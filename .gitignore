@@ -1,0 +1,30 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# Runtime data (never commit a live config)
+/config/
+/data/
+*.db
+*.db-shm
+*.db-wal
+*.log
+
+# Env
+.env
+.env.*
+!.env.example
+
+# Test
+coverage/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/*
+!.vscode/extensions.json
