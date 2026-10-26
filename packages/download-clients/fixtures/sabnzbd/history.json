@@ -1,0 +1,105 @@
+{
+  "history": {
+    "total_size": "48.2 GB",
+    "month_size": "12.1 GB",
+    "week_size": "3.4 GB",
+    "day_size": "1.2 GB",
+    "noofslots": 7,
+    "last_history_update": 1761400000,
+    "version": "4.3.3",
+    "slots": [
+      {
+        "action_line": "",
+        "duplicate_key": "show name/1/1",
+        "meta": null,
+        "fail_message": "",
+        "loaded": false,
+        "size": "2.1 GB",
+        "category": "media-tron",
+        "pp": "D",
+        "retry": 0,
+        "script": "None",
+        "nzb_name": "Show.Name.S00E01.1080p.WEB-DL-GRP.nzb",
+        "download_time": 182,
+        "storage": "/downloads/complete/media-tron/Show.Name.S00E01.1080p.WEB-DL-GRP",
+        "has_rating": false,
+        "status": "Completed",
+        "script_line": "",
+        "completed": 1761399000,
+        "nzo_id": "SABnzbd_nzo_done01",
+        "downloaded": 2254857830,
+        "report": "",
+        "password": "",
+        "path": "/downloads/incomplete/Show.Name.S00E01.1080p.WEB-DL-GRP",
+        "postproc_time": 40,
+        "name": "Show.Name.S00E01.1080p.WEB-DL-GRP",
+        "url": "Show.Name.S00E01.1080p.WEB-DL-GRP.nzb",
+        "md5sum": "",
+        "archive": false,
+        "bytes": 2254857830,
+        "url_info": "",
+        "stage_log": []
+      },
+      {
+        "fail_message": "Aborted, cannot be completed - https://sabnzbd.org/not-complete",
+        "category": "media-tron",
+        "storage": "",
+        "status": "Failed",
+        "nzo_id": "SABnzbd_nzo_fail01",
+        "path": "/downloads/incomplete/Movie.Old.1999.DVDRip-GRP",
+        "name": "Movie.Old.1999.DVDRip-GRP",
+        "bytes": 734003200
+      },
+      {
+        "fail_message": "Exit(1) Post-processing script returned an error",
+        "category": "media-tron",
+        "storage": "/downloads/complete/media-tron/Show.Name.S00E02.720p-GRP",
+        "status": "Failed",
+        "nzo_id": "SABnzbd_nzo_script1",
+        "path": "/downloads/incomplete/Show.Name.S00E02.720p-GRP",
+        "name": "Show.Name.S00E02.720p-GRP",
+        "bytes": 524288000
+      },
+      {
+        "fail_message": "",
+        "category": "media-tron",
+        "storage": null,
+        "status": "Repairing",
+        "nzo_id": "SABnzbd_nzo_repair1",
+        "path": "/downloads/incomplete/Show.Name.S00E03.1080p-GRP",
+        "name": "Show.Name.S00E03.1080p-GRP",
+        "bytes": 1610612736
+      },
+      {
+        "fail_message": "",
+        "category": "media-tron",
+        "storage": "",
+        "status": "Extracting",
+        "nzo_id": "SABnzbd_nzo_unpack1",
+        "path": "/downloads/incomplete/Show.Name.S00E04.1080p-GRP",
+        "name": "Show.Name.S00E04.1080p-GRP",
+        "bytes": 1610612736
+      },
+      {
+        "fail_message": "Unpacking failed, write error or disk is full?",
+        "category": "media-tron",
+        "storage": "",
+        "status": "Failed",
+        "nzo_id": "SABnzbd_nzo_disk01",
+        "path": "/downloads/incomplete/Show.Name.S00E05.1080p-GRP",
+        "name": "Show.Name.S00E05.1080p-GRP",
+        "bytes": 1610612736
+      },
+      {
+        "fail_message": "",
+        "category": "software",
+        "storage": "/downloads/complete/software/Linux.Distro.Old.ISO",
+        "status": "Completed",
+        "nzo_id": "SABnzbd_nzo_other2",
+        "path": "/downloads/incomplete/Linux.Distro.Old.ISO",
+        "name": "Linux.Distro.Old.ISO",
+        "bytes": 3221225472
+      }
+    ]
+  }
+}

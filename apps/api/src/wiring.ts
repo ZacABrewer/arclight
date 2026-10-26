@@ -6,6 +6,7 @@ import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, MediaFile }
 import type { AppContext } from './app.js';
 import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
+import { vpnServiceFor, GRAB_GUARD_REASON } from './modules/vpn/service.js';
 import { getDownloadClientsService, type TrackedDownload } from './modules/download-clients/index.js';
 import {
   dataValue,
@@ -169,6 +170,11 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
     },
     propers: {
       getDownloadPropersAndRepacks: () => getSection(db, 'mediaManagement').downloadPropersAndRepacks,
+    },
+    // VPN kill switch: grabs wait while the tunnel is down (no-op when VPN is disabled).
+    grabGuard: {
+      isSafeToGrab: () => vpnServiceFor(ctx).isSafeToGrab(),
+      reason: GRAB_GUARD_REASON,
     },
     settings: {
       getReleaseSettings: () => {

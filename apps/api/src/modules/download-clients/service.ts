@@ -331,6 +331,26 @@ export class DownloadClientsService {
     return { id: next.config.id, name: next.config.name, protocol, client: next.client };
   }
 
+  /**
+   * Set the incoming-connections port on every enabled client that supports it (qBittorrent),
+   * e.g. to follow a VPN's forwarded port. Per-client failures are reported, never thrown.
+   */
+  async setListenPortOnAll(port: number): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>> {
+    const results: Array<{ id: number; name: string; ok: boolean; message?: string }> = [];
+    for (const { config, client } of this.enabledClients()) {
+      if (config.implementation !== 'qbittorrent' || !client.setListenPort) continue;
+      try {
+        await client.setListenPort(port);
+        results.push({ id: config.id, name: config.name, ok: true });
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        this.log?.warn({ err, client: config.name, port }, 'could not set listen port');
+        results.push({ id: config.id, name: config.name, ok: false, message });
+      }
+    }
+    return results;
+  }
+
   private clientFor(config: DownloadClientResource): DownloadClient {
     const fingerprint = JSON.stringify(config);
     const cached = this.registry.get(config.id);

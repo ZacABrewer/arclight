@@ -14,28 +14,57 @@ authentication yet). See [docs/ROADMAP.md](docs/ROADMAP.md) and
 
 ## Deploy
 
+The recommended layout runs Media-Tron and qBittorrent behind [Gluetun](https://github.com/qdm12/gluetun)
+with ProtonVPN over WireGuard. Both containers use `network_mode: "service:gluetun"`, so all
+their traffic leaves through the tunnel and Gluetun's firewall drops anything else.
+
 ```yaml
 # docker-compose.yml
 services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add: [NET_ADMIN]
+    devices: [/dev/net/tun:/dev/net/tun]
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_KEY}
+      - SERVER_COUNTRIES=${VPN_COUNTRIES}
+      - VPN_PORT_FORWARDING=on
+      - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET}
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=off
+      - TZ=Europe/London
+    ports:
+      - 7878:7878   # Media-Tron
+      - 8080:8080   # qBittorrent
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      start_period: 60s
+    restart: unless-stopped
+
   media-tron:
     image: ghcr.io/media-tron/media-tron:latest
-    container_name: media-tron
+    network_mode: "service:gluetun"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/London
+      - MEDIATRON_VPN_CONTROL_URL=http://localhost:8000
     volumes:
       - ./config:/config
       - /volume1/media/tv:/tv
       - /volume1/media/movies:/movies
       - /volume1/downloads:/downloads
-    ports:
-      - 7878:7878
+    depends_on:
+      gluetun: { condition: service_healthy }
     restart: unless-stopped
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
-    container_name: qbittorrent
+    network_mode: "service:gluetun"
     environment:
       - PUID=1000
       - PGID=1000
@@ -44,20 +73,64 @@ services:
     volumes:
       - ./qbittorrent:/config
       - /volume1/downloads:/downloads
-    ports:
-      - 8080:8080
-      - 6881:6881
-      - 6881:6881/udp
+    depends_on:
+      gluetun: { condition: service_healthy }
     restart: unless-stopped
 ```
 
-The first-run setup wizard and automatic qBittorrent wiring are planned, not built. Add the
-download client yourself under the download-clients API (Settings UI page is a placeholder).
-There is no login yet: keep port 7878 on a trusted network.
+`docker/docker-compose.yml` is the build-from-source variant (with healthchecks on all three
+services). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`,
+`DOWNLOADS_ROOT`, `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET` from your
+environment or a `.env` file; copy `docker/.env.example` to start.
 
-`docker/docker-compose.yml` is the build-from-source variant of the snippet above (it uses
-`PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`, `DOWNLOADS_ROOT` from your
-environment or a `.env` file, defaulting to `./data/...`).
+### Getting the Proton WireGuard key
+
+1. Sign in at account.proton.me and open **VPN → Downloads → WireGuard configuration**.
+2. Name the config, pick a platform (any), and enable **NAT-PMP (port forwarding)**. Pick a
+   server in a country that allows P2P (the same country as `VPN_COUNTRIES`).
+3. Create it and copy the `PrivateKey = ...` value from the `[Interface]` section into
+   `PROTON_WIREGUARD_KEY` in your `.env`. Keep it secret: anyone with it can use your tunnel.
+
+### How qBittorrent gets the forwarded port
+
+Proton forwards one incoming port per session and Gluetun reports it on its control server.
+Media-Tron polls Gluetun every minute (Settings → VPN, provider *Gluetun*, enabled) and, when
+the port changes, sets it as qBittorrent's listening port (`/api/v2/app/setPreferences`,
+random port off) on every enabled qBittorrent client. Because the three containers share one
+network namespace, add qBittorrent in Media-Tron with host `localhost`, port `8080`. With
+**Pause grabs when down** on (default), Media-Tron stops grabbing while the VPN is down or
+its public IP equals your **home public IP**; the dashboard card and the `VpnDisconnected`
+health check show the state. Newer Gluetun releases protect the control server: create an
+API key per the Gluetun wiki and enter it (or username/password) in Settings → VPN.
+
+### Without a VPN
+
+Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Media-Tron on
+7878, qBittorrent on 8080 and peer port 6881, no Gluetun). Leave Settings → VPN disabled.
+
+### Native Windows VPN
+
+Running Media-Tron directly on Windows (no Docker), pick a provider in Settings → VPN:
+
+- **WireGuard for Windows**: install the official client (wireguard.com), download a Proton
+  WireGuard `.conf` (steps above; keep NAT-PMP on), save it under a short name such as
+  `C:\vpn\proton-nl.conf`, and point Media-Tron at it. Media-Tron installs the tunnel service
+  (`wireguard.exe /installtunnelservice`), reads `wg show <name>` for handshake, endpoint and
+  transfer, and finds the adapter's IPv4 (the bind address the built-in torrent engine uses).
+  It must run elevated (Administrator, or as a service under LocalSystem). With **auto-start**
+  it reinstalls a missing tunnel (at most every 5 minutes; a manual Disconnect suspends this).
+  With **kill switch** on, grabs stop and a `vpn` event tells the torrent engine to close its
+  sockets whenever the adapter disappears or the handshake goes stale.
+- **Interface binding**: you run the VPN yourself (e.g. the ProtonVPN app); name its adapter
+  (e.g. `ProtonVPN`) and Media-Tron watches its IPv4 and exposes it as the bind address.
+
+Limitation: Node's `fetch` cannot bind to a local address, so the native public IP check
+(`publicIpCheckUrl`, default `https://api.ipify.org?format=json`) follows the OS routing
+table. With a full-tunnel config (`AllowedIPs = 0.0.0.0/0`) that is the tunnel; with a split
+tunnel it may not be. Set **home public IP** so a check that leaves through your ISP is
+flagged as a leak instead of passing silently.
+
+There is no login yet: keep port 7878 on a trusted network.
 
 ## Develop
 
@@ -101,6 +174,7 @@ See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages
 | `MEDIATRON_WEB_DIST` | unset | Built web app to serve (set to `/app/web` in the image) |
 | `MEDIATRON_VERSION` | `0.1.0-dev` | Version reported by `/system/status` (set at image build) |
 | `MEDIATRON_TMDB_API_KEY` | unset | TMDB key fallback when none is stored in Settings |
+| `MEDIATRON_VPN_CONTROL_URL` | `http://localhost:8000` | Gluetun control server default when none is stored in Settings → VPN |
 
 The image also takes `PUID` and `PGID` (handled in `docker/entrypoint.sh`); compose passes `TZ`.
 

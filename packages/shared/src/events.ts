@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Job } from './jobs.js';
 import { HealthResponse } from './system.js';
+import { VpnStatus } from './vpn.js';
 
 // Messages pushed over the WebSocket feed at /api/v1/events. Discriminated on `type` so the
 // web client can switch exhaustively. Payloads carry ids, not whole resources: the client
@@ -34,5 +35,6 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('indexer'), action: z.enum(['failed', 'recovered']), id: z.number().int(), name: z.string() }),
   z.object({ type: z.literal('history'), action: z.enum(['added']) }),
   z.object({ type: z.literal('settings'), section: z.string() }),
+  z.object({ type: z.literal('vpn'), status: VpnStatus }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

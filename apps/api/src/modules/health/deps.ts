@@ -15,6 +15,7 @@ import {
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { getSection } from '../settings/service.js';
+import { vpnServiceFor } from '../vpn/service.js';
 import type { HealthDeps, HealthFs } from './types.js';
 
 // Production wiring of HealthDeps: real filesystem, database and the other modules' services.
@@ -191,6 +192,14 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
           .map((r) => ({ id: r.id, name: r.name, consecutiveFailures: statuses.get(r.id)?.consecutiveFailures ?? 0 }));
       },
       misconfigured: () => notifications.misconfigured(),
+    },
+
+    async vpn() {
+      const service = vpnServiceFor(ctx);
+      const status = service.getStatus();
+      // Never checked yet (e.g. right after start): probe once so the finding is real.
+      if (status.lastChecked === null && service.settings().enabled) return service.refresh();
+      return status;
     },
   };
 }

@@ -1,0 +1,27 @@
+{
+  "arguments": {
+    "alt-speed-enabled": false,
+    "blocklist-enabled": false,
+    "config-dir": "/config",
+    "dht-enabled": true,
+    "download-dir": "/downloads/complete",
+    "download-queue-enabled": true,
+    "download-queue-size": 5,
+    "encryption": "preferred",
+    "idle-seeding-limit": 30,
+    "idle-seeding-limit-enabled": false,
+    "incomplete-dir": "/downloads/incomplete",
+    "incomplete-dir-enabled": true,
+    "peer-port": 51413,
+    "peer-port-random-on-start": false,
+    "rename-partial-files": true,
+    "rpc-version": 17,
+    "rpc-version-minimum": 14,
+    "rpc-version-semver": "5.3.0",
+    "seedRatioLimit": 2,
+    "seedRatioLimited": false,
+    "start-added-torrents": true,
+    "version": "4.0.5 (a6fe2a64aa)"
+  },
+  "result": "success"
+}

@@ -662,6 +662,16 @@ export class ReleasesService {
     const c = e.candidate;
     if (!c) throw new ReleasesError('VALIDATION', 'Release is not mapped to a library item');
     const d = e.decision;
+    // Grab guard (deps.grabGuard, e.g. VPN down): temporary rejection `vpnDown`. Thrown as
+    // CLIENT_UNAVAILABLE so processDecisions parks the release as pending and retries it.
+    const guard = this.deps.grabGuard;
+    if (guard && !(await guard.isSafeToGrab())) {
+      if (!d.rejections.some((r) => r.reason === 'vpnDown')) {
+        d.rejections.push({ reason: 'vpnDown', message: guard.reason, type: 'temporary' });
+      }
+      d.temporarilyRejected = true;
+      throw new ReleasesError('CLIENT_UNAVAILABLE', guard.reason);
+    }
     const release = c.release;
     const indexer = this.indexers.list().find((i) => i.id === release.indexerId);
     const payload = await this.downloadPayload(release);

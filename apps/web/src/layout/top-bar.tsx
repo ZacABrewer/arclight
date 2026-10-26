@@ -1,6 +1,7 @@
 import { useEffect, useRef, type FormEvent } from 'react';
 import { useNavigate } from '@tanstack/react-router';
 import { ConnectionIndicator } from './connection-indicator.js';
+import { UserMenu } from './user-menu.js';
 
 /** True when a key press is going into a text field and must not trigger shortcuts. */
 export function isTypingTarget(target: EventTarget | null): boolean {
@@ -72,6 +73,7 @@ export function TopBar({ drawerOpen, onToggleDrawer, sidebarId }: TopBarProps) {
       </form>
       <div className="topbar-right">
         <ConnectionIndicator />
+        <UserMenu />
       </div>
     </header>
   );

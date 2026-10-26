@@ -28,6 +28,9 @@ import { releasesModuleWith } from './modules/releases/index.js';
 import { importsModuleWith } from './modules/imports/index.js';
 import { notificationsModuleWith } from './modules/notifications/index.js';
 import { calendarModule } from './modules/calendar/index.js';
+import { importListsModule } from './modules/import-lists/index.js';
+import { vpnModule } from './modules/vpn/index.js';
+import { authModule, installAuth } from './modules/auth/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -86,13 +89,19 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     historyModule,
     blocklistModule,
     releasesModuleWith(wiring.releases),
+    importListsModule,
     importsModuleWith(wiring.imports),
     // Imports dispatch their own import/upgrade notifications through the wiring.
     notificationsModuleWith({ translateImported: false }),
     calendarModule,
+    vpnModule,
+    authModule,
   ];
   await app.register(
     async (api) => {
+      // Auth first: the hook must be on this scope before any module's routes are added.
+      // Public routes and bypass rules: modules/auth/hook.ts.
+      installAuth(api, ctx);
       for (const mod of modules) await api.register(mod(ctx));
     },
     { prefix: '/api/v1' },

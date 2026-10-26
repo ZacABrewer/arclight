@@ -1,11 +1,14 @@
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
+  ImportListSettings,
   MediaManagementSettings,
   MetadataSettings,
   NamingConfig,
   ReleasesSettings,
   SECRET_MASK,
+  SecuritySettings,
+  VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
 } from '@media-tron/shared';
@@ -23,6 +26,12 @@ const sections = {
   naming: NamingConfig,
   // Decision-engine knobs read by the releases module (routes under /settings/releases).
   releases: ReleasesSettings,
+  // Owned by the vpn module (routes under /settings/vpn; secrets masked there).
+  vpn: VpnSettings,
+  // Owned by the auth module (auth method, API key, setup state; routes under /settings/security).
+  security: SecuritySettings,
+  // Owned by the import-lists module (sync interval, clean library; routes under /settings/importlists).
+  importLists: ImportListSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

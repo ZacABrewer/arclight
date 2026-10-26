@@ -1,7 +1,7 @@
 /**
  * Client-agnostic contract between Media-Tron and an external download client.
  *
- * Every concrete client (qBittorrent today; Transmission, Deluge, SABnzbd, NZBGet later)
+ * Every concrete client (qBittorrent, Transmission, Deluge, rTorrent, SABnzbd, NZBGet)
  * implements `DownloadClient` and reports its queue as normalized `DownloadItem`s so the
  * api's downloads module never needs to know which client it is talking to.
  */
@@ -69,6 +69,32 @@ export interface AddTorrentResult {
   warnings: string[];
 }
 
+/** Which kind of release a client downloads. */
+export type DownloadProtocol = 'torrent' | 'usenet';
+
+export interface AddNzbInput {
+  /** Raw NZB document. */
+  nzb: Uint8Array;
+  title: string;
+  category: string;
+  /**
+   * Overrides the client's configured priority. When omitted the client picks its
+   * `recentPriority` / `olderPriority` setting from `isRecent`.
+   */
+  priority?: UsenetPriority;
+  /** Whether the content aired/released recently. Defaults to false (older). */
+  isRecent?: boolean;
+}
+
+/** Normalized usenet queue priority; each client maps it to its own scale. */
+export type UsenetPriority = 'veryLow' | 'low' | 'normal' | 'high' | 'veryHigh' | 'force';
+
+export interface AddNzbResult {
+  /** The id the item will have in `getItems()` (SABnzbd nzo_id, NZBGet NZBID). */
+  id: string;
+  warnings: string[];
+}
+
 export interface DownloadClientStatus {
   /** Directory the client saves into for our category, as the client sees it. */
   outputRootDir: string;
@@ -92,9 +118,17 @@ export interface DownloadClientTestResult {
 
 export interface DownloadClient {
   readonly name: string;
+  /**
+   * The protocol the client downloads. Every client in this package sets it; it is optional
+   * only so hand-written test doubles elsewhere keep compiling. Undefined means 'torrent'.
+   */
+  readonly protocol?: DownloadProtocol;
   /** Verifies connectivity, credentials, version and category. Throws `DownloadClientError`. */
   test(): Promise<DownloadClientTestResult>;
+  /** Torrent clients only; usenet clients throw `DownloadClientError('not-supported')`. */
   addTorrent(input: AddTorrentInput): Promise<AddTorrentResult>;
+  /** Usenet clients only; torrent clients throw `DownloadClientError('not-supported')`. */
+  addNzb?(input: AddNzbInput): Promise<AddNzbResult>;
   getItems(category: string): Promise<DownloadItem[]>;
   removeItem(id: string, deleteData: boolean): Promise<void>;
   getStatus(): Promise<DownloadClientStatus>;
@@ -102,6 +136,13 @@ export interface DownloadClient {
   setCategory(id: string, category: string): Promise<void>;
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
+  /**
+   * Optional: set the port the client listens on for incoming peer connections (used to
+   * follow a VPN's forwarded port). Clients without the concept omit it.
+   */
+  setListenPort?(port: number): Promise<void>;
+  /** Optional: the client's current incoming-connections port. */
+  getListenPort?(): Promise<number>;
 }
 
 export type DownloadClientErrorCode =
@@ -114,7 +155,9 @@ export type DownloadClientErrorCode =
   /** The endpoint or the referenced item does not exist. */
   | 'not-found'
   /** The client refused the request itself (duplicate torrent, invalid torrent file, ...). */
-  | 'rejected';
+  | 'rejected'
+  /** The operation does not apply to this client (e.g. an NZB sent to a torrent client). */
+  | 'not-supported';
 
 export class DownloadClientError extends Error {
   override readonly name = 'DownloadClientError';

@@ -1,0 +1,110 @@
+[
+  {
+    "Name": "MainDir",
+    "Value": "/downloads"
+  },
+  {
+    "Name": "DestDir",
+    "Value": "${MainDir}/completed"
+  },
+  {
+    "Name": "InterDir",
+    "Value": "${MainDir}/inter"
+  },
+  {
+    "Name": "NzbDir",
+    "Value": "${MainDir}/nzb"
+  },
+  {
+    "Name": "QueueDir",
+    "Value": "${MainDir}/queue"
+  },
+  {
+    "Name": "TempDir",
+    "Value": "${MainDir}/tmp"
+  },
+  {
+    "Name": "WebDir",
+    "Value": "${AppDir}/webui"
+  },
+  {
+    "Name": "ControlIP",
+    "Value": "0.0.0.0"
+  },
+  {
+    "Name": "ControlPort",
+    "Value": "6789"
+  },
+  {
+    "Name": "ControlUsername",
+    "Value": "nzbget"
+  },
+  {
+    "Name": "ControlPassword",
+    "Value": "tegbzn6789"
+  },
+  {
+    "Name": "AppendCategoryDir",
+    "Value": "yes"
+  },
+  {
+    "Name": "KeepHistory",
+    "Value": "7"
+  },
+  {
+    "Name": "DupeCheck",
+    "Value": "yes"
+  },
+  {
+    "Name": "Category1.Name",
+    "Value": "Movies"
+  },
+  {
+    "Name": "Category1.DestDir",
+    "Value": "/mnt/movies-dl"
+  },
+  {
+    "Name": "Category1.Unpack",
+    "Value": "yes"
+  },
+  {
+    "Name": "Category1.Extensions",
+    "Value": ""
+  },
+  {
+    "Name": "Category1.Aliases",
+    "Value": ""
+  },
+  {
+    "Name": "Category2.Name",
+    "Value": "media-tron"
+  },
+  {
+    "Name": "Category2.DestDir",
+    "Value": ""
+  },
+  {
+    "Name": "Category2.Unpack",
+    "Value": "yes"
+  },
+  {
+    "Name": "Category2.Extensions",
+    "Value": ""
+  },
+  {
+    "Name": "Category2.Aliases",
+    "Value": ""
+  },
+  {
+    "Name": "Category3.Name",
+    "Value": "tv-imported"
+  },
+  {
+    "Name": "Category3.DestDir",
+    "Value": "${MainDir}/imported"
+  },
+  {
+    "Name": "Category3.Unpack",
+    "Value": "yes"
+  }
+]

@@ -7,6 +7,8 @@ export interface NavLeaf {
   label: string;
   to: AppPath;
   phase?: string;
+  /** Hidden from users with role `user` (the api refuses them anyway). */
+  adminOnly?: boolean;
 }
 
 export interface NavSection extends NavLeaf {
@@ -35,6 +37,7 @@ export const NAV: readonly NavSection[] = [
   { label: 'Calendar', to: '/calendar', glyph: '▦' },
   {
     label: 'Activity',
+    adminOnly: true,
     to: '/activity/queue',
     base: '/activity',
     glyph: '⇅',
@@ -54,10 +57,11 @@ export const NAV: readonly NavSection[] = [
       { label: 'Cutoff Unmet', to: '/wanted/cutoff' },
     ],
   },
-  { label: 'Subtitles', to: '/subtitles', glyph: '❝', phase: 'Phase 3' },
-  { label: 'Indexers', to: '/indexers', glyph: '⌕', phase: 'Phase 1' },
+  { label: 'Subtitles', to: '/subtitles', glyph: '❝', phase: 'Phase 3', adminOnly: true },
+  { label: 'Indexers', to: '/indexers', glyph: '⌕', phase: 'Phase 1', adminOnly: true },
   {
     label: 'Settings',
+    adminOnly: true,
     to: '/settings/mediamanagement',
     base: '/settings',
     glyph: '⚙',
@@ -69,11 +73,14 @@ export const NAV: readonly NavSection[] = [
       { label: 'Indexers', to: '/settings/indexers' },
       { label: 'Download Clients', to: '/settings/downloadclients' },
       { label: 'Notifications', to: '/settings/notifications' },
+      { label: 'VPN', to: '/settings/vpn' },
       { label: 'General', to: '/settings/general' },
+      { label: 'Security', to: '/settings/security' },
     ],
   },
   {
     label: 'System',
+    adminOnly: true,
     to: '/system/status',
     base: '/system',
     glyph: '⌘',
@@ -85,6 +92,14 @@ export const NAV: readonly NavSection[] = [
     ],
   },
 ];
+
+/** The sidebar as a given role sees it. */
+export function visibleNav(isAdmin: boolean, nav: readonly NavSection[] = NAV): NavSection[] {
+  if (isAdmin) return [...nav];
+  return nav
+    .filter((s) => !s.adminOnly)
+    .map((s) => (s.children ? { ...s, children: s.children.filter((c) => !c.adminOnly) } : s));
+}
 
 /** Find the nav entry for a path (used for placeholder titles and the document title). */
 export function navEntry(path: string): { label: string; phase?: string | undefined; section?: string } | undefined {

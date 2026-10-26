@@ -107,6 +107,20 @@ describe('RSS processing', () => {
   });
 });
 
+describe('grab guard', () => {
+  it('temporarily rejects with vpnDown and parks the release while the guard says no', async () => {
+    let safe = false;
+    const h = await tvSetup({ deps: { grabGuard: { isSafeToGrab: async () => safe, reason: 'VPN down' } } });
+    const decisions = await h.service.processReleases([makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP')], 'rss');
+    expect(h.downloads.grabs).toHaveLength(0);
+    expect(decisions[0]!.rejections).toContainEqual({ reason: 'vpnDown', message: 'VPN down', type: 'temporary' });
+    expect(h.service.listPending()).toEqual([expect.objectContaining({ reason: 'downloadClientUnavailable' })]);
+    safe = true;
+    await h.service.processReleases([makeRelease('Show.Name.S01E02.1080p.WEB-DL-GRP')], 'rss');
+    expect(h.downloads.grabs.map((g) => g.request.title)).toEqual(['Show.Name.S01E02.1080p.WEB-DL-GRP']);
+  });
+});
+
 describe('delay profiles and pending releases', () => {
   it('holds a delayed release, keeps lesser ones as fallback, and grabs the best once elapsed', async () => {
     const h = await tvSetup();

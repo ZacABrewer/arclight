@@ -112,6 +112,18 @@ export interface ReleasesDeps {
   freeSpace?: FreeSpaceReader;
   /** Minimum MB that must remain free after the download (free space spec). Default 100. */
   minimumFreeSpaceMb?: number;
+  /**
+   * Optional pre-grab check (the vpn module's `isSafeToGrab`). When it answers false the grab
+   * is temporarily rejected with reason `vpnDown`; automatic grabs are parked as pending and
+   * retried. Omitted = always allowed.
+   */
+  grabGuard?: GrabGuard;
+}
+
+export interface GrabGuard {
+  isSafeToGrab(): Promise<boolean>;
+  /** Human-readable rejection message. */
+  reason: string;
 }
 
 export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {

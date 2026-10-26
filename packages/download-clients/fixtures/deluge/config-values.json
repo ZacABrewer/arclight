@@ -1,0 +1,8 @@
+{
+  "stop_seed_at_ratio": false,
+  "stop_seed_ratio": 2.0,
+  "remove_seed_at_ratio": false,
+  "download_location": "/downloads",
+  "move_completed": true,
+  "move_completed_path": "/downloads/completed"
+}

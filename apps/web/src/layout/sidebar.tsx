@@ -1,8 +1,10 @@
 import { Link } from '@tanstack/react-router';
 import { cx } from '../lib/cx.js';
-import { NAV, isSectionActive } from '../nav.js';
+import { useAuth } from '../auth/auth-context.js';
+import { isSectionActive, visibleNav } from '../nav.js';
 
 export function Sidebar({ id, pathname }: { id: string; pathname: string }) {
+  const { isAdmin } = useAuth();
   return (
     <aside id={id} className="sidebar" aria-label="Main navigation">
       <div className="sidebar-brand">
@@ -12,7 +14,7 @@ export function Sidebar({ id, pathname }: { id: string; pathname: string }) {
       </div>
       <nav className="sidebar-nav">
         <ul className="nav-list">
-          {NAV.map((section) => {
+          {visibleNav(isAdmin).map((section) => {
             const active = isSectionActive(section, pathname);
             return (
               <li key={section.label} className={cx('nav-section', active && 'nav-section-active')}>

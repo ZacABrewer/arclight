@@ -6,6 +6,7 @@ import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import type { NotificationEvent } from '@media-tron/notifications';
 import { QualityProfileInput, type HistoryPage, type QueuePage, type ReleaseResource } from '@media-tron/shared';
+import { authServiceFor } from './modules/auth/index.js';
 import { buildApp, type AppContext } from './app.js';
 import type { AppConfig } from './config.js';
 import type { Db } from './db/index.js';
@@ -119,7 +120,12 @@ describe('phase 1 pipeline', () => {
     try {
       const ctx = ctxRef!;
       const api = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: unknown) =>
-        app.inject({ method, url: `/api/v1${url}`, ...(payload === undefined ? {} : { payload: payload as object }) });
+        app.inject({
+          method,
+          url: `/api/v1${url}`,
+          headers: { 'x-api-key': authServiceFor(ctx).apiKey() },
+          ...(payload === undefined ? {} : { payload: payload as object }),
+        });
 
       // Library setup: root folder, quality profile, series (metadata injected).
       expect((await api('POST', '/rootfolder', { path: tvRoot, mediaType: 'series' })).statusCode).toBe(201);

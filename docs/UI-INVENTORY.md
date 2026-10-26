@@ -7,12 +7,12 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 ## 1. Application shell
 
 - **Sidebar navigation** (collapsible; drawer on mobile) ✅
-- **Top bar**: global search (`/` shortcut), live-connection indicator, VPN status pill, queue/activity badge, health badge, user menu ⬜ (search + connection ✅)
+- **Top bar**: global search (`/` shortcut), live-connection indicator, VPN status pill, queue/activity badge, health badge, user menu 🔧 (search + connection + user menu ✅)
 - **Global search results** page/overlay: library matches + "add new" suggestions ⬜
 - **Toasts** (success/error/progress) ✅, **modal dialog** primitive ✅, **drawer** (details side panel) ⬜
 - **Error boundary** page, **404** page ✅
-- **First-run setup wizard** (admin account → TMDB key → root folders → download client → indexer → VPN → done) ⬜
-- **Login** page, **logout**, **session expired** ⬜
+- **First-run setup wizard** (admin account → TMDB key → root folders → download client → indexer → VPN → done) 🔧 (all but VPN ✅)
+- **Login** page, **logout**, **session expired** ✅
 - **Theme**: Tron Legacy tokens (colour, glow, grid, motion), light-grid variant for daytime ⬜
 - **Keyboard shortcuts** help sheet ⬜
 - **Command palette** (quick actions: add series, search, run task) ⬜ (nice-to-have)
@@ -121,7 +121,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - **General**: host/port/URL base, SSL, auth method/users, API key (show/regenerate), proxy, logging level, analytics, backups (schedule, list, restore, download), updates (branch/mechanism) 🔧
 - **UI**: theme (Tron/dark/light), first day of week, time/date formats, language, poster size ⬜
 - **Tags** manager ⬜
-- **Security**: users/roles (admin, user), sessions, API keys ⬜
+- **Security** 🔧: auth method, API key (show/copy/regenerate), users/roles table with add/edit/delete/reset password ✅; sessions list ⬜ (api ready)
 
 ## 11. System
 - **Status** ✅: version, uptime, runtime, paths, disk space per root, about/links
