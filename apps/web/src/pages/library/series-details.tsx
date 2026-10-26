@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
+import type { AdditionalLanguageTarget, Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
 import {
   Accordion,
   AccordionItem,
@@ -63,9 +63,17 @@ import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { EpisodeVersionFiles, VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
+import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
+import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
 import { t } from '../../i18n/index.js';
 
 const route = getRouteApi('/library/series/$id');
+
+/** Target of the "Add additional…" dialog opened from the series page. */
+export interface AddLanguageState {
+  targets: AdditionalLanguageTarget[];
+  title: string;
+}
 
 export interface InteractiveState {
   target: ReleaseSearchTarget;
@@ -98,6 +106,7 @@ export function SeriesDetailsPage() {
   const del = useDeleteSeries();
   const search = useAutomaticSearch();
   const [interactive, setInteractive] = useState<InteractiveState | null>(null);
+  const [addLanguage, setAddLanguage] = useState<AddLanguageState | null>(null);
   const navigate = useNavigate();
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.seriesDetails.invalidSeriesIdRawid', { rawId }))} title={t('library.seriesDetails.seriesNotFound')} />;
@@ -136,6 +145,7 @@ export function SeriesDetailsPage() {
           </>
         }
         facts={
+          <>
           <KeyValue
             layout="grid"
             columns={4}
@@ -146,6 +156,8 @@ export function SeriesDetailsPage() {
               { label: t('library.seriesDetails.nextAiring'), value: formatDate(stats?.nextAiring, { dateStyle: 'medium', timeStyle: 'short' }) },
             ]}
           />
+          <ItemLanguageChips query={{ seriesId: s.id }} />
+          </>
         }
         overview={s.overview}
         actions={
@@ -154,6 +166,7 @@ export function SeriesDetailsPage() {
               {t('library.seriesDetails.searchMonitored')}
             </Button>
             <Button onClick={() => setInteractive({ target: { seriesId: s.id }, title: s.title })}>{t('library.seriesDetails.interactiveSearch')}</Button>
+            <Button onClick={() => setAddLanguage({ targets: [{ seriesId: s.id }], title: s.title })}>{t('features.additionalLanguages.addAdditional')}</Button>
             <RefreshButtons target={{ seriesId: s.id }} />
             <CrossSeedSearchButton target={{ seriesId: s.id }} />
             <Link className={buttonClass({ variant: 'secondary' })} to="/activity/manual-import" search={{ seriesId: s.id }}>
@@ -177,7 +190,7 @@ export function SeriesDetailsPage() {
           {
             id: 'episodes',
             label: t('library.seriesDetails.seasonsEpisodes'),
-            content: <SeasonList series={s} episodes={episodes.data} error={episodes.error} files={files.data} onInteractive={setInteractive} />,
+            content: <SeasonList series={s} episodes={episodes.data} error={episodes.error} files={files.data} onInteractive={setInteractive} onAddLanguage={setAddLanguage} />,
           },
           {
             id: 'files',
@@ -194,6 +207,7 @@ export function SeriesDetailsPage() {
         ]}
       />
 
+      <AddAdditionalDialog open={addLanguage !== null} onClose={() => setAddLanguage(null)} targets={addLanguage?.targets ?? []} title={addLanguage?.title ?? ''} />
       <InteractiveSearchModal target={interactive?.target ?? null} title={interactive?.title ?? ''} onClose={() => setInteractive(null)} />
       {editing ? <EditSeriesModal onClose={() => setEditing(false)} series={s} /> : null}
       <DeleteMediaDialog
@@ -254,12 +268,14 @@ function SeasonList({
   error,
   files,
   onInteractive,
+  onAddLanguage,
 }: {
   series: Series;
   episodes: Episode[] | undefined;
   error: unknown;
   files: MediaFile[] | undefined;
   onInteractive: (s: InteractiveState) => void;
+  onAddLanguage: (s: AddLanguageState) => void;
 }) {
   const bySeason = useMemo(() => {
     const m = new Map<number, Episode[]>();
@@ -294,6 +310,7 @@ function SeasonList({
             progress={progress.episodes}
             defaultOpen={season.seasonNumber === latest}
             onInteractive={onInteractive}
+            onAddLanguage={onAddLanguage}
             onOpenEpisode={setDrawer}
           />
         ))}
@@ -305,6 +322,7 @@ function SeasonList({
         downloading={drawer ? progress.episodes.get(drawer.id) : undefined}
         onClose={() => setDrawer(null)}
         onInteractive={onInteractive}
+        onAddLanguage={onAddLanguage}
       />
     </>
   );
@@ -319,6 +337,7 @@ function SeasonPanel({
   progress,
   defaultOpen,
   onInteractive,
+  onAddLanguage,
   onOpenEpisode,
 }: {
   series: Series;
@@ -329,6 +348,7 @@ function SeasonPanel({
   progress: Map<number, number>;
   defaultOpen: boolean;
   onInteractive: (s: InteractiveState) => void;
+  onAddLanguage: (s: AddLanguageState) => void;
   onOpenEpisode: (ep: Episode) => void;
 }) {
   const search = useAutomaticSearch();
@@ -377,6 +397,14 @@ function SeasonPanel({
           >
             {t('library.seriesDetails.interactive')}
           </button>
+          <button
+            type="button"
+            className="mk-action-link mk-hide-mobile"
+            aria-label={t('features.additionalLanguages.addAdditionalTo', { title: label })}
+            onClick={() => onAddLanguage({ targets: [{ seriesId: series.id, seasonNumber: season.seasonNumber }], title: `${series.title} ${label}` })}
+          >
+            {t('features.additionalLanguages.addLanguage')}
+          </button>
         </div>
       }
     >
@@ -408,6 +436,7 @@ function SeasonPanel({
               downloading={progress.get(ep.id)}
               onOpen={() => onOpenEpisode(ep)}
               onInteractive={onInteractive}
+              onAddLanguage={onAddLanguage}
             />
           ))}
         </div>
@@ -423,6 +452,7 @@ function EpisodeRow({
   downloading,
   onOpen,
   onInteractive,
+  onAddLanguage,
 }: {
   series: Series;
   episode: Episode;
@@ -430,6 +460,7 @@ function EpisodeRow({
   downloading: number | undefined;
   onOpen: () => void;
   onInteractive: (s: InteractiveState) => void;
+  onAddLanguage: (s: AddLanguageState) => void;
 }) {
   const search = useAutomaticSearch();
   const setEpisode = useSetEpisodeMonitored();
@@ -475,6 +506,14 @@ function EpisodeRow({
         >
           {t('library.seriesDetails.interactive')}
         </button>
+        <button
+          type="button"
+          className="mk-action-link mk-hide-mobile"
+          aria-label={t('features.additionalLanguages.addAdditionalTo', { title: code })}
+          onClick={() => onAddLanguage({ targets: [{ seriesId: series.id, episodeIds: [ep.id] }], title: `${series.title} ${code}` })}
+        >
+          {t('features.additionalLanguages.addLanguage')}
+        </button>
       </span>
     </div>
   );
@@ -498,6 +537,7 @@ function EpisodeDrawer({
   downloading,
   onClose,
   onInteractive,
+  onAddLanguage,
 }: {
   series: Series;
   episode: Episode | null;
@@ -505,6 +545,7 @@ function EpisodeDrawer({
   downloading: number | undefined;
   onClose: () => void;
   onInteractive: (s: InteractiveState) => void;
+  onAddLanguage: (s: AddLanguageState) => void;
 }) {
   const search = useAutomaticSearch();
   const history = useMediaHistory({ episodeId: episode?.id ?? 0 }, episode !== null);
@@ -517,6 +558,7 @@ function EpisodeDrawer({
       title={`${code} · ${episode.title || 'TBA'}`}
       footer={
         <>
+          <Button onClick={() => onAddLanguage({ targets: [{ seriesId: series.id, episodeIds: [episode.id] }], title: `${series.title} ${code}` })}>{t('features.additionalLanguages.addAdditional')}</Button>
           <Button onClick={() => onInteractive({ target: { episodeId: episode.id }, title: `${series.title} ${code}` })}>{t('library.seriesDetails.interactiveSearch')}</Button>
           <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ episodeIds: [episode.id] })}>
             {t('library.seriesDetails.searchEpisode')}

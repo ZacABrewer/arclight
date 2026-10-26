@@ -46,6 +46,7 @@ import type { Db } from '../../db/index.js';
 import { mediaFiles } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import type { DownloadClientsService, TrackedDownload } from '../download-clients/index.js';
+import { releaseAudioLanguages, slotLanguageFit } from '../additional-languages/audio.js';
 import { isVersioned, libraryService, pickVersion, profileIdForSlot, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import { getSection, setSection } from '../settings/service.js';
@@ -698,8 +699,14 @@ export class ImportsService {
     const existingFile = libraryPath ? isUnder(file.path, libraryPath) : false;
     const sceneTitle = single && opts.clientTitle ? opts.clientTitle : stripExt(file.name);
     // Multi-version: the slot whose profile this file fits best; it only competes with that slot.
-    const versionTag = this.versionFor(series ?? movie, quality, profileCache, (p) =>
-      this.score(p, formats, { title: sceneTitle, quality, languages, releaseGroup, sizeBytes: file.sizeBytes, mediaType: target.mediaType }),
+    // A slot that asks for audio languages this release carries wins ("Add additional…" versions).
+    const audio = releaseAudioLanguages(sceneTitle, languages, original);
+    const versionTag = this.versionFor(
+      series ?? movie,
+      quality,
+      profileCache,
+      (p) => this.score(p, formats, { title: sceneTitle, quality, languages, releaseGroup, sizeBytes: file.sizeBytes, mediaType: target.mediaType }),
+      audio,
     );
     let existingFiles: MediaFile[] = [];
     if (series && episodes.length > 0) {
@@ -769,6 +776,7 @@ export class ImportsService {
     quality: QualityModel,
     profileCache: Map<number, QualityProfile | null>,
     score: (profile: QualityProfile) => number,
+    audio: readonly string[] = [],
   ): string | null {
     if (!parent || !isVersioned(parent.versions)) return null;
     const profiles = new Map<number, QualityProfile>();
@@ -776,7 +784,7 @@ export class ImportsService {
       const p = this.profileFor(v.qualityProfileId, profileCache);
       if (p) profiles.set(v.qualityProfileId, p);
     }
-    return pickVersion(parent.versions, profiles, quality, score)?.tag ?? slotOf(null, parent.versions);
+    return pickVersion(parent.versions, profiles, quality, score, (v) => slotLanguageFit(v, audio))?.tag ?? slotOf(null, parent.versions);
   }
 
   /** Quality profile governing an item's version slot. */

@@ -27,6 +27,7 @@ import {
   type SortState,
 } from '../../arclight/index.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
+import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError, TagChips } from '../../components/media/media-kit.js';
@@ -671,7 +672,9 @@ function BulkBar({
   const deleteSeries = useDeleteSeries();
   const deleteMovies = useDeleteMovies();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [addingLanguage, setAddingLanguage] = useState(false);
   const pending = bulkSeries.isPending || bulkMovies.isPending;
+  const languageTargets = useMemo(() => ids.map((id) => (kind === 'series' ? { seriesId: id } : { movieId: id })), [ids, kind]);
 
   const apply = (patch: { monitored?: boolean; qualityProfileId?: number; rootFolderPath?: string; tags?: { add?: number[]; remove?: number[] } }) => {
     if (kind === 'series') bulkSeries.mutate({ ids, ...patch });
@@ -722,6 +725,9 @@ function BulkBar({
           />
         )}
       </Popover>
+      <Button variant="ghost" disabled={pending} onClick={() => setAddingLanguage(true)}>
+        {t('features.additionalLanguages.addAdditional')}
+      </Button>
       <FloatBarDivider />
       <Button variant="danger" onClick={() => setConfirmDelete(true)}>
         {t('common.delete')}
@@ -729,6 +735,12 @@ function BulkBar({
       <Button variant="ghost" className="al-floatbar__cancel" onClick={onClear}>
         {t('common.cancel')}
       </Button>
+      <AddAdditionalDialog
+        open={addingLanguage}
+        onClose={() => setAddingLanguage(false)}
+        targets={languageTargets}
+        title={`${ids.length} ${noun(kind, ids.length)}`}
+      />
       <DeleteMediaDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}

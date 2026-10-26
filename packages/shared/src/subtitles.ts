@@ -373,7 +373,8 @@ export const WantedSubtitleItem = z.object({
   episodeLabel: z.string().nullable(),
   episodeTitle: z.string().nullable(),
   path: z.string(),
-  languageProfileId: z.number().int(),
+  /** Null when only additional (item-level) languages are wanted. */
+  languageProfileId: z.number().int().nullable(),
   missing: z.array(SubtitleLanguageRef),
   lastSearch: isoDate().nullable(),
   attempts: z.number().int(),

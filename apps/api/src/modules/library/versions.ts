@@ -67,6 +67,8 @@ export function primaryOf<T extends { id: number; versionTag?: string | null | u
 
 export interface VersionFit {
   version: MediaVersion;
+  /** Audio-language fit when the caller passed one (2 = the slot's languages are present, 1 = slot asks none, 0 = missing). */
+  languageFit: number;
   /** Whether the version's profile allows the quality at all. */
   allowed: boolean;
   /** Steps between the quality and the profile cutoff (0 = exactly the cutoff). */
@@ -81,14 +83,18 @@ export interface VersionFit {
  * one whose versions are all disabled) and when a profile is missing for every slot. When no
  * profile allows the quality the first enabled slot is returned, so the caller's evaluation
  * rejects it with that profile's reason.
+ *
+ * `languageFit` (optional) ranks first: a slot that asks for audio languages the release has
+ * beats a slot that asks for none, which beats one whose languages are missing.
  */
 export function pickVersion(
   versions: readonly MediaVersion[] | null | undefined,
   profiles: ReadonlyMap<number, QualityProfile>,
   quality: QualityModel,
   formatScore: (profile: QualityProfile) => number = () => 0,
+  languageFit?: (version: MediaVersion) => number,
 ): MediaVersion | null {
-  const fits = rankVersions(versions, profiles, quality, formatScore);
+  const fits = rankVersions(versions, profiles, quality, formatScore, languageFit);
   return fits[0]?.version ?? null;
 }
 
@@ -97,6 +103,7 @@ export function rankVersions(
   profiles: ReadonlyMap<number, QualityProfile>,
   quality: QualityModel,
   formatScore: (profile: QualityProfile) => number = () => 0,
+  languageFit?: (version: MediaVersion) => number,
 ): VersionFit[] {
   const fits: Array<VersionFit & { order: number }> = [];
   enabledVersions(versions).forEach((version, order) => {
@@ -106,15 +113,19 @@ export function rankVersions(
     const qi = qualityIndex(profile, quality.quality);
     const ci = qualityIndex(profile, effectiveCutoff(profile));
     const distance = qi >= 0 && ci >= 0 ? Math.abs(ci - qi) : Number.MAX_SAFE_INTEGER;
-    fits.push({ version, allowed, distance, formatScore: formatScore(profile), order });
+    fits.push({ version, languageFit: languageFit ? languageFit(version) : 1, allowed, distance, formatScore: formatScore(profile), order });
   });
   fits.sort(
     (a, b) =>
-      Number(b.allowed) - Number(a.allowed) || a.distance - b.distance || b.formatScore - a.formatScore || a.order - b.order,
+      b.languageFit - a.languageFit ||
+      Number(b.allowed) - Number(a.allowed) ||
+      a.distance - b.distance ||
+      b.formatScore - a.formatScore ||
+      a.order - b.order,
   );
   if (fits.length > 0 && !fits[0]!.allowed) {
     // Nothing allows it: evaluate against the first enabled slot (config order), not a random one.
-    fits.sort((a, b) => a.order - b.order);
+    fits.sort((a, b) => b.languageFit - a.languageFit || a.order - b.order);
   }
   return fits.map(({ order: _o, ...f }) => f);
 }
@@ -134,7 +145,14 @@ export function upsertVersion(
     current.push({ tag: baseTag, qualityProfileId: item.qualityProfileId, enabled: true });
   }
   const i = current.findIndex((v) => sameTag(v.tag, slot.tag));
-  if (i >= 0) current[i] = { ...current[i]!, qualityProfileId: slot.qualityProfileId, enabled: slot.enabled };
+  if (i >= 0) {
+    current[i] = {
+      ...current[i]!,
+      qualityProfileId: slot.qualityProfileId,
+      enabled: slot.enabled,
+      ...(slot.audioLanguages ? { audioLanguages: slot.audioLanguages } : {}),
+    };
+  }
   else current.push(slot);
   return current;
 }

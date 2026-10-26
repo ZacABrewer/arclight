@@ -33,6 +33,7 @@ import {
   type ReleaseSource,
   type TrackedDownloadState,
 } from '@arclight/shared';
+import { displayLanguage, missingLanguages, releaseAudioLanguages, type RequiredAudio } from '../additional-languages/audio.js';
 import type { DownloadPropersAndRepacks, HistoryEventSummary, ReleaseSettings } from './deps.js';
 import { detectHardcodedSubs, isWhitelistedHardcodedSubs } from './hardcoded-subs.js';
 import type { MatchCriteria, MatchResult, MovieMatch, SeriesMatch, Unmatched } from './matcher.js';
@@ -59,6 +60,8 @@ export interface ExistingFile {
   sizeBytes: number;
   /** Multi-version library: the version slot the file fills (null = unversioned). */
   versionTag?: string | null;
+  /** Audio languages (base tags) from media analysis, else the release name; null = unknown. */
+  audioLanguages?: string[] | null;
 }
 
 export interface QueuedItem {
@@ -117,6 +120,8 @@ export interface DecisionContext {
   minimumFreeSpaceMb: number;
   /** Indexer release filter verdict for this candidate (tracker freeleech-only); null/absent = pass. */
   releaseFilter?: SpecResult | null;
+  /** Audio languages the item (or its version slot) requires ("Add additional…"); null/absent = none. */
+  requiredAudio?: RequiredAudio | null;
 }
 
 export interface Candidate {
@@ -347,6 +352,32 @@ function sameItem(c: Candidate, item: { episodeIds?: number[] | undefined; movie
   return (item.episodeIds ?? []).some((id) => ids.has(id));
 }
 
+/** Audio the release must carry and the audio it has (base tags), when the item requires any. */
+export function audioRequirement(ctx: DecisionContext, c: Candidate): { required: string[]; have: string[] } | null {
+  const r = ctx.requiredAudio;
+  if (!r || r.languages.length === 0) return null;
+  const required = [...r.languages];
+  if (r.keepExisting) {
+    for (const f of filesFor(ctx, c)) for (const l of f.audioLanguages ?? []) if (!required.includes(l)) required.push(l);
+  }
+  const original = c.match.mediaType === 'movie' ? c.match.movie.originalLanguage : c.match.series.originalLanguage;
+  return { required, have: releaseAudioLanguages(c.release.title, c.languages, original) };
+}
+
+/**
+ * A language replacement: the existing file lacks a required audio language (or its audio is
+ * unknown) and this release carries every required one. Such a release may replace the file
+ * at the same or a better quality even when the file already meets cutoff.
+ */
+export function isLanguageReplacement(ctx: DecisionContext, c: Candidate, f: ExistingFile): boolean {
+  const r = ctx.requiredAudio;
+  if (!r || r.languages.length === 0) return false;
+  const fileLacks = f.audioLanguages == null || missingLanguages(r.languages, f.audioLanguages).length > 0;
+  if (!fileLacks) return false;
+  const a = audioRequirement(ctx, c);
+  return a !== null && missingLanguages(a.required, a.have).length === 0;
+}
+
 const RAW_DISC = [
   /\bdis[ck][ ._-]?\d+\b.*\bblu[ ._-]?ray\b/i,
   /\b(?:1080|2160|720)[pi]?[ ._-]+full[ ._-]+blu[ ._-]?ray\b/i,
@@ -396,6 +427,25 @@ export const specifications: readonly Specification[] = [
       const resolved = wanted.map((w) => (w === 'original' ? original : w));
       if (langs.some((l) => resolved.includes(l) || (l === 'original' && wanted.includes('original')))) return null;
       return { reason: 'wantedLanguage', message: `${resolved.join(', ')} is wanted, but found ${langs.join(', ')}` };
+    },
+  },
+  {
+    // "Add additional…" → audio: the item (or its version slot) needs these audio languages,
+    // plus, when replacing a file, every language that file already has.
+    id: 'requiredAudioLanguages',
+    tier: 0,
+    type: 'permanent',
+    appliesTo: 'both',
+    evaluate: (ctx, c) => {
+      const a = audioRequirement(ctx, c);
+      if (!a) return null;
+      const missing = missingLanguages(a.required, a.have);
+      if (missing.length === 0) return null;
+      const has = a.have.map(displayLanguage).join(', ') || 'none';
+      return {
+        reason: 'missingRequiredAudioLanguage',
+        message: `Missing required audio language${missing.length > 1 ? 's' : ''}: ${missing.map(displayLanguage).join(', ')} (release has ${has})`,
+      };
     },
   },
   {
@@ -751,6 +801,7 @@ export const specifications: readonly Specification[] = [
     evaluate: (ctx, c) => {
       const next = { quality: c.quality, formatScore: c.formatScore };
       for (const f of filesFor(ctx, c)) {
+        if (isLanguageReplacement(ctx, c, f)) continue;
         if (!isUpgradeAllowed(ctx.profile, f, next)) {
           return { reason: 'qualityUpgradesDisabled', message: 'Quality profile does not allow upgrades' };
         }
@@ -776,6 +827,10 @@ export const specifications: readonly Specification[] = [
             upgraded++;
             continue;
           }
+          if (isLanguageReplacement(ctx, c, file)) {
+            if (compareQuality(ctx.profile, c.quality, file.quality) >= 0) upgraded++;
+            continue;
+          }
           if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
           if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') upgraded++;
         }
@@ -785,6 +840,14 @@ export const specifications: readonly Specification[] = [
         return ok ? null : { reason: 'diskNotUpgrade', message: `Season pack upgrades only ${upgraded} of ${total} episodes` };
       }
       for (const f of files) {
+        if (isLanguageReplacement(ctx, c, f)) {
+          // Adds a required audio language: same or better quality is enough (keep at least the current quality).
+          if (compareQuality(ctx.profile, c.quality, f.quality) >= 0) continue;
+          return {
+            reason: 'languageReplacementLowerQuality',
+            message: `Existing file ${qualityName(f.quality)} is better; a release that adds the audio language must keep at least that quality`,
+          };
+        }
         if (!cutoffNotMet(ctx.profile, f, c.quality)) {
           return { reason: 'diskCutoffMet', message: `Existing file ${qualityName(f.quality)} meets cutoff` };
         }

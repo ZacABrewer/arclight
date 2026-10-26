@@ -28,6 +28,8 @@ import { MediaFilesTable } from './media-files-table.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { SearchTab } from './series-details.js';
 import { VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
+import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
+import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
 import { t } from '../../i18n/index.js';
 
 const route = getRouteApi('/library/movie/$id');
@@ -67,6 +69,7 @@ export function MovieDetailsPage() {
   const del = useDeleteMovies();
   const search = useAutomaticSearch();
   const [interactive, setInteractive] = useState(false);
+  const [addingLanguage, setAddingLanguage] = useState(false);
   const navigate = useNavigate();
   const progress = useQueueProgress(useMemo(() => ({ movieId: id }), [id]));
 
@@ -131,6 +134,7 @@ export function MovieDetailsPage() {
                 </span>
               ) : null}
             </div>
+            <ItemLanguageChips query={{ movieId: m.id }} />
           </>
         }
         overview={m.overview}
@@ -140,6 +144,7 @@ export function MovieDetailsPage() {
               {t('library.movieDetails.searchMovie')}
             </Button>
             <Button onClick={() => setInteractive(true)}>{t('library.movieDetails.interactiveSearch')}</Button>
+            <Button onClick={() => setAddingLanguage(true)}>{t('features.additionalLanguages.addAdditional')}</Button>
             <RefreshButtons target={{ movieId: m.id }} />
             <CrossSeedSearchButton target={{ movieId: m.id }} />
             <Link className={buttonClass({ variant: 'secondary' })} to="/activity/manual-import" search={{ movieId: m.id }}>
@@ -174,6 +179,7 @@ export function MovieDetailsPage() {
         ]}
       />
 
+      <AddAdditionalDialog open={addingLanguage} onClose={() => setAddingLanguage(false)} targets={[{ movieId: m.id }]} title={m.title} />
       <InteractiveSearchModal target={interactive ? { movieId: m.id } : null} title={m.title} onClose={() => setInteractive(false)} />
       {editing ? <EditMovieModal movie={m} onClose={() => setEditing(false)} /> : null}
       <DeleteMediaDialog

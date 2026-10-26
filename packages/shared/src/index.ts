@@ -45,3 +45,4 @@ export * from './discord-bot.js';
 export * from './transcode.js';
 export * from './tracker-stats.js';
 export * from './cross-seed.js';
+export * from './additional-languages.js';

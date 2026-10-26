@@ -56,6 +56,7 @@ import { crossSeedModule } from './modules/cross-seed/index.js';
 import { engineAgentModule } from './modules/engine-agent/index.js';
 import { discordBotModule } from './modules/discord-bot/index.js';
 import { transcodeModule } from './modules/transcode/index.js';
+import { additionalLanguagesModule } from './modules/additional-languages/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -142,6 +143,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // Requests do not send their own pushes yet, so the bus listener stays on.
     pushModule,
     subtitlesModule,
+    // "Add additional…" languages, over subtitles, releases and the library.
+    additionalLanguagesModule,
     requestsModule,
     // Slash commands and request channel posts over the requests service.
     discordBotModule,

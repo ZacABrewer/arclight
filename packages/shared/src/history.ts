@@ -46,6 +46,8 @@ export const HistoryEventType = z.enum([
   'downloadIgnored',
   // A library file was remuxed or transcoded in place (transcode module).
   'fileTranscoded',
+  // "Add additional…" asked for an audio/subtitle language, and what came of it (data.outcome).
+  'additionalLanguage',
 ]);
 export type HistoryEventType = z.infer<typeof HistoryEventType>;
 
