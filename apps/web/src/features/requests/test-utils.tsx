@@ -142,7 +142,7 @@ export function stubApi(routes: Record<string, unknown>, handler?: Handler): Fet
 export function authRoutes(u: User, isAdmin = u.role === 'admin'): Record<string, unknown> {
   const session = { user: u, via: 'session', isAdmin };
   return {
-    '/api/v1/auth/status': { needsSetup: false, authMethod: 'forms', authenticated: true, session },
+    '/api/v1/auth/status': { needsSetup: false, adminExists: true, authMethod: 'forms', authenticated: true, session },
     '/api/v1/auth/me': session,
   };
 }

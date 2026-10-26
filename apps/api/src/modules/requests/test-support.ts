@@ -436,6 +436,8 @@ export async function setup(opts: { watchlistProviders?: WatchlistProvider[]; ex
 /** Full HTTP stack: auth hook + the requests module, with session cookies per user. */
 export async function buildApp(opts: Parameters<typeof setup>[0] = {}) {
   const h = await setup(opts);
+  // Until an admin exists every route but setup answers SETUP_REQUIRED.
+  if (!authServiceFor(h.ctx).hasAdmin()) addUser(h.db, { role: 'admin', username: 'owner' });
   const app = Fastify().withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);

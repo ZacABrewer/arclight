@@ -17,17 +17,19 @@ class FakeSocket {
 
 const admin = { id: 1, username: 'admin', role: 'admin', permissions: 2, createdAt: '2026-01-01T00:00:00.000Z', settings: {} };
 const viewer = { ...admin, id: 2, username: 'viewer', displayName: 'Vee', role: 'user', permissions: 0 };
+/** A user an admin granted read-only Calendar access. */
+const calendarViewer = { ...viewer, appAccess: ['calendar'] };
 
 type Handler = (url: string, init?: RequestInit) => { status: number; body?: unknown } | undefined;
 let handler: Handler;
 let calls: Array<{ url: string; method: string; body: unknown }>;
 
-function anonymous(needsSetup = false) {
-  return { needsSetup, authMethod: 'forms', authenticated: false, session: null };
+function anonymous(needsSetup = false, adminExists = !needsSetup) {
+  return { needsSetup, adminExists, authMethod: 'forms', authenticated: false, session: null };
 }
-function signedIn(user: typeof admin) {
+function signedIn(user: typeof admin & { appAccess?: string[] }) {
   const session = { user, via: 'session', isAdmin: user.role === 'admin' };
-  return { status: { needsSetup: false, authMethod: 'forms', authenticated: true, session }, session };
+  return { status: { needsSetup: false, adminExists: true, authMethod: 'forms', authenticated: true, session }, session };
 }
 
 beforeEach(() => {
@@ -81,8 +83,24 @@ describe('route guard', () => {
     expect(screen.queryByRole('navigation')).toBeNull();
   });
 
-  it('hides admin-only nav for role user and shows the user menu', async () => {
+  it('sends a portal user who opens the app (dashboard, discover) to the request portal', async () => {
     const { status, session } = signedIn(viewer);
+    handler = (url) => {
+      if (url === '/api/v1/auth/status') return { status: 200, body: status };
+      if (url === '/api/v1/auth/me') return { status: 200, body: session };
+      return undefined;
+    };
+    const router = renderAt('/');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/portal'));
+    router.history.push('/settings/security');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/portal'));
+    router.history.push('/discover/movie/603');
+    await waitFor(() => expect(router.state.location.pathname).toBe('/portal/movie/603'));
+    expect(document.querySelector('.al-rail')).toBeNull();
+  });
+
+  it('shows a user only the app areas an admin granted, plus the way back to the portal', async () => {
+    const { status, session } = signedIn(calendarViewer);
     handler = (url) => {
       if (url === '/api/v1/auth/status') return { status: 200, body: status };
       if (url === '/api/v1/auth/me') return { status: 200, body: session };
@@ -93,14 +111,30 @@ describe('route guard', () => {
     expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
     expect(screen.queryByRole('link', { name: 'System' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Calendar' })).toBeTruthy();
-    // No admin status in the top bar; the mobile bar swaps Activity for Requests.
+    expect(screen.queryByRole('link', { name: 'Library' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'Dashboard' })).toBeNull();
+    // No admin status in the top bar; the mobile bar leads back to the portal.
     expect(document.querySelector('.al-topbar__requests')).toBeNull();
     expect(document.querySelector('.al-topbar__vpn')).toBeNull();
     const tabbar = document.querySelector('.al-tabbar') as HTMLElement;
-    expect(Array.from(tabbar.querySelectorAll('.al-tabbar__item')).map((t) => t.textContent)).toEqual(['Home', 'Library', 'Discover', 'Requests', 'More']);
+    expect(Array.from(tabbar.querySelectorAll('.al-tabbar__item')).map((t) => t.textContent)).toEqual(['Request portal', 'More']);
     fireEvent.click(screen.getByRole('button', { name: /Vee/ }));
     expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Security/ })).toBeNull();
+  });
+});
+
+describe('first launch', () => {
+  it('sends every page, /login included, to the setup wizard until the admin exists', async () => {
+    handler = (url) => {
+      if (url === '/api/v1/auth/status') return { status: 200, body: anonymous(true, false) };
+      if (url === '/api/v1/setup/status') return { status: 200, body: { needsSetup: true, steps: [{ id: 'admin', complete: false, optional: false }] } };
+      return undefined;
+    };
+    for (const path of ['/', '/login', '/portal', '/settings/security']) {
+      const router = renderAt(path);
+      await waitFor(() => expect(router.state.location.pathname).toBe('/setup'));
+    }
   });
 });
 
@@ -185,7 +219,8 @@ describe('setup wizard', () => {
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password1' } });
     fireEvent.click(screen.getByRole('button', { name: 'Create admin account' }));
-    expect(await screen.findByRole('heading', { name: 'Connect TMDB' })).toBeTruthy();
+    // Next: who else may sign in (the "User defaults" step).
+    expect(await screen.findByRole('heading', { name: 'Who else can sign in?' })).toBeTruthy();
     expect(calls.find((c) => c.url === '/api/v1/setup/admin')?.body).toEqual({ username: 'admin', password: 'password1' });
   });
 

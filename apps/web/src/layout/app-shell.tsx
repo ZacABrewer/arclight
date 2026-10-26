@@ -2,6 +2,7 @@ import { useState, type MouseEvent } from 'react';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import { Backdrop, Button, ContentInset, Drawer, Icon, MobileTabBar, Rail, TopBar, type RailItem, type TabBarItem } from '../arclight/index.js';
 import { useAuth } from '../auth/auth-context.js';
+import type { Access } from '../auth/access.js';
 import { useLiveEvents } from '../live.js';
 import { activeMobileTab, activeRailCode, mobileTabsFor, railFor, visibleNav } from '../nav.js';
 import { RestartBanner } from './restart-banner.js';
@@ -23,11 +24,11 @@ function ShellBackdrop() {
 }
 
 /** Mobile "More": every section the role can open, as 44px rows. */
-function MoreDrawer({ open, onClose, isAdmin }: { open: boolean; onClose: () => void; isAdmin: boolean }) {
+function MoreDrawer({ open, onClose, access }: { open: boolean; onClose: () => void; access: Access }) {
   return (
     <Drawer open={open} onClose={onClose} title={t('common.more')} width={320}>
       <ul className="al-more-list">
-        {visibleNav(isAdmin).map((s) => (
+        {visibleNav(access).map((s) => (
           <li key={s.label}>
             <Link to={s.to} className="al-more-list__item" onClick={onClose}>
               {s.label}
@@ -43,7 +44,7 @@ function Shell() {
   useLiveEvents();
   const router = useRouter();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  const { isAdmin } = useAuth();
+  const { isAdmin, access } = useAuth();
   const cluster = useStatusCluster(isAdmin);
   const [search, setSearch] = useState(false);
   const [more, setMore] = useState(false);
@@ -56,8 +57,8 @@ function Shell() {
     void router.navigate({ to: href as never });
   };
 
-  const rail: RailItem[] = railFor(isAdmin).map((r) => ({ code: r.code, label: r.label, title: r.title, href: r.href }));
-  const tabs: TabBarItem[] = mobileTabsFor(isAdmin).map((mobileTab) => ({ id: mobileTab.id, label: mobileTab.label, icon: mobileTab.icon, href: mobileTab.href ?? undefined }));
+  const rail: RailItem[] = railFor(access).map((r) => ({ code: r.code, label: r.label, title: r.title, href: r.href }));
+  const tabs: TabBarItem[] = mobileTabsFor(access).map((mobileTab) => ({ id: mobileTab.id, label: mobileTab.label, icon: mobileTab.icon, href: mobileTab.href ?? undefined }));
 
   return (
     <div className="al-app">
@@ -88,11 +89,11 @@ function Shell() {
       </TopBar>
       <ContentInset id="main">
         <RestartBanner />
-        <SectionNav pathname={pathname} isAdmin={isAdmin} />
+        <SectionNav pathname={pathname} access={access} />
         <Outlet />
       </ContentInset>
       <MobileTabBar
-        active={activeMobileTab(pathname, isAdmin)}
+        active={activeMobileTab(pathname, access)}
         items={tabs}
         onSelect={(id, e) => {
           if (id === 'more') {
@@ -103,7 +104,7 @@ function Shell() {
           go(tabs.find((tabBar) => tabBar.id === id)?.href, e);
         }}
       />
-      <MoreDrawer open={more} onClose={() => setMore(false)} isAdmin={isAdmin} />
+      <MoreDrawer open={more} onClose={() => setMore(false)} access={access} />
       <ShellOverlays isAdmin={isAdmin} search={search} setSearch={setSearch} sheet={sheet} setSheet={setSheet} />
     </div>
   );

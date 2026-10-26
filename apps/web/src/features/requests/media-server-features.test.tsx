@@ -17,7 +17,7 @@ afterEach(() => {
 
 const admin = user({ id: 1, username: 'root', role: 'admin', permissions: Permission.ADMIN });
 const page = (results: unknown[]) => ({ pageInfo: { total: results.length, take: 20, skip: 0 }, results });
-const signedOut = (extra: object = {}) => ({ needsSetup: false, authMethod: 'forms', authenticated: false, session: null, ...extra });
+const signedOut = (extra: object = {}) => ({ needsSetup: false, adminExists: true, authMethod: 'forms', authenticated: false, session: null, ...extra });
 const reqSettings = (over: Partial<UserRequestSettings> = {}): UserRequestSettings => ({ ...UserRequestSettings.parse({}), ...over });
 
 describe('helpers', () => {

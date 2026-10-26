@@ -34,16 +34,19 @@ import { DownloadClientsPage } from '../settings/download-clients/download-clien
 import { IndexersPage } from '../settings/indexers/indexers-page.js';
 import { VpnSettingsPage } from '../settings/vpn.js';
 import { crumbsFor } from './path-crumbs.js';
+import { UserDefaultsFields, useUserDefaults } from '../../features/users/user-defaults.js';
 import { t, chooseLocale, deviceLocale, type LocaleSetting } from '../../i18n/index.js';
 
-// Page 08 first-run wizard: Admin → TMDB → Root folders → Download client → Indexer → VPN.
-// One chamfered card per step under a diamond stepper. The admin step signs the new admin
-// in; every later step saves through the normal api as that admin, and the last step marks
-// setup complete (with the sign-in method).
+// Page 08 first-run wizard: Admin → User defaults → TMDB → Root folders → Download client →
+// Indexer → VPN. One chamfered card per step under a diamond stepper. The admin step creates a
+// local admin account (username + password; never a media-server account) and signs it in; no
+// other step opens before it. Every later step saves through the normal api as that admin, and
+// the last step marks setup complete (with the sign-in method).
 
-export type WizardStep = SetupStepId | 'vpn';
+export type WizardStep = SetupStepId | 'users' | 'vpn';
 export const WIZARD_STEPS: readonly { id: WizardStep; label: string; optional?: boolean }[] = [
   { id: 'admin', get label() { return t('common.admin'); } },
+  { id: 'users', get label() { return t('setup.wizard.userDefaults'); } },
   { id: 'tmdb', get label() { return t('setup.wizard.tmdb'); } },
   { id: 'rootFolders', get label() { return t('common.rootFolders'); } },
   { id: 'downloadClient', get label() { return t('setup.wizard.downloadClient'); }, optional: true },
@@ -90,6 +93,12 @@ export function validateRootFolders(d: RootFolderDraft, alreadyHasOne: boolean):
   if (tv && movies && tv === movies) e.movies = t('setup.wizard.tvAndMoviesNeedDifferent');
   if (!tv && !movies && !alreadyHasOne) e.form = t('setup.wizard.addAtLeastOneRoot');
   return e;
+}
+
+/** The step to show for stepper index `i`: nothing past the admin step until the admin exists. */
+export function wizardTarget(i: number, adminDone: boolean): WizardStep {
+  if (!adminDone) return 'admin';
+  return WIZARD_STEPS[Math.min(Math.max(i, 0), WIZARD_STEPS.length - 1)]!.id;
 }
 
 export function firstIncompleteStep(status: SetupStatus): WizardStep {
@@ -173,7 +182,7 @@ function AdminStep({ onDone }: { onDone: () => void }) {
 
   return (
     <form className="wiz-body" onSubmit={(e) => void submit(e)} noValidate>
-      <StepHead title={t('setup.wizard.createTheAdminAccount')}>{t('setup.wizard.youSignInWithThis')}</StepHead>
+      <StepHead title={t('setup.wizard.createTheAdminAccount')}>{t('setup.wizard.adminIsLocal')}</StepHead>
       <div className="wiz-grid">
         <Field label={t('setup.wizard.language')} hint={t('setup.wizard.languageHint')}>
           <LanguageSelect
@@ -201,6 +210,21 @@ function AdminStep({ onDone }: { onDone: () => void }) {
       <button type="submit" hidden />
       <StepFooter onContinue={() => void submit()} continueLabel={t('setup.wizard.createAdminAccount')} busy={busy} />
     </form>
+  );
+}
+
+/** Who else may sign in, and what new accounts get (Settings > Users later). */
+function UserDefaultsStep({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+  const state = useUserDefaults();
+  const next = async () => {
+    if (await state.save()) onDone();
+  };
+  return (
+    <div className="wiz-body">
+      <StepHead title={t('setup.wizard.userDefaultsTitle')}>{t('setup.wizard.userDefaultsLead')}</StepHead>
+      <UserDefaultsFields state={state} />
+      <StepFooter onBack={onBack} onContinue={() => void next()} busy={state.saving} />
+    </div>
   );
 }
 
@@ -494,11 +518,11 @@ export function SetupWizard() {
     );
   }
 
-  const complete = (id: WizardStep) => (id === 'vpn' ? false : (setup.data.steps.find((s) => s.id === id)?.complete ?? false));
+  const complete = (id: WizardStep) => (id === 'vpn' || id === 'users' ? false : (setup.data.steps.find((s) => s.id === id)?.complete ?? false));
   const index = WIZARD_STEPS.findIndex((s) => s.id === step);
   const goTo = (i: number) => {
     void setup.refetch();
-    setStep(WIZARD_STEPS[Math.min(Math.max(i, 0), WIZARD_STEPS.length - 1)]!.id);
+    setStep(wizardTarget(i, complete('admin')));
   };
   const next = () => goTo(index + 1);
   const back = () => goTo(index - 1);
@@ -515,13 +539,20 @@ export function SetupWizard() {
   } else if (step === 'admin') {
     body = complete('admin') ? (
       <div className="wiz-body">
-        <StepHead title={t('setup.wizard.theAdminAccountIsReady')}>{t('setup.wizard.continueToConnectTmdb')}</StepHead>
+        <StepHead title={t('setup.wizard.theAdminAccountIsReady')}>{t('setup.wizard.continueToUserDefaults')}</StepHead>
         <StepFooter onContinue={next} />
       </div>
     ) : (
-      <AdminStep onDone={next} />
+      <AdminStep
+        onDone={() => {
+          // The admin exists now (setup status catches up on the refetch).
+          void setup.refetch();
+          setStep('users');
+        }}
+      />
     );
-  } else if (step === 'tmdb') body = <TmdbStep complete={complete('tmdb')} onBack={back} onDone={next} />;
+  } else if (step === 'users') body = <UserDefaultsStep onBack={back} onDone={next} />;
+  else if (step === 'tmdb') body = <TmdbStep complete={complete('tmdb')} onBack={back} onDone={next} />;
   else if (step === 'rootFolders') body = <RootFoldersStep onBack={back} onDone={next} />;
   else if (step === 'downloadClient') {
     body = (

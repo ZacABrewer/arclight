@@ -10,7 +10,7 @@ import { FlareSolverrClient } from '@arclight/indexers';
 import type { AppContext } from '../../app.js';
 import type { Db } from '../../db/index.js';
 import { tags } from '../../db/schema.js';
-import { createTestDb } from '../../db/test-utils.js';
+import { createTestDb, seedAdmin } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
 import { Scheduler } from '../../scheduler.js';
 import { authServiceFor, installAuth } from '../auth/index.js';
@@ -71,6 +71,7 @@ let fake: ReturnType<typeof fakeSolver>;
 
 async function buildCtx(): Promise<AppContext> {
   db = await createTestDb();
+  seedAdmin(db);
   const log = pino({ level: 'silent' });
   const bus = new EventBus();
   return {

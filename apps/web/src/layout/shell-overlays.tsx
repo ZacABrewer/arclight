@@ -7,6 +7,7 @@ import { CommandPalette, DEFAULT_SHORTCUTS, GlobalSearchOverlay, KeyboardSheet, 
 import { useRunJob, useScheduledJobs } from '../hooks/jobs.js';
 import { libraryKeys } from '../hooks/library-keys.js';
 import { buildCommandGroups, buildSearchGroups, buildTaskGroups, type Target } from './search-groups.js';
+import { useAuth } from '../auth/auth-context.js';
 import { t } from '../i18n/index.js';
 
 function useDebounced<T>(value: T, ms: number): T {
@@ -42,13 +43,17 @@ export function GlobalSearch({ open, onClose, isAdmin, debounceMs = 250 }: Globa
     if (!open) setQuery('');
   }, [open]);
 
-  // Library lists share the library pages' cache; fetched once the overlay opens.
-  const series = useQuery({ queryKey: libraryKeys.series.list(), queryFn: () => libraryApi.series.list({ includeStatistics: true }), enabled: open, retry: false });
-  const movies = useQuery({ queryKey: libraryKeys.movie.list(), queryFn: () => libraryApi.movies.list(), enabled: open, retry: false });
+  // Library lists share the library pages' cache; fetched once the overlay opens, and only for
+  // people who may read the library (admins, or the Library app area). Discover lives in the
+  // portal for everyone else.
+  const { access } = useAuth();
+  const library = access.admin || access.areas.includes('library');
+  const series = useQuery({ queryKey: libraryKeys.series.list(), queryFn: () => libraryApi.series.list({ includeStatistics: true }), enabled: open && library, retry: false });
+  const movies = useQuery({ queryKey: libraryKeys.movie.list(), queryFn: () => libraryApi.movies.list(), enabled: open && library, retry: false });
   const discover = useQuery({
     queryKey: ['discover', 'search', 'overlay', debounced],
     queryFn: () => discoverApi.search(debounced),
-    enabled: open && debounced.length >= 2,
+    enabled: open && isAdmin && debounced.length >= 2,
     retry: false,
     staleTime: 60_000,
   });

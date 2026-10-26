@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
+import { Permission } from '@arclight/shared';
 import { authRoutes, makeRequest, renderAt, stubApi, user } from '../../features/requests/test-utils.js';
 import { requestTimeline } from './my-requests-page.js';
 
@@ -37,8 +38,8 @@ describe('requests page', () => {
     await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Approved 2 requests'));
   });
 
-  it('shows no admin actions to a plain user', async () => {
-    stubApi({ ...authRoutes(user()), '/api/v1/request': page([makeRequest()]) });
+  it('shows no admin actions to a user who may only view all requests', async () => {
+    stubApi({ ...authRoutes(user({ permissions: Permission.REQUEST | Permission.REQUEST_VIEW })), '/api/v1/request': page([makeRequest()]) });
     renderAt('/requests');
     expect(await screen.findByRole('link', { name: 'The Matrix' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();

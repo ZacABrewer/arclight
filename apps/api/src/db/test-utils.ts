@@ -19,3 +19,26 @@ export async function createTestDb(extraTables: Record<string, unknown> = {}): P
 
   return drizzle(sqlite, { schema });
 }
+
+/**
+ * Inserts an admin account (unusable password) so a full app answers: until an admin exists
+ * every API route but setup answers 403 SETUP_REQUIRED. Tests that call the api with the API
+ * key need this; tests of first-run behaviour leave it out.
+ */
+export function seedAdmin(db: Db, username = 'test-admin'): number {
+  const now = new Date().toISOString();
+  return db
+    .insert(schema.users)
+    .values({
+      username,
+      usernameKey: username.toLowerCase(),
+      passwordHash: 'disabled$test',
+      role: 'admin',
+      permissions: 2,
+      settings: {},
+      createdAt: now,
+      updatedAt: now,
+    })
+    .returning({ id: schema.users.id })
+    .get().id;
+}

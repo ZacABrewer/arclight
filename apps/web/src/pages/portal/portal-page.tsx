@@ -11,6 +11,9 @@ import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
 import { DiscoverSliders, BrowseLinks } from '../discover/discover-home.js';
 import { DiscoverSearchBox } from '../discover/discover-search.js';
 import { MyRequestsPage } from '../requests/my-requests-page.js';
+import { ProfilePage } from '../profile-page.js';
+import { IssueDetailPage, IssuesPage } from '../issues/issues-page.js';
+import { ADMIN_ACCESS, appHomeFor, type Access } from '../../auth/access.js';
 import '../../components/media/media-kit.css';
 import '../discover/discover.css';
 import './portal.css';
@@ -56,12 +59,25 @@ export function portalUnavailable(err: unknown): 'off' | 'error' {
 
 /**
  * Where "Open Arclight" goes from a portal page (a full page load, which leaves portal mode), or
- * null on a portal-only hostname.
+ * null: on a portal-only hostname, and for people without any app page (the portal is all a
+ * non-admin gets unless an admin granted app access).
  */
-export function openAppHref(doc: PortalDocument | null | undefined): string | null {
+export function openAppHref(doc: PortalDocument | null | undefined, access: Access = ADMIN_ACCESS): string | null {
+  if (doc?.mode === 'host' && doc.portalOnly) return null;
+  if (!access.admin) return appHomeFor(access);
   if (!doc || doc.mode === 'path') return '/';
-  return doc.portalOnly ? null : '/discover';
+  return '/discover';
 }
+
+/** What a signed-in person sees when /public/portal did not answer. */
+const SIGNED_IN_FALLBACK: PublicPortal = {
+  enabled: true,
+  title: '',
+  applicationUrl: '',
+  message: '',
+  allowAnonymousDiscover: false,
+  loginMethods: { local: true, mediaServer: null, plex: false },
+};
 
 function usePortal() {
   return useQuery({ queryKey: portalKeys.portal, queryFn: publicPortalApi.get, retry: false, staleTime: 60_000 });
@@ -87,6 +103,8 @@ const NAV: ReadonlyArray<{ to: DiscoverPath; label: () => string; icon: IconName
   { to: '/tv', label: () => t('common.series'), icon: 'tv' },
   { to: '/search', label: () => t('common.search'), icon: 'search' },
   { to: '/requests', label: () => t('common.myRequests'), icon: 'inbox', signedIn: true },
+  { to: '/issues', label: () => t('common.issues'), icon: 'alert', signedIn: true },
+  { to: '/profile', label: () => t('portal.navAccount'), icon: 'user', signedIn: true },
 ];
 
 /** The nav entry a portal route path belongs to. */
@@ -97,23 +115,27 @@ export function portalSection(pathname: string): DiscoverPath {
   if (rest === '/tv' || rest.startsWith('/tv?')) return '/tv';
   if (rest.startsWith('/search')) return '/search';
   if (rest.startsWith('/requests')) return '/requests';
+  if (rest.startsWith('/profile')) return '/profile';
+  if (rest.startsWith('/issues')) return '/issues';
   return '/movies';
 }
 
 /** Layout of every /portal page: header, gate, page, mobile tab bar. */
 export function PortalLayout() {
   const signedIn = useSignedIn();
-  const { logout } = useAuth();
+  const { logout, access } = useAuth();
   const portal = usePortal();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const title = portal.data?.title || t('common.arclight');
-  const appHref = openAppHref((useRouter().options.context as { portal?: PortalDocument | null } | undefined)?.portal);
+  const appHref = openAppHref((useRouter().options.context as { portal?: PortalDocument | null } | undefined)?.portal, access);
 
   useEffect(() => {
     document.title = t('portal.documentTitle', { title });
   }, [title]);
 
-  const off = portal.isError || (portal.data && !portal.data.enabled);
+  // "Public portal off" only hides the portal from anonymous visitors: signed-in people always
+  // have it (for non-admins it is the whole app).
+  const off = !signedIn && (portal.isError || (portal.data !== undefined && !portal.data.enabled));
   const isHome = pathname === PORTAL_ROOT || pathname === `${PORTAL_ROOT}/`;
   const gated = portal.data && !signedIn && !portal.data.allowAnonymousDiscover && !isHome;
   const section = portalSection(pathname);
@@ -160,7 +182,7 @@ export function PortalLayout() {
           </div>
         </header>
         <main className="portal-main">
-          {portal.isPending ? (
+          {portal.isPending && !signedIn ? (
             <Skeleton lines={6} />
           ) : off ? (
             <PortalOff reason={portal.isError ? portalUnavailable(portal.error) : 'off'} error={portal.error} />
@@ -215,16 +237,18 @@ function PortalOff({ reason, error }: { reason: 'off' | 'error'; error: unknown 
 export function PortalHomePage() {
   const portal = usePortal();
   const signedIn = useSignedIn();
-  if (!portal.data) return null;
-  const logins = portalLoginOptions(portal.data.loginMethods);
-  const browse = signedIn || portal.data.allowAnonymousDiscover;
+  // Signed-in people always get their portal, even when the descriptor did not load.
+  const data = portal.data ?? (signedIn ? SIGNED_IN_FALLBACK : null);
+  if (!data) return null;
+  const logins = portalLoginOptions(data.loginMethods);
+  const browse = signedIn || data.allowAnonymousDiscover;
   return (
     <div className="portal-stack">
       <div className={signedIn ? 'portal-top portal-top--single' : 'portal-top'}>
         <Pane chamfer="tl" strong className="portal-card" aria-label={t('portal.welcome')}>
           <p className="al-label portal-kicker">{t('portal.kicker')}</p>
-          <h1 className="al-title-l portal-heading">{portal.data.title || t('common.arclight')}</h1>
-          <p className="portal-message">{portal.data.message || (signedIn ? t('portal.signedInHelp') : t('portal.defaultMessage'))}</p>
+          <h1 className="al-title-l portal-heading">{data.title || t('common.arclight')}</h1>
+          <p className="portal-message">{data.message || (signedIn ? t('portal.signedInHelp') : t('portal.defaultMessage'))}</p>
           {browse ? (
             <div className="portal-links">
               <BrowseLinks />
@@ -249,6 +273,43 @@ export function PortalHomePage() {
       {browse ? <DiscoverSliders /> : <p className="al-caption portal-note">{t('portal.discoverNeedsSignIn')}</p>}
     </div>
   );
+}
+
+/** Portal "Issues": the signed-in user's issues (everyone's with the issue permissions). */
+export function PortalIssuesPage() {
+  const signedIn = useSignedIn();
+  if (!signedIn) {
+    return (
+      <Pane chamfer="tl" strong className="portal-card" aria-label={t('common.issues')}>
+        <EmptyState title={t('portal.issuesNeedSignIn')} action={<SignInLink>{t('portal.signIn')}</SignInLink>}>
+          {t('portal.requestsNeedSignInHelp')}
+        </EmptyState>
+      </Pane>
+    );
+  }
+  return <IssuesPage />;
+}
+
+/** Portal issue thread (sign-in prompt for anonymous visitors). */
+export function PortalIssueDetailPage() {
+  const signedIn = useSignedIn();
+  if (!signedIn) return <PortalIssuesPage />;
+  return <IssueDetailPage />;
+}
+
+/** Portal "Account": the signed-in user's profile (password, linked accounts, notifications). */
+export function PortalProfilePage() {
+  const signedIn = useSignedIn();
+  if (!signedIn) {
+    return (
+      <Pane chamfer="tl" strong className="portal-card" aria-label={t('portal.navAccount')}>
+        <EmptyState title={t('portal.accountNeedsSignIn')} action={<SignInLink>{t('portal.signIn')}</SignInLink>}>
+          {t('portal.requestsNeedSignInHelp')}
+        </EmptyState>
+      </Pane>
+    );
+  }
+  return <ProfilePage />;
 }
 
 /** Portal "My requests": the signed-in user's requests (sign-in prompt otherwise). */

@@ -9,7 +9,7 @@ import { buildApp, type AppContext } from './app.js';
 import type { AppConfig } from './config.js';
 import type { Db } from './db/index.js';
 import { movies, series } from './db/schema.js';
-import { createTestDb } from './db/test-utils.js';
+import { createTestDb, seedAdmin } from './db/test-utils.js';
 import { EventBus } from './events.js';
 import { authServiceFor } from './modules/auth/index.js';
 import { historyServiceFor, type HistoryTarget } from './modules/history/index.js';
@@ -79,6 +79,7 @@ let h: Harness;
 
 async function harness(): Promise<Harness> {
   const db = await createTestDb();
+  seedAdmin(db);
   const searches: SearchTarget[] = [];
   let ctxRef: AppContext | undefined;
   const app = await buildApp(config, db, pino({ level: 'silent' }), {

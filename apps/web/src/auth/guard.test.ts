@@ -1,12 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AuthStatus } from '@arclight/shared';
+import { Permission, type AuthStatus } from '@arclight/shared';
 import { request, setUnauthorizedHandler } from '../api/client.js';
 import { isAbsolutePath, validateAdmin, validateRootFolders, firstIncompleteStep } from '../pages/setup/setup-wizard.js';
 import { visibleNav } from '../nav.js';
 import { PUBLIC_PATHS, SHELLLESS_PATHS, isPublicPath, resolveAuthRedirect, safeRedirect } from './guard.js';
 
 const user = { id: 1, username: 'amy', role: 'user' as const, permissions: 0, createdAt: '2026-01-01T00:00:00.000Z', settings: {} };
-const status = (over: Partial<AuthStatus>): AuthStatus => ({ needsSetup: false, authMethod: 'forms', authenticated: true, session: null, ...over });
+const status = (over: Partial<AuthStatus>): AuthStatus => ({ needsSetup: false, adminExists: true, authMethod: 'forms', authenticated: true, session: null, ...over });
 
 describe('resolveAuthRedirect', () => {
   it('sends everything to /setup while setup is pending, except /setup and /login', () => {
@@ -31,11 +31,45 @@ describe('resolveAuthRedirect', () => {
     expect(resolveAuthRedirect(s, '/library/tv')).toBeNull();
   });
 
-  it('keeps plain users out of admin-only sections', () => {
+  it('keeps non-admins in the portal: no dashboard, no admin pages, no discover in the app', () => {
     const s = status({ session: { user, via: 'session', isAdmin: false } });
-    expect(resolveAuthRedirect(s, '/settings/security')).toBe('/');
-    expect(resolveAuthRedirect(s, '/system/status')).toBe('/');
-    expect(resolveAuthRedirect(s, '/calendar')).toBeNull();
+    for (const path of ['/', '/settings/security', '/system/status', '/calendar', '/library/tv', '/activity/queue', '/wanted/missing', '/discover', '/search', '/design']) {
+      expect([path, resolveAuthRedirect(s, path)]).toEqual([path, '/portal']);
+    }
+    // After sign-in a non-admin lands in the portal, whatever the return path was.
+    expect(resolveAuthRedirect(s, '/login', '/login', '/settings/general')).toBe('/portal');
+    expect(resolveAuthRedirect(s, '/login', '/login')).toBe('/portal');
+  });
+
+  it('opens exactly the granted app areas, read-only views only', () => {
+    const s = status({ session: { user: { ...user, appAccess: ['library', 'wanted'] }, via: 'session', isAdmin: false } });
+    expect(resolveAuthRedirect(s, '/library/tv')).toBeNull();
+    expect(resolveAuthRedirect(s, '/library/series/4')).toBeNull();
+    expect(resolveAuthRedirect(s, '/wanted/cutoff')).toBeNull();
+    expect(resolveAuthRedirect(s, '/library/add')).toBe('/portal');
+    expect(resolveAuthRedirect(s, '/library/retention')).toBe('/portal');
+    expect(resolveAuthRedirect(s, '/calendar')).toBe('/portal');
+    expect(resolveAuthRedirect(s, '/')).toBe('/portal');
+    expect(resolveAuthRedirect(s, '/login', '/login', '/library/movies')).toBe('/library/movies');
+  });
+
+  it('opens request management to users with the permission', () => {
+    const s = status({ session: { user: { ...user, permissions: Permission.MANAGE_REQUESTS }, via: 'session', isAdmin: false } });
+    expect(resolveAuthRedirect(s, '/requests')).toBeNull();
+    expect(resolveAuthRedirect(s, '/requests/12')).toBeNull();
+    expect(resolveAuthRedirect(s, '/settings/requests')).toBe('/portal');
+  });
+
+  it('keeps admins on the dashboard and everywhere else', () => {
+    const s = status({ session: { user: { ...user, role: 'admin' }, via: 'session', isAdmin: true } });
+    for (const path of ['/', '/settings/security', '/discover', '/library/add']) expect(resolveAuthRedirect(s, path)).toBeNull();
+    expect(resolveAuthRedirect(s, '/login', '/login')).toBe('/');
+  });
+
+  it('sends everything to /setup until the admin account exists, /login included', () => {
+    const s = status({ needsSetup: true, adminExists: false, authenticated: false });
+    for (const path of ['/', '/login', '/portal', '/portal/movie/603', '/settings/security']) expect(resolveAuthRedirect(s, path)).toBe('/setup');
+    expect(resolveAuthRedirect(s, '/setup')).toBeNull();
   });
 
   it('lets anyone open the public portal once setup is done, without the app shell', () => {
@@ -68,11 +102,12 @@ describe('resolveAuthRedirect', () => {
 });
 
 describe('admin-only nav', () => {
-  it('hides admin sections for role user', () => {
-    const labels = visibleNav(false).map((s) => s.label);
-    expect(labels).toContain('Library');
-    expect(labels).not.toContain('Settings');
-    expect(labels).not.toContain('System');
+  it('hides every admin section from non-admins and shows only granted areas', () => {
+    expect(visibleNav(false).map((s) => s.to)).toEqual(['/portal']);
+    const lib = visibleNav({ admin: false, areas: ['library'], permissions: 0 });
+    expect(lib.map((s) => s.label)).toEqual(['Request portal', 'Library']);
+    // Read-only areas: no "Add new", retention or hygiene.
+    expect(lib[1]?.children?.map((c) => c.to)).toEqual(['/library/tv', '/library/movies', '/library/collections']);
     expect(visibleNav(true).map((s) => s.label)).toContain('Settings');
   });
 });

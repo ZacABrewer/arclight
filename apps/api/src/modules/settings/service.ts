@@ -25,6 +25,7 @@ import {
   RequestsSettings,
   SECRET_MASK,
   SecuritySettings,
+  SignInSettings,
   SolverSettings,
   SubtitleSettings,
   SeedingRulesSettings,
@@ -53,6 +54,8 @@ const sections = {
   vpn: VpnSettings,
   // Owned by the auth module (auth method, API key, setup state; routes under /settings/security).
   security: SecuritySettings,
+  // Owned by the auth module: how non-admins sign in (routes under /settings/signin).
+  signIn: SignInSettings,
   // Owned by the import-lists module (sync interval, clean library; routes under /settings/importlists).
   importLists: ImportListSettings,
   // Owned by the subtitles module (routes under /subtitle/settings; provider secrets masked there).

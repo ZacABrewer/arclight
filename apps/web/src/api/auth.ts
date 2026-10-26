@@ -11,6 +11,7 @@ import {
   Session,
   SessionRecord,
   SetupStatus,
+  SignInSettings,
   User,
   type AuthSettings,
   type LoginRequest,
@@ -66,6 +67,12 @@ export const securityApi = {
   get: () => request('/settings/security', SecuritySettingsResponse),
   update: (body: AuthSettings) => request('/settings/security', SecuritySettingsResponse, { method: 'PUT', json: body }),
   regenerateApiKey: () => request('/settings/security/apikey', ApiKeyResponse, { method: 'POST' }),
+};
+
+/** How non-admins sign in (Settings > Users, and the setup wizard's "User defaults" step). */
+export const signInApi = {
+  get: () => request('/settings/signin', SignInSettings),
+  update: (body: SignInSettings) => request('/settings/signin', SignInSettings, { method: 'PUT', json: body }),
 };
 
 export const setupApi = {

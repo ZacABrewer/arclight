@@ -14,7 +14,7 @@ import { portalRewrite } from '../../features/discover/portal-location.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
-const anonymous = { '/api/v1/auth/status': { needsSetup: false, authMethod: 'forms', authenticated: false, session: null } };
+const anonymous = { '/api/v1/auth/status': { needsSetup: false, adminExists: true, authMethod: 'forms', authenticated: false, session: null } };
 const portal = (over: Partial<PublicPortal> = {}): PublicPortal =>
   PublicPortal.parse({
     enabled: true,
@@ -134,7 +134,9 @@ describe('/portal', () => {
       (url) => (url.startsWith('/api/v1/discover/search?') ? { body: discoverPage([makeItem({ tmdbId: 438631, title: 'Dune', year: 2021 })]) } : undefined),
     );
     const { router } = renderAt('/portal');
-    expect(await screen.findByRole('link', { name: 'Open Arclight' })).toBeTruthy();
+    // A portal user has no app pages: no way into the app, but their account and issues are here.
+    expect(await screen.findAllByRole('link', { name: 'Account' })).not.toHaveLength(0);
+    expect(screen.queryByRole('link', { name: 'Open Arclight' })).toBeNull();
     expect(within(screen.getByRole('navigation', { name: 'Portal' })).getByRole('link', { name: 'My requests' }).getAttribute('href')).toBe('/portal/requests');
     const box = screen.getAllByRole('combobox', { name: 'Search movies, series and people' })[0]!;
     fireEvent.focus(box);

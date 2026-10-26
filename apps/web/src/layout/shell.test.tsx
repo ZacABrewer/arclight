@@ -38,8 +38,9 @@ describe('rail and navigation', () => {
     expect(rail.find((r) => r.code === 'ST')?.href).toBe('/settings/mediamanagement');
   });
 
-  it('hides admin-only rail codes for role user', () => {
-    expect(railFor(false).map((r) => r.code)).toEqual(['DB', 'LB', 'DS', 'RQ', 'CL', 'WN']);
+  it('gives non-admins only the portal link and the areas an admin granted', () => {
+    expect(railFor(false).map((r) => [r.code, r.href])).toEqual([['DS', '/portal']]);
+    expect(railFor({ admin: false, areas: ['library', 'calendar'], permissions: 0 }).map((r) => r.code)).toEqual(['LB', 'DS', 'CL']);
   });
 
   it('lights the rail code that owns a path, and none for 404 or profile', () => {
@@ -69,9 +70,10 @@ describe('rail and navigation', () => {
     expect(activeTab('/discover/person/3', tabs)?.label).toBe('Home');
   });
 
-  it('gives role user a Requests tab instead of Activity on the mobile bar', () => {
+  it('gives non-admins the portal (and Library when granted) on the mobile bar', () => {
     expect(mobileTabsFor(true).map((t) => t.label)).toEqual(['Home', 'Library', 'Discover', 'Activity', 'More']);
-    expect(mobileTabsFor(false).map((t) => t.label)).toEqual(['Home', 'Library', 'Discover', 'Requests', 'More']);
+    expect(mobileTabsFor(false).map((t) => t.label)).toEqual(['Request portal', 'More']);
+    expect(mobileTabsFor({ admin: false, areas: ['library'], permissions: 0 }).map((t) => t.href)).toEqual(['/portal', '/library/tv', null]);
     expect(activeMobileTab('/activity/history', true)).toBe('activity');
     expect(activeMobileTab('/requests/mine', false)).toBe('requests');
     expect(activeMobileTab('/calendar', true)).toBe('more');

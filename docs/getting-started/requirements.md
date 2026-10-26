@@ -8,7 +8,7 @@ This page lists what you need before installing Arclight: the host, the folders,
 |---|---|
 | A machine that stays on (NAS, home server, mini PC) | Arclight searches, downloads and imports in the background, on a schedule. |
 | Docker with Compose v2 (`docker compose`), or Node 24 and pnpm 10 for a native Windows install | Docker is the main way to run it. See [install-other-platforms.md](install-other-platforms.md) to choose a guide. |
-| A TMDB API key (free) | Arclight reads all series and movie information from TMDB. See [first-run-wizard.md](first-run-wizard.md#step-2-connect-tmdb). |
+| A TMDB API key (free) | Arclight reads all series and movie information from TMDB. See [first-run-wizard.md](first-run-wizard.md#step-3-connect-tmdb). |
 | One way to download | The built-in torrent engine, which is included and already set up. External clients such as qBittorrent are optional. |
 | Optional: a Proton VPN account | Only for the VPN layouts. The bundled Docker files are written for Proton over WireGuard with Gluetun; other providers are covered in [install-docker.md](install-docker.md#other-vpn-providers). |
 | Optional: indexers | Arclight ships site definitions; you still add the indexers you have access to. |

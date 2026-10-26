@@ -93,6 +93,8 @@ export function MediaServerLinkPanel({ userId, isAdmin = false }: { userId: numb
     );
   }
 
+  // Admins sign in with their Arclight password only; the api refuses a link to an admin.
+  if (isAdmin) return <p className="al-caption" style={{ margin: 0 }}>{t('features.requests.mediaServerLink.adminsCannotLink')}</p>;
   if (!kind) return <p className="al-caption" style={{ margin: 0 }}>{t('features.requests.mediaServerLink.noMediaServerIsSet')}</p>;
 
   if (kind === 'plex') {

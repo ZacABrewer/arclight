@@ -19,6 +19,22 @@ export function hasPermission(held: number, wanted: number): boolean {
   return (held & wanted) === wanted;
 }
 
+/**
+ * Parts of the admin app a non-admin may open read-only, granted per user by an admin (Users →
+ * edit user). A user with none of them is a portal user: discover, own requests, own issues and
+ * own account only. Admins always have everything; writes stay admin-only.
+ */
+export const AppArea = z.enum(['library', 'calendar', 'activity', 'wanted']);
+export type AppArea = z.infer<typeof AppArea>;
+export const APP_AREAS: readonly AppArea[] = AppArea.options;
+
+/** Stored app access: unique, known areas in a stable order. */
+export const AppAccess = z
+  .array(AppArea)
+  .max(APP_AREAS.length)
+  .transform((areas) => APP_AREAS.filter((a) => areas.includes(a)));
+export type AppAccess = z.infer<typeof AppAccess>;
+
 export const ThemeName = z.enum(['tron', 'dark', 'light']);
 export type ThemeName = z.infer<typeof ThemeName>;
 
@@ -42,6 +58,10 @@ export const User = z.object({
   email: z.string().optional(),
   role: UserRole,
   permissions: z.number().int(),
+  /** Read-only admin-app areas (non-admins); empty or absent: request portal only. Ignored for admins. */
+  appAccess: z.array(AppArea).optional(),
+  /** The account has a password set in Arclight (not only a media-server identity). */
+  localPassword: z.boolean().optional(),
   avatar: z.string().optional(),
   createdAt: z.string(),
   lastLoginAt: z.string().optional(),
@@ -68,12 +88,17 @@ export const UserCreate = z.object({
   email: Email.optional(),
   role: UserRole.default('user'),
   permissions: z.number().int().min(0).optional(),
+  appAccess: AppAccess.optional(),
   avatar: z.string().max(2048).optional(),
   settings: UserSettings.optional(),
 });
 export type UserCreate = z.input<typeof UserCreate>;
 
-/** PUT /api/v1/user/:id (admin). `password` resets the password; null clears an optional field. */
+/**
+ * PUT /api/v1/user/:id (admin). `password` resets the password; null clears an optional field.
+ * Promoting a user to admin needs a local password: the account must already have one, or the
+ * same request sets it (`password`).
+ */
 export const UserUpdate = z.object({
   username: Username.optional(),
   password: Password.optional(),
@@ -81,6 +106,7 @@ export const UserUpdate = z.object({
   email: Email.nullable().optional(),
   role: UserRole.optional(),
   permissions: z.number().int().min(0).optional(),
+  appAccess: AppAccess.optional(),
   avatar: z.string().max(2048).nullable().optional(),
   settings: UserSettings.optional(),
 });
@@ -142,6 +168,11 @@ export type Session = z.infer<typeof Session>;
 /** GET /api/v1/auth/status: public; what the web needs to route before anything else. */
 export const AuthStatus = z.object({
   needsSetup: z.boolean(),
+  /**
+   * An admin account exists. Until one does, the only page is /setup and the api answers
+   * 403 SETUP_REQUIRED on everything but setup, auth status and the ping.
+   */
+  adminExists: z.boolean(),
   authMethod: AuthMethod,
   authenticated: z.boolean(),
   session: Session.nullable(),
@@ -190,6 +221,27 @@ export type ApiKeyResponse = z.infer<typeof ApiKeyResponse>;
 
 export const SecuritySettingsResponse = AuthSettings.extend({ apiKey: z.string() });
 export type SecuritySettingsResponse = z.infer<typeof SecuritySettingsResponse>;
+
+/** Who may create an account by signing in with a media server for the first time. */
+export const NewUserPolicy = z.enum(['automatic', 'invite']);
+export type NewUserPolicy = z.infer<typeof NewUserPolicy>;
+
+/**
+ * GET/PUT /settings/signin (admin; stored as settings section `signIn`): how people other than
+ * admins sign in. Admins always sign in with their Arclight username and password, whatever is
+ * set here. A media-server method also needs that server's own "sign-in" switch (Settings >
+ * Media servers); `newUsers` also needs the server's "create users on sign-in".
+ */
+export const SignInSettings = z.object({
+  /** Non-admin users may sign in with an Arclight username and password. */
+  local: z.boolean().default(true),
+  jellyfin: z.boolean().default(true),
+  emby: z.boolean().default(true),
+  plex: z.boolean().default(true),
+  /** automatic: a first media-server sign-in creates the account; invite: an admin adds, imports or links it first. */
+  newUsers: NewUserPolicy.default('automatic'),
+});
+export type SignInSettings = z.infer<typeof SignInSettings>;
 
 // ---------------------------------------------------------------------------------------
 // first-run setup
@@ -244,6 +296,8 @@ export const SetupRequest = z.object({
   tmdbApiKey: z.string().trim().min(1).optional(),
   rootFolders: z.array(SetupRootFolder).optional(),
   authMethod: AuthMethod.default('forms'),
+  /** The "User defaults" step: how non-admins sign in (Settings > Users later). */
+  signIn: SignInSettings.optional(),
 });
 export type SetupRequest = z.input<typeof SetupRequest>;
 

@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthStatus, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
+import { ADMIN_ACCESS, accessOf, type Access } from './access.js';
 import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences.js';
 import { t, applyLocaleSetting } from '../i18n/index.js';
 import { setReduceMotion } from '../arclight/motion-preference.js';
@@ -17,6 +18,8 @@ export interface AuthState {
    * everything; the api still refuses what the caller may not do.
    */
   isAdmin: boolean;
+  /** What the person may open: admin, granted app areas, permission bits (auth/access.ts). */
+  access: Access;
   /** Re-reads /auth/status and /auth/me (after login, setup, profile edits). */
   refresh: () => Promise<void>;
   logout: () => Promise<void>;
@@ -57,6 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       user: session?.user ?? null,
       isAdmin: session ? session.isAdmin : true,
+      access: accessOf(session),
       refresh,
       logout,
     };
@@ -74,6 +78,7 @@ const FALLBACK: AuthState = {
   session: null,
   user: null,
   isAdmin: true,
+  access: ADMIN_ACCESS,
   refresh: async () => {},
   logout: async () => {},
 };

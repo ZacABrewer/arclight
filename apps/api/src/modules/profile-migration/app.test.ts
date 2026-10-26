@@ -5,7 +5,7 @@ import { QUALITIES, type QualityName, type QualityProfile } from '@arclight/shar
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import { movies } from '../../db/schema.js';
-import { createTestDb } from '../../db/test-utils.js';
+import { createTestDb, seedAdmin } from '../../db/test-utils.js';
 import { authServiceFor } from '../auth/index.js';
 import { insertFile, insertMovie } from '../notifications/test-support.js';
 import { profileMigrationServiceFor } from './index.js';
@@ -51,6 +51,7 @@ afterEach(async () => {
 
 async function app() {
   const db = await createTestDb();
+  seedAdmin(db);
   let ctxRef: AppContext | undefined;
   const instance = await buildApp(config, db, pino({ level: 'silent' }), { probe: false, onContext: (c) => (ctxRef = c) });
   await instance.ready();

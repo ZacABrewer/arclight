@@ -1,7 +1,8 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { describe, expect, it } from 'vitest';
-import { MediaServerSettings, Permission as P, REQUEST_SECRET_MASK, RequestsSettings } from '@arclight/shared';
+import { eq } from 'drizzle-orm';
+import { MediaServerSettings, Permission as P, REQUEST_SECRET_MASK, RequestsSettings, SignInSettings } from '@arclight/shared';
 import { users } from '../../db/schema.js';
 import { authModule, authServiceFor, installAuth, SESSION_COOKIE } from '../auth/index.js';
 import { setSection } from '../settings/service.js';
@@ -145,11 +146,12 @@ describe('importing media server users', () => {
     configureServer(h.db, h.servers, 'jellyfin');
     h.servers.jellyfin.users.push({ id: 'jf-off', name: 'off', password: 'x', isDisabled: true });
     const admin = addUser(h.db, { role: 'admin' });
-    await h.accounts.link(admin.actor, admin.id, { username: 'bob', password: 'pw2' });
+    const linked = addUser(h.db);
+    await h.accounts.link(admin.actor, linked.id, { username: 'bob', password: 'pw2' });
     const listed = await h.accounts.listServerUsers(admin.actor);
     expect(listed.map((u) => [u.externalId, u.linkedUserId, u.isDisabled])).toEqual([
       ['jf-alice', null, false],
-      ['jf-bob', admin.id, false],
+      ['jf-bob', linked.id, false],
       ['jf-off', null, true],
     ]);
     const out = await h.accounts.importUsers(admin.actor, {});
@@ -213,6 +215,8 @@ describe('sign-in over HTTP', () => {
   async function app() {
     const h = await harness();
     configureServer(h.db, h.servers, 'jellyfin');
+    // An admin exists (otherwise every route but setup answers SETUP_REQUIRED).
+    addUser(h.db, { role: 'admin' });
     const server = Fastify().withTypeProvider<ZodTypeProvider>();
     server.setValidatorCompiler(validatorCompiler);
     server.setSerializerCompiler(serializerCompiler);
@@ -270,5 +274,68 @@ describe('sign-in over HTTP', () => {
     expect(imported.json()).toMatchObject({ created: [{ externalId: 'jf-alice' }] });
     const settings = await h.server.inject({ method: 'GET', url: '/api/v1/settings/mediaserver', headers: { cookie: cookie(admin.id) } });
     expect(settings.json()).toMatchObject({ kind: 'jellyfin', apiKey: REQUEST_SECRET_MASK });
+  });
+});
+
+describe('media-server sign-in never reaches an admin', () => {
+  it('creates portal users only: role user, no app access, no usable local password', async () => {
+    const h = await harness();
+    configureServer(h.db, h.servers, 'jellyfin');
+    // bob is an administrator on the Jellyfin server; that changes nothing in Arclight.
+    const id = await h.accounts.login('jellyfin', 'bob', 'pw2');
+    const row = h.db.select().from(users).all().find((r) => r.id === id)!;
+    expect(row).toMatchObject({ role: 'user', appAccess: [], localPassword: false });
+  });
+
+  it('refuses media-server sign-in for an account that is (or became) admin', async () => {
+    const h = await harness();
+    configureServer(h.db, h.servers, 'jellyfin');
+    const id = (await h.accounts.login('jellyfin', 'bob', 'pw2'))!;
+    h.db.update(users).set({ role: 'admin' }).where(eq(users.id, id)).run();
+    await expect(h.accounts.login('jellyfin', 'bob', 'pw2')).rejects.toMatchObject({ code: 'FORBIDDEN', message: expect.stringMatching(/admins sign in with their Arclight username/) });
+    // The auth service refuses too, whoever proved the identity.
+    expect(() => authServiceFor(h.ctx).loginExternal(id)).toThrow(/admins sign in/);
+  });
+
+  it('refuses a Plex PIN sign-in into an admin account', async () => {
+    const h = await harness();
+    configureServer(h.db, h.servers, 'plex');
+    const u = addUser(h.db);
+    const linkPin = await h.accounts.plexPin();
+    h.servers.plex.approve(linkPin.id, 'tok', { id: 5, username: 'pat' }, []);
+    await h.accounts.link(u.actor, u.id, { pinId: linkPin.id });
+    h.db.update(users).set({ role: 'admin' }).where(eq(users.id, u.id)).run();
+    const pin = await h.accounts.plexPin();
+    h.servers.plex.approve(pin.id, 'tok', { id: 5, username: 'pat' }, []);
+    await expect(h.accounts.plexSignIn(pin.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  });
+
+  it('never links a media-server identity to an admin account', async () => {
+    const h = await harness();
+    configureServer(h.db, h.servers, 'jellyfin');
+    const admin = addUser(h.db, { role: 'admin' });
+    await expect(h.accounts.link(admin.actor, admin.id, { username: 'bob', password: 'pw2' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    const pin = await h.accounts.plexPin();
+    h.servers.plex.approve(pin.id, 'tok', { id: 9, username: 'adm' }, []);
+    await expect(h.accounts.plexLinkPoll(admin.actor, pin.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    expect(h.accounts.linkOf(admin.id)).toBeUndefined();
+  });
+
+  it('honours the sign-in settings: per-kind switches and invite-only new users', async () => {
+    const h = await harness();
+    configureServer(h.db, h.servers, 'jellyfin');
+    setSection(h.db, 'signIn', SignInSettings.parse({ jellyfin: false }));
+    await expect(h.accounts.login('jellyfin', 'bob', 'pw2')).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    setSection(h.db, 'signIn', SignInSettings.parse({ newUsers: 'invite' }));
+    await expect(h.accounts.login('jellyfin', 'bob', 'pw2')).rejects.toMatchObject({ code: 'FORBIDDEN', message: expect.stringMatching(/ask an admin/) });
+    expect(h.db.select().from(users).all()).toHaveLength(0);
+    // An admin adds the person first (here: a linked account); then they may sign in.
+    const u = addUser(h.db);
+    await h.accounts.link(u.actor, u.id, { username: 'bob', password: 'pw2' });
+    expect(await h.accounts.login('jellyfin', 'bob', 'pw2')).toBe(u.id);
+    setSection(h.db, 'signIn', SignInSettings.parse({ plex: false }));
+    configureServer(h.db, h.servers, 'plex');
+    const pin = await h.accounts.plexPin();
+    await expect(h.accounts.plexSignIn(pin.id)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
 });

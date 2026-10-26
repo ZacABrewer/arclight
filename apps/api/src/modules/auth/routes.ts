@@ -14,6 +14,7 @@ import {
   SetupRequest,
   SetupRootFolderRequest,
   SetupStatus,
+  SignInSettings,
   User,
   UserCreate,
   UserSelfUpdate,
@@ -29,6 +30,8 @@ import type { SetupService } from './setup.js';
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
 
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
+/** Routes every signed-in user needs for their own account (the request portal). */
+const portal = { access: { portal: true } } as const;
 const Empty = z.null();
 const errors = {
   400: AuthErrorResponse,
@@ -83,23 +86,24 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
       return reply.code(204).send(null);
     });
 
-    app.get('/auth/me', { schema: { response: { 200: Session, 401: AuthErrorResponse } } }, async (req) => sessionOf(req.auth!));
+    app.get('/auth/me', { config: portal, schema: { response: { 200: Session, 401: AuthErrorResponse } } }, async (req) => sessionOf(req.auth!));
 
     app.get('/auth/status', { schema: { response: { 200: AuthStatus } } }, async (req) => ({
       needsSetup: auth.needsSetup(),
+      adminExists: auth.hasAdmin(),
       authMethod: auth.authSettings().method,
       authenticated: req.auth !== null,
       session: req.auth ? sessionOf(req.auth) : null,
       mediaServerLogin: auth.mediaServerLogin?.() ?? null,
     }));
 
-    app.get('/auth/sessions', { schema: { response: { 200: z.array(SessionRecord) } } }, async (req) =>
+    app.get('/auth/sessions', { config: portal, schema: { response: { 200: z.array(SessionRecord) } } }, async (req) =>
       req.auth?.user ? auth.listSessions(req.auth.user.id, req.auth.sessionId) : [],
     );
 
     app.delete(
       '/auth/sessions/:id',
-      { config: { allowUser: true }, schema: { params: IdParams, response: { 204: Empty, ...errors } } },
+      { config: portal, schema: { params: IdParams, response: { 204: Empty, ...errors } } },
       async (req, reply) => {
         auth.revokeSession(selfOf(req).id, req.params.id);
         return reply.code(204).send(null);
@@ -107,17 +111,17 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
     );
 
     // ----------------------------------------------------------------------------- self
-    app.get('/user/me', { schema: { response: { 200: User, ...errors } } }, async (req) => auth.getUser(selfOf(req).id));
+    app.get('/user/me', { config: portal, schema: { response: { 200: User, ...errors } } }, async (req) => auth.getUser(selfOf(req).id));
 
     app.put(
       '/user/me',
-      { config: { allowUser: true }, schema: { body: UserSelfUpdate, response: { 200: User, ...errors } } },
+      { config: portal, schema: { body: UserSelfUpdate, response: { 200: User, ...errors } } },
       async (req) => auth.updateSelf(selfOf(req).id, req.body),
     );
 
     app.put(
       '/user/me/password',
-      { config: { allowUser: true }, schema: { body: PasswordChange, response: { 204: Empty, ...errors } } },
+      { config: portal, schema: { body: PasswordChange, response: { 204: Empty, ...errors } } },
       async (req, reply) => {
         const self = selfOf(req);
         await auth.changePassword(self.id, req.body.currentPassword, req.body.newPassword, self.sessionId);
@@ -169,6 +173,16 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
         auth.updateAuthSettings(req.body);
         return securityResponse();
       },
+    );
+
+    app.get('/settings/signin', { preHandler: requireAdmin, schema: { response: { 200: SignInSettings, ...errors } } }, async () =>
+      auth.signInSettings(),
+    );
+
+    app.put(
+      '/settings/signin',
+      { preHandler: requireAdmin, schema: { body: SignInSettings, response: { 200: SignInSettings, ...errors } } },
+      async (req) => auth.updateSignInSettings(req.body),
     );
 
     app.post(

@@ -192,7 +192,7 @@ describe('Seerr apply', () => {
     const result = await service.apply(src);
     expect(area(result, 'users')).toMatchObject({ created: 1, skipped: 1 });
     const friend = db.select().from(t.users).where(eq(t.users.usernameKey, 'friend')).get()!;
-    expect(friend).toMatchObject({ role: 'user', email: 'friend@example.com', passwordHash: IMPORTED_PASSWORD_HASH, permissions: Permission.REQUEST });
+    expect(friend).toMatchObject({ role: 'user', appAccess: [], localPassword: false, email: 'friend@example.com', passwordHash: IMPORTED_PASSWORD_HASH, permissions: Permission.REQUEST });
     expect(friend.settings).toMatchObject({ quota: { movieLimit: 5, movieDays: 7 }, locale: 'en' });
     // The existing admin is untouched.
     expect(db.select().from(t.users).where(eq(t.users.id, owner.id)).get()).toMatchObject({ role: 'admin', permissions: Permission.ADMIN });
@@ -234,7 +234,7 @@ describe('Seerr apply', () => {
     const src = seerrSource();
     await service.apply(src);
     const owner = db.select().from(t.users).all().find((u) => u.email === 'owner@example.com')!;
-    expect(owner.role).toBe('user');
+    expect(owner).toMatchObject({ role: 'user', appAccess: [], localPassword: false });
     expect(owner.permissions & Permission.ADMIN).toBe(0);
     expect(owner.permissions).toBe(mapSeerrPermissions(Permission.ADMIN));
     expect(owner.permissions & Permission.MANAGE_REQUESTS).toBeTruthy();

@@ -40,7 +40,9 @@ export type DiscoverPath =
   | '/studio/$id'
   | '/network/$id'
   | '/provider/$id'
-  | '/requests';
+  | '/requests'
+  | '/issues'
+  | '/profile';
 
 export interface DiscoverTarget {
   to: DiscoverPath;

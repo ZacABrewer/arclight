@@ -9,7 +9,7 @@ import type { MovieMetadata, SearchResult, SeriesMetadata } from '@arclight/meta
 import { QualityProfileInput, type ReleaseResource } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
-import { createTestDb } from '../../db/test-utils.js';
+import { createTestDb, seedAdmin } from '../../db/test-utils.js';
 import { authServiceFor } from '../auth/index.js';
 import { FakeDownloadClient, qbit } from '../download-clients/test-support.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
@@ -194,6 +194,7 @@ async function buildHarness(): Promise<Harness> {
   await mkdir(tvRoot, { recursive: true });
   await mkdir(movieRoot, { recursive: true });
   const db = await createTestDb();
+  seedAdmin(db);
   const config: AppConfig = {
     configDir: tmp,
     dbPath: ':memory:',

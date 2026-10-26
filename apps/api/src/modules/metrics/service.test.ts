@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import type { Job } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
-import { createTestDb } from '../../db/test-utils.js';
+import { createTestDb, seedAdmin } from '../../db/test-utils.js';
 import type { Db } from '../../db/index.js';
 import { downloadClients, indexerStats, indexerStatus, indexers, mediaRequests, movies, trackedDownloads } from '../../db/schema.js';
 import { EventBus } from '../../events.js';
@@ -165,6 +165,7 @@ describe('metrics service', () => {
 
 async function app(allowAnonymous = false) {
   const db = await createTestDb();
+  seedAdmin(db);
   if (allowAnonymous) setSection(db, 'metrics', { allowAnonymous: true });
   const log = pino({ level: 'silent' });
   const bus = new EventBus();

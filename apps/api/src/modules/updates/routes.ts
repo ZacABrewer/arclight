@@ -6,7 +6,7 @@ import { ContainerUpdateError, type ContainerUpdater } from './containers.js';
 import { UpdatesError, type UpdatesService } from './service.js';
 
 // /api/v1/system/update*, /api/v1/system/update/containers* and /api/v1/settings/updates.
-// State-changing routes are admin-only through the global auth hook (no `allowUser`).
+// State-changing routes are admin-only through the global auth hook (no `config.access`).
 
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
 const errors = { 400: ErrorBody, 404: ErrorBody, 409: ErrorBody };

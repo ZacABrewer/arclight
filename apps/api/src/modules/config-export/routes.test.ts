@@ -17,7 +17,7 @@ async function build(db?: Db) {
   // Stand-in for the auth hook: `x-role: user` is a non-admin, anything else an admin.
   app.decorateRequest('auth', null);
   app.addHook('onRequest', async (req) => {
-    req.auth = { user: null, via: 'apikey', isAdmin: req.headers['x-role'] !== 'user' };
+    req.auth = { user: null, via: 'apikey', isAdmin: req.headers['x-role'] !== 'user', appAccess: [] };
   });
   const service = new ConfigService({ db: database, env: {} });
   await app.register(configRoutes(service), { prefix: '/api/v1' });

@@ -147,19 +147,19 @@ export function downloadClientsRoutes(
 
     // ---- queue -------------------------------------------------------------------------
 
-    app.get('/queue', { schema: { querystring: QueueQuery, response: { 200: QueuePage, ...errors } } }, async (req) =>
+    app.get('/queue', { config: { access: { areas: ['activity'] } }, schema: { querystring: QueueQuery, response: { 200: QueuePage, ...errors } } }, async (req) =>
       service.listQueue(req.query),
     );
 
-    app.get('/queue/status', { schema: { response: { 200: QueueStatus } } }, async () => service.queueStatus());
+    app.get('/queue/status', { config: { access: { areas: ['activity'] } }, schema: { response: { 200: QueueStatus } } }, async () => service.queueStatus());
 
     app.get(
       '/queue/:id/timeline',
-      { schema: { params: IdParams, response: { 200: DownloadTimeline, ...errors } } },
+      { config: { access: { areas: ['activity'] } }, schema: { params: IdParams, response: { 200: DownloadTimeline, ...errors } } },
       async (req) => service.getTimeline(req.params.id),
     );
 
-    app.get('/queue/:id', { schema: { params: IdParams, response: { 200: QueueItem, ...errors } } }, async (req) =>
+    app.get('/queue/:id', { config: { access: { areas: ['activity'] } }, schema: { params: IdParams, response: { 200: QueueItem, ...errors } } }, async (req) =>
       service.getQueueItem(req.params.id),
     );
 

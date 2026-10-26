@@ -18,6 +18,11 @@ Only the latest release (`:latest` / the newest `vX.Y.Z` tag) receives security 
 ## Hardening your install
 
 - Keep the login enabled (Settings > Security) and use a long, unique password.
+- Finish the setup wizard before anyone else can reach Arclight. Until the admin account exists
+  the api answers nothing but setup, but whoever reaches `/setup` first creates that admin.
+- Give other people the role `user`. Users only get the request portal; every other api route,
+  reads included, is admin-only unless you grant read-only app access per user. Admins sign in
+  with their Arclight password only, never through Jellyfin, Emby or Plex.
 - Don't publish port 7878 straight to the internet. Use a reverse proxy with HTTPS, a Cloudflare
   Tunnel or a private network such as Tailscale; see
   [Exposing Arclight outside your home](docs/getting-started/exposing-outside-home.md).

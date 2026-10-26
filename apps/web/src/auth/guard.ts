@@ -1,6 +1,7 @@
 import type { QueryClient } from '@tanstack/react-query';
 import type { AuthStatus } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
+import { PORTAL_ACCESS, accessOf, canOpenAppPath, portalTargetFor, type Access } from './access.js';
 
 // Route guard logic, kept free of React so it can be tested on its own. The api is the real
 // enforcer (every /api/v1 route checks the session); this only decides where the browser
@@ -34,11 +35,12 @@ export function isPublicPath(pathname: string): boolean {
 /** Pages that draw their own chrome (the component gallery renders a full demo shell). */
 export const SHELLLESS_PATHS: ReadonlySet<string> = new Set([...BARE_PATHS, ...PUBLIC_PATHS, '/design']);
 
-/** Sections only admins may open; users are sent home. */
-export const ADMIN_ONLY_PREFIXES: readonly string[] = ['/settings', '/system', '/activity', '/indexers', '/subtitles', '/design', '/library/retention', '/library/hygiene'];
-
-export function isAdminOnlyPath(pathname: string): boolean {
-  return ADMIN_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
+/**
+ * App pages a non-admin may open: only the granted app areas (and request/issue management
+ * with those permissions). Everything else, the dashboard included, sends them to the portal.
+ */
+export function isAdminOnlyPath(pathname: string, access: Access = PORTAL_ACCESS): boolean {
+  return !canOpenAppPath(access, pathname);
 }
 
 /** A redirect target taken from the query string: same-origin app paths only. */
@@ -68,6 +70,8 @@ export function resolveAuthRedirect(
   redirectParam?: unknown,
 ): string | null {
   if (!status) return null;
+  // First launch: until the admin account exists the setup wizard is the only page.
+  if (!status.adminExists) return pathname === '/setup' ? null : '/setup';
   if (status.needsSetup) {
     // During setup /login stays reachable so an admin who lost the cookie can resume. The
     // public portal has nothing to show before setup, so it goes to /setup like the rest.
@@ -78,8 +82,14 @@ export function resolveAuthRedirect(
   // Public pages stay put for everyone (signed-in users may still look at the portal).
   if (isPublicPath(pathname)) return null;
   if (!status.authenticated) return pathname === '/login' ? null : loginHref(href);
-  if (pathname === '/login') return safeRedirect(redirectParam);
-  if (status.session && !status.session.isAdmin && isAdminOnlyPath(pathname)) return '/';
+  const access = accessOf(status.session);
+  if (pathname === '/login') {
+    const target = safeRedirect(redirectParam);
+    // Non-admins land in the portal unless they were headed for a page they may open.
+    return access.admin || (target !== '/' && canOpenAppPath(access, target.split('?')[0] ?? '')) ? target : '/portal';
+  }
+  // Non-admins never see the dashboard or an admin page: the portal is their home.
+  if (!canOpenAppPath(access, pathname)) return portalTargetFor(pathname);
   return null;
 }
 

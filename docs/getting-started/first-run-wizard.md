@@ -1,6 +1,6 @@
 # First-run setup wizard
 
-The first time you open Arclight in a browser, it shows a setup wizard instead of the dashboard. It creates your admin account, connects the movie and TV database, tells Arclight where your media lives, and optionally adds a download client, an indexer and a VPN. This page explains each of the six steps, what to type, what you can skip, and what to do if you close the tab halfway. You need Arclight running first: see [install-docker.md](install-docker.md) or pick your platform in [install-other-platforms.md](install-other-platforms.md).
+The first time you open Arclight in a browser, it shows a setup wizard instead of the dashboard. It creates your admin account, decides who else may sign in and what new accounts may do, connects the movie and TV database, tells Arclight where your media lives, and optionally adds a download client, an indexer and a VPN. This page explains each of the seven steps, what to type, what you can skip, and what to do if you close the tab halfway. You need Arclight running first: see [install-docker.md](install-docker.md) or pick your platform in [install-other-platforms.md](install-other-platforms.md).
 
 ## Before you open it
 
@@ -9,30 +9,42 @@ Have these ready:
 | Item | Needed? | Notes |
 |---|---|---|
 | A username and password for yourself | Yes | The password must be at least 8 characters. |
-| A TMDB API key | Yes | Free. Step 2 explains where to get it. |
+| A TMDB API key | Yes | Free. Step 3 explains where to get it. |
 | The folder paths as the container sees them | Yes | In the Docker files: `/data/media/tv` for TV and `/data/media/movies` for movies. Natively: real paths such as `D:\Media\TV`. |
 | qBittorrent address and login | No | Only if you add qBittorrent yourself. The built-in engine is already registered and needs nothing. |
 | An indexer (site, Torznab URL or API key) | No | You can add these later. |
 | VPN details | No | You can set up the VPN later. |
 
-Open `http://<your-host>:7878`. On a fresh install the app redirects you to `/setup`. The header shows "Step n of 6" and a row of steps you can click to move around.
+Open `http://<your-host>:7878`. On a fresh install the app redirects you to `/setup`. The header shows "Step n of 7" and a row of steps you can click to move around once the admin account exists.
 
-## The six steps
+### Until the admin account exists
+
+A fresh install has no accounts and no default password. Until you create the admin in step 1:
+
+- every page (the login page and the request portal included) sends you to `/setup`;
+- the api answers `403` with the code `SETUP_REQUIRED` on everything except the setup wizard's own calls (`/api/v1/setup/status`, `/api/v1/setup/admin`, `/api/v1/setup/complete`), `/api/v1/auth/status` and the health ping (`/api/v1/system/ping`, `/ping`). That includes calls made with the API key, the Sonarr/Radarr-compatible `/api/v3`, `/metrics` and the live event feed;
+- "None on the local network" does not apply yet, so nobody gets in without the account;
+- the other steps cannot be opened from the step row.
+
+Once an admin exists, `/setup/admin` refuses a second one (409), and after **Finish setup** the wizard cannot run again.
+
+## The seven steps
 
 | # | Step | Required? | Skip button? |
 |---|---|---|---|
 | 1 | Admin | Yes | No |
-| 2 | TMDB | Yes | No |
-| 3 | Root folders | Yes (at least one) | No |
-| 4 | Download client | Optional | "Skip for now", only while none is configured |
-| 5 | Indexer | Optional | "Skip for now", only while none is configured |
-| 6 | VPN, and how people sign in | Optional | "Skip for now" (also finishes setup) |
+| 2 | User defaults | Yes (the defaults are fine) | No |
+| 3 | TMDB | Yes | No |
+| 4 | Root folders | Yes (at least one) | No |
+| 5 | Download client | Optional | "Skip for now", only while none is configured |
+| 6 | Indexer | Optional | "Skip for now", only while none is configured |
+| 7 | VPN, and how people sign in | Optional | "Skip for now" (also finishes setup) |
 
 Each step has **Back** and **Continue** (or the step's own button). Your answers are saved as you go: the admin account the moment you create it, and each later step when you continue or add something.
 
 ## Step 1: Create the admin account
 
-Heading: "Create the admin account". This is the account you sign in with, and it has full control. You can add more people later under Settings > Users (see [users-and-security.md](../using/users-and-security.md)).
+Heading: "Create the admin account". This is the account you sign in with, and it has full control. It is always a local Arclight account with a username and password: there is no option to use Jellyfin, Emby or Plex here, and admins can never sign in through a media server. You can add more people later under Settings > Users (see [users-and-security.md](../using/users-and-security.md)).
 
 | Field | What to enter |
 |---|---|
@@ -46,7 +58,24 @@ Click **Create admin account**. Arclight creates the account and signs you in at
 
 There is no default password, and no account exists until you do this. The first person to open the page can create the admin, so complete this step before you give other people the address, and do not expose an unfinished setup to the internet.
 
-## Step 2: Connect TMDB
+## Step 2: User defaults
+
+Heading: "Who else can sign in?". Everyone who is not an admin gets the request portal (Discover, their own requests and issues, their account), never the admin app. This step sets how those people sign in and what a new account starts with. Everything here can be changed later under Settings > Users.
+
+| Part | Setting | Default | What it means |
+|---|---|---|---|
+| Sign-in | Arclight accounts | On | Users may sign in with an Arclight username and password. Admins always can, whatever you choose. |
+| Sign-in | Jellyfin, Emby, Plex | On | Allows sign-in with that media server. It also needs the server's own sign-in switch under Settings > Media servers, so nothing is offered until you connect a server. |
+| Sign-in | New people | Create an account on first sign-in | **Create an account on first sign-in**: anyone the media server knows can sign in and gets the defaults below. **Only people an admin added**: an admin adds, imports or links the account first. |
+| Default request permissions | Request movies, Request series, Report issues | On | What a new account may do. |
+| Default request permissions | Request in 4K | Off | |
+| Default request permissions | Approve their requests automatically | Off | Off: an admin approves each request. |
+| Default quotas | Movies, Series | Unlimited | How many requests per number of days. Leave empty for unlimited. |
+| Default app access | Request portal only | Fixed | New accounts never get the app or admin rights by default. Grant read-only app access per user later. |
+
+The permissions and quotas are the same values as **Default permissions for new users** and **Default quotas** in Settings > Requests. Click **Continue** to save.
+
+## Step 3: Connect TMDB
 
 Heading: "Connect TMDB". TMDB (The Movie Database) is where Arclight gets titles, posters, episode lists and release dates. Without a key it cannot look anything up, so this step cannot be skipped.
 
@@ -58,7 +87,7 @@ Heading: "Connect TMDB". TMDB (The Movie Database) is where Arclight gets titles
 
 If a key is already saved (for example you set `ARCLIGHT_TMDB_API_KEY` in the environment), the step says so and you can continue without typing anything. Typing a new key replaces the saved one. Later you can change it under Settings > General. If this key is missing, System > Health shows [TMDB API key is missing](../TROUBLESHOOTING.md#tmdb-api-key-missing).
 
-## Step 3: Choose root folders
+## Step 4: Choose root folders
 
 Heading: "Where is your media stored?". A root folder is the top-level folder of your library. Arclight imports finished downloads into these and organises them in subfolders per show or movie. Add at least one folder for TV and one for movies.
 
@@ -85,7 +114,7 @@ Rules the wizard enforces:
 
 In Docker always use the container paths (`/data/media/tv`, `/data/media/movies`), not the paths on the host. Both live under the single `/data` mount, which is what lets imports hard-link instantly instead of copying (see [install-docker.md](install-docker.md#the-folder-layout-one-share-one-mount)). If you see `/tv` or `/movies` in an older install, follow the [migration steps](install-docker.md#migrating-from-the-old-three-mount-layout). More about folders and hardlinks: [folders-and-hardlinks.md](folders-and-hardlinks.md). Afterwards you can manage root folders under Settings > Media Management ([media-management.md](../using/media-management.md)).
 
-## Step 4: Download client (optional)
+## Step 5: Download client (optional)
 
 Heading: "Add a download client". A download client downloads the releases Arclight picks. The step shows the same Download Clients list you will find at Settings > Download Clients.
 
@@ -95,13 +124,13 @@ Heading: "Add a download client". A download client downloads the releases Arcli
 
 Field-by-field help, categories and the other clients are in [download-clients.md](../using/download-clients.md).
 
-## Step 5: Indexer (optional)
+## Step 6: Indexer (optional)
 
 Heading: "Add an indexer". Indexers are where Arclight searches for releases. The step embeds the Indexers page (Settings > Indexers). Click **Add indexer** to either pick a site from the catalogue or add a Torznab or Newznab endpoint, fill in what it asks for, and test it.
 
 If you skip, Arclight has nowhere to search, so the Wanted and Search pages find nothing and System > Health shows [No indexers enabled](../TROUBLESHOOTING.md#no-indexers-enabled). That is fine for a first look, and you can add indexers any time. See [indexers.md](../using/indexers.md).
 
-## Step 6: VPN and sign-in
+## Step 7: VPN and sign-in
 
 Heading: "Protect downloads with a VPN". This is the last step and has two parts.
 
@@ -121,7 +150,7 @@ Click **Finish setup** (or **Skip for now**, which finishes with the same sign-i
 
 | Situation | What happens |
 |---|---|
-| You close the tab after step 1 and come back in the same browser | The wizard resumes at the first required step you have not finished. |
+| You close the tab after step 1 and come back in the same browser | The wizard resumes at the first required step you have not finished (User defaults keeps its defaults if you never saved it). |
 | You come back in another browser or a private window | It says "An admin account already exists. Sign in with it to finish setup." Click **Sign in**, then you return to the wizard. |
 | You lost your session during setup | The `/login` page stays reachable so the admin can sign back in and continue. |
 | A step shows an error | Fix the value and click again. Earlier steps stay saved. |
@@ -135,7 +164,7 @@ Click **Finish setup** (or **Skip for now**, which finishes with the same sign-i
 
 ## Doing the same thing without the wizard
 
-For scripted installs, `POST /api/v1/setup/complete` accepts the admin, TMDB key, root folders and sign-in method in one request. See [API.md](../API.md). Settings can also be applied from a file; see [OPERATIONS.md](../OPERATIONS.md).
+For scripted installs, `POST /api/v1/setup/complete` accepts the admin, TMDB key, root folders, sign-in method and the sign-in settings (`signIn`) in one request. It creates the admin only while none exists. See [API.md](../API.md). Settings can also be applied from a file; see [OPERATIONS.md](../OPERATIONS.md).
 
 ## Related
 
