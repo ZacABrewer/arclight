@@ -1,7 +1,9 @@
 import type { AppContext, AppModule } from '../../app.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { vpnServiceFor } from '../vpn/service.js';
+import { registerTorrentJobs } from './jobs.js';
 import { torrentRoutes } from './routes.js';
+import { importedInDb, libraryPathsInDb } from './seeding-rules.js';
 import { engineInsightsFor, TorrentService, type TorrentServiceOptions } from './service.js';
 
 export {
@@ -14,6 +16,7 @@ export {
   type TorrentServiceOptions,
   type TorrentVpnPort,
 } from './service.js';
+export { APPLY_SEEDING_RULES_JOB } from './jobs.js';
 
 // The built-in torrent engine. Owns the single Session (started on boot when `torrent.enabled`
 // and `config.torrentEngine`), the `torrent` settings section, /torrent/* routes and the VPN
@@ -51,6 +54,12 @@ export function torrentServiceFor(
     downloads.setTorrentSession(() => created.session);
     // Kill-switch state and live numbers for "why is this download not moving" in the queue.
     downloads.setEngineInsights(engineInsightsFor(created));
+    // Seeding rules: import state and library folders from the database, actions on the timeline.
+    created.setSeedingPorts({
+      imported: (infoHash) => importedInDb(ctx.db, infoHash),
+      libraryPaths: () => libraryPathsInDb(ctx.db),
+      record: (infoHash, type, message, data) => downloads.recordEngineEvent(infoHash, type, { message, data }),
+    });
     services.set(ctx, created);
     service = created;
   }
@@ -60,6 +69,7 @@ export function torrentServiceFor(
 export const torrentModule: AppModule = (ctx) => async (app) => {
   const service = torrentServiceFor(ctx);
   await app.register(torrentRoutes(service));
+  registerTorrentJobs(ctx.scheduler, service);
   app.addHook('onReady', async () => {
     service.subscribe();
     if (!ctx.config.torrentEngine) return;

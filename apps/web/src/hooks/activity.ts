@@ -1,5 +1,13 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BlocklistAddRequestInput, QueuePage, QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
+import type {
+  BlocklistAddRequestInput,
+  QueueBulkRemoveRequest,
+  QueueItemLimitsRequest,
+  QueueMove,
+  QueuePage,
+  QueueQueryInput,
+  QueueRemoveOptions,
+} from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
 import { queueApi } from '../api/queue.js';
@@ -53,6 +61,26 @@ export function useRemoveQueueItems() {
 
 export function useGrabQueueItem() {
   return useInvalidatingMutation((id: number) => queueApi.grab(id), [['queue']], { errorTitle: t('hooks.activity.couldNotSendToClient') });
+}
+
+/** Per-download speed limits (bytes/s, 0 = unlimited). */
+export function useQueueItemLimits() {
+  return useInvalidatingMutation(({ id, body }: { id: number; body: QueueItemLimitsRequest }) => queueApi.limits(id, body), [['queue']], {
+    errorTitle: t('hooks.activity.couldNotSetLimits'),
+  });
+}
+
+/** Move a download in its client's queue. */
+export function useMoveQueueItem() {
+  return useInvalidatingMutation(({ id, move }: { id: number; move: QueueMove }) => queueApi.move(id, move), [['queue']], {
+    errorTitle: t('hooks.activity.couldNotMoveInQueue'),
+  });
+}
+
+export function useForceStartQueueItem() {
+  return useInvalidatingMutation(({ id, enabled }: { id: number; enabled: boolean }) => queueApi.forceStart(id, enabled), [['queue']], {
+    errorTitle: t('hooks.activity.couldNotForceStart'),
+  });
 }
 
 /** Pending api route: no retry so the "not available yet" notice shows at once. */

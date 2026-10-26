@@ -32,6 +32,8 @@ export {
   type DownloadItemPhase,
   type DownloadItemStatus,
   type DownloadProtocol,
+  type ItemSpeedLimits,
+  type QueueMove,
   type UsenetPriority,
 } from './types.js';
 export { QBittorrentSettings } from './qbittorrent/client.js';
@@ -47,6 +49,7 @@ export {
   attachSeedRules,
   builtinLive,
   builtinPhase,
+  builtinQueuePositions,
   completeResumeData,
   seedRulePending,
   type BuiltinClientOptions,

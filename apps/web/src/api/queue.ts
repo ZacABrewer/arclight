@@ -5,6 +5,8 @@ import {
   QueueRemoveResult,
   QueueStatus,
   type QueueBulkRemoveRequest,
+  type QueueItemLimitsRequest,
+  type QueueMove,
   type QueueQueryInput,
   type QueueRemoveOptions,
 } from '@arclight/shared';
@@ -26,4 +28,10 @@ export const queueApi = {
     request('/queue/bulk', QueueRemoveResult, { method: 'DELETE', json: body }),
   /** Retry sending a pending (delayed / failed-to-send) release to its client. */
   grab: (id: number) => request(`/queue/grab/${id}`, QueueItem, { method: 'POST' }),
+  /** Speed limits of one download in bytes/s (0 = unlimited); omitted keys keep their value. */
+  limits: (id: number, body: QueueItemLimitsRequest) => request(`/queue/${id}/limits`, QueueItem, { method: 'POST', json: body }),
+  /** Reorder the client's download queue. */
+  move: (id: number, move: QueueMove) => request(`/queue/${id}/move`, QueueItem, { method: 'POST', json: { move } }),
+  /** Run past the active-download limit (or stop forcing it). */
+  forceStart: (id: number, enabled: boolean) => request(`/queue/${id}/forcestart`, QueueItem, { method: 'POST', json: { enabled } }),
 };

@@ -266,5 +266,11 @@ export function qbtLive(torrent: QbtTorrent): DownloadItemLive | undefined {
   }
   if (torrent.num_complete !== undefined) live.swarmSeeds = torrent.num_complete;
   if (torrent.num_incomplete !== undefined) live.swarmLeechers = torrent.num_incomplete;
+  // qBittorrent reports "no limit" as 0 or -1.
+  if (torrent.dl_limit !== undefined) live.downloadLimit = Math.max(0, torrent.dl_limit);
+  if (torrent.up_limit !== undefined) live.uploadLimit = Math.max(0, torrent.up_limit);
+  // `priority` is the queue position; 0 or -1 when queueing is off or the torrent is not queued.
+  if (torrent.priority !== undefined && torrent.priority > 0) live.queuePosition = torrent.priority;
+  if (torrent.force_start !== undefined) live.forceStart = torrent.force_start;
   return live;
 }

@@ -34,6 +34,22 @@ export interface DownloadItemLive {
   /** Connected peers per transport. */
   transports?: { tcp: number; utp: number };
   encryptedPeers?: number;
+  /** This download's own limits in bytes/s (0 = unlimited), when the client has them. */
+  downloadLimit?: number;
+  uploadLimit?: number;
+  /** 1-based place in the client's download queue; absent for finished or unqueued items. */
+  queuePosition?: number;
+  /** Started past the client's active-download limit. */
+  forceStart?: boolean;
+}
+
+/** Where `DownloadClient.moveInQueue` moves an item. */
+export type QueueMove = 'top' | 'up' | 'down' | 'bottom';
+
+/** Per-download speed limits in bytes/s (0 = unlimited); omitted keys keep their value. */
+export interface ItemSpeedLimits {
+  downloadLimit?: number;
+  uploadLimit?: number;
 }
 
 /**
@@ -178,6 +194,14 @@ export interface DownloadClient {
   setListenPort?(port: number): Promise<void>;
   /** Optional: the client's current incoming-connections port. */
   getListenPort?(): Promise<number>;
+  /** Optional: speed limits of one download (bytes/s, 0 = unlimited). */
+  setItemLimits?(id: string, limits: ItemSpeedLimits): Promise<void>;
+  /** Optional: reorder the client's download queue. */
+  moveInQueue?(id: string, move: QueueMove): Promise<void>;
+  /** Optional: start a download regardless of the client's active-download limit. */
+  setForceStart?(id: string, enabled: boolean): Promise<void>;
+  /** Optional: switch the client's alternative ("slow mode") speed limits on or off. */
+  setAlternativeSpeed?(enabled: boolean): Promise<void>;
 }
 
 export type DownloadClientErrorCode =

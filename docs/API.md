@@ -397,6 +397,12 @@ its own feed.
 | DELETE | `/queue/bulk` | Remove several items (body has `ids` and options) |
 | DELETE | `/queue/:id` | Remove one item (query options) |
 | POST | `/queue/grab/:id` | Retry a pending item |
+| POST | `/queue/:id/limits` | `{ downloadLimit?, uploadLimit? }` in bytes/s (0 = unlimited) for one download; built-in engine (kept in its resume data) and qBittorrent. Returns the queue item; 409 when the client cannot |
+| POST | `/queue/:id/move` | `{ move: top / up / down / bottom }`: download queue order (built-in engine; qBittorrent with torrent queueing on) |
+| POST | `/queue/:id/forcestart` | `{ enabled }`: run past the active-download limit without taking a slot |
+
+Queue items' `live` block carries `downloadLimit`, `uploadLimit`, `queuePosition` (1-based among
+unfinished downloads) and `forceStart` when the client reports them.
 
 ## requests
 
@@ -1083,6 +1089,19 @@ fatal close code.
 | POST | `/torrent/:id/priority` | `{ files?: [{ index, priority 0..7 }], sequential? }` |
 | POST | `/torrent/:id/limits` | `{ uploadLimit?, downloadLimit?, peerUploadLimit?, peerDownloadLimit? }` in bytes/s (0 = unlimited); omitted keys keep their value; persisted in the resume data |
 | POST | `/torrent/:id/superseed` | `{ enabled }`: BEP 16 super-seeding |
+| GET | `/torrent/speed` | Current speed mode: `mode` (`normal` / `alternative`), `reason` (`manual` / `schedule`), `slowMode`, `slowModeUntil`, `nextChange`, effective `downloadLimit` / `uploadLimit` in bytes/s. Also `speed` in `/torrent/status` |
+| POST | `/torrent/slowmode` | `{ enabled, until? }`: manual slow mode (alternative limits) until turned off or until `until` (ISO-8601). Applied live; mirrored to qBittorrent's alternative limits when `mirrorToQbittorrent` |
+| GET | `/settings/torrent/speed` | `altDownloadLimitKbps` (default 1024), `altUploadLimitKbps` (256), `scheduleEnabled`, `schedule: [{ days: 0..6 (0 = Sunday), start, end: HH:MM }]` in server-local time (an end at or before the start runs past midnight), `mirrorToQbittorrent` (true) |
+| PUT | `/settings/torrent/speed` | Any subset; applied live. The schedule is re-checked every 30 s |
+| GET | `/settings/torrent/seedingrules` | `{ rules: [...] }`: per rule `id`, `name`, `enabled`, filters `categories` / `indexerIds` / `trackers` (host names, subdomains match; empty = any), `ratio` and/or `seedTimeMinutes` (either reached), `action` (`pause` / `remove`), `deleteFiles` |
+| PUT | `/settings/torrent/seedingrules` | Replaces the list; the first enabled matching rule applies |
+| POST | `/torrent/seedingrules/apply` | Run one pass now (the `ApplySeedingRules` job runs every 5 minutes): `{ checked, paused, removed, held: [{ infoHash, reason }] }`, null while the engine is not running |
+
+Seeding rules never act before a tracker's hit-and-run requirement is met, only remove downloads
+Arclight has imported, and delete files only when the download's folder does not overlap a
+library folder (root, series or movie folder) or another torrent's data; otherwise the torrent is
+removed and the files kept. Pauses and removals are written to the download timeline with
+`data.reason = seedingRule`.
 
 `:id` is the 40-character info-hash. Errors: 400 validation, 404 unknown torrent, 409 engine not running.
 The `builtin` download client settings also carry the defaults for new torrents: `superSeeding`,

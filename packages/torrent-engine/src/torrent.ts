@@ -208,8 +208,13 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   sequential: boolean;
   seedRatioLimit: number | null | undefined;
   seedTimeLimitMs: number | null | undefined;
-  /** Set by the session; the queue position is the order torrents were added in. */
+  /**
+   * Set by the session: the order the queue serves torrents in (lower first). New torrents go
+   * to the end; `Session.moveInQueue` reorders.
+   */
   queuePosition = 0;
+  /** Runs regardless of the active-download/seed limits (and does not use a slot). */
+  forceStart = false;
 
   private storage: Storage | null = null;
   private picker: PiecePicker | null = null;
@@ -1416,6 +1421,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       seedTimeLimitMs: this.seedTimeLimitMs ?? null,
       superSeeding: this.superSeedingValue,
       ...this.limits,
+      queuePosition: this.queuePosition,
+      forceStart: this.forceStart,
     };
   }
 

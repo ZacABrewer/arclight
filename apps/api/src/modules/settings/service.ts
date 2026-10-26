@@ -25,7 +25,10 @@ import {
   SecuritySettings,
   SolverSettings,
   SubtitleSettings,
+  SeedingRulesSettings,
   TorrentSettings,
+  TorrentSlowModeState,
+  TorrentSpeedSettings,
   VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
@@ -58,6 +61,12 @@ const sections = {
   backup: BackupSettings,
   // Owned by the torrent module (built-in engine; routes under /settings/torrent).
   torrent: TorrentSettings,
+  // Owned by the torrent module: alternative limits and their weekly schedule (routes under
+  // /settings/torrent/speed), the manual slow-mode switch (/torrent/slowmode) and the seeding
+  // rules (/settings/torrent/seedingrules).
+  torrentSpeed: TorrentSpeedSettings,
+  torrentSlowMode: TorrentSlowModeState,
+  seedingRules: SeedingRulesSettings,
   // Owned by the indexers module (RSS interval, subtitle/flag options; routes under
   // /settings/indexers, merged there with minimum age / retention / maximum size from `releases`).
   indexers: IndexerOptionsSection,

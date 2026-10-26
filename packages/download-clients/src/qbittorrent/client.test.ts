@@ -339,6 +339,59 @@ describe('item actions', () => {
   });
 });
 
+describe('engine control', () => {
+  it('sets per-torrent limits in bytes/s', async () => {
+    for (const p of ['setDownloadLimit', 'setUploadLimit']) qbt.on('POST', `/api/v2/torrents/${p}`, { body: '' });
+    const c = client();
+    await c.setItemLimits!(MAGNET_HASH.toUpperCase(), { downloadLimit: 512 * 1024, uploadLimit: 0 });
+    await c.setItemLimits!(MAGNET_HASH, { uploadLimit: 1000 });
+    expect(qbt.calls('/api/v2/torrents/setDownloadLimit').map((r) => r.form)).toEqual([{ hashes: MAGNET_HASH, limit: '524288' }]);
+    expect(qbt.calls('/api/v2/torrents/setUploadLimit').map((r) => r.form)).toEqual([
+      { hashes: MAGNET_HASH, limit: '0' },
+      { hashes: MAGNET_HASH, limit: '1000' },
+    ]);
+  });
+
+  it('moves torrents in the queue and force-starts them', async () => {
+    for (const p of ['increasePrio', 'decreasePrio', 'bottomPrio']) qbt.on('POST', `/api/v2/torrents/${p}`, { body: '' });
+    const c = client();
+    for (const move of ['top', 'up', 'down', 'bottom'] as const) await c.moveInQueue!(MAGNET_HASH, move);
+    await c.setForceStart!(MAGNET_HASH, false);
+    const paths = qbt.requests.filter((r) => r.method === 'POST' && r.path !== '/api/v2/auth/login').map((r) => r.path);
+    expect(paths).toEqual([
+      '/api/v2/torrents/topPrio',
+      '/api/v2/torrents/increasePrio',
+      '/api/v2/torrents/decreasePrio',
+      '/api/v2/torrents/bottomPrio',
+      '/api/v2/torrents/setForceStart',
+    ]);
+    expect(qbt.calls('/api/v2/torrents/setForceStart')[0]?.form).toEqual({ hashes: MAGNET_HASH, value: 'false' });
+  });
+
+  it('toggles the alternative speed limits only when the mode differs', async () => {
+    let mode = '0';
+    qbt.on('GET', '/api/v2/transfer/speedLimitsMode', () => ({ body: mode }));
+    qbt.on('POST', '/api/v2/transfer/toggleSpeedLimitsMode', () => {
+      mode = mode === '1' ? '0' : '1';
+      return { body: '' };
+    });
+    const c = client();
+    await c.setAlternativeSpeed!(true);
+    await c.setAlternativeSpeed!(true);
+    expect(mode).toBe('1');
+    await c.setAlternativeSpeed!(false);
+    expect(mode).toBe('0');
+    expect(qbt.calls('/api/v2/transfer/toggleSpeedLimitsMode')).toHaveLength(2);
+  });
+
+  it('reports limits, queue position and force start on items', async () => {
+    const [first] = torrentsFixture as Array<Record<string, unknown>>;
+    qbt.on('GET', '/api/v2/torrents/info', { body: [{ ...first, dl_limit: -1, up_limit: 2048, priority: 3, force_start: true }] });
+    const [item] = await client().getItems('tv');
+    expect(item?.live).toMatchObject({ downloadLimit: 0, uploadLimit: 2048, queuePosition: 3, forceStart: true });
+  });
+});
+
 describe('status and test', () => {
   it('resolves the output root from the category save path', async () => {
     await expect(client().getStatus()).resolves.toEqual({

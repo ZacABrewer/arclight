@@ -113,6 +113,132 @@ export const TorrentSettingsResponse = TorrentSettings.extend({
 export type TorrentSettingsResponse = z.infer<typeof TorrentSettingsResponse>;
 
 // ---------------------------------------------------------------------------------------
+// Speed schedule and slow mode (`torrentSpeed` and `torrentSlowMode` settings sections)
+// ---------------------------------------------------------------------------------------
+
+const ClockTime = z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, 'expected HH:MM (24-hour)');
+
+/**
+ * A weekly window in server-local time. `days` are the days the window starts on (0 = Sunday);
+ * an `end` at or before `start` runs past midnight into the next day.
+ */
+export const SpeedScheduleRange = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  start: ClockTime,
+  end: ClockTime,
+});
+export type SpeedScheduleRange = z.infer<typeof SpeedScheduleRange>;
+
+export const TorrentSpeedSettings = z.object({
+  altDownloadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .default(1024)
+    .describe('Global download limit in KiB/s while the alternative limits apply (0 = unlimited).'),
+  altUploadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .default(256)
+    .describe('Global upload limit in KiB/s while the alternative limits apply (0 = unlimited).'),
+  scheduleEnabled: z.boolean().default(false).describe('Apply the alternative limits during the scheduled windows.'),
+  schedule: z.array(SpeedScheduleRange).default([]).describe('Weekly windows in server-local time.'),
+  mirrorToQbittorrent: z
+    .boolean()
+    .default(true)
+    .describe("Switch qBittorrent's alternative speed limits on and off together with the engine's."),
+});
+export type TorrentSpeedSettings = z.infer<typeof TorrentSpeedSettings>;
+
+/** PUT /settings/torrent/speed: any subset; omitted keys keep their stored value. */
+export const TorrentSpeedSettingsUpdate = partialUpdate(TorrentSpeedSettings);
+export type TorrentSpeedSettingsUpdate = z.infer<typeof TorrentSpeedSettingsUpdate>;
+
+/** The manual slow-mode switch (persisted so it survives restarts). */
+export const TorrentSlowModeState = z.object({
+  enabled: z.boolean().default(false),
+  /** ISO-8601: slow mode switches itself off at this time; null = until turned off. */
+  until: z.string().nullable().default(null),
+});
+export type TorrentSlowModeState = z.infer<typeof TorrentSlowModeState>;
+
+/** POST /torrent/slowmode */
+export const TorrentSlowModeRequest = z.object({
+  enabled: z.boolean(),
+  /** ISO-8601 end time (only with enabled); omitted or null = until turned off. */
+  until: z.string().datetime({ offset: true }).nullable().optional(),
+});
+export type TorrentSlowModeRequest = z.infer<typeof TorrentSlowModeRequest>;
+
+/** Which limits the engine applies right now and why. */
+export const TorrentSpeedMode = z.object({
+  mode: z.enum(['normal', 'alternative']),
+  /** Why the alternative limits apply (null in normal mode). Manual slow mode wins over the schedule. */
+  reason: z.enum(['manual', 'schedule']).nullable(),
+  slowMode: z.boolean(),
+  /** ISO-8601 end of the manual slow mode, when it has one. */
+  slowModeUntil: z.string().nullable(),
+  /** ISO-8601: the next time the schedule switches modes (only while the schedule is on). */
+  nextChange: z.string().optional(),
+  /** Effective global limits in bytes/s (0 = unlimited). */
+  downloadLimit: z.number().int(),
+  uploadLimit: z.number().int(),
+});
+export type TorrentSpeedMode = z.infer<typeof TorrentSpeedMode>;
+
+// ---------------------------------------------------------------------------------------
+// Seeding rules (`seedingRules` settings section)
+// ---------------------------------------------------------------------------------------
+
+export const SeedingRuleAction = z.enum(['pause', 'remove']);
+export type SeedingRuleAction = z.infer<typeof SeedingRuleAction>;
+
+/**
+ * What to do with finished torrents of the built-in engine. A rule matches when every
+ * non-empty filter matches (any of its values); empty filters match everything. The first
+ * enabled matching rule (list order) applies. It acts once the ratio or the seeding time is
+ * reached (either one when both are set), never before a tracker's hit-and-run requirement
+ * is met, and removes only downloads Arclight has imported.
+ */
+export const SeedingRule = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().trim().min(1),
+    enabled: z.boolean().default(true),
+    /** Torrent categories (e.g. "tv", "movies"). */
+    categories: z.array(z.string().trim().min(1)).default([]),
+    /** Indexers the torrent was grabbed from (or whose trackers it announces to). */
+    indexerIds: z.array(z.number().int()).default([]),
+    /** Tracker host names; subdomains match too. */
+    trackers: z.array(z.string().trim().toLowerCase().min(1)).default([]),
+    ratio: z.number().min(0).nullable().default(null),
+    seedTimeMinutes: z.number().int().min(0).nullable().default(null),
+    action: SeedingRuleAction.default('pause'),
+    /** With `remove`: delete the download folder copy too (never the library copy). */
+    deleteFiles: z.boolean().default(false),
+  })
+  .refine((r) => r.ratio !== null || r.seedTimeMinutes !== null, { message: 'Set a ratio, a seeding time or both.' });
+export type SeedingRule = z.infer<typeof SeedingRule>;
+export type SeedingRuleInput = z.input<typeof SeedingRule>;
+
+export const SeedingRulesSettings = z.object({ rules: z.array(SeedingRule).default([]) });
+export type SeedingRulesSettings = z.infer<typeof SeedingRulesSettings>;
+export type SeedingRulesSettingsInput = z.input<typeof SeedingRulesSettings>;
+
+/** POST /torrent/seedingrules/apply: what one pass did (info-hashes). Null while the engine is not running. */
+export const SeedingRulesRunResult = z
+  .object({
+    checked: z.number().int(),
+    paused: z.array(z.string()),
+    removed: z.array(z.string()),
+    /** Torrents a rule wanted to act on but that were held back (hit-and-run, not imported). */
+    held: z.array(z.object({ infoHash: z.string(), reason: z.string() })),
+  })
+  .nullable();
+export type SeedingRulesRunResult = z.infer<typeof SeedingRulesRunResult>;
+
+// ---------------------------------------------------------------------------------------
 // Status
 // ---------------------------------------------------------------------------------------
 
@@ -174,6 +300,8 @@ export const TorrentSessionStatus = z.object({
   downloadRate: z.number(),
   uploadRate: z.number(),
   torrents: TorrentCounts,
+  /** Normal or alternative ("slow mode") limits. Optional: older servers omit it. */
+  speed: TorrentSpeedMode.optional(),
 });
 export type TorrentSessionStatus = z.infer<typeof TorrentSessionStatus>;
 

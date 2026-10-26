@@ -44,6 +44,12 @@ export const QbtTorrent = z.object({
   /** Seeds / leechers in the whole swarm, as trackers report them. */
   num_complete: z.number().optional(),
   num_incomplete: z.number().optional(),
+  /** Per-torrent limits in bytes/s; 0 or -1 = none. */
+  dl_limit: z.number().optional(),
+  up_limit: z.number().optional(),
+  /** Queue position (1 = first); 0 or -1 when queueing is off or the torrent is finished. */
+  priority: z.number().optional(),
+  force_start: z.boolean().optional(),
 });
 export type QbtTorrent = z.infer<typeof QbtTorrent>;
 

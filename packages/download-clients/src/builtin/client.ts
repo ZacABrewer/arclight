@@ -24,6 +24,8 @@ import {
   type DownloadItemLive,
   type DownloadItemPhase,
   type DownloadItemStatus,
+  type ItemSpeedLimits,
+  type QueueMove,
 } from '../types.js';
 import type { BuiltinSettings } from './settings.js';
 
@@ -161,7 +163,7 @@ export async function completeResumeData(
  * Live transfer numbers of an engine torrent, for queue items (also used by the api to show
  * up-to-the-second numbers between queue polls).
  */
-export function builtinLive(t: Torrent, stats: TorrentStats = t.getStats()): DownloadItemLive {
+export function builtinLive(t: Torrent, stats: TorrentStats = t.getStats(), queuePosition?: number): DownloadItemLive {
   let tcp = 0;
   let utp = 0;
   let encrypted = 0;
@@ -170,9 +172,14 @@ export function builtinLive(t: Torrent, stats: TorrentStats = t.getStats()): Dow
     else tcp++;
     if (p.encrypted) encrypted++;
   }
+  const limits = t.rateLimits;
   return {
     downloadRate: stats.downloadRate,
     uploadRate: stats.uploadRate,
+    downloadLimit: limits.downloadLimit,
+    uploadLimit: limits.uploadLimit,
+    forceStart: t.forceStart,
+    ...(queuePosition !== undefined ? { queuePosition } : {}),
     connectedPeers: stats.connectedPeers,
     connectedSeeds: stats.connectedSeeds,
     swarmSeeds: stats.swarmSeeds,
@@ -183,6 +190,16 @@ export function builtinLive(t: Torrent, stats: TorrentStats = t.getStats()): Dow
     transports: { tcp, utp },
     encryptedPeers: encrypted,
   };
+}
+
+/**
+ * 1-based places in the engine's download queue: unfinished torrents in queue order. Finished
+ * torrents have none (they compete for seed slots, not download slots).
+ */
+export function builtinQueuePositions(session: Pick<Session, 'getTorrents'>): Map<string, number> {
+  const out = new Map<string, number>();
+  for (const t of session.getTorrents()) if (!t.isComplete) out.set(t.infoHashHex, out.size + 1);
+  return out;
 }
 
 /** The finer phase of an engine torrent (metadata / checking), when it has one. */
@@ -305,13 +322,14 @@ export class BuiltinClient implements DownloadClient {
 
   async getItems(category: string): Promise<DownloadItem[]> {
     const session = this.session();
+    const positions = builtinQueuePositions(session);
     return session
       .getTorrents()
       .filter((t) => !category || t.category === category)
-      .map((t) => this.toItem(session, t));
+      .map((t) => this.toItem(session, t, positions.get(t.infoHashHex)));
   }
 
-  private toItem(session: Session, t: Torrent): DownloadItem {
+  private toItem(session: Session, t: Torrent, queuePosition?: number): DownloadItem {
     const stats = t.getStats();
     const complete = t.isComplete;
     const wanted = stats.wantedBytes || stats.totalBytes;
@@ -373,7 +391,7 @@ export class BuiltinClient implements DownloadClient {
       canBeRemoved: releasable,
     };
     if (statusMessage !== undefined) item.statusMessage = statusMessage;
-    item.live = builtinLive(t, stats);
+    item.live = builtinLive(t, stats, queuePosition);
     const phase = builtinPhase(stats);
     if (phase !== undefined) item.phase = phase;
     if (complete) item.etaSeconds = 0;
@@ -435,6 +453,27 @@ export class BuiltinClient implements DownloadClient {
 
   async getListenPort(): Promise<number> {
     return this.session().listenPort;
+  }
+
+  /** Per-torrent limits; saved with the torrent's resume data. */
+  async setItemLimits(id: string, limits: ItemSpeedLimits): Promise<void> {
+    const session = this.session();
+    const t = this.torrent(session, id);
+    const patch: { downloadLimit?: number; uploadLimit?: number } = {};
+    if (limits.downloadLimit !== undefined) patch.downloadLimit = Math.max(0, Math.round(limits.downloadLimit));
+    if (limits.uploadLimit !== undefined) patch.uploadLimit = Math.max(0, Math.round(limits.uploadLimit));
+    t.setRateLimits(patch);
+    await session.saveResumeData(t);
+  }
+
+  async moveInQueue(id: string, move: QueueMove): Promise<void> {
+    const session = this.session();
+    await session.moveInQueue(this.torrent(session, id).infoHashHex, move);
+  }
+
+  async setForceStart(id: string, enabled: boolean): Promise<void> {
+    const session = this.session();
+    await session.setForceStart(this.torrent(session, id).infoHashHex, enabled);
   }
 }
 

@@ -60,6 +60,15 @@
 .al-queue-detail { position: sticky; left: 0; box-sizing: border-box; max-width: min(100%, calc(100vw - 32px)); padding: 16px 26px 20px; display: flex; flex-direction: column; gap: 18px; }
 .al-queue-detail__reason { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--al-text-2); }
 .al-queue-detail__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+/* Engine control (queue-controls.tsx): header slow-mode switch, per-row queue order and limits. */
+.al-slowmode { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+.al-slowmode__duration { width: auto; min-width: 150px; }
+.al-queue-controls { position: sticky; left: 0; box-sizing: border-box; max-width: min(100%, calc(100vw - 32px)); padding: 0 26px 20px; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+@media (max-width: 767px) {
+  .al-queue-controls { padding: 0 16px 16px; grid-template-columns: minmax(0, 1fr); }
+  .al-slowmode { flex-wrap: wrap; white-space: normal; }
+  .al-queue-controls .al-btn { min-height: 44px; }
+}
 @media (max-width: 767px) {
   .al-queue-banner { padding: 12px 16px 0; }
   .al-queue-detail { padding: 12px 16px 16px; }

@@ -59,6 +59,8 @@ export const trackerStatsModule: AppModule = (ctx) => async (app) => {
 
   // H&R guard: builtin clients consult these rules before removing a finished torrent.
   torrentServiceFor(ctx).setSeedRuleProvider(service.seedRuleProvider());
+  // Seeding rules filtered by indexer use the same torrent attribution.
+  torrentServiceFor(ctx).setIndexerResolver((infoHash, hosts) => service.indexerForTorrent(infoHash, hosts));
   // New grabs change torrent attribution.
   const unsubscribe = ctx.bus.subscribe((event) => {
     if (event.type === 'queue' || event.type === 'settings') service.invalidate();
