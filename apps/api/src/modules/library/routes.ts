@@ -95,6 +95,11 @@ export const libraryRoutes = (
       if (err instanceof Error && 'validation' in err) {
         return reply.code(400).send({ error: err.message, code: 'VALIDATION' });
       }
+      // Fastify's own client errors (malformed JSON body, unsupported media type…) keep their status.
+      const status = (err as { statusCode?: number }).statusCode;
+      if (typeof status === 'number' && status >= 400 && status < 500) {
+        return reply.code(status).send({ error: err instanceof Error ? err.message : 'bad request', code: 'BAD_REQUEST' });
+      }
       req.log.error({ err }, 'unhandled library error');
       return reply.code(500).send({ error: 'internal error' });
     });
