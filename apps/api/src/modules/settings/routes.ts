@@ -1,12 +1,19 @@
 import {
   MetadataSettingsResponse,
   MetadataSettingsUpdate,
+  ReleasesSettings,
   SettingsErrorResponse,
 } from '@media-tron/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Db } from '../../db/index.js';
-import { getMetadataSettings, SettingsError, updateMetadataSettings } from './service.js';
+import {
+  getMetadataSettings,
+  getReleasesSettings,
+  SettingsError,
+  updateMetadataSettings,
+  updateReleasesSettings,
+} from './service.js';
 
 export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
@@ -27,6 +34,14 @@ export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>,
       '/settings/metadata',
       { schema: { body: MetadataSettingsUpdate, response: { 200: MetadataSettingsResponse, 400: SettingsErrorResponse } } },
       async (req) => updateMetadataSettings(db, req.body),
+    );
+
+    app.get('/settings/releases', { schema: { response: { 200: ReleasesSettings } } }, async () => getReleasesSettings(db));
+
+    app.put(
+      '/settings/releases',
+      { schema: { body: ReleasesSettings, response: { 200: ReleasesSettings, 400: SettingsErrorResponse } } },
+      async (req) => updateReleasesSettings(db, req.body),
     );
   };
 }

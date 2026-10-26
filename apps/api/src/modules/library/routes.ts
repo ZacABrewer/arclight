@@ -62,6 +62,10 @@ export const libraryRoutes = (
 ): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> => {
   return async (app) => {
     const db = ctx.db;
+    // Library mutations are announced on the bus (live UI, history/blocklist cleanup on delete,
+    // notifications). Published only after the service call succeeded.
+    const announce = (action: 'added' | 'updated' | 'deleted' | 'fileDeleted', mediaType: 'series' | 'movie', id: number) =>
+      ctx.bus.publish({ type: 'library', action, mediaType, id });
 
     // One place turns typed service errors into HTTP; everything else propagates to Fastify.
     app.setErrorHandler((err, req, reply) => {
@@ -131,6 +135,7 @@ export const libraryRoutes = (
         const meta = await metadata.series(req.body.tmdbId);
         if (!meta) throw LibraryError.notFound('series metadata for tmdbId', req.body.tmdbId);
         const series = svc.addSeries(db, meta, req.body);
+        announce('added', 'series', series.id);
         if (req.body.searchOnAdd && ctx.scheduler.has('series-search')) {
           void ctx.scheduler.run('series-search', 'system');
         }
@@ -140,23 +145,36 @@ export const libraryRoutes = (
     app.put(
       '/series/bulk',
       { schema: { body: BulkSeriesUpdateRequest, response: { 200: z.array(Series), 400: ErrorResponse, 404: ErrorResponse } } },
-      async (req) => svc.bulkUpdateSeries(db, req.body),
+      async (req) => {
+        const updated = svc.bulkUpdateSeries(db, req.body);
+        for (const s of updated) announce('updated', 'series', s.id);
+        return updated;
+      },
     );
     app.put(
       '/series/:id',
       { schema: { params: IdParams, body: UpdateSeriesRequest, response: { 200: Series, 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse } } },
-      async (req) => svc.updateSeries(db, req.params.id, req.body),
+      async (req) => {
+        const updated = svc.updateSeries(db, req.params.id, req.body);
+        announce('updated', 'series', updated.id);
+        return updated;
+      },
     );
     app.put(
       '/series/:id/seasons/:seasonNumber/monitor',
       { schema: { params: SeasonParams, body: SeasonMonitorUpdate.pick({ monitored: true }), response: { 200: Series, 404: ErrorResponse } } },
-      async (req) => svc.setSeasonMonitored(db, req.params.id, req.params.seasonNumber, req.body.monitored),
+      async (req) => {
+        const updated = svc.setSeasonMonitored(db, req.params.id, req.params.seasonNumber, req.body.monitored);
+        announce('updated', 'series', updated.id);
+        return updated;
+      },
     );
     app.delete(
       '/series/:id',
       { schema: { params: IdParams, querystring: DeleteMediaQuery, response: { 204: Empty, 400: ErrorResponse, 404: ErrorResponse } } },
       async (req, reply) => {
         await svc.deleteSeries(db, req.params.id, req.query);
+        announce('deleted', 'series', req.params.id);
         return reply.code(204).send(null);
       },
     );
@@ -171,12 +189,20 @@ export const libraryRoutes = (
     app.put(
       '/episode/monitor',
       { schema: { body: BulkEpisodeMonitorRequest, response: { 200: z.array(Episode) } } },
-      async (req) => svc.bulkSetEpisodesMonitored(db, req.body.episodeIds, req.body.monitored),
+      async (req) => {
+        const updated = svc.bulkSetEpisodesMonitored(db, req.body.episodeIds, req.body.monitored);
+        for (const seriesId of new Set(updated.map((e) => e.seriesId))) announce('updated', 'series', seriesId);
+        return updated;
+      },
     );
     app.put(
       '/episode/:id',
       { schema: { params: IdParams, body: EpisodeMonitorUpdate, response: { 200: Episode, 404: ErrorResponse } } },
-      async (req) => svc.setEpisodeMonitored(db, req.params.id, req.body.monitored),
+      async (req) => {
+        const updated = svc.setEpisodeMonitored(db, req.params.id, req.body.monitored);
+        announce('updated', 'series', updated.seriesId);
+        return updated;
+      },
     );
 
     // ----------------------------------------------------------------------------- movies
@@ -193,6 +219,7 @@ export const libraryRoutes = (
         const meta = await metadata.movie(req.body.tmdbId);
         if (!meta) throw LibraryError.notFound('movie metadata for tmdbId', req.body.tmdbId);
         const movie = svc.addMovie(db, meta, req.body);
+        announce('added', 'movie', movie.id);
         if (req.body.searchOnAdd && ctx.scheduler.has('movie-search')) {
           void ctx.scheduler.run('movie-search', 'system');
         }
@@ -202,18 +229,27 @@ export const libraryRoutes = (
     app.put(
       '/movie/bulk',
       { schema: { body: BulkMovieUpdateRequest, response: { 200: z.array(Movie), 400: ErrorResponse, 404: ErrorResponse } } },
-      async (req) => svc.bulkUpdateMovies(db, req.body),
+      async (req) => {
+        const updated = svc.bulkUpdateMovies(db, req.body);
+        for (const m of updated) announce('updated', 'movie', m.id);
+        return updated;
+      },
     );
     app.put(
       '/movie/:id',
       { schema: { params: IdParams, body: UpdateMovieRequest, response: { 200: Movie, 400: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse } } },
-      async (req) => svc.updateMovie(db, req.params.id, req.body),
+      async (req) => {
+        const updated = svc.updateMovie(db, req.params.id, req.body);
+        announce('updated', 'movie', updated.id);
+        return updated;
+      },
     );
     app.delete(
       '/movie/:id',
       { schema: { params: IdParams, querystring: DeleteMediaQuery, response: { 204: Empty, 400: ErrorResponse, 404: ErrorResponse } } },
       async (req, reply) => {
         await svc.deleteMovie(db, req.params.id, req.query);
+        announce('deleted', 'movie', req.params.id);
         return reply.code(204).send(null);
       },
     );
@@ -229,7 +265,10 @@ export const libraryRoutes = (
       '/mediafile/:id',
       { schema: { params: IdParams, querystring: DeleteMediaFileQuery, response: { 204: Empty, 404: ErrorResponse } } },
       async (req, reply) => {
+        const file = svc.getMediaFile(db, req.params.id);
         await svc.deleteMediaFile(db, req.params.id, req.query);
+        const parentId = file.mediaType === 'series' ? file.seriesId : file.movieId;
+        if (parentId !== null && parentId !== undefined) announce('fileDeleted', file.mediaType, parentId);
         return reply.code(204).send(null);
       },
     );

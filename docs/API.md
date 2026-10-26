@@ -42,6 +42,8 @@ Errors: modules map typed service errors to JSON `{ "error": "..." }` bodies (40
 |---|---|---|
 | GET | `/settings/metadata` | TMDB settings; API key masked |
 | PUT | `/settings/metadata` | Update TMDB settings; a masked key keeps the stored value |
+| GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired) |
+| PUT | `/settings/releases` | Replace the releases settings section |
 
 ## metadata
 

@@ -51,7 +51,8 @@ export function profilesRoutes(
       service.listQualityProfiles(),
     );
 
-    app.get('/qualityprofile/schema', { schema: { response: { 200: QualityProfileInput } } }, async () =>
+    // The template has an empty name for the user to fill in, so it is not a valid input yet.
+    app.get('/qualityprofile/schema', { schema: { response: { 200: QualityProfileInput.extend({ name: z.string() }) } } }, async () =>
       service.qualityProfileTemplate(),
     );
 

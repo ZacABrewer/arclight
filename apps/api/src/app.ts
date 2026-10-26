@@ -19,9 +19,16 @@ import { healthModule } from './modules/health/index.js';
 import { profilesModule } from './modules/profiles/index.js';
 import { settingsModule } from './modules/settings/index.js';
 import { metadataModule, metadata } from './modules/metadata/index.js';
-import { libraryModuleWith } from './modules/library/index.js';
+import { libraryModuleWith, type MetadataLookup } from './modules/library/index.js';
 import { indexersModule } from './modules/indexers/index.js';
 import { downloadClientsModule } from './modules/download-clients/index.js';
+import { historyModule } from './modules/history/index.js';
+import { blocklistModule } from './modules/blocklist/index.js';
+import { releasesModuleWith } from './modules/releases/index.js';
+import { importsModuleWith } from './modules/imports/index.js';
+import { notificationsModuleWith } from './modules/notifications/index.js';
+import { calendarModule } from './modules/calendar/index.js';
+import { wireModules } from './wiring.js';
 
 export interface AppContext {
   config: AppConfig;
@@ -39,7 +46,17 @@ export type AppModule = (
   ctx: AppContext,
 ) => FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
 
-export async function buildApp(config: AppConfig, db: Db, log: Logger) {
+/** Test seams; production passes none. */
+export interface BuildAppOptions {
+  /** Replaces the metadata module's lookup for POST /series and /movie. */
+  metadata?: MetadataLookup;
+  /** Called with the context before any module is built (tests pre-seed per-context services). */
+  onContext?: (ctx: AppContext) => void;
+  /** Inject an ffprobe probe into imports when available. Default true. */
+  probe?: boolean;
+}
+
+export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: BuildAppOptions = {}) {
   const app = Fastify({ loggerInstance: log, trustProxy: true }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -47,10 +64,14 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger) {
   const bus = new EventBus();
   const scheduler = new Scheduler(db, bus, log.child({ component: 'scheduler' }));
   const ctx: AppContext = { config, db, bus, scheduler, log, startedAt: new Date() };
+  opts.onContext?.(ctx);
+  // Cross-module dependency objects for the pipeline (see wiring.ts for the flows).
+  const wiring = wireModules(ctx, opts.probe === undefined ? {} : { probe: opts.probe });
 
   await app.register(cors, { origin: true, credentials: true });
   await app.register(websocket);
 
+  // Dependency-safe order: providers before the pipeline modules that consume them.
   const modules: AppModule[] = [
     systemModule,
     healthModule,
@@ -58,10 +79,17 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger) {
     eventsModule,
     settingsModule,
     metadataModule,
-    libraryModuleWith({ metadata }),
+    libraryModuleWith({ metadata: opts.metadata ?? metadata }),
     profilesModule,
     indexersModule,
     downloadClientsModule,
+    historyModule,
+    blocklistModule,
+    releasesModuleWith(wiring.releases),
+    importsModuleWith(wiring.imports),
+    // Imports dispatch their own import/upgrade notifications through the wiring.
+    notificationsModuleWith({ translateImported: false }),
+    calendarModule,
   ];
   await app.register(
     async (api) => {
@@ -81,6 +109,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger) {
 
   app.addHook('onReady', async () => scheduler.start());
   app.addHook('onClose', async () => scheduler.stop());
+  app.addHook('onClose', async () => wiring.dispose());
 
   return app;
 }

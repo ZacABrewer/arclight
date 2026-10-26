@@ -1,45 +1,53 @@
-import { statfsSync } from 'node:fs';
-import { HealthResponse, type HealthCheck } from '@media-tron/shared';
-import type { AppModule } from '../../app.js';
+import { HealthResponse } from '@media-tron/shared';
+import type { AppContext, AppModule } from '../../app.js';
+import { createChecks } from './checks/index.js';
+import { createHealthDeps } from './deps.js';
+import { HealthService } from './service.js';
 
-// Health checks are plain functions returning zero or more findings. Modules append their
-// own (download client unreachable, indexer failing, root folder missing…) in later phases.
-type Check = () => HealthCheck[];
+export { HealthService, overallStatus } from './service.js';
+export { createChecks } from './checks/index.js';
+export { createHealthDeps, nodeHealthFs, findMount, RECYCLE_BIN_SETTING } from './deps.js';
+export * from './types.js';
+
+// Health checks: a catalogue of functions (checks/*.ts) over injectable dependencies. Results
+// are cached by HealthService; the HealthCheck job refreshes them and publishes a `health`
+// event (the notifications module turns failures/restores into notifications).
+
+const services = new WeakMap<AppContext, HealthService>();
+
+export function healthServiceFor(ctx: AppContext): HealthService {
+  let service = services.get(ctx);
+  if (!service) {
+    // Deps are built lazily, on the first run, so module registration order does not matter.
+    let deps: ReturnType<typeof createHealthDeps> | null = null;
+    service = new HealthService(
+      createChecks(),
+      () => (deps ??= createHealthDeps(ctx)),
+      ctx.log.child({ module: 'health' }),
+    );
+    services.set(ctx, service);
+  }
+  return service;
+}
 
 export const healthModule: AppModule = (ctx) => async (app) => {
-  const checks: Check[] = [
-    () => {
-      const { bavail, bsize } = statfsSync(ctx.config.configDir);
-      const freeBytes = bavail * bsize;
-      if (freeBytes > 1024 ** 3) return [];
-      return [
-        {
-          source: 'ConfigDiskSpace',
-          status: 'warning',
-          message: `Less than 1 GiB free on the config volume (${(freeBytes / 1024 ** 2).toFixed(0)} MiB)`,
-        },
-      ];
-    },
-  ];
+  const service = healthServiceFor(ctx);
 
-  const evaluate = () => {
-    const findings = checks.flatMap((c) => c());
-    const status = findings.some((f) => f.status === 'error')
-      ? 'error'
-      : findings.some((f) => f.status === 'warning')
-        ? 'warning'
-        : 'ok';
-    return HealthResponse.parse({ status, checks: findings });
+  const runAndPublish = async () => {
+    const health = await service.run();
+    ctx.bus.publish({ type: 'health', health });
+    return health;
   };
 
-  app.get('/health', { schema: { response: { 200: HealthResponse } } }, async () => evaluate());
+  app.get('/health', { schema: { response: { 200: HealthResponse } } }, async () => service.current());
+
+  app.post('/health/recheck', { schema: { response: { 200: HealthResponse } } }, async () => runAndPublish());
 
   ctx.scheduler.register({
     name: 'HealthCheck',
     cron: '*/5 * * * *',
     handler: async () => {
-      const health = evaluate();
-      ctx.bus.publish({ type: 'health', health });
+      const health = await runAndPublish();
       return `${health.checks.length} finding(s), status ${health.status}`;
     },
   });

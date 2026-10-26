@@ -12,3 +12,8 @@ export * from './download-clients.js';
 export * from './naming.js';
 export * from './settings.js';
 export * from './metadata.js';
+export * from './releases.js';
+export * from './imports.js';
+export * from './history.js';
+export * from './notifications.js';
+export * from './calendar.js';

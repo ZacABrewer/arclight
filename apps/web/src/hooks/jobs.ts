@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { jobsApi } from '../api/jobs.js';
+import { useToast } from '../components/toast.js';
 import { upsertJob } from '../live.js';
 import { queryKeys } from './query-keys.js';
 
@@ -11,13 +12,15 @@ export function useScheduledJobs() {
   return useQuery({ queryKey: queryKeys.jobs.scheduled, queryFn: jobsApi.scheduled });
 }
 
-/** Queue a job by name. Failures surface as an error toast via the MutationCache. */
+/** Queue a job by name. Success raises a confirmation toast; failures an error toast via the MutationCache. */
 export function useRunJob() {
   const qc = useQueryClient();
+  const toast = useToast();
   return useMutation({
     mutationFn: jobsApi.run,
     meta: { errorTitle: 'Could not run job' },
     onSuccess: (job) => {
+      toast.push({ tone: 'ok', title: `Started ${job.name}`, message: `Run #${job.id} is ${job.status}.`, durationMs: 4_000 });
       upsertJob(qc, job);
       void qc.invalidateQueries({ queryKey: queryKeys.jobs.scheduled });
     },

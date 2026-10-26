@@ -81,8 +81,8 @@ describe('app shell', () => {
   });
 
   it('renders ComingSoon for routes that are not built yet', async () => {
-    renderAt('/settings/custom-formats');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Custom Formats' })).toBeTruthy();
+    renderAt('/discover');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Discover' })).toBeTruthy();
     expect(screen.getByText(/coming soon/i)).toBeTruthy();
   });
 

@@ -1,0 +1,119 @@
+import type { HealthCheck, HealthStatus } from '@media-tron/shared';
+
+// Health check framework types. A check is a named function over `HealthDeps` (everything it
+// may look at, injectable so tests use fakes) returning zero or more findings. A passing check
+// returns []. Findings carry a docs URL built from a stable anchor.
+
+export type PathPlatform = 'posix' | 'win32';
+
+/** Docs page the `wikiUrl` anchors point into (served by the web app). */
+export const HEALTH_DOCS_BASE = '/docs/system/health';
+
+export const GIB = 1024 ** 3;
+
+export interface HealthFs {
+  /** True when `path` exists and is a directory. */
+  isDirectory(path: string): Promise<boolean>;
+  /** Probe by actually creating and removing a file. */
+  canWrite(path: string): Promise<boolean>;
+  /** True when the directory has no entries. */
+  isEmpty(path: string): Promise<boolean>;
+  /** Bytes available to this user, or null when unknown. */
+  freeSpace(path: string): Promise<number | null>;
+  /** The mount containing `path`, when the platform can tell. */
+  mountOf(path: string): Promise<{ mountPoint: string; readOnly: boolean } | null>;
+  /** Owner of `path`, when the platform can tell. */
+  owner(path: string): Promise<{ uid: number; gid: number } | null>;
+}
+
+export interface HealthRootFolder {
+  path: string;
+  mediaType: 'series' | 'movie';
+  /** Series/movies stored under this root. */
+  itemCount: number;
+}
+
+export interface HealthDownloadClient {
+  id: number;
+  name: string;
+  host: string;
+}
+
+export interface HealthClientStatus {
+  outputRootDir: string;
+  isLocalhost: boolean;
+  removesCompletedDownloads: boolean;
+}
+
+export interface HealthIndexer {
+  id: number;
+  name: string;
+  enableRss: boolean;
+  enableAutomaticSearch: boolean;
+  enableInteractiveSearch: boolean;
+  /** ISO-8601; the indexer is in back-off until then. */
+  disabledTill?: string;
+  /** ISO-8601 of the first failure of the current failure streak. */
+  initialFailure?: string;
+}
+
+export interface HealthNotification {
+  id: number;
+  name: string;
+  /** Consecutive delivery failures since the last success. */
+  consecutiveFailures: number;
+}
+
+export interface HealthDeps {
+  appName: string;
+  isDocker: boolean;
+  configDir: string;
+  platform: PathPlatform;
+  now(): Date;
+  processIds: { uid?: number; gid?: number };
+  fs: HealthFs;
+  rootFolders(): Promise<HealthRootFolder[]>;
+  downloadClients: {
+    /** Enabled clients in repository order. */
+    enabled(): HealthDownloadClient[];
+    /** Outcome of the queue poller's last request to the client, if any. */
+    lastPoll(id: number): { ok: boolean; message?: string } | undefined;
+    /** Live connection test. */
+    test(id: number): Promise<{ ok: boolean; message?: string }>;
+    status(id: number): Promise<HealthClientStatus>;
+    /** Apply remote path mappings to a path the client reported. */
+    toLocal(host: string, path: string): string;
+  };
+  indexers(): HealthIndexer[];
+  tmdbKeyConfigured(): boolean;
+  /** Configured recycle bin folder, or null when not configured. */
+  recycleBin(): string | null;
+  /** Tracked downloads that finished and wait for import. */
+  pendingImports(): Array<{ id: number; title: string }>;
+  notifications: {
+    enabled(): HealthNotification[];
+    misconfigured(): Array<{ id: number; name: string; error: string }>;
+  };
+}
+
+export interface HealthCheckDef {
+  /** Stable id, also the `source` of every finding it returns. */
+  id: string;
+  run(deps: HealthDeps): Promise<HealthCheck[]>;
+}
+
+export function docsUrl(anchor: string): string {
+  return `${HEALTH_DOCS_BASE}#${anchor.replace(/^#/, '')}`;
+}
+
+export function finding(source: string, status: Exclude<HealthStatus, 'ok'>, message: string, anchor: string): HealthCheck {
+  return { source, status, message, wikiUrl: docsUrl(anchor) };
+}
+
+export function formatMiB(bytes: number): string {
+  return `${Math.floor(bytes / 1024 ** 2)} MiB`;
+}
+
+export function errorMessage(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
+}

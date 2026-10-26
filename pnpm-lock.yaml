@@ -32,6 +32,15 @@ importers:
       '@media-tron/metadata':
         specifier: workspace:*
         version: link:../../packages/metadata
+      '@media-tron/notifications':
+        specifier: workspace:*
+        version: link:../../packages/notifications
+      '@media-tron/organizer':
+        specifier: workspace:*
+        version: link:../../packages/organizer
+      '@media-tron/parser':
+        specifier: workspace:*
+        version: link:../../packages/parser
       '@media-tron/profiles-engine':
         specifier: workspace:*
         version: link:../../packages/profiles-engine
