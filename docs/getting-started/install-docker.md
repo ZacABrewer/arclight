@@ -70,7 +70,7 @@ Copy `docker/.env.example` to `docker/.env` (next to the compose file) and edit 
 |---|---|---|
 | `PUID` | `1000` | Numeric user id the containers run as. Must own your folders. |
 | `PGID` | `1000` | Numeric group id for the same purpose. |
-| `TZ` | `UTC` | Time zone for schedules and the calendar, for example `Etc/UTC` or `America/New_York`. |
+| `TZ` | `UTC` | Time zone for schedules and the calendar, for example `Etc/UTC` or `Europe/London`. |
 | `CONFIG_ROOT` | `./data` | Parent folder for each container's settings: `<CONFIG_ROOT>/arclight`, `/qbittorrent`, `/gluetun`, `/whisper`. Example: `/srv/arclight/appdata`. |
 | `DATA_ROOT` | `./data/share` | The one share mounted at `/data`. Contains `downloads`, `media/tv`, `media/movies`. Example: `/srv/arclight/data`. |
 | `PROTON_WIREGUARD_KEY` | none (required in VPN layouts) | The `PrivateKey` from a Proton WireGuard configuration. Treat it like a password. |

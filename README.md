@@ -7,16 +7,14 @@ login, one UI, one background scheduler. It drives an external download client
 (qBittorrent by default) and notifies your media server (Jellyfin, Emby, Plex) when
 content lands. It is not a media server.
 
-Arclight was started under the working name Media-Tron.
-
 ## Documentation
 
 **Full documentation: [docs/README.md](docs/README.md).** Install guides for Docker on Linux, Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer; a first-run walkthrough; one page per area of the app; [Troubleshooting](docs/TROUBLESHOOTING.md), [FAQ](docs/FAQ.md) and [Glossary](docs/GLOSSARY.md). The sections below are a short summary for contributors; the docs are the authoritative guide for users.
 
-Status: **Phase 1 in progress** (library, metadata, profiles, indexers and download-client
-plumbing work; the release/import pipeline and most UI pages are still being built; no
-authentication yet). See [docs/ROADMAP.md](docs/ROADMAP.md) and
-[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Status: **early release.** The full pipeline works end to end (requests, search, download,
+import, subtitles, notifications) with login and API keys; expect rough edges and report
+them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), plans: [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Deploy
 
@@ -41,7 +39,7 @@ services:
       - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET}
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=off
-      - TZ=America/New_York
+      - TZ=Etc/UTC
     ports:
       - 7878:7878   # Arclight
       - 8080:8080   # qBittorrent
@@ -57,14 +55,13 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/New_York
+      - TZ=Etc/UTC
       - ARCLIGHT_VPN_CONTROL_URL=http://localhost:8000
       - ARCLIGHT_FLARESOLVERR_URL=http://localhost:8191
     volumes:
       - ./config:/config
-      - /volume1/media/tv:/tv
-      - /volume1/media/movies:/movies
-      - /volume1/downloads:/downloads
+      # One share holding downloads/, media/tv/ and media/movies/: imports are hard links.
+      - /path/to/data:/data
     depends_on:
       gluetun: { condition: service_healthy }
     restart: unless-stopped
@@ -75,11 +72,11 @@ services:
     environment:
       - PUID=1000
       - PGID=1000
-      - TZ=America/New_York
+      - TZ=Etc/UTC
       - WEBUI_PORT=8080
     volumes:
       - ./qbittorrent:/config
-      - /volume1/downloads:/downloads
+      - /path/to/data:/data
     depends_on:
       gluetun: { condition: service_healthy }
     restart: unless-stopped
@@ -89,7 +86,7 @@ services:
     network_mode: "service:gluetun"
     environment:
       - LOG_LEVEL=info
-      - TZ=America/New_York
+      - TZ=Etc/UTC
     depends_on:
       gluetun: { condition: service_healthy }
     restart: unless-stopped
@@ -157,7 +154,7 @@ container: `docker compose -f docker/docker-compose.builtin.yml up -d` starts on
 Arclight (7878 published on Gluetun; no 6881 publish, since Proton forwards a port dynamically
 and Arclight moves the engine's listener onto it). On first start a **Built-in** download
 client is registered when none exists; engine options (limits, queue, seed goals, download
-folder `/downloads`) are under Settings → Torrent Engine. With **Bind to VPN** on (default) and
+folder `/data/downloads`) are under Settings → Torrent Engine. With **Bind to VPN** on (default) and
 the VPN integration enabled, the engine binds to the tunnel and, while the VPN is down or
 leaking, pauses every torrent and binds to 127.0.0.1 until it reconnects; set
 `ARCLIGHT_TORRENT_ENGINE=0` to keep the engine from starting at all.
@@ -206,7 +203,8 @@ table. With a full-tunnel config (`AllowedIPs = 0.0.0.0/0`) that is the tunnel; 
 tunnel it may not be. Set **home public IP** so a check that leaves through your ISP is
 flagged as a leak instead of passing silently.
 
-There is no login yet: keep port 7878 on a trusted network.
+Arclight has its own login (set up in the first-run wizard) and API keys. Before exposing it
+outside your network, read [Exposing Arclight outside your home](docs/getting-started/exposing-outside-home.md).
 
 ## Develop
 

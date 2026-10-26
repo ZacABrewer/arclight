@@ -86,7 +86,7 @@ What each part is for:
 | Item | What it does |
 |---|---|
 | `PUID` / `PGID` | The numeric user and group the app runs as. The container log confirms them with "Arclight starting as ..." |
-| `TZ` | Time zone, for example `America/New_York`. |
+| `TZ` | Time zone, for example `Europe/London`. |
 | `/config` | The database and settings. Back it up ([backup-restore.md](backup-restore.md)). |
 | `/data` | The one data mount. Never mount `/data/downloads` and `/data/media` as two separate volumes. |
 | `6881` tcp and udp | The built-in torrent engine's default port. Remove these two lines if you only use qBittorrent or usenet. |

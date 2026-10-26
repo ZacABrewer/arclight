@@ -52,7 +52,7 @@ Separate mounts for downloads and media force a full copy per import and break s
    |---|---|---|
    | `CONFIG_ROOT` | `/home/you/arclight/config` | Config for each container |
    | `DATA_ROOT` | `/home/you/arclight/data` | The one data mount |
-   | `TZ` | `Etc/UTC` | Time zone, for example `America/New_York` |
+   | `TZ` | `Etc/UTC` | Time zone, for example `Europe/London` |
    | `PUID` / `PGID` | `1000` / `1000` | Owner ids. Inside WSL, `id -u` and `id -g` show yours |
 
    If you chose a Windows folder, use the Linux-style form of it: `D:\Arclight\data` becomes `/mnt/d/Arclight/data` when the compose command runs inside WSL. Run `docker compose` from the same place you wrote the paths for.

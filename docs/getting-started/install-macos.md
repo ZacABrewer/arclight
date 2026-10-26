@@ -47,7 +47,7 @@ Get the compose files and `.env.example` from the repository's `docker/` folder.
 |---|---|---|
 | `CONFIG_ROOT` | `/Users/you/arclight/config` | Config for each container (use your real home path) |
 | `DATA_ROOT` | `/Users/you/arclight/data` | The single data mount, mapped to `/data` |
-| `TZ` | `Etc/UTC` | Time zone, for example `America/New_York` |
+| `TZ` | `Etc/UTC` | Time zone, for example `Europe/London` |
 | `PUID` / `PGID` | `1000` / `1000` | Container user. On macOS any value works for bind mounts; the Docker file-sharing layer maps ownership to your Mac user |
 
 For a VPN layout also set `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET`, then run `sh scripts/gluetun-auth.sh` once from the repository root. Choose your layout from [install-docker.md](install-docker.md#1-choose-a-layout). Because the VPN layouts are least certain on a Mac, start with the no-VPN built-in layout first to prove the rest works.

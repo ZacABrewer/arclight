@@ -74,7 +74,7 @@ services:
     restart: unless-stopped
 ```
 
-Replace the two host paths, `PUID`, `PGID` and `TZ` (for example `America/New_York`). Container Station may not read a `.env` file; if yours does not, typing values straight into the file as above is the simplest approach.
+Replace the two host paths, `PUID`, `PGID` and `TZ` (for example `Europe/London`). Container Station may not read a `.env` file; if yours does not, typing values straight into the file as above is the simplest approach.
 
 | Item | What it does |
 |---|---|

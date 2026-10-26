@@ -107,7 +107,7 @@ services:
 |---|---|---|
 | `PUID` | `1000` | Numeric user that owns your folders |
 | `PGID` | `1000` | Numeric group |
-| `TZ` | `Etc/UTC` | Time zone, for example `America/New_York` |
+| `TZ` | `Etc/UTC` | Time zone, for example `Europe/London` |
 | `CONFIG_ROOT` | `/path/to/appdata` | Parent of each container's config |
 | `DATA_ROOT` | `/path/to/data` | The single data mount, `/data` in the container |
 | `PROTON_WIREGUARD_KEY` | `<your-key>` | Proton WireGuard private key. Treat like a password |
