@@ -21,6 +21,13 @@ describe('deriveState', () => {
     expect(derive({})).toMatchObject({ code: 'downloading', reason: 'Downloading.' });
   });
 
+  it('shows copy progress while an import copies into the library', () => {
+    const r = derive({ state: 'importing', importCopy: { copiedBytes: 2 * 1024 ** 3, totalBytes: 8 * 1024 ** 3, bytesPerSecond: 50 * 1024 ** 2 } });
+    expect(r).toMatchObject({ code: 'importing', severity: 'info' });
+    expect(r.reason).toMatch(/^Copying into the library: 2\.0 GiB of 8\.0 GiB \(50\.0 MiB\/s\)/);
+    expect(derive({ state: 'importing' }).reason).toBe('Importing into the library.');
+  });
+
   it('says the engine is starting instead of unreachable while it restores torrents', () => {
     const r = derive({ engineStarting: true, clientError: 'The built-in torrent engine is not running.' });
     expect(r).toMatchObject({ code: 'checking', severity: 'info' });

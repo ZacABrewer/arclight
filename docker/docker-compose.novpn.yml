@@ -23,9 +23,9 @@ services:
       # recreate the containers labelled arclight.autoupdate=true. This gives Arclight root-equivalent
       # control of the Docker host; leave it commented to stay in "notify only" mode.
       # - /var/run/docker.sock:/var/run/docker.sock
-      - ${TV_ROOT:-./data/tv}:/tv
-      - ${MOVIES_ROOT:-./data/movies}:/movies
-      - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
+      # One share for downloads and library (downloads/, media/tv/, media/movies/): imports
+      # are instant hard links only when both live under the same mount.
+      - ${DATA_ROOT:-./data/share}:/data
     ports:
       - "7878:7878"
     restart: unless-stopped
@@ -46,7 +46,7 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ${CONFIG_ROOT:-./data}/qbittorrent:/config
-      - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
+      - ${DATA_ROOT:-./data/share}:/data
     ports:
       - "8080:8080"
       - "6881:6881"

@@ -31,6 +31,8 @@ export interface StateInput {
   clientName?: string | null | undefined;
   /** The client's last poll failed with this message. */
   clientError?: string | undefined;
+  /** An import copying the file into the library (no hard link possible). */
+  importCopy?: { copiedBytes: number; totalBytes: number; bytesPerSecond: number } | undefined;
   /** The built-in engine is still starting up (its last poll may have failed because of it). */
   engineStarting?: boolean | undefined;
   /** Paused by the built-in engine's VPN kill switch, with the engine's lockdown reason. */
@@ -98,6 +100,14 @@ export function deriveState(input: StateInput): StateReason {
     case 'pending':
       return r('pendingGrab', first ?? 'Waiting to be sent to a download client.', input.trackedStatus === 'ok' ? 'info' : 'warning');
     case 'importing':
+      if (input.importCopy) {
+        const c = input.importCopy;
+        return r(
+          'importing',
+          `Copying into the library: ${formatBytes(c.copiedBytes)} of ${formatBytes(c.totalBytes)} (${formatBytes(c.bytesPerSecond)}/s). ` +
+            'A hard link was not possible, so the file is copied; see the hard link health check.',
+        );
+      }
       return r('importing', 'Importing into the library.');
     case 'importPending':
       if (input.trackedStatus !== 'ok' || input.statusMessages.length > 0) {

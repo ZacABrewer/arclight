@@ -24,6 +24,8 @@ export interface HealthFs {
   mountOf(path: string): Promise<{ mountPoint: string; readOnly: boolean } | null>;
   /** Owner of `path`, when the platform can tell. */
   owner(path: string): Promise<{ uid: number; gid: number } | null>;
+  /** Probe whether a file in `fromDir` can be hard-linked into `toDir`; null when it cannot be tested. */
+  canHardLink?(fromDir: string, toDir: string): Promise<boolean | null>;
 }
 
 export interface HealthRootFolder {
@@ -106,6 +108,8 @@ export interface HealthDeps {
   feeds?(): Promise<FeedSummary[]>;
   /** Downloads still transferring (download-clients module); optional so deps without it skip the checks. */
   activeDownloads?(): Promise<HealthActiveDownload[]>;
+  /** Media management "use hard links instead of copy"; optional so deps without it skip the check. */
+  useHardlinks?(): boolean;
   /** Free space to keep on volumes (Settings > Media Management), bytes. */
   minimumFreeSpaceBytes?(): number;
   /** Whisper ASR provider status (subtitles module); optional so deps without it skip the check. */

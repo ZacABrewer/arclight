@@ -96,9 +96,9 @@ services:
       # recreate the containers labelled arclight.autoupdate=true. This gives Arclight root-equivalent
       # control of the Docker host; leave it commented to stay in "notify only" mode.
       # - /var/run/docker.sock:/var/run/docker.sock
-      - ${TV_ROOT:-./data/tv}:/tv
-      - ${MOVIES_ROOT:-./data/movies}:/movies
-      - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
+      # One share for downloads and library (downloads/, media/tv/, media/movies/): imports
+      # are instant hard links only when both live under the same mount.
+      - ${DATA_ROOT:-./data/share}:/data
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7878/api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
@@ -128,7 +128,7 @@ services:
       - WEBUI_PORT=8080
     volumes:
       - ${CONFIG_ROOT:-./data}/qbittorrent:/config
-      - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
+      - ${DATA_ROOT:-./data/share}:/data
     # No peer port mapping: the incoming port is the one Proton forwards, set automatically.
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8080/ || exit 1"]

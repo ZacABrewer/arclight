@@ -263,6 +263,8 @@ export class DownloadClientsService {
   private readonly failedHooks = new Set<TrackedDownloadHook>();
   private readonly blocklistHooks = new Set<BlocklistHook>();
   private readonly clientHealth = new Map<number, { ok: boolean; at: string; message?: string }>();
+  /** Copies into the library in progress, by download id (imports report them). */
+  private readonly importCopies = new Map<string, { copiedBytes: number; totalBytes: number; startedAt: number }>();
   private lastRefreshAt: number | null = null;
   private dirty = true;
   private torrentSession: SessionSource | undefined;
@@ -433,6 +435,23 @@ export class DownloadClientsService {
   }
 
   /** Called by the torrent module: kill-switch state and live numbers of the built-in engine. */
+  /** Progress of an import that copies (hard link impossible); null when it ends. */
+  setImportProgress(downloadId: string, progress: { copiedBytes: number; totalBytes: number } | null): void {
+    if (!progress) this.importCopies.delete(downloadId);
+    else {
+      const startedAt = this.importCopies.get(downloadId)?.startedAt ?? Date.now();
+      this.importCopies.set(downloadId, { ...progress, startedAt });
+    }
+    this.bus?.publish({ type: 'queue', action: 'changed' });
+  }
+
+  private importCopyOf(downloadId: string): { copiedBytes: number; totalBytes: number; bytesPerSecond: number } | undefined {
+    const c = this.importCopies.get(downloadId);
+    if (!c) return undefined;
+    const seconds = Math.max(1, (Date.now() - c.startedAt) / 1000);
+    return { copiedBytes: c.copiedBytes, totalBytes: c.totalBytes, bytesPerSecond: c.copiedBytes / seconds };
+  }
+
   setEngineInsights(insights: EngineInsights | undefined): void {
     this.engineInsights = insights;
   }
@@ -1508,6 +1527,7 @@ export class DownloadClientsService {
       clientName: client?.name ?? null,
       ...(builtin && ctx.engineStarting ? { engineStarting: true } : health && !health.ok ? { clientError: health.message ?? 'unknown error' } : {}),
       killSwitch,
+      importCopy: this.importCopyOf(row.downloadId),
       maxActiveDownloads: builtin ? ctx.maxActiveDownloads : null,
     });
     const etaMs = engine ? engine.etaMs : row.etaMs ?? undefined;
