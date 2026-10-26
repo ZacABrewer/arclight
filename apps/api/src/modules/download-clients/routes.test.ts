@@ -56,7 +56,7 @@ describe('download-clients routes', () => {
     expect(ids).toHaveLength(3);
 
     const status = await app.inject({ method: 'GET', url: '/api/v1/queue/status' });
-    expect(status.json()).toEqual({ totalCount: 0, unknownCount: 3, errors: 0, warnings: 0 });
+    expect(status.json()).toMatchObject({ totalCount: 0, unknownCount: 3, errors: 0, warnings: 0 });
 
     const one = await app.inject({ method: 'DELETE', url: `/api/v1/queue/${ids[0]}?removeFromClient=false` });
     expect(one.json()).toEqual({ removed: [ids[0]], failed: [] });

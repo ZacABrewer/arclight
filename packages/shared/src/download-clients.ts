@@ -566,6 +566,10 @@ export const QueueItemStateCode = z.enum([
   'noPeers',
   'stalled',
   'diskSpace',
+  /** Paused by Arclight: the download volume fell below the minimum free space. */
+  'diskPaused',
+  /** A grab held back (not sent to the client) until its download volume has room. */
+  'diskHeld',
   'clientUnavailable',
   'missing',
   'warning',
@@ -719,6 +723,19 @@ export const QueueStatus = z.object({
   warnings: z.number().int(),
   /** Queue items not linked to any series or movie. */
   unknownCount: z.number().int(),
+  /**
+   * Disk-space guard: downloads Arclight paused because their volume fell below the minimum
+   * free space, and grabs held back until there is room. Optional: older servers omit it.
+   */
+  diskGuard: z
+    .object({
+      paused: z.number().int(),
+      held: z.number().int(),
+      /** Download folders below the minimum, with their free bytes. */
+      volumes: z.array(z.object({ path: z.string(), freeBytes: z.number().int() })),
+      minimumFreeBytes: z.number().int(),
+    })
+    .optional(),
 });
 export type QueueStatus = z.infer<typeof QueueStatus>;
 
@@ -739,6 +756,33 @@ export const QueueRemoveResult = z.object({
   failed: z.array(z.object({ id: z.number().int(), error: z.string() })),
 });
 export type QueueRemoveResult = z.infer<typeof QueueRemoveResult>;
+
+/** POST /queue/:id/replace: give up on this release and search for another one. */
+export const QueueReplaceRequest = z.object({
+  /** Blocklist the release so the search does not pick it again. */
+  blocklist: z.boolean().default(true),
+  /** Delete the downloaded data along with the download. */
+  removeData: z.boolean().default(true),
+});
+export type QueueReplaceRequest = z.infer<typeof QueueReplaceRequest>;
+export type QueueReplaceRequestInput = z.input<typeof QueueReplaceRequest>;
+
+export const QueueReplaceResult = z.object({
+  /** The queue item that was replaced (now gone from the queue). */
+  id: z.number().int(),
+  blocklisted: z.boolean(),
+  /** False when the item has no series/movie to search for. */
+  searchStarted: z.boolean(),
+  message: z.string(),
+});
+export type QueueReplaceResult = z.infer<typeof QueueReplaceResult>;
+
+/** POST /queue/:id/reannounce */
+export const QueueReannounceResult = z.object({
+  id: z.number().int(),
+  message: z.string(),
+});
+export type QueueReannounceResult = z.infer<typeof QueueReannounceResult>;
 
 // ---------------------------------------------------------------------------------------
 // Download timeline
@@ -761,6 +805,12 @@ export const DownloadEventType = z.enum([
   'importFailed',
   'removed',
   'error',
+  /** Asked the client for fresh peers (stall recovery step 1, or the Re-announce action). */
+  'reannounced',
+  /** Gave up on the release: removed (and usually blocklisted), searching for another one. */
+  'replaced',
+  /** Grab held back until the download volume has room (disk-space guard). */
+  'held',
 ]);
 export type DownloadEventType = z.infer<typeof DownloadEventType>;
 

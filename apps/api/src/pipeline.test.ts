@@ -198,4 +198,74 @@ describe('phase 1 pipeline', () => {
       await app.close();
     }
   });
+
+  it('replaces a release: fails it through history, blocklists it and searches again', async () => {
+    const tvRoot = join(tmp, 'tv');
+    await mkdir(tvRoot, { recursive: true });
+    let ctxRef: AppContext | undefined;
+    let searches = 0;
+    const release = makeRelease(TITLE, {
+      guid: 'guid-1',
+      downloadUrl: `magnet:?xt=urn:btih:${HASH}`,
+      infoHash: HASH,
+      publishDate: new Date(Date.now() - 60 * 60_000).toISOString(),
+    });
+    const config: AppConfig = { configDir: tmp, dbPath: ':memory:', logDir: tmp, port: 0, host: '127.0.0.1', logLevel: 'silent', isDocker: false, webDist: null };
+    const app = await buildApp(config, db, pino({ level: 'silent' }), {
+      metadata,
+      probe: false,
+      onContext: (ctx) => {
+        ctxRef = ctx;
+        getDownloadClientsService(ctx, {
+          directoryExists: async () => true,
+          clientFactory: (cfg) => {
+            const fake = new FakeDownloadClient(cfg);
+            fake.nextId = HASH;
+            return fake;
+          },
+        });
+        const indexers = indexersServiceFor(ctx);
+        indexers.list = () => [makeIndexer()];
+        indexers.search = async () => {
+          searches++;
+          return [release];
+        };
+      },
+    });
+    await app.ready();
+    try {
+      const ctx = ctxRef!;
+      const api = (method: 'GET' | 'POST', url: string, payload?: unknown) =>
+        app.inject({
+          method,
+          url: `/api/v1${url}`,
+          headers: { 'x-api-key': authServiceFor(ctx).apiKey() },
+          ...(payload === undefined ? {} : { payload: payload as object }),
+        });
+      await api('POST', '/rootfolder', { path: tvRoot, mediaType: 'series' });
+      const { id: _id, ...draft } = makeProfile(HD_ALLOWED);
+      const profileId = (await api('POST', '/qualityprofile', QualityProfileInput.parse({ ...draft, name: 'Pipeline HD' }))).json<{ id: number }>().id;
+      const seriesId = (await api('POST', '/series', { tmdbId: 4242, rootFolderPath: tvRoot, qualityProfileId: profileId })).json<{ id: number }>().id;
+      await api('POST', '/downloadclient', qbit('Fake qBit'));
+      expect((await api('POST', '/command/search', { seriesId })).json()).toMatchObject({ grabbed: [TITLE] });
+      const queued = (await api('GET', '/queue')).json<QueuePage>().records[0]!;
+
+      const res = await api('POST', `/queue/${queued.id}/replace`, {});
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toMatchObject({ blocklisted: true, searchStarted: true });
+
+      const history = (await api('GET', '/history?pageSize=50')).json<HistoryPage>();
+      const failed = history.records.find((r) => r.eventType === 'downloadFailed');
+      expect(failed).toBeDefined();
+      expect(JSON.stringify(failed)).toContain('Replaced by the user');
+      const blocklist = (await api('GET', '/blocklist')).json<{ records: Array<{ sourceTitle: string }> }>();
+      expect(blocklist.records.map((r) => r.sourceTitle)).toEqual([TITLE]);
+      // The replacement search runs as a job; the only release is blocklisted now.
+      for (let i = 0; i < 50 && searches < 2; i++) await new Promise((r) => setTimeout(r, 20));
+      expect(searches).toBe(2);
+      expect((await api('GET', '/queue')).json<QueuePage>().records).toEqual([]);
+    } finally {
+      await app.close();
+    }
+  });
 });

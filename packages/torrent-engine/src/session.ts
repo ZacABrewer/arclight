@@ -468,6 +468,11 @@ export class Session extends EventEmitter<SessionEvents> {
     await this.saveResumeData(t);
   }
 
+  /** Asks trackers and the DHT for fresh peers of a torrent; null while it is not networking. */
+  reannounceTorrent(id: string): { trackers: number; dht: boolean } | null {
+    return this.require(id).reannounce();
+  }
+
   /** Changes a torrent's category; with `move` the payload follows the category save path. */
   async setCategory(id: string, category: string, move = false): Promise<void> {
     const t = this.require(id);

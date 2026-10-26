@@ -78,6 +78,15 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 //   here, which runs releases.searchFor for the record's episodes/movie inside an ad-hoc
 //   `HistoryRedownload` job (Scheduler.runTask) and hands the job back for the 202 answer.
 //
+// * Replace (POST /queue/:id/replace, stall recovery): download-clients.replace removes the
+//   download, fails it through the same history pipeline with skipRedownload (blocklist with
+//   the reason) and calls the replacement search registered here, which runs releases.searchFor
+//   in a `ReplacementSearch` job. Exactly one search, whatever `autoRedownloadFailed` says: the
+//   user (or the stall setting) asked for another release.
+//
+// * Held grabs: a grab the disk-space guard holds gets a `pending:*` download id; history
+//   records the grab under it and is re-keyed (onPendingSent) when the grab is finally sent.
+//
 // * Library commands: the bulk editor's `refresh` / `search` flags and "search on add" call
 //   libraryCommands below: refresh -> the metadata module's MetadataRefresher, search ->
 //   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` job.
@@ -111,6 +120,8 @@ export const REDOWNLOAD_PRIORITY = 100;
 export const REDOWNLOAD_JOB = 'HistoryRedownload';
 export const SERIES_SEARCH_JOB = 'SeriesSearch';
 export const MOVIE_SEARCH_JOB = 'MovieSearch';
+/** Search started when a download's release is replaced (manually or by stall recovery). */
+export const REPLACE_SEARCH_JOB = 'ReplacementSearch';
 
 export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wiring {
   const log = ctx.log.child({ module: 'wiring' });
@@ -142,10 +153,34 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   });
   disposers.push(() => history.setRedownloadHandler(undefined));
 
-  // Queue removal with "blocklist" goes through the same failed pipeline.
-  disposers.push(getDownloadClientsService(ctx).onBlocklist(async (item, { skipRedownload }) => {
-    await failTrackedDownload(ctx, item, { source: 'Queue', skipRedownload });
+  // Queue removal with "blocklist" goes through the same failed pipeline (so does replacing a
+  // release, with its reason, e.g. "Stalled: no data for 40 min").
+  const downloads = getDownloadClientsService(ctx);
+  disposers.push(downloads.onBlocklist(async (item, { skipRedownload, message }) => {
+    await failTrackedDownload(ctx, item, { source: 'Queue', skipRedownload, ...(message !== undefined ? { message } : {}) });
   }));
+
+  // Replacing a release ("Try another release", stall recovery): one search for the same
+  // episodes / movie, run as a job so it shows on the job board.
+  downloads.setReplacementSearch((item) => {
+    const target = searchTargetForTracked(item);
+    if (!target) return false;
+    ctx.scheduler.runTask(REPLACE_SEARCH_JOB, 'system', async ({ signal }) => {
+      const summary = await releasesServiceFor(ctx).searchFor(target, { signal });
+      return `searched for a replacement of "${item.title}": ${summary.releases} releases, ${summary.grabbed.length} grabbed`;
+    }, { key: `${REPLACE_SEARCH_JOB}:${item.id}` });
+    return true;
+  });
+  // Automatic replacements wait while grabs would (VPN down): the search could not grab anyway.
+  downloads.setReplaceGuard(() => vpnServiceFor(ctx).isSafeToGrab());
+  // A held (disk space) or delayed grab got its real download id: history follows it.
+  disposers.push(downloads.onPendingSent((item, pendingId) => {
+    historyServiceFor(ctx).rekeyDownloadId(pendingId, item.downloadId);
+  }));
+  disposers.push(() => {
+    downloads.setReplacementSearch(undefined);
+    downloads.setReplaceGuard(undefined);
+  });
 
   if (options.probe ?? true) {
     // One ffprobe runner per context, shared with the media-analysis queue.
@@ -370,6 +405,13 @@ function searchTargetFor(target: HistoryTarget): SearchTarget | null {
   // A failed download without known episodes would turn into a whole-series search; skip it.
   if (target.episodeIds.length === 0) return null;
   return { seriesId: target.seriesId, episodeIds: [...target.episodeIds] };
+}
+
+/** Search target of a queue item's episodes / movie; null when it is not linked to any. */
+function searchTargetForTracked(item: TrackedDownload): SearchTarget | null {
+  if (item.movieId !== undefined) return { movieId: item.movieId };
+  if (item.seriesId === undefined || !item.episodeIds?.length) return null;
+  return { seriesId: item.seriesId, episodeIds: [...item.episodeIds] };
 }
 
 /** Free bytes on the volume holding `path`, walking up to the nearest existing folder. */

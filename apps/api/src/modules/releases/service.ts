@@ -136,6 +136,8 @@ export interface DownloadClientGrab {
   isRecent?: boolean;
   seedConfig?: { ratioLimit?: number; seedTimeLimitMinutes?: number };
   protocol?: 'usenet' | 'torrent';
+  /** Release size (bytes) when known: the download-clients disk-space guard may hold the grab. */
+  sizeBytes?: number;
 }
 
 export interface DownloadTracking {
@@ -791,6 +793,7 @@ export class ReleasesService {
           protocol: release.protocol,
           isRecent: release.age <= 14,
           ...payload,
+          ...(release.size > 0 ? { sizeBytes: release.size } : {}),
           ...(release.protocol === 'torrent' && Object.keys(seedConfig).length > 0 ? { seedConfig } : {}),
         },
         tracking,
@@ -860,7 +863,7 @@ export class ReleasesService {
     try {
       tracked = await this.downloads.grab(
         opts.downloadClientId ?? indexer?.downloadClientId ?? null,
-        { title: release.title, protocol: release.protocol, isRecent: release.age <= 14, ...payload },
+        { title: release.title, protocol: release.protocol, isRecent: release.age <= 14, ...payload, ...(release.size > 0 ? { sizeBytes: release.size } : {}) },
         {},
       );
     } catch (err) {

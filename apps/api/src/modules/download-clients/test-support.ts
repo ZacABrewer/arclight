@@ -64,15 +64,34 @@ export class FakeDownloadClient implements DownloadClient {
   }
 
   async getStatus(): Promise<DownloadClientStatus> {
-    return { outputRootDir: '/downloads', isLocalhost: true, removesCompletedDownloads: false };
+    return { outputRootDir: this.outputRootDir, isLocalhost: true, removesCompletedDownloads: false };
   }
 
   async setCategory(id: string, category: string): Promise<void> {
     this.categoryChanges.push({ id, category });
   }
 
-  async pause(): Promise<void> {}
-  async resume(): Promise<void> {}
+  outputRootDir = '/downloads';
+  paused: string[] = [];
+  resumed: string[] = [];
+  reannounced: string[] = [];
+  failReannounce: Error | null = null;
+
+  /** Pausing/resuming flips the staged item's status, as a real client would. */
+  async pause(id: string): Promise<void> {
+    this.paused.push(id);
+    this.items = this.items.map((i) => (i.id === id ? { ...i, status: 'paused' } : i));
+  }
+
+  async resume(id: string): Promise<void> {
+    this.resumed.push(id);
+    this.items = this.items.map((i) => (i.id === id && i.status === 'paused' ? { ...i, status: 'downloading' } : i));
+  }
+
+  async reannounce(id: string): Promise<void> {
+    if (this.failReannounce) throw this.failReannounce;
+    this.reannounced.push(id);
+  }
 }
 
 export function item(overrides: Partial<DownloadItem> & { id: string }): DownloadItem {
@@ -115,6 +134,9 @@ export async function setup(options: Partial<DownloadClientsServiceOptions> = {}
         fake.added = existing.added;
         fake.nzbsAdded = existing.nzbsAdded;
         fake.removed = existing.removed;
+        fake.paused = existing.paused;
+        fake.resumed = existing.resumed;
+        fake.reannounced = existing.reannounced;
       }
       if (config.id !== 0) fakes.set(config.id, fake);
       return fake;

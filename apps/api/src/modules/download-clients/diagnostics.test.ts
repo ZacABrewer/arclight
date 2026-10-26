@@ -125,7 +125,9 @@ describe('stall detection', () => {
     const stalled = h.service.getQueueItem(h.tracked.id);
     expect(stalled).toMatchObject({ stateCode: 'stalled', stateSeverity: 'warning', trackedStatus: 'warning', stalledSince: startedAt });
     expect(stalled.statusMessages.flatMap((m) => m.messages)).toContain('No new data received for 10 minutes.');
-    const entry = h.service.getTimeline(h.tracked.id).events.at(-1)!;
+    // Stall recovery asks for fresh peers right after the stall is flagged.
+    expect(h.types().slice(-2)).toEqual(['stalled', 'reannounced']);
+    const entry = h.service.getTimeline(h.tracked.id).events.at(-2)!;
     expect(entry).toMatchObject({ type: 'stalled', severity: 'warning' });
     expect(entry.message).toBe('No new data for 10 minutes at 0%. 1 peer(s) connected, 0 seed(s).');
 
@@ -167,7 +169,7 @@ describe('stall detection', () => {
 
 describe('state reasons from the queue poll', () => {
   it('reports downloads that will not fit on the download volume', async () => {
-    const h = await grabbed({ freeSpace: async () => 300 });
+    const h = await grabbed({ freeSpace: async () => 300, minimumFreeSpaceBytes: () => 0 });
     h.set({ downloadedBytes: 100, remainingBytes: 900 });
     await h.service.refreshQueue();
     const queued = h.service.getQueueItem(h.tracked.id);

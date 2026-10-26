@@ -64,6 +64,20 @@ export const MediaManagementSettings = z.object({
   autoRedownloadFailed: z.boolean().default(true),
   /** A download that receives no data for this many minutes is flagged as stalled. 0 turns it off. */
   stalledDownloadMinutes: z.number().int().min(0).max(1440).default(10),
+  /**
+   * Self-healing for stalled downloads: re-announce for fresh peers right away, then (after
+   * `stallReplaceMinutes`) remove, blocklist and search for another release.
+   */
+  stallRecovery: z.boolean().default(true),
+  /** Minutes a download may stay stalled before it is replaced. 0 never replaces (re-announce only). */
+  stallReplaceMinutes: z.number().int().min(0).max(10080).default(30),
+  /** Downloads at or above this percentage are never replaced, only re-announced. */
+  stallReplaceMaxProgress: z.number().int().min(0).max(100).default(90),
+  /**
+   * Disk-space guard: hold grabs that would leave the download volume below
+   * `minimumFreeSpaceMb`, and pause downloads while it is below it.
+   */
+  diskSpaceGuard: z.boolean().default(true),
   /** Empty or absent: replaced/deleted files are deleted permanently. */
   recycleBinPath: z.string().optional(),
   /** 0 disables cleanup. */

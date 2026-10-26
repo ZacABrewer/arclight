@@ -590,6 +590,34 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     link: { get label() { return t('common.queue'); }, to: '/activity/queue' },
   },
   {
+    anchor: 'download-disk-guard-paused',
+    sources: ['DownloadDiskGuard'],
+    get title() {
+      return t('docs.healthDocs.diskGuardPausedTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.diskGuardPausedCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.diskGuardFix1'), t('docs.healthDocs.diskGuardFix2')];
+    },
+    link: { get label() { return t('common.queue'); }, to: '/activity/queue' },
+  },
+  {
+    anchor: 'download-disk-guard-held',
+    sources: ['DownloadDiskGuard'],
+    get title() {
+      return t('docs.healthDocs.diskGuardHeldTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.diskGuardHeldCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.diskGuardFix1'), t('docs.healthDocs.diskGuardHeldFix2')];
+    },
+    link: { get label() { return t('common.mediaManagement'); }, to: '/settings/mediamanagement' },
+  },
+  {
     anchor: 'torrent-engine-lockdown',
     sources: ['TorrentEngineLockdown'],
     get title() {

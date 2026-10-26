@@ -676,6 +676,15 @@ export class HistoryService {
     return this.findByDownloadId(downloadId, eventType)[0] ?? null;
   }
 
+  /**
+   * Moves every row of a download id to another (a held grab recorded under its `pending:*`
+   * id was sent and got the client's id). Returns the number of rows changed.
+   */
+  rekeyDownloadId(from: string, to: string): number {
+    if (!from || !to || from === to) return 0;
+    return this.db.update(history).set({ downloadId: to }).where(eq(history.downloadId, from)).run().changes;
+  }
+
   /** All rows for one item, newest first. */
   forItem(ref: HistoryItemRef, eventType?: HistoryEventType): HistoryRecord[] {
     const conds: SQL[] = ['episodeId' in ref ? eq(history.episodeId, ref.episodeId) : eq(history.movieId, ref.movieId)];

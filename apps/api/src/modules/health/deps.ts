@@ -239,6 +239,10 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
     minimumFreeSpaceBytes: () => downloads.minimumFreeSpaceBytes(),
     useHardlinks: () => getSection(db, 'mediaManagement').useHardlinks !== false,
 
+    async diskGuard() {
+      return downloads.diskGuardStatus();
+    },
+
     feeds: () => feedsRegistry(ctx).summary(),
 
     remoteEngines: () => downloads.remoteEngineHealth(),

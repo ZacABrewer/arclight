@@ -465,6 +465,18 @@ describe('BuiltinClient status and connection', () => {
     expect(await mapped.client.getStatus()).toEqual({ outputRootDir: dir, isLocalhost: true, removesCompletedDownloads: true });
   });
 
+  it('re-announces an active torrent and refuses a paused or unknown one', async () => {
+    const { s, client } = await leecher();
+    const a = pack();
+    const b = pack();
+    const ra = await client.addTorrent({ magnet: a.magnet, title: 'a', category: 'tv' });
+    const rb = await client.addTorrent({ magnet: b.magnet, title: 'b', category: 'tv', paused: true });
+    await client.reannounce?.(ra.id);
+    expect(s.getTorrent(rb.id)?.isPaused).toBe(true);
+    await expect(client.reannounce?.(rb.id)).rejects.toMatchObject({ code: 'rejected' });
+    await expect(client.reannounce?.('f'.repeat(40))).rejects.toMatchObject({ code: 'not-found' });
+  });
+
   it('rebinds the listener on setListenPort and reports it', async () => {
     const { s, client } = await leecher();
     const before = await client.getListenPort?.();

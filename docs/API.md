@@ -391,12 +391,25 @@ its own feed.
 | PUT | `/remotepathmapping/:id` | Update |
 | DELETE | `/remotepathmapping/:id` | Delete |
 | GET | `/queue` | Paged queue of tracked downloads |
-| GET | `/queue/status` | Queue totals |
+| GET | `/queue/status` | Queue totals; `diskGuard` `{paused, held, volumes, minimumFreeBytes}`: downloads the disk-space guard paused and grabs it holds |
 | GET | `/queue/:id` | One queue item (with `stateCode` / `stateReason` / `stateSeverity`, `stalledSince`, `live` rates and peers) |
 | GET | `/queue/:id/timeline` | What happened to the download (grabbed, paused by the kill switch, stalled, imported, ...), oldest first; kept 30 days, also after it left the queue |
 | DELETE | `/queue/bulk` | Remove several items (body has `ids` and options) |
 | DELETE | `/queue/:id` | Remove one item (query options) |
-| POST | `/queue/grab/:id` | Retry a pending item |
+| POST | `/queue/grab/:id` | Retry a pending item ("Send now"; also overrides a disk-space hold) |
+| POST | `/queue/:id/replace` | "Try another release": `QueueReplaceRequest` `{blocklist = true, removeData = true}`. Removes the download from its client, fails it through history (blocklist with the reason) and starts a `ReplacementSearch` job for its episodes / movie. Answers `QueueReplaceResult` `{id, blocklisted, searchStarted, message}` |
+| POST | `/queue/:id/reannounce` | Ask the client for fresh peers (built-in engine: trackers + DHT; qBittorrent: reannounce). 400 when the client cannot, or the download is not active. Answers `{id, message}` |
+
+Self-healing (Settings > Media Management): a stalled download is re-announced at once
+(`stallRecovery`) and, still stalled `stallReplaceMinutes` (default 30, 0 = never) after it was
+flagged, replaced as above with the reason "stalled: no data for N min", unless it is past
+`stallReplaceMaxProgress` (default 90%), paused, the engine is locked down or grabs are blocked
+by the VPN guard. The disk-space guard (`diskSpaceGuard`, uses `minimumFreeSpaceMb`) holds grabs
+that would leave the client's download folder below the minimum as `pending` items (state code
+`diskHeld`, retried by the `RetryHeldGrabs` job every 2 minutes) and pauses downloads on a
+volume below the minimum (`diskPaused`), resuming them at the minimum + 1 GiB. Timeline event
+types `reannounced`, `replaced` and `held`; paused/resumed carry `data.reason = 'diskSpace'`.
+
 | POST | `/queue/:id/limits` | `{ downloadLimit?, uploadLimit? }` in bytes/s (0 = unlimited) for one download; built-in engine (kept in its resume data) and qBittorrent. Returns the queue item; 409 when the client cannot |
 | POST | `/queue/:id/move` | `{ move: top / up / down / bottom }`: download queue order (built-in engine; qBittorrent with torrent queueing on) |
 | POST | `/queue/:id/forcestart` | `{ enabled }`: run past the active-download limit without taking a slot |
