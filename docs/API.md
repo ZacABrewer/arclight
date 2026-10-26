@@ -338,7 +338,7 @@ feed's downloads in `<config>/definitions/feed/`, user YAML files in `<config>/d
 ### Definition feed
 
 Settings `indexers.definitionFeed` (`DefinitionFeedSettings`): `enabled` (true), `url` (default
-`https://raw.githubusercontent.com/zacheryabrewer/arclight/main/packages/indexers/src/definitions/builtin/`,
+`https://raw.githubusercontent.com/ZacABrewer/arclight/main/packages/indexers/src/definitions/builtin/`,
 this repository's builtin folder; owner/repo are `ARCLIGHT_GITHUB_*` in
 `packages/shared/src/project.ts`), `intervalHours` (12), `mode` `auto`/`manual`. While the
 default feed's `index.json` answers 404 (repository not published yet) a sync succeeds with no

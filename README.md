@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   arclight:
-    image: ghcr.io/zacheryabrewer/arclight:latest
+    image: ghcr.io/zacabrewer/arclight:latest
     network_mode: "service:gluetun"
     environment:
       - PUID=1000

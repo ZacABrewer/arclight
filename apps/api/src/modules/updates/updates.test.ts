@@ -37,7 +37,7 @@ function fakeFetch(api: FakeApi): typeof fetch {
     }
     if (url.host === 'ghcr.io' && url.pathname.endsWith('/tags/list')) {
       expect(headers.get('authorization')).toBe('Bearer anon');
-      return Response.json({ name: 'zacheryabrewer/arclight', tags: api.tags ?? [] });
+      return Response.json({ name: 'ZacABrewer/arclight', tags: api.tags ?? [] });
     }
     return new Response('not found', { status: 404 });
   }) as typeof fetch;
@@ -47,7 +47,7 @@ const release = (tag: string, extra: Record<string, unknown> = {}) => ({
   tag_name: tag,
   name: `Arclight ${tag}`,
   body: `## ${tag}\n- things`,
-  html_url: `https://github.com/zacheryabrewer/arclight/releases/tag/${tag}`,
+  html_url: `https://github.com/ZacABrewer/arclight/releases/tag/${tag}`,
   draft: false,
   prerelease: tag.includes('-'),
   published_at: '2026-10-01T00:00:00Z',
@@ -89,14 +89,14 @@ describe('UpdatesService', () => {
       currentVersion: '0.2.0',
       latestVersion: '0.3.0',
       imageTag: 'v0.3.0',
-      image: 'ghcr.io/zacheryabrewer/arclight',
+      image: 'ghcr.io/zacabrewer/arclight',
       updateAvailable: true,
       checkedAt: NOW.toISOString(),
       channel: 'stable',
     });
     expect(info.releaseNotes).toContain('## v0.3.0');
     expect(info.releases.map((r) => r.version)).toEqual(['0.3.0']);
-    expect(api.calls).toEqual(['api.github.com/repos/zacheryabrewer/arclight/releases', 'ghcr.io/token', 'ghcr.io/v2/zacheryabrewer/arclight/tags/list']);
+    expect(api.calls).toEqual(['api.github.com/repos/ZacABrewer/arclight/releases', 'ghcr.io/token', 'ghcr.io/v2/zacabrewer/arclight/tags/list']);
   });
 
   it('includes pre-releases and the develop tag on the develop channel', async () => {
@@ -176,7 +176,7 @@ describe('UpdateAvailable health check', () => {
     expect(out).toEqual([
       expect.objectContaining({ source: 'UpdateAvailable', status: 'warning', wikiUrl: '/docs/system/health#update-available' }),
     ]);
-    expect(out[0]!.message).toContain('ghcr.io/zacheryabrewer/arclight:v0.3.0');
+    expect(out[0]!.message).toContain('ghcr.io/zacabrewer/arclight:v0.3.0');
     service.updateSettings({ notifyOnUpdate: false });
     expect(await run()).toEqual([]);
   });
@@ -210,7 +210,7 @@ describe('updates module routes', () => {
     expect(checked.json<UpdateInfo>()).toMatchObject({ latestVersion: '99.0.0', updateAvailable: true });
 
     const settings = await app.inject({ method: 'PUT', url: '/api/v1/settings/updates', payload: { checkIntervalHours: 6 } });
-    expect(settings.json()).toMatchObject({ enabled: true, repo: 'zacheryabrewer/arclight', channel: 'stable', checkIntervalHours: 6, notifyOnUpdate: true });
+    expect(settings.json()).toMatchObject({ enabled: true, repo: 'ZacABrewer/arclight', channel: 'stable', checkIntervalHours: 6, notifyOnUpdate: true });
     const bad = await app.inject({ method: 'PUT', url: '/api/v1/settings/updates', payload: { checkIntervalHours: 0 } });
     expect(bad.statusCode).toBe(400);
     expect(ctx.scheduler.has(UPDATE_CHECK_JOB)).toBe(true);

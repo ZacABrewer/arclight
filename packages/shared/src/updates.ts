@@ -69,7 +69,7 @@ export const UpdateInfo = z.object({
   releaseNotes: z.string().optional(),
   /** Image tag to pull for the latest version (`vX.Y.Z`, or `develop` on that channel). */
   imageTag: z.string().optional(),
-  /** Image reference without tag, e.g. `ghcr.io/zacheryabrewer/arclight`. */
+  /** Image reference without tag, e.g. `ghcr.io/zacabrewer/arclight`. */
   image: z.string().optional(),
   /** ISO-8601 of the last completed check; null = never checked. */
   checkedAt: z.string().nullable(),
