@@ -218,7 +218,6 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 2. Supported languages come from the shared OpenSubtitles language table (about 100 languages), plus Spanish-Mexico, each with forced and HI variants.
 
 **Anti-bot**: none. Plain JSON API over TLS with a user-agent header (default: the host application's name/version).
-
 **Other quirks**
 1. AI-translated and machine-translated items are excluded both in the request and again client-side (defence in depth), unless the flags are on.
 2. Title lookup treats a miss as "no results", not an error.
@@ -278,9 +277,7 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 3. Quota exhausted or not entitled error codes pause AI offers for 15 minutes and log a notice once.
 
 **Language quirks**: custom converter between internal languages and Subdl codes; includes script/country variants such as Brazilian Portuguese, and a Chinese split. Unknown service languages are skipped.
-
 **Anti-bot**: none.
-
 **Other quirks**
 1. Two-page cap is deliberate to bound requests.
 2. De-duplication key is the item's page link, falling back to name.
@@ -328,7 +325,6 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 2. Declared set: about 43 languages plus Serbian Latin and Cyrillic, each with HI variant. No forced variant.
 
 **Anti-bot**: reCAPTCHA on login via pitcher; browser-like headers with referer; cookies; optionally random user agent. Cloudflare may block the IP: treat 403/captcha pages as service unavailable/IP blocked.
-
 **Other quirks**
 1. Site throttles aggressively; space requests by at least 1 second in login and 4 seconds in search fallbacks.
 2. Multiple episode numbers: the smallest is used.
@@ -351,7 +347,6 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 Gestdown is a community-run mirror of Addic7ed content exposed through a plain API keyed by TheTVDB ids.
 
 **Settings and auth**: none. Fixed host. A simple "Bazarr" user agent is sent.
-
 **Flow**
 1. Resolve show: GET shows/external/tvdb/{series tvdb id}; 404 means not found (empty result). The response lists one or more shows (id plus its tvdb id).
 2. For each wanted language and each returned show: GET subtitles/get/{show id}/{season}/{episode}/{language name}. The language name is produced by the same converter Addic7ed uses (English names with the Addic7ed spellings), called with only the three-letter code (so variants such as Portuguese-Brazil collapse to the base spelling and Serbian script cannot be asked for).
@@ -359,7 +354,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 4. Download: GET the absolute URL formed from the base host plus the path (follow redirects); the body is the subtitle itself.
 
 **Query capabilities**: tvdb id only (no title search, no hash, no movies). Languages one at a time. HI is returned in the item and compared via the language value.
-
 **Limits**
 1. HTTP 423 (the service is still fetching the episode from its upstream) is retried up to 3 times, with 30 seconds between tries. After 3, the listing returns empty (not an error).
 2. HTTP 404 for the show or episode is an empty result.
@@ -373,9 +367,7 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 4. HI-verifiable true; hash false.
 
 **Language quirks**: same set as Addic7ed (about 43 plus Serbian variants) with HI variants. Forced is not offered.
-
 **Anti-bot**: none.
-
 **Other quirks**
 1. Episodes only.
 2. The inner loop over shows has a "continue" that does not stop after a hit; it simply accumulates results across shows.
@@ -386,7 +378,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 ### 2.6 Subf2m (id: subf2m)
 
 **Settings and auth**: user agent is mandatory (blank raises a configuration error). Optional: verify TLS (default true). No credentials.
-
 **Flow (HTML scraper)**
 1. Search by title: GET the title-search page with the URL-encoded query; parse result links. For episodes, result entries look like "Show - Second Season (2019)" or "Show (First Season)"; for movies "Title (Year)".
 2. Movies: normalise the title to lower case; keep entries whose year equals the video year; rank by text similarity to the title; take the top 3 paths. If none and the video has an imdb id, search again using the imdb id as the query text.
@@ -407,9 +398,7 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 2. Hash false; HI not verifiable (HI cannot be told; HI wanted is not honoured).
 
 **Language quirks**: a fixed table of 33 English language slugs (for example "farsi_persian", "brazillian-portuguese" with the site's own misspelling). Three-letter bibliographic codes (for example fre, ger, dut) are used internally to build language objects; the implementation must map to its own ISO scheme. Chinese, Korean, Ukrainian and many others are not offered.
-
 **Anti-bot**: heavy browser-like header set (client hints, fetch metadata). Must be a plausible modern browser fingerprint. A 403 is treated as a block and produces an empty text; no CAPTCHA solving.
-
 **Other quirks**
 1. Episode title for archive pick is passed from video.title (the episode title).
 2. A response parsed with an HTML parser that tolerates broken markup is required.
@@ -419,7 +408,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 ### 2.7 Napisy24 (id: napisy24)
 
 **Settings and auth**: optional username and password. Upstream embeds a built-in fallback account when none is given; this spec does not reproduce it. Media-Tron requires the user to supply credentials or disable the provider (see Open questions Q4).
-
 **Flow (single call; no download step)**
 1. POST a form to the agent endpoint with action "CheckSub", user, password, file size, file hash (the OpenSubtitles-style hash), file name (basename only) and a preference flag.
 2. The response text before a double-pipe separator is a status block: it starts with "OK-N" or "login error". After the separator is binary: a zip containing the subtitle.
@@ -428,15 +416,10 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 5. The first entry of the zip becomes the content (line endings normalised). The download step does nothing because content is already present.
 
 **Query capabilities**: hash, file size and file name only. Polish only. One request per wanted language (in practice one).
-
 **Limits**: undocumented; HTTP errors propagate. No rate-limit parsing.
-
 **Metadata and matching**: the record id is the hash. Matches: hash if the video's napisy24 hash equals it; imdb_id if equal. No release info is available (release info is empty). Hash-verifiable true; HI false.
-
 **Language quirks**: Polish only, no variants.
-
 **Anti-bot**: none (plain HTTP, not HTTPS, in the original; use HTTPS if the host supports it, else flag).
-
 **Other quirks**
 1. The provider declares a required hash: skipped when no hash.
 2. Movies and episodes both; but as the match is by hash only, nothing else is asserted. Score relies on the hash weight plus corroboration rule 1.5.4 (so a file whose only match is hash will lose the hash flag unless corroborated; an implementation may add title/source flags when the imdb id matches).
@@ -446,7 +429,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 ### 2.8 Animetosho (id: animetosho)
 
 **Settings and auth**: a "search threshold" integer (how many recent releases to inspect). Missing or zero raises a configuration error. No credentials.
-
 **Flow**
 1. Skip videos with no anidb episode id (the video must be an anime episode recognised by AniDB).
 2. GET the feed API (JSON) with the anidb episode id. Keep only entries with status "complete", sort newest first (by timestamp), take the first N where N is the search threshold. Each entry is a torrent release with an id and title.
@@ -455,9 +437,7 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 5. Download: GET the storage URL; verify the six-byte XZ magic header; otherwise raise provider error ("unidentified archive type"); decompress; the result is the subtitle text (often ASS).
 
 **Query capabilities**: anidb episode id only. No title, no hash, no languages in the query (filtered client-side).
-
 **Limits**: none documented; each search costs 1 + N requests (N = threshold), so keep N small.
-
 **Metadata and matching**
 1. Asserts title, series, tvdb id, season and episode (identity style, because the anidb episode id fixed those) and adds the release-parse of the attached file's original file name.
 2. Record id = torrent id + ":" + URL (a torrent can ship several subtitles).
@@ -468,7 +448,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 2. If the attachment omits language it defaults to English.
 
 **Anti-bot**: none.
-
 **Other quirks**
 1. Episodes only (the declared type is a single type, not a pair; ensure the movie path is excluded).
 2. Subtitles are frequently ASS/SSA; the post-pipeline must accept them.
@@ -481,7 +460,6 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 Japanese subtitles for anime, keyed by AniList.
 
 **Settings and auth**: API key (required; sent raw in the Authorization header). Flags: name-search fallback (when no AniList id, search by name), allow archives, allow AI subtitles.
-
 **Flow**
 1. Build search: if the video has an AniList id, query entries/search with it. Else, if name fallback is on or the video is a movie, query by lower-cased name (for episodes, "series name" plus season number when season is above 1). Otherwise no search.
 2. If a name search returns nothing, retry once with the "anime" restriction turned off (to find live-action).
@@ -492,7 +470,6 @@ Japanese subtitles for anime, keyed by AniList.
 7. Download: GET the file URL. Archives (zip or rar) go through the shared episode picker with the video's episode and episode title; plain files are used as is.
 
 **Query capabilities**: AniList id, free text name, episode number. No hash, no imdb.
-
 **Limits and errors**
 1. HTTP 429: sleep 5 seconds and retry, up to 3 tries. (Upstream bug: the counter never increments so it can loop forever. Media-Tron must count attempts and then raise "API throttled".)
 2. HTTP 401: authentication error. An "error" field in the body: service unavailable with the code. Empty list: none.
@@ -507,9 +484,7 @@ Japanese subtitles for anime, keyed by AniList.
 2. Tokens with digits or five or more letters mean "not a language token".
 
 **Anti-bot**: none.
-
 **Other quirks**: the video object is mutated (the episode number is rewritten to the adjusted absolute episode on success); avoid that side effect in Media-Tron, pass the adjusted number in the record instead.
-
 ---
 
 ### 2.10 Titlovi (id: titlovi)
@@ -517,7 +492,6 @@ Japanese subtitles for anime, keyed by AniList.
 South Slavic subtitles (Croatian, Bosnian, Serbian, Slovenian, Macedonian, English).
 
 **Settings and auth**: username and password (required). Login against the Kodi plugin API returns a user id, a token and an expiry; cache the triple until expiry. HTTP 401 on login: "account not verified or API disabled".
-
 **Flow**
 1. Search: GET search with query (title), language list joined with "|", season (episodes only), imdb id (if known), token, user id, json flag. Result: a page of results and a page count; fetch up to pages 2 and 3 if available (so at most 3 pages).
 2. Results are cached 3 hours by exact request.
@@ -526,7 +500,6 @@ South Slavic subtitles (Croatian, Bosnian, Serbian, Slovenian, Macedonian, Engli
 5. Download: GET link. Rar or zip: if more than one file and the record is a pack, choose the entry whose name carries the target season/episode in either "01x02" or "s01e02" form; if more than one file and the language is Serbian (Latin or Cyrillic), choose by script marker in the file name (names containing "cyr"/"cir" are Cyrillic; others are Latin); else use the shared archive picker. Non-archive payload is used directly if valid, else "unidentified archive type".
 
 **Limits**: HTTP 429 raises "too many requests" (override: 5 minutes). HTTP 401 at search or download raises authentication error. The Cloudflare-aware retrying session is used.
-
 **Metadata and matching**
 1. Text style: series/title by sanitised equality against the naming-fix table ("DC's Legends of Tomorrow" becomes "Legends of Tomorrow", "Marvel's Jessica Jones" becomes "Jessica Jones") or the alternative title; year; season; episode; release group via equivalence; plus release parsing.
 2. Hash false. HI false.
@@ -536,9 +509,7 @@ South Slavic subtitles (Croatian, Bosnian, Serbian, Slovenian, Macedonian, Engli
 2. If both Serbian and Serbian Latin are requested, send only Serbian (the site's Srpski covers both).
 
 **Anti-bot**: Cloudflare-aware session (JavaScript challenge solver).
-
 **Other quirks**: it is in the upstream "forced off" list for forced-only search (cannot serve forced). The episode number for a pack record uses the asked-for episode.
-
 ---
 
 ### 2.11 LegendasDivx (id: legendasdivx)
@@ -546,7 +517,6 @@ South Slavic subtitles (Croatian, Bosnian, Serbian, Slovenian, Macedonian, Engli
 Portuguese (Portugal and Brazil) subtitles.
 
 **Settings and auth**: username and password (both or neither; a half-filled pair is a configuration error), and "skip wrong fps" (default true). Login is a forum form: load the login page, collect all form fields (including hidden tokens), add credentials, POST; require a session cookie. Only five named cookies are cached for reuse. Errors: no session id: authentication error; HTTP error with "bloqueado" in the body: IP blocked; other HTTP errors: too many requests; anything else: service unavailable.
-
 **Flow**
 1. Build the search by type:
    - Movie: query text is the imdb id if known, else the title.
@@ -573,9 +543,7 @@ Portuguese (Portugal and Brazil) subtitles.
 3. "Exact match" flag (the whole file name appears in the description) is stored for ranking.
 
 **Language quirks**: Portuguese (Portugal) and Portuguese (Brazil) only. Language is read from the flag icon file name containing "brazil" or "portugal"; other flags are skipped.
-
 **Anti-bot**: Cloudflare-aware session; realistic headers with Origin and Referer pointing at the site; session cookie caching.
-
 **Other quirks**
 1. Listed in the upstream forced-off set (cannot serve forced-only).
 2. The accumulating language filter, the 6-page cap and the undefined frame-rate bug are upstream defects flagged here so they are not copied.
@@ -587,7 +555,6 @@ Portuguese (Portugal and Brazil) subtitles.
 Hungarian and English subtitles from feliratok.eu.
 
 **Settings and auth**: none. Random user agent plus a referer.
-
 **Flow (episodes)**
 1. Find the show id: GET the autocomplete endpoint with the series name; the response is JSON with names such as "Title (2016)" and ids. Compare the sanitised name against a guessit-style parse of the candidate (title + year), requiring year equality when the video has a year. Try progressively simpler names: the original, the version with apostrophes removed, then the longest single word.
 2. GET the "xbmc" listing for show id, season and episode; if the episode listing is empty, GET again with season only (the site is flaky for packs hidden in season sets). The JSON is a map of entries; one subtitle appears once per compatible release, so group by subtitle id and collect release names.
@@ -597,17 +564,13 @@ Hungarian and English subtitles from feliratok.eu.
 6. Download: GET the URL; if it is an archive, pick by episode through the shared picker; else use the body as is.
 
 **Flow (movies)**: GET the search page with the title, parse the table; for each row read the English title and year, the release (text in parentheses), language (from the small tag), download link, forced mark (a "szinkronoshoz" note, meaning "for the dubbed version", or "forced" in the link), uploader, and the imdb id from the detail page.
-
 **Limits**: none documented. 2 second pause between multi-title searches. All requests 30 second timeout.
-
 **Metadata and matching**
 1. Text style: series equality; series imdb id equality adds series, series_imdb_id and year; year fallback for original series; movie: title in alternatives, imdb id adds imdb_id, title, year; release group via listing; if the release group matches, the resolution and source are checked in the same release text.
 2. HI not verifiable. Hash false.
 
 **Language quirks**: Hungarian, English; forced variants. Converter maps "hu"/"en".
-
 **Anti-bot**: none (random user agent).
-
 **Other quirks**
 1. Upstream bug: the title loop returns after the first title regardless of success, so alternative titles are never tried. Media-Tron should continue to the next title when the first yields nothing.
 2. Naming-fix table: "Star Trek: The Next Generation" becomes "Star Trek TNG"; a "Marvel's" prefix is dropped; "Loki (aka. Marvel's Loki)" becomes "Loki".
@@ -621,7 +584,6 @@ Hungarian and English subtitles from feliratok.eu.
 Choice and reason: Subscene itself is not present in this snapshot (no provider, converter or settings). Of the three candidates (subsource, subscenter, subtitlecat), SubSource is the best stand-in: a currently maintained site with the same user experience as Subscene (pick a title, see all subtitles per language, download a zip) and a JSON API with a key. Subscenter is an old Hebrew-only wrapper, and Subtitlecat is a machine-translation aggregator (documented separately in 2.20). Subtitlecat is retained as an optional extra, not the Subscene successor.
 
 **Settings and auth**: API key (required; sent as a query parameter on every call).
-
 **Flow**
 1. Resolve a title id: GET movies/search with either search type imdb (imdb id plus optional season) or search type text (lower-cased title). If an imdb search yields nothing, retry with text. Accept the first result whose title or alternate title contains any of the wanted titles (series name and alternatives, or movie title), and whose release year equals the video's year when the video has one. Cached 6 hours. Without an imdb id on the video, no title id is looked up and the provider returns nothing (upstream quirk; it only searches by imdb).
 2. List subtitles: GET subtitles with language (lower-case English name), limit 100, title id, and for episodes season number and episode number. Results cached 1 hour.
@@ -631,7 +593,6 @@ Choice and reason: Subscene itself is not present in this snapshot (no provider,
 6. Download: GET subtitles/{id}/download (API key as query); body must be a zip; pick via the shared archive helper (episode number for packs). Archive responses are cached 15 minutes. A non-zip body yields empty content.
 
 **Query capabilities**: imdb id, title text, season, episode. No hash.
-
 **Limits and errors**
 1. 400: API throttled ("invalid request parameters"). 401: authentication error. 403: forbidden (override 15 minutes). 429: too many requests (override 1 hour).
 2. 429 handling: the server states reset time in headers (an absolute timestamp) or in the body as seconds; if the wait is at most 60 seconds, sleep and retry once; otherwise raise.
@@ -646,15 +607,12 @@ Choice and reason: Subscene itself is not present in this snapshot (no provider,
 2. The reverse mapping resolves Persian to the "per" code.
 
 **Anti-bot**: none (API). Previously the website blocked scrapers, hence the API.
-
 **Other quirks**: the commentary field is the only source of HI/forced when explicit flags are absent; keep the keyword lists (HI: sdh, hi, cc, closed caption and decorated forms; non-HI override: "non hi", "hi remove" and similar; forced: forced, foreign).
-
 ---
 
 ### 2.14 YIFY Subtitles (id: yifysubtitles)
 
 **Settings and auth**: none.
-
 **Flow (scraper, movies only)**
 1. Skip videos without an imdb id or that are episodes.
 2. GET /movie-imdb/{imdb id} with no redirect following and a referer. 404 means no subtitles. Any other non-200 (redirect) also means no subtitles. Other errors raise.
@@ -663,17 +621,13 @@ Choice and reason: Subscene itself is not present in this snapshot (no provider,
 5. Download: GET the subtitle page (cached by hash of the page link), find the "download" anchor, GET it, require a zip, scan the entries for ".srt" or ".sub", take the first valid one.
 
 **Query capabilities**: imdb id only. Languages filtered client-side.
-
 **Limits**: none; HTTP errors propagate.
-
 **Metadata and matching**
 1. Always adds imdb_id (identity); release parsing of the release string with the video's hints.
 2. Rating is carried for ordering. HI verifiable true (a marker exists).
 
 **Language quirks**: about 38 English names; Portuguese Brazil is "Brazilian Portuguese"; "Farsi/Persian"; Chinese. HI variants are declared. No forced.
-
 **Anti-bot**: browser-like header set with random user agent and "do not track". No CAPTCHA solver.
-
 **Other quirks**
 1. The row release text begins with the word "subtitle" and a newline, which is stripped; multi-line releases are joined with commas.
 2. Row parsing failures are silent; add logging in Media-Tron.
@@ -708,11 +662,8 @@ A local provider: it lists the subtitle streams already inside the video contain
 3. Both episodes and movies.
 
 **Limits**: none (local). Be mindful of CPU/disk: do the extraction once per file.
-
 **Language quirks**: tag languages arrive in three-letter or two-letter forms and are normalised; unknown tags can be mapped by the fallback setting.
-
 **Anti-bot**: n/a.
-
 **Other quirks**
 1. Image-based subtitle codecs (PGS, VobSub) are excluded by the codec list; OCR is out of scope.
 2. Memoisation of the probe is process-wide (up to thousands of entries).
@@ -751,7 +702,6 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 3. Audio extraction is memoised for the last two files (large buffers held in memory; Media-Tron should stream to the service instead of holding the whole WAV).
 
 **Anti-bot**: n/a.
-
 **Other quirks**
 1. A failed ffmpeg run yields empty content and a log line, not a throttle.
 2. Language detection results are memoised per file.
@@ -762,9 +712,7 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 ### 2.17 BSPlayer (id: bsplayer)
 
 **Status in the snapshot: disabled.** The list step returns nothing and the login and subdomain discovery at initialisation are commented out ("to prevent usage of this provider"). The rest of the code documents the protocol as it worked before.
-
 **Settings and auth**: none (anonymous login with empty username and password and a fixed application id string).
-
 **Historical flow (for reference only; do not implement as active)**
 1. Discover a working API host: try up to 8 randomly ordered hosts from a fixed pool of 17 sub-domains, with 3 second timeouts.
 2. SOAP/XML calls: logIn returns a token; searchSubtitles sends token, movie hash, file size, comma-joined language ids (the OpenSubtitles-style 3-letter codes), and imdb id ("*" if unknown); logOut at terminate.
@@ -773,17 +721,13 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 5. Retry policy: 5 attempts; on login failure re-discover a host; exhausted attempts raise "too many requests".
 
 **Matching (historical)**: hash (always asserted), title/year (movie), title/series/season/episode/year (episode), plus parse of the file name. Hash-verifiable true.
-
 **Languages**: Portuguese-Brazil plus 23 base languages (Arabic, Bulgarian, Czech, Danish, German, Greek, English, Finnish, French, Hungarian, Italian, Japanese, Korean, Dutch, Polish, Portuguese, Romanian, Russian, Spanish, Swedish, Turkish, Ukrainian, Chinese).
-
 **Recommendation**: ship as a registered but disabled provider (always returns empty, never touches the network). Revisit only if the service is confirmed alive. See Q5.
-
 ---
 
 ### 2.18 TVSubtitles (id: tvsubtitles)
 
 **Settings and auth**: none. Random browser user agent.
-
 **Flow (scraper, episodes only; HTTP not HTTPS in the original)**
 1. Resolve show id: POST the search form with the series name; parse suggestion links of the form "/tvshow-{id}.html" whose text looks like "Series (YYYY-YYYY)" with optional extra year or (US)/(UK) marker. Accept when the sanitised series name equals the wanted name (case-insensitive) and, if the video has a year, the first-air year equals it. Cached one week.
 2. GET the season page: tvshow-{show id}-{season}.html; rows with episode links give a map from episode number (from the "SxE" text) to episode id. Cached for the episode expiry period.
@@ -797,11 +741,8 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 2. Hash false; HI not available.
 
 **Language quirks**: site flag codes differ: br is Portuguese-Brazil, ua is Ukrainian, gr is Greek, cn is Chinese, jp is Japanese, cz is Czech; others use the two-letter code. Declared: Portuguese-Brazil plus 23 base languages (same list as BSPlayer).
-
 **Limits**: undocumented; HTTP errors propagate. Season page fetch does not call raise-for-status (silent failure possible).
-
 **Anti-bot**: none; random user agent.
-
 **Other quirks**
 1. The upstream "forced off" list includes it.
 2. The download-link assembly depends on the script layout; add a parse-failure error ("cannot get download link") so layout changes surface.
@@ -811,7 +752,6 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 ### 2.19 Subtitulamos.tv (id: subtitulamostv)
 
 **Settings and auth**: none (user agent from the environment or "Sub-Zero/2").
-
 **Flow (JSON search plus HTML pages; episodes only)**
 1. GET /search/query with the series name; JSON list of shows with names and ids. Consider only shows whose name equals the series name case-insensitively (no alternatives).
 2. GET /shows/{id}; find the season in the season chooser; if not selected, follow its link. Same for the episode chooser. If either is missing, skip the show.
@@ -824,11 +764,8 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 2. Hash false (explicitly not verifiable). HI false.
 
 **Language quirks**: English and Spanish only; no Latin American Spanish distinction.
-
 **Limits**: undocumented; 10 second timeouts; HTTP errors propagate.
-
 **Anti-bot**: none.
-
 **Other quirks**
 1. Up to four sequential requests per search; cache show and season pages in Media-Tron.
 2. The id of a record is its download link.
@@ -841,7 +778,6 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 Polish subtitles by file hash, with an optional scraper for authored subtitles.
 
 **Settings and auth**: three flags: hash only, only authors (skip anonymous or machine-made), only real names (author field must look like a human name). No credentials (the API takes empty user and password fields).
-
 **Flow (hash path)**
 1. Compute the Napiprojekt hash (MD5 of first 10 MiB; files over 10 MiB only).
 2. GET the dl endpoint with parameters: version tag "dreambox", queue off, empty nick and pass, os "Linux", language (two-letter, upper case), file hash, and a derived second hash. The derived hash is a short checksum computed from the file hash with a fixed digit-weighting scheme (a few arithmetic steps over the hex digits; reproduce from the original algorithm in the base library, listed as an open item in Q7 because it is not restated here).
@@ -857,13 +793,9 @@ Polish subtitles by file hash, with an optional scraper for authored subtitles.
 6. Download: re-query by hash (as above).
 
 **Matching**: hash if the video's napiprojekt hash equals; otherwise the identity flags from the title lookup.
-
 **Capabilities**: Polish only. Both types. Hash-verifiable true for the hash path.
-
 **Limits**: undocumented; retried calls only on non-fatal errors.
-
 **Anti-bot**: none observed.
-
 **Other quirks**
 1. Hash path is skipped when only-authors or only-real-names is on and hash-only is off (the scrape path serves instead).
 2. The scrape path uses regexes on hover text with Polish labels ("Autor", "Video rozdzielczość", "Video FPS"); layout changes break it silently.
