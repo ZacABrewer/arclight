@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { BuiltinClient, type SessionSource } from './builtin/client.js';
+import { BuiltinSettings, type BuiltinSettingsInput } from './builtin/settings.js';
 import { DelugeClient } from './deluge/client.js';
 import { DelugeSettings, type DelugeSettingsInput } from './deluge/settings.js';
 import { NzbgetClient } from './nzbget/client.js';
@@ -34,6 +36,8 @@ export { DelugePriority, DelugeSettings, type DelugeSettingsInput } from './delu
 export { RTorrentPriority, RTorrentSettings, type RTorrentSettingsInput } from './rtorrent/settings.js';
 export { SabnzbdPriority, SabnzbdSettings, type SabnzbdSettingsInput } from './sabnzbd/settings.js';
 export { NzbgetSettings, type NzbgetSettingsInput } from './nzbget/settings.js';
+export { BuiltinSettings, type BuiltinSettingsInput } from './builtin/settings.js';
+export { BuiltinClient, type SessionSource } from './builtin/client.js';
 export { hashFromMagnet, hashFromTorrentFile, TorrentParseError } from './torrent-hash.js';
 
 const DEFAULT_RUNTIME: ClientRuntime = {
@@ -87,8 +91,16 @@ export function createNzbgetClient(settings: NzbgetSettingsInput, runtime: Parti
   return new NzbgetClient(NzbgetSettings.parse(settings), runtimeWith(runtime));
 }
 
+/**
+ * The in-process torrent engine. `session` is the api's Session, or a getter returning it
+ * (null while the engine is disabled/stopped). The client never starts or stops the Session.
+ */
+export function createBuiltinClient(settings: BuiltinSettingsInput, session: SessionSource): DownloadClient {
+  return new BuiltinClient(BuiltinSettings.parse(settings), session);
+}
+
 /** Every client implementation this package can drive. */
-export const DownloadClientKind = z.enum(['qbittorrent', 'transmission', 'deluge', 'rtorrent', 'sabnzbd', 'nzbget']);
+export const DownloadClientKind = z.enum(['qbittorrent', 'transmission', 'deluge', 'rtorrent', 'sabnzbd', 'nzbget', 'builtin']);
 export type DownloadClientKind = z.infer<typeof DownloadClientKind>;
 
 /** Settings schema per kind, for validation and for rendering settings forms. */
@@ -99,6 +111,7 @@ export const downloadClientSettingsSchemas = {
   rtorrent: RTorrentSettings,
   sabnzbd: SabnzbdSettings,
   nzbget: NzbgetSettings,
+  builtin: BuiltinSettings,
 } as const satisfies Record<DownloadClientKind, z.ZodType>;
 
 /** Accepted (pre-default) settings shape for a kind. */
@@ -111,16 +124,25 @@ export const downloadClientProtocols: Readonly<Record<DownloadClientKind, Downlo
   rtorrent: 'torrent',
   sabnzbd: 'usenet',
   nzbget: 'usenet',
+  builtin: 'torrent',
 };
+
+/** In-process dependencies some kinds need (in addition to the HTTP `runtime`). */
+export interface DownloadClientDeps {
+  /** The api's torrent engine Session (or a getter; null when stopped). */
+  torrentSession?: SessionSource;
+}
 
 /**
  * Creates a client of the given kind. Settings are validated with that kind's schema; an
- * invalid shape or an unknown kind throws a ZodError.
+ * invalid shape or an unknown kind throws a ZodError. A `builtin` client without
+ * `deps.torrentSession` throws `DownloadClientError('unreachable')` from every method.
  */
 export function createDownloadClient<K extends DownloadClientKind>(
   kind: K,
   settings: DownloadClientSettingsInput<K>,
   runtime: Partial<ClientRuntime> = {},
+  deps: DownloadClientDeps = {},
 ): DownloadClient {
   const parsedKind: DownloadClientKind = DownloadClientKind.parse(kind);
   // Narrowing `kind` does not narrow the generic `settings`, so each branch validates the
@@ -139,5 +161,7 @@ export function createDownloadClient<K extends DownloadClientKind>(
       return createSabnzbdClient(SabnzbdSettings.parse(raw), runtime);
     case 'nzbget':
       return createNzbgetClient(NzbgetSettings.parse(raw), runtime);
+    case 'builtin':
+      return createBuiltinClient(BuiltinSettings.parse(raw), deps.torrentSession ?? (() => null));
   }
 }

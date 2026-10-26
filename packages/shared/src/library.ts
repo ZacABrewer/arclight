@@ -154,6 +154,8 @@ export const Series = z.object({
   seriesType: SeriesType,
   seasonFolder: z.boolean(),
   useSceneNumbering: z.boolean(),
+  /** Subtitle language profile (subtitles module); null = no subtitles wanted. */
+  languageProfileId: z.number().int().nullish(),
   tags: z.array(z.number().int()),
   added: isoDate(),
   lastRefreshed: isoDate().nullish(),
@@ -190,6 +192,8 @@ export const AddSeriesRequest = z.object({
   monitorNewItems: NewItemMonitor.default('all'),
   seriesType: SeriesType.default('standard'),
   seasonFolder: z.boolean().default(true),
+  /** Subtitle language profile; omitted = the subtitles default profile, null = none. */
+  languageProfileId: z.number().int().nullable().optional(),
   tags: z.array(z.number().int()).default([]),
   searchOnAdd: z.boolean().default(false),
 });
@@ -208,6 +212,8 @@ export const UpdateSeriesRequest = z.object({
   seriesType: SeriesType.optional(),
   seasonFolder: z.boolean().optional(),
   useSceneNumbering: z.boolean().optional(),
+  /** Subtitle language profile; null clears it. */
+  languageProfileId: z.number().int().nullable().optional(),
   rootFolderPath: z.string().min(1).optional(),
   /** Set explicitly to override the generated `<root>/<Title (Year)>` folder. */
   path: z.string().min(1).optional(),
@@ -326,6 +332,8 @@ export const Movie = z.object({
   qualityProfileId: z.number().int(),
   minimumAvailability: MinimumAvailability,
   monitored: z.boolean(),
+  /** Subtitle language profile (subtitles module); null = no subtitles wanted. */
+  languageProfileId: z.number().int().nullish(),
   tags: z.array(z.number().int()),
   added: isoDate(),
   lastRefreshed: isoDate().nullish(),
@@ -343,6 +351,8 @@ export const AddMovieRequest = z.object({
   qualityProfileId: z.number().int(),
   monitored: z.boolean().default(true),
   minimumAvailability: MinimumAvailability.default('released'),
+  /** Subtitle language profile; omitted = the subtitles default profile, null = none. */
+  languageProfileId: z.number().int().nullable().optional(),
   tags: z.array(z.number().int()).default([]),
   searchOnAdd: z.boolean().default(false),
 });
@@ -351,6 +361,9 @@ export type AddMovieRequest = z.infer<typeof AddMovieRequest>;
 export const UpdateMovieRequest = z.object({
   monitored: z.boolean().optional(),
   qualityProfileId: z.number().int().optional(),
+  /** Subtitle language profile; null clears it. */
+  languageProfileId: z.number().int().nullable().optional(),
+
   minimumAvailability: MinimumAvailability.optional(),
   rootFolderPath: z.string().min(1).optional(),
   path: z.string().min(1).optional(),

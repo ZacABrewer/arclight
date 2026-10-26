@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getRouteApi, useNavigate } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { MinimumAvailability, Movie } from '@media-tron/shared';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
@@ -12,6 +12,7 @@ import { formatBytes, formatDate, imageUrl } from '../../components/media/format
 import { Facts, MonitorToggle, PendingButton, Poster, QualityBadge, TagList } from '../../components/media/media-ui.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { Modal } from '../../components/modal.js';
+import { FoundInLists } from '../../components/media/found-in-lists.js';
 import { Page } from '../../components/page.js';
 import { LoadingBlock } from '../../components/spinner.js';
 import { Tabs } from '../../components/tabs.js';
@@ -30,6 +31,8 @@ import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
 import { InteractiveSearchModal } from './interactive-search.js';
 import { PENDING_REFRESH } from './series-details.js';
+import { SubtitlesTab } from '../subtitles/subtitles-tab.js';
+import { LanguageProfileSelect } from '../subtitles/language-profile-select.js';
 
 const route = getRouteApi('/library/movie/$id');
 
@@ -92,6 +95,7 @@ export function MovieDetailsPage() {
             ]}
           />
           {m.overview ? <p className="media-hero-overview">{m.overview}</p> : null}
+          <FoundInLists mediaType="movie" tmdbId={m.tmdbId} />
           <div className="media-hero-actions">
             {/* TODO(contract): wire Refresh to a refresh command once packages/shared defines one. */}
             <PendingButton reason={PENDING_REFRESH} size="md">
@@ -101,6 +105,9 @@ export function MovieDetailsPage() {
               Search
             </Button>
             <Button onClick={() => setInteractive(true)}>Interactive search</Button>
+            <Link className="btn btn-secondary btn-md" to="/activity/manual-import" search={{ movieId: m.id }}>
+              Manual import
+            </Link>
             <Button onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="danger" onClick={() => setDeleting(true)}>
               Delete
@@ -115,6 +122,11 @@ export function MovieDetailsPage() {
             id: 'files',
             label: `Files${files.data ? ` (${files.data.length})` : ''}`,
             content: <MediaFilesTable files={files.data} error={files.error} loading={files.isPending} mediaType="movie" ownerId={m.id} />,
+          },
+          {
+            id: 'subtitles',
+            label: 'Subtitles',
+            content: <SubtitlesTab scope={{ movieId: m.id }} />,
           },
           {
             id: 'history',
@@ -165,6 +177,7 @@ function EditMovieForm({ movie, onClose }: { movie: Movie; onClose: () => void }
   const [minimumAvailability, setMin] = useState<MinimumAvailability>(movie.minimumAvailability);
   const [path, setPath] = useState(movie.path);
   const [tags, setTags] = useState<number[]>([...movie.tags]);
+  const [languageProfileId, setLanguageProfileId] = useState<number | null>(movie.languageProfileId ?? null);
 
   return (
     <form
@@ -179,6 +192,7 @@ function EditMovieForm({ movie, onClose }: { movie: Movie; onClose: () => void }
               qualityProfileId,
               minimumAvailability,
               tags,
+              ...(languageProfileId !== (movie.languageProfileId ?? null) ? { languageProfileId } : {}),
               ...(path.trim() && path !== movie.path ? { path: path.trim() } : {}),
             },
           },
@@ -197,6 +211,7 @@ function EditMovieForm({ movie, onClose }: { movie: Movie; onClose: () => void }
             ))}
           </Select>
         </FormField>
+        <LanguageProfileSelect value={languageProfileId} onChange={setLanguageProfileId} />
         <FormField label="Minimum availability">
           <Select value={minimumAvailability} onChange={(e) => setMin(e.target.value as MinimumAvailability)}>
             {Object.entries(MINIMUM_AVAILABILITY_LABELS).map(([v, l]) => (

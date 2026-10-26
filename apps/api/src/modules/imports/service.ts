@@ -18,7 +18,9 @@ import {
   SeriesListQuery,
   type CustomFormat,
   type Episode,
+  type FileSystemEntry,
   type FileSystemListing,
+  type FileSystemMkdirRequest,
   type FileSystemQuery,
   type ImportRejection,
   type ManualImportItem,
@@ -1505,7 +1507,9 @@ export class ImportsService {
         return { path: '', parent: null, directories: drives, files: [] };
       }
     }
-    const path = requested === '' ? (SUPPORTED_ROOT ?? '/') : resolve(requested);
+    // A bare drive letter (`C:`) resolves to the process's cwd on that drive; mean the root.
+    const normalized = this.platform === 'win32' && /^[A-Za-z]:$/.test(requested) ? `${requested}\\` : requested;
+    const path = normalized === '' ? (SUPPORTED_ROOT ?? '/') : resolve(normalized);
     let entries;
     try {
       entries = await readdir(path, { withFileTypes: true });
@@ -1531,6 +1535,35 @@ export class ImportsService {
     }
     const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' });
     return { path, parent, directories: directories.sort(byName), files: files.sort(byName) };
+  }
+
+  /** Create a folder for the path picker. Returns the new (or already existing) directory. */
+  async makeDirectory(req: FileSystemMkdirRequest): Promise<FileSystemEntry> {
+    let target: string;
+    if (req.path !== undefined) {
+      target = req.path.trim();
+    } else {
+      const name = (req.name ?? '').trim();
+      if (name === '' || name === '.' || name === '..' || /[\\/]/.test(name) || (this.platform === 'win32' && /[<>:"|?*]/.test(name))) {
+        throw new ImportsError('VALIDATION', `Invalid folder name: ${name}`);
+      }
+      const parent = (req.parent ?? '').trim();
+      if (!(await isDirectory(parent))) throw new ImportsError('NOT_FOUND', `Parent folder does not exist: ${parent}`);
+      target = join(parent, name);
+    }
+    if (!isAbsolute(target)) throw new ImportsError('VALIDATION', 'Folder path must be absolute');
+    target = resolve(target);
+    if (await exists(target)) {
+      if (!(await isDirectory(target))) throw new ImportsError('CONFLICT', `A file already exists at ${target}`);
+    } else {
+      try {
+        await mkdir(target, { recursive: true });
+      } catch (err) {
+        throw new ImportsError('VALIDATION', `Cannot create ${target}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+    }
+    const s = await stat(target);
+    return { name: basename(target) || target, path: target, type: 'directory', lastModified: s.mtime.toISOString() };
   }
 
   /** Ids of media files the given list references (test/diagnostic helper). */

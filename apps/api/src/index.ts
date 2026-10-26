@@ -1,17 +1,11 @@
-import pino from 'pino';
 import { loadConfig } from './config.js';
 import { openDatabase } from './db/index.js';
 import { buildApp } from './app.js';
+import { createLogger } from './logging.js';
 
 const config = loadConfig();
-const log = pino(
-  process.env['NODE_ENV'] === 'production'
-    ? { level: config.logLevel }
-    : {
-        level: config.logLevel,
-        transport: { target: 'pino-pretty', options: { colorize: true, translateTime: 'HH:MM:ss' } },
-      },
-);
+// stdout (pretty in dev) + in-memory ring buffer + rotating logs/media-tron.log; see logging.ts.
+const { log } = createLogger(config);
 
 const db = openDatabase(config.dbPath);
 const app = await buildApp(config, db, log);

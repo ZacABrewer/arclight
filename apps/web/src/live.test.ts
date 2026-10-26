@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
 import type { HealthResponse, Job, ScheduledJob } from '@media-tron/shared';
 import { applyServerEvent, handleStreamOpen, upsertJob } from './live.js';
-import { queryKeys, RECENT_JOBS_LIMIT } from './hooks/query-keys.js';
+import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 
 function job(id: number, overrides: Partial<Job> = {}): Job {
   return {
@@ -102,5 +102,18 @@ describe('live cache layer', () => {
     expect(spy).not.toHaveBeenCalled();
     handleStreamOpen(qc, { reconnected: true });
     expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('invalidates the subtitles family, profiles on a profiles event, and the media family when given', () => {
+    const qc = client();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    applyServerEvent(qc, { type: 'subtitle', action: 'downloaded', mediaType: 'series', mediaId: 3, mediaFileId: 9 });
+    expect(spy).toHaveBeenCalledWith({ queryKey: subtitleKeys.all });
+    expect(spy).toHaveBeenCalledWith({ queryKey: ['series'] });
+    expect(spy).not.toHaveBeenCalledWith({ queryKey: subtitleKeys.languageProfiles });
+    spy.mockClear();
+    applyServerEvent(qc, { type: 'subtitle', action: 'profiles' });
+    expect(spy).toHaveBeenCalledWith({ queryKey: subtitleKeys.languageProfiles });
+    expect(spy).toHaveBeenCalledTimes(2);
   });
 });

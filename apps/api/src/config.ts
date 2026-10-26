@@ -13,6 +13,12 @@ export interface AppConfig {
   isDocker: boolean;
   /** Absolute path of the built web app to serve, or null in dev (Vite serves it). */
   webDist: string | null;
+  /**
+   * Boot-time torrent engine side effects (start the Session when `torrent.enabled`, auto-register
+   * the "Built-in" client). loadConfig turns it on unless MEDIATRON_TORRENT_ENGINE=0; configs built
+   * by hand (tests) leave it undefined, which means off, so tests never open sockets by accident.
+   */
+  torrentEngine?: boolean;
 }
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
@@ -32,5 +38,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     logLevel: env['MEDIATRON_LOG_LEVEL'] ?? 'info',
     isDocker,
     webDist,
+    torrentEngine: env['MEDIATRON_TORRENT_ENGINE'] !== '0',
   };
 }

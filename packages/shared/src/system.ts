@@ -33,5 +33,7 @@ export const SystemStatus = z.object({
     logs: z.string(),
   }),
   isDocker: z.boolean(),
+  /** A restore (or similar) changed state that only a restart picks up; POST /system/restart. */
+  restartRequired: z.boolean().default(false),
 });
 export type SystemStatus = z.infer<typeof SystemStatus>;

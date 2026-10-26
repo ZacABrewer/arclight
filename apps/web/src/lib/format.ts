@@ -28,3 +28,22 @@ export function formatDuration(ms: number | null | undefined): string {
   if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
+
+/** Bytes as a short binary-unit string (B, KiB, MiB, ...). */
+export function formatSize(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '—';
+  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
+  let n = Math.max(0, bytes);
+  let i = 0;
+  while (n >= 1024 && i < units.length - 1) {
+    n /= 1024;
+    i++;
+  }
+  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+}
+
+/** Bytes per second as a human-readable rate, e.g. "1.5 MiB/s". */
+export function formatRate(bytesPerSecond: number | null | undefined): string {
+  if (bytesPerSecond == null || !Number.isFinite(bytesPerSecond)) return '—';
+  return `${formatSize(bytesPerSecond)}/s`;
+}

@@ -52,6 +52,8 @@ export const series = sqliteTable(
     seriesType: text('series_type', { enum: ['standard', 'daily', 'anime'] }).notNull().default('standard'),
     seasonFolder: integer('season_folder', { mode: 'boolean' }).notNull().default(true),
     useSceneNumbering: integer('use_scene_numbering', { mode: 'boolean' }).notNull().default(false),
+    // Subtitle language profile (subtitles module); null = no subtitles wanted.
+    languageProfileId: integer('language_profile_id'),
     tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
     added: text('added').notNull(),
     lastRefreshed: text('last_refreshed'),
@@ -141,6 +143,8 @@ export const movies = sqliteTable(
       .notNull()
       .default('released'),
     monitored: integer('monitored', { mode: 'boolean' }).notNull().default(true),
+    // Subtitle language profile (subtitles module); null = no subtitles wanted.
+    languageProfileId: integer('language_profile_id'),
     tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
     added: text('added').notNull(),
     lastRefreshed: text('last_refreshed'),

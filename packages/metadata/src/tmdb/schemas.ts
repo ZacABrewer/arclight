@@ -259,3 +259,97 @@ export const tmdbMovieDetailsSchema = z
   })
   .loose();
 export type TmdbMovieDetails = z.infer<typeof tmdbMovieDetailsSchema>;
+
+// ---------------------------------------------------------------------------
+// Discover / title-page extras (Phase 4): credits, similar, recommendations, keywords,
+// people and companies.
+
+export const tmdbCastSchema = z
+  .object({
+    id: z.number(),
+    name: z.string().default(''),
+    character: nullableString,
+    profile_path: nullableString,
+    order: nullableNumber,
+  })
+  .loose();
+
+export const tmdbCrewSchema = z
+  .object({
+    id: z.number(),
+    name: z.string().default(''),
+    job: nullableString,
+    department: nullableString,
+    profile_path: nullableString,
+  })
+  .loose();
+
+export const tmdbCreditsSchema = z
+  .object({
+    cast: z.array(tmdbCastSchema).default([]),
+    crew: z.array(tmdbCrewSchema).default([]),
+  })
+  .loose();
+
+const tmdbKeywordSchema = z.object({ id: z.number(), name: z.string() }).loose();
+const tmdbCompanySchema = z
+  .object({ id: z.number(), name: z.string(), logo_path: nullableString })
+  .loose();
+const tmdbVideoListSchema = z.object({ results: z.array(tmdbVideoSchema).optional() }).loose();
+const tmdbPagedMovieSchema = z
+  .object({ results: z.array(tmdbMovieSearchItemSchema).default([]) })
+  .loose();
+const tmdbPagedTvSchema = z.object({ results: z.array(tmdbTvSearchItemSchema).default([]) }).loose();
+
+export const tmdbMovieExtrasSchema = z
+  .object({
+    id: z.number(),
+    tagline: nullableString,
+    genres: z.array(tmdbGenreSchema).optional(),
+    production_companies: z.array(tmdbCompanySchema).optional(),
+    credits: tmdbCreditsSchema.optional(),
+    similar: tmdbPagedMovieSchema.optional(),
+    recommendations: tmdbPagedMovieSchema.optional(),
+    videos: tmdbVideoListSchema.optional(),
+    keywords: z.object({ keywords: z.array(tmdbKeywordSchema).optional() }).loose().optional(),
+  })
+  .loose();
+export type TmdbMovieExtras = z.infer<typeof tmdbMovieExtrasSchema>;
+
+export const tmdbTvExtrasSchema = z
+  .object({
+    id: z.number(),
+    tagline: nullableString,
+    genres: z.array(tmdbGenreSchema).optional(),
+    networks: z.array(tmdbCompanySchema).optional(),
+    credits: tmdbCreditsSchema.optional(),
+    similar: tmdbPagedTvSchema.optional(),
+    recommendations: tmdbPagedTvSchema.optional(),
+    videos: tmdbVideoListSchema.optional(),
+    keywords: z.object({ results: z.array(tmdbKeywordSchema).optional() }).loose().optional(),
+  })
+  .loose();
+export type TmdbTvExtras = z.infer<typeof tmdbTvExtrasSchema>;
+
+export const tmdbPersonSchema = z
+  .object({
+    id: z.number(),
+    name: z.string(),
+    biography: nullableString,
+    birthday: nullableString,
+    deathday: nullableString,
+    place_of_birth: nullableString,
+    known_for_department: nullableString,
+    profile_path: nullableString,
+    combined_credits: z
+      .object({
+        cast: z.array(z.object({ media_type: z.string().optional() }).loose()).default([]),
+        crew: z.array(z.object({ media_type: z.string().optional() }).loose()).default([]),
+      })
+      .loose()
+      .optional(),
+  })
+  .loose();
+export type TmdbPerson = z.infer<typeof tmdbPersonSchema>;
+
+export const tmdbCompanyDetailsSchema = tmdbCompanySchema;

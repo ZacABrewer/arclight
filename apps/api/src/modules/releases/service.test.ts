@@ -99,6 +99,23 @@ describe('RSS processing', () => {
     expect(h.downloads.grabs.map((g) => g.request.title)).toEqual(['Show.Name.S01E01.720p.HDTV-OK']);
   });
 
+  it('downloads a usenet release as NZB bytes and passes them as `nzb`', async () => {
+    const h = await tvSetup();
+    await h.service.processReleases([makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP', { protocol: 'usenet' })], 'rss');
+    const grab = h.downloads.grabs[0]!;
+    expect(grab.request.protocol).toBe('usenet');
+    expect(grab.request.nzb).toBeInstanceOf(Uint8Array);
+    expect(grab.request.torrentFile).toBeUndefined();
+    expect(grab.request.seedConfig).toBeUndefined();
+  });
+
+  it('parks a usenet release when no usenet client is available', async () => {
+    const h = await tvSetup();
+    h.downloads.fail = Object.assign(new Error('No enabled usenet download client is available'), { code: 'NO_CLIENT' });
+    await h.service.processReleases([makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP', { protocol: 'usenet' })], 'rss');
+    expect(h.service.listPending()).toEqual([expect.objectContaining({ reason: 'downloadClientUnavailable' })]);
+  });
+
   it('parks releases when the download client is unavailable', async () => {
     const h = await tvSetup();
     h.downloads.fail = Object.assign(new Error('No enabled torrent download client is available'), { code: 'NO_CLIENT' });
@@ -292,5 +309,42 @@ describe('push', () => {
     const h = await tvSetup();
     const app = await routesApp(h);
     expect((await app.inject({ method: 'POST', url: '/release/push', payload: { title: 'x' } })).statusCode).toBe(400);
+  });
+});
+
+describe('search-page grabs and indexer downloads', () => {
+  it('grabs a matching search result through the decision engine', async () => {
+    const h = await tvSetup();
+    const outcome = await h.service.grabSearchResult(makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP'), { force: false });
+    expect(outcome).toMatchObject({ kind: 'grabbed', matched: true, title: 'Show.Name.S01E01.1080p.WEB-DL-GRP' });
+    expect(h.downloads.grabs[0]!.tracking).toMatchObject({ mediaType: 'series', seriesId: h.series.id });
+  });
+
+  it('refuses an unmatched result without force and grabs it untracked with force', async () => {
+    const h = await tvSetup();
+    const release = makeRelease('Some.Other.Thing.2024.1080p.WEB-DL-X');
+    const refused = await h.service.grabSearchResult(release, { force: false });
+    expect(refused.kind).toBe('no-match');
+    expect(h.downloads.grabs).toHaveLength(0);
+
+    const forced = await h.service.grabSearchResult(release, { force: true });
+    expect(forced).toMatchObject({ kind: 'grabbed', matched: false });
+    expect(h.downloads.grabs).toHaveLength(1);
+    expect(h.downloads.grabs[0]!.tracking).toEqual({});
+    expect(h.downloads.grabs[0]!.request.title).toBe(release.title);
+  });
+
+  it('downloads release files through the indexer port when it offers downloadRelease', async () => {
+    const h = await tvSetup();
+    const calls: string[] = [];
+    const port = h.indexers as unknown as { downloadRelease: (id: number, url: string) => Promise<unknown> };
+    port.downloadRelease = async (_id, url) => {
+      calls.push(url);
+      return { kind: 'file', protocol: 'torrent', data: new TextEncoder().encode('d8:announce3:urle') };
+    };
+    await h.service.processReleases([makeRelease('Show.Name.S01E02.1080p.WEB-DL-GRP', { downloadUrl: 'http://site/dl/2.torrent' })], 'rss');
+    expect(calls).toEqual(['http://site/dl/2.torrent']);
+    expect(h.fetchImpl.calls).toHaveLength(0);
+    expect(h.downloads.grabs[0]!.request.torrentFile).toBeInstanceOf(Uint8Array);
   });
 });

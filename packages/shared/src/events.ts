@@ -36,5 +36,18 @@ export const ServerEvent = z.discriminatedUnion('type', [
   z.object({ type: z.literal('history'), action: z.enum(['added']) }),
   z.object({ type: z.literal('settings'), section: z.string() }),
   z.object({ type: z.literal('vpn'), status: VpnStatus }),
+  z.object({
+    type: z.literal('subtitle'),
+    action: z.enum(['downloaded', 'upgraded', 'deleted', 'uploaded', 'synced', 'scanned', 'blacklisted', 'profiles', 'settings']),
+    mediaType: z.enum(['series', 'movie']).optional(),
+    mediaId: z.number().int().optional(),
+    mediaFileId: z.number().int().optional(),
+  }),
+  z.object({
+    type: z.literal('request'),
+    action: z.enum(['created', 'updated', 'approved', 'declined', 'failed', 'completed', 'deleted']),
+    id: z.number().int(),
+  }),
+  z.object({ type: z.literal('issue'), action: z.enum(['created', 'updated', 'deleted']), id: z.number().int() }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

@@ -19,6 +19,7 @@ import { FormField, Input, Select, Toggle } from '../../../components/form.js';
 import { SchemaForm } from '../../../components/forms/schema-form.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { Page } from '../../../components/page.js';
+import { PathInput } from '../../../components/path-picker/index.js';
 import { LoadingBlock } from '../../../components/spinner.js';
 import { useRootFolders } from '../../../hooks/library.js';
 import {
@@ -287,7 +288,6 @@ function RootFoldersCard() {
           </table>
         </div>
       )}
-      {/* TODO(contract): there is no /filesystem browse route yet; switch this to a path picker when it lands. */}
       <form
         className="row card-footer-form"
         onSubmit={(e) => {
@@ -295,7 +295,7 @@ function RootFoldersCard() {
           if (path.trim()) add.mutate({ path: path.trim(), mediaType }, { onSuccess: () => setPath('') });
         }}
       >
-        <Input aria-label="Root folder path" placeholder="/data/media/tv" value={path} onChange={(e) => setPath(e.currentTarget.value)} />
+        <PathInput aria-label="Root folder path" placeholder="/data/media/tv" value={path} onChange={setPath} pickerTitle="Choose a root folder" />
         <Select
           aria-label="Media type"
           value={mediaType}

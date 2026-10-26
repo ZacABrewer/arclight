@@ -49,6 +49,11 @@ export function UserMenu() {
             <strong>{name}</strong>
             <span className="muted">{user ? user.role : session.via === 'bypass' ? 'no sign-in needed' : session.via}</span>
           </div>
+          {user ? (
+            <Link to="/profile" role="menuitem" className="user-menu-item" onClick={() => setOpen(false)}>
+              Profile and notifications
+            </Link>
+          ) : null}
           {isAdmin ? (
             <Link to="/settings/security" role="menuitem" className="user-menu-item" onClick={() => setOpen(false)}>
               Settings → Security

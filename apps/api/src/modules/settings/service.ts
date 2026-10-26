@@ -1,13 +1,20 @@
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
+  BackupSettings,
+  CompatSettings,
   ImportListSettings,
+  IndexerGlobalSettings,
+  IndexerOptionsSection,
   MediaManagementSettings,
   MetadataSettings,
   NamingConfig,
   ReleasesSettings,
+  RequestsSettings,
   SECRET_MASK,
   SecuritySettings,
+  SubtitleSettings,
+  TorrentSettings,
   VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
@@ -32,6 +39,19 @@ const sections = {
   security: SecuritySettings,
   // Owned by the import-lists module (sync interval, clean library; routes under /settings/importlists).
   importLists: ImportListSettings,
+  // Owned by the subtitles module (routes under /subtitle/settings; provider secrets masked there).
+  subtitles: SubtitleSettings,
+  // Owned by the compat module (Sonarr/Radarr-shaped /api/v3; routes under /settings/compat).
+  compat: CompatSettings,
+  // Owned by the backup module (folder, schedule, retention; routes under /settings/backup).
+  backup: BackupSettings,
+  // Owned by the torrent module (built-in engine; routes under /settings/torrent).
+  torrent: TorrentSettings,
+  // Owned by the indexers module (RSS interval, subtitle/flag options; routes under
+  // /settings/indexers, merged there with minimum age / retention / maximum size from `releases`).
+  indexers: IndexerOptionsSection,
+  // Owned by the requests module (routes under /settings/requests).
+  requests: RequestsSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
@@ -119,4 +139,40 @@ export function getReleasesSettings(db: Db): ReleasesSettings {
 
 export function updateReleasesSettings(db: Db, value: ReleasesSettings): ReleasesSettings {
   return setSection(db, 'releases', value);
+}
+
+// ---------------------------------------------------------------------------------------
+// indexer options (Settings -> Indexer options): a view over two sections
+// ---------------------------------------------------------------------------------------
+
+/** Minimum age / retention / maximum size from `releases`, the rest from `indexers`. */
+export function getIndexerGlobalSettings(db: Db): IndexerGlobalSettings {
+  const releases = getSection(db, 'releases');
+  const options = getSection(db, 'indexers');
+  return {
+    minimumAgeMinutes: releases.minimumAgeMinutes,
+    retentionDays: releases.retentionDays,
+    maximumSizeMb: releases.maximumSizeMb,
+    ...options,
+  };
+}
+
+export function updateIndexerGlobalSettings(db: Db, value: IndexerGlobalSettings): IndexerGlobalSettings {
+  const parsed = IndexerGlobalSettings.safeParse(value);
+  if (!parsed.success) throw new SettingsError('VALIDATION', parsed.error.message);
+  const v = parsed.data;
+  const releases = getSection(db, 'releases');
+  setSection(db, 'releases', {
+    ...releases,
+    minimumAgeMinutes: v.minimumAgeMinutes,
+    retentionDays: v.retentionDays,
+    maximumSizeMb: v.maximumSizeMb,
+  });
+  setSection(db, 'indexers', {
+    rssSyncIntervalMinutes: v.rssSyncIntervalMinutes,
+    allowHardcodedSubs: v.allowHardcodedSubs,
+    whitelistedHardcodedSubs: v.whitelistedHardcodedSubs,
+    preferIndexerFlags: v.preferIndexerFlags,
+  });
+  return getIndexerGlobalSettings(db);
 }

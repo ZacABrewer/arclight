@@ -552,4 +552,20 @@ describe('routes', () => {
     const content = await readFile(join(downloads, 'Folder', 'file.mkv'));
     expect(content.length).toBe(64);
   });
+
+  it('creates folders for the path picker and rejects bad names', async () => {
+    const a = await app();
+    const made = await a.inject({ method: 'POST', url: '/api/v1/filesystem/mkdir', payload: { parent: downloads, name: 'New Folder' } });
+    expect(made.statusCode).toBe(201);
+    expect(made.json()).toMatchObject({ name: 'New Folder', type: 'directory', path: join(downloads, 'New Folder') });
+    expect((await stat(join(downloads, 'New Folder'))).isDirectory()).toBe(true);
+    const again = await a.inject({ method: 'POST', url: '/api/v1/filesystem/mkdir', payload: { path: join(downloads, 'New Folder') } });
+    expect(again.statusCode).toBe(201);
+    const bad = await a.inject({ method: 'POST', url: '/api/v1/filesystem/mkdir', payload: { parent: downloads, name: '../escape' } });
+    expect(bad.statusCode).toBe(400);
+    const noParent = await a.inject({ method: 'POST', url: '/api/v1/filesystem/mkdir', payload: { parent: join(tmp, 'nope'), name: 'x' } });
+    expect(noParent.statusCode).toBe(404);
+    const listing = await a.inject({ method: 'GET', url: `/api/v1/filesystem?path=${encodeURIComponent(downloads)}&allowFoldersWithoutTrailingSlashes=true` });
+    expect(listing.json().directories.map((d: { name: string }) => d.name)).toContain('New Folder');
+  });
 });

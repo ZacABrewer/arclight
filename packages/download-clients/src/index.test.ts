@@ -26,6 +26,7 @@ describe('createDownloadClient', () => {
       ['rtorrent', createDownloadClient('rtorrent', { host: 'h' }, { fetch: fetchStub })],
       ['sabnzbd', createDownloadClient('sabnzbd', { host: 'h', apiKey: 'k' }, { fetch: fetchStub })],
       ['nzbget', createDownloadClient('nzbget', { host: 'h' }, { fetch: fetchStub })],
+      ['builtin', createDownloadClient('builtin', {})],
     ];
     for (const [kind, client] of clients) {
       expect(client.protocol, kind).toBe(downloadClientProtocols[kind]);
@@ -34,8 +35,8 @@ describe('createDownloadClient', () => {
     expect(DownloadClientKind.options).toEqual(Object.keys(downloadClientSettingsSchemas));
   });
 
-  it('rejects unknown kinds (no builtin yet) and invalid settings', () => {
-    expect(() => createDownloadClient('builtin' as DownloadClientKind, { host: 'h' } as never)).toThrow();
+  it('rejects unknown kinds and invalid settings', () => {
+    expect(() => createDownloadClient('vuze' as DownloadClientKind, { host: 'h' } as never)).toThrow();
     expect(() => createDownloadClient('transmission', { host: '' })).toThrow();
   });
 
@@ -56,6 +57,7 @@ describe('createDownloadClient', () => {
       createDownloadClient('transmission', { host: 'h' }, { fetch: fetchStub }),
       createDownloadClient('deluge', { host: 'h' }, { fetch: fetchStub }),
       createDownloadClient('rtorrent', { host: 'h' }, { fetch: fetchStub }),
+      createDownloadClient('builtin', {}),
     ];
     for (const client of torrentClients) {
       await expect(client.addNzb?.(nzb)).rejects.toMatchObject({ code: 'not-supported' });

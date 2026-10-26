@@ -45,3 +45,6 @@ export * from '../modules/imports/schema.js';
 export * from '../modules/notifications/schema.js';
 export * from '../modules/auth/schema.js';
 export * from '../modules/import-lists/schema.js';
+export * from '../modules/migrate/schema.js';
+export * from '../modules/subtitles/schema.js';
+export * from '../modules/requests/schema.js';

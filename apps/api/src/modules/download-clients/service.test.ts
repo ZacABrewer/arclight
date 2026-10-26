@@ -4,6 +4,9 @@ import { mapRemoteToLocal, toDirectoryForm } from './remote-paths.js';
 import { DownloadClientsError, STATUS_TEXT, type TrackedDownload } from './service.js';
 import { DownloadClientError, item, qbit, setup } from './test-support.js';
 
+/** Every client in these tests is qBittorrent; `builtin` settings have no password. */
+const pw = (settings: object): unknown => (settings as { password?: unknown }).password;
+
 describe('download client CRUD', () => {
   it('creates a client with defaults and derives the protocol', async () => {
     const { service } = await setup();
@@ -23,22 +26,22 @@ describe('download client CRUD', () => {
   it('masks the password on every read', async () => {
     const { service } = await setup();
     const created = service.create(qbit('Main'));
-    expect(created.settings.password).toBe(PASSWORD_MASK);
-    expect(service.get(created.id).settings.password).toBe(PASSWORD_MASK);
-    expect(service.list()[0]!.settings.password).toBe(PASSWORD_MASK);
+    expect(pw(created.settings)).toBe(PASSWORD_MASK);
+    expect(pw(service.get(created.id).settings)).toBe(PASSWORD_MASK);
+    expect(pw(service.list()[0]!.settings)).toBe(PASSWORD_MASK);
   });
 
   it('returns an empty password (not the mask) when none is stored', async () => {
     const { service } = await setup();
     const created = service.create(qbit('Main', {}, { password: '' }));
-    expect(created.settings.password).toBe('');
+    expect(pw(created.settings)).toBe('');
   });
 
   it('keeps the stored password when the mask is sent back', async () => {
     const { service, fake } = await setup();
     const created = service.create(qbit('Main'));
     service.update(created.id, qbit('Main', { priority: 3 }, { password: PASSWORD_MASK }));
-    expect(fake(created.id).config.settings.password).toBe('secret');
+    expect(pw(fake(created.id).config.settings)).toBe('secret');
     expect(service.get(created.id).priority).toBe(3);
   });
 
@@ -46,7 +49,7 @@ describe('download client CRUD', () => {
     const { service, fake } = await setup();
     const created = service.create(qbit('Main'));
     service.update(created.id, qbit('Main', {}, { password: 'changed' }));
-    expect(fake(created.id).config.settings.password).toBe('changed');
+    expect(pw(fake(created.id).config.settings)).toBe('changed');
   });
 
   it('rejects duplicate names case-insensitively', async () => {

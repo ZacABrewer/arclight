@@ -96,12 +96,34 @@ export interface IndexerPort {
   search(request: SearchRequest, opts: { mode: 'automatic' | 'interactive'; signal?: AbortSignal }): Promise<ReleaseResource[]>;
   onReleases(handler: (releases: ReleaseResource[]) => void | Promise<void>): () => void;
   setManualSearchResolver(resolver: ((request: ManualSearchRequest) => SearchRequest | null | Promise<SearchRequest | null>) | undefined): void;
+  /**
+   * Resolve a release link through its indexer (login cookies, definition download rules,
+   * proxies). Optional: without it the link is fetched directly. Errors carry `code`
+   * `UNAVAILABLE` (gone) or `DOWNLOAD_FAILED`.
+   */
+  downloadRelease?(
+    indexerId: number,
+    url: string,
+  ): Promise<{ kind: 'magnet'; magnetUrl: string } | { kind: 'file'; protocol: 'torrent' | 'usenet'; data: Uint8Array }>;
+  /** Lets the search page (POST /search/grab) grab through the decision engine. Optional. */
+  setSearchGrabber?(grabber: SearchResultGrabber | undefined): void;
 }
+
+/** See `ReleasesService.grabSearchResult`. */
+export type SearchResultGrabber = (
+  release: ReleaseResource,
+  opts: { force: boolean; downloadClientId?: number },
+) => Promise<
+  | { kind: 'grabbed'; title: string; queueItemId: number; downloadId: string; downloadClientId: number | null; matched: boolean; rejections: string[] }
+  | { kind: 'no-match'; rejections: string[] }
+>;
 
 export interface DownloadClientGrab {
   title: string;
   magnet?: string;
   torrentFile?: Uint8Array;
+  /** Usenet releases: the raw .nzb document. */
+  nzb?: Uint8Array;
   isRecent?: boolean;
   seedConfig?: { ratioLimit?: number; seedTimeLimitMinutes?: number };
   protocol?: 'usenet' | 'torrent';
@@ -279,11 +301,13 @@ export class ReleasesService {
       await this.processReleases(releases, 'rss');
     });
     this.indexers.setManualSearchResolver((request) => this.resolveManualSearch(request));
+    this.indexers.setSearchGrabber?.((release, opts) => this.grabSearchResult(release, opts));
   }
 
   detach(): void {
     this.unsubscribeRss?.();
     this.indexers.setManualSearchResolver(undefined);
+    this.indexers.setSearchGrabber?.(undefined);
   }
 
   private settings(): ReleaseSettings {
@@ -762,8 +786,64 @@ export class ReleasesService {
     return tracked;
   }
 
+  /**
+   * Search page grab (POST /search/grab via the indexers module): decide on the result, grab it
+   * mapped when it matches the library; otherwise only with `force`, untracked (no library
+   * item, the client's default category), so it shows as unknown in the queue.
+   */
+  async grabSearchResult(
+    release: ReleaseResource,
+    opts: { force: boolean; downloadClientId?: number },
+  ): ReturnType<SearchResultGrabber> {
+    const [evaluated] = await this.decide([release], 'interactiveSearch');
+    const rejections = evaluated?.decision.rejections.map((r) => r.message) ?? [];
+    if (evaluated?.candidate) {
+      const tracked = await this.grabEvaluated(evaluated, opts.downloadClientId);
+      return { kind: 'grabbed', ...grabResponse(tracked), matched: true, rejections };
+    }
+    if (!opts.force) return { kind: 'no-match', rejections };
+    const indexer = this.indexers.list().find((i) => i.id === release.indexerId);
+    const payload = await this.downloadPayload(release);
+    let tracked: TrackedView;
+    try {
+      tracked = await this.downloads.grab(
+        opts.downloadClientId ?? indexer?.downloadClientId ?? null,
+        { title: release.title, protocol: release.protocol, isRecent: release.age <= 14, ...payload },
+        {},
+      );
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === 'NO_CLIENT' || code === 'CLIENT_ERROR') {
+        throw new ReleasesError('CLIENT_UNAVAILABLE', err instanceof Error ? err.message : String(err), { cause: err });
+      }
+      throw err;
+    }
+    this.log?.info({ title: release.title, client: tracked.downloadClientName }, 'release force-grabbed without a library match');
+    return { kind: 'grabbed', ...grabResponse(tracked), matched: false, rejections };
+  }
+
   /** Magnet passthrough, else fetch the .torrent / .nzb (redirects to magnets are followed). */
-  private async downloadPayload(release: ReleaseResource): Promise<{ magnet: string } | { torrentFile: Uint8Array }> {
+  private async downloadPayload(release: ReleaseResource): Promise<{ magnet: string } | { torrentFile: Uint8Array } | { nzb: Uint8Array }> {
+    // Through the indexer when it can (definition logins/cookies, proxies, grab stats).
+    // An unknown indexer (deleted since the search) falls through to the direct fetch below.
+    const viaIndexer = release.downloadUrl || release.magnetUrl;
+    if (this.indexers.downloadRelease && release.indexerId > 0 && viaIndexer) {
+      try {
+        const result = await this.indexers.downloadRelease(release.indexerId, viaIndexer);
+        if (result.kind === 'magnet') {
+          if (release.protocol === 'usenet') throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
+          return { magnet: result.magnetUrl };
+        }
+        return release.protocol === 'usenet' ? { nzb: result.data } : { torrentFile: result.data };
+      } catch (err) {
+        const code = (err as { code?: string }).code;
+        if (code !== 'NOT_FOUND') {
+          if (release.protocol === 'torrent' && release.magnetUrl && viaIndexer !== release.magnetUrl) return { magnet: release.magnetUrl };
+          if (err instanceof ReleasesError) throw err;
+          throw new ReleasesError(code === 'UNAVAILABLE' ? 'UNAVAILABLE' : 'DOWNLOAD_FAILED', err instanceof Error ? err.message : String(err), { cause: err });
+        }
+      }
+    }
     if (release.protocol === 'torrent') {
       if (release.downloadUrl.startsWith('magnet:')) return { magnet: release.downloadUrl };
       if (!release.downloadUrl && release.magnetUrl) return { magnet: release.magnetUrl };
@@ -775,7 +855,10 @@ export class ReleasesService {
         if (res.status >= 300 && res.status < 400) {
           const location = res.headers.get('location');
           if (!location) break;
-          if (location.startsWith('magnet:')) return { magnet: location };
+          if (location.startsWith('magnet:')) {
+            if (release.protocol === 'usenet') throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
+            return { magnet: location };
+          }
           url = new URL(location, url).toString();
           continue;
         }
@@ -785,9 +868,7 @@ export class ReleasesService {
         if (!res.ok) throw new ReleasesError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
         const bytes = new Uint8Array(await res.arrayBuffer());
         if (bytes.length === 0) throw new ReleasesError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
-        // GrabRequest has no nzb field yet: usenet bytes travel in `torrentFile` until a
-        // usenet download client exists (pickClient('usenet') currently finds none).
-        return { torrentFile: bytes };
+        return release.protocol === 'usenet' ? { nzb: bytes } : { torrentFile: bytes };
       }
       throw new ReleasesError('DOWNLOAD_FAILED', 'Too many redirects downloading the release');
     } catch (err) {
@@ -1340,4 +1421,13 @@ function groupPending(rows: PendingRow[], due: Set<number>): PendingRow[][] {
     else groups.push([row]);
   }
   return groups.filter((g) => g.some((r) => due.has(r.id)));
+}
+
+function grabResponse(tracked: TrackedView): { title: string; queueItemId: number; downloadId: string; downloadClientId: number | null } {
+  return {
+    title: tracked.title,
+    queueItemId: tracked.id,
+    downloadId: tracked.downloadId,
+    downloadClientId: tracked.downloadClientId,
+  };
 }

@@ -213,6 +213,11 @@ export const FileSystemQuery = z.object({
     .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
     .transform((v) => v === true || v === 'true' || v === '1')
     .default(false),
+  /** Accept `C:\Media` as well as `C:\Media\` (always true; kept for *arr-style clients). */
+  allowFoldersWithoutTrailingSlashes: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .transform((v) => v === true || v === 'true' || v === '1')
+    .optional(),
 });
 export type FileSystemQuery = z.infer<typeof FileSystemQuery>;
 
@@ -233,6 +238,18 @@ export const FileSystemListing = z.object({
   files: z.array(FileSystemEntry),
 });
 export type FileSystemListing = z.infer<typeof FileSystemListing>;
+
+/** POST /filesystem/mkdir: create `name` inside `parent` (or the absolute `path`). */
+export const FileSystemMkdirRequest = z
+  .object({
+    path: z.string().min(1).optional(),
+    parent: z.string().min(1).optional(),
+    name: z.string().min(1).optional(),
+  })
+  .refine((r) => r.path !== undefined || (r.parent !== undefined && r.name !== undefined), {
+    message: 'path, or parent and name, is required',
+  });
+export type FileSystemMkdirRequest = z.infer<typeof FileSystemMkdirRequest>;
 
 export const ImportsErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type ImportsErrorResponse = z.infer<typeof ImportsErrorResponse>;

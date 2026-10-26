@@ -22,6 +22,7 @@ export class Scheduler {
   private readonly definitions = new Map<string, JobDefinition>();
   private readonly crons = new Map<string, Cron>();
   private readonly running = new Map<string, AbortController>();
+  private started = false;
 
   constructor(
     private readonly db: Db,
@@ -49,19 +50,45 @@ export class Scheduler {
       .where(eq(schema.jobs.status, 'running'))
       .run();
 
-    for (const def of this.definitions.values()) {
-      if (!def.cron) continue;
-      const row = this.db.select().from(schema.scheduledJobs).where(eq(schema.scheduledJobs.name, def.name)).get();
-      if (row && !row.enabled) continue;
-      const cron = new Cron(def.cron, { protect: true }, () => void this.run(def.name, 'scheduled'));
-      this.crons.set(def.name, cron);
-    }
+    this.started = true;
+    for (const def of this.definitions.values()) this.schedule(def);
     this.log.info({ jobs: [...this.crons.keys()] }, 'scheduler started');
   }
 
+  private schedule(def: JobDefinition): void {
+    if (!def.cron) return;
+    const row = this.db.select().from(schema.scheduledJobs).where(eq(schema.scheduledJobs.name, def.name)).get();
+    if (row && !row.enabled) return;
+    const cron = new Cron(def.cron, { protect: true }, () => void this.run(def.name, 'scheduled'));
+    this.crons.set(def.name, cron);
+  }
+
   stop(): void {
+    this.started = false;
     for (const cron of this.crons.values()) cron.stop();
     for (const ctrl of this.running.values()) ctrl.abort();
+  }
+
+  /**
+   * Change a registered job's schedule. `null` makes it on-demand only (no cron). When the
+   * scheduler is running the timer is replaced immediately; a run in progress is not affected.
+   */
+  update(name: string, cron: string | null): void {
+    const def = this.definitions.get(name);
+    if (!def) throw new Error(`unknown job: ${name}`);
+    if (cron !== null) new Cron(cron, { paused: true }).stop(); // validate before touching state
+    const next: JobDefinition = { name: def.name, handler: def.handler, ...(cron !== null ? { cron } : {}) };
+    this.definitions.set(name, next);
+    if (cron !== null) {
+      this.db
+        .insert(schema.scheduledJobs)
+        .values({ name, interval: cron })
+        .onConflictDoUpdate({ target: schema.scheduledJobs.name, set: { interval: cron } })
+        .run();
+    }
+    this.crons.get(name)?.stop();
+    this.crons.delete(name);
+    if (this.started && cron !== null) this.schedule(next);
   }
 
   listScheduled(): ScheduledJob[] {

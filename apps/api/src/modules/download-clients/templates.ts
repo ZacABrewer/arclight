@@ -1,7 +1,70 @@
-import type { DownloadClientField, DownloadClientImplementationSchema } from '@media-tron/shared';
+import {
+  downloadClientProtocols,
+  downloadClientSettingsSchemas as packageSchemas,
+  type DownloadClientKind,
+  type DownloadClientSettingsInput,
+} from '@media-tron/download-clients';
+import {
+  DOWNLOAD_CLIENT_PROTOCOLS,
+  DOWNLOAD_CLIENT_SECRET_FIELDS,
+  DownloadClientImplementation,
+  downloadClientSettingsSchemas,
+  type DownloadClientField,
+  type DownloadClientImplementationSchema,
+  type DownloadClientInput,
+  type DownloadClientSettingsFor,
+} from '@media-tron/shared';
+import { z } from 'zod';
 
-// Field definitions the UI renders for each implementation. Common fields first, then the
-// implementation's settings (named `settings.<key>` so the form can write them back).
+// Field definitions the UI renders for each implementation, derived from the shared settings
+// schemas: types, defaults, bounds and options from the Zod shape, help texts from `.describe()`.
+// Common fields come first, then the implementation's settings (named `settings.<key>` so the
+// form can write them back).
+
+// ---------------------------------------------------------------------------------------
+// Contract sync: shared mirrors the package's kinds and settings (shared cannot depend on the
+// package). Fail typechecking, then startup, if they ever drift apart.
+// ---------------------------------------------------------------------------------------
+
+type Same<A, B> = [A] extends [B] ? ([B] extends [A] ? true : false) : false;
+const kindsInSync: Same<DownloadClientKind, DownloadClientImplementation> = true;
+void kindsInSync;
+
+/** Stored (shared, parsed) settings of each kind must be accepted by the package factory. */
+type SettingsAccepted = {
+  [K in DownloadClientKind]: DownloadClientSettingsFor<K> extends DownloadClientSettingsInput<K> ? true : false;
+};
+const settingsInSync: SettingsAccepted = {
+  qbittorrent: true,
+  transmission: true,
+  deluge: true,
+  rtorrent: true,
+  sabnzbd: true,
+  nzbget: true,
+  builtin: true,
+};
+void settingsInSync;
+
+/** Runtime half of the check: same kinds, same protocols, shared settings keys cover the package's. */
+export function assertContractInSync(): void {
+  for (const kind of DownloadClientImplementation.options) {
+    if (!(kind in packageSchemas)) throw new Error(`Download client kind "${kind}" is not known to @media-tron/download-clients`);
+    if (downloadClientProtocols[kind] !== DOWNLOAD_CLIENT_PROTOCOLS[kind]) {
+      throw new Error(`Download client "${kind}" protocol differs between shared and @media-tron/download-clients`);
+    }
+    const sharedKeys = new Set(Object.keys(downloadClientSettingsSchemas[kind].shape));
+    const missing = Object.keys(packageSchemas[kind].shape).filter((k) => !sharedKeys.has(k));
+    if (missing.length > 0) throw new Error(`Shared ${kind} settings lack ${missing.join(', ')}`);
+  }
+  if (Object.keys(packageSchemas).length !== DownloadClientImplementation.options.length) {
+    throw new Error('DownloadClientImplementation is out of sync with DownloadClientKind');
+  }
+}
+assertContractInSync();
+
+// ---------------------------------------------------------------------------------------
+// Common fields
+// ---------------------------------------------------------------------------------------
 
 const commonFields: DownloadClientField[] = [
   { name: 'name', label: 'Name', type: 'text', helpText: 'A name for this download client.', required: true, advanced: false },
@@ -45,145 +108,220 @@ const commonFields: DownloadClientField[] = [
   },
 ];
 
-const qbittorrentFields: DownloadClientField[] = [
-  { name: 'settings.host', label: 'Host', type: 'text', helpText: 'Hostname or IP address of qBittorrent.', required: true, advanced: false, default: 'localhost' },
-  { name: 'settings.port', label: 'Port', type: 'number', helpText: 'qBittorrent WebUI port.', required: true, advanced: false, default: 8080, min: 1, max: 65535 },
-  { name: 'settings.useSsl', label: 'Use SSL', type: 'checkbox', helpText: 'Connect to the WebUI over HTTPS.', required: false, advanced: false, default: false },
-  {
-    name: 'settings.urlBase',
-    label: 'URL Base',
+// ---------------------------------------------------------------------------------------
+// Per-kind metadata the schemas cannot express: names, descriptions, labels, advanced flags
+// ---------------------------------------------------------------------------------------
+
+interface KindMeta {
+  name: string;
+  description: string;
+  infoLink: string;
+  /** Settings keys hidden behind "Show advanced". */
+  advanced: readonly string[];
+  /** Label overrides for this kind's settings keys. */
+  labels?: Readonly<Record<string, string>>;
+}
+
+const KIND_META: Record<DownloadClientImplementation, KindMeta> = {
+  qbittorrent: {
+    name: 'qBittorrent',
+    description: 'Free, open-source BitTorrent client with a WebUI (API v2, qBittorrent 4.1 or newer).',
+    infoLink: 'https://www.qbittorrent.org/',
+    advanced: ['urlBase', 'postImportCategory', 'sequentialOrder', 'firstAndLast', 'contentLayout'],
+  },
+  transmission: {
+    name: 'Transmission',
+    description: 'Lightweight BitTorrent daemon, driven through its JSON RPC interface (Transmission 2.80 or newer).',
+    infoLink: 'https://transmissionbt.com/',
+    advanced: ['urlBase', 'postImportCategory', 'directory'],
+    labels: { category: 'Label', postImportCategory: 'Post-Import Label' },
+  },
+  deluge: {
+    name: 'Deluge',
+    description: 'BitTorrent client driven through the Deluge Web UI (1.3 or 2.x); categories use the Label plugin.',
+    infoLink: 'https://deluge-torrent.org/',
+    advanced: ['urlBase', 'postImportCategory'],
+    labels: { category: 'Label', postImportCategory: 'Post-Import Label' },
+  },
+  rtorrent: {
+    name: 'rTorrent',
+    description: 'rTorrent (0.9.6 or newer) over XML-RPC through a web server or ruTorrent; labels are ruTorrent compatible.',
+    infoLink: 'https://github.com/rakshasa/rtorrent',
+    advanced: ['urlBase', 'postImportCategory', 'directory'],
+    labels: { category: 'Label', postImportCategory: 'Post-Import Label', urlBase: 'URL Path' },
+  },
+  sabnzbd: {
+    name: 'SABnzbd',
+    description: 'Usenet (NZB) downloader with a web API (SABnzbd 1.0 or newer, 3.0+ recommended).',
+    infoLink: 'https://sabnzbd.org/',
+    advanced: ['urlBase', 'postImportCategory', 'username', 'password'],
+  },
+  nzbget: {
+    name: 'NZBGet',
+    description: 'Efficient Usenet (NZB) downloader driven through its JSON-RPC API (NZBGet 16 or newer).',
+    infoLink: 'https://nzbget.com/',
+    advanced: ['urlBase', 'postImportCategory'],
+  },
+  builtin: {
+    name: 'Built-in',
+    description:
+      "Media-Tron's own BitTorrent engine, running inside Media-Tron. Engine-wide options (port, limits, VPN binding) are under Settings > Torrent Engine.",
+    infoLink: '/settings/torrent',
+    advanced: ['postImportCategory', 'categories', 'seedRatioLimit', 'seedTimeLimitMinutes'],
+    labels: { savePath: 'Download Folder', categories: 'Category Folders', seedTimeLimitMinutes: 'Seed Time Limit (minutes)' },
+  },
+};
+
+const LABELS: Record<string, string> = {
+  host: 'Host',
+  port: 'Port',
+  useSsl: 'Use SSL',
+  urlBase: 'URL Base',
+  apiKey: 'API Key',
+  username: 'Username',
+  password: 'Password',
+  category: 'Category',
+  postImportCategory: 'Post-Import Category',
+  directory: 'Directory',
+  recentPriority: 'Recent Priority',
+  olderPriority: 'Older Priority',
+  initialState: 'Initial State',
+  addPaused: 'Add Paused',
+  sequentialOrder: 'Sequential Order',
+  firstAndLast: 'First and Last First',
+  contentLayout: 'Content Layout',
+};
+
+const OPTION_LABELS: Record<string, string> = {
+  start: 'Started',
+  pause: 'Paused',
+  forceStart: 'Force Started',
+  subfolder: 'Create Subfolder',
+  noSubfolder: "Don't Create Subfolder",
+  veryLow: 'Very Low',
+  veryHigh: 'Very High',
+};
+
+/** Prefilled host for a fresh client (the schemas deliberately have no default host). */
+const TEMPLATE_HOST = 'localhost';
+
+function humanize(value: string): string {
+  const spaced = value.replace(/([a-z])([A-Z])/g, '$1 $2');
+  return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+// ---------------------------------------------------------------------------------------
+// Zod shape -> field definition
+// ---------------------------------------------------------------------------------------
+
+interface Unwrapped {
+  inner: z.ZodType;
+  description: string | undefined;
+  optional: boolean;
+  defaultValue: unknown;
+}
+
+/** Peels optional/default wrappers, keeping the first description and default found. */
+function unwrap(schema: z.ZodType): Unwrapped {
+  let current: z.ZodType = schema;
+  let description: string | undefined;
+  let optional = false;
+  let defaultValue: unknown;
+  for (;;) {
+    description ??= current.description;
+    const def = current._zod.def as { type: string; innerType?: z.ZodType; defaultValue?: unknown };
+    if (def.type === 'optional' && def.innerType) {
+      optional = true;
+      current = def.innerType;
+    } else if (def.type === 'default' && def.innerType) {
+      optional = true;
+      defaultValue ??= def.defaultValue;
+      current = def.innerType;
+    } else {
+      return { inner: current, description, optional, defaultValue };
+    }
+  }
+}
+
+function settingsField(kind: DownloadClientImplementation, key: string, schema: z.ZodType): DownloadClientField {
+  const meta = KIND_META[kind];
+  const { inner, description, optional, defaultValue } = unwrap(schema);
+  const field: DownloadClientField = {
+    name: `settings.${key}`,
+    label: meta.labels?.[key] ?? LABELS[key] ?? humanize(key),
     type: 'text',
-    helpText: 'Prefix added to the WebUI URL when qBittorrent sits behind a reverse proxy, e.g. /qbittorrent.',
-    required: false,
-    advanced: true,
-  },
-  { name: 'settings.username', label: 'Username', type: 'text', helpText: 'WebUI username. Leave empty when authentication is bypassed.', required: false, advanced: false },
-  { name: 'settings.password', label: 'Password', type: 'password', helpText: 'WebUI password. Never shown after saving.', required: false, advanced: false },
-  {
-    name: 'settings.category',
-    label: 'Category',
-    type: 'text',
-    helpText: 'Category Media-Tron adds its torrents with. Only torrents in this category are tracked; using a dedicated category is strongly recommended.',
-    required: false,
-    advanced: false,
-    default: 'media-tron',
-  },
-  {
-    name: 'settings.postImportCategory',
-    label: 'Post-Import Category',
-    type: 'text',
-    helpText: 'Category to move torrents to after they are imported. Leave empty to keep the original category.',
-    required: false,
-    advanced: true,
-  },
-  {
-    name: 'settings.recentPriority',
-    label: 'Recent Priority',
-    type: 'select',
-    helpText: 'Queue position for content released within the last 14 days.',
-    required: false,
-    advanced: false,
-    default: 'last',
-    options: [
-      { value: 'last', label: 'Last' },
-      { value: 'first', label: 'First' },
-    ],
-  },
-  {
-    name: 'settings.olderPriority',
-    label: 'Older Priority',
-    type: 'select',
-    helpText: 'Queue position for content released more than 14 days ago.',
-    required: false,
-    advanced: false,
-    default: 'last',
-    options: [
-      { value: 'last', label: 'Last' },
-      { value: 'first', label: 'First' },
-    ],
-  },
-  {
-    name: 'settings.initialState',
-    label: 'Initial State',
-    type: 'select',
-    helpText: 'State of torrents when they are added. Force Started ignores qBittorrent queue limits.',
-    required: false,
-    advanced: false,
-    default: 'start',
-    options: [
-      { value: 'start', label: 'Started' },
-      { value: 'pause', label: 'Paused' },
-      { value: 'forceStart', label: 'Force Started' },
-    ],
-  },
-  {
-    name: 'settings.sequentialOrder',
-    label: 'Sequential Order',
-    type: 'checkbox',
-    helpText: 'Download pieces in order (qBittorrent 4.1.0+).',
-    required: false,
-    advanced: true,
-    default: false,
-  },
-  {
-    name: 'settings.firstAndLast',
-    label: 'First and Last First',
-    type: 'checkbox',
-    helpText: 'Download the first and last pieces first (qBittorrent 4.1.0+).',
-    required: false,
-    advanced: true,
-    default: false,
-  },
-  {
-    name: 'settings.contentLayout',
-    label: 'Content Layout',
-    type: 'select',
-    helpText: "Whether to use qBittorrent's configured content layout, the torrent's original layout, or always create a subfolder (qBittorrent 4.3.2+).",
-    required: false,
-    advanced: true,
-    default: 'default',
-    options: [
-      { value: 'default', label: 'Default' },
-      { value: 'original', label: 'Original' },
-      { value: 'subfolder', label: 'Create Subfolder' },
-      { value: 'noSubfolder', label: "Don't Create Subfolder" },
-    ],
-  },
-];
+    helpText: description ?? '',
+    required: !optional,
+    advanced: meta.advanced.includes(key),
+  };
+  if (inner instanceof z.ZodBoolean) {
+    field.type = 'checkbox';
+    field.required = false;
+  } else if (inner instanceof z.ZodNumber) {
+    field.type = 'number';
+    if (inner.minValue !== null && Number.isFinite(inner.minValue)) field.min = inner.minValue;
+    if (inner.maxValue !== null && Number.isFinite(inner.maxValue)) field.max = inner.maxValue;
+  } else if (inner instanceof z.ZodEnum) {
+    field.type = 'select';
+    field.options = inner.options.map((v) => ({ value: String(v), label: OPTION_LABELS[String(v)] ?? humanize(String(v)) }));
+  } else if ((DOWNLOAD_CLIENT_SECRET_FIELDS as readonly string[]).includes(key)) {
+    field.type = 'password';
+  }
+  if (key === 'host') field.default = TEMPLATE_HOST;
+  else if (typeof defaultValue === 'string' || typeof defaultValue === 'number' || typeof defaultValue === 'boolean') {
+    field.default = defaultValue;
+  }
+  return field;
+}
+
+/** The settings-form fields of one implementation (without the common fields). */
+export function settingsFields(kind: DownloadClientImplementation): DownloadClientField[] {
+  const shape = downloadClientSettingsSchemas[kind].shape as Record<string, z.ZodType>;
+  return Object.entries(shape).map(([key, schema]) => settingsField(kind, key, schema));
+}
+
+function template(kind: DownloadClientImplementation): DownloadClientInput {
+  const meta = KIND_META[kind];
+  const common = {
+    name: meta.name,
+    enable: true,
+    protocol: DOWNLOAD_CLIENT_PROTOCOLS[kind],
+    priority: 1,
+    removeCompletedDownloads: true,
+    removeFailedDownloads: true,
+    tags: [],
+  };
+  // Parsing `{ host }` fills every default the schema declares (`builtin` has no host).
+  const raw = { host: TEMPLATE_HOST };
+  switch (kind) {
+    case 'qbittorrent':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'transmission':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'deluge':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'rtorrent':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'sabnzbd':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'nzbget':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
+    case 'builtin':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse({}) };
+  }
+}
 
 export function implementationSchemas(): DownloadClientImplementationSchema[] {
-  return [
-    {
-      implementation: 'qbittorrent',
-      implementationName: 'qBittorrent',
-      protocol: 'torrent',
-      description: 'Free, open-source BitTorrent client with a WebUI (API v2, qBittorrent 4.1 or newer).',
-      infoLink: 'https://www.qbittorrent.org/',
-      fields: [...commonFields, ...qbittorrentFields],
-      template: {
-        name: 'qBittorrent',
-        implementation: 'qbittorrent',
-        enable: true,
-        protocol: 'torrent',
-        priority: 1,
-        removeCompletedDownloads: true,
-        removeFailedDownloads: true,
-        tags: [],
-        settings: {
-          host: 'localhost',
-          port: 8080,
-          useSsl: false,
-          username: '',
-          password: '',
-          category: 'media-tron',
-          recentPriority: 'last',
-          olderPriority: 'last',
-          initialState: 'start',
-          sequentialOrder: false,
-          firstAndLast: false,
-          contentLayout: 'default',
-        },
-      },
-    },
-  ];
+  return DownloadClientImplementation.options.map((kind) => {
+    const meta = KIND_META[kind];
+    return {
+      implementation: kind,
+      implementationName: meta.name,
+      protocol: DOWNLOAD_CLIENT_PROTOCOLS[kind],
+      description: meta.description,
+      infoLink: meta.infoLink,
+      fields: [...commonFields, ...settingsFields(kind)],
+      template: template(kind),
+    };
+  });
 }

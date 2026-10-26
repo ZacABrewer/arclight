@@ -5,12 +5,16 @@ import { ReleaseProtocol } from './profiles.js';
 // capabilities, and the release shape every search returns. The protocol clients live in
 // @media-tron/indexers; these are the shapes the API serves and the release pipeline reads.
 
-export const IndexerImplementation = z.enum(['torznab', 'newznab']);
+/**
+ * `torznab` / `newznab` talk to an API endpoint; `definition` runs a YAML site definition
+ * from the catalogue (always torrent).
+ */
+export const IndexerImplementation = z.enum(['torznab', 'newznab', 'definition']);
 export type IndexerImplementation = z.infer<typeof IndexerImplementation>;
 
-/** Torznab endpoints serve torrents, Newznab endpoints serve usenet. */
+/** Torznab endpoints and site definitions serve torrents, Newznab endpoints serve usenet. */
 export function protocolForImplementation(implementation: IndexerImplementation): ReleaseProtocol {
-  return implementation === 'torznab' ? 'torrent' : 'usenet';
+  return implementation === 'newznab' ? 'usenet' : 'torrent';
 }
 
 export const INDEXER_PRIORITY_MIN = 1;
@@ -21,7 +25,24 @@ const CategoryId = z.number().int().min(0);
 const Priority = z.number().int().min(INDEXER_PRIORITY_MIN).max(INDEXER_PRIORITY_MAX);
 const NonNegativeInt = z.number().int().min(0);
 
-/** Stored settings for one endpoint. Seed times are milliseconds; the rate limit is seconds. */
+/** A value of one definition setting: text/password/select are strings, checkboxes booleans. */
+export const DefinitionFieldValue = z.union([z.string(), z.boolean()]);
+export type DefinitionFieldValue = z.infer<typeof DefinitionFieldValue>;
+
+/** The definition-specific part of an indexer's settings (implementation `definition`). */
+export const DefinitionIndexerSettings = z.object({
+  /** Catalogue id, e.g. `yts`. */
+  definitionId: z.string().min(1),
+  /** Values for the definition's `settings` list, keyed by setting name. */
+  fields: z.record(z.string(), DefinitionFieldValue).default({}),
+});
+export type DefinitionIndexerSettings = z.infer<typeof DefinitionIndexerSettings>;
+
+/**
+ * Stored settings for one indexer. Seed times are milliseconds; the rate limit is seconds.
+ * Definition indexers set `definitionId` + `fields`; their `baseUrl` is the site link in use
+ * (a definition mirror or `fields.sitelink`) and `apiPath` is empty.
+ */
 export const IndexerSettings = z.object({
   baseUrl: z.string(),
   apiPath: z.string(),
@@ -38,12 +59,19 @@ export const IndexerSettings = z.object({
   additionalParameters: z.string().optional(),
   /** Minimum seconds between two requests to this indexer. */
   rateLimitSeconds: z.number().min(0).optional(),
+  /** Definition indexers: catalogue id. */
+  definitionId: z.string().min(1).optional(),
+  /** Definition indexers: values for the definition's settings, keyed by name. */
+  fields: z.record(z.string(), DefinitionFieldValue).optional(),
 });
 export type IndexerSettings = z.infer<typeof IndexerSettings>;
 
-/** Settings as submitted: list/path fields fall back to defaults. */
+/**
+ * Settings as submitted: list/path fields fall back to defaults. `baseUrl` is required for
+ * Torznab/Newznab (checked by the api); definition indexers may omit it.
+ */
 export const IndexerSettingsInput = IndexerSettings.extend({
-  baseUrl: z.string().trim().min(1),
+  baseUrl: z.string().trim().default(''),
   apiPath: z.string().trim().default('/api'),
   categories: z.array(CategoryId).default([]),
   animeCategories: z.array(CategoryId).default([]),
@@ -69,9 +97,17 @@ export const Indexer = z.object({
   enableInteractiveSearch: z.boolean(),
   priority: Priority,
   downloadClientId: z.number().int().optional(),
+  /** Explicit indexer proxy; without it proxies apply by matching tags. */
+  proxyId: z.number().int().optional(),
   tags: z.array(z.number().int()),
   settings: IndexerSettings,
   status: IndexerStatusSummary.optional(),
+  /** Definition indexers: the definition's display name (absent when missing from the catalogue). */
+  definitionName: z.string().optional(),
+  /** Definition indexers: public / semi-private / private. */
+  privacy: z.enum(['public', 'semi-private', 'private']).optional(),
+  /** Names of the proxies applied to this indexer (explicit or by tag). */
+  proxyNames: z.array(z.string()).optional(),
 });
 export type Indexer = z.infer<typeof Indexer>;
 
@@ -83,6 +119,7 @@ export const IndexerCreate = z.object({
   enableInteractiveSearch: z.boolean().default(true),
   priority: Priority.default(INDEXER_PRIORITY_DEFAULT),
   downloadClientId: z.number().int().nullish(),
+  proxyId: z.number().int().nullish(),
   tags: z.array(z.number().int()).default([]),
   settings: IndexerSettingsInput,
 });
@@ -98,6 +135,7 @@ export const IndexerUpdate = z.object({
   enableInteractiveSearch: z.boolean().optional(),
   priority: Priority.optional(),
   downloadClientId: z.number().int().nullish(),
+  proxyId: z.number().int().nullish(),
   tags: z.array(z.number().int()).optional(),
   settings: IndexerSettings.partial().optional(),
 });
@@ -267,6 +305,248 @@ export const ManualSearchRequest = z.object({
   indexerIds: IdList,
 });
 export type ManualSearchRequest = z.infer<typeof ManualSearchRequest>;
+
+// ---- definition catalogue -----------------------------------------------------------
+
+export const IndexerPrivacy = z.enum(['public', 'semi-private', 'private']);
+export type IndexerPrivacy = z.infer<typeof IndexerPrivacy>;
+
+/** One entry of a definition's `settings` list, as the editor renders it. */
+export const DefinitionSettingField = z.object({
+  name: z.string(),
+  /** text, password, checkbox, select, multi-select, info, info_cookie, info_flaresolverr, ... */
+  type: z.string(),
+  label: z.string(),
+  default: DefinitionFieldValue.optional(),
+  /** select / multi-select choices. */
+  options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
+  /** Help-only entries (`info*`) carry no value. */
+  informational: z.boolean(),
+});
+export type DefinitionSettingField = z.infer<typeof DefinitionSettingField>;
+
+export const IndexerDefinitionSummary = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  /** e.g. `en-US`. */
+  language: z.string(),
+  /** The site's declared type (same vocabulary as `privacy`). */
+  type: IndexerPrivacy,
+  protocol: ReleaseProtocol,
+  privacy: IndexerPrivacy,
+  /** Mirrors; the first is the default site link. */
+  links: z.array(z.string()),
+  settingsFields: z.array(DefinitionSettingField),
+  /** Standard (Newznab) categories the site maps to. */
+  categories: z.array(z.object({ id: z.number().int(), name: z.string() })),
+  /** False until someone confirmed the definition against the live site. */
+  tested: z.boolean(),
+  source: z.enum(['builtin', 'custom']),
+});
+export type IndexerDefinitionSummary = z.infer<typeof IndexerDefinitionSummary>;
+
+export const IndexerDefinitionDetail = IndexerDefinitionSummary.extend({
+  /** Search modes the site supports (`search`, `tv-search`, `movie-search`, ...). */
+  searchModes: z.array(z.string()),
+  requiresLogin: z.boolean(),
+  /** Non-fatal problems found while loading. */
+  warnings: z.array(z.string()),
+});
+export type IndexerDefinitionDetail = z.infer<typeof IndexerDefinitionDetail>;
+
+export const IndexerDefinitionListQuery = z.object({
+  privacy: IndexerPrivacy.optional(),
+  protocol: ReleaseProtocol.optional(),
+  /** Prefix match on the language (`en` matches `en-US`), case-insensitive. */
+  language: z.string().trim().min(1).optional(),
+  /** Case-insensitive substring of id, name or description. */
+  query: z.string().trim().min(1).optional(),
+});
+export type IndexerDefinitionListQuery = z.infer<typeof IndexerDefinitionListQuery>;
+
+/** Upload a custom definition (YAML text); saved as `<config>/definitions/<id>.yml`. */
+export const IndexerDefinitionUpload = z.object({ yaml: z.string().min(1) });
+export type IndexerDefinitionUpload = z.infer<typeof IndexerDefinitionUpload>;
+
+export const DefinitionLoadError = z.object({ file: z.string(), code: z.string(), message: z.string() });
+export type DefinitionLoadError = z.infer<typeof DefinitionLoadError>;
+
+export const IndexerDefinitionReloadResult = z.object({
+  total: z.number().int(),
+  builtin: z.number().int(),
+  custom: z.number().int(),
+  errors: z.array(DefinitionLoadError),
+});
+export type IndexerDefinitionReloadResult = z.infer<typeof IndexerDefinitionReloadResult>;
+
+// ---- indexer proxies ----------------------------------------------------------------
+
+export const IndexerProxyType = z.enum(['flaresolverr', 'http', 'socks5']);
+export type IndexerProxyType = z.infer<typeof IndexerProxyType>;
+
+export const INDEXER_PROXY_SECRET_MASK = '********';
+
+/**
+ * A proxy indexer requests can go through. FlareSolverr: `host` may carry a scheme
+ * (`http://flaresolverr`; default http). `requestTimeout` is seconds. Responses mask the
+ * password with `********`; sending the mask back keeps the stored one.
+ */
+export const IndexerProxy = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  type: IndexerProxyType,
+  host: z.string(),
+  port: z.number().int().min(1).max(65535),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  requestTimeout: z.number().int().min(1).max(600).optional(),
+  tags: z.array(z.number().int()),
+});
+export type IndexerProxy = z.infer<typeof IndexerProxy>;
+
+export const IndexerProxyCreate = z.object({
+  name: z.string().trim().min(1),
+  type: IndexerProxyType,
+  host: z.string().trim().min(1),
+  port: z.number().int().min(1).max(65535),
+  username: z.string().optional(),
+  password: z.string().optional(),
+  requestTimeout: z.number().int().min(1).max(600).optional(),
+  tags: z.array(z.number().int()).default([]),
+});
+export type IndexerProxyCreate = z.input<typeof IndexerProxyCreate>;
+
+export const IndexerProxyUpdate = IndexerProxyCreate.partial();
+export type IndexerProxyUpdate = z.input<typeof IndexerProxyUpdate>;
+
+/** Test an unsaved proxy; `url` is the target reached through it (default: a public test URL). */
+export const IndexerProxyTestRequest = IndexerProxyCreate.extend({ url: z.string().trim().min(1).optional() });
+export type IndexerProxyTestRequest = z.input<typeof IndexerProxyTestRequest>;
+
+export const IndexerProxyTestResult = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  /** Milliseconds. */
+  durationMs: z.number().int().min(0),
+});
+export type IndexerProxyTestResult = z.infer<typeof IndexerProxyTestResult>;
+
+// ---- stats --------------------------------------------------------------------------
+
+/** `query` = a search, `rss` = an RSS fetch, `grab` = a release download sent to a client. */
+export const IndexerStatKind = z.enum(['query', 'rss', 'grab']);
+export type IndexerStatKind = z.infer<typeof IndexerStatKind>;
+
+export const IndexerStatsDay = z.object({
+  /** `YYYY-MM-DD` (UTC). */
+  date: z.string(),
+  queries: NonNegativeInt,
+  grabs: NonNegativeInt,
+  failures: NonNegativeInt,
+});
+export type IndexerStatsDay = z.infer<typeof IndexerStatsDay>;
+
+export const IndexerStatsEntry = z.object({
+  indexerId: z.number().int(),
+  indexerName: z.string(),
+  /** Searches + RSS fetches. */
+  queries: NonNegativeInt,
+  grabs: NonNegativeInt,
+  /** Failed queries, RSS fetches and grabs. */
+  failures: NonNegativeInt,
+  /** Mean duration of successful queries/RSS fetches; null without any. */
+  avgResponseMs: z.number().int().min(0).nullable(),
+  /** One entry per day of the window, oldest first. */
+  byDay: z.array(IndexerStatsDay),
+});
+export type IndexerStatsEntry = z.infer<typeof IndexerStatsEntry>;
+
+export const IndexerStats = z.object({
+  days: z.number().int(),
+  /** ISO-8601 start of the window. */
+  since: z.string(),
+  indexers: z.array(IndexerStatsEntry),
+  totals: z.object({
+    queries: NonNegativeInt,
+    grabs: NonNegativeInt,
+    failures: NonNegativeInt,
+    avgResponseMs: z.number().int().min(0).nullable(),
+    byDay: z.array(IndexerStatsDay),
+  }),
+});
+export type IndexerStats = z.infer<typeof IndexerStats>;
+
+export const INDEXER_STATS_MAX_DAYS = 90;
+export const IndexerStatsQuery = z.object({
+  days: z.coerce.number().int().min(1).max(INDEXER_STATS_MAX_DAYS).default(30),
+});
+export type IndexerStatsQuery = z.infer<typeof IndexerStatsQuery>;
+
+// ---- global indexer options ---------------------------------------------------------
+
+/**
+ * Settings → Indexer options. Minimum age, retention and maximum size are the values the
+ * decision engine reads from the `releases` settings section (one source of truth); the rest
+ * live in the `indexers` section. `rssSyncIntervalMinutes` 0 disables RSS sync.
+ * (Named "global" because `IndexerSettings` is the per-indexer settings shape.)
+ */
+export const IndexerGlobalSettings = z.object({
+  /** Usenet: ignore releases newer than this (minutes); 0 = off. */
+  minimumAgeMinutes: z.number().int().min(0).default(0),
+  /** Usenet: ignore releases older than this (days); 0 = off. */
+  retentionDays: z.number().int().min(0).default(0),
+  /** Global hard cap in MB; 0 = off. */
+  maximumSizeMb: z.number().int().min(0).default(0),
+  /** 0 = disabled, otherwise 10-1440 minutes. */
+  rssSyncIntervalMinutes: z
+    .number()
+    .int()
+    .refine((n) => n === 0 || (n >= 10 && n <= 1440), 'must be 0 (off) or between 10 and 1440')
+    .default(15),
+  allowHardcodedSubs: z.boolean().default(false),
+  /** Subtitle tags (e.g. `ENG`, `HC.ENG`) allowed even when hardcoded subs are not. */
+  whitelistedHardcodedSubs: z.array(z.string().trim().min(1)).default([]),
+  preferIndexerFlags: z.boolean().default(false),
+});
+export type IndexerGlobalSettings = z.infer<typeof IndexerGlobalSettings>;
+export type IndexerGlobalSettingsInput = z.input<typeof IndexerGlobalSettings>;
+
+/** The `indexers` settings section: the IndexerGlobalSettings fields not owned by `releases`. */
+export const IndexerOptionsSection = IndexerGlobalSettings.pick({
+  rssSyncIntervalMinutes: true,
+  allowHardcodedSubs: true,
+  whitelistedHardcodedSubs: true,
+  preferIndexerFlags: true,
+});
+export type IndexerOptionsSection = z.infer<typeof IndexerOptionsSection>;
+
+// ---- search-page grab ---------------------------------------------------------------
+
+/**
+ * Grab a result of a recent `GET /search` by guid. The decision engine re-runs on it; a
+ * result that maps to nothing in the library is refused (409 NO_MATCH) unless `force`, which
+ * sends it to the default client of its protocol untracked (shown as unknown in the queue).
+ */
+export const SearchGrabRequest = z.object({
+  guid: z.string().min(1),
+  indexerId: z.number().int(),
+  force: z.boolean().default(false),
+  downloadClientId: z.number().int().optional(),
+});
+export type SearchGrabRequest = z.input<typeof SearchGrabRequest>;
+
+export const SearchGrabResponse = z.object({
+  title: z.string(),
+  queueItemId: z.number().int(),
+  downloadId: z.string(),
+  downloadClientId: z.number().int().nullable(),
+  /** False when force-grabbed without a library match. */
+  matched: z.boolean(),
+  /** Decision-engine rejection messages that the grab overrode. */
+  rejections: z.array(z.string()),
+});
+export type SearchGrabResponse = z.infer<typeof SearchGrabResponse>;
 
 export const IndexersErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type IndexersErrorResponse = z.infer<typeof IndexersErrorResponse>;

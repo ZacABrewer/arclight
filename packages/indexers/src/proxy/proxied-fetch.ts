@@ -17,7 +17,7 @@ export interface ProxiedFetchOptions {
 
 const FORM_CONTENT_TYPE = 'application/x-www-form-urlencoded';
 
-async function normalizeInput(input: RequestInfo | URL, init: RequestInit | undefined): Promise<{ url: URL; init: RequestInit }> {
+async function normalizeInput(input: Parameters<typeof fetch>[0], init: RequestInit | undefined): Promise<{ url: URL; init: RequestInit }> {
   if (typeof Request !== 'undefined' && input instanceof Request) {
     const base: RequestInit = { method: input.method, headers: input.headers, redirect: input.redirect, signal: input.signal };
     if (input.method !== 'GET' && input.method !== 'HEAD' && input.body !== null) {
@@ -85,7 +85,7 @@ export function createProxiedFetch(proxies: ProxyConfig | readonly ProxyConfig[]
   const send = (url: URL, init: RequestInit): Promise<Response> =>
     network ? fetchWithProxy(url, init, network, options.fetchImpl) : (options.fetchImpl ?? globalThis.fetch)(url, init);
 
-  const proxied = async (input: RequestInfo | URL, rawInit?: RequestInit): Promise<Response> => {
+  const proxied = async (input: Parameters<typeof fetch>[0], rawInit?: RequestInit): Promise<Response> => {
     const { url, init } = await normalizeInput(input, rawInit);
     const headers = new Headers(init.headers);
     const cachedUa = userAgents.get(url.host);

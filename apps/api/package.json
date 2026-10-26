@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@fastify/cors": "^11.1.0",
+    "@fastify/multipart": "^9.4.0",
     "@fastify/static": "^8.2.0",
     "@fastify/websocket": "^11.2.0",
     "@media-tron/download-clients": "workspace:*",
@@ -24,6 +25,8 @@
     "@media-tron/parser": "workspace:*",
     "@media-tron/profiles-engine": "workspace:*",
     "@media-tron/shared": "workspace:*",
+    "@media-tron/subtitles": "workspace:*",
+    "@media-tron/torrent-engine": "workspace:*",
     "better-sqlite3": "^12.4.1",
     "croner": "^9.1.0",
     "drizzle-orm": "^0.44.6",

@@ -156,3 +156,66 @@ export class MetadataError extends Error {
 export function isMetadataError(err: unknown, code?: MetadataErrorCode): err is MetadataError {
   return err instanceof MetadataError && (code === undefined || err.code === code);
 }
+
+// ---------------------------------------------------------------------------
+// Discover / title-page extras (Phase 4)
+
+export interface CreditPerson {
+  tmdbId: number;
+  name: string;
+  /** Cast only. */
+  character?: string;
+  /** Crew only. */
+  job?: string;
+  department?: string;
+  profile?: string;
+}
+
+export interface VideoRef {
+  name: string;
+  key: string;
+  site: string;
+  type: string;
+}
+
+export interface CompanyRef {
+  tmdbId: number;
+  name: string;
+  logo?: string;
+}
+
+export interface Keyword {
+  tmdbId: number;
+  name: string;
+}
+
+/** Everything a title page needs beyond the core metadata. */
+export interface TitleExtras {
+  tmdbId: number;
+  mediaType: 'movie' | 'series';
+  tagline?: string;
+  genres: Genre[];
+  keywords: Keyword[];
+  /** Production companies (movies) or networks (series). */
+  companies: CompanyRef[];
+  cast: CreditPerson[];
+  crew: CreditPerson[];
+  videos: VideoRef[];
+  similar: SearchResult[];
+  recommendations: SearchResult[];
+}
+
+export type PersonCredit = SearchResult & { character?: string; job?: string };
+
+export interface PersonMetadata {
+  tmdbId: number;
+  name: string;
+  biography: string;
+  birthday?: string;
+  deathday?: string;
+  placeOfBirth?: string;
+  knownForDepartment?: string;
+  profile?: string;
+  cast: PersonCredit[];
+  crew: PersonCredit[];
+}

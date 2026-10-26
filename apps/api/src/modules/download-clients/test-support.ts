@@ -1,4 +1,6 @@
 import type {
+  AddNzbInput,
+  AddNzbResult,
   AddTorrentInput,
   AddTorrentResult,
   DownloadClient,
@@ -7,16 +9,18 @@ import type {
   DownloadItem,
 } from '@media-tron/download-clients';
 import { DownloadClientError } from '@media-tron/download-clients';
-import type { DownloadClientResource } from '@media-tron/shared';
+import type { DownloadClientImplementation, DownloadClientResource, ReleaseProtocol } from '@media-tron/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import * as tables from './schema.js';
-import { DownloadClientsService, type DownloadClientsServiceOptions } from './service.js';
+import { DownloadClientsService, type DownloadClientInputRaw, type DownloadClientsServiceOptions } from './service.js';
 
 /** In-memory download client for tests. Not used by production code. */
 export class FakeDownloadClient implements DownloadClient {
   readonly name = 'fake';
+  readonly protocol: ReleaseProtocol;
   items: DownloadItem[] = [];
   added: AddTorrentInput[] = [];
+  nzbsAdded: AddNzbInput[] = [];
   removed: Array<{ id: string; deleteData: boolean }> = [];
   categoryChanges: Array<{ id: string; category: string }> = [];
   failGetItems: Error | null = null;
@@ -25,7 +29,9 @@ export class FakeDownloadClient implements DownloadClient {
   testResult: DownloadClientTestResult | Error = { version: '5.0.2', apiVersion: '2.11.2', warnings: [] };
   nextId = 'abc123';
 
-  constructor(readonly config: DownloadClientResource) {}
+  constructor(readonly config: DownloadClientResource) {
+    this.protocol = config.protocol;
+  }
 
   async test(): Promise<DownloadClientTestResult> {
     if (this.testResult instanceof Error) throw this.testResult;
@@ -35,6 +41,14 @@ export class FakeDownloadClient implements DownloadClient {
   async addTorrent(input: AddTorrentInput): Promise<AddTorrentResult> {
     if (this.failAdd) throw this.failAdd;
     this.added.push(input);
+    return { id: this.nextId, warnings: [] };
+  }
+
+  /** Mirrors the real clients: only usenet clients accept NZBs. */
+  async addNzb(input: AddNzbInput): Promise<AddNzbResult> {
+    if (this.protocol !== 'usenet') throw new DownloadClientError('not-supported', 'fake torrent client does not support NZBs');
+    if (this.failAdd) throw this.failAdd;
+    this.nzbsAdded.push(input);
     return { id: this.nextId, warnings: [] };
   }
 
@@ -99,6 +113,7 @@ export async function setup(options: Partial<DownloadClientsServiceOptions> = {}
       if (existing) {
         fake.items = existing.items;
         fake.added = existing.added;
+        fake.nzbsAdded = existing.nzbsAdded;
         fake.removed = existing.removed;
       }
       if (config.id !== 0) fakes.set(config.id, fake);
@@ -129,4 +144,20 @@ export function qbit(name: string, extra: Record<string, unknown> = {}, settings
     ...extra,
     settings: { host: 'seedbox', username: 'admin', password: 'secret', ...settings },
   };
+}
+
+/** A create body for any implementation (settings get a host and credentials). */
+export function clientOf(
+  implementation: DownloadClientImplementation,
+  name: string,
+  extra: Record<string, unknown> = {},
+  settings: Record<string, unknown> = {},
+) {
+  return {
+    name,
+    implementation,
+    ...extra,
+    settings: { host: 'nas', password: 'secret', ...settings },
+    // Not narrowed per kind: `builtin` simply ignores host/password (unknown keys are stripped).
+  } as DownloadClientInputRaw;
 }

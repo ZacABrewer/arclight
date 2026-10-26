@@ -2,7 +2,8 @@ import { useEffect } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Job, ServerEvent } from '@media-tron/shared';
 import { connectEvents } from './api/events.js';
-import { queryKeys, RECENT_JOBS_LIMIT } from './hooks/query-keys.js';
+import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
+import { requestKeys } from './hooks/request-keys.js';
 import { connectionStore } from './lib/connection.js';
 
 // The event-driven cache layer: every ServerEvent pushed over /api/v1/events is folded into
@@ -57,6 +58,22 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       return;
     case 'vpn':
       void qc.invalidateQueries({ queryKey: ['vpn'] });
+      return;
+    case 'subtitle':
+      void qc.invalidateQueries({ queryKey: subtitleKeys.all });
+      if (event.action === 'profiles') void qc.invalidateQueries({ queryKey: subtitleKeys.languageProfiles });
+      if (event.mediaType) void qc.invalidateQueries({ queryKey: [event.mediaType] });
+      return;
+    case 'request':
+      // Lists, counts and the single request; title pages and watchlist items show request status.
+      void qc.invalidateQueries({ queryKey: requestKeys.requests.all });
+      void qc.invalidateQueries({ queryKey: requestKeys.discover.titles });
+      void qc.invalidateQueries({ queryKey: requestKeys.watchlist.all });
+      return;
+    case 'issue':
+      void qc.invalidateQueries({ queryKey: requestKeys.issues.all });
+      // Title pages show the open-issue count.
+      void qc.invalidateQueries({ queryKey: requestKeys.discover.titles });
       return;
     default:
       assertNever(event);

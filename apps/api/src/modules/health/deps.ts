@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { readdir, readFile, realpath, rm, stat, statfs, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
+import { downloadClientHost } from '@media-tron/shared';
 import type { AppContext } from '../../app.js';
 import {
   indexers,
@@ -15,6 +16,7 @@ import {
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { getSection } from '../settings/service.js';
+import { torrentServiceFor } from '../torrent/index.js';
 import { vpnServiceFor } from '../vpn/service.js';
 import type { HealthDeps, HealthFs } from './types.js';
 
@@ -126,7 +128,7 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
 
     downloadClients: {
       enabled: () =>
-        downloads.enabledClients().map(({ config }) => ({ id: config.id, name: config.name, host: config.settings.host })),
+        downloads.enabledClients().map(({ config }) => ({ id: config.id, name: config.name, host: downloadClientHost(config.settings) })),
       lastPoll: (id) => {
         const s = downloads.clientStatuses().get(id);
         if (!s) return undefined;
@@ -200,6 +202,10 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
       // Never checked yet (e.g. right after start): probe once so the finding is real.
       if (status.lastChecked === null && service.settings().enabled) return service.refresh();
       return status;
+    },
+
+    async torrent() {
+      return torrentServiceFor(ctx).status();
     },
   };
 }

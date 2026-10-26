@@ -23,18 +23,52 @@ import { SystemHealthPage } from './pages/system/health.js';
 import { SystemStatusPage } from './pages/system/status.js';
 import { SystemTasksPage } from './pages/system/tasks.js';
 import { SystemLogsPage } from './pages/system/logs.js';
+import { SystemBackupsPage } from './pages/system/backups.js';
+import { SystemMigratePage } from './pages/system/migrate.js';
 import { BlocklistPage } from './pages/activity/blocklist-page.js';
 import { HistoryPage } from './pages/activity/history-page.js';
 import { QueuePage } from './pages/activity/queue-page.js';
+import { PendingReleasesPage } from './pages/activity/pending-page.js';
+import { ManualImportPage, parseManualImportSearch } from './pages/activity/manual-import/manual-import-page.js';
 import { CustomFormatsPage } from './pages/settings/custom-formats/custom-formats-page.js';
 import { DownloadClientsPage } from './pages/settings/download-clients/download-clients-page.js';
 import { GeneralPage } from './pages/settings/general/general-page.js';
 import { IndexersPage } from './pages/settings/indexers/indexers-page.js';
+import { IndexerProxiesPage } from './pages/settings/indexer-proxies/indexer-proxies-page.js';
+import { IndexerOptionsPage } from './pages/settings/indexer-options/indexer-options-page.js';
+import { IndexerStatsPage } from './pages/indexers/stats-page.js';
 import { MediaManagementPage } from './pages/settings/media-management/media-management-page.js';
+import { ImportListsPage } from './pages/settings/import-lists/import-lists-page.js';
 import { NotificationsPage } from './pages/settings/notifications/notifications-page.js';
 import { ProfilesPage } from './pages/settings/profiles/profiles-page.js';
 import { QualityPage } from './pages/settings/quality/quality-page.js';
 import { VpnSettingsPage } from './pages/settings/vpn.js';
+import { TorrentSettingsPage } from './pages/settings/torrent.js';
+import { WantedSubtitlesPage } from './pages/subtitles/wanted-subtitles-page.js';
+import { SubtitleHistoryPage } from './pages/subtitles/subtitle-history-page.js';
+import { SubtitleBlacklistPage } from './pages/subtitles/subtitle-blacklist-page.js';
+import { SubtitleSettingsPage } from './pages/settings/subtitles/subtitle-settings-page.js';
+import { DiscoverHomePage } from './pages/discover/discover-home.js';
+import { DiscoverMoviesPage, DiscoverTvPage } from './pages/discover/discover-browse.js';
+import {
+  DiscoverGenrePage,
+  DiscoverKeywordPage,
+  DiscoverNetworkPage,
+  DiscoverSearchPage,
+  DiscoverStudioPage,
+  DiscoverTrendingPage,
+  DiscoverUpcomingPage,
+  parseKindSearch,
+} from './pages/discover/discover-lists.js';
+import { MovieTitlePage, TvTitlePage } from './pages/discover/title-page.js';
+import { PersonPage } from './pages/discover/person-page.js';
+import { RequestsPage } from './pages/requests/requests-page.js';
+import { MyRequestsPage } from './pages/requests/my-requests-page.js';
+import { WatchlistPage } from './pages/requests/watchlist-page.js';
+import { IssueDetailPage, IssuesPage } from './pages/issues/issues-page.js';
+import { RequestsSettingsPage } from './pages/settings/requests/requests-settings-page.js';
+import { UsersPage } from './pages/settings/users/users-page.js';
+import { ProfilePage } from './pages/profile-page.js';
 
 // Code-based route tree. To build a real page: replace its `placeholder(...)` with a
 // createRoute whose component is the page. The sidebar lives in nav.ts.
@@ -101,6 +135,7 @@ type AppPathLiteral =
   | '/settings/mediamanagement'
   | '/settings/customformats'
   | '/settings/downloadclients'
+  | '/subtitles/wanted'
   | '/system/status';
 
 const searchRoute = createRoute({
@@ -110,6 +145,26 @@ const searchRoute = createRoute({
     q: typeof search.q === 'string' ? search.q : '',
   }),
   component: SearchPage,
+});
+
+const manualImportRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/activity/manual-import',
+  validateSearch: parseManualImportSearch,
+  component: ManualImportPage,
+});
+
+// Discover (pages/discover): grid pages that take ?mediaType=movie|tv, and search ?q=.
+const kindRoute = <TPath extends string>(path: TPath, component: () => React.ReactNode) =>
+  createRoute({ getParentRoute: () => rootRoute, path, validateSearch: parseKindSearch, component });
+
+const discoverSearchRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/discover/search',
+  validateSearch: (search: Record<string, unknown>): { q: string } => ({
+    q: typeof search.q === 'string' ? search.q : '',
+  }),
+  component: DiscoverSearchPage,
 });
 
 export const routeTree = rootRoute.addChildren([
@@ -126,8 +181,26 @@ export const routeTree = rootRoute.addChildren([
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
 
-  placeholder('/discover'),
-  placeholder('/requests'),
+  // Discover, requests, issues, watchlist (Phase 4).
+  page('/discover', DiscoverHomePage),
+  page('/discover/movies', DiscoverMoviesPage),
+  page('/discover/tv', DiscoverTvPage),
+  page('/discover/trending', DiscoverTrendingPage),
+  kindRoute('/discover/upcoming', DiscoverUpcomingPage),
+  kindRoute('/discover/genre/$id', DiscoverGenrePage),
+  kindRoute('/discover/keyword/$id', DiscoverKeywordPage),
+  page('/discover/studio/$id', DiscoverStudioPage),
+  page('/discover/network/$id', DiscoverNetworkPage),
+  discoverSearchRoute,
+  page('/discover/movie/$tmdbId', MovieTitlePage),
+  page('/discover/tv/$tmdbId', TvTitlePage),
+  page('/discover/person/$id', PersonPage),
+  page('/requests', RequestsPage),
+  page('/requests/mine', MyRequestsPage),
+  page('/issues', IssuesPage),
+  page('/issues/$id', IssueDetailPage),
+  page('/watchlist', WatchlistPage),
+  page('/profile', ProfilePage),
   page('/calendar', CalendarPage),
 
   sectionRedirect('/activity', '/activity/queue'),
@@ -135,14 +208,21 @@ export const routeTree = rootRoute.addChildren([
   page('/activity/queue', QueuePage),
   page('/activity/history', HistoryPage),
   page('/activity/blocklist', BlocklistPage),
+  page('/activity/pending', PendingReleasesPage),
+  manualImportRoute,
 
   sectionRedirect('/wanted', '/wanted/missing'),
   page('/wanted/missing', WantedMissingPage),
   page('/wanted/cutoff', WantedCutoffPage),
   sectionRedirect('/wanted/cutoff-unmet', '/wanted/cutoff'),
 
-  placeholder('/subtitles'),
-  placeholder('/indexers'),
+  sectionRedirect('/subtitles', '/subtitles/wanted'),
+  page('/subtitles/wanted', WantedSubtitlesPage),
+  page('/subtitles/history', SubtitleHistoryPage),
+  page('/subtitles/blacklist', SubtitleBlacklistPage),
+  // Indexers (the list is shared with Settings → Indexers).
+  page('/indexers', IndexersPage),
+  page('/indexers/stats', IndexerStatsPage),
 
   // Settings (pages/settings). Paths follow the *arr convention (no hyphens); the earlier
   // hyphenated paths redirect so old links keep working.
@@ -152,11 +232,18 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/quality', QualityPage),
   page('/settings/customformats', CustomFormatsPage),
   page('/settings/indexers', IndexersPage),
+  page('/settings/indexerproxies', IndexerProxiesPage),
+  page('/settings/indexeroptions', IndexerOptionsPage),
   page('/settings/downloadclients', DownloadClientsPage),
+  page('/settings/importlists', ImportListsPage),
   page('/settings/notifications', NotificationsPage),
   page('/settings/general', GeneralPage),
   page('/settings/security', SecurityPage),
+  page('/settings/requests', RequestsSettingsPage),
+  page('/settings/users', UsersPage),
   page('/settings/vpn', VpnSettingsPage),
+  page('/settings/torrent', TorrentSettingsPage),
+  page('/settings/subtitles', SubtitleSettingsPage),
   sectionRedirect('/settings/media-management', '/settings/mediamanagement'),
   sectionRedirect('/settings/custom-formats', '/settings/customformats'),
   sectionRedirect('/settings/download-clients', '/settings/downloadclients'),
@@ -165,7 +252,9 @@ export const routeTree = rootRoute.addChildren([
   page('/system/status', SystemStatusPage),
   page('/system/tasks', SystemTasksPage),
   page('/system/logs', SystemLogsPage),
+  page('/system/backup', SystemBackupsPage),
   page('/system/health', SystemHealthPage),
+  page('/system/migrate', SystemMigratePage),
 ]);
 
 export function createAppRouter(queryClient: QueryClient) {

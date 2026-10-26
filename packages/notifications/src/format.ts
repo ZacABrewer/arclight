@@ -160,8 +160,21 @@ export function eventSubject(event: NotificationEvent): string {
       return 'Request Approved';
     case 'requestAvailable':
       return 'Request Available';
+    case 'requestDeclined':
+      return 'Request Declined';
+    case 'issueCreated':
+      return `New ${ISSUE_TYPE_LABELS[event.issue.issueType]}Issue Reported`;
+    case 'issueUpdated':
+      return event.issue.change === 'resolved' ? 'Issue Resolved' : event.issue.change === 'reopened' ? 'Issue Reopened' : 'New Issue Comment';
   }
 }
+
+const ISSUE_TYPE_LABELS: Record<'video' | 'audio' | 'subtitles' | 'other', string> = {
+  video: 'Video ',
+  audio: 'Audio ',
+  subtitles: 'Subtitle ',
+  other: '',
+};
 
 export function eventSeverity(event: NotificationEvent): Severity {
   switch (event.type) {
@@ -178,6 +191,8 @@ export function eventSeverity(event: NotificationEvent): Severity {
     case 'manualInteractionRequired':
     case 'mediaDeleted':
     case 'fileDeleted':
+    case 'requestDeclined':
+    case 'issueCreated':
       return 'warning';
     default:
       return 'info';
@@ -201,6 +216,9 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   requestCreated: 'On Request Created',
   requestApproved: 'On Request Approved',
   requestAvailable: 'On Request Available',
+  requestDeclined: 'On Request Declined',
+  issueCreated: 'On Issue Reported',
+  issueUpdated: 'On Issue Updated',
 };
 
 function releaseFields(release: ReleaseInfo): FormattedField[] {
@@ -361,6 +379,25 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Path', value: event.subtitle.path });
       break;
     }
+    case 'issueCreated':
+    case 'issueUpdated': {
+      const issue = event.issue;
+      fields.push({ name: 'Reported By', value: issue.reportedBy.username, inline: true });
+      fields.push({ name: 'Status', value: issue.status, inline: true });
+      if (issue.problemSeason && issue.problemSeason > 0) {
+        fields.push({ name: 'Affected Season', value: String(issue.problemSeason), inline: true });
+        if (issue.problemEpisode && issue.problemEpisode > 0) {
+          fields.push({ name: 'Affected Episode', value: String(issue.problemEpisode), inline: true });
+        }
+      }
+      fields.push({ name: 'Issue', value: truncate(issue.message, 500) });
+      if (issue.comment) fields.push({ name: `Comment from ${issue.comment.user.username}`, value: truncate(issue.comment.message, 500) });
+      break;
+    }
+    case 'requestDeclined':
+      if (event.reason) fields.push({ name: 'Reason', value: truncate(event.reason, 500) });
+      fields.push({ name: 'Requested By', value: event.request.requestedBy.username, inline: true });
+      break;
     case 'requestCreated':
     case 'requestApproved':
     case 'requestAvailable':

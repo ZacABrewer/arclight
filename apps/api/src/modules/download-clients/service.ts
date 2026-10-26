@@ -4,21 +4,25 @@ import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import {
-  createQBittorrentClient,
+  createDownloadClient,
   DownloadClientError,
+  type ClientRuntime,
   type DownloadClient,
+  type DownloadClientDeps,
   type DownloadItem,
+  type SessionSource,
 } from '@media-tron/download-clients';
 import {
+  DOWNLOAD_CLIENT_PROTOCOLS,
+  DOWNLOAD_CLIENT_SECRET_FIELDS,
   DownloadClientInput,
+  DownloadClientResource,
   DownloadClientTestRequest,
+  downloadClientHost,
   PASSWORD_MASK,
-  QBittorrentClientSettings,
   QueueQuery,
   RemotePathMappingInput,
   TERMINAL_TRACKED_STATES,
-  type DownloadClientImplementation,
-  type DownloadClientResource,
   type DownloadClientTestAllResult,
   type DownloadClientTestResult,
   type MediaType,
@@ -88,8 +92,11 @@ export type BlocklistHook = (item: TrackedDownload, options: { skipRedownload: b
 
 export interface GrabRequest {
   title: string;
+  /** Torrent releases: a magnet link or the .torrent file. */
   magnet?: string;
   torrentFile?: Uint8Array;
+  /** Usenet releases: the raw .nzb document. */
+  nzb?: Uint8Array;
   /** Defaults to the client's configured category (the one the queue polls). */
   category?: string;
   /** Selects the client's recent vs older priority. */
@@ -136,6 +143,10 @@ export interface DownloadClientsServiceOptions {
   db: Db;
   log?: Logger;
   clientFactory?: DownloadClientFactory;
+  /** Runtime overrides (fetch, timeouts) for clients built by the default factory. */
+  clientRuntime?: Partial<ClientRuntime>;
+  /** The built-in torrent engine for `builtin` clients (the torrent module sets it later otherwise). */
+  torrentSession?: SessionSource;
   now?: () => Date;
   /** Platform local paths are validated against. Defaults to the running OS. */
   platform?: PathPlatform;
@@ -152,9 +163,7 @@ export interface DownloadClientsServiceOptions {
 // Constants
 // ---------------------------------------------------------------------------------------
 
-const IMPLEMENTATION_PROTOCOL: Record<DownloadClientImplementation, ReleaseProtocol> = {
-  qbittorrent: 'torrent',
-};
+const IMPLEMENTATION_PROTOCOL = DOWNLOAD_CLIENT_PROTOCOLS;
 
 const ACTIVE_STATES: TrackedDownloadState[] = ['downloading', 'importPending', 'importing', 'failedPending'];
 /** States the missing-item grace rule never deletes. */
@@ -199,11 +208,21 @@ export class DownloadClientsService {
   private readonly clientHealth = new Map<number, { ok: boolean; at: string; message?: string }>();
   private lastRefreshAt: number | null = null;
   private dirty = true;
+  private torrentSession: SessionSource | undefined;
 
   constructor(options: DownloadClientsServiceOptions) {
     this.db = options.db;
     this.log = options.log;
-    this.factory = options.clientFactory ?? defaultClientFactory;
+    const runtime = options.clientRuntime ?? {};
+    this.torrentSession = options.torrentSession;
+    // Resolved on every call, so `builtin` clients follow the engine being started/stopped.
+    const deps: DownloadClientDeps = {
+      torrentSession: () => {
+        const source = this.torrentSession;
+        return typeof source === 'function' ? source() : (source ?? null);
+      },
+    };
+    this.factory = options.clientFactory ?? ((config) => defaultClientFactory(config, runtime, deps));
     this.now = options.now ?? (() => new Date());
     this.platform = options.platform ?? (process.platform === 'win32' ? 'win32' : 'posix');
     this.directoryExists = options.directoryExists ?? defaultDirectoryExists;
@@ -269,14 +288,12 @@ export class DownloadClientsService {
     if (!parsed.success) throw new DownloadClientsError('VALIDATION', z.prettifyError(parsed.error));
     const { id, ...candidate } = parsed.data;
     const existing = id === undefined ? null : this.requireRow(id);
-    const settings = { ...candidate.settings };
-    if (settings.password === PASSWORD_MASK) settings.password = storedPassword(existing);
-    const config: DownloadClientResource = {
+    const config = {
       ...candidate,
       id: id ?? 0,
-      protocol: candidate.protocol ?? IMPLEMENTATION_PROTOCOL[candidate.implementation],
-      settings,
-    };
+      protocol: IMPLEMENTATION_PROTOCOL[candidate.implementation],
+      settings: restoreSecrets(candidate.settings, existing),
+    } as DownloadClientResource;
     return runTest(() => this.factory(config));
   }
 
@@ -331,14 +348,19 @@ export class DownloadClientsService {
     return { id: next.config.id, name: next.config.name, protocol, client: next.client };
   }
 
+  /** Called by the torrent module: the engine `builtin` clients drive (a getter; null while stopped). */
+  setTorrentSession(source: SessionSource | undefined): void {
+    this.torrentSession = source;
+  }
+
   /**
-   * Set the incoming-connections port on every enabled client that supports it (qBittorrent),
+   * Set the incoming-connections port on every enabled client that supports it (qBittorrent, Built-in),
    * e.g. to follow a VPN's forwarded port. Per-client failures are reported, never thrown.
    */
   async setListenPortOnAll(port: number): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>> {
     const results: Array<{ id: number; name: string; ok: boolean; message?: string }> = [];
     for (const { config, client } of this.enabledClients()) {
-      if (config.implementation !== 'qbittorrent' || !client.setListenPort) continue;
+      if ((config.implementation !== 'qbittorrent' && config.implementation !== 'builtin') || !client.setListenPort) continue;
       try {
         await client.setListenPort(port);
         results.push({ id: config.id, name: config.name, ok: true });
@@ -572,7 +594,8 @@ export class DownloadClientsService {
           messages.push({ title, messages: [STATUS_TEXT.failedNotGrabbed] });
         }
       } else if (item.status === 'completed' || item.status === 'seeding') {
-        const problem = this.outputPathProblem(item.outputPath, config.settings.host, mappings);
+        // Remote path mappings key on the client's configured host, whatever the kind.
+        const problem = this.outputPathProblem(item.outputPath, downloadClientHost(config.settings), mappings);
         if (problem) {
           trackedStatus = 'warning';
           messages.push({ title, messages: [problem] });
@@ -764,6 +787,7 @@ export class DownloadClientsService {
       tags: tracking.tags ?? [],
       ...(request.magnet !== undefined ? { magnet: request.magnet } : {}),
       ...(request.torrentFile !== undefined ? { torrentFileBase64: Buffer.from(request.torrentFile).toString('base64') } : {}),
+      ...(request.nzb !== undefined ? { nzbBase64: Buffer.from(request.nzb).toString('base64') } : {}),
       ...(request.category !== undefined ? { category: request.category } : {}),
       ...(request.seedConfig !== undefined ? { seedConfig: request.seedConfig } : {}),
       ...(reason !== undefined ? { reason } : {}),
@@ -802,6 +826,7 @@ export class DownloadClientsService {
       protocol: p.protocol,
       ...(p.magnet !== undefined ? { magnet: p.magnet } : {}),
       ...(p.torrentFileBase64 !== undefined ? { torrentFile: new Uint8Array(Buffer.from(p.torrentFileBase64, 'base64')) } : {}),
+      ...(p.nzbBase64 !== undefined ? { nzb: new Uint8Array(Buffer.from(p.nzbBase64, 'base64')) } : {}),
       ...(p.category !== undefined ? { category: p.category } : {}),
       ...(p.seedConfig !== undefined ? { seedConfig: p.seedConfig } : {}),
     };
@@ -834,6 +859,9 @@ export class DownloadClientsService {
     if (clientId !== null) {
       const config = rowToResource(this.requireRow(clientId));
       if (!config.enable) throw new DownloadClientsError('VALIDATION', `Download client ${config.name} is disabled`);
+      if (config.protocol !== protocol) {
+        throw new DownloadClientsError('NO_CLIENT', `${config.name} is a ${config.protocol} client and cannot download ${protocol} releases`);
+      }
       target = { config, client: this.clientFor(config) };
     } else {
       const picked = this.pickClient(protocol, tracking.tags ?? []);
@@ -841,19 +869,29 @@ export class DownloadClientsService {
       target = { config: rowToResource(this.requireRow(picked.id)), client: picked.client };
     }
 
+    const category = request.category ?? target.config.settings.category;
+    const isRecent = request.isRecent ?? false;
     let result;
     try {
-      result = await target.client.addTorrent({
-        title: request.title,
-        category: request.category ?? target.config.settings.category,
-        isRecent: request.isRecent ?? false,
-        ...(request.magnet !== undefined ? { magnet: request.magnet } : {}),
-        ...(request.torrentFile !== undefined ? { torrentFile: request.torrentFile } : {}),
-        ...(request.seedConfig?.ratioLimit !== undefined ? { seedRatioLimit: request.seedConfig.ratioLimit } : {}),
-        ...(request.seedConfig?.seedTimeLimitMinutes !== undefined
-          ? { seedTimeLimitMinutes: request.seedConfig.seedTimeLimitMinutes }
-          : {}),
-      });
+      if (protocol === 'usenet') {
+        const client = target.client;
+        if (!client.addNzb || request.nzb === undefined) {
+          throw new DownloadClientError('not-supported', `${target.config.name} cannot download NZB releases`);
+        }
+        result = await client.addNzb({ nzb: request.nzb, title: request.title, category, isRecent });
+      } else {
+        result = await target.client.addTorrent({
+          title: request.title,
+          category,
+          isRecent,
+          ...(request.magnet !== undefined ? { magnet: request.magnet } : {}),
+          ...(request.torrentFile !== undefined ? { torrentFile: request.torrentFile } : {}),
+          ...(request.seedConfig?.ratioLimit !== undefined ? { seedRatioLimit: request.seedConfig.ratioLimit } : {}),
+          ...(request.seedConfig?.seedTimeLimitMinutes !== undefined
+            ? { seedTimeLimitMinutes: request.seedConfig.seedTimeLimitMinutes }
+            : {}),
+        });
+      }
     } catch (err) {
       throw new DownloadClientsError('CLIENT_ERROR', `${target.config.name}: ${errorMessage(err)}`, { cause: err });
     }
@@ -1010,7 +1048,7 @@ export class DownloadClientsService {
   private queueContext(): QueueContext {
     const clients = new Map<number, { name: string; host: string }>();
     for (const row of this.db.select().from(downloadClients).all()) {
-      const host = typeof row.settings['host'] === 'string' ? row.settings['host'] : '';
+      const host = row.implementation === 'builtin' ? 'localhost' : typeof row.settings['host'] === 'string' ? row.settings['host'] : '';
       clients.set(row.id, { name: row.name, host });
     }
     return { clients, mappings: this.listMappings() };
@@ -1070,8 +1108,7 @@ export class DownloadClientsService {
       .find((r) => r.id !== existing?.id && r.name.toLowerCase() === input.name.toLowerCase());
     if (clash) throw new DownloadClientsError('CONFLICT', `A download client named "${input.name}" already exists`);
 
-    const settings: Record<string, unknown> = { ...input.settings };
-    if (settings['password'] === PASSWORD_MASK) settings['password'] = storedPassword(existing);
+    const settings: Record<string, unknown> = { ...restoreSecrets(input.settings, existing) };
     return {
       name: input.name,
       implementation: input.implementation,
@@ -1096,50 +1133,51 @@ interface QueueContext {
 }
 
 function rowToResource(row: DownloadClientRow): DownloadClientResource {
-  switch (row.implementation) {
-    case 'qbittorrent':
-      return {
-        id: row.id,
-        name: row.name,
-        implementation: 'qbittorrent',
-        enable: row.enable,
-        protocol: row.protocol,
-        priority: row.priority,
-        removeCompletedDownloads: row.removeCompletedDownloads,
-        removeFailedDownloads: row.removeFailedDownloads,
-        tags: row.tags,
-        settings: QBittorrentClientSettings.parse(row.settings),
-      };
-  }
+  // The discriminated union validates the settings with the implementation's own schema.
+  return DownloadClientResource.parse({
+    id: row.id,
+    name: row.name,
+    implementation: row.implementation,
+    enable: row.enable,
+    protocol: row.protocol,
+    priority: row.priority,
+    removeCompletedDownloads: row.removeCompletedDownloads,
+    removeFailedDownloads: row.removeFailedDownloads,
+    tags: row.tags,
+    settings: row.settings,
+  });
 }
 
+/** Replaces every stored secret (password, API key) with the mask, or '' when unset. */
 function mask(resource: DownloadClientResource): DownloadClientResource {
-  return { ...resource, settings: { ...resource.settings, password: resource.settings.password ? PASSWORD_MASK : '' } };
+  const settings: Record<string, unknown> = { ...resource.settings };
+  for (const key of DOWNLOAD_CLIENT_SECRET_FIELDS) {
+    if (key in settings) settings[key] = settings[key] ? PASSWORD_MASK : '';
+  }
+  return { ...resource, settings } as DownloadClientResource;
 }
 
-function storedPassword(row: DownloadClientRow | null): string {
-  const value = row?.settings['password'];
+/** Secrets sent back as the mask keep their stored value. */
+function restoreSecrets<T extends object>(settings: T, row: DownloadClientRow | null): T {
+  const out = { ...settings } as Record<string, unknown>;
+  for (const key of DOWNLOAD_CLIENT_SECRET_FIELDS) {
+    if (out[key] === PASSWORD_MASK) out[key] = storedSecret(row, key);
+  }
+  return out as unknown as T;
+}
+
+function storedSecret(row: DownloadClientRow | null, key: string): string {
+  const value = row?.settings[key];
   return typeof value === 'string' ? value : '';
 }
 
-function defaultClientFactory(config: DownloadClientResource): DownloadClient {
-  switch (config.implementation) {
-    case 'qbittorrent': {
-      const s = config.settings;
-      return createQBittorrentClient({
-        host: s.host,
-        port: s.port,
-        useSsl: s.useSsl,
-        username: s.username,
-        password: s.password,
-        category: s.category,
-        recentPriority: s.recentPriority,
-        olderPriority: s.olderPriority,
-        initialState: s.initialState,
-        ...(s.urlBase ? { urlBase: s.urlBase } : {}),
-      });
-    }
-  }
+/** Builds the package client for a configuration; the package validates the settings again. */
+function defaultClientFactory(
+  config: DownloadClientResource,
+  runtime: Partial<ClientRuntime>,
+  deps: DownloadClientDeps,
+): DownloadClient {
+  return createDownloadClient(config.implementation, config.settings, runtime, deps);
 }
 
 async function defaultDirectoryExists(path: string): Promise<boolean> {
@@ -1162,7 +1200,11 @@ async function runTest(build: () => DownloadClient): Promise<DownloadClientTestR
 
 function validateGrab(request: GrabRequest): void {
   if (!request.title.trim()) throw new DownloadClientsError('VALIDATION', 'A grab needs a title');
-  if (request.magnet === undefined && request.torrentFile === undefined) {
+  if ((request.protocol ?? 'torrent') === 'usenet') {
+    if (request.nzb === undefined || request.nzb.length === 0) {
+      throw new DownloadClientsError('VALIDATION', 'A usenet grab needs an NZB document');
+    }
+  } else if (request.magnet === undefined && request.torrentFile === undefined) {
     throw new DownloadClientsError('VALIDATION', 'A grab needs a magnet link or a torrent file');
   }
 }

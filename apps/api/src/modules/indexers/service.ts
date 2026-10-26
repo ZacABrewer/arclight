@@ -1,8 +1,10 @@
 import { eq } from 'drizzle-orm';
-import type { z } from 'zod';
 import type { Logger } from 'pino';
 import {
+  CookieJar,
+  createDefinitionIndexer,
   createIndexer,
+  createProxiedFetch,
   createRateLimiter,
   IndexerError,
   newznab,
@@ -10,11 +12,15 @@ import {
   STANDARD_CATEGORIES,
   torznab,
   type ClientOptions,
+  type Definition,
+  type DefinitionIndexer,
   type IndexerCapabilities,
   type IndexerDefinition,
+  type ProxyConfig,
   type ReleaseInfo,
   type SearchParam,
   type SearchRequest,
+  type SettingsValues,
 } from '@media-tron/indexers';
 import {
   IndexerCreate,
@@ -22,35 +28,30 @@ import {
   IndexerUpdate,
   INDEXER_PRIORITY_DEFAULT,
   protocolForImplementation,
+  SearchGrabRequest,
+  type DefinitionFieldValue,
   type Indexer,
   type IndexerCapabilitiesResource,
   type IndexerCategory,
   type IndexerErrorCode,
   type IndexerImplementation,
+  type IndexerStatKind,
   type IndexerStatus,
   type IndexerTemplate,
   type IndexerTestAllItem,
   type IndexerTestResult,
   type ManualSearchRequest,
   type ReleaseResource,
+  type SearchGrabResponse,
 } from '@media-tron/shared';
 import type { Db } from '../../db/index.js';
+import { DefinitionStore } from './definitions.js';
+import { IndexersError, parseOrThrow } from './errors.js';
+import { ProxiesService, type TunnelOpener } from './proxies.js';
 import { indexerCapsCache, indexerRssState, indexers, indexerStatus } from './schema.js';
+import { IndexerStatsRecorder } from './stats.js';
 
-// ---- errors -------------------------------------------------------------------------
-
-export type IndexersErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'CONFLICT';
-
-export class IndexersError extends Error {
-  constructor(
-    public readonly code: IndexersErrorCode,
-    message: string,
-    public readonly details?: unknown,
-  ) {
-    super(message);
-    this.name = 'IndexersError';
-  }
-}
+export { IndexersError, type IndexersErrorCode } from './errors.js';
 
 // ---- public types -------------------------------------------------------------------
 
@@ -81,6 +82,22 @@ export type ManualSearchResolver = (
   request: ManualSearchRequest,
 ) => SearchRequest | null | Promise<SearchRequest | null>;
 
+/** What the release pipeline answers for a search-page grab. */
+export type SearchGrabOutcome =
+  | ({ kind: 'grabbed' } & SearchGrabResponse)
+  | { kind: 'no-match'; rejections: string[] };
+
+/** Registered by the release pipeline: decide on and grab one search result. */
+export type SearchGrabber = (
+  release: ReleaseResource,
+  opts: { force: boolean; downloadClientId?: number },
+) => Promise<SearchGrabOutcome>;
+
+/** A release file resolved through its indexer (cookies, login and proxies applied). */
+export type ReleaseDownload =
+  | { kind: 'magnet'; magnetUrl: string }
+  | { kind: 'file'; protocol: 'torrent' | 'usenet'; data: Uint8Array; contentType: string; fileName: string };
+
 export interface IndexersServiceOptions {
   db: Db;
   log?: Logger;
@@ -92,6 +109,10 @@ export interface IndexersServiceOptions {
   indexerTimeoutMs?: number;
   /** Per-HTTP-request timeout handed to the client. Default 30 s. */
   requestTimeoutMs?: number;
+  /** Definition catalogue; defaults to the bundled definitions only. */
+  definitions?: DefinitionStore;
+  /** Test seam for proxy connectivity checks. */
+  openTunnel?: TunnelOpener;
 }
 
 // ---- constants ----------------------------------------------------------------------
@@ -103,7 +124,11 @@ export const CAPS_TTL_MS = 24 * 60 * MINUTE;
 /** Releases dated this far before the newest one seen still count as new if their guid is unseen. */
 export const RSS_DATE_TOLERANCE_MS = 6 * 60 * MINUTE;
 export const RSS_GUID_MEMORY = 1000;
+/** Search-page results stay grabbable / downloadable this long. */
+export const SEARCH_CACHE_TTL_MS = 30 * MINUTE;
+export const SEARCH_CACHE_MAX = 5000;
 const DAY = 24 * 60 * MINUTE;
+const MAX_REDIRECTS = 10;
 
 export function backoffFor(failureCount: number): number {
   const idx = Math.min(Math.max(failureCount, 1), BACKOFF_STEPS_MS.length) - 1;
@@ -112,10 +137,15 @@ export function backoffFor(failureCount: number): number {
 
 type IndexerRow = typeof indexers.$inferSelect;
 type StatusRow = typeof indexerStatus.$inferSelect;
+/** The parts of a row needed to talk to an indexer (saved or not). */
+type ClientRow = Pick<IndexerRow, 'id' | 'name' | 'implementation' | 'settings' | 'proxyId' | 'tags'>;
 
 // ---- service ------------------------------------------------------------------------
 
 export class IndexersService {
+  readonly definitions: DefinitionStore;
+  readonly proxies: ProxiesService;
+  readonly stats: IndexerStatsRecorder;
   private readonly db: Db;
   private readonly log: Logger | undefined;
   private readonly fetchImpl: typeof fetch | undefined;
@@ -126,7 +156,11 @@ export class IndexersService {
   private readonly limiters = new Map<number, { rateLimitMs: number; wait: () => Promise<void> }>();
   private readonly statusListeners = new Set<IndexerStatusListener>();
   private readonly releaseHandlers = new Set<ReleasesHandler>();
+  private readonly definitionClients = new Map<number, { key: string; client: DefinitionIndexer }>();
+  private readonly proxiedFetches = new Map<number, { key: string; fetch: typeof fetch }>();
+  private readonly searchCache = new Map<string, { release: ReleaseResource; at: number }>();
   private manualResolver: ManualSearchResolver | undefined;
+  private searchGrabber: SearchGrabber | undefined;
 
   constructor(opts: IndexersServiceOptions) {
     this.db = opts.db;
@@ -136,6 +170,16 @@ export class IndexersService {
     this.sleep = opts.sleep;
     this.indexerTimeoutMs = opts.indexerTimeoutMs ?? 60_000;
     this.requestTimeoutMs = opts.requestTimeoutMs ?? 30_000;
+    this.definitions = opts.definitions ?? new DefinitionStore(opts.log ? { log: opts.log } : {});
+    this.definitions.addReloadListener(() => this.dropClients());
+    this.proxies = new ProxiesService({
+      db: opts.db,
+      now: this.now,
+      onChange: () => this.dropClients(),
+      ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      ...(opts.openTunnel ? { openTunnel: opts.openTunnel } : {}),
+    });
+    this.stats = new IndexerStatsRecorder(opts.db, this.now);
   }
 
   // ---- hooks ------------------------------------------------------------------------
@@ -155,6 +199,11 @@ export class IndexersService {
   /** Lets the release pipeline turn library ids into indexer requests for manual search. */
   setManualSearchResolver(resolver: ManualSearchResolver | undefined): void {
     this.manualResolver = resolver;
+  }
+
+  /** Lets the release pipeline decide on and grab search-page results (POST /search/grab). */
+  setSearchGrabber(grabber: SearchGrabber | undefined): void {
+    this.searchGrabber = grabber;
   }
 
   /** Hand releases to the registered handlers (default: log the count). Handler errors are logged. */
@@ -181,18 +230,19 @@ export class IndexersService {
       .from(indexers)
       .orderBy(indexers.id)
       .all()
-      .map((row) => toResource(row, statuses.get(row.id)));
+      .map((row) => this.toResource(row, statuses.get(row.id)));
   }
 
   get(id: number): Indexer {
     const row = this.requireRow(id);
-    return toResource(row, this.statusRow(id));
+    return this.toResource(row, this.statusRow(id));
   }
 
   create(input: IndexerCreate): Indexer {
     const data = parseOrThrow(IndexerCreate, input);
-    const settings = validateSettings(data.settings);
+    const settings = this.validateFor(data.implementation, data.settings);
     this.assertUniqueName(data.name);
+    const proxyId = this.checkedProxyId(data.proxyId);
     const row = this.db
       .insert(indexers)
       .values({
@@ -203,13 +253,14 @@ export class IndexersService {
         enableInteractiveSearch: data.enableInteractiveSearch,
         priority: data.priority,
         downloadClientId: data.downloadClientId ?? null,
+        proxyId,
         tags: data.tags,
         settings,
         addedAt: this.isoNow(),
       })
       .returning()
       .get();
-    return toResource(row, undefined);
+    return this.toResource(row, undefined);
   }
 
   update(id: number, input: IndexerUpdate): Indexer {
@@ -218,9 +269,10 @@ export class IndexersService {
     const name = patch.name ?? current.name;
     if (name.toLowerCase() !== current.name.toLowerCase()) this.assertUniqueName(name, id);
 
-    const mergedRaw = { ...current.settings, ...withoutUndefined(patch.settings ?? {}) };
-    const settings = validateSettings(parseOrThrow(IndexerSettings, mergedRaw));
     const implementation = patch.implementation ?? current.implementation;
+    const mergedRaw = { ...current.settings, ...withoutUndefined(patch.settings ?? {}) };
+    const settings = this.validateFor(implementation, parseOrThrow(IndexerSettings, mergedRaw));
+    const proxyId = patch.proxyId === undefined ? current.proxyId : this.checkedProxyId(patch.proxyId);
 
     const row = this.db
       .update(indexers)
@@ -232,6 +284,7 @@ export class IndexersService {
         enableInteractiveSearch: patch.enableInteractiveSearch ?? current.enableInteractiveSearch,
         priority: patch.priority ?? current.priority,
         downloadClientId: patch.downloadClientId === undefined ? current.downloadClientId : patch.downloadClientId,
+        proxyId,
         tags: patch.tags ?? current.tags,
         settings,
       })
@@ -245,13 +298,16 @@ export class IndexersService {
       implementation !== current.implementation ||
       settings.baseUrl !== current.settings.baseUrl ||
       settings.apiPath !== current.settings.apiPath ||
-      settings.apiKey !== current.settings.apiKey;
+      settings.apiKey !== current.settings.apiKey ||
+      settings.definitionId !== current.settings.definitionId ||
+      JSON.stringify(settings.fields ?? {}) !== JSON.stringify(current.settings.fields ?? {});
     if (endpointChanged) {
       this.db.delete(indexerCapsCache).where(eq(indexerCapsCache.indexerId, id)).run();
       this.db.delete(indexerStatus).where(eq(indexerStatus.indexerId, id)).run();
     }
     this.limiters.delete(id);
-    return toResource(row, this.statusRow(id));
+    this.dropClients(id);
+    return this.toResource(row, this.statusRow(id));
   }
 
   delete(id: number): void {
@@ -261,6 +317,7 @@ export class IndexersService {
     this.db.delete(indexerRssState).where(eq(indexerRssState.indexerId, id)).run();
     this.db.delete(indexers).where(eq(indexers.id, id)).run();
     this.limiters.delete(id);
+    this.dropClients(id);
   }
 
   // ---- templates & categories -------------------------------------------------------
@@ -353,8 +410,12 @@ export class IndexersService {
   /** Test an unsaved definition: fresh caps + an RSS query. Never throws for indexer errors. */
   async test(input: IndexerCreate, signal?: AbortSignal): Promise<IndexerTestResult> {
     const data = parseOrThrow(IndexerCreate, input);
-    const settings = validateSettings(data.settings);
-    const result = await this.probe({ id: 0, name: data.name, implementation: data.implementation, settings }, signal);
+    if (data.implementation === 'definition') await this.definitions.ready();
+    const settings = this.validateFor(data.implementation, data.settings);
+    const result = await this.probe(
+      { id: 0, name: data.name, implementation: data.implementation, settings, proxyId: data.proxyId ?? null, tags: data.tags },
+      signal,
+    );
     return result.ok
       ? { ok: true, caps: result.caps, releaseCount: result.releaseCount }
       : { ok: false, error: { code: result.error.code, message: result.error.message } };
@@ -396,11 +457,18 @@ export class IndexersService {
     const started = this.now();
     const results = await Promise.allSettled(
       rows.map((row) =>
-        this.guarded(row, opts.signal, async (signal) => {
-          const caps = await this.loadCaps(row, signal, false);
-          const def = toDefinition(row, opts.categories);
-          return protocolOf(row.implementation).search(def, request, toPackageCaps(caps), this.clientOptions(row, signal));
-        }),
+        this.timed(row, 'query', opts.signal, () =>
+          this.guarded(row, opts.signal, async (signal) => {
+            if (row.implementation === 'definition') {
+              const client = await this.definitionClient(row);
+              const categories = opts.categories ?? (row.settings.categories.length > 0 ? row.settings.categories : undefined);
+              return client.search({ ...request, ...(categories ? { categories } : {}) });
+            }
+            const caps = await this.loadCaps(row, signal, false);
+            const def = toDefinition(row, opts.categories);
+            return protocolOf(row.implementation).search(def, request, toPackageCaps(caps), this.clientOptions(row, signal));
+          }),
+        ),
       ),
     );
     const merged: ReleaseResource[] = [];
@@ -434,12 +502,89 @@ export class IndexersService {
         );
       }
     }
-    return this.search(resolved, {
+    const releases = await this.search(resolved, {
       mode: 'interactive',
       ...(request.indexerIds?.length ? { indexerIds: request.indexerIds } : {}),
       ...(request.categories?.length ? { categories: request.categories } : {}),
       ...(signal ? { signal } : {}),
     });
+    this.cacheResults(releases);
+    return releases;
+  }
+
+  /** A result of a recent manual search, by indexer + guid. */
+  cachedResult(indexerId: number, guid: string): ReleaseResource | undefined {
+    const hit = this.searchCache.get(`${indexerId}:${guid}`);
+    if (!hit) return undefined;
+    if (this.now() - hit.at > SEARCH_CACHE_TTL_MS) {
+      this.searchCache.delete(`${indexerId}:${guid}`);
+      return undefined;
+    }
+    return hit.release;
+  }
+
+  /**
+   * POST /search/grab: re-run the decision engine on a cached search result and grab it.
+   * Without a library match the grab needs `force`.
+   */
+  async searchGrab(input: SearchGrabRequest): Promise<SearchGrabResponse> {
+    const req = parseOrThrow(SearchGrabRequest, input);
+    const release = this.cachedResult(req.indexerId, req.guid);
+    if (!release) throw new IndexersError('NOT_FOUND', 'Release not found; search again before grabbing');
+    if (!this.searchGrabber) throw new IndexersError('VALIDATION', 'grabbing is not available: the release pipeline is not loaded');
+    const outcome = await this.searchGrabber(release, {
+      force: req.force,
+      ...(req.downloadClientId !== undefined ? { downloadClientId: req.downloadClientId } : {}),
+    });
+    if (outcome.kind === 'no-match') {
+      const why = outcome.rejections.length > 0 ? ` (${outcome.rejections.join('; ')})` : '';
+      throw new IndexersError('NO_MATCH', `No library item matches this release${why}; grab with force to send it anyway`, {
+        rejections: outcome.rejections,
+      });
+    }
+    const { kind: _kind, ...response } = outcome;
+    return response;
+  }
+
+  // ---- downloads --------------------------------------------------------------------
+
+  /**
+   * Resolve a release link through its indexer: definition indexers use the site's download
+   * rules (login cookies, details-page scraping); Torznab/Newznab links are fetched through the
+   * indexer's proxies, following redirects (a redirect to a magnet returns the magnet).
+   * Every call is recorded as a grab in the stats.
+   */
+  async downloadRelease(indexerId: number, url: string, opts: { signal?: AbortSignal } = {}): Promise<ReleaseDownload> {
+    const row = this.requireRow(indexerId);
+    const protocol = protocolForImplementation(row.implementation);
+    const started = this.now();
+    try {
+      const result = await this.resolveDownload(row, protocol, url, opts.signal);
+      this.stats.record(row.id, 'grab', this.now() - started, true);
+      return result;
+    } catch (err) {
+      this.stats.record(row.id, 'grab', this.now() - started, false);
+      if (err instanceof IndexersError) throw err;
+      const status = err instanceof IndexerError ? err.status : undefined;
+      const message = err instanceof Error ? err.message : String(err);
+      if (status === 404 || status === 410) {
+        throw new IndexersError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${status})`);
+      }
+      throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed: ${message}`);
+    }
+  }
+
+  /**
+   * GET /indexer/:id/download: like `downloadRelease`, but only for links that belong to the
+   * indexer (a recent search result of it, or a URL on one of its hosts), so the endpoint cannot
+   * be used to send the indexer's cookies elsewhere.
+   */
+  async downloadForUser(indexerId: number, url: string): Promise<ReleaseDownload> {
+    const row = this.requireRow(indexerId);
+    if (!url.startsWith('magnet:') && !this.isIndexerLink(row, url)) {
+      throw new IndexersError('VALIDATION', 'url does not belong to this indexer; search again and use a result link');
+    }
+    return this.downloadRelease(indexerId, url);
   }
 
   // ---- RSS --------------------------------------------------------------------------
@@ -450,16 +595,23 @@ export class IndexersService {
     const started = this.now();
     const results = await Promise.allSettled(
       rows.map((row) =>
-        this.guarded(row, opts.signal, async (signal) => {
-          const caps = await this.loadCaps(row, signal, false);
-          const infos = await protocolOf(row.implementation).search(
-            toDefinition(row),
-            { kind: 'rss' },
-            toPackageCaps(caps),
-            this.clientOptions(row, signal),
-          );
-          return this.advanceRssMarker(row.id, infos);
-        }),
+        this.timed(row, 'rss', opts.signal, () =>
+          this.guarded(row, opts.signal, async (signal) => {
+            let infos: ReleaseInfo[];
+            if (row.implementation === 'definition') {
+              infos = await (await this.definitionClient(row)).rss();
+            } else {
+              const caps = await this.loadCaps(row, signal, false);
+              infos = await protocolOf(row.implementation).search(
+                toDefinition(row),
+                { kind: 'rss' },
+                toPackageCaps(caps),
+                this.clientOptions(row, signal),
+              );
+            }
+            return this.advanceRssMarker(row.id, infos);
+          }),
+        ),
       ),
     );
     const merged: ReleaseResource[] = [];
@@ -473,6 +625,126 @@ export class IndexersService {
   }
 
   // ---- internals --------------------------------------------------------------------
+
+  private async resolveDownload(
+    row: IndexerRow,
+    protocol: 'torrent' | 'usenet',
+    url: string,
+    signal: AbortSignal | undefined,
+  ): Promise<ReleaseDownload> {
+    if (url.startsWith('magnet:')) {
+      if (protocol === 'usenet') throw new IndexersError('DOWNLOAD_FAILED', 'A usenet release cannot be a magnet link');
+      return { kind: 'magnet', magnetUrl: url };
+    }
+    const title = this.titleForLink(row.id, url);
+    if (row.implementation === 'definition') {
+      const client = await this.definitionClient(row);
+      const result = await withTimeout(this.indexerTimeoutMs, signal, row.name, () => client.download(url));
+      if (result.kind === 'magnet') return { kind: 'magnet', magnetUrl: result.magnetUrl };
+      return {
+        kind: 'file',
+        protocol: 'torrent',
+        data: result.data,
+        contentType: 'application/x-bittorrent',
+        fileName: fileNameFor(title, 'torrent'),
+      };
+    }
+    const doFetch = this.proxiedFetch(row) ?? this.fetchImpl ?? fetch;
+    let current = url;
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      const res = await doFetch(current, {
+        redirect: 'manual',
+        signal: anySignal(signal, AbortSignal.timeout(this.requestTimeoutMs)),
+      });
+      if (res.status >= 300 && res.status < 400) {
+        const location = res.headers.get('location');
+        if (!location) break;
+        if (location.startsWith('magnet:')) {
+          if (protocol === 'usenet') throw new IndexersError('DOWNLOAD_FAILED', 'Indexer redirected a usenet release to a magnet link');
+          return { kind: 'magnet', magnetUrl: location };
+        }
+        current = new URL(location, current).toString();
+        continue;
+      }
+      if (res.status === 404 || res.status === 410) {
+        throw new IndexersError('UNAVAILABLE', `Release is no longer available at the indexer (HTTP ${res.status})`);
+      }
+      if (!res.ok) throw new IndexersError('DOWNLOAD_FAILED', `Downloading the release failed (HTTP ${res.status})`);
+      const data = new Uint8Array(await res.arrayBuffer());
+      if (data.length === 0) throw new IndexersError('DOWNLOAD_FAILED', 'Indexer returned an empty file');
+      const ext = protocol === 'usenet' ? 'nzb' : 'torrent';
+      return {
+        kind: 'file',
+        protocol,
+        data,
+        contentType: protocol === 'usenet' ? 'application/x-nzb' : 'application/x-bittorrent',
+        fileName: fileNameFor(title ?? dispositionName(res.headers.get('content-disposition')), ext),
+      };
+    }
+    throw new IndexersError('DOWNLOAD_FAILED', 'Too many redirects downloading the release');
+  }
+
+  private cacheResults(releases: readonly ReleaseResource[]): void {
+    const now = this.now();
+    for (const [key, v] of this.searchCache) if (now - v.at > SEARCH_CACHE_TTL_MS) this.searchCache.delete(key);
+    for (const r of releases) {
+      const key = `${r.indexerId}:${r.guid}`;
+      this.searchCache.delete(key);
+      this.searchCache.set(key, { release: r, at: now });
+    }
+    while (this.searchCache.size > SEARCH_CACHE_MAX) {
+      const oldest = this.searchCache.keys().next().value;
+      if (oldest === undefined) break;
+      this.searchCache.delete(oldest);
+    }
+  }
+
+  private titleForLink(indexerId: number, url: string): string | undefined {
+    for (const { release } of this.searchCache.values()) {
+      if (release.indexerId === indexerId && (release.downloadUrl === url || release.magnetUrl === url)) return release.title;
+    }
+    return undefined;
+  }
+
+  private isIndexerLink(row: IndexerRow, url: string): boolean {
+    if (this.titleForLink(row.id, url) !== undefined) return true;
+    let host: string;
+    try {
+      const parsed = new URL(url);
+      if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') return false;
+      host = parsed.hostname.toLowerCase();
+    } catch {
+      return false;
+    }
+    const hosts = new Set<string>();
+    const add = (u: string | undefined) => {
+      try {
+        if (u) hosts.add(new URL(u).hostname.toLowerCase());
+      } catch {
+        // not a URL
+      }
+    };
+    add(row.settings.baseUrl);
+    if (row.implementation === 'definition' && row.settings.definitionId) {
+      const def = this.definitions.get(row.settings.definitionId);
+      for (const link of [...(def?.links ?? []), ...(def?.legacylinks ?? [])]) add(link);
+    }
+    return hosts.has(host);
+  }
+
+  /** Run an indexer operation and append a stats row (requests the indexer cannot serve are not counted). */
+  private async timed<T>(row: IndexerRow, kind: IndexerStatKind, parent: AbortSignal | undefined, op: () => Promise<T>): Promise<T> {
+    const started = this.now();
+    try {
+      const value = await op();
+      this.stats.record(row.id, kind, this.now() - started, true);
+      return value;
+    } catch (err) {
+      const unsupported = err instanceof IndexerError && err.code === 'unsupported-search';
+      if (!parent?.aborted && !unsupported) this.stats.record(row.id, kind, this.now() - started, false);
+      throw err;
+    }
+  }
 
   private advanceRssMarker(indexerId: number, infos: ReleaseInfo[]): ReleaseInfo[] {
     const state = this.db.select().from(indexerRssState).where(eq(indexerRssState.indexerId, indexerId)).get();
@@ -554,18 +826,22 @@ export class IndexersService {
   }
 
   private async probe(
-    row: Pick<IndexerRow, 'id' | 'name' | 'implementation' | 'settings'>,
+    row: ClientRow,
     signal: AbortSignal | undefined,
   ): Promise<
     { ok: true; caps: IndexerCapabilitiesResource; releaseCount: number } | { ok: false; error: IndexerError }
   > {
     try {
       return await withTimeout(this.indexerTimeoutMs, signal, row.name, async (s) => {
-        const client = createIndexer(toDefinition(row), {
-          ...this.baseClientOptions(s),
-          ...(row.id > 0 ? { indexerId: row.id } : {}),
-          ...(this.sleep ? { sleep: this.sleep } : {}),
-        });
+        const proxy = this.proxies.resolve(row);
+        const client =
+          row.implementation === 'definition'
+            ? await this.buildDefinitionClient(row, proxy)
+            : createIndexer(proxy ? { ...toDefinition(row), proxy } : toDefinition(row), {
+                ...this.baseClientOptions(s),
+                ...(row.id > 0 ? { indexerId: row.id } : {}),
+                ...(this.sleep ? { sleep: this.sleep } : {}),
+              });
         const result = await client.test();
         if (!result.ok) return { ok: false as const, error: result.error };
         return { ok: true as const, caps: toCapsResource(result.caps), releaseCount: result.releaseCount };
@@ -580,7 +856,10 @@ export class IndexersService {
       const cached = this.cachedCaps(row.id);
       if (cached) return cached;
     }
-    const caps = await protocolOf(row.implementation).fetchCaps(toDefinition(row), this.clientOptions(row, signal));
+    const caps =
+      row.implementation === 'definition'
+        ? await (await this.definitionClient(row)).caps()
+        : await protocolOf(row.implementation).fetchCaps(toDefinition(row), this.clientOptions(row, signal));
     return this.storeCaps(row.id, toCapsResource(caps));
   }
 
@@ -618,7 +897,155 @@ export class IndexersService {
       limiter = { rateLimitMs, wait: createRateLimiter(rateLimitMs, this.now, this.sleep) };
       this.limiters.set(row.id, limiter);
     }
-    return { ...this.baseClientOptions(signal), beforeRequest: limiter.wait, indexerId: row.id };
+    const proxied = this.proxiedFetch(row);
+    return {
+      ...this.baseClientOptions(signal),
+      ...(proxied ? { fetch: proxied } : {}),
+      beforeRequest: limiter.wait,
+      indexerId: row.id,
+    };
+  }
+
+  /**
+   * Fetch through the indexer's proxies (Torznab/Newznab), with a cookie jar that keeps
+   * FlareSolverr clearance cookies across requests. Undefined when no proxy applies.
+   */
+  private proxiedFetch(row: IndexerRow): typeof fetch | undefined {
+    const proxy = this.proxies.resolve(row);
+    if (!proxy) {
+      this.proxiedFetches.delete(row.id);
+      return undefined;
+    }
+    const key = JSON.stringify(proxy);
+    const cached = this.proxiedFetches.get(row.id);
+    if (cached?.key === key) return cached.fetch;
+    const jar = new CookieJar();
+    const inner = createProxiedFetch(proxy, { jar, ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}) });
+    const wrapped: typeof fetch = (input, init) => {
+      const headers = new Headers(init?.headers);
+      const cookie = jar.header();
+      if (cookie && !headers.has('cookie')) headers.set('cookie', cookie);
+      return inner(input, { ...init, headers });
+    };
+    this.proxiedFetches.set(row.id, { key, fetch: wrapped });
+    return wrapped;
+  }
+
+  /** The cached definition client of a saved indexer (one per row, so login cookies persist). */
+  private async definitionClient(row: IndexerRow): Promise<DefinitionIndexer> {
+    await this.definitions.ready();
+    const proxy = this.proxies.resolve(row);
+    const key = JSON.stringify({ name: row.name, settings: row.settings, proxy: proxy ?? null });
+    const cached = this.definitionClients.get(row.id);
+    if (cached?.key === key) return cached.client;
+    const client = await this.buildDefinitionClient(row, proxy);
+    this.definitionClients.set(row.id, { key, client });
+    return client;
+  }
+
+  private async buildDefinitionClient(row: ClientRow, proxy: ProxyConfig[] | undefined): Promise<DefinitionIndexer> {
+    await this.definitions.ready();
+    const id = row.settings.definitionId;
+    const def = id ? this.definitions.get(id) : undefined;
+    if (!def) throw new IndexerError('bad-response', `definition "${id ?? ''}" is not in the catalogue`);
+    const rateLimitMs = Math.round((row.settings.rateLimitSeconds ?? 0) * 1000);
+    const log = this.log?.child({ indexer: row.name });
+    return createDefinitionIndexer(def, toSettingsValues(def, row.settings), {
+      name: row.name,
+      timeoutMs: this.requestTimeoutMs,
+      now: this.now,
+      ...(rateLimitMs > 0 ? { rateLimitMs } : {}),
+      ...(row.id > 0 ? { indexerId: row.id } : {}),
+      ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}),
+      ...(this.sleep ? { sleep: this.sleep } : {}),
+      ...(proxy ? { proxy } : {}),
+      ...(log ? { log: (level, message) => log[level](message) } : {}),
+    });
+  }
+
+  /** Forget cached clients (all, or one indexer's) so the next call rebuilds them. */
+  private dropClients(id?: number): void {
+    if (id === undefined) {
+      this.definitionClients.clear();
+      this.proxiedFetches.clear();
+    } else {
+      this.definitionClients.delete(id);
+      this.proxiedFetches.delete(id);
+    }
+  }
+
+  private validateFor(implementation: IndexerImplementation, settings: IndexerSettings): IndexerSettings {
+    return implementation === 'definition' ? this.validateDefinitionSettings(settings) : validateSettings(settings);
+  }
+
+  /** Known definition, typed field values, site link resolved into `baseUrl`. */
+  private validateDefinitionSettings(input: IndexerSettings): IndexerSettings {
+    const definitionId = input.definitionId?.trim();
+    if (!definitionId) throw new IndexersError('VALIDATION', 'settings.definitionId: required for definition indexers');
+    const def = this.definitions.get(definitionId);
+    if (!def) throw new IndexersError('VALIDATION', `settings.definitionId: unknown definition "${definitionId}"`);
+    const fields = normalizeFields(def, input.fields ?? {});
+    const sitelink = typeof fields['sitelink'] === 'string' ? fields['sitelink'] : undefined;
+    let baseUrl = def.links[0] ?? '';
+    for (const candidate of [sitelink, input.baseUrl]) {
+      const trimmed = candidate?.trim();
+      if (!trimmed) continue;
+      if (!isHttpUrl(trimmed)) throw new IndexersError('VALIDATION', `settings: "${trimmed}" is not a valid http(s) site link`);
+      baseUrl = trimmed;
+      break;
+    }
+    if (sitelink === undefined && baseUrl !== (def.links[0] ?? '')) fields['sitelink'] = baseUrl;
+    const out: IndexerSettings = {
+      baseUrl,
+      apiPath: '',
+      categories: [...new Set(input.categories)],
+      animeCategories: [...new Set(input.animeCategories)],
+      definitionId,
+      fields,
+    };
+    if (input.minimumSeeders !== undefined) out.minimumSeeders = input.minimumSeeders;
+    if (input.seedRatio !== undefined) out.seedRatio = input.seedRatio;
+    if (input.seedTime !== undefined) out.seedTime = input.seedTime;
+    if (input.seasonPackSeedTime !== undefined) out.seasonPackSeedTime = input.seasonPackSeedTime;
+    if (input.rateLimitSeconds !== undefined) out.rateLimitSeconds = input.rateLimitSeconds;
+    return out;
+  }
+
+  private checkedProxyId(proxyId: number | null | undefined): number | null {
+    if (proxyId === undefined || proxyId === null) return null;
+    if (!this.proxies.exists(proxyId)) throw new IndexersError('VALIDATION', `proxyId: indexer proxy ${proxyId} not found`);
+    return proxyId;
+  }
+
+  private toResource(row: IndexerRow, status: StatusRow | undefined): Indexer {
+    const out: Indexer = {
+      id: row.id,
+      name: row.name,
+      implementation: row.implementation,
+      protocol: protocolForImplementation(row.implementation),
+      enableRss: row.enableRss,
+      enableAutomaticSearch: row.enableAutomaticSearch,
+      enableInteractiveSearch: row.enableInteractiveSearch,
+      priority: row.priority,
+      tags: row.tags,
+      settings: row.settings,
+    };
+    if (row.downloadClientId !== null) out.downloadClientId = row.downloadClientId;
+    if (row.proxyId !== null) out.proxyId = row.proxyId;
+    if (status && (status.failureCount > 0 || status.lastFailure)) {
+      const { indexerId: _id, lastRssSyncAt: _rss, ...summary } = toStatus(row.id, status, undefined);
+      out.status = summary;
+    }
+    if (row.implementation === 'definition' && row.settings.definitionId) {
+      const def = this.definitions.get(row.settings.definitionId);
+      if (def) {
+        out.definitionName = def.name;
+        out.privacy = def.type;
+      }
+    }
+    const proxyNames = this.proxies.applicable(row).map((p) => p.name);
+    if (proxyNames.length > 0) out.proxyNames = proxyNames;
+    return out;
   }
 
   private recordFailure(row: IndexerRow | Pick<IndexerRow, 'id' | 'name'>, error: IndexerError): void {
@@ -708,19 +1135,103 @@ export class IndexersService {
 
 // ---- helpers ------------------------------------------------------------------------
 
-function parseOrThrow<S extends z.ZodType>(schema: S, value: unknown): z.output<S> {
-  const result = schema.safeParse(value);
-  if (!result.success) {
-    const message = result.error.issues.map((i) => `${i.path.map(String).join('.') || '(root)'}: ${i.message}`).join('; ');
-    throw new IndexersError('VALIDATION', message, result.error.issues);
-  }
-  return result.data;
-}
-
 function withoutUndefined<T extends object>(obj: T): { [K in keyof T]?: Exclude<T[K], undefined> } {
   return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as {
     [K in keyof T]?: Exclude<T[K], undefined>;
   };
+}
+
+function isHttpUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return url.protocol === 'http:' || url.protocol === 'https:';
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Check definition field values against the definition's settings: checkboxes are booleans
+ * (`"true"`/`"false"` accepted), selects must name an option, the rest are strings. Unknown
+ * keys are dropped except `sitelink`.
+ */
+export function normalizeFields(def: Definition, input: Record<string, DefinitionFieldValue>): Record<string, DefinitionFieldValue> {
+  const out: Record<string, DefinitionFieldValue> = {};
+  const sitelink = input['sitelink'] ?? input['baseUrl'];
+  if (typeof sitelink === 'string' && sitelink.trim()) out['sitelink'] = sitelink.trim();
+  for (const s of def.settings) {
+    if (s.type.startsWith('info') || s.type === 'cardigannCaptcha') continue;
+    const value = input[s.name];
+    if (value === undefined) continue;
+    const label = `settings.fields.${s.name}`;
+    switch (s.type) {
+      case 'checkbox':
+        if (typeof value === 'boolean') out[s.name] = value;
+        else if (value === 'true' || value === 'false') out[s.name] = value === 'true';
+        else throw new IndexersError('VALIDATION', `${label}: expected true or false`);
+        break;
+      case 'select': {
+        if (typeof value !== 'string') throw new IndexersError('VALIDATION', `${label}: expected one of the options`);
+        const keys = Object.keys(s.options ?? {});
+        if (keys.length > 0 && !keys.includes(value)) {
+          throw new IndexersError('VALIDATION', `${label}: "${value}" is not one of ${keys.join(', ')}`);
+        }
+        out[s.name] = value;
+        break;
+      }
+      default:
+        if (typeof value !== 'string') throw new IndexersError('VALIDATION', `${label}: expected text`);
+        out[s.name] = value;
+    }
+  }
+  return out;
+}
+
+/** Stored field values → runtime settings values (multi-select comma lists become arrays). */
+function toSettingsValues(def: Definition, settings: IndexerSettings): SettingsValues {
+  const values: SettingsValues = {};
+  const fields = settings.fields ?? {};
+  for (const [key, value] of Object.entries(fields)) values[key] = value;
+  for (const s of def.settings) {
+    const v = fields[s.name];
+    if (s.type === 'multi-select' && typeof v === 'string') {
+      values[s.name] = v
+        .split(',')
+        .map((p) => p.trim())
+        .filter((p) => p !== '');
+    }
+  }
+  if (settings.baseUrl && settings.baseUrl !== def.links[0]) values['sitelink'] = settings.baseUrl;
+  return values;
+}
+
+function fileNameFor(title: string | undefined, ext: string): string {
+  const base = (title ?? 'release')
+    .replace(/[\\/:*?"<>|\u0000-\u001f]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 200);
+  const name = base || 'release';
+  return name.toLowerCase().endsWith(`.${ext}`) ? name : `${name}.${ext}`;
+}
+
+function dispositionName(header: string | null): string | undefined {
+  if (!header) return undefined;
+  const star = /filename\*\s*=\s*(?:UTF-8'')?([^;]+)/i.exec(header);
+  if (star?.[1]) {
+    try {
+      return decodeURIComponent(star[1].trim().replace(/^"|"$/g, ''));
+    } catch {
+      // fall through
+    }
+  }
+  const plain = /filename\s*=\s*"?([^";]+)"?/i.exec(header);
+  return plain?.[1]?.trim();
+}
+
+function anySignal(...signals: (AbortSignal | undefined)[]): AbortSignal {
+  const list = signals.filter((s): s is AbortSignal => s !== undefined);
+  return list.length === 1 ? list[0]! : AbortSignal.any(list);
 }
 
 /** URL shape, path normalization, at least one category; drops empty optional strings. */
@@ -759,7 +1270,7 @@ function validateSettings(input: IndexerSettings): IndexerSettings {
 }
 
 function protocolOf(implementation: IndexerImplementation): typeof torznab | typeof newznab {
-  return implementation === 'torznab' ? torznab : newznab;
+  return implementation === 'newznab' ? newznab : torznab;
 }
 
 function toDefinition(
@@ -831,27 +1342,6 @@ function toStatus(indexerId: number, s: StatusRow | undefined, lastRssSyncAt: st
   if (s?.lastFailure) out.lastFailure = s.lastFailure;
   if (s?.mostRecentFailure) out.mostRecentFailure = s.mostRecentFailure;
   if (lastRssSyncAt) out.lastRssSyncAt = lastRssSyncAt;
-  return out;
-}
-
-function toResource(row: IndexerRow, status: StatusRow | undefined): Indexer {
-  const out: Indexer = {
-    id: row.id,
-    name: row.name,
-    implementation: row.implementation,
-    protocol: protocolForImplementation(row.implementation),
-    enableRss: row.enableRss,
-    enableAutomaticSearch: row.enableAutomaticSearch,
-    enableInteractiveSearch: row.enableInteractiveSearch,
-    priority: row.priority,
-    tags: row.tags,
-    settings: row.settings,
-  };
-  if (row.downloadClientId !== null) out.downloadClientId = row.downloadClientId;
-  if (status && (status.failureCount > 0 || status.lastFailure)) {
-    const { indexerId: _id, lastRssSyncAt: _rss, ...summary } = toStatus(row.id, status, undefined);
-    out.status = summary;
-  }
   return out;
 }
 
