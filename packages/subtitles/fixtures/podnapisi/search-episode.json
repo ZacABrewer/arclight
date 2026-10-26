@@ -1,0 +1,9 @@
+{
+  "page": 1, "all_pages": 1,
+  "data": [
+    { "id": "ep5", "language": "sl", "releases": ["The.Show.S02E05.720p.HDTV.x264-OTHER"], "flags": [],
+      "movie": { "title": "The Show", "year": 2021, "type": "tv-series", "episode_info": { "season": 2, "episode": 5 } } },
+    { "id": "ep6", "language": "sl", "releases": ["The.Show.S02E06"], "flags": [],
+      "movie": { "title": "The Show", "year": 2021, "type": "tv-series", "episode_info": { "season": 2, "episode": 6 } } }
+  ]
+}

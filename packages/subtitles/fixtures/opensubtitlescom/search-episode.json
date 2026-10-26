@@ -1,0 +1,51 @@
+{
+  "total_pages": 1,
+  "total_count": 4,
+  "page": 1,
+  "data": [
+    {
+      "id": "7001", "type": "subtitle",
+      "attributes": {
+        "subtitle_id": "7001", "language": "en", "download_count": 1520, "hearing_impaired": false,
+        "foreign_parts_only": false, "ai_translated": false, "machine_translated": false, "fps": 23.976,
+        "ratings": 8.5, "release": "The.Show.S02E05.1080p.WEB.H264-GROUP", "url": "https://www.opensubtitles.com/en/subtitles/the-show-s02e05",
+        "moviehash_match": true, "uploader": { "name": "alice" },
+        "feature_details": { "feature_type": "Episode", "year": 2021, "title": "Episode Five", "season_number": 2, "episode_number": 5, "parent_imdb_id": 1234567, "parent_title": "The Show" },
+        "files": [ { "file_id": 9001, "file_name": "The.Show.S02E05.1080p.WEB.H264-GROUP.srt" } ]
+      }
+    },
+    {
+      "id": "7002", "type": "subtitle",
+      "attributes": {
+        "language": "en", "download_count": 300, "hearing_impaired": true, "foreign_parts_only": false,
+        "release": "The.Show.S02E05.720p.HDTV.x264-OTHER", "uploader": { "name": "bob" },
+        "feature_details": { "year": 2021, "season_number": 2, "episode_number": 5, "parent_imdb_id": 1234567 },
+        "files": [ { "file_id": 9002, "file_name": "x.srt" } ]
+      }
+    },
+    {
+      "id": "7003", "type": "subtitle",
+      "attributes": {
+        "language": "en", "hearing_impaired": false, "foreign_parts_only": true,
+        "release": "The.Show.S02E05.FORCED", "feature_details": { "season_number": 2, "episode_number": 5, "parent_imdb_id": 1234567 },
+        "files": [ { "file_id": 9003, "file_name": "forced.srt" } ]
+      }
+    },
+    {
+      "id": "7004", "type": "subtitle",
+      "attributes": {
+        "language": "pt-BR", "hearing_impaired": false, "foreign_parts_only": false, "ai_translated": true,
+        "release": "The.Show.S02E05 AI", "feature_details": { "season_number": 2, "episode_number": 5, "parent_imdb_id": 1234567 },
+        "files": [ { "file_id": 9004, "file_name": "ai.srt" } ]
+      }
+    },
+    {
+      "id": "7005", "type": "subtitle",
+      "attributes": {
+        "language": "pt-PT", "hearing_impaired": false, "foreign_parts_only": false,
+        "release": "The.Show.S02E05.PT", "feature_details": { "season_number": 2, "episode_number": 6, "parent_imdb_id": 1234567 },
+        "files": [ { "file_id": 9005, "file_name": "pt.srt" } ]
+      }
+    }
+  ]
+}

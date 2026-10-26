@@ -1,0 +1,12 @@
+{
+  "matchingSubtitles": [
+    { "subtitleId": "b1f0c1e0-1111-4000-8000-000000000001", "version": "GROUP, OTHER", "completed": true, "hearingImpaired": false,
+      "corrected": true, "qualities": ["1080p", "720p"], "source": "Addic7ed", "downloadUri": "/subtitles/download/b1f0c1e0-1111-4000-8000-000000000001",
+      "language": "English", "discovered": "2026-10-20T10:00:00Z", "downloadCount": 812 },
+    { "subtitleId": "b1f0c1e0-1111-4000-8000-000000000002", "version": "GROUP", "completed": true, "hearingImpaired": true,
+      "qualities": ["720p"], "downloadUri": "/subtitles/download/b1f0c1e0-1111-4000-8000-000000000002", "language": "English", "downloadCount": 90 },
+    { "subtitleId": "b1f0c1e0-1111-4000-8000-000000000003", "version": "WIP", "completed": false, "hearingImpaired": false,
+      "downloadUri": "/subtitles/download/b1f0c1e0-1111-4000-8000-000000000003", "language": "English" }
+  ],
+  "episode": { "season": 2, "number": 5, "title": "Episode Five", "show": "The Show" }
+}

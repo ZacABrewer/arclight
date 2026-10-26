@@ -1,0 +1,17 @@
+{
+  "status": true,
+  "results": [ { "sd_id": 1001, "type": "tv", "name": "The Show", "imdb_id": "tt1234567", "tmdb_id": 555, "first_air_date": "2021-01-01", "year": 2021 } ],
+  "subtitles": [
+    { "release_name": "The.Show.S02E05.1080p.WEB.H264-GROUP", "name": "SUBDL::the-show-s02e05.zip", "lang": "english", "language": "EN", "author": "carol",
+      "url": "/subtitle/3197651-3213944.zip", "subtitlePage": "/s/info/abc/the-show", "season": 2, "episode": 5, "hi": false,
+      "episode_from": null, "episode_end": null, "full_season": false, "releases": ["The.Show.S02E05.1080p.WEB.H264-GROUP", "The.Show.S02E05.720p.WEB.H264-GROUP"], "comment": "synced" },
+    { "release_name": "The.Show.S02E05.HDTV.x264-OTHER", "name": "SUBDL::hi.zip", "lang": "english", "language": "EN", "author": "dave",
+      "url": "/subtitle/3197652-3213945.zip", "season": 2, "episode": 5, "hi": false, "comment": "SDH version" },
+    { "release_name": "The.Show.S02E05.FORCED", "name": "SUBDL::forced.zip", "lang": "english", "language": "EN",
+      "url": "/subtitle/3197653-3213946.zip", "season": 2, "episode": 5, "comment": "foreign parts only, forced" },
+    { "release_name": "The.Show.S02E05.BR", "name": "SUBDL::br.zip", "lang": "brazillian portuguese", "language": "BR_PT",
+      "url": "/subtitle/3197654-3213947.zip", "season": 2, "episode": 5, "hi": true, "comment": "non-HI cleaned" }
+  ],
+  "totalPages": 3,
+  "currentPage": 1
+}
