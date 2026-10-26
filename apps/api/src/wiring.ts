@@ -27,6 +27,7 @@ import {
 import { indexersServiceFor } from './modules/indexers/index.js';
 import type { LibraryCommands, LibraryCommandTarget } from './modules/library/index.js';
 import { metadataRefresherFor } from './modules/metadata/index.js';
+import { profileMigrationServiceFor } from './modules/profile-migration/index.js';
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
   releasesServiceFor,
@@ -264,6 +265,8 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
     },
     // Private trackers in freeleech-only mode reject non-freeleech releases (`notFreeleech`).
     releaseFilter: (indexerId, release) => trackerStatsServiceFor(ctx).releaseFilter(indexerId, release),
+    // "When files don't meet this profile": lets a release replace a file the profile no longer allows.
+    profileMigration: { mismatchActionFor: (id) => profileMigrationServiceFor(ctx).mismatchActionFor(id) },
     settings: {
       getReleaseSettings: () => {
         const r = getSection(db, 'releases');
@@ -417,6 +420,8 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
         await failTrackedDownload(ctx, item, { message, source: 'DownloadClient', skipRedownload: false });
       },
     },
+    // Same rule on the import side: a file the profile no longer allows gives way under `replace`.
+    profileMigration: { mismatchActionFor: (id) => profileMigrationServiceFor(ctx).mismatchActionFor(id) },
   };
 }
 

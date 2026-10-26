@@ -1,5 +1,5 @@
 import { and, eq, gte, inArray } from 'drizzle-orm';
-import { mkdir, readdir, stat, statfs, utimes } from 'node:fs/promises';
+import { mkdir, readdir, rename, stat, statfs, utimes } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, parse as parsePathParts, relative, resolve, sep } from 'node:path';
 import type { Logger } from 'pino';
 import {
@@ -808,10 +808,12 @@ export class ImportsService {
         if (!episodesCache.has(item.series.id)) episodesCache.set(item.series.id, libraryService.listEpisodes(this.db, { seriesId: item.series.id }));
         seriesEpisodes = episodesCache.get(item.series.id)!;
       }
+      const profile = this.profileFor(this.itemProfileId(item), profileCache);
       const ctx: DecisionContext = {
         settings,
         naming,
-        profile: this.profileFor(this.itemProfileId(item), profileCache),
+        profile,
+        ...(profile && this.deps.profileMigration ? { mismatchAction: this.deps.profileMigration.mismatchActionFor(profile.id) } : {}),
         freeSpaceBytes,
         grab: opts.grab,
         alreadyImported,
@@ -978,39 +980,65 @@ export class ImportsService {
       }
     } else {
       destination = this.buildDestination({ ...item, sceneName });
-      // Upgrade routine (spec 9.3): recycle files fully covered by the new one, then place.
+      // Upgrade routine (spec 9.3): files fully covered by the new one are replaced. The new file
+      // is placed first and the old ones recycled only after that succeeded, so a failed import
+      // never costs the existing file. An old file on the destination path is set aside under a
+      // temporary name meanwhile and put back if the transfer fails.
       const newEpisodeIds = new Set(item.episodes.map((e) => e.id));
       replacedFiles = item.existingFiles.filter(
         (f) => item.mediaType === 'movie' || f.episodeIds.every((id) => newEpisodeIds.has(id)),
       );
-      const bin = this.recycleBin(settings);
+      const setAside = new Map<string, string>();
       for (const old of replacedFiles) {
-        if (await exists(old.path)) {
-          await bin.recycle(old.path, relative(root, dirname(old.path)));
-        } else {
-          this.log?.warn({ path: old.path }, 'replaced file was not on disk');
-        }
-        // Free the path in the database when the new file lands on the same name.
-        if (resolve(old.path) === resolve(destination)) await libraryService.deleteMediaFile(this.db, old.id, { deleteFromDisk: false });
+        if (resolve(old.path) !== resolve(destination) || !(await exists(old.path))) continue;
+        const temp = `${old.path}.arclight-replacing`;
+        await rename(old.path, temp);
+        setAside.set(old.path, temp);
       }
 
       const copyMode: TransferMode = settings.useHardlinks ? 'hardlinkOrCopy' : 'copy';
       const mode: TransferMode = opts.mode === 'move' ? 'move' : copyMode;
       const libraryExisted = await isDirectory(libraryPath);
-      if (settings.importExtraFiles) {
-        await importExtraFiles(item.path, destination, {
-          extensions: settings.extraFileExtensions,
-          recursive: opts.folderImport,
-          mode: opts.mode === 'move' ? 'move' : copyMode,
-        });
+      try {
+        if (settings.importExtraFiles) {
+          await importExtraFiles(item.path, destination, {
+            extensions: settings.extraFileExtensions,
+            recursive: opts.folderImport,
+            mode: opts.mode === 'move' ? 'move' : copyMode,
+          });
+        }
+        transfer = await transferFile(item.path, destination, mode, this.fsOps ? { ops: this.fsOps } : {});
+      } catch (err) {
+        for (const [original, temp] of setAside) {
+          await rename(temp, original).catch((restoreErr: unknown) =>
+            this.log?.error({ err: restoreErr, path: original }, 'could not restore the file being replaced'),
+          );
+        }
+        throw err;
       }
-      transfer = await transferFile(item.path, destination, mode, this.fsOps ? { ops: this.fsOps } : {});
       if (settings.setPermissions) {
         await setPermissions(destination, settings.chmodFolder, false);
         if (!libraryExisted) await setPermissions(libraryPath, settings.chmodFolder, true);
         if (dirname(destination) !== libraryPath) await setPermissions(dirname(destination), settings.chmodFolder, true);
       }
       await this.applyFileDate(destination, item, settings);
+
+      const bin = this.recycleBin(settings);
+      for (const old of replacedFiles) {
+        const current = setAside.get(old.path) ?? old.path;
+        if (await exists(current)) {
+          try {
+            await bin.recycle(current, relative(root, dirname(old.path)), basename(old.path));
+          } catch (err) {
+            // The new file is in place; a file that could not be recycled stays on disk (orphan).
+            this.log?.warn({ err, path: current }, 'could not recycle the replaced file');
+          }
+        } else {
+          this.log?.warn({ path: old.path }, 'replaced file was not on disk');
+        }
+        // Free the path in the database when the new file lands on the same name.
+        if (resolve(old.path) === resolve(destination)) await libraryService.deleteMediaFile(this.db, old.id, { deleteFromDisk: false });
+      }
     }
 
     const size = (await stat(destination)).size;

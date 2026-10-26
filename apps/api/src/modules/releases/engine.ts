@@ -7,6 +7,7 @@ import {
   isQualityAllowed,
   isQualityCutoffMet,
   isRevisionUpgrade,
+  isStrictlyBetter,
   itemId,
   matchingTerms,
   protocolDelay,
@@ -20,6 +21,7 @@ import {
   type CustomFormat,
   type DelayProfile,
   type Indexer,
+  type ProfileMismatchAction,
   type QualityDefinition,
   type QualityDefinitionLimits,
   type QualityModel,
@@ -117,6 +119,12 @@ export interface DecisionContext {
   minimumFreeSpaceMb: number;
   /** Indexer release filter verdict for this candidate (tracker freeleech-only); null/absent = pass. */
   releaseFilter?: SpecResult | null;
+  /**
+   * The profile's rule for existing files it does not allow (profile migration). `replace` and
+   * `replaceIfBetter` let an acceptable release replace such a file even when it ranks higher or
+   * already meets the cutoff; absent/`none` keeps the classic upgrade rules.
+   */
+  mismatchAction?: ProfileMismatchAction;
 }
 
 export interface Candidate {
@@ -318,6 +326,23 @@ function filesFor(ctx: DecisionContext, c: Candidate): ExistingFile[] {
   const ids = new Set(c.match.episodes.map((e) => e.id));
   const seen = new Set<number>();
   return ctx.existingFiles.filter((f) => f.episodeIds.some((id) => ids.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
+}
+
+/**
+ * Profile migration: may `next` replace an existing file the profile does not allow (quality not
+ * allowed, or score below the minimum)? Only under a `replace` / `replaceIfBetter` rule; the
+ * candidate itself still has to pass every other spec (allowed quality, minimum score, ...).
+ */
+export function replacesDisallowedFile(
+  ctx: Pick<DecisionContext, 'profile' | 'mismatchAction'>,
+  file: { quality: QualityModel; formatScore: number },
+  next: { quality: QualityModel; formatScore: number },
+): boolean {
+  const action = ctx.mismatchAction ?? 'none';
+  if (action === 'none') return false;
+  const allowed = isQualityAllowed(ctx.profile, file.quality.quality) && file.formatScore >= ctx.profile.minFormatScore;
+  if (allowed) return false;
+  return action === 'replace' || isStrictlyBetter(ctx.profile, file, next);
 }
 
 function itemTags(c: Candidate): number[] {
@@ -751,6 +776,7 @@ export const specifications: readonly Specification[] = [
     evaluate: (ctx, c) => {
       const next = { quality: c.quality, formatScore: c.formatScore };
       for (const f of filesFor(ctx, c)) {
+        if (replacesDisallowedFile(ctx, f, next)) continue;
         if (!isUpgradeAllowed(ctx.profile, f, next)) {
           return { reason: 'qualityUpgradesDisabled', message: 'Quality profile does not allow upgrades' };
         }
@@ -772,7 +798,7 @@ export const specifications: readonly Specification[] = [
         let upgraded = 0;
         for (const e of c.match.episodes) {
           const file = files.find((f) => f.episodeIds.includes(e.id));
-          if (!file) {
+          if (!file || replacesDisallowedFile(ctx, file, next)) {
             upgraded++;
             continue;
           }
@@ -785,6 +811,7 @@ export const specifications: readonly Specification[] = [
         return ok ? null : { reason: 'diskNotUpgrade', message: `Season pack upgrades only ${upgraded} of ${total} episodes` };
       }
       for (const f of files) {
+        if (replacesDisallowedFile(ctx, f, next)) continue;
         if (!cutoffNotMet(ctx.profile, f, c.quality)) {
           return { reason: 'diskCutoffMet', message: `Existing file ${qualityName(f.quality)} meets cutoff` };
         }

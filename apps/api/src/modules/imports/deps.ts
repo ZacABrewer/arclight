@@ -1,4 +1,4 @@
-import type { MediaFile, MediaType } from '@arclight/shared';
+import type { MediaFile, MediaType, ProfileMismatchAction } from '@arclight/shared';
 import type { TrackedDownload } from '../download-clients/index.js';
 
 // Hooks into modules that are written in parallel (history, notifications, blocklist,
@@ -96,4 +96,6 @@ export interface ImportsDeps {
    */
   probe?: Probe;
   freeSpace?: FreeSpace;
+  /** Profile-migration rule per quality profile (see DecisionContext.mismatchAction). Omitted = `none`. */
+  profileMigration?: { mismatchActionFor(qualityProfileId: number): ProfileMismatchAction };
 }

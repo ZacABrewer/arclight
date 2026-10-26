@@ -3,7 +3,9 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Job, ServerEvent } from '@arclight/shared';
 import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
+import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
+import { settingsKeys } from './hooks/settings-keys.js';
 import { connectionStore } from './lib/connection.js';
 
 // The event-driven cache layer: every ServerEvent pushed over /api/v1/events is folded into
@@ -81,6 +83,15 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       void qc.invalidateQueries({ queryKey: requestKeys.issues.all });
       // Title pages show the open-issue count.
       void qc.invalidateQueries({ queryKey: requestKeys.discover.titles });
+      return;
+    case 'profile':
+      // Profiles and formats feed the profile pages; their files are re-judged server-side.
+      void qc.invalidateQueries({ queryKey: settingsKeys.qualityProfiles });
+      if (event.kind === 'customFormat') void qc.invalidateQueries({ queryKey: settingsKeys.customFormats });
+      void qc.invalidateQueries({ queryKey: profileMigrationKeys.all });
+      return;
+    case 'profileMigration':
+      void qc.invalidateQueries({ queryKey: profileMigrationKeys.all });
       return;
     default:
       assertNever(event);

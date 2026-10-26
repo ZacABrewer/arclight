@@ -1,6 +1,7 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseRelease } from '@arclight/parser';
+import { buildItems } from '@arclight/profiles-engine';
 import {
   MediaManagementSettings,
   NAMING_DEFAULTS,
@@ -187,6 +188,28 @@ describe('decision engine', () => {
     const same = file(7, q(QUALITIES['WEBDL-1080p']));
     expect(reasons(item({ existingFiles: [same], existingFormatScores: { 7: 100 }, formatScore: 50 }))).toContain('notCustomFormatUpgrade');
     expect(reasons(item({ existingFiles: [same] }))).toEqual([]);
+  });
+
+  it('lets a file the profile no longer allows give way under the profile-migration "replace" rule', () => {
+    const profile = {
+      id: 1,
+      name: 'HD',
+      upgradeAllowed: true,
+      cutoff: QUALITIES['WEBDL-1080p'].id,
+      items: buildItems(['HDTV-1080p', 'WEBDL-1080p', 'Bluray-1080p']),
+      minFormatScore: 0,
+      cutoffFormatScore: 0,
+      minUpgradeFormatScore: 1,
+      formatItems: [],
+      languages: [],
+    };
+    const uhd = file(7, q(QUALITIES['Bluray-2160p'])); // ranked above, but not allowed
+    expect(reasons(item({ existingFiles: [uhd] }), ctx({ profile }))).toContain('notQualityUpgrade');
+    expect(reasons(item({ existingFiles: [uhd] }), ctx({ profile, mismatchAction: 'replaceIfBetter' }))).toContain('notQualityUpgrade');
+    expect(reasons(item({ existingFiles: [uhd] }), ctx({ profile, mismatchAction: 'replace' }))).toEqual([]);
+    // The incoming file must itself be allowed.
+    const sd = item({ existingFiles: [uhd], quality: q(QUALITIES['SDTV']) });
+    expect(reasons(sd, ctx({ profile, mismatchAction: 'replace' }))).toContain('notQualityUpgrade');
   });
 
   it('rejects a file already registered in the library and already-imported downloads', () => {

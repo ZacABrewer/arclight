@@ -250,6 +250,74 @@ describe('completed download import (series)', () => {
     expect(libraryService.listMediaFiles(db, { seriesId: series.id }).map((f) => f.quality.quality.name)).toEqual(['Bluray-1080p']);
   });
 
+  it('never removes the file being replaced before its replacement is in place', async () => {
+    // No recycle bin: a replaced file is deleted, so the order matters.
+    const series = addSeries();
+    const [e1] = episodesOf(series.id);
+    const oldPath = join(series.path, 'Season 1', 'Show.Name.S01E01.720p.HDTV.x264-OLD.mkv');
+    await mkdir(join(series.path, 'Season 1'), { recursive: true });
+    await writeFile(oldPath, 'old');
+    const { file: old } = libraryService.addMediaFile(db, {
+      mediaType: 'series',
+      seriesId: series.id,
+      seasonNumber: 1,
+      episodeIds: [e1!.id],
+      relativePath: join('Season 1', 'Show.Name.S01E01.720p.HDTV.x264-OLD.mkv'),
+      path: oldPath,
+      sizeBytes: 3,
+      quality: { quality: { ...QUALITIES['HDTV-720p'], mediaTypes: ['series', 'movie'] }, revision: { version: 1, real: 0, isRepack: false } },
+      languages: ['en'],
+    });
+    const src = await put('Show.Name.S01E01.1080p.BluRay.x264-NEW.mkv');
+    const failing = new ImportsService({
+      db,
+      bus,
+      downloadClients: fake,
+      now: () => new Date(NOW),
+      fsOps: {
+        rename: async () => {
+          throw Object.assign(new Error('I/O error'), { code: 'EIO' });
+        },
+      },
+    });
+    const r = await failing.importCompletedDownload(
+      tracked({ id: 14, title: 'Show.Name.S01E01.1080p.BluRay.x264-NEW', outputPath: src, mediaType: 'series', seriesId: series.id, episodeIds: [e1!.id] }),
+    );
+    expect(r.outcomes[0]?.status).not.toBe('imported');
+    expect(await exists(oldPath)).toBe(true);
+    expect(libraryService.listMediaFiles(db, { seriesId: series.id }).map((f) => f.id)).toEqual([old.id]);
+  });
+
+  it('replaces a file on the same path and recycles it under its own name', async () => {
+    const binPath = join(tmp, 'bin');
+    setSection(db, 'mediaManagement', { ...service().getMediaManagement(), recycleBinPath: binPath });
+    const series = addSeries();
+    const [e1] = episodesOf(series.id);
+    const name = 'Show.Name.S01E01.1080p.BluRay.x264-NEW.mkv';
+    const oldPath = join(series.path, 'Season 1', name);
+    await mkdir(join(series.path, 'Season 1'), { recursive: true });
+    await writeFile(oldPath, 'old');
+    libraryService.addMediaFile(db, {
+      mediaType: 'series',
+      seriesId: series.id,
+      seasonNumber: 1,
+      episodeIds: [e1!.id],
+      relativePath: join('Season 1', name),
+      path: oldPath,
+      sizeBytes: 3,
+      quality: { quality: { ...QUALITIES['HDTV-720p'], mediaTypes: ['series', 'movie'] }, revision: { version: 1, real: 0, isRepack: false } },
+      languages: ['en'],
+    });
+    const src = await put(name, 64);
+    const r = await service().importCompletedDownload(
+      tracked({ id: 15, title: 'Show.Name.S01E01.1080p.BluRay.x264-NEW', outputPath: src, mediaType: 'series', seriesId: series.id, episodeIds: [e1!.id] }),
+    );
+    expect(r.outcomes[0]).toMatchObject({ status: 'imported' });
+    expect((await stat(oldPath)).size).toBe(64);
+    expect(await exists(`${oldPath}.arclight-replacing`)).toBe(false);
+    expect(await exists(join(binPath, 'Show Name (2020)', 'Season 1', name))).toBe(true);
+  });
+
   it('rejects a downgrade and leaves the existing file alone', async () => {
     const series = addSeries();
     const [e1] = episodesOf(series.id);

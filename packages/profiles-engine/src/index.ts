@@ -64,6 +64,8 @@ export {
 
 export { specImplementations } from './spec-definitions.js';
 
+export { fileFit, isStrictlyBetter, violatesProfile, type FileFit, type FileFitReason, type FileFitStatus } from './profile-fit.js';
+
 export {
   DEFAULT_GROUPS,
   buildItems,

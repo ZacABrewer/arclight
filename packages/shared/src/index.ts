@@ -38,6 +38,7 @@ export * from './media-analysis.js';
 export * from './library-hygiene.js';
 export * from './stats.js';
 export * from './operations.js';
+export * from './profile-migration.js';
 export * from './media-servers.js';
 export * from './retention.js';
 export * from './project.js';

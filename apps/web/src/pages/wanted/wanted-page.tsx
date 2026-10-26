@@ -22,6 +22,7 @@ import { useToast } from '../../components/toast.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
+import { ProfileMismatchList } from './profile-mismatch.js';
 import './wanted.css';
 import { t } from '../../i18n/index.js';
 
@@ -29,13 +30,19 @@ const PAGE_SIZE = 50;
 /** Largest page the api allows; "Search all" collects ids with one request of this size. */
 const MAX_PAGE = 500;
 
-type Mode = 'missing' | 'cutoff';
+type Mode = 'missing' | 'cutoff' | 'mismatch';
+/** The lists backed by the library's wanted queries (the mismatch list has its own). */
+type ListMode = Exclude<Mode, 'mismatch'>;
 type Kind = 'episodes' | 'movies';
 
 const MODE_TABS = [
   { id: 'missing', get label() { return t('status.missing'); } },
   { id: 'cutoff', get label() { return t('status.cutoffUnmet'); } },
+  { id: 'mismatch', get label() { return t('profileMigration.wanted.tab'); } },
 ] as const;
+
+const MODE_PATHS = { missing: '/wanted/missing', cutoff: '/wanted/cutoff', mismatch: '/wanted/mismatch' } as const;
+const MODE_TITLES: Record<Mode, string> = { missing: 'Missing', cutoff: 'Cutoff unmet', mismatch: 'Profile mismatch' };
 
 const KIND_OPTIONS = [
   { value: 'episodes' as const, get label() { return t('common.episodes'); } },
@@ -50,6 +57,10 @@ export function WantedCutoffPage() {
   return <WantedPage mode="cutoff" />;
 }
 
+export function WantedMismatchPage() {
+  return <WantedPage mode="mismatch" />;
+}
+
 /** Short mono date: "21 Feb 2025". */
 export function shortDate(value: string | null | undefined): string {
   return formatDate(value, { day: 'numeric', month: 'short', year: 'numeric' });
@@ -59,7 +70,7 @@ function WantedPage({ mode }: { mode: Mode }) {
   const navigate = useNavigate();
   const [kind, setKind] = useState<Kind>('episodes');
   useEffect(() => {
-    document.title = t('wanted.valueArclight', { value: mode === 'missing' ? 'Missing' : 'Cutoff unmet' });
+    document.title = t('wanted.valueArclight', { value: MODE_TITLES[mode] });
   }, [mode]);
   return (
     <div className="wanted-page">
@@ -69,16 +80,22 @@ function WantedPage({ mode }: { mode: Mode }) {
           aria-label={t('wanted.wantedLists')}
           value={mode}
           tabs={MODE_TABS}
-          onChange={(id) => void navigate({ to: id === 'missing' ? '/wanted/missing' : '/wanted/cutoff' })}
+          onChange={(id) => void navigate({ to: MODE_PATHS[id as Mode] })}
         />
         <Segmented aria-label={t('common.mediaType')} options={KIND_OPTIONS} value={kind} onChange={setKind} />
       </PageHeader>
-      {kind === 'episodes' ? <EpisodesList key={`e-${mode}`} mode={mode} /> : <MoviesList key={`m-${mode}`} mode={mode} />}
+      {mode === 'mismatch' ? (
+        <ProfileMismatchList key={`p-${kind}`} kind={kind} />
+      ) : kind === 'episodes' ? (
+        <EpisodesList key={`e-${mode}`} mode={mode} />
+      ) : (
+        <MoviesList key={`m-${mode}`} mode={mode} />
+      )}
     </div>
   );
 }
 
-function useWantedList(mode: Mode, kind: Kind, page: number) {
+function useWantedList(mode: ListMode, kind: Kind, page: number) {
   // Both hooks are always called (rules of hooks); only the one for this mode is enabled.
   const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing');
   const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff');
@@ -104,12 +121,12 @@ function useBatchSearch() {
   return { run, running, search };
 }
 
-function statusChip(mode: Mode) {
+function statusChip(mode: ListMode) {
   return mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
 }
 
 interface ListShellProps<T> {
-  mode: Mode;
+  mode: ListMode;
   noun: string;
   total: number | undefined;
   page: number;
@@ -211,7 +228,7 @@ function ListShell<T>(p: ListShellProps<T>) {
   );
 }
 
-function EpisodesList({ mode }: { mode: Mode }) {
+function EpisodesList({ mode }: { mode: ListMode }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'episodes', page);
@@ -288,7 +305,7 @@ function EpisodesList({ mode }: { mode: Mode }) {
   );
 }
 
-function MoviesList({ mode }: { mode: Mode }) {
+function MoviesList({ mode }: { mode: ListMode }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'movies', page);

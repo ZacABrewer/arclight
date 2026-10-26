@@ -27,6 +27,9 @@ import {
   type SortState,
 } from '../../arclight/index.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
+import { ProfileMigrationDialog } from '../../components/media/profile-migration-dialog.js';
+import { ProfileMismatchBadge } from '../../components/media/profile-fit.js';
+import { useProfileItemStatuses } from '../../hooks/profile-migration.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError, TagChips } from '../../components/media/media-kit.js';
@@ -184,6 +187,9 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
     row.kind === 'series' ? setSeriesMonitored.mutate({ id: row.id, monitored }) : setMovieMonitored.mutate({ id: row.id, monitored });
 
   const profileName = (id: number) => profiles.data?.find((p) => p.id === id)?.name ?? `#${id}`;
+  // Items with files their profile no longer allows (profile migration) get a badge.
+  const fit = useProfileItemStatuses();
+  const mismatchOf = (row: Pick<LibraryRow, 'kind' | 'id'>) => fit.data?.get(`${row.kind}:${row.id}`)?.notAllowed ?? 0;
   const filterCount = activeFilterCount(filters) + (filters.search ? 1 : 0);
   const addLabel = kind === 'series' ? t('library.addSeries') : t('library.addMovie');
   const viewOptions = [
@@ -303,6 +309,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
           onMonitor={toggleMonitored}
           profileName={profileName}
           tags={tags.data}
+          mismatchOf={mismatchOf}
         />
       ) : view === 'overview' ? (
         <div className="mk-overview">
@@ -315,6 +322,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
               onSelect={() => toggleSelected(row.id)}
               onMonitor={(m) => toggleMonitored(row, m)}
               profileName={profileName}
+              mismatch={mismatchOf(row)}
             />
           ))}
         </div>
@@ -336,6 +344,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
               selected={selected.has(row.id)}
               onSelect={() => toggleSelected(row.id)}
               onMonitor={(m) => toggleMonitored(row, m)}
+              mismatch={mismatchOf(row)}
             />
           ))}
         </div>
@@ -371,12 +380,15 @@ function LibraryPoster({
   selected,
   onSelect,
   onMonitor,
+  mismatch = 0,
 }: {
   row: LibraryRow;
   selectMode: boolean;
   selected: boolean;
   onSelect: () => void;
   onMonitor: (monitored: boolean) => void;
+  /** Files the item's profile does not allow. */
+  mismatch?: number;
 }) {
   const progress = row.total > 0 ? (row.have / row.total) * 100 : 0;
   const card = (
@@ -388,7 +400,15 @@ function LibraryPoster({
       progressTone={progressTone(row)}
       count={countText(row)}
       countTone={progressTone(row) === 'warn' ? 'warn' : 'default'}
-      meta={rowMeta(row)}
+      meta={
+        mismatch > 0 ? (
+          <span className="mk-row" style={{ gap: 6 }}>
+            {rowMeta(row)} <ProfileMismatchBadge count={mismatch} />
+          </span>
+        ) : (
+          rowMeta(row)
+        )
+      }
       onClick={selectMode ? onSelect : undefined}
       overlay={
         selectMode ? (
@@ -422,6 +442,7 @@ function OverviewRow({
   onSelect,
   onMonitor,
   profileName,
+  mismatch = 0,
 }: {
   row: LibraryRow;
   selectMode: boolean;
@@ -429,6 +450,7 @@ function OverviewRow({
   onSelect: () => void;
   onMonitor: (m: boolean) => void;
   profileName: (id: number) => string;
+  mismatch?: number;
 }) {
   const progress = row.total > 0 ? (row.have / row.total) * 100 : 0;
   return (
@@ -445,6 +467,7 @@ function OverviewRow({
         <div className="mk-row" style={{ gap: 8 }}>
           <StatusChip status={row.monitored ? 'monitored' : 'unmonitored'} />
           <span className="al-quality">{profileName(row.qualityProfileId)}</span>
+          {mismatch > 0 ? <ProfileMismatchBadge count={mismatch} /> : null}
           <span className="mk-muted" style={{ fontSize: 13 }}>
             {rowMeta(row)}
             {STATUS_LABELS[row.status] ? ` · ${STATUS_LABELS[row.status]}` : ''}
@@ -521,6 +544,7 @@ function LibraryTable({
   onMonitor,
   profileName,
   tags,
+  mismatchOf,
 }: {
   rows: LibraryRow[];
   sort: LibrarySort;
@@ -531,6 +555,7 @@ function LibraryTable({
   onMonitor: (row: LibraryRow, monitored: boolean) => void;
   profileName: (id: number) => string;
   tags: Tag[] | undefined;
+  mismatchOf: (row: LibraryRow) => number;
 }) {
   const isMovie = rows[0]?.kind === 'movie';
   const columns: Column<LibraryRow>[] = [
@@ -550,6 +575,7 @@ function LibraryTable({
             {r.title}
           </Link>
           <TagChips ids={r.tags} tags={tags} />
+          {mismatchOf(r) > 0 ? <ProfileMismatchBadge count={mismatchOf(r)} /> : null}
         </span>
       ),
     },
@@ -671,6 +697,8 @@ function BulkBar({
   const deleteSeries = useDeleteSeries();
   const deleteMovies = useDeleteMovies();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  // Profile changes go through the migration dialog (preview of what the new profile means).
+  const [migrateTo, setMigrateTo] = useState<number | null>(null);
   const pending = bulkSeries.isPending || bulkMovies.isPending;
 
   const apply = (patch: { monitored?: boolean; qualityProfileId?: number; rootFolderPath?: string; tags?: { add?: number[]; remove?: number[] } }) => {
@@ -697,7 +725,7 @@ function BulkBar({
           <Menu
             header={t('library.setQualityProfile')}
             onDone={close}
-            items={(profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => apply({ qualityProfileId: p.id }) }))}
+            items={(profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => setMigrateTo(p.id) }))}
           />
         )}
       </Popover>
@@ -729,6 +757,14 @@ function BulkBar({
       <Button variant="ghost" className="al-floatbar__cancel" onClick={onClear}>
         {t('common.cancel')}
       </Button>
+      <ProfileMigrationDialog
+        open={migrateTo !== null}
+        onClose={() => setMigrateTo(null)}
+        initialToProfileId={migrateTo}
+        selection={kind === 'series' ? { seriesIds: ids } : { movieIds: ids }}
+        profiles={profiles}
+        subject={`${ids.length} ${noun(kind, ids.length)}`}
+      />
       <DeleteMediaDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}

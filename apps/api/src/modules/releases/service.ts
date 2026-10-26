@@ -651,6 +651,7 @@ export class ReleasesService {
       freeSpaceBytes,
       minimumFreeSpaceMb: this.deps.minimumFreeSpaceMb ?? 100,
       releaseFilter: this.deps.releaseFilter?.(c.release.indexerId, c.release) ?? null,
+      mismatchAction: this.deps.profileMigration?.mismatchActionFor(profile.id) ?? 'none',
     };
   }
 

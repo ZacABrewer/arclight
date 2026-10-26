@@ -170,8 +170,9 @@ export class RecycleBin {
    * Moves a file into the bin under `subFolder` (path relative to its root folder), suffixing
    * `_2`, `_3` ... on a name clash, and stamps it with the current time so cleanup counts from
    * deletion. Without a bin the file is deleted. Returns the bin path, or null when deleted.
+   * `name` files it under another name (a file set aside under a temporary name keeps its own).
    */
-  async recycle(filePath: string, subFolder = ''): Promise<string | null> {
+  async recycle(filePath: string, subFolder = '', name = basename(filePath)): Promise<string | null> {
     try {
       if (!this.enabled) {
         await rm(filePath, { force: true });
@@ -179,8 +180,8 @@ export class RecycleBin {
       }
       const folder = join(this.binPath!, subFolder);
       await mkdir(folder, { recursive: true });
-      const ext = extname(filePath);
-      const stem = basename(filePath, ext);
+      const ext = extname(name);
+      const stem = basename(name, ext);
       let target = join(folder, stem + ext);
       for (let i = 2; (await sizeOrNull(target)) !== null; i++) target = join(folder, `${stem}_${i}${ext}`);
       await transferFile(filePath, target, 'move');

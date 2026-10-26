@@ -18,6 +18,7 @@ import {
   MetricsSettings,
   AuditSettings,
   NamingConfig,
+  ProfileMigrationSettings,
   ReleasesSettings,
   RequestsSettings,
   SECRET_MASK,
@@ -82,6 +83,8 @@ const sections = {
   engineAgent: EngineAgentSettings,
   // Owned by the discord-bot module (routes under /settings/discordbot; botToken masked there).
   discordBot: DiscordBotSettings,
+  // Owned by the profile-migration module (automatic mode; routes under /profilemigration/settings).
+  profileMigration: ProfileMigrationSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

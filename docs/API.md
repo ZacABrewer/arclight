@@ -268,6 +268,33 @@ upgraded on its own against its own profile; a disabled slot keeps its file but 
 `CustomFormat` responses carry `guideId` (read-only): the TRaSH `trash_id` the format is synced
 from by the guides module, null for user-created formats.
 
+## profile-migration
+
+Moving items between quality profiles, file fit against the governing profile, and the
+replacement work list. Contract: `packages/shared/src/profile-migration.ts`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/profilemigration/settings` | Automatic-mode settings (`enabled`, `intervalMinutes`, `searchesPerRun`, `maxSearchesPerDay`, `maxAttempts`, `retryAfterHours`) |
+| PUT | `/profilemigration/settings` | Update them (partial); reschedules the `ProfileMigration` job |
+| GET | `/profilemigration/profiles` | `ProfileMigrationProgress` per quality profile: rule, switches, file fit counts, mismatched items, queue counts, `pendingSearches` |
+| GET | `/profilemigration/profiles/:id` | One profile's progress |
+| PUT | `/profilemigration/profiles/:id` | `{ mismatchAction?, autoEnabled?, paused? }`; rebuilds the work list |
+| POST | `/profilemigration/profiles/:id/search` | "Search all now": 202 `{ searches, job }` (400 without a rule) |
+| POST | `/profilemigration/profiles/:id/retry` | Failed items back to queued |
+| POST | `/profilemigration/preview` | `{ selection, toProfileId }` -> `ProfileMigrationPreview` (no changes) |
+| POST | `/profilemigration/apply` | Same body; changes the profiles, records `profileChanged` history, returns the preview and the changed ids |
+| GET | `/profilemigration/mismatch` | Paged files that do not meet their profile; `status` (`notAllowed` by default, `upgradeAllowed`; comma list), `mediaType`, `qualityProfileId`, `page`, `pageSize` |
+| GET | `/profilemigration/items` | Items with at least one file that does not meet its profile (library badges) |
+| POST | `/profilemigration/reevaluate` | Full re-evaluation as a `ProfileFitRefresh` job (202) |
+
+`selection` combines (AND) `mediaType`, `seriesIds`, `movieIds`, `fromProfileId`, `rootFolderPath`,
+`tagIds` (any of them) and `versionTag`; at least one of ids, profile, root folder or tag is
+required. `mismatchAction` is `none` (default), `replace` or `replaceIfBetter`; the decision engine
+and the import upgrade check read it per profile (`ReleasesDeps.profileMigration`,
+`ImportsDeps.profileMigration`). History gains the event types `profileChanged` and
+`profileReplaced`.
+
 ## guides
 
 TRaSH-style sync of custom formats and quality-profile scores from a guide repository
@@ -1138,6 +1165,9 @@ of them with `POST /jobs/run`.
 | `AuditCleanup` | `17 3 * * *` | audit | Deletes `audit_events` older than `audit.retentionDays` (nothing at 0) |
 | `TrackerStatsSync` | `*/30 * * * *` | tracker-stats | Engine totals per tracker, then the account pages of enabled accounts with `scrapeAccount` |
 | `CrossSeedSearch` | `crossSeed.schedule` (default `0 4 * * *`) | cross-seed | Searches up to `maxPerRun` files not searched within `searchIntervalDays`, newest first (nothing while disabled) |
+| `ProfileMigration` | from `profileMigration.intervalMinutes` (default `*/30 * * * *`) | profile-migration | Searches up to `searchesPerRun` queued mismatched items (within `maxSearchesPerDay`), skipping active downloads and root folders below the minimum free space |
+| `ProfileFitRefresh` | `10 4 * * *` | profile-migration | Full file-fit re-evaluation; prunes `done` work-list rows after 30 days |
+| `ProfileMigrationSearch` | on demand | profile-migration | "Search all now" for one profile |
 
 The RSS and status crons can be overridden through `registerIndexerJobs` options.
 
@@ -1163,6 +1193,8 @@ The RSS and status crons can be overridden through `registerIndexerJobs` options
 | `request` | `action` (`created` `updated` `approved` `declined` `failed` `completed` `deleted`), `id` |
 | `issue` | `action` (`created` `updated` `deleted`), `id` |
 | `subtitle` | `action` (`downloaded` `upgraded` `deleted` `uploaded` `synced` `scanned` `blacklisted` `profiles` `settings`), optional `mediaType`, `mediaId`, `mediaFileId` |
+| `profile` | `action` (`created` `updated` `deleted`), `kind` (`quality` `customFormat`), `id` |
+| `profileMigration` | `action` (`changed`): file fit or the work list changed |
 
 `release`, `import` and `history` are defined in the contract (the file is uncommitted and
 being edited), but their producing modules are in progress, so nothing emits them yet.
