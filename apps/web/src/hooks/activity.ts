@@ -1,5 +1,5 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BlocklistAddRequestInput, QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
+import type { BlocklistAddRequestInput, QueuePage, QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
 import { queueApi } from '../api/queue.js';
@@ -8,14 +8,31 @@ import { upsertJob } from '../live.js';
 import { activityKeys, useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
 
-/** Queue events invalidate ['queue']; the poll is a safety net for progress between events. */
+/** Poll interval while a row on the page is transferring (live speeds and peers). */
+export const QUEUE_LIVE_POLL_MS = 3_000;
+const QUEUE_IDLE_POLL_MS = 10_000;
+
+/** True when any row is still downloading, so the page polls fast for live numbers. */
+export function hasActiveDownloads(page: QueuePage | undefined): boolean {
+  return (page?.records ?? []).some((r) => r.trackedState === 'downloading' && r.status !== 'paused');
+}
+
+/**
+ * Queue events invalidate ['queue']; the poll is a safety net between events, fast (3 s)
+ * while something is downloading. React Query skips interval polls while the tab is hidden.
+ */
 export function useQueue(query: Partial<QueueQueryInput>) {
   return useQuery({
     queryKey: activityKeys.queue(query),
     queryFn: () => queueApi.list(query),
     placeholderData: keepPreviousData,
-    refetchInterval: 10_000,
+    refetchInterval: (q) => (hasActiveDownloads(q.state.data) ? QUEUE_LIVE_POLL_MS : QUEUE_IDLE_POLL_MS),
   });
+}
+
+/** A download's timeline; `download` events refresh it live (see live.ts). */
+export function useQueueTimeline(id: number, enabled = true) {
+  return useQuery({ queryKey: activityKeys.queueTimeline(id), queryFn: () => queueApi.timeline(id), enabled, retry: false });
 }
 
 export function useQueueStatus() {

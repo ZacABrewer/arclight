@@ -23,11 +23,14 @@ import {
 import { errorMessage } from '../../api/client.js';
 import { useGrabQueueItem, useQueue, useQueueStatus, useRemoveQueueItems } from '../../hooks/activity.js';
 import { useDownloadClientList } from '../../hooks/download-clients.js';
+import { useTorrentStatus } from '../../hooks/torrent.js';
+import { useVpnStatus } from '../../hooks/vpn.js';
 import { useRunJob } from '../../hooks/jobs.js';
 import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { ActivityHeader, formatBytes, formatEta } from './activity-shared.js';
 import { needsManualImport } from './manual-import/mapping.js';
+import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
 import { TorrentDrawer } from './torrent-drawer.js';
@@ -38,6 +41,8 @@ export const RETRY_IMPORT_JOB = 'ProcessPendingImports';
 
 /** Status chip for a queue row; the full status messages sit in a tooltip. */
 export function QueueChipCell({ item }: { item: QueueItem }) {
+  // Servers that explain why a download is (not) moving get the state-reason chip.
+  if (item.stateCode) return <QueueStateChip item={item} />;
   const chip = queueChip(item);
   const focusable = chip.detail ? 0 : undefined;
   const el =
@@ -111,6 +116,18 @@ export function RemoveQueueDialog({
   );
 }
 
+/** Id of a row's expanded detail panel (the Info button's aria-controls). */
+const detailId = (id: number) => `queue-detail-${id}`;
+
+function EngineBannerSlot(props: Parameters<typeof EngineBanner>[0]) {
+  if (!engineBannerKind(props.engine, props.vpn)) return null;
+  return (
+    <div className="al-queue-banner">
+      <EngineBanner {...props} />
+    </div>
+  );
+}
+
 export function QueuePage() {
   const [page, setPage] = useState(1);
   const [pageSize] = useState(20);
@@ -119,6 +136,16 @@ export function QueuePage() {
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const [removing, setRemoving] = useState<QueueItem[] | null>(null);
   const [inspecting, setInspecting] = useState<QueueItem | null>(null);
+  const [expanded, setExpanded] = useState<Set<RowKey>>(new Set());
+  const toggleExpanded = (id: number) =>
+    setExpanded((cur) => {
+      const next = new Set(cur);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  const engine = useTorrentStatus();
+  const vpn = useVpnStatus();
   const query = { page, pageSize, sortKey: sort.key as QueueSortKey, sortDirection: sort.direction, includeUnknownMediaItems: includeUnknown };
   const queue = useQueue(query);
   const status = useQueueStatus();
@@ -173,6 +200,14 @@ export function QueuePage() {
       cell: (r) => <Trail value={r.progress * 100} state={trailState(queueChip(r))} showValue label={t('activity.queue.progressOfTitle', { title: r.title })} />,
     },
     { key: 'sizeBytes', header: t('common.size'), mono: true, align: 'right', sortValue: (r) => r.sizeBytes, cell: (r) => formatBytes(r.sizeBytes) },
+    { key: 'speed', header: t('activity.queue.speed'), mono: true, align: 'right', cell: (r) => <SpeedCell item={r} /> },
+    {
+      key: 'peers',
+      header: <span title={t('activity.queue.peersSeedsHint')}>{t('activity.queue.peers')}</span>,
+      mono: true,
+      align: 'right',
+      cell: (r) => formatPeers(r.live),
+    },
     { key: 'eta', header: t('activity.queue.eta'), mono: true, align: 'right', sortValue: (r) => r.eta, cell: (r) => formatEta(r.eta) },
     { key: 'status', header: t('common.status'), sortValue: (r) => r.status, cell: (r) => <QueueChipCell item={r} /> },
     {
@@ -181,6 +216,18 @@ export function QueuePage() {
       align: 'right',
       cell: (r) => (
         <span className="al-activity-actions">
+          {isPendingItem(r) ? null : (
+            <Button
+              size="sm"
+              variant="ghost"
+              aria-expanded={expanded.has(r.id)}
+              aria-controls={detailId(r.id)}
+              aria-label={t(expanded.has(r.id) ? 'activity.queue.hideInfoTitle' : 'activity.queue.showInfoTitle', { title: r.title })}
+              onClick={() => toggleExpanded(r.id)}
+            >
+              {expanded.has(r.id) ? t('activity.queue.hideInfo') : t('activity.queue.info')}
+            </Button>
+          )}
           {isBuiltin(r) ? (
             <Button size="sm" variant="ghost" onClick={() => setInspecting(r)} aria-label={t('activity.queue.detailsTitle', { title: r.title })}>
               {t('common.details')}
@@ -217,6 +264,7 @@ export function QueuePage() {
   return (
     <div className="al-activity">
       <ActivityHeader active="queue" />
+      <EngineBannerSlot engine={engine.data ?? undefined} vpn={vpn.data ?? undefined} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         {queue.isError ? (
           <div className="al-activity-pad">
@@ -242,6 +290,8 @@ export function QueuePage() {
             selectable
             selected={selected}
             onSelectionChange={setSelected}
+            expandedRows={expanded}
+            renderExpanded={(r) => <QueueItemDetail item={r} builtin={isBuiltin(r)} id={detailId(r.id)} />}
             bulkActions={(keys) => {
               const items = records.filter((r) => keys.has(r.id));
               const pendingItems = items.filter(isPendingItem);

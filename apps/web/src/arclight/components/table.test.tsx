@@ -148,3 +148,18 @@ describe('Table virtualisation', () => {
     expect(container.querySelector('table')!.getAttribute('aria-rowcount')).toBe('1001');
   });
 });
+
+describe('Table expandable rows', () => {
+  it('renders a full-width detail row under each expanded row only', () => {
+    const { rerender } = render(
+      <Table columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} selectable expandedRows={new Set([2])} renderExpanded={(r) => <p>Details of {r.title}</p>} />,
+    );
+    const detail = screen.getByText('Details of Andor').closest('tr')!;
+    expect(detail.className).toContain('al-table__detail');
+    expect(detail.querySelector('td')!.getAttribute('colspan')).toBe('3');
+    expect(detail.previousElementSibling!.textContent).toContain('Andor');
+    expect(screen.queryByText('Details of Dark')).toBeNull();
+    rerender(<Table columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} expandedRows={new Set()} renderExpanded={(r) => <p>Details of {r.title}</p>} />);
+    expect(screen.queryByText('Details of Andor')).toBeNull();
+  });
+});

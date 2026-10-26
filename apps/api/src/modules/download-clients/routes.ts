@@ -7,6 +7,7 @@ import {
   DownloadClientTestAllResult,
   DownloadClientTestRequest,
   DownloadClientTestResult,
+  DownloadTimeline,
   QueueBulkRemoveRequest,
   QueueItem,
   QueuePage,
@@ -145,6 +146,12 @@ export function downloadClientsRoutes(
     );
 
     app.get('/queue/status', { schema: { response: { 200: QueueStatus } } }, async () => service.queueStatus());
+
+    app.get(
+      '/queue/:id/timeline',
+      { schema: { params: IdParams, response: { 200: DownloadTimeline, ...errors } } },
+      async (req) => service.getTimeline(req.params.id),
+    );
 
     app.get('/queue/:id', { schema: { params: IdParams, response: { 200: QueueItem, ...errors } } }, async (req) =>
       service.getQueueItem(req.params.id),

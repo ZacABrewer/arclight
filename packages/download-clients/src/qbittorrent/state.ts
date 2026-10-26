@@ -1,5 +1,5 @@
 import { sameRemotePath } from '../paths.js';
-import type { DownloadItem, DownloadItemStatus } from '../types.js';
+import type { DownloadItem, DownloadItemLive, DownloadItemPhase, DownloadItemStatus } from '../types.js';
 import type { QbtPreferences, QbtTorrent } from './schemas.js';
 
 /** qBittorrent reports this ETA (100 days) when it has no estimate. */
@@ -237,7 +237,34 @@ export function mapTorrent(torrent: QbtTorrent, context: MapContext): DownloadIt
     canBeRemoved: removable,
   };
   if (message !== undefined) item.statusMessage = message;
+  const live = qbtLive(torrent);
+  if (live) item.live = live;
+  const phase = QBT_PHASES[torrent.state];
+  if (phase !== undefined) item.phase = phase;
   const eta = finished ? 0 : etaSeconds(torrent.eta);
   if (eta !== undefined) item.etaSeconds = eta;
   return item;
+}
+
+const QBT_PHASES: Readonly<Record<string, DownloadItemPhase>> = {
+  metaDL: 'metadata',
+  forcedMetaDL: 'metadata',
+  checkingDL: 'checking',
+  checkingUP: 'checking',
+  checkingResumeData: 'checking',
+  moving: 'moving',
+  stalledDL: 'stalled',
+};
+
+/** Rates and peer counts from torrents/info; undefined when this qBittorrent reports no rates. */
+export function qbtLive(torrent: QbtTorrent): DownloadItemLive | undefined {
+  if (torrent.dlspeed === undefined && torrent.upspeed === undefined) return undefined;
+  const live: DownloadItemLive = { downloadRate: torrent.dlspeed ?? 0, uploadRate: torrent.upspeed ?? 0, ratio: torrent.ratio };
+  if (torrent.num_seeds !== undefined) {
+    live.connectedSeeds = torrent.num_seeds;
+    live.connectedPeers = torrent.num_seeds + (torrent.num_leechs ?? 0);
+  }
+  if (torrent.num_complete !== undefined) live.swarmSeeds = torrent.num_complete;
+  if (torrent.num_incomplete !== undefined) live.swarmLeechers = torrent.num_incomplete;
+  return live;
 }

@@ -67,6 +67,18 @@ describe('download-clients routes', () => {
     expect(fake(c.id).removed.map((r) => r.id)).toEqual(['h2', 'h3']);
   });
 
+  it('GET /queue/:id/timeline serves the download timeline and 404s for unknown ids', async () => {
+    const { app, service } = await build();
+    const c = service.create(qbit('Main'));
+    const tracked = await service.grab(c.id, { title: 'Show.S01E01', magnet: 'magnet:?xt=urn:btih:abc123' }, { seriesId: 1 });
+    const res = await app.inject({ method: 'GET', url: `/api/v1/queue/${tracked.id}/timeline` });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ trackedDownloadId: tracked.id, events: [{ type: 'grabbed', severity: 'info', title: 'Show.S01E01' }] });
+    const item = await app.inject({ method: 'GET', url: `/api/v1/queue/${tracked.id}` });
+    expect(item.json()).toMatchObject({ stateCode: 'queued', stateSeverity: 'info', stateReason: 'Queued in Main.' });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/queue/999/timeline' })).statusCode).toBe(404);
+  });
+
   it('remote path mapping CRUD over HTTP', async () => {
     const { app } = await build();
     const created = await app.inject({

@@ -35,6 +35,15 @@ export const QbtTorrent = z.object({
   last_activity: z.number().optional(),
   /** qBittorrent 5.x reports this in torrents/info. */
   private: z.boolean().optional(),
+  /** Bytes per second. */
+  dlspeed: z.number().optional(),
+  upspeed: z.number().optional(),
+  /** Connected seeds / leechers. */
+  num_seeds: z.number().optional(),
+  num_leechs: z.number().optional(),
+  /** Seeds / leechers in the whole swarm, as trackers report them. */
+  num_complete: z.number().optional(),
+  num_incomplete: z.number().optional(),
 });
 export type QbtTorrent = z.infer<typeof QbtTorrent>;
 

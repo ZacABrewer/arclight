@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { DownloadEvent } from './download-clients.js';
 import { Job } from './jobs.js';
 import { HealthResponse } from './system.js';
 import { VpnStatus } from './vpn.js';
@@ -17,6 +18,18 @@ export const ServerEvent = z.discriminatedUnion('type', [
     id: z.number().int(),
   }),
   z.object({ type: z.literal('queue'), action: z.enum(['changed']) }),
+  /** A new entry on a tracked download's timeline (GET /queue/:id/timeline). */
+  z.object({ type: z.literal('download'), action: z.literal('event'), event: DownloadEvent }),
+  /**
+   * The built-in torrent engine entered or left lockdown (VPN kill switch). `infoHashes` are the
+   * torrents it paused (lockdown) or resumed (unlocked) with this transition.
+   */
+  z.object({
+    type: z.literal('torrent'),
+    action: z.enum(['lockdown', 'unlocked']),
+    reason: z.string().optional(),
+    infoHashes: z.array(z.string()),
+  }),
   z.object({
     type: z.literal('release'),
     action: z.enum(['grabbed', 'rejected', 'pending']),

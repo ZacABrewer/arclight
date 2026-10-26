@@ -62,6 +62,8 @@ export type FileDateMode = z.infer<typeof FileDateMode>;
 export const MediaManagementSettings = z.object({
   enableCompletedDownloadHandling: z.boolean().default(true),
   autoRedownloadFailed: z.boolean().default(true),
+  /** A download that receives no data for this many minutes is flagged as stalled. 0 turns it off. */
+  stalledDownloadMinutes: z.number().int().min(0).max(1440).default(10),
   /** Empty or absent: replaced/deleted files are deleted permanently. */
   recycleBinPath: z.string().optional(),
   /** 0 disables cleanup. */

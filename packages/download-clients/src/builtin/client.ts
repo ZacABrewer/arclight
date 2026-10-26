@@ -21,6 +21,8 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemLive,
+  type DownloadItemPhase,
   type DownloadItemStatus,
 } from '../types.js';
 import type { BuiltinSettings } from './settings.js';
@@ -153,6 +155,41 @@ export async function completeResumeData(
     seedRatioLimit: null,
     seedTimeLimitMs: null,
   };
+}
+
+/**
+ * Live transfer numbers of an engine torrent, for queue items (also used by the api to show
+ * up-to-the-second numbers between queue polls).
+ */
+export function builtinLive(t: Torrent, stats: TorrentStats = t.getStats()): DownloadItemLive {
+  let tcp = 0;
+  let utp = 0;
+  let encrypted = 0;
+  for (const p of t.getPeers()) {
+    if (p.transport === 'utp') utp++;
+    else tcp++;
+    if (p.encrypted) encrypted++;
+  }
+  return {
+    downloadRate: stats.downloadRate,
+    uploadRate: stats.uploadRate,
+    connectedPeers: stats.connectedPeers,
+    connectedSeeds: stats.connectedSeeds,
+    swarmSeeds: stats.swarmSeeds,
+    swarmLeechers: stats.swarmLeechers,
+    piecesHave: stats.piecesHave,
+    pieceCount: stats.pieceCount,
+    ratio: stats.ratio,
+    transports: { tcp, utp },
+    encryptedPeers: encrypted,
+  };
+}
+
+/** The finer phase of an engine torrent (metadata / checking), when it has one. */
+export function builtinPhase(stats: Pick<TorrentStats, 'state'>): DownloadItemPhase | undefined {
+  if (stats.state === 'downloadingMetadata') return 'metadata';
+  if (stats.state === 'checking') return 'checking';
+  return undefined;
 }
 
 /**
@@ -336,6 +373,9 @@ export class BuiltinClient implements DownloadClient {
       canBeRemoved: releasable,
     };
     if (statusMessage !== undefined) item.statusMessage = statusMessage;
+    item.live = builtinLive(t, stats);
+    const phase = builtinPhase(stats);
+    if (phase !== undefined) item.phase = phase;
     if (complete) item.etaSeconds = 0;
     else if (stats.etaSeconds !== undefined) item.etaSeconds = stats.etaSeconds;
     return item;

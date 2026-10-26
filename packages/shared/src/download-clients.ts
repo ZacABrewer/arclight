@@ -550,6 +550,60 @@ export const QueueStatusMessage = z.object({
 });
 export type QueueStatusMessage = z.infer<typeof QueueStatusMessage>;
 
+/**
+ * Why a queue item is (or is not) moving, as a machine code. `stateReason` carries the
+ * human-readable sentence; the web localises its label from the code.
+ */
+export const QueueItemStateCode = z.enum([
+  'downloading',
+  'pendingGrab',
+  'metadata',
+  'checking',
+  'moving',
+  'queued',
+  'paused',
+  'killSwitch',
+  'noPeers',
+  'stalled',
+  'diskSpace',
+  'clientUnavailable',
+  'missing',
+  'warning',
+  'error',
+  'completed',
+  'importPending',
+  'importBlocked',
+  'importing',
+]);
+export type QueueItemStateCode = z.infer<typeof QueueItemStateCode>;
+
+/** How loudly the UI shows a state reason or timeline event. */
+export const QueueSeverity = z.enum(['ok', 'info', 'warning', 'error']);
+export type QueueSeverity = z.infer<typeof QueueSeverity>;
+
+/**
+ * Live transfer numbers. Every field but the rates is optional: the built-in engine fills all
+ * of them, qBittorrent most, usenet clients only the rates (or omit the block).
+ */
+export const QueueItemLive = z.object({
+  /** Bytes per second. */
+  downloadRate: z.number(),
+  uploadRate: z.number(),
+  connectedPeers: z.number().int().optional(),
+  connectedSeeds: z.number().int().optional(),
+  /** Largest seeder/leecher counts trackers reported for the whole swarm. */
+  swarmSeeds: z.number().int().optional(),
+  swarmLeechers: z.number().int().optional(),
+  piecesHave: z.number().int().optional(),
+  pieceCount: z.number().int().optional(),
+  ratio: z.number().optional(),
+  /** Connected peers per transport. */
+  transports: z.object({ tcp: z.number().int(), utp: z.number().int() }).optional(),
+  /** Connected peers whose connection is encrypted. */
+  encryptedPeers: z.number().int().optional(),
+});
+export type QueueItemLive = z.infer<typeof QueueItemLive>;
+
 export const QueueItem = z.object({
   id: z.number().int(),
   /** Client-side id (info-hash for torrents). `pending:*` while not yet sent to a client. */
@@ -575,6 +629,13 @@ export const QueueItem = z.object({
   seriesId: z.number().int().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
+  /** Why the item is (not) moving. Optional: older servers and some paths omit it. */
+  stateCode: QueueItemStateCode.optional(),
+  stateReason: z.string().optional(),
+  stateSeverity: QueueSeverity.optional(),
+  /** ISO-8601: when the download last received data, set while it counts as stalled. */
+  stalledSince: z.string().optional(),
+  live: QueueItemLive.optional(),
 });
 export type QueueItem = z.infer<typeof QueueItem>;
 
@@ -653,3 +714,50 @@ export const QueueRemoveResult = z.object({
   failed: z.array(z.object({ id: z.number().int(), error: z.string() })),
 });
 export type QueueRemoveResult = z.infer<typeof QueueRemoveResult>;
+
+// ---------------------------------------------------------------------------------------
+// Download timeline
+// ---------------------------------------------------------------------------------------
+
+/** What happened to a tracked download. Persisted, so only ever extend this list. */
+export const DownloadEventType = z.enum([
+  'pending',
+  'grabbed',
+  'metadataReceived',
+  'started',
+  'paused',
+  'resumed',
+  'stalled',
+  'recovered',
+  'completed',
+  'importStarted',
+  'importBlocked',
+  'imported',
+  'importFailed',
+  'removed',
+  'error',
+]);
+export type DownloadEventType = z.infer<typeof DownloadEventType>;
+
+export const DownloadEvent = z.object({
+  id: z.number().int(),
+  trackedDownloadId: z.number().int(),
+  /** Client-side id (info-hash for torrents) at the time of the event. */
+  downloadId: z.string(),
+  title: z.string(),
+  type: DownloadEventType,
+  severity: QueueSeverity,
+  /** ISO-8601 */
+  time: z.string(),
+  message: z.string().optional(),
+  /** Small machine-readable extras, e.g. `{ reason: 'killSwitch' }` on a pause. */
+  data: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),
+});
+export type DownloadEvent = z.infer<typeof DownloadEvent>;
+
+/** GET /queue/:id/timeline: oldest first. Still served after the item left the queue. */
+export const DownloadTimeline = z.object({
+  trackedDownloadId: z.number().int(),
+  events: z.array(DownloadEvent),
+});
+export type DownloadTimeline = z.infer<typeof DownloadTimeline>;

@@ -214,6 +214,9 @@ describe('BuiltinClient adding', () => {
       canMoveFiles: false,
     });
     expect(item.outputPath).toBe(s.getTorrent(id)?.getStats().contentPath);
+    expect(item.phase).toBeUndefined();
+    expect(item.live).toMatchObject({ piecesHave: 4, pieceCount: 4, transports: expect.any(Object) });
+    expect(typeof item.live?.downloadRate).toBe('number');
   });
 
   it('downloads a magnet (metadata first) from a seeder', async () => {
@@ -224,6 +227,8 @@ describe('BuiltinClient adding', () => {
     const early = (await client.getItems(''))[0];
     expect(early?.status).toBe('downloading');
     expect(early?.statusMessage).toBe('Downloading metadata');
+    expect(early?.phase).toBe('metadata');
+    expect(early?.live).toMatchObject({ connectedPeers: 0, downloadRate: 0 });
     expect(Object.values(early ?? {}).includes(undefined)).toBe(false);
     s.getTorrent(id)?.addPeers([{ host: '127.0.0.1', port: seed.listenPort }]);
     await waitItem(client, id, (st) => st === 'seeding');

@@ -392,7 +392,8 @@ its own feed.
 | DELETE | `/remotepathmapping/:id` | Delete |
 | GET | `/queue` | Paged queue of tracked downloads |
 | GET | `/queue/status` | Queue totals |
-| GET | `/queue/:id` | One queue item |
+| GET | `/queue/:id` | One queue item (with `stateCode` / `stateReason` / `stateSeverity`, `stalledSince`, `live` rates and peers) |
+| GET | `/queue/:id/timeline` | What happened to the download (grabbed, paused by the kill switch, stalled, imported, ...), oldest first; kept 30 days, also after it left the queue |
 | DELETE | `/queue/bulk` | Remove several items (body has `ids` and options) |
 | DELETE | `/queue/:id` | Remove one item (query options) |
 | POST | `/queue/grab/:id` | Retry a pending item |
@@ -1133,6 +1134,7 @@ of them with `POST /jobs/run`.
 | `StatsSnapshot` | `15 0 * * *` | stats | Daily per-root-folder storage snapshot (keeps 400 days) |
 | `DecisionLogCleanup` | `50 4 * * *` | releases | Deletes `release_decisions` rows older than `releases.decisionLogDays` (default 14) |
 | `SceneMappingSync` | `23 5 * * *` | scene-mapping | Pulls the community scene-mapping feed and replaces the `feed` rules (404 = not published) |
+| `DownloadEventsCleanup` | `41 3 * * *` | download-clients | Deletes download timeline entries (`download_events`) older than 30 days |
 | `AuditCleanup` | `17 3 * * *` | audit | Deletes `audit_events` older than `audit.retentionDays` (nothing at 0) |
 | `TrackerStatsSync` | `*/30 * * * *` | tracker-stats | Engine totals per tracker, then the account pages of enabled accounts with `scrapeAccount` |
 | `CrossSeedSearch` | `crossSeed.schedule` (default `0 4 * * *`) | cross-seed | Searches up to `maxPerRun` files not searched within `searchIntervalDays`, newest first (nothing while disabled) |
@@ -1151,6 +1153,8 @@ The RSS and status crons can be overridden through `registerIndexerJobs` options
 | `health` | `health` (HealthResponse) |
 | `library` | `action` (`added` `updated` `deleted` `fileAdded` `fileDeleted` `refreshed`), `mediaType` (`series` `movie`), `id` |
 | `queue` | `action` (`changed`) |
+| `download` | `action` (`event`), `event` (a DownloadEvent: new timeline entry of a tracked download) |
+| `torrent` | `action` (`lockdown` `unlocked`), optional `reason`, `infoHashes` (torrents the kill switch paused / resumed) |
 | `release` | `action` (`grabbed` `rejected` `pending`), `title`, optional `mediaType`, `mediaId` |
 | `import` | `action` (`imported` `failed` `manualRequired`), `title`, optional `mediaType`, `mediaId`, `message` |
 | `indexer` | `action` (`failed` `recovered`), `id`, `name` |

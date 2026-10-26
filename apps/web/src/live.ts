@@ -39,6 +39,13 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       void qc.invalidateQueries({ queryKey: ['wanted'] });
       return;
     case 'queue':
+    // A timeline entry (paused by the kill switch, stalled, imported, ...): rows and timelines.
+    case 'download':
+      void qc.invalidateQueries({ queryKey: ['queue'] });
+      return;
+    case 'torrent':
+      // The engine entered or left lockdown: banner, engine status and the paused rows.
+      void qc.invalidateQueries({ queryKey: ['torrent'] });
       void qc.invalidateQueries({ queryKey: ['queue'] });
       return;
     case 'release':
