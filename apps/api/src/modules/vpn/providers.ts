@@ -31,6 +31,8 @@ export interface ProbeResult {
   rxBytes?: number;
   txBytes?: number;
   error?: string;
+  /** The provider could not be asked (timeout, refused), as opposed to reporting the VPN down. */
+  unreachable?: boolean;
 }
 
 export interface ProbeOptions {
@@ -57,6 +59,9 @@ export interface ProviderDeps {
 
 /** WireGuard rejects session keys older than this without a new handshake. */
 export const STALE_HANDSHAKE_MS = 180_000;
+/** Gluetun control-server request timeout. */
+export const GLUETUN_TIMEOUT_MS = 10_000;
+
 /** Minimum time between automatic tunnel installs. */
 export const AUTO_START_BACKOFF_MS = 5 * 60_000;
 
@@ -72,9 +77,20 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
         username: p.username,
         password: p.password,
         fetch: deps.fetch,
+        // The control server shares gluetun's CPU with the tunnel; under a busy download it can
+        // take a few seconds to answer.
+        timeoutMs: GLUETUN_TIMEOUT_MS,
       });
-      if (!(await client.isRunning())) return { connected: false, error: 'Gluetun reports the VPN is stopped.' };
-      const ip = await client.publicIp();
+      let ip: Awaited<ReturnType<GluetunClient['publicIp']>>;
+      try {
+        if (!(await client.isRunning())) return { connected: false, error: 'Gluetun reports the VPN is stopped.' };
+        ip = await client.publicIp();
+      } catch (err) {
+        if (err instanceof VpnError && (err.code === 'timeout' || err.code === 'unreachable')) {
+          return { connected: false, error: err.message, unreachable: true };
+        }
+        throw err;
+      }
       let forwardedPort: number | undefined;
       try {
         forwardedPort = await client.forwardedPort();

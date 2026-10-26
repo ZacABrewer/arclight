@@ -22,6 +22,14 @@ import { nodeShellRunner } from './shell.js';
 /** Wait before retrying a failed forwarded-port sync for the same port. */
 const SYNC_RETRY_MS = 10 * 60_000;
 
+/**
+ * Gluetun checks in a row that may fail to get an answer before the VPN counts as down, and the
+ * gap between those re-checks. Gluetun's own firewall blocks all traffic when its tunnel drops,
+ * so a slow control server is not a leak; pausing every torrent over it is what stalled downloads.
+ */
+const GLUETUN_UNREACHABLE_GRACE = 3;
+const GLUETUN_RECHECK_MS = 15_000;
+
 export interface ListenPortSync {
   setListenPortOnAll(port: number): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>>;
 }
@@ -76,6 +84,8 @@ export class VpnService {
   private lastSyncedPort: number | undefined;
   /** Last failed sync; retrying every poll can get Arclight banned by qBittorrent's login guard. */
   private syncFailure: { port: number; at: number } | undefined;
+  private unreachableStreak = 0;
+  private recheckTimer: ReturnType<typeof setTimeout> | null = null;
   private inFlight: Promise<VpnStatus> | null = null;
   private manuallyDisconnected = false;
   private watchTimer: ReturnType<typeof setInterval> | null = null;
@@ -209,6 +219,8 @@ export class VpnService {
   stopWatch(): void {
     if (this.watchTimer) clearInterval(this.watchTimer);
     this.watchTimer = null;
+    if (this.recheckTimer) clearTimeout(this.recheckTimer);
+    this.recheckTimer = null;
   }
 
   /** One watcher step; exposed for tests. Returns true when it triggered a refresh. */
@@ -229,6 +241,15 @@ export class VpnService {
   }
 
   // ---- internals ------------------------------------------------------------------------------
+
+  private scheduleRecheck(): void {
+    if (this.recheckTimer) return;
+    this.recheckTimer = setTimeout(() => {
+      this.recheckTimer = null;
+      void this.refresh().catch((err: unknown) => this.log?.warn({ err }, 'vpn re-check failed'));
+    }, GLUETUN_RECHECK_MS);
+    this.recheckTimer.unref?.();
+  }
 
   private async doRefresh(): Promise<VpnStatus> {
     const s = this.settings();
@@ -253,6 +274,15 @@ export class VpnService {
     } catch (err) {
       result = { connected: false, error: errorMessage(err) };
     }
+    if (result.unreachable && s.provider.type === 'gluetun' && prev.connected && this.unreachableStreak < GLUETUN_UNREACHABLE_GRACE) {
+      this.unreachableStreak++;
+      if (live) this.scheduleRecheck();
+      const { error: _e, warning: _w, ...kept } = prev;
+      const warning = `${result.error ?? 'Gluetun did not answer.'} Still treating the VPN as up; re-checking (${this.unreachableStreak}/${GLUETUN_UNREACHABLE_GRACE}).`;
+      this.log?.warn({ streak: this.unreachableStreak, error: result.error }, 'gluetun slow to answer; keeping the VPN up');
+      return { status: { ...kept, lastChecked: checked, warning }, probed: false };
+    }
+    if (!result.unreachable) this.unreachableStreak = 0;
     const leak = Boolean(s.homePublicIp && result.publicIp && result.publicIp === s.homePublicIp);
     const status: VpnStatus = {
       ...result,

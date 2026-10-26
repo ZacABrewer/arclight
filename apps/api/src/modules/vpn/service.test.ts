@@ -89,6 +89,38 @@ describe('VpnService status and events', () => {
   });
 });
 
+describe('slow gluetun control server', () => {
+  it('keeps the VPN up through a few unanswered checks, then reports it down', async () => {
+    let result: ProbeResult = { connected: true, publicIp: '212.0.0.1', forwardedPort: 41000 };
+    const h = await setup({ settings: { enabled: true }, probe: () => result });
+    await expect(h.service.refresh()).resolves.toMatchObject({ connected: true, killSwitchEngaged: false });
+    result = { connected: false, unreachable: true, error: 'Gluetun did not answer within 10000 ms.' };
+    for (let i = 1; i <= 3; i++) {
+      const st = await h.service.refresh();
+      expect(st).toMatchObject({ connected: true, killSwitchEngaged: false, publicIp: '212.0.0.1', forwardedPort: 41000 });
+      expect(st.warning).toContain(`(${i}/3)`);
+    }
+    await expect(h.service.refresh()).resolves.toMatchObject({ connected: false, killSwitchEngaged: true });
+    h.service.stopWatch();
+  });
+
+  it('resets the grace after a good answer and never applies it to an explicit stop', async () => {
+    let result: ProbeResult = { connected: true, publicIp: '212.0.0.1' };
+    const h = await setup({ settings: { enabled: true }, probe: () => result });
+    await h.service.refresh();
+    result = { connected: false, unreachable: true, error: 'timeout' };
+    await h.service.refresh();
+    await h.service.refresh();
+    result = { connected: true, publicIp: '212.0.0.1' };
+    await expect(h.service.refresh()).resolves.not.toHaveProperty('warning');
+    result = { connected: false, unreachable: true, error: 'timeout' };
+    await expect(h.service.refresh()).resolves.toMatchObject({ connected: true });
+    result = { connected: false, error: 'Gluetun reports the VPN is stopped.' };
+    await expect(h.service.refresh()).resolves.toMatchObject({ connected: false, killSwitchEngaged: true });
+    h.service.stopWatch();
+  });
+});
+
 describe('forwarded port sync', () => {
   it('calls setListenPort once per port change', async () => {
     let port = 41000;
