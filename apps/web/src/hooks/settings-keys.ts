@@ -1,4 +1,5 @@
 import { useMutation, useQueryClient, type QueryKey } from '@tanstack/react-query';
+import { t } from '../i18n/index.js';
 
 // Query keys for the settings and activity pages. First segments line up with what live.ts
 // invalidates: ['settings'] on a settings event, ['indexers'] on an indexer event, ['queue'] and
@@ -53,7 +54,7 @@ export function useInvalidatingMutation<TVars, TData>(
   const qc = useQueryClient();
   return useMutation({
     mutationFn,
-    meta: options.silent ? { silent: true } : { errorTitle: options.errorTitle ?? 'Could not save' },
+    meta: options.silent ? { silent: true } : { errorTitle: options.errorTitle ?? t('hooks.settingsKeys.couldNotSave') },
     onSettled: async () => {
       await Promise.all(keys.map((queryKey) => qc.invalidateQueries({ queryKey })));
     },

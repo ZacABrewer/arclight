@@ -1,7 +1,9 @@
 import type { ReactNode } from 'react';
 import { errorMessage } from '../../api/client.js';
-import { Button, Pane, SectionLabel } from '../../arclight/index.js';
+import { Button, Chip, Pane, SectionLabel, Tooltip } from '../../arclight/index.js';
 import './settings.css';
+import './managed.css';
+import { t } from '../../i18n/index.js';
 
 // Small building blocks shared by the settings pages (Arclight).
 
@@ -12,8 +14,8 @@ export function EditorFooter({
   saving,
   onDelete,
   extra,
-  saveLabel = 'Save',
-  deleteLabel = 'Delete',
+  saveLabel = t('common.save'),
+  deleteLabel = t('common.delete'),
 }: {
   onCancel: () => void;
   onSave: () => void;
@@ -35,7 +37,7 @@ export function EditorFooter({
       </div>
       <div className="al-editor-footer__side">
         <Button variant="ghost" onClick={onCancel}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button variant="primary" loading={saving ?? false} onClick={onSave}>
           {saveLabel}
@@ -101,15 +103,56 @@ export function AddCard({ label, onClick }: { label: string; onClick: () => void
   );
 }
 
-/** A section inside a settings pane: mono CAPS label, optional action right, then content. */
-export function SettingsSection({ label, action, children, count }: { label: string; action?: ReactNode; children: ReactNode; count?: number | undefined }) {
+export const managedTooltip = () => t('settings.shared.managedTooltip');
+
+/** "Managed by config file" lock badge with the reason in a tooltip. */
+export function ManagedBadge({ detail }: { detail?: string | undefined }) {
   return (
-    <section className="al-settings-section" aria-label={label}>
+    <Tooltip content={detail ? t('settings.shared.managedTooltipKeysDetail', { tooltip: managedTooltip(), detail }) : managedTooltip()}>
+      <span tabIndex={0} className="al-managed-badge">
+        <Chip tone="neutral" dot="ring">
+          {t('settings.shared.managedByConfigFile')}
+        </Chip>
+      </span>
+    </Tooltip>
+  );
+}
+
+/**
+ * A section inside a settings pane: mono CAPS label, optional action right, then content.
+ * `managed` (from isSectionManaged in hooks/config.ts) adds the lock badge and disables every
+ * input inside through a disabled fieldset.
+ */
+export function SettingsSection({
+  label,
+  action,
+  children,
+  count,
+  managed = false,
+  managedKeys,
+}: {
+  label: string;
+  action?: ReactNode;
+  children: ReactNode;
+  count?: number | undefined;
+  managed?: boolean | undefined;
+  /** Managed key names, listed in the badge tooltip. */
+  managedKeys?: readonly string[] | undefined;
+}) {
+  return (
+    <section className="al-settings-section" aria-label={label} data-managed={managed || undefined}>
       <div className="al-settings-section__head">
         <SectionLabel count={count}>{label}</SectionLabel>
+        {managed ? <ManagedBadge detail={managedKeys?.length ? managedKeys.join(', ') : undefined} /> : null}
         {action}
       </div>
-      {children}
+      {managed ? (
+        <fieldset disabled className="al-managed-fieldset" aria-label={t('settings.shared.labelManagedByConfigFile', { label })}>
+          {children}
+        </fieldset>
+      ) : (
+        children
+      )}
     </section>
   );
 }
@@ -128,14 +171,14 @@ export function SaveError({ error }: { error: unknown }) {
 export function PendingApiNotice({ what }: { what: string }) {
   return (
     <div className="al-notice" role="status">
-      The {what} api is not available on this server yet. This page works once that module ships.
+      {t('settings.shared.theWhatApiIsNot', { what })}
     </div>
   );
 }
 
 export function minutesLabel(minutes: number): string {
-  if (minutes === 0) return 'No delay';
-  if (minutes % 1440 === 0) return `${minutes / 1440} d`;
-  if (minutes % 60 === 0) return `${minutes / 60} h`;
-  return `${minutes} min`;
+  if (minutes === 0) return t('settings.shared.noDelay');
+  if (minutes % 1440 === 0) return t('settings.shared.valueD', { value: minutes / 1440 });
+  if (minutes % 60 === 0) return t('settings.shared.valueH', { value: minutes / 60 });
+  return t('settings.shared.minutesMin', { minutes });
 }

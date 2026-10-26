@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 // Pure path helpers for the folder browser. The api answers with native paths (backslashes
 // on Windows); these never touch the filesystem.
 
@@ -7,7 +8,10 @@ export interface Crumb {
   path: string;
 }
 
-export const ROOT_LABEL = 'Computer';
+/** Label of the virtual root above drives/mounts (read per call so it follows the locale). */
+export const rootLabel = () => t('components.pathPicker.computer');
+/** @deprecated English label; use rootLabel(). */
+export const ROOT_LABEL = 'Computer'; // i18n-ignore: English source, kept for tests
 
 export function isWindowsPath(path: string): boolean {
   return /^[A-Za-z]:/.test(path) || path.startsWith('\\\\');
@@ -15,9 +19,9 @@ export function isWindowsPath(path: string): boolean {
 
 /** Breadcrumbs for a listing path: roots first, the path itself last. */
 export function breadcrumbs(path: string): Crumb[] {
-  if (path === '') return [{ label: ROOT_LABEL, path: '' }];
+  if (path === '') return [{ label: rootLabel(), path: '' }];
   if (isWindowsPath(path)) {
-    const crumbs: Crumb[] = [{ label: ROOT_LABEL, path: '' }];
+    const crumbs: Crumb[] = [{ label: rootLabel(), path: '' }];
     let root: string;
     let rest: string;
     if (path.startsWith('\\\\')) {

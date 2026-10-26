@@ -155,10 +155,12 @@ describe('series details (Page 03)', () => {
     for (const name of ['Search monitored', 'Interactive search', 'Edit', 'Delete']) expect(within(hero).getByRole('button', { name })).toBeTruthy();
   });
 
-  it('has the six canonical tabs', async () => {
+  it('has the canonical tabs', async () => {
     renderAt('/library/series/1');
     await screen.findByRole('region', { name: 'Series overview' });
-    await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Seasons & episodes', 'Files1', 'History', 'Search', 'Subtitles', 'Requests']));
+    await waitFor(() =>
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Seasons & episodes', 'Files1', 'History', 'Decisions', 'Search', 'Scene mapping', 'Subtitles', 'Requests']),
+    );
   });
 
   it('season accordion shows the monitor switch, meter and kit status chips', async () => {
@@ -254,7 +256,7 @@ describe('movie details', () => {
     expect(within(hero).getByTestId('availability').textContent).toBe('Available');
     expect(within(hero).getByRole('link', { name: 'Dune Collection' })).toBeTruthy();
     expect(within(hero).getByText('Missing').getAttribute('data-status')).toBe('missing');
-    await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Files0', 'History', 'Search', 'Subtitles', 'Requests']));
+    await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Files0', 'History', 'Decisions', 'Search', 'Subtitles', 'Requests']));
   });
 });
 

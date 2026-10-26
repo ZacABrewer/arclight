@@ -1,0 +1,2 @@
+/* Settings → Challenge solver: reuses the VPN status pane layout (vpn.css). */
+.al-solver-detect { margin: 0; color: var(--al-text-3); }

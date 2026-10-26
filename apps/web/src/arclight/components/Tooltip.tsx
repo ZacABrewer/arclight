@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import { cx } from '../cx.js';
+import { t } from '../../i18n/index.js';
 
 export interface TooltipProps {
   /** Tooltip content — plain text or a short list (release rejections). */
@@ -65,7 +66,7 @@ export function RejectionList({ reasons }: { reasons: readonly string[] }) {
   return (
     <span style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
       <span style={{ fontWeight: 600, color: 'var(--al-warn-text)' }}>
-        {reasons.length} {reasons.length === 1 ? 'rejection' : 'rejections'}
+        {t('arclight.tooltip.rejections', { reasonsCount: reasons.length })}
       </span>
       {reasons.map((r) => (
         <span key={r}>· {r}</span>

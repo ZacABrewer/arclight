@@ -316,8 +316,8 @@ export function fakeFetch(): typeof fetch & { calls: string[] } {
   return fn;
 }
 
-export async function harness(opts: { deps?: ReleasesDeps; allowed?: QualityName[] } = {}) {
-  const db = await createTestDb({ ...tables });
+export async function harness(opts: { deps?: ReleasesDeps; allowed?: QualityName[]; tables?: Record<string, unknown> } = {}) {
+  const db = await createTestDb({ ...tables, ...(opts.tables ?? {}) });
   const profiles = new ProfilesService({ db });
   profiles.seedDefaults();
   const draft = makeProfile(opts.allowed ?? HD_ALLOWED);

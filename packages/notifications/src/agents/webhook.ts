@@ -1,10 +1,14 @@
+import { formatEvent, type FormattedAction } from '../format.js';
 import { basicAuthHeader, httpRequest } from '../http.js';
 import type { WebhookSettings } from '../settings.js';
 import type { NotificationEvent } from '../types.js';
 import { ALL_EVENTS, BaseAgent, type AgentDeps } from './base.js';
 
-/** The webhook body is the event itself, plus `eventType` as a friendlier alias for `type`. */
-export type WebhookPayload = NotificationEvent & { eventType: NotificationEvent['type'] };
+/**
+ * The webhook body is the event itself, plus `eventType` as a friendlier alias for `type` and
+ * `actions` (approve/decline deep links) when the event has any.
+ */
+export type WebhookPayload = NotificationEvent & { eventType: NotificationEvent['type']; actions?: FormattedAction[] };
 
 export class WebhookAgent extends BaseAgent {
   readonly kind = 'webhook' as const;
@@ -18,7 +22,8 @@ export class WebhookAgent extends BaseAgent {
   }
 
   buildPayload(event: NotificationEvent): WebhookPayload {
-    return { eventType: event.type, ...event };
+    const actions = event.type === 'test' ? undefined : formatEvent(event).actions;
+    return { eventType: event.type, ...event, ...(actions ? { actions } : {}) };
   }
 
   buildHeaders(): Record<string, string> {

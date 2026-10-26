@@ -1,0 +1,13 @@
+/* Settings → General → Config as code. */
+.al-cac { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-cac__row { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; }
+.al-cac__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.al-cac__file { color: var(--al-text-3); font: inherit; max-width: 100%; }
+.al-cac__preview { display: flex; flex-direction: column; gap: 10px; min-width: 0; border-top: 1px solid var(--al-line-1); padding-top: 12px; }
+.al-cac__summary { margin: 0; color: var(--al-text-2); }
+.al-cac__table { overflow-x: auto; max-width: 100%; }
+.al-cac__issues { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.al-cac__issues[data-tone='danger'] { color: var(--al-danger-text); }
+.al-cac__issues[data-tone='warn'] { color: var(--al-warn-text); }
+.al-cac__done { margin: 0; color: var(--al-text-2); }
+.al-cac__managed { display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow-wrap: anywhere; }

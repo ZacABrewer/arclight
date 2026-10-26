@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent, type ReactNode, type Ref, type SelectHTMLAttributes } from 'react';
 import { cx } from '../cx.js';
+import { t } from '../../i18n/index.js';
 
 export interface SelectOption<V extends string = string> {
   value: V;
@@ -61,7 +62,7 @@ export function SelectMenu<V extends string = string>({
   options,
   value,
   onChange,
-  placeholder = 'Select…',
+  placeholder = t('arclight.select.select'),
   id,
   disabled,
   width = 240,

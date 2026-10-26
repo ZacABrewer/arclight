@@ -1,4 +1,5 @@
 import { formatDateTime as formatPreferredDateTime } from './ui-preferences.js';
+import { t, formatDecimal } from '../i18n/index.js';
 
 export function formatUptime(totalSeconds: number): string {
   const d = Math.floor(totalSeconds / 86_400);
@@ -17,7 +18,7 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   else if (abs < 3600) text = `${Math.round(abs / 60)}m`;
   else if (abs < 86_400) text = `${Math.round(abs / 3600)}h`;
   else text = `${Math.round(abs / 86_400)}d`;
-  return diff < 0 ? `${text} ago` : `in ${text}`;
+  return diff < 0 ? t('lib.format.ago', { time: text }) : t('lib.format.in', { time: text });
 }
 
 /** Date and time in the signed-in user's preferred formats (Settings → General → UI). */
@@ -28,7 +29,7 @@ export function formatDateTime(iso: string): string {
 export function formatDuration(ms: number | null | undefined): string {
   if (ms == null) return '—';
   if (ms < 1000) return `${ms} ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)} s`;
+  if (ms < 60_000) return `${formatDecimal(ms / 1000, 1)} s`;
   return `${Math.floor(ms / 60_000)}m ${Math.round((ms % 60_000) / 1000)}s`;
 }
 
@@ -42,7 +43,7 @@ export function formatSize(bytes: number | null | undefined): string {
     n /= 1024;
     i++;
   }
-  return `${n.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+  return `${formatDecimal(n, i === 0 ? 0 : 1)} ${units[i]}`;
 }
 
 /** Bytes per second as a human-readable rate, e.g. "1.5 MiB/s". */

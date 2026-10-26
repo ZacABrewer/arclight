@@ -4,6 +4,7 @@ import { errorMessage } from '../../../api/client.js';
 import { Button, ErrorBlock, Input, Select, Table, type Column } from '../../../arclight/index.js';
 import { useAddImportListExclusion, useDeleteImportListExclusion, useImportListExclusions } from '../../../hooks/import-lists.js';
 import { SaveError, SettingsSection } from '../shared.js';
+import { t } from '../../../i18n/index.js';
 
 /** Titles import lists never add again (shared with the library's import exclusions). */
 export function ExclusionsCard() {
@@ -35,56 +36,56 @@ export function ExclusionsCard() {
   };
 
   const columns: Array<Column<ImportListExclusion>> = [
-    { key: 'title', header: 'Title', sortValue: (x) => x.title, cell: (x) => x.title },
-    { key: 'year', header: 'Year', sortValue: (x) => x.year ?? null, cell: (x) => x.year ?? '—', width: '80px', mono: true },
-    { key: 'type', header: 'Type', sortValue: (x) => x.mediaType, cell: (x) => (x.mediaType === 'series' ? 'Series' : 'Movie'), width: '90px', muted: true },
-    { key: 'tmdb', header: 'TMDB id', sortValue: (x) => x.tmdbId, cell: (x) => x.tmdbId, width: '110px', mono: true },
+    { key: 'title', header: t('common.title'), sortValue: (x) => x.title, cell: (x) => x.title },
+    { key: 'year', header: t('common.year'), sortValue: (x) => x.year ?? null, cell: (x) => x.year ?? '—', width: '80px', mono: true },
+    { key: 'type', header: t('common.type'), sortValue: (x) => x.mediaType, cell: (x) => (x.mediaType === 'series' ? t('common.series') : t('common.movie')), width: '90px', muted: true },
+    { key: 'tmdb', header: t('settings.importLists.exclusionsCard.tmdbId'), sortValue: (x) => x.tmdbId, cell: (x) => x.tmdbId, width: '110px', mono: true },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '110px',
       cell: (x) => (
-        <Button size="sm" variant="ghost" aria-label={`Remove ${x.title}`} onClick={() => remove.mutate(x.id)}>
-          Remove
+        <Button size="sm" variant="ghost" aria-label={t('settings.importLists.exclusionsCard.removeTitle', { title: x.title })} onClick={() => remove.mutate(x.id)}>
+          {t('common.remove')}
         </Button>
       ),
     },
   ];
 
   return (
-    <SettingsSection label="List exclusions" {...(list.data ? { count: list.data.length } : {})}>
+    <SettingsSection label={t('settings.importLists.exclusionsCard.listExclusions')} {...(list.data ? { count: list.data.length } : {})}>
       {list.isError ? (
-        <ErrorBlock title="Could not load exclusions" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.importLists.exclusionsCard.couldNotLoadExclusions')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
         <Table
-          caption="List exclusions"
+          caption={t('settings.importLists.exclusionsCard.listExclusions')}
           density="dense"
           columns={columns}
           rows={list.data}
           loading={list.isPending}
           rowKey={(x) => x.id}
           sortable
-          empty="No exclusions. Titles you exclude are never added by a list."
+          empty={t('settings.importLists.exclusionsCard.noExclusionsTitlesYouExclude')}
         />
       )}
-      <form className="al-inline-form" onSubmit={submit} aria-label="Add exclusion">
+      <form className="al-inline-form" onSubmit={submit} aria-label={t('settings.importLists.exclusionsCard.addExclusion')}>
         <Select
-          aria-label="Exclusion type"
+          aria-label={t('settings.importLists.exclusionsCard.exclusionType')}
           value={mediaType}
           onChange={(e) => setMediaType(e.currentTarget.value as MediaType)}
           options={[
-            { value: 'movie', label: 'Movie' },
-            { value: 'series', label: 'Series' },
+            { value: 'movie', label: t('common.movie') },
+            { value: 'series', label: t('common.series') },
           ]}
         />
-        <Input aria-label="TMDB id" mono inputMode="numeric" placeholder="TMDB id" value={tmdbId} onChange={(e) => setTmdbId(e.currentTarget.value)} />
-        <Input aria-label="Exclusion title" placeholder="Title" value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
-        <Input aria-label="Exclusion year" mono inputMode="numeric" placeholder="Year" value={year} onChange={(e) => setYear(e.currentTarget.value)} />
+        <Input aria-label={t('settings.importLists.exclusionsCard.tmdbId')} mono inputMode="numeric" placeholder={t('settings.importLists.exclusionsCard.tmdbId')} value={tmdbId} onChange={(e) => setTmdbId(e.currentTarget.value)} />
+        <Input aria-label={t('settings.importLists.exclusionsCard.exclusionTitle')} placeholder={t('common.title')} value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
+        <Input aria-label={t('settings.importLists.exclusionsCard.exclusionYear')} mono inputMode="numeric" placeholder={t('common.year')} value={year} onChange={(e) => setYear(e.currentTarget.value)} />
         <Button type="submit" variant="secondary" disabled={!valid} loading={add.isPending}>
-          Add exclusion
+          {t('settings.importLists.exclusionsCard.addExclusion')}
         </Button>
       </form>
       <SaveError error={add.error} />

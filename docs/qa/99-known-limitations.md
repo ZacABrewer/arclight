@@ -123,6 +123,30 @@ bugs unless the checklist for that area says otherwise.
 | With method "None on the local network" only loopback, private-range and link-local addresses skip sign-in. If Arclight sits behind a reverse proxy on the same LAN that forwards public addresses without `X-Forwarded-For`, every visitor looks local. Put the proxy's authentication first. | |
 | Failed logins are limited to 10 per address per 15 minutes (HTTP 429). The counter is in memory and resets on restart. | |
 
+## Wave-2 features (cross-seed, trackers, transcode, Discord, scene numbering, policies)
+
+Reported by the modules' authors and `docs/API.md`; there are no QA checklist files for these
+areas yet.
+
+| Limitation | Effect |
+|---|---|
+| Cross-seed handles single-file torrents only. Season packs, multi-season releases, multi-file torrents and magnet-only releases are skipped. | Only individual episode or movie files are cross-seeded; a library built from season packs gets few or no matches. |
+| Cross-seed adds only to the Built-in engine or qBittorrent, and verifies only the first and last piece before seeding with checking skipped. | Other clients are not used. A file that differs in the middle is only caught by the client later, as a failed piece. |
+| Cross-seed links a differently named torrent with a hard link and falls back to a symlink when the link folder is on another filesystem. | Deleting or upgrading the library file breaks a symlinked cross-seed. |
+| The hit-and-run guard is enforced only by the Built-in download client. | qBittorrent and other external clients can still remove a torrent before its seeding rule is met. |
+| Tracker account statistics (ratio, buffer, H&R count, bonus) are scraped only for definitions that declare an `account` block; torrents are attributed to trackers by grab history and announce hosts. | Other trackers show engine totals only; a torrent added by hand with an unknown announce host is not counted. |
+| Freeleech-only mode trusts the indexer's freeleech flags and download volume factor (rejection `notFreeleech`). | An indexer that does not report freeleech rejects every release while the mode is on. |
+| Request approval by size (`autoApproveIfSizeBelowGb`, budget `autoApproveUnder.sizeGb`) works only for titles already in the library; the size comes from a quick interactive search (20 s). | Requests for new titles are never size-approved. In `movieGb` budgets, unknown sizes count as 0. |
+| Approval windows use server local time. | Users in other time zones see holds and releases at shifted hours. |
+| Transcoding runs one file at a time. There is no HDR tone mapping, mp4 output drops image subtitles, and hardware encoding needs the device passed into the container (`/dev/dri` for VAAPI/QSV, the NVIDIA runtime for NVENC). | An HDR source encoded to h264 keeps PQ/HLG tags on 8-bit video. PGS/VobSub tracks are lost when remuxing to mp4. |
+| `runAfterImport` transcodes wait in memory (up to 6 h) for media analysis. With `keepOriginal` and a container change, the original stays on disk but is no longer tracked by the library. | A restart while a file waits drops that automatic transcode (run it by hand). The untracked original is not cleaned up. |
+| The community scene-numbering feed is not published yet (`/scenemapping/feed` reports it as not published). Applying rules re-registers remapped files with new file ids. | Only manual rules and the anime absolute fallback apply. Records keyed by the old file id (subtitle files, cross-seeds, transcode jobs) are not carried over to the new id. |
+| The Discord bot posts only request `created`, `approved` and `completed` events; `/request` for a series requests all seasons; `/pending` shows at most 5. | Declines and failures are not posted. Request single seasons from the web UI. |
+| The engine agent accepts only the API key (not a browser session) and always answers 409 to a remote listen-port change. It serves nothing while the built-in engine is stopped. | The driving instance's "follow VPN port" has no effect on the agent; set the port on the agent instance. |
+| Multi-version libraries allow at most 8 version slots per series or movie, one file per slot. | |
+| Whisper subtitles need an external Whisper ASR service (`ARCLIGHT_WHISPER_URL`, compose profile `whisper`); it is not bundled in the image. | Without it, `/subtitle/whisper/status` reports it as not configured and the provider is never used. |
+| Container update items carry the container's Docker labels (`labels`), but the Updates page does not show them yet. | |
+
 ## Pipeline behaviour worth knowing
 
 | Limitation | Effect |
@@ -132,7 +156,7 @@ bugs unless the checklist for that area says otherwise.
 | Archive files (.rar, .zip) in a completed download are not extracted by Arclight ("Found archive file, might need to be extracted"). | Configure the download client to unpack, or extract by hand then Manual Import. |
 | Language profiles for audio language live on the quality profile; subtitle language profiles are separate (Settings -> Subtitles). | |
 | Metadata comes from TMDB only (no TVDB fallback, no image caching on disk). | Series without TMDB episode data show gaps; posters load from TMDB each time. |
-| Docker image does not include ffmpeg, ffprobe, ffsubsync or alass. | Media-info on import and subtitle extraction/sync are unavailable unless you install them in a derived image. |
+| Docker image includes ffmpeg and ffprobe but not ffsubsync or alass. | Subtitle sync with the `tool` method is unavailable unless you install them in a derived image; the `builtin` sync check works. |
 | Docker permission and read-only-mount health checks assume a Linux container user mapping (`PUID`/`PGID`). | Native Windows reports fewer filesystem problems. |
 
 ## Documentation known to be stale

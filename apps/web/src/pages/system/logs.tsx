@@ -24,6 +24,7 @@ import { relativeTime } from '../../lib/format.js';
 import { formatBytes, formatStamp } from './format.js';
 import { formatContext, LEVEL_LABELS, LEVEL_TONES, mergeLive, visibleRecords, type LogFilter } from './logs-model.js';
 import { SystemHeader } from './system-header.js';
+import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 50;
 export const logKeys = {
@@ -35,8 +36,8 @@ export const logKeys = {
 function useDebounced<T>(value: T, ms = 300): T {
   const [v, setV] = useState(value);
   useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
+    const item = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(item);
   }, [value, ms]);
   return v;
 }
@@ -52,7 +53,7 @@ function LogMessage({ r }: { r: LogRecord }) {
   if (!ctx) return <span className="sys-log__msg">{r.message}</span>;
   return (
     <details className="sys-log__details">
-      <summary className="sys-log__msg">{r.message || <span className="sys-muted">(no message)</span>}</summary>
+      <summary className="sys-log__msg">{r.message || <span className="sys-muted">{t('system.logs.noMessage')}</span>}</summary>
       <pre className="sys-log__context">{ctx}</pre>
     </details>
   );
@@ -64,11 +65,11 @@ export function TailStatus({ tailing, connected, paused, fresh }: { tailing: boo
   return (
     <span className="sys-tail" aria-live="polite" data-live={live || undefined}>
       {live ? <LiveDot /> : <span className="sys-tail__dot" aria-hidden="true" />}
-      {!tailing ? 'Not tailing' : !connected ? 'Connecting…' : paused ? 'Paused' : 'Tailing'}
+      {!tailing ? t('system.logs.notTailing') : !connected ? t('system.logs.connecting') : paused ? t('status.paused') : t('system.logs.tailing')}
       {fresh ? (
         <>
           {' · '}
-          <span className="al-num">{fresh}</span> new
+          <span className="al-num">{fresh}</span> {t('system.logs.new')}
         </>
       ) : null}
     </span>
@@ -115,7 +116,7 @@ function EventsTab() {
 
   const clear = useMutation({
     mutationFn: logsApi.clear,
-    meta: { errorTitle: 'Could not clear logs' },
+    meta: { errorTitle: t('system.logs.couldNotClearLogs') },
     onSuccess: async () => {
       setLive([]);
       setHeld([]);
@@ -132,7 +133,7 @@ function EventsTab() {
   const columns: Column<LogRecord>[] = [
     {
       key: 'time',
-      header: 'Time',
+      header: t('common.time'),
       width: '170px',
       mono: true,
       cell: (r) => (
@@ -141,9 +142,9 @@ function EventsTab() {
         </time>
       ),
     },
-    { key: 'level', header: 'Level', width: '96px', cell: (r) => <Chip tone={LEVEL_TONES[r.level]}>{LEVEL_LABELS[r.level]}</Chip> },
-    { key: 'component', header: 'Component', width: '150px', mono: true, muted: true, cell: (r) => r.component ?? '—' },
-    { key: 'message', header: 'Message', mono: true, cell: (r) => <LogMessage r={r} /> },
+    { key: 'level', header: t('system.logs.level'), width: '96px', cell: (r) => <Chip tone={LEVEL_TONES[r.level]}>{LEVEL_LABELS[r.level]}</Chip> },
+    { key: 'component', header: t('system.logs.component'), width: '150px', mono: true, muted: true, cell: (r) => r.component ?? '—' },
+    { key: 'message', header: t('system.logs.message'), mono: true, cell: (r) => <LogMessage r={r} /> },
   ];
 
   return (
@@ -166,47 +167,47 @@ function EventsTab() {
                   setPaused(!paused);
                 }}
               >
-                {paused ? `Resume${held.length ? ` (${held.length} new)` : ''}` : 'Pause'}
+                {paused ? t('system.logs.resumeValue', { value: held.length ? ` (${held.length} new)` : '' }) : t('system.logs.pause')}
               </Button>
             ) : null}
             <Button size="sm" variant="ghost" onClick={() => void logs.refetch()} loading={logs.isFetching}>
-              Refresh
+              {t('common.refresh')}
             </Button>
             <Button size="sm" variant="danger" onClick={() => clear.mutate()} loading={clear.isPending}>
-              Clear logs
+              {t('system.logs.clearLogs')}
             </Button>
           </>
         }
       >
         <Select
-          aria-label="Minimum level"
+          aria-label={t('system.logs.minimumLevel')}
           value={level}
           onChange={(e) => {
             setLevel(e.currentTarget.value as LogLevel | '');
             setPage(1);
           }}
-          options={[{ value: '', label: 'All levels' }, ...LogLevel.options.map((l) => ({ value: l, label: `${LEVEL_LABELS[l]} and above` }))]}
+          options={[{ value: '', label: t('system.logs.allLevels') }, ...LogLevel.options.map((l) => ({ value: l, label: t('system.logs.valueAndAbove', { value: LEVEL_LABELS[l] }) }))]}
         />
         <Input
-          aria-label="Search logs"
+          aria-label={t('system.logs.searchLogs')}
           type="search"
-          placeholder="Search messages"
+          placeholder={t('system.logs.searchMessages')}
           value={searchText}
           onChange={(e) => {
             setSearchText(e.currentTarget.value);
             setPage(1);
           }}
         />
-        <Toggle label="Live tail" checked={follow} onChange={(e) => setFollow(e.currentTarget.checked)} />
+        <Toggle label={t('system.logs.liveTail')} checked={follow} onChange={(e) => setFollow(e.currentTarget.checked)} />
       </FilterBar>
       {logs.isError ? (
         <div className="sys-pad">
-          <ErrorBlock title="Couldn't load logs" onRetry={() => void logs.refetch()} />
+          <ErrorBlock title={t('system.logs.couldntLoadLogs')} onRetry={() => void logs.refetch()} />
         </div>
       ) : (
         <>
           <Table
-            caption="Log entries"
+            caption={t('system.logs.logEntries')}
             className="sys-log"
             density="dense"
             columns={columns}
@@ -215,7 +216,7 @@ function EventsTab() {
             loading={logs.isPending}
             sortable={false}
             manualSort
-            empty={<EmptyState title="No log entries">{level || search ? 'Nothing matches these filters.' : 'The in-memory log is empty.'}</EmptyState>}
+            empty={<EmptyState title={t('system.logs.noLogEntries')}>{level || search ? t('system.logs.nothingMatchesTheseFilters') : t('system.logs.theInMemoryLogIs')}</EmptyState>}
           />
           {pageCount > 1 ? (
             <div className="sys-foot">
@@ -232,11 +233,11 @@ function FilesTab() {
   const files = useQuery({ queryKey: logKeys.files, queryFn: logsApi.files });
   const status = useSystemStatus();
   const columns: Column<LogFile>[] = [
-    { key: 'name', header: 'File', mono: true, sortValue: (f) => f.name, cell: (f) => f.name },
-    { key: 'size', header: 'Size', mono: true, align: 'right', sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes) },
+    { key: 'name', header: t('common.file'), mono: true, sortValue: (f) => f.name, cell: (f) => f.name },
+    { key: 'size', header: t('common.size'), mono: true, align: 'right', sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes) },
     {
       key: 'modified',
-      header: 'Last written',
+      header: t('system.logs.lastWritten'),
       mono: true,
       sortValue: (f) => f.lastModified,
       cell: (f) => (
@@ -247,11 +248,11 @@ function FilesTab() {
     },
     {
       key: 'download',
-      header: <span className="al-sr-only">Download</span>,
+      header: <span className="al-sr-only">{t('common.download')}</span>,
       align: 'right',
       cell: (f) => (
         <LinkButton size="sm" variant="ghost" href={logsApi.fileUrl(f.name)} download={f.name}>
-          Download
+          {t('common.download')}
         </LinkButton>
       ),
     },
@@ -260,18 +261,18 @@ function FilesTab() {
     <Pane flush>
       {files.isError ? (
         <div className="sys-pad">
-          <ErrorBlock title="Couldn't list log files" onRetry={() => void files.refetch()} />
+          <ErrorBlock title={t('system.logs.couldntListLogFiles')} onRetry={() => void files.refetch()} />
         </div>
       ) : (
         <Table
-          caption="Log files"
+          caption={t('system.logs.logFiles')}
           columns={columns}
           rows={files.data}
           rowKey={(f) => f.name}
           loading={files.isPending}
           empty={
-            <EmptyState title="No log files">
-              Logs are written to {status.data ? <span className="al-num">{status.data.paths.logs}</span> : 'the log folder'}.
+            <EmptyState title={t('system.logs.noLogFiles')}>
+              {t('system.logs.logsAreWrittenTo')} {status.data ? <span className="al-num">{status.data.paths.logs}</span> : t('system.logs.theLogFolder')}.
             </EmptyState>
           }
         />
@@ -284,12 +285,12 @@ function FilesTab() {
 export function SystemLogsPage() {
   return (
     <>
-      <SystemHeader title="Logs" />
+      <SystemHeader title={t('common.logs')} />
       <Tabs
-        aria-label="Log views"
+        aria-label={t('system.logs.logViews')}
         tabs={[
-          { id: 'events', label: 'Events', content: <EventsTab /> },
-          { id: 'files', label: 'Files', content: <FilesTab /> },
+          { id: 'events', label: t('system.logs.events'), content: <EventsTab /> },
+          { id: 'files', label: t('common.files'), content: <FilesTab /> },
         ]}
       />
     </>

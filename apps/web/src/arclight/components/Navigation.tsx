@@ -2,6 +2,7 @@ import { useId, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { Button } from './Button.js';
 import { Icon } from './Icon.js';
+import { t } from '../../i18n/index.js';
 
 /* ------------------------------------------------------------------ Paginator */
 
@@ -18,12 +19,12 @@ export function Paginator({ page, pageCount, onPageChange, className }: Paginato
   const total = Math.max(1, pageCount);
   const current = Math.min(Math.max(1, page), total);
   return (
-    <nav className={cx('al-paginator', className)} aria-label="Pagination">
+    <nav className={cx('al-paginator', className)} aria-label={t('arclight.navigation.pagination')}>
       <span aria-live="polite">
-        Page <span className="al-paginator__num">{current}</span> of <span className="al-paginator__num">{total}</span>
+        {t('arclight.navigation.page')} <span className="al-paginator__num">{current}</span> {t('common.of')} <span className="al-paginator__num">{total}</span>
       </span>
-      <Button variant="secondary" size="sm" aria-label="Previous page" icon={<Icon name="chevronLeft" />} disabled={current <= 1} onClick={() => onPageChange(current - 1)} />
-      <Button variant="secondary" size="sm" aria-label="Next page" icon={<Icon name="chevronRight" />} disabled={current >= total} onClick={() => onPageChange(current + 1)} />
+      <Button variant="secondary" size="sm" aria-label={t('arclight.navigation.previousPage')} icon={<Icon name="chevronLeft" />} disabled={current <= 1} onClick={() => onPageChange(current - 1)} />
+      <Button variant="secondary" size="sm" aria-label={t('arclight.navigation.nextPage')} icon={<Icon name="chevronRight" />} disabled={current >= total} onClick={() => onPageChange(current + 1)} />
     </nav>
   );
 }
@@ -46,11 +47,11 @@ export interface FilterBarProps {
 export function FilterBar({ children, onClear, activeCount, end, className }: FilterBarProps) {
   const showClear = onClear && (activeCount === undefined || activeCount > 0);
   return (
-    <div className={cx('al-filterbar', className)} role="group" aria-label="Filters">
+    <div className={cx('al-filterbar', className)} role="group" aria-label={t('arclight.navigation.filters')}>
       {children}
       {showClear ? (
         <Button variant="ghost" size="sm" onClick={onClear}>
-          Clear
+          {t('arclight.navigation.clear')}
         </Button>
       ) : null}
       {end ? (
@@ -91,13 +92,13 @@ export function Tabs({ tabs, value, defaultValue, onChange, compact, className, 
   const baseId = useId();
   const [internal, setInternal] = useState(defaultValue ?? tabs[0]?.id ?? '');
   const active = value ?? internal;
-  const enabled = tabs.filter((t) => !t.disabled);
+  const enabled = tabs.filter((tab) => !tab.disabled);
   const select = (id: string) => {
     if (value === undefined) setInternal(id);
     onChange?.(id);
   };
   const onKeyDown = (e: KeyboardEvent) => {
-    const idx = enabled.findIndex((t) => t.id === active);
+    const idx = enabled.findIndex((item) => item.id === active);
     let next: TabItem | undefined;
     if (e.key === 'ArrowRight') next = enabled[(idx + 1) % enabled.length];
     else if (e.key === 'ArrowLeft') next = enabled[(idx - 1 + enabled.length) % enabled.length];
@@ -108,25 +109,25 @@ export function Tabs({ tabs, value, defaultValue, onChange, compact, className, 
     select(next.id);
     document.getElementById(`${baseId}-tab-${next.id}`)?.focus();
   };
-  const current = tabs.find((t) => t.id === active);
-  const hasPanels = tabs.some((t) => t.content !== undefined);
+  const current = tabs.find((entry) => entry.id === active);
+  const hasPanels = tabs.some((row) => row.content !== undefined);
   return (
     <div className={className}>
       <div role="tablist" aria-label={aria['aria-label']} className={cx('al-tabs', compact && 'al-tabs--compact')} onKeyDown={onKeyDown}>
-        {tabs.map((t) => (
+        {tabs.map((el) => (
           <button
-            key={t.id}
-            id={`${baseId}-tab-${t.id}`}
+            key={el.id}
+            id={`${baseId}-tab-${el.id}`}
             type="button"
             role="tab"
-            aria-selected={t.id === active}
-            aria-controls={hasPanels ? `${baseId}-panel-${t.id}` : undefined}
-            tabIndex={t.id === active ? 0 : -1}
-            disabled={t.disabled}
-            onClick={() => select(t.id)}
+            aria-selected={el.id === active}
+            aria-controls={hasPanels ? `${baseId}-panel-${el.id}` : undefined}
+            tabIndex={el.id === active ? 0 : -1}
+            disabled={el.disabled}
+            onClick={() => select(el.id)}
           >
-            {t.label}
-            {t.count !== undefined ? <span className="al-tabs__count">{t.count}</span> : null}
+            {el.label}
+            {el.count !== undefined ? <span className="al-tabs__count">{el.count}</span> : null}
           </button>
         ))}
       </div>
@@ -219,7 +220,7 @@ export function stepState(index: number, current: number): StepState {
 /** Diamond stepper (Page 08): done = filled, active = glow, todo = dim. */
 export function Stepper({ steps, current, onStepClick, className, ...aria }: StepperProps) {
   return (
-    <ol className={cx('al-stepper', className)} aria-label={aria['aria-label'] ?? 'Progress'}>
+    <ol className={cx('al-stepper', className)} aria-label={aria['aria-label'] ?? t('common.progress')}>
       {steps.map((s, i) => {
         const state = s.state ?? stepState(i, current);
         const body = (
@@ -228,7 +229,7 @@ export function Stepper({ steps, current, onStepClick, className, ...aria }: Ste
             <span className="al-step__diamond" aria-hidden="true" />
             <span className="al-step__label">
               {s.label}
-              <span className="al-sr-only">{state === 'done' ? ' (done)' : state === 'active' ? ' (current)' : ''}</span>
+              <span className="al-sr-only">{state === 'done' ? t('arclight.navigation.done') : state === 'active' ? t('arclight.navigation.current') : ''}</span>
             </span>
           </>
         );

@@ -8,8 +8,10 @@ import {
   type WatchlistSource,
   type WatchlistSyncResult,
 } from '@arclight/shared';
+import { MediaBrowserClient } from '@arclight/notifications';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
+import { configuredServer } from './media-server.js';
 import { RequestsError } from './errors.js';
 import { type Actor, can, canAutoRequest, canManageUsers } from './permissions.js';
 import { Permission } from '@arclight/shared';
@@ -18,8 +20,9 @@ import type { RequestsService } from './service.js';
 import { allUserRows, requestSettingsOf, userPermissions, userRow, type UserRow } from './users.js';
 
 // Watchlists (docs/spec/requests.md section 11): a per-user list, filled by hand or synced
-// from a media server. Sync providers are pluggable; Plex (plex.tv watchlist with the user's
-// own token) is implemented, Jellyfin is a placeholder until it grows a watchlist API.
+// from a media server. Sync providers are pluggable: Plex (plex.tv watchlist with the user's
+// own token) and Jellyfin/Emby (the linked account's favourite movies and series, read from
+// the server in Settings > Media server).
 
 type ItemRow = typeof watchlistItems.$inferSelect;
 
@@ -106,17 +109,50 @@ export function plexWatchlistProvider(fetchImpl: FetchLike = (u, i) => globalThi
   };
 }
 
-/** Placeholder: Jellyfin has no server-side watchlist API yet (favourites could stand in). */
-export const jellyfinWatchlistProvider: WatchlistProvider = {
-  source: 'jellyfin',
-  fetch: async () => null,
-};
+/**
+ * Jellyfin/Emby favourites of the user's linked account (`settings.mediaServerLink`), read
+ * with the account's own token (the server API key when the link has none, e.g. imported
+ * users). null when the user has no link of this kind or the server is not this kind.
+ */
+export function mediaBrowserWatchlistProvider(
+  kind: 'jellyfin' | 'emby',
+  db: Db,
+  fetchImpl: FetchLike = (u, i) => globalThis.fetch(u, i),
+): WatchlistProvider {
+  return {
+    source: kind,
+    async fetch(_user, settings, signal) {
+      const link = settings.mediaServerLink;
+      if (!link || link.kind !== kind) return null;
+      const server = configuredServer(db);
+      if (!server || server.kind !== kind) return null;
+      const client = new MediaBrowserClient({
+        kind,
+        url: server.baseUrl,
+        apiKey: server.apiKey,
+        fetch: (u, i) => fetchImpl(u, { ...i, ...(signal ? { signal } : {}) }),
+      });
+      const items = await client.favorites(link.externalId, link.accessToken ?? server.apiKey);
+      return items.map((i) => ({
+        mediaType: i.mediaType,
+        title: i.title,
+        year: i.year,
+        tmdbId: i.ids.tmdbId,
+        imdbId: i.ids.imdbId,
+        tvdbId: i.ids.tvdbId,
+        externalId: i.id,
+      }));
+    },
+  };
+}
 
 export interface WatchlistServiceOptions {
   db: Db;
   log?: Logger;
   requests: RequestsService;
   providers?: WatchlistProvider[];
+  /** HTTP for the default providers (tests pass a fake). */
+  fetch?: FetchLike;
 }
 
 export class WatchlistService {
@@ -129,7 +165,8 @@ export class WatchlistService {
     this.db = opts.db;
     this.log = opts.log;
     this.requests = opts.requests;
-    this.providers = opts.providers ?? [plexWatchlistProvider(), jellyfinWatchlistProvider];
+    const f = opts.fetch;
+    this.providers = opts.providers ?? [plexWatchlistProvider(f), mediaBrowserWatchlistProvider('jellyfin', opts.db, f), mediaBrowserWatchlistProvider('emby', opts.db, f)];
   }
 
   has(userId: number, type: MediaType, tmdbId: number): boolean {
@@ -303,6 +340,7 @@ export class WatchlistService {
 
   private async autoRequest(user: UserRow, settings: UserRequestSettings, type: MediaType, tmdbId: number): Promise<boolean> {
     const held = userPermissions(user);
+    if (!settings.autoRequestFromWatchlist) return false;
     if (!canAutoRequest(held, type)) return false;
     if (type === 'movie' ? !settings.watchlistSyncMovies : !settings.watchlistSyncSeries) return false;
     const status = this.requests.titleStatuses(type, [tmdbId]).get(tmdbId);

@@ -447,3 +447,13 @@ export function addEditionTokens(h: TokenHandlers, file: NamingFile): void {
   const edition = file.edition?.trim();
   if (edition) text(h, 'Edition Tags', () => formatEdition(edition));
 }
+
+/** `{Version}`: the multi-version slot of the file; empty (and dropped with its prefix) when unversioned. */
+export function addVersionTokens(h: TokenHandlers, file: NamingFile): void {
+  text(h, 'Version', () => file.versionTag?.trim() ?? '');
+}
+
+/** Whether a format uses `{Version}` anywhere. */
+export function hasVersionToken(format: string): boolean {
+  return tokensOf(parseFormat(format, { wrappers: true, escapes: true })).some((t) => normalizeTokenName(t.name) === 'version');
+}

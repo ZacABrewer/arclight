@@ -19,11 +19,21 @@ export const authKeys = {
 /** Pages rendered without the app shell and reachable before sign-in. */
 export const BARE_PATHS: ReadonlySet<string> = new Set(['/login', '/setup']);
 
+/**
+ * Pages anyone may open, signed in or not, once setup is done (the public request portal).
+ * They render without the app shell; the api decides what an anonymous visitor may read.
+ */
+export const PUBLIC_PATHS: ReadonlySet<string> = new Set(['/portal']);
+
+export function isPublicPath(pathname: string): boolean {
+  return PUBLIC_PATHS.has(pathname);
+}
+
 /** Pages that draw their own chrome (the component gallery renders a full demo shell). */
-export const SHELLLESS_PATHS: ReadonlySet<string> = new Set([...BARE_PATHS, '/design']);
+export const SHELLLESS_PATHS: ReadonlySet<string> = new Set([...BARE_PATHS, ...PUBLIC_PATHS, '/design']);
 
 /** Sections only admins may open; users are sent home. */
-export const ADMIN_ONLY_PREFIXES: readonly string[] = ['/settings', '/system', '/activity', '/indexers', '/subtitles', '/design'];
+export const ADMIN_ONLY_PREFIXES: readonly string[] = ['/settings', '/system', '/activity', '/indexers', '/subtitles', '/design', '/library/retention', '/library/hygiene'];
 
 export function isAdminOnlyPath(pathname: string): boolean {
   return ADMIN_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -57,11 +67,14 @@ export function resolveAuthRedirect(
 ): string | null {
   if (!status) return null;
   if (status.needsSetup) {
-    // During setup /login stays reachable so an admin who lost the cookie can resume.
+    // During setup /login stays reachable so an admin who lost the cookie can resume. The
+    // public portal has nothing to show before setup, so it goes to /setup like the rest.
     if (pathname === '/setup' || pathname === '/login') return null;
     return '/setup';
   }
   if (pathname === '/setup') return '/';
+  // Public pages stay put for everyone (signed-in users may still look at the portal).
+  if (isPublicPath(pathname)) return null;
   if (!status.authenticated) return pathname === '/login' ? null : loginHref(href);
   if (pathname === '/login') return safeRedirect(redirectParam);
   if (status.session && !status.session.isAdmin && isAdminOnlyPath(pathname)) return '/';

@@ -5,6 +5,7 @@ import { kindOf } from '../../api/requests.js';
 import {
   Button,
   Checkbox,
+  Chip,
   EmptyState,
   Field,
   FloatBar,
@@ -25,6 +26,7 @@ import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/med
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useToast } from '../../components/toast.js';
 import { titleLink } from '../../features/requests/title-link.js';
+import { HeldChip } from '../../features/requests/policy-drawer.js';
 import { MEDIA_STATUS_META, REQUEST_STATUS_META, seasonsLabel, usePermissions } from '../../features/requests/status.js';
 import { formatDateTime } from '../../lib/ui-preferences.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
@@ -40,13 +42,14 @@ import {
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { ApproveDialog } from './approve-dialog.js';
 import '../../components/media/media-kit.css';
+import { t } from '../../i18n/index.js';
 
 export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> = [
-  { id: 'pending', label: 'Pending' },
-  { id: 'approved', label: 'Approved' },
-  { id: 'declined', label: 'Declined' },
-  { id: 'available', label: 'Available' },
-  { id: 'all', label: 'All' },
+  { id: 'pending', get label() { return t('common.pending'); } },
+  { id: 'approved', get label() { return t('common.approved'); } },
+  { id: 'declined', get label() { return t('common.declined'); } },
+  { id: 'available', get label() { return t('common.available'); } },
+  { id: 'all', get label() { return t('common.all'); } },
 ];
 
 const PAGE_SIZE = 20;
@@ -63,27 +66,27 @@ export function RequestsPage() {
     <>
       <PageHeader
         index="03"
-        title="Requests"
-        subtitle={can(Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW) ? 'Everyone’s requests' : 'Your requests'}
+        title={t('common.requests')}
+        subtitle={can(Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW) ? t('requests.everyonesRequests') : t('requests.yourRequests')}
         actions={
           <>
             <Select
-              aria-label="Media type filter"
+              aria-label={t('requests.mediaTypeFilter')}
               value={mediaType}
               onChange={(e) => setMediaType(e.currentTarget.value as MediaFilter)}
               options={[
-                { value: 'all', label: 'Movies and series' },
-                { value: 'movie', label: 'Movies' },
-                { value: 'series', label: 'Series' },
+                { value: 'all', label: t('requests.moviesAndSeries') },
+                { value: 'movie', label: t('common.movies') },
+                { value: 'series', label: t('common.series') },
               ]}
             />
             <Link className="al-btn al-btn--secondary" to="/requests/mine">
-              My requests
+              {t('common.myRequests')}
             </Link>
           </>
         }
       >
-        <Tabs compact aria-label="Request status" value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((t) => ({ id: t.id, label: t.label }))} />
+        <Tabs compact aria-label={t('requests.requestStatus')} value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((item) => ({ id: item.id, label: item.label }))} />
       </PageHeader>
       <RequestList key={`${tab}-${mediaType}`} filter={tab} mediaType={mediaType} manage={manage} />
     </>
@@ -101,7 +104,7 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
   const mobile = useIsMobile();
 
   if (list.isPending) return <Loading />;
-  if (list.isError) return <QueryError error={list.error} title="Could not load requests" onRetry={() => void list.refetch()} />;
+  if (list.isError) return <QueryError error={list.error} title={t('requests.couldNotLoadRequests')} onRetry={() => void list.refetch()} />;
   const { results, pageInfo } = list.data;
   const pending = results.filter((r) => r.status === 'pending');
   const pages = Math.max(1, Math.ceil(pageInfo.total / PAGE_SIZE));
@@ -114,7 +117,7 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
         setSelected([]);
         toast.push({
           tone: res.failed.length ? 'warning' : 'ok',
-          title: `${action === 'approve' ? 'Approved' : 'Declined'} ${res.ok.length} request${res.ok.length === 1 ? '' : 's'}`,
+          title: t('requests.valueRequests', { value: action === 'approve' ? 'Approved' : 'Declined', okCount: res.ok.length }),
           message: res.failed.length ? res.failed.map((f) => `#${f.id}: ${f.error}`).join('; ') : undefined,
         });
       },
@@ -129,42 +132,42 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
             width: '44px',
             header: (
               <Checkbox
-                aria-label="Select all pending"
+                aria-label={t('requests.selectAllPending')}
                 disabled={pending.length === 0}
                 checked={pending.length > 0 && pending.every((r) => selected.includes(r.id))}
                 onChange={(e) => setSelected(e.currentTarget.checked ? pending.map((r) => r.id) : [])}
               />
             ),
             cell: (r: MediaRequest) => (
-              <Checkbox aria-label={`Select ${r.mediaTitle}`} disabled={r.status !== 'pending'} checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.currentTarget.checked)} />
+              <Checkbox aria-label={t('requests.selectMediatitle', { mediaTitle: r.mediaTitle })} disabled={r.status !== 'pending'} checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.currentTarget.checked)} />
             ),
           },
         ]
       : []),
-    { key: 'title', header: 'Title', cell: (r) => <RequestTitle r={r} /> },
-    { key: 'by', header: 'Requested by', cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
-    { key: 'seasons', header: 'Seasons', mono: true, cell: (r) => seasonsLabel(r.seasons) || '—' },
-    { key: 'status', header: 'Status', cell: (r) => <RequestStatusCell r={r} /> },
-    { key: 'created', header: 'Requested', mono: true, muted: true, cell: (r) => formatDateTime(r.createdAt) },
+    { key: 'title', header: t('common.title'), cell: (r) => <RequestTitle r={r} /> },
+    { key: 'by', header: t('common.requestedBy'), cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
+    { key: 'seasons', header: t('common.seasons'), mono: true, cell: (r) => seasonsLabel(r.seasons) || '—' },
+    { key: 'status', header: t('common.status'), cell: (r) => <RequestStatusCell r={r} /> },
+    { key: 'created', header: t('common.requested'), mono: true, muted: true, cell: (r) => formatDateTime(r.createdAt) },
     {
       key: 'modified',
-      header: 'Modified',
+      header: t('requests.modified'),
       mono: true,
       muted: true,
       cell: (r) => (
         <>
           {formatDateTime(r.updatedAt)}
-          {r.modifiedBy ? <div className="mk-title-cell__sub">by {r.modifiedBy.displayName ?? r.modifiedBy.username}</div> : null}
+          {r.modifiedBy ? <div className="mk-title-cell__sub">{t('requests.byValue', { value: r.modifiedBy.displayName ?? r.modifiedBy.username })}</div> : null}
         </>
       ),
     },
-    { key: 'actions', header: <span className="al-sr-only">Actions</span>, align: 'right', cell: (r) => <RequestActions r={r} manage={manage} /> },
+    { key: 'actions', header: <span className="al-sr-only">{t('common.actions')}</span>, align: 'right', cell: (r) => <RequestActions r={r} manage={manage} /> },
   ];
 
   return (
     <>
       {results.length === 0 ? (
-        <EmptyState title="No requests">Requests made from Discover show up here.</EmptyState>
+        <EmptyState title={t('requests.noRequests')}>{t('requests.requestsMadeFromDiscoverShow')}</EmptyState>
       ) : mobile ? (
         <div className="mk-mlist">
           {results.map((r) => (
@@ -173,7 +176,7 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
         </div>
       ) : (
         <Pane flush bare>
-          <Table columns={columns} rows={results} rowKey={(r) => r.id} density="rich" sortable={false} caption="Requests" />
+          <Table columns={columns} rows={results} rowKey={(r) => r.id} density="rich" sortable={false} caption={t('common.requests')} />
         </Pane>
       )}
       {pages > 1 ? (
@@ -184,14 +187,14 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
       {manage && selected.length > 0 ? (
         <FloatBar count={selected.length}>
           <Button variant="secondary" loading={bulkApprove.isPending} onClick={() => runBulk('approve')}>
-            Approve selected
+            {t('requests.approveSelected')}
           </Button>
           <FloatBarDivider />
           <Button variant="danger" loading={bulkDecline.isPending} onClick={() => runBulk('decline')}>
-            Decline selected
+            {t('requests.declineSelected')}
           </Button>
           <Button variant="ghost" className="al-floatbar__cancel" onClick={() => setSelected([])}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </FloatBar>
       ) : null}
@@ -211,19 +214,27 @@ export function RequestTitle({ r }: { r: MediaRequest }) {
         <span className="mk-title-cell__sub">
           {r.mediaYear ? <span className="al-num">{r.mediaYear}</span> : null}
           {r.mediaYear ? ' · ' : ''}
-          {[r.type === 'movie' ? 'Movie' : 'Series', r.is4k ? '4K' : null].filter(Boolean).join(' · ')}
+          {[r.type === 'movie' ? t('common.movie') : t('common.series'), r.is4k ? '4K' : null].filter(Boolean).join(' · ')}
         </span>
       </div>
     </div>
   );
 }
 
-function RequestStatusCell({ r }: { r: MediaRequest }) {
+/** "Available on Jellyfin": the media server that reported the title (requests availability). */
+export function AvailableOnChip({ r }: { r: Pick<MediaRequest, 'availableOn'> }) {
+  if (!r.availableOn) return null;
+  return <Chip tone="accent">{t('requests.availableOnAvailableon', { availableOn: r.availableOn })}</Chip>;
+}
+
+export function RequestStatusCell({ r }: { r: MediaRequest }) {
   return (
     <div className="mk-stack-sm" style={{ gap: 4, alignItems: 'flex-start' }}>
       <div className="mk-row" style={{ gap: 6 }}>
         <StatusLabelChip label={REQUEST_STATUS_META[r.status].label} />
         {r.status === 'approved' || r.status === 'completed' ? <StatusLabelChip label={MEDIA_STATUS_META[r.mediaStatus].label} /> : null}
+        <HeldChip request={r} />
+        <AvailableOnChip r={r} />
       </div>
       {r.declineReason ? <span className="mk-title-cell__sub">{r.declineReason}</span> : null}
       {r.failureReason ? <span className="mk-title-cell__sub" style={{ color: 'var(--al-danger-text)' }}>{r.failureReason}</span> : null}
@@ -247,26 +258,26 @@ function RequestActions({ r, manage }: { r: MediaRequest; manage: boolean }) {
       {manage && r.status === 'pending' ? (
         <>
           <Button size="sm" onClick={() => d.setApproving(true)}>
-            Approve
+            {t('common.approve')}
           </Button>
           <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>
-            Decline
+            {t('requests.decline')}
           </Button>
         </>
       ) : null}
       {r.status === 'pending' && (manage || r.canRemove) ? (
         <Button size="sm" variant="ghost" onClick={() => d.setEditing(true)}>
-          Edit
+          {t('common.edit')}
         </Button>
       ) : null}
       {manage && r.status === 'failed' ? (
         <Button size="sm" loading={retry.isPending} onClick={() => retry.mutate(r.id)}>
-          Retry
+          {t('requests.retry')}
         </Button>
       ) : null}
       {r.canRemove ? (
         <Button size="sm" variant="ghost" onClick={() => d.setDeleting(true)}>
-          Delete
+          {t('common.delete')}
         </Button>
       ) : null}
       <RowDialogs r={r} {...d} />
@@ -289,21 +300,23 @@ function RowDialogs({ r, approving, setApproving, declining, setDeclining, editi
 function MobileRequestRow({ r, manage }: { r: MediaRequest; manage: boolean }) {
   const d = useRowDialogs();
   return (
-    <SwipeRow onDelete={r.canRemove ? () => d.setDeleting(true) : undefined} deleteLabel="Delete">
+    <SwipeRow onDelete={r.canRemove ? () => d.setDeleting(true) : undefined} deleteLabel={t('common.delete')}>
       <div className="mk-mrow">
         <div style={{ minWidth: 0 }}>
           <RequestTitle r={r} />
-          <div style={{ marginTop: 6 }}>
+          <div className="mk-row" style={{ marginTop: 6, gap: 6, flexWrap: 'wrap' }}>
             <StatusLabelChip label={REQUEST_STATUS_META[r.status].label} />
+            <HeldChip request={r} />
+            <AvailableOnChip r={r} />
           </div>
         </div>
         {manage && r.status === 'pending' ? (
           <div className="mk-stack-sm" style={{ gap: 6 }}>
             <Button size="sm" onClick={() => d.setApproving(true)}>
-              Approve
+              {t('common.approve')}
             </Button>
             <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>
-              Decline
+              {t('requests.decline')}
             </Button>
           </div>
         ) : null}
@@ -319,20 +332,20 @@ function DeleteRequestDialog({ request, onClose }: { request: MediaRequest; onCl
     <Modal
       open
       onClose={onClose}
-      title={`Delete the request for ${request.mediaTitle}?`}
+      title={t('requests.deleteTheRequestForMediatitle', { mediaTitle: request.mediaTitle })}
       size={440}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="danger" loading={del.isPending} onClick={() => del.mutate(request.id, { onSuccess: onClose })}>
-            Delete request
+            {t('requests.deleteRequest')}
           </Button>
         </>
       }
     >
-      <p style={{ margin: 0 }}>The title stays in the library if it was already added.</p>
+      <p style={{ margin: 0 }}>{t('requests.theTitleStaysInThe')}</p>
     </Modal>
   );
 }
@@ -344,24 +357,24 @@ export function DeclineDialog({ request, onClose }: { request: MediaRequest; onC
     <Modal
       open
       onClose={onClose}
-      title={`Decline ${request.mediaTitle}?`}
+      title={t('requests.declineMediatitle', { mediaTitle: request.mediaTitle })}
       size={440}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button
             variant="danger"
             loading={decline.isPending}
             onClick={() => decline.mutate({ id: request.id, ...(reason.trim() ? { reason: reason.trim() } : {}) }, { onSuccess: onClose })}
           >
-            Decline request
+            {t('requests.declineRequest')}
           </Button>
         </>
       }
     >
-      <Field label="Reason (optional)" hint="Shown to the requester.">
+      <Field label={t('requests.reasonOptional')} hint={t('requests.shownToTheRequester')}>
         <Textarea rows={3} value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
       </Field>
     </Modal>
@@ -383,7 +396,7 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
 
   const save = () => {
     if (isSeries && seasons.length === 0) {
-      setError('Keep at least one season.');
+      setError(t('requests.keepAtLeastOneSeason'));
       return;
     }
     update.mutate(
@@ -404,15 +417,15 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
     <Modal
       open
       onClose={onClose}
-      title={`Edit request: ${request.mediaTitle}`}
+      title={t('requests.editRequestMediatitle', { mediaTitle: request.mediaTitle })}
       size={560}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" loading={update.isPending} onClick={save}>
-            Save changes
+            {t('common.saveChanges')}
           </Button>
         </>
       }
@@ -421,13 +434,13 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
         {isSeries ? (
           <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
             <legend className="al-label" style={{ marginBottom: 10 }}>
-              Seasons
+              {t('common.seasons')}
             </legend>
             <div className="mk-check-grid">
               {seasonChoices.map((n) => (
                 <Checkbox
                   key={n}
-                  label={n === 0 ? 'Specials' : `Season ${n}`}
+                  label={n === 0 ? t('common.specials') : t('requests.seasonN', { n })}
                   checked={seasons.includes(n)}
                   onChange={(e) => setSeasons((prev) => (e.currentTarget.checked ? [...prev, n] : prev.filter((x) => x !== n)))}
                 />
@@ -435,9 +448,9 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
             </div>
           </fieldset>
         ) : null}
-        <FormRow label="Root folder" htmlFor="edit-request-root">
+        <FormRow label={t('common.rootFolder')} htmlFor="edit-request-root">
           <Select id="edit-request-root" value={rootFolderPath} onChange={(e) => setRootFolderPath(e.currentTarget.value)}>
-            <option value="">Default folder</option>
+            <option value="">{t('common.defaultFolder')}</option>
             {(rootFolders.data ?? [])
               .filter((f) => f.mediaType === request.type)
               .map((f) => (
@@ -447,9 +460,9 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
               ))}
           </Select>
         </FormRow>
-        <FormRow label="Quality target" htmlFor="edit-request-profile">
+        <FormRow label={t('common.qualityTarget')} htmlFor="edit-request-profile">
           <Select id="edit-request-profile" value={profileId} onChange={(e) => setProfileId(e.currentTarget.value)}>
-            <option value="">Default profile</option>
+            <option value="">{t('common.defaultProfile')}</option>
             {(profiles.data ?? []).map((p) => (
               <option key={p.id} value={String(p.id)}>
                 {p.name}
@@ -457,7 +470,7 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
             ))}
           </Select>
         </FormRow>
-        <FormRow label="Tags">
+        <FormRow label={t('common.tags')}>
           <TagPicker value={tags} onChange={setTags} />
         </FormRow>
         {error ? (

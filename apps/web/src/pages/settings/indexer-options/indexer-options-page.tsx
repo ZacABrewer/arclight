@@ -4,24 +4,26 @@ import { errorMessage } from '../../../api/client.js';
 import { ErrorBlock, FormRow, FormSection, Input, Skeleton, Toggle } from '../../../arclight/index.js';
 import { useIndexerOptions, useSaveIndexerOptions } from '../../../hooks/indexers.js';
 import { SettingsPage, useDraft } from '../settings-layout.js';
+import { DefinitionFeedPanel } from './definition-feed-panel.js';
+import { t } from '../../../i18n/index.js';
 
 /** Errors keyed by field for the indexer options form; empty when valid. */
 export function validateIndexerOptions(v: IndexerGlobalSettings): Partial<Record<keyof IndexerGlobalSettings, string>> {
   const errors: Partial<Record<keyof IndexerGlobalSettings, string>> = {};
   const nonNeg = (k: 'minimumAgeMinutes' | 'retentionDays' | 'maximumSizeMb') => {
-    if (!Number.isInteger(v[k]) || v[k] < 0) errors[k] = 'Enter a whole number, 0 or more';
+    if (!Number.isInteger(v[k]) || v[k] < 0) errors[k] = t('settings.indexerOptions.enterAWholeNumber0');
   };
   nonNeg('minimumAgeMinutes');
   nonNeg('retentionDays');
   nonNeg('maximumSizeMb');
   const r = v.rssSyncIntervalMinutes;
-  if (!Number.isInteger(r) || (r !== 0 && (r < 10 || r > 1440))) errors.rssSyncIntervalMinutes = 'Use 0 (off) or 10 to 1440 minutes';
+  if (!Number.isInteger(r) || (r !== 0 && (r < 10 || r > 1440))) errors.rssSyncIntervalMinutes = t('settings.indexerOptions.use0OffOr10');
   return errors;
 }
 
 /** "ENG, HC.ENG" -> ['ENG', 'HC.ENG']. */
 export function parseTagList(text: string): string[] {
-  return [...new Set(text.split(',').map((t) => t.trim()).filter(Boolean))];
+  return [...new Set(text.split(',').map((item) => item.trim()).filter(Boolean))];
 }
 
 /** Form model: the settings with the whitelist as the text the user types. */
@@ -105,65 +107,66 @@ export function IndexerOptionsPage() {
 
   return (
     <SettingsPage
-      title="Indexer options"
-      description="Limits that apply to every indexer."
+      title={t('settings.indexerOptions.indexerOptions')}
+      description={t('settings.indexerOptions.limitsThatApplyToEvery')}
       save={{ count: query.data ? draft.changes : 0, onSave, onDiscard: draft.discard, saving: save.isPending, disabled: !valid }}
+      after={<DefinitionFeedPanel />}
     >
       {query.isError ? (
-        <ErrorBlock title="Couldn't load indexer options" onRetry={() => void query.refetch()}>
+        <ErrorBlock title={t('settings.indexerOptions.couldntLoadIndexerOptions')} onRetry={() => void query.refetch()}>
           {errorMessage(query.error)}
         </ErrorBlock>
       ) : !query.data ? (
         <Skeleton lines={6} />
       ) : (
         <form
-          aria-label="Indexer options"
+          aria-label={t('settings.indexerOptions.indexerOptions')}
           style={{ display: 'flex', flexDirection: 'column', gap: 30 }}
           onSubmit={(e) => {
             e.preventDefault();
             onSave();
           }}
         >
-          <FormSection label="RSS">
+          <FormSection label={t('settings.indexerOptions.rss')}>
             <NumberRow
-              label="RSS sync interval"
+              label={t('settings.indexerOptions.rssSyncInterval')}
               unit="min"
-              caption="How often indexers are polled for new releases. 0 disables RSS sync; otherwise 10 to 1440."
+              caption={t('settings.indexerOptions.howOftenIndexersArePolled')}
               value={d.rssSyncIntervalMinutes}
               error={errors.rssSyncIntervalMinutes}
               onChange={setNum('rssSyncIntervalMinutes')}
             />
           </FormSection>
-          <FormSection label="Usenet">
+          <FormSection label={t('common.usenet')}>
             <NumberRow
-              label="Minimum age"
+              label={t('settings.indexerOptions.minimumAge')}
               unit="min"
-              caption="Releases younger than this are not grabbed. 0 = off."
+              caption={t('settings.indexerOptions.releasesYoungerThanThisAre')}
               value={d.minimumAgeMinutes}
               error={errors.minimumAgeMinutes}
               onChange={setNum('minimumAgeMinutes')}
             />
             <NumberRow
-              label="Retention"
+              label={t('common.retention')}
               unit="days"
-              caption="Releases older than this are ignored. 0 = unlimited."
+              caption={t('settings.indexerOptions.releasesOlderThanThisAre')}
               value={d.retentionDays}
               error={errors.retentionDays}
               onChange={setNum('retentionDays')}
             />
           </FormSection>
-          <FormSection label="Releases">
+          <FormSection label={t('settings.indexerOptions.releases')}>
             <NumberRow
-              label="Maximum size"
+              label={t('settings.indexerOptions.maximumSize')}
               unit="MB"
-              caption="Releases larger than this are rejected. 0 = unlimited."
+              caption={t('settings.indexerOptions.releasesLargerThanThisAre')}
               value={d.maximumSizeMb}
               error={errors.maximumSizeMb}
               onChange={setNum('maximumSizeMb')}
             />
-            <FormRow label="Allow hardcoded subs" caption="Accept releases with burned-in subtitles." captionInline>
+            <FormRow label={t('settings.indexerOptions.allowHardcodedSubs')} caption={t('settings.indexerOptions.acceptReleasesWithBurnedIn')} captionInline>
               <Toggle
-                aria-label="Allow hardcoded subs"
+                aria-label={t('settings.indexerOptions.allowHardcodedSubs')}
                 checked={d.allowHardcodedSubs}
                 onChange={(e) => {
                   const on = e.currentTarget.checked;
@@ -173,9 +176,9 @@ export function IndexerOptionsPage() {
             </FormRow>
             {!d.allowHardcodedSubs ? (
               <FormRow
-                label="Whitelisted subtitle tags"
+                label={t('settings.indexerOptions.whitelistedSubtitleTags')}
                 htmlFor={subsId}
-                caption="Comma-separated tags allowed even though hardcoded subs are not (e.g. ENG, HC.ENG)."
+                caption={t('settings.indexerOptions.commaSeparatedTagsAllowedEven')}
               >
                 <Input
                   id={subsId}
@@ -188,9 +191,9 @@ export function IndexerOptionsPage() {
                 />
               </FormRow>
             ) : null}
-            <FormRow label="Prefer indexer flags" caption="Prefer releases the indexer flags (freeleech, internal, …)." captionInline>
+            <FormRow label={t('settings.indexerOptions.preferIndexerFlags')} caption={t('settings.indexerOptions.preferReleasesTheIndexerFlags')} captionInline>
               <Toggle
-                aria-label="Prefer indexer flags"
+                aria-label={t('settings.indexerOptions.preferIndexerFlags')}
                 checked={d.preferIndexerFlags}
                 onChange={(e) => {
                   const on = e.currentTarget.checked;

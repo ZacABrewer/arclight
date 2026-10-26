@@ -11,6 +11,7 @@ import { usePermissions } from '../../features/requests/status.js';
 import { useRemoveFromWatchlist, useSyncWatchlists, useWatchlist } from '../../hooks/requests.js';
 import { DiscoverCard } from '../discover/discover-kit.js';
 import '../../components/media/media-kit.css';
+import { t } from '../../i18n/index.js';
 
 export function WatchlistPage() {
   const { can, userId: me } = usePermissions();
@@ -28,17 +29,17 @@ export function WatchlistPage() {
     <>
       <PageHeader
         index="03"
-        title="Watchlist"
-        subtitle={list.data ? <><span className="al-num">{list.data.length}</span> titles</> : undefined}
+        title={t('common.watchlist')}
+        subtitle={list.data ? <><span className="al-num">{list.data.length}</span> {t('requests.watchlist.titles')}</> : undefined}
         actions={
           <>
             {canViewOthers && users.data ? (
               <Select
-                aria-label="Whose watchlist"
+                aria-label={t('requests.watchlist.whoseWatchlist')}
                 value={userId === undefined ? '' : String(userId)}
                 onChange={(e) => setUserId(e.currentTarget.value ? Number(e.currentTarget.value) : undefined)}
               >
-                <option value="">My watchlist</option>
+                <option value="">{t('requests.watchlist.myWatchlist')}</option>
                 {users.data
                   .filter((u) => u.id !== me)
                   .map((u) => (
@@ -53,11 +54,11 @@ export function WatchlistPage() {
                 loading={sync.isPending}
                 onClick={() =>
                   sync.mutate(undefined, {
-                    onSuccess: (r) => toast.push({ tone: 'ok', title: 'Watchlists synced', message: `${r.users} users · ${r.added} added · ${r.requested} requested` }),
+                    onSuccess: (r) => toast.push({ tone: 'ok', title: t('requests.watchlist.watchlistsSynced'), message: t('requests.watchlist.usersUsersAddedAddedRequested', { users: r.users, added: r.added, requested: r.requested }) }),
                   })
                 }
               >
-                Sync now
+                {t('common.syncNow')}
               </Button>
             ) : null}
           </>
@@ -66,25 +67,25 @@ export function WatchlistPage() {
       {list.isPending ? (
         <PosterSkeletons />
       ) : list.isError ? (
-        <QueryError error={list.error} title="Could not load the watchlist" onRetry={() => void list.refetch()} />
+        <QueryError error={list.error} title={t('requests.watchlist.couldNotLoadTheWatchlist')} onRetry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
         <EmptyState
-          title="The watchlist is empty"
+          title={t('requests.watchlist.theWatchlistIsEmpty')}
           action={
             <Link className="al-btn al-btn--secondary" to="/discover">
-              Discover titles
+              {t('requests.watchlist.discoverTitles')}
             </Link>
           }
         >
-          Add titles from their Discover page, or link a Plex token on your profile to sync your Plex watchlist.
+          {t('requests.watchlist.addTitlesFromTheirDiscover')}
         </EmptyState>
       ) : (
         <div className="mk-poster-grid" data-testid="watchlist-grid">
           {list.data.map((w) => (
-            <DiscoverCard key={w.id} item={w} subtitle={w.source === 'manual' ? undefined : `From ${w.source}`}>
+            <DiscoverCard key={w.id} item={w} subtitle={w.source === 'manual' ? undefined : t('requests.watchlist.fromSource', { source: w.source })}>
               {own || canManageUsers ? (
-                <Button size="sm" variant="ghost" aria-label={`Remove ${w.title}`} loading={remove.isPending && remove.variables === w.id} onClick={() => remove.mutate(w.id)}>
-                  Remove
+                <Button size="sm" variant="ghost" aria-label={t('requests.watchlist.removeTitle', { title: w.title })} loading={remove.isPending && remove.variables === w.id} onClick={() => remove.mutate(w.id)}>
+                  {t('common.remove')}
                 </Button>
               ) : null}
             </DiscoverCard>

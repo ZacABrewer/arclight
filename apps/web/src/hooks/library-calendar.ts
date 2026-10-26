@@ -2,6 +2,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { ApiError } from '../api/client.js';
 import { libraryApi } from '../api/library.js';
 import { libraryKeys } from './library-keys.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Calendar items for a range. Resolves to `null` while the calendar module is not registered
@@ -49,7 +50,7 @@ export function useRegenerateCalendarFeed() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: () => libraryApi.calendar.regenerateFeed(),
-    meta: { errorTitle: 'Could not regenerate the feed URL' },
+    meta: { errorTitle: t('hooks.libraryCalendar.couldNotRegenerateTheFeed') },
     onSuccess: (info) => qc.setQueryData([...libraryKeys.calendar.all, 'feed'], info),
   });
 }

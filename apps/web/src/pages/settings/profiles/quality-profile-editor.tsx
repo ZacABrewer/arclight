@@ -7,6 +7,7 @@ import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { QualityItemList } from './quality-item-list.js';
 import { cutoffOptions, formatScore, fromDisplay, setFormatScore, toDisplay, validateProfile, type ProfileErrors } from './quality-profile-model.js';
 import './profiles.css';
+import { t } from '../../../i18n/index.js';
 
 export interface QualityProfileEditorProps {
   /** Existing profile, or null to create one from `template`. */
@@ -48,15 +49,15 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
   const cutoffs = cutoffOptions(draft.items);
 
   const scoreColumns: Column<CustomFormat>[] = [
-    { key: 'name', header: 'Custom format', cell: (cf) => cf.name },
+    { key: 'name', header: t('settings.profiles.qualityProfileEditor.customFormat'), cell: (cf) => cf.name },
     {
       key: 'preview',
-      header: 'Effect',
+      header: t('settings.profiles.qualityProfileEditor.effect'),
       cell: (cf) => <ScoreTag name={cf.name} score={formatScore(draft.formatItems, cf.id)} />,
     },
     {
       key: 'score',
-      header: 'Score',
+      header: t('common.score'),
       align: 'right',
       width: '140px',
       cell: (cf) => (
@@ -64,7 +65,7 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
           type="number"
           mono
           className="al-score-input"
-          aria-label={`Score for ${cf.name}`}
+          aria-label={t('settings.profiles.qualityProfileEditor.scoreForName', { name: cf.name })}
           value={formatScore(draft.formatItems, cf.id)}
           onChange={(e) => set('formatItems', setFormatScore(draft.formatItems, cf.id, intOr(e.currentTarget.value, 0)))}
         />
@@ -78,37 +79,37 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
         open
         onClose={onClose}
         size={640}
-        title={profile ? `Edit ${profile.name}` : 'Add quality profile'}
+        title={profile ? t('settings.profiles.qualityProfileEditor.editName', { name: profile.name }) : t('settings.profiles.qualityProfileEditor.addQualityProfile')}
         footer={
           <EditorFooter
             onCancel={onClose}
             onSave={submit}
             saving={save.isPending}
             onDelete={profile ? () => setConfirmDelete(true) : undefined}
-            deleteLabel="Delete profile"
+            deleteLabel={t('settings.profiles.qualityProfileEditor.deleteProfile')}
           />
         }
       >
         <div className="al-profile-editor">
-          <Field label="Name" error={errors.name}>
+          <Field label={t('common.name')} error={errors.name}>
             <Input value={draft.name} onChange={(e) => set('name', e.currentTarget.value)} />
           </Field>
           <Toggle
             id={upgradeId}
             checked={draft.upgradeAllowed}
-            label="Upgrades allowed: keep grabbing better releases until the cutoff is met"
+            label={t('settings.profiles.qualityProfileEditor.upgradesAllowedKeepGrabbingBetter')}
             onChange={(e) => set('upgradeAllowed', e.currentTarget.checked)}
           />
-          <Field label="Upgrade until" hint="Stop upgrading once this quality is reached. The CUTOFF line marks it below." error={errors.cutoff}>
+          <Field label={t('settings.profiles.qualityProfileEditor.upgradeUntil')} hint={t('settings.profiles.qualityProfileEditor.stopUpgradingOnceThisQuality')} error={errors.cutoff}>
             <Select
               value={String(draft.cutoff)}
               onChange={(e) => set('cutoff', Number(e.currentTarget.value))}
               options={cutoffs.map((o) => ({ value: String(o.value), label: o.label }))}
-              {...(cutoffs.some((o) => o.value === draft.cutoff) ? {} : { placeholder: 'Choose an allowed quality' })}
+              {...(cutoffs.some((o) => o.value === draft.cutoff) ? {} : { placeholder: t('settings.profiles.qualityProfileEditor.chooseAnAllowedQuality') })}
             />
           </Field>
 
-          <SettingsSection label="Qualities">
+          <SettingsSection label={t('settings.profiles.qualityProfileEditor.qualities')}>
             {errors.items ? (
               <p className="al-inline-error" role="alert">
                 {errors.items}
@@ -117,15 +118,15 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
             <QualityItemList items={draft.items} cutoff={draft.cutoff} onChange={(items) => set('items', items)} />
           </SettingsSection>
 
-          <SettingsSection label="Custom format scores">
+          <SettingsSection label={t('settings.profiles.qualityProfileEditor.customFormatScores')}>
             <div className="al-profile-editor__scores">
-              <Field label="Minimum score" hint="Releases scoring below this are rejected.">
+              <Field label={t('settings.profiles.qualityProfileEditor.minimumScore')} hint={t('settings.profiles.qualityProfileEditor.releasesScoringBelowThisAre')}>
                 <Input type="number" mono value={draft.minFormatScore} onChange={(e) => set('minFormatScore', intOr(e.currentTarget.value, 0))} />
               </Field>
-              <Field label="Upgrade until score" hint="Stop upgrading once a file reaches this score.">
+              <Field label={t('settings.profiles.qualityProfileEditor.upgradeUntilScore')} hint={t('settings.profiles.qualityProfileEditor.stopUpgradingOnceAFile')}>
                 <Input type="number" mono value={draft.cutoffFormatScore} onChange={(e) => set('cutoffFormatScore', intOr(e.currentTarget.value, 0))} />
               </Field>
-              <Field label="Minimum increment" hint="An upgrade must beat the current score by this much." error={errors.minUpgradeFormatScore}>
+              <Field label={t('settings.profiles.qualityProfileEditor.minimumIncrement')} hint={t('settings.profiles.qualityProfileEditor.anUpgradeMustBeatThe')} error={errors.minUpgradeFormatScore}>
                 <Input
                   type="number"
                   mono
@@ -136,15 +137,15 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
               </Field>
             </div>
             {customFormats.length === 0 ? (
-              <p className="al-muted">No custom formats yet. Add some under Settings → Custom formats.</p>
+              <p className="al-muted">{t('settings.profiles.qualityProfileEditor.noCustomFormatsYetAdd')}</p>
             ) : (
-              <Table columns={scoreColumns} rows={customFormats} rowKey={(cf) => cf.id} caption="Custom format scores" />
+              <Table columns={scoreColumns} rows={customFormats} rowKey={(cf) => cf.id} caption={t('settings.profiles.qualityProfileEditor.customFormatScores')} />
             )}
           </SettingsSection>
 
-          <SettingsSection label="Languages">
-            <p className="al-caption">Accepted languages. None selected means any language.</p>
-            <div className="al-tag-toggles" role="group" aria-label="Languages">
+          <SettingsSection label={t('common.languages')}>
+            <p className="al-caption">{t('settings.profiles.qualityProfileEditor.acceptedLanguagesNoneSelectedMeans')}</p>
+            <div className="al-tag-toggles" role="group" aria-label={t('common.languages')}>
               {PROFILE_LANGUAGES.map((l) => {
                 const on = draft.languages.includes(l.code);
                 return (
@@ -167,8 +168,8 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
       {profile ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${profile.name}?`}
-          confirmLabel="Delete profile"
+          title={t('settings.profiles.qualityProfileEditor.deleteName', { name: profile.name })}
+          confirmLabel={t('settings.profiles.qualityProfileEditor.deleteProfile')}
           onCancel={() => setConfirmDelete(false)}
           describeError={(err) => inUseMessage(err, 'quality profile')}
           onConfirm={async () => {
@@ -177,7 +178,7 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
             onClose();
           }}
         >
-          <p>This cannot be undone.</p>
+          <p>{t('settings.profiles.qualityProfileEditor.thisCannotBeUndone')}</p>
         </ConfirmDialog>
       ) : null}
     </>

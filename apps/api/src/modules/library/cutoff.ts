@@ -2,6 +2,7 @@ import type { CustomFormat, MediaFile, QualityProfile } from '@arclight/shared';
 import { isCutoffMet, scoreRelease } from '@arclight/profiles-engine';
 import { movies, series } from '../../db/schema.js';
 import type { IsCutoffMet, LibraryDb } from './service.js';
+import { profileIdForSlot, slotOf } from './versions.js';
 
 /** What the cutoff check needs from the profiles module. */
 export interface CutoffProfiles {
@@ -16,18 +17,24 @@ export interface CutoffProfiles {
  * release group) reaches the format cutoff. A file whose parent or profile is gone counts as
  * met, so it is never searched for blindly.
  *
+ * On a versioned item the file is judged against the profile of the version slot it fills.
+ *
  * Profiles, formats and each item's profile id are read once when the checker is built; build
  * one per query (or per job run), not per file.
  */
 export function createCutoffChecker(db: LibraryDb, profiles: CutoffProfiles): IsCutoffMet {
   const byId = new Map(profiles.listQualityProfiles().map((p) => [p.id, p]));
   const formats = profiles.listCustomFormats();
-  const seriesProfile = new Map(db.select({ id: series.id, p: series.qualityProfileId }).from(series).all().map((r) => [r.id, r.p]));
-  const movieProfile = new Map(db.select({ id: movies.id, p: movies.qualityProfileId }).from(movies).all().map((r) => [r.id, r.p]));
+  const seriesItems = new Map(
+    db.select({ id: series.id, qualityProfileId: series.qualityProfileId, versions: series.versions }).from(series).all().map((r) => [r.id, r]),
+  );
+  const movieItems = new Map(
+    db.select({ id: movies.id, qualityProfileId: movies.qualityProfileId, versions: movies.versions }).from(movies).all().map((r) => [r.id, r]),
+  );
 
   return (file: MediaFile) => {
-    const profileId =
-      file.seriesId != null ? seriesProfile.get(file.seriesId) : file.movieId != null ? movieProfile.get(file.movieId) : undefined;
+    const item = file.seriesId != null ? seriesItems.get(file.seriesId) : file.movieId != null ? movieItems.get(file.movieId) : undefined;
+    const profileId = item ? profileIdForSlot(item, slotOf(file.versionTag ?? null, item.versions)) : undefined;
     const profile = profileId !== undefined ? byId.get(profileId) : undefined;
     if (!profile) return true;
     return isCutoffMet(profile, file.quality, fileFormatScore(profile, formats, file));

@@ -36,6 +36,8 @@ export {
   eventSeverity,
   qualityLabel,
   EVENT_LABELS,
+  requestLinks,
+  type FormattedAction,
   type FormattedEvent,
   type FormattedField,
   type Severity,
@@ -46,6 +48,26 @@ export { DISCORD_COLOURS, type DiscordPayload, type DiscordEmbed } from './agent
 export { type WebhookPayload } from './agents/webhook.js';
 export { type MediaBrowserUpdate } from './agents/media-browser.js';
 export { type PlexSection, pathIsInside } from './agents/plex.js';
+export {
+  MediaBrowserClient,
+  PlexServerClient,
+  PlexTvClient,
+  PLEX_CLIENT_ID,
+  PLEX_TV_URL,
+  idsMatch,
+  plexGuidIds,
+  providerIdsOf,
+  type LibraryMatch,
+  type MediaBrowserClientOptions,
+  type MediaServerAccount,
+  type MediaServerAuthResult,
+  type MediaServerItem,
+  type PlexPinResult,
+  type ProviderIds,
+  type SeasonPresence,
+  type ServerInfo,
+} from './media-server.js';
+export { type FetchLike } from './http.js';
 export { sendMail, connectSmtp, SmtpReplyParser, type SmtpConnect, type SmtpConnection, type SmtpReply } from './smtp.js';
 export { type AgentDeps, testEvent, ALL_EVENTS, MESSAGE_EVENTS, LIBRARY_EVENTS } from './agents/base.js';
 export { DiscordAgent, TelegramAgent, WebhookAgent, EmailAgent, CustomScriptAgent, NtfyAgent, GotifyAgent, PushoverAgent, MediaBrowserAgent, PlexAgent };

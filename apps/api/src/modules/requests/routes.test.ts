@@ -87,7 +87,7 @@ describe('requests routes', () => {
     expect(setQuota.json().effective.movieLimit).toBe(3);
     expect((await h.app.inject({ method: 'PUT', url: `/api/v1/user/${h.user.id}/permissions`, headers: { cookie: h.userCookie }, payload: { permissions: P.MANAGE_REQUESTS } })).statusCode).toBe(403);
     const perms = await h.app.inject({ method: 'PUT', url: `/api/v1/user/${h.user.id}/permissions`, headers: { cookie: h.adminCookie }, payload: { permissions: P.REQUEST | P.ADMIN } });
-    expect(perms.json()).toEqual({ permissions: P.REQUEST }); // ADMIN follows the role
+    expect(perms.json()).toMatchObject({ permissions: P.REQUEST }); // ADMIN follows the role
 
     const put = await h.app.inject({
       method: 'PUT',

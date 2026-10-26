@@ -13,6 +13,7 @@ import {
   addQualityTokens,
   addSeasonTokens,
   addSeriesTokens,
+  addVersionTokens,
   normalizeTokenName,
   originalTitle,
   padNumber,
@@ -252,6 +253,7 @@ export function buildEpisodeFileName(
     addQualityTokens(h, file, series.seriesType === 'anime');
     if (file.mediaInfo) addMediaInfoTokens(h, file.mediaInfo, file.sceneName, false);
     addCustomFormatTokens(h, extras.customFormats ?? []);
+    addVersionTokens(h, file);
 
     const limit = limits(extras, isLast);
     let out = cleanupFileComponent(renderParts(parts, h, clean));
@@ -333,6 +335,7 @@ export function buildMovieFileName(
   if (file.mediaInfo) addMediaInfoTokens(h, file.mediaInfo, file.sceneName, true);
   addCustomFormatTokens(h, extras.customFormats ?? []);
   addEditionTokens(h, file);
+  addVersionTokens(h, file);
 
   const components = splitPath(format);
   const rendered = components.map((component, index) => {

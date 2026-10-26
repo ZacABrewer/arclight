@@ -125,6 +125,8 @@ const SONARR_EVENT: Record<HistoryEventType, string> = {
   fileDeleted: 'episodeFileDeleted',
   fileRenamed: 'episodeFileRenamed',
   downloadIgnored: 'downloadIgnored',
+  // No Sonarr/Radarr equivalent; passed through under our own name.
+  fileTranscoded: 'fileTranscoded',
 };
 
 const RADARR_EVENT: Record<HistoryEventType, string> = {

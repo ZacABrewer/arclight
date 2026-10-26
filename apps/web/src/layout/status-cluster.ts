@@ -9,6 +9,7 @@ import { useRequestCount } from '../hooks/requests.js';
 import { requestKeys } from '../hooks/request-keys.js';
 import { vpnKeys } from '../hooks/vpn.js';
 import { useConnection } from '../lib/connection.js';
+import { t } from '../i18n/index.js';
 
 // The top bar's plain-text status cluster: live dot + "Connected" / "Reconnecting…", VPN
 // location, pending requests (admins) and issues (orange when > 0). Pure part first so the
@@ -52,7 +53,7 @@ export function healthIssueCount(health: HealthResponse | undefined): number | u
 export function statusCluster(input: StatusClusterInput): StatusCluster {
   return {
     connected: input.connection === 'open',
-    disconnectedLabel: input.connection === 'connecting' ? 'Connecting…' : 'Reconnecting…',
+    disconnectedLabel: input.connection === 'connecting' ? t('layout.statusCluster.connecting') : t('layout.statusCluster.reconnecting'),
     vpnLocation: input.isAdmin ? vpnLocationOf(input.vpn) : undefined,
     requestCount: input.isAdmin ? input.requests?.pending : undefined,
     issueCount: input.isAdmin ? healthIssueCount(input.health) : input.openIssues,

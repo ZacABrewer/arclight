@@ -1,6 +1,7 @@
 // Client-side naming preview: renders a naming format against canned sample data so the
 // FormRow caption ("→ Severance - S02E09 - The After Hours [WEBDL-2160p].mkv") updates as
 // the user types. The server stays the authority on the real file names.
+import { t } from '../../../i18n/index.js';
 
 export type PreviewKind = 'episode' | 'daily' | 'anime' | 'seriesFolder' | 'seasonFolder' | 'specialsFolder' | 'movie' | 'movieFolder';
 
@@ -47,9 +48,15 @@ const MOVIE_OVERRIDES: Readonly<Record<string, string | number>> = {
 
 const FILE_KINDS: ReadonlySet<PreviewKind> = new Set(['episode', 'daily', 'anime', 'movie']);
 
-function lookup(rawName: string, kind: PreviewKind): string | number | undefined {
+export interface PreviewOptions {
+  /** Version tag `{Version}` renders as; unversioned (empty) by default. */
+  version?: string | undefined;
+}
+
+function lookup(rawName: string, kind: PreviewKind, opts: PreviewOptions = {}): string | number | undefined {
   const name = rawName.trim().toLowerCase();
   const key = name.replace(/[\s._-]+/g, '');
+  if (key === 'version') return opts.version ?? '';
   if (kind === 'movie' || kind === 'movieFolder') {
     if (key in MOVIE_OVERRIDES) return MOVIE_OVERRIDES[key];
   }
@@ -64,10 +71,10 @@ function separatorOf(name: string): string {
 }
 
 /** Render one format against the sample data. Unknown tokens are left as written. */
-export function renderPreview(format: string, kind: PreviewKind): string {
+export function renderPreview(format: string, kind: PreviewKind, opts: PreviewOptions = {}): string {
   const out = format.replace(/\{([^{}]+)\}/g, (whole, inner: string) => {
     const [name = '', pad] = inner.split(':');
-    const value = lookup(name, kind);
+    const value = lookup(name, kind, opts);
     if (value === undefined) return whole;
     if (typeof value === 'number') {
       const width = pad && /^0+$/.test(pad) ? pad.length : 0;
@@ -78,6 +85,7 @@ export function renderPreview(format: string, kind: PreviewKind): string {
   });
   const tidy = out
     .replace(/\[\s*\]|\(\s*\)/g, '')
+    .replace(/\s+-\s*$/, '')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (!tidy) return '';
@@ -87,5 +95,38 @@ export function renderPreview(format: string, kind: PreviewKind): string {
 /** The FormRow caption: "→ <name>", or a plain hint when the format is empty. */
 export function previewCaption(format: string, kind: PreviewKind): string {
   const name = renderPreview(format, kind);
-  return name ? `→ ${name}` : 'Enter a format to see a sample';
+  return name ? `→ ${name}` : t('settings.mediaManagement.namingPreview.enterAFormatToSee');
+}
+
+// ---- multi-version items (naming.versionLayout, {Version}) --------------------------------
+
+export type VersionLayout = 'sideBySide' | 'subfolder';
+
+const VERSION_TOKEN = /\{\s*version\s*(?::[^{}]*)?\}/i;
+
+/** True when a format places the version itself (so sideBySide appends nothing). */
+export function hasVersionToken(format: string): boolean {
+  return VERSION_TOKEN.test(format);
+}
+
+/**
+ * Sample path of a file kept in version slot `tag`: the folders, then (subfolder layout) the
+ * tag folder, then the file name; sideBySide appends " - <tag>" when the file format has no
+ * {Version} token (docs/API.md "Multi-version library").
+ */
+export function versionedPreview(
+  file: { format: string; kind: PreviewKind },
+  folders: ReadonlyArray<{ format: string; kind: PreviewKind }>,
+  layout: VersionLayout,
+  tag: string,
+): string {
+  let name = renderPreview(file.format, file.kind, { version: tag });
+  if (layout === 'sideBySide' && name && !hasVersionToken(file.format)) {
+    const ext = FILE_KINDS.has(file.kind) ? '.mkv' : '';
+    name = `${name.slice(0, name.length - ext.length)} - ${tag}${ext}`;
+  }
+  const parts = folders.map((f) => renderPreview(f.format, f.kind, { version: tag }));
+  if (layout === 'subfolder') parts.push(tag);
+  parts.push(name);
+  return parts.filter(Boolean).join('/');
 }

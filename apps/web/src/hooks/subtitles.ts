@@ -3,8 +3,11 @@ import type { LanguageProfileInput, SubtitleMediaType, SubtitleSearchCommand, Su
 import { languageProfilesApi, subtitlesApi, type SubtitleHistoryFilter, type SubtitleScope, type SubtitleUploadInput } from '../api/subtitles.js';
 import { subtitleKeys } from './query-keys.js';
 import { useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 const ALL = subtitleKeys.all;
+/** Under the subtitles family, so settings saves and subtitle events refresh it too. */
+const WHISPER_STATUS = ['subtitles', 'whisperStatus'] as const;
 
 export function useLanguageProfiles() {
   return useQuery({ queryKey: subtitleKeys.languageProfiles, queryFn: languageProfilesApi.list, retry: false });
@@ -33,7 +36,7 @@ export function useSubtitleSettings() {
 
 export function useSaveSubtitleSettings() {
   return useInvalidatingMutation((body: SubtitleSettings) => subtitlesApi.saveSettings(body), [subtitleKeys.settings, subtitleKeys.providers], {
-    errorTitle: 'Could not save subtitle settings',
+    errorTitle: t('hooks.subtitles.couldNotSaveSubtitleSettings'),
   });
 }
 
@@ -43,7 +46,7 @@ export function useSubtitleProviders() {
 
 export function useResetProviderThrottles() {
   return useInvalidatingMutation((onlyAuthOrConfig: boolean) => subtitlesApi.resetProviders(onlyAuthOrConfig), [subtitleKeys.providers], {
-    errorTitle: 'Could not reset throttles',
+    errorTitle: t('hooks.subtitles.couldNotResetThrottles'),
   });
 }
 
@@ -75,7 +78,7 @@ export function useSubtitleBlacklist(page: number, pageSize: number) {
 }
 
 export function useRemoveFromSubtitleBlacklist() {
-  return useInvalidatingMutation((id: number) => subtitlesApi.removeFromBlacklist(id), [ALL], { errorTitle: 'Could not remove from blacklist' });
+  return useInvalidatingMutation((id: number) => subtitlesApi.removeFromBlacklist(id), [ALL], { errorTitle: t('hooks.subtitles.couldNotRemoveFromBlacklist') });
 }
 
 export function useClearSubtitleBlacklist() {
@@ -84,7 +87,7 @@ export function useClearSubtitleBlacklist() {
 
 export function useBlacklistSubtitle() {
   return useInvalidatingMutation((subtitleId: number) => subtitlesApi.addToBlacklist({ subtitleId, search: true }), [ALL], {
-    errorTitle: 'Could not blacklist subtitle',
+    errorTitle: t('hooks.subtitles.couldNotBlacklistSubtitle'),
   });
 }
 
@@ -98,11 +101,11 @@ export function useMediaFileSubtitles(scope: SubtitleScope | null) {
 }
 
 export function useScanSubtitles() {
-  return useInvalidatingMutation((scope: SubtitleScope) => subtitlesApi.scan(scope), [ALL], { errorTitle: 'Rescan failed' });
+  return useInvalidatingMutation((scope: SubtitleScope) => subtitlesApi.scan(scope), [ALL], { errorTitle: t('hooks.subtitles.rescanFailed') });
 }
 
 export function useSubtitleSearchCommand() {
-  return useInvalidatingMutation((scope: SubtitleSearchCommand) => subtitlesApi.search(scope), [ALL], { errorTitle: 'Subtitle search failed' });
+  return useInvalidatingMutation((scope: SubtitleSearchCommand) => subtitlesApi.search(scope), [ALL], { errorTitle: t('hooks.subtitles.subtitleSearchFailed') });
 }
 
 export function useManualSubtitleSearch(mediaFileId: number | null, language: string) {
@@ -117,7 +120,7 @@ export function useManualSubtitleSearch(mediaFileId: number | null, language: st
 
 export function useDownloadSubtitle() {
   return useInvalidatingMutation(({ mediaFileId, key }: { mediaFileId: number; key: string }) => subtitlesApi.download(mediaFileId, key), [ALL], {
-    errorTitle: 'Download failed',
+    errorTitle: t('hooks.subtitles.downloadFailed'),
   });
 }
 
@@ -130,9 +133,17 @@ export function useDeleteSubtitle() {
 }
 
 export function useSyncSubtitle() {
-  return useInvalidatingMutation((id: number) => subtitlesApi.sync(id), [ALL], { errorTitle: 'Sync failed' });
+  return useInvalidatingMutation((id: number) => subtitlesApi.sync(id), [ALL], { errorTitle: t('common.syncFailed') });
 }
 
 export function useExtractSubtitle() {
-  return useInvalidatingMutation((id: number) => subtitlesApi.extract(id), [ALL], { errorTitle: 'Extract failed' });
+  return useInvalidatingMutation((id: number) => subtitlesApi.extract(id), [ALL], { errorTitle: t('hooks.subtitles.extractFailed') });
+}
+
+export function useCheckSubtitleSync() {
+  return useInvalidatingMutation((id: number) => subtitlesApi.syncCheck(id), [ALL], { errorTitle: t('hooks.subtitles.syncCheckFailed') });
+}
+
+export function useWhisperStatus() {
+  return useQuery({ queryKey: WHISPER_STATUS, queryFn: subtitlesApi.whisperStatus, retry: false });
 }

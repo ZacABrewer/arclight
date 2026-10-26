@@ -7,6 +7,7 @@ import { CUSTOM_SLIDER_TYPES, SLIDER_LABELS } from '../../../features/requests/s
 import { useCreateSlider, useDeleteSlider, useOrderSliders, useResetSliders, useSliders, useUpdateSlider } from '../../../hooks/requests.js';
 import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import './requests-settings.css';
+import { t } from '../../../i18n/index.js';
 
 /** Move the item at `index` by `delta` (-1 up, +1 down); out-of-range moves are no-ops. */
 export function moveItem<T>(list: readonly T[], index: number, delta: number): T[] {
@@ -39,15 +40,15 @@ export function SlidersCard() {
 
   return (
     <SettingsSection
-      label="Discover sliders"
+      label={t('settings.requests.slidersCard.discoverSliders')}
       {...(draft ? { count: draft.length } : {})}
       action={
         <div className="al-section-actions">
           <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
-            Add slider
+            {t('settings.requests.slidersCard.addSlider')}
           </Button>
           <Button size="sm" variant="ghost" onClick={() => setConfirmReset(true)}>
-            Reset to defaults
+            {t('settings.requests.slidersCard.resetToDefaults')}
           </Button>
           <Button
             size="sm"
@@ -56,19 +57,19 @@ export function SlidersCard() {
             loading={order.isPending}
             onClick={() => draft && order.mutate(draft.map((s) => ({ id: s.id, enabled: s.enabled })))}
           >
-            Save order
+            {t('settings.requests.slidersCard.saveOrder')}
           </Button>
         </div>
       }
     >
       {sliders.isError ? (
-        <ErrorBlock title="Could not load sliders" onRetry={() => void sliders.refetch()}>
+        <ErrorBlock title={t('settings.requests.slidersCard.couldNotLoadSliders')} onRetry={() => void sliders.refetch()}>
           {errorMessage(sliders.error)}
         </ErrorBlock>
       ) : !draft ? (
         <Skeleton lines={4} />
       ) : (
-        <ol className="al-order-list" aria-label="Sliders">
+        <ol className="al-order-list" aria-label={t('settings.requests.slidersCard.sliders')}>
           {draft.map((s, i) => {
             const label = s.title ?? SLIDER_LABELS[s.type];
             return (
@@ -77,7 +78,7 @@ export function SlidersCard() {
                   {String(i + 1).padStart(2, '0')}
                 </span>
                 <Toggle
-                  aria-label={`Show ${label}`}
+                  aria-label={t('settings.requests.slidersCard.showLabel', { label })}
                   checked={s.enabled}
                   onChange={(e) => {
                     const enabled = e.currentTarget.checked;
@@ -88,26 +89,26 @@ export function SlidersCard() {
                   {label}{' '}
                   {s.isBuiltIn ? (
                     <Chip tone="neutral" dot="none">
-                      Built-in
+                      {t('settings.requests.slidersCard.builtIn')}
                     </Chip>
                   ) : (
                     <Chip dot="none">{SLIDER_LABELS[s.type]}</Chip>
                   )}
                 </span>
                 <span className="al-order-row__actions">
-                  <Button size="sm" variant="ghost" aria-label={`Move ${label} up`} disabled={i === 0} onClick={() => setDraft(moveItem(draft, i, -1))}>
+                  <Button size="sm" variant="ghost" aria-label={t('settings.requests.slidersCard.moveLabelUp', { label })} disabled={i === 0} onClick={() => setDraft(moveItem(draft, i, -1))}>
                     ↑
                   </Button>
-                  <Button size="sm" variant="ghost" aria-label={`Move ${label} down`} disabled={i === draft.length - 1} onClick={() => setDraft(moveItem(draft, i, 1))}>
+                  <Button size="sm" variant="ghost" aria-label={t('settings.requests.slidersCard.moveLabelDown', { label })} disabled={i === draft.length - 1} onClick={() => setDraft(moveItem(draft, i, 1))}>
                     ↓
                   </Button>
                   {!s.isBuiltIn ? (
                     <>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(s)} aria-label={`Edit ${label}`}>
-                        Edit
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(s)} aria-label={t('settings.requests.slidersCard.editLabel', { label })}>
+                        {t('common.edit')}
                       </Button>
-                      <Button size="sm" variant="danger" onClick={() => setDeleting(s)} aria-label={`Delete ${label}`}>
-                        Delete
+                      <Button size="sm" variant="danger" onClick={() => setDeleting(s)} aria-label={t('settings.requests.slidersCard.deleteLabel', { label })}>
+                        {t('common.delete')}
                       </Button>
                     </>
                   ) : null}
@@ -120,8 +121,8 @@ export function SlidersCard() {
       {editing ? <SliderEditor slider={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
-        title={`Delete ${deleting?.title ?? 'slider'}?`}
-        confirmLabel="Delete slider"
+        title={t('settings.requests.slidersCard.deleteValue', { value: deleting?.title ?? 'slider' })}
+        confirmLabel={t('settings.requests.slidersCard.deleteSlider')}
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await del.mutateAsync(deleting.id);
@@ -130,15 +131,15 @@ export function SlidersCard() {
       />
       <ConfirmDialog
         open={confirmReset}
-        title="Reset sliders?"
-        confirmLabel="Reset sliders"
+        title={t('settings.requests.slidersCard.resetSliders')}
+        confirmLabel={t('settings.requests.slidersCard.resetSliders2')}
         onCancel={() => setConfirmReset(false)}
         onConfirm={async () => {
           await reset.mutateAsync(undefined);
           setConfirmReset(false);
         }}
       >
-        Custom sliders are deleted and the built-in ones return to their default order.
+        {t('settings.requests.slidersCard.customSlidersAreDeletedAnd')}
       </ConfirmDialog>
     </SettingsSection>
   );
@@ -152,11 +153,11 @@ function SliderEditor({ slider, onClose }: { slider: DiscoverSlider | null; onCl
   const [data, setData] = useState(slider?.data ?? '');
   const [enabled, setEnabled] = useState(slider?.enabled ?? true);
   const [error, setError] = useState<string | null>(null);
-  const dataLabel = CUSTOM_SLIDER_TYPES.find((t) => t.type === type)?.dataLabel ?? 'Data';
+  const dataLabel = CUSTOM_SLIDER_TYPES.find((entry) => entry.type === type)?.dataLabel ?? t('settings.requests.slidersCard.data');
 
   const submit = () => {
     if (!title.trim() || !data.trim()) {
-      setError('Title and data are required.');
+      setError(t('settings.requests.slidersCard.titleAndDataAreRequired'));
       return;
     }
     setError(null);
@@ -166,23 +167,23 @@ function SliderEditor({ slider, onClose }: { slider: DiscoverSlider | null; onCl
   };
 
   return (
-    <Modal open size={560} onClose={onClose} title={slider ? `Edit ${slider.title ?? 'slider'}` : 'Add slider'} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending || update.isPending} />}>
+    <Modal open size={560} onClose={onClose} title={slider ? t('settings.requests.slidersCard.editValue', { value: slider.title ?? 'slider' }) : t('settings.requests.slidersCard.addSlider')} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending || update.isPending} />}>
       <div className="al-editor-stack">
-      <Field label="Type">
+      <Field label={t('common.type')}>
         <Select
           value={type}
           disabled={slider !== null}
           onChange={(e) => setType(e.currentTarget.value as DiscoverSliderType)}
-          options={CUSTOM_SLIDER_TYPES.map((t) => ({ value: t.type, label: SLIDER_LABELS[t.type] }))}
+          options={CUSTOM_SLIDER_TYPES.map((row) => ({ value: row.type, label: SLIDER_LABELS[row.type] }))}
         />
       </Field>
-      <Field label="Title">
+      <Field label={t('common.title')}>
         <Input value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
       </Field>
       <Field label={dataLabel}>
         <Input value={data} onChange={(e) => setData(e.currentTarget.value)} />
       </Field>
-      <Toggle label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
+      <Toggle label={t('common.enabled')} checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
       {error ? (
         <p className="al-inline-error" role="alert">
           {error}

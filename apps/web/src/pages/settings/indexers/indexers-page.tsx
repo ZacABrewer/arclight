@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { indexersApi } from '../../../api/indexers.js';
@@ -12,6 +13,7 @@ import {
   useDeleteIndexer,
   useIndexerCategories,
   useIndexerList,
+  useIndexerProxies,
   useIndexerTemplates,
   useTestAllIndexers,
   useUpdateIndexer,
@@ -21,9 +23,14 @@ import { SettingsPage } from '../settings-layout.js';
 import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
 import { CatalogueList, TemplateList } from './catalogue.js';
 import { DefinitionEditor } from './definition-editor.js';
-import { filterTemplates } from './definition-fields.js';
+import { definitionNeedsSolver, filterTemplates } from './definition-fields.js';
+import { hasSolverProxy } from '../indexer-proxies/proxy-model.js';
+import { settingsKeys } from '../../../hooks/settings-keys.js';
+import { SolverHint } from './solver-hint.js';
+import { IndexerEditorTabs } from './tracker-account.js';
 import { categoryRenderer, indexerFields, indexerTestOutcome, toIndexerBody } from './indexer-fields.js';
 import './indexers.css';
+import { t } from '../../../i18n/index.js';
 
 /** "20:55" — local 24h clock time for retry hints. */
 function clockTime(iso: string): string {
@@ -39,17 +46,17 @@ export function indexerHealth(
   now = Date.now(),
 ): { tone: ChipTone; label: string; title?: string } {
   const off = indexer.enableRss === false && indexer.enableAutomaticSearch === false && indexer.enableInteractiveSearch === false;
-  if (off) return { tone: 'muted', label: 'Disabled' };
+  if (off) return { tone: 'muted', label: t('common.disabled') };
   const s = indexer.status;
   if (s?.disabledTill && new Date(s.disabledTill).getTime() > now) {
     return {
       tone: 'warn',
-      label: `Backing off · retry ${clockTime(s.disabledTill)}`,
-      title: `Skipped until ${formatDateTime(s.disabledTill)} after ${s.failureCount} failures`,
+      label: t('settings.indexers.backingOffRetryClocktime', { clockTime: clockTime(s.disabledTill) }),
+      title: t('settings.indexers.skippedUntilDatetimeAfterFailurecount', { dateTime: formatDateTime(s.disabledTill), failureCount: s.failureCount }),
     };
   }
-  if (s && s.failureCount > 0) return { tone: 'danger', label: `Failed · ${s.failureCount} recent ${s.failureCount === 1 ? 'failure' : 'failures'}` };
-  return { tone: 'accent', label: 'Enabled' };
+  if (s && s.failureCount > 0) return { tone: 'danger', label: t('settings.indexers.failedFailurecountRecentFailures', { failureCount: s.failureCount }) };
+  return { tone: 'accent', label: t('common.enabled') };
 }
 
 type Editing = { indexer: Indexer } | { template: IndexerTemplate };
@@ -84,7 +91,7 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
         open
         size={640}
         onClose={onClose}
-        title={existing ? `Edit ${existing.name}` : `Add ${'template' in editing ? editing.template.implementationName : ''} indexer`}
+        title={existing ? t('settings.indexers.editName', { name: existing.name }) : t('settings.indexers.addValueIndexer', { value: 'template' in editing ? editing.template.implementationName : '' })}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -95,21 +102,23 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
           />
         }
       >
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={renderers} />
-        <SaveError error={create.error ?? update.error} />
+        <IndexerEditorTabs indexer={existing}>
+          <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={renderers} />
+          <SaveError error={create.error ?? update.error} />
+        </IndexerEditorTabs>
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${existing.name}?`}
-          confirmLabel="Delete indexer"
+          title={t('settings.indexers.deleteName', { name: existing.name })}
+          confirmLabel={t('settings.indexers.deleteIndexer')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
         >
-          <p>Searches and RSS stop using {existing.name}.</p>
+          <p>{t('settings.indexers.searchesAndRssStopUsing', { name: existing.name })}</p>
         </ConfirmDialog>
       ) : null}
     </>
@@ -122,7 +131,7 @@ export function IndexerChooser({
   onPickDefinition,
   onClose,
 }: {
-  onPick: (t: IndexerTemplate) => void;
+  onPick: (item: IndexerTemplate) => void;
   onPickDefinition: (d: IndexerDefinitionSummary) => void;
   onClose: () => void;
 }) {
@@ -131,27 +140,27 @@ export function IndexerChooser({
   const endpoints = templates.isPending ? (
     <Skeleton lines={3} />
   ) : templates.isError ? (
-    <ErrorBlock title="Couldn't load endpoint types" onRetry={() => void templates.refetch()}>
+    <ErrorBlock title={t('settings.indexers.couldntLoadEndpointTypes')} onRetry={() => void templates.refetch()}>
       {errorMessage(templates.error)}
     </ErrorBlock>
   ) : (
     <TemplateList templates={filterTemplates(templates.data, text)} onPick={onPick} />
   );
   return (
-    <Modal open size={640} onClose={onClose} title="Add indexer">
+    <Modal open size={640} onClose={onClose} title={t('settings.indexers.addIndexer')}>
       <div className="al-chooser">
         <Input
           type="search"
-          aria-label="Search indexers"
-          placeholder="Search by name, description or language"
+          aria-label={t('settings.indexers.searchIndexers')}
+          placeholder={t('settings.indexers.searchByNameDescriptionOr')}
           value={text}
           onChange={(e) => setText(e.currentTarget.value)}
         />
         <Tabs
-          aria-label="Indexer sources"
+          aria-label={t('settings.indexers.indexerSources')}
           tabs={[
-            { id: 'endpoint', label: 'Torznab/Newznab', content: endpoints },
-            { id: 'catalogue', label: 'Catalogue', content: <CatalogueList text={text} onPick={onPickDefinition} /> },
+            { id: 'endpoint', label: t('settings.indexers.torznabNewznab'), content: endpoints },
+            { id: 'catalogue', label: t('settings.indexers.catalogue'), content: <CatalogueList text={text} onPick={onPickDefinition} /> },
           ]}
         />
       </div>
@@ -169,16 +178,27 @@ export function indexerSourceLine(indexer: Pick<Indexer, 'implementation' | 'def
   return parts.join(' · ');
 }
 
-const IMPLEMENTATION_LABELS: Record<string, string> = { torznab: 'Torznab', newznab: 'Newznab', definition: 'Catalogue' };
+const IMPLEMENTATION_LABELS: Record<string, string> = { get torznab() { return t('settings.indexers.torznab'); }, get newznab() { return t('settings.indexers.newznab'); }, get definition() { return t('settings.indexers.catalogue'); } };
 
 /** One indexer card: name, status chip, protocol, priority (mono), Test / Edit. */
-export function IndexerCard({ indexer, onEdit, result }: { indexer: Indexer; onEdit: () => void; result?: IndexerTestAllItem | undefined }) {
+export function IndexerCard({
+  indexer,
+  onEdit,
+  result,
+  needsSolver = false,
+}: {
+  indexer: Indexer;
+  onEdit: () => void;
+  result?: IndexerTestAllItem | undefined;
+  /** Its definition needs a challenge solver and none is configured. */
+  needsSolver?: boolean;
+}) {
   const health = indexerHealth(indexer);
   const source = indexerSourceLine(indexer);
   return (
     <ItemCard
       title={indexer.name}
-      muted={health.label === 'Disabled'}
+      muted={health.tone === 'muted'}
       onClick={onEdit}
       status={
         <Chip tone={health.tone} title={health.title}>
@@ -188,8 +208,8 @@ export function IndexerCard({ indexer, onEdit, result }: { indexer: Indexer; onE
       actions={
         <>
           <TestButton size="sm" onTest={async () => indexerTestOutcome(await indexersApi.test(toIndexerBody(indexer as unknown as Record<string, unknown>)))} />
-          <Button size="sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${indexer.name}`}>
-            Edit
+          <Button size="sm" variant="ghost" onClick={onEdit} aria-label={t('settings.indexers.editName', { name: indexer.name })}>
+            {t('common.edit')}
           </Button>
         </>
       }
@@ -197,21 +217,44 @@ export function IndexerCard({ indexer, onEdit, result }: { indexer: Indexer; onE
       <ProtocolBadge protocol={indexer.protocol} />
       <span>{IMPLEMENTATION_LABELS[indexer.implementation] ?? indexer.implementation}</span>
       <span>
-        Priority <span className="al-card-priority">{indexer.priority}</span>
+        {t('common.priority')} <span className="al-card-priority">{indexer.priority}</span>
       </span>
       {source ? <span className="al-card-line">{source}</span> : null}
+      {needsSolver ? <SolverHint as="span" /> : null}
       {result ? (
         <TestResultView
           outcome={{
             ok: result.ok,
-            message: result.ok ? `${result.releaseCount ?? 0} releases` : undefined,
+            message: result.ok ? t('settings.indexers.valueReleases', { value: result.releaseCount ?? 0 }) : undefined,
             warnings: [],
-            errors: result.ok ? [] : [result.error?.message ?? 'Unknown error'],
+            errors: result.ok ? [] : [result.error?.message ?? t('settings.indexers.unknownError')],
           }}
         />
       ) : null}
     </ItemCard>
   );
+}
+
+/**
+ * Ids of definition indexers whose definition needs a challenge solver while no
+ * FlareSolverr-type proxy exists. The catalogue is only fetched in that situation.
+ */
+export function useSolverHints(indexers: readonly Indexer[] | undefined): Set<number> {
+  const proxies = useIndexerProxies();
+  const definitionIds = (indexers ?? []).filter((i) => i.implementation === 'definition' && i.settings.definitionId);
+  const missingSolver = proxies.isSuccess && !hasSolverProxy(proxies.data);
+  const catalogue = useQuery({
+    queryKey: settingsKeys.indexerDefinitions({}),
+    queryFn: () => indexersApi.definitions.list({}),
+    staleTime: 60_000,
+    enabled: missingSolver && definitionIds.length > 0,
+  });
+  return useMemo(() => {
+    if (!missingSolver || !catalogue.data) return new Set<number>();
+    const needs = new Set(catalogue.data.filter(definitionNeedsSolver).map((d) => d.id));
+    return new Set(definitionIds.filter((i) => needs.has(i.settings.definitionId ?? '')).map((i) => i.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [missingSolver, catalogue.data, indexers]);
 }
 
 /** Settings → Indexers (also /indexers): card grid + add chooser + editors. */
@@ -223,11 +266,12 @@ export function IndexersPage() {
   const [definitionEditing, setDefinitionEditing] = useState<{ definition: IndexerDefinitionSummary } | { indexer: Indexer } | null>(null);
   const openIndexer = (indexer: Indexer) => (indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer }));
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
+  const needsSolverIds = useSolverHints(list.data);
 
   return (
     <SettingsPage
-      title="Indexers"
-      standalone={{ index: '08', title: 'Indexers' }}
+      title={t('common.indexers')}
+      standalone={{ index: '08', title: t('common.indexers') }}
       actions={
         <>
           <Button
@@ -236,10 +280,10 @@ export function IndexersPage() {
             disabled={!list.data?.length}
             onClick={() => testAll.mutate(undefined, { onSuccess: (r) => setResults(Object.fromEntries(r.map((x) => [x.id, x]))) })}
           >
-            Test all
+            {t('settings.indexers.testAll')}
           </Button>
           <Button variant="primary" onClick={() => setPicking(true)}>
-            Add indexer
+            {t('settings.indexers.addIndexer')}
           </Button>
         </>
       }
@@ -247,15 +291,15 @@ export function IndexersPage() {
       {list.isPending ? (
         <Skeleton lines={4} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load indexers" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.indexers.couldntLoadIndexers')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : list.data.length === 0 ? (
-        <EmptyState title="No indexers yet">Add a Torznab or Newznab endpoint, or pick a site from the catalogue.</EmptyState>
+        <EmptyState title={t('settings.indexers.noIndexersYet')}>{t('settings.indexers.addATorznabOrNewznab')}</EmptyState>
       ) : (
-        <CardGrid label="Indexers">
+        <CardGrid label={t('common.indexers')}>
           {list.data.map((indexer) => (
-            <IndexerCard key={indexer.id} indexer={indexer} onEdit={() => openIndexer(indexer)} result={results[indexer.id]} />
+            <IndexerCard key={indexer.id} indexer={indexer} onEdit={() => openIndexer(indexer)} result={results[indexer.id]} needsSolver={needsSolverIds.has(indexer.id)} />
           ))}
         </CardGrid>
       )}

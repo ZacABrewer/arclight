@@ -55,7 +55,7 @@ describe('rail and navigation', () => {
 
   it('builds section tabs from every section under the active code', () => {
     expect(sectionTabs('/issues', true).map((t) => t.label)).toEqual(['All requests', 'My requests', 'Issues', 'Watchlist']);
-    expect(sectionTabs('/indexers/stats', true).map((t) => t.to)).toEqual(['/indexers', '/indexers/stats', '/search']);
+    expect(sectionTabs('/indexers/stats', true).map((t) => t.to)).toEqual(['/indexers', '/indexers/stats', '/indexers/trackers', '/search']);
     expect(sectionTabs('/system/status', true).map((t) => t.label)).toContain('Updates');
     // Settings draws its own sub-nav; the dashboard is a single page.
     expect(sectionTabs('/settings/general', true)).toEqual([]);

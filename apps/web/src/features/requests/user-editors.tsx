@@ -1,8 +1,14 @@
 import { useEffect, useState } from 'react';
 import {
+  ContentRestrictions,
+  MOVIE_CERTIFICATIONS,
   PERMISSION_INFO,
   Permission,
   REQUEST_SECRET_MASK,
+  TV_CERTIFICATIONS,
+  UserApprovalPolicy,
+  type MovieCertification,
+  type TvCertification,
   type PermissionInfo,
   type QuotaInfo,
   type UserNotificationTestResult,
@@ -11,11 +17,12 @@ import {
   type UserRequestSettings,
 } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { Button, Checkbox, Chip, Field, Input, SectionLabel, Skeleton, Toggle } from '../../arclight/index.js';
+import { Button, Checkbox, Chip, Field, Input, KeyValue, SectionLabel, Select, Skeleton, Toggle } from '../../arclight/index.js';
 import { ErrorView } from '../../components/error-boundary.js';
 import { useToast } from '../../components/toast.js';
 import {
   useSetUserPermissions,
+  useSetUserPolicy,
   useSetUserQuota,
   useSetUserRequestSettings,
   useTestUserNotifications,
@@ -25,18 +32,32 @@ import {
 } from '../../hooks/requests.js';
 import { SaveError } from '../../pages/settings/shared.js';
 import './requests.css';
+import './policy.css';
+import { t } from '../../i18n/index.js';
 
 // ---------------------------------------------------------------------------------------
 // Permissions matrix
 // ---------------------------------------------------------------------------------------
 
 export const PERMISSION_GROUP_LABELS: Record<PermissionInfo['group'], string> = {
-  admin: 'Administration',
-  request: 'Requesting',
-  autoApprove: 'Auto-approve',
-  autoRequest: 'Auto-request (watchlist sync)',
-  issues: 'Issues',
-  view: 'Visibility',
+  get admin() {
+    return t('features.requests.userEditors.administration');
+  },
+  get request() {
+    return t('features.requests.userEditors.requesting');
+  },
+  get autoApprove() {
+    return t('features.requests.userEditors.autoApprove');
+  },
+  get autoRequest() {
+    return t('features.requests.userEditors.autoRequestWatchlistSync');
+  },
+  get issues() {
+    return t('common.issues');
+  },
+  get view() {
+    return t('features.requests.userEditors.visibility');
+  },
 };
 
 /** Set or clear one permission bit. */
@@ -91,7 +112,7 @@ export function PermissionsMatrix({
           </div>
         </fieldset>
       ))}
-      {isAdmin ? <p className="al-muted">Admin passes every check; the other boxes have no effect.</p> : null}
+      {isAdmin ? <p className="al-muted">{t('features.requests.userEditors.adminPassesEveryCheckThe')}</p> : null}
     </div>
   );
 }
@@ -119,12 +140,157 @@ export function UserPermissionsEditor({ userId, lockAdmin = true }: { userId: nu
             save.mutate(draft, {
               onSuccess: (res) => {
                 setDraft(res.permissions);
-                toast.push({ tone: 'ok', title: 'Permissions saved' });
+                toast.push({ tone: 'ok', title: t('features.requests.userEditors.permissionsSaved') });
               },
             })
           }
         >
-          Save permissions
+          {t('features.requests.userEditors.savePermissions')}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------------------
+// Content caps and the per-user approval override (PUT /user/:id/permissions)
+// ---------------------------------------------------------------------------------------
+
+/** "12.5" → 12.5; blank or junk → null (inherit / off). */
+export function parseOptionalGb(raw: string): number | null {
+  if (raw.trim() === '') return null;
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : null;
+}
+
+/** "Movies up to PG-13 · Series up to TV-PG · Adult titles hidden", or "No caps". */
+export function capsSummary(c: ContentRestrictions): string {
+  const parts = [
+    c.maxCertification.movie ? t('features.requests.userEditors.capMovies', { cert: c.maxCertification.movie }) : null,
+    c.maxCertification.tv ? t('features.requests.userEditors.capSeries', { cert: c.maxCertification.tv }) : null,
+    c.hideAdultContent ? t('features.requests.userEditors.adultHidden') : null,
+  ].filter((p): p is string => p !== null);
+  return parts.length ? parts.join(' · ') : t('features.requests.userEditors.noCaps');
+}
+
+function autoApproveLabel(v: UserApprovalPolicy['autoApprove']): string {
+  if (v === 'always') return t('features.requests.userEditors.overrideAlways');
+  if (v === 'never') return t('features.requests.userEditors.overrideNever');
+  return t('features.requests.userEditors.overrideInherit');
+}
+
+interface PolicyDraft {
+  caps: ContentRestrictions;
+  policy: UserApprovalPolicy;
+}
+
+function policyDraftOf(data: { contentRestrictions?: unknown; approvalPolicy?: unknown }): PolicyDraft {
+  return { caps: ContentRestrictions.parse(data.contentRestrictions ?? {}), policy: UserApprovalPolicy.parse(data.approvalPolicy ?? {}) };
+}
+
+/**
+ * Content caps (certification limits, hide adult) and the approval-policy override for one
+ * user. `readOnly` shows them as facts (Profile: users cannot change their own caps).
+ */
+export function UserPolicyEditor({ userId, readOnly = false }: { userId: number; readOnly?: boolean }) {
+  const query = useUserPermissions(userId);
+  const save = useSetUserPolicy(userId);
+  const toast = useToast();
+  const [draft, setDraft] = useState<PolicyDraft | null>(null);
+  useEffect(() => {
+    if (query.data && draft === null) setDraft(policyDraftOf(query.data));
+  }, [query.data, draft]);
+
+  if (query.isError) return readOnly ? <p className="al-caption">{t('features.requests.userEditors.capsUnavailable')}</p> : <ErrorView error={query.error} onRetry={() => void query.refetch()} />;
+  if (!query.data || draft === null) return <Skeleton lines={4} />;
+  const { caps, policy } = draft;
+  const permissions = query.data.permissions;
+
+  if (readOnly) {
+    return (
+      <KeyValue
+        items={[
+          { label: t('features.requests.userEditors.contentCaps'), value: capsSummary(caps), mono: false },
+          { label: t('features.requests.userEditors.autoApproval'), value: autoApproveLabel(policy.autoApprove), mono: false },
+          ...(policy.budgetExempt ? [{ label: t('features.requests.userEditors.budgets'), value: t('features.requests.userEditors.budgetExemptShort'), mono: false }] : []),
+        ]}
+      />
+    );
+  }
+
+  const setCaps = (patch: Partial<ContentRestrictions>) => setDraft({ ...draft, caps: { ...caps, ...patch } });
+  const setPolicy = (patch: Partial<UserApprovalPolicy>) => setDraft({ ...draft, policy: { ...policy, ...patch } });
+  const none = { value: '', label: t('features.requests.userEditors.noCap') };
+
+  return (
+    <div className="req-stack" data-testid="user-policy-editor">
+      <SectionLabel>{t('features.requests.userEditors.contentCaps')}</SectionLabel>
+      <div className="req-fields-2">
+        <Field label={t('features.requests.userEditors.maxMovieRating')} hint={t('features.requests.userEditors.maxMovieRatingHint')}>
+          <Select
+            aria-label={t('features.requests.userEditors.maxMovieRating')}
+            value={caps.maxCertification.movie ?? ''}
+            onChange={(e) => setCaps({ maxCertification: { ...caps.maxCertification, movie: (e.currentTarget.value || null) as MovieCertification | null } })}
+            options={[none, ...MOVIE_CERTIFICATIONS.map((c) => ({ value: c, label: c }))]}
+          />
+        </Field>
+        <Field label={t('features.requests.userEditors.maxSeriesRating')} hint={t('features.requests.userEditors.maxSeriesRatingHint')}>
+          <Select
+            aria-label={t('features.requests.userEditors.maxSeriesRating')}
+            value={caps.maxCertification.tv ?? ''}
+            onChange={(e) => setCaps({ maxCertification: { ...caps.maxCertification, tv: (e.currentTarget.value || null) as TvCertification | null } })}
+            options={[none, ...TV_CERTIFICATIONS.map((c) => ({ value: c, label: c }))]}
+          />
+        </Field>
+      </div>
+      <Field label={t('features.requests.userEditors.hideAdult')} inline hint={t('features.requests.userEditors.hideAdultHint')}>
+        <Toggle aria-label={t('features.requests.userEditors.hideAdult')} checked={caps.hideAdultContent} onChange={(e) => setCaps({ hideAdultContent: e.currentTarget.checked })} />
+      </Field>
+
+      <SectionLabel>{t('features.requests.userEditors.approvalOverride')}</SectionLabel>
+      <div className="req-fields-2">
+        <Field label={t('features.requests.userEditors.autoApproval')} hint={t('features.requests.userEditors.autoApprovalHint')}>
+          <Select
+            aria-label={t('features.requests.userEditors.autoApproval')}
+            value={policy.autoApprove}
+            onChange={(e) => setPolicy({ autoApprove: e.currentTarget.value as UserApprovalPolicy['autoApprove'] })}
+            options={(['inherit', 'always', 'never'] as const).map((v) => ({ value: v, label: autoApproveLabel(v) }))}
+          />
+        </Field>
+        <Field label={t('features.requests.userEditors.sizeLimitOverride')} hint={t('features.requests.userEditors.sizeLimitOverrideHint')}>
+          <Input
+            type="number"
+            min={0}
+            step="any"
+            mono
+            end="GB"
+            aria-label={t('features.requests.userEditors.sizeLimitOverride')}
+            value={policy.autoApproveIfSizeBelowGb ?? ''}
+            onChange={(e) => setPolicy({ autoApproveIfSizeBelowGb: parseOptionalGb(e.currentTarget.value) })}
+          />
+        </Field>
+      </div>
+      <Field label={t('features.requests.userEditors.budgetExempt')} inline hint={t('features.requests.userEditors.budgetExemptHint')}>
+        <Toggle aria-label={t('features.requests.userEditors.budgetExempt')} checked={policy.budgetExempt} onChange={(e) => setPolicy({ budgetExempt: e.currentTarget.checked })} />
+      </Field>
+      <SaveError error={save.error} />
+      <div className="req-actions">
+        <Button
+          variant="primary"
+          loading={save.isPending}
+          onClick={() =>
+            save.mutate(
+              { permissions, contentRestrictions: caps, approvalPolicy: policy },
+              {
+                onSuccess: (res) => {
+                  setDraft(policyDraftOf({ contentRestrictions: res.contentRestrictions ?? caps, approvalPolicy: res.approvalPolicy ?? policy }));
+                  toast.push({ tone: 'ok', title: t('features.requests.userEditors.capsSaved') });
+                },
+              },
+            )
+          }
+        >
+          {t('features.requests.userEditors.saveCaps')}
         </Button>
       </div>
     </div>
@@ -157,21 +323,21 @@ export function QuotaFields({ value, onChange, blankHint }: { value: UserQuota; 
   return (
     <div className="req-stack">
       <div className="req-fields-2">
-        {field('movieLimit', 'Movie request limit')}
-        {field('movieDays', 'Movie window (days)')}
+        {field('movieLimit', t('features.requests.userEditors.movieRequestLimit'))}
+        {field('movieDays', t('features.requests.userEditors.movieWindowDays'))}
       </div>
       <div className="req-fields-2">
-        {field('tvLimit', 'Series request limit')}
-        {field('tvDays', 'Series window (days)')}
+        {field('tvLimit', t('features.requests.userEditors.seriesRequestLimit'))}
+        {field('tvDays', t('features.requests.userEditors.seriesWindowDays'))}
       </div>
     </div>
   );
 }
 
 export function quotaSummary(info: QuotaInfo): string {
-  if (!info.limit) return `${info.used} used · unlimited`;
+  if (!info.limit) return t('features.requests.userEditors.usedUsedUnlimited', { used: info.used });
   const window = info.days ? ` per ${info.days} days` : ' in total';
-  return `${info.used} of ${info.limit}${window} · ${info.remaining ?? 0} left`;
+  return t('features.requests.userEditors.usedOfLimitWindowValue', { used: info.used, limit: info.limit, window, value: info.remaining ?? 0 });
 }
 
 export function UserQuotaEditor({ userId }: { userId: number }) {
@@ -190,23 +356,23 @@ export function UserQuotaEditor({ userId }: { userId: number }) {
     <div className="req-stack" data-testid="quota-editor">
       {exempt ? (
         <p className="al-notice" role="status">
-          This user manages users (or is an admin) and is exempt from quotas.
+          {t('features.requests.userEditors.thisUserManagesUsersOr')}
         </p>
       ) : null}
-      <QuotaFields value={draft} onChange={setDraft} blankHint="Blank: use the global default" />
+      <QuotaFields value={draft} onChange={setDraft} blankHint={t('features.requests.userEditors.blankUseTheGlobalDefault')} />
       <div className="req-fields-2">
         <div>
-          <SectionLabel>Movies</SectionLabel>
+          <SectionLabel>{t('common.movies')}</SectionLabel>
           <p className="req-usage" data-testid="quota-movie">
-            Effective: {effective.movieLimit ? `${effective.movieLimit} per ${effective.movieDays ?? '∞'} days` : 'unlimited'} — {quotaSummary(status.movie)}
-            {status.movie.restricted ? <Chip tone="danger">limit reached</Chip> : null}
+            {t('features.requests.userEditors.effectiveValueQuotasummary', { value: effective.movieLimit ? t('features.requests.userEditors.movielimitPerValueDays', { movieLimit: effective.movieLimit, value: effective.movieDays ?? '∞' }) : t('features.requests.userEditors.unlimited'), quotaSummary: quotaSummary(status.movie) })}
+            {status.movie.restricted ? <Chip tone="danger">{t('features.requests.userEditors.limitReached')}</Chip> : null}
           </p>
         </div>
         <div>
-          <SectionLabel>Series</SectionLabel>
+          <SectionLabel>{t('common.series')}</SectionLabel>
           <p className="req-usage" data-testid="quota-series">
-            Effective: {effective.tvLimit ? `${effective.tvLimit} per ${effective.tvDays ?? '∞'} days` : 'unlimited'} — {quotaSummary(status.series)}
-            {status.series.restricted ? <Chip tone="danger">limit reached</Chip> : null}
+            {t('features.requests.userEditors.effectiveValueQuotasummary', { value: effective.tvLimit ? t('features.requests.userEditors.tvlimitPerValueDays', { tvLimit: effective.tvLimit, value: effective.tvDays ?? '∞' }) : t('features.requests.userEditors.unlimited'), quotaSummary: quotaSummary(status.series) })}
+            {status.series.restricted ? <Chip tone="danger">{t('features.requests.userEditors.limitReached')}</Chip> : null}
           </p>
         </div>
       </div>
@@ -219,12 +385,12 @@ export function UserQuotaEditor({ userId }: { userId: number }) {
             save.mutate(draft, {
               onSuccess: (res) => {
                 setDraft(res.overrides);
-                toast.push({ tone: 'ok', title: 'Quota saved' });
+                toast.push({ tone: 'ok', title: t('features.requests.userEditors.quotaSaved') });
               },
             })
           }
         >
-          Save quota
+          {t('features.requests.userEditors.saveQuota')}
         </Button>
       </div>
     </div>
@@ -236,12 +402,24 @@ export function UserQuotaEditor({ userId }: { userId: number }) {
 // ---------------------------------------------------------------------------------------
 
 const TYPE_LABELS: Record<keyof UserNotificationTypes, string> = {
-  requestApproved: 'Request approved',
-  requestDeclined: 'Request declined',
-  requestAvailable: 'Request available',
-  requestPending: 'Request pending approval (managers)',
-  issueCreated: 'Issue reported (managers)',
-  issueUpdated: 'Issue updated',
+  get requestApproved() {
+    return t('common.requestApproved');
+  },
+  get requestDeclined() {
+    return t('features.requests.userEditors.requestDeclined');
+  },
+  get requestAvailable() {
+    return t('features.requests.userEditors.requestAvailable');
+  },
+  get requestPending() {
+    return t('features.requests.userEditors.requestPendingApprovalManagers');
+  },
+  get issueCreated() {
+    return t('features.requests.userEditors.issueReportedManagers');
+  },
+  get issueUpdated() {
+    return t('features.requests.userEditors.issueUpdated');
+  },
 };
 
 export function UserRequestSettingsForm({ userId }: { userId: number }) {
@@ -262,11 +440,11 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
 
   return (
     <div className="req-stack" data-testid="request-settings-form">
-      <SectionLabel>Discord</SectionLabel>
-      <Field label="Enabled" inline>
-        <Toggle aria-label="Discord enabled" checked={n.discordEnabled} onChange={(e) => setN({ discordEnabled: e.currentTarget.checked })} />
+      <SectionLabel>{t('features.requests.userEditors.discord')}</SectionLabel>
+      <Field label={t('common.enabled')} inline>
+        <Toggle aria-label={t('features.requests.userEditors.discordEnabled')} checked={n.discordEnabled} onChange={(e) => setN({ discordEnabled: e.currentTarget.checked })} />
       </Field>
-      <Field label="Webhook URL" hint="A webhook into a private channel or DM server.">
+      <Field label={t('features.requests.userEditors.webhookUrl')} hint={t('features.requests.userEditors.aWebhookIntoAPrivate')}>
         <Input
           value={n.discordWebhookUrl ?? ''}
           onChange={(e) => setN(optionalText('discordWebhookUrl', e.currentTarget.value))}
@@ -274,34 +452,34 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
         />
       </Field>
 
-      <SectionLabel>Telegram</SectionLabel>
-      <Field label="Enabled" inline>
-        <Toggle aria-label="Telegram enabled" checked={n.telegramEnabled} onChange={(e) => setN({ telegramEnabled: e.currentTarget.checked })} />
+      <SectionLabel>{t('features.requests.userEditors.telegram')}</SectionLabel>
+      <Field label={t('common.enabled')} inline>
+        <Toggle aria-label={t('features.requests.userEditors.telegramEnabled')} checked={n.telegramEnabled} onChange={(e) => setN({ telegramEnabled: e.currentTarget.checked })} />
       </Field>
-      <Field label="Chat id" hint="Uses the bot of the first enabled Telegram connection.">
+      <Field label={t('features.requests.userEditors.chatId')} hint={t('features.requests.userEditors.usesTheBotOfThe')}>
         <Input value={n.telegramChatId ?? ''} onChange={(e) => setN(optionalText('telegramChatId', e.currentTarget.value))} />
       </Field>
-      <Field label="Send silently" inline>
+      <Field label={t('features.requests.userEditors.sendSilently')} inline>
         <Toggle checked={n.telegramSendSilently} onChange={(e) => setN({ telegramSendSilently: e.currentTarget.checked })} />
       </Field>
 
-      <SectionLabel>Email</SectionLabel>
-      <Field label="Enabled" inline>
-        <Toggle aria-label="Email enabled" checked={n.emailEnabled} onChange={(e) => setN({ emailEnabled: e.currentTarget.checked })} />
+      <SectionLabel>{t('common.email')}</SectionLabel>
+      <Field label={t('common.enabled')} inline>
+        <Toggle aria-label={t('features.requests.userEditors.emailEnabled')} checked={n.emailEnabled} onChange={(e) => setN({ emailEnabled: e.currentTarget.checked })} />
       </Field>
-      <Field label="Address" hint="Blank: the account email.">
+      <Field label={t('common.address')} hint={t('features.requests.userEditors.blankTheAccountEmail')}>
         <Input type="email" value={n.email ?? ''} onChange={(e) => setN(optionalText('email', e.currentTarget.value))} />
       </Field>
 
-      <SectionLabel>Notify me about</SectionLabel>
+      <SectionLabel>{t('features.requests.userEditors.notifyMeAbout')}</SectionLabel>
       <div className="req-check-grid">
         {(Object.keys(TYPE_LABELS) as Array<keyof UserNotificationTypes>).map((k) => (
           <Checkbox key={k} label={TYPE_LABELS[k]} checked={n.types[k]} onChange={(e) => setN({ types: { ...n.types, [k]: e.currentTarget.checked } })} />
         ))}
       </div>
 
-      <SectionLabel>Plex watchlist</SectionLabel>
-      <Field label="Plex token" hint="Stored masked; leave the mask to keep the saved token.">
+      <SectionLabel>{t('common.watchlist')}</SectionLabel>
+      <Field label={t('features.requests.userEditors.plexToken')} hint={t('features.requests.userEditors.storedMaskedLeaveTheMask')}>
         <Input
           type="password"
           autoComplete="off"
@@ -315,20 +493,27 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
           placeholder={REQUEST_SECRET_MASK}
         />
       </Field>
-      <Field label="Sync movies" inline>
+      <Field label={t('features.requests.userEditors.syncMovies')} inline>
         <Toggle checked={draft.watchlistSyncMovies} onChange={(e) => setDraft({ ...draft, watchlistSyncMovies: e.currentTarget.checked })} />
       </Field>
-      <Field label="Sync series" inline>
+      <Field label={t('features.requests.userEditors.syncSeries')} inline>
         <Toggle checked={draft.watchlistSyncSeries} onChange={(e) => setDraft({ ...draft, watchlistSyncSeries: e.currentTarget.checked })} />
+      </Field>
+      <Field label={t('features.requests.userEditors.requestFromWatchlist')} inline hint={t('features.requests.userEditors.titlesAddedToYourPlex')}>
+        <Toggle
+          aria-label={t('features.requests.userEditors.requestFromWatchlist')}
+          checked={draft.autoRequestFromWatchlist}
+          onChange={(e) => setDraft({ ...draft, autoRequestFromWatchlist: e.currentTarget.checked })}
+        />
       </Field>
 
       <SaveError error={save.error ?? test.error} />
       {testResult ? (
-        <ul className="req-results" aria-label="Test results">
-          {testResult.results.length === 0 ? <li className="al-muted">No personal agent is enabled.</li> : null}
+        <ul className="req-results" aria-label={t('features.requests.userEditors.testResults')}>
+          {testResult.results.length === 0 ? <li className="al-muted">{t('features.requests.userEditors.noPersonalAgentIsEnabled')}</li> : null}
           {testResult.results.map((r) => (
             <li key={r.agent} data-ok={r.ok}>
-              {r.agent}: {r.ok ? 'sent' : (r.error ?? 'failed')}
+              {r.agent}: {r.ok ? t('features.requests.userEditors.sent') : (r.error ?? t('features.requests.userEditors.failed'))}
             </li>
           ))}
         </ul>
@@ -341,12 +526,12 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
             save.mutate(draft, {
               onSuccess: (res) => {
                 setDraft(res);
-                toast.push({ tone: 'ok', title: 'Notification settings saved' });
+                toast.push({ tone: 'ok', title: t('features.requests.userEditors.notificationSettingsSaved') });
               },
             })
           }
         >
-          Save
+          {t('common.save')}
         </Button>
         <Button
           variant="secondary"
@@ -354,11 +539,11 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
           onClick={() =>
             test.mutate(undefined, {
               onSuccess: setTestResult,
-              onError: (err) => toast.error('Test failed', errorMessage(err)),
+              onError: (err) => toast.error(t('features.requests.userEditors.testFailed'), errorMessage(err)),
             })
           }
         >
-          Send test
+          {t('features.requests.userEditors.sendTest')}
         </Button>
       </div>
     </div>

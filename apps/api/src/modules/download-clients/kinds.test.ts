@@ -26,6 +26,7 @@ const REAL_NAMES: Record<string, string> = {
   sabnzbd: 'SABnzbd',
   nzbget: 'NZBGet',
   builtin: 'Built-in',
+  remoteEngine: 'Remote engine',
 };
 
 async function realService(fetchImpl?: typeof fetch) {

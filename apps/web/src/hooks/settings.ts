@@ -6,6 +6,7 @@ import { notificationsApi, type NotificationInput } from '../api/notifications.j
 import { settingsApi, type MediaManagementSettings } from '../api/settings.js';
 import { libraryKeys } from './library-keys.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 export function useMetadataSettings() {
   return useQuery({ queryKey: settingsKeys.metadata, queryFn: settingsApi.metadata.get });
@@ -13,7 +14,7 @@ export function useMetadataSettings() {
 
 export function useSaveMetadataSettings() {
   return useInvalidatingMutation((body: MetadataSettingsUpdate) => settingsApi.metadata.update(body), [settingsKeys.metadata], {
-    errorTitle: 'Could not save metadata settings',
+    errorTitle: t('hooks.settings.couldNotSaveMetadataSettings'),
   });
 }
 
@@ -26,7 +27,7 @@ export function useSaveMediaManagementSettings() {
   return useInvalidatingMutation(
     (body: MediaManagementSettings) => settingsApi.mediaManagement.update(body),
     [settingsKeys.mediaManagement],
-    { errorTitle: 'Could not save media management settings' },
+    { errorTitle: t('hooks.settings.couldNotSaveMediaManagement') },
   );
 }
 
@@ -36,7 +37,7 @@ export function useNamingConfig() {
 
 export function useSaveNamingConfig() {
   return useInvalidatingMutation((body: NamingConfigInput) => namingApi.update(body), [settingsKeys.naming], {
-    errorTitle: 'Could not save naming settings',
+    errorTitle: t('hooks.settings.couldNotSaveNamingSettings'),
   });
 }
 
@@ -59,7 +60,7 @@ export function useAddRootFolder() {
 
 export function useDeleteRootFolder() {
   return useInvalidatingMutation((id: number) => libraryApi.rootFolders.remove(id), [libraryKeys.library.rootFolders], {
-    errorTitle: 'Could not remove root folder',
+    errorTitle: t('hooks.settings.couldNotRemoveRootFolder'),
   });
 }
 
@@ -82,6 +83,6 @@ export function useSaveNotification() {
 
 export function useDeleteNotification() {
   return useInvalidatingMutation((id: number) => notificationsApi.remove(id), [settingsKeys.notifications], {
-    errorTitle: 'Could not delete connection',
+    errorTitle: t('hooks.settings.couldNotDeleteConnection'),
   });
 }

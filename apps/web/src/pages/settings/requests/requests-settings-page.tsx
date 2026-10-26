@@ -8,18 +8,20 @@ import {
   type RequestTypeDefaults,
 } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
-import { Checkbox, ErrorBlock, FormRow, FormSection, Select, Skeleton, Toggle } from '../../../arclight/index.js';
+import { Button, Checkbox, ErrorBlock, FormRow, FormSection, Input, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { TagPicker } from '../../../components/forms/tag-picker.js';
 import { useToast } from '../../../components/toast.js';
 import { PermissionsMatrix, QuotaFields } from '../../../features/requests/user-editors.js';
 import { useQualityProfiles, useRootFolders } from '../../../hooks/library.js';
-import { useRequestsSettings, useSaveRequestsSettings } from '../../../hooks/requests.js';
+import { useRequestsSettings, useSaveRequestsSettings, useSendDigest } from '../../../hooks/requests.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
 import { SettingsPage, useDraft, type Draft } from '../settings-layout.js';
 import { SaveError, SettingsSection } from '../shared.js';
 import { OverrideRulesCard } from './override-rules-card.js';
 import { SlidersCard } from './sliders-card.js';
+import { ApprovalPolicySections, PublicPortalSection, policyErrors } from './approval-policies.js';
 import './requests-settings.css';
+import { t } from '../../../i18n/index.js';
 
 /** Draft + save wiring for the requests settings form (GET/PUT /settings/requests). */
 export function useRequestsSettingsForm() {
@@ -30,7 +32,7 @@ export function useRequestsSettingsForm() {
   const submit = () => {
     if (!draft.value) return;
     save.mutate(draft.value, {
-      onSuccess: () => toast.push({ tone: 'ok', title: 'Request settings saved' }),
+      onSuccess: () => toast.push({ tone: 'ok', title: t('settings.requests.settings.requestSettingsSaved') }),
     });
   };
   return { query, save, draft, submit };
@@ -40,9 +42,15 @@ export function RequestsSettingsPage() {
   const form = useRequestsSettingsForm();
   return (
     <SettingsPage
-      title="Requests"
-      description="Defaults for new requests, discover sliders and override rules."
-      save={{ count: form.draft.changes, onSave: form.submit, onDiscard: form.draft.discard, saving: form.save.isPending }}
+      title={t('common.requests')}
+      description={t('settings.requests.settings.defaultsForNewRequestsDiscover')}
+      save={{
+        count: form.draft.changes,
+        onSave: form.submit,
+        onDiscard: form.draft.discard,
+        saving: form.save.isPending,
+        disabled: form.draft.value ? policyErrors(form.draft.value).length > 0 : false,
+      }}
     >
       <RequestsSettingsForm form={form} />
       <SlidersCard />
@@ -55,7 +63,7 @@ export function RequestsSettingsForm({ form }: { form: ReturnType<typeof useRequ
   const { query, draft, save } = form;
   if (query.isError) {
     return (
-      <ErrorBlock title="Could not load request settings" onRetry={() => void query.refetch()}>
+      <ErrorBlock title={t('settings.requests.settings.couldNotLoadRequestSettings')} onRetry={() => void query.refetch()}>
         {errorMessage(query.error)}
       </ErrorBlock>
     );
@@ -64,11 +72,75 @@ export function RequestsSettingsForm({ form }: { form: ReturnType<typeof useRequ
   return <SettingsFields draft={draft as Draft<RequestsSettings>} error={save.error} />;
 }
 
+/** "09:00" for the digest hour select. */
+export function digestHourLabel(hour: number): string {
+  return `${String(hour).padStart(2, '0')}:00`;
+}
+
+/** An application URL is optional; when set it must be an absolute http(s) URL. */
+export function applicationUrlError(value: string): string | null {
+  const v = value.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(v);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? null : t('common.useHttpAddress');
+  } catch {
+    return t('settings.requests.enterFullAddress');
+  }
+}
+
+const DIGEST_HOURS = Array.from({ length: 24 }, (_, h) => ({ value: String(h), label: digestHourLabel(h) }));
+
+function NotificationLinks({ value, set }: { value: RequestsSettings; set: <K extends keyof RequestsSettings>(key: K, v: RequestsSettings[K]) => void }) {
+  const ids = { url: useId(), hour: useId() };
+  const digest = useSendDigest();
+  const toast = useToast();
+  const urlError = applicationUrlError(value.applicationUrl);
+  return (
+    <FormSection label={t('common.notifications')}>
+      <FormRow
+        label={t('settings.requests.settings.applicationUrl')}
+        htmlFor={ids.url}
+        error={urlError ?? undefined}
+        caption={t('settings.requests.settings.publicAddressOfArclightNotifications')}
+      >
+        <Input id={ids.url} mono spellCheck={false} placeholder="https://arclight.example.com" invalid={urlError !== null} value={value.applicationUrl} onChange={(e) => set('applicationUrl', e.currentTarget.value)} />
+      </FormRow>
+      <FormRow label={t('settings.requests.settings.dailyDigest')} captionInline caption={t('settings.requests.settings.oneNotificationADayListing')}>
+        <Toggle aria-label={t('settings.requests.settings.dailyDigest')} checked={value.digestEnabled} onChange={(e) => set('digestEnabled', e.currentTarget.checked)} />
+      </FormRow>
+      <FormRow label={t('settings.requests.settings.digestTime')} htmlFor={ids.hour} caption={t('settings.requests.settings.serverLocalTime')}>
+        <Select id={ids.hour} disabled={!value.digestEnabled} value={String(value.digestHour)} onChange={(e) => set('digestHour', Number(e.currentTarget.value))} options={DIGEST_HOURS} />
+      </FormRow>
+      <FormRow label={t('settings.requests.settings.sendNow')}>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={digest.isPending}
+          onClick={() =>
+            digest.mutate(undefined, {
+              onSuccess: (r) =>
+                toast.push(
+                  r.sent
+                    ? { tone: 'ok', title: t('settings.requests.settings.digestSent'), message: t('settings.requests.settings.pendingrequestsPendingRequestsOpenissuesOpen', { pendingRequests: r.pendingRequests, openIssues: r.openIssues }) }
+                    : { tone: 'info', title: t('settings.requests.settings.nothingToSend'), message: t('settings.requests.settings.noPendingRequestsOrOpen') },
+                ),
+            })
+          }
+        >
+          {t('settings.requests.settings.sendDigestNow')}
+        </Button>
+      </FormRow>
+    </FormSection>
+  );
+}
+
+/** Auto-approve toggles: permission key and the message key of its label. */
 const AUTO_APPROVE = [
-  ['movie', 'Movies'],
-  ['series', 'Series'],
-  ['movie4k', '4K movies'],
-  ['series4k', '4K series'],
+  ['movie', 'common.movies'],
+  ['series', 'common.series'],
+  ['movie4k', 'settings.requests.movies4k'],
+  ['series4k', 'settings.requests.series4k'],
 ] as const;
 
 function SettingsFields({ draft, error }: { draft: Draft<RequestsSettings>; error: unknown }) {
@@ -82,18 +154,18 @@ function SettingsFields({ draft, error }: { draft: Draft<RequestsSettings>; erro
 
   return (
     <>
-      <TypeDefaults title="Movie defaults" mediaType="movie" value={value.movie} onChange={(v) => set('movie', v)} />
-      <TypeDefaults title="Series defaults" mediaType="series" value={value.series} onChange={(v) => set('series', v)} />
-      <FourK title="4K movies" mediaType="movie" value={value.movie4k} onChange={(v) => set('movie4k', v)} />
-      <FourK title="4K series" mediaType="series" value={value.series4k} onChange={(v) => set('series4k', v)} />
-      <FormSection label="Approval">
-        <FormRow label="Auto-approve everyone’s requests">
-          <div className="al-check-grid" role="group" aria-label="Auto-approve">
-            {AUTO_APPROVE.map(([k, label]) => (
+      <TypeDefaults title={t('settings.requests.settings.movieDefaults')} mediaType="movie" value={value.movie} onChange={(v) => set('movie', v)} />
+      <TypeDefaults title={t('settings.requests.settings.seriesDefaults')} mediaType="series" value={value.series} onChange={(v) => set('series', v)} />
+      <FourK title={t('settings.requests.settings.n4kMovies')} mediaType="movie" value={value.movie4k} onChange={(v) => set('movie4k', v)} />
+      <FourK title={t('settings.requests.settings.n4kSeries')} mediaType="series" value={value.series4k} onChange={(v) => set('series4k', v)} />
+      <FormSection label={t('settings.requests.settings.approval')}>
+        <FormRow label={t('settings.requests.settings.autoApproveEveryonesRequests')}>
+          <div className="al-check-grid" role="group" aria-label={t('settings.requests.settings.autoApprove')}>
+            {AUTO_APPROVE.map(([k, labelKey]) => ({ k, label: t(labelKey) })).map(({ k, label }) => (
               <Checkbox
                 key={k}
                 label={label}
-                aria-label={`Auto-approve all ${label}`}
+                aria-label={t('settings.requests.settings.autoApproveAllLabel', { label })}
                 checked={value.autoApprove[k]}
                 onChange={(e) => set('autoApprove', { ...value.autoApprove, [k]: e.currentTarget.checked })}
               />
@@ -101,18 +173,21 @@ function SettingsFields({ draft, error }: { draft: Draft<RequestsSettings>; erro
           </div>
         </FormRow>
       </FormSection>
-      <FormSection label="Requests">
-        {toggleRow('Allow partial series requests', 'partialRequestsEnabled', 'Allow partial series requests', 'Off: a series request always covers every season.')}
-        {toggleRow('Allow requesting specials', 'enableSpecialEpisodes', 'Allow requesting specials')}
-        {toggleRow('Hide available titles in Discover', 'hideAvailable', 'Hide available titles')}
-        {toggleRow('Hide requested titles in Discover', 'hideRequested', 'Hide requested titles')}
+      <FormSection label={t('common.requests')}>
+        {toggleRow(t('settings.requests.allowPartialSeriesRequests'), 'partialRequestsEnabled', t('settings.requests.allowPartialSeriesRequests'), t('settings.requests.allowPartialSeriesRequestsCaption'))}
+        {toggleRow(t('settings.requests.allowRequestingSpecials'), 'enableSpecialEpisodes', t('settings.requests.allowRequestingSpecials'))}
+        {toggleRow(t('settings.requests.hideAvailableTitlesInDiscover'), 'hideAvailable', t('settings.requests.hideAvailableTitles'))}
+        {toggleRow(t('settings.requests.hideRequestedTitlesInDiscover'), 'hideRequested', t('settings.requests.hideRequestedTitles'))}
       </FormSection>
-      <SettingsSection label="Default quotas">
+      <ApprovalPolicySections value={value} set={set} />
+      <PublicPortalSection value={value.publicPortal} onChange={(v) => set('publicPortal', v)} />
+      <NotificationLinks value={value} set={set} />
+      <SettingsSection label={t('settings.requests.settings.defaultQuotas')}>
         <div className="al-requests-embed">
-          <QuotaFields value={value.defaultQuotas} onChange={(v) => set('defaultQuotas', v)} blankHint="Blank: no quota" />
+          <QuotaFields value={value.defaultQuotas} onChange={(v) => set('defaultQuotas', v)} blankHint={t('settings.requests.settings.blankNoQuota')} />
         </div>
       </SettingsSection>
-      <SettingsSection label="Default permissions for new users">
+      <SettingsSection label={t('settings.requests.settings.defaultPermissionsForNewUsers')}>
         <div className="al-requests-embed">
           <PermissionsMatrix value={value.defaultPermissions} onChange={(v) => set('defaultPermissions', v)} lockAdmin />
         </div>
@@ -126,7 +201,7 @@ function RootFolderSelect({ id, mediaType, value, onChange, label }: { id: strin
   const folders = useRootFolders();
   return (
     <Select id={id} className="al-select--fit al-mono" aria-label={label} value={value ?? ''} onChange={(e) => onChange(e.currentTarget.value || null)}>
-      <option value="">First root folder</option>
+      <option value="">{t('settings.requests.settings.firstRootFolder')}</option>
       {(folders.data ?? [])
         .filter((f) => f.mediaType === mediaType)
         .map((f) => (
@@ -149,7 +224,7 @@ function ProfileSelect({ id, value, onChange, label }: { id: string; value: numb
       value={value === null ? '' : String(value)}
       onChange={(e) => onChange(e.currentTarget.value ? Number(e.currentTarget.value) : null)}
     >
-      <option value="">First profile</option>
+      <option value="">{t('settings.requests.settings.firstProfile')}</option>
       {(profiles.data ?? []).map((p) => (
         <option key={p.id} value={String(p.id)}>
           {p.name}
@@ -164,17 +239,17 @@ function TypeDefaults({ title, mediaType, value, onChange }: { title: string; me
   const set = <K extends keyof RequestTypeDefaults>(k: K, v: RequestTypeDefaults[K]) => onChange({ ...value, [k]: v });
   return (
     <FormSection label={title}>
-      <FormRow label="Root folder" htmlFor={`${ids}-root`}>
-        <RootFolderSelect id={`${ids}-root`} mediaType={mediaType} label={`${title} root folder`} value={value.rootFolderPath} onChange={(v) => set('rootFolderPath', v)} />
+      <FormRow label={t('common.rootFolder')} htmlFor={`${ids}-root`}>
+        <RootFolderSelect id={`${ids}-root`} mediaType={mediaType} label={t('settings.requests.settings.titleRootFolder', { title })} value={value.rootFolderPath} onChange={(v) => set('rootFolderPath', v)} />
       </FormRow>
-      <FormRow label="Quality profile" htmlFor={`${ids}-profile`}>
-        <ProfileSelect id={`${ids}-profile`} label={`${title} quality profile`} value={value.qualityProfileId} onChange={(v) => set('qualityProfileId', v)} />
+      <FormRow label={t('common.qualityProfile')} htmlFor={`${ids}-profile`}>
+        <ProfileSelect id={`${ids}-profile`} label={t('settings.requests.settings.titleQualityProfile', { title })} value={value.qualityProfileId} onChange={(v) => set('qualityProfileId', v)} />
       </FormRow>
-      <FormRow label="Tags">
+      <FormRow label={t('common.tags')}>
         <TagPicker value={value.tags} onChange={(v) => set('tags', v)} />
       </FormRow>
       {mediaType === 'movie' ? (
-        <FormRow label="Minimum availability" htmlFor={`${ids}-avail`}>
+        <FormRow label={t('common.minimumAvailability')} htmlFor={`${ids}-avail`}>
           <Select
             id={`${ids}-avail`}
             className="al-select--fit"
@@ -185,7 +260,7 @@ function TypeDefaults({ title, mediaType, value, onChange }: { title: string; me
         </FormRow>
       ) : (
         <>
-          <FormRow label="Monitor" htmlFor={`${ids}-monitor`} caption="Requested seasons are always monitored; this applies to the rest.">
+          <FormRow label={t('common.monitor')} htmlFor={`${ids}-monitor`} caption={t('settings.requests.settings.requestedSeasonsAreAlwaysMonitored')}>
             <Select
               id={`${ids}-monitor`}
               className="al-select--fit"
@@ -194,19 +269,19 @@ function TypeDefaults({ title, mediaType, value, onChange }: { title: string; me
               options={MonitorOption.options.map((o) => ({ value: o, label: MONITOR_OPTION_LABELS[o] }))}
             />
           </FormRow>
-          <FormRow label="Monitor new seasons" htmlFor={`${ids}-new`}>
+          <FormRow label={t('settings.requests.settings.monitorNewSeasons')} htmlFor={`${ids}-new`}>
             <Select
               id={`${ids}-new`}
               className="al-select--fit"
               value={value.monitorNewItems}
               onChange={(e) => set('monitorNewItems', e.currentTarget.value as 'all' | 'none')}
               options={[
-                { value: 'none', label: 'No' },
-                { value: 'all', label: 'Yes' },
+                { value: 'none', label: t('settings.requests.settings.no') },
+                { value: 'all', label: t('settings.requests.settings.yes') },
               ]}
             />
           </FormRow>
-          <FormRow label="Series type" htmlFor={`${ids}-type`}>
+          <FormRow label={t('common.seriesType')} htmlFor={`${ids}-type`}>
             <Select
               id={`${ids}-type`}
               className="al-select--fit"
@@ -215,13 +290,13 @@ function TypeDefaults({ title, mediaType, value, onChange }: { title: string; me
               options={SeriesType.options.map((o) => ({ value: o, label: SERIES_TYPE_LABELS[o] }))}
             />
           </FormRow>
-          <FormRow label="Season folders" captionInline>
-            <Toggle aria-label={`${title} season folders`} checked={value.seasonFolder} onChange={(e) => set('seasonFolder', e.currentTarget.checked)} />
+          <FormRow label={t('common.seasonFolders')} captionInline>
+            <Toggle aria-label={t('settings.requests.settings.titleSeasonFolders', { title })} checked={value.seasonFolder} onChange={(e) => set('seasonFolder', e.currentTarget.checked)} />
           </FormRow>
         </>
       )}
-      <FormRow label="Search on add" captionInline>
-        <Toggle aria-label={`${title} search on add`} checked={value.searchOnAdd} onChange={(e) => set('searchOnAdd', e.currentTarget.checked)} />
+      <FormRow label={t('common.searchOnAdd')} captionInline>
+        <Toggle aria-label={t('settings.requests.settings.titleSearchOnAdd', { title })} checked={value.searchOnAdd} onChange={(e) => set('searchOnAdd', e.currentTarget.checked)} />
       </FormRow>
     </FormSection>
   );
@@ -233,21 +308,21 @@ function FourK({ title, mediaType, value, onChange }: { title: string; mediaType
   return (
     <FormSection label={title}>
       <FormRow
-        label="Enable 4K requests"
+        label={t('settings.requests.settings.enable4kRequests')}
         captionInline
-        caption={value.enabled ? undefined : '4K requests use their own root folder and profile so both versions can live side by side.'}
+        caption={value.enabled ? undefined : t('settings.requests.settings.n4kRequestsUseTheirOwn')}
       >
-        <Toggle aria-label={`Enable ${title}`} checked={value.enabled} onChange={(e) => set('enabled', e.currentTarget.checked)} />
+        <Toggle aria-label={t('settings.requests.settings.enableTitle', { title })} checked={value.enabled} onChange={(e) => set('enabled', e.currentTarget.checked)} />
       </FormRow>
       {value.enabled ? (
         <>
-          <FormRow label="Root folder" htmlFor={`${ids}-root`}>
-            <RootFolderSelect id={`${ids}-root`} mediaType={mediaType} label={`${title} root folder`} value={value.rootFolderPath} onChange={(v) => set('rootFolderPath', v)} />
+          <FormRow label={t('common.rootFolder')} htmlFor={`${ids}-root`}>
+            <RootFolderSelect id={`${ids}-root`} mediaType={mediaType} label={t('settings.requests.settings.titleRootFolder', { title })} value={value.rootFolderPath} onChange={(v) => set('rootFolderPath', v)} />
           </FormRow>
-          <FormRow label="Quality profile" htmlFor={`${ids}-profile`}>
-            <ProfileSelect id={`${ids}-profile`} label={`${title} quality profile`} value={value.qualityProfileId} onChange={(v) => set('qualityProfileId', v)} />
+          <FormRow label={t('common.qualityProfile')} htmlFor={`${ids}-profile`}>
+            <ProfileSelect id={`${ids}-profile`} label={t('settings.requests.settings.titleQualityProfile', { title })} value={value.qualityProfileId} onChange={(v) => set('qualityProfileId', v)} />
           </FormRow>
-          <FormRow label="Tags">
+          <FormRow label={t('common.tags')}>
             <TagPicker value={value.tags} onChange={(v) => set('tags', v)} />
           </FormRow>
         </>

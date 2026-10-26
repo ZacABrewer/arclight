@@ -11,6 +11,7 @@ import { useResetProviderThrottles, useSubtitleProviders } from '../../../hooks/
 import { formatDateTime } from '../../../lib/format.js';
 import { CardGrid, SettingsSection } from '../shared.js';
 import './subtitle-settings.css';
+import { t } from '../../../i18n/index.js';
 
 /** Provider field -> schema-form field under `settings.<name>`; secrets render as password inputs. */
 export function providerFieldDefinition(f: SubtitleProviderField): FieldDefinition {
@@ -47,15 +48,31 @@ export function moveProvider(list: readonly SubtitleProviderConfig[], index: num
   return next;
 }
 
+/** Provider setting key: search this provider only when the others found nothing acceptable. */
+export const ONLY_WHEN_NO_OTHER_RESULT = 'onlyWhenNoOtherResult';
+
+/** Whether the provider gets the "Only when no other result" toggle (Whisper, or any schema with the field). */
+export function hasFallbackToggle(schema: SubtitleProviderSchema): boolean {
+  return schema.id === 'whisperai' || schema.fields.some((f) => f.name === ONLY_WHEN_NO_OTHER_RESULT);
+}
+
+/** The stored flag, else the schema field default (Whisper defaults to on). */
+export function onlyWhenNoOtherResult(config: SubtitleProviderConfig, schema: SubtitleProviderSchema): boolean {
+  const stored = config.settings[ONLY_WHEN_NO_OTHER_RESULT];
+  if (typeof stored === 'boolean') return stored;
+  const field = schema.fields.find((f) => f.name === ONLY_WHEN_NO_OTHER_RESULT);
+  return field ? field.default === true : schema.id === 'whisperai';
+}
+
 function testOutcome(r: { ok: boolean; message: string }): TestOutcome {
   return { ok: r.ok, message: r.ok ? r.message : undefined, warnings: [], errors: r.ok ? [] : [r.message] };
 }
 
 function StatusChip({ status }: { status: SubtitleProviderStatus | undefined }) {
   if (!status) return null;
-  if (status.throttle) return <Chip tone="warn">Rate-limited</Chip>;
-  if (!status.configured) return <Chip tone="danger">{status.configError ? `Failed · ${status.configError}` : 'Not configured'}</Chip>;
-  return status.enabled ? <Chip tone="accent">Ready</Chip> : <Chip tone="muted">Disabled</Chip>;
+  if (status.throttle) return <Chip tone="warn">{t('settings.subtitles.providersCard.rateLimited')}</Chip>;
+  if (!status.configured) return <Chip tone="danger">{status.configError ? t('settings.subtitles.providersCard.failedConfigerror', { configError: status.configError }) : t('settings.subtitles.providersCard.notConfigured')}</Chip>;
+  return status.enabled ? <Chip tone="accent">{t('settings.subtitles.providersCard.ready')}</Chip> : <Chip tone="muted">{t('common.disabled')}</Chip>;
 }
 
 function ProviderCard({
@@ -77,7 +94,9 @@ function ProviderCard({
   onChange: (patch: Partial<SubtitleProviderConfig>) => void;
   onMove: (delta: -1 | 1) => void;
 }) {
-  const fields = useMemo(() => schema.fields.map(providerFieldDefinition), [schema]);
+  // The fallback flag gets its own toggle; every other field goes through the schema form.
+  const fields = useMemo(() => schema.fields.filter((f) => f.name !== ONLY_WHEN_NO_OTHER_RESULT).map(providerFieldDefinition), [schema]);
+  const fallback = hasFallbackToggle(schema);
   const [errors, setErrors] = useState<FieldErrors>({});
   const values = { settings: config.settings } as FormValues;
   const settings = () => (values.settings ?? {}) as Record<string, unknown>;
@@ -93,7 +112,7 @@ function ProviderCard({
           <p className="al-provider-card__desc">{schema.description}</p>
           {status?.throttle ? (
             <p className="al-provider-card__throttle" data-testid={`throttle-${status.id}`}>
-              {schema.name} is rate-limited ({status.throttle.code}): {status.throttle.description}. Retry at{' '}
+              {t('settings.subtitles.providersCard.nameIsRateLimitedCode', { name: schema.name, code: status.throttle.code, description: status.throttle.description })}
               <time className="al-num" dateTime={status.throttle.until}>
                 {formatDateTime(status.throttle.until)}
               </time>
@@ -103,17 +122,28 @@ function ProviderCard({
         </div>
         <div className="al-provider-card__body">
           <div className="al-provider-card__row">
-            <Toggle label="Enabled" aria-label={`Enable ${schema.name}`} checked={config.enabled} onChange={(e) => onChange({ enabled: e.currentTarget.checked })} />
+            <Toggle label={t('common.enabled')} aria-label={t('settings.subtitles.providersCard.enableName', { name: schema.name })} checked={config.enabled} onChange={(e) => onChange({ enabled: e.currentTarget.checked })} />
             <span className="al-provider-card__order">
               <span className="al-num al-muted">{String(index + 1).padStart(2, '0')}</span>
-              <Button size="sm" variant="ghost" aria-label={`Move ${schema.name} up`} disabled={index === 0} onClick={() => onMove(-1)}>
+              <Button size="sm" variant="ghost" aria-label={t('settings.subtitles.providersCard.moveNameUp', { name: schema.name })} disabled={index === 0} onClick={() => onMove(-1)}>
                 ↑
               </Button>
-              <Button size="sm" variant="ghost" aria-label={`Move ${schema.name} down`} disabled={index === count - 1} onClick={() => onMove(1)}>
+              <Button size="sm" variant="ghost" aria-label={t('settings.subtitles.providersCard.moveNameDown', { name: schema.name })} disabled={index === count - 1} onClick={() => onMove(1)}>
                 ↓
               </Button>
             </span>
           </div>
+          {fallback ? (
+            <div className="al-provider-card__fallback">
+              <Toggle
+                label={t('settings.subtitles.providersCard.onlyWhenNoOtherResult')}
+                aria-label={t('settings.subtitles.providersCard.onlyWhenNoOtherResultFor', { name: schema.name })}
+                checked={onlyWhenNoOtherResult(config, schema)}
+                onChange={(e) => onChange({ settings: { ...config.settings, [ONLY_WHEN_NO_OTHER_RESULT]: e.currentTarget.checked } })}
+              />
+              <p className="al-caption">{t('settings.subtitles.providersCard.onlyWhenNoOtherResultHelp')}</p>
+            </div>
+          ) : null}
           {fields.length ? (
             <SchemaForm
               fields={fields}
@@ -126,7 +156,7 @@ function ProviderCard({
               }}
             />
           ) : (
-            <p className="al-caption">No credentials needed.</p>
+            <p className="al-caption">{t('settings.subtitles.providersCard.noCredentialsNeeded')}</p>
           )}
         </div>
         <div className="al-item-card__actions">
@@ -159,21 +189,21 @@ export function ProvidersCard({
 
   const action = (
     <Button size="sm" variant="secondary" loading={reset.isPending} onClick={() => reset.mutate(false)} disabled={!data.data}>
-      Reset throttles
+      {t('settings.subtitles.providersCard.resetThrottles')}
     </Button>
   );
 
   if (data.isPending) {
     return (
-      <SettingsSection label="Providers" action={action}>
+      <SettingsSection label={t('settings.subtitles.providersCard.providers')} action={action}>
         <Skeleton lines={4} />
       </SettingsSection>
     );
   }
   if (data.isError) {
     return (
-      <SettingsSection label="Providers" action={action}>
-        <ErrorBlock title="Could not load subtitle providers" onRetry={() => void data.refetch()}>
+      <SettingsSection label={t('settings.subtitles.providersCard.providers')} action={action}>
+        <ErrorBlock title={t('settings.subtitles.providersCard.couldNotLoadSubtitleProviders')} onRetry={() => void data.refetch()}>
           {errorMessage(data.error)}
         </ErrorBlock>
       </SettingsSection>
@@ -185,10 +215,10 @@ export function ProvidersCard({
   const update = (id: string, patch: Partial<SubtitleProviderConfig>) => onChange(list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   return (
-    <SettingsSection label="Providers" count={list.length} action={action}>
-      <p className="al-caption">Providers are searched in this order. Enable the ones you have accounts for; changes apply when you save.</p>
+    <SettingsSection label={t('settings.subtitles.providersCard.providers')} count={list.length} action={action}>
+      <p className="al-caption">{t('settings.subtitles.providersCard.providersAreSearchedInThis')}</p>
       <div className="al-provider-grid">
-        <CardGrid label="Subtitle providers">
+        <CardGrid label={t('settings.subtitles.providersCard.subtitleProviders')}>
           {list.map((p, i) => (
             <ProviderCard
               key={p.id}

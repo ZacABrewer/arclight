@@ -1,6 +1,7 @@
 import type { CalendarItem, HealthCheck, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
 import type { TrailState } from '../arclight/index.js';
 import { formatBytes, formatClock, formatSpan } from './system/format.js';
+import { t } from '../i18n/index.js';
 
 // Pure view models for the dashboard panes (Page 01), tested without rendering.
 
@@ -12,7 +13,7 @@ export interface UpcomingRow {
   href: { to: '/library/series/$id' | '/library/movie/$id'; params: { id: string } };
 }
 
-const RELEASE_LABEL = { cinema: 'In cinemas', digital: 'Digital release', physical: 'Physical release' } as const;
+const RELEASE_LABEL = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('dashboard.digitalRelease'); }, get physical() { return t('dashboard.physicalRelease'); } } as const;
 
 /** Calendar items airing in [from, from + 24h), soonest first. */
 export function upcomingRows(items: readonly CalendarItem[] | null | undefined, from: Date, hours = 24): UpcomingRow[] {
@@ -61,22 +62,28 @@ export interface VpnSummary {
 }
 
 const PROVIDER_LABEL: Record<NonNullable<VpnStatus['provider']>, string> = {
-  gluetun: 'Gluetun',
-  'wireguard-windows': 'WireGuard',
-  'interface-binding': 'Interface binding',
+  get gluetun() {
+    return t('dashboard.gluetun');
+  },
+  get 'wireguard-windows'() {
+    return t('dashboard.wireguard');
+  },
+  get 'interface-binding'() {
+    return t('dashboard.interfaceBinding');
+  },
 };
 
 export function vpnSummary(vpn: VpnStatus | undefined, now: number = Date.now()): VpnSummary | undefined {
   if (!vpn) return undefined;
-  if (!vpn.enabled) return { state: 'off', headline: 'VPN off' };
-  const place = vpn.city ?? vpn.country ?? vpn.region ?? vpn.publicIp ?? 'Unknown location';
+  if (!vpn.enabled) return { state: 'off', headline: t('common.vpnOff') };
+  const place = vpn.city ?? vpn.country ?? vpn.region ?? vpn.publicIp ?? t('dashboard.unknownLocation');
   const provider = vpn.provider ? PROVIDER_LABEL[vpn.provider] : undefined;
   const headline = [place, provider].filter(Boolean).join(' · ');
   if (!vpn.connected || vpn.leak) {
     return {
       state: 'down',
       headline,
-      cause: vpn.leak ? 'Traffic is leaving outside the tunnel. Downloads are paused.' : (vpn.error ?? 'The tunnel is down. Downloads are paused.'),
+      cause: vpn.leak ? t('dashboard.trafficIsLeavingOutsideThe') : (vpn.error ?? t('dashboard.theTunnelIsDownDownloads')),
     };
   }
   const since = vpn.lastChanged ? now - new Date(vpn.lastChanged).getTime() : undefined;
@@ -98,7 +105,7 @@ export function storageRows(folders: readonly RootFolder[] | undefined): Storage
   return (folders ?? []).map((f) => ({
     key: f.id,
     path: f.path,
-    free: f.accessible ? (f.freeSpaceBytes != null ? `${formatBytes(f.freeSpaceBytes)} free` : 'Free space unknown') : 'Not reachable',
+    free: f.accessible ? (f.freeSpaceBytes != null ? `${formatBytes(f.freeSpaceBytes)} free` : t('dashboard.freeSpaceUnknown')) : t('common.notReachable'),
     low: !f.accessible || (f.freeSpaceBytes != null && f.freeSpaceBytes < LOW_DISK_BYTES),
     accessible: f.accessible,
   }));
@@ -133,10 +140,10 @@ export function queueRow(item: QueueItem): QueueRowModel {
   let chip: QueueRowModel['chip'];
   if (item.trackedStatus === 'error' || item.status === 'failed' || item.trackedState === 'failedPending') {
     trail = 'failed';
-    chip = { status: 'failed', cause: cause ?? 'download client reported an error' };
+    chip = { status: 'failed', cause: cause ?? t('dashboard.downloadClientReportedAnError') };
   } else if (item.trackedStatus === 'warning' || item.status === 'warning') {
     trail = 'stalled';
-    chip = { status: 'stalled', cause: cause ?? 'no progress' };
+    chip = { status: 'stalled', cause: cause ?? t('dashboard.noProgress') };
   } else if (item.trackedState === 'importing' || item.trackedState === 'importPending') {
     trail = 'complete';
     chip = { status: 'importing' };

@@ -13,6 +13,12 @@ declare module 'fastify' {
      * non-admin users are limited to GET/HEAD.
      */
     allowUser?: boolean;
+    /**
+     * Evaluated per request: when it returns true the route answers without credentials (like
+     * PUBLIC_ROUTES), e.g. discover while the public request portal is enabled. The route
+     * still sees `req.auth` when credentials were sent.
+     */
+    publicWhen?: (req: FastifyRequest) => boolean;
   }
 }
 
@@ -23,6 +29,9 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/auth/login',
   '/auth/logout',
   '/auth/status',
+  // Plex PIN sign-in (requests module); the poll only signs in once plex.tv confirms the PIN.
+  '/auth/plex/pin',
+  '/auth/plex/poll',
   '/system/ping',
   // Calendar apps cannot send headers; the feed checks its own token.
   '/calendar/feed.ics',
@@ -94,6 +103,10 @@ export function requireAuth(service: AuthService, isPublic: PublicRoutePredicate
       if (token) setSessionCookie(req, reply, token, resolved.renewed.maxAgeSeconds);
     }
     if (isPublic(req.routeOptions.url)) return;
+    if (!req.auth && (req.method === 'GET' || req.method === 'HEAD')) {
+      const when = req.routeOptions.config?.publicWhen;
+      if (when && when(req)) return;
+    }
     if (!req.auth) return unauthorized(reply, service.security().method === 'basic');
     if (!req.auth.isAdmin && req.method !== 'GET' && req.method !== 'HEAD' && !req.routeOptions.config?.allowUser) {
       return reply.code(403).send({ error: 'admin only', code: 'FORBIDDEN' });

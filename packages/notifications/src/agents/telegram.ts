@@ -42,7 +42,9 @@ export class TelegramAgent extends BaseAgent {
     for (const field of formatted.fields) {
       lines.push(`${escapeMarkdownV2(field.name)}: ${escapeMarkdownV2(field.value)}`);
     }
-    if (this.settings.includeLink && formatted.link) {
+    if (formatted.actions && formatted.actions.length > 0) {
+      lines.push(formatted.actions.map((a) => `[${escapeMarkdownV2(a.label)}](${escapeLinkUrl(a.url)})`).join(' \\| '));
+    } else if (this.settings.includeLink && formatted.link) {
       lines.push(`[${escapeMarkdownV2('Open')}](${escapeLinkUrl(formatted.link)})`);
     }
     const payload: TelegramPayload = {

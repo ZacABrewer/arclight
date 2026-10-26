@@ -1,5 +1,10 @@
+import { z } from 'zod';
 import {
   ApiKeyResponse,
+  MediaServerKind,
+  PlexPin,
+  PlexPollPending,
+  type PlexPollRequest,
   AuthStatus,
   RootFolder,
   SecuritySettingsResponse,
@@ -21,6 +26,20 @@ import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/auth/routes.ts.
 
+/**
+ * /auth/status as the login page reads it. TODO(contract): `AuthStatus` does not yet say
+ * whether media-server sign-in is on; the page reads an optional `mediaServerLogin`
+ * `{kind, name?}` (null/absent = local sign-in only) until the shared contract carries it.
+ */
+export const LoginOptions = AuthStatus.extend({
+  mediaServerLogin: z.object({ kind: MediaServerKind, name: z.string().optional() }).nullish(),
+});
+export type LoginOptions = z.infer<typeof LoginOptions>;
+
+/** POST /auth/plex/poll answers 202 `{pending: true}` until the PIN is approved. */
+export const PlexPollResponse = z.union([PlexPollPending, Session]);
+export type PlexPollResponse = z.infer<typeof PlexPollResponse>;
+
 export const authApi = {
   status: () => request('/auth/status', AuthStatus),
   me: () => request('/auth/me', Session),
@@ -28,6 +47,9 @@ export const authApi = {
   logout: () => request('/auth/logout', null, { method: 'POST' }),
   sessions: () => request('/auth/sessions', SessionRecord.array()),
   revokeSession: (id: number) => request(`/auth/sessions/${id}`, null, { method: 'DELETE' }),
+  loginOptions: () => request('/auth/status', LoginOptions),
+  plexPin: () => request('/auth/plex/pin', PlexPin, { method: 'POST', json: {} }),
+  plexPoll: (body: PlexPollRequest) => request('/auth/plex/poll', PlexPollResponse, { method: 'POST', json: body }),
 };
 
 export const usersApi = {

@@ -1,5 +1,17 @@
+import { stat } from 'node:fs/promises';
 import { join } from 'node:path';
-import { parseMagnet, parseTorrent, TorrentEngineError, type Session, type Torrent } from '@arclight/torrent-engine';
+import {
+  Bitfield,
+  parseMagnet,
+  parseTorrent,
+  TorrentEngineError,
+  type AddTorrentOptions,
+  type Metainfo,
+  type ResumeData,
+  type Session,
+  type Torrent,
+  type TorrentStats,
+} from '@arclight/torrent-engine';
 import {
   DownloadClientError,
   type AddNzbResult,
@@ -25,6 +37,125 @@ export type SessionSource = Session | (() => Session | null);
 const NOT_RUNNING = 'The built-in torrent engine is not running. Enable it under Settings > Torrent Engine.';
 
 /**
+ * A private tracker's hit-and-run rule. The torrent may leave the client once it has seeded
+ * `minSeedHours` or reached `minRatio` (either one when both are set).
+ */
+export interface SeedRule {
+  minSeedHours?: number;
+  minRatio?: number;
+  /** Shown in messages, e.g. the indexer name. */
+  label?: string;
+}
+
+/**
+ * Looks up the hit-and-run rule for a torrent from its announce hosts (lowercase host names,
+ * no port) and info-hash. Null when no tracker rule applies.
+ */
+export type SeedRuleProvider = (hosts: readonly string[], infoHash: string) => SeedRule | null;
+
+const sessionSeedRules = new WeakMap<Session, SeedRuleProvider>();
+
+/**
+ * Attaches hit-and-run rules to a Session, so every `BuiltinClient` driving it guards
+ * removals (the api's torrent module does this whenever it starts the engine). null detaches.
+ */
+export function attachSeedRules(session: Session, provider: SeedRuleProvider | null): void {
+  if (provider) sessionSeedRules.set(session, provider);
+  else sessionSeedRules.delete(session);
+}
+
+export interface BuiltinClientOptions {
+  /** Hit-and-run rules; defaults to the provider attached to the Session, if any. */
+  seedRules?: SeedRuleProvider;
+}
+
+/** Lowercase announce host names of a torrent (trackers of the .torrent and of its magnet). */
+export function announceHosts(t: Pick<Torrent, 'metainfo' | 'magnet' | 'getTrackers'>): string[] {
+  const urls = [
+    ...(t.metainfo?.announceList.flat() ?? []),
+    ...(t.metainfo?.announce ? [t.metainfo.announce] : []),
+    ...(t.magnet?.trackers ?? []),
+    ...t.getTrackers().map((tr) => tr.url),
+  ];
+  const hosts = new Set<string>();
+  for (const url of urls) {
+    try {
+      const host = new URL(url).hostname.toLowerCase().replace(/^\[|\]$/g, '');
+      if (host) hosts.add(host);
+    } catch {
+      // Not a URL: ignore.
+    }
+  }
+  return [...hosts];
+}
+
+/** Message when `rule` is not satisfied yet by these stats; null when it is (or is empty). */
+export function seedRulePending(rule: SeedRule, stats: Pick<TorrentStats, 'seedingTimeMs' | 'ratio'>): string | null {
+  const hours = rule.minSeedHours;
+  const ratio = rule.minRatio;
+  if (hours === undefined && ratio === undefined) return null;
+  const timeMet = hours !== undefined && stats.seedingTimeMs >= hours * 3_600_000;
+  const ratioMet = ratio !== undefined && stats.ratio >= ratio;
+  if (timeMet || ratioMet) return null;
+  const needs = [hours !== undefined ? `${hours} h of seeding` : null, ratio !== undefined ? `ratio ${ratio}` : null]
+    .filter((x): x is string => x !== null)
+    .join(' or ');
+  const seeded = (stats.seedingTimeMs / 3_600_000).toFixed(1);
+  const who = rule.label ? `${rule.label} ` : '';
+  return `Hit-and-run guard: ${who}requires ${needs} (seeded ${seeded} h, ratio ${stats.ratio.toFixed(2)}).`;
+}
+
+/**
+ * Fast-resume data claiming every piece of `meta` is present at `savePath`, so the engine
+ * seeds without hashing (cross-seeding a payload that was verified beforehand). Undefined
+ * when a file is missing or has the wrong size: the engine then checks normally.
+ */
+export async function completeResumeData(
+  meta: Metainfo,
+  savePath: string,
+  init: { category: string; paused: boolean; now?: Date },
+): Promise<ResumeData | undefined> {
+  const fileStats: ResumeData['fileStats'] = [];
+  for (const f of meta.files) {
+    if (f.padding) {
+      fileStats.push(null);
+      continue;
+    }
+    try {
+      const s = await stat(join(savePath, ...f.pathSegments));
+      if (!s.isFile() || s.size !== f.length) return undefined;
+      fileStats.push({ size: s.size, mtimeMs: Math.floor(s.mtimeMs) });
+    } catch {
+      return undefined;
+    }
+  }
+  const at = (init.now ?? new Date()).toISOString();
+  return {
+    version: 1,
+    infoHash: meta.infoHashHex,
+    name: meta.name,
+    bitfield: Bitfield.full(meta.pieceCount).toBuffer().toString('base64'),
+    pieceCount: meta.pieceCount,
+    uploaded: 0,
+    downloaded: 0,
+    seedingTimeMs: 0,
+    activeTimeMs: 0,
+    addedAt: at,
+    completedAt: at,
+    savePath,
+    category: init.category,
+    tags: [],
+    filePriorities: [],
+    paused: init.paused,
+    sequential: false,
+    fileStats,
+    magnet: null,
+    seedRatioLimit: null,
+    seedTimeLimitMs: null,
+  };
+}
+
+/**
  * Download client backed by the in-process `@arclight/torrent-engine` Session. The api
  * owns the Session's lifetime; this client never starts or shuts it down.
  */
@@ -35,6 +166,7 @@ export class BuiltinClient implements DownloadClient {
   constructor(
     private readonly settings: BuiltinSettings,
     private readonly source: SessionSource,
+    private readonly options: BuiltinClientOptions = {},
   ) {}
 
   private session(): Session {
@@ -95,16 +227,31 @@ export class BuiltinClient implements DownloadClient {
     const category = input.category;
     const seedRatioLimit = input.seedRatioLimit ?? this.settings.seedRatioLimit;
     const seedTimeMinutes = input.seedTimeLimitMinutes ?? this.settings.seedTimeLimitMinutes;
+    const savePath = input.savePath ?? this.savePathFor(category, session);
+    const paused = input.paused ?? this.settings.initialState === 'pause';
+    const kib = (v: number | undefined): number => (v ?? 0) * 1024;
+    const options: AddTorrentOptions = {
+      ...(input.torrentFile ? { torrent: input.torrentFile } : { magnet: input.magnet as string }),
+      category,
+      savePath,
+      paused,
+      ...(seedRatioLimit !== undefined ? { seedRatioLimit } : {}),
+      ...(seedTimeMinutes !== undefined ? { seedTimeLimitMs: seedTimeMinutes * 60_000 } : {}),
+      superSeeding: this.settings.superSeeding ?? false,
+      uploadLimit: kib(this.settings.uploadLimitKbps),
+      downloadLimit: kib(this.settings.downloadLimitKbps),
+      peerUploadLimit: kib(this.settings.peerUploadLimitKbps),
+      peerDownloadLimit: kib(this.settings.peerDownloadLimitKbps),
+    };
+    const warnings: string[] = [];
+    let resume: ResumeData | undefined;
+    if (input.skipChecking && input.torrentFile) {
+      resume = await completeResumeData(parseTorrent(input.torrentFile), savePath, { category, paused });
+      if (!resume) warnings.push('The files at the save path do not match the torrent; the engine checks them before seeding.');
+    }
     try {
-      const t = await session.addTorrent({
-        ...(input.torrentFile ? { torrent: input.torrentFile } : { magnet: input.magnet as string }),
-        category,
-        savePath: input.savePath ?? this.savePathFor(category, session),
-        paused: input.paused ?? this.settings.initialState === 'pause',
-        ...(seedRatioLimit !== undefined ? { seedRatioLimit } : {}),
-        ...(seedTimeMinutes !== undefined ? { seedTimeLimitMs: seedTimeMinutes * 60_000 } : {}),
-      });
-      return { id: t.infoHashHex, warnings: [] };
+      const t = await session.addTorrent(options, resume);
+      return { id: t.infoHashHex, warnings };
     } catch (error) {
       // Lost a race with a concurrent add of the same torrent.
       if (session.getTorrent(id)) return duplicate();
@@ -171,7 +318,8 @@ export class BuiltinClient implements DownloadClient {
     const limitsMet =
       (ratioLimit != null && stats.ratio >= ratioLimit) || (timeLimit != null && stats.seedingTimeMs >= timeLimit);
     const isPrivate = t.metainfo?.private ?? false;
-    const releasable = complete && (limitsMet || stats.state === 'paused');
+    const hnr = this.hitAndRunPending(session, t, stats);
+    const releasable = complete && (limitsMet || stats.state === 'paused') && hnr === null;
 
     const item: DownloadItem = {
       id: t.infoHashHex,
@@ -183,7 +331,7 @@ export class BuiltinClient implements DownloadClient {
       progress: stats.progress,
       status,
       outputPath: stats.contentPath,
-      isReadOnly: complete && isPrivate && !limitsMet,
+      isReadOnly: complete && ((isPrivate && !limitsMet) || hnr !== null),
       canMoveFiles: releasable,
       canBeRemoved: releasable,
     };
@@ -193,9 +341,24 @@ export class BuiltinClient implements DownloadClient {
     return item;
   }
 
+  /**
+   * Hit-and-run guard: the message when a tracker rule still requires this finished torrent
+   * to seed; null otherwise (no rule, not finished, or already satisfied).
+   */
+  hitAndRunPending(session: Session, t: Torrent, stats: TorrentStats = t.getStats()): string | null {
+    if (!t.isComplete) return null;
+    const provider = this.options.seedRules ?? sessionSeedRules.get(session);
+    if (!provider) return null;
+    const rule = provider(announceHosts(t), t.infoHashHex);
+    return rule ? seedRulePending(rule, stats) : null;
+  }
+
+  /** Refuses (`rejected`) while a tracker's hit-and-run rule still requires seeding. */
   async removeItem(id: string, deleteData: boolean): Promise<void> {
     const session = this.session();
     const t = this.torrent(session, id);
+    const hnr = this.hitAndRunPending(session, t);
+    if (hnr !== null) throw new DownloadClientError('rejected', hnr);
     await session.removeTorrent(t.infoHashHex, deleteData);
   }
 

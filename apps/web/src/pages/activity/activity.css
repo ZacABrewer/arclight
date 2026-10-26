@@ -49,3 +49,7 @@
   .al-activity-title { max-width: 240px; }
   .al-activity-actions .al-btn, .al-mi-wizard__foot .al-btn { min-height: 44px; }
 }
+
+/* Torrent drawer extras (torrent-extras.tsx). */
+.al-torrent-peer-badges { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.al-torrent-limits { display: flex; flex-direction: column; gap: 24px; }

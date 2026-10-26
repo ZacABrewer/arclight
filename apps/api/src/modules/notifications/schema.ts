@@ -24,6 +24,13 @@ export const notifications = sqliteTable('notifications', {
   onHealthRestored: flag('on_health_restored'),
   onApplicationUpdate: flag('on_application_update'),
   onManualInteractionRequired: flag('on_manual_interaction_required'),
+  // Sitewide request/issue events (the requests module dispatches them).
+  onRequestCreated: flag('on_request_created'),
+  onRequestApproved: flag('on_request_approved'),
+  onRequestDeclined: flag('on_request_declined'),
+  onRequestAvailable: flag('on_request_available'),
+  onIssueCreated: flag('on_issue_created'),
+  onIssueUpdated: flag('on_issue_updated'),
   includeHealthWarnings: flag('include_health_warnings'),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
   settings: text('settings', { mode: 'json' }).$type<Record<string, unknown>>().notNull(),

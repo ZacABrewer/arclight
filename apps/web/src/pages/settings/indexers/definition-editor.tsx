@@ -9,9 +9,13 @@ import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import { TestButton } from '../../../components/forms/test-result.js';
 import { useCreateIndexer, useDeleteIndexer, useIndexerDefinition, useIndexerProxies, useUpdateIndexer } from '../../../hooks/indexers.js';
 import { EditorFooter, SaveError } from '../shared.js';
-import { definitionBase, definitionFields, definitionNotes, definitionValuesOf, PRIVACY_LABELS, PRIVACY_TONES, toDefinitionBody } from './definition-fields.js';
+import { hasSolverProxy } from '../indexer-proxies/proxy-model.js';
+import { SolverHint } from './solver-hint.js';
+import { definitionBase, definitionFields, definitionNeedsSolver, definitionNotes, definitionValuesOf, PRIVACY_LABELS, PRIVACY_TONES, toDefinitionBody } from './definition-fields.js';
 import { indexerTestOutcome } from './indexer-fields.js';
+import { IndexerEditorTabs } from './tracker-account.js';
 import './indexers.css';
+import { t } from '../../../i18n/index.js';
 
 export type DefinitionEditing = { definition: IndexerDefinitionSummary } | { indexer: Indexer };
 
@@ -25,9 +29,9 @@ export function DefinitionEditor({ editing, onClose }: { editing: DefinitionEdit
 
   if (!def) {
     return (
-      <Modal open size={640} onClose={onClose} title={'indexer' in editing ? `Edit ${editing.indexer.name}` : 'Add indexer'}>
+      <Modal open size={640} onClose={onClose} title={'indexer' in editing ? t('settings.indexers.definitionEditor.editName', { name: editing.indexer.name }) : t('settings.indexers.definitionEditor.addIndexer')}>
         {detail.isError ? (
-          <ErrorBlock title="Couldn't load the definition" onRetry={() => void detail.refetch()}>
+          <ErrorBlock title={t('settings.indexers.definitionEditor.couldntLoadTheDefinition')} onRetry={() => void detail.refetch()}>
             {errorMessage(detail.error)}
           </ErrorBlock>
         ) : (
@@ -71,7 +75,7 @@ function DefinitionForm({
         open
         size={640}
         onClose={onClose}
-        title={existing ? `Edit ${existing.name}` : `Add ${def.name}`}
+        title={existing ? t('settings.indexers.definitionEditor.editName', { name: existing.name }) : t('settings.indexers.definitionEditor.addName', { name: def.name })}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -89,32 +93,35 @@ function DefinitionForm({
           <ProtocolBadge protocol={def.protocol} />
           {def.tested ? null : (
             <Chip tone="warn" dot="none">
-              Untested definition
+              {t('settings.indexers.definitionEditor.untestedDefinition')}
             </Chip>
           )}
           {def.description ? <span>{def.description}</span> : null}
         </div>
+        {definitionNeedsSolver(def) && !hasSolverProxy(proxies) ? <SolverHint /> : null}
         {notes.map((n) => (
           <p key={n.name} className="al-def-note" role="note">
             <strong>{n.label || n.name}</strong>
             {typeof n.default === 'string' && n.default ? <span> {n.default.replace(/<[^>]*>/g, '')}</span> : null}
           </p>
         ))}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
-        <SaveError error={create.error ?? update.error} />
+        <IndexerEditorTabs indexer={existing} def={def}>
+          <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
+          <SaveError error={create.error ?? update.error} />
+        </IndexerEditorTabs>
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${existing.name}?`}
-          confirmLabel="Delete indexer"
+          title={t('settings.indexers.definitionEditor.deleteName', { name: existing.name })}
+          confirmLabel={t('settings.indexers.definitionEditor.deleteIndexer')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
         >
-          <p>Searches and RSS stop using {existing.name}.</p>
+          <p>{t('settings.indexers.definitionEditor.searchesAndRssStopUsing', { name: existing.name })}</p>
         </ConfirmDialog>
       ) : null}
     </>

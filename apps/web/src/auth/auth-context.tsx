@@ -4,6 +4,7 @@ import type { AuthStatus, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
 import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences.js';
+import { t, applyLocaleSetting } from '../i18n/index.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -45,8 +46,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthState>(() => {
     const session = (authenticated ? me.data : null) ?? status.data?.session ?? null;
-    // Plain formatters (tables, dates) read the signed-in user's UI preferences from here.
-    setActiveUiPreferences(readUiPreferences(session?.user?.settings));
+    // Plain formatters (tables, dates) read the signed-in user's UI preferences from here,
+    // and the UI language follows the user's setting (signed out: device → browser → en).
+    const prefs = readUiPreferences(session?.user?.settings);
+    setActiveUiPreferences(prefs);
+    void applyLocaleSetting(prefs.locale);
     return {
       status: status.data ?? null,
       session,
@@ -77,7 +81,7 @@ export function useAuth(): AuthState {
 /** Name to show for a user. */
 export function displayNameOf(user: User | null, session: Session | null): string {
   if (user) return user.displayName ?? user.username;
-  if (session?.via === 'apikey') return 'API key';
-  if (session?.via === 'bypass') return 'Local access';
-  return 'Guest';
+  if (session?.via === 'apikey') return t('common.apiKey');
+  if (session?.via === 'bypass') return t('auth.context.localAccess');
+  return t('auth.authContext.guest');
 }

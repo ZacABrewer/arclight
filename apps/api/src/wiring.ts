@@ -16,9 +16,10 @@ import {
   type HistoryTarget,
   type TrackedDownloadInfo,
 } from './modules/history/index.js';
+import { healthServiceFor } from './modules/health/index.js';
+import { createAnalysisProbe, ffprobeRunnerFor, mediaAnalysisFor } from './modules/media-analysis/index.js';
+import { containerUpdatesCheckFor, updateAvailableCheckFor } from './modules/updates/index.js';
 import {
-  createFfprobeProbe,
-  ffprobeAvailable,
   getImportsService,
   type ImportedEvent,
   type ImportsDeps,
@@ -36,6 +37,7 @@ import {
   type SearchTarget,
 } from './modules/releases/index.js';
 import { getSection } from './modules/settings/service.js';
+import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 
 // ---------------------------------------------------------------------------------------
 // Cross-module wiring for the Phase 1 pipeline.
@@ -146,11 +148,20 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   }));
 
   if (options.probe ?? true) {
-    void ffprobeAvailable().then((available) => {
-      if (available) getImportsService(ctx).setDeps({ probe: createFfprobeProbe() });
+    // One ffprobe runner per context, shared with the media-analysis queue.
+    const runner = ffprobeRunnerFor(ctx);
+    void runner.available().then((available) => {
+      if (available) getImportsService(ctx).setDeps({ probe: createAnalysisProbe(runner) });
       else log.info('ffprobe not found; imports use name-based sample detection only');
     });
   }
+
+  // Health checks contributed by modules that do not register their own. (media-analysis
+  // FfprobeMissing and library-hygiene OrphanFilesFound register in their modules; stale feeds,
+  // guides included, are the generic FeedStale check over the feeds registry.)
+  const health = healthServiceFor(ctx);
+  disposers.push(health.register(updateAvailableCheckFor(ctx)));
+  disposers.push(health.register(containerUpdatesCheckFor(ctx)));
 
   return {
     releases: releasesDeps(ctx),
@@ -251,9 +262,12 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
       isSafeToGrab: () => vpnServiceFor(ctx).isSafeToGrab(),
       reason: GRAB_GUARD_REASON,
     },
+    // Private trackers in freeleech-only mode reject non-freeleech releases (`notFreeleech`).
+    releaseFilter: (indexerId, release) => trackerStatsServiceFor(ctx).releaseFilter(indexerId, release),
     settings: {
       getReleaseSettings: () => {
         const r = getSection(db, 'releases');
+        const i = getSection(db, 'indexers');
         return {
           maximumSizeMb: r.maximumSizeMb,
           minimumAgeMinutes: r.minimumAgeMinutes,
@@ -264,6 +278,9 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
           availabilityDelayDays: r.availabilityDelayDays,
           allowUnairedEpisodes: r.allowUnairedEpisodes,
           unairedToleranceMinutes: r.unairedToleranceMinutes,
+          allowHardcodedSubs: i.allowHardcodedSubs,
+          whitelistedHardcodedSubs: i.whitelistedHardcodedSubs,
+          preferIndexerFlags: i.preferIndexerFlags,
         };
       },
     },
@@ -311,6 +328,7 @@ export function recordGrabInHistory(ctx: AppContext, grab: GrabHistoryInput): vo
       customFormatScore: grab.customFormatScore,
       releaseSource: toReleaseSource(grab.source),
       ...(grab.releaseGroup ? { releaseGroup: grab.releaseGroup } : {}),
+      ...(grab.batchId ? { decisionBatchId: grab.batchId } : {}),
     },
     grab.downloadId,
     client ? { name, implementation: client.implementation } : name,
@@ -384,6 +402,12 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
       onImported: async (event) => {
         const built = buildImportNotification(ctx, event);
         if (built) await notificationsServiceFor(ctx).dispatch(built);
+        // Media info for the new file (queued; the analysis job works it off).
+        try {
+          mediaAnalysisFor(ctx).enqueue([event.file.id]);
+        } catch (err) {
+          ctx.log.warn({ err, fileId: event.file.id }, 'could not queue media analysis');
+        }
         // Subtitles: schedule a wanted-search for the freshly imported file (returns at once).
         subtitlesServiceFor(ctx).onImported(event);
       },

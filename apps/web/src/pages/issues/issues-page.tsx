@@ -30,13 +30,14 @@ import {
   useSetIssueStatus,
 } from '../../hooks/requests.js';
 import '../../components/media/media-kit.css';
+import { t } from '../../i18n/index.js';
 
 type StatusFilter = 'open' | 'resolved' | 'all';
 const PAGE_SIZE = 25;
 
 export function problemLabel(issue: Pick<Issue, 'problemSeason' | 'problemEpisode'>): string {
   if (issue.problemSeason === 0) return '';
-  return issue.problemEpisode > 0 ? `S${issue.problemSeason}E${issue.problemEpisode}` : `Season ${issue.problemSeason}`;
+  return issue.problemEpisode > 0 ? t('issues.sProblemseasonEProblemepisode', { problemSeason: issue.problemSeason, problemEpisode: issue.problemEpisode }) : t('issues.seasonProblemseason', { problemSeason: issue.problemSeason });
 }
 
 export function userName(u: Pick<RequestUser, 'username' | 'displayName'>): string {
@@ -51,13 +52,15 @@ export function initials(name: string): string {
 }
 
 function IssueStatusChip({ status }: { status: Issue['status'] }) {
-  return status === 'open' ? <Chip tone="warn">Open</Chip> : <Chip tone="accent" dot="ring">Resolved</Chip>;
+  return status === 'open' ? <Chip tone="warn">{t('common.open')}</Chip> : <Chip tone="accent" dot="ring">{t('issues.resolved')}</Chip>;
 }
 
 const columns: Column<Issue>[] = [
   {
     key: 'title',
-    header: 'Title',
+    get header() {
+      return t('common.title');
+    },
     cell: (i) => (
       <div className="mk-title-cell">
         <Poster src={i.mediaPoster} title={i.mediaTitle} width={32} />
@@ -70,11 +73,11 @@ const columns: Column<Issue>[] = [
       </div>
     ),
   },
-  { key: 'type', header: 'Type', cell: (i) => ISSUE_TYPE_LABELS[i.type] },
-  { key: 'status', header: 'Status', cell: (i) => <IssueStatusChip status={i.status} /> },
-  { key: 'by', header: 'Reported by', cell: (i) => userName(i.createdBy) },
-  { key: 'comments', header: 'Comments', mono: true, align: 'right', cell: (i) => i.comments.length },
-  { key: 'updated', header: 'Updated', mono: true, muted: true, cell: (i) => formatDateTime(i.updatedAt) },
+  { key: 'type', get header() { return t('common.type'); }, cell: (i) => ISSUE_TYPE_LABELS[i.type] },
+  { key: 'status', get header() { return t('common.status'); }, cell: (i) => <IssueStatusChip status={i.status} /> },
+  { key: 'by', get header() { return t('issues.reportedBy'); }, cell: (i) => userName(i.createdBy) },
+  { key: 'comments', get header() { return t('issues.comments'); }, mono: true, align: 'right', cell: (i) => i.comments.length },
+  { key: 'updated', get header() { return t('issues.updated'); }, mono: true, muted: true, cell: (i) => formatDateTime(i.updatedAt) },
 ];
 
 export function IssuesPage() {
@@ -89,10 +92,10 @@ export function IssuesPage() {
 
   return (
     <>
-      <PageHeader index="03" title="Issues" subtitle={list.data ? <><span className="al-num">{list.data.pageInfo.total}</span> {filter === 'all' ? 'issues' : filter}</> : undefined} />
+      <PageHeader index="03" title={t('common.issues')} subtitle={list.data ? <><span className="al-num">{list.data.pageInfo.total}</span> {filter === 'all' ? t('issues.issues') : filter}</> : undefined} />
       <FilterBar onClear={() => { setType('all'); setFilter('open'); setPage(0); }} activeCount={(type !== 'all' ? 1 : 0) + (filter !== 'open' ? 1 : 0)}>
         <Segmented
-          aria-label="Status filter"
+          aria-label={t('issues.statusFilter')}
           variant="soft"
           value={filter}
           onChange={(f) => {
@@ -100,25 +103,25 @@ export function IssuesPage() {
             setPage(0);
           }}
           options={[
-            { value: 'open', label: 'Open' },
-            { value: 'resolved', label: 'Resolved' },
-            { value: 'all', label: 'All' },
+            { value: 'open', label: t('common.open') },
+            { value: 'resolved', label: t('issues.resolved') },
+            { value: 'all', label: t('common.all') },
           ]}
         />
         <Select
-          aria-label="Issue type filter"
+          aria-label={t('issues.issueTypeFilter')}
           value={type}
           onChange={(e) => setType(e.currentTarget.value as IssueType | 'all')}
-          options={[{ value: 'all', label: 'All types' }, ...IssueType.options.map((t) => ({ value: t, label: ISSUE_TYPE_LABELS[t] }))]}
+          options={[{ value: 'all', label: t('issues.allTypes') }, ...IssueType.options.map((item) => ({ value: item, label: ISSUE_TYPE_LABELS[item] }))]}
         />
       </FilterBar>
       <div style={{ marginTop: 20 }}>
         {list.isPending ? (
           <Loading />
         ) : list.isError ? (
-          <QueryError error={list.error} title="Could not load issues" onRetry={() => void list.refetch()} />
+          <QueryError error={list.error} title={t('issues.couldNotLoadIssues')} onRetry={() => void list.refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title="No issues">Report a problem from a title page in Discover.</EmptyState>
+          <EmptyState title={t('issues.noIssues')}>{t('issues.reportAProblemFromA')}</EmptyState>
         ) : (
           <Pane flush bare>
             <Table
@@ -127,7 +130,7 @@ export function IssuesPage() {
               rowKey={(i) => i.id}
               density="rich"
               sortable={false}
-              caption="Issues"
+              caption={t('common.issues')}
               onRowClick={(i) => void navigate({ to: '/issues/$id', params: { id: String(i.id) } })}
             />
           </Pane>
@@ -148,7 +151,7 @@ export function IssueDetailPage() {
   const { id } = detailRoute.useParams();
   const issue = useIssue(Number(id));
   if (issue.isPending) return <Loading />;
-  if (issue.isError) return <QueryError error={issue.error} title="Could not load this issue" onRetry={() => void issue.refetch()} />;
+  if (issue.isError) return <QueryError error={issue.error} title={t('issues.couldNotLoadThisIssue')} onRetry={() => void issue.refetch()} />;
   return <IssueView issue={issue.data} />;
 }
 
@@ -169,7 +172,7 @@ function IssueView({ issue }: { issue: Issue }) {
   return (
     <>
       <div className="mk-crumb" style={{ marginBottom: 10 }}>
-        <Link to="/issues">Issues</Link> / #{issue.id}
+        <Link to="/issues">{t('common.issues')}</Link> / #{issue.id}
       </div>
       <PageHeader
         title={`${ISSUE_TYPE_LABELS[issue.type]} issue: ${issue.mediaTitle}`}
@@ -177,7 +180,7 @@ function IssueView({ issue }: { issue: Issue }) {
           <span className="mk-row">
             <IssueStatusChip status={issue.status} />
             <span>
-              Reported by {userName(issue.createdBy)} · <span className="al-num">{formatDateTime(issue.createdAt)}</span>
+              {t('issues.reportedByUsername', { userName: userName(issue.createdBy) })} <span className="al-num">{formatDateTime(issue.createdAt)}</span>
             </span>
             {problem ? <span className="al-num">{problem}</span> : null}
           </span>
@@ -185,23 +188,23 @@ function IssueView({ issue }: { issue: Issue }) {
         actions={
           <>
             <Link className="al-btn al-btn--secondary" {...titleLink(issue.mediaType, issue.mediaTmdbId)}>
-              View title
+              {t('issues.viewTitle')}
             </Link>
             {canComment ? (
               <Button loading={setStatus.isPending} onClick={() => setStatus.mutate({ id: issue.id, status: issue.status === 'open' ? 'resolved' : 'open' })}>
-                {issue.status === 'open' ? 'Resolve' : 'Reopen'}
+                {issue.status === 'open' ? t('issues.resolve') : t('issues.reopen')}
               </Button>
             ) : null}
             {canDelete ? (
               <Button variant="danger" onClick={() => setDeleting(true)}>
-                Delete
+                {t('common.delete')}
               </Button>
             ) : null}
           </>
         }
       />
-      <section aria-label="Comment thread" className="mk-stack-sm" style={{ maxWidth: 860 }}>
-        <ol className="mk-thread" aria-label="Comments">
+      <section aria-label={t('issues.commentThread')} className="mk-stack-sm" style={{ maxWidth: 860 }}>
+        <ol className="mk-thread" aria-label={t('issues.comments')}>
           {issue.comments.map((c) => (
             <CommentItem key={c.id} c={c} mine={userId !== null && c.user.id === userId} manage={manage} />
           ))}
@@ -216,10 +219,10 @@ function IssueView({ issue }: { issue: Issue }) {
                 comment.mutate({ id: issue.id, message: message.trim() }, { onSuccess: () => setMessage('') });
               }}
             >
-              <Textarea rows={3} aria-label="New comment" placeholder="Add a comment" value={message} onChange={(e) => setMessage(e.currentTarget.value)} />
+              <Textarea rows={3} aria-label={t('issues.newComment')} placeholder={t('issues.addAComment')} value={message} onChange={(e) => setMessage(e.currentTarget.value)} />
               <div className="mk-row mk-row--end">
                 <Button type="submit" variant="primary" loading={comment.isPending} disabled={!message.trim()}>
-                  Comment
+                  {t('issues.comment')}
                 </Button>
               </div>
             </form>
@@ -229,12 +232,12 @@ function IssueView({ issue }: { issue: Issue }) {
       <Modal
         open={deleting}
         onClose={() => setDeleting(false)}
-        title={`Delete the ${ISSUE_TYPE_LABELS[issue.type].toLowerCase()} issue for ${issue.mediaTitle}?`}
+        title={t('issues.deleteTheValueIssueFor', { value: ISSUE_TYPE_LABELS[issue.type].toLowerCase(), mediaTitle: issue.mediaTitle })}
         size={440}
         footer={
           <>
             <Button variant="ghost" onClick={() => setDeleting(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
@@ -245,13 +248,13 @@ function IssueView({ issue }: { issue: Issue }) {
                 await navigate({ to: '/issues' });
               }}
             >
-              Delete issue
+              {t('issues.deleteIssue')}
             </Button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          The issue and its <span className="al-num">{issue.comments.length}</span> comments are deleted.
+          {t('issues.theIssueAndIts')} <span className="al-num">{issue.comments.length}</span> {t('issues.commentsAreDeleted')}
         </p>
       </Modal>
     </>
@@ -265,7 +268,7 @@ function CommentItem({ c, mine, manage }: { c: IssueComment; mine: boolean; mana
   const [draft, setDraft] = useState(c.message);
   const name = userName(c.user);
   return (
-    <li className="mk-comment" aria-label={`Comment by ${name}`}>
+    <li className="mk-comment" aria-label={t('issues.commentByName', { name })}>
       <span className="mk-avatar" aria-hidden="true">
         {initials(name)}
       </span>
@@ -274,27 +277,27 @@ function CommentItem({ c, mine, manage }: { c: IssueComment; mine: boolean; mana
           <span className="mk-comment__name">{name}</span>
           <span className="al-num al-caption">
             {formatDateTime(c.createdAt)}
-            {c.updatedAt !== c.createdAt ? ' · edited' : ''}
+            {c.updatedAt !== c.createdAt ? t('issues.edited') : ''}
           </span>
           {!editing && (mine || manage) ? (
             <span className="mk-row" style={{ marginLeft: 'auto', gap: 4 }}>
               {mine ? (
                 <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-                  Edit
+                  {t('common.edit')}
                 </Button>
               ) : null}
               <Button size="sm" variant="ghost" loading={remove.isPending} onClick={() => remove.mutate(c.id)}>
-                Delete
+                {t('common.delete')}
               </Button>
             </span>
           ) : null}
         </div>
         {editing ? (
           <div className="mk-stack-sm">
-            <Textarea rows={3} aria-label="Edit comment" value={draft} onChange={(e) => setDraft(e.currentTarget.value)} />
+            <Textarea rows={3} aria-label={t('issues.editComment')} value={draft} onChange={(e) => setDraft(e.currentTarget.value)} />
             <div className="mk-row mk-row--end">
               <Button size="sm" variant="ghost" onClick={() => setEditing(false)}>
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -303,7 +306,7 @@ function CommentItem({ c, mine, manage }: { c: IssueComment; mine: boolean; mana
                 disabled={!draft.trim()}
                 onClick={() => edit.mutate({ commentId: c.id, message: draft.trim() }, { onSuccess: () => setEditing(false) })}
               >
-                Save
+                {t('common.save')}
               </Button>
             </div>
           </div>

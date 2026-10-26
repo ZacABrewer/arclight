@@ -7,6 +7,7 @@ import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
 import { routeTree } from '../../router.js';
 import { WIZARD_STEPS } from './setup-wizard.js';
+import { I18nProvider, setLocale } from '../../i18n/index.js';
 
 class FakeSocket {
   onopen = null;
@@ -56,6 +57,11 @@ beforeEach(() => {
         folders = [...folders, f];
         return json(f, 201);
       }
+      if (path === '/api/v1/setup/admin' && method === 'POST') {
+        steps = steps.map((s) => (s.id === 'admin' ? { ...s, complete: true } : s));
+        return json(session, 201);
+      }
+      if (path === '/api/v1/user/me' && method === 'PUT') return json({ ...admin, settings: body.settings });
       if (path === '/api/v1/setup/complete' && method === 'POST') {
         completed = true;
         return json({ needsSetup: false, steps });
@@ -64,7 +70,11 @@ beforeEach(() => {
     }),
   );
 });
-afterEach(() => vi.unstubAllGlobals());
+afterEach(async () => {
+  vi.unstubAllGlobals();
+  localStorage.clear();
+  await setLocale('en');
+});
 
 function renderSetup() {
   const toasts = createToastStore();
@@ -72,9 +82,11 @@ function renderSetup() {
   const router = createRouter({ routeTree, context: { queryClient }, history: createMemoryHistory({ initialEntries: ['/setup'] }) });
   render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider store={toasts}>
-        <RouterProvider router={router} />
-      </ToastProvider>
+      <I18nProvider>
+        <ToastProvider store={toasts}>
+          <RouterProvider router={router} />
+        </ToastProvider>
+      </I18nProvider>
     </QueryClientProvider>,
   );
   return router;
@@ -129,6 +141,28 @@ describe('setup wizard (Page 08)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
     await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/setup/complete')?.body).toEqual({ authMethod: 'forms' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
+  });
+
+  it('offers the UI language on the first step and keeps it on the new admin account', async () => {
+    steps = steps.map((s) => (s.id === 'admin' ? { ...s, complete: false } : s));
+    renderSetup();
+    await screen.findByRole('heading', { name: 'Create the admin account' });
+    const select = screen.getByLabelText('Language') as HTMLSelectElement;
+    expect([...select.options].map((o) => o.value)).toEqual(['auto', 'en', 'de', 'fr', 'es', 'nl']);
+    expect([...select.options].map((o) => o.text)).toContain('Deutsch · German');
+    fireEvent.change(select, { target: { value: 'de' } });
+    await waitFor(() => expect(document.documentElement.lang).toBe('de'));
+    expect(localStorage.getItem('arclight.locale')).toBe('de');
+    // The app remounts in the new language (placeholders until German is translated); the
+    // picker keeps the device choice.
+    expect(await screen.findByRole('heading', { name: '[de] Create the admin account' })).toBeTruthy();
+    const picker = screen.getByLabelText('[de] Language') as HTMLSelectElement;
+    expect(picker.value).toBe('de');
+    const [password, confirm] = [...document.querySelectorAll<HTMLInputElement>('input[type=password]')];
+    fireEvent.change(password!, { target: { value: 'correct horse battery' } });
+    fireEvent.change(confirm!, { target: { value: 'correct horse battery' } });
+    fireEvent.submit(picker.closest('form')!);
+    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/user/me' && c.method === 'PUT')?.body).toEqual({ settings: { locale: 'de' } }));
   });
 
   it('goes back to a finished step from the stepper', async () => {

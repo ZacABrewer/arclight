@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useFocusTrap } from '../hooks/use-focus-trap.js';
 import { Icon } from './Icon.js';
 import { SectionLabel } from './SectionLabel.js';
+import { t } from '../../i18n/index.js';
 
 export interface ResultItem {
   id: string;
@@ -76,9 +77,9 @@ function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyT
         />
         <kbd className="al-kbd">Esc</kbd>
       </div>
-      <div className="al-cmd__results" id={listId} role="listbox" aria-label="Results" aria-busy={loading || undefined}>
+      <div className="al-cmd__results" id={listId} role="listbox" aria-label={t('common.results')} aria-busy={loading || undefined}>
         {flat.length === 0 ? (
-          <div className="al-cmd__empty">{loading ? 'Searching…' : emptyText}</div>
+          <div className="al-cmd__empty">{loading ? t('arclight.commandPalette.searching') : emptyText}</div>
         ) : (
           groups
             .filter((g) => g.items.length > 0)
@@ -113,9 +114,9 @@ function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyT
       <div className="al-cmd__foot" aria-hidden="true">
         {footer ?? (
           <>
-            <span>↑↓ move</span>
-            <span>↵ open</span>
-            <span>esc close</span>
+            <span>{t('arclight.commandPalette.move')}</span>
+            <span>{t('arclight.commandPalette.open')}</span>
+            <span>{t('arclight.commandPalette.escClose')}</span>
           </>
         )}
       </div>
@@ -136,16 +137,16 @@ export interface CommandPaletteProps {
 }
 
 /** Command palette: centred 640px pane, chamfer top-left, scrim. */
-export function CommandPalette({ open, onClose, query, onQueryChange, groups, placeholder = 'Type a command or search', loading, emptyText = 'No matches.' }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, query, onQueryChange, groups, placeholder = t('arclight.commandPalette.typeACommandOrSearch'), loading, emptyText = t('arclight.commandPalette.noMatches') }: CommandPaletteProps) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, { active: open, onEscape: onClose });
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
     <div className="al-cmd-layer">
       <div className="al-scrim" aria-hidden="true" onClick={onClose} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Command palette" className="al-cmd al-pane al-pane--chamfer-tl al-pane--strong">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={t('common.commandPalette')} className="al-cmd al-pane al-pane--chamfer-tl al-pane--strong">
         <i className="al-edge al-edge--tl" aria-hidden="true" />
-        <ResultList groups={groups} query={query} onQueryChange={onQueryChange} onClose={onClose} placeholder={placeholder} emptyText={emptyText} loading={loading} inputLabel="Command" />
+        <ResultList groups={groups} query={query} onQueryChange={onQueryChange} onClose={onClose} placeholder={placeholder} emptyText={emptyText} loading={loading} inputLabel={t('arclight.commandPalette.command')} />
       </div>
     </div>,
     document.body,
@@ -161,23 +162,23 @@ export interface GlobalSearchOverlayProps extends CommandPaletteProps {
  * Global search overlay: full-width pane dropping from the top bar, grouped results
  * (Series / Movies / People / Settings) as 44px rows with mono keyboard hints. Opened by "/".
  */
-export function GlobalSearchOverlay({ open, onClose, query, onQueryChange, groups, placeholder = 'Search', loading, emptyText, hint = 'Search series, movies, people and settings.' }: GlobalSearchOverlayProps) {
+export function GlobalSearchOverlay({ open, onClose, query, onQueryChange, groups, placeholder = t('common.search'), loading, emptyText, hint = t('arclight.commandPalette.searchSeriesMoviesPeopleAnd') }: GlobalSearchOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, { active: open, onEscape: onClose });
   if (!open || typeof document === 'undefined') return null;
   return createPortal(
     <div className="al-search-overlay">
       <div className="al-search-overlay__scrim" aria-hidden="true" onClick={onClose} />
-      <div ref={ref} role="dialog" aria-modal="true" aria-label="Search" className="al-pane al-pane--strong">
+      <div ref={ref} role="dialog" aria-modal="true" aria-label={t('common.search')} className="al-pane al-pane--strong">
         <ResultList
           groups={groups}
           query={query}
           onQueryChange={onQueryChange}
           onClose={onClose}
           placeholder={placeholder}
-          emptyText={query.trim() ? (emptyText ?? `Nothing matches "${query.trim()}".`) : hint}
+          emptyText={query.trim() ? (emptyText ?? t('arclight.commandPalette.nothingMatchesQuery', { query: query.trim() })) : hint}
           loading={loading}
-          inputLabel="Search"
+          inputLabel={t('common.search')}
         />
       </div>
     </div>,

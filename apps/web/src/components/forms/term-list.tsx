@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from 'react';
 import { Button, Input, Tag } from '../../arclight/index.js';
+import { t } from '../../i18n/index.js';
 
 /** Split pasted text into terms (comma or newline separated), trimmed and de-duplicated. */
 export function addTerms(existing: readonly string[], text: string): string[] {
@@ -19,7 +20,7 @@ export interface TermListProps {
 }
 
 /** Editable list of terms (release profile required/ignored words, file extensions...). */
-export function TermList({ id, value, onChange, placeholder = 'Add a term, or /regex/' }: TermListProps) {
+export function TermList({ id, value, onChange, placeholder = t('components.forms.termList.addATermOrRegex') }: TermListProps) {
   const [draft, setDraft] = useState('');
   const commit = () => {
     if (!draft.trim()) return;
@@ -38,10 +39,10 @@ export function TermList({ id, value, onChange, placeholder = 'Add a term, or /r
     <div className="al-term-list">
       {value.length > 0 ? (
         <ul className="al-term-list__terms">
-          {value.map((t) => (
-            <li key={t}>
-              <Tag className="al-num" onRemove={() => onChange(value.filter((v) => v !== t))} removeLabel={`Remove ${t}`}>
-                {t}
+          {value.map((item) => (
+            <li key={item}>
+              <Tag className="al-num" onRemove={() => onChange(value.filter((v) => v !== item))} removeLabel={t('components.forms.termList.removeT', { t: item })}>
+                {item}
               </Tag>
             </li>
           ))}
@@ -50,7 +51,7 @@ export function TermList({ id, value, onChange, placeholder = 'Add a term, or /r
       <div className="al-term-list__add">
         <Input id={id} mono value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.currentTarget.value)} onKeyDown={onKeyDown} />
         <Button variant="secondary" size="sm" onClick={commit} disabled={!draft.trim()}>
-          Add
+          {t('common.add')}
         </Button>
       </div>
     </div>

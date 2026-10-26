@@ -8,6 +8,7 @@ import {
   type ReleaseIndexerFlag,
   type ReleaseKind,
 } from '@arclight/shared';
+import { t } from '../../../i18n/index.js';
 
 // Import/export of custom formats as JSON. Accepts our own export and the community format
 // shared by TRaSH-guides and *arr exports: `{ name, includeCustomFormatWhenRenaming,
@@ -158,7 +159,7 @@ function mapSpec(raw: Raw, app: SourceApp): CustomFormatSpec | string {
 
 function mapFormat(raw: unknown, app: SourceApp, warnings: string[]): CustomFormatInput | null {
   if (!isObj(raw) || typeof raw.name !== 'string' || !raw.name.trim()) {
-    warnings.push('Skipped an entry without a name');
+    warnings.push(t('settings.customFormats.customFormatJson.skippedAnEntryWithoutA'));
     return null;
   }
   const specs = Array.isArray(raw.specifications) ? raw.specifications : [];

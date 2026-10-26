@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { downloadClientHost } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
+import { feedsRegistry } from '../../feeds.js';
 import {
   indexers,
   indexerStatus,
@@ -17,6 +18,7 @@ import { getDownloadClientsService } from '../download-clients/index.js';
 import { indexersServiceFor } from '../indexers/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { getSection } from '../settings/service.js';
+import { subtitlesServiceFor } from '../subtitles/index.js';
 import { torrentServiceFor } from '../torrent/index.js';
 import { vpnServiceFor } from '../vpn/service.js';
 import type { HealthDeps, HealthFs } from './types.js';
@@ -208,6 +210,12 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
     async torrent() {
       return torrentServiceFor(ctx).status();
     },
+
+    feeds: () => feedsRegistry(ctx).summary(),
+
+    remoteEngines: () => downloads.remoteEngineHealth(),
+
+    whisper: () => subtitlesServiceFor(ctx).whisperStatus(),
 
     async flareSolverrs() {
       const proxies = indexersServiceFor(ctx).proxies;

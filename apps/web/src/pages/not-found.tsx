@@ -3,6 +3,7 @@ import { useRouter } from '@tanstack/react-router';
 import { Button } from '../arclight/index.js';
 import { useAuth } from '../auth/auth-context.js';
 import { useBackdropOptions } from '../layout/shell-options.js';
+import { t } from '../i18n/index.js';
 
 /** Page 09: mono 404, plain explanation, the way back. The vanishing point moves right. */
 export function NotFoundPage() {
@@ -10,7 +11,7 @@ export function NotFoundPage() {
   const { isAdmin } = useAuth();
   useBackdropOptions({ vx: 0.78, horizon: 0.65, circuit: false });
   useEffect(() => {
-    document.title = 'Page not found · Arclight';
+    document.title = t('notFound.pageNotFoundArclight');
   }, []);
   const path = typeof location === 'undefined' ? '' : location.pathname;
   return (
@@ -19,10 +20,10 @@ export function NotFoundPage() {
         404
       </div>
       <h1 id="nf-title" className="nf__title">
-        Page not found
+        {t('notFound.pageNotFound')}
       </h1>
       <p className="nf__body">
-        This page doesn't exist or has moved. Check the address, or go back to the dashboard.
+        {t('notFound.thisPageDoesntExistOr')}
         {path ? (
           <>
             {' '}
@@ -32,12 +33,12 @@ export function NotFoundPage() {
       </p>
       <div className="nf__actions">
         <Button variant="primary" onClick={() => void router.navigate({ to: '/' })}>
-          Go to dashboard
+          {t('notFound.goToDashboard')}
         </Button>
         {isAdmin ? (
           // There is no bug tracker in the app; the logs are where a problem gets reported from.
           <Button variant="secondary" onClick={() => void router.navigate({ to: '/system/logs' })}>
-            Report a problem
+            {t('notFound.reportAProblem')}
           </Button>
         ) : null}
       </div>

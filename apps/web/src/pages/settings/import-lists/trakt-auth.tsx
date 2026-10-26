@@ -3,6 +3,7 @@ import { SECRET_MASK, type TraktDeviceResponse, type TraktPollResponse } from '@
 import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
 import { Button } from '../../../arclight/index.js';
+import { t } from '../../../i18n/index.js';
 
 // Trakt device-code flow: ask the api for a device code, show the user code and verification
 // URL, then poll at the interval Trakt gave until it is authorized, denied or expired.
@@ -23,9 +24,15 @@ type State =
   | { phase: 'failed'; message: string };
 
 const FAILURES: Record<string, string> = {
-  denied: 'Authorization was denied on Trakt.',
-  expired: 'The code expired before it was entered. Try again.',
-  invalid: 'Trakt rejected the device code. Check the client id and secret.',
+  get denied() {
+    return t('settings.importLists.traktAuth.authorizationWasDeniedOnTrakt');
+  },
+  get expired() {
+    return t('settings.importLists.traktAuth.theCodeExpiredBeforeIt');
+  },
+  get invalid() {
+    return t('settings.importLists.traktAuth.traktRejectedTheDeviceCode');
+  },
 };
 
 export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }: TraktAuthProps) {
@@ -48,11 +55,11 @@ export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }
 
   const start = async () => {
     if (!clientId.trim()) {
-      setState({ phase: 'failed', message: 'Enter the Trakt client id first.' });
+      setState({ phase: 'failed', message: t('settings.importLists.traktAuth.enterTheTraktClientId') });
       return;
     }
     if (!secret && !canUseStored) {
-      setState({ phase: 'failed', message: 'Enter the Trakt client secret first.' });
+      setState({ phase: 'failed', message: t('settings.importLists.traktAuth.enterTheTraktClientSecret') });
       return;
     }
     if (timer.current) clearTimeout(timer.current);
@@ -94,7 +101,7 @@ export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }
           timer.current = setTimeout(() => void poll(), interval);
           return;
         }
-        setState({ phase: 'failed', message: FAILURES[res.status] ?? `Trakt answered ${res.status}.` });
+        setState({ phase: 'failed', message: FAILURES[res.status] ?? t('settings.importLists.traktAuth.traktAnsweredStatus', { status: res.status }) });
       } catch (err) {
         if (!cancelled.current) setState({ phase: 'failed', message: errorMessage(err) });
       }
@@ -108,38 +115,38 @@ export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }
   };
 
   return (
-    <div className="al-trakt" aria-label="Trakt authentication" role="group">
+    <div className="al-trakt" aria-label={t('settings.importLists.traktAuth.traktAuthentication')} role="group">
       {state.phase === 'waiting' ? (
         <>
           <p className="al-trakt__step">
-            Open{' '}
+            {t('common.open')}
             <a className="al-trakt__url" href={state.device.verificationUrl} target="_blank" rel="noreferrer">
               {state.device.verificationUrl}
             </a>{' '}
             and enter this code:
           </p>
-          <div className="al-trakt__code" data-testid="trakt-user-code" aria-label="Trakt user code">
+          <div className="al-trakt__code" data-testid="trakt-user-code" aria-label={t('settings.importLists.traktAuth.traktUserCode')}>
             {state.device.userCode}
           </div>
           <p className="al-trakt__status" role="status">
-            Waiting for Trakt to confirm. Checking every <span className="al-num">{Math.max(1, state.device.interval)} s</span>.
+            {t('settings.importLists.traktAuth.waitingForTraktToConfirm')} <span className="al-num">{t('settings.importLists.traktAuth.valueS', { value: Math.max(1, state.device.interval) })}</span>.
           </p>
           <div className="al-trakt__actions">
             <Button size="sm" variant="ghost" onClick={cancel}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         </>
       ) : (
         <div className="al-trakt__actions">
           <Button variant="secondary" loading={state.phase === 'starting'} onClick={() => void start()}>
-            {state.phase === 'authorized' ? 'Re-authenticate with Trakt' : 'Authenticate with Trakt'}
+            {state.phase === 'authorized' ? t('settings.importLists.traktAuth.reAuthenticateWithTrakt') : t('settings.importLists.traktAuth.authenticateWithTrakt')}
           </Button>
         </div>
       )}
       {state.phase === 'authorized' ? (
         <p className="al-trakt__status" role="status">
-          Authorized with Trakt. Save the list to keep the tokens.
+          {t('settings.importLists.traktAuth.authorizedWithTraktSaveThe')}
         </p>
       ) : null}
       {state.phase === 'failed' ? (

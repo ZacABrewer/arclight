@@ -20,3 +20,19 @@ export type {
   MovieMetadataInput,
   SeriesMetadataInput,
 } from './service.js';
+export {
+  DEFAULT_VERSION_TAG,
+  UHD_VERSION_TAG,
+  canonicalTag,
+  enabledVersions,
+  findVersion,
+  isVersioned,
+  pickVersion,
+  primaryOf,
+  profileIdForSlot,
+  rankVersions,
+  sameTag,
+  slotOf,
+  upsertVersion,
+  type VersionFit,
+} from './versions.js';

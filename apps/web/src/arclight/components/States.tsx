@@ -1,5 +1,6 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { cx } from '../cx.js';
+import { t } from '../../i18n/index.js';
 
 export interface EmptyStateProps {
   /** Object + state: "No series yet", "No movies yet". */
@@ -71,7 +72,7 @@ export interface ErrorBlockProps {
 }
 
 /** `.al-error` — red-outlined error block with a cause and a Retry link. */
-export function ErrorBlock({ title, children, onRetry, retryLabel = 'Retry', className }: ErrorBlockProps) {
+export function ErrorBlock({ title, children, onRetry, retryLabel = t('arclight.states.retry'), className }: ErrorBlockProps) {
   return (
     <div className={cx('al-error', className)} role="alert">
       <p className="al-error__title">{title}</p>

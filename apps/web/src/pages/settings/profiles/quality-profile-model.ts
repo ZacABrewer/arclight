@@ -7,6 +7,7 @@ import {
   type QualityProfileInput,
   type QualityProfileItem,
 } from '@arclight/shared';
+import { t } from '../../../i18n/index.js';
 
 // Pure editing logic for the quality-profile dialog. The api stores items worst -> best; the
 // editor shows best first (like every *arr), so the dialog converts with toDisplay/fromDisplay
@@ -93,12 +94,12 @@ export interface ProfileErrors {
 
 export function validateProfile(p: QualityProfileInput): ProfileErrors {
   const errors: ProfileErrors = {};
-  if (!p.name.trim()) errors.name = 'Name is required';
-  if (!p.items.some((i) => i.allowed)) errors.items = 'Allow at least one quality';
+  if (!p.name.trim()) errors.name = t('common.nameIsRequired');
+  if (!p.items.some((i) => i.allowed)) errors.items = t('settings.profiles.qualityProfile.allowAtLeastOneQuality');
   else if (!cutoffOptions(p.items).some((o) => o.value === p.cutoff)) {
-    errors.cutoff = 'The cutoff must be one of the allowed qualities';
+    errors.cutoff = t('settings.profiles.qualityProfile.theCutoffMustBeOne');
   }
-  if (p.upgradeAllowed && p.minUpgradeFormatScore < 1) errors.minUpgradeFormatScore = 'Must be at least 1';
+  if (p.upgradeAllowed && p.minUpgradeFormatScore < 1) errors.minUpgradeFormatScore = t('settings.profiles.qualityProfile.mustBeAtLeast1');
   return errors;
 }
 

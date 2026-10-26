@@ -1,0 +1,23 @@
+/* Updates (System → Updates, Settings → Updates). */
+.al-upd-rows { display: flex; flex-direction: column; gap: 16px; }
+.al-upd-num { max-width: 140px; }
+.al-upd-window { display: flex; align-items: center; gap: 10px; color: var(--al-text-4); }
+.al-upd-window .al-select { max-width: 120px; }
+.al-upd-pad { padding: 16px 20px; }
+.al-upd-foot { margin: 0; padding: 12px 20px; border-top: 1px solid var(--al-line-1); }
+.al-upd-foot [data-tone='danger'] { color: var(--al-danger-text); }
+.al-upd-name { display: inline-flex; align-items: center; gap: 8px; }
+.al-upd-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr)); gap: 20px; margin-bottom: 20px; }
+.al-upd-stack { display: flex; flex-direction: column; gap: 20px; }
+.al-upd-steps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 8px; color: var(--al-text-3); }
+.al-upd-cmd { display: block; margin-top: 6px; padding: 8px 10px; border: 1px solid var(--al-line-2); color: var(--al-text-1); font-family: var(--al-mono); font-size: 12px; overflow-x: auto; white-space: pre; }
+.al-upd-howto[data-current] { border-left: 2px solid var(--al-cyan); padding-left: 12px; }
+.al-upd-howto + .al-upd-howto { margin-top: 18px; }
+.al-upd-notes { color: var(--al-text-3); }
+.al-upd-notes ul, .al-upd-notes ol { padding-left: 18px; margin: 6px 0; }
+.al-upd-notes p { margin: 6px 0; }
+.al-upd-notes .md-h { margin: 12px 0 4px; color: var(--al-text-1); }
+.al-upd-notes .md-pre { padding: 8px; border: 1px solid var(--al-line-1); overflow-x: auto; }
+.al-upd-error { color: var(--al-warn-text); margin: 0 0 12px; }
+.al-upd-status { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.al-upd-labelhint { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }

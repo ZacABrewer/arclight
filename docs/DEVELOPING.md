@@ -69,9 +69,40 @@ web tests.
    server code in packages.
 4. In the consumer (`apps/api` or another package) add `"@arclight/<name>": "workspace:*"`
    and run `pnpm install`.
-5. If it must ship in the image, check `docker/Dockerfile`: its install layer copies
-   individual `package.json` files, so a new package has to be added there too.
+5. The image ships the api as one esbuild bundle, so a workspace package is included
+   automatically. If the package reads files at runtime (like the indexer definitions or
+   the migrations) or depends on a native addon, see "Bundled build" below.
 6. Any new third-party dependency needs a reason in the commit message.
+
+## Bundled build (Docker image)
+
+`pnpm --filter @arclight/api build` runs `apps/api/scripts/bundle.mjs`, which uses esbuild
+to inline the api, every `@arclight/*` package (TypeScript sources) and the third-party
+JavaScript into `apps/api/dist/server.mjs` (ESM, node24). Next to it, it writes:
+
+- `drizzle/` (migrations) and `definitions/builtin/` (indexer YAML), copied from the sources;
+- `package.json` listing the externals the image installs (`EXTERNALS` in the script, today
+  only `better-sqlite3`, a native addon);
+- `bundle-meta.json`, what the bundle still imports at runtime.
+
+A banner provides `require`/`__dirname` for inlined CommonJS, defaults `NODE_ENV` to
+`production` (so the logger never asks for the `pino-pretty` worker) and sets
+`ARCLIGHT_ASSET_ROOT` to the bundle's folder. Code that reads a file shipped with the sources
+must resolve it from `ARCLIGHT_ASSET_ROOT` when set and from `import.meta.url` otherwise (see
+`migrationsFolder()` in `apps/api/src/db/index.ts` and `BUILTIN_DEFINITIONS_DIR` in
+`packages/indexers`), and the script must copy it. A new native or dynamic-require-heavy
+dependency goes into `EXTERNALS`. `src/bundle.test.ts` builds the bundle and checks it
+statically (no paths into `src/`, only the expected externals, assets present).
+
+`node apps/api/dist/server.mjs` runs the bundle locally. `pnpm dev` and
+`scripts/local-test.ps1` keep running the TypeScript sources through `tsx`.
+
+The Dockerfile builds web + bundle, installs the externals with `npm` in a separate stage
+and prunes them to the addon, then copies the node binary, bundle, addon and web dist onto
+`debian:bookworm-slim` (npm, corepack and yarn are left behind). Result: about 80 MB
+compressed / 220 MB unpacked versus 103 MB / 365 MB for the old tsx image, and first HTTP
+response about 1.7 s after `docker run` versus about 39 s (tsx compiling and `chown -R` over
+a 100 MB `node_modules`).
 
 ## Fixture-driven parser tests
 

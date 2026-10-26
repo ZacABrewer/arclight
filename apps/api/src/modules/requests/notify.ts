@@ -8,6 +8,7 @@ import {
   type NotificationAgentKind,
   type NotificationEvent,
   type RequestInfo,
+  type RequestsDigestEvent,
 } from '@arclight/notifications';
 import { Permission, type UserNotificationTestResult, type UserNotificationTypes } from '@arclight/shared';
 import type { Logger } from 'pino';
@@ -24,7 +25,8 @@ import { allUserRows, findUserRow, requestSettingsOf, userPermissions, type User
 // through the bot of the first enabled Telegram connection) and an email address (sent with
 // the SMTP settings of the first enabled email connection) in `settings.notifications`.
 // System connections additionally receive every event through the notifications module's
-// dispatcher (which currently has no request/issue trigger flags, so it is a no-op there).
+// dispatcher, filtered there by each connection's onRequest*/onIssue* flags (sitewide
+// notifications). The daily digest goes to system connections only.
 
 type RequestRow = typeof mediaRequests.$inferSelect;
 type IssueRow = typeof issues.$inferSelect;
@@ -41,6 +43,8 @@ export interface RequestNotifierOptions {
   /** System-wide connections (notifications module). */
   systemDispatch?: (event: NotificationEvent) => Promise<unknown>;
   instanceName?: string;
+  /** Public URL of this Arclight (read per event so a saved setting applies at once). */
+  applicationUrl?: () => string | undefined;
   now?: () => Date;
 }
 
@@ -66,6 +70,7 @@ export class RequestNotifier {
   private readonly agentFactory: AgentFactory;
   private readonly systemDispatch: ((event: NotificationEvent) => Promise<unknown>) | undefined;
   private readonly instanceName: string;
+  private readonly applicationUrl: () => string | undefined;
   private readonly now: () => Date;
   /** Last deliveries (bounded); for tests and diagnostics. */
   readonly deliveries: Delivery[] = [];
@@ -76,7 +81,14 @@ export class RequestNotifier {
     this.agentFactory = opts.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
     this.systemDispatch = opts.systemDispatch;
     this.instanceName = opts.instanceName ?? 'Arclight';
+    this.applicationUrl = opts.applicationUrl ?? (() => undefined);
     this.now = opts.now ?? (() => new Date());
+  }
+
+  /** Common event fields; `applicationUrl` only when configured. */
+  private base(): { instanceName: string; timestamp: string; applicationUrl?: string } {
+    const url = this.applicationUrl()?.trim();
+    return { instanceName: this.instanceName, timestamp: this.now().toISOString(), ...(url ? { applicationUrl: url } : {}) };
   }
 
   // -------------------------------------------------------------------------------------
@@ -87,12 +99,17 @@ export class RequestNotifier {
     const requester = findUserRow(this.db, req.requestedById);
     const info: RequestInfo = {
       id: req.id,
-      requestedBy: { id: req.requestedById, username: requester?.displayName ?? requester?.username ?? `user ${req.requestedById}` },
+      requestedBy: {
+        id: req.requestedById,
+        username: requester?.displayName ?? requester?.username ?? `user ${req.requestedById}`,
+        ...(requester?.avatar ? { avatar: requester.avatar } : {}),
+        ...(requester?.email ? { email: requester.email } : {}),
+      },
       status: kind === 'created' ? (req.status === 'approved' ? 'approved' : 'pending') : kind === 'declined' ? 'declined' : kind === 'available' ? 'available' : 'approved',
       ...(req.type === 'series' ? { seasons: this.seasonsOf(req) } : {}),
       is4k: req.is4k,
     };
-    const base = { instanceName: this.instanceName, timestamp: this.now().toISOString(), media: this.mediaInfo(req) };
+    const base = { ...this.base(), media: this.mediaInfo(req) };
     let event: NotificationEvent;
     switch (kind) {
       case 'created':
@@ -132,7 +149,7 @@ export class RequestNotifier {
       ...(kind === 'created' ? {} : { change: kind }),
     };
     const media = this.mediaInfoFor(issue.mediaType, issue.tmdbId, issue.title, issue.year, issue.poster);
-    const base = { instanceName: this.instanceName, timestamp: this.now().toISOString(), media };
+    const base = { ...this.base(), media };
     const event: NotificationEvent =
       kind === 'created' ? { ...base, type: 'issueCreated', issue: info } : { ...base, type: 'issueUpdated', issue: info };
 
@@ -142,6 +159,13 @@ export class RequestNotifier {
       audience.push(creator);
     }
     await this.fanOut(audience, event, kind === 'created' ? 'issueCreated' : 'issueUpdated');
+  }
+
+  /** The admin digest: system connections only (their onRequestCreated/onIssueCreated flags decide). */
+  async digest(content: Omit<RequestsDigestEvent, 'instanceName' | 'timestamp' | 'applicationUrl'>): Promise<void> {
+    if (!this.systemDispatch) return;
+    const event: RequestsDigestEvent = { ...this.base(), ...content };
+    await this.systemDispatch(event).catch((err: unknown) => this.log?.warn({ err }, 'digest dispatch failed'));
   }
 
   /** Sends a test through each enabled personal agent of `userId`. */

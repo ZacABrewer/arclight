@@ -6,6 +6,7 @@ import { FilterBar, Input, PageHeader, Segmented, Select } from '../../arclight/
 import { DiscoverGrid } from './discover-kit.js';
 import { useDiscoverGenres } from '../../hooks/requests.js';
 import { requestKeys } from '../../hooks/request-keys.js';
+import { t } from '../../i18n/index.js';
 
 export interface DiscoverFilters {
   sortBy: string;
@@ -55,14 +56,14 @@ export function buildDiscoverQuery(f: DiscoverFilters): Omit<DiscoverQuery, 'pag
 export function sortLabel(sort: string): string {
   const [field = '', dir] = sort.split('.');
   const names: Record<string, string> = {
-    popularity: 'Popularity',
-    vote_average: 'Rating',
-    vote_count: 'Votes',
-    primary_release_date: 'Release date',
-    first_air_date: 'First air date',
-    revenue: 'Revenue',
-    original_title: 'Title',
-    original_name: 'Title',
+    popularity: t('discover.browse.sortPopularity'),
+    vote_average: t('discover.browse.sortRating'),
+    vote_count: t('discover.browse.sortVotes'),
+    primary_release_date: t('discover.browse.releaseDate'),
+    first_air_date: t('discover.browse.firstAirDate'),
+    revenue: t('discover.browse.sortRevenue'),
+    original_title: t('common.title'),
+    original_name: t('common.title'),
   };
   return `${names[field] ?? field} ${dir === 'asc' ? '↑' : '↓'}`;
 }
@@ -94,33 +95,33 @@ function DiscoverBrowse({ kind }: { kind: DiscoverKind }) {
 
   return (
     <>
-      <PageHeader index="02" title={kind === 'movie' ? 'Discover movies' : 'Discover series'}>
+      <PageHeader index="02" title={kind === 'movie' ? t('discover.browse.discoverMovies') : t('discover.browse.discoverSeries')}>
         <Segmented
-          aria-label="Media type"
+          aria-label={t('common.mediaType')}
           value={kind}
           onChange={(k) => void navigate({ to: k === 'movie' ? '/discover/movies' : '/discover/tv' })}
           options={[
-            { value: 'movie', label: 'Movies' },
-            { value: 'tv', label: 'Series' },
+            { value: 'movie', label: t('common.movies') },
+            { value: 'tv', label: t('common.series') },
           ]}
         />
       </PageHeader>
       <FilterBar onClear={() => setFilters(EMPTY_FILTERS)} activeCount={activeDiscoverFilters(filters)}>
-        <Select aria-label="Sort" value={filters.sortBy} onChange={set('sortBy')} options={sorts.map((s) => ({ value: s, label: sortLabel(s) }))} />
-        <Select aria-label="Genre" value={filters.genre} onChange={set('genre')}>
-          <option value="">Any genre</option>
+        <Select aria-label={t('discover.browse.sort')} value={filters.sortBy} onChange={set('sortBy')} options={sorts.map((s) => ({ value: s, label: sortLabel(s) }))} />
+        <Select aria-label={t('discover.browse.genre')} value={filters.genre} onChange={set('genre')}>
+          <option value="">{t('discover.browse.anyGenre')}</option>
           {(genres.data ?? []).map((g) => (
             <option key={g.id} value={String(g.id)}>
               {g.name}
             </option>
           ))}
         </Select>
-        <Input aria-label="Year from" mono inputMode="numeric" placeholder="1990" style={{ width: 90 }} value={filters.yearFrom} onChange={set('yearFrom')} />
-        <Input aria-label="Year to" mono inputMode="numeric" placeholder="2026" style={{ width: 90 }} value={filters.yearTo} onChange={set('yearTo')} />
-        <Input aria-label="Min rating" mono type="number" min={0} max={10} step={0.5} placeholder="Rating" style={{ width: 96 }} value={filters.minRating} onChange={set('minRating')} />
-        <Input aria-label="Language" mono placeholder="en" maxLength={3} style={{ width: 70 }} value={filters.language} onChange={set('language')} />
-        <Input aria-label="Runtime min" mono type="number" min={0} placeholder="Min" end="min" style={{ width: 110 }} value={filters.runtimeMin} onChange={set('runtimeMin')} />
-        <Input aria-label="Runtime max" mono type="number" min={0} placeholder="Max" end="min" style={{ width: 110 }} value={filters.runtimeMax} onChange={set('runtimeMax')} />
+        <Input aria-label={t('discover.browse.yearFrom')} mono inputMode="numeric" placeholder="1990" style={{ width: 90 }} value={filters.yearFrom} onChange={set('yearFrom')} />
+        <Input aria-label={t('discover.browse.yearTo')} mono inputMode="numeric" placeholder="2026" style={{ width: 90 }} value={filters.yearTo} onChange={set('yearTo')} />
+        <Input aria-label={t('discover.browse.minRating')} mono type="number" min={0} max={10} step={0.5} placeholder={t('discover.browse.rating')} style={{ width: 96 }} value={filters.minRating} onChange={set('minRating')} />
+        <Input aria-label={t('common.language')} mono placeholder={t('discover.browse.en')} maxLength={3} style={{ width: 70 }} value={filters.language} onChange={set('language')} />
+        <Input aria-label={t('discover.browse.runtimeMin')} mono type="number" min={0} placeholder={t('discover.browse.min')} end="min" style={{ width: 110 }} value={filters.runtimeMin} onChange={set('runtimeMin')} />
+        <Input aria-label={t('discover.browse.runtimeMax')} mono type="number" min={0} placeholder={t('common.max')} end="min" style={{ width: 110 }} value={filters.runtimeMax} onChange={set('runtimeMax')} />
       </FilterBar>
       <div style={{ marginTop: 24 }}>
         <DiscoverGrid queryKey={requestKeys.discover.list(kind, query)} fetchPage={fetchPage} />

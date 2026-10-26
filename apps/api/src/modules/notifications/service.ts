@@ -331,8 +331,29 @@ export function wantsEvent(row: Pick<NotificationRow, NotificationTrigger | 'inc
       return row.onApplicationUpdate;
     case 'manualInteractionRequired':
       return row.onManualInteractionRequired;
+    case 'requestCreated':
+      return row.onRequestCreated;
+    case 'requestApproved':
+      return row.onRequestApproved;
+    case 'requestDeclined':
+      return row.onRequestDeclined;
+    case 'requestAvailable':
+      return row.onRequestAvailable;
+    case 'issueCreated':
+      return row.onIssueCreated;
+    case 'issueUpdated':
+      return row.onIssueUpdated;
+    case 'retention':
+      // Retention removes movies and series, so it follows the delete flags.
+      return row.onMovieDelete || row.onSeriesDelete;
+    case 'fileTranscoded':
+      // The file on disk changed name/format in place, like a rename.
+      return row.onRename;
+    case 'requestsDigest':
+      // The daily digest goes wherever admins hear about new requests or issues.
+      return row.onRequestCreated || row.onIssueCreated;
     default:
-      // Subtitle and request events have no connection flags yet.
+      // Subtitle events have no connection flags yet.
       return false;
   }
 }

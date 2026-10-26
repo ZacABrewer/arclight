@@ -116,6 +116,12 @@ export interface SearcherOptions {
   originalFormat?: boolean | undefined;
   utf8?: boolean | undefined;
   throttle?: ThrottleTracker | ThrottleOptions | undefined;
+  /**
+   * Providers flagged `onlyWhenNoOtherResult` (e.g. Whisper): searched after the others, and
+   * only for wanted languages where no other provider produced a candidate reaching the
+   * automatic minimum score.
+   */
+  fallbackProviders?: readonly ProviderKind[] | undefined;
 }
 
 export interface SearchOutcome {
@@ -219,15 +225,34 @@ export class SubtitleSearcher {
       if (s.ok) eligible.push(p);
       else outcome.skipped.push({ provider: p.kind, reason: s.reason });
     }
-    let lists: SubtitleCandidate[][];
-    if (this.opts.concurrent ?? true) {
-      lists = await Promise.all(eligible.map((p) => this.searchProvider(p, query, outcome)));
-    } else {
-      lists = [];
-      for (const p of eligible) lists.push(await this.searchProvider(p, query, outcome));
-    }
+    const fallbackKinds = new Set(this.opts.fallbackProviders ?? []);
+    const primary = eligible.filter((p) => !fallbackKinds.has(p.kind));
+    const fallback = eligible.filter((p) => fallbackKinds.has(p.kind));
     const seen = new Set<string>();
     const scored: ScoredCandidate[] = [];
+    this.collect(query, await this.searchAll(primary, query, outcome), seen, scored);
+    if (fallback.length > 0) {
+      const min = this.minScore(query.mediaType);
+      const uncovered = query.languages.filter((w) => selectCandidates(query, scored, w, { minScore: min }).length === 0);
+      if (uncovered.length > 0) {
+        const narrowed: SubtitleQuery = { ...query, languages: uncovered };
+        this.collect(narrowed, await this.searchAll(fallback, narrowed, outcome), seen, scored);
+      } else {
+        for (const p of fallback) outcome.skipped.push({ provider: p.kind, reason: 'other providers have results' });
+      }
+    }
+    outcome.candidates = sortCandidates(scored);
+    return outcome;
+  }
+
+  private async searchAll(providers: readonly SubtitleProvider[], query: SubtitleQuery, outcome: SearchOutcome): Promise<SubtitleCandidate[][]> {
+    if (this.opts.concurrent ?? true) return Promise.all(providers.map((p) => this.searchProvider(p, query, outcome)));
+    const lists: SubtitleCandidate[][] = [];
+    for (const p of providers) lists.push(await this.searchProvider(p, query, outcome));
+    return lists;
+  }
+
+  private collect(query: SubtitleQuery, lists: SubtitleCandidate[][], seen: Set<string>, scored: ScoredCandidate[]): void {
     for (const list of lists) {
       for (const c of list) {
         const key = `${c.provider}\u0000${c.id}`;
@@ -240,8 +265,6 @@ export class SubtitleSearcher {
         scored.push(scoreCandidate(query, c, wanted));
       }
     }
-    outcome.candidates = sortCandidates(scored);
-    return outcome;
   }
 
   /** Manual search rows (R12): no minimum, HI hidden for excluded languages. */

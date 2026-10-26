@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Input, cx } from '../arclight/index.js';
 import './pickers.css';
+import { t } from '../i18n/index.js';
 
 export interface EntityOption {
   id: number;
@@ -31,7 +32,7 @@ export function filterOptions(options: readonly EntityOption[], query: string, l
 }
 
 /** A searchable single-select dropdown (series / movie pickers), drawn as an Arclight select menu. */
-export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€¦', disabled = false, limit = 50, ...aria }: EntityPickerProps) {
+export function EntityPicker({ options, value, onChange, placeholder = t('components.entityPicker.choose'), disabled = false, limit = 50, ...aria }: EntityPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
@@ -96,8 +97,8 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
             aria-expanded="true"
             aria-controls={listId}
             aria-activedescendant={matches[active] ? `${listId}-${matches[active].id}` : undefined}
-            aria-label={`Search ${aria['aria-label']}`}
-            placeholder="Searchâ€¦"
+            aria-label={t('components.entityPicker.searchValue', { value: aria['aria-label'] })}
+            placeholder={t('components.entityPicker.search')}
             value={query}
             onChange={(e) => {
               setQuery(e.currentTarget.value);
@@ -140,7 +141,7 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
                 {o.detail ? <span className="mt-entity__detail"> {o.detail}</span> : null}
               </li>
             ))}
-            {matches.length === 0 ? <li className="mt-entity__none">No matches</li> : null}
+            {matches.length === 0 ? <li className="mt-entity__none">{t('components.entityPicker.noMatches')}</li> : null}
           </ul>
         </div>
       ) : null}

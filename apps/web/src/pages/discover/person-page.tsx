@@ -4,6 +4,7 @@ import { KeyValue, Poster, SectionHead, Skeleton, type KeyValueItem } from '../.
 import { QueryError } from '../../components/media/media-kit.js';
 import { usePerson } from '../../hooks/requests.js';
 import { DiscoverCard } from './discover-kit.js';
+import { t } from '../../i18n/index.js';
 
 const route = getRouteApi('/discover/person/$id');
 
@@ -23,34 +24,34 @@ export function PersonPage() {
   const { id } = route.useParams();
   const person = usePerson(Number(id));
   if (person.isPending) return <Skeleton lines={6} />;
-  if (person.isError) return <QueryError error={person.error} title="Could not load this person" onRetry={() => void person.refetch()} />;
+  if (person.isError) return <QueryError error={person.error} title={t('discover.person.couldNotLoadThisPerson')} onRetry={() => void person.refetch()} />;
   const p = person.data;
   const cast = sortCredits(p.cast);
   const crew = sortCredits(p.crew);
   const facts: KeyValueItem[] = [
-    { label: 'Known for', value: p.knownForDepartment ?? '—', mono: false },
-    { label: 'Born', value: p.birthday ?? '—' },
-    { label: 'Place of birth', value: p.placeOfBirth ?? '—', mono: false },
-    ...(p.deathday ? [{ label: 'Died', value: p.deathday }] : []),
+    { label: t('discover.person.knownFor'), value: p.knownForDepartment ?? '—', mono: false },
+    { label: t('discover.person.born'), value: p.birthday ?? '—' },
+    { label: t('discover.person.placeOfBirth'), value: p.placeOfBirth ?? '—', mono: false },
+    ...(p.deathday ? [{ label: t('discover.person.died'), value: p.deathday }] : []),
   ];
 
   return (
     <div className="mk-stack" style={{ gap: 40 }}>
-      <section className="mk-hero__grid" aria-label="Person" style={{ gridTemplateColumns: '208px minmax(0, 1fr)' }}>
+      <section className="mk-hero__grid" aria-label={t('discover.person.person')} style={{ gridTemplateColumns: '208px minmax(0, 1fr)' }}>
         <Poster src={p.profileUrl} title={p.name} className="mk-headshot mk-hero__poster" />
         <div className="mk-hero__body">
           <div className="mk-crumb">
-            <Link to="/discover">Discover</Link> / People
+            <Link to="/discover">{t('common.discover')}</Link> {t('discover.person.people')}
           </div>
           <h1 className="al-title-xl" style={{ margin: 0 }}>
             {p.name}
           </h1>
           <KeyValue layout="grid" columns={facts.length} items={facts} />
-          <p className="mk-hero__overview">{p.biography || 'No biography on TMDB.'}</p>
+          <p className="mk-hero__overview">{p.biography || t('discover.person.noBiographyOnTmdb')}</p>
         </div>
       </section>
-      {cast.length > 0 ? <Credits title="Appearances" credits={cast} sub={(c) => c.character} /> : null}
-      {crew.length > 0 ? <Credits title="Crew" credits={crew} sub={(c) => c.job} /> : null}
+      {cast.length > 0 ? <Credits title={t('discover.person.appearances')} credits={cast} sub={(c) => c.character} /> : null}
+      {crew.length > 0 ? <Credits title={t('discover.person.crew')} credits={crew} sub={(c) => c.job} /> : null}
     </div>
   );
 }

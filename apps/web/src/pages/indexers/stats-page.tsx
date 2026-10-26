@@ -5,8 +5,8 @@ import { EmptyState, ErrorBlock, KeyValue, PageHeader, Pane, Select, Skeleton, T
 import { useIndexerStats } from '../../hooks/indexers.js';
 import { areaPath, axisTicks, barLayout, failureRate, linePath, seriesMax, type DayMetric } from './stats-model.js';
 import './stats.css';
+import { t } from '../../i18n/index.js';
 
-const TITLE = 'Indexer Stats';
 
 // Chart geometry (viewBox units). Plot area sits inside the margins; axes and labels outside.
 const W = 640;
@@ -26,21 +26,21 @@ export const CHART = {
 } as const;
 
 const LINES: { metric: DayMetric; label: string; color: string; dash?: string }[] = [
-  { metric: 'queries', label: 'Queries', color: CHART.stroke },
-  { metric: 'grabs', label: 'Grabs', color: CHART.stroke, dash: '4 3' },
-  { metric: 'failures', label: 'Failures', color: 'var(--al-danger)', dash: '1 3' },
+  { metric: 'queries', get label() { return t('indexers.stats.queries'); }, color: CHART.stroke },
+  { metric: 'grabs', get label() { return t('indexers.stats.grabs'); }, color: CHART.stroke, dash: '4 3' },
+  { metric: 'failures', get label() { return t('indexers.stats.failures'); }, color: 'var(--al-danger)', dash: '1 3' },
 ];
 
 function YAxis({ max }: { max: number }) {
   return (
     <g className="mt-chart__axis" aria-hidden="true">
-      {axisTicks(max).map((t) => {
-        const y = M.top + PH - (t / Math.max(1, max)) * PH;
+      {axisTicks(max).map((item) => {
+        const y = M.top + PH - (item / Math.max(1, max)) * PH;
         return (
-          <g key={t}>
-            <line x1={M.left} x2={M.left + PW} y1={y} y2={y} stroke={CHART.axis} strokeWidth={CHART.strokeWidth} strokeOpacity={t === 0 ? 1 : 0.4} />
+          <g key={item}>
+            <line x1={M.left} x2={M.left + PW} y1={y} y2={y} stroke={CHART.axis} strokeWidth={CHART.strokeWidth} strokeOpacity={item === 0 ? 1 : 0.4} />
             <text x={M.left - 8} y={y + 4} textAnchor="end" fontSize={11} fontFamily={CHART.font} fill={CHART.label}>
-              {t}
+              {item}
             </text>
           </g>
         );
@@ -59,7 +59,7 @@ function QueriesBarChart({ entries }: { entries: readonly IndexerStatsEntry[] })
     12,
   );
   return (
-    <svg viewBox={`0 0 ${W} ${H}`} className="mt-chart" role="img" aria-label="Queries per indexer">
+    <svg viewBox={`0 0 ${W} ${H}`} className="mt-chart" role="img" aria-label={t('indexers.stats.queriesPerIndexer')}>
       <YAxis max={max} />
       <g transform={`translate(${M.left} ${M.top})`}>
         {bars.map((b) => (
@@ -101,7 +101,7 @@ function DailyLineChart({ days }: { days: readonly IndexerStatsDay[] }) {
   const last = days[days.length - 1];
   return (
     <figure className="mt-chart-figure">
-      <svg viewBox={`0 0 ${W} ${H}`} className="mt-chart" role="img" aria-label="Daily activity">
+      <svg viewBox={`0 0 ${W} ${H}`} className="mt-chart" role="img" aria-label={t('indexers.stats.dailyActivity')}>
         <YAxis max={max} />
         <g transform={`translate(${M.left} ${M.top})`}>
           <path className="mt-chart__area" d={areaPath(queries, PW, PH, days.length)} fill={CHART.stroke} fillOpacity={CHART.fillOpacity} stroke="none" />
@@ -139,7 +139,7 @@ function DailyLineChart({ days }: { days: readonly IndexerStatsDay[] }) {
           </span>
         ))}
         <span className="mt-chart__key">
-          max <span className="al-num">{max}</span>/day
+          {t('indexers.stats.max')} <span className="al-num">{max}</span>/day
         </span>
       </figcaption>
     </figure>
@@ -149,12 +149,12 @@ function DailyLineChart({ days }: { days: readonly IndexerStatsDay[] }) {
 const ms = (v: number | null) => (v === null ? '—' : `${v} ms`);
 
 const columns: Column<IndexerStatsEntry>[] = [
-  { key: 'name', header: 'Indexer', sortValue: (e) => e.indexerName, cell: (e) => e.indexerName },
-  { key: 'queries', header: 'Queries', align: 'right', mono: true, sortValue: (e) => e.queries, cell: (e) => e.queries },
-  { key: 'grabs', header: 'Grabs', align: 'right', mono: true, sortValue: (e) => e.grabs, cell: (e) => e.grabs },
-  { key: 'failures', header: 'Failures', align: 'right', mono: true, sortValue: (e) => e.failures, cell: (e) => e.failures },
-  { key: 'rate', header: 'Failure rate', align: 'right', mono: true, cell: (e) => failureRate(e) },
-  { key: 'avg', header: 'Avg response', align: 'right', mono: true, sortValue: (e) => e.avgResponseMs ?? -1, cell: (e) => ms(e.avgResponseMs) },
+  { key: 'name', get header() { return t('common.indexer'); }, sortValue: (e) => e.indexerName, cell: (e) => e.indexerName },
+  { key: 'queries', get header() { return t('indexers.stats.queries'); }, align: 'right', mono: true, sortValue: (e) => e.queries, cell: (e) => e.queries },
+  { key: 'grabs', get header() { return t('indexers.stats.grabs'); }, align: 'right', mono: true, sortValue: (e) => e.grabs, cell: (e) => e.grabs },
+  { key: 'failures', get header() { return t('indexers.stats.failures'); }, align: 'right', mono: true, sortValue: (e) => e.failures, cell: (e) => e.failures },
+  { key: 'rate', get header() { return t('indexers.stats.failureRate'); }, align: 'right', mono: true, cell: (e) => failureRate(e) },
+  { key: 'avg', get header() { return t('indexers.stats.avgResponse'); }, align: 'right', mono: true, sortValue: (e) => e.avgResponseMs ?? -1, cell: (e) => ms(e.avgResponseMs) },
 ];
 
 /** Indexers → Stats: queries, grabs, failures and response times per indexer. */
@@ -163,20 +163,20 @@ export function IndexerStatsPage() {
   const stats = useIndexerStats(days);
 
   useEffect(() => {
-    document.title = `${TITLE} · Arclight`;
+    document.title = t('indexers.stats.titleArclight', { title: t('indexers.stats.title') });
   }, []);
 
   return (
     <>
-      <PageHeader index="08" title={TITLE}>
+      <PageHeader index="08" title={t('indexers.stats.title')}>
         <Select
-          aria-label="Window"
+          aria-label={t('indexers.stats.window')}
           value={String(days)}
           onChange={(e) => setDays(Number(e.currentTarget.value))}
           options={[
-            { value: '7', label: 'Last 7 days' },
-            { value: '30', label: 'Last 30 days' },
-            { value: '90', label: 'Last 90 days' },
+            { value: '7', label: t('indexers.stats.last7Days') },
+            { value: '30', label: t('indexers.stats.last30Days') },
+            { value: '90', label: t('indexers.stats.last90Days') },
           ]}
         />
       </PageHeader>
@@ -185,36 +185,36 @@ export function IndexerStatsPage() {
           <Skeleton lines={4} />
         </Pane>
       ) : stats.isError ? (
-        <ErrorBlock title="Indexer stats did not load" onRetry={() => void stats.refetch()}>
+        <ErrorBlock title={t('indexers.stats.indexerStatsDidNotLoad')} onRetry={() => void stats.refetch()}>
           {errorMessage(stats.error)}
         </ErrorBlock>
       ) : stats.data.indexers.length === 0 ? (
-        <EmptyState title="No indexer activity yet">Stats appear once indexers have been queried.</EmptyState>
+        <EmptyState title={t('indexers.stats.noIndexerActivityYet')}>{t('indexers.stats.statsAppearOnceIndexersHave')}</EmptyState>
       ) : (
         <div className="mt-stats">
-          <Pane title="Totals" aria-label="Totals">
+          <Pane title={t('indexers.stats.totals')} aria-label={t('indexers.stats.totals')}>
             <KeyValue
               layout="grid"
               columns={4}
               className="mt-stats__totals"
               items={[
-                { label: 'Queries', value: stats.data.totals.queries },
-                { label: 'Grabs', value: stats.data.totals.grabs },
-                { label: 'Failures', value: `${stats.data.totals.failures} · ${failureRate(stats.data.totals)}` },
-                { label: 'Avg response', value: ms(stats.data.totals.avgResponseMs) },
+                { label: t('indexers.stats.queries'), value: stats.data.totals.queries },
+                { label: t('indexers.stats.grabs'), value: stats.data.totals.grabs },
+                { label: t('indexers.stats.failures'), value: `${stats.data.totals.failures} · ${failureRate(stats.data.totals)}` },
+                { label: t('indexers.stats.avgResponse'), value: ms(stats.data.totals.avgResponseMs) },
               ]}
             />
           </Pane>
           <div className="mt-stats__charts">
-            <Pane title="Queries per indexer">
+            <Pane title={t('indexers.stats.queriesPerIndexer')}>
               <QueriesBarChart entries={stats.data.indexers} />
             </Pane>
-            <Pane title="Daily activity">
+            <Pane title={t('indexers.stats.dailyActivity')}>
               <DailyLineChart days={stats.data.totals.byDay} />
             </Pane>
           </div>
-          <Pane flush title="Per indexer">
-            <Table caption="Indexer stats" columns={columns} rows={stats.data.indexers} rowKey={(e) => String(e.indexerId)} defaultSort={{ key: 'queries', direction: 'desc' }} />
+          <Pane flush title={t('indexers.stats.perIndexer')}>
+            <Table caption={t('indexers.stats.indexerStats')} columns={columns} rows={stats.data.indexers} rowKey={(e) => String(e.indexerId)} defaultSort={{ key: 'queries', direction: 'desc' }} />
           </Pane>
         </div>
       )}

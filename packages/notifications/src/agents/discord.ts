@@ -22,6 +22,7 @@ export interface DiscordEmbed {
   fields: Array<{ name: string; value: string; inline: boolean }>;
   thumbnail?: { url: string };
   image?: { url: string };
+  footer?: { text: string; icon_url?: string };
   timestamp: string;
 }
 
@@ -71,6 +72,14 @@ export class DiscordAgent extends BaseAgent {
     } else {
       if (formatted.posterUrl) embed.thumbnail = { url: formatted.posterUrl };
       embed.fields = formatted.fields.map((f) => ({ name: f.name, value: clip(f.value, 1024), inline: f.inline ?? false }));
+    }
+    if (formatted.actions && formatted.actions.length > 0) {
+      // Webhook messages cannot carry link buttons, so the deep links go in a field.
+      embed.fields.push({ name: 'Actions', value: clip(formatted.actions.map((a) => `[${a.label}](${a.url})`).join(' \u00b7 '), 1024), inline: false });
+    }
+    if (formatted.person) {
+      embed.footer = { text: `Requested by ${formatted.person.name}` };
+      if (formatted.person.avatarUrl && /^https?:\/\//.test(formatted.person.avatarUrl)) embed.footer.icon_url = formatted.person.avatarUrl;
     }
     embed.fields = embed.fields.filter((f) => f.value.length > 0).slice(0, 25);
 

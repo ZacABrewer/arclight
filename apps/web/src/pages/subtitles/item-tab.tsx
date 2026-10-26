@@ -37,9 +37,12 @@ import {
 } from '../../hooks/subtitles.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { MissingChip, SubtitleChip, refLabel, useLanguageName } from './subtitle-ui.js';
+import { CheckSyncButton, SyncBadge } from './sync-ui.js';
+import { t } from '../../i18n/index.js';
 
 // Per-item Subtitles tab for series and movie details (handoff §8): per media file, a table of
-// languages (on disk, embedded, still missing) with Search / Upload / Delete / Sync actions.
+// languages (on disk, embedded, still missing) with Search / Upload / Delete / Sync actions and
+// the sync-quality badge (score, offset, drift) with a per-row Check sync.
 
 /** Bitmap codecs cannot be extracted to a text file. */
 const IMAGE_CODECS = new Set(['hdmv_pgs_subtitle', 'pgs', 'pgssub', 'dvd_subtitle', 'vobsub', 'dvdsub', 'dvb_subtitle', 'xsub']);
@@ -99,7 +102,7 @@ export function SubtitlesTab({ scope, episodes }: { scope: { seriesId: number } 
     return [...m.entries()].sort(([a], [b]) => (b ?? -1) - (a ?? -1));
   }, [files.data]);
 
-  if (pending) return <PendingApiNotice what="subtitles" />;
+  if (pending) return <PendingApiNotice what={t('subtitles.itemTab.subtitles')} />;
   if (files.isPending)
     return (
       <Pane>
@@ -108,12 +111,12 @@ export function SubtitlesTab({ scope, episodes }: { scope: { seriesId: number } 
     );
   if (files.isError)
     return (
-      <ErrorBlock title="Subtitles did not load" onRetry={() => void files.refetch()}>
+      <ErrorBlock title={t('subtitles.itemTab.subtitlesDidNotLoad')} onRetry={() => void files.refetch()}>
         {errorMessage(files.error)}
       </ErrorBlock>
     );
 
-  const notifySearch = (message: string) => toast.push({ tone: 'info', title: 'Subtitle search finished', message });
+  const notifySearch = (message: string) => toast.push({ tone: 'info', title: t('subtitles.itemTab.subtitleSearchFinished'), message });
   const ctx: FileContext = {
     episodes,
     onManual: (file, label) => setManual({ file, label }),
@@ -123,11 +126,11 @@ export function SubtitlesTab({ scope, episodes }: { scope: { seriesId: number } 
     searching: search.isPending ? (search.variables.mediaFileId ?? null) : null,
   };
 
-  const seasonLabel = (season: number) => (season === 0 ? 'Specials' : `Season ${season}`);
+  const seasonLabel = (season: number) => (season === 0 ? t('common.specials') : t('subtitles.itemTab.seasonSeason', { season }));
 
   return (
     <Pane
-      title="Files"
+      title={t('common.files')}
       flush
       actions={
         <>
@@ -138,16 +141,16 @@ export function SubtitlesTab({ scope, episodes }: { scope: { seriesId: number } 
             loading={search.isPending && search.variables.mediaFileId === undefined}
             onClick={() => search.mutate(scope, { onSuccess: (r) => notifySearch(r.message) })}
           >
-            Search all
+            {t('subtitles.itemTab.searchAll')}
           </Button>
           <Button size="sm" variant="ghost" icon={<Icon name="refresh" />} loading={scan.isPending} onClick={() => scan.mutate(scope as SubtitleScope)}>
-            Rescan all
+            {t('subtitles.itemTab.rescanAll')}
           </Button>
         </>
       }
     >
       {files.data.length === 0 ? (
-        <EmptyState title="No files">Subtitles are tracked once a video file is imported.</EmptyState>
+        <EmptyState title={t('subtitles.itemTab.noFiles')}>{t('subtitles.itemTab.subtitlesAreTrackedOnceA')}</EmptyState>
       ) : groups.length === 1 && groups[0]![0] === null ? (
         groups[0]![1].map((f) => <FileBlock key={f.mediaFileId} file={f} ctx={ctx} />)
       ) : (
@@ -155,15 +158,15 @@ export function SubtitlesTab({ scope, episodes }: { scope: { seriesId: number } 
           {groups.map(([season, list], i) => (
             <AccordionItem
               key={String(season)}
-              title={season === null ? 'Files' : seasonLabel(season)}
+              title={season === null ? t('common.files') : seasonLabel(season)}
               meta={
                 <span className="al-num">
-                  {list.length} {list.length === 1 ? 'file' : 'files'}
+                  {t('subtitles.itemTab.files', { listCount: list.length })}
                 </span>
               }
               defaultOpen={i === 0}
             >
-              <section aria-label={season === null ? 'Files' : seasonLabel(season)}>
+              <section aria-label={season === null ? t('common.files') : seasonLabel(season)}>
                 {list.map((f) => (
                   <FileBlock key={f.mediaFileId} file={f} ctx={ctx} />
                 ))}
@@ -195,7 +198,7 @@ function FileBlock({ file, ctx }: { file: MediaFileSubtitles; ctx: FileContext }
   const columns: Column<LanguageRow>[] = [
     {
       key: 'language',
-      header: 'Language',
+      header: t('common.language'),
       cell: (r) =>
         r.kind === 'missing' ? (
           <span className="sub-lang">
@@ -209,29 +212,35 @@ function FileBlock({ file, ctx }: { file: MediaFileSubtitles; ctx: FileContext }
     },
     {
       key: 'state',
-      header: 'State',
+      header: t('common.state'),
       cell: (r) =>
         r.kind === 'missing' ? (
-          <Chip tone="warn">Missing</Chip>
+          <Chip tone="warn">{t('status.missing')}</Chip>
         ) : r.kind === 'embedded' ? (
           <span className="sub-state">
-            Embedded{r.subtitle.codec ? <span className="sub-code">{r.subtitle.codec}</span> : null}
+            {t('subtitles.itemTab.embedded')}{r.subtitle.codec ? <span className="sub-code">{r.subtitle.codec}</span> : null}
           </span>
         ) : (
-          <span className="sub-state">External</span>
+          <span className="sub-state">{t('subtitles.itemTab.external')}</span>
         ),
     },
-    { key: 'provider', header: 'Provider', muted: true, cell: (r) => (r.kind !== 'missing' && r.subtitle.provider) || '—' },
+    { key: 'provider', header: t('common.provider'), muted: true, cell: (r) => (r.kind !== 'missing' && r.subtitle.provider) || '—' },
     {
       key: 'score',
-      header: 'Score',
+      header: t('common.score'),
       align: 'right',
       mono: true,
       cell: (r) => (r.kind !== 'missing' && r.subtitle.percent !== null ? `${Math.round(r.subtitle.percent)}%` : '—'),
     },
     {
+      key: 'sync',
+      header: t('subtitles.sync.syncColumn'),
+      align: 'right',
+      cell: (r) => (r.kind === 'missing' ? <span className="sub-none">—</span> : <SyncBadge sync={r.subtitle} label={refLabel(r.subtitle, name)} />),
+    },
+    {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) =>
         r.kind === 'missing' ? (
@@ -239,11 +248,11 @@ function FileBlock({ file, ctx }: { file: MediaFileSubtitles; ctx: FileContext }
             <Button
               size="sm"
               variant="secondary"
-              aria-label={`Search ${refLabel(r.missing, name)} subtitle for ${label}`}
+              aria-label={t('subtitles.itemTab.searchReflabelSubtitleForLabel', { refLabel: refLabel(r.missing, name), label })}
               loading={ctx.searching === file.mediaFileId}
               onClick={() => ctx.onSearch(file)}
             >
-              Search
+              {t('common.search')}
             </Button>
           </span>
         ) : (
@@ -262,27 +271,27 @@ function FileBlock({ file, ctx }: { file: MediaFileSubtitles; ctx: FileContext }
           </span>
         </div>
         <div className="sub-actions">
-          <Button size="sm" variant="secondary" icon={<Icon name="search" />} aria-label={`Search subtitles ${label}`} loading={ctx.searching === file.mediaFileId} onClick={() => ctx.onSearch(file)}>
-            Search
+          <Button size="sm" variant="secondary" icon={<Icon name="search" />} aria-label={t('subtitles.itemTab.searchSubtitlesLabel', { label })} loading={ctx.searching === file.mediaFileId} onClick={() => ctx.onSearch(file)}>
+            {t('common.search')}
           </Button>
-          <Button size="sm" variant="secondary" aria-label={`Manual search ${label}`} onClick={() => ctx.onManual(file, label)}>
-            Manual search
+          <Button size="sm" variant="secondary" aria-label={t('subtitles.itemTab.manualSearchLabel', { label })} onClick={() => ctx.onManual(file, label)}>
+            {t('subtitles.itemTab.manualSearch')}
           </Button>
-          <Button size="sm" variant="secondary" icon={<Icon name="upload" />} aria-label={`Upload subtitle ${label}`} onClick={() => ctx.onUpload(file, label)}>
-            Upload
+          <Button size="sm" variant="secondary" icon={<Icon name="upload" />} aria-label={t('subtitles.itemTab.uploadSubtitleLabel', { label })} onClick={() => ctx.onUpload(file, label)}>
+            {t('common.upload')}
           </Button>
-          <Button size="sm" variant="ghost" icon={<Icon name="refresh" />} aria-label={`Rescan ${label}`} onClick={() => ctx.onRescan(file)}>
-            Rescan
+          <Button size="sm" variant="ghost" icon={<Icon name="refresh" />} aria-label={t('subtitles.itemTab.rescanLabel', { label })} onClick={() => ctx.onRescan(file)}>
+            {t('subtitles.itemTab.rescan')}
           </Button>
         </div>
       </div>
       <Table
-        caption={`Subtitle languages for ${label}`}
+        caption={t('subtitles.itemTab.subtitleLanguagesForLabel', { label })}
         columns={columns}
         rows={rows}
         rowKey={(r) => r.key}
         sortable={false}
-        empty={<EmptyState title="No subtitles">This file has no subtitles and its language profile asks for none.</EmptyState>}
+        empty={<EmptyState title={t('subtitles.itemTab.noSubtitles')}>{t('subtitles.itemTab.thisFileHasNoSubtitles')}</EmptyState>}
       />
     </div>
   );
@@ -303,8 +312,8 @@ function SubtitleActions({ subtitle }: { subtitle: SubtitleState }) {
   if (subtitle.embedded) {
     return isExtractable(subtitle) ? (
       <span className="sub-actions">
-        <Button size="sm" variant="secondary" aria-label={`Extract ${label} embedded subtitle`} loading={extract.isPending} onClick={() => extract.mutate(subtitle.id)}>
-          Extract
+        <Button size="sm" variant="secondary" aria-label={t('subtitles.itemTab.extractLabelEmbeddedSubtitle', { label })} loading={extract.isPending} onClick={() => extract.mutate(subtitle.id)}>
+          {t('subtitles.itemTab.extract')}
         </Button>
       </span>
     ) : (
@@ -317,28 +326,29 @@ function SubtitleActions({ subtitle }: { subtitle: SubtitleState }) {
       <Button
         size="sm"
         variant="secondary"
-        aria-label={`Sync ${label} subtitle`}
+        aria-label={t('subtitles.itemTab.syncLabelSubtitle', { label })}
         loading={sync.isPending}
         onClick={() =>
           sync.mutate(subtitle.id, {
-            onSuccess: (r) => toast.push({ tone: r.ok ? 'ok' : 'warning', title: r.ok ? 'Subtitle synced' : 'Sync failed', message: r.message }),
+            onSuccess: (r) => toast.push({ tone: r.ok ? 'ok' : 'warning', title: r.ok ? t('subtitles.itemTab.subtitleSynced') : t('common.syncFailed'), message: r.message }),
           })
         }
       >
-        Sync
+        {t('subtitles.itemTab.sync')}
       </Button>
+      <CheckSyncButton subtitle={subtitle} label={label} />
       {subtitle.provider ? (
-        <Button size="sm" variant="ghost" aria-label={`Blacklist ${label} subtitle`} onClick={() => setConfirmBlacklist(true)}>
-          Blacklist
+        <Button size="sm" variant="ghost" aria-label={t('subtitles.itemTab.blacklistLabelSubtitle', { label })} onClick={() => setConfirmBlacklist(true)}>
+          {t('common.blacklist')}
         </Button>
       ) : null}
-      <Button size="sm" variant="danger" aria-label={`Delete ${label} subtitle`} onClick={() => setConfirmDelete(true)}>
-        Delete
+      <Button size="sm" variant="danger" aria-label={t('subtitles.itemTab.deleteLabelSubtitle', { label })} onClick={() => setConfirmDelete(true)}>
+        {t('common.delete')}
       </Button>
       <ConfirmDialog
         open={confirmDelete}
-        title={`Delete ${label} subtitle?`}
-        confirmLabel="Delete subtitle"
+        title={t('subtitles.itemTab.deleteLabelSubtitle2', { label })}
+        confirmLabel={t('subtitles.itemTab.deleteSubtitle')}
         onCancel={() => setConfirmDelete(false)}
         onConfirm={async () => {
           await remove.mutateAsync(subtitle.id);
@@ -346,20 +356,20 @@ function SubtitleActions({ subtitle }: { subtitle: SubtitleState }) {
         }}
       >
         <p>
-          The file <span className="al-num mt-break">{subtitle.path}</span> is removed from disk.
+          {t('subtitles.itemTab.theFile')} <span className="al-num mt-break">{subtitle.path}</span> {t('subtitles.itemTab.isRemovedFromDisk')}
         </p>
       </ConfirmDialog>
       <ConfirmDialog
         open={confirmBlacklist}
-        title={`Blacklist ${label} subtitle?`}
-        confirmLabel="Blacklist subtitle"
+        title={t('subtitles.itemTab.blacklistLabelSubtitle2', { label })}
+        confirmLabel={t('subtitles.itemTab.blacklistSubtitle')}
         onCancel={() => setConfirmBlacklist(false)}
         onConfirm={async () => {
           await blacklist.mutateAsync(subtitle.id);
           setConfirmBlacklist(false);
         }}
       >
-        <p>The subtitle is deleted, never downloaded again from {subtitle.provider}, and a replacement is searched for.</p>
+        <p>{t('subtitles.itemTab.theSubtitleIsDeletedNever', { provider: subtitle.provider })}</p>
       </ConfirmDialog>
     </span>
   );
@@ -382,22 +392,22 @@ export function ManualSearchModal({ file, label, onClose }: { file: MediaFileSub
   const languageOptions = [...new Set([...profileLanguages, ...file.missing.map((m) => m.language)])];
 
   const columns: Column<SubtitleSearchResult>[] = [
-    { key: 'provider', header: 'Provider', cell: (r) => r.provider },
-    { key: 'language', header: 'Language', cell: (r) => name(r.language) },
+    { key: 'provider', header: t('common.provider'), cell: (r) => r.provider },
+    { key: 'language', header: t('common.language'), cell: (r) => name(r.language) },
     {
       key: 'flags',
-      header: 'Flags',
+      header: t('subtitles.itemTab.flags'),
       cell: (r) => (
         <span className="sub-chips">
-          {r.forced ? <Chip tone="neutral">Forced</Chip> : null}
-          {r.hi ? <Chip tone="neutral">HI</Chip> : null}
-          {r.matches.includes('hash') ? <Chip tone="accent">Hash</Chip> : null}
+          {r.forced ? <Chip tone="neutral">{t('common.forced')}</Chip> : null}
+          {r.hi ? <Chip tone="neutral">{t('common.hi')}</Chip> : null}
+          {r.matches.includes('hash') ? <Chip tone="accent">{t('subtitles.itemTab.hash')}</Chip> : null}
         </span>
       ),
     },
     {
       key: 'score',
-      header: 'Score',
+      header: t('common.score'),
       align: 'right',
       mono: true,
       sortValue: (r) => r.percent,
@@ -405,7 +415,7 @@ export function ManualSearchModal({ file, label, onClose }: { file: MediaFileSub
     },
     {
       key: 'release',
-      header: 'Release',
+      header: t('common.release'),
       cell: (r) => (
         <span className="mt-break al-num" title={r.releaseInfo.join('\n')}>
           {r.releaseInfo[0] ?? '—'}
@@ -413,43 +423,43 @@ export function ManualSearchModal({ file, label, onClose }: { file: MediaFileSub
         </span>
       ),
     },
-    { key: 'uploader', header: 'Uploader', muted: true, cell: (r) => r.uploader ?? '—' },
+    { key: 'uploader', header: t('subtitles.itemTab.uploader'), muted: true, cell: (r) => r.uploader ?? '—' },
     {
       key: 'matches',
-      header: 'Matches',
+      header: t('subtitles.itemTab.matches'),
       muted: true,
-      cell: (r) => <span title={r.dontMatches.length ? `Does not match: ${r.dontMatches.join(', ')}` : undefined}>{r.matches.join(', ') || '—'}</span>,
+      cell: (r) => <span title={r.dontMatches.length ? t('subtitles.itemTab.doesNotMatchDontmatches', { dontMatches: r.dontMatches.join(', ') }) : undefined}>{r.matches.join(', ') || '—'}</span>,
     },
     {
       key: 'download',
-      header: <span className="al-sr-only">Download</span>,
+      header: <span className="al-sr-only">{t('common.download')}</span>,
       align: 'right',
       cell: (r) => (
         <Button
           size="sm"
           variant="secondary"
           icon={<Icon name="download" />}
-          aria-label={`Download ${r.provider} ${r.language} ${r.providerSubtitleId}`}
+          aria-label={t('subtitles.itemTab.downloadProviderLanguageProvidersubtitleid', { provider: r.provider, language: r.language, providerSubtitleId: r.providerSubtitleId })}
           loading={download.isPending && download.variables.key === r.key}
           onClick={() =>
             download.mutate(
               { mediaFileId: file.mediaFileId, key: r.key },
-              { onSuccess: () => toast.push({ tone: 'ok', title: `Downloaded ${name(r.language)} subtitle from ${r.provider}` }) },
+              { onSuccess: () => toast.push({ tone: 'ok', title: t('subtitles.itemTab.downloadedNameSubtitleFromProvider', { name: name(r.language), provider: r.provider }) }) },
             )
           }
         >
-          Download
+          {t('common.download')}
         </Button>
       ),
     },
   ];
 
   return (
-    <Modal open onClose={onClose} size={1100} title={`Manual search · ${label}`}>
+    <Modal open onClose={onClose} size={1100} title={t('subtitles.itemTab.manualSearchLabel2', { label })}>
       <div className="sub-toolbar">
-        <Field label="Language">
+        <Field label={t('common.language')}>
           <Select value={language} onChange={(e) => setLanguage(e.currentTarget.value)}>
-            <option value="">All profile languages</option>
+            <option value="">{t('subtitles.itemTab.allProfileLanguages')}</option>
             {languageOptions.map((code) => (
               <option key={code} value={code}>
                 {name(code)}
@@ -458,20 +468,20 @@ export function ManualSearchModal({ file, label, onClose }: { file: MediaFileSub
           </Select>
         </Field>
         <Button size="sm" variant="ghost" icon={<Icon name="refresh" />} loading={results.isFetching} onClick={() => void results.refetch()}>
-          Search again
+          {t('subtitles.itemTab.searchAgain')}
         </Button>
       </div>
       {results.isPending ? (
         <Skeleton lines={4} />
       ) : results.isError ? (
-        <ErrorBlock title="Subtitle search failed" onRetry={() => void results.refetch()}>
+        <ErrorBlock title={t('subtitles.itemTab.subtitleSearchFailed')} onRetry={() => void results.refetch()}>
           {errorMessage(results.error)}
         </ErrorBlock>
       ) : (
         <>
           {results.data.allThrottled ? (
             <p className="sub-notice" role="status">
-              Every provider is throttled right now. Try again later.
+              {t('subtitles.itemTab.everyProviderIsThrottledRight')}
             </p>
           ) : null}
           {results.data.errors.length ? (
@@ -480,12 +490,12 @@ export function ManualSearchModal({ file, label, onClose }: { file: MediaFileSub
             </p>
           ) : null}
           <Table
-            caption="Subtitle candidates"
+            caption={t('subtitles.itemTab.subtitleCandidates')}
             columns={columns}
             rows={results.data.results}
             rowKey={(r) => r.key}
             defaultSort={{ key: 'score', direction: 'desc' }}
-            empty={<EmptyState title="No subtitles found">No enabled provider returned a candidate.</EmptyState>}
+            empty={<EmptyState title={t('subtitles.itemTab.noSubtitlesFound')}>{t('subtitles.itemTab.noEnabledProviderReturnedA')}</EmptyState>}
           />
         </>
       )}
@@ -505,14 +515,14 @@ export function UploadSubtitleModal({ file, label, onClose }: { file: MediaFileS
   const [error, setError] = useState<string | null>(null);
 
   const submit = () => {
-    if (!picked) return setError('Choose a subtitle file');
-    if (!language) return setError('Choose a language');
+    if (!picked) return setError(t('subtitles.itemTab.chooseASubtitleFile'));
+    if (!language) return setError(t('subtitles.itemTab.chooseALanguage'));
     setError(null);
     upload.mutate(
       { mediaFileId: file.mediaFileId, language, forced, hi, file: picked },
       {
         onSuccess: () => {
-          toast.push({ tone: 'ok', title: 'Subtitle uploaded' });
+          toast.push({ tone: 'ok', title: t('subtitles.itemTab.subtitleUploaded') });
           onClose();
         },
         onError: (err) => setError(errorMessage(err)),
@@ -528,25 +538,25 @@ export function UploadSubtitleModal({ file, label, onClose }: { file: MediaFileS
       open
       onClose={onClose}
       size={560}
-      title={`Upload subtitle · ${label}`}
+      title={t('subtitles.itemTab.uploadSubtitleLabel2', { label })}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" icon={<Icon name="upload" />} loading={upload.isPending} onClick={submit}>
-            Upload
+            {t('common.upload')}
           </Button>
         </>
       }
     >
       <div className="sub-fields">
-        <Field label="Subtitle file">
+        <Field label={t('subtitles.itemTab.subtitleFile')}>
           <input className="sub-file-input" type="file" accept=".srt,.ass,.ssa,.vtt,.sub,.smi,.txt" onChange={(e) => setPicked(e.currentTarget.files?.[0] ?? null)} />
         </Field>
-        <Field label="Language">
+        <Field label={t('common.language')}>
           <Select value={language} onChange={(e) => setLanguage(e.currentTarget.value)}>
-            <option value="">Select a language…</option>
+            <option value="">{t('subtitles.itemTab.selectALanguage')}</option>
             {options.map((l) => (
               <option key={l.code} value={l.code}>
                 {l.name}
@@ -554,8 +564,8 @@ export function UploadSubtitleModal({ file, label, onClose }: { file: MediaFileS
             ))}
           </Select>
         </Field>
-        <Checkbox label="Forced" checked={forced} onChange={(e) => setForced(e.currentTarget.checked)} />
-        <Checkbox label="Hearing impaired" checked={hi} onChange={(e) => setHi(e.currentTarget.checked)} />
+        <Checkbox label={t('common.forced')} checked={forced} onChange={(e) => setForced(e.currentTarget.checked)} />
+        <Checkbox label={t('subtitles.itemTab.hearingImpaired')} checked={hi} onChange={(e) => setHi(e.currentTarget.checked)} />
       </div>
       {error ? (
         <p className="al-field__error" role="alert">

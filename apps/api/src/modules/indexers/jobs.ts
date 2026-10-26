@@ -1,9 +1,13 @@
+import type { DefinitionFeedSettings } from '@arclight/shared';
+import { hourlyCron } from '../../feeds.js';
 import type { Scheduler } from '../../scheduler.js';
+import type { DefinitionFeed } from './definition-feed.js';
 import type { IndexersService } from './service.js';
 
 export const RSS_SYNC_JOB = 'RssSync';
 export const INDEXER_STATUS_CHECK_JOB = 'IndexerStatusCheck';
 export const INDEXER_STATS_CLEANUP_JOB = 'IndexerStatsCleanup';
+export const DEFINITION_FEED_SYNC_JOB = 'IndexerDefinitionFeedSync';
 
 export const DEFAULT_RSS_SYNC_MINUTES = 15;
 
@@ -57,4 +61,27 @@ export function registerIndexerJobs(scheduler: Scheduler, service: IndexersServi
 /** Apply a changed RSS interval to the running scheduler. */
 export function rescheduleRssSync(scheduler: Scheduler, minutes: number): void {
   if (scheduler.has(RSS_SYNC_JOB)) scheduler.update(RSS_SYNC_JOB, rssCronFor(minutes));
+}
+
+/** Cron for the definition feed: null when disabled or manual. Minute 41 keeps it off the hour. */
+export function definitionFeedCronFor(settings: Pick<DefinitionFeedSettings, 'enabled' | 'mode' | 'intervalHours'>): string | null {
+  return settings.enabled && settings.mode === 'auto' ? hourlyCron(settings.intervalHours, 41) : null;
+}
+
+export function registerDefinitionFeedJob(scheduler: Scheduler, feed: DefinitionFeed, settings: () => DefinitionFeedSettings): void {
+  const cron = definitionFeedCronFor(settings());
+  scheduler.register({
+    name: DEFINITION_FEED_SYNC_JOB,
+    ...(cron ? { cron } : {}),
+    handler: async ({ signal }) => {
+      if (!settings().enabled) return 'definition feed disabled';
+      const r = await feed.sync({ signal });
+      if (r.notModified) return 'index not modified';
+      return `${r.added.length} added, ${r.updated.length} updated, ${r.removed.length} removed, ${r.unchanged} unchanged, ${r.rejected.length} rejected`;
+    },
+  });
+}
+
+export function rescheduleDefinitionFeed(scheduler: Scheduler, settings: Pick<DefinitionFeedSettings, 'enabled' | 'mode' | 'intervalHours'>): void {
+  if (scheduler.has(DEFINITION_FEED_SYNC_JOB)) scheduler.update(DEFINITION_FEED_SYNC_JOB, definitionFeedCronFor(settings));
 }

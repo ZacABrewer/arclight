@@ -1,0 +1,7 @@
+/* Settings → Indexer options: definition feed panel. */
+.al-feed { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.al-feed__error { margin: 0; font-size: 13px; color: var(--al-danger-text); overflow-wrap: anywhere; }
+.al-feed__section { display: flex; flex-direction: column; gap: 10px; min-width: 0; overflow-x: auto; }
+.al-feed__rejected { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 14px; color: var(--al-warn-text); }
+.al-feed-form { display: flex; flex-direction: column; gap: 16px; }
+.al-feed-form__save { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }

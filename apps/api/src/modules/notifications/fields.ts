@@ -47,6 +47,12 @@ export const TRIGGER_EVENT: Record<NotificationTrigger, NotificationEventType> =
   onHealthRestored: 'healthRestored',
   onApplicationUpdate: 'applicationUpdate',
   onManualInteractionRequired: 'manualInteractionRequired',
+  onRequestCreated: 'requestCreated',
+  onRequestApproved: 'requestApproved',
+  onRequestDeclined: 'requestDeclined',
+  onRequestAvailable: 'requestAvailable',
+  onIssueCreated: 'issueCreated',
+  onIssueUpdated: 'issueUpdated',
 };
 
 const IMPLEMENTATION_NAMES: Record<NotificationAgentKind, string> = {

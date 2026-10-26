@@ -26,6 +26,7 @@ import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
+import { t } from '../../i18n/index.js';
 
 export function BlocklistPage() {
   const [page, setPage] = useState(1);
@@ -41,19 +42,19 @@ export function BlocklistPage() {
   const total = list.data?.totalRecords ?? 0;
 
   const columns: Column<BlocklistItem>[] = [
-    { key: 'sourceTitle', header: 'Source title', cell: (r) => <span className="al-activity-break">{r.sourceTitle}</span> },
-    { key: 'quality', header: 'Quality', mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
+    { key: 'sourceTitle', header: t('common.sourceTitle'), cell: (r) => <span className="al-activity-break">{r.sourceTitle}</span> },
+    { key: 'quality', header: t('common.quality'), mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
     {
       key: 'protocol',
-      header: 'Prot',
+      header: t('common.prot'),
       width: '64px',
       cell: (r) => (r.protocol === 'torrent' || r.protocol === 'usenet' ? <ProtocolBadge protocol={r.protocol} /> : (r.protocol ?? '—')),
     },
-    { key: 'indexer', header: 'Indexer', muted: true, cell: (r) => r.indexer ?? '—' },
-    { key: 'message', header: 'Reason', muted: true, cell: (r) => r.message ?? '' },
+    { key: 'indexer', header: t('common.indexer'), muted: true, cell: (r) => r.indexer ?? '—' },
+    { key: 'message', header: t('activity.blocklist.reason'), muted: true, cell: (r) => r.message ?? '' },
     {
       key: 'date',
-      header: 'Date',
+      header: t('common.date'),
       mono: true,
       align: 'right',
       cell: (r) => (
@@ -64,11 +65,11 @@ export function BlocklistPage() {
     },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) => (
-        <Button size="sm" variant="ghost" aria-label={`Remove ${r.sourceTitle} from blocklist`} onClick={() => remove.mutate([r.id])}>
-          Remove
+        <Button size="sm" variant="ghost" aria-label={t('activity.blocklist.removeSourcetitleFromBlocklist', { sourceTitle: r.sourceTitle })} onClick={() => remove.mutate([r.id])}>
+          {t('common.remove')}
         </Button>
       ),
     },
@@ -81,10 +82,10 @@ export function BlocklistPage() {
         actions={
           <>
             <Button variant="danger" disabled={total === 0} onClick={() => setClearing(true)}>
-              Clear all
+              {t('activity.blocklist.clearAll')}
             </Button>
             <Button variant="secondary" onClick={() => setAdding(true)}>
-              Add
+              {t('common.add')}
             </Button>
           </>
         }
@@ -92,22 +93,22 @@ export function BlocklistPage() {
       <Pane flush bare className="al-activity-pane">
         {pending ? (
           <div className="al-activity-pad">
-            <PendingApiNotice what="blocklist" />
+            <PendingApiNotice what={t('activity.blocklist.blocklist')} />
           </div>
         ) : list.isError ? (
           <div className="al-activity-pad">
-            <ErrorBlock title="Couldn't load the blocklist" onRetry={() => void list.refetch()}>
+            <ErrorBlock title={t('activity.blocklist.couldntLoadTheBlocklist')} onRetry={() => void list.refetch()}>
               {errorMessage(list.error)}
             </ErrorBlock>
           </div>
         ) : (
           <>
             <Table
-              caption="Blocklist"
+              caption={t('common.blocklist')}
               columns={columns}
               rows={list.data?.records}
               rowKey={(r) => r.id}
-              rowLabel={(r) => `Select ${r.sourceTitle}`}
+              rowLabel={(r) => t('activity.blocklist.selectSourcetitle', { sourceTitle: r.sourceTitle })}
               loading={list.isPending}
               sortable={false}
               selectable
@@ -119,10 +120,10 @@ export function BlocklistPage() {
                   loading={remove.isPending}
                   onClick={() => remove.mutate([...keys].map(Number), { onSuccess: clearSelection })}
                 >
-                  {keys.size === 1 ? 'Remove 1 release' : `Remove ${keys.size} releases`}
+                  {keys.size === 1 ? t('activity.blocklist.remove1Release') : t('activity.blocklist.removeKeyscountReleases', { keysCount: keys.size })}
                 </Button>
               )}
-              empty={<EmptyState title="Blocklist is empty">Releases that failed or were rejected manually are listed here.</EmptyState>}
+              empty={<EmptyState title={t('activity.blocklist.blocklistIsEmpty')}>{t('activity.blocklist.releasesThatFailedOrWere')}</EmptyState>}
             />
             {list.data && list.data.totalRecords > pageSize ? (
               <footer className="al-activity-foot">
@@ -136,19 +137,19 @@ export function BlocklistPage() {
       {adding ? <AddBlocklistModal onClose={() => setAdding(false)} /> : null}
       <ConfirmDialog
         open={clearing}
-        title="Clear the blocklist?"
-        confirmLabel="Clear all"
+        title={t('activity.blocklist.clearTheBlocklist')}
+        confirmLabel={t('activity.blocklist.clearAll')}
         onCancel={() => setClearing(false)}
         onConfirm={async () => {
           const r = await clear.mutateAsync();
-          toast.push({ tone: 'ok', title: 'Blocklist cleared', message: `Removed ${r.deleted} ${r.deleted === 1 ? 'release' : 'releases'}.` });
+          toast.push({ tone: 'ok', title: t('activity.blocklist.blocklistCleared'), message: t('activity.blocklist.removedReleases', { deleted: r.deleted }) });
           setClearing(false);
           setSelected(new Set());
           setPage(1);
         }}
       >
         <p>
-          All <span className="al-num">{total}</span> blocked releases are removed. The next search can grab them again.
+          {t('common.all')} <span className="al-num">{total}</span> {t('activity.blocklist.blockedReleasesAreRemovedThe')}
         </p>
       </ConfirmDialog>
     </div>
@@ -158,13 +159,13 @@ export function BlocklistPage() {
 type MediaKind = 'series' | 'movie';
 
 const KIND_OPTIONS = [
-  { value: 'series' as const, label: 'Series' },
-  { value: 'movie' as const, label: 'Movie' },
+  { value: 'series' as const, get label() { return t('common.series'); } },
+  { value: 'movie' as const, get label() { return t('common.movie'); } },
 ];
 
 const PROTOCOL_OPTIONS = [
-  { value: 'torrent', label: 'Torrent' },
-  { value: 'usenet', label: 'Usenet' },
+  { value: 'torrent', get label() { return t('common.torrent'); } },
+  { value: 'usenet', get label() { return t('common.usenet'); } },
 ];
 
 export interface BlocklistDraft {
@@ -179,8 +180,8 @@ export interface BlocklistDraft {
 
 /** The POST /blocklist body for a draft, or a sentence saying what is missing. */
 export function blocklistBody(d: BlocklistDraft): BlocklistAddRequestInput | string {
-  if (d.mediaId === null) return d.kind === 'series' ? 'Choose a series.' : 'Choose a movie.';
-  if (!d.sourceTitle.trim()) return 'Enter the source title.';
+  if (d.mediaId === null) return d.kind === 'series' ? t('activity.blocklist.chooseASeries') : t('activity.blocklist.chooseAMovie');
+  if (!d.sourceTitle.trim()) return t('activity.blocklist.enterTheSourceTitle');
   const quality = ALL_QUALITIES.find((q) => q.id === d.qualityId) ?? QUALITIES.Unknown;
   return {
     mediaType: d.kind,
@@ -189,7 +190,7 @@ export function blocklistBody(d: BlocklistDraft): BlocklistAddRequestInput | str
     quality: { quality: { ...quality, mediaTypes: [...quality.mediaTypes] }, revision: { version: 1, real: 0, isRepack: false } },
     protocol: d.protocol,
     indexer: d.indexer.trim() || null,
-    message: d.message.trim() || 'Added manually',
+    message: d.message.trim() || t('activity.blocklist.addedManually'),
   };
 }
 
@@ -216,7 +217,7 @@ export function AddBlocklistModal({ onClose }: { onClose: () => void }) {
     return items.map((m) => ({ id: m.id, label: m.title, detail: m.year ? String(m.year) : undefined }));
   }, [draft.kind, series.data, movies.data]);
   const qualities = ALL_QUALITIES.filter((q) => q.id === QUALITIES.Unknown.id || q.mediaTypes.includes(draft.kind));
-  const noun = draft.kind === 'series' ? 'Series' : 'Movie';
+  const noun = draft.kind === 'series' ? t('common.series') : t('common.movie');
 
   const submit = (e: FormEvent) => {
     e.preventDefault();
@@ -228,7 +229,7 @@ export function AddBlocklistModal({ onClose }: { onClose: () => void }) {
     setError(null);
     add.mutate(body, {
       onSuccess: (r) => {
-        toast.push({ tone: 'ok', title: 'Added to blocklist', message: r.sourceTitle });
+        toast.push({ tone: 'ok', title: t('activity.blocklist.addedToBlocklist'), message: r.sourceTitle });
         onClose();
       },
       onError: (err) => setError(errorMessage(err)),
@@ -239,40 +240,40 @@ export function AddBlocklistModal({ onClose }: { onClose: () => void }) {
     <Modal
       open
       onClose={onClose}
-      title="Add to blocklist"
+      title={t('activity.blocklist.addToBlocklist')}
       size={560}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" form="add-blocklist-form" variant="primary" loading={add.isPending}>
-            Add to blocklist
+            {t('activity.blocklist.addToBlocklist')}
           </Button>
         </>
       }
     >
       <form id="add-blocklist-form" className="mk-stack-sm" onSubmit={submit} noValidate>
         {error ? <Banner tone="danger">{error}</Banner> : null}
-        <FormRow label="Type">
-          <Segmented aria-label="Media type" options={KIND_OPTIONS} value={draft.kind} onChange={(kind) => set({ kind, mediaId: null })} />
+        <FormRow label={t('common.type')}>
+          <Segmented aria-label={t('common.mediaType')} options={KIND_OPTIONS} value={draft.kind} onChange={(kind) => set({ kind, mediaId: null })} />
         </FormRow>
         <FormRow label={noun}>
           <EntityPicker
-            aria-label={`${noun} to block`}
-            placeholder={draft.kind === 'series' ? 'Choose a series…' : 'Choose a movie…'}
+            aria-label={t('activity.blocklist.nounToBlock', { noun })}
+            placeholder={draft.kind === 'series' ? t('activity.blocklist.chooseASeries2') : t('activity.blocklist.chooseAMovie2')}
             options={options}
             value={draft.mediaId}
             onChange={(mediaId) => set({ mediaId })}
           />
         </FormRow>
-        <FormRow label="Source title" htmlFor="blocklist-title" caption="The release name exactly as the indexer lists it.">
+        <FormRow label={t('common.sourceTitle')} htmlFor="blocklist-title" caption={t('activity.blocklist.theReleaseNameExactlyAs')}>
           <Input id="blocklist-title" mono value={draft.sourceTitle} onChange={(e) => set({ sourceTitle: e.target.value })} />
         </FormRow>
-        <FormRow label="Indexer" htmlFor="blocklist-indexer">
+        <FormRow label={t('common.indexer')} htmlFor="blocklist-indexer">
           <Input id="blocklist-indexer" value={draft.indexer} onChange={(e) => set({ indexer: e.target.value })} />
         </FormRow>
-        <FormRow label="Protocol" htmlFor="blocklist-protocol">
+        <FormRow label={t('common.protocol')} htmlFor="blocklist-protocol">
           <Select
             id="blocklist-protocol"
             options={PROTOCOL_OPTIONS}
@@ -280,7 +281,7 @@ export function AddBlocklistModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => set({ protocol: e.target.value as ReleaseProtocol })}
           />
         </FormRow>
-        <FormRow label="Quality" htmlFor="blocklist-quality">
+        <FormRow label={t('common.quality')} htmlFor="blocklist-quality">
           <Select
             id="blocklist-quality"
             options={qualities.map((q) => ({ value: String(q.id), label: q.name }))}
@@ -288,8 +289,8 @@ export function AddBlocklistModal({ onClose }: { onClose: () => void }) {
             onChange={(e) => set({ qualityId: Number(e.target.value) })}
           />
         </FormRow>
-        <FormRow label="Reason" htmlFor="blocklist-reason">
-          <Input id="blocklist-reason" placeholder="Added manually" value={draft.message} onChange={(e) => set({ message: e.target.value })} />
+        <FormRow label={t('activity.blocklist.reason')} htmlFor="blocklist-reason">
+          <Input id="blocklist-reason" placeholder={t('activity.blocklist.addedManually')} value={draft.message} onChange={(e) => set({ message: e.target.value })} />
         </FormRow>
       </form>
     </Modal>

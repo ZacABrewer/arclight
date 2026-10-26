@@ -6,6 +6,7 @@ import { queueApi } from '../api/queue.js';
 import { useToast } from '../components/toast.js';
 import { upsertJob } from '../live.js';
 import { activityKeys, useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 /** Queue events invalidate ['queue']; the poll is a safety net for progress between events. */
 export function useQueue(query: Partial<QueueQueryInput>) {
@@ -29,12 +30,12 @@ export function useRemoveQueueItems() {
       return queueApi.removeBulk(body);
     },
     [['queue'], ['history']],
-    { errorTitle: 'Could not remove from queue' },
+    { errorTitle: t('hooks.activity.couldNotRemoveFromQueue') },
   );
 }
 
 export function useGrabQueueItem() {
-  return useInvalidatingMutation((id: number) => queueApi.grab(id), [['queue']], { errorTitle: 'Could not send to client' });
+  return useInvalidatingMutation((id: number) => queueApi.grab(id), [['queue']], { errorTitle: t('hooks.activity.couldNotSendToClient') });
 }
 
 /** Pending api route: no retry so the "not available yet" notice shows at once. */
@@ -49,7 +50,7 @@ export function useHistory(filter: HistoryFilter) {
 
 export function useMarkHistoryFailed() {
   return useInvalidatingMutation((id: number) => historyApi.markFailed(id), [['history'], ['queue']], {
-    errorTitle: 'Could not mark as failed',
+    errorTitle: t('hooks.activity.couldNotMarkAsFailed'),
   });
 }
 
@@ -59,9 +60,9 @@ export function useRedownloadHistory() {
   const toast = useToast();
   return useMutation({
     mutationFn: (id: number) => historyApi.redownload(id),
-    meta: { errorTitle: 'Could not redownload' },
+    meta: { errorTitle: t('hooks.activity.couldNotRedownload') },
     onSuccess: (job) => {
-      toast.push({ tone: 'ok', title: 'Search started', message: `Run #${job.id} is ${job.status}.`, durationMs: 4_000 });
+      toast.push({ tone: 'ok', title: t('hooks.activity.searchStarted'), message: t('hooks.activity.runIdIsStatus', { id: job.id, status: job.status }), durationMs: 4_000 });
       upsertJob(qc, job);
     },
     onSettled: async () => {
@@ -91,7 +92,7 @@ export function useRemoveBlocklist() {
   return useInvalidatingMutation(
     (ids: number[]) => (ids.length === 1 ? blocklistApi.remove(ids[0]!) : blocklistApi.removeBulk(ids)),
     [['history', 'blocklist']],
-    { errorTitle: 'Could not remove from blocklist' },
+    { errorTitle: t('hooks.activity.couldNotRemoveFromBlocklist') },
   );
 }
 

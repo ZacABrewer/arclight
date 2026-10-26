@@ -31,6 +31,7 @@ import { needsManualImport } from './manual-import/mapping.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
 import { TorrentDrawer } from './torrent-drawer.js';
+import { t } from '../../i18n/index.js';
 
 /** Server job that retries imports blocked only by temporary rejections. */
 export const RETRY_IMPORT_JOB = 'ProcessPendingImports';
@@ -66,7 +67,7 @@ export function RemoveQueueDialog({
 }) {
   const [state, dispatch] = useReducer(removeReducer, items, initialRemoveState);
   const single = items.length === 1;
-  const title = single ? `Remove ${items[0]!.title}?` : `Remove ${items.length} items?`;
+  const title = single ? t('activity.queue.removeTitle', { title: items[0]!.title }) : t('activity.queue.removeItemscountItems', { itemsCount: items.length });
   return (
     <Modal
       open
@@ -76,31 +77,31 @@ export function RemoveQueueDialog({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="danger-solid" loading={busy ?? false} onClick={() => onConfirm(toRemoveOptions(state))}>
-            {single ? 'Remove 1 item' : `Remove ${items.length} items`}
+            {single ? t('activity.queue.remove1Item') : t('activity.queue.removeItemscountItems2', { itemsCount: items.length })}
           </Button>
         </>
       }
     >
       <div className="al-activity-stack">
         <Checkbox
-          label="Remove from client"
-          hint={state.clientAvailable ? 'Deletes the download and its data from the download client.' : 'Not sent to a download client yet.'}
+          label={t('activity.queue.removeFromClient')}
+          hint={state.clientAvailable ? t('activity.queue.deletesTheDownloadAndIts') : t('activity.queue.notSentToADownload')}
           checked={state.removeFromClient}
           disabled={!state.clientAvailable}
           onChange={(e) => dispatch({ type: 'removeFromClient', value: e.currentTarget.checked })}
         />
         <Checkbox
-          label="Add to blocklist"
-          hint="Stops this release from being grabbed again and searches for a replacement."
+          label={t('activity.queue.addToBlocklist')}
+          hint={t('activity.queue.stopsThisReleaseFromBeing')}
           checked={state.blocklist}
           onChange={(e) => dispatch({ type: 'blocklist', value: e.currentTarget.checked })}
         />
         <Checkbox
-          label="Skip redownload"
-          hint="Blocklist without searching for a replacement."
+          label={t('activity.queue.skipRedownload')}
+          hint={t('activity.queue.blocklistWithoutSearchingForA')}
           checked={state.skipRedownload}
           disabled={!state.blocklist}
           onChange={(e) => dispatch({ type: 'skipRedownload', value: e.currentTarget.checked })}
@@ -142,7 +143,7 @@ export function QueuePage() {
   const columns: Column<QueueItem>[] = [
     {
       key: 'title',
-      header: 'Title',
+      header: t('common.title'),
       sortValue: (r) => r.title,
       cell: (r) => {
         const media = mediaTitle(r);
@@ -154,40 +155,40 @@ export function QueuePage() {
             <span className="al-activity-title__sub">
               {media ? `${media} · ` : ''}
               <time dateTime={r.added} title={formatDateTime(r.added)}>
-                added {relativeTime(r.added)}
+                {t('activity.queue.addedRelativetime', { relativeTime: relativeTime(r.added) })}
               </time>
             </span>
           </div>
         );
       },
     },
-    { key: 'quality', header: 'Quality', mono: true, width: '130px', cell: (r) => qualityFromTitle(r.title) ?? '—' },
-    { key: 'protocol', header: 'Prot', width: '64px', sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} /> },
-    { key: 'downloadClientName', header: 'Client', muted: true, sortValue: (r) => r.downloadClientName, cell: (r) => r.downloadClientName ?? '—' },
+    { key: 'quality', header: t('common.quality'), mono: true, width: '130px', cell: (r) => qualityFromTitle(r.title) ?? '—' },
+    { key: 'protocol', header: t('common.prot'), width: '64px', sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} /> },
+    { key: 'downloadClientName', header: t('activity.queue.client'), muted: true, sortValue: (r) => r.downloadClientName, cell: (r) => r.downloadClientName ?? '—' },
     {
       key: 'progress',
-      header: 'Progress',
+      header: t('common.progress'),
       width: '180px',
       sortValue: (r) => r.progress,
-      cell: (r) => <Trail value={r.progress * 100} state={trailState(queueChip(r))} showValue label={`Progress of ${r.title}`} />,
+      cell: (r) => <Trail value={r.progress * 100} state={trailState(queueChip(r))} showValue label={t('activity.queue.progressOfTitle', { title: r.title })} />,
     },
-    { key: 'sizeBytes', header: 'Size', mono: true, align: 'right', sortValue: (r) => r.sizeBytes, cell: (r) => formatBytes(r.sizeBytes) },
-    { key: 'eta', header: 'ETA', mono: true, align: 'right', sortValue: (r) => r.eta, cell: (r) => formatEta(r.eta) },
-    { key: 'status', header: 'Status', sortValue: (r) => r.status, cell: (r) => <QueueChipCell item={r} /> },
+    { key: 'sizeBytes', header: t('common.size'), mono: true, align: 'right', sortValue: (r) => r.sizeBytes, cell: (r) => formatBytes(r.sizeBytes) },
+    { key: 'eta', header: t('activity.queue.eta'), mono: true, align: 'right', sortValue: (r) => r.eta, cell: (r) => formatEta(r.eta) },
+    { key: 'status', header: t('common.status'), sortValue: (r) => r.status, cell: (r) => <QueueChipCell item={r} /> },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) => (
         <span className="al-activity-actions">
           {isBuiltin(r) ? (
-            <Button size="sm" variant="ghost" onClick={() => setInspecting(r)} aria-label={`Details ${r.title}`}>
-              Details
+            <Button size="sm" variant="ghost" onClick={() => setInspecting(r)} aria-label={t('activity.queue.detailsTitle', { title: r.title })}>
+              {t('common.details')}
             </Button>
           ) : null}
           {isPendingItem(r) ? (
             <Button size="sm" variant="ghost" loading={grab.isPending && grab.variables === r.id} onClick={() => grab.mutate(r.id)}>
-              Send now
+              {t('activity.queue.sendNow')}
             </Button>
           ) : null}
           {needsManualImport(r) ? (
@@ -195,13 +196,13 @@ export function QueuePage() {
               className={buttonClass({ variant: 'ghost', size: 'sm' })}
               to="/activity/manual-import"
               search={{ downloadId: r.downloadId }}
-              aria-label={`Manual import ${r.title}`}
+              aria-label={t('activity.queue.manualImportTitle', { title: r.title })}
             >
-              Import
+              {t('common.import')}
             </Link>
           ) : null}
-          <Button size="sm" variant="ghost" onClick={() => setRemoving([r])} aria-label={`Remove ${r.title}`}>
-            Remove
+          <Button size="sm" variant="ghost" onClick={() => setRemoving([r])} aria-label={t('activity.queue.removeTitle2', { title: r.title })}>
+            {t('common.remove')}
           </Button>
         </span>
       ),
@@ -219,18 +220,18 @@ export function QueuePage() {
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         {queue.isError ? (
           <div className="al-activity-pad">
-            <ErrorBlock title="Couldn't load the queue" onRetry={() => void queue.refetch()}>
+            <ErrorBlock title={t('activity.queue.couldntLoadTheQueue')} onRetry={() => void queue.refetch()}>
               {errorMessage(queue.error)}
             </ErrorBlock>
           </div>
         ) : (
           <Table
-            caption="Download queue"
+            caption={t('activity.queue.downloadQueue')}
             density="rich"
             columns={columns}
             rows={queue.data?.records}
             rowKey={(r) => r.id}
-            rowLabel={(r) => `Select ${r.title}`}
+            rowLabel={(r) => t('activity.queue.selectTitle', { title: r.title })}
             loading={queue.isPending}
             manualSort
             sort={sort}
@@ -247,24 +248,24 @@ export function QueuePage() {
               return (
                 <>
                   <Button variant="danger" onClick={() => setRemoving(items)}>
-                    Remove…
+                    {t('activity.queue.remove')}
                   </Button>
                   <Button variant="secondary" loading={runJob.isPending} onClick={() => runJob.mutate(RETRY_IMPORT_JOB)}>
-                    Retry import
+                    {t('activity.queue.retryImport')}
                   </Button>
                   {pendingItems.length ? (
                     <Button variant="secondary" onClick={() => pendingItems.forEach((r) => grab.mutate(r.id))}>
-                      Send now
+                      {t('activity.queue.sendNow')}
                     </Button>
                   ) : null}
                 </>
               );
             }}
-            empty={<EmptyState title="Queue is empty">Grabbed releases show up here while they download and import.</EmptyState>}
+            empty={<EmptyState title={t('activity.queue.queueIsEmpty')}>{t('activity.queue.grabbedReleasesShowUpHere')}</EmptyState>}
           />
         )}
         <footer className="al-activity-foot">
-          <Toggle size="sm" label="Show unknown" checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.currentTarget.checked)} />
+          <Toggle size="sm" label={t('activity.queue.showUnknown')} checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.currentTarget.checked)} />
           {summary.length ? <span className="al-activity-muted al-num">{summary.join(' · ')}</span> : null}
           <span className="al-activity-spacer" />
           <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />

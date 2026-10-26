@@ -1,5 +1,6 @@
 import { Field, Select } from '../../arclight/index.js';
 import { useLanguageProfiles } from '../../hooks/subtitles.js';
+import { t } from '../../i18n/index.js';
 
 /** Add dialogs may leave the profile to the server default (the field is omitted). */
 export type LanguageProfileChoice = number | null | 'default';
@@ -22,7 +23,7 @@ export function LanguageProfileSelect<T extends LanguageProfileChoice>({
   const list = profiles.data ?? [];
   const known = value === null || value === 'default' || list.some((p) => p.id === value);
   return (
-    <Field label="Language profile" hint="Which subtitles to look for.">
+    <Field label={t('subtitles.languageProfileSelect.languageProfile')} hint={t('subtitles.languageProfileSelect.whichSubtitlesToLookFor')}>
       <Select
         value={encoded}
         onChange={(e) => {
@@ -30,14 +31,14 @@ export function LanguageProfileSelect<T extends LanguageProfileChoice>({
           onChange((v === 'default' ? 'default' : v === 'none' ? null : Number(v)) as T);
         }}
       >
-        {allowDefault ? <option value="default">Default</option> : null}
-        <option value="none">None</option>
+        {allowDefault ? <option value="default">{t('subtitles.languageProfileSelect.default')}</option> : null}
+        <option value="none">{t('common.none')}</option>
         {list.map((p) => (
           <option key={p.id} value={p.id}>
             {p.name}
           </option>
         ))}
-        {!known ? <option value={encoded}>Profile #{encoded}</option> : null}
+        {!known ? <option value={encoded}>{t('subtitles.languageProfileSelect.profileEncoded', { encoded })}</option> : null}
       </Select>
     </Field>
   );

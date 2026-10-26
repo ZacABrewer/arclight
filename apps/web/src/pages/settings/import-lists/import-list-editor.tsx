@@ -13,6 +13,7 @@ import { EditorFooter, SaveError } from '../shared.js';
 import { existingListValues, listFields, newListValues, rootsFor, settingsFields, toListBody, type RootFolderOption } from './fields.js';
 import { ItemsTable } from './items-table.js';
 import { TraktAuth } from './trakt-auth.js';
+import { t } from '../../../i18n/index.js';
 
 export type Editing = { list: ImportList; schema: ImportListSchema | undefined } | { schema: ImportListSchema };
 
@@ -94,7 +95,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
 
   const clientId = getPath(form.values, 'settings.clientId');
   const clientSecret = getPath(form.values, 'settings.clientSecret');
-  const title = existing ? `Edit ${existing.name}` : `Add ${schema?.implementationName ?? 'import list'}`;
+  const title = existing ? t('settings.importLists.importListEditor.editName', { name: existing.name }) : t('settings.importLists.importListEditor.addValue', { value: schema?.implementationName ?? 'import list' });
 
   return (
     <>
@@ -111,7 +112,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
             extra={
               <Button variant="secondary" loading={testing} onClick={() => void runTest()}>
-                Test
+                {t('common.test')}
               </Button>
             }
           />
@@ -120,7 +121,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
         {schema?.infoLink ? (
           <p className="al-caption">
             <a href={schema.infoLink} target="_blank" rel="noreferrer">
-              About {schema.implementationName}
+              {t('settings.importLists.importListEditor.aboutImplementationname', { implementationName: schema.implementationName })}
             </a>
           </p>
         ) : null}
@@ -134,16 +135,16 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
           />
         ) : null}
         {test ? (
-          <section aria-label="Test result">
+          <section aria-label={t('common.testResult')}>
             <TestResultView
               outcome={{
                 ok: test.ok,
-                message: test.ok ? `${test.itemCount ?? test.items?.length ?? 0} items found` : undefined,
+                message: test.ok ? t('settings.importLists.importListEditor.valueItemsFound', { value: test.itemCount ?? test.items?.length ?? 0 }) : undefined,
                 warnings: [],
                 errors: test.error ? [test.error.message] : [],
               }}
             />
-            {test.ok && test.items?.length ? <ItemsTable caption="First items" items={test.items} /> : null}
+            {test.ok && test.items?.length ? <ItemsTable caption={t('settings.importLists.importListEditor.firstItems')} items={test.items} /> : null}
           </section>
         ) : null}
         <SaveError error={save.error} />
@@ -151,15 +152,15 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${existing.name}?`}
-          confirmLabel="Delete import list"
+          title={t('settings.importLists.importListEditor.deleteName', { name: existing.name })}
+          confirmLabel={t('settings.importLists.importListEditor.deleteImportList')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
         >
-          The list stops syncing. Titles it already added stay in the library.
+          {t('settings.importLists.importListEditor.theListStopsSyncingTitles')}
         </ConfirmDialog>
       ) : null}
     </>

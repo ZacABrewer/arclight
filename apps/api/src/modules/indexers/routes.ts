@@ -4,6 +4,9 @@ import {
   IndexerCapabilitiesResource,
   IndexerCategory,
   IndexerCreate,
+  DefinitionFeedSettings,
+  DefinitionFeedStatus,
+  DefinitionFeedSyncResult,
   IndexerDefinitionDetail,
   IndexerDefinitionListQuery,
   IndexerDefinitionReloadResult,
@@ -31,6 +34,7 @@ import {
 import { IndexerError } from '@arclight/indexers';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { DefinitionFeedError, type DefinitionFeed } from './definition-feed.js';
 import { DefinitionStoreError } from './definitions.js';
 import { IndexersError, type IndexersErrorCode } from './errors.js';
 import type { IndexersService } from './service.js';
@@ -74,6 +78,12 @@ export interface IndexersRoutesOptions {
     get(): IndexerGlobalSettings;
     update(value: IndexerGlobalSettings): IndexerGlobalSettings;
   };
+  /** Definition feed routes (/indexer/definition/feed/*); omitted = not registered. */
+  feed?: {
+    feed: DefinitionFeed;
+    getSettings(): DefinitionFeedSettings;
+    updateSettings(value: DefinitionFeedSettings): DefinitionFeedSettings;
+  };
 }
 
 export function indexersRoutes(
@@ -86,6 +96,10 @@ export function indexersRoutes(
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof IndexersError) {
         return reply.code(statusFor[err.code]).send({ error: err.message, code: err.code });
+      }
+      if (err instanceof DefinitionFeedError) {
+        const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'VALIDATION' ? 400 : 502;
+        return reply.code(status).send({ error: err.message, code: err.code });
       }
       if (err instanceof DefinitionStoreError) {
         return reply.code(err.code === 'NOT_FOUND' ? 404 : 400).send({ error: err.message, code: err.code });
@@ -176,6 +190,36 @@ export function indexersRoutes(
         return reply.code(204).send(null);
       },
     );
+
+    // ---- definition feed ------------------------------------------------------------
+
+    const feed = opts.feed;
+    if (feed) {
+      app.get('/indexer/definition/feed/status', { schema: { response: { 200: DefinitionFeedStatus } } }, async () => {
+        await service.definitions.ready();
+        return feed.feed.status();
+      });
+
+      app.post('/indexer/definition/feed/sync', { schema: { response: { 200: DefinitionFeedSyncResult, ...errors } } }, async () =>
+        feed.feed.sync(),
+      );
+
+      app.post(
+        '/indexer/definition/feed/rollback/:id',
+        { schema: { params: DefinitionParams, response: { 200: DefinitionFeedStatus, ...errors } } },
+        async (req) => feed.feed.rollback(req.params.id),
+      );
+
+      app.get('/indexer/definition/feed/settings', { schema: { response: { 200: DefinitionFeedSettings } } }, async () =>
+        feed.getSettings(),
+      );
+
+      app.put(
+        '/indexer/definition/feed/settings',
+        { schema: { body: DefinitionFeedSettings, response: { 200: DefinitionFeedSettings, ...errors } } },
+        async (req) => feed.updateSettings(req.body),
+      );
+    }
 
     // ---- indexers -------------------------------------------------------------------
 

@@ -1,0 +1,11 @@
+/* Held-by-policy chip, policy drawer, content caps and approval override. Arclight tokens only. */
+.req-held-btn { display: inline-flex; padding: 0; margin: 0; border: 0; background: none; cursor: pointer; font: inherit; }
+.req-held-btn:focus-visible { outline: var(--al-focus); outline-offset: 2px; }
+.req-policy-steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.req-policy-step { display: grid; grid-template-columns: 150px minmax(0, 1fr); gap: 4px 14px; align-items: start; padding: 10px 0; border-top: 1px solid var(--al-line-1); }
+.req-policy-step__rule { display: flex; flex-direction: column; gap: 6px; align-items: flex-start; font-size: 13px; color: var(--al-text-2); }
+.req-policy-step__msg { margin: 0; font-size: 13px; color: var(--al-text-3); }
+.req-policy-head { margin: 0 0 16px; font-size: 14px; color: var(--al-text-2); }
+@media (max-width: 767px) {
+  .req-policy-step { grid-template-columns: minmax(0, 1fr); }
+}

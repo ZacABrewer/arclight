@@ -115,7 +115,7 @@ describe('Jellyfin availability hook', () => {
     };
     h.db.insert(notifications).values({ name: 'jf', implementation: 'jellyfin', enabled: true, ...flags, tags: [], settings: { host: 'jf.local', port: 8096, apiKey: 'k' }, addedAt: now, updatedAt: now }).run();
     const urls: string[] = [];
-    let answer: unknown = { TotalRecordCount: 1 };
+    let answer: unknown = { TotalRecordCount: 1, Items: [{ Id: 'm1', Name: 'The Matrix', Type: 'Movie', ProviderIds: { Tmdb: '603' } }] };
     const hook = jellyfinAvailability(h.db, async (url, init) => {
       urls.push(url);
       expect((init?.headers as Record<string, string>)['X-Emby-Token']).toBe('k');
@@ -125,6 +125,9 @@ describe('Jellyfin availability hook', () => {
     expect(await hook.isAvailable({ mediaType: 'movie', tmdbId: 603 })).toBe(true);
     expect(urls[0]).toContain('http://jf.local:8096/Items');
     expect(decodeURIComponent(urls[0]!)).toContain('AnyProviderIdEquals=Tmdb.603');
+    // The server ignoring the filter (an unrelated item) is still "absent".
+    answer = { TotalRecordCount: 1, Items: [{ Id: 'x', Name: 'Other', Type: 'Movie', ProviderIds: { Tmdb: '1' } }] };
+    expect(await hook.isAvailable({ mediaType: 'movie', tmdbId: 603 })).toBe(false);
     answer = { TotalRecordCount: 0 };
     expect(await hook.isAvailable({ mediaType: 'series', tmdbId: 1, tvdbId: 2 })).toBe(false);
     answer = new Error('down');

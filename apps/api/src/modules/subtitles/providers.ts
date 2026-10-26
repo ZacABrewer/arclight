@@ -227,6 +227,10 @@ export const PROVIDER_DEFS: Readonly<Record<SubtitleProviderId, ProviderDef>> = 
       field('endpoint', 'Endpoint', 'text', { required: true, default: 'http://127.0.0.1:9000' }),
       field('transcribeTimeoutMs', 'Transcription timeout (ms)', 'number', { default: 3_600_000, advanced: true }),
       field('passVideoName', 'Send the video name', 'checkbox', { default: false, advanced: true }),
+      field('onlyWhenNoOtherResult', 'Only when no other result', 'checkbox', {
+        default: true,
+        helpText: 'Transcribe only for languages where no other provider found a subtitle reaching the minimum score.',
+      }),
     ],
     create: (s, d) =>
       new WhisperProvider(
@@ -287,4 +291,14 @@ export function unmaskSettings(id: SubtitleProviderId, incoming: Record<string, 
 export function credentialsChanged(id: SubtitleProviderId, a: Record<string, unknown> | undefined, b: Record<string, unknown>): boolean {
   const names = PROVIDER_DEFS[id].fields.filter((f) => f.secret || f.name === 'username').map((f) => f.name);
   return names.some((n) => (a?.[n] ?? '') !== (b[n] ?? ''));
+}
+
+/** Setting key: search this provider only when the others found nothing acceptable. */
+export const ONLY_WHEN_NO_OTHER_RESULT = 'onlyWhenNoOtherResult';
+
+/** The provider's `onlyWhenNoOtherResult` flag: the stored value, else its field default. */
+export function onlyWhenNoOtherResult(cfg: Pick<SubtitleProviderConfig, 'id' | 'settings'>): boolean {
+  const v = cfg.settings[ONLY_WHEN_NO_OTHER_RESULT];
+  if (typeof v === 'boolean') return v;
+  return PROVIDER_DEFS[cfg.id].fields.find((f) => f.name === ONLY_WHEN_NO_OTHER_RESULT)?.default === true;
 }

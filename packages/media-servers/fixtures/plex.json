@@ -1,0 +1,78 @@
+{
+  "root": { "MediaContainer": { "friendlyName": "Living Room Plex", "version": "1.41.2.9200", "machineIdentifier": "abc123machine" } },
+  "sections": {
+    "MediaContainer": {
+      "Directory": [
+        { "key": "1", "title": "Movies", "type": "movie", "Location": [{ "id": 1, "path": "/media/movies" }] },
+        { "key": "2", "title": "TV Shows", "type": "show", "Location": [{ "id": 2, "path": "/media/tv" }] },
+        { "key": "3", "title": "Music", "type": "artist", "Location": [{ "id": 3, "path": "/media/music" }] }
+      ]
+    }
+  },
+  "accounts": {
+    "MediaContainer": {
+      "Account": [
+        { "id": 0, "name": "" },
+        { "id": 1, "name": "owner" },
+        { "id": 5, "name": "dave" }
+      ]
+    }
+  },
+  "movies": {
+    "MediaContainer": {
+      "size": 2,
+      "totalSize": 2,
+      "Metadata": [
+        {
+          "ratingKey": "101",
+          "title": "Harbour Lights",
+          "year": 2021,
+          "librarySectionID": 1,
+          "guid": "plex://movie/5d776",
+          "Guid": [{ "id": "imdb://tt7654321" }, { "id": "tmdb://98765" }],
+          "duration": 7200000,
+          "viewCount": 1,
+          "lastViewedAt": 1759348800,
+          "Media": [{ "Part": [{ "file": "/media/movies/Harbour Lights (2021)/Harbour Lights (2021).mkv" }] }]
+        },
+        {
+          "ratingKey": "102",
+          "title": "Old Agent Film",
+          "year": 1999,
+          "guid": "com.plexapp.agents.imdb://tt0000001?lang=en",
+          "duration": 5400000,
+          "viewOffset": 600000
+        }
+      ]
+    }
+  },
+  "shows": {
+    "MediaContainer": {
+      "size": 1,
+      "totalSize": 1,
+      "Metadata": [
+        {
+          "ratingKey": "200",
+          "title": "Signal Lost",
+          "year": 2023,
+          "Guid": [{ "id": "tvdb://424242" }, { "id": "tmdb://123456" }],
+          "leafCount": 3,
+          "viewedLeafCount": 3,
+          "viewCount": 4,
+          "lastViewedAt": 1760000000
+        }
+      ]
+    }
+  },
+  "historyDave": {
+    "MediaContainer": {
+      "size": 4,
+      "Metadata": [
+        { "historyKey": "/status/sessions/history/9", "ratingKey": "201", "key": "/library/metadata/201", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1760100000, "accountID": 5 },
+        { "historyKey": "/status/sessions/history/8", "ratingKey": "202", "key": "/library/metadata/202", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1760000000, "accountID": 5 },
+        { "historyKey": "/status/sessions/history/7", "ratingKey": "201", "key": "/library/metadata/201", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1759000000, "accountID": 5 },
+        { "historyKey": "/status/sessions/history/6", "key": "/library/metadata/101", "type": "movie", "viewedAt": 1758000000, "accountID": 5 }
+      ]
+    }
+  }
+}

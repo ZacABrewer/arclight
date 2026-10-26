@@ -1,5 +1,5 @@
 import { asc, eq, inArray } from 'drizzle-orm';
-import { UserRequestSettings, type RequestUser } from '@arclight/shared';
+import { MediaServerLink, UserApprovalPolicy, UserRequestSettings, type RequestUser } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { RequestsError } from './errors.js';
@@ -63,8 +63,19 @@ export function requestSettingsOf(row: Pick<UserRow, 'settings'>): UserRequestSe
     plexToken: raw['plexToken'],
     watchlistSyncMovies: raw['watchlistSyncMovies'],
     watchlistSyncSeries: raw['watchlistSyncSeries'],
+    autoRequestFromWatchlist: raw['autoRequestFromWatchlist'],
+    mediaServerLink: raw['mediaServerLink'],
   });
-  return parsed.success ? parsed.data : UserRequestSettings.parse({});
+  if (parsed.success) return parsed.data;
+  // A malformed link must not hide the user's other settings.
+  const retry = UserRequestSettings.safeParse({ ...raw, mediaServerLink: undefined });
+  return retry.success ? retry.data : UserRequestSettings.parse({});
+}
+
+/** The user's media-server link, if any. */
+export function mediaServerLinkOf(row: Pick<UserRow, 'settings'>): MediaServerLink | undefined {
+  const parsed = MediaServerLink.safeParse(((row.settings ?? {}) as Record<string, unknown>)['mediaServerLink']);
+  return parsed.success ? parsed.data : undefined;
 }
 
 /** Merges `patch` into the user's settings JSON (other keys untouched). */
@@ -81,4 +92,10 @@ export function setUserPermissions(db: Db, id: number, permissions: number, now:
   const row = userRow(db, id);
   const next = effectivePermissions({ role: row.role, permissions });
   return db.update(users).set({ permissions: next, updatedAt: now }).where(eq(users.id, id)).returning().get()!;
+}
+
+/** The user's approval-policy override (users.settings.approvalPolicy), defaults applied. */
+export function approvalPolicyOf(row: Pick<UserRow, 'settings'>): UserApprovalPolicy {
+  const parsed = UserApprovalPolicy.safeParse(((row.settings ?? {}) as Record<string, unknown>)['approvalPolicy'] ?? {});
+  return parsed.success ? parsed.data : UserApprovalPolicy.parse({});
 }

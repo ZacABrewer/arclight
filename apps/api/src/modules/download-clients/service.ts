@@ -354,13 +354,14 @@ export class DownloadClientsService {
   }
 
   /**
-   * Set the incoming-connections port on every enabled client that supports it (qBittorrent, Built-in),
-   * e.g. to follow a VPN's forwarded port. Per-client failures are reported, never thrown.
+   * Set the incoming-connections port on every enabled client that supports it (qBittorrent, Built-in,
+   * Remote Engine with "Follow VPN port"), e.g. to follow a VPN's forwarded port. Per-client
+   * failures are reported, never thrown.
    */
   async setListenPortOnAll(port: number): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>> {
     const results: Array<{ id: number; name: string; ok: boolean; message?: string }> = [];
     for (const { config, client } of this.enabledClients()) {
-      if ((config.implementation !== 'qbittorrent' && config.implementation !== 'builtin') || !client.setListenPort) continue;
+      if (!followsVpnPort(config) || !client.setListenPort) continue;
       try {
         await client.setListenPort(port);
         results.push({ id: config.id, name: config.name, ok: true });
@@ -490,6 +491,30 @@ export class DownloadClientsService {
       .get();
     if (active) return true;
     return this.now().getTime() - this.lastRefreshAt >= this.idleIntervalMs;
+  }
+
+  /**
+   * Reachability of every enabled remote engine, for the RemoteEngineUnreachable health check:
+   * the queue poller's last outcome, else a live status request.
+   */
+  async remoteEngineHealth(): Promise<Array<{ id: number; name: string; url: string; ok: boolean; message?: string }>> {
+    const out: Array<{ id: number; name: string; url: string; ok: boolean; message?: string }> = [];
+    for (const { config, client } of this.enabledClients()) {
+      if (config.implementation !== 'remoteEngine') continue;
+      const url = config.settings.url;
+      const polled = this.clientHealth.get(config.id);
+      if (polled) {
+        out.push({ id: config.id, name: config.name, url, ok: polled.ok, ...(polled.message ? { message: polled.message } : {}) });
+        continue;
+      }
+      try {
+        await client.getStatus();
+        out.push({ id: config.id, name: config.name, url, ok: true });
+      } catch (err) {
+        out.push({ id: config.id, name: config.name, url, ok: false, message: errorMessage(err) });
+      }
+    }
+    return out;
   }
 
   /** Last poll outcome per client id, for health checks. */
@@ -1048,7 +1073,7 @@ export class DownloadClientsService {
   private queueContext(): QueueContext {
     const clients = new Map<number, { name: string; host: string }>();
     for (const row of this.db.select().from(downloadClients).all()) {
-      const host = row.implementation === 'builtin' ? 'localhost' : typeof row.settings['host'] === 'string' ? row.settings['host'] : '';
+      const host = row.implementation === 'builtin' ? 'localhost' : downloadClientHost(row.settings);
       clients.set(row.id, { name: row.name, host });
     }
     return { clients, mappings: this.listMappings() };
@@ -1148,7 +1173,13 @@ function rowToResource(row: DownloadClientRow): DownloadClientResource {
   });
 }
 
-/** Replaces every stored secret (password, API key) with the mask, or '' when unset. */
+/** Clients that take the VPN's forwarded port: qBittorrent, Built-in, and remote engines that opted in. */
+function followsVpnPort(config: DownloadClientResource): boolean {
+  if (config.implementation === 'qbittorrent' || config.implementation === 'builtin') return true;
+  return config.implementation === 'remoteEngine' && config.settings.followVpnPort;
+}
+
+/** Replaces every stored secret (password, API key, token) with the mask, or '' when unset. */
 function mask(resource: DownloadClientResource): DownloadClientResource {
   const settings: Record<string, unknown> = { ...resource.settings };
   for (const key of DOWNLOAD_CLIENT_SECRET_FIELDS) {

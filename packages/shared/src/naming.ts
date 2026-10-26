@@ -49,6 +49,12 @@ export const NamingConfig = z.object({
   specialsFolderFormat: z.string().default(DEFAULT_NAMING_FORMATS.specialsFolderFormat),
   movieFormat: z.string().default(DEFAULT_NAMING_FORMATS.movieFormat),
   movieFolderFormat: z.string().default(DEFAULT_NAMING_FORMATS.movieFolderFormat),
+  /**
+   * Multi-version items: `sideBySide` (default) keeps every version in the item's folder and
+   * appends ` - <tag>` when the format has no `{Version}` token; `subfolder` puts each version
+   * in a `<tag>` sub-folder of the series/season or movie folder.
+   */
+  versionLayout: z.enum(['sideBySide', 'subfolder']).optional(),
 });
 export type NamingConfig = z.infer<typeof NamingConfig>;
 export type NamingConfigInput = z.input<typeof NamingConfig>;

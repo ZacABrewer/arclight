@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join } from 'node:path';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type { NotificationEvent } from '@arclight/notifications';
 import {
@@ -29,7 +29,10 @@ import {
   type SubtitleSearchResult,
   type SubtitleSettings,
   type SubtitleState,
+  type SubtitleSyncCheck,
+  type SubtitleSyncCheckResult,
   type SubtitleSyncResult,
+  type SubtitleWhisperStatus,
   type WantedSubtitleItem,
   type WantedSubtitlesPage,
   type WantedSubtitlesQuery,
@@ -41,7 +44,21 @@ import {
   SubtitleSearcher,
   ThrottleTracker,
   buildAlassCommand,
+  buildAudioActivityCommand,
   buildFfsubsyncCommand,
+  buildSyncCheckCommand,
+  compareTimings,
+  decodeSubtitle,
+  estimateSync,
+  parseCues,
+  parseEbur128,
+  parseSilenceDetect,
+  planAudioWindows,
+  probeWhisperService,
+  syncAutoAction,
+  type SyncEstimate,
+  type TimeInterval,
+  type WhisperProbeResult,
   buildPostProcessCommand,
   buildQuery,
   buildSubtitleExtractArgs,
@@ -78,6 +95,8 @@ import {
   configError,
   credentialsChanged,
   maskProviders,
+  onlyWhenNoOtherResult,
+  ONLY_WHEN_NO_OTHER_RESULT,
   providerName,
   providerSchemas,
   unmaskSettings,
@@ -166,7 +185,14 @@ export interface SubtitlesServiceOptions {
   fetch?: typeof fetch;
   /** Download retry pause and strike sleep (tests set 0). */
   retryDelayMs?: number;
+  /** ARCLIGHT_WHISPER_URL (the bundled Whisper service); undefined disables auto-detect. */
+  whisperUrl?: string | undefined;
+  /** Whisper liveness probe (tests pass a fake). */
+  probeWhisper?: (url: string) => Promise<WhisperProbeResult>;
 }
+
+/** Setting key marking a whisperai entry created by WhisperAutoDetect. */
+export const WHISPER_AUTO_KEY = 'autoRegistered';
 
 export interface FileSearchResult {
   searched: number;
@@ -199,6 +225,8 @@ interface SaveInput {
   uploader?: string | undefined;
   /** Run sync and the custom command (not for extraction). Default true. */
   postProcess?: boolean;
+  /** Automatic provider download: a low sync score may ask the caller to try the next candidate. */
+  allowRetry?: boolean;
 }
 
 interface CachedResult {
@@ -271,6 +299,25 @@ function toState(row: SubtitleRow): SubtitleState {
     size: row.size,
     mtime: row.mtime,
     added: row.added,
+    syncScore: row.syncScore,
+    syncOffsetMs: row.syncOffsetMs,
+    syncDriftPpm: row.syncDriftPpm,
+    syncCheckedAt: row.syncCheckedAt,
+    syncMethod: row.syncMethod,
+  };
+}
+
+function toCheck(e: SyncEstimate): SubtitleSyncCheck {
+  return {
+    method: e.method,
+    reliable: e.reliable,
+    syncScore: e.syncScore,
+    offsetMs: e.offsetMs,
+    driftPpm: e.driftPpm,
+    meanErrorMs: e.meanErrorMs,
+    confidence: e.confidence,
+    matched: e.matched,
+    message: e.message,
   };
 }
 
@@ -301,6 +348,8 @@ export class SubtitlesService {
   private readonly providerCache = new Map<string, { key: string; provider: SubtitleProvider }>();
   private readonly manualCache = new Map<string, CachedResult>();
   private readonly pending = new Set<Promise<unknown>>();
+  /** Subtitle rows whose sync check asked for the next candidate (consumed by searchFile). */
+  private readonly retryRequested = new Set<number>();
 
   constructor(opts: SubtitlesServiceOptions) {
     this.opts = opts;
@@ -331,8 +380,8 @@ export class SubtitlesService {
     });
   }
 
-  /** Detached work (import-triggered searches); tests await `idle()`. */
-  private detach(p: Promise<unknown>): void {
+  /** Detached work (import-triggered searches, boot-time detection); tests await `idle()`. */
+  detach(p: Promise<unknown>): void {
     const tracked = p.catch((err: unknown) => this.log.warn({ err }, 'background subtitle task failed')).finally(() => this.pending.delete(tracked));
     this.pending.add(tracked);
   }
@@ -609,6 +658,7 @@ export class SubtitlesService {
       originalFormat: profile?.originalFormat ?? false,
       utf8: s.naming.utf8Encode,
       throttle: this.throttle,
+      fallbackProviders: s.providers.filter((p) => p.enabled && onlyWhenNoOtherResult(p)).map((p) => p.id),
       ...(delay !== undefined ? { downloadRetryDelayMs: delay, strikeSleepMs: delay } : {}),
     });
   }
@@ -1020,9 +1070,23 @@ export class SubtitlesService {
         result.allThrottled = true;
         break;
       }
-      const got = await this.downloadBest(searcher, query, outcome.candidates, wanted, searcher.minScore(query.mediaType), c.profile);
-      if (got) {
-        await this.saveDownloaded(c, got, query, 'downloaded', false);
+      const minScore = searcher.minScore(query.mediaType);
+      let candidates = outcome.candidates;
+      let got = await this.downloadBest(searcher, query, candidates, wanted, minScore, c.profile);
+      let saved: SubtitleState | null = null;
+      let retries = 0;
+      while (got) {
+        saved = await this.saveDownloaded(c, got, query, 'downloaded', false, null, true);
+        // A sync check below autoRetryProviderBelow blacklists this one and tries the next candidate.
+        if (!this.retryRequested.delete(saved.id) || retries >= s.sync.maxProviderRetries) break;
+        retries++;
+        const rejected = got.candidate;
+        await this.rejectForSync(c, saved.id);
+        saved = null;
+        candidates = candidates.filter((x) => !(x.provider === rejected.provider && x.id === rejected.id));
+        got = await this.downloadBest(searcher, query, candidates, wanted, minScore, c.profile);
+      }
+      if (saved) {
         this.clearAttempts(c.file.id, key);
         result.downloaded++;
       } else if (searcher.available().length > 0) {
@@ -1032,7 +1096,15 @@ export class SubtitlesService {
     return result;
   }
 
-  private async saveDownloaded(c: FileContext, got: Downloaded, query: SubtitleQuery, action: SubtitleHistoryAction, manual: boolean, upgradedFromId: number | null = null): Promise<SubtitleState> {
+  private async saveDownloaded(
+    c: FileContext,
+    got: Downloaded,
+    query: SubtitleQuery,
+    action: SubtitleHistoryAction,
+    manual: boolean,
+    upgradedFromId: number | null = null,
+    allowRetry = false,
+  ): Promise<SubtitleState> {
     const report = matchReport(got.candidate.matches, query.mediaType);
     return this.saveSubtitle(c, {
       language: got.candidate.language,
@@ -1051,6 +1123,7 @@ export class SubtitlesService {
       upgradedFromId,
       releaseInfo: got.candidate.releaseInfo,
       uploader: got.candidate.uploader,
+      allowRetry,
     });
   }
 
@@ -1119,7 +1192,7 @@ export class SubtitlesService {
     });
 
     if (input.postProcess !== false) {
-      await this.postProcess(c, row, { percent: percent ?? 100, manual: input.manual, releaseInfo: input.releaseInfo, uploader: input.uploader });
+      await this.postProcess(c, row, { percent: percent ?? 100, manual: input.manual, releaseInfo: input.releaseInfo, uploader: input.uploader, allowRetry: input.allowRetry ?? false });
     }
     try {
       const st = await stat(path);
@@ -1187,7 +1260,11 @@ export class SubtitlesService {
 
   // ---- post-processing ------------------------------------------------------------------------
 
-  private async postProcess(c: FileContext, row: SubtitleRow, info: { percent: number; manual: boolean; releaseInfo?: string | undefined; uploader?: string | undefined }): Promise<void> {
+  private async postProcess(
+    c: FileContext,
+    row: SubtitleRow,
+    info: { percent: number; manual: boolean; releaseInfo?: string | undefined; uploader?: string | undefined; allowRetry?: boolean },
+  ): Promise<void> {
     const s = this.settings();
     const series = c.mediaType === 'series';
     const syncSettings = {
@@ -1196,13 +1273,23 @@ export class SubtitlesService {
       threshold: series ? s.sync.thresholdSeries : s.sync.thresholdMovie,
       blacklistedProviders: s.sync.blacklistedProviders,
     };
+    let synced = false;
     if (row.path && shouldSync(syncSettings, { forced: row.forced, provider: row.provider ?? 'manual', percent: info.percent })) {
       try {
         const r = await this.runSyncTool(c, row.path);
+        synced = r.ok;
         if (r.ok) this.writeHistory(c, { action: 'synced', description: r.message, language: row.language, forced: row.forced, hi: row.hi, provider: row.provider, providerSubtitleId: row.providerSubtitleId, score: null, scoreOutOf: null, subtitlePath: row.path, matched: [], notMatched: [] });
         else this.log.warn({ path: row.path, message: r.message }, 'subtitle sync failed');
       } catch (err) {
         this.log.warn({ err }, 'subtitle sync failed');
+      }
+    }
+    if (row.path && s.sync.autoCheck) {
+      try {
+        const r = await this.checkAndAct(c, row.id, { fixed: synced, fromProvider: info.allowRetry ?? false });
+        if (r.retry) this.retryRequested.add(row.id);
+      } catch (err) {
+        this.log.warn({ err: err instanceof Error ? err.message : String(err), path: row.path }, 'subtitle sync check failed');
       }
     }
     const useThreshold = series ? s.postProcessing.useThresholdSeries : s.postProcessing.useThresholdMovie;
@@ -1271,6 +1358,225 @@ export class SubtitlesService {
       message: offset !== undefined
         ? `${lang} subtitles synchronization ended with an offset of ${offset} seconds and a framerate scale factor of ${ratio ?? '1.000'}.`
         : `${lang} subtitles synchronized with ${s.sync.tool}.`,
+    };
+  }
+
+  // ---- sync-quality scoring -----------------------------------------------------------------------
+
+  /** Measure the sync of an external subtitle (builtin audio correlation or the sync tool in check mode). */
+  private async measureSync(c: FileContext, row: SubtitleRow): Promise<SyncEstimate> {
+    if (!row.path) throw new SubtitlesError('UNSUPPORTED', 'only external subtitles can be checked');
+    const s = this.settings();
+    const cues = parseCues(decodeSubtitle(new Uint8Array(await readFile(row.path)), { language: row.language }).text, row.path);
+    if (s.sync.checkMethod === 'tool') {
+      const cmd = buildSyncCheckCommand({
+        tool: s.sync.tool,
+        binary: s.sync.binaryPath.trim() || undefined,
+        video: c.file.path,
+        subtitle: row.path,
+        maxOffsetSeconds: s.sync.maxOffsetSeconds,
+        gss: s.sync.gss,
+        timeoutMs: s.sync.timeoutMs,
+      });
+      try {
+        const r = await this.runner(cmd.command, cmd.args, { timeoutMs: cmd.timeoutMs });
+        if (!r.ok || !(await exists(cmd.output))) {
+          throw new SubtitlesError('FAILED', `${s.sync.tool} check failed: ${r.error ?? (r.stderr.trim().split('\n').pop() || 'no output')}`);
+        }
+        const corrected = parseCues(decodeSubtitle(new Uint8Array(await readFile(cmd.output))).text, cmd.output);
+        return compareTimings(cues, corrected, s.sync.tool);
+      } finally {
+        await rm(cmd.output, { force: true });
+      }
+    }
+    const lastCue = cues.length ? cues[cues.length - 1]!.startMs : 0;
+    const windows = planAudioWindows(lastCue, s.sync.checkWindowMinutes * 60_000);
+    const speech: TimeInterval[] = [];
+    for (const window of windows) {
+      const cmd = buildAudioActivityCommand({ ffmpegPath: s.embedded.ffmpegPath, input: c.file.path, window, detector: s.sync.audioDetector });
+      const r = await this.runner(cmd.command, cmd.args, { timeoutMs: cmd.timeoutMs });
+      if (!r.ok) throw new SubtitlesError('FAILED', `audio analysis failed: ${r.error ?? r.stderr.slice(-300)}`);
+      speech.push(...(s.sync.audioDetector === 'ebur128' ? parseEbur128(r.stderr, window) : parseSilenceDetect(r.stderr, window)));
+    }
+    return estimateSync(speech, cues, { windows, maxOffsetMs: s.sync.maxOffsetSeconds * 1000 });
+  }
+
+  /** Store a measurement on the subtitle row and on the history entry that wrote the file. */
+  private storeSync(row: SubtitleRow, e: SyncEstimate): void {
+    this.db
+      .update(subtitleFiles)
+      .set({ syncScore: e.syncScore, syncOffsetMs: e.offsetMs, syncDriftPpm: e.driftPpm, syncCheckedAt: this.iso(), syncMethod: e.method })
+      .where(eq(subtitleFiles.id, row.id))
+      .run();
+    if (!row.path) return;
+    const h = this.db
+      .select({ id: subtitleHistory.id })
+      .from(subtitleHistory)
+      .where(and(eq(subtitleHistory.subtitlePath, row.path), inArray(subtitleHistory.action, ['downloaded', 'manualDownload', 'upgraded', 'uploaded'])))
+      .orderBy(desc(subtitleHistory.id))
+      .get();
+    if (h) this.db.update(subtitleHistory).set({ syncScore: e.syncScore, syncOffsetMs: e.offsetMs, syncDriftPpm: e.driftPpm }).where(eq(subtitleHistory.id, h.id)).run();
+  }
+
+  /**
+   * Check, then apply the `subtitles.sync` auto actions: below autoFixBelow run the sync tool and
+   * check again; below autoRetryProviderBelow (after any fix) report `retry` for provider downloads.
+   */
+  private async checkAndAct(c: FileContext, id: number, o: { fixed: boolean; fromProvider: boolean }): Promise<{ check: SyncEstimate; actions: string[]; retry: boolean }> {
+    const s = this.settings();
+    const actions: string[] = [];
+    let row = this.stateRow(id);
+    let check = await this.measureSync(c, row);
+    this.storeSync(row, check);
+    let action = syncAutoAction(check, s.sync, { fixed: o.fixed, fromProvider: o.fromProvider });
+    if (action === 'fix' && row.path) {
+      const r = await this.runSyncTool(c, row.path);
+      if (r.ok) {
+        actions.push('fixed');
+        this.writeHistory(c, { action: 'synced', description: r.message, language: row.language, forced: row.forced, hi: row.hi, provider: row.provider, providerSubtitleId: row.providerSubtitleId, score: null, scoreOutOf: null, subtitlePath: row.path, matched: [], notMatched: [] });
+        row = this.stateRow(id);
+        check = await this.measureSync(c, row);
+        this.storeSync(row, check);
+      } else {
+        this.log.warn({ path: row.path, message: r.message }, 'automatic subtitle sync failed');
+      }
+      action = syncAutoAction(check, s.sync, { fixed: true, fromProvider: o.fromProvider });
+    }
+    const retry = action === 'retry';
+    if (retry) actions.push('retried');
+    this.log.info({ path: row.path, score: check.syncScore, offsetMs: check.offsetMs, driftPpm: check.driftPpm, actions }, 'subtitle sync checked');
+    return { check, actions, retry };
+  }
+
+  /** Blacklist a just-downloaded subtitle whose sync score is too low (the caller tries the next one). */
+  private async rejectForSync(c: FileContext, id: number): Promise<void> {
+    const row = this.stateRow(id);
+    if (!row.provider || !row.providerSubtitleId) return;
+    this.insertBlacklist(c, row.provider, row.providerSubtitleId, { language: row.language, forced: row.forced, hi: row.hi });
+    if (row.path) await rm(row.path, { force: true });
+    this.db.delete(subtitleFiles).where(eq(subtitleFiles.id, row.id)).run();
+    this.writeHistory(c, {
+      action: 'deleted',
+      description: `${languageName(row.language)} subtitles from ${providerName(row.provider)} blacklisted: sync score ${row.syncScore ?? '?'} is below ${this.settings().sync.autoRetryProviderBelow}.`,
+      language: row.language,
+      forced: row.forced,
+      hi: row.hi,
+      provider: row.provider,
+      providerSubtitleId: row.providerSubtitleId,
+      score: null,
+      scoreOutOf: null,
+      subtitlePath: row.path,
+      matched: [],
+      notMatched: [],
+      syncScore: row.syncScore,
+      syncOffsetMs: row.syncOffsetMs,
+      syncDriftPpm: row.syncDriftPpm,
+    });
+    this.publish('blacklisted', c);
+  }
+
+  /** POST /subtitle/:id/synccheck: measure now and store the result (no auto actions). */
+  async syncCheck(id: number): Promise<SubtitleSyncCheckResult> {
+    const row = this.stateRow(id);
+    if (row.embedded || !row.path) throw new SubtitlesError('UNSUPPORTED', 'only external subtitles can be checked');
+    const c = this.loadFile(row.mediaFileId);
+    let check: SyncEstimate;
+    try {
+      check = await this.measureSync(c, row);
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err), check: null, actions: [], subtitle: toState(row) };
+    }
+    this.storeSync(row, check);
+    this.publish('synced', c);
+    return { ok: check.reliable, message: check.message, check: toCheck(check), actions: [], subtitle: toState(this.stateRow(id)) };
+  }
+
+  /** SubtitleSyncCheck job: score external subtitles never checked, applying the auto actions. */
+  async syncCheckBatch(signal?: AbortSignal): Promise<string> {
+    const s = this.settings();
+    if (!s.sync.autoCheck) return 'Sync checks are off (subtitle settings: sync.autoCheck)';
+    const rows = this.db
+      .select()
+      .from(subtitleFiles)
+      .where(and(eq(subtitleFiles.embedded, false), isNotNull(subtitleFiles.path), isNull(subtitleFiles.syncCheckedAt)))
+      .orderBy(asc(subtitleFiles.id))
+      .limit(s.sync.checkBatchSize)
+      .all();
+    const out = { checked: 0, unreliable: 0, fixed: 0, retried: 0, failed: 0 };
+    for (const row of rows) {
+      if (signal?.aborted) break;
+      try {
+        const c = this.loadFile(row.mediaFileId);
+        const fromProvider = Boolean(row.provider && row.providerSubtitleId && row.provider !== 'manual' && row.provider !== 'embeddedsubtitles');
+        const r = await this.checkAndAct(c, row.id, { fixed: false, fromProvider });
+        out.checked++;
+        if (!r.check.reliable) out.unreliable++;
+        if (r.actions.includes('fixed')) out.fixed++;
+        if (r.retry) {
+          await this.blacklist(row.id, true);
+          out.retried++;
+        }
+      } catch (err) {
+        out.failed++;
+        // Mark it checked so one broken file does not block the queue.
+        this.db.update(subtitleFiles).set({ syncCheckedAt: this.iso() }).where(eq(subtitleFiles.id, row.id)).run();
+        this.log.warn({ err: err instanceof Error ? err.message : String(err), subtitleId: row.id }, 'subtitle sync check failed');
+      }
+    }
+    if (out.checked) this.publish('synced');
+    return `Checked ${out.checked} subtitle(s) (${out.unreliable} not measurable): ${out.fixed} fixed, ${out.retried} re-searched, ${out.failed} failed`;
+  }
+
+  // ---- whisper ------------------------------------------------------------------------------------
+
+  private probeWhisperUrl(url: string): Promise<WhisperProbeResult> {
+    if (this.opts.probeWhisper) return this.opts.probeWhisper(url);
+    return probeWhisperService(url, { ...(this.opts.fetch ? { fetch: this.opts.fetch } : {}), timeoutMs: 5000 });
+  }
+
+  /**
+   * WhisperAutoDetect: when ARCLIGHT_WHISPER_URL answers, register the whisperai provider last in
+   * the priority list with onlyWhenNoOtherResult. A hand-configured entry is never touched; an
+   * auto-registered one follows the URL.
+   */
+  async whisperAutoDetect(): Promise<string> {
+    const url = this.opts.whisperUrl?.trim().replace(/\/+$/, '');
+    if (!url) return 'ARCLIGHT_WHISPER_URL is not set';
+    const s = this.settings();
+    const entry = s.providers.find((p) => p.id === 'whisperai');
+    if (entry && entry.settings[WHISPER_AUTO_KEY] !== true) return 'Whisper provider is configured by hand; left unchanged';
+    if (entry && entry.settings['endpoint'] === url) return 'Whisper provider already registered';
+    const probe = await this.probeWhisperUrl(url);
+    if (!probe.ok) return `Whisper not detected: ${probe.message}`;
+    const providers = entry
+      ? s.providers.map((p) => (p.id === 'whisperai' ? { ...p, settings: { ...p.settings, endpoint: url } } : p))
+      : [...s.providers, { id: 'whisperai' as const, enabled: true, settings: { endpoint: url, [ONLY_WHEN_NO_OTHER_RESULT]: true, [WHISPER_AUTO_KEY]: true } }];
+    setSection(this.db, 'subtitles', { ...s, providers }, this.iso());
+    this.providerCache.clear();
+    this.publish('settings');
+    const message = entry ? `Whisper endpoint updated to ${url}` : `Whisper provider registered at ${url} (lowest priority, only when no other result)`;
+    this.log.info({ url }, message);
+    return message;
+  }
+
+  /** GET /subtitle/whisper/status: the settings entry plus a live probe. */
+  async whisperStatus(): Promise<SubtitleWhisperStatus> {
+    const envUrl = this.opts.whisperUrl?.trim() || null;
+    const entry = this.settings().providers.find((p) => p.id === 'whisperai');
+    const raw = entry?.settings['endpoint'];
+    const endpoint = typeof raw === 'string' && raw.trim() ? raw.trim() : null;
+    const target = endpoint ?? envUrl;
+    const probe = target ? await this.probeWhisperUrl(target) : null;
+    return {
+      envUrl,
+      endpoint,
+      registered: Boolean(entry),
+      enabled: entry?.enabled ?? false,
+      autoRegistered: entry?.settings[WHISPER_AUTO_KEY] === true,
+      onlyWhenNoOtherResult: entry ? onlyWhenNoOtherResult(entry) : true,
+      reachable: probe ? probe.ok : null,
+      message: probe?.message ?? 'Whisper is not configured: set ARCLIGHT_WHISPER_URL or add the Whisper provider',
+      checkedAt: this.iso(),
     };
   }
 

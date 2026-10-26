@@ -1,0 +1,42 @@
+[
+  {
+    "name": "hd-bluray-tier-01.json",
+    "path": "docs/json/radarr/cf/hd-bluray-tier-01.json",
+    "sha": "237b4d7a08c1d13bd67b04d71e1849a14e0ddf07",
+    "size": 5313,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/hd-bluray-tier-01.json"
+  },
+  {
+    "name": "web-tier-01.json",
+    "path": "docs/json/radarr/cf/web-tier-01.json",
+    "sha": "92ff7afd0fb499e51fa92b2e53fc500595780598",
+    "size": 4869,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/web-tier-01.json"
+  },
+  {
+    "name": "repack-proper.json",
+    "path": "docs/json/radarr/cf/repack-proper.json",
+    "sha": "d7a696596e4f43cc43b9ed7239ba2a317a9d5970",
+    "size": 849,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/repack-proper.json"
+  },
+  {
+    "name": "repack2.json",
+    "path": "docs/json/radarr/cf/repack2.json",
+    "sha": "08e00c615c491a53b2bfd3d5af4da87d4f2dc206",
+    "size": 872,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/repack2.json"
+  },
+  {
+    "name": "br-disk.json",
+    "path": "docs/json/radarr/cf/br-disk.json",
+    "sha": "7dcee038fc545dad9182daa138b5c9299425bc50",
+    "size": 975,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/br-disk.json"
+  }
+]

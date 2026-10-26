@@ -1,4 +1,4 @@
-import type { QualityModel, ReleaseProtocol } from '@arclight/shared';
+import type { QualityModel, ReleaseProtocol, ReleaseResource } from '@arclight/shared';
 
 // Hooks the releases module needs from modules written in parallel (history, blocklist,
 // settings). Each has a no-op default so the module works stand-alone; the app wires the
@@ -41,6 +41,8 @@ export interface GrabHistoryInput {
   /** Client-side id (info-hash for torrents). */
   downloadId: string;
   source: string;
+  /** Decision-log batch the grab was chosen from (GET /release/decisions/:batchId). */
+  batchId?: string;
 }
 
 export interface HistoryWriter {
@@ -94,6 +96,12 @@ export interface ReleaseSettings {
   allowUnairedEpisodes: boolean;
   /** Tolerance before the air time a single-episode release is accepted (minutes). */
   unairedToleranceMinutes: number;
+  /** Settings → Indexers: accept releases with burned-in subtitles. */
+  allowHardcodedSubs: boolean;
+  /** Settings → Indexers: subtitle tags (`ENG`, `HC.ENG`, `KORSUB`) accepted even when hardcoded subs are not. */
+  whitelistedHardcodedSubs: string[];
+  /** Settings → Indexers: rank freeleech / double-upload releases above otherwise equal ones. */
+  preferIndexerFlags: boolean;
 }
 
 export interface ReleaseSettingsReader {
@@ -118,7 +126,18 @@ export interface ReleasesDeps {
    * retried. Omitted = always allowed.
    */
   grabGuard?: GrabGuard;
+  /**
+   * Optional per-indexer release filter (the tracker-stats module's freeleech-only mode). A
+   * non-null answer rejects the release (tier 0, permanent). Omitted = everything passes.
+   */
+  releaseFilter?: ReleaseFilter;
 }
+
+/** Rejection (`reason` e.g. `notFreeleech`) or null when the release may be grabbed. */
+export type ReleaseFilter = (
+  indexerId: number,
+  release: Pick<ReleaseResource, 'downloadVolumeFactor' | 'uploadVolumeFactor' | 'indexerFlags'>,
+) => { reason: string; message: string } | null;
 
 export interface GrabGuard {
   isSafeToGrab(): Promise<boolean>;
@@ -136,6 +155,9 @@ export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {
   availabilityDelayDays: 0,
   allowUnairedEpisodes: false,
   unairedToleranceMinutes: 60,
+  allowHardcodedSubs: false,
+  whitelistedHardcodedSubs: [],
+  preferIndexerFlags: false,
 };
 
 export const noopHistory: HistoryWriter = { recordGrab: () => undefined };

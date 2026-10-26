@@ -3,6 +3,7 @@ import { systemApi } from '../api/system.js';
 import { Banner, Button } from '../arclight/index.js';
 import { useRestart } from '../hooks/backup.js';
 import { useSystemStatus } from '../hooks/system.js';
+import { t } from '../i18n/index.js';
 
 /** Polls until the api answers with a new start time, then reloads the page. */
 function useReloadWhenBack(previousStart: string | null, reload: () => void, intervalMs = 2000) {
@@ -31,7 +32,7 @@ export function RestartBanner({ reload = reloadPage, pollMs = 2000 }: { reload?:
 
   if (!status.data?.restartRequired && waitingOn === null) return null;
   if (waitingOn !== null) {
-    return <Banner className="al-shell-banner">Restarting Arclight. This page reloads when it is back.</Banner>;
+    return <Banner className="al-shell-banner">{t('layout.restartBanner.restartingArclightThisPageReloads')}</Banner>;
   }
   return (
     <Banner
@@ -39,11 +40,11 @@ export function RestartBanner({ reload = reloadPage, pollMs = 2000 }: { reload?:
       className="al-shell-banner"
       action={
         <Button size="sm" variant="primary" loading={restart.isPending} onClick={() => restart.mutate(undefined, { onSuccess: () => setWaitingOn(status.data?.startTime ?? '') })}>
-          Restart now
+          {t('layout.restartBanner.restartNow')}
         </Button>
       }
     >
-      Restart required. A backup was restored; restart Arclight to load it.
+      {t('layout.restartBanner.restartRequiredABackupWas')}
     </Banner>
   );
 }

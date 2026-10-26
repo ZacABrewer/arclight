@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { isMetadataError, type MetadataErrorCode } from '@arclight/metadata';
 import {
   Job,
+  MetadataCollection,
   MetadataErrorResponse,
   MetadataMovie,
   MetadataSearchQuery,
@@ -70,6 +71,12 @@ export function metadataRoutes(
       '/metadata/movie/:tmdbId',
       { schema: { params: TmdbIdParams, response: { 200: MetadataMovie, ...errors } } },
       async (req) => service.getMovie(req.params.tmdbId),
+    );
+
+    app.get(
+      '/metadata/collection/:tmdbId',
+      { schema: { params: TmdbIdParams, response: { 200: MetadataCollection, ...errors } } },
+      async (req) => service.getCollection(req.params.tmdbId),
     );
 
     // On-demand refresh of one item (or the library). Answers 202 with the started job; the

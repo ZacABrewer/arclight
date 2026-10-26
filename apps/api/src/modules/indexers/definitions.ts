@@ -22,11 +22,12 @@ import type {
   IndexerDefinitionSummary,
 } from '@arclight/shared';
 
-// The definition catalogue as the api serves it: definitions bundled with
-// @arclight/indexers plus user YAML files in `<config>/definitions`, which override bundled
-// ones by id. The user directory is watched (debounced) and can be reloaded on demand.
+// The definition catalogue as the api serves it, in three layers that override by id:
+// definitions bundled with @arclight/indexers, then the definition feed's downloads in
+// `<config>/definitions/feed` (see definition-feed.ts), then user YAML files in
+// `<config>/definitions`. The user directory is watched (debounced) and can be reloaded on demand.
 
-export type DefinitionSource = 'builtin' | 'custom';
+export type DefinitionSource = 'builtin' | 'feed' | 'custom';
 
 export class DefinitionStoreError extends Error {
   constructor(
@@ -43,6 +44,8 @@ export interface DefinitionStoreOptions {
   customDir?: string;
   /** Builtin directory; defaults to the package's bundled definitions. */
   builtinDir?: string;
+  /** Definition feed directory (`<config>/definitions/feed`); loaded between builtin and custom. */
+  feedDir?: string;
   log?: Logger;
   /** Watch `customDir` and reload on change. Default false. */
   watch?: boolean;
@@ -54,7 +57,7 @@ export class DefinitionStore {
   private catalogue = new DefinitionCatalogue();
   private sources = new Map<string, DefinitionSource>();
   private errors: DefinitionLoadError[] = [];
-  private counts = { builtin: 0, custom: 0 };
+  private counts = { builtin: 0, feed: 0, custom: 0 };
   private loading: Promise<IndexerDefinitionReloadResult> | undefined;
   private loaded = false;
   private watcher: FSWatcher | undefined;
@@ -68,6 +71,10 @@ export class DefinitionStore {
 
   get customDir(): string | undefined {
     return this.opts.customDir;
+  }
+
+  get feedDir(): string | undefined {
+    return this.opts.feedDir;
   }
 
   /** Resolves once the first load finished (starting it if needed). */
@@ -88,6 +95,8 @@ export class DefinitionStore {
 
   private async load(): Promise<IndexerDefinitionReloadResult> {
     const builtin = await DefinitionCatalogue.fromDirectories([this.builtinDir]);
+    const feed = new DefinitionCatalogue();
+    if (this.opts.feedDir) await feed.loadDirectory(this.opts.feedDir);
     const custom = new DefinitionCatalogue();
     if (this.opts.customDir) await custom.loadDirectory(this.opts.customDir);
 
@@ -97,21 +106,25 @@ export class DefinitionStore {
       merged.add(def);
       sources.set(def.id, 'builtin');
     }
+    for (const def of feed.list()) {
+      merged.add(def);
+      sources.set(def.id, 'feed');
+    }
     for (const def of custom.list()) {
       merged.add(def);
       sources.set(def.id, 'custom');
     }
     this.catalogue = merged;
     this.sources = sources;
-    this.counts = { builtin: builtin.size, custom: custom.size };
-    this.errors = [...builtin.errors, ...custom.errors].map((e) => ({
+    this.counts = { builtin: builtin.size, feed: feed.size, custom: custom.size };
+    this.errors = [...builtin.errors, ...feed.errors, ...custom.errors].map((e) => ({
       file: e.file,
       code: e.error.code,
       message: e.error.message,
     }));
     this.loaded = true;
     for (const e of this.errors) this.opts.log?.warn({ file: e.file, code: e.code }, `definition not loaded: ${e.message}`);
-    this.opts.log?.info({ builtin: builtin.size, custom: custom.size }, 'indexer definitions loaded');
+    this.opts.log?.info({ builtin: builtin.size, feed: feed.size, custom: custom.size }, 'indexer definitions loaded');
     for (const listener of this.reloadListeners) listener();
     return this.status();
   }
@@ -123,7 +136,7 @@ export class DefinitionStore {
   }
 
   status(): IndexerDefinitionReloadResult {
-    return { total: this.catalogue.size, builtin: this.counts.builtin, custom: this.counts.custom, errors: [...this.errors] };
+    return { total: this.catalogue.size, ...this.counts, errors: [...this.errors] };
   }
 
   /** Synchronous lookup; undefined before the first load or for unknown ids. */
@@ -262,6 +275,12 @@ function privacyOf(def: Definition): IndexerDefinitionSummary['privacy'] {
   return def.type;
 }
 
+/** The definition parser lowercases keys, so the parsed flag is `requiresflaresolverr`. */
+function requiresFlareSolverr(def: Definition): boolean {
+  const flags = def as unknown as { requiresflaresolverr?: unknown; requiresFlareSolverr?: unknown };
+  return flags.requiresflaresolverr === true || flags.requiresFlareSolverr === true;
+}
+
 export function toSummary(def: Definition, source: DefinitionSource): IndexerDefinitionSummary {
   const caps = synthesizeCaps(def, buildCategoryMap(def));
   const categories: IndexerDefinitionSummary['categories'] = [];
@@ -282,6 +301,7 @@ export function toSummary(def: Definition, source: DefinitionSource): IndexerDef
     categories,
     tested: def.tested === true,
     source,
+    ...(requiresFlareSolverr(def) ? { requiresFlareSolverr: true } : {}),
   };
 }
 

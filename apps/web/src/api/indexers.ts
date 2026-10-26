@@ -1,5 +1,8 @@
 import {
   Indexer,
+  DefinitionFeedSettings,
+  DefinitionFeedStatus,
+  DefinitionFeedSyncResult,
   IndexerCapabilitiesResource,
   IndexerCategory,
   IndexerDefinitionDetail,
@@ -62,6 +65,16 @@ export const indexersApi = {
     upload: (yaml: string) => request('/indexer/definition', IndexerDefinitionDetail, { method: 'POST', json: { yaml } }),
     remove: (id: string) => request(`/indexer/definition/${encodeURIComponent(id)}`, null, { method: 'DELETE' }),
     reload: () => request('/indexer/definition/reload', IndexerDefinitionReloadResult, { method: 'POST' }),
+    /** Definition feed (docs/API.md § Definition feed). */
+    feed: {
+      status: () => request('/indexer/definition/feed/status', DefinitionFeedStatus),
+      sync: () => request('/indexer/definition/feed/sync', DefinitionFeedSyncResult, { method: 'POST' }),
+      rollback: (id: string) => request(`/indexer/definition/feed/rollback/${encodeURIComponent(id)}`, null, { method: 'POST' }),
+      settings: {
+        get: () => request('/indexer/definition/feed/settings', DefinitionFeedSettings),
+        save: (body: DefinitionFeedSettings) => request('/indexer/definition/feed/settings', DefinitionFeedSettings, { method: 'PUT', json: body }),
+      },
+    },
   },
 
   proxies: {

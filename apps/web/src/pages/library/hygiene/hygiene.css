@@ -1,0 +1,23 @@
+/* Library → Hygiene */
+.hyg-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.hyg-strong { color: var(--al-text-1); font-weight: 500; overflow-wrap: anywhere; }
+.hyg-path { overflow-wrap: anywhere; word-break: break-all; }
+.hyg-pathcell { min-width: 0; }
+.hyg-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; }
+.hyg-groups { display: flex; flex-direction: column; gap: 16px; }
+.hyg-group__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.hyg-group__row { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: center; padding: 10px 0; border-top: 1px solid var(--al-line-1); }
+.hyg-group__row:first-child { border-top: 0; }
+.hyg-group__path { min-width: 0; }
+.hyg-map { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.hyg-map__file { padding: 10px 12px; border: 1px solid var(--al-line-2); }
+.hyg-episodes { border: 0; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; max-height: 280px; overflow: auto; }
+.hyg-episodes__season { display: flex; flex-direction: column; gap: 6px; }
+.hyg-episodes__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 16px; }
+.hyg-error { margin: 0; color: var(--al-danger-text); }
+.hyg-confirm-list { margin: 8px 0 0; padding-left: 18px; color: var(--al-text-3); overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .hyg-episodes__grid { grid-template-columns: minmax(0, 1fr); }
+  .hyg-group__row { grid-template-columns: auto minmax(0, 1fr); }
+  .hyg-group__row > :last-child { grid-column: 2; justify-self: start; }
+}

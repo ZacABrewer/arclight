@@ -1,5 +1,6 @@
 import { useSyncExternalStore, type ReactNode } from 'react';
 import { TOAST_LIMIT } from '../tokens.js';
+import { t } from '../../i18n/index.js';
 
 /** Arclight toast tones. The app's existing store tones map onto them (see toToastTone). */
 export type ToastTone = 'default' | 'warn' | 'danger';
@@ -57,7 +58,7 @@ export function Toast({ toast, onDismiss }: ToastProps) {
         </button>
       ) : null}
       {onDismiss ? (
-        <button type="button" className="al-toast__close" aria-label="Dismiss" onClick={() => onDismiss(toast.id)}>
+        <button type="button" className="al-toast__close" aria-label={t('arclight.toast.dismiss')} onClick={() => onDismiss(toast.id)}>
           ✕
         </button>
       ) : null}
@@ -84,8 +85,8 @@ export function ToastStack({ toasts, onDismiss, limit = TOAST_LIMIT, inline }: T
       aria-live="polite"
       aria-relevant="additions"
     >
-      {shown.map((t) => (
-        <Toast key={t.id} toast={t} onDismiss={onDismiss} />
+      {shown.map((toastData) => (
+        <Toast key={toastData.id} toast={toastData} onDismiss={onDismiss} />
       ))}
     </div>
   );
@@ -101,6 +102,6 @@ export interface ToastStoreLike {
 /** Renders the existing toast store through the Arclight stack (drop-in for ToastViewport). */
 export function ToastViewport({ store }: { store: ToastStoreLike }) {
   const list = useSyncExternalStore(store.subscribe, store.list, store.list);
-  const toasts: ToastData[] = list.map((t) => ({ id: t.id, tone: t.tone, title: t.title, description: t.message }));
+  const toasts: ToastData[] = list.map((item) => ({ id: item.id, tone: item.tone, title: item.title, description: item.message }));
   return <ToastStack toasts={toasts} onDismiss={(id) => store.dismiss(Number(id))} />;
 }

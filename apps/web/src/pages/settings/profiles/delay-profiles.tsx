@@ -8,6 +8,7 @@ import { useDelayProfileList, useDeleteDelayProfile, useReorderDelayProfile, use
 import { EditorFooter, SaveError, SettingsSection, minutesLabel } from '../shared.js';
 import { delayDropRequest, delayReorderRequest, isDefaultDelayProfile } from './quality-profile-model.js';
 import './profiles.css';
+import { t } from '../../../i18n/index.js';
 
 function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null; onClose: () => void }) {
   const [draft, setDraft] = useState<DelayProfileInput>(() =>
@@ -28,7 +29,7 @@ function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null
   const remove = useDeleteDelayProfile();
   const isDefault = profile !== null && isDefaultDelayProfile(profile);
   const set = <K extends keyof DelayProfileInput>(k: K, v: DelayProfileInput[K]) => setDraft((d) => ({ ...d, [k]: v }));
-  const tagError = !isDefault && draft.tags.length === 0 ? 'Only the default profile may be untagged' : undefined;
+  const tagError = !isDefault && draft.tags.length === 0 ? t('settings.profiles.delayProfiles.onlyTheDefaultProfileMay') : undefined;
 
   return (
     <>
@@ -36,7 +37,7 @@ function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null
         open
         onClose={onClose}
         size={560}
-        title={profile ? 'Edit delay profile' : 'Add delay profile'}
+        title={profile ? t('settings.profiles.delayProfiles.editDelayProfile') : t('settings.profiles.delayProfiles.addDelayProfile')}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -46,46 +47,46 @@ function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null
               save.mutate({ id: profile?.id, body: draft }, { onSuccess: onClose });
             }}
             onDelete={profile && !isDefault ? () => setConfirmDelete(true) : undefined}
-            deleteLabel="Delete delay profile"
+            deleteLabel={t('settings.profiles.delayProfiles.deleteDelayProfile')}
           />
         }
       >
         <div className="al-profile-editor">
-          <Field label="Preferred protocol">
+          <Field label={t('settings.profiles.delayProfiles.preferredProtocol')}>
             <Select
               value={draft.preferredProtocol}
               onChange={(e) => set('preferredProtocol', e.currentTarget.value === 'torrent' ? 'torrent' : 'usenet')}
               options={[
-                { value: 'usenet', label: 'Prefer Usenet' },
-                { value: 'torrent', label: 'Prefer Torrent' },
+                { value: 'usenet', label: t('settings.profiles.delayProfiles.preferUsenet') },
+                { value: 'torrent', label: t('settings.profiles.delayProfiles.preferTorrent') },
               ]}
             />
           </Field>
-          <Field label="Usenet delay (minutes)">
+          <Field label={t('settings.profiles.delayProfiles.usenetDelayMinutes')}>
             <Input type="number" mono min={0} value={draft.usenetDelayMinutes} onChange={(e) => set('usenetDelayMinutes', Math.max(0, Number(e.currentTarget.value) || 0))} />
           </Field>
-          <Field label="Torrent delay (minutes)">
+          <Field label={t('settings.profiles.delayProfiles.torrentDelayMinutes')}>
             <Input type="number" mono min={0} value={draft.torrentDelayMinutes} onChange={(e) => set('torrentDelayMinutes', Math.max(0, Number(e.currentTarget.value) || 0))} />
           </Field>
           <Toggle
             checked={draft.bypassIfHighestQuality}
-            label="Bypass if highest quality: grab at once when the release is the profile's best quality"
+            label={t('settings.profiles.delayProfiles.bypassIfHighestQualityGrab')}
             onChange={(e) => set('bypassIfHighestQuality', e.currentTarget.checked)}
           />
           <Toggle
             checked={draft.bypassIfAboveCustomFormatScore}
-            label="Bypass if above custom format score"
+            label={t('settings.profiles.delayProfiles.bypassIfAboveCustomFormat')}
             onChange={(e) => set('bypassIfAboveCustomFormatScore', e.currentTarget.checked)}
           />
           {draft.bypassIfAboveCustomFormatScore ? (
-            <Field label="Minimum custom format score">
+            <Field label={t('settings.profiles.delayProfiles.minimumCustomFormatScore')}>
               <Input type="number" mono value={draft.minimumCustomFormatScore} onChange={(e) => set('minimumCustomFormatScore', Number(e.currentTarget.value) || 0)} />
             </Field>
           ) : null}
           {isDefault ? (
-            <p className="al-muted">This is the default profile. It applies to everything without a more specific tag match and stays untagged.</p>
+            <p className="al-muted">{t('settings.profiles.delayProfiles.thisIsTheDefaultProfile')}</p>
           ) : (
-            <Field label="Tags" error={tagError}>
+            <Field label={t('common.tags')} error={tagError}>
               <TagPicker value={draft.tags} onChange={(tags) => set('tags', tags)} />
             </Field>
           )}
@@ -95,8 +96,8 @@ function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null
       {profile ? (
         <ConfirmDialog
           open={confirmDelete}
-          title="Delete this delay profile?"
-          confirmLabel="Delete delay profile"
+          title={t('settings.profiles.delayProfiles.deleteThisDelayProfile')}
+          confirmLabel={t('settings.profiles.delayProfiles.deleteDelayProfile')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(profile.id);
@@ -104,7 +105,7 @@ function DelayProfileEditor({ profile, onClose }: { profile: DelayProfile | null
             onClose();
           }}
         >
-          <p>Items with its tags fall back to the next matching profile.</p>
+          <p>{t('settings.profiles.delayProfiles.itemsWithItsTagsFall')}</p>
         </ConfirmDialog>
       ) : null}
     </>
@@ -136,37 +137,37 @@ export function DelayProfilesSection() {
 
   return (
     <SettingsSection
-      label="Delay profiles"
+      label={t('settings.profiles.delayProfiles.delayProfiles')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
         <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
-          Add delay profile
+          {t('settings.profiles.delayProfiles.addDelayProfile')}
         </Button>
       }
     >
-      <p className="al-caption">The first profile whose tags match is used. Drag rows or use the move buttons to change the order.</p>
+      <p className="al-caption">{t('settings.profiles.delayProfiles.theFirstProfileWhoseTags')}</p>
       {list.isPending ? (
         <Skeleton lines={3} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load delay profiles" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.profiles.delayProfiles.couldntLoadDelayProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
         <div className="al-table-wrap">
           <table className="al-table al-delay-table">
-            <caption className="al-sr-only">Delay profiles</caption>
+            <caption className="al-sr-only">{t('settings.profiles.delayProfiles.delayProfiles')}</caption>
             <thead>
               <tr>
                 <th scope="col" style={{ width: 28 }}>
-                  <span className="al-sr-only">Order</span>
+                  <span className="al-sr-only">{t('settings.profiles.delayProfiles.order')}</span>
                 </th>
-                <th scope="col">Protocol</th>
-                <th scope="col">Usenet delay</th>
-                <th scope="col">Torrent delay</th>
-                <th scope="col">Bypass</th>
-                <th scope="col">Tags</th>
+                <th scope="col">{t('common.protocol')}</th>
+                <th scope="col">{t('settings.profiles.delayProfiles.usenetDelay')}</th>
+                <th scope="col">{t('settings.profiles.delayProfiles.torrentDelay')}</th>
+                <th scope="col">{t('settings.profiles.delayProfiles.bypass')}</th>
+                <th scope="col">{t('common.tags')}</th>
                 <th scope="col" className="al-th--right">
-                  <span className="al-sr-only">Actions</span>
+                  <span className="al-sr-only">{t('common.actions')}</span>
                 </th>
               </tr>
             </thead>
@@ -200,15 +201,15 @@ export function DelayProfilesSection() {
                         {pinned ? '' : '⋮⋮'}
                       </span>
                     </td>
-                    <td>{p.preferredProtocol === 'usenet' ? 'Prefer Usenet' : 'Prefer Torrent'}</td>
+                    <td>{p.preferredProtocol === 'usenet' ? t('settings.profiles.delayProfiles.preferUsenet') : t('settings.profiles.delayProfiles.preferTorrent')}</td>
                     <td className="al-td--mono">{minutesLabel(p.usenetDelayMinutes)}</td>
                     <td className="al-td--mono">{minutesLabel(p.torrentDelayMinutes)}</td>
                     <td>
                       <span className="al-chip-row">
-                        {p.bypassIfHighestQuality ? <Chip tone="neutral">Highest quality</Chip> : null}
+                        {p.bypassIfHighestQuality ? <Chip tone="neutral">{t('settings.profiles.delayProfiles.highestQuality')}</Chip> : null}
                         {p.bypassIfAboveCustomFormatScore ? (
                           <Chip tone="neutral">
-                            Score ≥ <span className="al-num">{p.minimumCustomFormatScore}</span>
+                            {t('settings.profiles.delayProfiles.score')} <span className="al-num">{p.minimumCustomFormatScore}</span>
                           </Chip>
                         ) : null}
                       </span>
@@ -217,10 +218,10 @@ export function DelayProfilesSection() {
                       <span className="al-chip-row">
                         {pinned ? (
                           <Chip tone="muted" dot="none">
-                            Default
+                            {t('settings.profiles.delayProfiles.default')}
                           </Chip>
                         ) : (
-                          tagLabels(p.tags).map((t) => <Tag key={t}>{t}</Tag>)
+                          tagLabels(p.tags).map((item) => <Tag key={item}>{item}</Tag>)
                         )}
                       </span>
                     </td>
@@ -230,7 +231,7 @@ export function DelayProfilesSection() {
                           size="sm"
                           variant="ghost"
                           className="al-qlist__move"
-                          aria-label="Move up"
+                          aria-label={t('settings.profiles.delayProfiles.moveUp')}
                           disabled={!delayReorderRequest(sorted, i, 'up') || reorder.isPending}
                           onClick={() => move(i, 'up')}
                         >
@@ -240,14 +241,14 @@ export function DelayProfilesSection() {
                           size="sm"
                           variant="ghost"
                           className="al-qlist__move"
-                          aria-label="Move down"
+                          aria-label={t('settings.profiles.delayProfiles.moveDown')}
                           disabled={!delayReorderRequest(sorted, i, 'down') || reorder.isPending}
                           onClick={() => move(i, 'down')}
                         >
                           ↓
                         </Button>
                         <Button size="sm" variant="ghost" onClick={() => setEditing(p)}>
-                          Edit
+                          {t('common.edit')}
                         </Button>
                       </span>
                     </td>

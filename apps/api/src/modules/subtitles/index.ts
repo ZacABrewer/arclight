@@ -4,7 +4,8 @@ import { registerSubtitleJobs } from './jobs.js';
 import { subtitlesRoutes } from './routes.js';
 import { SubtitlesService, type SubtitlesServiceOptions } from './service.js';
 
-export { SubtitlesService, SubtitlesError, type FileContext, type SubtitlesServiceOptions } from './service.js';
+export { SubtitlesService, SubtitlesError, WHISPER_AUTO_KEY, type FileContext, type SubtitlesServiceOptions } from './service.js';
+export { whisperUnreachableCheck, WHISPER_AUTODETECT_JOB, WHISPER_HEALTH_SOURCE, type WhisperHealthDeps } from './whisper.js';
 export { SUBTITLE_JOBS } from './jobs.js';
 export { execFileRunner, type ProcessRunner, type RunResult } from './runner.js';
 export * from './schema.js';
@@ -24,6 +25,7 @@ export function subtitlesServiceFor(ctx: AppContext, overrides: Partial<Subtitle
         await notificationsServiceFor(ctx).dispatch(event);
       },
       describeMedia: (mediaType, id) => translator.media(mediaType, id),
+      whisperUrl: process.env['ARCLIGHT_WHISPER_URL'],
       ...overrides,
     });
     services.set(ctx, service);
@@ -39,6 +41,10 @@ export const subtitlesModule: AppModule = (ctx) => async (app) => {
   // Media files that disappear take their subtitle rows with them.
   const unsubscribe = ctx.bus.subscribe((event) => {
     if (event.type === 'library' && (event.action === 'deleted' || event.action === 'fileDeleted')) service.pruneOrphans();
+  });
+  // Bundled Whisper: register it once the server is up (detached: a down service must not delay boot).
+  app.addHook('onReady', async () => {
+    service.detach(service.whisperAutoDetect().then((message) => ctx.log.debug({ module: 'subtitles' }, message)));
   });
   app.addHook('onClose', async () => {
     unsubscribe();

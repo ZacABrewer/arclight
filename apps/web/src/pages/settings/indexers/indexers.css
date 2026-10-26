@@ -29,3 +29,10 @@
   .al-chooser__filters > * { flex: 1 1 140px; }
   .al-chooser__list { max-height: none; }
 }
+.al-proxy-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+.al-solver-hint { color: var(--al-warn-text); }
+.al-solver-hint a { margin-left: 6px; }
+.al-chooser__list > li > .al-solver-hint { margin: 0; padding: 6px 14px 0; font-size: 13px; }
+
+/* Tracker account tab (tracker-account.tsx). */
+.al-tracker-account { display: flex; flex-direction: column; gap: 24px; padding-top: 8px; }

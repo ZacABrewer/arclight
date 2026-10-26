@@ -205,6 +205,19 @@ const downloadSchema = obj({
   }).optional(),
 });
 
+/**
+ * Arclight extension: the user's account page on a private tracker. `fields` maps `ratio`,
+ * `uploaded`, `downloaded`, `buffer`, `hnrCount` and `seedBonus` to selector blocks evaluated
+ * against the (logged-in) page; sizes go through the size parser, `ratio`/`seedBonus` through
+ * the decimal parser and `hnrCount` through the integer parser.
+ */
+const accountSchema = obj({
+  path: scalar,
+  method: z.string().optional(),
+  inputs: inputsSchema.optional(),
+  fields: z.record(z.string(), selectorBlockSchema),
+});
+
 export const definitionSchema = obj({
   schemaversion: z.number().int().optional(),
   schema: z.number().int().optional(),
@@ -232,6 +245,8 @@ export const definitionSchema = obj({
   download: downloadSchema.optional(),
   /** Arclight extension: the search path `test()` requests instead of the RSS/keyword probe. */
   test: pathSchema.optional(),
+  /** Arclight extension: account statistics page (ratio, upload, download, buffer, H&R count). */
+  account: accountSchema.optional(),
 });
 
 type RawDefinition = z.output<typeof definitionSchema>;
@@ -247,6 +262,7 @@ export type LoginMethod = 'form' | 'post' | 'cookie' | 'get' | 'oneurl';
 export type LoginDefinition = Omit<z.output<typeof loginSchema>, 'method'> & { method: LoginMethod };
 export type SearchDefinition = Omit<z.output<typeof searchSchema>, 'paths' | 'path'> & { paths: SearchPathDefinition[] };
 export type DownloadDefinition = z.output<typeof downloadSchema>;
+export type AccountDefinition = z.output<typeof accountSchema>;
 export type CapsDefinition = Omit<z.output<typeof capsSchema>, 'modes'> & { modes: Record<SearchModeName, string[]> };
 export type SiteType = 'public' | 'semi-private' | 'private';
 export type SearchModeName = 'search' | 'tv-search' | 'movie-search' | 'music-search' | 'book-search';
@@ -426,6 +442,9 @@ export function parseDefinition(input: unknown, options: ParseDefinitionOptions 
     ...(testPath ? { test: testPath } : {}),
     warnings,
   };
-  validateTemplates({ login: definition.login, search: definition.search, download: definition.download, test: definition.test }, '');
+  validateTemplates(
+    { login: definition.login, search: definition.search, download: definition.download, test: definition.test, account: definition.account },
+    '',
+  );
   return definition;
 }

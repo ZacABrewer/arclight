@@ -37,6 +37,13 @@ export const subtitleFiles = sqliteTable(
     size: integer('size'),
     mtime: text('mtime'),
     added: text('added').notNull(),
+    /** Sync quality 0-100 of the last check (null: never checked or not measurable). */
+    syncScore: integer('sync_score'),
+    syncOffsetMs: integer('sync_offset_ms'),
+    syncDriftPpm: integer('sync_drift_ppm'),
+    syncCheckedAt: text('sync_checked_at'),
+    /** builtin | ffsubsync | alass */
+    syncMethod: text('sync_method'),
   },
   (t) => [index('subtitle_files_media_file_idx').on(t.mediaFileId), index('subtitle_files_path_idx').on(t.path)],
 );
@@ -66,6 +73,10 @@ export const subtitleHistory = sqliteTable(
     matched: text('matched', { mode: 'json' }).$type<string[]>().notNull(),
     notMatched: text('not_matched', { mode: 'json' }).$type<string[]>().notNull(),
     upgradedFromId: integer('upgraded_from_id'),
+    /** Latest sync check of the subtitle this entry wrote. */
+    syncScore: integer('sync_score'),
+    syncOffsetMs: integer('sync_offset_ms'),
+    syncDriftPpm: integer('sync_drift_ppm'),
     date: text('date').notNull(),
   },
   (t) => [

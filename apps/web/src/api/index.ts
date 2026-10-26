@@ -34,3 +34,6 @@ export {
 } from './requests.js';
 export { subtitlesApi, languageProfilesApi, uploadFormData } from './subtitles.js';
 export { torrentApi, type TorrentAction } from './torrent.js';
+export { solverApi } from './solver.js';
+export { updatesApi } from './updates.js';
+export { pushApi } from './push.js';

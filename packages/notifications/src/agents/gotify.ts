@@ -28,7 +28,11 @@ export class GotifyAgent extends BaseAgent {
   buildPayload(event: NotificationEvent): GotifyPayload {
     const formatted = formatEvent(event);
     const message = this.settings.markdown
-      ? [`**${formatted.subject}**`, ...formatted.fields.map((f) => `**${f.name}:** ${f.value}`)].join('  \n')
+      ? [
+          `**${formatted.subject}**`,
+          ...formatted.fields.map((f) => `**${f.name}:** ${f.value}`),
+          ...(formatted.actions ?? []).map((a) => `[${a.label}](${a.url})`),
+        ].join('  \n')
       : formatted.body;
     const payload: GotifyPayload = {
       title: formatted.title,

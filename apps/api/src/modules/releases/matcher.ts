@@ -1,5 +1,13 @@
 import { parseRelease, type MediaTypeHint, type ParsedRelease } from '@arclight/parser';
 import type { Episode, Movie, Series } from '@arclight/shared';
+import {
+  absoluteIndex,
+  aliasAppliesToSeason,
+  parsedSeason,
+  preferAlias,
+  resolveSceneNumbering,
+  type SceneRule,
+} from '../scene-mapping/mapping.js';
 
 // Maps a parsed release onto library items (decision-engine spec §3). Pure: the library is
 // read through the `LibrarySnapshot` interface so the matcher is testable without a DB.
@@ -8,6 +16,10 @@ export interface LibrarySnapshot {
   series(): readonly Series[];
   episodes(seriesId: number): readonly Episode[];
   movies(): readonly Movie[];
+  /** Scene numbering rules of a series (scene-mapping module); omitted = none. */
+  sceneMappings?(seriesId: number): readonly SceneRule[];
+  /** Every `title` rule (scene title aliases) across the library; omitted = none. */
+  sceneTitleRules?(): readonly SceneRule[];
 }
 
 export interface ReleaseIds {
@@ -25,7 +37,10 @@ export interface MatchCriteria {
   movieId?: number;
 }
 
-export type MatchType = 'title' | 'id' | 'criteria' | 'override';
+export type MatchType = 'title' | 'alias' | 'id' | 'criteria' | 'override';
+
+/** Which numbering produced the episodes: a scene rule tier, or the anime absolute fallback. */
+export type SceneNumberingSource = 'manual' | 'feed' | 'absolute';
 
 export interface SeriesMatch {
   status: 'mapped';
@@ -36,6 +51,8 @@ export interface SeriesMatch {
   fullSeason: boolean;
   special: boolean;
   matchType: MatchType;
+  /** Set when scene rules or the derived anime absolute numbering mapped the episodes. */
+  sceneSource?: SceneNumberingSource;
 }
 
 export interface MovieMatch {
@@ -156,7 +173,46 @@ function findSeriesByIds(all: readonly Series[], ids: ReleaseIds): Series | null
   return null;
 }
 
-type SeriesLookup = { series: Series; matchType: MatchType } | { ambiguous: number[] } | null;
+type SeriesLookup = { series: Series; matchType: MatchType; alias?: SceneRule } | { ambiguous: number[] } | null;
+
+const aliasKeyCache = new WeakMap<SceneRule, Set<string>>();
+function aliasKeys(rule: SceneRule): Set<string> {
+  let keys = aliasKeyCache.get(rule);
+  if (!keys) {
+    keys = titleKeys(rule.sceneTitle ?? '');
+    aliasKeyCache.set(rule, keys);
+  }
+  return keys;
+}
+
+/** Spec §3.1.3 step 1: scene title aliases (title rules), preferring the searched series. */
+function lookupAlias(parsed: ParsedRelease, all: readonly Series[], lib: LibrarySnapshot, criteria?: MatchCriteria): SeriesLookup {
+  const info = parsed.series;
+  const rules = lib.sceneTitleRules?.() ?? [];
+  if (!info || rules.length === 0) return null;
+  const title = info.titleInfo.title || info.title;
+  const keys = titleKeys(title);
+  const keysWithoutYear = titleKeys(info.titleInfo.titleWithoutYear || title);
+  const season = parsedSeason(info);
+  const hits = rules.filter(
+    (r) => aliasAppliesToSeason(r, season) && (intersects(keys, aliasKeys(r)) || intersects(keysWithoutYear, aliasKeys(r))),
+  );
+  if (hits.length === 0) return null;
+  const bySeries = new Map<number, SceneRule[]>();
+  for (const r of hits) {
+    if (!all.some((s) => s.id === r.seriesId)) continue;
+    bySeries.set(r.seriesId, [...(bySeries.get(r.seriesId) ?? []), r]);
+  }
+  const pick = (id: number): SeriesLookup => {
+    const series = all.find((s) => s.id === id)!;
+    const alias = preferAlias(bySeries.get(id)!, season);
+    return { series, matchType: 'alias', ...(alias ? { alias } : {}) };
+  };
+  if (criteria?.seriesId !== undefined && bySeries.has(criteria.seriesId)) return pick(criteria.seriesId);
+  if (bySeries.size === 1) return pick([...bySeries.keys()][0]!);
+  if (bySeries.size > 1) return { ambiguous: [...bySeries.keys()] };
+  return null;
+}
 
 function lookupSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: LibrarySnapshot, criteria?: MatchCriteria): SeriesLookup {
   const info = parsed.series;
@@ -166,6 +222,9 @@ function lookupSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: LibrarySnapsh
   const year = info?.titleInfo.year ?? 0;
   const keys = titleKeys(title);
   const keysWithoutYear = titleKeys(withoutYear);
+
+  const viaAlias = lookupAlias(parsed, all, lib, criteria);
+  if (viaAlias) return viaAlias;
 
   // A running search: compare against the searched series first.
   if (criteria?.seriesId !== undefined) {
@@ -223,11 +282,15 @@ export function mapEpisodes(
     return { episodes: sortEpisodes(hits), seasonNumber: season, fullSeason: true, special: false };
   }
 
-  if (info.absoluteEpisodes.length > 0 && (info.episodes.length === 0 || series.seriesType === 'anime')) {
+  const anime = series.seriesType === 'anime';
+  // Anime without library absolute numbers: derived from season/episode order.
+  const absIndex = absoluteIndex(episodes, anime);
+  if (info.absoluteEpisodes.length > 0 && (info.episodes.length === 0 || anime)) {
     const hits: Episode[] = [];
     for (const abs of info.absoluteEpisodes) {
-      const pool = info.special ? episodes.filter((e) => e.seasonNumber === 0) : episodes.filter((e) => e.seasonNumber > 0);
-      const hit = pool.find((e) => e.absoluteEpisodeNumber === abs);
+      const hit = info.special
+        ? episodes.find((e) => e.seasonNumber === 0 && e.absoluteEpisodeNumber === abs)
+        : absIndex.get(abs);
       if (hit) hits.push(hit);
     }
     if (hits.length > 0) {
@@ -238,8 +301,12 @@ export function mapEpisodes(
 
   if (season === undefined) return none;
   const hits: Episode[] = [];
+  const seasonMax = Math.max(0, ...episodes.filter((e) => e.seasonNumber === season).map((e) => e.episodeNumber));
   for (const n of info.episodes) {
-    const hit = episodes.find((e) => e.seasonNumber === season && e.episodeNumber === n);
+    let hit = episodes.find((e) => e.seasonNumber === season && e.episodeNumber === n);
+    // Anime groups often number continuously under one season ("S01E30"): past the end of the
+    // season the number is read as absolute.
+    if (!hit && anime && season > 0 && n > seasonMax) hit = absIndex.get(n);
     if (hit) hits.push(hit); // missing numbers are skipped (§3.2.6)
   }
   return { episodes: dedupeEpisodes(hits), seasonNumber: season, fullSeason: false, special: season === 0 };
@@ -306,7 +373,7 @@ export function matchSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: Library
       candidates: found.ambiguous,
     };
   }
-  const mapped = mapEpisodes(parsed, found.series, lib.episodes(found.series.id));
+  const mapped = mapSeriesEpisodes(parsed, found.series, lib.episodes(found.series.id), lib.sceneMappings?.(found.series.id) ?? [], found.alias);
   if (mapped.episodes.length === 0) {
     return {
       status: 'unknown',
@@ -317,6 +384,50 @@ export function matchSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: Library
     };
   }
   return { status: 'mapped', mediaType: 'series', series: found.series, ...mapped, matchType: found.matchType };
+}
+
+export type MappedEpisodes = ReturnType<typeof mapEpisodes> & { sceneSource?: SceneNumberingSource };
+
+/**
+ * Episodes of a known series for a parsed release: scene rules first (manual, then feed), else
+ * plain numbering with the anime absolute fallback. `alias` is the title rule the series was
+ * matched through; when omitted, the series's own title rules are checked against the parsed
+ * title (used for library files, whose series is known from the folder).
+ */
+export function mapSeriesEpisodes(
+  parsed: ParsedRelease,
+  series: Series,
+  episodes: readonly Episode[],
+  rules: readonly SceneRule[],
+  alias?: SceneRule,
+): MappedEpisodes {
+  const info = parsed.series;
+  if (!info) return mapEpisodes(parsed, series, episodes);
+  let via = alias;
+  if (!via) {
+    const keys = titleKeys(info.titleInfo.title || info.title);
+    const season = parsedSeason(info);
+    const own = rules.filter((r) => aliasAppliesToSeason(r, season) && intersects(keys, aliasKeys(r)));
+    via = own.length > 0 ? preferAlias(own, season) : undefined;
+  }
+  const scene = resolveSceneNumbering(info, series, episodes, rules, via);
+  if (scene) {
+    const { source, ...rest } = scene;
+    return { ...rest, sceneSource: source };
+  }
+  const mapped: MappedEpisodes = mapEpisodes(parsed, series, episodes);
+  if (mapped.episodes.length > 0 && usedDerivedAbsolute(parsed, series, episodes, mapped.episodes)) mapped.sceneSource = 'absolute';
+  return mapped;
+}
+
+/** True when the anime fallback mapped through derived (not library) absolute numbers. */
+function usedDerivedAbsolute(parsed: ParsedRelease, series: Series, all: readonly Episode[], mapped: readonly Episode[]): boolean {
+  if (series.seriesType !== 'anime' || !parsed.series) return false;
+  const info = parsed.series;
+  if (all.some((e) => e.seasonNumber > 0 && e.absoluteEpisodeNumber != null)) return false;
+  if (info.absoluteEpisodes.length > 0) return true;
+  const season = info.seasons[0];
+  return mapped.some((e) => e.seasonNumber !== season || !info.episodes.includes(e.episodeNumber));
 }
 
 // ---- movies -------------------------------------------------------------------------

@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { useHotkey } from '../hooks/use-hotkey.js';
 import { LiveDot } from '../components/Progress.js';
+import { t } from '../../i18n/index.js';
 
 export interface TopBarProps {
   /** Opens the global search overlay. Bound to the search field click and the "/" key. */
@@ -34,23 +35,19 @@ export interface TopBarProps {
   className?: string | undefined;
 }
 
-function plural(n: number, one: string, many: string) {
-  return n === 1 ? one : many;
-}
-
 /** Top bar: 60px, wordmark, underline search with "/" hint, plain-text status, square avatar. */
 export function TopBar({
   onSearch,
-  searchPlaceholder = 'Search',
+  searchPlaceholder = t('common.search'),
   connected = true,
-  disconnectedLabel = 'Reconnecting',
+  disconnectedLabel = t('arclight.chrome.topBar.reconnecting'),
   vpnLocation,
   requestCount,
   issueCount,
   onRequestsClick,
   onIssuesClick,
   initials = '?',
-  userLabel = 'Account',
+  userLabel = t('common.account'),
   userMenu,
   onAvatarClick,
   children,
@@ -94,9 +91,9 @@ export function TopBar({
 
   return (
     <header className={cx('al-topbar', className)}>
-      <div className="al-wordmark">ARCLIGHT</div>
+      <div className="al-wordmark">{t('common.arclight')}</div>
       {onSearch ? (
-        <button type="button" className="al-topbar__search" onClick={onSearch} aria-label="Search (press /)" aria-keyshortcuts="/">
+        <button type="button" className="al-topbar__search" onClick={onSearch} aria-label={t('arclight.chrome.topBar.searchPress')} aria-keyshortcuts="/">
           <span>{searchPlaceholder}</span>
           <kbd>/</kbd>
         </button>
@@ -106,15 +103,15 @@ export function TopBar({
       <div className="al-topbar__status" role="status" aria-live="polite">
         <span className="al-topbar__conn" data-state={connected ? undefined : 'down'}>
           <LiveDot down={!connected} />
-          <span className="al-topbar__conn-label">{connected ? 'Connected' : disconnectedLabel}</span>
+          <span className="al-topbar__conn-label">{connected ? t('common.connected') : disconnectedLabel}</span>
         </span>
-        {vpnLocation !== undefined ? <span className="al-topbar__vpn">{vpnLocation === null ? 'VPN off' : `VPN ${vpnLocation}`}</span> : null}
+        {vpnLocation !== undefined ? <span className="al-topbar__vpn">{vpnLocation === null ? t('common.vpnOff') : t('arclight.chrome.topBar.vpnVpnlocation', { vpnLocation })}</span> : null}
         {requestCount !== undefined
           ? statusText(
               onRequestsClick,
               'al-topbar__requests',
               <>
-                <Count n={requestCount} /> {plural(requestCount, 'request', 'requests')}
+                <Count n={requestCount} /> {t('arclight.chrome.topBar.requests', { count: requestCount })}
               </>,
             )
           : null}
@@ -123,7 +120,7 @@ export function TopBar({
               onIssuesClick,
               'al-topbar__issues',
               <>
-                <Count n={issueCount} /> {plural(issueCount, 'issue', 'issues')}
+                <Count n={issueCount} /> {t('arclight.chrome.topBar.issues', { count: issueCount })}
               </>,
               { 'data-active': issuesActive ? 'true' : undefined },
             )

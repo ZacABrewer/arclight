@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { ImportListCreateInput, ImportListExclusionCreate, ImportListSettings, MediaType } from '@arclight/shared';
 import { importListsApi } from '../api/import-lists.js';
 import { useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 // Keys live under ['settings', 'importlists'] so a settings event from the live socket refetches
 // them; found-in chips sit under the same root so a sync refreshes them too.
@@ -59,12 +60,12 @@ export function useSaveImportList() {
 
 export function useDeleteImportList() {
   return useInvalidatingMutation((id: number) => importListsApi.remove(id), [importListKeys.all], {
-    errorTitle: 'Could not delete import list',
+    errorTitle: t('hooks.importLists.couldNotDeleteImportList'),
   });
 }
 
 export function useSyncImportLists() {
-  return useInvalidatingMutation(() => importListsApi.sync(), [importListKeys.all], { errorTitle: 'Sync failed' });
+  return useInvalidatingMutation(() => importListsApi.sync(), [importListKeys.all], { errorTitle: t('common.syncFailed') });
 }
 
 export function useImportListExclusions() {
@@ -81,7 +82,7 @@ export function useAddImportListExclusion() {
 
 export function useDeleteImportListExclusion() {
   return useInvalidatingMutation((id: number) => importListsApi.exclusions.remove(id), [importListKeys.exclusions], {
-    errorTitle: 'Could not remove exclusion',
+    errorTitle: t('hooks.importLists.couldNotRemoveExclusion'),
   });
 }
 
@@ -91,6 +92,6 @@ export function useImportListSettings() {
 
 export function useSaveImportListSettings() {
   return useInvalidatingMutation((body: ImportListSettings) => importListsApi.settings.update(body), [importListKeys.settings], {
-    errorTitle: 'Could not save import list settings',
+    errorTitle: t('hooks.importLists.couldNotSaveImportList'),
   });
 }

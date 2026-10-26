@@ -109,6 +109,34 @@ export {
   type ZipEntry,
   type PickHints,
 } from './archive.js';
+export {
+  buildAudioActivityCommand,
+  planAudioWindows,
+  parseSilenceDetect,
+  parseEbur128,
+  parseCues,
+  speechOnsets,
+  estimateSync,
+  compareTimings,
+  robustTimingFit,
+  syncScoreFromError,
+  describeEstimate,
+  syncCheckOutputPath,
+  buildSyncCheckCommand,
+  syncAutoAction,
+  DEFAULT_SYNC_RATIOS,
+  type TimeInterval,
+  type AudioWindow,
+  type AudioDetector,
+  type SyncCheckMethod,
+  type AudioActivityOptions,
+  type Ebur128Options,
+  type SyncEstimate,
+  type EstimateOptions,
+  type SyncCheckCommandOptions,
+  type SyncAutoActionSettings,
+  type SyncAutoAction,
+} from './sync-check.js';
 export { xzDecompress, isXz, XzError } from './xz.js';
 export { decodeSubtitle, toUtf8, type DecodedText } from './encoding.js';
 export {
@@ -150,7 +178,14 @@ export {
   type ProbeResult,
   type ProbeStream,
 } from './providers/embedded.js';
-export { WhisperProvider, buildAudioExtractArgs, type WhisperConfig, type WhisperDeps } from './providers/whisper.js';
+export {
+  WhisperProvider,
+  buildAudioExtractArgs,
+  probeWhisperService,
+  type WhisperConfig,
+  type WhisperDeps,
+  type WhisperProbeResult,
+} from './providers/whisper.js';
 
 /** Default provider order for Phase 3 (R5.3), embedded first per Q9, whisper last. */
 export const DEFAULT_PROVIDER_ORDER = [

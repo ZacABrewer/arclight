@@ -42,6 +42,7 @@ const settingsInSync: SettingsAccepted = {
   sabnzbd: true,
   nzbget: true,
   builtin: true,
+  remoteEngine: true,
 };
 void settingsInSync;
 
@@ -170,6 +171,21 @@ const KIND_META: Record<DownloadClientImplementation, KindMeta> = {
     advanced: ['postImportCategory', 'categories', 'seedRatioLimit', 'seedTimeLimitMinutes'],
     labels: { savePath: 'Download Folder', categories: 'Category Folders', seedTimeLimitMinutes: 'Seed Time Limit (minutes)' },
   },
+  remoteEngine: {
+    name: 'Remote Engine',
+    description:
+      "Arclight's BitTorrent engine running on another machine: the engine agent on a seedbox or VPS, or another Arclight. Finished downloads are imported from shared storage or copied over (pull mode).",
+    infoLink: '/docs/remote-engine',
+    advanced: ['postImportCategory', 'bandwidthLimitKbps', 'followVpnPort'],
+    labels: {
+      url: 'Agent URL',
+      token: 'Token',
+      pullMode: 'Pull Mode',
+      localDownloadPath: 'Local Download Folder',
+      bandwidthLimitKbps: 'Copy Limit (KiB/s)',
+      followVpnPort: 'Follow VPN Port',
+    },
+  },
 };
 
 const LABELS: Record<string, string> = {
@@ -204,6 +220,8 @@ const OPTION_LABELS: Record<string, string> = {
 
 /** Prefilled host for a fresh client (the schemas deliberately have no default host). */
 const TEMPLATE_HOST = 'localhost';
+/** Prefilled agent address for a fresh remote engine (the standalone agent's default port). */
+const REMOTE_ENGINE_TEMPLATE_URL = 'http://localhost:7879';
 
 function humanize(value: string): string {
   const spaced = value.replace(/([a-z])([A-Z])/g, '$1 $2');
@@ -268,6 +286,7 @@ function settingsField(kind: DownloadClientImplementation, key: string, schema: 
     field.type = 'password';
   }
   if (key === 'host') field.default = TEMPLATE_HOST;
+  else if (kind === 'remoteEngine' && key === 'url') field.default = REMOTE_ENGINE_TEMPLATE_URL;
   else if (typeof defaultValue === 'string' || typeof defaultValue === 'number' || typeof defaultValue === 'boolean') {
     field.default = defaultValue;
   }
@@ -308,6 +327,8 @@ function template(kind: DownloadClientImplementation): DownloadClientInput {
       return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse(raw) };
     case 'builtin':
       return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse({}) };
+    case 'remoteEngine':
+      return { ...common, implementation: kind, settings: downloadClientSettingsSchemas[kind].parse({ url: REMOTE_ENGINE_TEMPLATE_URL }) };
   }
 }
 

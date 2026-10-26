@@ -7,7 +7,9 @@ import { useSubtitleHistory } from '../../hooks/subtitles.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { SubtitlesHeader } from './subtitles-header.js';
+import { SyncBadge, syncShiftText } from './sync-ui.js';
 import { HISTORY_ACTION_LABELS, formatPercent, refLabel } from './subtitle-ui.js';
+import { t } from '../../i18n/index.js';
 
 const ACTION_TONES: Partial<Record<SubtitleHistoryAction, ChipTone>> = {
   downloaded: 'accent',
@@ -28,17 +30,19 @@ export function SubtitleHistoryPage() {
   const columns: Column<SubtitleHistoryRecord>[] = [
     {
       key: 'action',
-      header: 'Action',
+      header: t('common.action'),
       cell: (r) => <Chip tone={ACTION_TONES[r.action] ?? 'neutral'}>{HISTORY_ACTION_LABELS[r.action]}</Chip>,
     },
-    { key: 'title', header: 'Item', cell: (r) => <span className="mt-break">{r.title}</span> },
-    { key: 'language', header: 'Language', cell: (r) => refLabel(r) },
-    { key: 'provider', header: 'Provider', muted: true, cell: (r) => r.provider ?? '—' },
-    { key: 'score', header: 'Score', align: 'right', mono: true, cell: (r) => formatPercent(r.score, r.scoreOutOf) },
-    { key: 'description', header: 'Description', muted: true, cell: (r) => r.description },
+    { key: 'title', header: t('subtitles.subtitleHistory.item'), cell: (r) => <span className="mt-break">{r.title}</span> },
+    { key: 'language', header: t('common.language'), cell: (r) => refLabel(r) },
+    { key: 'provider', header: t('common.provider'), muted: true, cell: (r) => r.provider ?? '—' },
+    { key: 'score', header: t('common.score'), align: 'right', mono: true, cell: (r) => formatPercent(r.score, r.scoreOutOf) },
+    { key: 'sync', header: t('subtitles.sync.syncColumn'), align: 'right', cell: (r) => <SyncBadge sync={r} label={r.title} /> },
+    { key: 'syncShift', header: t('subtitles.sync.offsetAndDrift'), mono: true, muted: true, cell: (r) => syncShiftText(r) },
+    { key: 'description', header: t('subtitles.subtitleHistory.description'), muted: true, cell: (r) => r.description },
     {
       key: 'date',
-      header: 'Date',
+      header: t('common.date'),
       mono: true,
       cell: (r) => (
         <time dateTime={r.date} title={formatDateTime(r.date)}>
@@ -57,21 +61,21 @@ export function SubtitleHistoryPage() {
       <SubtitlesHeader active="history" />
       <div className="sub-page">
         <FilterBar activeCount={active} onClear={() => setFilter(DEFAULT_SUBTITLE_HISTORY_FILTER)}>
-          <Select aria-label="Media" value={filter.mediaType ?? ''} onChange={(e) => set({ mediaType: (e.currentTarget.value || undefined) as SubtitleMediaType | undefined })}>
-            <option value="">All media</option>
-            <option value="series">TV</option>
-            <option value="movie">Movies</option>
+          <Select aria-label={t('subtitles.subtitleHistory.media')} value={filter.mediaType ?? ''} onChange={(e) => set({ mediaType: (e.currentTarget.value || undefined) as SubtitleMediaType | undefined })}>
+            <option value="">{t('subtitles.subtitleHistory.allMedia')}</option>
+            <option value="series">{t('common.tv')}</option>
+            <option value="movie">{t('common.movies')}</option>
           </Select>
-          <Select aria-label="Action" value={filter.action ?? ''} onChange={(e) => set({ action: (e.currentTarget.value || undefined) as SubtitleHistoryAction | undefined })}>
-            <option value="">All actions</option>
+          <Select aria-label={t('common.action')} value={filter.action ?? ''} onChange={(e) => set({ action: (e.currentTarget.value || undefined) as SubtitleHistoryAction | undefined })}>
+            <option value="">{t('subtitles.subtitleHistory.allActions')}</option>
             {SubtitleHistoryAction.options.map((a) => (
               <option key={a} value={a}>
                 {HISTORY_ACTION_LABELS[a]}
               </option>
             ))}
           </Select>
-          <Select aria-label="Provider" value={filter.provider ?? ''} onChange={(e) => set({ provider: e.currentTarget.value || undefined })}>
-            <option value="">All providers</option>
+          <Select aria-label={t('common.provider')} value={filter.provider ?? ''} onChange={(e) => set({ provider: e.currentTarget.value || undefined })}>
+            <option value="">{t('subtitles.subtitleHistory.allProviders')}</option>
             {SUBTITLE_PROVIDER_IDS.map((p) => (
               <option key={p} value={p}>
                 {p}
@@ -80,21 +84,21 @@ export function SubtitleHistoryPage() {
           </Select>
         </FilterBar>
         {pending ? (
-          <PendingApiNotice what="subtitle history" />
+          <PendingApiNotice what={t('subtitles.subtitleHistory.subtitleHistory')} />
         ) : list.isError ? (
-          <ErrorBlock title="Subtitle history did not load" onRetry={() => void list.refetch()}>
+          <ErrorBlock title={t('subtitles.subtitleHistory.subtitleHistoryDidNotLoad')} onRetry={() => void list.refetch()}>
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
           <Pane flush bare>
             <Table
-              caption="Subtitle history"
+              caption={t('subtitles.subtitleHistory.subtitleHistory2')}
               columns={columns}
               rows={list.data?.records}
               rowKey={(r) => r.id}
               loading={list.isPending}
               sortable={false}
-              empty={<EmptyState title="No subtitle history">Downloads, upgrades, uploads and deletions are listed here.</EmptyState>}
+              empty={<EmptyState title={t('subtitles.subtitleHistory.noSubtitleHistory')}>{t('subtitles.subtitleHistory.downloadsUpgradesUploadsAndDeletions')}</EmptyState>}
             />
             {pageCount > 1 ? (
               <div className="sub-pager">

@@ -2,6 +2,7 @@ import type { CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
+import { t, intlLocale } from '../../i18n/index.js';
 
 // Pure calendar math: month grids, request ranges, grouping items by local day.
 
@@ -32,7 +33,7 @@ export function monthGrid(anchor: Date, weekStart: WeekStart = 1): Date[] {
 }
 
 /** Weekday header labels in grid order. */
-export function weekdayLabels(weekStart: WeekStart = 1, locale?: string): string[] {
+export function weekdayLabels(weekStart: WeekStart = 1, locale: string | undefined = intlLocale()): string[] {
   // 2023-01-01 was a Sunday.
   return Array.from({ length: 7 }, (_, i) =>
     new Date(2023, 0, 1 + ((i + weekStart) % 7)).toLocaleDateString(locale, { weekday: 'short' }),
@@ -114,7 +115,7 @@ export interface CalendarEntry {
   link: { to: '/library/series/$id' | '/library/movie/$id'; params: { id: string } };
 }
 
-const RELEASE_LABELS = { cinema: 'In cinemas', digital: 'Digital release', physical: 'Physical release' } as const;
+const RELEASE_LABELS = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('calendar.math.digitalRelease'); }, get physical() { return t('calendar.math.physicalRelease'); } } as const;
 
 export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: TimeFormat = '24h'): CalendarEntry | null {
   const parsed = parseDateish(item.date);

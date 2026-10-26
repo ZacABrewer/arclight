@@ -1,0 +1,13 @@
+/* System → Health docs: one article per check anchor, mono check ids, numbered fixes. */
+.al-hdocs { display: flex; flex-direction: column; }
+.al-hdocs__none { padding: 20px 24px; margin: 0; }
+.al-hdoc { padding: 20px 24px; border-bottom: 1px solid var(--al-line-1); scroll-margin-top: 96px; }
+.al-hdoc:last-child { border-bottom: 0; }
+.al-hdoc[data-active] { border-left: 2px solid var(--al-cyan); padding-left: 22px; }
+.al-hdoc__title { margin: 0 0 4px; }
+.al-hdoc__anchor { color: var(--al-text-1); }
+.al-hdoc__sources { margin: 0 0 12px; color: var(--al-text-4); font-size: 12px; }
+.al-hdoc__body { display: grid; grid-template-columns: 80px 1fr; gap: 8px 16px; margin: 0; }
+.al-hdoc__body dd { margin: 0; color: var(--al-text-3); }
+.al-hdoc__steps { margin: 0 0 8px; padding-left: 18px; }
+@media (max-width: 767px) { .al-hdoc__body { grid-template-columns: 1fr; } }

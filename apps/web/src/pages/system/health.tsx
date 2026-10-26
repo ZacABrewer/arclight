@@ -2,6 +2,7 @@ import type { HealthCheck } from '@arclight/shared';
 import { Button, Chip, EmptyState, ErrorBlock, Pane, Skeleton } from '../../arclight/index.js';
 import { useHealth } from '../../hooks/system.js';
 import { SystemHeader } from './system-header.js';
+import { t } from '../../i18n/index.js';
 
 const ORDER = { error: 0, warning: 1, ok: 2 } as const;
 
@@ -9,14 +10,15 @@ const ORDER = { error: 0, warning: 1, ok: 2 } as const;
 function IssueRow({ check }: { check: HealthCheck }) {
   return (
     <li className="sys-issue" data-status={check.status}>
-      {check.status === 'error' ? <Chip tone="danger">Failed</Chip> : check.status === 'warning' ? <Chip tone="warn">Needs attention</Chip> : <Chip tone="accent">OK</Chip>}
+      {check.status === 'error' ? <Chip tone="danger">{t('status.failed')}</Chip> : check.status === 'warning' ? <Chip tone="warn">{t('system.health.needsAttention')}</Chip> : <Chip tone="accent">{t('system.health.ok')}</Chip>}
       <div className="sys-issue__text">
         <span className="sys-issue__cause">{check.message}</span>
         <span className="sys-muted">{check.source}</span>
       </div>
       {check.wikiUrl ? (
-        <a className="al-link sys-issue__fix" href={check.wikiUrl} target="_blank" rel="noreferrer">
-          How to fix
+        // In-app docs (/docs/system/health#…) open in place; external links in a new tab.
+        <a className="al-link sys-issue__fix" href={check.wikiUrl} {...(check.wikiUrl.startsWith('/') ? {} : { target: '_blank', rel: 'noreferrer' })}>
+          {t('system.health.howToFix')}
         </a>
       ) : null}
     </li>
@@ -30,36 +32,36 @@ export function SystemHealthPage() {
   return (
     <>
       <SystemHeader
-        title="Health"
+        title={t('system.health.health')}
         subtitle={
           health.data ? (
             issues ? (
               <>
-                <span className="al-num">{issues}</span> {issues === 1 ? 'issue' : 'issues'}
+                <span className="al-num">{issues}</span> {t('system.health.issues', { issues })}
               </>
             ) : (
-              'Every check passes'
+              t('system.health.everyCheckPasses')
             )
           ) : null
         }
         actions={
           <Button variant="secondary" onClick={() => void health.refetch()} loading={health.isFetching}>
-            Run checks
+            {t('system.health.runChecks')}
           </Button>
         }
       />
-      <Pane title="Checks" flush>
+      <Pane title={t('system.health.checks')} flush>
         {health.isPending ? (
           <div className="sys-pad">
             <Skeleton lines={3} />
           </div>
         ) : health.isError ? (
           <div className="sys-pad">
-            <ErrorBlock title="Couldn't run health checks" onRetry={() => void health.refetch()} />
+            <ErrorBlock title={t('system.health.couldntRunHealthChecks')} onRetry={() => void health.refetch()} />
           </div>
         ) : checks.length === 0 ? (
           <div className="sys-pad">
-            <EmptyState title="No issues">Every health check passes.</EmptyState>
+            <EmptyState title={t('system.health.noIssues')}>{t('system.health.everyHealthCheckPasses')}</EmptyState>
           </div>
         ) : (
           <ul className="sys-issues">

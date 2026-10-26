@@ -72,7 +72,7 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
 
     // ----------------------------------------------------------------------------- auth
     app.post('/auth/login', { schema: { body: LoginRequest, response: { 200: Session, ...errors } } }, async (req, reply) => {
-      const result = await auth.login(req.body.username, req.body.password, { ...meta(req), rememberMe: req.body.rememberMe });
+      const result = await auth.loginWith(req.body.method, req.body.username, req.body.password, { ...meta(req), rememberMe: req.body.rememberMe });
       setSessionCookie(req, reply, result.token, result.maxAgeSeconds);
       return { user: result.user, via: 'session' as const, isAdmin: result.user.role === 'admin', expiresAt: result.expiresAt };
     });
@@ -90,6 +90,7 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
       authMethod: auth.authSettings().method,
       authenticated: req.auth !== null,
       session: req.auth ? sessionOf(req.auth) : null,
+      mediaServerLogin: auth.mediaServerLogin?.() ?? null,
     }));
 
     app.get('/auth/sessions', { schema: { response: { 200: z.array(SessionRecord) } } }, async (req) =>

@@ -70,3 +70,7 @@
 .sub-lang { display: inline-flex; align-items: center; gap: 8px; }
 .sub-state { display: inline-flex; align-items: center; color: var(--al-text-3); }
 .sub-seasons { padding: 12px; }
+/* Sync-quality badge: focusable chip (tooltip carries score / offset / drift). */
+.sub-sync-badge { font-family: var(--al-mono); cursor: help; }
+.sub-sync-details { display: flex; flex-direction: column; gap: 6px; min-width: 180px; }
+.sub-sync-details__head { font-weight: 600; }

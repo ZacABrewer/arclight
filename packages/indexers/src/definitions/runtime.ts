@@ -63,6 +63,31 @@ export interface RuntimeOptions {
 /** Torznab categories may be attached to any request. */
 export type DefinitionSearchRequest = SearchRequest & { categories?: readonly number[] };
 
+/** Account statistics scraped through a definition's `account` block (absent fields were not found). */
+export interface AccountStats {
+  ratio?: number;
+  /** Bytes. */
+  uploaded?: number;
+  /** Bytes. */
+  downloaded?: number;
+  /** Bytes. */
+  buffer?: number;
+  hnrCount?: number;
+  seedBonus?: number;
+}
+
+const ACCOUNT_FIELDS: Record<string, { key: keyof AccountStats; parse: (raw: string) => number | undefined }> = {
+  ratio: { key: 'ratio', parse: (raw) => parseDecimal(raw) },
+  uploaded: { key: 'uploaded', parse: (raw) => parseSize(raw) },
+  upload: { key: 'uploaded', parse: (raw) => parseSize(raw) },
+  downloaded: { key: 'downloaded', parse: (raw) => parseSize(raw) },
+  download: { key: 'downloaded', parse: (raw) => parseSize(raw) },
+  buffer: { key: 'buffer', parse: (raw) => parseSize(raw) },
+  hnrcount: { key: 'hnrCount', parse: (raw) => parseInteger(raw) },
+  hnr: { key: 'hnrCount', parse: (raw) => parseInteger(raw) },
+  seedbonus: { key: 'seedBonus', parse: (raw) => parseDecimal(raw) },
+};
+
 export type DownloadResult =
   | { kind: 'torrent'; data: Uint8Array; url: string; contentType?: string }
   | { kind: 'magnet'; magnetUrl: string };
@@ -1478,6 +1503,47 @@ export class DefinitionRuntime {
     }
     if (!looksLikeTorrent(res.body)) throw new IndexerError('bad-response', 'Downloaded file is not a torrent');
     return { kind: 'torrent', data: res.body, url: res.url, ...(ct ? { contentType: ct } : {}) };
+  }
+
+  // ------------------------------------------------------------------ account (Arclight)
+
+  /**
+   * Fetch the logged-in account page named by the definition's `account` block and read the
+   * user's ratio, upload, download, buffer and H&R count from it. Missing values are left out;
+   * a definition without an `account` block throws `IndexerError('bad-response')`.
+   */
+  async accountStats(): Promise<AccountStats> {
+    const account = this.definition.account;
+    if (!account) throw new IndexerError('bad-response', `${this.definition.name} has no account statistics page`);
+    const vars = this.baseVars();
+    const path: SearchPathDefinition = {
+      path: account.path,
+      method: (account.method ?? 'get').toLowerCase() === 'post' ? 'post' : 'get',
+      inheritinputs: false,
+      ...(account.inputs ? { inputs: account.inputs } : {}),
+    };
+    const result = await this.fetchAuthed(() => this.buildSearchRequest(path, vars));
+    this.checkResponse(result);
+    const doc = parseHtml(this.text(result));
+    const target: RowTarget = { kind: 'html', node: doc, doc };
+    const stats: AccountStats = {};
+    for (const [name, block] of Object.entries(account.fields)) {
+      const field = ACCOUNT_FIELDS[name.toLowerCase().replace(/[_-]/g, '')];
+      if (!field) {
+        this.log('debug', `account field ${name} is not used`);
+        continue;
+      }
+      let raw: string | null = null;
+      try {
+        raw = this.evalBlock(block, target, vars, false);
+      } catch (err) {
+        this.log('debug', `account field ${name}: ${err instanceof Error ? err.message : String(err)}`);
+      }
+      if (raw === null || raw.trim() === '') continue;
+      const value = field.parse(raw.trim());
+      if (value !== undefined && Number.isFinite(value)) stats[field.key] = value;
+    }
+    return stats;
   }
 
   // ------------------------------------------------------------------ test (S12)

@@ -1,5 +1,6 @@
 import { Link } from '@tanstack/react-router';
 import { activeTab, sectionTabs } from '../nav.js';
+import { t } from '../i18n/index.js';
 
 /**
  * Route-driven tabs for the section the rail has active (Library: TV / Movies / Add new …).
@@ -10,11 +11,11 @@ export function SectionNav({ pathname, isAdmin }: { pathname: string; isAdmin: b
   if (tabs.length === 0) return null;
   const current = activeTab(pathname, tabs);
   return (
-    <nav className="al-section-nav" aria-label="Section">
+    <nav className="al-section-nav" aria-label={t('layout.sectionNav.section')}>
       <div className="al-tabs al-tabs--compact">
-        {tabs.map((t) => (
-          <Link key={t.to} to={t.to} aria-current={t === current ? 'page' : undefined}>
-            {t.label}
+        {tabs.map((navLeaf) => (
+          <Link key={navLeaf.to} to={navLeaf.to} aria-current={navLeaf === current ? 'page' : undefined}>
+            {navLeaf.label}
           </Link>
         ))}
       </div>

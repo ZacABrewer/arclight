@@ -1,5 +1,6 @@
 import type { RailCode } from './arclight/index.js';
 import type { AppPath } from './router.js';
+import { t } from './i18n/index.js';
 
 // The navigation tree. Each section sits under one of the 11 rail codes (several sections can
 // share a code: Issues and Watchlist live under RQ, Search under IX); the shell turns the
@@ -25,133 +26,169 @@ export interface NavSection extends NavLeaf {
 }
 
 export const NAV: readonly NavSection[] = [
-  { label: 'Dashboard', to: '/', rail: 'DB' },
+  { get label() { return t('common.dashboard'); }, to: '/', rail: 'DB' },
   {
-    label: 'Library',
+    get label() {
+      return t('common.library');
+    },
     to: '/library/tv',
     base: '/library',
     rail: 'LB',
     children: [
-      { label: 'TV', to: '/library/tv' },
-      { label: 'Movies', to: '/library/movies' },
-      { label: 'Add new', to: '/library/add' },
+      { get label() { return t('common.tv'); }, to: '/library/tv' },
+      { get label() { return t('common.movies'); }, to: '/library/movies' },
+      { get label() { return t('common.collections'); }, to: '/library/collections' },
+      { get label() { return t('nav.addNew'); }, to: '/library/add' },
+      { get label() { return t('common.retention'); }, to: '/library/retention', adminOnly: true },
+      { get label() { return t('common.hygiene'); }, to: '/library/hygiene', adminOnly: true },
     ],
   },
   {
-    label: 'Discover',
+    get label() {
+      return t('common.discover');
+    },
     to: '/discover',
     base: '/discover',
     rail: 'DS',
     children: [
-      { label: 'Home', to: '/discover' },
-      { label: 'Movies', to: '/discover/movies' },
-      { label: 'TV', to: '/discover/tv' },
+      { get label() { return t('nav.home'); }, to: '/discover' },
+      { get label() { return t('common.movies'); }, to: '/discover/movies' },
+      { get label() { return t('common.tv'); }, to: '/discover/tv' },
     ],
   },
   {
-    label: 'Requests',
+    get label() {
+      return t('common.requests');
+    },
     to: '/requests',
     base: '/requests',
     rail: 'RQ',
     children: [
-      { label: 'All requests', to: '/requests' },
-      { label: 'My requests', to: '/requests/mine' },
+      { get label() { return t('nav.allRequests'); }, to: '/requests' },
+      { get label() { return t('common.myRequests'); }, to: '/requests/mine' },
     ],
   },
-  { label: 'Issues', to: '/issues', rail: 'RQ' },
-  { label: 'Watchlist', to: '/watchlist', rail: 'RQ' },
-  { label: 'Calendar', to: '/calendar', rail: 'CL' },
+  { get label() { return t('common.issues'); }, to: '/issues', rail: 'RQ' },
+  { get label() { return t('common.watchlist'); }, to: '/watchlist', rail: 'RQ' },
+  { get label() { return t('common.calendar'); }, to: '/calendar', rail: 'CL' },
   {
-    label: 'Activity',
+    get label() {
+      return t('common.activity');
+    },
     adminOnly: true,
     to: '/activity/queue',
     base: '/activity',
     rail: 'AC',
     children: [
-      { label: 'Queue', to: '/activity/queue' },
-      { label: 'History', to: '/activity/history' },
-      { label: 'Blocklist', to: '/activity/blocklist' },
-      { label: 'Pending', to: '/activity/pending' },
-      { label: 'Manual import', to: '/activity/manual-import' },
+      { get label() { return t('common.queue'); }, to: '/activity/queue' },
+      { get label() { return t('common.history'); }, to: '/activity/history' },
+      { get label() { return t('common.blocklist'); }, to: '/activity/blocklist' },
+      { get label() { return t('common.pending'); }, to: '/activity/pending' },
+      { get label() { return t('nav.crossSeeds'); }, to: '/activity/crossseed' },
+      { get label() { return t('nav.transcodeJobs'); }, to: '/activity/transcode' },
+      { get label() { return t('common.manualImport'); }, to: '/activity/manual-import' },
     ],
   },
   {
-    label: 'Wanted',
+    get label() {
+      return t('common.wanted');
+    },
     to: '/wanted/missing',
     base: '/wanted',
     rail: 'WN',
     children: [
-      { label: 'Missing', to: '/wanted/missing' },
-      { label: 'Cutoff unmet', to: '/wanted/cutoff' },
+      { get label() { return t('status.missing'); }, to: '/wanted/missing' },
+      { get label() { return t('status.cutoffUnmet'); }, to: '/wanted/cutoff' },
     ],
   },
   {
-    label: 'Subtitles',
+    get label() {
+      return t('common.subtitles');
+    },
     adminOnly: true,
     to: '/subtitles/wanted',
     base: '/subtitles',
     rail: 'SB',
     children: [
-      { label: 'Wanted', to: '/subtitles/wanted' },
-      { label: 'History', to: '/subtitles/history' },
-      { label: 'Blacklist', to: '/subtitles/blacklist' },
+      { get label() { return t('common.wanted'); }, to: '/subtitles/wanted' },
+      { get label() { return t('common.history'); }, to: '/subtitles/history' },
+      { get label() { return t('common.blacklist'); }, to: '/subtitles/blacklist' },
     ],
   },
   {
-    label: 'Indexers',
+    get label() {
+      return t('common.indexers');
+    },
     adminOnly: true,
     to: '/indexers',
     base: '/indexers',
     rail: 'IX',
     children: [
-      { label: 'Indexers', to: '/indexers' },
-      { label: 'Stats', to: '/indexers/stats' },
+      { get label() { return t('common.indexers'); }, to: '/indexers' },
+      { get label() { return t('nav.stats'); }, to: '/indexers/stats' },
+      { get label() { return t('nav.trackerStats'); }, to: '/indexers/trackers' },
     ],
   },
-  { label: 'Search', to: '/search', rail: 'IX', adminOnly: true },
+  { get label() { return t('common.search'); }, to: '/search', rail: 'IX', adminOnly: true },
   {
-    label: 'Settings',
+    get label() {
+      return t('common.settings');
+    },
     adminOnly: true,
     to: '/settings/mediamanagement',
     base: '/settings',
     rail: 'ST',
     pageNav: true,
     children: [
-      { label: 'Media Management', to: '/settings/mediamanagement' },
-      { label: 'Profiles', to: '/settings/profiles' },
-      { label: 'Quality', to: '/settings/quality' },
-      { label: 'Custom Formats', to: '/settings/customformats' },
-      { label: 'Indexers', to: '/settings/indexers' },
-      { label: 'Indexer Proxies', to: '/settings/indexerproxies' },
-      { label: 'Indexer Options', to: '/settings/indexeroptions' },
-      { label: 'Download Clients', to: '/settings/downloadclients' },
-      { label: 'Torrent Engine', to: '/settings/torrent' },
-      { label: 'Import Lists', to: '/settings/importlists' },
-      { label: 'Notifications', to: '/settings/notifications' },
-      { label: 'Subtitles', to: '/settings/subtitles' },
-      { label: 'VPN', to: '/settings/vpn' },
-      { label: 'General', to: '/settings/general' },
-      { label: 'Security', to: '/settings/security' },
-      { label: 'Requests', to: '/settings/requests' },
-      { label: 'Users', to: '/settings/users' },
+      { get label() { return t('nav.mediaManagement'); }, to: '/settings/mediamanagement' },
+      { get label() { return t('common.profiles'); }, to: '/settings/profiles' },
+      { get label() { return t('common.quality'); }, to: '/settings/quality' },
+      { get label() { return t('nav.customFormats'); }, to: '/settings/customformats' },
+      { get label() { return t('common.guides'); }, to: '/settings/guides' },
+      { get label() { return t('common.indexers'); }, to: '/settings/indexers' },
+      { get label() { return t('nav.indexerProxies'); }, to: '/settings/indexerproxies' },
+      { get label() { return t('nav.indexerOptions'); }, to: '/settings/indexeroptions' },
+      { get label() { return t('nav.challengeSolver'); }, to: '/settings/solver' },
+      { get label() { return t('nav.downloadClients'); }, to: '/settings/downloadclients' },
+      { get label() { return t('nav.torrentEngine'); }, to: '/settings/torrent' },
+      { get label() { return t('nav.crossSeed'); }, to: '/settings/crossseed' },
+      { get label() { return t('nav.transcode'); }, to: '/settings/transcode' },
+      { get label() { return t('nav.importLists'); }, to: '/settings/importlists' },
+      { get label() { return t('common.notifications'); }, to: '/settings/notifications' },
+      { get label() { return t('nav.mediaServers'); }, to: '/settings/mediaservers' },
+      { get label() { return t('common.subtitles'); }, to: '/settings/subtitles' },
+      { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
+      { get label() { return t('common.general'); }, to: '/settings/general' },
+      { get label() { return t('common.security'); }, to: '/settings/security' },
+      { get label() { return t('common.requests'); }, to: '/settings/requests' },
+      { get label() { return t('nav.discordBot'); }, to: '/settings/discordbot' },
+      { get label() { return t('common.users'); }, to: '/settings/users' },
+      { get label() { return t('common.updates'); }, to: '/settings/updates' },
     ],
   },
   {
-    label: 'System',
+    get label() {
+      return t('common.system');
+    },
     adminOnly: true,
     to: '/system/status',
     base: '/system',
     rail: 'SY',
     children: [
-      { label: 'Status', to: '/system/status' },
-      { label: 'Tasks', to: '/system/tasks' },
-      { label: 'Logs', to: '/system/logs' },
-      { label: 'Backups', to: '/system/backup' },
-      { label: 'Health', to: '/system/health' },
-      { label: 'Import', to: '/system/migrate' },
-      { label: 'Updates', to: '/system/updates' },
+      { get label() { return t('common.status'); }, to: '/system/status' },
+      { get label() { return t('common.tasks'); }, to: '/system/tasks' },
+      { get label() { return t('common.logs'); }, to: '/system/logs' },
+      { get label() { return t('common.backups'); }, to: '/system/backup' },
+      { get label() { return t('nav.health'); }, to: '/system/health' },
+      { get label() { return t('common.import'); }, to: '/system/migrate' },
+      { get label() { return t('common.updates'); }, to: '/system/updates' },
+      { get label() { return t('nav.stats'); }, to: '/system/stats' },
+      { get label() { return t('common.feeds'); }, to: '/system/feeds' },
+      { get label() { return t('nav.audit'); }, to: '/system/audit' },
     ],
   },
+  // In-app docs for health check fixes (the checks' wikiUrl targets), under the System rail code.
+  { get label() { return t('nav.healthDocs'); }, to: '/docs/system/health', base: '/docs', rail: 'SY', adminOnly: true },
 ];
 
 /** The navigation as a given role sees it. */
@@ -187,17 +224,17 @@ export function isSectionActive(section: NavSection, pathname: string): boolean 
 
 /** Order, 9px labels and names of the 11 rail codes (mirrors arclight RAIL_ITEMS). */
 export const RAIL_CODES: ReadonlyArray<{ code: RailCode; label: string; title: string }> = [
-  { code: 'DB', label: 'DASH', title: 'Dashboard' },
-  { code: 'LB', label: 'LIB', title: 'Library' },
-  { code: 'DS', label: 'DISC', title: 'Discover' },
-  { code: 'RQ', label: 'REQ', title: 'Requests' },
-  { code: 'CL', label: 'CAL', title: 'Calendar' },
-  { code: 'WN', label: 'WANT', title: 'Wanted' },
-  { code: 'AC', label: 'ACT', title: 'Activity' },
-  { code: 'SB', label: 'SUBS', title: 'Subtitles' },
-  { code: 'IX', label: 'INDX', title: 'Indexers' },
-  { code: 'ST', label: 'SET', title: 'Settings' },
-  { code: 'SY', label: 'SYS', title: 'System' },
+  { code: 'DB', get label() { return t('nav.dash'); }, get title() { return t('common.dashboard'); } },
+  { code: 'LB', get label() { return t('nav.lib'); }, get title() { return t('common.library'); } },
+  { code: 'DS', get label() { return t('nav.disc'); }, get title() { return t('common.discover'); } },
+  { code: 'RQ', get label() { return t('nav.req'); }, get title() { return t('common.requests'); } },
+  { code: 'CL', get label() { return t('nav.cal'); }, get title() { return t('common.calendar'); } },
+  { code: 'WN', get label() { return t('nav.want'); }, get title() { return t('common.wanted'); } },
+  { code: 'AC', get label() { return t('nav.act'); }, get title() { return t('common.activity'); } },
+  { code: 'SB', get label() { return t('nav.subs'); }, get title() { return t('common.subtitles'); } },
+  { code: 'IX', get label() { return t('nav.indx'); }, get title() { return t('common.indexers'); } },
+  { code: 'ST', get label() { return t('nav.set'); }, get title() { return t('common.settings'); } },
+  { code: 'SY', get label() { return t('nav.sys'); }, get title() { return t('common.system'); } },
 ];
 
 export interface RailEntry {
@@ -243,9 +280,9 @@ export function sectionTabs(pathname: string, isAdmin: boolean, nav: readonly Na
 /** The tab that matches `pathname` best (longest prefix), so detail pages keep their tab lit. */
 export function activeTab(pathname: string, tabs: readonly NavLeaf[]): NavLeaf | undefined {
   let best: NavLeaf | undefined;
-  for (const t of tabs) {
-    const hit = pathname === t.to || (t.to !== '/' && pathname.startsWith(`${t.to}/`));
-    if (hit && (!best || t.to.length > best.to.length)) best = t;
+  for (const navLeaf of tabs) {
+    const hit = pathname === navLeaf.to || (navLeaf.to !== '/' && pathname.startsWith(`${navLeaf.to}/`));
+    if (hit && (!best || navLeaf.to.length > best.to.length)) best = navLeaf;
   }
   return best;
 }
@@ -262,13 +299,13 @@ export interface MobileTab {
 /** Bottom tab bar (Page 10): Home, Library, Discover, Activity (Requests for role user), More. */
 export function mobileTabsFor(isAdmin: boolean): MobileTab[] {
   return [
-    { id: 'home', label: 'Home', href: '/', icon: 'home' },
-    { id: 'library', label: 'Library', href: '/library/tv', icon: 'library' },
-    { id: 'discover', label: 'Discover', href: '/discover', icon: 'discover' },
+    { id: 'home', label: t('nav.home'), href: '/', icon: 'home' },
+    { id: 'library', label: t('common.library'), href: '/library/tv', icon: 'library' },
+    { id: 'discover', label: t('common.discover'), href: '/discover', icon: 'discover' },
     isAdmin
-      ? { id: 'activity', label: 'Activity', href: '/activity/queue', icon: 'activity' }
-      : { id: 'requests', label: 'Requests', href: '/requests', icon: 'inbox' },
-    { id: 'more', label: 'More', href: null, icon: 'more' },
+      ? { id: 'activity', label: t('common.activity'), href: '/activity/queue', icon: 'activity' }
+      : { id: 'requests', label: t('common.requests'), href: '/requests', icon: 'inbox' },
+    { id: 'more', label: t('common.more'), href: null, icon: 'more' },
   ];
 }
 

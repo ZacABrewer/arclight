@@ -44,6 +44,8 @@ export const HistoryEventType = z.enum([
   'fileDeleted',
   'fileRenamed',
   'downloadIgnored',
+  // A library file was remuxed or transcoded in place (transcode module).
+  'fileTranscoded',
 ]);
 export type HistoryEventType = z.infer<typeof HistoryEventType>;
 

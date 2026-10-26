@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import { vpnApi } from '../api/vpn.js';
 import { useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 // Everything VPN lives under ['vpn'], which live.ts invalidates on every `vpn` event.
 export const vpnKeys = {
@@ -20,7 +21,7 @@ export function useVpnSettings() {
 
 export function useSaveVpnSettings() {
   return useInvalidatingMutation((body: VpnSettingsUpdate) => vpnApi.settings.update(body), [vpnKeys.all], {
-    errorTitle: 'Could not save VPN settings',
+    errorTitle: t('hooks.vpn.couldNotSaveVpnSettings'),
   });
 }
 
@@ -34,7 +35,7 @@ export function useVpnAction(action: 'refresh' | 'connect' | 'disconnect') {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (): Promise<VpnStatus> => vpnApi[action](),
-    meta: { errorTitle: `VPN ${action} failed` },
+    meta: { errorTitle: t('hooks.vpn.vpnActionFailed', { action }) },
     onSuccess: (status) => qc.setQueryData(vpnKeys.status, status),
   });
 }

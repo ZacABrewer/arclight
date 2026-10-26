@@ -1,0 +1,7 @@
+.al-ms-editor { display: flex; flex-direction: column; gap: 4px; }
+.al-ms-flags { display: flex; flex-direction: column; border-top: 1px solid var(--al-line-1); margin-top: 8px; padding-top: 8px; }
+.al-ms-chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.al-ms-url { overflow-wrap: anywhere; min-width: 0; color: var(--al-text-3); }
+.al-ms-table { max-width: 100%; overflow-x: auto; }
+.al-ms-signin { display: flex; flex-direction: column; gap: 12px; }
+.al-ms-skipped { margin: 12px 0 0; padding-left: 18px; font-size: 13px; color: var(--al-text-4); }

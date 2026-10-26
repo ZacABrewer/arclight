@@ -3,11 +3,20 @@ import type { z } from 'zod';
 import {
   BackupSettings,
   CompatSettings,
+  CrossSeedSettings,
+  DiscordBotSettings,
+  EngineAgentSettings,
+  DefinitionFeedSettings,
+  GuidesSettings,
   ImportListSettings,
   IndexerGlobalSettings,
   IndexerOptionsSection,
   MediaManagementSettings,
+  MediaServerSettings,
+  MediaServersSettings,
   MetadataSettings,
+  MetricsSettings,
+  AuditSettings,
   NamingConfig,
   ReleasesSettings,
   RequestsSettings,
@@ -53,11 +62,44 @@ const sections = {
   indexers: IndexerOptionsSection,
   // Owned by the requests module (routes under /settings/requests).
   requests: RequestsSettings,
+  // Owned by the requests module (Jellyfin/Emby/Plex for sign-in, watchlists, availability;
+  // routes under /settings/mediaserver, apiKey masked there).
+  mediaServer: MediaServerSettings,
+  // Owned by the media-servers module: the list of Jellyfin/Emby/Plex connections with per-feature
+  // flags (availability, retention, refresh); routes under /mediaserver, apiKey masked there.
+  mediaServers: MediaServersSettings,
   // Owned by the solver module (built-in Cloudflare challenge solver; routes under /settings/solver).
   solver: SolverSettings,
+  // Owned by the guides module (TRaSH-style format/score sync; routes under /settings/guides).
+  guides: GuidesSettings,
+  // Owned by the metrics module (GET /metrics; allowAnonymous).
+  metrics: MetricsSettings,
+  // Owned by the audit module (enabled, retentionDays).
+  audit: AuditSettings,
+  // Owned by the cross-seed module (routes under /settings/crossseed).
+  crossSeed: CrossSeedSettings,
+  // Owned by the engine-agent module (routes under /settings/engineagent).
+  engineAgent: EngineAgentSettings,
+  // Owned by the discord-bot module (routes under /settings/discordbot; botToken masked there).
+  discordBot: DiscordBotSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
+
+/** Every registered section name (config export/import walks these). */
+export function settingsSections(): SettingsSection[] {
+  return Object.keys(sections) as SettingsSection[];
+}
+
+/** Validate a whole section value without writing it; returns the parsed value or the error message. */
+export function validateSection(
+  section: SettingsSection,
+  value: unknown,
+): { ok: true; value: Record<string, unknown> } | { ok: false; error: string } {
+  const parsed = sections[section].safeParse(value);
+  if (parsed.success) return { ok: true, value: parsed.data as Record<string, unknown> };
+  return { ok: false, error: parsed.error.message };
+}
 export type SectionValue<K extends SettingsSection> = z.infer<(typeof sections)[K]>;
 
 export class SettingsError extends Error {
@@ -151,7 +193,8 @@ export function updateReleasesSettings(db: Db, value: ReleasesSettings): Release
 /** Minimum age / retention / maximum size from `releases`, the rest from `indexers`. */
 export function getIndexerGlobalSettings(db: Db): IndexerGlobalSettings {
   const releases = getSection(db, 'releases');
-  const options = getSection(db, 'indexers');
+  // The definition feed shares the section but has its own routes (/indexer/definition/feed).
+  const { definitionFeed: _feed, ...options } = getSection(db, 'indexers');
   return {
     minimumAgeMinutes: releases.minimumAgeMinutes,
     retentionDays: releases.retentionDays,
@@ -172,10 +215,25 @@ export function updateIndexerGlobalSettings(db: Db, value: IndexerGlobalSettings
     maximumSizeMb: v.maximumSizeMb,
   });
   setSection(db, 'indexers', {
+    definitionFeed: getSection(db, 'indexers').definitionFeed,
     rssSyncIntervalMinutes: v.rssSyncIntervalMinutes,
     allowHardcodedSubs: v.allowHardcodedSubs,
     whitelistedHardcodedSubs: v.whitelistedHardcodedSubs,
     preferIndexerFlags: v.preferIndexerFlags,
   });
   return getIndexerGlobalSettings(db);
+}
+
+// ---------------------------------------------------------------------------------------
+// indexers.definitionFeed (owned by the indexers module's definition feed)
+// ---------------------------------------------------------------------------------------
+
+export function getDefinitionFeedSettings(db: Db): DefinitionFeedSettings {
+  return getSection(db, 'indexers').definitionFeed;
+}
+
+export function updateDefinitionFeedSettings(db: Db, value: DefinitionFeedSettings): DefinitionFeedSettings {
+  const parsed = DefinitionFeedSettings.safeParse(value);
+  if (!parsed.success) throw new SettingsError('VALIDATION', parsed.error.message);
+  return setSection(db, 'indexers', { ...getSection(db, 'indexers'), definitionFeed: parsed.data }).definitionFeed;
 }

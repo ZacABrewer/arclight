@@ -25,10 +25,11 @@ import {
   resultMeta,
 } from './add-form.js';
 import './library.css';
+import { t } from '../../i18n/index.js';
 
 const REMEMBER_KEY = 'library.add.defaults';
 
-function loadDefaults(mediaType: string): AddDefaults {
+export function loadDefaults(mediaType: string): AddDefaults {
   try {
     const raw = localStorage.getItem(`${REMEMBER_KEY}.${mediaType}`);
     return raw ? (JSON.parse(raw) as AddDefaults) : {};
@@ -37,7 +38,7 @@ function loadDefaults(mediaType: string): AddDefaults {
   }
 }
 
-function saveDefaults(mediaType: string, d: AddDefaults) {
+export function saveDefaults(mediaType: string, d: AddDefaults) {
   try {
     localStorage.setItem(`${REMEMBER_KEY}.${mediaType}`, JSON.stringify(d));
   } catch {
@@ -47,8 +48,8 @@ function saveDefaults(mediaType: string, d: AddDefaults) {
 
 /** Movie release state for the add dialog: released (available) or upcoming. */
 export function releaseChip(releaseDate: string | undefined, today: string = localIsoDate(new Date())): { label: string; tone: 'accent' | 'neutral' } {
-  if (!releaseDate) return { label: 'Release date unknown', tone: 'neutral' };
-  return releaseDate <= today ? { label: 'Available', tone: 'accent' } : { label: 'Not released yet', tone: 'neutral' };
+  if (!releaseDate) return { label: t('library.addDialog.releaseDateUnknown'), tone: 'neutral' };
+  return releaseDate <= today ? { label: t('common.available'), tone: 'accent' } : { label: t('library.addDialog.notReleasedYet'), tone: 'neutral' };
 }
 
 export interface AddDialogProps {
@@ -61,7 +62,7 @@ export interface AddDialogProps {
 /** Add dialog: Modal 560 with form rows and the mono destination preview. */
 export function AddDialog({ result, onClose, rootFolders, profiles }: AddDialogProps) {
   return (
-    <Modal open={result !== null} onClose={onClose} title={result ? `Add ${result.title}` : 'Add'} size={560}>
+    <Modal open={result !== null} onClose={onClose} title={result ? t('library.addDialog.addTitle', { title: result.title }) : t('common.add')} size={560}>
       {result ? <AddForm key={`${result.mediaType}-${result.tmdbId}`} result={result} onClose={onClose} rootFolders={rootFolders} profiles={profiles} /> : null}
     </Modal>
   );
@@ -105,7 +106,7 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
     if (!isValid(errors)) return;
     saveDefaults(mediaType, { rootFolderPath: form.rootFolderPath, qualityProfileId: form.qualityProfileId ?? undefined });
     const onSuccess = (item: { id: number; title: string }) => {
-      toast.push({ tone: 'ok', title: `Added ${item.title}` });
+      toast.push({ tone: 'ok', title: t('library.addDialog.addedTitle', { title: item.title }) });
       onClose();
       void navigate(
         mediaType === 'series'
@@ -134,9 +135,9 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
           </div>
           <div className="mk-result__meta">{resultMeta(result)}</div>
           {result.mediaType === 'movie' ? (
-            <div className="mk-dates" style={{ marginTop: 6, alignItems: 'center' }} aria-label="Release dates">
+            <div className="mk-dates" style={{ marginTop: 6, alignItems: 'center' }} aria-label={t('library.addDialog.releaseDates')}>
               <span>
-                Released<span className="al-num">{result.releaseDate ?? '—'}</span>
+                {t('common.released')}<span className="al-num">{result.releaseDate ?? '—'}</span>
               </span>
               {release ? (
                 <Chip tone={release.tone} data-testid="availability">
@@ -145,35 +146,35 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
               ) : null}
             </div>
           ) : null}
-          <p>{result.overview || 'No overview available.'}</p>
+          <p>{result.overview || t('common.noOverviewAvailable')}</p>
         </div>
       </div>
 
       <FormRow
-        label="Root folder"
+        label={t('common.rootFolder')}
         htmlFor={fid('root')}
         error={touched ? errors.rootFolderPath : undefined}
-        caption={roots.length === 0 ? 'No root folder yet. Browse to add one.' : undefined}
+        caption={roots.length === 0 ? t('library.addDialog.noRootFolderYetBrowse') : undefined}
       >
         <div className="mk-row" style={{ flexWrap: 'nowrap' }}>
           <Select id={fid('root')} value={form.rootFolderPath} onChange={(e) => set('rootFolderPath', e.target.value)} style={{ flex: 1 }}>
-            <option value="">Select a root folder</option>
+            <option value="">{t('library.addDialog.selectARootFolder')}</option>
             {roots.map((r) => (
               <option key={r.id} value={r.path}>
                 {r.path}
-                {r.accessible ? '' : ' (inaccessible)'}
+                {r.accessible ? '' : t('library.addDialog.inaccessible')}
               </option>
             ))}
           </Select>
           <Button loading={addRoot.isPending} onClick={() => setBrowsing(true)}>
-            Browse
+            {t('library.addDialog.browse')}
           </Button>
         </div>
       </FormRow>
 
-      <FormRow label="Quality profile" htmlFor={fid('profile')} error={touched ? errors.qualityProfileId : undefined}>
+      <FormRow label={t('common.qualityProfile')} htmlFor={fid('profile')} error={touched ? errors.qualityProfileId : undefined}>
         <Select id={fid('profile')} value={form.qualityProfileId?.toString() ?? ''} onChange={(e) => set('qualityProfileId', e.target.value ? Number(e.target.value) : null)}>
-          <option value="">Select a profile</option>
+          <option value="">{t('library.addDialog.selectAProfile')}</option>
           {profiles.map((p) => (
             <option key={p.id} value={p.id}>
               {p.name}
@@ -184,7 +185,7 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
 
       {mediaType === 'series' ? (
         <>
-          <FormRow label="Monitor" htmlFor={fid('monitor')}>
+          <FormRow label={t('common.monitor')} htmlFor={fid('monitor')}>
             <Select id={fid('monitor')} value={form.monitorOption} onChange={(e) => set('monitorOption', e.target.value as MonitorOption)}>
               {Object.entries(MONITOR_OPTION_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -193,7 +194,7 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
               ))}
             </Select>
           </FormRow>
-          <FormRow label="Series type" htmlFor={fid('type')}>
+          <FormRow label={t('common.seriesType')} htmlFor={fid('type')}>
             <Select id={fid('type')} value={form.seriesType} onChange={(e) => set('seriesType', e.target.value as SeriesType)}>
               {Object.entries(SERIES_TYPE_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -202,16 +203,16 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
               ))}
             </Select>
           </FormRow>
-          <FormRow label="Season folders" htmlFor={fid('season-folder')} captionInline caption="Put each season in its own folder.">
+          <FormRow label={t('common.seasonFolders')} htmlFor={fid('season-folder')} captionInline caption={t('library.addDialog.putEachSeasonInIts')}>
             <Toggle id={fid('season-folder')} checked={form.seasonFolder} onChange={(e) => set('seasonFolder', e.target.checked)} />
           </FormRow>
         </>
       ) : (
         <>
-          <FormRow label="Monitored" htmlFor={fid('monitored')} captionInline caption="Search for the movie once it is available.">
+          <FormRow label={t('status.monitored')} htmlFor={fid('monitored')} captionInline caption={t('library.addDialog.searchForTheMovieOnce')}>
             <Toggle id={fid('monitored')} checked={form.monitored} onChange={(e) => set('monitored', e.target.checked)} />
           </FormRow>
-          <FormRow label="Minimum availability" htmlFor={fid('availability')}>
+          <FormRow label={t('common.minimumAvailability')} htmlFor={fid('availability')}>
             <Select id={fid('availability')} value={form.minimumAvailability} onChange={(e) => set('minimumAvailability', e.target.value as MinimumAvailability)}>
               {Object.entries(MINIMUM_AVAILABILITY_LABELS).map(([v, l]) => (
                 <option key={v} value={v}>
@@ -225,22 +226,22 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
 
       <LanguageProfileSelect allowDefault value={form.languageProfileId} onChange={(v) => set('languageProfileId', v)} />
 
-      <FormRow label="Tags">
+      <FormRow label={t('common.tags')}>
         <TagPicker value={form.tags} onChange={(tagIds) => set('tags', tagIds)} />
       </FormRow>
 
       <FormRow
-        label="Search on add"
+        label={t('common.searchOnAdd')}
         htmlFor={fid('search')}
         captionInline
-        caption={mediaType === 'series' ? 'Search for missing episodes right away.' : 'Search for the movie right away.'}
+        caption={mediaType === 'series' ? t('library.addDialog.searchForMissingEpisodesRight') : t('library.addDialog.searchForTheMovieRight')}
       >
         <Toggle id={fid('search')} checked={form.searchOnAdd} onChange={(e) => set('searchOnAdd', e.target.checked)} />
       </FormRow>
 
-      <FormRow label="Destination">
+      <FormRow label={t('library.addDialog.destination')}>
         <div className="lib-path-preview" data-testid="path-preview">
-          {preview || 'Choose a root folder to see the path'}
+          {preview || t('library.addDialog.chooseARootFolderTo')}
         </div>
       </FormRow>
 
@@ -252,16 +253,16 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
 
       <div className="lib-form-foot">
         <Button variant="ghost" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button type="submit" variant="primary" loading={mutation.isPending} disabled={touched && !isValid(errors)}>
-          Add {mediaType === 'series' ? 'series' : 'movie'}
+          {t('library.addDialog.addValue', { value: mediaType === 'series' ? t('library.addDialog.series') : t('library.addDialog.movie') })}
         </Button>
       </div>
       <FolderPickerModal
         open={browsing}
         onClose={() => setBrowsing(false)}
-        title="Choose a root folder"
+        title={t('common.chooseARootFolder')}
         initialPath={form.rootFolderPath}
         onSelect={(path) => {
           setBrowsing(false);

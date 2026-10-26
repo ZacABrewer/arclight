@@ -1,0 +1,4 @@
+{
+  "page.count": "{n, plural, one {# Eintrag} other {# Einträge}}",
+  "page.extra": "Nicht in Englisch"
+}

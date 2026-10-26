@@ -32,7 +32,8 @@ function createProfilesTestDb(): Db {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL UNIQUE,
       include_when_renaming INTEGER NOT NULL DEFAULT 0,
-      specifications TEXT NOT NULL
+      specifications TEXT NOT NULL,
+      guide_id TEXT
     );
     CREATE TABLE delay_profiles (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

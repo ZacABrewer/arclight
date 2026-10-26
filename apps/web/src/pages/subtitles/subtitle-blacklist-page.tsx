@@ -8,6 +8,7 @@ import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { SubtitlesHeader } from './subtitles-header.js';
 import { refLabel } from './subtitle-ui.js';
+import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 25;
 
@@ -21,13 +22,13 @@ export function SubtitleBlacklistPage() {
   const pending = list.error instanceof ApiError && list.error.status === 404;
 
   const columns: Column<SubtitleBlacklistRecord>[] = [
-    { key: 'title', header: 'Item', cell: (r) => <span className="mt-break">{r.title}</span> },
-    { key: 'language', header: 'Language', cell: (r) => refLabel(r) },
-    { key: 'provider', header: 'Provider', muted: true, cell: (r) => r.provider },
-    { key: 'providerSubtitleId', header: 'Subtitle id', mono: true, cell: (r) => <span className="mt-break">{r.providerSubtitleId}</span> },
+    { key: 'title', header: t('subtitles.subtitleBlacklist.item'), cell: (r) => <span className="mt-break">{r.title}</span> },
+    { key: 'language', header: t('common.language'), cell: (r) => refLabel(r) },
+    { key: 'provider', header: t('common.provider'), muted: true, cell: (r) => r.provider },
+    { key: 'providerSubtitleId', header: t('subtitles.subtitleBlacklist.subtitleId'), mono: true, cell: (r) => <span className="mt-break">{r.providerSubtitleId}</span> },
     {
       key: 'date',
-      header: 'Date',
+      header: t('common.date'),
       mono: true,
       cell: (r) => (
         <time dateTime={r.date} title={formatDateTime(r.date)}>
@@ -37,17 +38,17 @@ export function SubtitleBlacklistPage() {
     },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) => (
         <Button
           size="sm"
           variant="secondary"
           loading={remove.isPending && remove.variables === r.id}
-          aria-label={`Remove ${r.title} ${r.language} from blacklist`}
+          aria-label={t('subtitles.subtitleBlacklist.removeTitleLanguageFromBlacklist', { title: r.title, language: r.language })}
           onClick={() => remove.mutate(r.id)}
         >
-          Remove
+          {t('common.remove')}
         </Button>
       ),
     },
@@ -62,26 +63,26 @@ export function SubtitleBlacklistPage() {
         active="blacklist"
         actions={
           <Button variant="danger" icon={<Icon name="trash" />} disabled={!list.data || total === 0} onClick={() => setConfirmClear(true)}>
-            Clear all
+            {t('subtitles.subtitleBlacklist.clearAll')}
           </Button>
         }
       />
       {pending ? (
-        <PendingApiNotice what="subtitle blacklist" />
+        <PendingApiNotice what={t('subtitles.subtitleBlacklist.subtitleBlacklist')} />
       ) : list.isError ? (
-        <ErrorBlock title="Subtitle blacklist did not load" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('subtitles.subtitleBlacklist.subtitleBlacklistDidNotLoad')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
         <Pane flush bare>
           <Table
-            caption="Subtitle blacklist"
+            caption={t('subtitles.subtitleBlacklist.subtitleBlacklist2')}
             columns={columns}
             rows={list.data?.records}
             rowKey={(r) => r.id}
             loading={list.isPending}
             sortable={false}
-            empty={<EmptyState title="Blacklist is empty">Subtitles you blacklist are never downloaded again.</EmptyState>}
+            empty={<EmptyState title={t('subtitles.subtitleBlacklist.blacklistIsEmpty')}>{t('subtitles.subtitleBlacklist.subtitlesYouBlacklistAreNever')}</EmptyState>}
           />
           {pageCount > 1 ? (
             <div className="sub-pager">
@@ -92,8 +93,8 @@ export function SubtitleBlacklistPage() {
       )}
       <ConfirmDialog
         open={confirmClear}
-        title="Clear the subtitle blacklist?"
-        confirmLabel="Clear all"
+        title={t('subtitles.subtitleBlacklist.clearTheSubtitleBlacklist')}
+        confirmLabel={t('subtitles.subtitleBlacklist.clearAll')}
         onCancel={() => setConfirmClear(false)}
         onConfirm={async () => {
           await clear.mutateAsync();
@@ -102,7 +103,7 @@ export function SubtitleBlacklistPage() {
         }}
       >
         <p>
-          All <span className="al-num">{total}</span> blacklisted {total === 1 ? 'subtitle becomes' : 'subtitles become'} eligible for download again.
+          {t('common.all')} <span className="al-num">{total}</span> {t('subtitles.subtitleBlacklist.blacklistedSubtitlesBecomeEligibleFor', { total })}
         </p>
       </ConfirmDialog>
     </>

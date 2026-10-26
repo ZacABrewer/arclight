@@ -3,42 +3,49 @@ import { INDEXER_PROXY_SECRET_MASK, IndexerProxyTestResult as IndexerProxyTestRe
 import { request } from '../../../api/client.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import type { TestOutcome } from '../../../components/forms/test-result.js';
+import { t } from '../../../i18n/index.js';
 
 // Indexer proxies (FlareSolverr / HTTP / SOCKS5): editor fields and body mapping.
 
 export const PROXY_TYPE_LABELS: Record<IndexerProxyType, string> = {
-  flaresolverr: 'FlareSolverr',
-  http: 'HTTP',
-  socks5: 'SOCKS5',
+  get flaresolverr() {
+    return t('settings.indexerProxies.proxy.flaresolverr');
+  },
+  get http() {
+    return t('settings.indexerProxies.proxy.http');
+  },
+  get socks5() {
+    return t('settings.indexerProxies.proxy.socks5');
+  },
 };
 
 export const DEFAULT_PORTS: Record<IndexerProxyType, number> = { flaresolverr: 8191, http: 8080, socks5: 1080 };
 
 export function proxyFields(type: IndexerProxyType): FieldDefinition[] {
   const fields: FieldDefinition[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
+    { name: 'name', label: t('common.name'), type: 'text', required: true },
     {
       name: 'type',
-      label: 'Type',
+      label: t('common.type'),
       type: 'select',
       required: true,
-      options: (Object.keys(PROXY_TYPE_LABELS) as IndexerProxyType[]).map((t) => ({ value: t, label: PROXY_TYPE_LABELS[t] })),
+      options: (Object.keys(PROXY_TYPE_LABELS) as IndexerProxyType[]).map((item) => ({ value: item, label: PROXY_TYPE_LABELS[item] })),
     },
     {
       name: 'host',
-      label: 'Host',
+      label: t('common.host'),
       type: 'text',
       required: true,
       placeholder: type === 'flaresolverr' ? 'http://flaresolverr' : 'proxy.example',
     },
-    { name: 'port', label: 'Port', type: 'number', required: true, min: 1, max: 65535 },
+    { name: 'port', label: t('common.port'), type: 'number', required: true, min: 1, max: 65535 },
   ];
   if (type !== 'flaresolverr') {
-    fields.push({ name: 'username', label: 'Username', type: 'text' }, { name: 'password', label: 'Password', type: 'password' });
+    fields.push({ name: 'username', label: t('common.username'), type: 'text' }, { name: 'password', label: t('common.password'), type: 'password' });
   }
   fields.push(
-    { name: 'requestTimeout', label: 'Request timeout', type: 'number', min: 1, max: 600, unit: 's', advanced: true },
-    { name: 'tags', label: 'Tags', type: 'text', helpText: 'Applies to indexers with a matching tag (unless an indexer picks a proxy explicitly).' },
+    { name: 'requestTimeout', label: t('settings.indexerProxies.proxy.requestTimeout'), type: 'number', min: 1, max: 600, unit: 's', advanced: true },
+    { name: 'tags', label: t('common.tags'), type: 'text', helpText: t('settings.indexerProxies.proxy.appliesToIndexersWithA') },
   );
   return fields;
 }
@@ -69,7 +76,7 @@ export function toProxyBody(values: FormValues): IndexerProxyCreate {
 export function proxyTestOutcome(r: IndexerProxyTestResult): TestOutcome {
   return {
     ok: r.ok,
-    message: r.ok ? `${r.message} (${r.durationMs} ms)` : undefined,
+    message: r.ok ? t('settings.indexerProxies.proxy.messageDurationmsMs', { message: r.message, durationMs: r.durationMs }) : undefined,
     warnings: [],
     errors: r.ok ? [] : [r.message],
   };
@@ -84,4 +91,17 @@ export const hasStoredPassword = (p: Pick<IndexerProxy, 'password'>) => p.passwo
 /** Test a saved proxy with its stored password (POST /indexerproxy/:id/test). */
 export function testSavedProxy(id: number): Promise<IndexerProxyTestResult> {
   return request(`/indexerproxy/${id}/test`, IndexerProxyTestResultSchema, { method: 'POST', json: {} });
+}
+
+/** Names ProxyAutoDetect gives the proxies it creates (apps/api/src/modules/solver/autodetect.ts). */
+export const MANAGED_PROXY_NAMES = ['FlareSolverr (bundled)', 'Built-in solver', 'Built-in solver (Arclight)'] as const;
+
+/** Created (and, for the built-in solver, kept in sync) by Arclight rather than the user. */
+export function isManagedProxy(p: Pick<IndexerProxy, 'name'> & { managed?: boolean | undefined }): boolean {
+  return p.managed === true || (MANAGED_PROXY_NAMES as readonly string[]).includes(p.name);
+}
+
+/** At least one FlareSolverr-type proxy (bundled, external or the built-in solver) exists. */
+export function hasSolverProxy(proxies: ReadonlyArray<Pick<IndexerProxy, 'type'>> | undefined): boolean {
+  return (proxies ?? []).some((p) => p.type === 'flaresolverr');
 }

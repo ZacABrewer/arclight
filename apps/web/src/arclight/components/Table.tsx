@@ -6,6 +6,7 @@ import { Button } from './Button.js';
 import { Checkbox } from './Controls.js';
 import { FloatBar } from './Pane.js';
 import { EmptyState, Skeleton } from './States.js';
+import { t } from '../../i18n/index.js';
 
 export type SortDirection = 'asc' | 'desc';
 export interface SortState {
@@ -171,7 +172,7 @@ export function Table<T>({
 
   if (loading && !rows) {
     return (
-      <div className="al-skeleton-lines" aria-busy="true" aria-label="Loading" style={{ padding: 16 }}>
+      <div className="al-skeleton-lines" aria-busy="true" aria-label={t('common.loading')} style={{ padding: 16 }}>
         {[70, 90, 60, 80].map((w) => (
           <Skeleton key={w} width={`${w}%`} height={12} />
         ))}
@@ -190,7 +191,7 @@ export function Table<T>({
             <tr>
               {selectable ? (
                 <th scope="col" className="al-table__check">
-                  <Checkbox aria-label="Select all rows" checked={allSelected} indeterminate={someSelected} onChange={toggleAll} disabled={allKeys.length === 0} />
+                  <Checkbox aria-label={t('arclight.table.selectAllRows')} checked={allSelected} indeterminate={someSelected} onChange={toggleAll} disabled={allKeys.length === 0} />
                 </th>
               ) : null}
               {columns.map((col) => {
@@ -237,7 +238,7 @@ export function Table<T>({
                 >
                   {selectable ? (
                     <td className="al-table__check" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox aria-label={rowLabel ? rowLabel(row) : 'Select row'} checked={isSel} onChange={() => toggleRow(key)} />
+                      <Checkbox aria-label={rowLabel ? rowLabel(row) : t('arclight.table.selectRow')} checked={isSel} onChange={() => toggleRow(key)} />
                     </td>
                   ) : null}
                   {columns.map((col) => (
@@ -258,13 +259,13 @@ export function Table<T>({
             ) : null}
           </tbody>
         </table>
-        {sorted.length === 0 ? <div className="al-table__empty">{empty ?? <EmptyState title="Nothing here yet" />}</div> : null}
+        {sorted.length === 0 ? <div className="al-table__empty">{empty ?? <EmptyState title={t('arclight.table.nothingHereYet')} />}</div> : null}
       </div>
       {selectable && bulkActions && selectedCount > 0 ? (
         <FloatBar count={selectedCount} position={bulkPosition}>
           {bulkActions(new Set(allKeys.filter((k) => selected.has(k))), clear)}
           <Button variant="ghost" className="al-floatbar__cancel" onClick={clear}>
-            Cancel
+            {t('common.cancel')}
           </Button>
         </FloatBar>
       ) : null}

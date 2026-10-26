@@ -8,29 +8,22 @@ import { titleLink } from '../../features/requests/title-link.js';
 import { availabilityBadge } from '../../features/requests/status.js';
 import { useDiscoverInfinite } from '../../hooks/requests.js';
 import '../../components/media/media-kit.css';
+import { t } from '../../i18n/index.js';
 
 // Arclight versions of the discover building blocks: status chip, poster card, slider row,
 // infinite grid. Pages under pages/discover and pages/requests use these.
 
 /** Chip tone/dot for a request or availability label (no new colours: kit tones only). */
 export function statusChipStyle(label: string): { tone: ChipTone; dot: 'fill' | 'ring' } {
-  switch (label) {
-    case 'Available':
-      return { tone: 'accent', dot: 'fill' };
-    case 'Approved':
-    case 'Processing':
-      return { tone: 'accent', dot: 'ring' };
-    case 'Declined':
-    case 'Failed':
-      return { tone: 'danger', dot: 'fill' };
-    case 'Pending approval':
-      return { tone: 'warn', dot: 'ring' };
-    case 'Not requested':
-      return { tone: 'muted', dot: 'ring' };
-    default:
-      // Requested, Partially available, Completed
-      return { tone: 'default', dot: 'ring' };
-  }
+  // Labels arrive translated (features/requests/status.ts), so compare in the active locale.
+  const is = (...keys: string[]) => keys.some((k) => t(k) === label);
+  if (is('common.available')) return { tone: 'accent', dot: 'fill' };
+  if (is('common.approved', 'features.requests.status.processing')) return { tone: 'accent', dot: 'ring' };
+  if (is('common.declined', 'status.failed')) return { tone: 'danger', dot: 'fill' };
+  if (is('features.requests.status.pendingApproval')) return { tone: 'warn', dot: 'ring' };
+  if (is('features.requests.status.notRequested')) return { tone: 'muted', dot: 'ring' };
+  // Requested, Partially available, Completed
+  return { tone: 'default', dot: 'ring' };
 }
 
 export function StatusLabelChip({ label, large }: { label: string; large?: boolean | undefined }) {
@@ -66,7 +59,7 @@ export function DiscoverCard({ item, subtitle, children }: { item: CardItem; sub
           {item.year ? <span className="al-num" style={{ fontSize: 11, color: 'var(--al-text-4)' }}>{item.year}</span> : null}
         </span>
       </Link>
-      <div className="al-poster-card__meta">{subtitle ?? (item.mediaType === 'movie' ? 'Movie' : 'Series')}</div>
+      <div className="al-poster-card__meta">{subtitle ?? (item.mediaType === 'movie' ? t('common.movie') : t('common.series'))}</div>
       {children}
     </article>
   );
@@ -79,7 +72,7 @@ export function DiscoverRow({
   loading = false,
   error,
   action,
-  empty = 'Nothing here yet.',
+  empty = t('discover.kit.nothingHereYet'),
 }: {
   title: string;
   items: readonly DiscoverItem[] | undefined;
@@ -92,13 +85,13 @@ export function DiscoverRow({
     <section className="mk-slider" aria-label={title}>
       <SectionHead label={<h2 className="al-title-m mk-section-title">{title}</h2>} action={action} />
       {loading ? (
-        <div className="mk-slider__track" aria-busy="true" aria-label="Loading">
+        <div className="mk-slider__track" aria-busy="true" aria-label={t('common.loading')}>
           {Array.from({ length: 6 }, (_, i) => (
             <Skeleton key={i} shape="poster" />
           ))}
         </div>
       ) : error ? (
-        <QueryError error={error} title={`Could not load ${title.toLowerCase()}`} />
+        <QueryError error={error} title={t('discover.kit.couldNotLoadTitle', { title: title.toLowerCase() })} />
       ) : !items || items.length === 0 ? (
         <p className="al-caption" style={{ margin: 0 }}>
           {empty}
@@ -161,9 +154,9 @@ export function DiscoverGrid({
   }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   if (query.isPending) return <PosterSkeletons />;
-  if (query.isError) return <QueryError error={query.error} title="Could not load titles" onRetry={() => void query.refetch()} />;
+  if (query.isError) return <QueryError error={query.error} title={t('discover.kit.couldNotLoadTitles')} onRetry={() => void query.refetch()} />;
   const items = dedupe(query.data.pages.flatMap((p) => p.results));
-  if (items.length === 0) return <EmptyState title="No titles found">Try other filters.</EmptyState>;
+  if (items.length === 0) return <EmptyState title={t('discover.kit.noTitlesFound')}>{t('discover.kit.tryOtherFilters')}</EmptyState>;
 
   return (
     <>
@@ -176,7 +169,7 @@ export function DiscoverGrid({
       {hasNextPage ? (
         <div className="mk-more">
           <Button loading={isFetchingNextPage} onClick={() => void fetchNextPage()}>
-            Load more
+            {t('discover.kit.loadMore')}
           </Button>
         </div>
       ) : null}

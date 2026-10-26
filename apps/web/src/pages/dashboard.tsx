@@ -13,6 +13,7 @@ import { useTorrentStatus } from '../hooks/torrent.js';
 import { useVpnStatus } from '../hooks/vpn.js';
 import { attentionChecks, queueRow, storageRows, upcomingRows, vpnSummary } from './dashboard-model.js';
 import { formatClock, formatDay, formatRate } from './system/format.js';
+import { t } from '../i18n/index.js';
 
 // Page 01. Two hero panes (chamfer tl / br) frame the open centre where the backdrop spire
 // stands; two decorative traces lead from them toward it. Queue and Requests sit below.
@@ -31,8 +32,8 @@ function useWindowStart(): Date {
 function useNow(intervalMs = 30_000): Date {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), intervalMs);
-    return () => clearInterval(t);
+    const item = setInterval(() => setNow(new Date()), intervalMs);
+    return () => clearInterval(item);
   }, [intervalMs]);
   return now;
 }
@@ -47,21 +48,21 @@ function NextDayPane() {
       chamfer="tl"
       small={false}
       className="dash-hero dash-hero--next"
-      title="Next 24 hours"
+      title={t('dashboard.next24Hours')}
       actions={
         <Link to="/calendar" className="al-link">
-          Calendar
+          {t('common.calendar')}
         </Link>
       }
     >
       {calendar.isLoading ? (
         <Skeleton lines={3} />
       ) : calendar.isError ? (
-        <ErrorBlock title="Couldn't load the calendar" onRetry={() => void calendar.refetch()} />
+        <ErrorBlock title={t('dashboard.couldntLoadTheCalendar')} onRetry={() => void calendar.refetch()} />
       ) : calendar.data === null ? (
-        <p className="dash-muted">The calendar is not available on this server.</p>
+        <p className="dash-muted">{t('dashboard.theCalendarIsNotAvailable')}</p>
       ) : rows.length === 0 ? (
-        <p className="dash-muted">Nothing airs in the next 24 hours.</p>
+        <p className="dash-muted">{t('dashboard.nothingAirsInTheNext')}</p>
       ) : (
         <ul className="dash-upcoming">
           {rows.slice(0, 5).map((r) => (
@@ -84,18 +85,18 @@ function VpnSection() {
   const summary = vpnSummary(vpn.data);
   return (
     <div className="dash-status__block">
-      <SectionLabel tone={summary?.state === 'down' ? 'warn' : 'default'}>VPN</SectionLabel>
+      <SectionLabel tone={summary?.state === 'down' ? 'warn' : 'default'}>{t('common.vpn')}</SectionLabel>
       {vpn.isLoading ? (
         <Skeleton lines={2} />
       ) : !summary ? (
-        <p className="dash-muted">VPN status is unavailable.</p>
+        <p className="dash-muted">{t('dashboard.vpnStatusIsUnavailable')}</p>
       ) : summary.state === 'off' ? (
         <>
-          <div className="dash-status__headline">VPN off</div>
+          <div className="dash-status__headline">{t('common.vpnOff')}</div>
           <div className="dash-muted">
-            Downloads use your normal connection.{' '}
+            {t('dashboard.downloadsUseYourNormalConnection')}
             <Link to="/settings/vpn" className="al-link">
-              Set up
+              {t('dashboard.setUp')}
             </Link>
           </div>
         </>
@@ -108,15 +109,14 @@ function VpnSection() {
             <div className="dash-muted">
               {summary.port !== undefined ? (
                 <>
-                  Port <span className="al-num dash-data">{summary.port}</span> forwarded
+                  {t('common.port')} <span className="al-num dash-data">{summary.port}</span> {t('dashboard.forwarded')}
                 </>
               ) : (
-                'Connected'
+                t('common.connected')
               )}
               {summary.uptime ? (
                 <>
-                  {' '}
-                  · up <span className="al-num dash-data">{summary.uptime}</span>
+                  {t('dashboard.up')} <span className="al-num dash-data">{summary.uptime}</span>
                 </>
               ) : null}
             </div>
@@ -132,16 +132,16 @@ function StorageSection() {
   const rows = storageRows(folders.data);
   return (
     <div className="dash-status__block">
-      <SectionLabel>Storage</SectionLabel>
+      <SectionLabel>{t('dashboard.storage')}</SectionLabel>
       {folders.isLoading ? (
         <Skeleton lines={2} />
       ) : folders.isError ? (
-        <p className="dash-muted">Couldn't read root folders.</p>
+        <p className="dash-muted">{t('dashboard.couldntReadRootFolders')}</p>
       ) : rows.length === 0 ? (
         <p className="dash-muted">
-          No root folders yet.{' '}
+          {t('dashboard.noRootFoldersYet')}
           <Link to="/settings/mediamanagement" className="al-link">
-            Add one
+            {t('dashboard.addOne')}
           </Link>
         </p>
       ) : (
@@ -166,28 +166,28 @@ function IssuesSection() {
   return (
     <div className="dash-status__block">
       <SectionLabel tone={issues.length ? 'warn' : 'default'} count={health.data ? issues.length : undefined}>
-        Issues
+        {t('common.issues')}
       </SectionLabel>
       {health.isLoading ? (
         <Skeleton lines={2} />
       ) : health.isError ? (
-        <p className="dash-muted">Couldn't run health checks.</p>
+        <p className="dash-muted">{t('dashboard.couldntRunHealthChecks')}</p>
       ) : issues.length === 0 ? (
-        <p className="dash-muted">No issues.</p>
+        <p className="dash-muted">{t('dashboard.noIssues')}</p>
       ) : (
         <ul className="dash-issues">
           {issues.slice(0, 3).map((c) => (
             <li key={`${c.source}:${c.message}`}>
               {c.message}{' '}
               <Link to="/system/health" className="al-link">
-                {c.status === 'error' ? 'Fix' : 'Details'}
+                {c.status === 'error' ? t('common.fix') : t('common.details')}
               </Link>
             </li>
           ))}
           {issues.length > 3 ? (
             <li>
               <Link to="/system/health" className="al-link">
-                {issues.length - 3} more
+                {t('dashboard.valueMore', { value: issues.length - 3 })}
               </Link>
             </li>
           ) : null}
@@ -218,14 +218,14 @@ function QueuePane() {
       flush
       title={
         <div className="dash-queue__head">
-          <SectionLabel as="h2">Queue</SectionLabel>
+          <SectionLabel as="h2">{t('common.queue')}</SectionLabel>
           {rates ? (
             <>
               <span>
-                Down <span className="al-num dash-data--strong">{formatRate(rates.downloadRate)}</span>
+                {t('common.down')} <span className="al-num dash-data--strong">{formatRate(rates.downloadRate)}</span>
               </span>
               <span>
-                Up <span className="al-num dash-data">{formatRate(rates.uploadRate)}</span>
+                {t('dashboard.up2')} <span className="al-num dash-data">{formatRate(rates.uploadRate)}</span>
               </span>
             </>
           ) : null}
@@ -233,7 +233,7 @@ function QueuePane() {
       }
       actions={
         <Link to="/activity/queue" className="al-link">
-          Activity
+          {t('common.activity')}
         </Link>
       }
     >
@@ -243,11 +243,11 @@ function QueuePane() {
         </div>
       ) : queue.isError ? (
         <div className="dash-pad">
-          <ErrorBlock title="Couldn't load the queue" onRetry={() => void queue.refetch()} />
+          <ErrorBlock title={t('dashboard.couldntLoadTheQueue')} onRetry={() => void queue.refetch()} />
         </div>
       ) : rows.length === 0 ? (
         <div className="dash-pad">
-          <EmptyState title="Queue is empty">Grabbed releases show their progress here.</EmptyState>
+          <EmptyState title={t('dashboard.queueIsEmpty')}>{t('dashboard.grabbedReleasesShowTheirProgress')}</EmptyState>
         </div>
       ) : (
         <ul className="dash-queue__rows">
@@ -268,7 +268,7 @@ function QueuePane() {
                   {r.detail}
                 </span>
               </div>
-              <Trail value={r.pct} state={r.trail} label={`${r.title} progress`} />
+              <Trail value={r.pct} state={r.trail} label={t('dashboard.titleProgress', { title: r.title })} />
               <div className="dash-queue__pct">
                 <span className="al-num">{r.pctLabel}</span>
                 <span className="al-num dash-queue__eta">{r.eta}</span>
@@ -289,11 +289,11 @@ function RequestsPane() {
   const approve = useApproveRequest();
   if (!manage) {
     return (
-      <Pane title="Requests" className="dash-requests">
+      <Pane title={t('common.requests')} className="dash-requests">
         <p className="dash-muted">
-          Ask for a series or movie and follow it here.{' '}
+          {t('dashboard.askForASeriesOr')}
           <Link to="/requests/mine" className="al-link">
-            My requests
+            {t('common.myRequests')}
           </Link>
         </p>
       </Pane>
@@ -303,19 +303,19 @@ function RequestsPane() {
   return (
     <Pane
       className="dash-requests"
-      title={<SectionLabel as="h2" count={count.data?.pending}>Requests</SectionLabel>}
+      title={<SectionLabel as="h2" count={count.data?.pending}>{t('common.requests')}</SectionLabel>}
       actions={
         <Link to="/requests" className="al-link">
-          Review all
+          {t('dashboard.reviewAll')}
         </Link>
       }
     >
       {list.isLoading ? (
         <Skeleton lines={3} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load requests" onRetry={() => void list.refetch()} />
+        <ErrorBlock title={t('dashboard.couldntLoadRequests')} onRetry={() => void list.refetch()} />
       ) : items.length === 0 ? (
-        <p className="dash-muted">No requests are waiting for approval.</p>
+        <p className="dash-muted">{t('dashboard.noRequestsAreWaitingFor')}</p>
       ) : (
         <ul className="dash-requests__rows">
           {items.map((r) => (
@@ -323,18 +323,18 @@ function RequestsPane() {
               <div className="dash-requests__body">
                 <span className="dash-requests__title">{r.mediaTitle}</span>
                 <span className="dash-muted">
-                  {r.type === 'movie' ? 'Movie' : 'Series'}
-                  {r.is4k ? ' · 4K' : ''} · {r.requestedBy.displayName ?? r.requestedBy.username}
+                  {r.type === 'movie' ? t('common.movie') : t('common.series')}
+                  {r.is4k ? t('dashboard.n4k') : ''} · {r.requestedBy.displayName ?? r.requestedBy.username}
                 </span>
               </div>
               <Button
                 size="sm"
                 variant="secondary"
-                aria-label={`Approve ${r.mediaTitle}`}
+                aria-label={t('dashboard.approveMediatitle', { mediaTitle: r.mediaTitle })}
                 loading={approve.isPending && approve.variables?.id === r.id}
                 onClick={() => approve.mutate({ id: r.id })}
               >
-                Approve
+                {t('common.approve')}
               </Button>
             </li>
           ))}
@@ -362,14 +362,14 @@ export function DashboardPage() {
   const { isAdmin } = useAuth();
   const now = useNow();
   useEffect(() => {
-    document.title = 'Dashboard · Arclight';
+    document.title = t('dashboard.dashboardArclight');
   }, []);
 
   return (
     <div className="dash">
       <PageHeader
         index="00"
-        title="Dashboard"
+        title={t('common.dashboard')}
         className="al-page-header--baseline"
         actions={
           <span className="dash-date">

@@ -1,0 +1,47 @@
+{
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "hevc",
+      "profile": "Main 10",
+      "codec_type": "video",
+      "codec_tag_string": "dvh1",
+      "width": 3840,
+      "height": 2160,
+      "pix_fmt": "yuv420p10le",
+      "color_range": "pc",
+      "r_frame_rate": "25/1",
+      "avg_frame_rate": "25/1",
+      "disposition": { "default": 1, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "side_data_list": [
+        {
+          "side_data_type": "DOVI configuration record",
+          "dv_version_major": 1,
+          "dv_version_minor": 0,
+          "dv_profile": 5,
+          "dv_level": 6,
+          "rpu_present_flag": 1,
+          "el_present_flag": 0,
+          "bl_present_flag": 1,
+          "dv_bl_signal_compatibility_id": 0
+        }
+      ]
+    },
+    {
+      "index": 1,
+      "codec_name": "eac3",
+      "codec_type": "audio",
+      "channels": 6,
+      "channel_layout": "5.1",
+      "bit_rate": "640000",
+      "disposition": { "default": 1, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "eng" }
+    }
+  ],
+  "format": {
+    "filename": "/tv/Streaming Show/Season 02/Streaming Show - S02E03 WEBDL-2160p.mp4",
+    "format_name": "mov,mp4,m4a,3gp,3g2,mj2",
+    "duration": "3125.760000",
+    "bit_rate": "17800233"
+  }
+}

@@ -65,6 +65,7 @@ import {
   type MonitoredFilter,
 } from './library-filters.js';
 import './library.css';
+import { t } from '../../i18n/index.js';
 
 export type LibraryView = 'posters' | 'table' | 'overview' | 'collections';
 
@@ -127,7 +128,7 @@ export function MovieLibraryPage() {
 }
 
 function noun(kind: LibraryKind, n: number): string {
-  return kind === 'series' ? 'series' : n === 1 ? 'movie' : 'movies';
+  return t('library.index.noun', { kind, count: n });
 }
 
 export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
@@ -184,19 +185,19 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
 
   const profileName = (id: number) => profiles.data?.find((p) => p.id === id)?.name ?? `#${id}`;
   const filterCount = activeFilterCount(filters) + (filters.search ? 1 : 0);
-  const addLabel = kind === 'series' ? 'Add series' : 'Add movie';
+  const addLabel = kind === 'series' ? t('library.addSeries') : t('library.addMovie');
   const viewOptions = [
-    { value: 'posters' as const, label: 'Posters' },
-    { value: 'table' as const, label: 'Table' },
-    { value: 'overview' as const, label: 'Overview' },
-    ...(kind === 'movie' ? [{ value: 'collections' as const, label: 'Collections' }] : []),
+    { value: 'posters' as const, label: t('library.posters') },
+    { value: 'table' as const, label: t('library.table') },
+    { value: 'overview' as const, label: t('library.overview') },
+    ...(kind === 'movie' ? [{ value: 'collections' as const, label: t('common.collections') }] : []),
   ];
 
   return (
     <div className="lib-page" style={{ '--mk-cols': clampColumns(columns) } as CSSProperties}>
       <PageHeader
         index="01"
-        title="Library"
+        title={t('common.library')}
         actions={
           <>
             <Button
@@ -204,7 +205,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
               aria-pressed={selectMode}
               onClick={() => (selectMode ? clearSelection() : setSelectMode(true))}
             >
-              {selectMode ? 'Done' : 'Select'}
+              {selectMode ? t('library.done') : t('common.select')}
             </Button>
             <Link to="/library/add" className={buttonClass({ variant: 'primary' })}>
               {addLabel}
@@ -213,19 +214,19 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
         }
       >
         <Segmented
-          aria-label="Library type"
+          aria-label={t('library.libraryType')}
           value={kind}
           onChange={(k) => void navigate({ to: k === 'series' ? '/library/tv' : '/library/movies' })}
           options={[
-            { value: 'series', label: 'Series' },
-            { value: 'movie', label: 'Movies' },
+            { value: 'series', label: t('common.series') },
+            { value: 'movie', label: t('common.movies') },
           ]}
         />
         {query.data ? (
           <span className="mk-count">
             {rows.length !== allRows.length ? (
               <>
-                <Num>{rows.length}</Num> of <Num>{allRows.length}</Num> {noun(kind, allRows.length)}
+                <Num>{rows.length}</Num> {t('common.of')} <Num>{allRows.length}</Num> {noun(kind, allRows.length)}
               </>
             ) : (
               <>
@@ -235,32 +236,32 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
             · <Num>{formatBytes(totalSize)}</Num>
           </span>
         ) : null}
-        <Segmented aria-label="View" variant="soft" value={view} onChange={setView} options={viewOptions} />
+        <Segmented aria-label={t('library.view')} variant="soft" value={view} onChange={setView} options={viewOptions} />
         <Select
-          aria-label="Sort by"
+          aria-label={t('library.sortBy')}
           value={sort.key}
           onChange={(e) => setSort({ ...sort, key: e.target.value as LibrarySortKey })}
-          options={Object.entries(SORT_LABELS).map(([value, label]) => ({ value, label: `Sort: ${label}` }))}
+          options={Object.entries(SORT_LABELS).map(([value, label]) => ({ value, label: t('library.sortLabel', { label }) }))}
         />
         <Button
           size="sm"
-          aria-label={sort.direction === 'asc' ? 'Sort ascending' : 'Sort descending'}
+          aria-label={sort.direction === 'asc' ? t('library.sortAscending') : t('library.sortDescending')}
           onClick={() => setSort({ ...sort, direction: sort.direction === 'asc' ? 'desc' : 'asc' })}
         >
           {sort.direction === 'asc' ? '↑' : '↓'}
         </Button>
         <Button aria-expanded={showFilters} onClick={() => setShowFilters(!showFilters)}>
-          Filter {filterCount > 0 ? <CountBadge>{filterCount}</CountBadge> : null}
+          {t('library.filter')} {filterCount > 0 ? <CountBadge>{filterCount}</CountBadge> : null}
         </Button>
         {view === 'posters' || view === 'collections' ? (
           <Slider
             className="mk-hide-mobile"
-            label="Size"
+            label={t('common.size')}
             min={MIN_COLUMNS}
             max={MAX_COLUMNS}
             value={clampColumns(MIN_COLUMNS + MAX_COLUMNS - columns)}
             showValue={false}
-            aria-label="Poster size"
+            aria-label={t('library.posterSize')}
             onChange={(v) => setColumns(MIN_COLUMNS + MAX_COLUMNS - v)}
           />
         ) : null}
@@ -271,26 +272,26 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
       {query.isPending ? (
         view === 'posters' ? <PosterSkeletons /> : <Loading />
       ) : query.isError ? (
-        <QueryError error={query.error} onRetry={() => void query.refetch()} title="Could not load the library" />
+        <QueryError error={query.error} onRetry={() => void query.refetch()} title={t('library.couldNotLoadTheLibrary')} />
       ) : allRows.length === 0 ? (
         <EmptyState
           size="lg"
-          title={kind === 'series' ? 'No series yet' : 'No movies yet'}
+          title={kind === 'series' ? t('library.noSeriesYet') : t('library.noMoviesYet')}
           action={
             <>
               <Link to="/library/add" className={buttonClass({ variant: 'primary' })}>
                 {addLabel}
               </Link>
               <Link to="/activity/manual-import" className={buttonClass({ variant: 'secondary' })}>
-                Import folder
+                {t('library.importFolder')}
               </Link>
             </>
           }
         >
-          Add one or import a folder you already have.
+          {t('library.addOneOrImportA')}
         </EmptyState>
       ) : rows.length === 0 ? (
-        <EmptyState title="Nothing matches these filters" action={<Button onClick={() => setFilters(DEFAULT_FILTERS)}>Clear filters</Button>} />
+        <EmptyState title={t('library.nothingMatchesTheseFilters')} action={<Button onClick={() => setFilters(DEFAULT_FILTERS)}>{t('library.clearFilters')}</Button>} />
       ) : view === 'table' ? (
         <LibraryTable
           rows={rows}
@@ -391,7 +392,7 @@ function LibraryPoster({
       onClick={selectMode ? onSelect : undefined}
       overlay={
         selectMode ? (
-          <Checkbox aria-label={`Select ${row.title}`} checked={selected} onChange={onSelect} onClick={(e) => e.stopPropagation()} />
+          <Checkbox aria-label={t('library.selectTitle', { title: row.title })} checked={selected} onChange={onSelect} onClick={(e) => e.stopPropagation()} />
         ) : undefined
       }
     />
@@ -400,7 +401,7 @@ function LibraryPoster({
     <div className="mk-poster-wrap" data-unmonitored={!row.monitored || undefined}>
       {selectMode ? null : (
         <span className="mk-poster-monitor">
-          <MonitorSwitch monitored={row.monitored} onChange={onMonitor} label={`${row.monitored ? 'Unmonitor' : 'Monitor'} ${row.title}`} />
+          <MonitorSwitch monitored={row.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: row.monitored, title: row.title })} />
         </span>
       )}
       {selectMode ? (
@@ -435,12 +436,12 @@ function OverviewRow({
       <Poster src={row.posterUrl} title={row.title} progress={progress} progressTone={progressTone(row)} />
       <div className="mk-overview-row__body">
         <div className="mk-row" style={{ flexWrap: 'nowrap' }}>
-          {selectMode ? <Checkbox aria-label={`Select ${row.title}`} checked={selected} onChange={onSelect} /> : null}
+          {selectMode ? <Checkbox aria-label={t('library.selectTitle', { title: row.title })} checked={selected} onChange={onSelect} /> : null}
           <Link {...detailLink(row)} className="mk-overview-row__title mk-link">
             {row.title}
           </Link>
         </div>
-        <p className="mk-overview-row__text">{row.overview || 'No overview available.'}</p>
+        <p className="mk-overview-row__text">{row.overview || t('common.noOverviewAvailable')}</p>
         <div className="mk-row" style={{ gap: 8 }}>
           <StatusChip status={row.monitored ? 'monitored' : 'unmonitored'} />
           <span className="al-quality">{profileName(row.qualityProfileId)}</span>
@@ -451,7 +452,7 @@ function OverviewRow({
         </div>
       </div>
       <div className="mk-overview-row__aside">
-        <MonitorSwitch monitored={row.monitored} onChange={onMonitor} label={`${row.monitored ? 'Unmonitor' : 'Monitor'} ${row.title}`} />
+        <MonitorSwitch monitored={row.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: row.monitored, title: row.title })} />
         <Num className="mk-muted">{countText(row)}</Num>
         <Num className="mk-muted">{formatBytes(row.sizeOnDisk)}</Num>
       </div>
@@ -474,7 +475,7 @@ function CollectionsView({
 }) {
   const groups = useMemo(() => groupCollections(rows), [rows]);
   if (groups.length === 0) {
-    return <EmptyState title="No collections yet">Movies that belong to a TMDB collection are grouped here.</EmptyState>;
+    return <EmptyState title={t('library.noCollectionsYet')}>{t('library.moviesThatBelongToA')}</EmptyState>;
   }
   return (
     <div className="mk-stack" data-testid="collections">
@@ -535,13 +536,13 @@ function LibraryTable({
   const columns: Column<LibraryRow>[] = [
     {
       key: 'monitored',
-      header: <span className="al-sr-only">Monitored</span>,
-      cell: (r) => <MonitorSwitch monitored={r.monitored} onChange={(m) => onMonitor(r, m)} label={`${r.monitored ? 'Unmonitor' : 'Monitor'} ${r.title}`} />,
+      header: <span className="al-sr-only">{t('status.monitored')}</span>,
+      cell: (r) => <MonitorSwitch monitored={r.monitored} onChange={(m) => onMonitor(r, m)} label={t('common.monitorTitle', { monitored: r.monitored, title: r.title })} />,
       width: '56px',
     },
     {
       key: 'title',
-      header: 'Title',
+      header: t('common.title'),
       sortValue: (r) => r.sortTitle,
       cell: (r) => (
         <span className="mk-row" style={{ gap: 8 }}>
@@ -552,26 +553,26 @@ function LibraryTable({
         </span>
       ),
     },
-    { key: 'year', header: 'Year', sortValue: (r) => r.year, cell: (r) => r.year || '—', mono: true, width: '72px' },
-    { key: 'status', header: 'Status', cell: (r) => STATUS_LABELS[r.status] ?? r.status, muted: true },
-    { key: 'profile', header: 'Profile', cell: (r) => profileName(r.qualityProfileId), mono: true },
-    { key: 'subtitle', header: isMovie ? 'Studio' : 'Network', cell: (r) => r.subtitle ?? '—', muted: true },
+    { key: 'year', header: t('common.year'), sortValue: (r) => r.year, cell: (r) => r.year || '—', mono: true, width: '72px' },
+    { key: 'status', header: t('common.status'), cell: (r) => STATUS_LABELS[r.status] ?? r.status, muted: true },
+    { key: 'profile', header: t('common.profile'), cell: (r) => profileName(r.qualityProfileId), mono: true },
+    { key: 'subtitle', header: isMovie ? t('common.studio') : t('common.network'), cell: (r) => r.subtitle ?? '—', muted: true },
     {
       key: 'progress',
-      header: isMovie ? 'File' : 'Episodes',
+      header: isMovie ? t('common.file') : t('common.episodes'),
       sortValue: (r) => r.have,
       cell: (r) => (
         <Meter
           value={r.total > 0 ? (r.have / r.total) * 100 : 0}
           tone={progressTone(r) === 'warn' ? 'warn' : 'default'}
-          label={`${r.title} progress`}
+          label={t('library.titleProgress', { title: r.title })}
           valueText={countText(r)}
         />
       ),
       width: '180px',
     },
-    { key: 'size', header: 'Size', sortValue: (r) => r.sizeOnDisk, cell: (r) => formatBytes(r.sizeOnDisk), align: 'right', mono: true },
-    { key: 'added', header: 'Added', sortValue: (r) => r.added, cell: (r) => formatDate(r.added), mono: true },
+    { key: 'size', header: t('common.size'), sortValue: (r) => r.sizeOnDisk, cell: (r) => formatBytes(r.sizeOnDisk), align: 'right', mono: true },
+    { key: 'added', header: t('common.added'), sortValue: (r) => r.added, cell: (r) => formatDate(r.added), mono: true },
   ];
   const tableSort: SortState = { key: sort.key, direction: sort.direction };
   return (
@@ -586,8 +587,8 @@ function LibraryTable({
       selectable={selectable}
       selected={selected}
       onSelectionChange={(keys) => onSelectionChange(new Set([...keys].map(Number)))}
-      rowLabel={(r) => `Select ${r.title}`}
-      caption="Library"
+      rowLabel={(r) => t('library.selectTitle', { title: r.title })}
+      caption={t('common.library')}
     />
   );
 }
@@ -612,40 +613,40 @@ function LibraryFilterBar({
       <Input
         type="search"
         className="mk-search"
-        aria-label="Filter library"
-        placeholder="Filter by title"
+        aria-label={t('library.filterLibrary')}
+        placeholder={t('library.filterByTitle')}
         value={filters.search}
         onChange={(e) => onChange({ ...filters, search: e.target.value })}
       />
       <Select
-        aria-label="Monitored filter"
+        aria-label={t('library.monitoredFilter')}
         value={filters.monitored}
         onChange={(e) => onChange({ ...filters, monitored: e.target.value as MonitoredFilter })}
         options={[
-          { value: 'all', label: 'Monitored and unmonitored' },
-          { value: 'monitored', label: 'Monitored' },
-          { value: 'unmonitored', label: 'Unmonitored' },
+          { value: 'all', label: t('library.monitoredAndUnmonitored') },
+          { value: 'monitored', label: t('status.monitored') },
+          { value: 'unmonitored', label: t('status.unmonitored') },
         ]}
       />
       <Select
-        aria-label="Quality profile filter"
+        aria-label={t('library.qualityProfileFilter')}
         value={filters.qualityProfileId?.toString() ?? ''}
         onChange={(e) => onChange({ ...filters, qualityProfileId: num(e.target.value) })}
-        options={[{ value: '', label: 'Any profile' }, ...(profiles ?? []).map((p) => ({ value: String(p.id), label: p.name }))]}
+        options={[{ value: '', label: t('library.anyProfile') }, ...(profiles ?? []).map((p) => ({ value: String(p.id), label: p.name }))]}
       />
       <Select
-        aria-label="Tag filter"
+        aria-label={t('library.tagFilter')}
         value={filters.tagId?.toString() ?? ''}
         onChange={(e) => onChange({ ...filters, tagId: num(e.target.value) })}
-        options={[{ value: '', label: 'Any tag' }, ...(tags ?? []).map((t) => ({ value: String(t.id), label: t.label }))]}
+        options={[{ value: '', label: t('library.anyTag') }, ...(tags ?? []).map((item) => ({ value: String(item.id), label: item.label }))]}
       />
       <Select
-        aria-label="Status filter"
+        aria-label={t('library.statusFilter')}
         value={filters.status ?? ''}
         onChange={(e) => onChange({ ...filters, status: e.target.value || null })}
-        options={[{ value: '', label: 'Any status' }, ...statuses.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s }))]}
+        options={[{ value: '', label: t('library.anyStatus') }, ...statuses.map((s) => ({ value: s, label: STATUS_LABELS[s] ?? s }))]}
       />
-      <Checkbox label="Missing files" checked={filters.missing} onChange={(e) => onChange({ ...filters, missing: e.target.checked })} />
+      <Checkbox label={t('library.missingFiles')} checked={filters.missing} onChange={(e) => onChange({ ...filters, missing: e.target.checked })} />
     </FilterBar>
   );
 }
@@ -686,47 +687,47 @@ function BulkBar({
   return (
     <FloatBar count={ids.length}>
       <Button variant="ghost" disabled={pending} onClick={() => apply({ monitored: true })}>
-        Monitor
+        {t('common.monitor')}
       </Button>
       <Button variant="ghost" disabled={pending} onClick={() => apply({ monitored: false })}>
-        Unmonitor
+        {t('common.unmonitor')}
       </Button>
-      <Popover trigger={menuTrigger('Profile')} placement="top-start" width={240} label="Set quality profile">
+      <Popover trigger={menuTrigger(t('common.profile'))} placement="top-start" width={240} label={t('library.setQualityProfile')}>
         {(close) => (
           <Menu
-            header="Set quality profile"
+            header={t('library.setQualityProfile')}
             onDone={close}
             items={(profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => apply({ qualityProfileId: p.id }) }))}
           />
         )}
       </Popover>
-      <Popover trigger={menuTrigger('Root folder')} placement="top-start" width={280} label="Move to root folder">
+      <Popover trigger={menuTrigger(t('common.rootFolder'))} placement="top-start" width={280} label={t('library.moveToRootFolder')}>
         {(close) => (
           <Menu
-            header="Move to root folder"
+            header={t('library.moveToRootFolder')}
             onDone={close}
             items={(rootFolders ?? []).map((r) => ({ id: r.path, label: <span className="al-num">{r.path}</span>, onSelect: () => apply({ rootFolderPath: r.path }) }))}
           />
         )}
       </Popover>
-      <Popover trigger={menuTrigger('Tags')} placement="top-start" width={240} label="Change tags">
+      <Popover trigger={menuTrigger(t('common.tags'))} placement="top-start" width={240} label={t('library.changeTags')}>
         {(close) => (
           <Menu
-            header="Add or remove a tag"
+            header={t('library.addOrRemoveATag')}
             onDone={close}
-            items={(tags ?? []).flatMap((t) => [
-              { id: `add-${t.id}`, label: `Add ${t.label}`, onSelect: () => apply({ tags: { add: [t.id] } }) },
-              { id: `remove-${t.id}`, label: `Remove ${t.label}`, onSelect: () => apply({ tags: { remove: [t.id] } }) },
+            items={(tags ?? []).flatMap((entry) => [
+              { id: `add-${entry.id}`, label: t('library.addLabel', { label: entry.label }), onSelect: () => apply({ tags: { add: [entry.id] } }) },
+              { id: `remove-${entry.id}`, label: t('library.removeLabel', { label: entry.label }), onSelect: () => apply({ tags: { remove: [entry.id] } }) },
             ])}
           />
         )}
       </Popover>
       <FloatBarDivider />
       <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-        Delete
+        {t('common.delete')}
       </Button>
       <Button variant="ghost" className="al-floatbar__cancel" onClick={onClear}>
-        Cancel
+        {t('common.cancel')}
       </Button>
       <DeleteMediaDialog
         open={confirmDelete}

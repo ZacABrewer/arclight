@@ -199,3 +199,6 @@
   .sys-mapping { flex-wrap: wrap; }
   .al-pane--flush .al-filterbar { padding: 12px 18px; }
 }
+.login-plex { display: flex; flex-direction: column; gap: 12px; }
+.login-or { align-self: center; font-family: var(--al-mono); font-size: 11px; letter-spacing: .14em; text-transform: uppercase; color: var(--al-text-4); }
+.login-plex__wait { margin: 0; text-align: center; }

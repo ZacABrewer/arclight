@@ -31,13 +31,15 @@ import {
 import { SettingsPage } from '../settings-layout.js';
 import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
 import { categoriesRenderer, cleanCategories } from './categories-field.js';
+import { EngineAgentSection } from './engine-agent-section.js';
 import '../indexers/indexers.css';
 import './download-clients.css';
+import { t } from '../../../i18n/index.js';
 
 export function downloadClientTestOutcome(r: DownloadClientTestResult): TestOutcome {
   return {
     ok: r.ok,
-    message: r.version ? `version ${r.version}${r.apiVersion ? ` (API ${r.apiVersion})` : ''}` : undefined,
+    message: r.version ? t('settings.downloadClients.versionVersionValue', { version: r.version, value: r.apiVersion ? ` (API ${r.apiVersion})` : '' }) : undefined,
     warnings: r.warnings,
     errors: r.error ? [`${r.error.message} (${r.error.code})`] : [],
   };
@@ -62,16 +64,17 @@ export function toDownloadClientBody(values: FormValues, fields: readonly FieldD
   return body as unknown as DownloadClientInput;
 }
 
-export const BUILTIN_DESCRIPTION = "Arclight's own BitTorrent engine, running in-process. No separate app or host to configure.";
 
 /** The add-dialog blurb: the api's description, or ours for the built-in engine. */
 export function schemaDescription(s: DownloadClientImplementationSchema): string {
-  return s.description || (s.implementation === 'builtin' ? BUILTIN_DESCRIPTION : '');
+  return s.description || (s.implementation === 'builtin' ? t('settings.downloadClients.builtinDescription') : '');
 }
 
 /** Second line of a client card: where it lives. */
 export function clientLocation(c: DownloadClientResource): string {
-  if (c.implementation === 'builtin') return c.settings.savePath ? `built-in engine · ${c.settings.savePath}` : 'built-in engine';
+  if (c.implementation === 'builtin') return c.settings.savePath ? t('settings.downloadClients.builtinEngineAt', { path: c.settings.savePath }) : t('settings.downloadClients.builtinEngine');
+  // A Remote Engine is addressed by its agent URL rather than host and port.
+  if (c.implementation === 'remoteEngine') return c.settings.url;
   const s = c.settings;
   return `${s.useSsl ? 'https' : 'http'}://${s.host}:${s.port}${s.urlBase ?? ''}`;
 }
@@ -103,7 +106,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
         open
         size={640}
         onClose={onClose}
-        title={existing ? `Edit ${existing.name}` : `Add ${editing.schema.implementationName}`}
+        title={existing ? t('settings.downloadClients.editName', { name: existing.name }) : t('settings.downloadClients.addImplementationname', { implementationName: editing.schema.implementationName })}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -136,15 +139,15 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${existing.name}?`}
-          confirmLabel="Delete download client"
+          title={t('settings.downloadClients.deleteName', { name: existing.name })}
+          confirmLabel={t('settings.downloadClients.deleteDownloadClient')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
         >
-          <p>Arclight stops sending releases to {existing.name}.</p>
+          <p>{t('settings.downloadClients.arclightStopsSendingReleasesTo', { name: existing.name })}</p>
         </ConfirmDialog>
       ) : null}
     </>
@@ -155,15 +158,15 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
 function ClientChooser({ onPick, onClose }: { onPick: (s: DownloadClientImplementationSchema) => void; onClose: () => void }) {
   const schemas = useDownloadClientSchema();
   return (
-    <Modal open size={640} onClose={onClose} title="Add download client">
+    <Modal open size={640} onClose={onClose} title={t('settings.downloadClients.addDownloadClient')}>
       {schemas.isPending ? (
         <Skeleton lines={4} />
       ) : schemas.isError ? (
-        <ErrorBlock title="Couldn't load client types" onRetry={() => void schemas.refetch()}>
+        <ErrorBlock title={t('settings.downloadClients.couldntLoadClientTypes')} onRetry={() => void schemas.refetch()}>
           {errorMessage(schemas.error)}
         </ErrorBlock>
       ) : (
-        <ul className="al-chooser__list" aria-label="Client types">
+        <ul className="al-chooser__list" aria-label={t('settings.downloadClients.clientTypes')}>
           {sortedSchemas(schemas.data).map((s) => (
             <li key={s.implementation}>
               <button type="button" className="al-chooser__row" onClick={() => onPick(s)}>
@@ -195,7 +198,7 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
   const listId = useId();
 
   const submit = () => {
-    if (!draft.host.trim() || !draft.remotePath || !draft.localPath.trim()) return setError('Host, remote path and local path are all required');
+    if (!draft.host.trim() || !draft.remotePath || !draft.localPath.trim()) return setError(t('settings.downloadClients.hostRemotePathAndLocal'));
     setError(undefined);
     save.mutate({ id: mapping?.id, body: draft }, { onSuccess: onClose });
   };
@@ -205,11 +208,11 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
       open
       size={560}
       onClose={onClose}
-      title={mapping ? 'Edit remote path mapping' : 'Add remote path mapping'}
+      title={mapping ? t('settings.downloadClients.editRemotePathMapping') : t('settings.downloadClients.addRemotePathMapping')}
       footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} />}
     >
       <div className="al-schema-form__stack">
-        <Field label="Host" htmlFor={hostId} hint="The download client host this mapping applies to." error={error}>
+        <Field label={t('common.host')} htmlFor={hostId} hint={t('settings.downloadClients.theDownloadClientHostThis')} error={error}>
           <Input id={hostId} mono list={listId} value={draft.host} onChange={(e) => setDraft({ ...draft, host: e.currentTarget.value })} />
         </Field>
         <datalist id={listId}>
@@ -217,10 +220,10 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
             <option key={h} value={h} />
           ))}
         </datalist>
-        <Field label="Remote path" htmlFor={remoteId} hint="The path as the download client reports it.">
+        <Field label={t('settings.downloadClients.remotePath')} htmlFor={remoteId} hint={t('settings.downloadClients.thePathAsTheDownload')}>
           <Input id={remoteId} mono value={draft.remotePath} onChange={(e) => setDraft({ ...draft, remotePath: e.currentTarget.value })} />
         </Field>
-        <Field label="Local path" htmlFor={localId} hint="The same folder as Arclight sees it.">
+        <Field label={t('settings.downloadClients.localPath')} htmlFor={localId} hint={t('settings.downloadClients.theSameFolderAsArclight')}>
           <Input id={localId} mono value={draft.localPath} onChange={(e) => setDraft({ ...draft, localPath: e.currentTarget.value })} />
         </Field>
       </div>
@@ -237,20 +240,20 @@ function RemotePathMappingsSection() {
   const [deleting, setDeleting] = useState<RemotePathMapping | null>(null);
 
   const columns: Column<RemotePathMapping>[] = [
-    { key: 'host', header: 'Host', cell: (m) => m.host, mono: true },
-    { key: 'remote', header: 'Remote path', cell: (m) => m.remotePath, mono: true },
-    { key: 'local', header: 'Local path', cell: (m) => m.localPath, mono: true },
+    { key: 'host', header: t('common.host'), cell: (m) => m.host, mono: true },
+    { key: 'remote', header: t('settings.downloadClients.remotePath'), cell: (m) => m.remotePath, mono: true },
+    { key: 'local', header: t('settings.downloadClients.localPath'), cell: (m) => m.localPath, mono: true },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (m) => (
         <span className="al-dc-actions">
-          <Button size="sm" variant="ghost" onClick={() => setEditing(m)} aria-label={`Edit mapping ${m.remotePath}`}>
-            Edit
+          <Button size="sm" variant="ghost" onClick={() => setEditing(m)} aria-label={t('settings.downloadClients.editMappingRemotepath', { remotePath: m.remotePath })}>
+            {t('common.edit')}
           </Button>
-          <Button size="sm" variant="danger" onClick={() => setDeleting(m)} aria-label={`Delete mapping ${m.remotePath}`}>
-            Delete
+          <Button size="sm" variant="danger" onClick={() => setDeleting(m)} aria-label={t('settings.downloadClients.deleteMappingRemotepath', { remotePath: m.remotePath })}>
+            {t('common.delete')}
           </Button>
         </span>
       ),
@@ -259,29 +262,29 @@ function RemotePathMappingsSection() {
 
   return (
     <SettingsSection
-      label="Remote path mappings"
+      label={t('settings.downloadClients.remotePathMappings')}
       action={
         <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
-          Add mapping
+          {t('settings.downloadClients.addMapping')}
         </Button>
       }
     >
       {list.isPending ? (
         <Skeleton lines={2} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load remote path mappings" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.downloadClients.couldntLoadRemotePathMappings')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : list.data.length === 0 ? (
-        <EmptyState title="No mappings">Only needed when the download client sees paths differently from Arclight (e.g. Docker).</EmptyState>
+        <EmptyState title={t('settings.downloadClients.noMappings')}>{t('settings.downloadClients.onlyNeededWhenTheDownload')}</EmptyState>
       ) : (
-        <Table columns={columns} rows={list.data} rowKey={(m) => m.id} caption="Remote path mappings" stickyHeader={false} />
+        <Table columns={columns} rows={list.data} rowKey={(m) => m.id} caption={t('settings.downloadClients.remotePathMappings')} stickyHeader={false} />
       )}
       {editing ? <MappingEditor key={editing === 'new' ? 'new' : editing.id} mapping={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
-        title="Delete remote path mapping?"
-        confirmLabel="Delete mapping"
+        title={t('settings.downloadClients.deleteRemotePathMapping')}
+        confirmLabel={t('settings.downloadClients.deleteMapping')}
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await remove.mutateAsync(deleting.id);
@@ -290,7 +293,7 @@ function RemotePathMappingsSection() {
       >
         {deleting ? (
           <p>
-            Paths from <span className="al-num">{deleting.host}</span> under <span className="al-num">{deleting.remotePath}</span> are no longer translated.
+            {t('settings.downloadClients.pathsFrom')} <span className="al-num">{deleting.host}</span> {t('settings.downloadClients.under')} <span className="al-num">{deleting.remotePath}</span> {t('settings.downloadClients.areNoLongerTranslated')}
           </p>
         ) : null}
       </ConfirmDialog>
@@ -316,7 +319,7 @@ export function DownloadClientCard({
       title={client.name}
       muted={!client.enable}
       onClick={onEdit}
-      status={client.enable ? <Chip tone="accent">Enabled</Chip> : <Chip tone="muted">Disabled</Chip>}
+      status={client.enable ? <Chip tone="accent">{t('common.enabled')}</Chip> : <Chip tone="muted">{t('common.disabled')}</Chip>}
       actions={
         <>
           <TestButton
@@ -324,13 +327,13 @@ export function DownloadClientCard({
             onTest={async () => downloadClientTestOutcome(await downloadClientsApi.test({ ...toDownloadClientBody(client as unknown as FormValues), id: client.id }))}
           />
           {onEdit ? (
-            <Button size="sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${client.name}`}>
-              Edit
+            <Button size="sm" variant="ghost" onClick={onEdit} aria-label={t('settings.downloadClients.editName', { name: client.name })}>
+              {t('common.edit')}
             </Button>
           ) : null}
           {builtin ? (
             <Link to="/settings/torrent" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
-              Engine settings
+              {t('settings.downloadClients.engineSettings')}
             </Link>
           ) : null}
         </>
@@ -339,7 +342,7 @@ export function DownloadClientCard({
       <ProtocolBadge protocol={client.protocol} />
       <span>{schema?.implementationName ?? client.implementation}</span>
       <span>
-        Priority <span className="al-card-priority">{client.priority}</span>
+        {t('common.priority')} <span className="al-card-priority">{client.priority}</span>
       </span>
       <span className="al-card-line al-card-line--mono">{clientLocation(client)}</span>
       {result ? <TestResultView outcome={result} /> : null}
@@ -360,7 +363,7 @@ export function DownloadClientsPage() {
 
   return (
     <SettingsPage
-      title="Download clients"
+      title={t('common.downloadClients')}
       actions={
         <>
           <Button
@@ -373,10 +376,10 @@ export function DownloadClientsPage() {
               })
             }
           >
-            Test all
+            {t('settings.downloadClients.testAll')}
           </Button>
           <Button variant="primary" onClick={() => setPicking(true)}>
-            Add download client
+            {t('settings.downloadClients.addDownloadClient')}
           </Button>
         </>
       }
@@ -384,13 +387,13 @@ export function DownloadClientsPage() {
       {list.isPending ? (
         <Skeleton lines={4} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load download clients" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.downloadClients.couldntLoadDownloadClients')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : list.data.length === 0 ? (
-        <EmptyState title="No download clients yet">Add the built-in engine or a client such as qBittorrent or SABnzbd.</EmptyState>
+        <EmptyState title={t('settings.downloadClients.noDownloadClientsYet')}>{t('settings.downloadClients.addTheBuiltInEngine')}</EmptyState>
       ) : (
-        <CardGrid label="Download clients">
+        <CardGrid label={t('common.downloadClients')}>
           {list.data.map((c) => {
             const schema = schemaFor(c.implementation);
             return (
@@ -406,6 +409,7 @@ export function DownloadClientsPage() {
         </CardGrid>
       )}
       <RemotePathMappingsSection />
+      <EngineAgentSection />
       {picking ? (
         <ClientChooser
           onClose={() => setPicking(false)}

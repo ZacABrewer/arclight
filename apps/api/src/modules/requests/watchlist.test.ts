@@ -39,13 +39,13 @@ describe('watchlist', () => {
           : [{ type: 'show', title: 'Show', year: 2010, Guid: [{ id: 'tvdb://81189' }, { id: 'imdb://tt0903747' }] }, { type: 'person', title: 'nope' }];
       return new Response(JSON.stringify({ MediaContainer: { totalSize: 51, Metadata: rows } }), { status: 200 });
     });
-    const items = (await provider.fetch({} as never, { plexToken: 'secret', notifications: {} as never, watchlistSyncMovies: false, watchlistSyncSeries: false }))!;
+    const items = (await provider.fetch({} as never, { plexToken: 'secret', notifications: {} as never, watchlistSyncMovies: false, watchlistSyncSeries: false, autoRequestFromWatchlist: true }))!;
     expect(items).toHaveLength(51);
     expect(items[0]).toMatchObject({ mediaType: 'movie', tmdbId: 1, externalId: 'k0' });
     expect(items[50]).toMatchObject({ mediaType: 'series', tvdbId: 81189, imdbId: 'tt0903747', tmdbId: null });
     expect(calls).toHaveLength(2);
     expect(calls.every((c) => c.token === 'secret' && !c.url.includes('secret'))).toBe(true);
-    expect(await provider.fetch({} as never, { notifications: {} as never, watchlistSyncMovies: false, watchlistSyncSeries: false })).toBeNull();
+    expect(await provider.fetch({} as never, { notifications: {} as never, watchlistSyncMovies: false, watchlistSyncSeries: false, autoRequestFromWatchlist: true })).toBeNull();
   });
 
   it('sync mirrors remote items, resolves TMDB ids, auto-requests when permitted and drops stale items', async () => {

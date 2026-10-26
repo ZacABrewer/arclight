@@ -1,21 +1,34 @@
 import { useId, useState, type ReactNode } from 'react';
-import type { TorrentEngineState, TorrentSessionStatus, TorrentSettingsResponse, TorrentSettingsUpdate } from '@arclight/shared';
+import { TORRENT_TRANSPORT_DEFAULTS } from '@arclight/shared';
+import type { TorrentEncryptionMode, TorrentEngineState, TorrentSessionStatus, TorrentSettingsResponse, TorrentSettingsUpdate } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { Chip, ErrorBlock, FormRow, FormSection, Input, KeyValue, LiveDot, Pane, Skeleton, Toggle, type ChipTone, type KeyValueItem } from '../../arclight/index.js';
+import { Chip, ErrorBlock, FormRow, FormSection, Input, KeyValue, LiveDot, Pane, Segmented, Skeleton, Toggle, type ChipTone, type KeyValueItem } from '../../arclight/index.js';
 import { useSaveTorrentSettings, useTorrentSettings, useTorrentStatus } from '../../hooks/torrent.js';
 import { formatRate } from '../../lib/format.js';
 import { SettingsPage, useDraft } from './settings-layout.js';
+import { t } from '../../i18n/index.js';
 
 // Settings -> Torrent engine: engine-wide settings of the built-in BitTorrent engine in
 // FormSection groups, plus a live status pane on the side. Per-client options (categories,
-// save paths) live on the Built-in download client.
+// save paths) live on the Built-in download client; super-seeding and per-torrent limits are
+// set per torrent in the queue drawer.
 
 const STATE_LABELS: Record<TorrentEngineState, [string, ChipTone]> = {
-  disabled: ['Disabled', 'muted'],
-  starting: ['Starting', 'default'],
-  running: ['Running', 'accent'],
-  lockdown: ['Lockdown', 'danger'],
-  error: ['Failed', 'danger'],
+  get disabled() {
+    return [t('common.disabled'), 'muted'] as [string, ChipTone];
+  },
+  get starting() {
+    return [t('settings.torrent.starting'), 'default'] as [string, ChipTone];
+  },
+  get running() {
+    return [t('common.running'), 'accent'] as [string, ChipTone];
+  },
+  get lockdown() {
+    return [t('settings.torrent.lockdown'), 'danger'] as [string, ChipTone];
+  },
+  get error() {
+    return [t('status.failed'), 'danger'] as [string, ChipTone];
+  },
 };
 
 /** Engine state as a chip: Running (accent) · Starting · Disabled (muted) · Lockdown / Failed (danger). */
@@ -24,20 +37,20 @@ export function engineBadge(state: TorrentEngineState) {
   return <Chip tone={tone}>{label}</Chip>;
 }
 
-export const LOCKDOWN_EXPLANATION = 'VPN down — all torrents paused, sockets bound to 127.0.0.1';
+export const lockdownExplanation = () => t('settings.torrent.lockdownExplanation');
 
 /** "41234 (forwarded by VPN; configured 6881)" and friends. */
 export function listenPortText(status: Pick<TorrentSessionStatus, 'listenPort' | 'configuredListenPort'>): string {
-  if (status.listenPort === null) return `not listening (configured ${status.configuredListenPort})`;
-  if (status.listenPort !== status.configuredListenPort) return `${status.listenPort} (forwarded by VPN; configured ${status.configuredListenPort})`;
+  if (status.listenPort === null) return t('settings.torrent.notListeningConfiguredConfiguredlistenport', { configuredListenPort: status.configuredListenPort });
+  if (status.listenPort !== status.configuredListenPort) return t('settings.torrent.listenportForwardedByVpnConfigured', { listenPort: status.listenPort, configuredListenPort: status.configuredListenPort });
   return String(status.listenPort);
 }
 
 function vpnText(vpn: TorrentSessionStatus['vpn']): string {
-  if (!vpn.bindToVpn) return 'Not bound to the VPN';
-  if (!vpn.enabled) return 'Bind to VPN on, VPN integration disabled';
+  if (!vpn.bindToVpn) return t('settings.torrent.notBoundToTheVpn');
+  if (!vpn.enabled) return t('settings.torrent.bindToVpnOnVpn');
   return [
-    vpn.connected ? 'Connected' : 'Disconnected',
+    vpn.connected ? t('common.connected') : t('common.disconnected'),
     vpn.tunnelAddress ? `tunnel ${vpn.tunnelAddress}` : null,
     vpn.forwardedPort !== undefined ? `forwarded port ${vpn.forwardedPort}` : null,
     vpn.killSwitchEngaged ? 'kill switch engaged' : null,
@@ -46,28 +59,41 @@ function vpnText(vpn: TorrentSessionStatus['vpn']): string {
     .join(' · ');
 }
 
+/** "12 of 17 (71%)": encrypted peers and their share of connected peers. */
+export function encryptedPeersText(status: Pick<TorrentSessionStatus, 'peers' | 'encryptedPeers' | 'encryptedPeerRatio'>): string {
+  const ratio = status.encryptedPeerRatio ?? (status.encryptedPeers !== undefined && status.peers > 0 ? status.encryptedPeers / status.peers : 0);
+  const percent = `${Math.round(ratio * 100)}%`;
+  if (status.encryptedPeers === undefined) return percent;
+  return t('settings.torrent.encryptedOfPeers', { encrypted: status.encryptedPeers, peers: status.peers, percent });
+}
+
 /** Live status as key/value rows (mono values). Shared by the settings page and handy elsewhere. */
 export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }) {
-  const t = status.torrents;
+  const item = status.torrents;
   const items: KeyValueItem[] = [
-    { label: 'State', value: engineBadge(status.state), mono: false },
-    { label: 'Listening port', value: listenPortText(status) },
-    { label: 'Bound address', value: status.boundAddress ?? 'all interfaces' },
-    { label: 'VPN binding', value: vpnText(status.vpn), mono: false },
-    { label: 'DHT nodes', value: String(status.dhtNodes) },
-    { label: 'Connected peers', value: String(status.peers) },
-    { label: 'Download', value: formatRate(status.downloadRate) },
-    { label: 'Upload', value: formatRate(status.uploadRate) },
+    { label: t('common.state'), value: engineBadge(status.state), mono: false },
+    { label: t('settings.torrent.listeningPort'), value: listenPortText(status) },
+    { label: t('settings.torrent.boundAddress'), value: status.boundAddress ?? 'all interfaces' },
+    { label: t('settings.torrent.vpnBinding'), value: vpnText(status.vpn), mono: false },
+    { label: t('settings.torrent.dhtNodes'), value: String(status.dhtNodes) },
+    ...(status.dht6Nodes !== undefined ? [{ label: t('settings.torrent.ipv6DhtNodes'), value: String(status.dht6Nodes) }] : []),
+    { label: t('settings.torrent.connectedPeers'), value: String(status.peers) },
+    ...(status.utpConnections !== undefined ? [{ label: t('settings.torrent.utpConnections'), value: String(status.utpConnections) }] : []),
+    ...(status.encryptedPeerRatio !== undefined || status.encryptedPeers !== undefined
+      ? [{ label: t('settings.torrent.encryptedPeers'), value: encryptedPeersText(status) }]
+      : []),
+    { label: t('common.download'), value: formatRate(status.downloadRate) },
+    { label: t('common.upload'), value: formatRate(status.uploadRate) },
     {
-      label: 'Torrents',
-      value: `${t.total} total · ${t.downloading} downloading · ${t.seeding} seeding · ${t.paused} paused · ${t.queued} queued · ${t.checking} checking · ${t.error} error`,
+      label: t('settings.torrent.torrents'),
+      value: `${item.total} total · ${item.downloading} downloading · ${item.seeding} seeding · ${item.paused} paused · ${item.queued} queued · ${item.checking} checking · ${item.error} error`,
     },
   ];
   return (
-    <div role="group" aria-label="Torrent engine status" className="al-torrent-status">
+    <div role="group" aria-label={t('settings.torrent.torrentEngineStatus')} className="al-torrent-status">
       {status.state === 'lockdown' ? (
         <p className="al-inline-error" role="alert">
-          {LOCKDOWN_EXPLANATION}
+          {lockdownExplanation()}
           {status.lockdownReason ? ` (${status.lockdownReason})` : ''}
         </p>
       ) : null}
@@ -94,26 +120,31 @@ const INT_KEYS = [
   'maxActiveSeeds',
 ] as const;
 const NULLABLE_KEYS = ['defaultSeedRatio', 'defaultSeedTimeMinutes'] as const;
+/** Optional transport switches; rows saved before they existed read as the engine defaults. */
+const TRANSPORT_KEYS = ['tcp', 'utp', 'ipv6'] as const;
 
-type BoolKey = (typeof BOOL_KEYS)[number];
-type NumKey = (typeof INT_KEYS)[number] | (typeof NULLABLE_KEYS)[number];
+type BoolKey = (typeof BOOL_KEYS)[number] | (typeof TRANSPORT_KEYS)[number];
+type NumKey = (typeof INT_KEYS)[number] | (typeof NULLABLE_KEYS)[number] | 'webSeedConnectionsPerTorrent';
 
 /** Number inputs are kept as text so they can be empty while typing. */
-export type TorrentDraft = Record<BoolKey, boolean> & Record<NumKey, string> & { downloadsRoot: string };
+export type TorrentDraft = Record<BoolKey, boolean> & Record<NumKey, string> & { downloadsRoot: string; encryption: TorrentEncryptionMode };
 
 export function toTorrentDraft(s: TorrentSettingsResponse): TorrentDraft {
-  const draft = { downloadsRoot: s.downloadsRoot } as TorrentDraft;
+  const draft = { downloadsRoot: s.downloadsRoot, encryption: s.encryption ?? TORRENT_TRANSPORT_DEFAULTS.encryption } as TorrentDraft;
   for (const k of BOOL_KEYS) draft[k] = s[k];
+  for (const k of TRANSPORT_KEYS) draft[k] = s[k] ?? TORRENT_TRANSPORT_DEFAULTS[k];
   for (const k of INT_KEYS) draft[k] = String(s[k]);
   for (const k of NULLABLE_KEYS) draft[k] = s[k] === null ? '' : String(s[k]);
+  draft.webSeedConnectionsPerTorrent = String(s.webSeedConnectionsPerTorrent ?? TORRENT_TRANSPORT_DEFAULTS.webSeedConnectionsPerTorrent);
   return draft;
 }
 
 /** Draft -> PUT body. Empty nullable numbers mean "unlimited" (null); other empty numbers are omitted. */
 export function toTorrentUpdate(draft: TorrentDraft): TorrentSettingsUpdate {
-  const body: TorrentSettingsUpdate = { downloadsRoot: draft.downloadsRoot.trim() };
+  const body: TorrentSettingsUpdate = { downloadsRoot: draft.downloadsRoot.trim(), encryption: draft.encryption };
   for (const k of BOOL_KEYS) body[k] = draft[k];
-  for (const k of INT_KEYS) {
+  for (const k of TRANSPORT_KEYS) body[k] = draft[k];
+  for (const k of [...INT_KEYS, 'webSeedConnectionsPerTorrent'] as const) {
     const text = draft[k].trim();
     const n = Number(text);
     if (text !== '' && Number.isFinite(n)) body[k] = n;
@@ -161,20 +192,33 @@ function BoolRow({ f, checked, onChange }: { f: BoolField; checked: boolean; onC
 }
 
 /** The engine form groups in page order (handoff §10: Port, Limits, Ratio/time, Interface binding, DHT/PEX, Encryption). */
-export const TORRENT_SECTIONS = ['Engine', 'Port', 'Limits', 'Ratio & time', 'Interface binding', 'DHT & PEX', 'Encryption'] as const;
+export const TORRENT_SECTIONS = ['Engine', 'Port', 'Limits', 'Ratio & time', 'Interface binding', 'DHT & PEX', 'Transport', 'Encryption'] as const;
+
+const ENCRYPTION_OPTIONS: { value: TorrentEncryptionMode; readonly label: string }[] = [
+  { value: 'preferred', get label() { return t('settings.torrent.encryptionPreferred'); } },
+  { value: 'required', get label() { return t('settings.torrent.encryptionRequired'); } },
+  { value: 'disabled', get label() { return t('common.disabled'); } },
+];
+
+/** Caption under the encryption choice: what the selected mode does. */
+export function encryptionCaption(mode: TorrentEncryptionMode): string {
+  if (mode === 'required') return t('settings.torrent.encryptionRequiredCaption');
+  if (mode === 'disabled') return t('settings.torrent.encryptionDisabledCaption');
+  return t('settings.torrent.encryptionPreferredCaption');
+}
 
 const LIMIT_FIELDS: NumField[] = [
-  { key: 'maxConnections', label: 'Max connections', caption: 'Peer connections across all torrents.', min: 1, max: 5000 },
-  { key: 'maxConnectionsPerTorrent', label: 'Max connections per torrent', min: 1, max: 1000 },
-  { key: 'downloadLimitKbps', label: 'Download limit', unit: 'KiB/s', caption: '0 = unlimited.', min: 0 },
-  { key: 'uploadLimitKbps', label: 'Upload limit', unit: 'KiB/s', caption: '0 = unlimited.', min: 0 },
-  { key: 'maxActiveDownloads', label: 'Max active downloads', caption: '-1 = unlimited.', min: -1 },
-  { key: 'maxActiveSeeds', label: 'Max active seeds', caption: '-1 = unlimited.', min: -1 },
+  { key: 'maxConnections', get label() { return t('settings.torrent.maxConnections'); }, get caption() { return t('settings.torrent.peerConnectionsAcrossAllTorrents'); }, min: 1, max: 5000 },
+  { key: 'maxConnectionsPerTorrent', get label() { return t('settings.torrent.maxConnectionsPerTorrent'); }, min: 1, max: 1000 },
+  { key: 'downloadLimitKbps', get label() { return t('settings.torrent.downloadLimit'); }, unit: 'KiB/s', get caption() { return t('settings.torrent.n0Unlimited'); }, min: 0 },
+  { key: 'uploadLimitKbps', get label() { return t('settings.torrent.uploadLimit'); }, unit: 'KiB/s', get caption() { return t('settings.torrent.n0Unlimited'); }, min: 0 },
+  { key: 'maxActiveDownloads', get label() { return t('settings.torrent.maxActiveDownloads'); }, get caption() { return t('settings.torrent.n1Unlimited'); }, min: -1 },
+  { key: 'maxActiveSeeds', get label() { return t('settings.torrent.maxActiveSeeds'); }, get caption() { return t('settings.torrent.n1Unlimited'); }, min: -1 },
 ];
 
 const RATIO_FIELDS: NumField[] = [
-  { key: 'defaultSeedRatio', label: 'Default seed ratio', caption: 'Stop seeding at this ratio. Empty = unlimited.', min: 0, step: '0.1', placeholder: 'unlimited' },
-  { key: 'defaultSeedTimeMinutes', label: 'Default seed time', unit: 'min', caption: 'Stop seeding after this long. Empty = unlimited.', min: 0, placeholder: 'unlimited' },
+  { key: 'defaultSeedRatio', get label() { return t('settings.torrent.defaultSeedRatio'); }, get caption() { return t('settings.torrent.stopSeedingAtThisRatio'); }, min: 0, step: '0.1', get placeholder() { return t('settings.torrent.unlimited'); } },
+  { key: 'defaultSeedTimeMinutes', get label() { return t('settings.torrent.defaultSeedTime'); }, unit: 'min', get caption() { return t('settings.torrent.stopSeedingAfterThisLong'); }, min: 0, get placeholder() { return t('settings.torrent.unlimited'); } },
 ];
 
 /** Saved value for the draft: the save response until the next refetch lands, then the query. */
@@ -203,57 +247,72 @@ function TorrentForm({
 
   const body = (
     <form
-      aria-label="Torrent engine settings"
+      aria-label={t('settings.torrent.torrentEngineSettings')}
       style={{ display: 'flex', flexDirection: 'column', gap: 30 }}
       onSubmit={(e) => {
         e.preventDefault();
       }}
     >
-      <FormSection label="Engine">
-        <BoolRow f={{ key: 'enabled', label: 'Enable engine', caption: 'Run the built-in torrent engine.' }} checked={d.enabled} onChange={(v) => set('enabled', v)} />
+      <FormSection label={t('settings.torrent.engine')}>
+        <BoolRow f={{ key: 'enabled', label: t('settings.torrent.enableEngine'), caption: t('settings.torrent.runTheBuiltInTorrent') }} checked={d.enabled} onChange={(v) => set('enabled', v)} />
         <BoolRow
-          f={{ key: 'autoRegisterClient', label: 'Auto-register client', caption: 'Add a "Built-in" download client on first start when none exists.' }}
+          f={{ key: 'autoRegisterClient', label: t('settings.torrent.autoRegisterClient'), caption: t('settings.torrent.addABuiltInDownload') }}
           checked={d.autoRegisterClient}
           onChange={(v) => set('autoRegisterClient', v)}
         />
-        <FormRow label="Downloads folder" htmlFor={downloadsId} caption="Default download folder. Empty uses the folder shown.">
+        <FormRow label={t('settings.torrent.downloadsFolder')} htmlFor={downloadsId} caption={t('settings.torrent.defaultDownloadFolderEmptyUses')}>
           <Input id={downloadsId} mono value={d.downloadsRoot} placeholder={data.effectiveDownloadsRoot} onChange={(e) => set('downloadsRoot', e.currentTarget.value)} />
         </FormRow>
-        <FormRow label="Resume data folder" htmlFor={resumeId} caption="Fast-resume data and saved .torrent files. Not editable.">
+        <FormRow label={t('settings.torrent.resumeDataFolder')} htmlFor={resumeId} caption={t('settings.torrent.fastResumeDataAndSaved')}>
           <Input id={resumeId} mono value={data.resumeDir} readOnly />
         </FormRow>
       </FormSection>
-      <FormSection label="Port">
+      <FormSection label={t('common.port')}>
         <NumRow
-          f={{ key: 'listenPort', label: 'Listen port', caption: 'Incoming peers (TCP) and DHT (UDP). A port forwarded by the VPN takes precedence.', min: 1, max: 65535 }}
+          f={{ key: 'listenPort', label: t('settings.torrent.listenPort'), caption: t('settings.torrent.incomingPeersTcpAndDht'), min: 1, max: 65535 }}
           value={d.listenPort}
           onChange={(v) => set('listenPort', v)}
         />
       </FormSection>
-      <FormSection label="Limits">
+      <FormSection label={t('settings.torrent.limits')}>
         {LIMIT_FIELDS.map((f) => (
           <NumRow key={f.key} f={f} value={d[f.key]} onChange={(v) => set(f.key, v)} />
         ))}
       </FormSection>
-      <FormSection label="Ratio & time">
+      <FormSection label={t('settings.torrent.ratioTime')}>
         {RATIO_FIELDS.map((f) => (
           <NumRow key={f.key} f={f} value={d[f.key]} onChange={(v) => set(f.key, v)} />
         ))}
       </FormSection>
-      <FormSection label="Interface binding">
+      <FormSection label={t('settings.torrent.interfaceBinding')}>
         <BoolRow
-          f={{ key: 'bindToVpn', label: 'Bind to VPN', caption: 'Bind every socket to the VPN tunnel and pause all torrents while it is down.' }}
+          f={{ key: 'bindToVpn', label: t('settings.torrent.bindToVpn'), caption: t('settings.torrent.bindEverySocketToThe') }}
           checked={d.bindToVpn}
           onChange={(v) => set('bindToVpn', v)}
         />
       </FormSection>
-      <FormSection label="DHT & PEX">
-        <BoolRow f={{ key: 'dht', label: 'DHT', caption: 'Find peers through the distributed hash table (not for private torrents).' }} checked={d.dht} onChange={(v) => set('dht', v)} />
-        <BoolRow f={{ key: 'pex', label: 'Peer exchange', caption: 'Exchange peers with connected peers (not for private torrents).' }} checked={d.pex} onChange={(v) => set('pex', v)} />
+      <FormSection label={t('settings.torrent.dhtPex')}>
+        <BoolRow f={{ key: 'dht', label: t('settings.torrent.dht'), caption: t('settings.torrent.findPeersThroughTheDistributed') }} checked={d.dht} onChange={(v) => set('dht', v)} />
+        <BoolRow f={{ key: 'pex', label: t('settings.torrent.peerExchange'), caption: t('settings.torrent.exchangePeersWithConnectedPeers') }} checked={d.pex} onChange={(v) => set('pex', v)} />
       </FormSection>
-      <FormSection label="Encryption">
-        <FormRow label="Peer encryption" caption="The engine does not offer encrypted peer connections yet.">
-          <span className="al-muted">Plain connections only</span>
+      <FormSection label={t('settings.torrent.transport')}>
+        <BoolRow f={{ key: 'tcp', label: t('settings.torrent.tcp'), caption: t('settings.torrent.tcpCaption') }} checked={d.tcp} onChange={(v) => set('tcp', v)} />
+        <BoolRow f={{ key: 'utp', label: t('settings.torrent.utp'), caption: t('settings.torrent.utpCaption') }} checked={d.utp} onChange={(v) => set('utp', v)} />
+        {!d.tcp && !d.utp ? (
+          <p className="al-inline-error" role="alert">
+            {t('settings.torrent.noTransportWarning')}
+          </p>
+        ) : null}
+        <BoolRow f={{ key: 'ipv6', label: t('settings.torrent.ipv6'), caption: t('settings.torrent.ipv6Caption') }} checked={d.ipv6} onChange={(v) => set('ipv6', v)} />
+        <NumRow
+          f={{ key: 'webSeedConnectionsPerTorrent', label: t('settings.torrent.webSeedConnections'), caption: t('settings.torrent.webSeedConnectionsCaption'), min: 0, max: 32 }}
+          value={d.webSeedConnectionsPerTorrent}
+          onChange={(v) => set('webSeedConnectionsPerTorrent', v)}
+        />
+      </FormSection>
+      <FormSection label={t('settings.torrent.encryption')}>
+        <FormRow label={t('settings.torrent.peerEncryption')} caption={encryptionCaption(d.encryption)}>
+          <Segmented aria-label={t('settings.torrent.peerEncryption')} variant="soft" options={ENCRYPTION_OPTIONS} value={d.encryption} onChange={(v) => set('encryption', v)} />
         </FormRow>
       </FormSection>
     </form>
@@ -280,14 +339,14 @@ function LiveStatus() {
   const live = status.data?.state === 'running';
   return (
     <Pane
-      title="Live status"
-      actions={live ? <LiveDot label="Engine running" /> : null}
-      aria-label="Live status"
+      title={t('common.liveStatus')}
+      actions={live ? <LiveDot label={t('settings.torrent.engineRunning')} /> : null}
+      aria-label={t('common.liveStatus')}
     >
       {status.isPending ? (
         <Skeleton lines={6} />
       ) : status.isError ? (
-        <ErrorBlock title="Couldn't read the engine status" onRetry={() => void status.refetch()}>
+        <ErrorBlock title={t('settings.torrent.couldntReadTheEngineStatus')} onRetry={() => void status.refetch()}>
           {errorMessage(status.error)}
         </ErrorBlock>
       ) : (
@@ -302,9 +361,9 @@ export function TorrentSettingsPage() {
   const aside = <LiveStatus />;
   if (!settings.data) {
     return (
-      <SettingsPage title="Torrent engine" aside={aside}>
+      <SettingsPage title={t('common.torrentEngine')} aside={aside}>
         {settings.isError ? (
-          <ErrorBlock title="Couldn't load torrent engine settings" onRetry={() => void settings.refetch()}>
+          <ErrorBlock title={t('settings.torrent.couldntLoadTorrentEngineSettings')} onRetry={() => void settings.refetch()}>
             {errorMessage(settings.error)}
           </ErrorBlock>
         ) : (
@@ -316,7 +375,7 @@ export function TorrentSettingsPage() {
   return (
     <TorrentForm data={settings.data} dataUpdatedAt={settings.dataUpdatedAt}>
       {({ body, save }) => (
-        <SettingsPage title="Torrent engine" description="Engine-wide settings of the built-in BitTorrent engine." aside={aside} save={save}>
+        <SettingsPage title={t('common.torrentEngine')} description={t('settings.torrent.engineWideSettingsOfThe')} aside={aside} save={save}>
           {body}
         </SettingsPage>
       )}

@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
 
   arclight:
-    image: ghcr.io/arclight/arclight:latest
+    image: ghcr.io/zacheryabrewer/arclight:latest
     network_mode: "service:gluetun"
     environment:
       - PUID=1000
@@ -92,7 +92,10 @@ services:
 ```
 
 `docker/docker-compose.yml` is the build-from-source variant (with healthchecks on all three
-services). Every compose variant also runs [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)
+services). The image runs a single esbuild bundle (`node dist/server.mjs`) with only the
+`better-sqlite3` addon installed beside it: about 80 MB to pull and about 220 MB unpacked
+(the Node 24 binary is 127 MB of that), and it answers HTTP within about 2 seconds of
+`docker run`. Every compose variant also runs [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)
 for Cloudflare-protected indexers: in the VPN layouts it shares Gluetun's namespace (its
 browser traffic is tunnelled too; port 8191 stays internal), without a VPN Arclight reaches it
 at `http://flaresolverr:8191`. Arclight reads `ARCLIGHT_FLARESOLVERR_URL` and registers a
@@ -101,6 +104,22 @@ needs a solver use it automatically. Running natively on Windows, the built-in s
 local Edge/Chrome instead; see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`,
 `DOWNLOADS_ROOT`, `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET` from your
 environment or a `.env` file; copy `docker/.env.example` to start.
+
+**Whisper (opt-in).** Every compose file has a `whisper` service
+(`onerahmet/openai-whisper-asr-webservice`, `ASR_MODEL=base`, faster-whisper on the CPU; a GPU
+variant is commented in) behind the `whisper` profile: `docker compose -f <file> --profile whisper
+up -d`. Arclight's `ARCLIGHT_WHISPER_URL=http://whisper:9000` is probed on boot and hourly
+(`WhisperAutoDetect`, HEAD `/docs` or `/asr`); when it answers, the Whisper provider is added as
+the lowest-priority subtitle provider with "only when no other result" on, and the
+`WhisperUnreachable` health check warns if it later stops answering
+(`GET /api/v1/subtitle/whisper/status` shows the state). Without a VPN, `http://whisper:9000`
+resolves through Docker's DNS. In the VPN layouts Arclight lives in Gluetun's network namespace,
+so whisper (not tunnelled) gets a fixed address on a fixed compose subnet
+(`ARCLIGHT_SUBNET`, default `172.30.53.0/24`; `WHISPER_IP`, default `172.30.53.200`), gluetun
+maps the name with `extra_hosts` and allows the subnet in `FIREWALL_OUTBOUND_SUBNETS`; the same
+`http://whisper:9000` works, and `http://172.30.53.200:9000` is the fallback if a Gluetun
+version ignores the hosts file. Existing VPN stacks need one `docker compose down` to recreate
+the network with the fixed subnet. On a bare install, point it at any Whisper ASR service.
 
 ### Getting the Proton WireGuard key
 
@@ -143,6 +162,23 @@ leaking, pauses every torrent and binds to 127.0.0.1 until it reconnects; set
 
 Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Arclight on
 7878, qBittorrent on 8080 and peer port 6881, no Gluetun). Leave Settings → VPN disabled.
+
+### Self-update (Docker socket)
+
+Settings → Updates can recreate labelled containers (`arclight.autoupdate=true`) on a new image
+through the Docker API. Mount the socket into the Arclight container:
+
+```yaml
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+The image starts as root only long enough for `docker/entrypoint.sh` to add the app user
+(`PUID`) to the socket's group (its gid is read from the mounted socket and created as
+`docker-sock` if the image has no such group), then drops to `PUID:PGID`. On hosts where the
+socket belongs to `root:root` (Docker Desktop, some NAS builds) that group is gid 0. Without the
+mount the update check still works and only "Update now" is unavailable.
+`ARCLIGHT_DOCKER_SOCKET` points at a different socket path.
 
 ### Native Windows VPN
 
@@ -211,9 +247,20 @@ See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages
 | `ARCLIGHT_VERSION` | `0.1.0-dev` | Version reported by `/system/status` (set at image build) |
 | `ARCLIGHT_TMDB_API_KEY` | unset | TMDB key fallback when none is stored in Settings |
 | `ARCLIGHT_VPN_CONTROL_URL` | `http://localhost:8000` | Gluetun control server default when none is stored in Settings → VPN |
+| `ARCLIGHT_ASSET_ROOT` | unset (the bundle sets it to its own folder) | Where the bundled server finds `drizzle/` migrations and `definitions/builtin/`; unset under `tsx`, which reads them from the sources |
 | `ARCLIGHT_TORRENT_ENGINE` | `1` | `0` keeps the built-in torrent engine from starting (and from auto-registering its client) at boot |
 
+| `ARCLIGHT_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker API socket for container self-update (the entrypoint grants the app user its group) |
+| `ARCLIGHT_FFPROBE` | `ffprobe` on `PATH` (`/usr/bin/ffprobe` in the image) | ffprobe binary for media analysis and sample detection |
+| `ARCLIGHT_FFMPEG` | `ffmpeg` next to `ARCLIGHT_FFPROBE`, else on `PATH` | ffmpeg binary for transcode/remux rules |
+| `ARCLIGHT_CONFIG_FILE` | unset | Managed-mode config file applied at boot (see docs/OPERATIONS.md) |
+| `ARCLIGHT_WHISPER_URL` | unset (`http://whisper:9000` in compose) | Whisper ASR service auto-registered as the last subtitle provider when it answers |
+
 The image also takes `PUID` and `PGID` (handled in `docker/entrypoint.sh`); compose passes `TZ`.
+
+Transcode rules with VAAPI hardware encoding (Intel/AMD) need the render device passed through
+to the container: add `devices: - /dev/dri:/dev/dri` to the Arclight service (and make sure
+`PGID` or the container user can read `/dev/dri/renderD128`). ffmpeg is already in the image.
 
 ## Licence
 

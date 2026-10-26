@@ -4,11 +4,12 @@ import { Input } from '../../../arclight/index.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import type { FieldDefinition, FieldRendererProps, FieldRenderers, FormValues } from '../../../components/forms/types.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
+import { t } from '../../../i18n/index.js';
 
 // Maps the import-list schema (GET /importlist/schema) and the list-level defaults onto the
 // shared schema-form vocabulary, and turns form values back into a create/update body.
 
-export const MEDIA_TYPE_LABELS: Record<ImportListMediaType, string> = { series: 'Series', movie: 'Movies', both: 'Series & movies' };
+export const MEDIA_TYPE_LABELS: Record<ImportListMediaType, string> = { get series() { return t('common.series'); }, get movie() { return t('common.movies'); }, get both() { return t('settings.importLists.fields.seriesMovies'); } };
 
 const options = (labels: Record<string, string>) => Object.entries(labels).map(([value, label]) => ({ value, label }));
 
@@ -21,7 +22,7 @@ function ListInput({ id, value, onChange, numeric }: FieldRendererProps & { nume
       id={id}
       type="text"
       value={text}
-      placeholder="Comma separated"
+      placeholder={t('settings.importLists.fields.commaSeparated')}
       onChange={(e) => {
         const raw = e.currentTarget.value;
         setText(raw);
@@ -36,7 +37,7 @@ function ListInput({ id, value, onChange, numeric }: FieldRendererProps & { nume
 }
 
 function ReadOnlyValue({ id, value }: FieldRendererProps) {
-  const shown = value === undefined || value === null || value === '' ? 'Not set' : value === '********' ? 'Stored' : String(value);
+  const shown = value === undefined || value === null || value === '' ? t('settings.importLists.fields.notSet') : value === '********' ? t('settings.importLists.fields.stored') : String(value);
   return (
     <span id={id} className="al-muted">
       {shown}
@@ -44,14 +45,14 @@ function ReadOnlyValue({ id, value }: FieldRendererProps) {
   );
 }
 
-const toFieldType = (t: ImportListField['type']): FieldDefinition['type'] => {
-  switch (t) {
+const toFieldType = (item: ImportListField['type']): FieldDefinition['type'] => {
+  switch (item) {
     case 'boolean':
       return 'checkbox';
     case 'password':
     case 'number':
     case 'select':
-      return t;
+      return item;
     default:
       return 'text';
   }
@@ -105,31 +106,31 @@ export function listFields({ schema, mediaType, rootFolders, profiles }: ListFie
   const series = mediaType !== 'movie';
   const movies = mediaType !== 'series';
   const fields: Array<FieldDefinition | false> = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
-    { name: 'enabled', label: 'Enabled', type: 'checkbox' },
-    { name: 'enableAutomaticAdd', label: 'Add automatically', type: 'checkbox', helpText: 'Off: only fetch the list (preview, "found in list").' },
-    { name: 'mediaType', label: 'Media type', type: 'select', required: true, options: supported.map((m) => ({ value: m, label: MEDIA_TYPE_LABELS[m] })) },
+    { name: 'name', label: t('common.name'), type: 'text', required: true },
+    { name: 'enabled', label: t('common.enabled'), type: 'checkbox' },
+    { name: 'enableAutomaticAdd', label: t('settings.importLists.fields.addAutomatically'), type: 'checkbox', helpText: t('settings.importLists.fields.offOnlyFetchTheList') },
+    { name: 'mediaType', label: t('common.mediaType'), type: 'select', required: true, options: supported.map((m) => ({ value: m, label: MEDIA_TYPE_LABELS[m] })) },
     {
       name: 'rootFolderPath',
-      label: mediaType === 'both' ? 'Series root folder' : 'Root folder',
+      label: mediaType === 'both' ? t('settings.importLists.fields.seriesRootFolder') : t('common.rootFolder'),
       type: 'select',
       required: true,
       options: opts(mediaType === 'movie' ? 'movie' : 'series'),
     },
-    mediaType === 'both' && { name: 'movieRootFolderPath', label: 'Movie root folder', type: 'select', required: true, options: opts('movie') },
+    mediaType === 'both' && { name: 'movieRootFolderPath', label: t('settings.importLists.fields.movieRootFolder'), type: 'select', required: true, options: opts('movie') },
     {
       name: 'qualityProfileId',
-      label: 'Quality profile',
+      label: t('common.qualityProfile'),
       type: 'select',
       required: true,
       options: profiles.map((p) => ({ value: p.id, label: p.name })),
     },
-    series && { name: 'monitorOption', label: 'Monitor', type: 'select', options: options(MONITOR_OPTION_LABELS) },
-    series && { name: 'seriesType', label: 'Series type', type: 'select', options: options(SERIES_TYPE_LABELS) },
-    series && { name: 'seasonFolder', label: 'Season folders', type: 'checkbox' },
-    movies && { name: 'minimumAvailability', label: 'Minimum availability', type: 'select', options: options(MINIMUM_AVAILABILITY_LABELS) },
-    { name: 'searchOnAdd', label: 'Search on add', type: 'checkbox', helpText: 'Search for missing items as soon as they are added.' },
-    { name: 'tags', label: 'Tags', type: 'text', helpText: 'Applied to every item added from this list.' },
+    series && { name: 'monitorOption', label: t('common.monitor'), type: 'select', options: options(MONITOR_OPTION_LABELS) },
+    series && { name: 'seriesType', label: t('common.seriesType'), type: 'select', options: options(SERIES_TYPE_LABELS) },
+    series && { name: 'seasonFolder', label: t('common.seasonFolders'), type: 'checkbox' },
+    movies && { name: 'minimumAvailability', label: t('common.minimumAvailability'), type: 'select', options: options(MINIMUM_AVAILABILITY_LABELS) },
+    { name: 'searchOnAdd', label: t('common.searchOnAdd'), type: 'checkbox', helpText: t('settings.importLists.fields.searchForMissingItemsAs') },
+    { name: 'tags', label: t('common.tags'), type: 'text', helpText: t('settings.importLists.fields.appliedToEveryItemAdded') },
   ];
   return fields.filter((f): f is FieldDefinition => f !== false);
 }

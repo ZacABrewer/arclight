@@ -5,6 +5,7 @@ import { errorMessage } from '../api/client.js';
 import { usersApi } from '../api/auth.js';
 import { Button, Field, Input, Modal } from '../arclight/index.js';
 import { useToast } from '../components/toast.js';
+import { t } from '../i18n/index.js';
 
 export interface PasswordDraft {
   currentPassword: string;
@@ -17,9 +18,9 @@ export type PasswordErrors = Partial<Record<keyof PasswordDraft, string>>;
 /** Client-side checks before PUT /user/me/password; the server re-checks the length. */
 export function passwordErrors(d: PasswordDraft): PasswordErrors {
   const errors: PasswordErrors = {};
-  if (!d.currentPassword) errors.currentPassword = 'Enter your current password.';
-  if (d.newPassword.length < PASSWORD_MIN_LENGTH) errors.newPassword = `Use at least ${PASSWORD_MIN_LENGTH} characters.`;
-  if (d.confirmPassword !== d.newPassword) errors.confirmPassword = 'The passwords do not match.';
+  if (!d.currentPassword) errors.currentPassword = t('changePassword.enterYourCurrentPassword');
+  if (d.newPassword.length < PASSWORD_MIN_LENGTH) errors.newPassword = t('changePassword.useAtLeastPasswordMin', { PASSWORD_MIN_LENGTH });
+  if (d.confirmPassword !== d.newPassword) errors.confirmPassword = t('changePassword.thePasswordsDoNotMatch');
   return errors;
 }
 
@@ -57,7 +58,7 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
       { currentPassword: draft.currentPassword, newPassword: draft.newPassword },
       {
         onSuccess: () => {
-          toast.push({ tone: 'ok', title: 'Password changed', message: 'Your other sessions were signed out.' });
+          toast.push({ tone: 'ok', title: t('changePassword.passwordChanged'), message: t('changePassword.yourOtherSessionsWereSigned') });
           close();
         },
         onError: (err) => setServerError(capitalise(errorMessage(err))),
@@ -78,27 +79,27 @@ export function ChangePasswordDialog({ open, onClose }: { open: boolean; onClose
     <Modal
       open={open}
       onClose={close}
-      title="Change password"
+      title={t('changePassword.changePassword')}
       size={440}
       footer={
         <>
           <Button variant="ghost" onClick={close}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" loading={change.isPending} onClick={() => submit()}>
-            Change password
+            {t('changePassword.changePassword')}
           </Button>
         </>
       }
     >
       <form id="change-password-form" className="mk-stack-sm" onSubmit={submit} noValidate>
-        <Field label="Current password" htmlFor="pw-current" error={errors.currentPassword}>
+        <Field label={t('changePassword.currentPassword')} htmlFor="pw-current" error={errors.currentPassword}>
           <Input id="pw-current" type="password" autoComplete="current-password" {...field('currentPassword')} />
         </Field>
-        <Field label="New password" htmlFor="pw-new" hint={`At least ${PASSWORD_MIN_LENGTH} characters.`} error={errors.newPassword}>
+        <Field label={t('changePassword.newPassword')} htmlFor="pw-new" hint={t('changePassword.atLeastPasswordMinLength', { PASSWORD_MIN_LENGTH })} error={errors.newPassword}>
           <Input id="pw-new" type="password" autoComplete="new-password" {...field('newPassword')} />
         </Field>
-        <Field label="Confirm new password" htmlFor="pw-confirm" error={errors.confirmPassword}>
+        <Field label={t('changePassword.confirmNewPassword')} htmlFor="pw-confirm" error={errors.confirmPassword}>
           <Input id="pw-confirm" type="password" autoComplete="new-password" {...field('confirmPassword')} />
         </Field>
         {/* Enter in any field submits. */}

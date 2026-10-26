@@ -10,9 +10,12 @@ import {
   MediaRequest,
   OverrideRule,
   PersonDetail,
+  PublicPortal,
   RequestAccepted,
   RequestCount,
   RequestPage,
+  RequestPolicyExplanation,
+  RequestsDigestResult,
   RequestsSettings,
   TitleDetail,
   UserNotificationTestResult,
@@ -68,8 +71,12 @@ export const requestsApi = {
   decline: (id: number, reason?: string) =>
     request(`/request/${id}/decline`, MediaRequest, { method: 'POST', json: reason ? { reason } : {} }),
   retry: (id: number) => request(`/request/${id}/retry`, MediaRequest, { method: 'POST', json: {} }),
+  /** Why the approval policies hold (or would approve) a request, evaluated now. */
+  policy: (id: number) => request(`/request/${id}/policy`, RequestPolicyExplanation),
   bulkApprove: (ids: number[]) => request('/request/bulk/approve', BulkRequestResult, { method: 'POST', json: { ids } }),
   bulkDecline: (ids: number[]) => request('/request/bulk/decline', BulkRequestResult, { method: 'POST', json: { ids } }),
+  /** Send the admin digest of pending requests and open issues now. */
+  digest: () => request('/request/digest', RequestsDigestResult, { method: 'POST', json: {} }),
 };
 
 export const discoverApi = {
@@ -127,6 +134,8 @@ export const requestUsersApi = {
   permissions: (id: number) => request(`/user/${id}/permissions`, UserPermissions),
   setPermissions: (id: number, permissions: number) =>
     request(`/user/${id}/permissions`, UserPermissions, { method: 'PUT', json: { permissions } }),
+  /** PUT with content caps and/or the approval override (`permissions` is required by the route). */
+  setPolicy: (id: number, body: UserPermissions) => request(`/user/${id}/permissions`, UserPermissions, { method: 'PUT', json: body }),
   quota: (id: number) => request(`/user/${id}/quota`, UserQuotaResponse),
   setQuota: (id: number, body: UserQuota) => request(`/user/${id}/quota`, UserQuotaResponse, { method: 'PUT', json: body }),
   settings: (id: number) => request(`/user/${id}/requestsettings`, UserRequestSettings),
@@ -139,4 +148,9 @@ export const requestUsersApi = {
 export const requestsSettingsApi = {
   get: () => request('/settings/requests', RequestsSettings),
   update: (body: RequestsSettings) => request('/settings/requests', RequestsSettings, { method: 'PUT', json: body }),
+};
+
+/** The public request portal (GET /public/portal: public while the portal is enabled). */
+export const publicPortalApi = {
+  get: () => request('/public/portal', PublicPortal),
 };

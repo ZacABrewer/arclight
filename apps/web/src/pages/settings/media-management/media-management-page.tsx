@@ -27,26 +27,52 @@ import { formatSize } from '../../../lib/format.js';
 import { SettingsPage, countChanges, useDraft } from '../settings-layout.js';
 import { PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
 import { previewCaption, type PreviewKind } from './naming-preview.js';
+import { VersionNamingSection } from './version-naming.js';
 import './media-management.css';
+import { t } from '../../../i18n/index.js';
 
 const isNotFound = (err: unknown) => err instanceof ApiError && err.status === 404;
 
 const COLON_LABELS: Record<ColonReplacement, string> = {
-  delete: 'Delete',
-  dash: 'Replace with dash',
-  spaceDash: 'Replace with space dash',
-  spaceDashSpace: 'Replace with space dash space',
-  smart: 'Smart replace',
-  custom: 'Custom',
+  get delete() {
+    return t('common.delete');
+  },
+  get dash() {
+    return t('settings.mediaManagement.replaceWithDash');
+  },
+  get spaceDash() {
+    return t('settings.mediaManagement.replaceWithSpaceDash');
+  },
+  get spaceDashSpace() {
+    return t('settings.mediaManagement.replaceWithSpaceDashSpace');
+  },
+  get smart() {
+    return t('settings.mediaManagement.smartReplace');
+  },
+  get custom() {
+    return t('common.custom');
+  },
 };
 
 const MULTI_LABELS: Record<MultiEpisodeStyle, string> = {
-  extend: 'Extend (S01E01-02-03)',
-  duplicate: 'Duplicate (S01E01.S01E02)',
-  repeat: 'Repeat (S01E01E02E03)',
-  scene: 'Scene (S01E01-E02-E03)',
-  range: 'Range (S01E01-03)',
-  prefixedRange: 'Prefixed range (S01E01-E03)',
+  get extend() {
+    return t('settings.mediaManagement.extendS01e010203');
+  },
+  get duplicate() {
+    return t('settings.mediaManagement.duplicateS01e01S01e02');
+  },
+  get repeat() {
+    return t('settings.mediaManagement.repeatS01e01e02e03');
+  },
+  get scene() {
+    return t('settings.mediaManagement.sceneS01e01E02E03');
+  },
+  get range() {
+    return t('settings.mediaManagement.rangeS01e0103');
+  },
+  get prefixedRange() {
+    return t('settings.mediaManagement.prefixedRangeS01e01E03');
+  },
 };
 
 type FormatKey =
@@ -68,56 +94,56 @@ export interface FormatRowDef {
 }
 
 export const FORMATS: readonly FormatRowDef[] = [
-  { key: 'standardEpisodeFormat', label: 'Standard episode format', kind: 'episode', group: 'series' },
-  { key: 'dailyEpisodeFormat', label: 'Daily episode format', kind: 'daily', group: 'series', advanced: true },
-  { key: 'animeEpisodeFormat', label: 'Anime episode format', kind: 'anime', group: 'series', advanced: true },
-  { key: 'seriesFolderFormat', label: 'Series folder format', kind: 'seriesFolder', group: 'series' },
-  { key: 'seasonFolderFormat', label: 'Season folder format', kind: 'seasonFolder', group: 'series' },
-  { key: 'specialsFolderFormat', label: 'Specials folder format', kind: 'specialsFolder', group: 'series', advanced: true },
-  { key: 'movieFormat', label: 'Movie format', kind: 'movie', group: 'movie' },
-  { key: 'movieFolderFormat', label: 'Movie folder format', kind: 'movieFolder', group: 'movie' },
+  { key: 'standardEpisodeFormat', get label() { return t('settings.mediaManagement.standardEpisodeFormat'); }, kind: 'episode', group: 'series' },
+  { key: 'dailyEpisodeFormat', get label() { return t('settings.mediaManagement.dailyEpisodeFormat'); }, kind: 'daily', group: 'series', advanced: true },
+  { key: 'animeEpisodeFormat', get label() { return t('settings.mediaManagement.animeEpisodeFormat'); }, kind: 'anime', group: 'series', advanced: true },
+  { key: 'seriesFolderFormat', get label() { return t('settings.mediaManagement.seriesFolderFormat'); }, kind: 'seriesFolder', group: 'series' },
+  { key: 'seasonFolderFormat', get label() { return t('settings.mediaManagement.seasonFolderFormat'); }, kind: 'seasonFolder', group: 'series' },
+  { key: 'specialsFolderFormat', get label() { return t('settings.mediaManagement.specialsFolderFormat'); }, kind: 'specialsFolder', group: 'series', advanced: true },
+  { key: 'movieFormat', get label() { return t('settings.mediaManagement.movieFormat'); }, kind: 'movie', group: 'movie' },
+  { key: 'movieFolderFormat', get label() { return t('settings.mediaManagement.movieFolderFormat'); }, kind: 'movieFolder', group: 'movie' },
 ];
 
 const PROPERS = [
-  { value: 'preferAndUpgrade', label: 'Prefer and upgrade' },
-  { value: 'doNotUpgrade', label: 'Do not upgrade automatically' },
-  { value: 'doNotPrefer', label: 'Do not prefer' },
+  { value: 'preferAndUpgrade', get label() { return t('settings.mediaManagement.preferAndUpgrade'); } },
+  { value: 'doNotUpgrade', get label() { return t('settings.mediaManagement.doNotUpgradeAutomatically'); } },
+  { value: 'doNotPrefer', get label() { return t('settings.mediaManagement.doNotPrefer'); } },
 ];
 const ALWAYS_OPTIONS = [
-  { value: 'always', label: 'Always' },
-  { value: 'afterManual', label: 'After manual refresh' },
-  { value: 'never', label: 'Never' },
+  { value: 'always', get label() { return t('settings.mediaManagement.always'); } },
+  { value: 'afterManual', get label() { return t('settings.mediaManagement.afterManualRefresh'); } },
+  { value: 'never', get label() { return t('common.never'); } },
 ];
 const TITLE_REQUIRED = [
-  { value: 'always', label: 'Always' },
-  { value: 'bulkSeasonReleases', label: 'Only for bulk season releases' },
-  { value: 'never', label: 'Never' },
+  { value: 'always', get label() { return t('settings.mediaManagement.always'); } },
+  { value: 'bulkSeasonReleases', get label() { return t('settings.mediaManagement.onlyForBulkSeasonReleases'); } },
+  { value: 'never', get label() { return t('common.never'); } },
 ];
 
 export const IMPORT_FIELDS: FieldDefinition[] = [
-  { name: 'episodeTitleRequired', label: 'Episode title required', type: 'select', options: TITLE_REQUIRED, helpText: 'Wait for the episode title before importing when the format uses it.' },
-  { name: 'useHardlinks', label: 'Use hardlinks instead of copy', type: 'checkbox', advanced: true, helpText: 'Hardlink torrents that are still seeding instead of copying them.' },
-  { name: 'importExtraFiles', label: 'Import extra files', type: 'checkbox', helpText: 'Import matching extra files (subtitles, nfo, …).' },
-  { name: 'extraFileExtensions', label: 'Extra file extensions', type: 'text', placeholder: 'srt,nfo', helpText: 'Comma-separated list of extensions to import.' },
-  { name: 'skipFreeSpaceCheck', label: 'Skip free space check', type: 'checkbox', advanced: true },
-  { name: 'minimumFreeSpaceMb', label: 'Minimum free space', type: 'number', unit: 'MB', min: 0, advanced: true, helpText: 'Refuse to import when less than this would be left.' },
+  { name: 'episodeTitleRequired', get label() { return t('settings.mediaManagement.episodeTitleRequired'); }, type: 'select', options: TITLE_REQUIRED, get helpText() { return t('settings.mediaManagement.waitForTheEpisodeTitle'); } },
+  { name: 'useHardlinks', get label() { return t('settings.mediaManagement.useHardlinksInsteadOfCopy'); }, type: 'checkbox', advanced: true, get helpText() { return t('settings.mediaManagement.hardlinkTorrentsThatAreStill'); } },
+  { name: 'importExtraFiles', get label() { return t('settings.mediaManagement.importExtraFiles'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.importMatchingExtraFilesSubtitles'); } },
+  { name: 'extraFileExtensions', get label() { return t('settings.mediaManagement.extraFileExtensions'); }, type: 'text', placeholder: 'srt,nfo', get helpText() { return t('settings.mediaManagement.commaSeparatedListOfExtensions'); } },
+  { name: 'skipFreeSpaceCheck', get label() { return t('settings.mediaManagement.skipFreeSpaceCheck'); }, type: 'checkbox', advanced: true },
+  { name: 'minimumFreeSpaceMb', get label() { return t('settings.mediaManagement.minimumFreeSpace'); }, type: 'number', unit: 'MB', min: 0, advanced: true, get helpText() { return t('settings.mediaManagement.refuseToImportWhenLess'); } },
 ];
 
 export const PROPER_FIELDS: FieldDefinition[] = [
-  { name: 'downloadPropersAndRepacks', label: 'Propers and repacks', type: 'select', options: PROPERS, helpText: 'How a proper or repack of a file you already have is treated.' },
+  { name: 'downloadPropersAndRepacks', get label() { return t('settings.mediaManagement.propersAndRepacks'); }, type: 'select', options: PROPERS, get helpText() { return t('settings.mediaManagement.howAProperOrRepack'); } },
 ];
 
 export const FILE_FIELDS: FieldDefinition[] = [
-  { name: 'createEmptySeriesFolders', label: 'Create empty series folders', type: 'checkbox', helpText: 'Create missing series folders during disk scan.' },
-  { name: 'deleteEmptyFolders', label: 'Delete empty folders', type: 'checkbox', helpText: 'Remove empty series and season folders during disk scan.' },
-  { name: 'enableMediaInfo', label: 'Analyse video files', type: 'checkbox', advanced: true, helpText: 'Read resolution, codecs and runtime from files.' },
-  { name: 'rescanAfterRefresh', label: 'Rescan folder after refresh', type: 'select', options: ALWAYS_OPTIONS, advanced: true },
-  { name: 'fileDateMode', label: 'Change file date', type: 'select', options: FILE_DATE_MODES, advanced: true },
-  { name: 'recycleBinPath', label: 'Recycling bin', type: 'text', placeholder: '/data/.recycle', helpText: 'Deleted files go here instead of being removed.' },
-  { name: 'recycleBinCleanupDays', label: 'Recycling bin cleanup', type: 'number', unit: 'days', min: 0, advanced: true, helpText: '0 turns automatic cleanup off.' },
-  { name: 'setPermissions', label: 'Set permissions', type: 'checkbox', advanced: true, helpText: 'Apply chmod and chown to imported files and folders (Linux).' },
-  { name: 'chmodFolder', label: 'chmod folder', type: 'text', advanced: true, placeholder: '755' },
-  { name: 'chownGroup', label: 'chown group', type: 'text', advanced: true },
+  { name: 'createEmptySeriesFolders', get label() { return t('settings.mediaManagement.createEmptySeriesFolders'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.createMissingSeriesFoldersDuring'); } },
+  { name: 'deleteEmptyFolders', get label() { return t('settings.mediaManagement.deleteEmptyFolders'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.removeEmptySeriesAndSeason'); } },
+  { name: 'enableMediaInfo', get label() { return t('settings.mediaManagement.analyseVideoFiles'); }, type: 'checkbox', advanced: true, get helpText() { return t('settings.mediaManagement.readResolutionCodecsAndRuntime'); } },
+  { name: 'rescanAfterRefresh', get label() { return t('settings.mediaManagement.rescanFolderAfterRefresh'); }, type: 'select', options: ALWAYS_OPTIONS, advanced: true },
+  { name: 'fileDateMode', get label() { return t('settings.mediaManagement.changeFileDate'); }, type: 'select', options: FILE_DATE_MODES, advanced: true },
+  { name: 'recycleBinPath', get label() { return t('settings.mediaManagement.recyclingBin'); }, type: 'text', placeholder: '/data/.recycle', get helpText() { return t('settings.mediaManagement.deletedFilesGoHereInstead'); } },
+  { name: 'recycleBinCleanupDays', get label() { return t('settings.mediaManagement.recyclingBinCleanup'); }, type: 'number', unit: 'days', min: 0, advanced: true, get helpText() { return t('settings.mediaManagement.n0TurnsAutomaticCleanupOff'); } },
+  { name: 'setPermissions', get label() { return t('settings.mediaManagement.setPermissions'); }, type: 'checkbox', advanced: true, get helpText() { return t('settings.mediaManagement.applyChmodAndChownTo'); } },
+  { name: 'chmodFolder', get label() { return t('settings.mediaManagement.chmodFolder'); }, type: 'text', advanced: true, placeholder: '755' },
+  { name: 'chownGroup', get label() { return t('settings.mediaManagement.chownGroup'); }, type: 'text', advanced: true },
 ];
 
 interface MediaDraft {
@@ -184,18 +210,18 @@ function NamingSections({
     ));
   return (
     <>
-      <SettingsSection label="Episode naming">
+      <SettingsSection label={t('settings.mediaManagement.episodeNaming')}>
         <div className="al-mm-rows">
           <ToggleRow
-            label="Rename episodes"
-            caption="Rename imported files using the format below"
+            label={t('settings.mediaManagement.renameEpisodes')}
+            caption={t('settings.mediaManagement.renameImportedFilesUsingThe')}
             checked={value.renameEpisodes}
             disabled={disabled}
             onChange={(v) => set('renameEpisodes', v)}
           />
           {rows('series')}
           <SelectRow
-            label="Multi-episode style"
+            label={t('settings.mediaManagement.multiEpisodeStyle')}
             value={value.multiEpisodeStyle}
             disabled={disabled}
             options={MultiEpisodeStyle.options.map((o) => ({ value: o, label: MULTI_LABELS[o] }))}
@@ -204,21 +230,21 @@ function NamingSections({
           {advanced ? (
             <>
               <ToggleRow
-                label="Replace illegal characters"
-                caption="Off removes them instead"
+                label={t('settings.mediaManagement.replaceIllegalCharacters')}
+                caption={t('settings.mediaManagement.offRemovesThemInstead')}
                 checked={value.replaceIllegalCharacters}
                 disabled={disabled}
                 onChange={(v) => set('replaceIllegalCharacters', v)}
               />
               <SelectRow
-                label="Colon replacement"
+                label={t('settings.mediaManagement.colonReplacement')}
                 value={value.colonReplacement}
                 disabled={disabled}
                 options={ColonReplacement.options.map((o) => ({ value: o, label: COLON_LABELS[o] }))}
                 onChange={(v) => set('colonReplacement', ColonReplacement.parse(v))}
               />
               {value.colonReplacement === 'custom' ? (
-                <FormRow label="Custom colon replacement" htmlFor={customId}>
+                <FormRow label={t('settings.mediaManagement.customColonReplacement')} htmlFor={customId}>
                   <Input
                     id={customId}
                     mono
@@ -233,11 +259,11 @@ function NamingSections({
           ) : null}
         </div>
       </SettingsSection>
-      <SettingsSection label="Movie naming">
+      <SettingsSection label={t('settings.mediaManagement.movieNaming')}>
         <div className="al-mm-rows">
           <ToggleRow
-            label="Rename movies"
-            caption="Rename imported files using the format below"
+            label={t('settings.mediaManagement.renameMovies')}
+            caption={t('settings.mediaManagement.renameImportedFilesUsingThe')}
             checked={value.renameMovies}
             disabled={disabled}
             onChange={(v) => set('renameMovies', v)}
@@ -245,6 +271,7 @@ function NamingSections({
           {rows('movie')}
         </div>
       </SettingsSection>
+      <VersionNamingSection value={value} set={set} disabled={disabled} />
     </>
   );
 }
@@ -265,18 +292,18 @@ export function RootFolderRow({ folder, maxFree, onRemove }: { folder: RootFolde
         <span className="al-num al-root-row__path-text">{folder.path}</span>
         {folder.accessible ? null : (
           <Chip tone="danger" dot="none">
-            Not reachable
+            {t('common.notReachable')}
           </Chip>
         )}
       </span>
-      <span className="al-root-row__kind">{folder.mediaType === 'series' ? 'Series' : 'Movies'}</span>
+      <span className="al-root-row__kind">{folder.mediaType === 'series' ? t('common.series') : t('common.movies')}</span>
       <Meter
         value={pct}
         tone={low ? 'warn' : 'default'}
-        label={`Free space on ${folder.path}`}
-        valueText={<span className="al-num">{free === null ? '—' : `${formatSize(free)} free`}</span>}
+        label={t('settings.mediaManagement.freeSpaceOnPath', { path: folder.path })}
+        valueText={<span className="al-num">{free === null ? '—' : t('settings.mediaManagement.sizeFree', { size: formatSize(free) })}</span>}
       />
-      <Button variant="danger" size="sm" icon={<Icon name="close" />} aria-label={`Remove ${folder.path}`} onClick={onRemove} className="al-root-row__remove" />
+      <Button variant="danger" size="sm" icon={<Icon name="close" />} aria-label={t('settings.mediaManagement.removePath', { path: folder.path })} onClick={onRemove} className="al-root-row__remove" />
     </li>
   );
 }
@@ -295,23 +322,23 @@ function RootFoldersSection() {
 
   return (
     <SettingsSection
-      label="Root folders"
+      label={t('common.rootFolders')}
       action={
         <Button size="sm" variant="secondary" onClick={() => setPicking(true)}>
-          Add root folder
+          {t('settings.mediaManagement.addRootFolder')}
         </Button>
       }
     >
       {folders.isPending ? (
         <Skeleton lines={2} />
       ) : folders.isError ? (
-        <ErrorBlock title="Couldn't load root folders" onRetry={() => void folders.refetch()}>
+        <ErrorBlock title={t('settings.mediaManagement.couldntLoadRootFolders')} onRetry={() => void folders.refetch()}>
           {errorMessage(folders.error)}
         </ErrorBlock>
       ) : list.length === 0 && !pending ? (
-        <EmptyState title="No root folders yet">Add the folders your series and movies live in.</EmptyState>
+        <EmptyState title={t('settings.mediaManagement.noRootFoldersYet')}>{t('settings.mediaManagement.addTheFoldersYourSeries')}</EmptyState>
       ) : (
-        <ul className="al-row-list al-root-list" aria-label="Root folders">
+        <ul className="al-row-list al-root-list" aria-label={t('common.rootFolders')}>
           {list.map((f) => (
             <RootFolderRow key={f.id} folder={f} maxFree={maxFree} onRemove={() => setRemoving(f)} />
           ))}
@@ -320,21 +347,21 @@ function RootFoldersSection() {
               <span className="al-num al-root-row__path-text">{pending.path}</span>
               <span className="al-root-row__kind">
                 <label className="al-sr-only" htmlFor={kindId}>
-                  Media type
+                  {t('common.mediaType')}
                 </label>
                 <Select
                   id={kindId}
                   value={pending.mediaType}
                   onChange={(e) => setPending({ ...pending, mediaType: e.currentTarget.value === 'movie' ? 'movie' : 'series' })}
                   options={[
-                    { value: 'series', label: 'Series' },
-                    { value: 'movie', label: 'Movies' },
+                    { value: 'series', label: t('common.series') },
+                    { value: 'movie', label: t('common.movies') },
                   ]}
                 />
               </span>
               <span className="al-root-row__pending-actions">
                 <Button variant="ghost" size="sm" onClick={() => setPending(null)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   variant="primary"
@@ -342,7 +369,7 @@ function RootFoldersSection() {
                   loading={add.isPending}
                   onClick={() => add.mutate({ path: pending.path, mediaType: pending.mediaType }, { onSuccess: () => setPending(null) })}
                 >
-                  Add
+                  {t('common.add')}
                 </Button>
               </span>
             </li>
@@ -352,7 +379,7 @@ function RootFoldersSection() {
       <SaveError error={add.error} />
       <PathPickerDialog
         open={picking}
-        title="Choose a root folder"
+        title={t('common.chooseARootFolder')}
         onClose={() => setPicking(false)}
         onSelect={(path) => {
           setPicking(false);
@@ -361,8 +388,8 @@ function RootFoldersSection() {
       />
       <ConfirmDialog
         open={removing !== null}
-        title={removing ? `Remove ${removing.path}?` : 'Remove root folder?'}
-        confirmLabel="Remove root folder"
+        title={removing ? t('settings.mediaManagement.removePath2', { path: removing.path }) : t('settings.mediaManagement.removeRootFolder')}
+        confirmLabel={t('settings.mediaManagement.removeRootFolder2')}
         onCancel={() => setRemoving(null)}
         onConfirm={async () => {
           if (!removing) return;
@@ -370,7 +397,7 @@ function RootFoldersSection() {
           setRemoving(null);
         }}
       >
-        <p>Arclight stops using this folder. Files on disk are not touched.</p>
+        <p>{t('settings.mediaManagement.arclightStopsUsingThisFolder')}</p>
       </ConfirmDialog>
     </SettingsSection>
   );
@@ -416,15 +443,15 @@ export function MediaManagementPage() {
 
   return (
     <SettingsPage
-      title="Media management"
+      title={t('common.mediaManagement')}
       advanced={{ value: advanced, onChange: setAdvanced }}
       save={{ count: draft.changes, onSave: () => void onSave(), onDiscard: draft.discard, saving }}
     >
       {naming.isPending ? <Skeleton lines={4} /> : null}
       {namingMissing ? (
-        <PendingApiNotice what="naming settings" />
+        <PendingApiNotice what={t('settings.mediaManagement.namingSettings')} />
       ) : naming.isError ? (
-        <ErrorBlock title="Couldn't load naming settings" onRetry={() => void naming.refetch()}>
+        <ErrorBlock title={t('settings.mediaManagement.couldntLoadNamingSettings')} onRetry={() => void naming.refetch()}>
           {errorMessage(naming.error)}
         </ErrorBlock>
       ) : null}
@@ -434,17 +461,17 @@ export function MediaManagementPage() {
 
       {settings.isPending ? <Skeleton lines={4} /> : null}
       {settingsMissing ? (
-        <PendingApiNotice what="media management settings" />
+        <PendingApiNotice what={t('settings.mediaManagement.mediaManagementSettings')} />
       ) : settings.isError ? (
-        <ErrorBlock title="Couldn't load media management settings" onRetry={() => void settings.refetch()}>
+        <ErrorBlock title={t('settings.mediaManagement.couldntLoadMediaManagementSettings')} onRetry={() => void settings.refetch()}>
           {errorMessage(settings.error)}
         </ErrorBlock>
       ) : null}
       {settingsReady ? (
         <>
-          <SettingsSection label="File management">{settingsBody(FILE_FIELDS)}</SettingsSection>
-          <SettingsSection label="Importing">{settingsBody(IMPORT_FIELDS)}</SettingsSection>
-          <SettingsSection label="Propers">{settingsBody(PROPER_FIELDS)}</SettingsSection>
+          <SettingsSection label={t('settings.mediaManagement.fileManagement')}>{settingsBody(FILE_FIELDS)}</SettingsSection>
+          <SettingsSection label={t('status.importing')}>{settingsBody(IMPORT_FIELDS)}</SettingsSection>
+          <SettingsSection label={t('settings.mediaManagement.propers')}>{settingsBody(PROPER_FIELDS)}</SettingsSection>
         </>
       ) : null}
     </SettingsPage>

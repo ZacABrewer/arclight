@@ -1,6 +1,7 @@
 import { MutationCache, QueryClient } from '@tanstack/react-query';
 import { errorMessage } from './api/client.js';
 import { toasts as defaultToasts, type ToastStore } from './lib/toast.js';
+import { t } from './i18n/index.js';
 
 declare module '@tanstack/react-query' {
   interface Register {
@@ -19,7 +20,7 @@ export function createQueryClient(toasts: ToastStore = defaultToasts): QueryClie
     mutationCache: new MutationCache({
       onError: (error, _vars, _ctx, mutation) => {
         if (mutation.meta?.silent) return;
-        toasts.error(mutation.meta?.errorTitle ?? 'Something went wrong', errorMessage(error));
+        toasts.error(mutation.meta?.errorTitle ?? t('queryClient.somethingWentWrong'), errorMessage(error));
       },
     }),
     defaultOptions: {

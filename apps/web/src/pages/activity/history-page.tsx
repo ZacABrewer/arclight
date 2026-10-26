@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { getRouteApi } from '@tanstack/react-router';
 import { ApiError, errorMessage } from '../../api/client.js';
 import {
   DEFAULT_HISTORY_FILTER,
@@ -15,7 +16,12 @@ import { useToast } from '../../components/toast.js';
 import { useHistory, useMarkHistoryFailed, useRedownloadHistory } from '../../hooks/activity.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
+import { DecisionBatchModal } from '../library/decisions/decisions-panel.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
+import { historyFilterFromSearch } from './history-search.js';
+
+const historyRoute = getRouteApi('/activity/history');
+import { t } from '../../i18n/index.js';
 
 const EVENT_TONES: Record<string, ChipTone> = {
   grabbed: 'default',
@@ -31,12 +37,16 @@ export const eventLabel = historyEventLabel;
 /** Toggle one event type in the filter; any filter change goes back to page 1. */
 export function toggleEventType(filter: HistoryFilter, type: HistoryEventType): HistoryFilter {
   const has = filter.eventTypes.includes(type);
-  return { ...filter, page: 1, eventTypes: has ? filter.eventTypes.filter((t) => t !== type) : [...filter.eventTypes, type] };
+  return { ...filter, page: 1, eventTypes: has ? filter.eventTypes.filter((item) => item !== type) : [...filter.eventTypes, type] };
 }
 
 /** Number of filters that differ from the default (drives the Clear button). */
 export function activeHistoryFilters(filter: HistoryFilter): number {
-  return (filter.eventTypes.length > 0 ? 1 : 0) + (filter.sortDirection !== DEFAULT_HISTORY_FILTER.sortDirection ? 1 : 0);
+  return (
+    (filter.eventTypes.length > 0 ? 1 : 0) +
+    (filter.sortDirection !== DEFAULT_HISTORY_FILTER.sortDirection ? 1 : 0) +
+    (filter.seriesId !== undefined || filter.episodeId !== undefined || filter.movieId !== undefined ? 1 : 0)
+  );
 }
 
 export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; onChange: (f: HistoryFilter) => void }) {
@@ -48,7 +58,7 @@ export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; 
       onClear={() => onChange({ ...DEFAULT_HISTORY_FILTER, pageSize: filter.pageSize })}
     >
       <Select
-        aria-label="Event type"
+        aria-label={t('activity.history.eventType')}
         value={eventValue}
         onChange={(e) => {
           const v = e.currentTarget.value;
@@ -56,21 +66,24 @@ export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; 
           onChange({ ...filter, page: 1, eventTypes: v ? [v as HistoryEventType] : [] });
         }}
       >
-        <option value="">All events</option>
-        {HISTORY_EVENT_TYPES.map((t) => (
-          <option key={t} value={t}>
-            {HISTORY_EVENT_LABELS[t]}
+        <option value="">{t('activity.history.allEvents')}</option>
+        {HISTORY_EVENT_TYPES.map((entry) => (
+          <option key={entry} value={entry}>
+            {HISTORY_EVENT_LABELS[entry]}
           </option>
         ))}
-        {eventValue === '__many' ? <option value="__many">Several</option> : null}
+        {eventValue === '__many' ? <option value="__many">{t('activity.history.several')}</option> : null}
       </Select>
+      {filter.seriesId !== undefined || filter.episodeId !== undefined || filter.movieId !== undefined ? (
+        <Chip tone="default">{t('activity.history.oneItemOnly')}</Chip>
+      ) : null}
       <Select
-        aria-label="Order"
+        aria-label={t('activity.history.order')}
         value={filter.sortDirection}
         onChange={(e) => onChange({ ...filter, page: 1, sortDirection: e.currentTarget.value as 'asc' | 'desc' })}
         options={[
-          { value: 'desc', label: 'Newest first' },
-          { value: 'asc', label: 'Oldest first' },
+          { value: 'desc', label: t('activity.history.newestFirst') },
+          { value: 'asc', label: t('activity.history.oldestFirst') },
         ]}
       />
     </FilterBar>
@@ -87,28 +100,36 @@ export function redownloadTarget(record: HistoryRecord): { episodeIds: number[] 
   return null;
 }
 
+/** The decision-log batch a grab came from (history data `decisionBatchId`), if recorded. */
+export function decisionBatchIdOf(record: Pick<HistoryRecord, 'data'>): string | null {
+  const v = record.data?.['decisionBatchId'];
+  return typeof v === 'string' && v !== '' ? v : null;
+}
+
 export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onClose: () => void }) {
   const markFailed = useMarkHistoryFailed();
   const redownload = useRedownloadHistory();
   const toast = useToast();
   const [confirm, setConfirm] = useState(false);
+  const [why, setWhy] = useState<string | null>(null);
+  const batchId = decisionBatchIdOf(record);
   const target = redownloadTarget(record);
   const canMarkFailed = record.eventType === 'grabbed';
   const items: KeyValueItem[] = [
-    { label: 'Event', value: <Chip tone={EVENT_TONES[record.eventType] ?? 'neutral'}>{eventLabel(record.eventType)}</Chip>, mono: false },
-    { label: 'Source title', value: <span className="al-activity-break">{record.sourceTitle}</span> },
-    { label: 'Date', value: formatDateTime(record.date) },
+    { label: t('activity.history.event'), value: <Chip tone={EVENT_TONES[record.eventType] ?? 'neutral'}>{eventLabel(record.eventType)}</Chip>, mono: false },
+    { label: t('common.sourceTitle'), value: <span className="al-activity-break">{record.sourceTitle}</span> },
+    { label: t('common.date'), value: formatDateTime(record.date) },
   ];
-  if (record.quality?.quality?.name) items.push({ label: 'Quality', value: record.quality.quality.name });
-  if (record.languages?.length) items.push({ label: 'Languages', value: record.languages.join(', '), mono: false });
-  if (record.downloadId) items.push({ label: 'Download id', value: <span className="al-activity-break">{record.downloadId}</span> });
+  if (record.quality?.quality?.name) items.push({ label: t('common.quality'), value: record.quality.quality.name });
+  if (record.languages?.length) items.push({ label: t('common.languages'), value: record.languages.join(', '), mono: false });
+  if (record.downloadId) items.push({ label: t('activity.history.downloadId'), value: <span className="al-activity-break">{record.downloadId}</span> });
   for (const [k, v] of Object.entries(record.data ?? {})) {
     items.push({ key: `data-${k}`, label: k, value: <span className="al-activity-break">{typeof v === 'string' ? v : JSON.stringify(v)}</span> });
   }
   return (
     <>
       <Drawer
-        open={!confirm}
+        open={!confirm && why === null}
         onClose={onClose}
         title={eventLabel(record.eventType)}
         footer={
@@ -116,52 +137,60 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
             <Button
               variant="danger"
               disabled={!canMarkFailed}
-              title={canMarkFailed ? undefined : 'Only grabbed releases can be marked failed'}
+              title={canMarkFailed ? undefined : t('activity.history.onlyGrabbedReleasesCanBe')}
               onClick={() => setConfirm(true)}
             >
-              Mark failed
+              {t('activity.history.markFailed')}
             </Button>
             <Button
               variant="secondary"
               disabled={!target}
               loading={redownload.isPending}
-              title={target ? undefined : 'This event is not linked to an episode or movie'}
+              title={target ? undefined : t('activity.history.thisEventIsNotLinked')}
               onClick={() => target && redownload.mutate(record.id)}
             >
-              Redownload
+              {t('activity.history.redownload')}
             </Button>
             <span className="al-activity-spacer" />
             <Button variant="ghost" onClick={onClose}>
-              Close
+              {t('common.close')}
             </Button>
           </>
         }
       >
+        {batchId ? (
+          <p style={{ margin: '0 0 12px' }}>
+            <Button variant="secondary" size="sm" onClick={() => setWhy(batchId)}>
+              {t('activity.history.whyThisRelease')}
+            </Button>
+          </p>
+        ) : null}
         <KeyValue items={items} />
       </Drawer>
+      <DecisionBatchModal batchId={why} onClose={() => setWhy(null)} />
       <ConfirmDialog
         open={confirm}
-        title={`Mark ${record.sourceTitle} as failed?`}
-        confirmLabel="Mark failed"
+        title={t('activity.history.markSourcetitleAsFailed', { sourceTitle: record.sourceTitle })}
+        confirmLabel={t('activity.history.markFailed')}
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           await markFailed.mutateAsync(record.id);
-          toast.push({ tone: 'ok', title: 'Marked as failed', message: record.sourceTitle });
+          toast.push({ tone: 'ok', title: t('activity.history.markedAsFailed'), message: record.sourceTitle });
           setConfirm(false);
           onClose();
         }}
       >
-        <p>The release is blocklisted and, unless disabled, a replacement is searched for.</p>
+        <p>{t('activity.history.theReleaseIsBlocklistedAnd')}</p>
       </ConfirmDialog>
     </>
   );
 }
 
 const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecord>[] => [
-  { key: 'eventType', header: 'Event', width: '140px', cell: (r) => <Chip tone={EVENT_TONES[r.eventType] ?? 'neutral'}>{eventLabel(r.eventType)}</Chip> },
+  { key: 'eventType', header: t('activity.history.event'), width: '140px', cell: (r) => <Chip tone={EVENT_TONES[r.eventType] ?? 'neutral'}>{eventLabel(r.eventType)}</Chip> },
   {
     key: 'sourceTitle',
-    header: 'Source title',
+    header: t('common.sourceTitle'),
     cell: (r) => (
       <button
         type="button"
@@ -175,10 +204,10 @@ const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecor
       </button>
     ),
   },
-  { key: 'quality', header: 'Quality', mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
+  { key: 'quality', header: t('common.quality'), mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
   {
     key: 'date',
-    header: 'Date',
+    header: t('common.date'),
     mono: true,
     align: 'right',
     cell: (r) => (
@@ -190,7 +219,15 @@ const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecor
 ];
 
 export function HistoryPage() {
-  const [filter, setFilter] = useState<HistoryFilter>(DEFAULT_HISTORY_FILTER);
+  const search = historyRoute.useSearch();
+  const searchKey = JSON.stringify(search);
+  const [filter, setFilter] = useState<HistoryFilter>(() => historyFilterFromSearch(search));
+  // A new deep link while the page is open replaces the filter.
+  const [seenSearch, setSeenSearch] = useState(searchKey);
+  if (seenSearch !== searchKey) {
+    setSeenSearch(searchKey);
+    setFilter(historyFilterFromSearch(search));
+  }
   const [open, setOpen] = useState<HistoryRecord | null>(null);
   const history = useHistory(filter);
   const pending = history.error instanceof ApiError && history.error.status === 404;
@@ -204,25 +241,25 @@ export function HistoryPage() {
         </div>
         {pending ? (
           <div className="al-activity-pad">
-            <PendingApiNotice what="history" />
+            <PendingApiNotice what={t('activity.history.history')} />
           </div>
         ) : history.isError ? (
           <div className="al-activity-pad">
-            <ErrorBlock title="Couldn't load history" onRetry={() => void history.refetch()}>
+            <ErrorBlock title={t('activity.history.couldntLoadHistory')} onRetry={() => void history.refetch()}>
               {errorMessage(history.error)}
             </ErrorBlock>
           </div>
         ) : (
           <>
             <Table
-              caption="History"
+              caption={t('common.history')}
               columns={historyColumns(setOpen)}
               rows={history.data?.records}
               rowKey={(r) => r.id}
               loading={history.isPending}
               sortable={false}
               onRowClick={setOpen}
-              empty={<EmptyState title="No history yet">Grabs, imports and failures are recorded here.</EmptyState>}
+              empty={<EmptyState title={t('activity.history.noHistoryYet')}>{t('activity.history.grabsImportsAndFailuresAre')}</EmptyState>}
             />
             {history.data && history.data.totalRecords > filter.pageSize ? (
               <footer className="al-activity-foot">

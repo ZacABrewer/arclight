@@ -15,6 +15,7 @@ import {
   visibleFields,
 } from './values.js';
 import './forms.css';
+import { t } from '../../i18n/index.js';
 
 export interface SchemaFormProps {
   fields: readonly FieldDefinition[];
@@ -36,7 +37,8 @@ export interface SchemaFormProps {
 }
 
 /** Placeholder of a password input while a secret is stored (the api sent the mask). */
-export const STORED_SECRET_PLACEHOLDER = 'Stored, unchanged · type to replace';
+export const STORED_SECRET_PLACEHOLDER = 'Stored, unchanged · type to replace'; // i18n-ignore: English source, tests compare with it
+const storedSecretPlaceholder = () => t('components.forms.schemaForm.storedSecretPlaceholder');
 
 /** Renders field definitions as Arclight form rows, with a "Show advanced" toggle. */
 export function SchemaForm({
@@ -79,7 +81,7 @@ export function SchemaForm({
             {' *'}
           </span>
         ) : null}
-        {field.advanced ? <span className="al-adv-tag">ADVANCED</span> : null}
+        {field.advanced ? <span className="al-adv-tag">{t('components.forms.schemaForm.advanced')}</span> : null}
       </>
     );
     if (inline) {
@@ -108,7 +110,7 @@ export function SchemaForm({
     <div className="al-schema-form" data-layout={inline ? 'rows' : 'stacked'}>
       {ownToggle || toolbar ? (
         <div className="al-schema-form__toolbar">
-          {ownToggle ? <Toggle label="Show advanced" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.currentTarget.checked)} /> : <span />}
+          {ownToggle ? <Toggle label={t('components.forms.schemaForm.showAdvanced')} checked={showAdvanced} onChange={(e) => setShowAdvanced(e.currentTarget.checked)} /> : <span />}
           {toolbar}
         </div>
       ) : null}
@@ -149,7 +151,7 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
           type="password"
           autoComplete="new-password"
           value={passwordDisplayValue(value)}
-          placeholder={isMasked(value) ? STORED_SECRET_PLACEHOLDER : field.placeholder}
+          placeholder={isMasked(value) ? storedSecretPlaceholder() : field.placeholder}
           data-stored={isMasked(value) || undefined}
           invalid={invalid}
           onChange={(e) => onChange(e.currentTarget.value)}
@@ -164,7 +166,7 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
           invalid={invalid}
           onChange={(e) => onChange(coerceOption(field.options, e.currentTarget.value))}
           options={(field.options ?? []).map((o) => ({ value: String(o.value), label: o.label }))}
-          {...(value === undefined || value === null || value === '' ? { placeholder: 'Select…' } : {})}
+          {...(value === undefined || value === null || value === '' ? { placeholder: t('components.forms.schemaForm.select') } : {})}
         />
       );
     case 'multiSelect': {

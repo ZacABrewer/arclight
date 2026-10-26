@@ -7,12 +7,13 @@ import { CommandPalette, DEFAULT_SHORTCUTS, GlobalSearchOverlay, KeyboardSheet, 
 import { useRunJob, useScheduledJobs } from '../hooks/jobs.js';
 import { libraryKeys } from '../hooks/library-keys.js';
 import { buildCommandGroups, buildSearchGroups, buildTaskGroups, type Target } from './search-groups.js';
+import { t } from '../i18n/index.js';
 
 function useDebounced<T>(value: T, ms: number): T {
   const [v, setV] = useState(value);
   useEffect(() => {
-    const t = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(t);
+    const item = setTimeout(() => setV(value), ms);
+    return () => clearTimeout(item);
   }, [value, ms]);
   return v;
 }
@@ -72,7 +73,7 @@ export function GlobalSearch({ open, onClose, isAdmin, debounceMs = 250 }: Globa
       query={query}
       onQueryChange={setQuery}
       groups={groups}
-      placeholder="Search series, movies, people and settings"
+      placeholder={t('layout.shellOverlays.searchSeriesMoviesPeopleAnd')}
       loading={series.isLoading || movies.isLoading || discover.isFetching}
     />
   );
@@ -132,21 +133,23 @@ export function Palette({ open, onClose, isAdmin, onShortcuts }: PaletteProps) {
       query={query}
       onQueryChange={setQuery}
       groups={groups}
-      placeholder={mode === 'tasks' ? 'Run a task' : 'Type a command or search'}
+      placeholder={mode === 'tasks' ? t('layout.shellOverlays.runATask') : t('layout.shellOverlays.typeACommandOrSearch')}
       loading={mode === 'tasks' && jobs.isLoading}
-      emptyText={mode === 'tasks' ? 'No tasks match.' : 'No matches.'}
+      emptyText={mode === 'tasks' ? t('layout.shellOverlays.noTasksMatch') : t('layout.shellOverlays.noMatches')}
     />
   );
 }
 
 export const SHELL_SHORTCUTS: readonly ShortcutGroup[] = [
   {
-    title: 'Global',
+    get title() {
+      return t('layout.shellOverlays.global');
+    },
     shortcuts: [
-      { keys: ['/'], label: 'Search' },
-      { keys: ['Ctrl', 'K'], label: 'Command palette' },
-      { keys: ['?'], label: 'Keyboard shortcuts' },
-      { keys: ['Esc'], label: 'Close dialog or overlay' },
+      { keys: ['/'], get label() { return t('common.search'); } },
+      { keys: ['Ctrl', 'K'], get label() { return t('common.commandPalette'); } },
+      { keys: ['?'], get label() { return t('common.keyboardShortcuts'); } },
+      { keys: ['Esc'], get label() { return t('layout.shellOverlays.closeDialogOrOverlay'); } },
     ],
   },
   DEFAULT_SHORTCUTS[1]!,

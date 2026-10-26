@@ -120,8 +120,14 @@ export class DefinitionCatalogue {
   }
 }
 
-/** Directory holding the definitions shipped with the package. */
-export const BUILTIN_DEFINITIONS_DIR = fileURLToPath(new URL('./builtin/', import.meta.url));
+/**
+ * Directory holding the definitions shipped with the package. A bundled build sets
+ * ARCLIGHT_ASSET_ROOT and copies them to `<root>/definitions/builtin`; otherwise they are
+ * read from the package source.
+ */
+export const BUILTIN_DEFINITIONS_DIR = process.env['ARCLIGHT_ASSET_ROOT']
+  ? join(process.env['ARCLIGHT_ASSET_ROOT'], 'definitions', 'builtin')
+  : fileURLToPath(new URL('./builtin/', import.meta.url));
 
 /** Bundled definitions, optionally overridden by user directories. */
 export function loadDefinitionCatalogue(userDirs: readonly string[] = []): Promise<DefinitionCatalogue> {

@@ -117,6 +117,8 @@ export const ReleasesSettings = z.object({
   allowUnairedEpisodes: z.boolean().default(false),
   /** Tolerance before air time a single-episode release is accepted (minutes). */
   unairedToleranceMinutes: z.number().int().min(0).default(60),
+  /** Release decision log: rows older than this many days are pruned nightly (DecisionLogCleanup). */
+  decisionLogDays: z.number().int().min(1).max(365).default(14),
 });
 export type ReleasesSettings = z.infer<typeof ReleasesSettings>;
 export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;
