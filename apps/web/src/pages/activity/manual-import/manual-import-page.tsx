@@ -1,22 +1,38 @@
-import { useEffect, useMemo, useReducer, useState } from 'react';
+import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { ImportMode, ManualImportQueryInput, ManualImportResult, MediaType, Movie, Series } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { manualImportApi } from '../../../api/manual-import.js';
 import { queueApi } from '../../../api/queue.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
+import {
+  Button,
+  buttonClass,
+  Checkbox,
+  Chip,
+  EmptyState,
+  ErrorBlock,
+  Field,
+  Input,
+  PageHeader,
+  Pane,
+  Popover,
+  RejectionList,
+  SectionLabel,
+  Segmented,
+  Select,
+  Skeleton,
+  StatusChip,
+  Stepper,
+  Table,
+  Tooltip,
+  type Column,
+} from '../../../arclight/index.js';
 import { EntityPicker, type EntityOption } from '../../../components/entity-picker.js';
-import { EmptyState } from '../../../components/empty-state.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input, Select } from '../../../components/form.js';
-import { Page } from '../../../components/page.js';
 import { PathInput } from '../../../components/path-picker/index.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useEpisodes, useMovieList, useSeriesList } from '../../../hooks/library.js';
-import { formatBytes } from '../activity-shared.js';
+import { formatBytes, useDocumentTitle } from '../activity-shared.js';
+import { queueChip } from '../queue-status.js';
 import {
   initRows,
   needsManualImport,
@@ -61,213 +77,270 @@ export function toManualImportQuery(s: ManualImportSearch): ManualImportQueryInp
   return null;
 }
 
+export const WIZARD_STEPS = [
+  { id: 'path', label: 'Path' },
+  { id: 'files', label: 'Files' },
+  { id: 'mapping', label: 'Mapping' },
+  { id: 'mode', label: 'Mode' },
+  { id: 'results', label: 'Results' },
+] as const;
 
-type Step = 'source' | 'files' | 'confirm' | 'results';
+export type WizardStep = (typeof WIZARD_STEPS)[number]['id'];
 
-// ---- step 1 ------------------------------------------------------------------------------
+const stepIndex = (s: WizardStep) => WIZARD_STEPS.findIndex((x) => x.id === s);
 
-function SourceStep({ onChoose }: { onChoose: (s: ManualImportSearch) => void }) {
-  const [folder, setFolder] = useState('');
+export const MODE_OPTIONS: ReadonlyArray<{ value: ImportMode; label: string; hint: string }> = [
+  { value: 'auto', label: 'Auto', hint: 'Moves files out of ordinary folders; copies or hardlinks out of an active download so seeding continues.' },
+  { value: 'move', label: 'Move', hint: 'Moves the files into the library. The download client loses them.' },
+  { value: 'copy', label: 'Copy or hardlink', hint: 'Hardlinks when the library is on the same disk, otherwise copies. The original stays in place.' },
+];
+
+// ---- Path ---------------------------------------------------------------------------------
+
+function PathStep({ folder, onFolder, onChoose }: { folder: string; onFolder: (v: string) => void; onChoose: (s: ManualImportSearch) => void }) {
   const queue = useQuery({ queryKey: ['queue', 'list', 'manual-import'], queryFn: () => queueApi.list({ page: 1, pageSize: 100 }) });
   const candidates = (queue.data?.records ?? []).filter((q) => q.outputPath !== undefined);
   return (
-    <div className="stack">
-      <Card title="From a folder">
-        <div className="stack-sm">
-          <FormField label="Folder" hint="Every video file under it is listed; nothing moves until you confirm.">
-            <PathInput value={folder} onChange={setFolder} placeholder="/downloads/complete" pickerTitle="Choose a folder to import from" />
-          </FormField>
-          <div>
-            <Button variant="primary" disabled={!folder.trim()} onClick={() => onChoose({ folder: folder.trim() })}>
-              List files
-            </Button>
-          </div>
-        </div>
-      </Card>
-      <Card title="From the queue" flush>
+    <div className="al-mi-step">
+      <Field label="Folder" hint="Every video file under it is listed. Nothing moves until you confirm.">
+        <PathInput aria-label="Folder" value={folder} onChange={onFolder} placeholder="/downloads/complete" pickerTitle="Choose a folder to import from" />
+      </Field>
+      <section className="al-mi-section">
+        <SectionLabel as="h3">FROM THE QUEUE</SectionLabel>
         {queue.isPending ? (
-          <LoadingBlock />
+          <Skeleton lines={3} />
         ) : candidates.length === 0 ? (
-          <EmptyState title="No downloads with content on disk" />
+          <EmptyState title="No downloads with files on disk" />
         ) : (
-          <ul className="mi-queue-list">
-            {candidates.map((q) => (
-              <li key={q.id}>
-                <button type="button" className="path-picker-entry" onClick={() => onChoose({ downloadId: q.downloadId })}>
-                  <span className="break">{q.title}</span>
-                  {needsManualImport(q) ? <Badge tone="warning">needs import</Badge> : <Badge>{q.trackedState}</Badge>}
-                </button>
-              </li>
-            ))}
+          <ul className="al-mi-list">
+            {candidates.map((q) => {
+              const chip = queueChip(q);
+              return (
+                <li key={q.id}>
+                  <button type="button" className="al-mi-list__row" onClick={() => onChoose({ downloadId: q.downloadId })}>
+                    <span className="al-mi-list__title">{q.title}</span>
+                    {needsManualImport(q) ? <Chip tone="warn">Needs import</Chip> : <StatusChip status={chip.status} cause={chip.cause} />}
+                  </button>
+                </li>
+              );
+            })}
           </ul>
         )}
-      </Card>
+      </section>
     </div>
   );
 }
 
-// ---- step 2 ------------------------------------------------------------------------------
+// ---- Files --------------------------------------------------------------------------------
+
+function MappingChip({ row }: { row: ImportRow }) {
+  const permanent = row.rejections.find((r) => r.type === 'permanent');
+  const problems = rowProblems(row);
+  const chip =
+    permanent && problems.length === 0 ? (
+      <StatusChip status="failed" cause={permanent.message.toLowerCase()} />
+    ) : problems.length ? (
+      <Chip tone="warn">{problems[0]}</Chip>
+    ) : (
+      <Chip tone="accent">Mapped</Chip>
+    );
+  if (row.rejections.length === 0) return chip;
+  return (
+    <Tooltip content={<RejectionList reasons={row.rejections.map((r) => r.message)} />}>
+      <span tabIndex={0} className="al-mi-chip-anchor">
+        {chip}
+      </span>
+    </Tooltip>
+  );
+}
+
+const FILE_COLUMNS: Column<ImportRow>[] = [
+  { key: 'path', header: 'File', mono: true, cell: (r) => <span className="al-activity-break">{r.relativePath}</span> },
+  { key: 'size', header: 'Size', mono: true, align: 'right', width: '100px', cell: (r) => formatBytes(r.sizeBytes) },
+  { key: 'quality', header: 'Quality', mono: true, width: '140px', cell: (r) => r.quality.quality.name },
+  { key: 'state', header: 'Mapping', cell: (r) => <MappingChip row={r} /> },
+];
+
+function FilesStep({ rows }: { rows: ImportRow[] }) {
+  const mapped = rows.filter((r) => rowProblems(r).length === 0).length;
+  return (
+    <div className="al-mi-step">
+      <p className="al-activity-muted">
+        <span className="al-num">{rows.length}</span> files found · <span className="al-num">{mapped}</span> already mapped. Map the rest on the next step.
+      </p>
+      <Table caption="Files found" columns={FILE_COLUMNS} rows={rows} rowKey={(r) => r.path} sortable={false} />
+    </div>
+  );
+}
+
+// ---- Mapping ------------------------------------------------------------------------------
+
+const ep = (n: number) => `E${String(n).padStart(2, '0')}`;
 
 function EpisodesPicker({ row, dispatch }: { row: ImportRow; dispatch: (a: RowAction) => void }) {
   const episodes = useEpisodes(row.seriesId!);
   const inSeason = (episodes.data ?? []).filter((e) => e.seasonNumber === row.seasonNumber).sort((a, b) => a.episodeNumber - b.episodeNumber);
   const chosen = new Set(row.episodeIds);
+  if (row.seasonNumber === null) return <span className="al-activity-muted">Pick a season</span>;
   const summary =
     row.episodeIds.length === 0
       ? 'Choose…'
       : inSeason
           .filter((e) => chosen.has(e.id))
-          .map((e) => `E${String(e.episodeNumber).padStart(2, '0')}`)
+          .map((e) => ep(e.episodeNumber))
           .join(', ') || `${row.episodeIds.length} selected`;
   return (
-    <details className="popover mi-episodes">
-      <summary aria-label={`Episodes for ${row.name}`} className={row.seasonNumber === null ? 'muted' : undefined}>
-        {row.seasonNumber === null ? 'Pick a season' : summary}
-      </summary>
-      {row.seasonNumber !== null ? (
-        <div className="popover-body">
-          {episodes.isPending ? <LoadingBlock /> : null}
-          {inSeason.map((e) => (
-            <label key={e.id} className="mi-episode-option">
-              <input
-                type="checkbox"
-                checked={chosen.has(e.id)}
-                onChange={(ev) => {
-                  const on = ev.currentTarget.checked;
-                  dispatch({ type: 'episodes', path: row.path, episodeIds: on ? [...row.episodeIds, e.id] : row.episodeIds.filter((id) => id !== e.id) });
-                }}
-              />
-              {`E${String(e.episodeNumber).padStart(2, '0')}`} <span className="muted">{e.title}</span>
-            </label>
-          ))}
-          {!episodes.isPending && inSeason.length === 0 ? <p className="muted">No episodes in this season.</p> : null}
-        </div>
-      ) : null}
-    </details>
+    <Popover
+      width={280}
+      label={`Episodes for ${row.name}`}
+      trigger={(props) => (
+        <Button {...props} size="sm" variant="secondary" aria-label={`Episodes for ${row.name}`}>
+          <span className="al-num">{summary}</span>
+        </Button>
+      )}
+    >
+      <div className="al-mi-episodes">
+        {episodes.isPending ? <Skeleton lines={3} /> : null}
+        {inSeason.map((e) => (
+          <Checkbox
+            key={e.id}
+            label={
+              <>
+                <span className="al-num">{ep(e.episodeNumber)}</span> {e.title}
+              </>
+            }
+            checked={chosen.has(e.id)}
+            onChange={(ev) => {
+              const on = ev.currentTarget.checked;
+              dispatch({ type: 'episodes', path: row.path, episodeIds: on ? [...row.episodeIds, e.id] : row.episodeIds.filter((id) => id !== e.id) });
+            }}
+          />
+        ))}
+        {!episodes.isPending && inSeason.length === 0 ? <p className="al-activity-muted">No episodes in this season.</p> : null}
+      </div>
+    </Popover>
   );
 }
 
-function Rejections({ row }: { row: ImportRow }) {
-  if (row.rejections.length === 0) return null;
-  const text = row.rejections.map((r) => r.message).join('\n');
-  return (
-    <span title={text} aria-label={`Rejections: ${text}`} className="mi-rejections">
-      <Badge tone={row.rejections.some((r) => r.type === 'permanent') ? 'error' : 'warning'}>
-        {row.rejections.length} issue{row.rejections.length === 1 ? '' : 's'}
-      </Badge>
-    </span>
-  );
-}
-
-function FileRow({
-  row,
-  dispatch,
-  seriesList,
-  seriesOptions,
-  movieOptions,
-}: {
-  row: ImportRow;
+interface MappingContext {
   dispatch: (a: RowAction) => void;
   seriesList: readonly Series[];
   seriesOptions: EntityOption[];
   movieOptions: EntityOption[];
-}) {
-  const series = row.seriesId !== null ? seriesList.find((s) => s.id === row.seriesId) : undefined;
-  const problems = rowProblems(row);
-  return (
-    <tr className={problems.length ? 'mi-row-incomplete' : undefined}>
-      <td>
-        <input
-          type="checkbox"
-          aria-label={`Import ${row.name}`}
-          checked={row.selected}
-          disabled={problems.length > 0}
-          title={problems.join(', ') || undefined}
-          onChange={(e) => dispatch({ type: 'toggle', path: row.path, selected: e.currentTarget.checked })}
-        />
-      </td>
-      <td className="break">
-        <div>{row.relativePath}</div>
-        <div className="muted">
-          {formatBytes(row.sizeBytes)} <Rejections row={row} />
+}
+
+function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: MappingContext): Column<ImportRow>[] {
+  return [
+    {
+      key: 'file',
+      header: 'File',
+      cell: (r) => (
+        <div className="al-activity-title">
+          <span className="al-activity-title__main al-num" title={r.relativePath}>
+            {r.relativePath}
+          </span>
+          <span className="al-activity-title__sub al-num">
+            {formatBytes(r.sizeBytes)}
+            {rowProblems(r).length ? ` · ${rowProblems(r).join(', ')}` : ''}
+          </span>
         </div>
-      </td>
-      <td>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      cell: (r) => (
         <Select
-          aria-label={`Type for ${row.name}`}
-          value={row.mediaType}
-          onChange={(e) => dispatch({ type: 'mediaType', path: row.path, mediaType: e.currentTarget.value as MediaType })}
+          aria-label={`Type for ${r.name}`}
+          value={r.mediaType}
+          onChange={(e) => dispatch({ type: 'mediaType', path: r.path, mediaType: e.currentTarget.value as MediaType })}
           options={[
             { value: 'series', label: 'Episode' },
             { value: 'movie', label: 'Movie' },
           ]}
         />
-      </td>
-      {row.mediaType === 'series' ? (
-        <>
-          <td>
-            <EntityPicker
-              aria-label={`Series for ${row.name}`}
-              options={seriesOptions}
-              value={row.seriesId}
-              onChange={(id) => dispatch({ type: 'series', path: row.path, seriesId: id })}
-            />
-          </td>
-          <td>
-            <Select
-              aria-label={`Season for ${row.name}`}
-              value={row.seasonNumber?.toString() ?? ''}
-              disabled={!series}
-              onChange={(e) => dispatch({ type: 'season', path: row.path, seasonNumber: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })}
-            >
-              <option value="">—</option>
-              {(series?.seasons ?? []).map((s) => (
-                <option key={s.seasonNumber} value={s.seasonNumber}>
-                  {s.seasonNumber === 0 ? 'Specials' : `Season ${s.seasonNumber}`}
-                </option>
-              ))}
-            </Select>
-          </td>
-          <td>{row.seriesId !== null ? <EpisodesPicker row={row} dispatch={dispatch} /> : <span className="muted">—</span>}</td>
-        </>
-      ) : (
-        <td colSpan={3}>
-          <EntityPicker
-            aria-label={`Movie for ${row.name}`}
-            options={movieOptions}
-            value={row.movieId}
-            onChange={(id) => dispatch({ type: 'movie', path: row.path, movieId: id })}
-          />
-        </td>
-      )}
-      <td>
+      ),
+    },
+    {
+      key: 'target',
+      header: 'Series / movie',
+      cell: (r) =>
+        r.mediaType === 'series' ? (
+          <EntityPicker aria-label={`Series for ${r.name}`} options={seriesOptions} value={r.seriesId} onChange={(id) => dispatch({ type: 'series', path: r.path, seriesId: id })} />
+        ) : (
+          <EntityPicker aria-label={`Movie for ${r.name}`} options={movieOptions} value={r.movieId} onChange={(id) => dispatch({ type: 'movie', path: r.path, movieId: id })} />
+        ),
+    },
+    {
+      key: 'season',
+      header: 'Season',
+      cell: (r) => {
+        if (r.mediaType !== 'series') return <span className="al-activity-muted">—</span>;
+        const series = r.seriesId !== null ? seriesList.find((s) => s.id === r.seriesId) : undefined;
+        return (
+          <Select
+            aria-label={`Season for ${r.name}`}
+            value={r.seasonNumber?.toString() ?? ''}
+            disabled={!series}
+            onChange={(e) => dispatch({ type: 'season', path: r.path, seasonNumber: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })}
+          >
+            <option value="">—</option>
+            {(series?.seasons ?? []).map((s) => (
+              <option key={s.seasonNumber} value={s.seasonNumber}>
+                {s.seasonNumber === 0 ? 'Specials' : `Season ${s.seasonNumber}`}
+              </option>
+            ))}
+          </Select>
+        );
+      },
+    },
+    {
+      key: 'episodes',
+      header: 'Episodes',
+      cell: (r) =>
+        r.mediaType === 'series' && r.seriesId !== null ? <EpisodesPicker row={r} dispatch={dispatch} /> : <span className="al-activity-muted">—</span>,
+    },
+    {
+      key: 'quality',
+      header: 'Quality',
+      cell: (r) => (
         <Select
-          aria-label={`Quality for ${row.name}`}
-          value={String(row.quality.quality.id)}
-          onChange={(e) => dispatch({ type: 'quality', path: row.path, qualityId: Number(e.currentTarget.value) })}
-          options={qualityOptions(row.mediaType).map((q) => ({ value: String(q.id), label: q.name }))}
+          aria-label={`Quality for ${r.name}`}
+          value={String(r.quality.quality.id)}
+          onChange={(e) => dispatch({ type: 'quality', path: r.path, qualityId: Number(e.currentTarget.value) })}
+          options={qualityOptions(r.mediaType).map((q) => ({ value: String(q.id), label: q.name }))}
         />
-      </td>
-      <td>
+      ),
+    },
+    {
+      key: 'languages',
+      header: 'Languages',
+      cell: (r) => (
         <Input
-          aria-label={`Languages for ${row.name}`}
-          className="mi-small-input"
-          defaultValue={row.languages.join(', ')}
-          onBlur={(e) => dispatch({ type: 'languages', path: row.path, languages: parseLanguages(e.currentTarget.value) })}
+          aria-label={`Languages for ${r.name}`}
+          className="al-mi-small"
+          defaultValue={r.languages.join(', ')}
+          onBlur={(e) => dispatch({ type: 'languages', path: r.path, languages: parseLanguages(e.currentTarget.value) })}
         />
-      </td>
-      <td>
+      ),
+    },
+    {
+      key: 'group',
+      header: 'Group',
+      cell: (r) => (
         <Input
-          aria-label={`Release group for ${row.name}`}
-          className="mi-small-input"
-          value={row.releaseGroup}
-          onChange={(e) => dispatch({ type: 'releaseGroup', path: row.path, releaseGroup: e.currentTarget.value })}
+          aria-label={`Release group for ${r.name}`}
+          className="al-mi-small"
+          mono
+          value={r.releaseGroup}
+          onChange={(e) => dispatch({ type: 'releaseGroup', path: r.path, releaseGroup: e.currentTarget.value })}
         />
-      </td>
-    </tr>
-  );
+      ),
+    },
+  ];
 }
 
+/** Mapping table: select files and map each one to a series episode or movie. */
 export function FilesTable({ rows, dispatch }: { rows: ImportRow[]; dispatch: (a: RowAction) => void }) {
   const series = useSeriesList();
   const movies = useMovieList();
@@ -279,90 +352,103 @@ export function FilesTable({ rows, dispatch }: { rows: ImportRow[]; dispatch: (a
     () => (movies.data ?? []).map((m: Movie) => ({ id: m.id, label: m.title, detail: m.year ? String(m.year) : undefined })).sort((a, b) => a.label.localeCompare(b.label)),
     [movies.data],
   );
-  const selectable = rows.filter((r) => rowProblems(r).length === 0);
-  const allSelected = selectable.length > 0 && selectable.every((r) => r.selected);
+  const columns = mappingColumns({ dispatch, seriesList: series.data ?? [], seriesOptions, movieOptions });
+  const selected = new Set(rows.filter((r) => r.selected).map((r) => r.path));
   return (
-    <div className="table-wrap">
-      <table className="table mi-table">
-        <caption className="sr-only">Files to import</caption>
-        <thead>
-          <tr>
-            <th scope="col">
-              <input type="checkbox" aria-label="Select all files" checked={allSelected} onChange={(e) => dispatch({ type: 'toggleAll', selected: e.currentTarget.checked })} />
-            </th>
-            <th scope="col">File</th>
-            <th scope="col">Type</th>
-            <th scope="col">Series / Movie</th>
-            <th scope="col">Season</th>
-            <th scope="col">Episodes</th>
-            <th scope="col">Quality</th>
-            <th scope="col">Languages</th>
-            <th scope="col">Release group</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((r) => (
-            <FileRow key={r.path} row={r} dispatch={dispatch} seriesList={series.data ?? []} seriesOptions={seriesOptions} movieOptions={movieOptions} />
-          ))}
-        </tbody>
-      </table>
+    <Table
+      caption="Files to import"
+      columns={columns}
+      rows={rows}
+      rowKey={(r) => r.path}
+      rowLabel={(r) => `Import ${r.name}`}
+      sortable={false}
+      selectable
+      selected={selected}
+      onSelectionChange={(next) => {
+        const all = rows.every((r) => next.has(r.path));
+        const none = next.size === 0;
+        if (all || none) {
+          dispatch({ type: 'toggleAll', selected: all });
+          return;
+        }
+        for (const r of rows) {
+          const on = next.has(r.path);
+          if (on !== r.selected) dispatch({ type: 'toggle', path: r.path, selected: on });
+        }
+      }}
+    />
+  );
+}
+
+// ---- Mode ---------------------------------------------------------------------------------
+
+function ModeStep({ mode, onMode, count, error }: { mode: ImportMode; onMode: (m: ImportMode) => void; count: number; error: unknown }) {
+  const current = MODE_OPTIONS.find((o) => o.value === mode)!;
+  return (
+    <div className="al-mi-step">
+      <p>
+        Import <span className="al-num">{count}</span> {count === 1 ? 'file' : 'files'} into the library.
+      </p>
+      <Field label="Import mode" hint={current.hint}>
+        <Segmented aria-label="Import mode" variant="soft" value={mode} onChange={onMode} options={MODE_OPTIONS.map(({ value, label }) => ({ value, label }))} />
+      </Field>
+      {error ? (
+        <ErrorBlock title="Import failed">{errorMessage(error)}</ErrorBlock>
+      ) : null}
     </div>
   );
 }
 
-// ---- step 3 ------------------------------------------------------------------------------
+// ---- Results ------------------------------------------------------------------------------
 
-function ResultsView({ result }: { result: ManualImportResult }) {
+interface ResultRow {
+  path: string;
+  ok: boolean;
+  detail: string;
+}
+
+const RESULT_COLUMNS: Column<ResultRow>[] = [
+  {
+    key: 'status',
+    header: 'Result',
+    width: '220px',
+    cell: (r) => (r.ok ? <StatusChip status="downloaded" label="Imported" /> : <StatusChip status="failed" cause={r.detail.toLowerCase().replace(/[.\s]+$/, '').slice(0, 40)} />),
+  },
+  { key: 'path', header: 'File', mono: true, cell: (r) => <span className="al-activity-break">{r.path}</span> },
+  { key: 'detail', header: 'Destination / error', mono: true, muted: true, cell: (r) => <span className="al-activity-break">{r.detail}</span> },
+];
+
+export function ResultsView({ result }: { result: ManualImportResult }) {
+  const rows: ResultRow[] = [
+    ...result.imported.map((i) => ({ path: i.path, ok: true, detail: i.destination })),
+    ...result.failed.map((f) => ({ path: f.path, ok: false, detail: f.error })),
+  ];
   return (
-    <div className="table-wrap">
-      <table className="table">
-        <caption className="sr-only">Import results</caption>
-        <thead>
-          <tr>
-            <th scope="col">Status</th>
-            <th scope="col">File</th>
-            <th scope="col">Result</th>
-          </tr>
-        </thead>
-        <tbody>
-          {result.imported.map((i) => (
-            <tr key={`ok-${i.path}`}>
-              <td>
-                <Badge tone="ok">imported</Badge>
-              </td>
-              <td className="break">{i.path}</td>
-              <td className="break">{i.destination}</td>
-            </tr>
-          ))}
-          {result.failed.map((f) => (
-            <tr key={`fail-${f.path}`}>
-              <td>
-                <Badge tone="error">failed</Badge>
-              </td>
-              <td className="break">{f.path}</td>
-              <td className="break">{f.error}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="al-mi-step">
+      <p>
+        Imported <span className="al-num">{result.imported.length}</span>, failed <span className="al-num">{result.failed.length}</span>.
+      </p>
+      <Table caption="Import results" columns={RESULT_COLUMNS} rows={rows} rowKey={(r) => `${r.ok}-${r.path}`} sortable={false} />
     </div>
   );
 }
 
-// ---- page --------------------------------------------------------------------------------
+// ---- page ---------------------------------------------------------------------------------
 
 export function ManualImportPage() {
+  useDocumentTitle('Manual import');
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const qc = useQueryClient();
   const query = toManualImportQuery(search);
-  const [step, setStep] = useState<Step>(query ? 'files' : 'source');
+  const [step, setStep] = useState<WizardStep>(query ? 'files' : 'path');
+  const [folder, setFolder] = useState(search.folder ?? '');
   const [rows, dispatch] = useReducer(rowsReducer, []);
   const [mode, setMode] = useState<ImportMode>('auto');
   const fallbackType: MediaType = search.movieId !== undefined ? 'movie' : 'series';
 
   useEffect(() => {
-    setStep(query ? 'files' : 'source');
+    setStep(query ? 'files' : 'path');
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the serialised query is the dependency
   }, [JSON.stringify(query)]);
 
@@ -380,7 +466,7 @@ export function ManualImportPage() {
 
   const run = useMutation({
     mutationFn: () => manualImportApi.execute(toImportRequest(rows, mode)),
-    meta: { errorTitle: 'Manual import failed' },
+    meta: { errorTitle: 'Manual import failed', silent: true },
     onSuccess: async () => {
       setStep('results');
       await Promise.all([qc.invalidateQueries({ queryKey: ['queue'] }), qc.invalidateQueries({ queryKey: ['history'] }), qc.invalidateQueries({ queryKey: ['library'] })]);
@@ -389,106 +475,106 @@ export function ManualImportPage() {
 
   const chosen = selectedCount(rows);
   const sourceLabel = search.folder ?? (search.downloadId ? `download ${search.downloadId}` : search.seriesId !== undefined ? 'series folder' : search.movieId !== undefined ? 'movie folder' : null);
+  const index = stepIndex(step);
+
+  const startOver = () => {
+    run.reset();
+    setFolder('');
+    void navigate({ search: {} });
+    setStep('path');
+  };
+
+  const goTo = (s: WizardStep) => {
+    if (s === 'path') startOver();
+    else setStep(s);
+  };
+
+  let body: ReactNode;
+  let canContinue = false;
+  let onContinue: () => void = () => {};
+  let continueLabel = 'Continue';
+  if (step === 'path') {
+    body = <PathStep folder={folder} onFolder={setFolder} onChoose={(s) => void navigate({ search: s })} />;
+    canContinue = folder.trim() !== '';
+    onContinue = () => void navigate({ search: { folder: folder.trim() } });
+  } else if (step === 'files' || step === 'mapping') {
+    if (files.isPending) body = <Skeleton lines={5} />;
+    else if (files.isError)
+      body = (
+        <ErrorBlock title="Couldn't list files" onRetry={() => void files.refetch()}>
+          {errorMessage(files.error)}
+        </ErrorBlock>
+      );
+    else if (rows.length === 0)
+      body = <EmptyState title="No importable files found">Nothing under this source looks like a video file that is not already in the library.</EmptyState>;
+    else body = step === 'files' ? <FilesStep rows={rows} /> : <FilesTable rows={rows} dispatch={dispatch} />;
+    if (step === 'files') {
+      canContinue = rows.length > 0;
+      onContinue = () => setStep('mapping');
+    } else {
+      canContinue = chosen > 0;
+      onContinue = () => setStep('mode');
+    }
+  } else if (step === 'mode') {
+    body = <ModeStep mode={mode} onMode={setMode} count={chosen} error={run.error} />;
+    canContinue = chosen > 0;
+    continueLabel = `Import ${chosen} ${chosen === 1 ? 'file' : 'files'}`;
+    onContinue = () => run.mutate();
+  } else {
+    body = run.data ? <ResultsView result={run.data} /> : null;
+  }
 
   return (
-    <Page
-      title="Manual import"
-      subtitle={sourceLabel ? <span className="break">{sourceLabel}</span> : 'Choose files, map them to the library, and import'}
-      actions={
-        step !== 'source' ? (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              run.reset();
-              void navigate({ search: {} });
-              setStep('source');
-            }}
-          >
-            Start over
-          </Button>
-        ) : null
-      }
-    >
-      <ol className="mi-steps" aria-label="Steps">
-        <li className={step === 'source' ? 'mi-step-active' : undefined}>1. Source</li>
-        <li className={step === 'files' ? 'mi-step-active' : undefined}>2. Map files</li>
-        <li className={step === 'confirm' || step === 'results' ? 'mi-step-active' : undefined}>3. Import</li>
-      </ol>
-
-      {step === 'source' ? <SourceStep onChoose={(s) => void navigate({ search: s })} /> : null}
-
-      {step === 'files' ? (
-        <Card flush>
-          {files.isPending ? (
-            <LoadingBlock label="Scanning files" />
-          ) : files.isError ? (
-            <ErrorView error={files.error} onRetry={() => void files.refetch()} />
-          ) : rows.length === 0 ? (
-            <EmptyState title="No importable files found">Nothing under this source looks like a video file that is not already in the library.</EmptyState>
+    <div className="al-activity">
+      <PageHeader
+        index="06"
+        title="Manual import"
+        subtitle={sourceLabel ? <span className="al-num al-activity-break">{sourceLabel}</span> : 'Choose files, map them to the library, and import.'}
+        actions={
+          <Link className={buttonClass({ variant: 'secondary', size: 'md' })} to="/activity/queue">
+            Back to queue
+          </Link>
+        }
+      />
+      <Pane chamfer="tl" bare className="al-mi-wizard">
+        <div className="al-mi-wizard__head">
+          <Stepper aria-label="Manual import steps" steps={WIZARD_STEPS} current={index} onStepClick={step === 'results' ? undefined : (i) => goTo(WIZARD_STEPS[i]!.id)} />
+          {step === 'mapping' ? (
+            <span className="al-activity-muted">
+              <span className="al-num">{chosen}</span> of <span className="al-num">{rows.length}</span> selected
+            </span>
+          ) : null}
+        </div>
+        <div className="al-mi-wizard__body">{body}</div>
+        <footer className="al-mi-wizard__foot">
+          {step === 'results' ? (
+            <>
+              <Button variant="ghost" onClick={startOver}>
+                Start over
+              </Button>
+              <span className="al-activity-spacer" />
+              <Button variant="secondary" onClick={() => void files.refetch().then(() => setStep('files'))}>
+                Import more from this source
+              </Button>
+              <Link className={buttonClass({ variant: 'primary', size: 'md' })} to="/activity/queue">
+                Go to queue
+              </Link>
+            </>
           ) : (
             <>
-              <FilesTable rows={rows} dispatch={dispatch} />
-              <div className="card-footer-form row-end">
-                <span className="muted">
-                  {chosen} of {rows.length} selected
-                </span>
-                <Button variant="primary" disabled={chosen === 0} onClick={() => setStep('confirm')}>
-                  Next
+              {index > 0 ? (
+                <Button variant="ghost" onClick={() => goTo(WIZARD_STEPS[index - 1]!.id)}>
+                  Back
                 </Button>
-              </div>
+              ) : null}
+              <span className="al-activity-spacer" />
+              <Button variant="primary" disabled={!canContinue} loading={step === 'mode' && run.isPending} onClick={onContinue}>
+                {continueLabel}
+              </Button>
             </>
           )}
-        </Card>
-      ) : null}
-
-      {step === 'confirm' ? (
-        <Card title="Import options">
-          <div className="stack-sm">
-            <p>
-              Import {chosen} file{chosen === 1 ? '' : 's'} into the library.
-            </p>
-            <FormField label="Import mode" hint="Auto moves files out of non-download folders and copies (or hardlinks) out of an active download so seeding continues.">
-              <Select
-                value={mode}
-                onChange={(e) => setMode(e.currentTarget.value as ImportMode)}
-                options={[
-                  { value: 'auto', label: 'Auto' },
-                  { value: 'move', label: 'Move' },
-                  { value: 'copy', label: 'Copy / hardlink' },
-                ]}
-              />
-            </FormField>
-            {run.error ? (
-              <p className="field-error-text" role="alert">
-                {errorMessage(run.error)}
-              </p>
-            ) : null}
-            <div className="row">
-              <Button variant="ghost" onClick={() => setStep('files')}>
-                Back
-              </Button>
-              <Button variant="primary" loading={run.isPending} onClick={() => run.mutate()}>
-                Import
-              </Button>
-            </div>
-          </div>
-        </Card>
-      ) : null}
-
-      {step === 'results' && run.data ? (
-        <Card
-          title={`Imported ${run.data.imported.length}, failed ${run.data.failed.length}`}
-          flush
-        >
-          <ResultsView result={run.data} />
-          <div className="card-footer-form row">
-            <Link to="/activity/queue">Back to queue</Link>
-            <Button variant="ghost" onClick={() => void files.refetch().then(() => setStep('files'))}>
-              Import more from this source
-            </Button>
-          </div>
-        </Card>
-      ) : null}
-    </Page>
+        </footer>
+      </Pane>
+    </div>
   );
 }

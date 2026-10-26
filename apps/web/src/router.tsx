@@ -1,11 +1,12 @@
+import { Suspense, lazy } from 'react';
 import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { ComingSoon } from './components/coming-soon.js';
 import { ErrorView } from './components/error-boundary.js';
-import { LoadingBlock } from './components/spinner.js';
+import { Skeleton } from './arclight/index.js';
 import { AppShell } from './layout/app-shell.js';
 import { AuthProvider } from './auth/auth-context.js';
-import { BARE_PATHS, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
+import { SHELLLESS_PATHS, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
 import { LoginPage } from './pages/login.js';
 import { SetupWizard } from './pages/setup/setup-wizard.js';
 import { SecurityPage } from './pages/settings/security/security-page.js';
@@ -25,6 +26,7 @@ import { SystemTasksPage } from './pages/system/tasks.js';
 import { SystemLogsPage } from './pages/system/logs.js';
 import { SystemBackupsPage } from './pages/system/backups.js';
 import { SystemMigratePage } from './pages/system/migrate.js';
+import { SystemUpdatesPage } from './pages/system/updates.js';
 import { BlocklistPage } from './pages/activity/blocklist-page.js';
 import { HistoryPage } from './pages/activity/history-page.js';
 import { QueuePage } from './pages/activity/queue-page.js';
@@ -81,10 +83,24 @@ function RouteError({ error, reset }: ErrorComponentProps) {
   return <ErrorView error={error} onRetry={reset} />;
 }
 
-/** /login and /setup render bare; everything else inside the app shell. */
+/** /login, /setup and /design draw their own chrome; everything else lives in the app shell. */
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return <AuthProvider>{BARE_PATHS.has(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
+  return <AuthProvider>{SHELLLESS_PATHS.has(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
+}
+
+function PendingPage() {
+  return <Skeleton lines={4} />;
+}
+
+// The component gallery is only for admins checking the design system: load it on demand.
+const LazyDesignPage = lazy(() => import('./pages/design.js').then((m) => ({ default: m.DesignPage })));
+function DesignRoute() {
+  return (
+    <Suspense fallback={<PendingPage />}>
+      <LazyDesignPage />
+    </Suspense>
+  );
 }
 
 const rootRoute = createRootRouteWithContext<RouterContext>()({
@@ -102,8 +118,11 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
 const loginRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/login',
-  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
-    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
+  // `expired` comes from the 401 handler in main.tsx and shows the "session expired" banner.
+  validateSearch: (search: Record<string, unknown>): { redirect?: string; expired?: true } => ({
+    ...(typeof search.redirect === 'string' ? { redirect: search.redirect } : {}),
+    ...(search.expired === true || search.expired === 1 || search.expired === '1' ? { expired: true as const } : {}),
+  }),
   component: LoginPage,
 });
 
@@ -255,6 +274,10 @@ export const routeTree = rootRoute.addChildren([
   page('/system/backup', SystemBackupsPage),
   page('/system/health', SystemHealthPage),
   page('/system/migrate', SystemMigratePage),
+  page('/system/updates', SystemUpdatesPage),
+
+  // Component gallery (admins; rendered without the shell, loaded on demand).
+  page('/design', DesignRoute),
 ]);
 
 export function createAppRouter(queryClient: QueryClient) {
@@ -262,7 +285,7 @@ export function createAppRouter(queryClient: QueryClient) {
     routeTree,
     context: { queryClient },
     defaultPreload: 'intent',
-    defaultPendingComponent: () => <LoadingBlock />,
+    defaultPendingComponent: PendingPage,
     defaultErrorComponent: RouteError,
     defaultNotFoundComponent: NotFoundPage,
     scrollRestoration: true,

@@ -56,3 +56,19 @@ export function failureRate(e: { queries: number; grabs: number; failures: numbe
 function round(n: number): number {
   return Math.round(n * 10) / 10;
 }
+
+/** Evenly spaced whole-number axis ticks from 0 to `max` (at most `count` + 1, no repeats). */
+export function axisTicks(max: number, count = 4): number[] {
+  const top = Math.max(1, Math.ceil(max));
+  const ticks = new Set<number>();
+  for (let i = 0; i <= count; i++) ticks.add(Math.round((top * i) / count));
+  return [...ticks].sort((a, b) => a - b);
+}
+
+/** Closed area path under a line path, down to the baseline (for a faint ≤12% fill). */
+export function areaPath(line: string, width: number, height: number, points: number): string {
+  if (!line) return '';
+  const lastX = points > 1 ? width : width / 2;
+  const firstX = points > 1 ? 0 : width / 2;
+  return `${line} L${lastX} ${height} L${firstX} ${height} Z`;
+}

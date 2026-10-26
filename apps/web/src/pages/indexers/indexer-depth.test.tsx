@@ -165,7 +165,7 @@ describe('indexer catalogue', () => {
     fireEvent.click(within(dialog).getByRole('tab', { name: 'Catalogue' }));
     const list = await within(dialog).findByRole('list', { name: 'Definitions' });
     expect(within(list).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Add PrivTracker', 'Add YTS']);
-    expect(within(list).getByText('untested')).toBeTruthy();
+    expect(within(list).getByText('Untested')).toBeTruthy();
 
     fireEvent.change(within(dialog).getByLabelText('Privacy'), { target: { value: 'public' } });
     expect(within(list).getAllByRole('button')).toHaveLength(1);
@@ -199,7 +199,7 @@ describe('indexer proxies page', () => {
   it('lists proxies and tests an unsaved one', async () => {
     handler = (url, method) => (url === '/api/v1/indexerproxy/test' && method === 'POST' ? json({ ok: true, message: 'FlareSolverr is ready', durationMs: 12 }) : undefined);
     renderAt('/settings/indexerproxies');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Indexer Proxies' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Indexer proxies' })).toBeTruthy();
     expect(await screen.findByText('http://flare:8191')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Add proxy/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Add indexer proxy' });
@@ -216,7 +216,7 @@ describe('indexer stats page', () => {
     expect(await screen.findByRole('heading', { level: 1, name: 'Indexer Stats' })).toBeTruthy();
     expect(await screen.findByRole('img', { name: 'Queries per indexer' })).toBeTruthy();
     const line = screen.getByRole('img', { name: 'Daily activity' });
-    expect(line.querySelectorAll('path')).toHaveLength(3);
+    expect(line.querySelectorAll('path[data-metric]')).toHaveLength(3);
     const table = screen.getByRole('table');
     expect(within(table).getByText('320 ms')).toBeTruthy();
     expect(within(table).getByText('4.2%')).toBeTruthy();
@@ -232,7 +232,7 @@ describe('indexer options page', () => {
     expect(screen.getByText(/0 \(off\) or 10 to 1440/)).toBeTruthy();
     fireEvent.change(interval, { target: { value: '30' } });
     fireEvent.change(screen.getByLabelText('Whitelisted subtitle tags'), { target: { value: 'ENG, HC.ENG' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ rssSyncIntervalMinutes: 30, whitelistedHardcodedSubs: ['ENG', 'HC.ENG'] });
   });

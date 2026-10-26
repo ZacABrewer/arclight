@@ -1,15 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import type { TorrentSessionStatus, TorrentSettingsResponse } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { formatRate } from '../../lib/format.js';
 import { createToastStore } from '../../lib/toast.js';
-import { NAV, navEntry } from '../../nav.js';
 import { createQueryClient } from '../../query-client.js';
-import { routeTree } from '../../router.js';
-import { toTorrentDraft, toTorrentUpdate } from './torrent.js';
+import { TORRENT_SECTIONS, TorrentSettingsPage, toTorrentDraft, toTorrentUpdate } from './torrent.js';
 
 class FakeSocket {
   onopen = null;
@@ -73,7 +71,26 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderAt(path: string) {
+/** The torrent page in a minimal router (independent of the app shell). */
+function renderPage() {
+  const toasts = createToastStore();
+  const queryClient = createQueryClient(toasts);
+  const root = createRootRoute();
+  const route = createRoute({ getParentRoute: () => root, path: '/settings/torrent', component: TorrentSettingsPage });
+  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: ['/settings/torrent'] }) });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider store={toasts}>
+        <RouterProvider router={router} />
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+  return router;
+}
+
+/** The full app (dashboard tests). The router loads lazily so a shell problem stays in these tests. */
+async function renderApp(path: string) {
+  const { routeTree } = await import('../../router.js');
   const toasts = createToastStore();
   const queryClient = createQueryClient(toasts);
   const router = createRouter({ routeTree, context: { queryClient }, history: createMemoryHistory({ initialEntries: [path] }) });
@@ -87,28 +104,52 @@ function renderAt(path: string) {
   return router;
 }
 
-describe('Settings -> Torrent Engine', () => {
-  it('is routed and listed in the settings nav next to Download Clients', async () => {
-    const children = NAV.find((s) => s.label === 'Settings')!.children!.map((c) => c.label);
-    expect(children.indexOf('Torrent Engine')).toBe(children.indexOf('Download Clients') + 1);
-    expect(navEntry('/settings/torrent')).toMatchObject({ label: 'Torrent Engine', section: 'Settings' });
-    renderAt('/settings/torrent');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Torrent Engine' })).toBeTruthy();
+describe('Settings -> Torrent engine', () => {
+  it('renders the engine form in FormSection groups with the six handoff sections', async () => {
+    renderPage();
+    expect(await screen.findByRole('heading', { level: 2, name: 'Torrent engine' })).toBeTruthy();
+    await screen.findByLabelText('Listen port', {}, { timeout: 5000 });
+    const form = screen.getByRole('form', { name: 'Torrent engine settings' });
+    const labels = [...form.querySelectorAll('.al-form-section .al-label')].map((el) => el.textContent);
+    expect(labels).toEqual([...TORRENT_SECTIONS]);
+    for (const label of ['Port', 'Limits', 'Ratio & time', 'Interface binding', 'DHT & PEX', 'Encryption']) expect(labels).toContain(label);
+    // Numbers are mono with their unit at the end.
+    const limit = screen.getByLabelText('Download limit') as HTMLInputElement;
+    expect(limit.className).toContain('mono');
+    expect(limit.parentElement!.textContent).toContain('KiB/s');
   });
 
-  it('renders the form, shows the effective folder as placeholder and saves with PUT', async () => {
-    renderAt('/settings/torrent');
+  it('shows the effective folder as placeholder and keeps the resume folder read-only', async () => {
+    renderPage();
     const port = (await screen.findByLabelText('Listen port', {}, { timeout: 5000 })) as HTMLInputElement;
     expect(port.value).toBe('6881');
     expect((screen.getByLabelText('Downloads folder') as HTMLInputElement).placeholder).toBe('/downloads');
     const resume = screen.getByLabelText('Resume data folder') as HTMLInputElement;
     expect(resume.value).toBe('/config/torrents');
     expect(resume.readOnly).toBe(true);
+  });
 
+  it('shows the unsaved-changes bar with a count while editing, and Discard restores the saved values', async () => {
+    renderPage();
+    const port = (await screen.findByLabelText('Listen port', {}, { timeout: 5000 })) as HTMLInputElement;
+    expect(screen.queryByRole('button', { name: 'Save changes' })).toBeNull();
+    fireEvent.change(port, { target: { value: '51413' } });
+    expect(screen.getByText('1 unsaved change')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('DHT'));
+    expect(screen.getByText('2 unsaved changes')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Discard' }));
+    expect(port.value).toBe('6881');
+    expect((screen.getByLabelText('DHT') as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText(/unsaved change/)).toBeNull();
+  });
+
+  it('Save changes sends the PUT body', async () => {
+    renderPage();
+    const port = (await screen.findByLabelText('Listen port', {}, { timeout: 5000 })) as HTMLInputElement;
     fireEvent.change(port, { target: { value: '51413' } });
     fireEvent.change(screen.getByLabelText('Default seed ratio'), { target: { value: '' } });
     fireEvent.click(screen.getByLabelText('DHT'));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     const put = calls.find((c) => c.method === 'PUT')!;
     expect(put.url).toBe('/api/v1/settings/torrent');
@@ -117,18 +158,19 @@ describe('Settings -> Torrent Engine', () => {
     expect(put.body).not.toHaveProperty('resumeDir');
   });
 
-  it('shows live status: forwarded port, all interfaces, rates and counts', async () => {
-    renderAt('/settings/torrent');
+  it('shows live status in the side pane: forwarded port, all interfaces, rates, counts and a live dot', async () => {
+    renderPage();
     const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
-    expect(within(panel).getByText('Running')).toBeTruthy();
+    expect(within(panel).getByText('Running').closest('.al-chip')).toBeTruthy();
     expect(within(panel).getByText('41234 (forwarded by VPN; configured 6881)')).toBeTruthy();
     expect(within(panel).getByText('all interfaces')).toBeTruthy();
     expect(within(panel).getByText('1.5 MiB/s')).toBeTruthy();
     expect(within(panel).getByText('312')).toBeTruthy();
     expect(within(panel).getByText(/4 total · 2 downloading · 1 seeding/)).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Engine running' })).toBeTruthy();
   });
 
-  it('explains lockdown when the VPN is down', async () => {
+  it('explains lockdown when the VPN is down, without a live dot', async () => {
     status = {
       ...running,
       state: 'lockdown',
@@ -137,13 +179,14 @@ describe('Settings -> Torrent Engine', () => {
       boundAddress: '127.0.0.1',
       vpn: { bindToVpn: true, enabled: true, connected: false, killSwitchEngaged: true },
     };
-    renderAt('/settings/torrent');
+    renderPage();
     const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
-    expect(within(panel).getByText('Lockdown', { selector: '.badge' })).toBeTruthy();
+    expect(within(panel).getByText('Lockdown').closest('.al-chip')).toBeTruthy();
     expect(within(panel).getByText(/VPN down — all torrents paused, sockets bound to 127\.0\.0\.1/)).toBeTruthy();
     expect(within(panel).getByText(/VPN tunnel is down/)).toBeTruthy();
     expect(within(panel).getByText('127.0.0.1')).toBeTruthy();
     expect(within(panel).getByText(/kill switch engaged/)).toBeTruthy();
+    expect(screen.queryByRole('img', { name: 'Engine running' })).toBeNull();
   });
 
   it('maps drafts to update bodies (empty nullable -> null, empty required -> omitted)', () => {
@@ -157,19 +200,18 @@ describe('Settings -> Torrent Engine', () => {
 });
 
 describe('dashboard torrent engine card', () => {
-  it('shows engine rates and active torrents', async () => {
-    renderAt('/');
-    const card = await screen.findByLabelText('Torrent engine activity', {}, { timeout: 5000 });
-    expect(within(card).getByText('1.5 MiB/s')).toBeTruthy();
-    expect(within(card).getByText('2.0 KiB/s')).toBeTruthy();
-    expect(within(card).getByText(/3 \(2 downloading, 1 seeding\) of 4/)).toBeTruthy();
-  });
+  it('shows engine rates in mono in the dashboard queue pane', async () => {
+    await renderApp('/');
+    const down = await screen.findByText(/^1\.5 Mi?B\/s$/, {}, { timeout: 5000 });
+    expect(down.className).toContain('al-num');
+    expect(screen.getByText(/^2(\.0)? Ki?B\/s$/).className).toContain('al-num');
+  }, 20_000);
 
   it('renders nothing extra when the engine is disabled or the request fails', async () => {
     status = { ...running, enabled: false, state: 'disabled' };
-    renderAt('/');
+    await renderApp('/');
     await screen.findByRole('heading', { level: 1, name: 'Dashboard' });
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/torrent/status')).toBe(true));
     expect(screen.queryByLabelText('Torrent engine activity')).toBeNull();
-  });
+  }, 20_000);
 });

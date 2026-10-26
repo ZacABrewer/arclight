@@ -12,6 +12,7 @@ import type {
   HistoryRecord,
   HistoryReleaseSource,
   HistorySeriesSummary,
+  Job,
   MediaType,
   QualityModel,
   ReleaseProtocol,
@@ -23,7 +24,7 @@ import { history, type HistoryRow, type NewHistoryRow } from './schema.js';
 
 // ---- errors -------------------------------------------------------------------------
 
-export type HistoryErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'NOT_GRABBED';
+export type HistoryErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'NOT_GRABBED' | 'UNAVAILABLE';
 
 export class HistoryError extends Error {
   constructor(
@@ -36,7 +37,7 @@ export class HistoryError extends Error {
 }
 
 export function historyHttpStatus(code: HistoryErrorCode): number {
-  return code === 'NOT_FOUND' ? 404 : 400;
+  return code === 'NOT_FOUND' ? 404 : code === 'UNAVAILABLE' ? 503 : 400;
 }
 
 // ---- public input types -------------------------------------------------------------
@@ -142,6 +143,12 @@ export interface DownloadFailedEvent {
 }
 
 export type DownloadFailedHandler = (event: DownloadFailedEvent, rows: HistoryRecord[]) => void | Promise<void>;
+
+/**
+ * Starts a search for the items of a history record (POST /history/:id/redownload) and returns
+ * the started job. Registered by wiring.ts (releases.searchFor behind an ad-hoc job).
+ */
+export type RedownloadHandler = (target: HistoryTarget, record: HistoryRecord) => Job;
 
 export interface FileDeletedInput {
   target: HistoryTarget;
@@ -313,6 +320,7 @@ export class HistoryService {
   private readonly resolveFormats: CustomFormatResolver | undefined;
   private readonly failedHandlers: { handler: DownloadFailedHandler; priority: number }[] = [];
   private markFailedHook: DownloadFailedHandler | undefined;
+  private redownloadHandler: RedownloadHandler | undefined;
   retentionDays: number | null;
 
   constructor(opts: HistoryServiceOptions) {
@@ -345,6 +353,37 @@ export class HistoryService {
   /** Extra hook run after a manual "mark as failed" has gone through the failed pipeline. */
   setOnMarkFailed(hook: DownloadFailedHandler | undefined): void {
     this.markFailedHook = hook;
+  }
+
+  /** Where POST /history/:id/redownload sends its search. */
+  setRedownloadHandler(handler: RedownloadHandler | undefined): void {
+    this.redownloadHandler = handler;
+  }
+
+  /**
+   * Re-run the search for a record's items: its movie, or its episode plus every other episode
+   * recorded under the same download id and event type (a multi-episode or season grab is one
+   * row per episode). Returns the started job.
+   */
+  redownload(id: number): Job {
+    const row = this.get(id);
+    if (!row) throw new HistoryError('NOT_FOUND', `history item ${id} not found`);
+    if (!this.redownloadHandler) throw new HistoryError('UNAVAILABLE', 'release search is not available');
+    let target: HistoryTarget;
+    if (row.mediaType === 'movie') {
+      if (row.movieId === null) throw new HistoryError('VALIDATION', `history item ${id} has no movie`);
+      target = { mediaType: 'movie', movieId: row.movieId };
+    } else {
+      if (row.seriesId === null || row.episodeId === null) {
+        throw new HistoryError('VALIDATION', `history item ${id} has no episode to search for`);
+      }
+      const siblings = row.downloadId ? this.findByDownloadId(row.downloadId, row.eventType) : [];
+      const episodeIds = [...new Set([row.episodeId, ...siblings.map((r) => r.episodeId)])]
+        .filter((e): e is number => e !== null)
+        .sort((a, b) => a - b);
+      target = { mediaType: 'series', seriesId: row.seriesId, episodeIds };
+    }
+    return this.redownloadHandler(target, row);
   }
 
   // ---- writers ----------------------------------------------------------------------

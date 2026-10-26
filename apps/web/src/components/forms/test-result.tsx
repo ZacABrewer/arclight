@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { errorMessage } from '../../api/client.js';
-import { Button } from '../button.js';
+import { Button, Chip } from '../../arclight/index.js';
+import './forms.css';
 
 /** Normalized answer of any `/test` route (download client, indexer, notification). */
 export interface TestOutcome {
@@ -10,22 +11,25 @@ export interface TestOutcome {
   errors: string[];
 }
 
+/** Inline result next to a Test button: a chip with the verdict, then the causes as lines. */
 export function TestResultView({ outcome }: { outcome: TestOutcome }) {
   return (
-    <div className={`test-result ${outcome.ok ? 'test-result-ok' : 'test-result-error'}`} role="status">
-      <strong>{outcome.ok ? 'Test passed' : 'Test failed'}</strong>
-      {outcome.message ? <span className="muted"> · {outcome.message}</span> : null}
+    <div className="al-test-result" role="status" data-ok={outcome.ok}>
+      <div className="al-test-result__head">
+        <Chip tone={outcome.ok ? 'accent' : 'danger'}>{outcome.ok ? 'Test passed' : 'Test failed'}</Chip>
+        {outcome.message ? <span className="al-test-result__message">{outcome.message}</span> : null}
+      </div>
       {outcome.errors.length > 0 ? (
-        <ul className="test-result-list test-result-errors">
+        <ul className="al-test-result__list" data-tone="danger">
           {outcome.errors.map((e) => (
             <li key={e}>{e}</li>
           ))}
         </ul>
       ) : null}
       {outcome.warnings.length > 0 ? (
-        <ul className="test-result-list test-result-warnings">
+        <ul className="al-test-result__list" data-tone="warn">
           {outcome.warnings.map((w) => (
-            <li key={w}>⚠ {w}</li>
+            <li key={w}>{w}</li>
           ))}
         </ul>
       ) : null}
@@ -40,10 +44,11 @@ export interface TestButtonProps {
   beforeTest?: () => boolean;
   disabled?: boolean;
   label?: string;
+  size?: 'sm' | 'md';
 }
 
-/** A Test button with its result rendered inline next to it. */
-export function TestButton({ onTest, beforeTest, disabled, label = 'Test' }: TestButtonProps) {
+/** A secondary Test button with its result rendered inline beside it. */
+export function TestButton({ onTest, beforeTest, disabled, label = 'Test', size = 'md' }: TestButtonProps) {
   const [running, setRunning] = useState(false);
   const [outcome, setOutcome] = useState<TestOutcome | null>(null);
 
@@ -61,8 +66,8 @@ export function TestButton({ onTest, beforeTest, disabled, label = 'Test' }: Tes
   };
 
   return (
-    <div className="test-box">
-      <Button onClick={() => void run()} loading={running} disabled={disabled}>
+    <div className="al-test-box">
+      <Button variant="secondary" size={size} onClick={() => void run()} loading={running} disabled={disabled}>
         {label}
       </Button>
       {outcome ? <TestResultView outcome={outcome} /> : null}

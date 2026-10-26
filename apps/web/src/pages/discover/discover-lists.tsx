@@ -2,8 +2,9 @@ import { useCallback, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
 import type { DiscoverPage } from '@arclight/shared';
 import { discoverApi, type DiscoverKind } from '../../api/requests.js';
-import { Page } from '../../components/page.js';
-import { DiscoverGrid } from '../../features/requests/discover-ui.js';
+import type { ReactNode } from 'react';
+import { EmptyState, PageHeader, Segmented } from '../../arclight/index.js';
+import { DiscoverGrid } from './discover-kit.js';
 import { useDiscoverGenres } from '../../hooks/requests.js';
 import { requestKeys } from '../../hooks/request-keys.js';
 
@@ -19,14 +20,27 @@ export const parseKindSearch = (search: Record<string, unknown>): KindSearch => 
 
 function KindToggle({ value, onChange }: { value: DiscoverKind; onChange: (k: DiscoverKind) => void }) {
   return (
-    <div className="segmented" role="group" aria-label="Media type">
-      <button type="button" aria-pressed={value === 'movie'} onClick={() => onChange('movie')}>
-        Movies
-      </button>
-      <button type="button" aria-pressed={value === 'tv'} onClick={() => onChange('tv')}>
-        Series
-      </button>
-    </div>
+    <Segmented
+      aria-label="Media type"
+      value={value}
+      onChange={onChange}
+      options={[
+        { value: 'movie', label: 'Movies' },
+        { value: 'tv', label: 'Series' },
+      ]}
+    />
+  );
+}
+
+/** Page header + grid body; replaces the old Page wrapper. */
+function GridPage({ title, subtitle, controls, children }: { title: string; subtitle?: ReactNode; controls?: ReactNode; children: ReactNode }) {
+  return (
+    <>
+      <PageHeader index="02" title={title} subtitle={subtitle}>
+        {controls}
+      </PageHeader>
+      {children}
+    </>
   );
 }
 
@@ -39,13 +53,13 @@ export function DiscoverGenrePage() {
   const name = genres.data?.find((g) => g.id === Number(id))?.name ?? `Genre ${id}`;
   const fetchPage = useCallback((page: number) => discoverApi.genre(Number(id), { mediaType, page }), [id, mediaType]);
   return (
-    <Page
+    <GridPage
       title={name}
       subtitle={mediaType === 'movie' ? 'Movies' : 'Series'}
-      actions={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/genre/$id', params: { id }, search: { mediaType: k } })} />}
+      controls={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/genre/$id', params: { id }, search: { mediaType: k } })} />}
     >
       <DiscoverGrid queryKey={requestKeys.discover.list('genre', { id, mediaType })} fetchPage={fetchPage} />
-    </Page>
+    </GridPage>
   );
 }
 
@@ -56,12 +70,12 @@ export function DiscoverKeywordPage() {
   const navigate = useNavigate();
   const fetchPage = useCallback((page: number) => discoverApi.keyword(Number(id), { mediaType, page }), [id, mediaType]);
   return (
-    <Page
+    <GridPage
       title={`Keyword ${id}`}
-      actions={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/keyword/$id', params: { id }, search: { mediaType: k } })} />}
+      controls={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/keyword/$id', params: { id }, search: { mediaType: k } })} />}
     >
       <DiscoverGrid queryKey={requestKeys.discover.list('keyword', { id, mediaType })} fetchPage={fetchPage} />
-    </Page>
+    </GridPage>
   );
 }
 
@@ -71,9 +85,9 @@ function NamedGrid({ source, id, fallback, fetch }: { source: string; id: string
   const fetchPage = useCallback((page: number) => fetch(Number(id), page), [fetch, id]);
   const onFirstPage = useCallback((p: DiscoverPage) => setTitle(p.title ?? null), []);
   return (
-    <Page title={title ?? fallback}>
+    <GridPage title={title ?? fallback}>
       <DiscoverGrid queryKey={requestKeys.discover.list(source, { id })} fetchPage={fetchPage} onFirstPage={onFirstPage} />
-    </Page>
+    </GridPage>
   );
 }
 
@@ -94,30 +108,35 @@ export function DiscoverTrendingPage() {
   const [timeWindow, setTimeWindow] = useState<'day' | 'week'>('day');
   const fetchPage = useCallback((page: number) => discoverApi.trending({ mediaType, timeWindow, page }), [mediaType, timeWindow]);
   return (
-    <Page
+    <GridPage
       title="Trending"
-      actions={
-        <div className="row">
-          <div className="segmented" role="group" aria-label="Media type">
-            {(['all', 'movie', 'tv'] as const).map((m) => (
-              <button key={m} type="button" aria-pressed={mediaType === m} onClick={() => setMediaType(m)}>
-                {m === 'all' ? 'All' : m === 'movie' ? 'Movies' : 'Series'}
-              </button>
-            ))}
-          </div>
-          <div className="segmented" role="group" aria-label="Time window">
-            <button type="button" aria-pressed={timeWindow === 'day'} onClick={() => setTimeWindow('day')}>
-              Today
-            </button>
-            <button type="button" aria-pressed={timeWindow === 'week'} onClick={() => setTimeWindow('week')}>
-              This week
-            </button>
-          </div>
-        </div>
+      controls={
+        <>
+          <Segmented
+            aria-label="Media type"
+            value={mediaType}
+            onChange={setMediaType}
+            options={[
+              { value: 'all', label: 'All' },
+              { value: 'movie', label: 'Movies' },
+              { value: 'tv', label: 'Series' },
+            ]}
+          />
+          <Segmented
+            aria-label="Time window"
+            variant="soft"
+            value={timeWindow}
+            onChange={setTimeWindow}
+            options={[
+              { value: 'day', label: 'Today' },
+              { value: 'week', label: 'This week' },
+            ]}
+          />
+        </>
       }
     >
       <DiscoverGrid queryKey={requestKeys.discover.list('trending', { mediaType, timeWindow })} fetchPage={fetchPage} />
-    </Page>
+    </GridPage>
   );
 }
 
@@ -127,12 +146,12 @@ export function DiscoverUpcomingPage() {
   const navigate = useNavigate();
   const fetchPage = useCallback((page: number) => discoverApi.upcoming({ mediaType, page }), [mediaType]);
   return (
-    <Page
+    <GridPage
       title={mediaType === 'movie' ? 'Upcoming movies' : 'Upcoming series'}
-      actions={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/upcoming', search: { mediaType: k } })} />}
+      controls={<KindToggle value={mediaType} onChange={(k) => void navigate({ to: '/discover/upcoming', search: { mediaType: k } })} />}
     >
       <DiscoverGrid queryKey={requestKeys.discover.list('upcoming', { mediaType })} fetchPage={fetchPage} />
-    </Page>
+    </GridPage>
   );
 }
 
@@ -141,8 +160,8 @@ export function DiscoverSearchPage() {
   const { q } = searchRoute.useSearch();
   const fetchPage = useCallback((page: number) => discoverApi.search(q, page), [q]);
   return (
-    <Page title={q ? `Results for “${q}”` : 'Search'}>
-      {q ? <DiscoverGrid queryKey={requestKeys.discover.list('search', { q })} fetchPage={fetchPage} /> : <p className="muted">Type a title in the Discover search box.</p>}
-    </Page>
+    <GridPage title={q ? `Results for “${q}”` : 'Search'}>
+      {q ? <DiscoverGrid queryKey={requestKeys.discover.list('search', { q })} fetchPage={fetchPage} /> : <EmptyState title="Nothing to search for">Type a title in the Discover search box.</EmptyState>}
+    </GridPage>
   );
 }

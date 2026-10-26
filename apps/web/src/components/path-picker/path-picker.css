@@ -1,0 +1,10 @@
+/* Path input + picker dialog on Arclight (square, mono paths). */
+.mt-path-input { display: flex; gap: 8px; align-items: stretch; flex: 1; min-width: 0; }
+.mt-path-input > .al-input { flex: 1; min-width: 0; }
+.mt-path-picker { display: flex; flex-direction: column; gap: 12px; }
+.mt-path-picker .al-browser__list { max-height: 50vh; overflow-y: auto; }
+.mt-path-picker__row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.mt-path-picker__row > .al-input { flex: 1; min-width: 160px; }
+.mt-path-picker__error { margin: 0; color: var(--al-danger-text); font-size: 13px; }
+.mt-path-picker__spacer { flex: 1; }
+.mt-path-picker__hint { margin: 0; font-size: 12px; color: var(--al-text-4); }

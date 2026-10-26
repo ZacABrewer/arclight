@@ -3,17 +3,14 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { PERMISSION_INFO, Permission, type User } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
+import { errorMessage } from '../../../api/client.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { authKeys } from '../../../auth/guard.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Modal } from '../../../components/modal.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
-import { Tabs } from '../../../components/tabs.js';
+import { Button, Chip, ErrorBlock, Modal, Table, Tabs, buttonClass, type Column } from '../../../arclight/index.js';
 import { UserPermissionsEditor, UserQuotaEditor, UserRequestSettingsForm } from '../../../features/requests/user-editors.js';
+import { SettingsPage } from '../settings-layout.js';
+import { SettingsSection } from '../shared.js';
+import '../security/security.css';
 
 /** Short summary of a permission bitfield for the users table. */
 export function permissionSummary(bits: number): string {
@@ -28,62 +25,61 @@ export function UsersPage() {
   const users = useQuery({ queryKey: authKeys.users, queryFn: usersApi.list });
   const [open, setOpen] = useState<User | null>(null);
 
-  return (
-    <Page
-      title="Users"
-      subtitle={
+  const columns: Array<Column<User>> = [
+    {
+      key: 'user',
+      header: 'User',
+      sortValue: (u) => u.displayName ?? u.username,
+      cell: (u) => (
         <>
-          Request permissions, quotas and personal notifications. Accounts are created on{' '}
-          <Link to="/settings/security" className="link-subtle">
-            Settings → Security
-          </Link>
-          .
+          {u.displayName ?? u.username}
+          {u.id === me?.id ? <span className="al-you">(you)</span> : null}
+          {u.displayName ? <span className="al-sub al-num">{u.username}</span> : null}
         </>
+      ),
+    },
+    {
+      key: 'role',
+      header: 'Role',
+      sortValue: (u) => u.role,
+      cell: (u) => (u.role === 'admin' ? <Chip tone="accent">Admin</Chip> : <Chip tone="neutral">User</Chip>),
+    },
+    { key: 'permissions', header: 'Permissions', cell: (u) => permissionSummary(u.permissions), muted: true },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (u) => (
+        <Button size="sm" variant="secondary" onClick={() => setOpen(u)} aria-label={`Manage ${u.displayName ?? u.username}`}>
+          Manage
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <SettingsPage
+      title="Users"
+      description="Request permissions, quotas and personal notifications. Accounts are created on Settings → Security."
+      actions={
+        <Link to="/settings/security" className={buttonClass({ variant: 'secondary' })}>
+          Manage accounts
+        </Link>
       }
     >
-      <Card flush>
-        {users.isPending ? (
-          <LoadingBlock />
-        ) : users.isError ? (
-          <ErrorView error={users.error} onRetry={() => void users.refetch()} />
+      <SettingsSection label="Users" {...(users.data ? { count: users.data.length } : {})}>
+        {users.isError ? (
+          <ErrorBlock title="Could not load users" onRetry={() => void users.refetch()}>
+            {errorMessage(users.error)}
+          </ErrorBlock>
         ) : (
-          <div className="table-wrap">
-            <table className="table">
-              <thead>
-                <tr>
-                  <th>User</th>
-                  <th>Role</th>
-                  <th>Permissions</th>
-                  <th className="align-right">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.data.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      {u.displayName ?? u.username}
-                      {u.id === me?.id ? <span className="muted"> (you)</span> : null}
-                      {u.displayName ? <div className="muted small">{u.username}</div> : null}
-                    </td>
-                    <td>
-                      <Badge tone={u.role === 'admin' ? 'info' : 'neutral'}>{u.role}</Badge>
-                    </td>
-                    <td className="muted small">{permissionSummary(u.permissions)}</td>
-                    <td className="align-right">
-                      <Button size="sm" onClick={() => setOpen(u)}>
-                        Manage
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <Table caption="Users" density="dense" columns={columns} rows={users.data} loading={users.isPending} rowKey={(u) => u.id} sortable empty="No users." />
         )}
-      </Card>
+      </SettingsSection>
       {open ? (
-        <Modal open size="lg" onClose={() => setOpen(null)} title={`Manage ${open.displayName ?? open.username}`}>
+        <Modal open size={640} onClose={() => setOpen(null)} title={`Manage ${open.displayName ?? open.username}`}>
           <Tabs
+            aria-label="User settings"
             tabs={[
               { id: 'permissions', label: 'Permissions', content: <UserPermissionsEditor userId={open.id} /> },
               { id: 'quota', label: 'Quota', content: <UserQuotaEditor userId={open.id} /> },
@@ -92,6 +88,6 @@ export function UsersPage() {
           />
         </Modal>
       ) : null}
-    </Page>
+    </SettingsPage>
   );
 }

@@ -258,6 +258,61 @@ describe('override rules', () => {
 });
 
 describe('approval and lifecycle', () => {
+  it('approve with monitorOption monitors episodes by that option as well as the requested seasons', async () => {
+    const h = await harness();
+    const admin = addUser(h.db, { role: 'admin' });
+    const u = addUser(h.db);
+    const req = await created(h, u.actor, { mediaType: 'series', tmdbId: 1399, seasons: [2] });
+    await h.services.requests.approve(admin.actor, req.id, { monitorOption: 'all' });
+    const show = h.db.select().from(series).where(eq(series.tmdbId, 1399)).get()!;
+    const eps = h.db.select().from(episodes).where(eq(episodes.seriesId, show.id)).all();
+    const monitoredSeasons = [...new Set(eps.filter((e) => e.monitored).map((e) => e.seasonNumber))].sort();
+    expect(monitoredSeasons).toEqual([1, 2, 4]);
+    expect(show.monitored).toBe(true);
+  });
+
+  it('approve with seasons replaces the requested seasons before the series is added', async () => {
+    const h = await harness();
+    const admin = addUser(h.db, { role: 'admin' });
+    const u = addUser(h.db);
+    const req = await created(h, u.actor, { mediaType: 'series', tmdbId: 1399, seasons: [2] });
+    const approved = await h.services.requests.approve(admin.actor, req.id, { seasons: [1, 4] });
+    expect(approved.seasons).toEqual([
+      { seasonNumber: 1, status: 'approved' },
+      { seasonNumber: 4, status: 'approved' },
+    ]);
+    const show = h.db.select().from(series).where(eq(series.tmdbId, 1399)).get()!;
+    const monitored = h.db.select().from(seasons).where(eq(seasons.seriesId, show.id)).all().filter((x) => x.monitored).map((x) => x.seasonNumber);
+    expect(monitored.sort()).toEqual([1, 4]);
+    expect(h.searches).toEqual([
+      { seriesId: show.id, seasonNumber: 1 },
+      { seriesId: show.id, seasonNumber: 4 },
+    ]);
+  });
+
+  it('approve with minimumAvailability sets it on the library movie', async () => {
+    const h = await harness();
+    const admin = addUser(h.db, { role: 'admin' });
+    const u = addUser(h.db);
+    const req = await created(h, u.actor, { mediaType: 'movie', tmdbId: 603 });
+    await h.services.requests.approve(admin.actor, req.id, { minimumAvailability: 'announced', tags: [] });
+    expect(h.db.select().from(movies).get()!.minimumAvailability).toBe('announced');
+  });
+
+  it('approve refuses series-only overrides on a movie (and vice versa) and leaves the request pending', async () => {
+    const h = await harness();
+    const admin = addUser(h.db, { role: 'admin' });
+    const u = addUser(h.db);
+    const movieReq = await created(h, u.actor, { mediaType: 'movie', tmdbId: 603 });
+    await expectError(h.services.requests.approve(admin.actor, movieReq.id, { monitorOption: 'all' }), 'VALIDATION', /series requests only/);
+    await expectError(h.services.requests.approve(admin.actor, movieReq.id, { seasons: [1] }), 'VALIDATION');
+    const seriesReq = await created(h, u.actor, { mediaType: 'series', tmdbId: 1399, seasons: [2] });
+    await expectError(h.services.requests.approve(admin.actor, seriesReq.id, { minimumAvailability: 'released' }), 'VALIDATION', /movie requests only/);
+    await expectError(h.services.requests.approve(admin.actor, seriesReq.id, { seasons: [3] }), 'VALIDATION', /no seasons/);
+    expect(h.db.select().from(mediaRequests).all().map((r) => r.status)).toEqual(['pending', 'pending']);
+    expect(h.db.select().from(movies).all()).toHaveLength(0);
+  });
+
   it('approve adds a series monitoring only the requested seasons and searches them', async () => {
     const h = await harness();
     const admin = addUser(h.db, { role: 'admin', settings: {} });

@@ -139,3 +139,17 @@ export function delayReorderRequest(
   if (!below || isDefaultDelayProfile(below)) return null;
   return { id: item.id, afterId: below.id };
 }
+
+/**
+ * Reorder request for dragging the profile at `from` onto the row at `to` (indices into
+ * `sorted`). The dragged profile takes the target's place. Null when nothing changes or the
+ * move would touch the default profile, which stays pinned last.
+ */
+export function delayDropRequest(sorted: readonly DelayProfile[], from: number, to: number): DelayProfileReorderRequest | null {
+  const item = sorted[from];
+  const target = sorted[to];
+  if (!item || !target || from === to || isDefaultDelayProfile(item) || isDefaultDelayProfile(target)) return null;
+  if (to > from) return { id: item.id, afterId: target.id };
+  const before = sorted[to - 1];
+  return before ? { id: item.id, afterId: before.id } : { id: item.id };
+}

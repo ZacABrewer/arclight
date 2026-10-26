@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import { errorMessage } from '../../api/client.js';
-import { Button } from '../../components/button.js';
-import { cx } from '../../lib/cx.js';
+import { Button, Pane, SectionLabel } from '../../arclight/index.js';
+import './settings.css';
 
-// Small building blocks shared by the settings pages.
+// Small building blocks shared by the settings pages (Arclight).
 
-/** Footer for editor dialogs: optional Delete on the left, Cancel / Save on the right. */
+/** Footer for editor dialogs: optional Delete (danger) on the left, Cancel / Save on the right. */
 export function EditorFooter({
   onCancel,
   onSave,
@@ -13,6 +13,7 @@ export function EditorFooter({
   onDelete,
   extra,
   saveLabel = 'Save',
+  deleteLabel = 'Delete',
 }: {
   onCancel: () => void;
   onSave: () => void;
@@ -20,18 +21,19 @@ export function EditorFooter({
   onDelete?: (() => void) | undefined;
   extra?: ReactNode;
   saveLabel?: string;
+  deleteLabel?: string;
 }) {
   return (
-    <div className="editor-footer">
-      <div className="editor-footer-left">
+    <div className="al-editor-footer">
+      <div className="al-editor-footer__side">
         {onDelete ? (
           <Button variant="danger" onClick={onDelete}>
-            Delete
+            {deleteLabel}
           </Button>
         ) : null}
         {extra}
       </div>
-      <div className="editor-footer-right">
+      <div className="al-editor-footer__side">
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
@@ -43,9 +45,13 @@ export function EditorFooter({
   );
 }
 
-/** Grid of clickable cards (profiles, indexers, clients) with an "add" tile at the end. */
-export function CardGrid({ children }: { children: ReactNode }) {
-  return <div className="card-grid">{children}</div>;
+/** Grid of `.al-pane` cards (profiles, indexers, clients) with an "add" tile at the end. */
+export function CardGrid({ children, label }: { children: ReactNode; label?: string }) {
+  return (
+    <div className="al-card-grid" role="list" aria-label={label}>
+      {children}
+    </div>
+  );
 }
 
 export function ItemCard({
@@ -54,35 +60,57 @@ export function ItemCard({
   children,
   muted = false,
   status,
+  actions,
 }: {
   title: ReactNode;
   onClick?: (() => void) | undefined;
   children?: ReactNode;
   muted?: boolean;
+  /** Chip(s) top right. */
   status?: ReactNode;
+  /** Buttons at the bottom of the card (Test / Edit). */
+  actions?: ReactNode;
 }) {
   return (
-    <div className={cx('item-card', muted && 'item-card-muted')}>
-      <div className="item-card-head">
-        {onClick ? (
-          <button type="button" className="item-card-title link-button" onClick={onClick}>
-            {title}
-          </button>
-        ) : (
-          <span className="item-card-title">{title}</span>
-        )}
-        {status}
-      </div>
-      {children ? <div className="item-card-body">{children}</div> : null}
+    <div role="listitem" className="al-item-card-wrap">
+      <Pane className="al-item-card" data-muted={muted || undefined}>
+        <div className="al-item-card__head">
+          {onClick ? (
+            <button type="button" className="al-item-card__title" onClick={onClick}>
+              {title}
+            </button>
+          ) : (
+            <h3 className="al-item-card__title">{title}</h3>
+          )}
+          {status}
+        </div>
+        {children ? <div className="al-item-card__meta">{children}</div> : null}
+        {actions ? <div className="al-item-card__actions">{actions}</div> : null}
+      </Pane>
     </div>
   );
 }
 
 export function AddCard({ label, onClick }: { label: string; onClick: () => void }) {
   return (
-    <button type="button" className="item-card add-card" onClick={onClick}>
-      <span aria-hidden="true">+</span> {label}
-    </button>
+    <div role="listitem">
+      <button type="button" className="al-add-card" onClick={onClick}>
+        <span aria-hidden="true">+</span> {label}
+      </button>
+    </div>
+  );
+}
+
+/** A section inside a settings pane: mono CAPS label, optional action right, then content. */
+export function SettingsSection({ label, action, children, count }: { label: string; action?: ReactNode; children: ReactNode; count?: number | undefined }) {
+  return (
+    <section className="al-settings-section" aria-label={label}>
+      <div className="al-settings-section__head">
+        <SectionLabel count={count}>{label}</SectionLabel>
+        {action}
+      </div>
+      {children}
+    </section>
   );
 }
 
@@ -90,7 +118,7 @@ export function AddCard({ label, onClick }: { label: string; onClick: () => void
 export function SaveError({ error }: { error: unknown }) {
   if (!error) return null;
   return (
-    <p className="inline-error" role="alert">
+    <p className="al-inline-error" role="alert">
       {errorMessage(error)}
     </p>
   );
@@ -99,8 +127,8 @@ export function SaveError({ error }: { error: unknown }) {
 /** Notice for a page whose api route is being built in parallel and answered 404. */
 export function PendingApiNotice({ what }: { what: string }) {
   return (
-    <div className="notice notice-warning" role="status">
-      The {what} api is not available on this server yet. The page will work once that module ships.
+    <div className="al-notice" role="status">
+      The {what} api is not available on this server yet. This page works once that module ships.
     </div>
   );
 }

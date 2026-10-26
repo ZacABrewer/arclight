@@ -1,71 +1,67 @@
-import { useEffect, useRef, useState } from 'react';
-import { Link, useRouter } from '@tanstack/react-router';
+import type { ReactNode } from 'react';
+import { useRouter } from '@tanstack/react-router';
+import type { Session, User } from '@arclight/shared';
+import { Menu, type MenuItem } from '../arclight/index.js';
 import { displayNameOf, useAuth } from '../auth/auth-context.js';
 
-/** Top-bar menu: who is signed in, Settings → Security (admins), Sign out. */
-export function UserMenu() {
+/** Two-letter avatar initials: "Sam Kade" → "SK", "admin" → "AD". */
+export function initialsOf(name: string): string {
+  const words = name.trim().split(/[\s._@-]+/).filter(Boolean);
+  if (words.length >= 2) return `${words[0]![0]}${words[1]![0]}`.toUpperCase();
+  return (words[0] ?? '?').slice(0, 2).toUpperCase();
+}
+
+function roleLine(user: User | null, session: Session): string {
+  if (user) return user.role === 'admin' ? 'Admin' : 'User';
+  if (session.via === 'bypass') return 'No sign-in needed';
+  if (session.via === 'apikey') return 'API key';
+  return 'Signed in';
+}
+
+export interface UserMenuModel {
+  initials: string;
+  label: string;
+  menu: ((close: () => void) => ReactNode) | undefined;
+}
+
+/** Avatar initials, accessible name and menu (profile, security, shortcuts, sign out). */
+export function useUserMenu(onShortcuts: () => void): UserMenuModel {
   const { session, user, isAdmin, logout } = useAuth();
   const router = useRouter();
-  const [open, setOpen] = useState(false);
-  const ref = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e: MouseEvent) => {
-      if (!ref.current?.contains(e.target as Node)) setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    document.addEventListener('mousedown', onDown);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  if (!session) return null;
+  if (!session) return { initials: '?', label: 'Account', menu: undefined };
   const name = displayNameOf(user, session);
-  const canSignOut = session.via === 'session';
 
-  const signOut = async () => {
-    setOpen(false);
-    await logout();
-    await router.navigate({ to: '/login', replace: true });
+  const items: MenuItem[] = [];
+  if (user) items.push({ id: 'profile', label: 'Profile and notifications', onSelect: () => void router.navigate({ to: '/profile' }) });
+  if (isAdmin) items.push({ id: 'security', label: 'Security settings', onSelect: () => void router.navigate({ to: '/settings/security' }) });
+  items.push({ id: 'shortcuts', label: 'Keyboard shortcuts', onSelect: onShortcuts });
+  if (isAdmin) items.push({ id: 'design', label: 'Design system', onSelect: () => void router.navigate({ to: '/design' }) });
+  if (session.via === 'session') {
+    items.push({
+      id: 'signout',
+      label: 'Sign out',
+      separatorBefore: true,
+      onSelect: () =>
+        void (async () => {
+          await logout();
+          await router.navigate({ to: '/login', replace: true });
+        })(),
+    });
+  }
+
+  return {
+    initials: initialsOf(name),
+    label: `Account: ${name}`,
+    menu: (close) => (
+      <Menu
+        header={
+          <>
+            <strong>{name}</strong> · {roleLine(user, session)}
+          </>
+        }
+        items={items}
+        onDone={close}
+      />
+    ),
   };
-
-  return (
-    <div className="user-menu" ref={ref}>
-      <button type="button" className="user-menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((v) => !v)}>
-        <span className="user-avatar" aria-hidden="true">
-          {name.slice(0, 1).toUpperCase()}
-        </span>
-        <span className="user-menu-name">{name}</span>
-      </button>
-      {open ? (
-        <div className="user-menu-popover" role="menu" aria-label="User menu">
-          <div className="user-menu-header">
-            <strong>{name}</strong>
-            <span className="muted">{user ? user.role : session.via === 'bypass' ? 'no sign-in needed' : session.via}</span>
-          </div>
-          {user ? (
-            <Link to="/profile" role="menuitem" className="user-menu-item" onClick={() => setOpen(false)}>
-              Profile and notifications
-            </Link>
-          ) : null}
-          {isAdmin ? (
-            <Link to="/settings/security" role="menuitem" className="user-menu-item" onClick={() => setOpen(false)}>
-              Settings → Security
-            </Link>
-          ) : null}
-          {canSignOut ? (
-            <button type="button" role="menuitem" className="user-menu-item" onClick={() => void signOut()}>
-              Sign out
-            </button>
-          ) : null}
-        </div>
-      ) : null}
-    </div>
-  );
 }

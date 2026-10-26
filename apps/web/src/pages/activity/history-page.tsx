@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ApiError } from '../../api/client.js';
+import { ApiError, errorMessage } from '../../api/client.js';
 import {
   DEFAULT_HISTORY_FILTER,
   HISTORY_EVENT_LABELS,
@@ -8,25 +8,19 @@ import {
   type HistoryFilter,
   type HistoryRecord,
 } from '../../api/history.js';
-import { Badge, type BadgeTone } from '../../components/badge.js';
-import { Button } from '../../components/button.js';
-import { Card } from '../../components/card.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
+import { Button, Chip, Drawer, EmptyState, ErrorBlock, FilterBar, KeyValue, Pane, Select, Table, type ChipTone, type Column, type KeyValueItem } from '../../arclight/index.js';
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
-import { Modal } from '../../components/modal.js';
-import { Page } from '../../components/page.js';
-import { Table, type Column } from '../../components/table.js';
 import { useHistory, useMarkHistoryFailed } from '../../hooks/activity.js';
+import { useAutomaticSearch } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
-import { Pager } from './activity-shared.js';
+import { ActivityHeader, Pager } from './activity-shared.js';
 
-const EVENT_TONES: Record<string, BadgeTone> = {
-  grabbed: 'info',
-  imported: 'ok',
-  failed: 'error',
-  fileDeleted: 'warning',
+const EVENT_TONES: Record<string, ChipTone> = {
+  grabbed: 'default',
+  imported: 'accent',
+  failed: 'danger',
+  fileDeleted: 'warn',
   fileRenamed: 'neutral',
   ignored: 'neutral',
 };
@@ -39,94 +33,111 @@ export function toggleEventType(filter: HistoryFilter, type: HistoryEventType): 
   return { ...filter, page: 1, eventTypes: has ? filter.eventTypes.filter((t) => t !== type) : [...filter.eventTypes, type] };
 }
 
+/** Number of filters that differ from the default (drives the Clear button). */
+export function activeHistoryFilters(filter: HistoryFilter): number {
+  return (filter.eventTypes.length > 0 ? 1 : 0) + (filter.sortDirection !== DEFAULT_HISTORY_FILTER.sortDirection ? 1 : 0);
+}
+
 export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; onChange: (f: HistoryFilter) => void }) {
+  // One event type at a time from the select; a multi-type filter (set elsewhere) shows as "Several".
+  const eventValue = filter.eventTypes.length === 0 ? '' : filter.eventTypes.length === 1 ? filter.eventTypes[0]! : '__many';
   return (
-    <div className="chip-group" role="group" aria-label="Event types">
-      <button
-        type="button"
-        className={`chip ${filter.eventTypes.length === 0 ? 'chip-on' : ''}`}
-        aria-pressed={filter.eventTypes.length === 0}
-        onClick={() => onChange({ ...filter, page: 1, eventTypes: [] })}
+    <FilterBar
+      activeCount={activeHistoryFilters(filter)}
+      onClear={() => onChange({ ...DEFAULT_HISTORY_FILTER, pageSize: filter.pageSize })}
+    >
+      <Select
+        aria-label="Event type"
+        value={eventValue}
+        onChange={(e) => {
+          const v = e.currentTarget.value;
+          if (v === '__many') return;
+          onChange({ ...filter, page: 1, eventTypes: v ? [v as HistoryEventType] : [] });
+        }}
       >
-        All
-      </button>
-      {HISTORY_EVENT_TYPES.map((t) => {
-        const on = filter.eventTypes.includes(t);
-        return (
-          <button key={t} type="button" className={`chip ${on ? 'chip-on' : ''}`} aria-pressed={on} onClick={() => onChange(toggleEventType(filter, t))}>
+        <option value="">All events</option>
+        {HISTORY_EVENT_TYPES.map((t) => (
+          <option key={t} value={t}>
             {HISTORY_EVENT_LABELS[t]}
-          </button>
-        );
-      })}
-    </div>
+          </option>
+        ))}
+        {eventValue === '__many' ? <option value="__many">Several</option> : null}
+      </Select>
+      <Select
+        aria-label="Order"
+        value={filter.sortDirection}
+        onChange={(e) => onChange({ ...filter, page: 1, sortDirection: e.currentTarget.value as 'asc' | 'desc' })}
+        options={[
+          { value: 'desc', label: 'Newest first' },
+          { value: 'asc', label: 'Oldest first' },
+        ]}
+      />
+    </FilterBar>
   );
 }
 
-function HistoryDetails({ record, onClose }: { record: HistoryRecord; onClose: () => void }) {
+/** What "Redownload" searches for, or null when the record names no episode or movie. */
+export function redownloadTarget(record: HistoryRecord): { episodeIds: number[] } | { movieId: number } | null {
+  if (record.episodeId != null) return { episodeIds: [record.episodeId] };
+  if (record.movieId != null) return { movieId: record.movieId };
+  return null;
+}
+
+export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onClose: () => void }) {
   const markFailed = useMarkHistoryFailed();
+  const search = useAutomaticSearch();
   const [confirm, setConfirm] = useState(false);
-  const data = Object.entries(record.data ?? {});
+  const target = redownloadTarget(record);
+  const canMarkFailed = record.eventType === 'grabbed';
+  const items: KeyValueItem[] = [
+    { label: 'Event', value: <Chip tone={EVENT_TONES[record.eventType] ?? 'neutral'}>{eventLabel(record.eventType)}</Chip>, mono: false },
+    { label: 'Source title', value: <span className="al-activity-break">{record.sourceTitle}</span> },
+    { label: 'Date', value: formatDateTime(record.date) },
+  ];
+  if (record.quality?.quality?.name) items.push({ label: 'Quality', value: record.quality.quality.name });
+  if (record.languages?.length) items.push({ label: 'Languages', value: record.languages.join(', '), mono: false });
+  if (record.downloadId) items.push({ label: 'Download id', value: <span className="al-activity-break">{record.downloadId}</span> });
+  for (const [k, v] of Object.entries(record.data ?? {})) {
+    items.push({ key: `data-${k}`, label: k, value: <span className="al-activity-break">{typeof v === 'string' ? v : JSON.stringify(v)}</span> });
+  }
   return (
     <>
-      <Modal
-        open
+      <Drawer
+        open={!confirm}
         onClose={onClose}
-        size="lg"
         title={eventLabel(record.eventType)}
         footer={
           <>
-            {record.eventType === 'grabbed' ? (
-              <Button variant="danger" onClick={() => setConfirm(true)}>
-                Mark as failed
-              </Button>
-            ) : null}
+            <Button
+              variant="danger"
+              disabled={!canMarkFailed}
+              title={canMarkFailed ? undefined : 'Only grabbed releases can be marked failed'}
+              onClick={() => setConfirm(true)}
+            >
+              Mark failed
+            </Button>
+            <Button
+              variant="secondary"
+              disabled={!target}
+              loading={search.isPending}
+              title={target ? undefined : 'This event is not linked to an episode or movie'}
+              onClick={() => target && search.mutate(target)}
+            >
+              Redownload
+            </Button>
+            <span className="al-activity-spacer" />
             <Button variant="ghost" onClick={onClose}>
               Close
             </Button>
           </>
         }
       >
-        <dl className="fields">
-          <div className="fields-row">
-            <dt>Source title</dt>
-            <dd className="break">{record.sourceTitle}</dd>
-          </div>
-          <div className="fields-row">
-            <dt>Date</dt>
-            <dd>{formatDateTime(record.date)}</dd>
-          </div>
-          {record.quality?.quality?.name ? (
-            <div className="fields-row">
-              <dt>Quality</dt>
-              <dd>{record.quality.quality.name}</dd>
-            </div>
-          ) : null}
-          {record.languages?.length ? (
-            <div className="fields-row">
-              <dt>Languages</dt>
-              <dd>{record.languages.join(', ')}</dd>
-            </div>
-          ) : null}
-          {record.downloadId ? (
-            <div className="fields-row">
-              <dt>Download id</dt>
-              <dd>
-                <code>{record.downloadId}</code>
-              </dd>
-            </div>
-          ) : null}
-          {data.map(([k, v]) => (
-            <div key={k} className="fields-row">
-              <dt>{k}</dt>
-              <dd className="break">{typeof v === 'string' ? v : JSON.stringify(v)}</dd>
-            </div>
-          ))}
-        </dl>
-      </Modal>
+        <KeyValue items={items} />
+      </Drawer>
       <ConfirmDialog
         open={confirm}
-        title="Mark as failed?"
-        confirmLabel="Mark as failed"
+        title={`Mark ${record.sourceTitle} as failed?`}
+        confirmLabel="Mark failed"
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           await markFailed.mutateAsync(record.id);
@@ -140,13 +151,30 @@ function HistoryDetails({ record, onClose }: { record: HistoryRecord; onClose: (
   );
 }
 
-const columns: Column<HistoryRecord>[] = [
-  { key: 'eventType', header: 'Event', cell: (r) => <Badge tone={EVENT_TONES[r.eventType] ?? 'neutral'}>{eventLabel(r.eventType)}</Badge> },
-  { key: 'sourceTitle', header: 'Source title', cell: (r) => <span className="break">{r.sourceTitle}</span> },
-  { key: 'quality', header: 'Quality', cell: (r) => r.quality?.quality?.name ?? '—' },
+const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecord>[] => [
+  { key: 'eventType', header: 'Event', width: '140px', cell: (r) => <Chip tone={EVENT_TONES[r.eventType] ?? 'neutral'}>{eventLabel(r.eventType)}</Chip> },
+  {
+    key: 'sourceTitle',
+    header: 'Source title',
+    cell: (r) => (
+      <button
+        type="button"
+        className="al-activity-rowlink"
+        onClick={(e) => {
+          e.stopPropagation();
+          onOpen(r);
+        }}
+      >
+        {r.sourceTitle}
+      </button>
+    ),
+  },
+  { key: 'quality', header: 'Quality', mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
   {
     key: 'date',
     header: 'Date',
+    mono: true,
+    align: 'right',
     cell: (r) => (
       <time dateTime={r.date} title={formatDateTime(r.date)}>
         {relativeTime(r.date)}
@@ -162,33 +190,44 @@ export function HistoryPage() {
   const pending = history.error instanceof ApiError && history.error.status === 404;
 
   return (
-    <Page title="History" actions={<HistoryFilterBar filter={filter} onChange={setFilter} />}>
-      <Card flush>
+    <div className="al-activity">
+      <ActivityHeader active="history" />
+      <Pane flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <HistoryFilterBar filter={filter} onChange={setFilter} />
+        </div>
         {pending ? (
-          <div className="card-body">
+          <div className="al-activity-pad">
             <PendingApiNotice what="history" />
           </div>
         ) : history.isError ? (
-          <ErrorView error={history.error} onRetry={() => void history.refetch()} />
+          <div className="al-activity-pad">
+            <ErrorBlock title="Couldn't load history" onRetry={() => void history.refetch()}>
+              {errorMessage(history.error)}
+            </ErrorBlock>
+          </div>
         ) : (
           <>
             <Table
               caption="History"
-              columns={columns}
+              columns={historyColumns(setOpen)}
               rows={history.data?.records}
               rowKey={(r) => r.id}
               loading={history.isPending}
               sortable={false}
               onRowClick={setOpen}
-              empty={<EmptyState title="No history yet" />}
+              empty={<EmptyState title="No history yet">Grabs, imports and failures are recorded here.</EmptyState>}
             />
             {history.data && history.data.totalRecords > filter.pageSize ? (
-              <Pager page={filter.page} pageSize={filter.pageSize} total={history.data.totalRecords} onPage={(page) => setFilter({ ...filter, page })} />
+              <footer className="al-activity-foot">
+                <span className="al-activity-spacer" />
+                <Pager page={filter.page} pageSize={filter.pageSize} total={history.data.totalRecords} onPage={(page) => setFilter({ ...filter, page })} />
+              </footer>
             ) : null}
           </>
         )}
-      </Card>
+      </Pane>
       {open ? <HistoryDetails record={open} onClose={() => setOpen(null)} /> : null}
-    </Page>
+    </div>
   );
 }

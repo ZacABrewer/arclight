@@ -1,12 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useId, useState } from 'react';
 import type { IndexerGlobalSettings } from '@arclight/shared';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input, Toggle } from '../../../components/form.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import { errorMessage } from '../../../api/client.js';
+import { ErrorBlock, FormRow, FormSection, Input, Skeleton, Toggle } from '../../../arclight/index.js';
 import { useIndexerOptions, useSaveIndexerOptions } from '../../../hooks/indexers.js';
+import { SettingsPage, useDraft } from '../settings-layout.js';
 
 /** Errors keyed by field for the indexer options form; empty when valid. */
 export function validateIndexerOptions(v: IndexerGlobalSettings): Partial<Record<keyof IndexerGlobalSettings, string>> {
@@ -27,28 +24,62 @@ export function parseTagList(text: string): string[] {
   return [...new Set(text.split(',').map((t) => t.trim()).filter(Boolean))];
 }
 
-function NumberField({
+/** Form model: the settings with the whitelist as the text the user types. */
+type OptionsDraft = Omit<IndexerGlobalSettings, 'whitelistedHardcodedSubs'> & { subsText: string };
+
+const EMPTY: OptionsDraft = {
+  minimumAgeMinutes: 0,
+  retentionDays: 0,
+  maximumSizeMb: 0,
+  rssSyncIntervalMinutes: 15,
+  allowHardcodedSubs: false,
+  preferIndexerFlags: false,
+  subsText: '',
+};
+
+function toDraft(s: IndexerGlobalSettings): OptionsDraft {
+  const { whitelistedHardcodedSubs, ...rest } = s;
+  return { ...rest, subsText: whitelistedHardcodedSubs.join(', ') };
+}
+
+function fromDraft(d: OptionsDraft): IndexerGlobalSettings {
+  const { subsText, ...rest } = d;
+  return { ...rest, whitelistedHardcodedSubs: parseTagList(subsText) };
+}
+
+type NumKey = 'minimumAgeMinutes' | 'retentionDays' | 'maximumSizeMb' | 'rssSyncIntervalMinutes';
+
+function NumberRow({
   label,
-  hint,
+  caption,
   unit,
   value,
   error,
   onChange,
 }: {
   label: string;
-  hint: string;
+  caption: string;
   unit: string;
   value: number;
   error?: string | undefined;
   onChange: (n: number) => void;
 }) {
+  const id = useId();
   return (
-    <FormField inline label={label} hint={hint} error={error}>
-      <span className="input-with-unit">
-        <Input type="number" min={0} aria-label={label} value={Number.isFinite(value) ? String(value) : ''} onChange={(e) => onChange(Number(e.currentTarget.value))} />
-        <span className="input-unit">{unit}</span>
-      </span>
-    </FormField>
+    <FormRow label={label} htmlFor={id} caption={caption} error={error}>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        min={0}
+        mono
+        className="al-input--num"
+        end={unit}
+        invalid={error ? true : undefined}
+        value={Number.isFinite(value) ? String(value) : ''}
+        onChange={(e) => onChange(Number(e.currentTarget.value))}
+      />
+    </FormRow>
   );
 }
 
@@ -56,93 +87,120 @@ function NumberField({
 export function IndexerOptionsPage() {
   const query = useIndexerOptions();
   const save = useSaveIndexerOptions();
-  const [draft, setDraft] = useState<IndexerGlobalSettings | null>(null);
-  const [subsText, setSubsText] = useState('');
-
-  useEffect(() => {
-    if (query.data) {
-      setDraft(query.data);
-      setSubsText(query.data.whitelistedHardcodedSubs.join(', '));
-    }
-  }, [query.data]);
-
-  const errors = draft ? validateIndexerOptions(draft) : {};
+  // After a save the response is the saved value until the next refetch lands.
+  const [savedOverride, setSavedOverride] = useState<{ at: number; value: OptionsDraft } | null>(null);
+  const fromQuery = query.data ? toDraft(query.data) : EMPTY;
+  const saved = savedOverride && savedOverride.at >= query.dataUpdatedAt ? savedOverride.value : fromQuery;
+  const draft = useDraft(saved);
+  const d = draft.value;
+  const errors = validateIndexerOptions(fromDraft(d));
   const valid = Object.keys(errors).length === 0;
+  const setNum = (k: NumKey) => (n: number) => draft.set((prev) => ({ ...prev, [k]: n }));
+  const subsId = useId();
+
+  const onSave = () => {
+    if (!valid) return;
+    save.mutate(fromDraft(d), { onSuccess: (res) => setSavedOverride({ at: Date.now(), value: toDraft(res) }) });
+  };
 
   return (
-    <Page title="Indexer Options">
-      <Card>
-        {query.isError ? (
-          <ErrorView error={query.error} onRetry={() => void query.refetch()} />
-        ) : !draft ? (
-          <LoadingBlock />
-        ) : (
-          <form
-            aria-label="Indexer options"
-            onSubmit={(e) => {
-              e.preventDefault();
-              if (valid) save.mutate({ ...draft, whitelistedHardcodedSubs: parseTagList(subsText) });
-            }}
-          >
-            <NumberField
-              label="Minimum age"
-              unit="min"
-              hint="Usenet only: releases younger than this are not grabbed. 0 = off."
-              value={draft.minimumAgeMinutes}
-              error={errors.minimumAgeMinutes}
-              onChange={(n) => setDraft({ ...draft, minimumAgeMinutes: n })}
-            />
-            <NumberField
-              label="Retention"
-              unit="days"
-              hint="Usenet only: releases older than this are ignored. 0 = unlimited."
-              value={draft.retentionDays}
-              error={errors.retentionDays}
-              onChange={(n) => setDraft({ ...draft, retentionDays: n })}
-            />
-            <NumberField
-              label="Maximum size"
-              unit="MB"
-              hint="Releases larger than this are rejected. 0 = unlimited."
-              value={draft.maximumSizeMb}
-              error={errors.maximumSizeMb}
-              onChange={(n) => setDraft({ ...draft, maximumSizeMb: n })}
-            />
-            <NumberField
+    <SettingsPage
+      title="Indexer options"
+      description="Limits that apply to every indexer."
+      save={{ count: query.data ? draft.changes : 0, onSave, onDiscard: draft.discard, saving: save.isPending, disabled: !valid }}
+    >
+      {query.isError ? (
+        <ErrorBlock title="Couldn't load indexer options" onRetry={() => void query.refetch()}>
+          {errorMessage(query.error)}
+        </ErrorBlock>
+      ) : !query.data ? (
+        <Skeleton lines={6} />
+      ) : (
+        <form
+          aria-label="Indexer options"
+          style={{ display: 'flex', flexDirection: 'column', gap: 30 }}
+          onSubmit={(e) => {
+            e.preventDefault();
+            onSave();
+          }}
+        >
+          <FormSection label="RSS">
+            <NumberRow
               label="RSS sync interval"
               unit="min"
-              hint="How often indexers are polled for new releases. 0 disables RSS sync; otherwise 10 to 1440."
-              value={draft.rssSyncIntervalMinutes}
+              caption="How often indexers are polled for new releases. 0 disables RSS sync; otherwise 10 to 1440."
+              value={d.rssSyncIntervalMinutes}
               error={errors.rssSyncIntervalMinutes}
-              onChange={(n) => setDraft({ ...draft, rssSyncIntervalMinutes: n })}
+              onChange={setNum('rssSyncIntervalMinutes')}
             />
-            <FormField inline label="Allow hardcoded subs" hint="Accept releases with burned-in subtitles.">
+          </FormSection>
+          <FormSection label="Usenet">
+            <NumberRow
+              label="Minimum age"
+              unit="min"
+              caption="Releases younger than this are not grabbed. 0 = off."
+              value={d.minimumAgeMinutes}
+              error={errors.minimumAgeMinutes}
+              onChange={setNum('minimumAgeMinutes')}
+            />
+            <NumberRow
+              label="Retention"
+              unit="days"
+              caption="Releases older than this are ignored. 0 = unlimited."
+              value={d.retentionDays}
+              error={errors.retentionDays}
+              onChange={setNum('retentionDays')}
+            />
+          </FormSection>
+          <FormSection label="Releases">
+            <NumberRow
+              label="Maximum size"
+              unit="MB"
+              caption="Releases larger than this are rejected. 0 = unlimited."
+              value={d.maximumSizeMb}
+              error={errors.maximumSizeMb}
+              onChange={setNum('maximumSizeMb')}
+            />
+            <FormRow label="Allow hardcoded subs" caption="Accept releases with burned-in subtitles." captionInline>
               <Toggle
                 aria-label="Allow hardcoded subs"
-                checked={draft.allowHardcodedSubs}
-                onChange={(e) => setDraft({ ...draft, allowHardcodedSubs: e.currentTarget.checked })}
+                checked={d.allowHardcodedSubs}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked;
+                  draft.set((prev) => ({ ...prev, allowHardcodedSubs: on }));
+                }}
               />
-            </FormField>
-            {!draft.allowHardcodedSubs ? (
-              <FormField inline label="Whitelisted subtitle tags" hint="Comma-separated tags allowed even though hardcoded subs are not (e.g. ENG, HC.ENG).">
-                <Input aria-label="Whitelisted subtitle tags" value={subsText} onChange={(e) => setSubsText(e.currentTarget.value)} />
-              </FormField>
+            </FormRow>
+            {!d.allowHardcodedSubs ? (
+              <FormRow
+                label="Whitelisted subtitle tags"
+                htmlFor={subsId}
+                caption="Comma-separated tags allowed even though hardcoded subs are not (e.g. ENG, HC.ENG)."
+              >
+                <Input
+                  id={subsId}
+                  mono
+                  value={d.subsText}
+                  onChange={(e) => {
+                    const text = e.currentTarget.value;
+                    draft.set((prev) => ({ ...prev, subsText: text }));
+                  }}
+                />
+              </FormRow>
             ) : null}
-            <FormField inline label="Prefer indexer flags" hint="Prefer releases the indexer flags (freeleech, internal, ...).">
+            <FormRow label="Prefer indexer flags" caption="Prefer releases the indexer flags (freeleech, internal, …)." captionInline>
               <Toggle
                 aria-label="Prefer indexer flags"
-                checked={draft.preferIndexerFlags}
-                onChange={(e) => setDraft({ ...draft, preferIndexerFlags: e.currentTarget.checked })}
+                checked={d.preferIndexerFlags}
+                onChange={(e) => {
+                  const on = e.currentTarget.checked;
+                  draft.set((prev) => ({ ...prev, preferIndexerFlags: on }));
+                }}
               />
-            </FormField>
-            <div className="form-actions">
-              <Button type="submit" variant="primary" loading={save.isPending} disabled={!valid}>
-                Save
-              </Button>
-            </div>
-          </form>
-        )}
-      </Card>
-    </Page>
+            </FormRow>
+          </FormSection>
+        </form>
+      )}
+    </SettingsPage>
   );
 }

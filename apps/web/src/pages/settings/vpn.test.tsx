@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import type { VpnStatus } from '@arclight/shared';
@@ -24,8 +24,10 @@ const status: VpnStatus = {
   country: 'Netherlands',
   forwardedPort: 41234,
   downloadClientPortSynced: true,
+  interfaceName: 'tun0',
+  tunnelAddress: '10.2.0.2',
   lastChecked: new Date().toISOString(),
-  lastChanged: null,
+  lastChanged: new Date(Date.now() - (2 * 3600 + 5 * 60) * 1000).toISOString(),
 };
 
 const settings = {
@@ -70,12 +72,41 @@ function renderAt(path: string) {
 }
 
 describe('Settings -> VPN', () => {
-  it('shows live status and saves the form with masked secrets kept', async () => {
+  it('shows the live status pane with mono public IP, port forward, uptime and interface', async () => {
     renderAt('/settings/vpn');
-    expect(await screen.findByText('41234 (synced to qBittorrent)')).toBeTruthy();
+    const pane = await screen.findByRole('region', { name: 'Live status' });
+    expect(pane.getAttribute('data-chamfer')).toBe('tl');
+    const ip = await within(pane).findByText('185.1.2.3');
+    expect(ip.className).toContain('al-kv__value--mono');
+    const value = (label: string) => within(pane).getByText(label).nextElementSibling as HTMLElement;
+    expect(value('Port forward').textContent).toBe('41234 · synced to qBittorrent');
+    expect(value('Port forward').className).toContain('al-kv__value--mono');
+    expect(value('Uptime').textContent).toBe('2h 5m');
+    expect(value('Uptime').className).toContain('al-kv__value--mono');
+    expect(value('Interface').textContent).toBe('tun0 10.2.0.2');
+    expect(within(pane).getByRole('status').textContent).toBe('Connected');
+    expect(pane.querySelector('.al-live')).toBeTruthy();
+  });
+
+  it('says why it is disconnected and drops the live dot', async () => {
+    Object.assign(status, { connected: false, error: 'handshake timed out' });
+    try {
+      renderAt('/settings/vpn');
+      const pane = await screen.findByRole('region', { name: 'Live status' });
+      expect((await within(pane).findByRole('status')).textContent).toBe('Disconnected · handshake timed out');
+      expect(pane.querySelector('.al-live')).toBeNull();
+    } finally {
+      Object.assign(status, { connected: true, error: undefined });
+    }
+  });
+
+  it('saves the form from the unsaved-changes bar with masked secrets kept', async () => {
+    renderAt('/settings/vpn');
     const url = await screen.findByDisplayValue('http://localhost:8000');
     fireEvent.change(url, { target: { value: 'http://gluetun:8000' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    const bar = screen.getByRole('region', { name: 'Unsaved changes' });
+    expect(bar.textContent).toContain('1 unsaved change');
+    fireEvent.click(within(bar).getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     const put = calls.find((c) => c.method === 'PUT')!;
     expect(put.body).toMatchObject({ provider: { type: 'gluetun', controlUrl: 'http://gluetun:8000', apiKey: '********' }, homePublicIp: null });
@@ -95,9 +126,10 @@ describe('Settings -> VPN', () => {
 
   it('shows the VPN card on the dashboard', async () => {
     renderAt('/');
-    expect(await screen.findByText('185.1.2.3')).toBeTruthy();
-    expect(screen.getAllByText('Connected').length).toBeGreaterThan(0);
-    expect(screen.getByText('41234 (synced to qBittorrent)')).toBeTruthy();
+    // Dashboard VPN block: location headline, forwarded port in mono.
+    const port = await screen.findByText('41234');
+    expect(port.className).toContain('al-num');
+    expect(screen.getAllByText(/Netherlands/).length).toBeGreaterThan(0);
   });
 
   it('invalidates the vpn queries on a vpn event', () => {

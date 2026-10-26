@@ -1,4 +1,12 @@
-import { Button } from '../../components/button.js';
+import { useEffect, type ReactNode } from 'react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { Button, buttonClass, PageHeader, Paginator, Tabs, Trail, type TrailState } from '../../arclight/index.js';
+import { useQueueStatus } from '../../hooks/activity.js';
+import { usePendingReleases } from '../../hooks/releases.js';
+import { useTorrentStatus } from '../../hooks/torrent.js';
+import { formatRate } from '../../lib/format.js';
+import './activity.css';
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return '—';
@@ -24,6 +32,14 @@ export function formatEta(ms: number | null | undefined): string {
   return d ? `${d}d ${pad(h)}:${pad(m)}` : `${h}:${pad(m)}:${pad(s)}`;
 }
 
+/** Sets `<title>` the way the old Page wrapper did. */
+export function useDocumentTitle(title: string) {
+  useEffect(() => {
+    document.title = `${title} · Arclight`;
+  }, [title]);
+}
+
+/** Paged-list footer: Arclight paginator plus a mono total. Same props as before. */
 export function Pager({
   page,
   pageSize,
@@ -37,32 +53,83 @@ export function Pager({
 }) {
   const pages = Math.max(1, Math.ceil(total / pageSize));
   return (
-    <nav className="pager" aria-label="Pagination">
-      <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => onPage(1)} aria-label="First page">
-        «
-      </Button>
-      <Button size="sm" variant="ghost" disabled={page <= 1} onClick={() => onPage(page - 1)} aria-label="Previous page">
-        ‹
-      </Button>
-      <span className="pager-info">
-        Page {Math.min(page, pages)} of {pages} · {total} total
+    <div className="al-activity-pager">
+      <span className="al-activity-muted">
+        <span className="al-num">{total}</span> total
       </span>
-      <Button size="sm" variant="ghost" disabled={page >= pages} onClick={() => onPage(page + 1)} aria-label="Next page">
-        ›
-      </Button>
-      <Button size="sm" variant="ghost" disabled={page >= pages} onClick={() => onPage(pages)} aria-label="Last page">
-        »
-      </Button>
-    </nav>
+      <Paginator page={page} pageCount={pages} onPageChange={onPage} />
+    </div>
   );
 }
 
-export function ProgressBar({ value, tone = 'info' }: { value: number; tone?: 'info' | 'ok' | 'warning' | 'error' }) {
-  const pct = Math.max(0, Math.min(100, Math.round(value * 100)));
+/** 0..1 progress as a light trail with a mono percentage. */
+export function ProgressBar({ value, state = 'active' }: { value: number; state?: TrailState }) {
+  return <Trail value={value * 100} state={state} showValue />;
+}
+
+export type ActivityTab = 'queue' | 'history' | 'blocklist' | 'pending';
+
+const TAB_ROUTES: Record<ActivityTab, '/activity/queue' | '/activity/history' | '/activity/blocklist' | '/activity/pending'> = {
+  queue: '/activity/queue',
+  history: '/activity/history',
+  blocklist: '/activity/blocklist',
+  pending: '/activity/pending',
+};
+
+const TAB_LABELS: Record<ActivityTab, string> = { queue: 'Queue', history: 'History', blocklist: 'Blocklist', pending: 'Pending' };
+
+/**
+ * Shared Page 04 header: index 06, "Activity", route-driven compact tabs with mono counts,
+ * live transfer speeds on the queue, Manual import + Refresh.
+ */
+export function ActivityHeader({ active, actions }: { active: ActivityTab; actions?: ReactNode }) {
+  useDocumentTitle(TAB_LABELS[active]);
+  const navigate = useNavigate();
+  const qc = useQueryClient();
+  const status = useQueueStatus();
+  const pending = usePendingReleases();
+  const engine = useTorrentStatus({ enabled: active === 'queue' });
+  const speeds = active === 'queue' && engine.data ? engine.data : null;
   return (
-    <span className={`progress progress-${tone}`} role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100}>
-      <span className="progress-fill" style={{ width: `${pct}%` }} />
-      <span className="progress-label">{pct}%</span>
-    </span>
+    <PageHeader
+      index="06"
+      title="Activity"
+      actions={
+        <>
+          {speeds ? (
+            <span className="al-activity-speeds">
+              Down <span className="al-num">{formatRate(speeds.downloadRate)}</span> · Up <span className="al-num">{formatRate(speeds.uploadRate)}</span>
+            </span>
+          ) : null}
+          {actions}
+          <Link className={buttonClass({ variant: 'secondary', size: 'md' })} to="/activity/manual-import">
+            Manual import
+          </Link>
+          <Button
+            variant="secondary"
+            onClick={() => {
+              void qc.invalidateQueries({ queryKey: ['queue'] });
+              void qc.invalidateQueries({ queryKey: ['history'] });
+              void qc.invalidateQueries({ queryKey: ['torrent'] });
+            }}
+          >
+            Refresh
+          </Button>
+        </>
+      }
+    >
+      <Tabs
+        compact
+        aria-label="Activity"
+        value={active}
+        onChange={(id) => void navigate({ to: TAB_ROUTES[id as ActivityTab] })}
+        tabs={[
+          { id: 'queue', label: 'Queue', count: status.data?.totalCount },
+          { id: 'history', label: 'History' },
+          { id: 'blocklist', label: 'Blocklist' },
+          { id: 'pending', label: 'Pending', count: pending.data?.length },
+        ]}
+      />
+    </PageHeader>
   );
 }

@@ -10,6 +10,7 @@ import {
   HistoryRecord,
   HistorySeriesQuery,
   HistorySinceQuery,
+  Job,
 } from '@arclight/shared';
 import { HistoryError, historyHttpStatus, type HistoryService } from './service.js';
 
@@ -75,5 +76,12 @@ export const historyRoutes =
           source: 'api',
         });
       },
+    );
+
+    // Re-run the search for the record's episode(s) or movie; 202 with the started job.
+    app.post(
+      '/history/:id/redownload',
+      { schema: { params: IdParams, response: { 202: Job, 400: HistoryErrorResponse, 404: HistoryErrorResponse, 503: HistoryErrorResponse } } },
+      async (req, reply) => reply.code(202).send(service.redownload(req.params.id)),
     );
   };

@@ -92,7 +92,7 @@ private-tracker use, not to match every feature.
 | Limitation | Effect | Where you notice it |
 |---|---|---|
 | Approved requests add the title directly to the Arclight library; there are no separate Radarr/Sonarr "server" targets as in Seerr. 4K is a second profile on the same item, not a second server. | Differs from `docs/spec/requests.md` section 9. | 09 |
-| The Approve button has no override options; set profile, root folder and tags by editing the pending request first (or via the API). | | 09 |
+| The Approve button has no override options; set profile, root folder and tags by editing the pending request first. The API accepts overrides on approve (`POST /api/v1/request/:id/approve` with root folder, profile, tags, monitor option, minimum availability, seasons). | | 09 |
 | Out of scope in this build: a Plex library scanner for availability, voting, and the "Recently added" discover slider. By default availability comes from the Arclight library only; the optional "use media server availability" setting also asks Jellyfin or Emby connections (not Plex). | A title that exists on Plex but not in Arclight shows as not available. | 09 |
 | Sign-in through Jellyfin/Emby/Plex accounts is not built; users are local accounts created in Settings -> Security. | | 01, 09 |
 | Seerr-style partial-request enforcement on the server for `partialRequestsEnabled` = false is unverified. | | 09 |
@@ -104,10 +104,10 @@ bugs unless the checklist for that area says otherwise.
 
 | Area | What is missing |
 |---|---|
-| Library | No poster-size slider, no Overview view, no bulk Refresh/Search/Tags actions, no tag-management page, no import-exclusions screen, no "import existing library from folder". The series "Refresh" button is greyed out. No series History tab; the movie History tab shows "History is coming soon". Rename preview, rescan and library statistics are API only. |
-| Calendar | Month and Agenda views only. No week or day view, no tag/type/date-kind filters, no popovers. No "regenerate token" button for the iCal feed. |
-| Wanted | No filters and no monitored toggle on Missing. Cutoff Unmet shows "Cutoff unmet is not available yet" because the native API has no cutoff route (the compat API does). |
-| Activity | History has no Redownload action; the Imported, Failed and Ignored filter chips use event names the API does not store, so they may show nothing. The Queue has no status filter. Blocklist cannot be cleared or added to from the UI (API only). "Mark as failed" cannot set skip-redownload. |
+| Library | No poster-size slider, no Overview view, no bulk Refresh/Search/Tags actions (API: `PUT /api/v1/series/bulk` and `/movie/bulk` take `tags`, `refresh`, `search`), no tag-management page, no import-exclusions screen, no "import existing library from folder". The series "Refresh" button is greyed out (API: `POST /api/v1/command/refresh`). No series History tab; the movie History tab shows "History is coming soon". Rename preview, rescan and library statistics are API only. |
+| Calendar | Month and Agenda views only. No week or day view, no tag/type/date-kind filters, no popovers. No "regenerate token" button for the iCal feed (API: `POST /api/v1/calendar/feed/regenerate`; `GET /calendar` also takes `mediaType`). |
+| Wanted | No filters and no monitored toggle on Missing. Cutoff Unmet shows "Cutoff unmet is not available yet"; the native API now has `GET /api/v1/wanted/cutoff/episodes` and `/movies` but the page is not wired to them yet. |
+| Activity | History has no Redownload action (API: `POST /api/v1/history/:id/redownload`); the Imported, Failed and Ignored filter chips use event names the API does not store, so they may show nothing. The Queue has no status filter. Blocklist cannot be cleared or added to from the UI (API only). "Mark as failed" cannot set skip-redownload. |
 | Settings | Notification flags `enabled` and `includeHealthWarnings`, compat settings, and the log level have no screen. Changing your own password has no screen (API only: `PUT /api/v1/user/me/password`). Settings -> General still shows a stale "Backups are coming soon" card; backups are under System -> Backups. |
 | Shell | The newer UI kit pieces (Backdrop, Rail, CommandPalette, KeyboardSheet, MobileTabBar) are not mounted in the live app. The only keyboard shortcut is `/` (focus search). No keyboard-shortcut help sheet, no command palette. |
 | Mobile / PWA | No web app manifest and no service worker, so "Install app" is not offered. The layout collapses to a drawer below 900 px; there is no bottom tab bar and no push notification. |

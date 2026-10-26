@@ -1,6 +1,5 @@
 import { useState, type KeyboardEvent } from 'react';
-import { Button } from '../button.js';
-import { Input } from '../form.js';
+import { Button, Input, Tag } from '../../arclight/index.js';
 
 /** Split pasted text into terms (comma or newline separated), trimmed and de-duplicated. */
 export function addTerms(existing: readonly string[], text: string): string[] {
@@ -36,22 +35,21 @@ export function TermList({ id, value, onChange, placeholder = 'Add a term, or /r
     }
   };
   return (
-    <div className="term-list">
+    <div className="al-term-list">
       {value.length > 0 ? (
-        <ul className="chip-group">
+        <ul className="al-term-list__terms">
           {value.map((t) => (
-            <li key={t} className="chip chip-on">
-              <code>{t}</code>
-              <button type="button" className="chip-remove" aria-label={`Remove ${t}`} onClick={() => onChange(value.filter((v) => v !== t))}>
-                ×
-              </button>
+            <li key={t}>
+              <Tag className="al-num" onRemove={() => onChange(value.filter((v) => v !== t))} removeLabel={`Remove ${t}`}>
+                {t}
+              </Tag>
             </li>
           ))}
         </ul>
       ) : null}
-      <div className="row">
-        <Input id={id} value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.currentTarget.value)} onKeyDown={onKeyDown} />
-        <Button size="sm" onClick={commit} disabled={!draft.trim()}>
+      <div className="al-term-list__add">
+        <Input id={id} mono value={draft} placeholder={placeholder} onChange={(e) => setDraft(e.currentTarget.value)} onKeyDown={onKeyDown} />
+        <Button variant="secondary" size="sm" onClick={commit} disabled={!draft.trim()}>
           Add
         </Button>
       </div>

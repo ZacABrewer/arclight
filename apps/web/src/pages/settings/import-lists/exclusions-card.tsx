@@ -1,12 +1,9 @@
 import { useState, type FormEvent } from 'react';
 import type { ImportListExclusion, MediaType } from '@arclight/shared';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Input, Select } from '../../../components/form.js';
-import { Table, type Column } from '../../../components/table.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, ErrorBlock, Input, Select, Table, type Column } from '../../../arclight/index.js';
 import { useAddImportListExclusion, useDeleteImportListExclusion, useImportListExclusions } from '../../../hooks/import-lists.js';
-import { SaveError } from '../shared.js';
+import { SaveError, SettingsSection } from '../shared.js';
 
 /** Titles import lists never add again (shared with the library's import exclusions). */
 export function ExclusionsCard() {
@@ -39,13 +36,14 @@ export function ExclusionsCard() {
 
   const columns: Array<Column<ImportListExclusion>> = [
     { key: 'title', header: 'Title', sortValue: (x) => x.title, cell: (x) => x.title },
-    { key: 'year', header: 'Year', sortValue: (x) => x.year ?? null, cell: (x) => x.year ?? '—', width: '70px' },
-    { key: 'type', header: 'Type', sortValue: (x) => x.mediaType, cell: (x) => (x.mediaType === 'series' ? 'Series' : 'Movie'), width: '80px' },
-    { key: 'tmdb', header: 'TMDB id', sortValue: (x) => x.tmdbId, cell: (x) => x.tmdbId, width: '100px' },
+    { key: 'year', header: 'Year', sortValue: (x) => x.year ?? null, cell: (x) => x.year ?? '—', width: '80px', mono: true },
+    { key: 'type', header: 'Type', sortValue: (x) => x.mediaType, cell: (x) => (x.mediaType === 'series' ? 'Series' : 'Movie'), width: '90px', muted: true },
+    { key: 'tmdb', header: 'TMDB id', sortValue: (x) => x.tmdbId, cell: (x) => x.tmdbId, width: '110px', mono: true },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="al-sr-only">Actions</span>,
       align: 'right',
+      width: '110px',
       cell: (x) => (
         <Button size="sm" variant="ghost" aria-label={`Remove ${x.title}`} onClick={() => remove.mutate(x.id)}>
           Remove
@@ -55,13 +53,24 @@ export function ExclusionsCard() {
   ];
 
   return (
-    <Card title="List exclusions">
+    <SettingsSection label="List exclusions" {...(list.data ? { count: list.data.length } : {})}>
       {list.isError ? (
-        <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+        <ErrorBlock title="Could not load exclusions" onRetry={() => void list.refetch()}>
+          {errorMessage(list.error)}
+        </ErrorBlock>
       ) : (
-        <Table caption="List exclusions" columns={columns} rows={list.data} loading={list.isPending} rowKey={(x) => x.id} sortable empty="No exclusions." />
+        <Table
+          caption="List exclusions"
+          density="dense"
+          columns={columns}
+          rows={list.data}
+          loading={list.isPending}
+          rowKey={(x) => x.id}
+          sortable
+          empty="No exclusions. Titles you exclude are never added by a list."
+        />
       )}
-      <form className="inline-form" onSubmit={submit} aria-label="Add exclusion">
+      <form className="al-inline-form" onSubmit={submit} aria-label="Add exclusion">
         <Select
           aria-label="Exclusion type"
           value={mediaType}
@@ -71,14 +80,14 @@ export function ExclusionsCard() {
             { value: 'series', label: 'Series' },
           ]}
         />
-        <Input aria-label="TMDB id" inputMode="numeric" placeholder="TMDB id" value={tmdbId} onChange={(e) => setTmdbId(e.currentTarget.value)} />
+        <Input aria-label="TMDB id" mono inputMode="numeric" placeholder="TMDB id" value={tmdbId} onChange={(e) => setTmdbId(e.currentTarget.value)} />
         <Input aria-label="Exclusion title" placeholder="Title" value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
-        <Input aria-label="Exclusion year" inputMode="numeric" placeholder="Year" value={year} onChange={(e) => setYear(e.currentTarget.value)} />
-        <Button type="submit" disabled={!valid} loading={add.isPending}>
+        <Input aria-label="Exclusion year" mono inputMode="numeric" placeholder="Year" value={year} onChange={(e) => setYear(e.currentTarget.value)} />
+        <Button type="submit" variant="secondary" disabled={!valid} loading={add.isPending}>
           Add exclusion
         </Button>
       </form>
       <SaveError error={add.error} />
-    </Card>
+    </SettingsSection>
   );
 }

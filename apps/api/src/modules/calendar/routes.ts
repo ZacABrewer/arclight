@@ -52,9 +52,13 @@ export function calendarRoutes(
       },
     );
 
-    app.get('/calendar/feed', { schema: { response: { 200: CalendarFeedInfo } } }, async () => {
-      const token = service.icsToken();
-      return { token, path: `/api/v1/calendar/feed.ics?token=${token}` };
-    });
+    const feedInfo = (token: string) => ({ token, path: `/api/v1/calendar/feed.ics?token=${token}` });
+
+    app.get('/calendar/feed', { schema: { response: { 200: CalendarFeedInfo } } }, async () => feedInfo(service.icsToken()));
+
+    // Rotates the feed token; the old feed URL stops working at once. Admin only (POST).
+    app.post('/calendar/feed/regenerate', { schema: { response: { 200: CalendarFeedInfo } } }, async () =>
+      feedInfo(service.regenerateToken()),
+    );
   };
 }

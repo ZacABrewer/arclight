@@ -5,6 +5,7 @@ import type { DelayProfile, QualityProfileInput, QualityProfileItem } from '@arc
 import { QualityItemList } from './quality-item-list.js';
 import {
   cutoffOptions,
+  delayDropRequest,
   delayReorderRequest,
   fromDisplay,
   groupItems,
@@ -113,6 +114,15 @@ describe('delay profile reordering', () => {
     expect(delayReorderRequest(list, 2, 'down')).toBeNull();
     expect(delayReorderRequest(list, 3, 'up')).toBeNull();
   });
+
+  it('turns a drag onto another row into a reorder request, never touching the default', () => {
+    expect(delayDropRequest(list, 0, 2)).toEqual({ id: 1, afterId: 3 });
+    expect(delayDropRequest(list, 2, 0)).toEqual({ id: 3 });
+    expect(delayDropRequest(list, 2, 1)).toEqual({ id: 3, afterId: 1 });
+    expect(delayDropRequest(list, 1, 1)).toBeNull();
+    expect(delayDropRequest(list, 0, 3)).toBeNull();
+    expect(delayDropRequest(list, 3, 0)).toBeNull();
+  });
 });
 
 describe('QualityItemList', () => {
@@ -155,6 +165,8 @@ describe('QualityItemList', () => {
     render(<Harness onChange={onChange} />);
     fireEvent.click(screen.getByRole('checkbox', { name: 'Allow Bluray-1080p' }));
     expect(onChange.mock.lastCall?.[0][0].allowed).toBe(false);
+    expect(screen.queryByRole('checkbox', { name: 'Select WEBDL-1080p for grouping' })).toBeNull();
+    fireEvent.click(screen.getByRole('switch', { name: 'Group qualities' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select WEBDL-1080p for grouping' }));
     fireEvent.click(screen.getByRole('checkbox', { name: 'Select WEBDL-720p for grouping' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'New group name' }), { target: { value: 'WEB' } });

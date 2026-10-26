@@ -3,19 +3,13 @@ import { useQuery } from '@tanstack/react-query';
 import type { MediaType, OverrideRule, OverrideRuleInput } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
 import { authKeys } from '../../../auth/guard.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { EmptyState } from '../../../components/empty-state.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input, Select, Toggle } from '../../../components/form.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, EmptyState, ErrorBlock, Field, FormRow, Input, Modal, Select, Skeleton, Table, Toggle, type Column } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { TagPicker } from '../../../components/forms/tag-picker.js';
-import { Modal } from '../../../components/modal.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useQualityProfiles, useRootFolders } from '../../../hooks/library.js';
 import { useDeleteOverrideRule, useDiscoverGenres, useOverrideRules, useSaveOverrideRule } from '../../../hooks/requests.js';
-import { EditorFooter, SaveError } from '../shared.js';
+import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 
 /** "12, 34|56" → [12, 34, 56]; junk is dropped. */
 export function parseIdList(raw: string): number[] {
@@ -81,86 +75,112 @@ export function fromDraft(d: RuleDraft): OverrideRuleInput {
   };
 }
 
+/** "2 users · 1 genre · ja" — what a rule matches. */
+export function ruleConditions(r: OverrideRule): string {
+  const n = (count: number, one: string) => `${count} ${one}${count === 1 ? '' : 's'}`;
+  return (
+    [
+      r.users.length ? n(r.users.length, 'user') : null,
+      r.genres.length ? n(r.genres.length, 'genre') : null,
+      r.languages.length ? r.languages.join(', ') : null,
+      r.keywords.length ? n(r.keywords.length, 'keyword') : null,
+    ]
+      .filter(Boolean)
+      .join(' · ') || 'Always'
+  );
+}
+
+/** "Profile, root folder, auto-approve" — what a rule changes. */
+export function ruleResult(r: OverrideRule): string {
+  const parts = [r.qualityProfileId ? 'profile' : null, r.rootFolderPath ? 'root folder' : null, r.tags.length ? 'tags' : null, r.autoApprove ? 'auto-approve' : null].filter(
+    (p): p is string => p !== null,
+  );
+  if (!parts.length) return '—';
+  const text = parts.join(', ');
+  return text.charAt(0).toUpperCase() + text.slice(1);
+}
+
 export function OverrideRulesCard() {
   const rules = useOverrideRules();
   const del = useDeleteOverrideRule();
   const [editing, setEditing] = useState<OverrideRule | 'new' | null>(null);
   const [deleting, setDeleting] = useState<OverrideRule | null>(null);
 
+  const columns: Array<Column<OverrideRule>> = [
+    {
+      key: 'name',
+      header: 'Name',
+      sortValue: (r) => r.name,
+      cell: (r) => (
+        <>
+          {r.name}{' '}
+          {r.enabled ? null : (
+            <Chip tone="muted" dot="ring">
+              Disabled
+            </Chip>
+          )}
+        </>
+      ),
+    },
+    {
+      key: 'applies',
+      header: 'Applies to',
+      cell: (r) => `${r.mediaType === 'movie' ? 'Movies' : 'Series'}${r.is4k === null ? '' : r.is4k ? ' (4K)' : ' (standard)'}`,
+    },
+    { key: 'conditions', header: 'Conditions', cell: ruleConditions, muted: true },
+    { key: 'result', header: 'Result', cell: ruleResult, muted: true },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (r) => (
+        <span className="al-row-actions">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(r)} aria-label={`Edit ${r.name}`}>
+            Edit
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => setDeleting(r)} aria-label={`Delete ${r.name}`}>
+            Delete
+          </Button>
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <Card title="Override rules" flush actions={<Button onClick={() => setEditing('new')}>Add rule</Button>}>
+    <SettingsSection
+      label="Override rules"
+      {...(rules.data ? { count: rules.data.length } : {})}
+      action={
+        <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+          Add rule
+        </Button>
+      }
+    >
       {rules.isPending ? (
-        <LoadingBlock />
+        <Skeleton lines={3} />
       ) : rules.isError ? (
-        <ErrorView error={rules.error} onRetry={() => void rules.refetch()} />
+        <ErrorBlock title="Could not load override rules" onRetry={() => void rules.refetch()}>
+          {errorMessage(rules.error)}
+        </ErrorBlock>
       ) : rules.data.length === 0 ? (
         <EmptyState title="No override rules">
-          <p className="muted">Rules route matching requests (by user, genre, language or keyword) to another profile, root folder or tags, or approve them automatically.</p>
+          Rules route matching requests (by user, genre, language or keyword) to another profile, root folder or tags, or approve them automatically.
         </EmptyState>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Applies to</th>
-                <th>Conditions</th>
-                <th>Result</th>
-                <th className="align-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rules.data.map((r) => (
-                <tr key={r.id}>
-                  <td>
-                    {r.name} {r.enabled ? null : <Badge>disabled</Badge>}
-                  </td>
-                  <td>
-                    {r.mediaType === 'movie' ? 'Movies' : 'Series'}
-                    {r.is4k === null ? '' : r.is4k ? ' (4K)' : ' (standard)'}
-                  </td>
-                  <td className="muted small">
-                    {[
-                      r.users.length ? `${r.users.length} user(s)` : null,
-                      r.genres.length ? `${r.genres.length} genre(s)` : null,
-                      r.languages.length ? r.languages.join(', ') : null,
-                      r.keywords.length ? `${r.keywords.length} keyword(s)` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' · ') || 'Always'}
-                  </td>
-                  <td className="muted small">
-                    {[r.qualityProfileId ? 'profile' : null, r.rootFolderPath ? 'root folder' : null, r.tags.length ? 'tags' : null, r.autoApprove ? 'auto-approve' : null]
-                      .filter(Boolean)
-                      .join(', ') || '—'}
-                  </td>
-                  <td className="align-right">
-                    <div className="row row-end">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing(r)}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setDeleting(r)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table caption="Override rules" density="dense" columns={columns} rows={rules.data} rowKey={(r) => r.id} sortable />
       )}
       {editing ? <RuleEditor rule={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete ${deleting?.name ?? 'rule'}?`}
+        confirmLabel="Delete rule"
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await del.mutateAsync(deleting.id);
           setDeleting(null);
         }}
       />
-    </Card>
+    </SettingsSection>
   );
 }
 
@@ -184,14 +204,20 @@ function RuleEditor({ rule, onClose }: { rule: OverrideRule | null; onClose: () 
     save.mutate({ id: rule?.id ?? null, body: fromDraft(d) }, { onSuccess: onClose });
   };
 
+  const pill = (on: boolean, label: string, onClick: () => void, key: number) => (
+    <button key={key} type="button" className="al-tag al-tag-toggle" aria-pressed={on} onClick={onClick}>
+      {label}
+    </button>
+  );
+
   return (
-    <Modal open size="lg" onClose={onClose} title={rule ? `Edit ${rule.name}` : 'Add override rule'} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} />}>
-      <div className="stack-sm">
-        <div className="fields-row">
-          <FormField label="Name">
+    <Modal open size={640} onClose={onClose} title={rule ? `Edit ${rule.name}` : 'Add override rule'} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} />}>
+      <div className="al-editor-stack">
+        <div className="al-field-grid">
+          <Field label="Name">
             <Input value={d.name} onChange={(e) => set('name', e.currentTarget.value)} />
-          </FormField>
-          <FormField label="Media type">
+          </Field>
+          <Field label="Media type">
             <Select
               value={d.mediaType}
               onChange={(e) => setD({ ...d, mediaType: e.currentTarget.value as MediaType, genres: [] })}
@@ -200,8 +226,8 @@ function RuleEditor({ rule, onClose }: { rule: OverrideRule | null; onClose: () 
                 { value: 'series', label: 'Series' },
               ]}
             />
-          </FormField>
-          <FormField label="Track">
+          </Field>
+          <Field label="Track">
             <Select
               value={d.is4k}
               onChange={(e) => set('is4k', e.currentTarget.value as RuleDraft['is4k'])}
@@ -211,44 +237,33 @@ function RuleEditor({ rule, onClose }: { rule: OverrideRule | null; onClose: () 
                 { value: 'yes', label: '4K only' },
               ]}
             />
-          </FormField>
+          </Field>
         </div>
-        <FormField label="Enabled" inline>
-          <Toggle checked={d.enabled} onChange={(e) => set('enabled', e.currentTarget.checked)} />
-        </FormField>
+        <Toggle label="Enabled" checked={d.enabled} onChange={(e) => set('enabled', e.currentTarget.checked)} />
 
-        <h3 className="section-title">Conditions (all must match; empty = any)</h3>
-        <FormField label="Users">
-          <div className="chip-group" role="group" aria-label="Users">
-            {(users.data ?? []).map((u) => (
-              <button key={u.id} type="button" className={`chip ${d.users.includes(u.id) ? 'chip-on' : ''}`} aria-pressed={d.users.includes(u.id)} onClick={() => toggleIn('users', u.id)}>
-                {u.displayName ?? u.username}
-              </button>
-            ))}
+        <div className="al-label">Conditions · all must match, empty = any</div>
+        <FormRow label="Users">
+          <div className="al-tag-toggles" role="group" aria-label="Users">
+            {(users.data ?? []).map((u) => pill(d.users.includes(u.id), u.displayName ?? u.username, () => toggleIn('users', u.id), u.id))}
           </div>
-        </FormField>
-        <FormField label="Genres">
-          <div className="chip-group" role="group" aria-label="Genres">
-            {(genres.data ?? []).map((g) => (
-              <button key={g.id} type="button" className={`chip ${d.genres.includes(g.id) ? 'chip-on' : ''}`} aria-pressed={d.genres.includes(g.id)} onClick={() => toggleIn('genres', g.id)}>
-                {g.name}
-              </button>
-            ))}
-            {genres.isError ? <span className="muted">Genres unavailable (TMDB not configured?)</span> : null}
+        </FormRow>
+        <FormRow label="Genres" caption={genres.isError ? 'Genres unavailable. Is TMDB configured?' : undefined}>
+          <div className="al-tag-toggles" role="group" aria-label="Genres">
+            {(genres.data ?? []).map((g) => pill(d.genres.includes(g.id), g.name, () => toggleIn('genres', g.id), g.id))}
           </div>
-        </FormField>
-        <div className="fields-row">
-          <FormField label="Original languages" hint="ISO 639-1 codes, comma separated (e.g. ja, ko)">
-            <Input value={d.languages} onChange={(e) => set('languages', e.currentTarget.value)} />
-          </FormField>
-          <FormField label="TMDB keyword ids" hint="Comma separated">
-            <Input value={d.keywords} onChange={(e) => set('keywords', e.currentTarget.value)} />
-          </FormField>
+        </FormRow>
+        <div className="al-field-grid al-field-grid--2">
+          <Field label="Original languages" hint="ISO 639-1 codes, comma separated (e.g. ja, ko)">
+            <Input mono value={d.languages} onChange={(e) => set('languages', e.currentTarget.value)} />
+          </Field>
+          <Field label="TMDB keyword ids" hint="Comma separated">
+            <Input mono value={d.keywords} onChange={(e) => set('keywords', e.currentTarget.value)} />
+          </Field>
         </div>
 
-        <h3 className="section-title">Then</h3>
-        <div className="fields-row">
-          <FormField label="Quality profile">
+        <div className="al-label">Then</div>
+        <div className="al-field-grid al-field-grid--2">
+          <Field label="Quality profile">
             <Select value={d.qualityProfileId} onChange={(e) => set('qualityProfileId', e.currentTarget.value)}>
               <option value="">Leave as is</option>
               {(profiles.data ?? []).map((p) => (
@@ -257,8 +272,8 @@ function RuleEditor({ rule, onClose }: { rule: OverrideRule | null; onClose: () 
                 </option>
               ))}
             </Select>
-          </FormField>
-          <FormField label="Root folder">
+          </Field>
+          <Field label="Root folder">
             <Select value={d.rootFolderPath} onChange={(e) => set('rootFolderPath', e.currentTarget.value)}>
               <option value="">Leave as is</option>
               {(folders.data ?? [])
@@ -269,16 +284,14 @@ function RuleEditor({ rule, onClose }: { rule: OverrideRule | null; onClose: () 
                   </option>
                 ))}
             </Select>
-          </FormField>
+          </Field>
         </div>
-        <FormField label="Add tags">
+        <FormRow label="Add tags">
           <TagPicker value={d.tags} onChange={(v) => set('tags', v)} />
-        </FormField>
-        <FormField label="Approve automatically" inline>
-          <Toggle checked={d.autoApprove} onChange={(e) => set('autoApprove', e.currentTarget.checked)} />
-        </FormField>
+        </FormRow>
+        <Toggle label="Approve automatically" checked={d.autoApprove} onChange={(e) => set('autoApprove', e.currentTarget.checked)} />
         {error ? (
-          <p className="inline-error" role="alert">
+          <p className="al-inline-error" role="alert">
             {error}
           </p>
         ) : null}

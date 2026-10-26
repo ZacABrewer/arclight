@@ -1,65 +1,141 @@
-import type { ReactNode } from 'react';
-import { Badge } from '../../components/badge.js';
-import { Card } from '../../components/card.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { Page } from '../../components/page.js';
-import { LoadingBlock } from '../../components/spinner.js';
+import type { Indexer, TorrentEngineState } from '@arclight/shared';
+import { Link } from '@tanstack/react-router';
+import { Chip, ErrorBlock, KeyValue, Pane, ProtocolBadge, Skeleton, type ChipTone, type KeyValueItem } from '../../arclight/index.js';
+import { useIndexerList } from '../../hooks/indexers.js';
 import { useSystemStatus } from '../../hooks/system.js';
-import { formatDateTime, formatUptime } from '../../lib/format.js';
+import { useTorrentStatus } from '../../hooks/torrent.js';
+import { formatRate, formatSpan, formatStamp } from './format.js';
+import { SystemHeader } from './system-header.js';
 
-function Fields({ rows }: { rows: Array<[string, ReactNode]> }) {
+const ENGINE_LABEL: Record<TorrentEngineState, [string, ChipTone]> = {
+  running: ['Running', 'accent'],
+  starting: ['Starting', 'neutral'],
+  lockdown: ['Lockdown', 'warn'],
+  error: ['Failed', 'danger'],
+  disabled: ['Disabled', 'muted'],
+};
+
+/** The built-in engine's live numbers (moved here from the old dashboard card). */
+function EnginePane() {
+  const engine = useTorrentStatus();
+  const s = engine.data;
+  if (engine.isError || !s) return null;
+  const [label, tone] = ENGINE_LABEL[s.state];
+  const items: KeyValueItem[] = [{ label: 'State', value: <Chip tone={tone}>{label}</Chip>, mono: false }];
+  if (s.state !== 'disabled') {
+    items.push(
+      { label: 'Download', value: formatRate(s.downloadRate) },
+      { label: 'Upload', value: formatRate(s.uploadRate) },
+      { label: 'Torrents', value: `${s.torrents.downloading} downloading · ${s.torrents.seeding} seeding · ${s.torrents.total} total` },
+      { label: 'Peers', value: String(s.peers) },
+    );
+  }
+  if (s.state === 'lockdown') {
+    items.push({ label: 'Cause', value: `VPN down. Torrents are paused and bound to 127.0.0.1${s.lockdownReason ? ` (${s.lockdownReason})` : ''}.`, mono: false });
+  }
   return (
-    <dl className="fields">
-      {rows.map(([label, value]) => (
-        <div key={label} className="fields-row">
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <Pane
+      title="Torrent engine"
+      actions={
+        <Link to="/settings/torrent" className="al-link">
+          Settings
+        </Link>
+      }
+    >
+      <KeyValue items={items} />
+    </Pane>
+  );
+}
+
+/** Indexer health as a chip: paused until a time, recently failing, or OK. */
+export function indexerChip(i: Pick<Indexer, 'status'>, now: number = Date.now()): { tone: ChipTone; label: string } {
+  const st = i.status;
+  const till = st?.disabledTill ? new Date(st.disabledTill).getTime() : NaN;
+  if (Number.isFinite(till) && till > now) return { tone: 'warn', label: `Paused · retry in ${formatSpan(till - now)}` };
+  if (st && st.failureCount > 0) return { tone: 'warn', label: `${st.failureCount} recent ${st.failureCount === 1 ? 'failure' : 'failures'}` };
+  return { tone: 'accent', label: 'OK' };
+}
+
+function IndexersPane() {
+  const list = useIndexerList();
+  if (list.isError) return null;
+  const rows = list.data ?? [];
+  return (
+    <Pane
+      title="Indexers"
+      actions={
+        <Link to="/indexers" className="al-link">
+          Manage
+        </Link>
+      }
+    >
+      {list.isLoading ? (
+        <Skeleton lines={3} />
+      ) : rows.length === 0 ? (
+        <p className="sys-muted">No indexers yet.</p>
+      ) : (
+        <ul className="sys-list">
+          {rows.map((i) => {
+            const chip = indexerChip(i);
+            return (
+              <li key={i.id}>
+                <span className="sys-list__name">{i.name}</span>
+                <ProtocolBadge protocol={i.protocol} />
+                <Chip tone={chip.tone}>{chip.label}</Chip>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Pane>
   );
 }
 
 export function SystemStatusPage() {
   const status = useSystemStatus();
   return (
-    <Page title="Status">
+    <>
+      <SystemHeader title="Status" />
       {status.isPending ? (
-        <LoadingBlock />
+        <Pane>
+          <Skeleton lines={5} />
+        </Pane>
       ) : status.isError ? (
-        <ErrorView error={status.error} onRetry={() => void status.refetch()} />
+        <ErrorBlock title="Couldn't read the system status" onRetry={() => void status.refetch()} />
       ) : (
-        <div className="grid">
-          <Card title="About">
-            <Fields
-              rows={[
-                ['Version', status.data.version],
-                ['Started', formatDateTime(status.data.startTime)],
-                ['Uptime', formatUptime(status.data.uptimeSeconds)],
-                ['Docker', status.data.isDocker ? <Badge tone="info">yes</Badge> : <Badge>no</Badge>],
+        <div className="sys-cols">
+          <Pane title="About">
+            <KeyValue
+              items={[
+                { label: 'Version', value: status.data.version },
+                { label: 'Started', value: formatStamp(status.data.startTime) },
+                { label: 'Uptime', value: formatSpan(status.data.uptimeSeconds * 1000) },
+                { label: 'Docker', value: status.data.isDocker ? 'Yes' : 'No' },
               ]}
             />
-          </Card>
-          <Card title="Runtime">
-            <Fields
-              rows={[
-                ['Node', status.data.runtime.node],
-                ['Platform', status.data.runtime.platform],
-                ['Architecture', status.data.runtime.arch],
+          </Pane>
+          <Pane title="Runtime">
+            <KeyValue
+              items={[
+                { label: 'Node', value: status.data.runtime.node },
+                { label: 'Platform', value: status.data.runtime.platform },
+                { label: 'Architecture', value: status.data.runtime.arch },
               ]}
             />
-          </Card>
-          <Card title="Paths">
-            <Fields
-              rows={[
-                ['Config', <code key="c">{status.data.paths.config}</code>],
-                ['Database', <code key="d">{status.data.paths.database}</code>],
-                ['Logs', <code key="l">{status.data.paths.logs}</code>],
+          </Pane>
+          <Pane title="Paths">
+            <KeyValue
+              items={[
+                { label: 'Config', value: status.data.paths.config },
+                { label: 'Database', value: status.data.paths.database },
+                { label: 'Logs', value: status.data.paths.logs },
               ]}
             />
-          </Card>
+          </Pane>
+          <EnginePane />
+          <IndexersPane />
         </div>
       )}
-    </Page>
+    </>
   );
 }

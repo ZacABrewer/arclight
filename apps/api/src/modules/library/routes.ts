@@ -35,7 +35,9 @@ import {
 } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { httpStatusFor, LibraryError } from './errors.js';
+import { createCutoffChecker, type CutoffProfiles } from './cutoff.js';
 import * as svc from './service.js';
+import { ProfilesService } from '../profiles/index.js';
 import type { MovieMetadataInput, SeriesMetadataInput } from './service.js';
 
 /**
@@ -48,8 +50,26 @@ export interface MetadataLookup {
   movie(tmdbId: number): Promise<MovieMetadataInput | null>;
 }
 
+/** Ids of the items a library command acts on. */
+export interface LibraryCommandTarget {
+  seriesIds?: number[];
+  movieIds?: number[];
+}
+
+/**
+ * Follow-up commands the bulk editor (and "search on add") can queue. Provided by wiring.ts
+ * (metadata refresher and releases search); each starts a job and returns without waiting.
+ */
+export interface LibraryCommands {
+  refresh(target: LibraryCommandTarget): void;
+  search(target: LibraryCommandTarget): void;
+}
+
 export interface LibraryRoutesOptions {
   metadata?: MetadataLookup;
+  commands?: LibraryCommands;
+  /** Profiles for the cutoff-unmet queries; defaults to a ProfilesService on the same db. */
+  profiles?: CutoffProfiles;
 }
 
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
@@ -78,6 +98,23 @@ export const libraryRoutes = (
       req.log.error({ err }, 'unhandled library error');
       return reply.code(500).send({ error: 'internal error' });
     });
+
+    const profiles: CutoffProfiles = opts.profiles ?? new ProfilesService({ db });
+    const commands = opts.commands;
+    const queueSearch = (target: LibraryCommandTarget, legacyJob: string) => {
+      if (commands) commands.search(target);
+      else if (ctx.scheduler.has(legacyJob)) void ctx.scheduler.run(legacyJob, 'system');
+    };
+    type FollowUpFlags = { refresh?: boolean | undefined; search?: boolean | undefined };
+    /** Checked before the update, so an unavailable command does not leave a half-applied request. */
+    const assertCommands = (body: FollowUpFlags) => {
+      if ((body.refresh || body.search) && !commands) throw new LibraryError('VALIDATION', 'refresh and search commands are not available');
+    };
+    /** Bulk `refresh` / `search` flags: queued after the update committed. */
+    const followUps = (body: FollowUpFlags, target: LibraryCommandTarget) => {
+      if (body.refresh) commands?.refresh(target);
+      if (body.search) commands?.search(target);
+    };
 
     const metadata: MetadataLookup = opts.metadata ?? {
       series: async () => {
@@ -136,9 +173,7 @@ export const libraryRoutes = (
         if (!meta) throw LibraryError.notFound('series metadata for tmdbId', req.body.tmdbId);
         const series = svc.addSeries(db, meta, req.body);
         announce('added', 'series', series.id);
-        if (req.body.searchOnAdd && ctx.scheduler.has('series-search')) {
-          void ctx.scheduler.run('series-search', 'system');
-        }
+        if (req.body.searchOnAdd) queueSearch({ seriesIds: [series.id] }, 'series-search');
         return reply.code(201).send(series);
       },
     );
@@ -146,8 +181,10 @@ export const libraryRoutes = (
       '/series/bulk',
       { schema: { body: BulkSeriesUpdateRequest, response: { 200: z.array(Series), 400: ErrorResponse, 404: ErrorResponse } } },
       async (req) => {
+        assertCommands(req.body);
         const updated = svc.bulkUpdateSeries(db, req.body);
         for (const s of updated) announce('updated', 'series', s.id);
+        followUps(req.body, { seriesIds: req.body.ids });
         return updated;
       },
     );
@@ -220,9 +257,7 @@ export const libraryRoutes = (
         if (!meta) throw LibraryError.notFound('movie metadata for tmdbId', req.body.tmdbId);
         const movie = svc.addMovie(db, meta, req.body);
         announce('added', 'movie', movie.id);
-        if (req.body.searchOnAdd && ctx.scheduler.has('movie-search')) {
-          void ctx.scheduler.run('movie-search', 'system');
-        }
+        if (req.body.searchOnAdd) queueSearch({ movieIds: [movie.id] }, 'movie-search');
         return reply.code(201).send(movie);
       },
     );
@@ -230,8 +265,10 @@ export const libraryRoutes = (
       '/movie/bulk',
       { schema: { body: BulkMovieUpdateRequest, response: { 200: z.array(Movie), 400: ErrorResponse, 404: ErrorResponse } } },
       async (req) => {
+        assertCommands(req.body);
         const updated = svc.bulkUpdateMovies(db, req.body);
         for (const m of updated) announce('updated', 'movie', m.id);
+        followUps(req.body, { movieIds: req.body.ids });
         return updated;
       },
     );
@@ -279,6 +316,14 @@ export const libraryRoutes = (
     );
     app.get('/wanted/missing/movies', { schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
       svc.listMissingMovies(db, req.query),
+    );
+    // Cutoff unmet: monitored items with a file below their profile's quality or format-score
+    // cutoff. Same checker as the CutoffUnmetSearch job (releases.isFileCutoffMet).
+    app.get('/wanted/cutoff/episodes', { schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
+      svc.listCutoffUnmetEpisodes(db, req.query, createCutoffChecker(db, profiles)),
+    );
+    app.get('/wanted/cutoff/movies', { schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
+      svc.listCutoffUnmetMovies(db, req.query, createCutoffChecker(db, profiles)),
     );
 
     // ----------------------------------------------------------------------------- exclusions + stats

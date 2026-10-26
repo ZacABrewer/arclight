@@ -1,17 +1,12 @@
 import { useEffect, useState } from 'react';
 import type { DiscoverSlider, DiscoverSliderType } from '@arclight/shared';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input, Select, Toggle } from '../../../components/form.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, ErrorBlock, Field, Input, Modal, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
-import { Modal } from '../../../components/modal.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { CUSTOM_SLIDER_TYPES, SLIDER_LABELS } from '../../../features/requests/status.js';
 import { useCreateSlider, useDeleteSlider, useOrderSliders, useResetSliders, useSliders, useUpdateSlider } from '../../../hooks/requests.js';
-import { EditorFooter, SaveError } from '../shared.js';
-import '../../../features/requests/requests.css';
+import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
+import './requests-settings.css';
 
 /** Move the item at `index` by `delta` (-1 up, +1 down); out-of-range moves are no-ops. */
 export function moveItem<T>(list: readonly T[], index: number, delta: number): T[] {
@@ -43,30 +38,44 @@ export function SlidersCard() {
     JSON.stringify(draft.map((s) => [s.id, s.enabled])) !== JSON.stringify([...sliders.data].sort((a, b) => a.order - b.order).map((s) => [s.id, s.enabled]));
 
   return (
-    <Card
-      title="Discover sliders"
-      actions={
-        <div className="row">
-          <Button onClick={() => setEditing('new')}>Add slider</Button>
-          <Button variant="ghost" onClick={() => setConfirmReset(true)}>
+    <SettingsSection
+      label="Discover sliders"
+      {...(draft ? { count: draft.length } : {})}
+      action={
+        <div className="al-section-actions">
+          <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+            Add slider
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setConfirmReset(true)}>
             Reset to defaults
           </Button>
-          <Button variant="primary" disabled={!dirty} loading={order.isPending} onClick={() => draft && order.mutate(draft.map((s) => ({ id: s.id, enabled: s.enabled })))}>
+          <Button
+            size="sm"
+            variant="secondary"
+            disabled={!dirty}
+            loading={order.isPending}
+            onClick={() => draft && order.mutate(draft.map((s) => ({ id: s.id, enabled: s.enabled })))}
+          >
             Save order
           </Button>
         </div>
       }
     >
       {sliders.isError ? (
-        <ErrorView error={sliders.error} onRetry={() => void sliders.refetch()} />
+        <ErrorBlock title="Could not load sliders" onRetry={() => void sliders.refetch()}>
+          {errorMessage(sliders.error)}
+        </ErrorBlock>
       ) : !draft ? (
-        <LoadingBlock />
+        <Skeleton lines={4} />
       ) : (
-        <ol className="slider-list" aria-label="Sliders">
+        <ol className="al-order-list" aria-label="Sliders">
           {draft.map((s, i) => {
             const label = s.title ?? SLIDER_LABELS[s.type];
             return (
-              <li key={s.id} className="slider-item">
+              <li key={s.id} className="al-order-row">
+                <span className="al-order-row__index al-num" aria-hidden="true">
+                  {String(i + 1).padStart(2, '0')}
+                </span>
                 <Toggle
                   aria-label={`Show ${label}`}
                   checked={s.enabled}
@@ -75,25 +84,34 @@ export function SlidersCard() {
                     setDraft(draft.map((x) => (x.id === s.id ? { ...x, enabled } : x)));
                   }}
                 />
-                <span className="slider-item-title">
-                  {label} {s.isBuiltIn ? <Badge>built-in</Badge> : <Badge tone="info">{SLIDER_LABELS[s.type]}</Badge>}
+                <span className="al-order-row__title">
+                  {label}{' '}
+                  {s.isBuiltIn ? (
+                    <Chip tone="neutral" dot="none">
+                      Built-in
+                    </Chip>
+                  ) : (
+                    <Chip dot="none">{SLIDER_LABELS[s.type]}</Chip>
+                  )}
                 </span>
-                <Button size="sm" variant="ghost" aria-label={`Move ${label} up`} disabled={i === 0} onClick={() => setDraft(moveItem(draft, i, -1))}>
-                  ↑
-                </Button>
-                <Button size="sm" variant="ghost" aria-label={`Move ${label} down`} disabled={i === draft.length - 1} onClick={() => setDraft(moveItem(draft, i, 1))}>
-                  ↓
-                </Button>
-                {!s.isBuiltIn ? (
-                  <>
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(s)}>
-                      Edit
-                    </Button>
-                    <Button size="sm" variant="ghost" onClick={() => setDeleting(s)}>
-                      Delete
-                    </Button>
-                  </>
-                ) : null}
+                <span className="al-order-row__actions">
+                  <Button size="sm" variant="ghost" aria-label={`Move ${label} up`} disabled={i === 0} onClick={() => setDraft(moveItem(draft, i, -1))}>
+                    ↑
+                  </Button>
+                  <Button size="sm" variant="ghost" aria-label={`Move ${label} down`} disabled={i === draft.length - 1} onClick={() => setDraft(moveItem(draft, i, 1))}>
+                    ↓
+                  </Button>
+                  {!s.isBuiltIn ? (
+                    <>
+                      <Button size="sm" variant="ghost" onClick={() => setEditing(s)} aria-label={`Edit ${label}`}>
+                        Edit
+                      </Button>
+                      <Button size="sm" variant="danger" onClick={() => setDeleting(s)} aria-label={`Delete ${label}`}>
+                        Delete
+                      </Button>
+                    </>
+                  ) : null}
+                </span>
               </li>
             );
           })}
@@ -103,6 +121,7 @@ export function SlidersCard() {
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete ${deleting?.title ?? 'slider'}?`}
+        confirmLabel="Delete slider"
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await del.mutateAsync(deleting.id);
@@ -112,7 +131,7 @@ export function SlidersCard() {
       <ConfirmDialog
         open={confirmReset}
         title="Reset sliders?"
-        confirmLabel="Reset"
+        confirmLabel="Reset sliders"
         onCancel={() => setConfirmReset(false)}
         onConfirm={async () => {
           await reset.mutateAsync(undefined);
@@ -121,7 +140,7 @@ export function SlidersCard() {
       >
         Custom sliders are deleted and the built-in ones return to their default order.
       </ConfirmDialog>
-    </Card>
+    </SettingsSection>
   );
 }
 
@@ -147,30 +166,30 @@ function SliderEditor({ slider, onClose }: { slider: DiscoverSlider | null; onCl
   };
 
   return (
-    <Modal open onClose={onClose} title={slider ? `Edit ${slider.title ?? 'slider'}` : 'Add slider'} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending || update.isPending} />}>
-      <FormField label="Type">
+    <Modal open size={560} onClose={onClose} title={slider ? `Edit ${slider.title ?? 'slider'}` : 'Add slider'} footer={<EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending || update.isPending} />}>
+      <div className="al-editor-stack">
+      <Field label="Type">
         <Select
           value={type}
           disabled={slider !== null}
           onChange={(e) => setType(e.currentTarget.value as DiscoverSliderType)}
           options={CUSTOM_SLIDER_TYPES.map((t) => ({ value: t.type, label: SLIDER_LABELS[t.type] }))}
         />
-      </FormField>
-      <FormField label="Title">
+      </Field>
+      <Field label="Title">
         <Input value={title} onChange={(e) => setTitle(e.currentTarget.value)} />
-      </FormField>
-      <FormField label={dataLabel}>
+      </Field>
+      <Field label={dataLabel}>
         <Input value={data} onChange={(e) => setData(e.currentTarget.value)} />
-      </FormField>
-      <FormField label="Enabled" inline>
-        <Toggle checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
-      </FormField>
+      </Field>
+      <Toggle label="Enabled" checked={enabled} onChange={(e) => setEnabled(e.currentTarget.checked)} />
       {error ? (
-        <p className="inline-error" role="alert">
+        <p className="al-inline-error" role="alert">
           {error}
         </p>
       ) : null}
       <SaveError error={create.error ?? update.error} />
+      </div>
     </Modal>
   );
 }

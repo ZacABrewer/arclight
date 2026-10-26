@@ -6,6 +6,7 @@ import { ToastProvider } from '../components/toast.js';
 import { createToastStore } from '../lib/toast.js';
 import { createQueryClient } from '../query-client.js';
 import { routeTree } from '../router.js';
+import { loginHref } from './guard.js';
 
 class FakeSocket {
   onopen = null;
@@ -66,7 +67,7 @@ describe('route guard', () => {
       return undefined;
     };
     const router = renderAt('/library/tv');
-    expect(await screen.findByRole('heading', { name: 'Admin account' })).toBeTruthy();
+    expect(await screen.findByRole('heading', { name: 'Create the admin account' })).toBeTruthy();
     expect(router.state.location.pathname).toBe('/setup');
   });
 
@@ -90,7 +91,13 @@ describe('route guard', () => {
     renderAt('/calendar');
     expect(await screen.findByRole('button', { name: /Vee/ })).toBeTruthy();
     expect(screen.queryByRole('link', { name: 'Settings' })).toBeNull();
+    expect(screen.queryByRole('link', { name: 'System' })).toBeNull();
     expect(screen.getByRole('link', { name: 'Calendar' })).toBeTruthy();
+    // No admin status in the top bar; the mobile bar swaps Activity for Requests.
+    expect(document.querySelector('.al-topbar__requests')).toBeNull();
+    expect(document.querySelector('.al-topbar__vpn')).toBeNull();
+    const tabbar = document.querySelector('.al-tabbar') as HTMLElement;
+    expect(Array.from(tabbar.querySelectorAll('.al-tabbar__item')).map((t) => t.textContent)).toEqual(['Home', 'Library', 'Discover', 'Requests', 'More']);
     fireEvent.click(screen.getByRole('button', { name: /Vee/ }));
     expect(screen.getByRole('menuitem', { name: 'Sign out' })).toBeTruthy();
     expect(screen.queryByRole('menuitem', { name: /Security/ })).toBeNull();
@@ -98,6 +105,22 @@ describe('route guard', () => {
 });
 
 describe('login form', () => {
+  it('shows the session-expired banner (Page 07) when a 401 sent the user back', async () => {
+    handler = (url) => (url === '/api/v1/auth/status' ? { status: 200, body: anonymous() } : undefined);
+    renderAt(loginHref('/calendar', true));
+    expect(await screen.findByText('Your session expired. Sign in to continue.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Sign in' })).toBeTruthy();
+    expect(loginHref('/calendar', true)).toBe('/login?redirect=%2Fcalendar&expired=1');
+    expect(loginHref('/')).toBe('/login');
+  });
+
+  it('shows no banner on a normal visit', async () => {
+    handler = (url) => (url === '/api/v1/auth/status' ? { status: 200, body: anonymous() } : undefined);
+    renderAt('/login');
+    await screen.findByRole('heading', { name: 'Sign in' });
+    expect(screen.queryByText(/session expired/)).toBeNull();
+  });
+
   it('validates, reports bad credentials, then signs in and returns to the target', async () => {
     let authed = false;
     const { status, session } = signedIn(admin);
@@ -152,16 +175,16 @@ describe('setup wizard', () => {
       return undefined;
     };
     renderAt('/setup');
-    await screen.findByRole('heading', { name: 'Admin account' });
+    await screen.findByRole('heading', { name: 'Create the admin account' });
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'short' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create admin' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create admin account' }));
     expect(await screen.findByText('At least 8 characters.')).toBeTruthy();
     expect(calls.some((c) => c.url === '/api/v1/setup/admin')).toBe(false);
 
     fireEvent.change(screen.getByLabelText('Password'), { target: { value: 'password1' } });
     fireEvent.change(screen.getByLabelText('Confirm password'), { target: { value: 'password1' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create admin' }));
-    expect(await screen.findByRole('heading', { name: 'TMDB key' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Create admin account' }));
+    expect(await screen.findByRole('heading', { name: 'Connect TMDB' })).toBeTruthy();
     expect(calls.find((c) => c.url === '/api/v1/setup/admin')?.body).toEqual({ username: 'admin', password: 'password1' });
   });
 
@@ -175,8 +198,8 @@ describe('setup wizard', () => {
       return undefined;
     };
     renderAt('/setup');
-    await screen.findByRole('heading', { name: 'TMDB key' });
-    fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+    await screen.findByRole('heading', { name: 'Connect TMDB' });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
     expect((await screen.findByRole('alert')).textContent).toMatch(/TMDB API key is required/);
   });
 });

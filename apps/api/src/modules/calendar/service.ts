@@ -68,9 +68,13 @@ export class CalendarService {
     private readonly now: () => Date = () => new Date(),
   ) {}
 
-  list(query: CalendarQuery): CalendarItem[] {
+  list(query: Omit<CalendarQuery, 'mediaType'> & { mediaType?: CalendarQuery['mediaType'] }): CalendarItem[] {
     const range = resolveRange(query, this.now());
-    const items: CalendarItem[] = [...this.episodeItems(range, query), ...this.movieItems(range, query)];
+    const mediaType = query.mediaType ?? 'all';
+    const items: CalendarItem[] = [
+      ...(mediaType === 'movie' ? [] : this.episodeItems(range, query)),
+      ...(mediaType === 'series' ? [] : this.movieItems(range, query)),
+    ];
     return items.sort(
       (a, b) => instant(a.date) - instant(b.date) || titleOf(a).localeCompare(titleOf(b)) || orderOf(a) - orderOf(b),
     );
@@ -78,7 +82,7 @@ export class CalendarService {
 
   // ---- episodes ----------------------------------------------------------------------------
 
-  private episodeItems(range: CalendarRange, query: CalendarQuery): CalendarEpisodeItem[] {
+  private episodeItems(range: CalendarRange, query: Omit<CalendarQuery, 'mediaType'>): CalendarEpisodeItem[] {
     // Coarse SQL window on the text columns (one day of slack either side), exact filter in JS.
     const lo = isoDay(range.start.getTime() - DAY_MS);
     const hi = isoDay(range.end.getTime() + DAY_MS) + '~';
@@ -131,7 +135,7 @@ export class CalendarService {
 
   // ---- movies --------------------------------------------------------------------------------
 
-  private movieItems(range: CalendarRange, query: CalendarQuery): CalendarMovieItem[] {
+  private movieItems(range: CalendarRange, query: Omit<CalendarQuery, 'mediaType'>): CalendarMovieItem[] {
     const lo = isoDay(range.start.getTime() - DAY_MS);
     const hi = isoDay(range.end.getTime() + DAY_MS) + '~';
     const window = (col: typeof movies.inCinemas | typeof movies.digitalRelease | typeof movies.physicalRelease) => and(isNotNull(col), gte(col, lo), lte(col, hi));
@@ -173,6 +177,17 @@ export class CalendarService {
     // Another request may have won the race; re-read so everyone agrees.
     const stored = this.db.select().from(settings).where(eq(settings.key, ICS_TOKEN_KEY)).get();
     return typeof stored?.value === 'string' ? stored.value : token;
+  }
+
+  /** Replace the feed token; subscribed calendar apps must be given the new feed URL. */
+  regenerateToken(): string {
+    const token = randomBytes(24).toString('hex');
+    this.db
+      .insert(settings)
+      .values({ key: ICS_TOKEN_KEY, value: token, updatedAt: this.now().toISOString() })
+      .onConflictDoUpdate({ target: settings.key, set: { value: token, updatedAt: this.now().toISOString() } })
+      .run();
+    return token;
   }
 
   verifyToken(token: string | undefined): void {

@@ -1,26 +1,43 @@
-import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
-import type { Movie, WantedEpisode } from '@arclight/shared';
-import { ApiError, errorMessage } from '../../api/client.js';
+import { useEffect, useState } from 'react';
+import { Link, useNavigate } from '@tanstack/react-router';
+import type { Movie, SearchCommandRequest, WantedEpisode } from '@arclight/shared';
+import { errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
-import { Button } from '../../components/button.js';
-import { Card } from '../../components/card.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { EpisodeStatusChip } from '../../components/media/media-ui.js';
+import {
+  Button,
+  EmptyState,
+  PageHeader,
+  Paginator,
+  Pane,
+  Segmented,
+  StatusChip,
+  Table,
+  Tabs,
+  type Column,
+  type RowKey,
+} from '../../arclight/index.js';
 import { episodeCode, formatDate } from '../../components/media/format.js';
-import { Page } from '../../components/page.js';
-import { Table, type Column } from '../../components/table.js';
-import { Tabs } from '../../components/tabs.js';
+import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { useToast } from '../../components/toast.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
-import '../../components/media/media.css';
+import './wanted.css';
 
 const PAGE_SIZE = 50;
-/** Largest page the api allows; "search all" collects ids with one request of this size. */
+/** Largest page the api allows; "Search all" collects ids with one request of this size. */
 const MAX_PAGE = 500;
 
 type Mode = 'missing' | 'cutoff';
+type Kind = 'episodes' | 'movies';
+
+const MODE_TABS = [
+  { id: 'missing', label: 'Missing' },
+  { id: 'cutoff', label: 'Cutoff unmet' },
+] as const;
+
+const KIND_OPTIONS = [
+  { value: 'episodes' as const, label: 'Episodes' },
+  { value: 'movies' as const, label: 'Movies' },
+];
 
 export function WantedMissingPage() {
   return <WantedPage mode="missing" />;
@@ -30,20 +47,35 @@ export function WantedCutoffPage() {
   return <WantedPage mode="cutoff" />;
 }
 
+/** Short mono date: "21 Feb 2025". */
+export function shortDate(value: string | null | undefined): string {
+  return formatDate(value, { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
 function WantedPage({ mode }: { mode: Mode }) {
+  const navigate = useNavigate();
+  const [kind, setKind] = useState<Kind>('episodes');
+  useEffect(() => {
+    document.title = `${mode === 'missing' ? 'Missing' : 'Cutoff unmet'} · Arclight`;
+  }, [mode]);
   return (
-    <Page title={mode === 'missing' ? 'Missing' : 'Cutoff unmet'}>
-      <Tabs
-        tabs={[
-          { id: 'episodes', label: 'Episodes', content: <EpisodesTab mode={mode} /> },
-          { id: 'movies', label: 'Movies', content: <MoviesTab mode={mode} /> },
-        ]}
-      />
-    </Page>
+    <div className="wanted-page">
+      <PageHeader index="05" title="Wanted">
+        <Tabs
+          compact
+          aria-label="Wanted lists"
+          value={mode}
+          tabs={MODE_TABS}
+          onChange={(id) => void navigate({ to: id === 'missing' ? '/wanted/missing' : '/wanted/cutoff' })}
+        />
+        <Segmented aria-label="Media type" options={KIND_OPTIONS} value={kind} onChange={setKind} />
+      </PageHeader>
+      {kind === 'episodes' ? <EpisodesList key={`e-${mode}`} mode={mode} /> : <MoviesList key={`m-${mode}`} mode={mode} />}
+    </div>
   );
 }
 
-function useWantedList(mode: Mode, kind: 'episodes' | 'movies', page: number) {
+function useWantedList(mode: Mode, kind: Kind, page: number) {
   // Both hooks are always called (rules of hooks); only the one for this mode is enabled.
   const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing');
   const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff');
@@ -55,7 +87,7 @@ function useBatchSearch() {
   const search = useAutomaticSearch();
   const toast = useToast();
   const [running, setRunning] = useState(false);
-  const run = async (requests: Array<Parameters<typeof search.mutateAsync>[0]>) => {
+  const run = async (requests: SearchCommandRequest[]) => {
     setRunning(true);
     try {
       for (const r of requests) await search.mutateAsync(r);
@@ -66,28 +98,126 @@ function useBatchSearch() {
     }
     if (requests.length > 1) toast.push({ tone: 'info', title: `Queued ${requests.length} searches` });
   };
-  return { run, running };
+  return { run, running, search };
 }
 
-function EpisodesTab({ mode }: { mode: Mode }) {
+function statusChip(mode: Mode) {
+  return mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
+}
+
+interface ListShellProps<T> {
+  mode: Mode;
+  noun: string;
+  total: number | undefined;
+  page: number;
+  onPage: (p: number) => void;
+  rows: T[] | undefined;
+  loading: boolean;
+  columns: Column<T>[];
+  rowKey: (r: T) => number;
+  rowLabel: (r: T) => string;
+  mobileRow: (r: T) => { title: string; sub: string };
+  selected: Set<RowKey>;
+  onSelect: (s: Set<RowKey>) => void;
+  running: boolean;
+  onSearchRows: (ids: number[]) => void;
+  onSearchAll: () => void;
+}
+
+/** Shared frame: header actions, rich selectable table (desktop) or swipe rows (mobile), paginator. */
+function ListShell<T>(p: ListShellProps<T>) {
+  const mobile = useIsMobile();
+  const pages = Math.max(1, Math.ceil((p.total ?? 0) / PAGE_SIZE));
+  const empty = (
+    <EmptyState title={p.mode === 'missing' ? `No missing ${p.noun}` : `No ${p.noun} below cutoff`}>
+      {p.mode === 'missing' ? 'Every monitored item that has aired is on disk.' : 'Every file meets its profile cutoff.'}
+    </EmptyState>
+  );
+  return (
+    <Pane
+      flush
+      title={p.total === undefined ? p.noun.toUpperCase() : `${p.total} ${p.noun}`}
+      actions={
+        <Button variant="primary" size="sm" disabled={!p.total} loading={p.running} onClick={p.onSearchAll}>
+          Search all
+        </Button>
+      }
+    >
+      {mobile ? (
+        p.loading ? (
+          <Loading />
+        ) : (p.rows ?? []).length === 0 ? (
+          empty
+        ) : (
+          <div className="mk-mlist" role="list" aria-label={`Wanted ${p.noun}`}>
+            {(p.rows ?? []).map((r) => {
+              const m = p.mobileRow(r);
+              return (
+                <SwipeRow key={p.rowKey(r)} onSearch={() => p.onSearchRows([p.rowKey(r)])} searchLabel={`Search ${p.rowLabel(r)}`}>
+                  <div className="mk-mrow" role="listitem">
+                    <div style={{ minWidth: 0 }}>
+                      <div className="mk-mrow__title">{m.title}</div>
+                      <div className="mk-mrow__sub al-num">{m.sub}</div>
+                    </div>
+                    {statusChip(p.mode)}
+                  </div>
+                </SwipeRow>
+              );
+            })}
+          </div>
+        )
+      ) : (
+        <Table
+          columns={p.columns}
+          rows={p.rows}
+          loading={p.loading}
+          rowKey={p.rowKey}
+          density="rich"
+          sortable={false}
+          selectable
+          selected={p.selected}
+          onSelectionChange={p.onSelect}
+          rowLabel={(r) => `Select ${p.rowLabel(r)}`}
+          empty={empty}
+          caption={`Wanted ${p.noun}`}
+          bulkActions={(keys, clear) => (
+            <>
+              <Button
+                variant="ghost"
+                loading={p.running}
+                onClick={() => {
+                  p.onSearchRows([...keys].map(Number));
+                  clear();
+                }}
+              >
+                Search selected
+              </Button>
+              <Button variant="ghost" loading={p.running} onClick={p.onSearchAll}>
+                Search all
+              </Button>
+            </>
+          )}
+        />
+      )}
+      {pages > 1 ? (
+        <div className="wanted-foot">
+          <Paginator page={p.page} pageCount={pages} onPageChange={p.onPage} />
+        </div>
+      ) : null}
+    </Pane>
+  );
+}
+
+function EpisodesList({ mode }: { mode: Mode }) {
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'episodes', page);
   const batch = useBatchSearch();
   const toast = useToast();
-  const records = (list.data?.records ?? []) as WantedEpisode[];
 
-  if (list.isError) return <ErrorView error={list.error} onRetry={() => void list.refetch()} />;
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted episodes" />;
   if (list.data === null) return <CutoffPending />;
-
-  const toggle = (id: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  const allSelected = records.length > 0 && records.every((r) => selected.has(r.id));
+  const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
 
   const searchAll = async () => {
     try {
@@ -98,88 +228,74 @@ function EpisodesTab({ mode }: { mode: Mode }) {
       const ids = all.records.map((r) => r.id);
       if (ids.length) await batch.run([{ episodeIds: ids }]);
     } catch (err) {
-      toast.error('Search failed', err instanceof ApiError ? err.message : errorMessage(err));
+      toast.error('Search failed', errorMessage(err));
     }
   };
 
+  const label = (r: WantedEpisode) => `${r.seriesTitle} ${episodeCode(r.seasonNumber, r.episodeNumber)}`;
   const columns: Column<WantedEpisode>[] = [
-    {
-      key: 'select',
-      header: (
-        <input
-          type="checkbox"
-          aria-label="Select all"
-          checked={allSelected}
-          onChange={() => setSelected(allSelected ? new Set() : new Set(records.map((r) => r.id)))}
-        />
-      ),
-      cell: (r) => <input type="checkbox" aria-label={`Select ${r.seriesTitle} ${episodeCode(r.seasonNumber, r.episodeNumber)}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />,
-      width: '32px',
-    },
     {
       key: 'series',
       header: 'Series',
       cell: (r) => (
-        <Link to="/library/series/$id" params={{ id: String(r.seriesId) }}>
+        <Link className="mk-link" to="/library/series/$id" params={{ id: String(r.seriesId) }}>
           {r.seriesTitle}
         </Link>
       ),
     },
-    { key: 'episode', header: 'Episode', cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber) },
-    { key: 'title', header: 'Title', cell: (r) => r.title || '—' },
-    { key: 'airDate', header: 'Air date', cell: (r) => formatDate(r.airDateUtc ?? r.airDate) },
-    { key: 'status', header: 'Status', cell: (r) => <EpisodeStatusChip episode={r} /> },
+    { key: 'episode', header: 'Episode', mono: true, cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber), width: '96px' },
+    { key: 'title', header: 'Title', muted: true, cell: (r) => r.title || '—' },
+    { key: 'airDate', header: 'Air date', mono: true, cell: (r) => shortDate(r.airDateUtc ?? r.airDate), width: '130px' },
+    { key: 'status', header: 'Status', cell: () => statusChip(mode), width: '150px' },
+    {
+      key: 'search',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      width: '96px',
+      cell: (r) => (
+        <Button size="sm" aria-label={`Search ${label(r)}`} onClick={() => batch.search.mutate({ episodeIds: [r.id] })}>
+          Search
+        </Button>
+      ),
+    },
   ];
 
   return (
-    <Card
-      flush
-      actions={
-        <>
-          <Button size="sm" disabled={selected.size === 0} loading={batch.running} onClick={() => void batch.run([{ episodeIds: [...selected] }])}>
-            Search selected ({selected.size})
-          </Button>
-          <Button size="sm" variant="primary" disabled={!list.data?.totalRecords} loading={batch.running} onClick={() => void searchAll()}>
-            Search all
-          </Button>
-        </>
-      }
-      title={list.data ? `${list.data.totalRecords} episodes` : 'Episodes'}
-    >
-      <Table
-        columns={columns}
-        rows={list.data ? records : undefined}
-        loading={list.isPending}
-        rowKey={(r) => r.id}
-        sortable={false}
-        empty={<EmptyState title={mode === 'missing' ? 'No missing episodes' : 'No episodes below cutoff'} />}
-        caption="Wanted episodes"
-      />
-      <Pager page={page} pageSize={PAGE_SIZE} total={list.data?.totalRecords ?? 0} onPage={(p) => { setPage(p); setSelected(new Set()); }} />
-    </Card>
+    <ListShell
+      mode={mode}
+      noun="episodes"
+      total={list.data?.totalRecords}
+      page={page}
+      onPage={(p) => {
+        setPage(p);
+        setSelected(new Set());
+      }}
+      rows={records}
+      loading={list.isPending}
+      columns={columns}
+      rowKey={(r) => r.id}
+      rowLabel={label}
+      mobileRow={(r) => ({ title: r.seriesTitle, sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}` })}
+      selected={selected}
+      onSelect={setSelected}
+      running={batch.running}
+      onSearchRows={(ids) => void batch.run([{ episodeIds: ids }])}
+      onSearchAll={() => void searchAll()}
+    />
   );
 }
 
-function MoviesTab({ mode }: { mode: Mode }) {
+function MoviesList({ mode }: { mode: Mode }) {
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'movies', page);
   const profiles = useQualityProfiles();
   const batch = useBatchSearch();
   const toast = useToast();
-  const records = (list.data?.records ?? []) as Movie[];
 
-  if (list.isError) return <ErrorView error={list.error} onRetry={() => void list.refetch()} />;
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted movies" />;
   if (list.data === null) return <CutoffPending />;
-
-  const allSelected = records.length > 0 && records.every((r) => selected.has(r.id));
-  const toggle = (id: number) =>
-    setSelected((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
+  const records = list.data ? (list.data.records as Movie[]) : undefined;
 
   const searchAll = async () => {
     try {
@@ -195,93 +311,63 @@ function MoviesTab({ mode }: { mode: Mode }) {
 
   const columns: Column<Movie>[] = [
     {
-      key: 'select',
-      header: (
-        <input
-          type="checkbox"
-          aria-label="Select all"
-          checked={allSelected}
-          onChange={() => setSelected(allSelected ? new Set() : new Set(records.map((r) => r.id)))}
-        />
-      ),
-      cell: (r) => <input type="checkbox" aria-label={`Select ${r.title}`} checked={selected.has(r.id)} onChange={() => toggle(r.id)} />,
-      width: '32px',
-    },
-    {
       key: 'title',
       header: 'Title',
       cell: (r) => (
-        <Link to="/library/movie/$id" params={{ id: String(r.id) }}>
+        <Link className="mk-link" to="/library/movie/$id" params={{ id: String(r.id) }}>
           {r.title}
         </Link>
       ),
     },
-    { key: 'year', header: 'Year', cell: (r) => r.year || '—' },
-    { key: 'profile', header: 'Profile', cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
-    { key: 'cinemas', header: 'In cinemas', cell: (r) => formatDate(r.inCinemas) },
-    { key: 'digital', header: 'Digital', cell: (r) => formatDate(r.digitalRelease) },
-    { key: 'physical', header: 'Physical', cell: (r) => formatDate(r.physicalRelease) },
+    { key: 'year', header: 'Year', mono: true, cell: (r) => r.year || '—', width: '72px' },
+    { key: 'profile', header: 'Profile', muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
+    { key: 'cinemas', header: 'In cinemas', mono: true, cell: (r) => shortDate(r.inCinemas) },
+    { key: 'digital', header: 'Digital', mono: true, cell: (r) => shortDate(r.digitalRelease) },
+    { key: 'physical', header: 'Physical', mono: true, cell: (r) => shortDate(r.physicalRelease) },
+    { key: 'status', header: 'Status', cell: () => statusChip(mode), width: '150px' },
+    {
+      key: 'search',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      width: '96px',
+      cell: (r) => (
+        <Button size="sm" aria-label={`Search ${r.title}`} onClick={() => batch.search.mutate({ movieId: r.id })}>
+          Search
+        </Button>
+      ),
+    },
   ];
 
   return (
-    <Card
-      flush
-      title={list.data ? `${list.data.totalRecords} movies` : 'Movies'}
-      actions={
-        <>
-          <Button
-            size="sm"
-            disabled={selected.size === 0}
-            loading={batch.running}
-            onClick={() => void batch.run([...selected].map((movieId) => ({ movieId })))}
-          >
-            Search selected ({selected.size})
-          </Button>
-          <Button size="sm" variant="primary" disabled={!list.data?.totalRecords} loading={batch.running} onClick={() => void searchAll()}>
-            Search all
-          </Button>
-        </>
-      }
-    >
-      <Table
-        columns={columns}
-        rows={list.data ? records : undefined}
-        loading={list.isPending}
-        rowKey={(r) => r.id}
-        sortable={false}
-        empty={<EmptyState title={mode === 'missing' ? 'No missing movies' : 'No movies below cutoff'} />}
-        caption="Wanted movies"
-      />
-      <Pager page={page} pageSize={PAGE_SIZE} total={list.data?.totalRecords ?? 0} onPage={(p) => { setPage(p); setSelected(new Set()); }} />
-    </Card>
+    <ListShell
+      mode={mode}
+      noun="movies"
+      total={list.data?.totalRecords}
+      page={page}
+      onPage={(p) => {
+        setPage(p);
+        setSelected(new Set());
+      }}
+      rows={records}
+      loading={list.isPending}
+      columns={columns}
+      rowKey={(r) => r.id}
+      rowLabel={(r) => r.title}
+      mobileRow={(r) => ({ title: r.title, sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}` })}
+      selected={selected}
+      onSelect={setSelected}
+      running={batch.running}
+      onSearchRows={(ids) => void batch.run(ids.map((movieId) => ({ movieId })))}
+      onSearchAll={() => void searchAll()}
+    />
   );
 }
 
 function CutoffPending() {
+  // TODO(contract): GET /wanted/cutoff/{episodes,movies} is not served by apps/api yet.
   return (
-    <Card>
-      {/* TODO(contract): GET /wanted/cutoff/{episodes,movies} is not served by apps/api yet. */}
-      <EmptyState title="Cutoff unmet is not available yet">
-        <p className="muted">The api does not serve the cutoff-unmet lists yet. They will appear here once the route lands.</p>
-      </EmptyState>
-    </Card>
-  );
-}
-
-export function Pager({ page, pageSize, total, onPage }: { page: number; pageSize: number; total: number; onPage: (p: number) => void }) {
-  const pages = Math.max(1, Math.ceil(total / pageSize));
-  if (pages <= 1) return null;
-  return (
-    <nav className="pager" aria-label="Pagination">
-      <Button size="sm" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-        Previous
-      </Button>
-      <span className="muted">
-        Page {page} of {pages}
-      </span>
-      <Button size="sm" disabled={page >= pages} onClick={() => onPage(page + 1)}>
-        Next
-      </Button>
-    </nav>
+    <EmptyState title="Cutoff unmet is not available yet">
+      The api does not serve the cutoff unmet lists yet. They appear here once the route lands.
+    </EmptyState>
   );
 }

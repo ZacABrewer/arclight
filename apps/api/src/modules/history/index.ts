@@ -21,6 +21,7 @@ export {
   type TrackedDownloadInfo,
   type DownloadFailedEvent,
   type DownloadFailedHandler,
+  type RedownloadHandler,
   type FileDeletedInput,
   type FileRenamedInput,
   type IgnoredInput,

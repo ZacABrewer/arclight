@@ -6,16 +6,20 @@ import type {
   IndexerDefinitionSummary,
   IndexerPrivacy,
   IndexerProxy,
+  IndexerTemplate,
   ReleaseProtocol,
 } from '@arclight/shared';
 import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
-import type { BadgeTone } from '../../../components/badge.js';
+import type { ChipTone } from '../../../arclight/index.js';
 
 // Definition (catalogue) indexers: the editor's fields come from the definition's own
 // `settings` list (served as `settingsFields`); values live under `settings.fields.<name>`.
 
-export const PRIVACY_TONES: Record<IndexerPrivacy, BadgeTone> = { public: 'ok', 'semi-private': 'warning', private: 'error' };
+/** Privacy is a fact, not a state: no accent or warning colours (rule 2). */
+export const PRIVACY_TONES: Record<IndexerPrivacy, ChipTone> = { public: 'default', 'semi-private': 'neutral', private: 'neutral' };
+
+export const PRIVACY_LABELS: Record<IndexerPrivacy, string> = { public: 'Public', 'semi-private': 'Semi-private', private: 'Private' };
 
 /** Field path for one definition setting. */
 export const definitionFieldPath = (name: string) => `settings.fields.${name}`;
@@ -187,4 +191,15 @@ export function filterDefinitions(list: readonly IndexerDefinitionSummary[], f: 
 /** Distinct languages in the catalogue, for the language filter. */
 export function catalogueLanguages(list: readonly IndexerDefinitionSummary[]): string[] {
   return [...new Set(list.map((d) => d.language).filter(Boolean))].sort();
+}
+
+/** Generic endpoint templates (Torznab / Newznab) matching the chooser's search text. */
+export function filterTemplates(list: readonly IndexerTemplate[], text: string): IndexerTemplate[] {
+  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
+  return list
+    .filter((t) => t.implementation !== 'definition')
+    .filter((t) => {
+      const hay = `${t.implementation} ${t.implementationName} ${t.protocol}`.toLowerCase();
+      return words.every((w) => hay.includes(w));
+    });
 }

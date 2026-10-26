@@ -1,12 +1,8 @@
 import { useState } from 'react';
 import type { MediaFile } from '@arclight/shared';
-import { Button } from '../../components/button.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
+import { Button, EmptyState, Modal, Table, type Column } from '../../arclight/index.js';
 import { formatBytes, formatDate, seasonLabel } from '../../components/media/format.js';
-import { QualityBadge } from '../../components/media/media-ui.js';
-import { Modal } from '../../components/modal.js';
-import { Table, type Column } from '../../components/table.js';
+import { QualityLabel, QueryError } from '../../components/media/media-kit.js';
 import { useDeleteMediaFile } from '../../hooks/library.js';
 
 export function MediaFilesTable({
@@ -25,23 +21,23 @@ export function MediaFilesTable({
   const del = useDeleteMediaFile();
   const [confirm, setConfirm] = useState<MediaFile | null>(null);
 
-  if (error) return <ErrorView error={error} />;
+  if (error) return <QueryError error={error} title="Could not load files" />;
 
   const columns: Column<MediaFile>[] = [
-    { key: 'path', header: 'Relative path', sortValue: (f) => f.relativePath, cell: (f) => <code>{f.relativePath}</code> },
+    { key: 'path', header: 'Relative path', sortValue: (f) => f.relativePath, cell: (f) => f.relativePath, mono: true },
     ...(mediaType === 'series'
-      ? [{ key: 'season', header: 'Season', sortValue: (f: MediaFile) => f.seasonNumber, cell: (f: MediaFile) => (f.seasonNumber == null ? '—' : seasonLabel(f.seasonNumber)) }]
+      ? [{ key: 'season', header: 'Season', sortValue: (f: MediaFile) => f.seasonNumber, cell: (f: MediaFile) => (f.seasonNumber == null ? '—' : seasonLabel(f.seasonNumber)), muted: true }]
       : []),
-    { key: 'quality', header: 'Quality', sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityBadge quality={f.quality} /> },
-    { key: 'languages', header: 'Languages', cell: (f) => (f.languages.length ? f.languages.join(', ') : '—') },
-    { key: 'group', header: 'Group', cell: (f) => f.releaseGroup ?? '—' },
-    { key: 'size', header: 'Size', sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right' },
-    { key: 'added', header: 'Added', sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded) },
+    { key: 'quality', header: 'Quality', sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityLabel quality={f.quality} /> },
+    { key: 'languages', header: 'Languages', cell: (f) => (f.languages.length ? f.languages.join(', ') : '—'), mono: true },
+    { key: 'group', header: 'Group', cell: (f) => f.releaseGroup ?? '—', muted: true },
+    { key: 'size', header: 'Size', sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
+    { key: 'added', header: 'Added', sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="al-sr-only">Actions</span>,
       cell: (f) => (
-        <Button size="sm" variant="ghost" aria-label={`Delete ${f.relativePath}`} onClick={() => setConfirm(f)}>
+        <Button size="sm" variant="danger" aria-label={`Delete ${f.relativePath}`} onClick={() => setConfirm(f)}>
           Delete
         </Button>
       ),
@@ -56,33 +52,33 @@ export function MediaFilesTable({
         rows={files}
         loading={loading}
         rowKey={(f) => f.id}
+        density="dense"
         defaultSort={{ key: 'path', direction: 'asc' }}
-        empty={<EmptyState title="No files on disk" />}
+        empty={<EmptyState title="No files on disk">Search or import to add one.</EmptyState>}
         caption="Media files"
       />
       <Modal
         open={confirm !== null}
         onClose={() => setConfirm(null)}
-        title="Delete file"
-        size="sm"
+        title="Delete file?"
+        size={440}
         footer={
           <>
-            <Button onClick={() => setConfirm(null)}>Cancel</Button>
+            <Button variant="ghost" onClick={() => setConfirm(null)}>
+              Cancel
+            </Button>
             <Button
               variant="danger"
               loading={del.isPending}
-              onClick={() =>
-                confirm &&
-                del.mutate({ fileId: confirm.id, mediaType, ownerId }, { onSuccess: () => setConfirm(null) })
-              }
+              onClick={() => confirm && del.mutate({ fileId: confirm.id, mediaType, ownerId }, { onSuccess: () => setConfirm(null) })}
             >
-              Delete from disk
+              Delete file
             </Button>
           </>
         }
       >
-        <p>
-          Delete <code>{confirm?.relativePath}</code> from disk? This cannot be undone.
+        <p style={{ margin: 0 }}>
+          <span className="al-num">{confirm?.relativePath}</span> ({formatBytes(confirm?.sizeBytes)}) will be deleted from disk. This cannot be undone.
         </p>
       </Modal>
     </>

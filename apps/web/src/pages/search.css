@@ -1,0 +1,19 @@
+/* Cross-indexer search page (Arclight). */
+.mt-search__form { display: flex; flex-direction: column; gap: 16px; }
+.mt-search__bar { display: flex; gap: 10px; align-items: stretch; }
+.mt-search__bar > .al-input { flex: 1; min-width: 0; }
+.mt-search__results,
+.mt-search__empty { margin-top: 20px; }
+.mt-search__results .al-pane__actions .al-filterbar { flex-wrap: wrap; }
+.mt-release__title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; min-width: 240px; }
+.mt-release__name { overflow-wrap: anywhere; word-break: break-word; }
+.mt-release__cats { flex-basis: 100%; font-size: 12px; color: var(--al-text-4); }
+.mt-release__scores { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.mt-release__none { color: var(--al-text-4); }
+.mt-release__actions { display: inline-flex; gap: 6px; align-items: center; justify-content: flex-end; white-space: nowrap; }
+.mt-release__rejected { color: var(--al-warn-text); }
+@media (max-width: 767px) {
+  .mt-search__bar { flex-direction: column; }
+  .mt-release__actions .al-btn,
+  .mt-release__rejected { min-height: 44px; min-width: 44px; }
+}

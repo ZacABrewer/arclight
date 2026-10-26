@@ -1,14 +1,22 @@
 import type { ReleaseDecision } from '@arclight/shared';
-import { Badge } from '../../components/badge.js';
-import { Button } from '../../components/button.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
+import {
+  Button,
+  Chip,
+  EmptyState,
+  Modal,
+  ProtocolBadge,
+  RejectionList,
+  ScoreTag,
+  StatusChip,
+  Table,
+  Tag,
+  Tooltip,
+  type Column,
+} from '../../arclight/index.js';
 import { formatBytes } from '../../components/media/format.js';
-import { QualityBadge } from '../../components/media/media-ui.js';
-import { Modal } from '../../components/modal.js';
-import { LoadingBlock } from '../../components/spinner.js';
-import { Table, type Column } from '../../components/table.js';
+import { Loading, QualityLabel, QueryError } from '../../components/media/media-kit.js';
 import { useGrabRelease, useInteractiveSearch, type ReleaseSearchTarget } from '../../hooks/library.js';
+import './library.css';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
   if (r.age >= 1) return `${r.age}d`;
@@ -16,67 +24,85 @@ export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinu
   return `${Math.floor(r.ageMinutes)}m`;
 }
 
-/** Interactive search over GET /release: every decision with its rejections; grab any allowed one. */
-export function InteractiveSearchModal({
-  target,
-  title,
-  onClose,
-}: {
-  target: ReleaseSearchTarget | null;
-  title: string;
-  onClose: () => void;
-}) {
+/** Sort rank: approved first, then temporarily rejected, then rejected. */
+export function decisionRank(r: Pick<ReleaseDecision, 'approved' | 'temporarilyRejected'>): number {
+  return r.approved ? 0 : r.temporarilyRejected ? 1 : 2;
+}
+
+/** Release table (interactive search modal and the details "Search" tab). */
+export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null }) {
   const releases = useInteractiveSearch(target);
   const grab = useGrabRelease();
 
   const columns: Column<ReleaseDecision>[] = [
-    { key: 'protocol', header: 'Source', sortValue: (r) => r.protocol, cell: (r) => <Badge tone="neutral">{r.protocol}</Badge> },
-    { key: 'age', header: 'Age', sortValue: (r) => r.ageMinutes, cell: formatAge },
+    { key: 'protocol', header: 'Source', sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} />, width: '64px' },
     {
       key: 'title',
       header: 'Title',
       sortValue: (r) => r.title,
-      cell: (r) => (r.infoUrl ? <a href={r.infoUrl} target="_blank" rel="noreferrer noopener">{r.title}</a> : r.title),
+      cell: (r) =>
+        r.infoUrl ? (
+          <a className="mk-release-title" href={r.infoUrl} target="_blank" rel="noreferrer noopener" title={r.title}>
+            {r.title}
+          </a>
+        ) : (
+          <span className="mk-release-title" title={r.title}>
+            {r.title}
+          </span>
+        ),
     },
-    { key: 'indexer', header: 'Indexer', sortValue: (r) => r.indexerName, cell: (r) => r.indexerName },
-    { key: 'size', header: 'Size', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size), align: 'right' },
+    { key: 'indexer', header: 'Indexer', sortValue: (r) => r.indexerName, cell: (r) => r.indexerName, muted: true },
+    { key: 'age', header: 'Age', sortValue: (r) => r.ageMinutes, cell: formatAge, mono: true, align: 'right' },
+    { key: 'size', header: 'Size', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size), mono: true, align: 'right' },
     {
       key: 'peers',
       header: 'Peers',
       sortValue: (r) => r.seeders,
       cell: (r) => (r.protocol === 'torrent' ? `${r.seeders ?? '?'} / ${r.leechers ?? '?'}` : '—'),
+      mono: true,
+      align: 'right',
     },
-    { key: 'languages', header: 'Languages', cell: (r) => r.languages.join(', ') || '—' },
-    { key: 'quality', header: 'Quality', sortValue: (r) => r.quality.quality.weight, cell: (r) => <QualityBadge quality={r.quality} /> },
+    { key: 'quality', header: 'Quality', sortValue: (r) => r.quality.quality.weight, cell: (r) => <QualityLabel quality={r.quality} /> },
     {
       key: 'score',
-      header: 'Score',
+      header: 'Formats',
       sortValue: (r) => r.customFormatScore,
-      cell: (r) => <span title={r.customFormats.map((c) => c.name).join(', ')}>{r.customFormatScore}</span>,
-      align: 'right',
+      cell: (r) => (
+        <span className="mk-scores">
+          {r.customFormats.map((c) => (
+            <Tag key={c.id}>{c.name}</Tag>
+          ))}
+          <ScoreTag name="Score" score={r.customFormatScore} />
+        </span>
+      ),
     },
     {
       key: 'decision',
       header: 'Decision',
-      sortValue: (r) => (r.approved ? 0 : r.temporarilyRejected ? 1 : 2),
+      sortValue: decisionRank,
       cell: (r) =>
         r.approved ? (
-          <Badge tone="ok">Approved</Badge>
+          <Chip tone="accent">Approved</Chip>
         ) : (
-          <span title={r.rejections.map((x) => x.message).join('\n')}>
-            <Badge tone={r.temporarilyRejected ? 'warning' : 'error'}>
-              {r.rejections.length} rejection{r.rejections.length === 1 ? '' : 's'}
-            </Badge>
-          </span>
+          <Tooltip content={<RejectionList reasons={r.rejections.map((x) => x.message)} />}>
+            <button type="button" className="mk-action-link" aria-label={`${r.rejections.length} rejections: ${r.rejections.map((x) => x.message).join('; ')}`}>
+              <StatusChip
+                status={r.temporarilyRejected ? 'queued' : 'missing'}
+                label={`${r.rejections.length} ${r.rejections.length === 1 ? 'rejection' : 'rejections'}`}
+              />
+            </button>
+          </Tooltip>
         ),
     },
     {
       key: 'grab',
-      header: <span className="sr-only">Grab</span>,
+      header: <span className="al-sr-only">Grab</span>,
+      align: 'right',
       cell: (r) => (
         <Button
           size="sm"
-          variant={r.approved ? 'primary' : 'secondary'}
+          variant="secondary"
+          aria-label={`Grab ${r.title}`}
           disabled={!r.downloadAllowed}
           loading={grab.isPending && grab.variables?.guid === r.guid}
           onClick={() =>
@@ -95,22 +121,28 @@ export function InteractiveSearchModal({
     },
   ];
 
+  if (target === null) return null;
+  if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label="Searching indexers" />;
+  if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title="Search failed" />;
   return (
-    <Modal open={target !== null} onClose={onClose} title={`Interactive search: ${title}`} size="lg">
-      {releases.isPending && releases.fetchStatus !== 'idle' ? (
-        <LoadingBlock label="Searching indexers" />
-      ) : releases.isError ? (
-        <ErrorView error={releases.error} onRetry={() => void releases.refetch()} />
-      ) : (
-        <Table
-          columns={columns}
-          rows={releases.data}
-          rowKey={(r) => `${r.indexerId}-${r.guid}`}
-          defaultSort={{ key: 'decision', direction: 'asc' }}
-          empty={<EmptyState title="No releases found" />}
-          caption="Releases"
-        />
-      )}
+    <Table
+      columns={columns}
+      rows={releases.data}
+      rowKey={(r) => `${r.indexerId}-${r.guid}`}
+      density="dense"
+      defaultSort={{ key: 'decision', direction: 'asc' }}
+      maxHeight="62vh"
+      empty={<EmptyState title="No releases found">Every enabled indexer was searched.</EmptyState>}
+      caption="Releases"
+    />
+  );
+}
+
+/** Interactive search over GET /release: Modal 1100 with every decision and its rejections. */
+export function InteractiveSearchModal({ target, title, onClose }: { target: ReleaseSearchTarget | null; title: string; onClose: () => void }) {
+  return (
+    <Modal open={target !== null} onClose={onClose} title={`Interactive search · ${title}`} size={1100}>
+      <ReleaseTable target={target} />
     </Modal>
   );
 }

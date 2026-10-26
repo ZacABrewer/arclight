@@ -1,18 +1,16 @@
 import { useMemo, useState } from 'react';
 import type { SubtitleProviderConfig, SubtitleProviderField, SubtitleProviderSchema, SubtitleProviderStatus } from '@arclight/shared';
 import { subtitlesApi } from '../../../api/subtitles.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Toggle } from '../../../components/form.js';
-import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, ErrorBlock, Pane, Skeleton, Toggle } from '../../../arclight/index.js';
+import { SchemaForm } from '../../../components/forms/schema-form.js';
 import { TestButton, type TestOutcome } from '../../../components/forms/test-result.js';
-import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
-import { Modal } from '../../../components/modal.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import type { FieldDefinition, FieldErrors, FormValues } from '../../../components/forms/types.js';
+import { validateFields } from '../../../components/forms/values.js';
 import { useResetProviderThrottles, useSubtitleProviders } from '../../../hooks/subtitles.js';
 import { formatDateTime } from '../../../lib/format.js';
+import { CardGrid, SettingsSection } from '../shared.js';
+import './subtitle-settings.css';
 
 /** Provider field -> schema-form field under `settings.<name>`; secrets render as password inputs. */
 export function providerFieldDefinition(f: SubtitleProviderField): FieldDefinition {
@@ -53,164 +51,159 @@ function testOutcome(r: { ok: boolean; message: string }): TestOutcome {
   return { ok: r.ok, message: r.ok ? r.message : undefined, warnings: [], errors: r.ok ? [] : [r.message] };
 }
 
-function ProviderEditor({
+function StatusChip({ status }: { status: SubtitleProviderStatus | undefined }) {
+  if (!status) return null;
+  if (status.throttle) return <Chip tone="warn">Rate-limited</Chip>;
+  if (!status.configured) return <Chip tone="danger">{status.configError ? `Failed · ${status.configError}` : 'Not configured'}</Chip>;
+  return status.enabled ? <Chip tone="accent">Ready</Chip> : <Chip tone="muted">Disabled</Chip>;
+}
+
+function ProviderCard({
   schema,
   config,
-  onApply,
-  onClose,
+  status,
+  index,
+  count,
+  showAdvanced,
+  onChange,
+  onMove,
 }: {
   schema: SubtitleProviderSchema;
   config: SubtitleProviderConfig;
-  onApply: (settings: Record<string, unknown>) => void;
-  onClose: () => void;
+  status: SubtitleProviderStatus | undefined;
+  index: number;
+  count: number;
+  showAdvanced: boolean;
+  onChange: (patch: Partial<SubtitleProviderConfig>) => void;
+  onMove: (delta: -1 | 1) => void;
 }) {
   const fields = useMemo(() => schema.fields.map(providerFieldDefinition), [schema]);
-  const form = useSchemaForm(fields, { settings: config.settings } as FormValues);
-  const settings = () => (form.values.settings ?? {}) as Record<string, unknown>;
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const values = { settings: config.settings } as FormValues;
+  const settings = () => (values.settings ?? {}) as Record<string, unknown>;
 
   return (
-    <Modal
-      open
-      size="lg"
-      onClose={onClose}
-      title={`${schema.name} settings`}
-      footer={
-        <>
-          <TestButton beforeTest={form.validate} onTest={async () => testOutcome(await subtitlesApi.testProvider(schema.id, settings()))} />
-          <span className="toolbar-spacer" />
-          <Button variant="ghost" onClick={onClose}>
-            Cancel
-          </Button>
-          <Button
-            variant="primary"
-            onClick={() => {
-              if (!form.validate()) return;
-              onApply(settings());
-              onClose();
+    <div role="listitem" className="al-item-card-wrap">
+      <Pane className="al-item-card al-provider-card" aria-label={schema.name} data-muted={!config.enabled || undefined}>
+        <div className="al-item-card__head">
+          <h3 className="al-item-card__title">{schema.name}</h3>
+          <StatusChip status={status} />
+        </div>
+        <div className="al-item-card__meta">
+          <p className="al-provider-card__desc">{schema.description}</p>
+          {status?.throttle ? (
+            <p className="al-provider-card__throttle" data-testid={`throttle-${status.id}`}>
+              {schema.name} is rate-limited ({status.throttle.code}): {status.throttle.description}. Retry at{' '}
+              <time className="al-num" dateTime={status.throttle.until}>
+                {formatDateTime(status.throttle.until)}
+              </time>
+              .
+            </p>
+          ) : null}
+        </div>
+        <div className="al-provider-card__body">
+          <div className="al-provider-card__row">
+            <Toggle label="Enabled" aria-label={`Enable ${schema.name}`} checked={config.enabled} onChange={(e) => onChange({ enabled: e.currentTarget.checked })} />
+            <span className="al-provider-card__order">
+              <span className="al-num al-muted">{String(index + 1).padStart(2, '0')}</span>
+              <Button size="sm" variant="ghost" aria-label={`Move ${schema.name} up`} disabled={index === 0} onClick={() => onMove(-1)}>
+                ↑
+              </Button>
+              <Button size="sm" variant="ghost" aria-label={`Move ${schema.name} down`} disabled={index === count - 1} onClick={() => onMove(1)}>
+                ↓
+              </Button>
+            </span>
+          </div>
+          {fields.length ? (
+            <SchemaForm
+              fields={fields}
+              values={values}
+              errors={errors}
+              showAdvanced={showAdvanced}
+              onChange={(next) => {
+                setErrors({});
+                onChange({ settings: (next.settings ?? {}) as Record<string, unknown> });
+              }}
+            />
+          ) : (
+            <p className="al-caption">No credentials needed.</p>
+          )}
+        </div>
+        <div className="al-item-card__actions">
+          <TestButton
+            beforeTest={() => {
+              const found = validateFields(fields, values);
+              setErrors(found);
+              return Object.keys(found).length === 0;
             }}
-          >
-            Apply
-          </Button>
-        </>
-      }
-    >
-      <p className="muted">{schema.description}</p>
-      {fields.length ? (
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} inline />
-      ) : (
-        <p className="muted">This provider has no settings.</p>
-      )}
-      <p className="field-hint">Changes take effect when you save the subtitle settings.</p>
-    </Modal>
+            onTest={async () => testOutcome(await subtitlesApi.testProvider(schema.id, settings()))}
+          />
+        </div>
+      </Pane>
+    </div>
   );
 }
 
-function StatusCell({ status }: { status: SubtitleProviderStatus | undefined }) {
-  if (!status) return <span className="muted">—</span>;
-  if (status.throttle) {
-    return (
-      <span data-testid={`throttle-${status.id}`}>
-        <Badge tone="warning">Throttled · {status.throttle.code}</Badge>{' '}
-        <span className="muted">
-          {status.throttle.description} · retry at {formatDateTime(status.throttle.until)}
-        </span>
-      </span>
-    );
-  }
-  if (!status.configured) return <Badge tone="error">{status.configError ?? 'Not configured'}</Badge>;
-  return status.enabled ? <Badge tone="ok">Ready</Badge> : <Badge>Disabled</Badge>;
-}
-
-/** Providers: enable/disable, priority order, credentials, test, throttle status. Edits the page's settings draft. */
+/** Providers: card grid in priority order, credentials, enable, test, throttle status. Edits the page's settings draft. */
 export function ProvidersCard({
   providers,
   onChange,
+  showAdvanced = false,
 }: {
   providers: readonly SubtitleProviderConfig[];
   onChange: (next: SubtitleProviderConfig[]) => void;
+  showAdvanced?: boolean;
 }) {
   const data = useSubtitleProviders();
   const reset = useResetProviderThrottles();
-  const [editing, setEditing] = useState<SubtitleProviderSchema | null>(null);
 
-  if (data.isPending) return <Card title="Providers"><LoadingBlock /></Card>;
-  if (data.isError) return <Card title="Providers"><ErrorView error={data.error} onRetry={() => void data.refetch()} /></Card>;
+  const action = (
+    <Button size="sm" variant="secondary" loading={reset.isPending} onClick={() => reset.mutate(false)} disabled={!data.data}>
+      Reset throttles
+    </Button>
+  );
+
+  if (data.isPending) {
+    return (
+      <SettingsSection label="Providers" action={action}>
+        <Skeleton lines={4} />
+      </SettingsSection>
+    );
+  }
+  if (data.isError) {
+    return (
+      <SettingsSection label="Providers" action={action}>
+        <ErrorBlock title="Could not load subtitle providers" onRetry={() => void data.refetch()}>
+          {errorMessage(data.error)}
+        </ErrorBlock>
+      </SettingsSection>
+    );
+  }
 
   const list = orderedProviders(providers, data.data.schema);
   const schemaFor = (id: string) => data.data.schema.find((s) => s.id === id)!;
   const update = (id: string, patch: Partial<SubtitleProviderConfig>) => onChange(list.map((p) => (p.id === id ? { ...p, ...patch } : p)));
-  const editingConfig = editing ? list.find((p) => p.id === editing.id) : undefined;
 
   return (
-    <Card
-      title="Providers"
-      actions={
-        <Button size="sm" loading={reset.isPending} onClick={() => reset.mutate(false)}>
-          Reset throttles
-        </Button>
-      }
-    >
-      <p className="muted">Providers are searched in this order. Enable the ones you have accounts for.</p>
-      <table className="table" aria-label="Subtitle providers">
-        <thead>
-          <tr>
-            <th scope="col">Order</th>
-            <th scope="col">Provider</th>
-            <th scope="col">Enabled</th>
-            <th scope="col">Status</th>
-            <th scope="col">
-              <span className="sr-only">Actions</span>
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {list.map((p, i) => {
-            const schema = schemaFor(p.id);
-            return (
-              <tr key={p.id}>
-                <td>
-                  <Button size="sm" variant="ghost" aria-label={`Move ${schema.name} up`} disabled={i === 0} onClick={() => onChange(moveProvider(list, i, -1))}>
-                    ↑
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    aria-label={`Move ${schema.name} down`}
-                    disabled={i === list.length - 1}
-                    onClick={() => onChange(moveProvider(list, i, 1))}
-                  >
-                    ↓
-                  </Button>
-                </td>
-                <td>
-                  <strong>{schema.name}</strong>
-                  <div className="muted">{schema.description}</div>
-                </td>
-                <td>
-                  <Toggle aria-label={`Enable ${schema.name}`} checked={p.enabled} onChange={(e) => update(p.id, { enabled: e.currentTarget.checked })} />
-                </td>
-                <td>
-                  <StatusCell status={data.data.status.find((s) => s.id === p.id)} />
-                </td>
-                <td className="align-right">
-                  <Button size="sm" aria-label={`Edit ${schema.name}`} onClick={() => setEditing(schema)}>
-                    Edit
-                  </Button>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-      {editing && editingConfig ? (
-        <ProviderEditor
-          key={editing.id}
-          schema={editing}
-          config={editingConfig}
-          onApply={(settings) => update(editing.id, { settings })}
-          onClose={() => setEditing(null)}
-        />
-      ) : null}
-    </Card>
+    <SettingsSection label="Providers" count={list.length} action={action}>
+      <p className="al-caption">Providers are searched in this order. Enable the ones you have accounts for; changes apply when you save.</p>
+      <div className="al-provider-grid">
+        <CardGrid label="Subtitle providers">
+          {list.map((p, i) => (
+            <ProviderCard
+              key={p.id}
+              schema={schemaFor(p.id)}
+              config={p}
+              status={data.data.status.find((s) => s.id === p.id)}
+              index={i}
+              count={list.length}
+              showAdvanced={showAdvanced}
+              onChange={(patch) => update(p.id, patch)}
+              onMove={(delta) => onChange(moveProvider(list, i, delta))}
+            />
+          ))}
+        </CardGrid>
+      </div>
+    </SettingsSection>
   );
 }

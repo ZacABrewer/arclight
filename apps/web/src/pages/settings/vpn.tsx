@@ -1,15 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { VpnProviderSettings, VpnProviderType, VpnSettingsResponse, VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { Badge } from '../../components/badge.js';
-import { Button } from '../../components/button.js';
-import { Card } from '../../components/card.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { FormField, Input, Select, Toggle } from '../../components/form.js';
-import { Page } from '../../components/page.js';
-import { LoadingBlock } from '../../components/spinner.js';
+import { Button, Chip, ErrorBlock, FormRow, Input, KeyValue, LiveDot, Pane, Select, Skeleton, Toggle, type KeyValueItem } from '../../arclight/index.js';
 import { useSaveVpnSettings, useTestVpn, useVpnAction, useVpnSettings, useVpnStatus } from '../../hooks/vpn.js';
-import { relativeTime } from '../../lib/format.js';
+import { formatSize, formatUptime, relativeTime } from '../../lib/format.js';
+import { SettingsPage, useDraft } from './settings-layout.js';
+import { SettingsSection } from './shared.js';
+import './vpn.css';
 
 export const PROVIDER_OPTIONS: Array<{ value: VpnProviderType; label: string }> = [
   { value: 'gluetun', label: 'Gluetun (Docker)' },
@@ -34,51 +31,100 @@ export function toVpnUpdate(draft: VpnSettingsResponse): VpnSettingsUpdate {
   return { ...rest, homePublicIp: homePublicIp?.trim() ? homePublicIp.trim() : null };
 }
 
-function formatBytes(n: number | undefined): string {
-  if (n === undefined) return '—';
-  const units = ['B', 'KiB', 'MiB', 'GiB', 'TiB'];
-  let v = n;
-  let i = 0;
-  while (v >= 1024 && i < units.length - 1) {
-    v /= 1024;
-    i++;
-  }
-  return `${v.toFixed(i === 0 ? 0 : 1)} ${units[i]}`;
+/** Plain status text: "Connected", "Disconnected · <cause>", "Leaking · …", "Off". */
+export function vpnStatusText(status: VpnStatus | undefined): string {
+  if (!status || !status.enabled) return 'Off';
+  if (status.leak) return 'Leaking · public IP matches your home IP';
+  if (status.connected) return 'Connected';
+  return `Disconnected · ${status.error ?? 'tunnel is down'}`;
 }
 
+/** Status chip (cyan connected, orange leaking, red disconnected). Kept for other screens. */
 export function vpnBadge(status: VpnStatus | undefined) {
-  if (!status || !status.enabled) return <Badge>Disabled</Badge>;
-  if (status.leak) return <Badge tone="warning">Leak</Badge>;
-  return status.connected ? <Badge tone="ok">Connected</Badge> : <Badge tone="error">Disconnected</Badge>;
+  if (!status || !status.enabled) return <Chip tone="muted">Off</Chip>;
+  if (status.leak) return <Chip tone="warn">Leaking</Chip>;
+  return status.connected ? <Chip tone="accent">Connected</Chip> : <Chip tone="danger">Disconnected</Chip>;
 }
 
-/** Status rows shared by the settings page and the dashboard card. */
-export function VpnStatusFields({ status }: { status: VpnStatus }) {
+/** Seconds the tunnel has been up, from the last state change; null when unknown or down. */
+export function vpnUptimeSeconds(status: VpnStatus, now: number = Date.now()): number | null {
+  if (!status.enabled || !status.connected || !status.lastChanged) return null;
+  const since = new Date(status.lastChanged).getTime();
+  return Number.isFinite(since) ? Math.max(0, Math.floor((now - since) / 1000)) : null;
+}
+
+function portText(status: VpnStatus): string {
+  if (status.forwardedPort === undefined) return '—';
+  const synced = status.downloadClientPortSynced === undefined ? '' : status.downloadClientPortSynced ? ' · synced to qBittorrent' : ' · sync failed';
+  return `${status.forwardedPort}${synced}`;
+}
+
+/** Key/value rows (mono values) for a status: public IP, port forward, uptime, interface… */
+export function vpnStatusItems(status: VpnStatus): KeyValueItem[] {
   const location = [status.city, status.region, status.country].filter(Boolean).join(', ');
-  const rows: Array<[string, React.ReactNode]> = [
-    ['State', vpnBadge(status)],
-    ['Public IP', status.publicIp ?? '—'],
-    ['Location', location || '—'],
+  const uptime = vpnUptimeSeconds(status);
+  const items: KeyValueItem[] = [
+    { label: 'Public IP', value: status.publicIp ?? '—' },
+    { label: 'Port forward', value: portText(status) },
+    { label: 'Uptime', value: uptime === null ? '—' : formatUptime(uptime) },
+    { label: 'Interface', value: status.interfaceName || status.tunnelAddress ? `${status.interfaceName ?? '?'} ${status.tunnelAddress ?? ''}`.trim() : '—' },
   ];
-  if (status.forwardedPort !== undefined || status.provider === 'gluetun') {
-    const synced = status.downloadClientPortSynced === undefined ? '' : status.downloadClientPortSynced ? ' (synced to qBittorrent)' : ' (sync failed)';
-    rows.push(['Forwarded port', status.forwardedPort === undefined ? '—' : `${status.forwardedPort}${synced}`]);
-  }
-  if (status.tunnelAddress || status.interfaceName) rows.push(['Adapter', `${status.interfaceName ?? '?'} ${status.tunnelAddress ?? '(no IPv4)'}`]);
-  if (status.endpoint) rows.push(['Endpoint', status.endpoint]);
-  if (status.lastHandshake) rows.push(['Last handshake', relativeTime(status.lastHandshake)]);
-  if (status.rxBytes !== undefined) rows.push(['Transfer', `${formatBytes(status.rxBytes)} in, ${formatBytes(status.txBytes)} out`]);
-  if (status.error) rows.push(['Problem', <span className="field-error-text">{status.error}</span>]);
-  rows.push(['Last checked', status.lastChecked ? relativeTime(status.lastChecked) : 'never']);
+  if (location) items.push({ label: 'Location', value: location, mono: false });
+  if (status.endpoint) items.push({ label: 'Endpoint', value: status.endpoint });
+  if (status.lastHandshake) items.push({ label: 'Last handshake', value: relativeTime(status.lastHandshake) });
+  if (status.rxBytes !== undefined) items.push({ label: 'Transfer', value: `${formatSize(status.rxBytes)} in · ${formatSize(status.txBytes)} out` });
+  items.push({ label: 'Last checked', value: status.lastChecked ? relativeTime(status.lastChecked) : 'never' });
+  return items;
+}
+
+/** Status line + key/values. Shared by the live pane and the test result. */
+export function VpnStatusFields({ status }: { status: VpnStatus }) {
+  const live = status.enabled && status.connected && !status.leak;
+  const tone = !status.enabled ? 'off' : status.leak ? 'warn' : status.connected ? 'ok' : 'danger';
   return (
-    <dl className="fields">
-      {rows.map(([label, value]) => (
-        <div className="fields-row" key={label}>
-          <dt>{label}</dt>
-          <dd>{value}</dd>
-        </div>
-      ))}
-    </dl>
+    <div className="al-vpn-status">
+      <p className="al-vpn-status__line" data-tone={tone} role="status">
+        {live ? <LiveDot /> : null}
+        <span>{vpnStatusText(status)}</span>
+      </p>
+      <KeyValue items={vpnStatusItems(status)} />
+    </div>
+  );
+}
+
+// ---- form --------------------------------------------------------------------------------
+
+function TextRow({
+  label,
+  caption,
+  value,
+  onChange,
+  type = 'text',
+  placeholder,
+  mono = true,
+}: {
+  label: string;
+  caption?: ReactNode;
+  value: string;
+  onChange: (v: string) => void;
+  type?: string;
+  placeholder?: string;
+  mono?: boolean;
+}) {
+  const id = useId();
+  return (
+    <FormRow label={label} htmlFor={id} caption={caption}>
+      <Input id={id} type={type} mono={mono} value={value} placeholder={placeholder} spellCheck={false} onChange={(e) => onChange(e.currentTarget.value)} />
+    </FormRow>
+  );
+}
+
+function ToggleRow({ label, caption, checked, onChange }: { label: string; caption: string; checked: boolean; onChange: (v: boolean) => void }) {
+  const id = useId();
+  return (
+    <FormRow label={label} htmlFor={id} captionInline>
+      <Toggle id={id} checked={checked} label={caption} onChange={(e) => onChange(e.currentTarget.checked)} />
+    </FormRow>
   );
 }
 
@@ -87,172 +133,234 @@ function ProviderFields({ provider, onChange }: { provider: VpnProviderSettings;
     case 'gluetun':
       return (
         <>
-          <FormField label="Control server URL" hint="Gluetun's HTTP control server (HTTP_CONTROL_SERVER_ADDRESS)." inline>
-            <Input value={provider.controlUrl ?? ''} placeholder="http://localhost:8000" onChange={(e) => onChange({ ...provider, controlUrl: e.target.value })} />
-          </FormField>
-          <FormField label="API key" hint="Sent as X-API-Key. Leave empty when the control server is open." inline>
-            <Input type="password" value={provider.apiKey ?? ''} onChange={(e) => onChange({ ...provider, apiKey: e.target.value })} />
-          </FormField>
-          <FormField label="Username" hint="Basic auth, if your Gluetun uses it instead of an API key." inline>
-            <Input value={provider.username ?? ''} onChange={(e) => onChange({ ...provider, username: e.target.value })} />
-          </FormField>
-          <FormField label="Password" inline>
-            <Input type="password" value={provider.password ?? ''} onChange={(e) => onChange({ ...provider, password: e.target.value })} />
-          </FormField>
+          <TextRow
+            label="Control server URL"
+            caption="Gluetun's HTTP control server (HTTP_CONTROL_SERVER_ADDRESS)."
+            value={provider.controlUrl ?? ''}
+            placeholder="http://localhost:8000"
+            onChange={(v) => onChange({ ...provider, controlUrl: v })}
+          />
+          <TextRow
+            label="API key"
+            type="password"
+            caption="Sent as X-API-Key. Leave empty when the control server is open."
+            value={provider.apiKey ?? ''}
+            onChange={(v) => onChange({ ...provider, apiKey: v })}
+          />
+          <TextRow
+            label="Username"
+            mono={false}
+            caption="Basic auth, if your Gluetun uses it instead of an API key."
+            value={provider.username ?? ''}
+            onChange={(v) => onChange({ ...provider, username: v })}
+          />
+          <TextRow label="Password" type="password" value={provider.password ?? ''} onChange={(v) => onChange({ ...provider, password: v })} />
         </>
       );
     case 'wireguard-windows':
       return (
         <>
-          <FormField label="WireGuard config (.conf)" hint="Path to the Proton WireGuard file, e.g. C:\vpn\proton-nl.conf. Its name is the tunnel name." inline>
-            <Input value={provider.configPath} onChange={(e) => onChange({ ...provider, configPath: e.target.value })} />
-          </FormField>
-          <FormField label="wireguard.exe" hint="Leave empty for C:\Program Files\WireGuard\wireguard.exe." inline>
-            <Input value={provider.wireguardExe ?? ''} onChange={(e) => onChange({ ...provider, wireguardExe: e.target.value })} />
-          </FormField>
-          <FormField label="Auto-start" inline>
-            <Toggle checked={provider.autoStart} label="Install the tunnel service when it is not running" onChange={(e) => onChange({ ...provider, autoStart: e.target.checked })} />
-          </FormField>
-          <FormField label="Kill switch" inline>
-            <Toggle checked={provider.killSwitch} label="Stop grabs and torrent traffic when the tunnel drops" onChange={(e) => onChange({ ...provider, killSwitch: e.target.checked })} />
-          </FormField>
+          <TextRow
+            label="WireGuard config (.conf)"
+            caption="Path to the WireGuard file, e.g. C:\vpn\proton-nl.conf. Its name is the tunnel name."
+            value={provider.configPath}
+            onChange={(v) => onChange({ ...provider, configPath: v })}
+          />
+          <TextRow
+            label="wireguard.exe"
+            caption="Leave empty for C:\Program Files\WireGuard\wireguard.exe."
+            value={provider.wireguardExe ?? ''}
+            onChange={(v) => onChange({ ...provider, wireguardExe: v })}
+          />
+          <ToggleRow
+            label="Auto-start"
+            caption="Install the tunnel service when it is not running"
+            checked={provider.autoStart}
+            onChange={(v) => onChange({ ...provider, autoStart: v })}
+          />
+          <ToggleRow
+            label="Kill switch"
+            caption="Stop grabs and torrent traffic when the tunnel drops"
+            checked={provider.killSwitch}
+            onChange={(v) => onChange({ ...provider, killSwitch: v })}
+          />
         </>
       );
     case 'interface-binding':
       return (
-        <FormField label="Adapter name" hint='The VPN network adapter, e.g. "ProtonVPN" or "wg0".' inline>
-          <Input value={provider.interfaceName} onChange={(e) => onChange({ ...provider, interfaceName: e.target.value })} />
-        </FormField>
+        <TextRow
+          label="Adapter name"
+          caption='The VPN network adapter, e.g. "ProtonVPN" or "wg0".'
+          value={provider.interfaceName}
+          onChange={(v) => onChange({ ...provider, interfaceName: v })}
+        />
       );
   }
 }
 
-function VpnForm({ data }: { data: VpnSettingsResponse }) {
-  const [draft, setDraft] = useState(data);
-  // Per-provider drafts so flipping the selector back and forth keeps what was typed.
-  const drafts = useRef(new Map<VpnProviderType, VpnProviderSettings>([[data.provider.type, data.provider]]));
-  useEffect(() => {
-    setDraft(data);
-    drafts.current.set(data.provider.type, data.provider);
-  }, [data]);
-  const save = useSaveVpnSettings();
-  const test = useTestVpn();
-  const set = <K extends keyof VpnSettingsResponse>(key: K, value: VpnSettingsResponse[K]) => setDraft((d) => ({ ...d, [key]: value }));
-  const setProvider = (p: VpnProviderSettings) => {
-    drafts.current.set(p.type, p);
-    set('provider', p);
-  };
-
-  return (
-    <>
-      <FormField label="Enable VPN monitoring" inline>
-        <Toggle checked={draft.enabled} label="Watch the VPN and guard grabs" onChange={(e) => set('enabled', e.target.checked)} />
-      </FormField>
-      <FormField label="Provider" inline>
-        <Select
-          aria-label="Provider"
-          value={draft.provider.type}
-          options={PROVIDER_OPTIONS}
-          onChange={(e) => {
-            const type = e.target.value as VpnProviderType;
-            setProvider(drafts.current.get(type) ?? defaultProvider(type));
-          }}
-        />
-      </FormField>
-      <ProviderFields provider={draft.provider} onChange={setProvider} />
-      {draft.provider.type === 'gluetun' ? (
-        <FormField label="Sync forwarded port" inline>
-          <Toggle
-            checked={draft.syncForwardedPortToDownloadClient}
-            label="Set qBittorrent's listening port to the forwarded port"
-            onChange={(e) => set('syncForwardedPortToDownloadClient', e.target.checked)}
-          />
-        </FormField>
-      ) : (
-        <FormField label="Public IP check URL" hint="Answers with your public IP (JSON {ip} or plain text)." inline>
-          <Input value={draft.publicIpCheckUrl} onChange={(e) => set('publicIpCheckUrl', e.target.value)} />
-        </FormField>
-      )}
-      <FormField label="Pause grabs when down" inline>
-        <Toggle checked={draft.pauseGrabsWhenDown} label="Hold grabs while the VPN is down or leaking" onChange={(e) => set('pauseGrabsWhenDown', e.target.checked)} />
-      </FormField>
-      <FormField label="Home public IP" hint="Your ISP address. If the VPN reports it, traffic is leaking." inline>
-        <Input value={draft.homePublicIp ?? ''} placeholder="optional" onChange={(e) => set('homePublicIp', e.target.value)} />
-      </FormField>
-      <FormField label="Poll interval (seconds)" inline>
-        <Input type="number" min={10} max={3600} value={draft.pollIntervalSeconds} onChange={(e) => set('pollIntervalSeconds', Number(e.target.value))} />
-      </FormField>
-      <div className="editor-footer">
-        <div className="editor-footer-left">
-          <Button loading={test.isPending} onClick={() => test.mutate(toVpnUpdate(draft))}>
-            Test
-          </Button>
-        </div>
-        <div className="editor-footer-right">
-          <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(toVpnUpdate(draft))}>
-            Save
-          </Button>
-        </div>
-      </div>
-      {test.isError ? <p className="field-error-text" role="alert">{errorMessage(test.error)}</p> : null}
-      {test.data ? (
-        <div aria-label="Test result">
-          <h3 className="card-title">Test result</h3>
-          <VpnStatusFields status={test.data} />
-        </div>
-      ) : null}
-    </>
-  );
-}
-
-function LiveStatus() {
+function LiveStatusPane() {
   const status = useVpnStatus();
   const refresh = useVpnAction('refresh');
   const connect = useVpnAction('connect');
   const disconnect = useVpnAction('disconnect');
   const native = status.data?.provider === 'wireguard-windows';
   return (
-    <Card
+    <Pane
+      chamfer="tl"
       title="Live status"
+      aria-label="Live status"
       actions={
         <>
           {native ? (
-            <>
-              <Button size="sm" loading={connect.isPending} onClick={() => connect.mutate()}>
-                Connect
-              </Button>
+            status.data?.connected ? (
               <Button size="sm" loading={disconnect.isPending} onClick={() => disconnect.mutate()}>
                 Disconnect
               </Button>
-            </>
+            ) : (
+              <Button size="sm" loading={connect.isPending} onClick={() => connect.mutate()}>
+                Connect
+              </Button>
+            )
           ) : null}
-          <Button size="sm" loading={refresh.isPending} onClick={() => refresh.mutate()}>
+          <Button size="sm" variant="ghost" loading={refresh.isPending} onClick={() => refresh.mutate()}>
             Refresh
           </Button>
         </>
       }
     >
-      {status.isPending ? <LoadingBlock /> : status.isError ? <ErrorView error={status.error} onRetry={() => void status.refetch()} /> : <VpnStatusFields status={status.data} />}
-    </Card>
+      {status.isPending ? (
+        <Skeleton lines={4} />
+      ) : status.isError ? (
+        <ErrorBlock title="Couldn't read the VPN status" onRetry={() => void status.refetch()}>
+          {errorMessage(status.error)}
+        </ErrorBlock>
+      ) : (
+        <VpnStatusFields status={status.data} />
+      )}
+    </Pane>
+  );
+}
+
+function VpnForm({ data, advanced, onAdvanced }: { data: VpnSettingsResponse; advanced: boolean; onAdvanced: (v: boolean) => void }) {
+  const draft = useDraft(data);
+  // Per-provider drafts so flipping the selector back and forth keeps what was typed.
+  const drafts = useRef(new Map<VpnProviderType, VpnProviderSettings>([[data.provider.type, data.provider]]));
+  useEffect(() => {
+    drafts.current.set(data.provider.type, data.provider);
+  }, [data]);
+  const save = useSaveVpnSettings();
+  const test = useTestVpn();
+  const providerId = useId();
+  const pollId = useId();
+  const value = draft.value;
+  const set = <K extends keyof VpnSettingsResponse>(key: K, v: VpnSettingsResponse[K]) => draft.set((d) => ({ ...d, [key]: v }));
+  const setProvider = (p: VpnProviderSettings) => {
+    drafts.current.set(p.type, p);
+    set('provider', p);
+  };
+
+  return (
+    <SettingsPage
+      title="VPN"
+      description="Watch the tunnel, guard grabs when it drops, and keep the forwarded port in sync."
+      advanced={{ value: advanced, onChange: onAdvanced }}
+      actions={
+        <Button size="sm" loading={test.isPending} onClick={() => test.mutate(toVpnUpdate(value))}>
+          Test
+        </Button>
+      }
+      save={{ count: draft.changes, onSave: () => save.mutate(toVpnUpdate(value)), onDiscard: draft.discard, saving: save.isPending }}
+      aside={<LiveStatusPane />}
+      after={
+        test.isError || test.data ? (
+          <Pane title="Test result" aria-label="Test result">
+            {test.isError ? (
+              <ErrorBlock title="The test failed">{errorMessage(test.error)}</ErrorBlock>
+            ) : test.data ? (
+              <VpnStatusFields status={test.data} />
+            ) : null}
+          </Pane>
+        ) : null
+      }
+    >
+      <SettingsSection label="Connection">
+        <div className="al-vpn-rows">
+          <ToggleRow label="VPN monitoring" caption="Watch the VPN and guard grabs" checked={value.enabled} onChange={(v) => set('enabled', v)} />
+          <FormRow label="Provider" htmlFor={providerId}>
+            <Select
+              id={providerId}
+              className="al-vpn-select"
+              value={value.provider.type}
+              options={PROVIDER_OPTIONS}
+              onChange={(e) => {
+                const type = e.currentTarget.value as VpnProviderType;
+                setProvider(drafts.current.get(type) ?? defaultProvider(type));
+              }}
+            />
+          </FormRow>
+          <ProviderFields provider={value.provider} onChange={setProvider} />
+        </div>
+      </SettingsSection>
+      <SettingsSection label="Protection">
+        <div className="al-vpn-rows">
+          {value.provider.type === 'gluetun' ? (
+            <ToggleRow
+              label="Sync forwarded port"
+              caption="Set qBittorrent's listening port to the forwarded port"
+              checked={value.syncForwardedPortToDownloadClient}
+              onChange={(v) => set('syncForwardedPortToDownloadClient', v)}
+            />
+          ) : null}
+          <ToggleRow label="Pause grabs when down" caption="Hold grabs while the VPN is down or leaking" checked={value.pauseGrabsWhenDown} onChange={(v) => set('pauseGrabsWhenDown', v)} />
+          <TextRow
+            label="Home public IP"
+            caption="Your ISP address. If the VPN reports it, traffic is leaking."
+            value={value.homePublicIp ?? ''}
+            placeholder="optional"
+            onChange={(v) => set('homePublicIp', v)}
+          />
+          {advanced && value.provider.type !== 'gluetun' ? (
+            <TextRow
+              label="Public IP check URL"
+              caption="Answers with your public IP (JSON {ip} or plain text)."
+              value={value.publicIpCheckUrl}
+              onChange={(v) => set('publicIpCheckUrl', v)}
+            />
+          ) : null}
+          {advanced ? (
+            <FormRow label="Poll interval" htmlFor={pollId} caption="How often the status is checked, 10 to 3600 seconds.">
+              <Input
+                id={pollId}
+                type="number"
+                mono
+                min={10}
+                max={3600}
+                className="al-vpn-num"
+                end="s"
+                value={value.pollIntervalSeconds}
+                onChange={(e) => set('pollIntervalSeconds', Number(e.currentTarget.value))}
+              />
+            </FormRow>
+          ) : null}
+        </div>
+      </SettingsSection>
+    </SettingsPage>
   );
 }
 
 export function VpnSettingsPage() {
   const settings = useVpnSettings();
+  const [advanced, setAdvanced] = useState(false);
+  if (settings.isSuccess) return <VpnForm data={settings.data} advanced={advanced} onAdvanced={setAdvanced} />;
   return (
-    <Page title="VPN">
-      <div className="stack">
-        <LiveStatus />
-        <Card title="VPN">
-          {settings.isPending ? (
-            <LoadingBlock />
-          ) : settings.isError ? (
-            <ErrorView error={settings.error} onRetry={() => void settings.refetch()} />
-          ) : (
-            <VpnForm data={settings.data} />
-          )}
-        </Card>
-      </div>
-    </Page>
+    <SettingsPage title="VPN" aside={<LiveStatusPane />}>
+      {settings.isError ? (
+        <ErrorBlock title="Couldn't load VPN settings" onRetry={() => void settings.refetch()}>
+          {errorMessage(settings.error)}
+        </ErrorBlock>
+      ) : (
+        <Skeleton lines={6} />
+      )}
+    </SettingsPage>
   );
 }

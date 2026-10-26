@@ -32,3 +32,20 @@ export const RunJobRequest = z.object({
   name: z.string().min(1),
 });
 export type RunJobRequest = z.infer<typeof RunJobRequest>;
+
+/**
+ * POST /command/refresh: re-fetch metadata for one series, one movie, or the whole library.
+ * Exactly one of `seriesId`, `movieId` or `all: true`. `rescan` also re-reads the item's
+ * folder from disk afterwards. Answered 202 with the started Job.
+ */
+export const RefreshCommand = z
+  .object({
+    seriesId: z.number().int().positive().optional(),
+    movieId: z.number().int().positive().optional(),
+    all: z.literal(true).optional(),
+    rescan: z.boolean().default(false),
+  })
+  .refine((c) => [c.seriesId !== undefined, c.movieId !== undefined, c.all === true].filter(Boolean).length === 1, {
+    message: 'give exactly one of seriesId, movieId or all: true',
+  });
+export type RefreshCommand = z.infer<typeof RefreshCommand>;

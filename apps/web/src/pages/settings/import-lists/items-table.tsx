@@ -1,10 +1,6 @@
 import type { ImportListItem } from '@arclight/shared';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Modal } from '../../../components/modal.js';
-import { LoadingBlock } from '../../../components/spinner.js';
-import { Table, type Column } from '../../../components/table.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, ErrorBlock, Modal, Skeleton, Table, type Column } from '../../../arclight/index.js';
 import { useAddImportListExclusion, useImportListItems } from '../../../hooks/import-lists.js';
 
 export type PreviewItem = Omit<ImportListItem, 'importListId'>;
@@ -13,19 +9,19 @@ export type PreviewItem = Omit<ImportListItem, 'importListId'>;
 export function ItemsTable({ items, onExclude, caption }: { items: readonly PreviewItem[]; onExclude?: (item: PreviewItem) => void; caption: string }) {
   const columns: Array<Column<PreviewItem>> = [
     { key: 'title', header: 'Title', sortValue: (i) => i.title, cell: (i) => i.title },
-    { key: 'year', header: 'Year', sortValue: (i) => i.year ?? null, cell: (i) => i.year ?? '—', width: '70px' },
-    { key: 'type', header: 'Type', cell: (i) => (i.mediaType === 'series' ? 'Series' : 'Movie'), width: '80px' },
+    { key: 'year', header: 'Year', sortValue: (i) => i.year ?? null, cell: (i) => i.year ?? '—', width: '80px', mono: true },
+    { key: 'type', header: 'Type', cell: (i) => (i.mediaType === 'series' ? 'Series' : 'Movie'), width: '90px', muted: true },
     {
       key: 'state',
       header: 'State',
       cell: (i) =>
-        i.excluded ? <Badge tone="warning">Excluded</Badge> : i.inLibrary ? <Badge tone="ok">In library</Badge> : <Badge tone="info">New</Badge>,
+        i.excluded ? <Chip tone="warn">Excluded</Chip> : i.inLibrary ? <Chip tone="accent">In library</Chip> : <Chip tone="neutral">New</Chip>,
     },
   ];
   if (onExclude) {
     columns.push({
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="al-sr-only">Actions</span>,
       align: 'right',
       cell: (i) =>
         i.excluded ? null : (
@@ -38,6 +34,7 @@ export function ItemsTable({ items, onExclude, caption }: { items: readonly Prev
   return (
     <Table
       caption={caption}
+      density="dense"
       columns={columns}
       rows={items}
       rowKey={(i) => `${i.mediaType}-${i.tmdbId}`}
@@ -52,15 +49,17 @@ export function ItemsPreviewDialog({ id, name, onClose }: { id: number; name: st
   const items = useImportListItems(id);
   const exclude = useAddImportListExclusion();
   return (
-    <Modal open size="lg" onClose={onClose} title={`Items in ${name}`}>
+    <Modal open size={640} onClose={onClose} title={`Items in ${name}`}>
       {items.isError ? (
-        <ErrorView error={items.error} onRetry={() => void items.refetch()} />
+        <ErrorBlock title="Could not load list items" onRetry={() => void items.refetch()}>
+          {errorMessage(items.error)}
+        </ErrorBlock>
       ) : items.isPending ? (
-        <LoadingBlock />
+        <Skeleton lines={4} />
       ) : (
         <>
-          <p className="muted">
-            {items.data.length} item{items.data.length === 1 ? '' : 's'} from the last sync.
+          <p className="al-caption">
+            <span className="al-num">{items.data.length}</span> item{items.data.length === 1 ? '' : 's'} from the last sync.
           </p>
           <ItemsTable
             caption={`Items in ${name}`}

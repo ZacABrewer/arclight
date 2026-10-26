@@ -2,17 +2,29 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
 import type { ReleaseResource } from '@arclight/shared';
+import { errorMessage } from '../api/client.js';
 import { indexersApi } from '../api/indexers.js';
+import {
+  Button,
+  EmptyState,
+  ErrorBlock,
+  FilterBar,
+  Icon,
+  Input,
+  LinkButton,
+  PageHeader,
+  Pane,
+  ProtocolBadge,
+  QualityTag,
+  RejectionList,
+  ScoreTag,
+  Select,
+  Table,
+  Tooltip,
+  type Column,
+} from '../arclight/index.js';
 import { ConfirmDialog } from '../components/forms/confirm-dialog.js';
-import { Badge } from '../components/badge.js';
-import { Button } from '../components/button.js';
-import { Card } from '../components/card.js';
-import { EmptyState } from '../components/empty-state.js';
-import { ErrorView } from '../components/error-boundary.js';
-import { Input, Select } from '../components/form.js';
 import { MultiSelect } from '../components/multi-select.js';
-import { Page } from '../components/page.js';
-import { Table, type Column } from '../components/table.js';
 import { useToast } from '../components/toast.js';
 import { useIndexerCategories, useIndexerList } from '../hooks/indexers.js';
 import { formatDateTime } from '../lib/format.js';
@@ -26,13 +38,132 @@ import {
   formatAge,
   isNoMatch,
   peersLabel,
+  releaseQuality,
+  releaseScores,
   toSearchRequest,
   type ProtocolFilter,
   type SearchForm,
   type SearchKind,
 } from './search-model.js';
+import './search.css';
 
 const route = getRouteApi('/search');
+const TITLE = 'Search';
+
+export interface ReleaseColumnOptions {
+  categoryName: (id: number) => string;
+  onGrab: (r: ReleaseResource) => void;
+  grabbing: (r: ReleaseResource) => boolean;
+}
+
+/**
+ * Release table columns, the same layout as the interactive search modal: title, indexer,
+ * age / size / peers (mono), quality, format scores, rejections (tooltip), download + Grab.
+ */
+export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumnOptions): Column<ReleaseResource>[] {
+  return [
+    {
+      key: 'title',
+      header: 'Title',
+      sortValue: (r) => r.title,
+      cell: (r) => (
+        <span className="mt-release__title">
+          <ProtocolBadge protocol={r.protocol} />
+          {r.infoUrl ? (
+            <a href={r.infoUrl} target="_blank" rel="noreferrer noopener" className="mt-release__name">
+              {r.title}
+            </a>
+          ) : (
+            <span className="mt-release__name">{r.title}</span>
+          )}
+          {r.categories.length ? <span className="mt-release__cats">{r.categories.map(categoryName).join(', ')}</span> : null}
+        </span>
+      ),
+    },
+    { key: 'indexer', header: 'Indexer', muted: true, sortValue: (r) => r.indexerName, cell: (r) => r.indexerName },
+    {
+      key: 'age',
+      header: 'Age',
+      mono: true,
+      align: 'right',
+      sortValue: (r) => r.ageMinutes,
+      cell: (r) => <span title={formatDateTime(r.publishDate)}>{formatAge(r)}</span>,
+    },
+    { key: 'size', header: 'Size', mono: true, align: 'right', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size) },
+    {
+      key: 'peers',
+      header: 'Peers',
+      mono: true,
+      align: 'right',
+      sortValue: (r) => (r.protocol === 'torrent' ? (r.seeders ?? -1) : (r.grabs ?? -1)),
+      cell: (r) => peersLabel(r),
+    },
+    {
+      key: 'quality',
+      header: 'Quality',
+      sortValue: (r) => releaseQuality(r.title),
+      cell: (r) => {
+        const q = releaseQuality(r.title);
+        return q ? <QualityTag>{q}</QualityTag> : <span className="mt-release__none">—</span>;
+      },
+    },
+    {
+      key: 'scores',
+      header: 'Formats',
+      cell: (r) => {
+        const scores = releaseScores(r);
+        return scores.length ? (
+          <span className="mt-release__scores">
+            {scores.map((s) => (
+              <ScoreTag key={s.name} name={s.name} score={s.score} />
+            ))}
+          </span>
+        ) : (
+          <span className="mt-release__none">—</span>
+        );
+      },
+    },
+    {
+      key: 'rejections',
+      header: <span className="al-sr-only">Rejections</span>,
+      align: 'center',
+      cell: (r) =>
+        r.rejections.length ? (
+          <Tooltip content={<RejectionList reasons={r.rejections} />}>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="mt-release__rejected"
+              icon={<Icon name="alert" />}
+              aria-label={`${r.rejections.length} ${r.rejections.length === 1 ? 'rejection' : 'rejections'} for ${r.title}`}
+            />
+          </Tooltip>
+        ) : null,
+    },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (r) => {
+        const link = downloadLink(r);
+        const magnet = link?.startsWith('magnet:') ?? false;
+        const what = magnet ? 'Open magnet link' : r.protocol === 'torrent' ? 'Download .torrent' : 'Download .nzb';
+        return (
+          <span className="mt-release__actions">
+            {link ? (
+              <Tooltip content={what}>
+                <LinkButton variant="ghost" size="sm" icon={<Icon name={magnet ? 'link' : 'download'} />} href={link} rel="noreferrer noopener" aria-label={`Download ${r.title}`} />
+              </Tooltip>
+            ) : null}
+            <Button size="sm" variant="secondary" loading={grabbing(r)} onClick={() => onGrab(r)} aria-label={`Grab ${r.title}`}>
+              Grab
+            </Button>
+          </span>
+        );
+      },
+    },
+  ];
+}
 
 /** Cross-indexer manual search: query + type + categories + indexers, results with download/grab. */
 export function SearchPage() {
@@ -45,6 +176,10 @@ export function SearchPage() {
   const [refine, setRefine] = useState('');
   const categories = useIndexerCategories();
   const indexers = useIndexerList();
+
+  useEffect(() => {
+    document.title = `${TITLE} · Arclight`;
+  }, []);
 
   // The top bar (or a link) changed ?q=: search for it.
   useEffect(() => {
@@ -94,87 +229,56 @@ export function SearchPage() {
     if (form.query.trim() !== q) void navigate({ search: { q: form.query.trim() } });
   };
 
-  const columns: Column<ReleaseResource>[] = [
-    { key: 'age', header: 'Age', sortValue: (r) => r.ageMinutes, cell: (r) => <span title={formatDateTime(r.publishDate)}>{formatAge(r)}</span> },
-    {
-      key: 'title',
-      header: 'Title',
-      sortValue: (r) => r.title,
-      cell: (r) =>
-        r.infoUrl ? (
-          <a href={r.infoUrl} target="_blank" rel="noreferrer noopener" className="break">
-            {r.title}
-          </a>
-        ) : (
-          <span className="break">{r.title}</span>
-        ),
-    },
-    { key: 'indexer', header: 'Indexer', sortValue: (r) => r.indexerName, cell: (r) => r.indexerName },
-    { key: 'size', header: 'Size', align: 'right', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size) },
-    {
-      key: 'peers',
-      header: 'Peers',
-      align: 'right',
-      sortValue: (r) => (r.protocol === 'torrent' ? (r.seeders ?? -1) : (r.grabs ?? -1)),
-      cell: (r) => peersLabel(r),
-    },
-    { key: 'protocol', header: 'Protocol', sortValue: (r) => r.protocol, cell: (r) => <Badge tone={r.protocol === 'torrent' ? 'info' : 'neutral'}>{r.protocol}</Badge> },
-    {
-      key: 'categories',
-      header: 'Categories',
-      cell: (r) => <span className="muted">{r.categories.map((c) => names.get(c) ?? String(c)).join(', ') || '—'}</span>,
-    },
-    {
-      key: 'actions',
-      header: <span className="sr-only">Actions</span>,
-      align: 'right',
-      cell: (r) => {
-        const link = downloadLink(r);
-        return (
-          <span className="nowrap">
-            {link ? (
-              <a className="btn btn-ghost btn-sm" href={link} rel="noreferrer noopener" aria-label={`Download ${r.title}`}>
-                {link.startsWith('magnet:') ? 'magnet' : r.protocol === 'torrent' ? '.torrent' : '.nzb'}
-              </a>
-            ) : null}
-            <Button size="sm" variant="ghost" loading={grab.isPending && grab.variables?.guid === r.guid} onClick={() => grab.mutate(r)} aria-label={`Grab ${r.title}`}>
-              Grab
-            </Button>
-          </span>
-        );
-      },
-    },
-  ];
+  const activeFilters = (form.kind !== 'all' ? 1 : 0) + (form.categories.length ? 1 : 0) + (form.indexerIds.length ? 1 : 0);
+  const activeRefine = (protocol !== 'all' ? 1 : 0) + (refine.trim() ? 1 : 0);
+
+  const columns = releaseColumns({
+    categoryName: (c) => names.get(c) ?? String(c),
+    onGrab: (r) => grab.mutate(r),
+    grabbing: (r) => grab.isPending && grab.variables?.guid === r.guid,
+  });
 
   return (
-    <Page title="Search" subtitle="Search every indexer at once">
-      <Card>
-        <form className="search-form" role="search" aria-label="Indexer search" onSubmit={onSubmit}>
-          <Input aria-label="Search query" placeholder="Title, release name…" value={form.query} onChange={(e) => setForm({ ...form, query: e.currentTarget.value })} />
-          <Select
-            aria-label="Type"
-            value={form.kind}
-            onChange={(e) => setForm({ ...form, kind: e.currentTarget.value as SearchKind, categories: [] })}
-            options={[
-              { value: 'all', label: 'All' },
-              { value: 'series', label: 'TV' },
-              { value: 'movie', label: 'Movies' },
-            ]}
-          />
-          <MultiSelect label="Categories" options={catOptions} value={form.categories} onChange={(categories) => setForm({ ...form, categories })} emptyLabel="All categories" />
-          <MultiSelect label="Indexers" options={indexerOptions} value={form.indexerIds} onChange={(indexerIds) => setForm({ ...form, indexerIds })} emptyLabel="All indexers" />
-          <Button type="submit" variant="primary" loading={results.isFetching} disabled={!form.query.trim()}>
-            Search
-          </Button>
+    <>
+      <PageHeader index="08" title={TITLE} subtitle="Search every indexer at once." />
+      <Pane className="mt-search">
+        <form className="mt-search__form" role="search" aria-label="Indexer search" onSubmit={onSubmit}>
+          <div className="mt-search__bar">
+            <Input size="lg" aria-label="Search query" placeholder="Title, release name…" value={form.query} onChange={(e) => setForm({ ...form, query: e.currentTarget.value })} />
+            <Button type="submit" variant="primary" size="lg" icon={<Icon name="search" />} loading={results.isFetching} disabled={!form.query.trim()}>
+              Search
+            </Button>
+          </div>
+          <FilterBar activeCount={activeFilters} onClear={() => setForm({ ...form, kind: 'all', categories: [], indexerIds: [] })}>
+            <Select
+              aria-label="Type"
+              value={form.kind}
+              onChange={(e) => setForm({ ...form, kind: e.currentTarget.value as SearchKind, categories: [] })}
+              options={[
+                { value: 'all', label: 'All types' },
+                { value: 'series', label: 'TV' },
+                { value: 'movie', label: 'Movies' },
+              ]}
+            />
+            <MultiSelect label="Categories" options={catOptions} value={form.categories} onChange={(c) => setForm({ ...form, categories: c })} emptyLabel="All categories" />
+            <MultiSelect label="Indexers" options={indexerOptions} value={form.indexerIds} onChange={(ids) => setForm({ ...form, indexerIds: ids })} emptyLabel="All indexers" />
+          </FilterBar>
         </form>
-      </Card>
+      </Pane>
 
       {request ? (
-        <Card
+        <Pane
           flush
+          className="mt-search__results"
           title={results.data ? `${rows?.length ?? 0} of ${results.data.length} results` : 'Results'}
           actions={
-            <span className="row">
+            <FilterBar
+              activeCount={activeRefine}
+              onClear={() => {
+                setProtocol('all');
+                setRefine('');
+              }}
+            >
               <Input aria-label="Filter results" placeholder="Filter titles" value={refine} onChange={(e) => setRefine(e.currentTarget.value)} />
               <Select
                 aria-label="Protocol"
@@ -186,11 +290,13 @@ export function SearchPage() {
                   { value: 'usenet', label: 'Usenet' },
                 ]}
               />
-            </span>
+            </FilterBar>
           }
         >
           {results.isError ? (
-            <ErrorView error={results.error} onRetry={() => void results.refetch()} />
+            <ErrorBlock title="Search failed" onRetry={() => void results.refetch()}>
+              {errorMessage(results.error)}
+            </ErrorBlock>
           ) : (
             <Table
               caption="Search results"
@@ -202,9 +308,11 @@ export function SearchPage() {
               empty={<EmptyState title="No results">Try fewer words, another type or more categories.</EmptyState>}
             />
           )}
-        </Card>
+        </Pane>
       ) : (
-        <EmptyState title="Search your indexers">Type a title and press Search. Library matches show in the top bar as you type.</EmptyState>
+        <EmptyState title="Search your indexers" className="mt-search__empty">
+          Type a title and press Search. Library matches show in the top bar as you type.
+        </EmptyState>
       )}
       {forceTarget ? (
         <ConfirmDialog
@@ -216,11 +324,11 @@ export function SearchPage() {
           onConfirm={() => forceGrab(forceTarget.release)}
         >
           <p>
-            <strong className="break">{forceTarget.release.title}</strong> does not match anything in your library ({forceTarget.reason}).
+            <strong className="mt-release__name">{forceTarget.release.title}</strong> does not match anything in your library ({forceTarget.reason}).
           </p>
-          <p className="muted">Force grabbing sends it to the default {forceTarget.release.protocol} client. It will show as unknown in the queue and will not be imported.</p>
+          <p>Force grabbing sends it to the default {forceTarget.release.protocol} client. It will show as unknown in the queue and will not be imported.</p>
         </ConfirmDialog>
       ) : null}
-    </Page>
+    </>
   );
 }

@@ -1,0 +1,21 @@
+/* Media management (Page 06). Square corners; mono for formats, paths and sizes. */
+.al-mm-rows { display: flex; flex-direction: column; gap: 16px; }
+.al-mm-select { max-width: 320px; }
+.al-mm-short { max-width: 200px; }
+
+.al-root-list { list-style: none; margin: 0; padding: 0; }
+.al-row-list__row.al-root-row { grid-template-columns: minmax(0, 1fr) 140px 220px 44px; }
+.al-root-row__path { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.al-root-row__path-text { color: var(--al-text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.al-root-row__kind { color: var(--al-text-3); }
+.al-root-row__remove { justify-self: end; }
+.al-row-list__row.al-root-row--pending { grid-template-columns: minmax(0, 1fr) 140px auto; padding-top: 6px; padding-bottom: 6px; border-style: dashed; }
+.al-root-row__pending-actions { display: flex; gap: 8px; justify-content: flex-end; }
+
+@media (max-width: 767px) {
+  .al-row-list__row.al-root-row,
+  .al-row-list__row.al-root-row--pending { grid-template-columns: minmax(0, 1fr); }
+  .al-root-row__remove { justify-self: start; min-width: 44px; min-height: 44px; }
+  .al-root-row__pending-actions { justify-content: flex-start; }
+  .al-root-row__pending-actions .al-btn { min-height: 44px; }
+}

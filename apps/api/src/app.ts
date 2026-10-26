@@ -93,7 +93,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     settingsModule,
     backupModule,
     metadataModule,
-    libraryModuleWith({ metadata: opts.metadata ?? metadata }),
+    libraryModuleWith({ metadata: opts.metadata ?? metadata, commands: wiring.library }),
     profilesModule,
     indexersModule,
     downloadClientsModule,

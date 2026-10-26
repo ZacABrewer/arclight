@@ -105,6 +105,8 @@ export const CalendarQuery = z.object({
   includeSeries: qsBool(false),
   includeEpisodeFile: qsBool(false),
   tags: qsTags,
+  /** Only episodes (`series`) or only movies (`movie`); default both. */
+  mediaType: z.enum(['all', 'series', 'movie']).default('all'),
 });
 export type CalendarQuery = z.infer<typeof CalendarQuery>;
 export type CalendarQueryInput = z.input<typeof CalendarQuery>;

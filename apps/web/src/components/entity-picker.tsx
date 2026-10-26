@@ -1,5 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
-import { cx } from '../lib/cx.js';
+import { Input, cx } from '../arclight/index.js';
+import './pickers.css';
 
 export interface EntityOption {
   id: number;
@@ -29,12 +30,13 @@ export function filterOptions(options: readonly EntityOption[], query: string, l
   return hits.slice(0, limit);
 }
 
-/** A searchable single-select dropdown (series / movie pickers). */
+/** A searchable single-select dropdown (series / movie pickers), drawn as an Arclight select menu. */
 export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€¦', disabled = false, limit = 50, ...aria }: EntityPickerProps) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [active, setActive] = useState(0);
   const ref = useRef<HTMLDivElement>(null);
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const listId = useId();
   const selected = options.find((o) => o.id === value);
   const matches = useMemo(() => filterOptions(options, query, limit), [options, query, limit]);
@@ -48,17 +50,23 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
     return () => document.removeEventListener('mousedown', onDoc);
   }, [open]);
 
-  const choose = (o: EntityOption) => {
-    onChange(o.id);
+  const close = (refocus: boolean) => {
     setOpen(false);
     setQuery('');
+    if (refocus) buttonRef.current?.focus();
+  };
+
+  const choose = (o: EntityOption) => {
+    onChange(o.id);
+    close(true);
   };
 
   return (
-    <div className="entity-picker" ref={ref}>
+    <div className="al-selectmenu mt-entity" data-open={open} ref={ref}>
       <button
+        ref={buttonRef}
         type="button"
-        className={cx('input', 'select', 'entity-picker-button', !selected && 'muted')}
+        className="al-selectmenu__button"
         disabled={disabled}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -67,17 +75,27 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
           setOpen((o) => !o);
           setActive(0);
         }}
+        onKeyDown={(e) => {
+          if (e.key === 'ArrowDown' && !open) {
+            e.preventDefault();
+            setOpen(true);
+            setActive(0);
+          }
+        }}
       >
-        {selected ? selected.label : placeholder}
+        <span className={selected ? undefined : 'mt-entity__placeholder'}>{selected ? selected.label : placeholder}</span>
+        <span className="al-selectmenu__caret" aria-hidden="true">
+          {open ? 'â–´' : 'â–¾'}
+        </span>
       </button>
       {open ? (
-        <div className="entity-picker-pop">
-          <input
-            className="input"
+        <div className="mt-entity__pop">
+          <Input
             autoFocus
             role="combobox"
             aria-expanded="true"
             aria-controls={listId}
+            aria-activedescendant={matches[active] ? `${listId}-${matches[active].id}` : undefined}
             aria-label={`Search ${aria['aria-label']}`}
             placeholder="Searchâ€¦"
             value={query}
@@ -99,27 +117,30 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
               } else if (e.key === 'Escape') {
                 e.preventDefault();
                 e.stopPropagation();
-                setOpen(false);
+                close(true);
               }
             }}
           />
-          <ul id={listId} role="listbox" className="entity-picker-list">
+          <ul id={listId} role="listbox" className="al-listbox" aria-label={aria['aria-label']}>
             {matches.map((o, i) => (
               <li
                 key={o.id}
+                id={`${listId}-${o.id}`}
                 role="option"
                 aria-selected={o.id === value}
-                className={cx('entity-picker-option', i === active && 'entity-picker-active')}
+                data-active={i === active}
+                className={cx('al-listbox__option', i === active && 'entity-picker-active')}
+                onMouseEnter={() => setActive(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();
                   choose(o);
                 }}
               >
                 {o.label}
-                {o.detail ? <span className="muted"> {o.detail}</span> : null}
+                {o.detail ? <span className="mt-entity__detail"> {o.detail}</span> : null}
               </li>
             ))}
-            {matches.length === 0 ? <li className="muted entity-picker-option">No matches</li> : null}
+            {matches.length === 0 ? <li className="mt-entity__none">No matches</li> : null}
           </ul>
         </div>
       ) : null}

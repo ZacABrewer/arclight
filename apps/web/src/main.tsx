@@ -9,18 +9,19 @@ import { createQueryClient } from './query-client.js';
 import { createAppRouter } from './router.js';
 import { setUnauthorizedHandler } from './api/client.js';
 import { authKeys, loginHref } from './auth/guard.js';
+import './arclight/fonts.js';
 import './styles/index.css';
 
 const queryClient = createQueryClient(toasts);
 const router = createAppRouter(queryClient);
 
 // A 401 from any api call means the session ended: drop the cached auth state and go to
-// /login, coming back here afterwards.
+// /login (with the "session expired" banner), coming back here afterwards.
 setUnauthorizedHandler(() => {
   const { pathname, href } = router.state.location;
   if (pathname === '/login' || pathname === '/setup') return;
   void queryClient.invalidateQueries({ queryKey: authKeys.all });
-  void router.navigate({ href: loginHref(href), replace: true });
+  void router.navigate({ href: loginHref(href, true), replace: true });
 });
 
 const rootEl = document.getElementById('root');

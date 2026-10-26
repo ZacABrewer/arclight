@@ -1,16 +1,17 @@
-import { useEffect, useState } from 'react';
+import { useMemo, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import type { MetadataSettingsResponse, MetadataSettingsUpdate } from '@arclight/shared';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { EmptyState } from '../../../components/empty-state.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
-import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
-import { isMasked } from '../../../components/forms/values.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import { errorMessage } from '../../../api/client.js';
+import { ErrorBlock, FormRow, FormSection, KeyValue, Skeleton, buttonClass } from '../../../arclight/index.js';
+import { SchemaForm } from '../../../components/forms/schema-form.js';
+import type { FieldDefinition, FieldErrors, FormValues } from '../../../components/forms/types.js';
+import { isMasked, validateFields } from '../../../components/forms/values.js';
 import { useMetadataSettings, useSaveMetadataSettings } from '../../../hooks/settings.js';
 import { useSystemStatus } from '../../../hooks/system.js';
+import { SettingsPage, useDraft } from '../settings-layout.js';
+import { SettingsSection } from '../shared.js';
+import { ApiKeyControls } from '../security/api-key.js';
+import '../security/security.css';
 
 export const METADATA_FIELDS: FieldDefinition[] = [
   {
@@ -35,77 +36,100 @@ export function toMetadataUpdate(values: FormValues): MetadataSettingsUpdate {
   return update;
 }
 
-function MetadataForm({ data }: { data: MetadataSettingsResponse }) {
-  const form = useSchemaForm(METADATA_FIELDS, { ...data, tmdbApiKey: data.tmdbApiKey ?? '' });
-  const save = useSaveMetadataSettings();
-  const { reset } = form;
-  useEffect(() => reset({ ...data, tmdbApiKey: data.tmdbApiKey ?? '' }), [data, reset]);
-  const regionError = form.values.region && String(form.values.region).trim().length !== 2 ? 'Use a two-letter code' : undefined;
-  return (
-    <>
-      <SchemaForm
-        fields={METADATA_FIELDS}
-        values={form.values}
-        onChange={form.setValues}
-        errors={regionError ? { ...form.errors, region: regionError } : form.errors}
-        inline
-      />
-      <Button variant="primary" loading={save.isPending} onClick={() => form.validate() && !regionError && save.mutate(toMetadataUpdate(form.values))}>
-        Save
-      </Button>
-    </>
-  );
+function metadataValues(data: MetadataSettingsResponse | undefined): FormValues | null {
+  return data ? { tmdbApiKey: data.tmdbApiKey ?? '', language: data.language, region: data.region } : null;
+}
+
+/** Field errors for the metadata form: required fields plus the two-letter region. */
+export function metadataErrors(values: FormValues): FieldErrors {
+  const errors = validateFields(METADATA_FIELDS, values);
+  const region = String(values.region ?? '').trim();
+  if (region && region.length !== 2) errors.region = 'Use a two-letter code';
+  return errors;
 }
 
 export function GeneralPage() {
   const metadata = useMetadataSettings();
+  const save = useSaveMetadataSettings();
   const status = useSystemStatus();
   const [origin] = useState(() => (typeof location === 'undefined' ? '' : location.host));
+  const saved = useMemo(() => metadataValues(metadata.data), [metadata.data]);
+  const draft = useDraft<FormValues | null>(saved);
+  const [touched, setTouched] = useState(false);
+  const errors = draft.value ? metadataErrors(draft.value) : {};
+  const invalid = Object.keys(errors).length > 0;
+
+  const onSave = () => {
+    setTouched(true);
+    if (!draft.value || invalid) return;
+    save.mutate(toMetadataUpdate(draft.value));
+  };
 
   return (
-    <Page title="General">
-      <div className="stack">
-        <Card title="Metadata (TMDB)">
-          {metadata.isPending ? (
-            <LoadingBlock />
-          ) : metadata.isError ? (
-            <ErrorView error={metadata.error} onRetry={() => void metadata.refetch()} />
-          ) : (
-            <MetadataForm data={metadata.data} />
-          )}
-        </Card>
-        <Card title="Host">
-          <dl className="fields">
-            <div className="fields-row">
-              <dt>Address</dt>
-              <dd>
-                <code>{origin}</code>
-              </dd>
-            </div>
-            <div className="fields-row">
-              <dt>Port</dt>
-              <dd>Set with the ARCLIGHT_PORT environment variable.</dd>
-            </div>
-            <div className="fields-row">
-              <dt>Log level</dt>
-              <dd className="muted">Not exposed by the api yet (set ARCLIGHT_LOG_LEVEL).</dd>
-            </div>
-            <div className="fields-row">
-              <dt>Config folder</dt>
-              <dd>{status.data ? <code>{status.data.paths.config}</code> : '—'}</dd>
-            </div>
-            <div className="fields-row">
-              <dt>Version</dt>
-              <dd>{status.data?.version ?? '—'}</dd>
-            </div>
-          </dl>
-        </Card>
-        <Card title="Backups">
-          <EmptyState title="Backups are coming soon">
-            <p className="muted">Scheduled database backups and restore will live here.</p>
-          </EmptyState>
-        </Card>
-      </div>
-    </Page>
+    <SettingsPage
+      title="General"
+      description="Metadata source, host details and the API key apps use to reach Arclight."
+      save={{
+        count: draft.changes,
+        onSave,
+        onDiscard: () => {
+          setTouched(false);
+          draft.discard();
+        },
+        saving: save.isPending,
+        disabled: invalid,
+      }}
+    >
+      <SettingsSection label="Metadata">
+        {metadata.isPending ? (
+          <Skeleton lines={3} />
+        ) : metadata.isError ? (
+          <ErrorBlock title="Could not load metadata settings" onRetry={() => void metadata.refetch()}>
+            {errorMessage(metadata.error)}
+          </ErrorBlock>
+        ) : draft.value ? (
+          <SchemaForm
+            fields={METADATA_FIELDS}
+            values={draft.value}
+            onChange={(next) => draft.set(next)}
+            // Region shape errors show while typing; "required" only after a save attempt.
+            errors={touched ? errors : errors.region ? { region: errors.region } : {}}
+            inline
+          />
+        ) : null}
+      </SettingsSection>
+
+      <SettingsSection label="Host">
+        <KeyValue
+          items={[
+            { label: 'Address', value: origin || '—' },
+            { label: 'Port', value: 'Set with the ARCLIGHT_PORT environment variable', mono: false },
+            { label: 'Log level', value: 'Set with the ARCLIGHT_LOG_LEVEL environment variable', mono: false },
+            { label: 'Config folder', value: status.data?.paths.config ?? '—' },
+            { label: 'Version', value: status.data?.version ?? '—' },
+          ]}
+        />
+      </SettingsSection>
+
+      <FormSection label="API key">
+        <FormRow label="API key" htmlFor="general-api-key" caption="Apps and scripts send this as the X-Api-Key header (or ?apikey=). It grants admin access.">
+          <ApiKeyControls id="general-api-key" />
+        </FormRow>
+      </FormSection>
+
+      <SettingsSection label="Interface">
+        <p className="al-caption">Interface preferences arrive in a later release.</p>
+      </SettingsSection>
+
+      <FormSection label="Backups">
+        <FormRow label="Database backups" caption="Create, download and restore backups on the System pages.">
+          <div>
+            <Link to="/system/backup" className={buttonClass({ variant: 'secondary' })}>
+              Open backups
+            </Link>
+          </div>
+        </FormRow>
+      </FormSection>
+    </SettingsPage>
   );
 }

@@ -1,10 +1,9 @@
 import { useCallback, useMemo, useState } from 'react';
+import { useNavigate } from '@tanstack/react-router';
 import { DISCOVER_MOVIE_SORTS, DISCOVER_TV_SORTS, type DiscoverQuery } from '@arclight/shared';
 import { discoverApi, type DiscoverKind } from '../../api/requests.js';
-import { Button } from '../../components/button.js';
-import { FormField, Input, Select } from '../../components/form.js';
-import { Page } from '../../components/page.js';
-import { DiscoverGrid } from '../../features/requests/discover-ui.js';
+import { FilterBar, Input, PageHeader, Segmented, Select } from '../../arclight/index.js';
+import { DiscoverGrid } from './discover-kit.js';
 import { useDiscoverGenres } from '../../hooks/requests.js';
 import { requestKeys } from '../../hooks/request-keys.js';
 
@@ -68,6 +67,11 @@ export function sortLabel(sort: string): string {
   return `${names[field] ?? field} ${dir === 'asc' ? '↑' : '↓'}`;
 }
 
+/** Filters that differ from the defaults (drives the FilterBar Clear button). */
+export function activeDiscoverFilters(f: DiscoverFilters): number {
+  return (Object.keys(EMPTY_FILTERS) as Array<keyof DiscoverFilters>).filter((k) => f[k] !== EMPTY_FILTERS[k]).length;
+}
+
 export function DiscoverMoviesPage() {
   return <DiscoverBrowse kind="movie" />;
 }
@@ -78,6 +82,7 @@ export function DiscoverTvPage() {
 
 function DiscoverBrowse({ kind }: { kind: DiscoverKind }) {
   const [filters, setFilters] = useState<DiscoverFilters>(EMPTY_FILTERS);
+  const navigate = useNavigate();
   const genres = useDiscoverGenres(kind);
   const query = useMemo(() => buildDiscoverQuery(filters), [filters]);
   const fetchPage = useCallback(
@@ -88,44 +93,38 @@ function DiscoverBrowse({ kind }: { kind: DiscoverKind }) {
   const sorts = kind === 'movie' ? DISCOVER_MOVIE_SORTS : DISCOVER_TV_SORTS;
 
   return (
-    <Page title={kind === 'movie' ? 'Discover movies' : 'Discover series'}>
-      <div className="filter-bar" role="group" aria-label="Filters">
-        <FormField label="Sort">
-          <Select value={filters.sortBy} onChange={set('sortBy')} options={sorts.map((s) => ({ value: s, label: sortLabel(s) }))} />
-        </FormField>
-        <FormField label="Genre">
-          <Select value={filters.genre} onChange={set('genre')}>
-            <option value="">Any</option>
-            {(genres.data ?? []).map((g) => (
-              <option key={g.id} value={String(g.id)}>
-                {g.name}
-              </option>
-            ))}
-          </Select>
-        </FormField>
-        <FormField label="Year from">
-          <Input className="input-narrow" inputMode="numeric" placeholder="1990" value={filters.yearFrom} onChange={set('yearFrom')} />
-        </FormField>
-        <FormField label="Year to">
-          <Input className="input-narrow" inputMode="numeric" placeholder="2026" value={filters.yearTo} onChange={set('yearTo')} />
-        </FormField>
-        <FormField label="Min rating">
-          <Input className="input-narrow" type="number" min={0} max={10} step={0.5} value={filters.minRating} onChange={set('minRating')} />
-        </FormField>
-        <FormField label="Language">
-          <Input className="input-narrow" placeholder="en" maxLength={3} value={filters.language} onChange={set('language')} />
-        </FormField>
-        <FormField label="Runtime min">
-          <Input className="input-narrow" type="number" min={0} value={filters.runtimeMin} onChange={set('runtimeMin')} />
-        </FormField>
-        <FormField label="Runtime max">
-          <Input className="input-narrow" type="number" min={0} value={filters.runtimeMax} onChange={set('runtimeMax')} />
-        </FormField>
-        <Button variant="ghost" onClick={() => setFilters(EMPTY_FILTERS)}>
-          Reset
-        </Button>
+    <>
+      <PageHeader index="02" title={kind === 'movie' ? 'Discover movies' : 'Discover series'}>
+        <Segmented
+          aria-label="Media type"
+          value={kind}
+          onChange={(k) => void navigate({ to: k === 'movie' ? '/discover/movies' : '/discover/tv' })}
+          options={[
+            { value: 'movie', label: 'Movies' },
+            { value: 'tv', label: 'Series' },
+          ]}
+        />
+      </PageHeader>
+      <FilterBar onClear={() => setFilters(EMPTY_FILTERS)} activeCount={activeDiscoverFilters(filters)}>
+        <Select aria-label="Sort" value={filters.sortBy} onChange={set('sortBy')} options={sorts.map((s) => ({ value: s, label: sortLabel(s) }))} />
+        <Select aria-label="Genre" value={filters.genre} onChange={set('genre')}>
+          <option value="">Any genre</option>
+          {(genres.data ?? []).map((g) => (
+            <option key={g.id} value={String(g.id)}>
+              {g.name}
+            </option>
+          ))}
+        </Select>
+        <Input aria-label="Year from" mono inputMode="numeric" placeholder="1990" style={{ width: 90 }} value={filters.yearFrom} onChange={set('yearFrom')} />
+        <Input aria-label="Year to" mono inputMode="numeric" placeholder="2026" style={{ width: 90 }} value={filters.yearTo} onChange={set('yearTo')} />
+        <Input aria-label="Min rating" mono type="number" min={0} max={10} step={0.5} placeholder="Rating" style={{ width: 96 }} value={filters.minRating} onChange={set('minRating')} />
+        <Input aria-label="Language" mono placeholder="en" maxLength={3} style={{ width: 70 }} value={filters.language} onChange={set('language')} />
+        <Input aria-label="Runtime min" mono type="number" min={0} placeholder="Min" end="min" style={{ width: 110 }} value={filters.runtimeMin} onChange={set('runtimeMin')} />
+        <Input aria-label="Runtime max" mono type="number" min={0} placeholder="Max" end="min" style={{ width: 110 }} value={filters.runtimeMax} onChange={set('runtimeMax')} />
+      </FilterBar>
+      <div style={{ marginTop: 24 }}>
+        <DiscoverGrid queryKey={requestKeys.discover.list(kind, query)} fetchPage={fetchPage} />
       </div>
-      <DiscoverGrid queryKey={requestKeys.discover.list(kind, query)} fetchPage={fetchPage} />
-    </Page>
+    </>
   );
 }

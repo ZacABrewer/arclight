@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { FileSystemListing } from '@arclight/shared';
 import { PathPickerDialog } from './path-picker.js';
+import { PathInput } from './path-input.js';
 import { breadcrumbs, isValidFolderName } from './path-utils.js';
 
 describe('breadcrumbs', () => {
@@ -93,17 +94,17 @@ function renderPicker(props: Partial<Parameters<typeof PathPickerDialog>[0]> = {
 describe('PathPickerDialog', () => {
   it('starts at the drive list and cannot select it', async () => {
     renderPicker();
-    expect(await screen.findByRole('button', { name: /D:/ })).toBeTruthy();
+    expect(await screen.findByRole('option', { name: /D:/ })).toBeTruthy();
     expect((screen.getByRole('button', { name: 'Select' }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole('button', { name: 'New folder' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('navigates into folders, shows files when asked and selects the current folder', async () => {
     const { onSelect } = renderPicker({ includeFiles: true });
-    fireEvent.click(await screen.findByRole('button', { name: /D:/ }));
-    fireEvent.click(await screen.findByRole('button', { name: /Media/ }));
-    await screen.findByText('Empty folder');
-    expect(screen.getByRole('navigation', { name: 'Breadcrumbs' }).textContent).toContain('Media');
+    fireEvent.doubleClick(await screen.findByRole('option', { name: /D:/ }));
+    fireEvent.doubleClick(await screen.findByRole('option', { name: /Media/ }));
+    await screen.findByText('This folder is empty.');
+    expect(screen.getByRole('navigation', { name: 'Current folder' }).textContent).toContain('Media');
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     expect(onSelect).toHaveBeenCalledWith('D:\\Media');
     // files were requested and rendered (disabled) on D:\
@@ -112,11 +113,11 @@ describe('PathPickerDialog', () => {
 
   it('creates a folder and opens it', async () => {
     renderPicker({ initialPath: 'D:\\' });
-    await screen.findByRole('button', { name: /Media/ });
+    await screen.findByRole('option', { name: /Media/ });
     expect(screen.queryByText('notes.txt')).toBeNull(); // files hidden unless asked for
     fireEvent.click(screen.getByRole('button', { name: 'New folder' }));
     fireEvent.change(screen.getByRole('textbox', { name: 'New folder name' }), { target: { value: 'New' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create folder' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'POST')?.body).toEqual({ parent: 'D:\\', name: 'New' }));
     await waitFor(() => expect((screen.getByRole('textbox', { name: 'Folder path' }) as HTMLInputElement).value).toBe('D:\\New'));
   });
@@ -125,6 +126,45 @@ describe('PathPickerDialog', () => {
     renderPicker({ initialPath: 'Z:\\gone' });
     expect(await screen.findByRole('alert')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: /Back to Computer/ }));
-    expect(await screen.findByRole('button', { name: /C:/ })).toBeTruthy();
+    expect(await screen.findByRole('option', { name: /C:/ })).toBeTruthy();
+  });
+
+  it('uses a mono path input, selects on click and opens with Enter or →', async () => {
+    const { onSelect } = renderPicker();
+    const input = screen.getByRole('textbox', { name: 'Folder path' }) as HTMLInputElement;
+    expect(input.className).toContain('al-input--mono');
+    const drive = await screen.findByRole('option', { name: /D:/ });
+    fireEvent.click(drive);
+    expect(input.value).toBe('D:\\');
+    expect(drive.getAttribute('aria-selected')).toBe('true');
+    // A drive picked from the root list can be selected directly.
+    fireEvent.click(screen.getByRole('button', { name: 'Select' }));
+    expect(onSelect).toHaveBeenCalledWith('D:\\');
+    fireEvent.keyDown(drive, { key: 'ArrowRight' });
+    const media = await screen.findByRole('option', { name: /Media/ });
+    expect(screen.getByRole('navigation', { name: 'Current folder' }).textContent).toContain('D:');
+    fireEvent.click(screen.getByRole('button', { name: 'Up one level' }));
+    expect(await screen.findByRole('option', { name: /C:/ })).toBeTruthy();
+    expect(media.isConnected).toBe(false);
+    fireEvent.change(input, { target: { value: 'D:\\Media' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(await screen.findByText('This folder is empty.')).toBeTruthy();
+  });
+});
+
+describe('PathInput', () => {
+  it('renders a mono input with a secondary Browse button that opens the picker', async () => {
+    const qc = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const onChange = vi.fn();
+    render(
+      <QueryClientProvider client={qc}>
+        <PathInput aria-label="Root folder path" value="/data" onChange={onChange} pickerTitle="Choose a root folder" />
+      </QueryClientProvider>,
+    );
+    expect(screen.getByRole('textbox', { name: 'Root folder path' }).className).toContain('al-input--mono');
+    const browse = screen.getByRole('button', { name: 'Browse for Root folder path' });
+    expect(browse.className).toContain('al-btn--secondary');
+    fireEvent.click(browse);
+    expect(await screen.findByRole('dialog', { name: 'Choose a root folder' })).toBeTruthy();
   });
 });

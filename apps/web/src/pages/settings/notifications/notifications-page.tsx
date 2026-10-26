@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { ApiError } from '../../../api/client.js';
+import { ApiError, errorMessage } from '../../../api/client.js';
 import {
   eventFlagLabel,
   eventFlags,
@@ -9,25 +9,27 @@ import {
   type NotificationSchema,
   type NotificationTestResult,
 } from '../../../api/notifications.js';
-import { Badge } from '../../../components/badge.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField } from '../../../components/form.js';
+import { Button, Checkbox, Chip, ErrorBlock, Field, Modal, Skeleton, Tag } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { TagPicker, tagRenderer } from '../../../components/forms/tag-picker.js';
 import { TestButton, type TestOutcome } from '../../../components/forms/test-result.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
-import { Modal } from '../../../components/modal.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useDeleteNotification, useNotificationList, useNotificationSchema, useSaveNotification } from '../../../hooks/settings.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError } from '../shared.js';
+import { SettingsPage } from '../settings-layout.js';
+import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
+import './notifications.css';
 
 const NAME_FIELD: FieldDefinition = { name: 'name', label: 'Name', type: 'text', required: true };
 
 export function notificationTestOutcome(r: NotificationTestResult): TestOutcome {
   return { ok: r.ok, warnings: r.warnings ?? [], errors: r.error ? [r.error.message] : [] };
+}
+
+/** `onGrab` -> "On grab", `onHealthIssue` -> "On health issue" (sentence case for tags). */
+export function eventFlagTag(flag: string): string {
+  const words = eventFlagLabel(flag).toLowerCase();
+  return `On ${words}`;
 }
 
 function toBody(values: FormValues): NotificationInput {
@@ -61,7 +63,7 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
     <>
       <Modal
         open
-        size="lg"
+        size={640}
         onClose={onClose}
         title={existing ? `Edit ${existing.name}` : `Add ${editing.schema?.implementationName ?? 'connection'}`}
         footer={
@@ -81,42 +83,76 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
           />
         }
       >
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} inline />
-        {flags.length ? (
-          <FormField inline label="Notify on">
-            <div className="check-grid" role="group" aria-label="Events">
-              {flags.map((flag) => (
-                <label key={flag} className="check">
-                  <input
-                    type="checkbox"
+        <div className="al-notification-editor">
+          <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
+          {flags.length ? (
+            <fieldset className="al-event-flags">
+              <legend className="al-label">Notify on</legend>
+              <div className="al-check-grid" role="group" aria-label="Events">
+                {flags.map((flag) => (
+                  <Checkbox
+                    key={flag}
+                    label={eventFlagTag(flag)}
                     checked={form.values[flag] === true}
                     onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
                   />
-                  {eventFlagLabel(flag)}
-                </label>
-              ))}
-            </div>
-          </FormField>
-        ) : null}
-        {fields.some((f) => f.name === 'tags') ? null : (
-          <FormField inline label="Tags" hint="Only notify for items with a matching tag; empty means all.">
-            <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
-          </FormField>
-        )}
-        <SaveError error={save.error} />
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          {fields.some((f) => f.name === 'tags') ? null : (
+            <Field label="Tags" hint="Only notify for items with a matching tag; empty means all.">
+              <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
+            </Field>
+          )}
+          <SaveError error={save.error} />
+        </div>
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${existing.name}?`}
+          confirmLabel="Delete notification"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
-        />
+        >
+          Arclight stops sending events to this connection.
+        </ConfirmDialog>
       ) : null}
     </>
+  );
+}
+
+function NotificationCard({ notification: n, schema, onEdit }: { notification: Notification; schema: NotificationSchema | undefined; onEdit: () => void }) {
+  const on = eventFlags(n).filter((f) => n[f] === true);
+  return (
+    <ItemCard
+      title={n.name}
+      onClick={onEdit}
+      status={on.length ? null : <Chip tone="warn">No events</Chip>}
+      actions={
+        <>
+          <TestButton
+            size="sm"
+            onTest={async () => {
+              const { id, ...rest } = n;
+              return notificationTestOutcome(await notificationsApi.test({ ...rest, id }));
+            }}
+          />
+          <Button size="sm" variant="secondary" onClick={onEdit} aria-label={`Edit ${n.name}`}>
+            Edit
+          </Button>
+        </>
+      }
+    >
+      <span className="al-card-line">{schema?.implementationName ?? n.implementation}</span>
+      {on.map((f) => (
+        <Tag key={f}>{eventFlagTag(f)}</Tag>
+      ))}
+    </ItemCard>
   );
 }
 
@@ -128,55 +164,62 @@ export function NotificationsPage() {
   const pending = list.error instanceof ApiError && list.error.status === 404;
 
   return (
-    <Page title="Notifications" subtitle="Connections notify other apps and services about grabs, imports and health issues.">
-      <Card>
+    <SettingsPage
+      title="Notifications"
+      description="Connections tell other apps and services about grabs, imports and health issues."
+      actions={
+        <Button variant="primary" onClick={() => setPicking(true)}>
+          Add connection
+        </Button>
+      }
+    >
+      <SettingsSection label="Connections" {...(list.data ? { count: list.data.length } : {})}>
         {list.isPending ? (
-          <LoadingBlock />
+          <Skeleton lines={3} />
         ) : pending ? (
           <PendingApiNotice what="notifications" />
         ) : list.isError ? (
-          <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+          <ErrorBlock title="Could not load notifications" onRetry={() => void list.refetch()}>
+            {errorMessage(list.error)}
+          </ErrorBlock>
         ) : (
-          <CardGrid>
+          <CardGrid label="Connections">
             {list.data.map((n) => {
               const schema = schemas.data?.find((s) => s.implementation === n.implementation);
-              const on = eventFlags(n).filter((f) => n[f] === true);
-              return (
-                <ItemCard key={n.id} title={n.name} onClick={() => setEditing({ notification: n, schema })}>
-                  <div className="muted">{schema?.implementationName ?? n.implementation}</div>
-                  <div className="badge-row">
-                    {on.length ? on.map((f) => <Badge key={f}>{eventFlagLabel(f)}</Badge>) : <Badge tone="warning">no events</Badge>}
-                  </div>
-                </ItemCard>
-              );
+              return <NotificationCard key={n.id} notification={n} schema={schema} onEdit={() => setEditing({ notification: n, schema })} />;
             })}
-            <AddCard label="Add connection" onClick={() => setPicking(true)} />
+            <AddCard label="Add notification" onClick={() => setPicking(true)} />
           </CardGrid>
         )}
-      </Card>
+      </SettingsSection>
       {picking ? (
-        <Modal open onClose={() => setPicking(false)} title="Add connection">
+        <Modal open size={640} onClose={() => setPicking(false)} title="Add connection">
           {schemas.isPending ? (
-            <LoadingBlock />
+            <Skeleton lines={4} />
           ) : schemas.isError ? (
-            schemas.error instanceof ApiError && schemas.error.status === 404 ? <PendingApiNotice what="notifications" /> : <ErrorView error={schemas.error} />
+            schemas.error instanceof ApiError && schemas.error.status === 404 ? (
+              <PendingApiNotice what="notifications" />
+            ) : (
+              <ErrorBlock title="Could not load connection types">{errorMessage(schemas.error)}</ErrorBlock>
+            )
           ) : (
-            <CardGrid>
+            <div className="al-chooser" role="list" aria-label="Connection types">
               {schemas.data.map((s) => (
-                <button
-                  key={s.implementation}
-                  type="button"
-                  className="item-card add-card"
-                  onClick={() => {
-                    setPicking(false);
-                    setEditing({ schema: s });
-                  }}
-                >
-                  <strong>{s.implementationName}</strong>
-                  {s.description ? <span className="muted">{s.description}</span> : null}
-                </button>
+                <div role="listitem" key={s.implementation}>
+                  <button
+                    type="button"
+                    className="al-chooser__item"
+                    onClick={() => {
+                      setPicking(false);
+                      setEditing({ schema: s });
+                    }}
+                  >
+                    <span className="al-chooser__name">{s.implementationName}</span>
+                    {s.description ? <span className="al-chooser__desc">{s.description}</span> : null}
+                  </button>
+                </div>
               ))}
-            </CardGrid>
+            </div>
           )}
         </Modal>
       ) : null}
@@ -187,6 +230,6 @@ export function NotificationsPage() {
           onClose={() => setEditing(null)}
         />
       ) : null}
-    </Page>
+    </SettingsPage>
   );
 }

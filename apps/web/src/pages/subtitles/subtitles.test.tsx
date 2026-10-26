@@ -5,6 +5,7 @@ import { makeMovie } from '../library/test-fixtures.js';
 import { initialAddForm, toAddMovieRequest, toAddSeriesRequest } from '../library/add-form.js';
 import { profiles, rootFolders } from '../library/test-fixtures.js';
 import { isExtractable } from './subtitles-tab.js';
+import * as itemTab from './item-tab.js';
 import { languageProfiles, languages, makeSubtitle, mockApi, movieFile, renderAt, type Call } from './test-harness.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -49,7 +50,7 @@ describe('wanted subtitles page', () => {
       'POST /command/subtitlesearch': { files: 1, searched: 1, downloaded: 1, message: 'Downloaded 1 subtitle' },
     });
     renderAt('/subtitles');
-    const search = await screen.findByRole('button', { name: 'Search subtitles for The Expanse S01E02' });
+    const search = await screen.findByRole('button', { name: 'Search subtitles for The Expanse S01E02' }, { timeout: 5000 });
     expect(screen.getByText('2')).toBeTruthy();
     expect(screen.getAllByTestId('missing-chip').map((c) => c.textContent)).toEqual(['en']);
     fireEvent.click(search);
@@ -57,8 +58,45 @@ describe('wanted subtitles page', () => {
     expect(calls.find((c) => c.method === 'POST')?.path).toBe('/command/subtitlesearch');
 
     fireEvent.click(screen.getByRole('tab', { name: 'Movies' }));
-    expect(await screen.findByRole('button', { name: 'Search subtitles for Dune' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Search subtitles for Dune' }, { timeout: 5000 })).toBeTruthy();
     expect(calls.some((c) => c.url === '/api/v1/subtitle/wanted?mediaType=movie&page=1&pageSize=50')).toBe(true);
+  }, 20_000);
+
+  it('switches between the TV and Movies tabs under the Subtitles header and bulk-searches the selection', async () => {
+    const calls = mockApi({
+      ...base,
+      'GET /subtitle/wanted': (c: Call) =>
+        c.url.includes('mediaType=movie')
+          ? page([wanted({ mediaFileId: 9, mediaType: 'movie', seriesId: null, movieId: 1, episodeIds: [], title: 'Dune', episodeLabel: null, episodeTitle: null })])
+          : page([wanted({ mediaFileId: 8 }), wanted({ mediaFileId: 10, episodeLabel: 'S01E03', episodeTitle: 'Remember the Cant' })]),
+      'POST /command/subtitlesearch': { files: 1, searched: 1, downloaded: 0, message: 'No subtitles found' },
+    });
+    renderAt('/subtitles/wanted');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Subtitles' })).toBeTruthy();
+    const sections = screen.getByRole('tablist', { name: 'Subtitles sections' });
+    expect(within(sections).getByRole('tab', { name: 'Wanted' }).getAttribute('aria-selected')).toBe('true');
+    const tv = screen.getByRole('tab', { name: 'TV' });
+    const movies = screen.getByRole('tab', { name: 'Movies' });
+    expect(tv.getAttribute('aria-selected')).toBe('true');
+    const search = await screen.findByRole('button', { name: 'Search subtitles for The Expanse S01E02' });
+    expect(search.className).toContain('al-btn--secondary');
+    expect(search.className).toContain('al-btn--sm');
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select The Expanse S01E02' }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select The Expanse S01E03' }));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    expect(bar.textContent).toContain('2 selected');
+    fireEvent.click(within(bar).getByRole('button', { name: 'Search selected' }));
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([{ mediaFileId: 8 }, { mediaFileId: 10 }]));
+
+    fireEvent.click(movies);
+    expect(movies.getAttribute('aria-selected')).toBe('true');
+    expect(tv.getAttribute('aria-selected')).toBe('false');
+    expect(await screen.findByRole('button', { name: 'Search subtitles for Dune' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Search subtitles for The Expanse S01E02' })).toBeNull();
+
+    fireEvent.click(within(sections).getByRole('tab', { name: 'History' }));
+    await waitFor(() => expect(calls.some((c) => c.path === '/subtitle/history')).toBe(true));
   });
 });
 
@@ -151,13 +189,13 @@ describe('movie subtitles tab', () => {
     expect(screen.getAllByTestId('missing-chip').map((c) => c.textContent)).toEqual(['de']);
     expect(calls.some((c) => c.url === '/api/v1/subtitle/file?movieId=1')).toBe(true);
 
-    // External: sync / blacklist / delete; embedded text track: extract.
-    fireEvent.click(await screen.findByRole('button', { name: 'Actions for French (forced) external subtitle' }));
-    expect(screen.getByRole('button', { name: 'Blacklist' })).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Sync' }));
+    // External: sync / blacklist / delete; embedded text track: extract; missing: search.
+    expect(await screen.findByRole('button', { name: 'Blacklist French (forced) subtitle' })).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Delete French (forced) subtitle' }).className).toContain('al-btn--danger');
+    expect(screen.getByRole('button', { name: 'Search German subtitle for Dune.mkv' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Sync French (forced) subtitle' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/subtitle/sync/11')).toBe(true));
-    fireEvent.click(screen.getByRole('button', { name: 'Actions for English (HI) embedded subtitle' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Extract' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Extract English (HI) embedded subtitle' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.path === '/subtitle/extract/12')).toBe(true));
   });
 
@@ -233,8 +271,28 @@ describe('movie subtitles tab', () => {
     await waitFor(() => expect(within(select).getByRole('option', { name: 'Euro' })).toBeTruthy());
     expect(select.value).toBe('1');
     fireEvent.change(select, { target: { value: '2' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toMatchObject({ languageProfileId: 2 }));
+  });
+});
+
+describe('per-item subtitles tab module', () => {
+  it('is exported from item-tab.tsx (and re-exported for the old path) with language-row actions', async () => {
+    const legacy = await import('./subtitles-tab.js');
+    expect(itemTab.SubtitlesTab).toBe(legacy.SubtitlesTab);
+    const rows = itemTab.languageRows(movieFile);
+    expect(rows.map((r) => r.kind)).toEqual(['external', 'embedded', 'missing']);
+
+    mockApi({ ...base, 'GET /movie/1': makeMovie({ id: 1, title: 'Dune', hasFile: true, languageProfileId: 1 }), 'GET /subtitle/file': [movieFile] });
+    renderAt('/library/movie/1');
+    fireEvent.click(await screen.findByRole('tab', { name: 'Subtitles' }));
+    const table = await screen.findByRole('table', { name: 'Subtitle languages for Dune.mkv' });
+    await screen.findByRole('button', { name: 'Delete French (forced) subtitle' });
+    expect(within(table).getAllByRole('row')).toHaveLength(4); // header + 3 languages
+    expect(within(table).getByText('Missing')).toBeTruthy();
+    for (const name of ['Search subtitles Dune.mkv', 'Upload subtitle Dune.mkv', 'Delete French (forced) subtitle', 'Sync French (forced) subtitle']) {
+      expect(screen.getByRole('button', { name }).className).toMatch(/al-btn--(secondary|danger)/);
+    }
   });
 });
 

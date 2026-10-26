@@ -1,4 +1,4 @@
-import { FormField, Select } from '../../components/form.js';
+import { Field, Select } from '../../arclight/index.js';
 import { useLanguageProfiles } from '../../hooks/subtitles.js';
 
 /** Add dialogs may leave the profile to the server default (the field is omitted). */
@@ -22,7 +22,7 @@ export function LanguageProfileSelect<T extends LanguageProfileChoice>({
   const list = profiles.data ?? [];
   const known = value === null || value === 'default' || list.some((p) => p.id === value);
   return (
-    <FormField label="Language profile" hint="Which subtitles to look for.">
+    <Field label="Language profile" hint="Which subtitles to look for.">
       <Select
         value={encoded}
         onChange={(e) => {
@@ -39,6 +39,6 @@ export function LanguageProfileSelect<T extends LanguageProfileChoice>({
         ))}
         {!known ? <option value={encoded}>Profile #{encoded}</option> : null}
       </Select>
-    </FormField>
+    </Field>
   );
 }

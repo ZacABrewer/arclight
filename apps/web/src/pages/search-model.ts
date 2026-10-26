@@ -104,3 +104,49 @@ export function downloadLink(r: Pick<ReleaseResource, 'downloadUrl' | 'magnetUrl
 export function isNoMatch(err: unknown): boolean {
   return err instanceof ApiError && err.status === 409 && err.code === 'NO_MATCH';
 }
+
+const RESOLUTIONS: [RegExp, string][] = [
+  [/\b(2160p|4k|uhd)\b/i, '2160p'],
+  [/\b1080[pi]\b/i, '1080p'],
+  [/\b720p\b/i, '720p'],
+  [/\b(480p|576p)\b/i, '480p'],
+];
+const SOURCES: [RegExp, string][] = [
+  [/\bremux\b/i, 'Remux'],
+  [/\b(blu-?ray|bdrip|brrip)\b/i, 'BluRay'],
+  [/\bweb-?dl\b/i, 'WEB-DL'],
+  [/\bweb-?rip\b/i, 'WEBRip'],
+  [/\bweb\b/i, 'WEB'],
+  [/\bhdtv\b/i, 'HDTV'],
+  [/\b(dvdrip|dvd)\b/i, 'DVD'],
+];
+
+/**
+ * Quality string read from a release title ("WEB-DL 1080p", "Remux 2160p"), or null when the
+ * title names neither. The indexer search has no decision engine pass, so this is a display hint.
+ */
+export function releaseQuality(title: string): string | null {
+  const source = SOURCES.find(([re]) => re.test(title))?.[1];
+  const resolution = RESOLUTIONS.find(([re]) => re.test(title))?.[1];
+  const parts = [source, resolution].filter(Boolean);
+  return parts.length ? parts.join(' ') : null;
+}
+
+export interface ScoreItem {
+  name: string;
+  score: number;
+}
+
+/**
+ * Custom format score tags when the result carries them (decision-engine results do; plain
+ * indexer results do not and get none).
+ */
+export function releaseScores(r: object): ScoreItem[] {
+  const { customFormats, customFormatScore } = r as { customFormats?: unknown; customFormatScore?: unknown };
+  if (typeof customFormatScore !== 'number') return [];
+  const names = Array.isArray(customFormats)
+    ? customFormats.map((f) => (f && typeof f === 'object' && 'name' in f ? String((f as { name: unknown }).name) : '')).filter(Boolean)
+    : [];
+  if (names.length === 0 && customFormatScore === 0) return [];
+  return [{ name: names.length ? names.join(' · ') : 'Score', score: customFormatScore }];
+}

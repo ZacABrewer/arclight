@@ -1,5 +1,5 @@
 import { useCallback, useId, useState, type ReactNode } from 'react';
-import { FormField, Input, Select, Toggle } from '../form.js';
+import { Checkbox, Field, FormRow, Input, Select, Textarea, Toggle } from '../../arclight/index.js';
 import type { FieldDefinition, FieldErrors, FieldRendererProps, FieldRenderers, FormValues } from './types.js';
 import {
   coerceOption,
@@ -14,24 +14,31 @@ import {
   validateFields,
   visibleFields,
 } from './values.js';
+import './forms.css';
 
 export interface SchemaFormProps {
   fields: readonly FieldDefinition[];
   values: FormValues;
   onChange: (next: FormValues) => void;
   errors?: FieldErrors | undefined;
-  /** Controlled "show advanced"; omit to let the form keep it. */
+  /**
+   * Controlled "Show advanced". Settings pages own the toggle (top right of the pane) and pass
+   * it in; omit it and the form draws its own toggle above the rows.
+   */
   showAdvanced?: boolean | undefined;
   onShowAdvancedChange?: ((value: boolean) => void) | undefined;
   /** Per-field-name overrides (tag pickers, category trees, ...). */
   renderers?: FieldRenderers | undefined;
-  /** Lay fields out label-beside-control (settings pages) instead of stacked (dialogs). */
+  /** Settings layout: 220px label column + control + caption (FormRow). Dialogs stay stacked. */
   inline?: boolean | undefined;
   /** Extra content after the toggle row (e.g. a Test button). */
   toolbar?: ReactNode;
 }
 
-/** Renders a list of field definitions as a form section with a "Show advanced" toggle. */
+/** Placeholder of a password input while a secret is stored (the api sent the mask). */
+export const STORED_SECRET_PLACEHOLDER = 'Stored, unchanged · type to replace';
+
+/** Renders field definitions as Arclight form rows, with a "Show advanced" toggle. */
 export function SchemaForm({
   fields,
   values,
@@ -50,71 +57,90 @@ export function SchemaForm({
     if (controlledAdvanced === undefined) setInternalAdvanced(v);
     onShowAdvancedChange?.(v);
   };
-
+  const ownToggle = controlledAdvanced === undefined && hasAdvanced(fields);
   const shown = visibleFields(fields, showAdvanced, errors);
 
+  const rows = shown.map((field) => {
+    const id = `${baseId}-${field.name.replace(/\W/g, '-')}`;
+    const props: FieldRendererProps = {
+      field,
+      id,
+      value: getPath(values, field.name),
+      onChange: (v) => onChange(setPath(values, field.name, v)),
+      error: errors[field.name],
+    };
+    const custom = renderers?.[field.name];
+    const control = custom ? custom(props) : <FieldControl {...props} />;
+    const label = (
+      <>
+        {field.label}
+        {field.required ? (
+          <span className="al-req" aria-hidden="true">
+            {' *'}
+          </span>
+        ) : null}
+        {field.advanced ? <span className="al-adv-tag">ADVANCED</span> : null}
+      </>
+    );
+    if (inline) {
+      const toggleRow = field.type === 'checkbox' && !custom;
+      return (
+        <FormRow
+          key={field.name}
+          label={label}
+          htmlFor={toggleRow ? undefined : id}
+          caption={field.helpText}
+          captionInline={toggleRow}
+          error={props.error}
+        >
+          {control}
+        </FormRow>
+      );
+    }
+    return (
+      <Field key={field.name} label={label} hint={field.helpText} error={props.error} htmlFor={id}>
+        {control}
+      </Field>
+    );
+  });
+
   return (
-    <div className="schema-form">
-      {hasAdvanced(fields) || toolbar ? (
-        <div className="schema-form-toolbar">
-          {hasAdvanced(fields) ? (
-            <Toggle label="Show advanced" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.currentTarget.checked)} />
-          ) : (
-            <span />
-          )}
+    <div className="al-schema-form" data-layout={inline ? 'rows' : 'stacked'}>
+      {ownToggle || toolbar ? (
+        <div className="al-schema-form__toolbar">
+          {ownToggle ? <Toggle label="Show advanced" checked={showAdvanced} onChange={(e) => setShowAdvanced(e.currentTarget.checked)} /> : <span />}
           {toolbar}
         </div>
       ) : null}
-      {shown.map((field) => {
-        const id = `${baseId}-${field.name.replace(/\W/g, '-')}`;
-        const props: FieldRendererProps = {
-          field,
-          id,
-          value: getPath(values, field.name),
-          onChange: (v) => onChange(setPath(values, field.name, v)),
-          error: errors[field.name],
-        };
-        const custom = renderers?.[field.name];
-        const control = custom ? custom(props) : <FieldControl {...props} />;
-        const label = (
-          <>
-            {field.label}
-            {field.required ? <span className="field-required" aria-hidden="true"> *</span> : null}
-            {field.advanced ? <span className="field-advanced-tag">advanced</span> : null}
-          </>
-        );
-        return (
-          <FormField key={field.name} label={label} hint={field.helpText} error={props.error} htmlFor={id} inline={inline}>
-            {control}
-          </FormField>
-        );
-      })}
+      {inline ? <div className="al-form-grid">{rows}</div> : <div className="al-schema-form__stack">{rows}</div>}
     </div>
   );
 }
 
-/** The default control for each field type. */
+/** The default Arclight control for each field type. */
 export function FieldControl({ field, id, value, onChange, error }: FieldRendererProps) {
   const invalid = error ? true : undefined;
   switch (field.type) {
     case 'checkbox':
-      return <Toggle id={id} checked={value === true} onChange={(e) => onChange(e.currentTarget.checked)} aria-invalid={invalid} />;
+      return (
+        <Toggle id={id} aria-label={field.label} checked={value === true} onChange={(e) => onChange(e.currentTarget.checked)} aria-invalid={invalid} />
+      );
     case 'number':
       return (
-        <span className="input-with-unit">
-          <Input
-            id={id}
-            type="number"
-            inputMode="decimal"
-            value={toDisplayNumber(value, field.scale)}
-            min={field.min}
-            max={field.max}
-            placeholder={field.placeholder}
-            aria-invalid={invalid}
-            onChange={(e) => onChange(fromDisplayNumber(e.currentTarget.value, field.scale))}
-          />
-          {field.unit ? <span className="input-unit">{field.unit}</span> : null}
-        </span>
+        <Input
+          id={id}
+          type="number"
+          inputMode="decimal"
+          mono
+          className="al-input--num"
+          value={toDisplayNumber(value, field.scale)}
+          min={field.min}
+          max={field.max}
+          placeholder={field.placeholder}
+          invalid={invalid}
+          end={field.unit}
+          onChange={(e) => onChange(fromDisplayNumber(e.currentTarget.value, field.scale))}
+        />
       );
     case 'password':
       return (
@@ -123,8 +149,9 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
           type="password"
           autoComplete="new-password"
           value={passwordDisplayValue(value)}
-          placeholder={isMasked(value) ? '•••••••• (unchanged)' : field.placeholder}
-          aria-invalid={invalid}
+          placeholder={isMasked(value) ? STORED_SECRET_PLACEHOLDER : field.placeholder}
+          data-stored={isMasked(value) || undefined}
+          invalid={invalid}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
       );
@@ -132,8 +159,9 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
       return (
         <Select
           id={id}
+          className="al-select--fit"
           value={value === undefined || value === null ? '' : String(value)}
-          aria-invalid={invalid}
+          invalid={invalid}
           onChange={(e) => onChange(coerceOption(field.options, e.currentTarget.value))}
           options={(field.options ?? []).map((o) => ({ value: String(o.value), label: o.label }))}
           {...(value === undefined || value === null || value === '' ? { placeholder: 'Select…' } : {})}
@@ -142,18 +170,16 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
     case 'multiSelect': {
       const selected = Array.isArray(value) ? (value as unknown[]) : [];
       return (
-        <div id={id} className="check-grid" role="group" aria-invalid={invalid}>
+        <div id={id} className="al-check-grid" role="group" aria-label={field.label} aria-invalid={invalid}>
           {(field.options ?? []).map((o) => {
             const on = selected.some((s) => String(s) === String(o.value));
             return (
-              <label key={String(o.value)} className="check">
-                <input
-                  type="checkbox"
-                  checked={on}
-                  onChange={() => onChange(on ? selected.filter((s) => String(s) !== String(o.value)) : [...selected, o.value])}
-                />
-                {o.label}
-              </label>
+              <Checkbox
+                key={String(o.value)}
+                label={o.label}
+                checked={on}
+                onChange={() => onChange(on ? selected.filter((s) => String(s) !== String(o.value)) : [...selected, o.value])}
+              />
             );
           })}
         </div>
@@ -161,13 +187,12 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
     }
     case 'textarea':
       return (
-        <textarea
+        <Textarea
           id={id}
-          className="input textarea"
           rows={4}
           value={typeof value === 'string' ? value : ''}
           placeholder={field.placeholder}
-          aria-invalid={invalid}
+          invalid={invalid}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
       );
@@ -178,11 +203,11 @@ export function FieldControl({ field, id, value, onChange, error }: FieldRendere
         <Input
           id={id}
           type="text"
-          className={field.type === 'regex' ? 'input-mono' : undefined}
+          mono={field.type === 'regex'}
           value={value === undefined || value === null ? '' : String(value)}
           placeholder={field.placeholder}
           spellCheck={field.type === 'regex' ? false : undefined}
-          aria-invalid={invalid}
+          invalid={invalid}
           onChange={(e) => onChange(e.currentTarget.value)}
         />
       );

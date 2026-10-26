@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { ImportList, ImportListCreateInput, ImportListField, ImportListMediaType, ImportListSchema } from '@arclight/shared';
-import { Input } from '../../../components/form.js';
+import { Input } from '../../../arclight/index.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import type { FieldDefinition, FieldRendererProps, FieldRenderers, FormValues } from '../../../components/forms/types.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
@@ -38,7 +38,7 @@ function ListInput({ id, value, onChange, numeric }: FieldRendererProps & { nume
 function ReadOnlyValue({ id, value }: FieldRendererProps) {
   const shown = value === undefined || value === null || value === '' ? 'Not set' : value === '********' ? 'Stored' : String(value);
   return (
-    <span id={id} className="muted">
+    <span id={id} className="al-muted">
       {shown}
     </span>
   );

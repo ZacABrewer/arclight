@@ -27,6 +27,9 @@ export interface LibraryRow {
   posterUrl: string | undefined;
   /** Network for series, studio for movies. */
   subtitle: string | null;
+  overview: string;
+  /** TMDB collection (movies only). */
+  collection: { tmdbId: number; title: string } | null;
   searchText: string;
 }
 
@@ -61,6 +64,8 @@ export function seriesRow(s: Series): LibraryRow {
     rootFolderPath: s.rootFolderPath,
     posterUrl: imageUrl(s.images, 'poster'),
     subtitle: s.network ?? null,
+    overview: s.overview,
+    collection: null,
     searchText: normaliseSearch(`${s.title} ${s.sortTitle} ${s.year}`),
   };
 }
@@ -85,6 +90,8 @@ export function movieRow(m: Movie): LibraryRow {
     rootFolderPath: m.rootFolderPath,
     posterUrl: imageUrl(m.images, 'poster'),
     subtitle: m.studio ?? null,
+    overview: m.overview,
+    collection: m.collection ?? null,
     searchText: normaliseSearch(`${m.title} ${m.originalTitle} ${m.sortTitle} ${m.year}`),
   };
 }
@@ -188,3 +195,36 @@ export const STATUS_LABELS: Record<string, string> = {
   inCinemas: 'In cinemas',
   released: 'Released',
 };
+
+/** Caption under a poster: "2022 · Apple TV+". */
+export function rowMeta(r: Pick<LibraryRow, 'year' | 'subtitle'>): string {
+  return [r.year || null, r.subtitle].filter(Boolean).join(' · ');
+}
+
+/** Poster progress bar tone: orange when monitored files are missing, grey when unmonitored. */
+export function progressTone(r: Pick<LibraryRow, 'monitored' | 'have' | 'total'>): 'default' | 'warn' | 'muted' {
+  if (!r.monitored) return 'muted';
+  return r.total > 0 && r.have < r.total ? 'warn' : 'default';
+}
+
+export interface CollectionGroup {
+  tmdbId: number;
+  title: string;
+  movies: LibraryRow[];
+  /** Movies in the collection with a file on disk. */
+  owned: number;
+}
+
+/** Movies grouped by TMDB collection (largest first); movies without one are left out. */
+export function groupCollections(rows: readonly LibraryRow[]): CollectionGroup[] {
+  const map = new Map<number, CollectionGroup>();
+  for (const r of rows) {
+    if (!r.collection) continue;
+    const g = map.get(r.collection.tmdbId) ?? { tmdbId: r.collection.tmdbId, title: r.collection.title, movies: [], owned: 0 };
+    g.movies.push(r);
+    if (r.have > 0) g.owned += 1;
+    map.set(r.collection.tmdbId, g);
+  }
+  for (const g of map.values()) g.movies.sort((a, b) => a.year - b.year || collator.compare(a.sortTitle, b.sortTitle));
+  return [...map.values()].sort((a, b) => b.movies.length - a.movies.length || collator.compare(a.title, b.title));
+}

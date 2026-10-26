@@ -1,32 +1,52 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Link, useRouter } from '@tanstack/react-router';
-import { PASSWORD_MIN_LENGTH, type AuthMethod, type SetupStatus, type SetupStepId } from '@arclight/shared';
+import { useRouter } from '@tanstack/react-router';
+import { PASSWORD_MIN_LENGTH, type AuthMethod, type MediaType, type SetupStatus, type SetupStepId } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { setupApi } from '../../api/auth.js';
+import { filesystemApi } from '../../api/filesystem.js';
+import { libraryApi } from '../../api/library.js';
 import { metadataApi } from '../../api/metadata.js';
 import { settingsApi } from '../../api/settings.js';
+import {
+  Backdrop,
+  Banner,
+  Button,
+  ErrorBlock,
+  Field,
+  FormSection,
+  Input,
+  Mark,
+  Pane,
+  PathPickerField,
+  SectionLabel,
+  Segmented,
+  Select,
+  Skeleton,
+  Stepper,
+  type PathEntry,
+} from '../../arclight/index.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { authKeys } from '../../auth/guard.js';
-import { Button } from '../../components/button.js';
-import { FormField, Input, Select, Toggle } from '../../components/form.js';
-import { LoadingBlock } from '../../components/spinner.js';
-import { cx } from '../../lib/cx.js';
+import { formatBytes } from '../system/format.js';
 import { DownloadClientsPage } from '../settings/download-clients/download-clients-page.js';
 import { IndexersPage } from '../settings/indexers/indexers-page.js';
+import { VpnSettingsPage } from '../settings/vpn.js';
+import { crumbsFor } from './path-crumbs.js';
 
-// First-run wizard: admin -> TMDB key -> root folders -> download client -> indexer -> done.
-// The admin step signs the new admin in; every later step saves through the normal api as
-// that admin, and "Finish" marks setup complete.
+// Page 08 first-run wizard: Admin → TMDB → Root folders → Download client → Indexer → VPN.
+// One chamfered card per step under a diamond stepper. The admin step signs the new admin
+// in; every later step saves through the normal api as that admin, and the last step marks
+// setup complete (with the sign-in method).
 
-export type WizardStep = SetupStepId | 'done';
+export type WizardStep = SetupStepId | 'vpn';
 export const WIZARD_STEPS: readonly { id: WizardStep; label: string; optional?: boolean }[] = [
-  { id: 'admin', label: 'Admin account' },
-  { id: 'tmdb', label: 'TMDB key' },
+  { id: 'admin', label: 'Admin' },
+  { id: 'tmdb', label: 'TMDB' },
   { id: 'rootFolders', label: 'Root folders' },
   { id: 'downloadClient', label: 'Download client', optional: true },
   { id: 'indexer', label: 'Indexer', optional: true },
-  { id: 'done', label: 'Done' },
+  { id: 'vpn', label: 'VPN', optional: true },
 ];
 
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
@@ -79,16 +99,43 @@ function hasErrors(e: object): boolean {
   return Object.values(e).some(Boolean);
 }
 
-function StepNav({ onBack, onNext, nextLabel = 'Next', busy, extra }: { onBack?: () => void; onNext: () => void; nextLabel?: string; busy?: boolean; extra?: ReactNode }) {
+interface StepFooterProps {
+  onBack?: (() => void) | undefined;
+  onSkip?: (() => void) | undefined;
+  onContinue: () => void;
+  continueLabel?: string | undefined;
+  busy?: boolean | undefined;
+  extra?: ReactNode;
+}
+
+/** Back (ghost) left; Skip for now (ghost) + Continue (primary) right. */
+function StepFooter({ onBack, onSkip, onContinue, continueLabel = 'Continue', busy, extra }: StepFooterProps) {
   return (
-    <div className="wizard-nav">
-      <div>{onBack ? <Button variant="ghost" onClick={onBack}>Back</Button> : null}</div>
-      <div className="row">
-        {extra}
-        <Button variant="primary" loading={busy ?? false} onClick={onNext}>
-          {nextLabel}
+    <div className="wiz-footer">
+      {onBack ? (
+        <Button variant="ghost" onClick={onBack}>
+          Back
         </Button>
-      </div>
+      ) : null}
+      <span className="wiz-footer__spacer" />
+      {extra}
+      {onSkip ? (
+        <Button variant="ghost" onClick={onSkip}>
+          Skip for now
+        </Button>
+      ) : null}
+      <Button variant="primary" loading={busy ?? false} onClick={onContinue}>
+        {continueLabel}
+      </Button>
+    </div>
+  );
+}
+
+function StepHead({ title, children }: { title: string; children?: ReactNode }) {
+  return (
+    <div className="wiz-head">
+      <h2 className="wiz-head__title">{title}</h2>
+      {children ? <p className="wiz-head__lead">{children}</p> : null}
     </div>
   );
 }
@@ -120,23 +167,25 @@ function AdminStep({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <form className="stack" onSubmit={(e) => void submit(e)} noValidate>
-      <p className="muted">Create the administrator account. You will use it to sign in.</p>
-      <FormField label="Username" error={errors.username}>
-        <Input autoComplete="username" value={draft.username} onChange={set('username')} />
-      </FormField>
-      <FormField label="Password" error={errors.password}>
-        <Input type="password" autoComplete="new-password" value={draft.password} onChange={set('password')} />
-      </FormField>
-      <FormField label="Confirm password" error={errors.confirm}>
-        <Input type="password" autoComplete="new-password" value={draft.confirm} onChange={set('confirm')} />
-      </FormField>
-      <FormField label="Email (optional)" error={errors.email}>
-        <Input type="email" autoComplete="email" value={draft.email} onChange={set('email')} />
-      </FormField>
-      {failure ? <p className="text-error" role="alert">{failure}</p> : null}
+    <form className="wiz-body" onSubmit={(e) => void submit(e)} noValidate>
+      <StepHead title="Create the admin account">You sign in with this account. You can add more people later.</StepHead>
+      <div className="wiz-grid">
+        <Field label="Username" error={errors.username}>
+          <Input size="lg" autoComplete="username" value={draft.username} onChange={set('username')} />
+        </Field>
+        <Field label="Email (optional)" error={errors.email}>
+          <Input size="lg" type="email" autoComplete="email" value={draft.email} onChange={set('email')} />
+        </Field>
+        <Field label="Password" hint={`At least ${PASSWORD_MIN_LENGTH} characters.`} error={errors.password}>
+          <Input size="lg" type="password" autoComplete="new-password" value={draft.password} onChange={set('password')} />
+        </Field>
+        <Field label="Confirm password" error={errors.confirm}>
+          <Input size="lg" type="password" autoComplete="new-password" value={draft.confirm} onChange={set('confirm')} />
+        </Field>
+      </div>
+      {failure ? <ErrorBlock title="Couldn't create the admin account">{failure}</ErrorBlock> : null}
       <button type="submit" hidden />
-      <StepNav onNext={() => void submit()} nextLabel="Create admin" busy={busy} />
+      <StepFooter onContinue={() => void submit()} continueLabel="Create admin account" busy={busy} />
     </form>
   );
 }
@@ -156,86 +205,178 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
     try {
       await save();
       const found = await metadataApi.search('The Matrix', 'movie');
-      setResult({ ok: true, message: `Key works (${found.length} results for a test search).` });
+      setResult({ ok: true, message: `The key works. A test search found ${found.length} results.` });
     } catch (err) {
-      setResult({ ok: false, message: errorMessage(err) });
+      setResult({ ok: false, message: `Test failed · ${errorMessage(err)}` });
     } finally {
       setBusy(null);
     }
   };
 
   const next = async () => {
-    if (!key.trim() && !complete) return setResult({ ok: false, message: 'A TMDB API key is required for metadata.' });
+    if (!key.trim() && !complete) return setResult({ ok: false, message: 'A TMDB API key is required for series and movie information.' });
     setBusy('next');
     try {
       await save();
       onDone();
     } catch (err) {
-      setResult({ ok: false, message: errorMessage(err) });
+      setResult({ ok: false, message: `Save failed · ${errorMessage(err)}` });
     } finally {
       setBusy(null);
     }
   };
 
   return (
-    <div className="stack">
-      <p className="muted">
-        Arclight reads series and movie information from TMDB. Create a free v3 API key at themoviedb.org (Settings → API).
-        {complete ? ' A key is already configured; enter a new one to replace it.' : ''}
-      </p>
-      <FormField label="TMDB API key">
-        <Input value={key} autoComplete="off" spellCheck={false} onChange={(e) => setKey(e.currentTarget.value)} />
-      </FormField>
-      {result ? <p className={result.ok ? 'text-ok' : 'text-error'} role={result.ok ? 'status' : 'alert'}>{result.message}</p> : null}
-      <StepNav
+    <div className="wiz-body">
+      <StepHead title="Connect TMDB">
+        Arclight reads series and movie information from TMDB. Create a free v3 API key at themoviedb.org under Settings › API.
+        {complete ? ' A key is already saved; enter a new one to replace it.' : ''}
+      </StepHead>
+      <Field label="TMDB API key">
+        <Input size="lg" mono value={key} autoComplete="off" spellCheck={false} onChange={(e) => setKey(e.currentTarget.value)} />
+      </Field>
+      {result ? (
+        result.ok ? (
+          <Banner>{result.message}</Banner>
+        ) : (
+          <p className="wiz-error" role="alert">
+            {result.message}
+          </p>
+        )
+      ) : null}
+      <StepFooter
         onBack={onBack}
-        onNext={() => void next()}
+        onContinue={() => void next()}
         busy={busy === 'next'}
-        extra={<Button loading={busy === 'test'} onClick={() => void test()}>Test</Button>}
+        extra={
+          <Button variant="secondary" loading={busy === 'test'} onClick={() => void test()}>
+            Test key
+          </Button>
+        }
       />
     </div>
   );
 }
 
-function RootFoldersStep({ complete, onBack, onDone }: { complete: boolean; onBack: () => void; onDone: () => void }) {
-  const [draft, setDraft] = useState<RootFolderDraft>({ tv: '', movies: '' });
-  const [create, setCreate] = useState(true);
-  const [errors, setErrors] = useState<FieldErrors<keyof RootFolderDraft | 'form'>>({});
-  const [busy, setBusy] = useState(false);
+const ROOT_KIND_LABEL: Record<MediaType, string> = { series: 'TV', movie: 'Movies' };
 
-  const next = async () => {
-    const found = validateRootFolders(draft, complete);
-    setErrors(found);
-    if (hasErrors(found)) return;
+function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
+  const qc = useQueryClient();
+  const [kind, setKind] = useState<MediaType>('series');
+  const [path, setPath] = useState('');
+  const [browse, setBrowse] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const folders = useQuery({ queryKey: ['setup', 'rootfolders'], queryFn: libraryApi.rootFolders.list, retry: false });
+  const listing = useQuery({ queryKey: ['setup', 'fs', browse], queryFn: () => filesystemApi.list(browse), retry: false });
+
+  const entries: PathEntry[] = (listing.data?.directories ?? []).map((d) => ({ name: d.name, path: d.path, kind: d.type === 'drive' ? 'drive' : 'folder' }));
+  const added = folders.data ?? [];
+
+  const add = async (value: string) => {
+    const p = value.trim();
+    if (!p) return;
+    if (!isAbsolutePath(p)) return setError('Use an absolute path, such as /media/tv.');
+    if (added.some((f) => f.path === p)) return setError(`${p} is already added.`);
     setBusy(true);
+    setError(null);
     try {
-      if (draft.tv.trim()) await setupApi.addRootFolder({ path: draft.tv.trim(), mediaType: 'series', createIfMissing: create });
-      if (draft.movies.trim()) await setupApi.addRootFolder({ path: draft.movies.trim(), mediaType: 'movie', createIfMissing: create });
-      onDone();
+      await setupApi.addRootFolder({ path: p, mediaType: kind, createIfMissing: true });
+      setPath('');
+      await qc.invalidateQueries({ queryKey: ['setup', 'rootfolders'] });
+      // The other kind usually comes next.
+      setKind(kind === 'series' ? 'movie' : 'series');
     } catch (err) {
-      setErrors({ form: errorMessage(err) });
+      setError(`Couldn't add ${p} · ${errorMessage(err)}`);
     } finally {
       setBusy(false);
     }
   };
 
+  const remove = async (id: number) => {
+    try {
+      await libraryApi.rootFolders.remove(id);
+      await qc.invalidateQueries({ queryKey: ['setup', 'rootfolders'] });
+    } catch (err) {
+      setError(`Couldn't remove the folder · ${errorMessage(err)}`);
+    }
+  };
+
+  const next = () => {
+    if (added.length === 0) return setError('Add at least one root folder.');
+    onDone();
+  };
+
   return (
-    <div className="stack">
-      <p className="muted">Where your library lives. Series and movies each get their own root folder.{complete ? ' You already have one; add more or continue.' : ''}</p>
-      <FormField label="TV root folder" hint="e.g. /data/media/tv" error={errors.tv}>
-        <Input value={draft.tv} onChange={(e) => setDraft({ ...draft, tv: e.currentTarget.value })} />
-      </FormField>
-      <FormField label="Movies root folder" hint="e.g. /data/media/movies" error={errors.movies}>
-        <Input value={draft.movies} onChange={(e) => setDraft({ ...draft, movies: e.currentTarget.value })} />
-      </FormField>
-      <Toggle label="Create folders that do not exist" checked={create} onChange={(e) => setCreate(e.currentTarget.checked)} />
-      {errors.form ? <p className="text-error" role="alert">{errors.form}</p> : null}
-      <StepNav onBack={onBack} onNext={() => void next()} busy={busy} />
+    <div className="wiz-body">
+      <StepHead title="Where is your media stored?">Add a root folder for TV and one for movies. Arclight imports finished downloads into these.</StepHead>
+      <Segmented<MediaType>
+        aria-label="Folder for"
+        options={[
+          { value: 'series', label: 'TV' },
+          { value: 'movie', label: 'Movies' },
+        ]}
+        value={kind}
+        onChange={setKind}
+      />
+      <PathPickerField
+        label={`${ROOT_KIND_LABEL[kind]} root folder`}
+        value={path}
+        onChange={setPath}
+        entries={entries}
+        crumbs={crumbsFor(listing.data?.path ?? browse)}
+        onNavigate={(p) => setBrowse(p)}
+        onAdd={(p) => void add(p)}
+        addLabel={busy ? 'Adding…' : 'Add'}
+        loading={listing.isLoading}
+        error={error ?? (listing.isError ? `Couldn't list folders · ${errorMessage(listing.error)}` : undefined)}
+        placeholder={kind === 'series' ? '/media/tv' : '/media/movies'}
+      />
+      <div className="wiz-added">
+        <SectionLabel count={added.length || undefined}>Added</SectionLabel>
+        {folders.isLoading ? (
+          <Skeleton lines={1} />
+        ) : added.length === 0 ? (
+          <p className="wiz-muted">Nothing added yet.</p>
+        ) : (
+          <ul>
+            {added.map((f) => (
+              <li key={f.id} className="wiz-added__row">
+                <span className="wiz-added__dot" aria-hidden="true" />
+                <span className="al-num wiz-added__path">{f.path}</span>
+                <span className="wiz-muted">
+                  {ROOT_KIND_LABEL[f.mediaType]}
+                  {f.freeSpaceBytes != null ? (
+                    <>
+                      {' · '}
+                      <span className="al-num">{formatBytes(f.freeSpaceBytes)}</span> free
+                    </>
+                  ) : null}
+                </span>
+                <Button size="sm" variant="ghost" className="wiz-added__remove" aria-label={`Remove ${f.path}`} onClick={() => void remove(f.id)}>
+                  Remove
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      <StepFooter onBack={onBack} onContinue={next} />
     </div>
   );
 }
 
-function DoneStep({ onBack }: { onBack: () => void }) {
+function EmbeddedStep({ title, lead, children, complete, onBack, onDone }: { title: string; lead: string; children: ReactNode; complete: boolean; onBack: () => void; onDone: () => void }) {
+  return (
+    <div className="wiz-body">
+      <StepHead title={title}>{lead}</StepHead>
+      <div className="wiz-embed">{children}</div>
+      <StepFooter onBack={onBack} onSkip={complete ? undefined : onDone} onContinue={onDone} />
+    </div>
+  );
+}
+
+function VpnStep({ onBack }: { onBack: () => void }) {
   const router = useRouter();
   const qc = useQueryClient();
   const [method, setMethod] = useState<AuthMethod>('forms');
@@ -255,21 +396,46 @@ function DoneStep({ onBack }: { onBack: () => void }) {
   };
 
   return (
-    <div className="stack">
-      <p>Almost there. Choose how people sign in; you can change this later under Settings → Security.</p>
-      <FormField label="Authentication">
-        <Select
-          value={method}
-          onChange={(e) => setMethod(e.currentTarget.value as AuthMethod)}
-          options={[
-            { value: 'forms', label: 'Login page (recommended)' },
-            { value: 'basic', label: 'Browser prompt (HTTP Basic)' },
-            { value: 'none', label: 'None on the local network' },
-          ]}
-        />
-      </FormField>
-      {failure ? <p className="text-error" role="alert">{failure}</p> : null}
-      <StepNav onBack={onBack} onNext={() => void finish()} nextLabel="Finish setup" busy={busy} />
+    <div className="wiz-body">
+      <StepHead title="Protect downloads with a VPN">Optional. Arclight pauses downloads whenever the tunnel drops. You can set this up later in Settings › VPN.</StepHead>
+      <div className="wiz-embed">
+        <VpnSettingsPage />
+      </div>
+      <FormSection label="Sign-in">
+        <Field label="How people sign in" hint="You can change this later in Settings › Security.">
+          <Select
+            value={method}
+            onChange={(e) => setMethod(e.currentTarget.value as AuthMethod)}
+            options={[
+              { value: 'forms', label: 'Login page (recommended)' },
+              { value: 'basic', label: 'Browser prompt (HTTP Basic)' },
+              { value: 'none', label: 'None on the local network' },
+            ]}
+          />
+        </Field>
+      </FormSection>
+      {failure ? <ErrorBlock title="Couldn't finish setup">{failure}</ErrorBlock> : null}
+      <StepFooter onBack={onBack} onSkip={() => void finish()} onContinue={() => void finish()} continueLabel="Finish setup" busy={busy} />
+    </div>
+  );
+}
+
+function WizardFrame({ index, children }: { index: number; children: ReactNode }) {
+  return (
+    <div className="al-app wiz">
+      <Backdrop vx={0.5} horizon={0.625} spire={false} />
+      <header className="wiz-bar">
+        <Mark size={26} />
+        <span className="al-wordmark">ARCLIGHT</span>
+        <span className="wiz-bar__label">Setup</span>
+        <span className="wiz-bar__spacer" />
+        {index >= 0 ? (
+          <span className="wiz-bar__count">
+            Step <span className="al-num">{index + 1}</span> of {WIZARD_STEPS.length}
+          </span>
+        ) : null}
+      </header>
+      <main className="wiz-main">{children}</main>
     </div>
   );
 }
@@ -278,6 +444,7 @@ export function SetupWizard() {
   const { status: authStatus } = useAuth();
   const setup = useQuery({ queryKey: authKeys.setup, queryFn: setupApi.status, retry: false });
   const [step, setStep] = useState<WizardStep | null>(null);
+  const router = useRouter();
 
   useEffect(() => {
     document.title = 'Setup · Arclight';
@@ -287,66 +454,80 @@ export function SetupWizard() {
     if (step === null && setup.data) setStep(firstIncompleteStep(setup.data));
   }, [setup.data, step]);
 
-  if (setup.isPending || step === null) return <LoadingBlock />;
-  if (setup.isError) return <p className="text-error">{errorMessage(setup.error)}</p>;
+  if (setup.isError) {
+    return (
+      <WizardFrame index={-1}>
+        <ErrorBlock title="Couldn't load setup" onRetry={() => void setup.refetch()}>
+          {errorMessage(setup.error)}
+        </ErrorBlock>
+      </WizardFrame>
+    );
+  }
+  if (setup.isPending || step === null) {
+    return (
+      <WizardFrame index={-1}>
+        <Pane chamfer="tl" className="wiz-card">
+          <Skeleton lines={4} />
+        </Pane>
+      </WizardFrame>
+    );
+  }
 
-  const complete = (id: SetupStepId) => setup.data.steps.find((s) => s.id === id)?.complete ?? false;
+  const complete = (id: WizardStep) => (id === 'vpn' ? false : (setup.data.steps.find((s) => s.id === id)?.complete ?? false));
   const index = WIZARD_STEPS.findIndex((s) => s.id === step);
-  const go = (offset: number) => {
+  const goTo = (i: number) => {
     void setup.refetch();
-    setStep(WIZARD_STEPS[Math.min(Math.max(index + offset, 0), WIZARD_STEPS.length - 1)]!.id);
+    setStep(WIZARD_STEPS[Math.min(Math.max(i, 0), WIZARD_STEPS.length - 1)]!.id);
   };
+  const next = () => goTo(index + 1);
+  const back = () => goTo(index - 1);
   const needsSignIn = complete('admin') && !authStatus?.authenticated && step !== 'admin';
 
   let body: ReactNode;
   if (needsSignIn) {
     body = (
-      <div className="stack">
-        <p>An admin account already exists. Sign in with it to continue setup.</p>
-        <Link to="/login" search={{ redirect: '/setup' }} className="btn btn-primary btn-md">
-          Sign in
-        </Link>
+      <div className="wiz-body">
+        <StepHead title="Sign in to continue">An admin account already exists. Sign in with it to finish setup.</StepHead>
+        <StepFooter onContinue={() => void router.navigate({ to: '/login', search: { redirect: '/setup' } })} continueLabel="Sign in" />
       </div>
     );
   } else if (step === 'admin') {
     body = complete('admin') ? (
-      <div className="stack">
-        <p>The admin account is set up.</p>
-        <StepNav onNext={() => go(1)} />
+      <div className="wiz-body">
+        <StepHead title="The admin account is ready">Continue to connect TMDB.</StepHead>
+        <StepFooter onContinue={next} />
       </div>
     ) : (
-      <AdminStep onDone={() => go(1)} />
+      <AdminStep onDone={next} />
     );
-  } else if (step === 'tmdb') body = <TmdbStep complete={complete('tmdb')} onBack={() => go(-1)} onDone={() => go(1)} />;
-  else if (step === 'rootFolders') body = <RootFoldersStep complete={complete('rootFolders')} onBack={() => go(-1)} onDone={() => go(1)} />;
-  else if (step === 'downloadClient' || step === 'indexer') {
+  } else if (step === 'tmdb') body = <TmdbStep complete={complete('tmdb')} onBack={back} onDone={next} />;
+  else if (step === 'rootFolders') body = <RootFoldersStep onBack={back} onDone={next} />;
+  else if (step === 'downloadClient') {
     body = (
-      <div className="stack">
-        <p className="muted">Optional. {step === 'downloadClient' ? 'Add the client that downloads releases.' : 'Add an indexer to search for releases.'} You can also do this later in Settings.</p>
-        <div className="setup-embed">{step === 'downloadClient' ? <DownloadClientsPage /> : <IndexersPage />}</div>
-        <StepNav onBack={() => go(-1)} onNext={() => go(1)} nextLabel={complete(step) ? 'Next' : 'Skip'} />
-      </div>
+      <EmbeddedStep title="Add a download client" lead="Optional. The client downloads the releases Arclight grabs." complete={complete('downloadClient')} onBack={back} onDone={next}>
+        <DownloadClientsPage />
+      </EmbeddedStep>
     );
-  } else body = <DoneStep onBack={() => go(-1)} />;
+  } else if (step === 'indexer') {
+    body = (
+      <EmbeddedStep title="Add an indexer" lead="Optional. Indexers are where Arclight searches for releases." complete={complete('indexer')} onBack={back} onDone={next}>
+        <IndexersPage />
+      </EmbeddedStep>
+    );
+  } else body = <VpnStep onBack={back} />;
 
   return (
-    <div className="auth-screen">
-      <div className="wizard card">
-        <div className="card-body stack">
-          <div className="auth-brand">ARCLIGHT</div>
-          <h1 className="auth-title">Welcome · setup</h1>
-          <ol className="wizard-steps" aria-label="Setup steps">
-            {WIZARD_STEPS.map((s, i) => (
-              <li key={s.id} className={cx('wizard-step', i === index && 'wizard-step-active', i < index && 'wizard-step-done')} aria-current={i === index ? 'step' : undefined}>
-                {s.label}
-                {s.optional ? <span className="muted"> (optional)</span> : null}
-              </li>
-            ))}
-          </ol>
-          <h2 className="wizard-step-title">{WIZARD_STEPS[index]?.label}</h2>
-          {body}
-        </div>
-      </div>
-    </div>
+    <WizardFrame index={index}>
+      <Stepper
+        aria-label="Setup steps"
+        className="wiz-stepper"
+        steps={WIZARD_STEPS.map((s) => ({ id: s.id, label: s.label }))}
+        current={index}
+        onStepClick={(i) => goTo(i)}
+      />
+      <Pane chamfer="tl" strong className="wiz-card" aria-label={WIZARD_STEPS[index]?.label}>
+        {body}
+      </Pane>
+    </WizardFrame>
   );
 }
