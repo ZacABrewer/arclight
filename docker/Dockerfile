@@ -2,7 +2,7 @@
 # Three stages: build (pnpm workspace -> web dist + esbuild api bundle), externals (the few
 # packages the bundle leaves out, i.e. the better-sqlite3 native addon) and a slim runtime
 # that holds only the node binary, the bundle, the addon and the runtime-read assets.
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 ENV CI=true
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
@@ -15,7 +15,7 @@ RUN pnpm install --offline --frozen-lockfile
 # Web: vite build. Api: scripts/bundle.mjs -> apps/api/dist/{server.mjs,drizzle,definitions,package.json}.
 RUN pnpm --filter @arclight/web build && pnpm --filter @arclight/api build
 
-FROM node:24-bookworm-slim AS externals
+FROM node:26-bookworm-slim AS externals
 WORKDIR /ext
 # dist/package.json lists only the bundle's externals (scripts/bundle.mjs EXTERNALS).
 COPY --from=build /src/apps/api/dist/package.json ./package.json

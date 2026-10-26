@@ -4,7 +4,7 @@
 # Two stages: build (pnpm workspace -> one esbuild bundle, packages/engine-agent/dist/agent.mjs)
 # and a slim runtime holding only the node binary, tini and that bundle (no node_modules: the
 # agent has no runtime dependencies besides Node itself).
-FROM node:24-bookworm-slim AS build
+FROM node:26-bookworm-slim AS build
 ENV CI=true
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
