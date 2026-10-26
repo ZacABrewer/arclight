@@ -1,0 +1,135 @@
+# System pages
+
+The System section is where you look after Arclight itself: is it healthy, what is it doing in the background, what do the logs say, can I back it up, and is there an update. This page walks through each System page, then covers the metrics endpoint, config-as-code and where the log files live. Use it when something looks wrong or when you want to keep an eye on things.
+
+The System menu has these items: Status, Tasks, Logs, Backups, Health, Import, Updates, Stats, Feeds and Audit.
+
+## Status
+
+System > Status is the "what am I running" page.
+
+| Section | What it shows |
+|---|---|
+| About | Version, started time, uptime, and whether Arclight runs in Docker |
+| Runtime | Node version, platform, architecture |
+| Paths | The config folder, database file and log folder |
+| Torrent engine | State (running, starting, VPN lockdown, failed, disabled), download and upload speed, torrents downloading, seeding and total, peers |
+| Indexers | Each indexer with an OK, "recent failures" or paused (with a retry timer) chip |
+
+During a VPN lockdown the engine card says torrents are paused and bound to `127.0.0.1` until the VPN is back. See [vpn.md](vpn.md).
+
+> Coming soon: speed and VPN history charts. This page will be updated when it ships.
+
+## Tasks
+
+System > Tasks shows everything Arclight does on a timer.
+
+- **Scheduled tasks**: Task, Interval, State, Last run, Next run. Click "Run now" to start one immediately.
+- **Task history**: every run with its Status, Trigger (scheduled or manual), when it was queued, Duration and Message. Failed runs show the reason.
+- **Media analysis queue**: how many files are waiting for `ffprobe` to read their resolution and codecs. If ffprobe is missing the files stay in the queue and a hint explains how to fix it.
+
+Examples of tasks you will see: the hourly health check, the queue refresh, RSS sync, missing-episode searches, metadata refresh, the backup job, update checks, the audit cleanup and the VPN status check. Tasks you never need to touch; "Run now" is for when you want a result sooner.
+
+## Logs
+
+System > Logs has two parts.
+
+- **Log entries**: a live view. Filter by level ("{level} and above"), search messages, "Live tail" (Pause or Resume), and "Clear logs" (clears the on-screen buffer, not the files).
+- **Log files**: the files on disk, each with a download link.
+
+### Log locations and levels
+
+| What | Where |
+|---|---|
+| Log file | `<config folder>/logs/arclight.log` (in Docker: `/config/logs/arclight.log`) |
+| Rotation | At 10 MB, five old files kept: `arclight.log.1` to `arclight.log.5` |
+| Live buffer | The most recent 5000 entries in memory |
+| Container output | Also written to the container's standard output: `docker logs <container-name>` |
+
+Levels, from most to least detailed: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. The default is `info`. To change it, set the environment variable `ARCLIGHT_LOG_LEVEL` (for example `debug`) and restart. Use `debug` only while hunting a problem; it is noisy.
+
+## Backups
+
+System > Backups creates, downloads and restores backups and sets the schedule. All of it is explained in [backup-restore.md](../getting-started/backup-restore.md).
+
+## Health
+
+System > Health runs checks and tells you what needs fixing. "Run checks" refreshes them now (they also run every 5 minutes). Each warning has a "How to fix" link to a page that explains the cause and the fix; those pages are also available in the app as System > Health docs. When all is well it says "Every health check passes."
+
+The most common ones are covered in [Troubleshooting](../TROUBLESHOOTING.md), for example [VPN disconnected](../TROUBLESHOOTING.md#vpn-disconnected), [Empty root folder](../TROUBLESHOOTING.md#empty-root-folder) and [Update available](../TROUBLESHOOTING.md#update-available).
+
+## Import
+
+System > Import brings settings and libraries over from Sonarr, Radarr, Prowlarr, Bazarr and Overseerr. See [migrating.md](../getting-started/migrating.md).
+
+## Updates
+
+System > Updates shows whether a new version exists and lets you update the containers if you enabled it. Options are on Settings > Updates. See [updating.md](../getting-started/updating.md).
+
+## Stats
+
+System > Stats is a read-only dashboard about your library:
+
+- Library counts (series, episodes, files, movies, continuing and ended series)
+- Library size over time, with the 30 and 90 day change
+- Storage: free space on each root folder ("{size} free of {size}")
+- Breakdowns by quality, resolution, video codec and dynamic range
+- Largest series and largest movies
+- Activity over the last days: grabbed, imported and failed
+- Indexer stats
+
+Stats are snapshotted once a day (task `StatsSnapshot`), so the size trend starts empty on a new install.
+
+## Feeds
+
+System > Feeds lists the data feeds Arclight downloads in the background (indexer definition updates, quality guides, scene mappings and similar). Each row shows the feed, its state, interval, last sync, last success and pending items.
+
+A feed turns "Stale" when it has not synced for three intervals. The "Fix" link opens "Why {name} is stale" and "What to do". The health check "Feed stale" fires for the same reason.
+
+## Audit
+
+System > Audit lists who changed what ("Every change made through the api, and every sign-in"). Filter by user name or id, action and date range, and use "Export CSV" to save the list. Two settings on the page: "Record changes" and "Kept for" (days; 0 keeps everything, default 90). Only administrators can see it. More in [users-and-security.md](users-and-security.md#audit-log).
+
+## Metrics endpoint and Grafana
+
+Arclight exposes Prometheus metrics at `/metrics` on the server root (for example `http://<your-host>:7878/metrics`). Examples of what it reports:
+
+| Metric | What it is |
+|---|---|
+| `arclight_info` | Version information |
+| `arclight_http_requests_total` | Requests handled |
+| `arclight_queue_items` | Items in the download queue |
+| `arclight_torrent_*` | Torrent engine counters (speeds, torrents, peers) |
+| `arclight_vpn_connected` | 1 when the VPN is up |
+
+How to authenticate when scraping: send the API key as `X-Api-Key`, as `?apikey=`, with HTTP Basic, or with a session cookie. If you prefer no credentials, turn on "Allow /metrics without credentials" under Settings > General in the "Metrics" row (only on a trusted network).
+
+A ready-made Grafana dashboard is in the repository: [grafana-dashboard.json](../grafana-dashboard.json). In Grafana choose Dashboards > Import, upload the file and pick your Prometheus data source. The full metric list and a Prometheus scrape example are in [OPERATIONS.md](../OPERATIONS.md).
+
+## Config as code
+
+Settings > General has a "Config as code" pane. It exports your settings to a YAML or JSON file and imports them again, which is handy for rebuilding a machine or keeping your setup in version control.
+
+| Action | What it does |
+|---|---|
+| Export (YAML or JSON) | Downloads your settings. Secrets are masked as `********` unless you tick "Include secrets" |
+| Import file, then "Preview changes" | Shows what would change without changing anything |
+| "Apply changes" | Applies the file. It is all or nothing: if anything is invalid, nothing is applied. Items are matched by name and settings are merged |
+| "Delete what the document does not list" | Off by default. Turn it on only if you want items missing from the file to be removed |
+
+### Managed mode
+
+If you set the environment variable `ARCLIGHT_CONFIG_FILE` (for example `/config/arclight.yml`), Arclight applies that file every time it starts. For the keys in that file the file wins over anything edited in the UI. The pane lists "Managed keys" and "Config file errors", so you can see what is locked.
+
+Individual settings can also be forced with environment variables named `ARCLIGHT_SETTING__<section>__<key>`. Order of precedence: UI/database lowest, then the config file, then environment variables.
+
+The export and import also work over the API (`/api/v1/config/export`, `/api/v1/config/import`). Everything in detail is in [OPERATIONS.md](../OPERATIONS.md).
+
+## Related
+
+- [Back up and restore](../getting-started/backup-restore.md)
+- [Updating Arclight](../getting-started/updating.md)
+- [Migrating](../getting-started/migrating.md)
+- [Users and security](users-and-security.md)
+- [Troubleshooting](../TROUBLESHOOTING.md)
+- [Operations guide](../OPERATIONS.md)

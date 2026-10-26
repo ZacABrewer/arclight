@@ -9,7 +9,7 @@ Test environment: Native unless noted. After a restore, "Restart now" stops the 
 | ID | Step | Expected result | Pass/Fail |
 |----|------|-----------------|-----------|
 | SYS-01 | Click System -> Status. | Page "Status" with three cards. "About": Version, Started (date and time), Uptime, Docker (badge yes or no). "Runtime": Node, Platform, Architecture. "Paths": Config, Database, Logs, each a file path. | |
-| SYS-02 | Compare the Docker badge and Paths to your environment, then compare Version and Uptime with the Dashboard subtitle ("v... · up ..."). | Native: Docker "no" and paths under the test-env config folder (for example `C:\path\to\test-env\config`). Docker or NAS: Docker "yes" and paths such as `/config`. Version matches the Dashboard; Uptime grows when you reload a few minutes later. | |
+| SYS-02 | Compare the Docker badge and Paths to your environment, then compare Version and Uptime with the Dashboard subtitle ("v... · up ..."). | Native: Docker "no" and paths under the test-env config folder (for example `<test-env>\config`). Docker or NAS: Docker "yes" and paths such as `/config`. Version matches the Dashboard; Uptime grows when you reload a few minutes later. | |
 
 ## System -> Tasks
 
@@ -54,7 +54,7 @@ Test environment: Native unless noted. After a restore, "Restart now" stops the 
 | SYS-24 | Click "Restore from file...", pick a backup zip downloaded earlier, then try a non-zip file. | The zip opens the same "Restore backup" dialog naming that file and, once confirmed, shows the banner from SYS-22. A non-zip file is rejected: the chooser offers only zip files, and a forced wrong file gives an error in the dialog with nothing changed. | |
 | SYS-25 | Click Delete on a backup row. | Dialog "Delete backup" says "Delete <name>? This cannot be undone." Cancel keeps it; Delete removes the row. | |
 | SYS-26 | In Settings enter Interval `400`, Hour `25`, Folder `backups` and click Save. Then enter Interval `2`, Hour `3`, Keep at most `5`, Keep for `14`, empty Folder, Save and reload. | The first attempt shows "Enter a whole number from 0 to 365", "Enter a whole number from 0 to 23" and "Use an absolute path, or leave empty for the default" and saves nothing. The second shows toast "Backup settings saved" and the values persist after reload. | |
-| SYS-27 | Set Folder to an existing absolute folder (for example `C:\path\to\test-env\backups`), Save, then click Back up now. | The new archive is written into that folder on disk and listed on the page. | |
+| SYS-27 | Set Folder to an existing absolute folder (for example `<test-env>\backups`), Save, then click Back up now. | The new archive is written into that folder on disk and listed on the page. | |
 
 ## System -> Import (from existing apps)
 
