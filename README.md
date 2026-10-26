@@ -9,6 +9,10 @@ content lands. It is not a media server.
 
 Arclight was started under the working name Media-Tron.
 
+## Documentation
+
+**Full documentation: [docs/README.md](docs/README.md).** Install guides for Docker on Linux, Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer; a first-run walkthrough; one page per area of the app; [Troubleshooting](docs/TROUBLESHOOTING.md), [FAQ](docs/FAQ.md) and [Glossary](docs/GLOSSARY.md). The sections below are a short summary for contributors; the docs are the authoritative guide for users.
+
 Status: **Phase 1 in progress** (library, metadata, profiles, indexers and download-client
 plumbing work; the release/import pipeline and most UI pages are still being built; no
 authentication yet). See [docs/ROADMAP.md](docs/ROADMAP.md) and
