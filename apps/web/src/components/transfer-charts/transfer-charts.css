@@ -1,0 +1,36 @@
+/* Transfer history charts (transfer-charts.tsx): 1px lines, text-4 mono axes, no glow. */
+.al-transfer-chart { margin: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.al-transfer-chart__svg { display: block; width: 100%; overflow: visible; }
+.al-transfer-chart__caption { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--al-text-4); }
+.al-transfer-chart__legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; font-size: 12px; color: var(--al-text-4); }
+.al-transfer-chart__summary { color: var(--al-text-3); overflow-wrap: anywhere; }
+.al-transfer-key { display: inline-flex; align-items: center; gap: 6px; }
+.al-transfer-chart__data > summary { cursor: pointer; font-size: 12px; color: var(--al-text-3); width: max-content; }
+.al-transfer-chart__data > summary:focus-visible { outline: 1px solid var(--al-focus, var(--al-cyan)); outline-offset: 2px; }
+.al-transfer-chart__tables { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; max-height: 320px; overflow: auto; }
+.al-transfer-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 16px; }
+.al-transfer-range { flex: none; }
+.al-transfer-muted { margin: 0; font-size: 13px; color: var(--al-text-4); }
+
+.al-transfer-events { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; color: var(--al-text-2); }
+.al-transfer-events li { padding-left: 10px; border-left: 2px solid var(--al-line-2); overflow-wrap: anywhere; }
+.al-transfer-events li[data-severity='warning'] { border-left-color: var(--al-warn); }
+.al-transfer-events li[data-severity='error'] { border-left-color: var(--al-danger); }
+.al-transfer-events time { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+
+.al-transfer-section { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.al-transfer-section__title { margin: 0; font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--al-text-3); }
+
+/* VPN connection strip. */
+.al-vpn-strip { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.al-vpn-strip__uptime { margin: 0; font-size: 14px; color: var(--al-text-1); }
+.al-vpn-strip__bar { position: relative; height: 14px; border: 1px solid var(--al-line-2); background: transparent; overflow: hidden; }
+.al-vpn-strip__seg { position: absolute; top: 0; bottom: 0; opacity: 0.85; }
+.al-vpn-strip__seg[data-state='up'] { opacity: 0.6; }
+.al-vpn-strip__axis { display: flex; justify-content: space-between; font-family: var(--al-mono); font-size: 11px; color: var(--al-text-4); }
+
+/* Activity → Queue: the engine "Transfer" section sits under the banner, aligned with it. */
+.al-transfer-section-slot { padding: 16px 26px 0; }
+@media (max-width: 767px) {
+  .al-transfer-section-slot { padding: 12px 16px 0; }
+}

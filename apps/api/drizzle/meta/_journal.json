@@ -71,6 +71,13 @@
       "when": 1793030758572,
       "tag": "0009_brown_black_knight",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793035737973,
+      "tag": "0010_glorious_synch",
+      "breakpoints": true
     }
   ]
 }
