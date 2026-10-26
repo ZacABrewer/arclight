@@ -38,3 +38,8 @@ export * from '../modules/profiles/schema.js';
 export * from '../modules/library/schema.js';
 export * from '../modules/indexers/schema.js';
 export * from '../modules/download-clients/schema.js';
+export * from '../modules/history/schema.js';
+export * from '../modules/blocklist/schema.js';
+export * from '../modules/releases/schema.js';
+export * from '../modules/imports/schema.js';
+export * from '../modules/notifications/schema.js';

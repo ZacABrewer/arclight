@@ -8,9 +8,27 @@ import { navEntry } from './nav.js';
 import { DashboardPage } from './pages/dashboard.js';
 import { NotFoundPage } from './pages/not-found.js';
 import { SearchPage } from './pages/search.js';
+import { CalendarPage } from './pages/calendar/calendar-page.js';
+import { AddNewPage } from './pages/library/add-new.js';
+import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
+import { MovieDetailsPage } from './pages/library/movie-details.js';
+import { SeriesDetailsPage } from './pages/library/series-details.js';
+import { WantedCutoffPage, WantedMissingPage } from './pages/wanted/wanted-page.js';
 import { SystemHealthPage } from './pages/system/health.js';
 import { SystemStatusPage } from './pages/system/status.js';
 import { SystemTasksPage } from './pages/system/tasks.js';
+import { SystemLogsPage } from './pages/system/logs.js';
+import { BlocklistPage } from './pages/activity/blocklist-page.js';
+import { HistoryPage } from './pages/activity/history-page.js';
+import { QueuePage } from './pages/activity/queue-page.js';
+import { CustomFormatsPage } from './pages/settings/custom-formats/custom-formats-page.js';
+import { DownloadClientsPage } from './pages/settings/download-clients/download-clients-page.js';
+import { GeneralPage } from './pages/settings/general/general-page.js';
+import { IndexersPage } from './pages/settings/indexers/indexers-page.js';
+import { MediaManagementPage } from './pages/settings/media-management/media-management-page.js';
+import { NotificationsPage } from './pages/settings/notifications/notifications-page.js';
+import { ProfilesPage } from './pages/settings/profiles/profiles-page.js';
+import { QualityPage } from './pages/settings/quality/quality-page.js';
 
 // Code-based route tree. To build a real page: replace its `placeholder(...)` with a
 // createRoute whose component is the page. The sidebar lives in nav.ts.
@@ -52,7 +70,10 @@ type AppPathLiteral =
   | '/library/tv'
   | '/activity/queue'
   | '/wanted/missing'
-  | '/settings/media-management'
+  | '/wanted/cutoff'
+  | '/settings/mediamanagement'
+  | '/settings/customformats'
+  | '/settings/downloadclients'
   | '/system/status';
 
 const searchRoute = createRoute({
@@ -68,40 +89,51 @@ export const routeTree = rootRoute.addChildren([
   page('/', DashboardPage),
   searchRoute,
 
+  // Library (pages/library, pages/calendar, pages/wanted).
   sectionRedirect('/library', '/library/tv'),
-  placeholder('/library/tv'),
-  placeholder('/library/movies'),
+  page('/library/tv', SeriesLibraryPage),
+  page('/library/movies', MovieLibraryPage),
+  page('/library/add', AddNewPage),
+  page('/library/series/$id', SeriesDetailsPage),
+  page('/library/movie/$id', MovieDetailsPage),
 
   placeholder('/discover'),
   placeholder('/requests'),
-  placeholder('/calendar'),
+  page('/calendar', CalendarPage),
 
   sectionRedirect('/activity', '/activity/queue'),
-  placeholder('/activity/queue'),
-  placeholder('/activity/history'),
-  placeholder('/activity/blocklist'),
+  // Activity (pages/activity).
+  page('/activity/queue', QueuePage),
+  page('/activity/history', HistoryPage),
+  page('/activity/blocklist', BlocklistPage),
 
   sectionRedirect('/wanted', '/wanted/missing'),
-  placeholder('/wanted/missing'),
-  placeholder('/wanted/cutoff-unmet'),
+  page('/wanted/missing', WantedMissingPage),
+  page('/wanted/cutoff', WantedCutoffPage),
+  sectionRedirect('/wanted/cutoff-unmet', '/wanted/cutoff'),
 
   placeholder('/subtitles'),
   placeholder('/indexers'),
 
-  sectionRedirect('/settings', '/settings/media-management'),
-  placeholder('/settings/media-management'),
-  placeholder('/settings/profiles'),
-  placeholder('/settings/quality'),
-  placeholder('/settings/custom-formats'),
-  placeholder('/settings/indexers'),
-  placeholder('/settings/download-clients'),
-  placeholder('/settings/notifications'),
-  placeholder('/settings/general'),
+  // Settings (pages/settings). Paths follow the *arr convention (no hyphens); the earlier
+  // hyphenated paths redirect so old links keep working.
+  sectionRedirect('/settings', '/settings/mediamanagement'),
+  page('/settings/mediamanagement', MediaManagementPage),
+  page('/settings/profiles', ProfilesPage),
+  page('/settings/quality', QualityPage),
+  page('/settings/customformats', CustomFormatsPage),
+  page('/settings/indexers', IndexersPage),
+  page('/settings/downloadclients', DownloadClientsPage),
+  page('/settings/notifications', NotificationsPage),
+  page('/settings/general', GeneralPage),
+  sectionRedirect('/settings/media-management', '/settings/mediamanagement'),
+  sectionRedirect('/settings/custom-formats', '/settings/customformats'),
+  sectionRedirect('/settings/download-clients', '/settings/downloadclients'),
 
   sectionRedirect('/system', '/system/status'),
   page('/system/status', SystemStatusPage),
   page('/system/tasks', SystemTasksPage),
-  placeholder('/system/logs'),
+  page('/system/logs', SystemLogsPage),
   page('/system/health', SystemHealthPage),
 ]);
 

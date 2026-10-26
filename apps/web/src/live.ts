@@ -30,6 +30,31 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
     case 'health':
       qc.setQueryData(queryKeys.health, event.health);
       return;
+    // Resource-changed notifications: refetch the matching query families. Pages that
+    // introduce finer keys refine these invalidations alongside their query-key additions.
+    case 'library':
+      void qc.invalidateQueries({ queryKey: [event.mediaType] });
+      void qc.invalidateQueries({ queryKey: ['library'] });
+      void qc.invalidateQueries({ queryKey: ['wanted'] });
+      return;
+    case 'queue':
+      void qc.invalidateQueries({ queryKey: ['queue'] });
+      return;
+    case 'release':
+    case 'import':
+    case 'history':
+      void qc.invalidateQueries({ queryKey: ['queue'] });
+      void qc.invalidateQueries({ queryKey: ['history'] });
+      if (event.type !== 'history' && event.mediaType) {
+        void qc.invalidateQueries({ queryKey: [event.mediaType] });
+      }
+      return;
+    case 'indexer':
+      void qc.invalidateQueries({ queryKey: ['indexers'] });
+      return;
+    case 'settings':
+      void qc.invalidateQueries({ queryKey: ['settings'] });
+      return;
     default:
       assertNever(event);
   }

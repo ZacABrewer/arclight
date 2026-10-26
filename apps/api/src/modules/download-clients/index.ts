@@ -1,13 +1,14 @@
 import type { AppContext, AppModule } from '../../app.js';
 import { registerDownloadClientJobs } from './jobs.js';
 import { downloadClientsRoutes } from './routes.js';
-import { DownloadClientsService } from './service.js';
+import { DownloadClientsService, type DownloadClientsServiceOptions } from './service.js';
 
 export {
   DownloadClientsService,
   DownloadClientsError,
   STATUS_TEXT,
   type BlocklistHook,
+  type DownloadClientsServiceOptions,
   type GrabRequest,
   type PickedClient,
   type RefreshSummary,
@@ -22,10 +23,17 @@ export * from './schema.js';
 // hooks) regardless of registration order.
 const services = new WeakMap<AppContext, DownloadClientsService>();
 
-export function getDownloadClientsService(ctx: AppContext): DownloadClientsService {
+/**
+ * `overrides` apply only when this call creates the instance (tests inject a fake client
+ * factory before the app's modules are registered); later calls return the existing one.
+ */
+export function getDownloadClientsService(
+  ctx: AppContext,
+  overrides: Partial<Omit<DownloadClientsServiceOptions, 'db'>> = {},
+): DownloadClientsService {
   let service = services.get(ctx);
   if (!service) {
-    service = new DownloadClientsService({ db: ctx.db, log: ctx.log.child({ module: 'download-clients' }) });
+    service = new DownloadClientsService({ db: ctx.db, log: ctx.log.child({ module: 'download-clients' }), ...overrides });
     services.set(ctx, service);
   }
   return service;

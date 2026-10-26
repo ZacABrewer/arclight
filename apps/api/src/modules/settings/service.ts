@@ -1,7 +1,10 @@
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
+  MediaManagementSettings,
   MetadataSettings,
+  NamingConfig,
+  ReleasesSettings,
   SECRET_MASK,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
@@ -15,6 +18,11 @@ import { settings } from '../../db/schema.js';
 
 const sections = {
   metadata: MetadataSettings,
+  // Owned by the imports module (routes under /settings/mediamanagement and /settings/naming).
+  mediaManagement: MediaManagementSettings,
+  naming: NamingConfig,
+  // Decision-engine knobs read by the releases module (routes under /settings/releases).
+  releases: ReleasesSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
@@ -90,4 +98,16 @@ export function getMetadataSettings(db: Db): MetadataSettingsResponse {
 export function updateMetadataSettings(db: Db, update: MetadataSettingsUpdate): MetadataSettingsResponse {
   const next = applyMetadataUpdate(getSection(db, 'metadata'), update);
   return maskMetadataSettings(setSection(db, 'metadata', next));
+}
+
+// ---------------------------------------------------------------------------------------
+// releases section
+// ---------------------------------------------------------------------------------------
+
+export function getReleasesSettings(db: Db): ReleasesSettings {
+  return getSection(db, 'releases');
+}
+
+export function updateReleasesSettings(db: Db, value: ReleasesSettings): ReleasesSettings {
+  return setSection(db, 'releases', value);
 }
