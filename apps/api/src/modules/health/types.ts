@@ -98,6 +98,15 @@ export interface HealthDeps {
   vpn?(): Promise<VpnStatus>;
   /** Built-in torrent engine status (torrent module); optional so deps without it skip the check. */
   torrent?(): Promise<TorrentSessionStatus>;
+  /** Liveness of every FlareSolverr-type indexer proxy (indexers module); optional so deps without it skip the check. */
+  flareSolverrs?(): Promise<HealthFlareSolverr[]>;
+}
+
+export interface HealthFlareSolverr {
+  id: number;
+  name: string;
+  ok: boolean;
+  message?: string;
 }
 
 export interface HealthCheckDef {

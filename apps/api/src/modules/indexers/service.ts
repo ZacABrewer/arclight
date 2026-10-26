@@ -833,7 +833,7 @@ export class IndexersService {
   > {
     try {
       return await withTimeout(this.indexerTimeoutMs, signal, row.name, async (s) => {
-        const proxy = this.proxies.resolve(row);
+        const proxy = this.proxies.resolve(row, this.proxyOptions(row));
         const client =
           row.implementation === 'definition'
             ? await this.buildDefinitionClient(row, proxy)
@@ -911,7 +911,7 @@ export class IndexersService {
    * FlareSolverr clearance cookies across requests. Undefined when no proxy applies.
    */
   private proxiedFetch(row: IndexerRow): typeof fetch | undefined {
-    const proxy = this.proxies.resolve(row);
+    const proxy = this.proxies.resolve(row, this.proxyOptions(row));
     if (!proxy) {
       this.proxiedFetches.delete(row.id);
       return undefined;
@@ -931,10 +931,22 @@ export class IndexersService {
     return wrapped;
   }
 
+  /**
+   * Definitions that set `requiresFlareSolverr: true` default to the first FlareSolverr proxy
+   * when none applies. The key is new in the definition schema, so it is read defensively:
+   * anything but `true` (including absent) means no.
+   */
+  private proxyOptions(row: Pick<ClientRow, 'implementation' | 'settings'>): { needsSolver?: boolean } {
+    if (row.implementation !== 'definition' || !row.settings.definitionId) return {};
+    const def: unknown = this.definitions.get(row.settings.definitionId);
+    const needs = typeof def === 'object' && def !== null && (def as { requiresFlareSolverr?: unknown }).requiresFlareSolverr === true;
+    return needs ? { needsSolver: true } : {};
+  }
+
   /** The cached definition client of a saved indexer (one per row, so login cookies persist). */
   private async definitionClient(row: IndexerRow): Promise<DefinitionIndexer> {
     await this.definitions.ready();
-    const proxy = this.proxies.resolve(row);
+    const proxy = this.proxies.resolve(row, this.proxyOptions(row));
     const key = JSON.stringify({ name: row.name, settings: row.settings, proxy: proxy ?? null });
     const cached = this.definitionClients.get(row.id);
     if (cached?.key === key) return cached.client;
@@ -1043,7 +1055,7 @@ export class IndexersService {
         out.privacy = def.type;
       }
     }
-    const proxyNames = this.proxies.applicable(row).map((p) => p.name);
+    const proxyNames = this.proxies.applicable(row, this.proxyOptions(row)).map((p) => p.name);
     if (proxyNames.length > 0) out.proxyNames = proxyNames;
     return out;
   }

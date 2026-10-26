@@ -21,6 +21,7 @@ import { settingsModule } from './modules/settings/index.js';
 import { metadataModule, metadata } from './modules/metadata/index.js';
 import { libraryModuleWith, type MetadataLookup } from './modules/library/index.js';
 import { indexersModule } from './modules/indexers/index.js';
+import { solverModule } from './modules/solver/index.js';
 import { downloadClientsModule } from './modules/download-clients/index.js';
 import { historyModule } from './modules/history/index.js';
 import { blocklistModule } from './modules/blocklist/index.js';
@@ -96,6 +97,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     libraryModuleWith({ metadata: opts.metadata ?? metadata, commands: wiring.library }),
     profilesModule,
     indexersModule,
+    solverModule,
     downloadClientsModule,
     historyModule,
     blocklistModule,

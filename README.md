@@ -55,6 +55,7 @@ services:
       - PGID=1000
       - TZ=America/New_York
       - ARCLIGHT_VPN_CONTROL_URL=http://localhost:8000
+      - ARCLIGHT_FLARESOLVERR_URL=http://localhost:8191
     volumes:
       - ./config:/config
       - /volume1/media/tv:/tv
@@ -78,10 +79,26 @@ services:
     depends_on:
       gluetun: { condition: service_healthy }
     restart: unless-stopped
+
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    network_mode: "service:gluetun"
+    environment:
+      - LOG_LEVEL=info
+      - TZ=America/New_York
+    depends_on:
+      gluetun: { condition: service_healthy }
+    restart: unless-stopped
 ```
 
 `docker/docker-compose.yml` is the build-from-source variant (with healthchecks on all three
-services). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`,
+services). Every compose variant also runs [FlareSolverr](https://github.com/FlareSolverr/FlareSolverr)
+for Cloudflare-protected indexers: in the VPN layouts it shares Gluetun's namespace (its
+browser traffic is tunnelled too; port 8191 stays internal), without a VPN Arclight reaches it
+at `http://flaresolverr:8191`. Arclight reads `ARCLIGHT_FLARESOLVERR_URL` and registers a
+**FlareSolverr (bundled)** indexer proxy tagged `cloudflare` on boot; indexers whose definition
+needs a solver use it automatically. Running natively on Windows, the built-in solver drives a
+local Edge/Chrome instead; see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`,
 `DOWNLOADS_ROOT`, `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET` from your
 environment or a `.env` file; copy `docker/.env.example` to start.
 
@@ -102,8 +119,13 @@ random port off) on every enabled qBittorrent client. Because the three containe
 network namespace, add qBittorrent in Arclight with host `localhost`, port `8080`. With
 **Pause grabs when down** on (default), Arclight stops grabbing while the VPN is down or
 its public IP equals your **home public IP**; the dashboard card and the `VpnDisconnected`
-health check show the state. Newer Gluetun releases protect the control server: create an
-API key per the Gluetun wiki and enter it (or username/password) in Settings → VPN.
+health check show the state. Current Gluetun releases protect the control server with an
+API key. Run `scripts/gluetun-auth.sh` (or `scripts\gluetun-auth.ps1` on Windows) once: it
+generates a key, writes `${CONFIG_ROOT}/gluetun/auth/config.toml` for Gluetun and stores
+`GLUETUN_API_KEY` in `docker/.env`; the compose files pass it to Arclight as
+`ARCLIGHT_VPN_API_KEY`, so nothing needs typing into Settings → VPN. Then
+`docker compose down && docker compose up -d` (containers that share Gluetun's network
+must be recreated whenever Gluetun restarts).
 
 ### Built-in torrent engine (no qBittorrent)
 

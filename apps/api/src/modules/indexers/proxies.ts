@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
 import type { Socket } from 'node:net';
 import {
+  DEFAULT_FLARESOLVERR_TEST_URL,
+  FlareSolverrClient,
   openHttpConnectTunnel,
   openSocks5Tunnel,
   type NetworkProxy,
@@ -19,11 +21,18 @@ import { indexerProxies, indexers } from './schema.js';
 import { IndexersError, parseOrThrow } from './errors.js';
 
 // Indexer proxies: CRUD, connectivity test, and resolution of the proxies that apply to an
-// indexer (its explicit `proxyId`, else every proxy sharing one of its tags).
+// indexer (its explicit `proxyId`, else every proxy sharing one of its tags; indexers whose
+// definition needs a challenge solver also get the first FlareSolverr proxy when none applies).
 
 export const DEFAULT_PROXY_TEST_URL = 'https://www.google.com/';
 
 type ProxyRow = typeof indexerProxies.$inferSelect;
+
+/** How an indexer is matched to proxies. */
+export interface ApplicableOptions {
+  /** The indexer's definition sets `requiresFlareSolverr`: add the first solver if none applies. */
+  needsSolver?: boolean;
+}
 
 export type TunnelOpener = (proxy: NetworkProxy, host: string, port: number, timeoutMs: number) => Promise<Socket>;
 
@@ -119,21 +128,65 @@ export class ProxiesService {
     return this.db.select({ id: indexerProxies.id }).from(indexerProxies).where(eq(indexerProxies.id, id)).get() !== undefined;
   }
 
-  /** Proxy rows that apply to an indexer: its explicit proxy, else those sharing a tag. */
-  applicable(indexer: { proxyId: number | null; tags: readonly number[] }): ProxyRow[] {
+  /**
+   * Proxy rows that apply to an indexer: its explicit proxy, else those sharing a tag. With
+   * `needsSolver`, the first FlareSolverr proxy (lowest id) is appended when none of those is one.
+   */
+  applicable(indexer: { proxyId: number | null; tags: readonly number[] }, opts: ApplicableOptions = {}): ProxyRow[] {
+    let out: ProxyRow[];
     if (indexer.proxyId !== null) {
       const row = this.db.select().from(indexerProxies).where(eq(indexerProxies.id, indexer.proxyId)).get();
-      return row ? [row] : [];
+      out = row ? [row] : [];
+    } else if (indexer.tags.length === 0) {
+      out = [];
+    } else {
+      const tags = new Set(indexer.tags);
+      out = this.rows().filter((p) => p.tags.some((t) => tags.has(t)));
     }
-    if (indexer.tags.length === 0) return [];
-    const tags = new Set(indexer.tags);
-    return this.rows().filter((p) => p.tags.some((t) => tags.has(t)));
+    if (opts.needsSolver && !out.some((p) => p.type === 'flaresolverr')) {
+      const solver = this.firstSolverRow();
+      if (solver) out = [...out, solver];
+    }
+    return out;
   }
 
   /** Package proxy configs for an indexer, or undefined when none apply. */
-  resolve(indexer: { proxyId: number | null; tags: readonly number[] }): ProxyConfig[] | undefined {
-    const configs = this.applicable(indexer).map(toConfig);
+  resolve(indexer: { proxyId: number | null; tags: readonly number[] }, opts: ApplicableOptions = {}): ProxyConfig[] | undefined {
+    const configs = this.applicable(indexer, opts).map(toConfig);
     return configs.length > 0 ? configs : undefined;
+  }
+
+  /** The default challenge solver: the FlareSolverr proxy with the lowest id. */
+  firstSolverRow(): ProxyRow | undefined {
+    return this.rows().find((p) => p.type === 'flaresolverr');
+  }
+
+  /** Raw rows (with secrets) for the auto-detect job and health checks. */
+  allRows(): ProxyRow[] {
+    return this.rows();
+  }
+
+  /**
+   * Cheap liveness probe for a FlareSolverr proxy (`sessions.list`; never launches a browser).
+   * Used by the FlareSolverrUnreachable health check.
+   */
+  async ping(id: number): Promise<{ ok: boolean; message?: string }> {
+    const row = this.requireRow(id);
+    if (row.type !== 'flaresolverr') return { ok: true };
+    try {
+      const res = await (this.fetchImpl ?? fetch)(`${flareSolverrUrl(row)}/v1`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', ...(row.password ? { 'x-api-key': row.password } : {}) },
+        body: JSON.stringify({ cmd: 'sessions.list' }),
+        signal: AbortSignal.timeout(10_000),
+      });
+      const json = (await res.json().catch(() => null)) as { status?: unknown; message?: unknown } | null;
+      if (res.ok && json?.status === 'ok') return { ok: true };
+      const detail = typeof json?.message === 'string' ? json.message : `HTTP ${res.status}`;
+      return { ok: false, message: detail };
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    }
   }
 
   /** Test a stored proxy (its password is used even though responses mask it). */
@@ -174,19 +227,17 @@ export class ProxiesService {
     });
     try {
       if (row.type === 'flaresolverr') {
-        const base = flareSolverrUrl(row);
-        const res = await (this.fetchImpl ?? fetch)(`${base}/v1`, {
-          method: 'POST',
-          headers: { 'content-type': 'application/json' },
-          body: JSON.stringify({ cmd: 'sessions.list' }),
-          signal: AbortSignal.timeout(timeoutMs),
-        });
-        if (!res.ok) return done(false, `FlareSolverr answered HTTP ${res.status}`);
-        const json = (await res.json().catch(() => null)) as { status?: unknown; message?: unknown } | null;
-        if (!json || json.status !== 'ok') {
-          return done(false, `FlareSolverr reported an error: ${typeof json?.message === 'string' ? json.message : 'unexpected response'}`);
-        }
-        return done(true, 'FlareSolverr is reachable');
+        // A real request.get through the solver (the indexer base URL when the caller passes
+        // one, else a harmless page), so a broken browser inside the solver is caught too.
+        const target = url ?? DEFAULT_FLARESOLVERR_TEST_URL;
+        const config = toConfig(row);
+        const client = new FlareSolverrClient(
+          { ...(config as Extract<ProxyConfig, { type: 'flaresolverr' }>), timeoutMs: row.requestTimeout ? timeoutMs : 60_000 },
+          this.fetchImpl ? { fetchImpl: this.fetchImpl } : {},
+        );
+        const result = await client.test(target);
+        if (!result.ok) return done(false, result.message);
+        return done(true, `FlareSolverr fetched ${target}${result.version ? ` (v${result.version})` : ''}`);
       }
       let target: URL;
       try {
@@ -253,6 +304,8 @@ export function toConfig(row: ProxyRow): ProxyConfig {
       type: 'flaresolverr',
       url: flareSolverrUrl(row),
       ...(row.requestTimeout ? { timeoutMs: row.requestTimeout * 1000 } : {}),
+      // The built-in solver endpoint is behind the API key; it is stored as the proxy password.
+      ...(row.password ? { apiKey: row.password } : {}),
     };
   }
   return toNetwork(row);
