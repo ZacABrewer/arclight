@@ -9,7 +9,7 @@ This page lists what you need before installing Arclight: the host, the folders,
 | A machine that stays on (NAS, home server, mini PC) | Arclight searches, downloads and imports in the background, on a schedule. |
 | Docker with Compose v2 (`docker compose`), or Node 24 and pnpm 10 for a native Windows install | Docker is the main way to run it. See [install-other-platforms.md](install-other-platforms.md) to choose a guide. |
 | A TMDB API key (free) | Arclight reads all series and movie information from TMDB. See [first-run-wizard.md](first-run-wizard.md#step-2-connect-tmdb). |
-| One way to download | The built-in torrent engine (nothing extra to install), or an external client such as qBittorrent. |
+| One way to download | The built-in torrent engine, which is included and already set up. External clients such as qBittorrent are optional. |
 | Optional: a Proton VPN account | Only for the VPN layouts. The bundled Docker files are written for Proton over WireGuard with Gluetun; other providers are covered in [install-docker.md](install-docker.md#other-vpn-providers). |
 | Optional: indexers | Arclight ships site definitions; you still add the indexers you have access to. |
 
@@ -46,7 +46,7 @@ Arclight needs two places on disk. In Docker they are mounted into the container
 | `CONFIG_ROOT` (a parent folder; Arclight uses `<CONFIG_ROOT>/arclight`) | `/config` | The database, logs, backups, torrent resume data |
 | `DATA_ROOT` (one share) | `/data` | `downloads/`, `media/tv/` and `media/movies/` |
 
-Arclight and qBittorrent mount the same `DATA_ROOT` at `/data`, and your root folders in Arclight are `/data/media/tv` and `/data/media/movies`. One mount matters: Linux cannot hard-link between two different mounts, even on one disk, so separate mounts for downloads and library make every import a slow full copy that needs double the space. One mount gives instant hard links and seeding keeps working. See [install-docker.md](install-docker.md#the-folder-layout-one-share-one-mount) and [folders-and-hardlinks.md](folders-and-hardlinks.md).
+Arclight mounts `DATA_ROOT` at `/data` (so does qBittorrent, if you add it), and your root folders in Arclight are `/data/media/tv` and `/data/media/movies`. One mount matters: Linux cannot hard-link between two different mounts, even on one disk, so separate mounts for downloads and library make every import a slow full copy that needs double the space. One mount gives instant hard links and seeding keeps working. See [install-docker.md](install-docker.md#the-folder-layout-one-share-one-mount) and [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 The containers run as the numeric user and group you give them (`PUID` and `PGID`), so that user must be able to read and write both folders.
 
@@ -55,13 +55,13 @@ The containers run as the numeric user and group you give them (`PUID` and `PGID
 | Port | Used by | Published? | Notes |
 |---|---|---|---|
 | 7878/tcp | Arclight web UI and API | Yes, in every layout | Change the host side of the mapping (`"7979:7878"`) if another app already uses 7878. |
-| 8080/tcp | qBittorrent web UI | Only in layouts that include qBittorrent | Not used by the built-in engine layout. |
-| 6881/tcp and udp | Torrent peer port | Only in the no-VPN qBittorrent layout | In the VPN layouts no peer port is published: Proton forwards a port at runtime and Arclight sets it on the client or the engine. |
+| 8080/tcp | qBittorrent web UI | Only if you start the optional `qbittorrent` profile | Not used by the built-in engine. In VPN layouts the port line on `gluetun` is commented out until you need it. |
+| 6881/tcp and udp | Torrent peer port | Only for qBittorrent in the no-VPN layout (or if you publish the built-in engine's port yourself) | In the VPN layouts no peer port is published: Proton forwards a port at runtime and Arclight moves the built-in engine's listener (and qBittorrent's, if used) onto it. |
 | 8000/tcp | Gluetun control server | No (internal) | Arclight reads VPN status at `http://localhost:8000`. |
 | 8191/tcp | FlareSolverr | No (internal) | Solves Cloudflare challenges for indexers. |
 | 9000/tcp | Whisper (optional) | No (internal) | Only with the `whisper` profile. |
 
-In the VPN layouts every published port is published on the `gluetun` container, because Arclight and qBittorrent share its network. You still open the UI at `http://<your-host>:7878`.
+In the VPN layouts every published port is published on the `gluetun` container, because Arclight (and qBittorrent, if used) shares its network. You still open the UI at `http://<your-host>:7878`.
 
 Arclight does not serve HTTPS itself. If you expose it beyond your home, put it behind a TLS reverse proxy and keep sign-in on (see [users-and-security.md](../using/users-and-security.md)).
 

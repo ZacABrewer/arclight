@@ -233,7 +233,7 @@ More detail: [Cloudflare and other browser challenges](CLOUDFLARE.md).
 
 **Fix:**
 
-1. Gluetun: fix the key or country in `.env` (`PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES`), then `docker compose up -d`. After Gluetun is recreated, the containers that share its network (Arclight, FlareSolverr, qBittorrent) must be recreated too; `docker compose up -d` does this.
+1. Gluetun: fix the key or country in `.env` (`PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES`), then `docker compose up -d`. After Gluetun is recreated, the containers that share its network (Arclight, FlareSolverr, and qBittorrent if you use it) must be recreated too; `docker compose up -d` does this.
 2. Control server: use `http://localhost:8000` when Arclight shares Gluetun's network (the default in the provided compose files); otherwise use Gluetun's container name and port.
 3. Windows: start Arclight from an elevated session and check the `.conf` path.
 4. The "Public IP check URL" is only used by the native providers. If the VPN is up but the check fails, change it to another IP echo service.
@@ -246,12 +246,12 @@ More detail: [VPN](using/vpn.md).
 <a id="port-forward-not-synced"></a>
 ### Port forward not synced
 
-**What you see:** Settings > VPN shows no "Port forward" value, or qBittorrent keeps its old listening port, and downloads have few peers.
+**What you see:** Settings > VPN shows no "Port forward" value, or (if you use qBittorrent) qBittorrent keeps its old listening port, and downloads have few peers.
 
 **Cause:** the VPN did not hand out a forwarded port, or Arclight could not pass it on.
 
 - With Gluetun, port forwarding must be on (`VPN_PORT_FORWARDING=on` in the provided compose files). For Proton the WireGuard configuration must have NAT-PMP (port forwarding) enabled and you must connect to a P2P-capable server.
-- Arclight reads the port from Gluetun's control server and, if **Sync forwarded port** is on (default), sets qBittorrent's listening port to it. This applies to Gluetun and to qBittorrent clients only.
+- Arclight reads the port from Gluetun's control server and, if **Sync forwarded port** is on (default), sets qBittorrent's listening port to it (relevant only if you use qBittorrent). This applies to Gluetun and to qBittorrent clients only.
 - The built-in torrent engine does not need syncing: when Bind to VPN is on it moves its listener to the forwarded port by itself. Settings > Torrent Engine then shows "Listening port" as "forwarded by VPN".
 
 **How to confirm:**
@@ -263,7 +263,7 @@ More detail: [VPN](using/vpn.md).
 **Fix:**
 
 1. Enable NAT-PMP on the Proton config, pick a P2P server, set `VPN_PORT_FORWARDING=on`.
-2. In Settings > VPN make sure "Sync forwarded port" is on and the qBittorrent client passes **Test** in Settings > Download Clients.
+2. In Settings > VPN make sure "Sync forwarded port" is on and (if you use qBittorrent) the qBittorrent client passes **Test** in Settings > Download Clients.
 3. Wait one poll interval (default 60 seconds) after a change.
 
 ---
@@ -285,7 +285,7 @@ More detail: [VPN](using/vpn.md).
 
 1. Set `PUID` and `PGID` in `.env` to the user that owns the media and download folders, then `docker compose up -d`. The container's start script sets ownership of `/config` for you.
 2. Or change the folder ownership to match: `chown -R <uid>:<gid> /path/to/data`.
-3. Make sure qBittorrent (if you use it) runs with the same PUID/PGID, so the files it writes can be read and hardlinked.
+3. Make sure any external client you use (qBittorrent, for example) runs with the same PUID/PGID, so the files it writes can be read and hardlinked.
 4. Optional: Settings > Media Management > "Set permissions" lets Arclight apply a mode (default 755 for folders; files get the same without execute bits) and group to imported files.
 
 ---
@@ -300,7 +300,7 @@ More detail: [VPN](using/vpn.md).
 - Downloads and library are on different volumes or network shares.
 - The share does not support hardlinks (some network mounts).
 - "Use hardlinks instead of copy" is off in Settings > Media Management.
-- qBittorrent saves somewhere outside the shared mount.
+- If you use qBittorrent, it saves somewhere outside the shared mount.
 
 **How to confirm:**
 
@@ -315,7 +315,7 @@ More detail: [VPN](using/vpn.md).
 1. Set the compose `DATA_ROOT` (in `.env`) to one share that holds everything, for example `/path/to/data`, laid out as `downloads/`, `media/tv/` and `media/movies/`, and mount it as `${DATA_ROOT}:/data`.
 2. If you are moving from separate mounts: stop the stack (`docker compose down`), move the existing folders into that one share (same filesystem, so the move is instant), change the volume lines to the single `/data` mount, and start the stack again.
 3. Edit the root folders to the new paths (Settings > Media Management, `/data/media/tv` and `/data/media/movies`), and set the built-in engine's downloads folder (Settings > Torrent Engine > "Downloads folder") to `/data/downloads`. The engine defaults to `/data/downloads` when `/data` exists; older installs keep `/downloads` until you change it.
-4. qBittorrent: set the default save path to `/data/downloads` (Options > Downloads), so no remote path mapping is needed.
+4. If you use qBittorrent: set the default save path to `/data/downloads` (Options > Downloads), so no remote path mapping is needed.
 5. Run a library rescan (refresh and scan the titles) so Arclight picks the files up at the new paths.
 6. Turn on "Use hardlinks instead of copy".
 
@@ -376,7 +376,7 @@ Files already imported by copy stay duplicated until you delete the download cop
 |---|---|
 | `chown` or "Operation not permitted"/"Read-only file system" right after the start line | The start script sets ownership of `/config` and stops if that fails. This happens on NFS shares with root squash, read-only mounts, or a config path the NAS refuses to chown. Use a normal local folder for the config location. |
 | Errors about the database or "unable to open" | The config folder is not writable or its disk is full. See [docker-puid-pgid-mismatch](#docker-puid-pgid-mismatch) and [config-disk-space-low](#config-disk-space-low). |
-| "address already in use" | Port 7878 (or 8080 for qBittorrent) is taken. Change the published port, or in the VPN stack remember the ports are published on the `gluetun` container. |
+| "address already in use" | Port 7878 (or 8080 for the optional qBittorrent) is taken. Change the published port, or in the VPN stack remember the ports are published on the `gluetun` container. |
 | Nothing wrong, container stays "starting" | With the VPN stack, `arclight` waits for `gluetun` to be healthy. If Gluetun cannot connect, nothing else starts. See [VPN will not connect](#vpn-wont-connect). |
 
 The container health check calls `/api/v1/system/ping` and allows 20 seconds to start; a slow NAS can need longer after an update.
@@ -524,7 +524,7 @@ Source: `DownloadClientCheck` (warning).
 
 **How to confirm:** Settings > Download Clients is empty or every client is disabled.
 
-**Fix:** enable the built-in torrent engine (Settings > Torrent Engine, "Enable engine"; it adds a "Built-in" client on first start unless `ARCLIGHT_TORRENT_ENGINE=0`) or add qBittorrent, Transmission, SABnzbd or NZBGet under Settings > Download Clients, then press **Test**.
+**Fix:** enable the built-in torrent engine (Settings > Torrent Engine, "Enable engine"; it adds a "Built-in" client on first start unless `ARCLIGHT_TORRENT_ENGINE=0`) or add an external client such as qBittorrent, Transmission, SABnzbd or NZBGet under Settings > Download Clients, then press **Test**.
 
 <a id="unable-to-communicate-with-download-client"></a>
 ### Download client does not answer
@@ -915,7 +915,7 @@ Back up first (System > Backups). Details: [Updating](getting-started/updating.m
 
 Source: `ContainerUpdatesAvailable` (warning).
 
-**Meaning:** a container labelled `arclight.autoupdate=true` (in the provided compose files: gluetun, flaresolverr, qbittorrent, whisper) runs an older image than its registry offers.
+**Meaning:** a container labelled `arclight.autoupdate=true` (in the provided compose files: gluetun, flaresolverr, and qbittorrent and whisper when enabled) runs an older image than its registry offers.
 
 **How to confirm:** Settings > Updates lists the containers and which have updates.
 

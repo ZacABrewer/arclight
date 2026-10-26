@@ -56,7 +56,7 @@ Separate mounts for downloads and media force a full copy per import and break s
    | `PUID` / `PGID` | `1000` / `1000` | Owner ids. Inside WSL, `id -u` and `id -g` show yours |
 
    If you chose a Windows folder, use the Linux-style form of it: `D:\Arclight\data` becomes `/mnt/d/Arclight/data` when the compose command runs inside WSL. Run `docker compose` from the same place you wrote the paths for.
-3. Choose a layout (VPN or not, built-in engine or qBittorrent) in [install-docker.md](install-docker.md#1-choose-a-layout). For a VPN layout, also set `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET`, then run `.\scripts\gluetun-auth.ps1` once (PowerShell, repository root).
+3. Choose a layout (VPN or not; the built-in engine is the default) in [install-docker.md](install-docker.md#1-choose-a-layout). For a VPN layout, also set `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET`, then run `.\scripts\gluetun-auth.ps1` once (PowerShell, repository root).
 4. Start it from the `docker/` folder:
 
    ```sh

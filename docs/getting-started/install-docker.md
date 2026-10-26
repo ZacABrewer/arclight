@@ -6,7 +6,7 @@ Check [requirements.md](requirements.md) first.
 
 ## The folder layout: one share, one mount
 
-Arclight and (if you use it) qBittorrent both mount one folder from your machine, `DATA_ROOT`, at `/data` inside the containers. Inside it, lay out three folders:
+Arclight (and qBittorrent, if you opt in to it) mounts one folder from your machine, `DATA_ROOT`, at `/data` inside the container. Inside it, lay out three folders:
 
 ```
 <DATA_ROOT>/
@@ -16,32 +16,43 @@ Arclight and (if you use it) qBittorrent both mount one folder from your machine
     movies/         movie root folder  (Arclight sees /data/media/movies)
 ```
 
-Every path Arclight and qBittorrent talk about starts with `/data`. In Arclight you add `/data/media/tv` and `/data/media/movies` as root folders (the wizard does this, see [first-run-wizard.md](first-run-wizard.md)).
+Every path Arclight (and qBittorrent, if used) talks about starts with `/data`. In Arclight you add `/data/media/tv` and `/data/media/movies` as root folders (the wizard does this, see [first-run-wizard.md](first-run-wizard.md)).
 
 **Why one mount and not three?** When a download finishes, Arclight puts it in your library by creating a hard link: a second name for the same file on disk. That is instant, uses no extra space, and lets the torrent keep seeding the original. Linux cannot create a hard link between two different mounts, even when they are on the same disk. If downloads and the library are mounted separately (`/downloads` and `/tv`, for example), every import silently falls back to a full copy: slow, and it needs double the space until you delete the original. One mount that contains both makes hard links work. More detail and how to test it: [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 Keep `downloads/`, `media/tv` and `media/movies` on the same disk or volume, too, since a hard link also cannot cross filesystems.
 
-**qBittorrent users:** in qBittorrent, open Tools > Options > Downloads and set **Default Save Path** to `/data/downloads`. Then Arclight and qBittorrent report identical paths and you need no remote path mapping. The built-in torrent engine defaults to `/data/downloads` when `/data` exists in the container; installs created before this layout keep their old `/downloads` folder until you change it under Settings > Torrent Engine.
+The built-in torrent engine downloads to `/data/downloads` when `/data` exists in the container; installs created before this layout keep their old `/downloads` folder until you change it under Settings > Torrent Engine.
+
+**If you use qBittorrent:** in qBittorrent, open Tools > Options > Downloads and set **Default Save Path** to `/data/downloads`. Then Arclight and qBittorrent report identical paths and you need no remote path mapping.
 
 ## 1. Choose a layout
 
-Do you want a VPN, and do you want qBittorrent or just Arclight's built-in torrent engine?
+Do you want a VPN? Every layout uses Arclight's built-in torrent engine by default; qBittorrent is an optional extra (see [Optional: qBittorrent](#optional-qbittorrent)).
 
-| Layout | Containers | Published ports | Published-image file | Build-from-source file |
+| Layout | Containers started by default | Published ports | Published-image file | Build-from-source file |
 |---|---|---|---|---|
-| VPN + built-in engine | gluetun, flaresolverr, arclight | 7878 (on gluetun) | none ships; see the note below | `docker-compose.builtin.yml` |
-| VPN + qBittorrent | gluetun, flaresolverr, arclight, qbittorrent | 7878 and 8080 (on gluetun) | `docker-compose.release.yml` | `docker-compose.yml` |
-| No VPN, with qBittorrent | arclight, qbittorrent, flaresolverr | 7878, 8080, 6881 tcp and udp | `docker-compose.release.novpn.yml` | `docker-compose.novpn.yml` |
+| VPN + built-in engine | gluetun, flaresolverr, arclight | 7878 (on gluetun) | `docker-compose.release.yml` | `docker-compose.yml` (`docker-compose.builtin.yml` is the same stack) |
+| No VPN, built-in engine | arclight, flaresolverr | 7878 | `docker-compose.release.novpn.yml` | `docker-compose.novpn.yml` |
 
 Notes:
 
-- **VPN layouts** put Arclight (and qBittorrent, if present) inside Gluetun's network (`network_mode: "service:gluetun"`). All their traffic leaves through the WireGuard tunnel, and Gluetun's firewall blocks everything else, so a dropped tunnel cuts them off. Arclight also pauses grabs and, with the built-in engine, pauses torrents. See [vpn.md](../using/vpn.md).
-- **Built-in engine** means torrents run inside Arclight, so there is no qBittorrent container. On the first start, when no download client exists, Arclight adds one called **Built-in**. See [download-clients.md](../using/download-clients.md).
+- **VPN layouts** put Arclight (and qBittorrent, if you add it) inside Gluetun's network (`network_mode: "service:gluetun"`). All their traffic leaves through the WireGuard tunnel, and Gluetun's firewall blocks everything else, so a dropped tunnel cuts them off. Arclight also pauses grabs and pauses the built-in engine's torrents. See [vpn.md](../using/vpn.md).
+- **Built-in engine** means torrents run inside Arclight, so there is no download client container. On the first start, when no download client exists, Arclight adds one called **Built-in**. See [download-clients.md](../using/download-clients.md).
 - **Release vs build-from-source.** The `release` files pull the ready-made image (`ghcr.io/zacabrewer/arclight`, tag `latest` by default). The other files build the image from the repository on your machine, which takes several minutes and needs the whole repository. Use a release file unless you are changing the code. Build-from-source Arclight containers are not offered for self-update.
-- **No release file for the built-in layout.** To use the published image with the built-in engine, copy `docker-compose.release.yml` and delete the `qbittorrent` service, its entries under `depends_on`, and the `8080` port mapping on gluetun.
-- **No VPN with the built-in engine.** The no-VPN files only publish a peer port for qBittorrent. For the built-in engine publish the engine's port (default 6881, tcp and udp) on the `arclight` service and remove the qBittorrent mapping that uses the same port.
+- **No VPN: peer port.** The no-VPN files publish only the web UI (7878). For better incoming connectivity with the built-in engine, publish its peer port (default 6881, tcp and udp) on the `arclight` service. If you also start qBittorrent without a VPN, it publishes 6881 itself, so give the two different peer ports.
 - Without a VPN leave Settings > VPN disabled.
+
+<a id="optional-qbittorrent"></a>
+### Optional: qBittorrent
+
+The compose files include a `qbittorrent` service behind the compose profile `qbittorrent`. Arclight does not depend on it and it does not start unless you ask:
+
+```sh
+docker compose -f docker-compose.release.yml --profile qbittorrent up -d
+```
+
+In the VPN layouts the WebUI port line (`8080`) on the `gluetun` service is commented out; uncomment it to reach the qBittorrent WebUI from your LAN. In the no-VPN layouts the service publishes 8080 and 6881 itself. Then follow [Using qBittorrent](#using-qbittorrent) after the stack is up. If you install through a tool that cannot use profiles, copy the `qbittorrent` service block out of the compose file instead.
 
 The compose files and `.env.example` are attached to every GitHub release and live in the repository's `docker/` folder. The helper scripts in `scripts/` are only in the repository, so download or clone the whole repository for a VPN layout.
 
@@ -71,7 +82,7 @@ Copy `docker/.env.example` to `docker/.env` (next to the compose file) and edit 
 | `PUID` | `1000` | Numeric user id the containers run as. Must own your folders. |
 | `PGID` | `1000` | Numeric group id for the same purpose. |
 | `TZ` | `UTC` | Time zone for schedules and the calendar, for example `Etc/UTC` or `Europe/London`. |
-| `CONFIG_ROOT` | `./data` | Parent folder for each container's settings: `<CONFIG_ROOT>/arclight`, `/qbittorrent`, `/gluetun`, `/whisper`. Example: `/srv/arclight/appdata`. |
+| `CONFIG_ROOT` | `./data` | Parent folder for each container's settings: `<CONFIG_ROOT>/arclight`, `/gluetun`, and `/qbittorrent` and `/whisper` if you enable those. Example: `/srv/arclight/appdata`. |
 | `DATA_ROOT` | `./data/share` | The one share mounted at `/data`. Contains `downloads`, `media/tv`, `media/movies`. Example: `/srv/arclight/data`. |
 | `PROTON_WIREGUARD_KEY` | none (required in VPN layouts) | The `PrivateKey` from a Proton WireGuard configuration. Treat it like a password. |
 | `VPN_COUNTRIES` | `Netherlands` | Comma-separated Proton server countries. Use a country that allows P2P. |
@@ -118,7 +129,7 @@ Gluetun, the VPN container used here, supports many providers besides Proton (Mu
 Things to know:
 
 - **Port forwarding support differs by provider.** Only Proton port forwarding is set up and tested by these files. For any other provider, check the Gluetun wiki page for that provider and your provider's own documentation. If it is not supported, remove the `VPN_PORT_FORWARDING=on` line. Torrents still download without a forwarded port, but you may connect to fewer peers.
-- The rest of the setup does not change: Arclight and qBittorrent still share Gluetun's network, and the control key from step 5 still applies.
+- The rest of the setup does not change: Arclight (and qBittorrent, if you use it) still shares Gluetun's network, and the control key from step 5 still applies.
 - Do not put secrets from another provider into the repository files you share; keep them in `.env` or an environment-specific copy.
 - Arclight reports the forwarded port only if Gluetun does. In Settings > VPN the forwarded port stays empty when the provider offers none ([vpn.md](../using/vpn.md)).
 
@@ -160,7 +171,10 @@ Press Ctrl+C to stop following. The Arclight log should include `Arclight starti
 
 Open `http://<your-host>:7878`. On a fresh install you land in the setup wizard: [first-run-wizard.md](first-run-wizard.md). There is no default login; you create the admin account there.
 
-If you use qBittorrent, open its web UI at `http://<your-host>:8080`, set the login it asks for, and set **Default Save Path** to `/data/downloads` as described above. Then add it in Arclight with host `localhost` and port `8080` (VPN layout) or host `qbittorrent` and port `8080` (no-VPN layout).
+The built-in engine is already registered as a download client, so there is nothing more to set up for downloads.
+
+<a id="using-qbittorrent"></a>
+**Using qBittorrent (optional).** If you started the `qbittorrent` profile, open its web UI at `http://<your-host>:8080`, set the login it asks for, and set **Default Save Path** to `/data/downloads` as described above. Then add it in Arclight under Settings > Download Clients with host `localhost` and port `8080` (VPN layout) or host `qbittorrent` and port `8080` (no-VPN layout).
 
 | Task | Command |
 |---|---|
@@ -204,7 +218,7 @@ Earlier versions mounted three separate folders: `/tv`, `/movies` and `/download
 6. **Add the new root folders.** In Settings > Media Management add `/data/media/tv` (TV) and `/data/media/movies` (movies).
 7. **Point existing titles at them.** In the Library, select your titles, use the **Root folder** action in the selection bar and choose the new root folder. Arclight rebuilds each title's path from the new root plus the title folder. Folders that Arclight created have matching names; folders that came from another app may have a different name, so open one title and check that its path matches the folder on disk. Then remove the old `/tv` and `/movies` root folders from Media Management.
 8. **Rescan.** Refresh and rescan your titles (from the title's page, or the scheduled tasks under System > Tasks) so Arclight re-reads the files at their new location. Files that still show as missing after a rescan mean the title's path does not match the folder on disk.
-9. **Download folder.** Under Settings > Torrent Engine set the download folder to `/data/downloads` (older installs keep `/downloads`). For qBittorrent set **Default Save Path** to `/data/downloads` in Tools > Options > Downloads. Torrents that were saved under `/downloads` need to be moved to the new path (set the location in the client) or removed and re-added.
+9. **Download folder.** Under Settings > Torrent Engine set the download folder to `/data/downloads` (older installs keep `/downloads`). If you use qBittorrent, set **Default Save Path** to `/data/downloads` in Tools > Options > Downloads. Torrents that were saved under `/downloads` need to be moved to the new path (set the location in the client) or removed and re-added.
 10. **Check hard links.** Import something small, then follow the test in [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 ## What to do next

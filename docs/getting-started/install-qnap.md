@@ -80,12 +80,12 @@ Replace the two host paths, `PUID`, `PGID` and `TZ` (for example `Europe/London`
 |---|---|
 | `/config` | Arclight's database and settings. Back it up ([backup-restore.md](backup-restore.md)). |
 | `/data` | The one data mount. Do not add separate mounts for downloads or media. |
-| `6881` tcp and udp | The built-in torrent engine's default port. Remove these lines if you use only qBittorrent or usenet. |
+| `6881` tcp and udp | The built-in torrent engine's default port. Remove these lines if you use only usenet or an external client. |
 | Port `7878` | The web UI. If QNAP or another app already uses it, change the left number. |
 
-### Using qBittorrent instead
+### Optional: qBittorrent
 
-Add this service and use the same `/data` mount. In qBittorrent, open Options > Downloads and set the default save path to `/data/downloads`:
+The built-in engine is all you need. If you also want qBittorrent, add this service and use the same `/data` mount. In qBittorrent, open Options > Downloads and set the default save path to `/data/downloads`:
 
 ```yaml
   qbittorrent:

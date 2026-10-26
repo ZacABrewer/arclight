@@ -99,7 +99,7 @@ Leave the rest alone: `HTTP_CONTROL_SERVER_ADDRESS`, `FIREWALL_OUTBOUND_SUBNETS`
 |---|---|---|
 | VPN monitoring | Off | Master switch. Off means Arclight does nothing about the VPN: no checks, no guard. Turn it on once the provider is filled in |
 | Provider | Gluetun | See above |
-| Sync forwarded port (Gluetun only) | On | When Gluetun reports a forwarded port, set qBittorrent's listening port to it. Does not affect the built-in engine, which follows the port by itself (see below) |
+| Sync forwarded port (Gluetun only) | On | When Gluetun reports a forwarded port, set qBittorrent's listening port to it (only relevant if you use qBittorrent). Does not affect the built-in engine, which follows the port by itself (see below) |
 | Pause grabs when down | On | Refuse new grabs while the VPN is down or leaking |
 | Home public IP | empty | Your ISP address. If the VPN reports this as its public IP, traffic is leaking |
 | Public IP check URL (advanced; native providers) | `https://api.ipify.org?format=json` | A web service that answers with your public IP, as JSON (`{"ip": "..."}`) or plain text. Gluetun reports its own public IP, so this is not used with Gluetun |
@@ -121,7 +121,7 @@ A forwarded port lets other peers connect to you, which means more peers and fas
 2. The shipped Gluetun setup has `VPN_PORT_FORWARDING=on`. Nothing else to do there.
 3. In Arclight: Settings > VPN, provider Gluetun, VPN monitoring on. Settings > Torrent Engine, Bind to VPN on.
 4. Arclight reads the forwarded port from Gluetun on every poll. The built-in engine moves its listener to that port at once (the Listen port setting is then ignored; the Torrent Engine page shows "forwarded by VPN").
-5. For a qBittorrent client, "Sync forwarded port" sets qBittorrent's listening port to match. If that fails for some client, the VPN status shows the port as not synced, and Arclight waits 10 minutes before retrying so it does not trigger qBittorrent's login lockout. A Remote Engine client follows the port only if you turn on **Follow VPN Port** on it; see [Download clients](download-clients.md).
+5. If you also use a qBittorrent client, "Sync forwarded port" sets qBittorrent's listening port to match. If that fails for some client, the VPN status shows the port as not synced, and Arclight waits 10 minutes before retrying so it does not trigger qBittorrent's login lockout. A Remote Engine client follows the port only if you turn on **Follow VPN Port** on it; see [Download clients](download-clients.md).
 
 With the native providers, Arclight cannot learn a forwarded port, so the engine uses the Listen port you set. If your provider hands you a fixed forwarded port, put it there.
 

@@ -10,11 +10,11 @@ This page installs Arclight on a Synology NAS using DSM's Container Manager and 
 
 ## Why one data folder
 
-Arclight and qBittorrent both mount one folder, `DATA_ROOT`, at `/data`: downloads in `/data/downloads`, library in `/data/media/tv` and `/data/media/movies`. A finished download is imported by hard link (instant, no extra space, seeding continues). Linux cannot hard-link between two different mounts, even on one disk, so separate mounts for downloads and library force a full copy on every import. Keep all three folders inside one shared folder on one volume. More in [folders-and-hardlinks.md](folders-and-hardlinks.md).
+Arclight (and qBittorrent, if you add it) mounts one folder, `DATA_ROOT`, at `/data`: downloads in `/data/downloads`, library in `/data/media/tv` and `/data/media/movies`. A finished download is imported by hard link (instant, no extra space, seeding continues). Linux cannot hard-link between two different mounts, even on one disk, so separate mounts for downloads and library force a full copy on every import. Keep all three folders inside one shared folder on one volume. More in [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 ## 1. Choose a layout
 
-Use the chooser in [install-docker.md](install-docker.md#1-choose-a-layout). "VPN + built-in engine" is the smallest VPN stack; "No VPN, with qBittorrent" is the simplest.
+Use the chooser in [install-docker.md](install-docker.md#1-choose-a-layout). "VPN + built-in engine" is the recommended stack; "No VPN, built-in engine" is the simplest.
 
 ## 2. Create the folders
 
@@ -75,9 +75,9 @@ Gluetun needs up to a minute to connect; the other containers wait for it. In Co
 
 1. Browse to `http://<nas-ip>:7878`. In a VPN layout the ports are published by the `gluetun` container, but the address is the NAS.
 2. Complete the [setup wizard](first-run-wizard.md). Root folders are `/data/media/tv` and `/data/media/movies`.
-3. qBittorrent users: open `http://<nas-ip>:8080`, and set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`. In Arclight add the client with host `localhost` (VPN layout) or `qbittorrent` (no-VPN), port `8080`.
+3. Optional: qBittorrent. The built-in engine is already set up; only if you also want qBittorrent, start the stack with the `qbittorrent` profile (or add its service block), open `http://<nas-ip>:8080` (in VPN layouts uncomment the `8080` port line on `gluetun` first), and set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`. In Arclight add the client with host `localhost` (VPN layout) or `qbittorrent` (no-VPN), port `8080`.
 
-DSM's own services may already use ports 7878 or 8080 in rare cases. If a port is taken, change the left side of the mapping, for example `"7979:7878"`.
+DSM's own services may already use port 7878 (or 8080 with qBittorrent) in rare cases. If a port is taken, change the left side of the mapping, for example `"7979:7878"`.
 
 ## Common problems
 

@@ -6,7 +6,7 @@ This page explains how Arclight expects your folders to be laid out, why the lay
 
 > **Linux cannot hard-link a file across two different mounts, even when both are on the same disk.** If downloads and your library are mounted into the container as separate volumes, every import becomes a full copy: slower, and it uses double the disk space for as long as the torrent seeds. With one mount that contains both, an import is an instant hard link, and seeding keeps working.
 
-So Arclight's compose files mount **one** share into both Arclight and qBittorrent:
+So Arclight's compose files mount **one** share into Arclight (and into qBittorrent, if you use it):
 
 | Where | Path in the container |
 |---|---|
@@ -117,11 +117,11 @@ Older compose files mounted `/tv`, `/movies` and `/downloads` separately (with `
    ```
 
    Moving within one disk or volume is instant. If the old folders were on different disks, the files have to be copied across, which takes time.
-4. Update your compose file and `.env` to the new version: remove `TV_ROOT`, `MOVIES_ROOT` and `DOWNLOADS_ROOT`, add `DATA_ROOT=/path/to/data`, and use `${DATA_ROOT}:/data` as the mount in Arclight and qBittorrent.
+4. Update your compose file and `.env` to the new version: remove `TV_ROOT`, `MOVIES_ROOT` and `DOWNLOADS_ROOT`, add `DATA_ROOT=/path/to/data`, and use `${DATA_ROOT}:/data` as the mount in Arclight (and qBittorrent, if you use it).
 5. Start the stack: `docker compose up -d`.
 6. In Arclight, edit your root folders in Settings > Media Management to `/data/media/tv` and `/data/media/movies`.
 7. Change the built-in engine's download folder to `/data/downloads` in its settings (Settings > Torrent Engine). Installs that started on the old layout keep `/downloads` until you change it.
-8. If you use qBittorrent, set its default save path to `/data/downloads` (Options > Downloads).
+8. Only if you use qBittorrent, set its default save path to `/data/downloads` (Options > Downloads).
 9. Run a library rescan so Arclight picks the files up at their new paths.
 10. Check System > Health and do the [hardlink check](#verify-a-hardlink) on the next import.
 
@@ -129,7 +129,7 @@ Files that were copied earlier stay as separate copies; only new imports are har
 
 ## Remote path mappings
 
-You only need these when a download client reports paths that Arclight cannot open under the same name. With the layout above and qBittorrent saving to `/data/downloads`, you do not need any. They are for an external client on another machine, or one with its own different mounts.
+You only need these when a download client reports paths that Arclight cannot open under the same name. With the layout above and the built-in engine (or qBittorrent) saving to `/data/downloads`, you do not need any. They are for an external client on another machine, or one with its own different mounts.
 
 Add them under Settings > Download Clients, in the "Remote path mappings" section. Each mapping has three fields:
 

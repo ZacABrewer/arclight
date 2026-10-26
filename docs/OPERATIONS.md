@@ -181,6 +181,8 @@ releaseProfiles:
     ignored: [CAM, TELESYNC]
 
 downloadClients:
+  # Optional external client (needs `docker compose --profile qbittorrent up -d`). The built-in
+  # engine registers itself on first start and does not need an entry here.
   qBittorrent:
     implementation: qbittorrent
     protocol: torrent
