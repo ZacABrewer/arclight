@@ -66,9 +66,9 @@ describe('Rail', () => {
 
 describe('TopBar', () => {
   it('shows connection, VPN, requests and issues as plain text', () => {
-    render(<TopBar connected vpnLocation="Zürich" requestCount={4} issueCount={2} initials="sk" />);
+    render(<TopBar connected vpnLocation="Amsterdam" requestCount={4} issueCount={2} initials="sk" />);
     expect(screen.getByText('Connected')).toBeTruthy();
-    expect(screen.getByText('VPN Zürich')).toBeTruthy();
+    expect(screen.getByText('VPN Amsterdam')).toBeTruthy();
     expect(screen.getByText('requests', { exact: false }).textContent).toBe('4 requests');
     expect(screen.getByRole('button', { name: 'Account' }).textContent).toBe('SK');
   });

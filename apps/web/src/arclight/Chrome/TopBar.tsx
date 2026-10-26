@@ -12,7 +12,7 @@ export interface TopBarProps {
   connected?: boolean | undefined;
   /** Text when down ("Reconnecting", "Offline"). */
   disconnectedLabel?: string | undefined;
-  /** "Zürich" → "VPN Zürich"; null → "VPN off"; undefined → hidden. */
+  /** "Amsterdam" → "VPN Amsterdam"; null → "VPN off"; undefined → hidden. */
   vpnLocation?: string | null | undefined;
   /** Pending requests count; hidden when undefined. */
   requestCount?: number | undefined;

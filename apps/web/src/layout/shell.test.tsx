@@ -89,7 +89,7 @@ describe('status cluster', () => {
     expect(vpnLocationOf(undefined)).toBeUndefined();
     expect(vpnLocationOf(vpn({ enabled: false }))).toBeNull();
     expect(vpnLocationOf(vpn({ connected: false }))).toBe('down');
-    expect(vpnLocationOf(vpn({ country: 'Switzerland', city: 'Zürich' }))).toBe('Switzerland');
+    expect(vpnLocationOf(vpn({ country: 'Netherlands', city: 'Amsterdam' }))).toBe('Netherlands');
   });
 
   it('counts pending requests and health issues for admins only', () => {

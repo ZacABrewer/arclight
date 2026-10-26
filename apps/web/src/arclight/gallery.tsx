@@ -163,7 +163,7 @@ export function ArclightGallery() {
       <Rail active="DB" homeHref="#" />
       <TopBar
         onSearch={() => setSearch(true)}
-        vpnLocation="Zürich"
+        vpnLocation="Amsterdam"
         requestCount={4}
         issueCount={2}
         initials="SK"

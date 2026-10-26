@@ -96,9 +96,9 @@ describe('dashboard view models', () => {
     const base: VpnStatus = { enabled: true, connected: true, lastChecked: null, lastChanged: null };
     expect(vpnSummary({ ...base, enabled: false })).toEqual({ state: 'off', headline: 'VPN off' });
     const now = Date.parse('2026-10-25T12:00:00.000Z');
-    expect(vpnSummary({ ...base, city: 'Zürich', provider: 'wireguard-windows', forwardedPort: 51413, lastChanged: '2026-10-22T05:00:00.000Z' }, now)).toEqual({
+    expect(vpnSummary({ ...base, city: 'Amsterdam', provider: 'wireguard-windows', forwardedPort: 51413, lastChanged: '2026-10-22T05:00:00.000Z' }, now)).toEqual({
       state: 'up',
-      headline: 'Zürich · WireGuard',
+      headline: 'Amsterdam · WireGuard',
       port: 51413,
       uptime: '3d 7h',
     });
@@ -138,7 +138,7 @@ describe('dashboard page', () => {
     vi.stubGlobal('WebSocket', FakeSocket);
     const responses: Record<string, unknown> = {
       '/api/v1/calendar': [episodeItem(1, inHours(1), { title: 'Severance', network: 'Apple TV+' })],
-      '/api/v1/vpn/status': { enabled: true, connected: true, city: 'Zürich', country: 'Switzerland', provider: 'wireguard-windows', forwardedPort: 51413, lastChecked: null, lastChanged: null },
+      '/api/v1/vpn/status': { enabled: true, connected: true, city: 'Amsterdam', country: 'Netherlands', provider: 'wireguard-windows', forwardedPort: 51413, lastChecked: null, lastChanged: null },
       '/api/v1/rootfolder': [{ id: 1, path: '/media/tv', mediaType: 'series', freeSpaceBytes: Math.round(0.9 * 1024 ** 4), accessible: true }],
       '/api/v1/health': { status: 'warning', checks: [{ source: 'IndexerStatusCheck', status: 'warning', message: 'Nyaa is rate-limited. Retry at 20:55.' }] },
       '/api/v1/queue': { page: 1, pageSize: 5, sortKey: 'added', sortDirection: 'desc', totalRecords: 2, records: [queueItem({}), queueItem({ id: 2, title: 'Andor.S02E01', progress: 0.12, trackedStatus: 'warning', statusMessages: [{ title: 'Stalled', messages: ['no peers'] }] })] },
@@ -181,7 +181,7 @@ describe('dashboard page', () => {
 
     const status = document.querySelector('.dash-hero--status') as HTMLElement;
     expect(status.getAttribute('data-chamfer')).toBe('br');
-    expect(await within(status).findByText('Zürich · WireGuard')).toBeTruthy();
+    expect(await within(status).findByText('Amsterdam · WireGuard')).toBeTruthy();
     expect(within(status).getByText('51413')).toBeTruthy();
     expect(await within(status).findByText('/media/tv')).toBeTruthy();
     expect(within(status).getByText('922 GB free')).toBeTruthy();

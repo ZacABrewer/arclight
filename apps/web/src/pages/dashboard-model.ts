@@ -52,7 +52,7 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
 
 export interface VpnSummary {
   state: 'off' | 'up' | 'down';
-  /** "Zürich · WireGuard" */
+  /** "Amsterdam · WireGuard" */
   headline: string;
   port?: number | undefined;
   /** "3d 7h" since the tunnel last changed state. */

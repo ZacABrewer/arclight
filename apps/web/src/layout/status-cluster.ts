@@ -29,7 +29,7 @@ export interface StatusClusterInput {
 export interface StatusCluster {
   connected: boolean;
   disconnectedLabel: string;
-  /** "Zürich" → "VPN Zürich"; null → "VPN off"; undefined → hidden. */
+  /** "Amsterdam" → "VPN Amsterdam"; null → "VPN off"; undefined → hidden. */
   vpnLocation: string | null | undefined;
   requestCount: number | undefined;
   issueCount: number | undefined;

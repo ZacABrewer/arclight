@@ -32,7 +32,7 @@ const responses: Record<string, unknown> = {
   '/api/v1/health': { status: 'warning', checks: [{ source: 'IndexerCheck', status: 'warning', message: 'Nyaa is rate-limited. Retry at 20:55.' }] },
   '/api/v1/jobs': [],
   '/api/v1/jobs/scheduled': [{ name: 'housekeeping', interval: 'PT1H', lastRun: null, nextRun: null, enabled: true }],
-  '/api/v1/vpn/status': { enabled: true, connected: true, country: 'Switzerland', city: 'Zürich', lastChecked: null, lastChanged: null },
+  '/api/v1/vpn/status': { enabled: true, connected: true, country: 'Netherlands', city: 'Amsterdam', lastChecked: null, lastChanged: null },
   '/api/v1/request/count': { total: 6, movie: 2, series: 4, pending: 4, approved: 1, declined: 0, failed: 0, processing: 1, available: 0, completed: 0 },
 };
 
@@ -141,7 +141,7 @@ describe('app shell', () => {
     act(() => socket.onopen?.());
     expect(connectionStore.get().state).toBe('open');
     expect(screen.getByText('Connected')).toBeTruthy();
-    expect(await screen.findByText('VPN Switzerland')).toBeTruthy();
+    expect(await screen.findByText('VPN Netherlands')).toBeTruthy();
     await waitFor(() => expect(document.querySelector('.al-topbar__requests')?.textContent).toBe('4 requests'));
     await waitFor(() => expect(document.querySelector('.al-topbar__issues')?.getAttribute('data-active')).toBe('true'));
   });
