@@ -2,50 +2,111 @@
 
 Discover is where you browse movies and series to find something new. Requests are how people ask for it: one click on a title sends a request, Arclight (or an admin) approves it, the title is added to your library, a search runs, and the requester is told when it is ready. This page covers browsing, requesting, approvals, auto-approve rules, permissions, quotas, kids content limits, issues, the watchlist, the public request portal and the Discord bot.
 
-Most of the settings live in **Settings > Requests**, **Settings > Users** and **Settings > Discord bot**.
+Most of the settings live in **Settings > Requests**, **Settings > Users** and **Settings > Discord bot**. The region in **Settings > Metadata** decides which streaming services, age ratings and release dates Discover shows.
 
 ## Discover
 
-**Discover** in the left menu has three tabs: **Home**, **Movies** and **TV**.
+**Discover** in the left menu is a full catalogue of movies and series from TMDB. Its tabs are **Home**, **Movies**, **TV** and **Trending**. Every poster shows where the title stands in Arclight:
 
-- **Home** shows a search box ("Search movies and series") and a set of sliders such as Trending, Popular movies, Upcoming series and Recently added. **See all** opens the full list for a slider.
-- **Movies** and **TV** let you browse with filters.
+| Badge | Meaning |
+| --- | --- |
+| Available | In your library with files. |
+| Partially available | A series with some of its seasons in the library. |
+| Requested | Someone asked for it and it waits for approval. |
+| Processing | Approved, being added or searched for. |
+| Declined | The newest request for it was declined. |
 
-Browse filters:
+No badge means nobody has asked for it yet.
+
+### Home
+
+Home has a search box and a set of rows (sliders). Swipe a row on a phone, or use the arrows at its ends on a computer. **See all** opens the full list.
+
+| Row | What it shows |
+| --- | --- |
+| Recently added | The newest titles in your library. Needs the View recently added permission. |
+| Recent requests | Your requests (everyone's for request managers). |
+| Your watchlist | See [Watchlist](#watchlist). |
+| Trending | What people watch on TMDB. Switch between **Today** and **This week** above the row. |
+| Popular movies, Popular TV | The most popular titles right now. |
+| Upcoming movies, Upcoming series | Releases and first air dates from today on. |
+| Now playing | Movies in cinemas in your region. |
+| Top rated movies, Top rated series | Highest rated on TMDB. |
+| Airing series | Series with episodes airing this week. |
+| Movie genres, Series genres | One tile per genre, with a picture from its most popular title. |
+| Studios, Networks | Logos of well-known studios and networks. |
+| Streaming services | The services available in your region (Settings > Metadata > Region), most prominent first. |
+
+An admin picks which rows show and in what order: see [Discover sliders](#discover-sliders). If Home shows "No sliders enabled", none are turned on.
+
+### Browsing with filters
+
+**Movies** and **TV** are grids that keep loading as you scroll; there is no last page to click to. A count under the grid shows how many titles you have seen of how many match. The same grid and filters are behind every genre, keyword, studio, network and streaming service page.
 
 | Filter | What it does |
 | --- | --- |
-| Genre | Only titles in the genres you pick. |
-| Min rating | Hide titles under this score. |
+| Sort | Popularity, Rating, Votes, Release date (First air date for series) or Title, ascending or descending. Sorting by rating skips titles with fewer than 100 votes unless you set Min votes. |
 | Year from / to | Release year range. |
-| Runtime min / max | Length range. |
-| Release date / First air date | Date range. |
-| Sort | Popularity, Rating, Revenue or Votes. |
+| Min rating | Hide titles rated under this score (0 to 10). |
+| Hide available, Hide requested | Leave out titles already in your library or already requested. |
+| Genres | Tick any number. Titles in any of the ticked genres show. On a genre page, ticked genres narrow it down instead. |
 
-Use **Load more** at the bottom to see further results. There are also list pages for Upcoming movies, Upcoming series and Trending (with a **Time window** of Today or This week).
+**More filters** opens the rest:
 
-If Home shows "No sliders enabled", an admin can turn sliders on in Settings > Requests (see [Discover sliders](#discover-sliders)).
+| Filter | What it does |
+| --- | --- |
+| Rating | A minimum and a maximum score. |
+| Min votes | Only titles with at least this many votes on TMDB. |
+| Runtime | Length range in minutes. |
+| Original language | The language the title was made in. |
+| Age rating | Titles up to this rating in your region (for example up to PG-13). |
+| Streaming on | Pick a region and tick services; titles on any of them show. |
+| Keywords | Find TMDB keywords (such as "time travel") and tick them. |
+
+Filters live in the address, so you can bookmark a filtered grid or send the link to someone. **Back** returns to the grid where you left it. **Clear** resets the filters.
+
+### Searching
+
+Type in the search box on Home (or in the portal header). Suggestions appear as you type: up to six titles and three people. Use the arrow keys and Enter, or click one. Press Enter without picking one to open the results page, which has tabs for **All**, **Movies**, **Series** and **People**, each loading more as you scroll.
 
 ### The title page
 
-Click any poster to open its page. You will see the overview, **Cast**, **Similar** and **Recommendations**. Click a person to see their other work. Buttons on the page:
+Click any poster to open its page. It shows the backdrop and poster, the overview, rating and votes, runtime, age rating, genres (click one for more of the genre), the release dates (In cinemas, Digital, Physical) for movies, and first and last air dates for series. Further down:
+
+- **Seasons** (series): each season with its status, and a **Request** button for a season that can still be requested.
+- **Part of** (movies in a collection): **View collection** opens the collection page.
+- **Cast** and **Crew** rows. Click a person for their page.
+- **Trailers and videos**: links that open on YouTube or Vimeo.
+- **Recommendations** and **Similar** rows.
+- **Studios** or **Networks**, and **Keywords**: links to grids of more titles like this one.
+
+Buttons on the page:
 
 | Button | What it does |
 | --- | --- |
 | Request | Ask for the title. |
 | Request 4K | Ask for a 4K version. Only shown if 4K requests are enabled and you have permission. |
+| Sign in to request | Shown to visitors of the [public request portal](#public-request-portal) who are not signed in. |
 | Add to watchlist / Remove from watchlist | See [Watchlist](#watchlist). |
+| Manage (admins) / Open in library | Opens the title in your library when you have it. |
 | Report issue | See [Issues](#issues). |
-| Watch trailer | Plays the trailer. |
-| Open in library | Shown when the title is already in your library. |
+| Watch trailer | Opens the trailer. |
 
 If someone has reported a problem with the title, an "open issue" link with **Review** appears.
 
+### People and collections
+
+A person's page shows their photo, biography, a **Known for** row and every credit, split into **Appearances** and **Crew**. Use **All**, **Movies** or **Series** to narrow the credits; the grids load more as you scroll.
+
+A collection page (for example a film series) shows every movie in it with its status. **Request all missing (N)** requests each movie in the collection that is not in your library and has not been requested, one request per movie, under the same rules as requesting one by one (quotas, approval, caps). If you run out of quota part way, Arclight stops and says which ones could not be requested. **Request all in 4K** does the same on the 4K track when 4K requests are enabled for you.
+
 ## Requesting a title
 
-1. Open the title page and click **Request**.
-2. For a series, choose **All seasons** or tick the seasons you want, then click **Request N seasons**. You must pick at least one season.
-3. Click send. You will see "Request sent for approval", or the title is approved straight away if you are allowed to auto-approve (see [Auto-approve](#auto-approve)).
+1. Open the title page and click **Request** (or **Request** next to one season in the **Seasons** list, which opens the dialog with that season ticked).
+2. When 4K requests are open to you, pick **Standard** or **4K** at the top of the dialog.
+3. For a series, choose **All seasons** or tick the seasons you want, then click **Request N seasons**. You must pick at least one season.
+4. If you have a [quota](#quotas), the dialog shows how many requests you have left, for example "Season requests left: 4 of 6 per 30 days".
+5. Click send. You will see "Request sent for approval", or the title is approved straight away if you are allowed to auto-approve (see [Auto-approve](#auto-approve)).
 
 Series requests cover every season not already requested or available. Specials (season 0) can only be requested if **Allow requesting specials** is on, and picking only some seasons needs **Allow partial series requests**.
 
@@ -90,6 +151,8 @@ The title itself also has an availability: Unknown, Pending, Processing, Partial
 
 - **All requests**: everyone's requests. Needs the permission to view requests.
 - **My requests**: only yours, with **Awaiting approval**, **Partially available**, **Failed to add** and the decline reason. **Cancel request** withdraws one ("Cancel your request for {title}?"; **Keep request** backs out). You need a real user account for this page.
+
+**My requests** is also linked from Discover Home, and portal users find it in the portal header.
 
 Filter by status (All, Pending, Approved, Processing, Unavailable, Declined, Failed, Completed, Available), by type (Movies, Series) and sort by date added or modified. Clicking a request opens its details page.
 
@@ -227,15 +290,46 @@ Per-user settings in **Settings > Users > Manage**:
 
 ## Public request portal
 
-The portal is a simple request page at `/portal` (for example `http://<your-host>:<port>/portal`) for people who do not use the full app. It is off by default. Turn it on in **Settings > Requests > Public request portal**:
+The portal is the request side of Arclight on its own, for people who do not use the full app: the same Discover home, browsing, search, title, person and collection pages, plus **My requests**, in a simple layout without the admin menu. It is off by default. Turn it on in **Settings > Requests > Public request portal**:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
 | Public portal | Off | "Show the request portal at /portal to anyone." |
-| Anonymous browsing | Off | Visitors can browse and search without signing in (rate-limited). Requesting still needs sign-in. |
-| Portal message | Empty | A short note shown on the page, up to 2000 characters. |
+| Anonymous browsing | Off | Visitors can browse and search without signing in. Requesting still needs sign-in. |
+| Portal message | Empty | A short note shown on the portal home, up to 2000 characters. |
+| Portal paths | `/portal` | Extra addresses for the portal on any hostname. See below. |
+| Portal hostnames | None | Hostnames that show the portal at their root. See below. |
 
-Click **Open portal** to see it. Visitors sign in with a local account or with your media server (Plex, Jellyfin or Emby). Anonymous visitors never see adult titles. If the portal is off, visitors see "The request portal is off".
+Click **Open portal** to see it. Visitors sign in with a local account or with your media server (Plex, Jellyfin or Emby), and come back to the page they were on. Without **Anonymous browsing**, visitors who are not signed in see the welcome and sign-in panes and nothing else. Anonymous visitors never see adult titles, never see anyone's requests, and are limited to a burst of 120 page requests, then 2 a second, per address. If the portal is off, visitors see "The request portal is off".
+
+The portal header has **Home**, **Movies**, **Series**, **Search** and (signed in) **My requests**; on a phone they move to a tab bar at the bottom. Signed-in users also get **Open Arclight** (to the full app) and **Sign out**.
+
+### Portal paths
+
+The portal always answers at `/portal`. Add more paths under **Portal paths**, for example `/requests`, `/watch` or something hard to guess. Each path is one word of letters, digits, `-` or `_`; Arclight lower-cases it and adds the leading `/`. Paths the app uses itself (`/api`, `/settings`, `/library`, `/discover`, `/login`, `/assets` and the like) are refused with "Arclight uses that path itself".
+
+A path works on every hostname Arclight answers on, and every portal page lives below it: `http://<your-host>:<port>/watch`, `/watch/movies`, `/watch/movie/603`, `/watch/search?q=dune`. Links inside the portal stay below the path you came in on, and refreshing or sharing a link works.
+
+### Portal on its own hostname
+
+To give the portal its own address, such as `requests.example.com`, while the full app stays on `arclight.example.com` (or only on your home network):
+
+1. Point the new hostname at Arclight, the same way as the app's own hostname: a reverse proxy site or a Cloudflare Tunnel public hostname that forwards to Arclight's port. See [Reaching Arclight from outside your home](../getting-started/exposing-outside-home.md) for the proxy and tunnel set-up and the hardening steps.
+2. Make sure the proxy passes the original hostname: the `Host` header, or `X-Forwarded-Host`. Caddy, Traefik, Nginx Proxy Manager and Cloudflare Tunnel do this by default; plain Nginx needs `proxy_set_header Host $host;`. In a tunnel, leave "HTTP Host Header" empty.
+3. In **Settings > Requests > Public request portal**, add `requests.example.com` under **Portal hostnames** (type the hostname only; a pasted `https://` address is trimmed to its hostname) and save.
+
+On that hostname the portal answers at the root: `https://requests.example.com/`, `/movies`, `/movie/603`, `/requests` (My requests). **Portal only** is on for a new hostname: any other page on that hostname (Settings, Library and so on) sends the visitor to the portal home, signed-in admins included, so the hostname never shows the admin pages. `/login` keeps working there. Turn **Portal only** off to let the rest of the app work on that hostname too (its portal pages still take precedence for `/`, `/movies`, `/search`, `/requests` and the other portal addresses).
+
+Portal only hides the admin pages; it is not a security boundary. Every API call checks permissions whatever the hostname, so a user only ever reaches what their account allows.
+
+**Signing in across hostnames.** The sign-in cookie belongs to the hostname it was set on, so signing in on `requests.example.com` does not sign you in on `arclight.example.com` and the other way round. Sign in once on each hostname you use. Arclight does not widen the cookie to the whole domain.
+
+| Problem | Likely cause |
+| --- | --- |
+| The hostname shows the full app, not the portal | The hostname is not listed, the portal is off, or the proxy does not pass the original `Host` / `X-Forwarded-Host`. |
+| Every page redirects to the portal home | **Portal only** is on for that hostname. Use the app's own address, or turn it off. |
+| A portal path shows "Page not found" | The portal is off, or the path was not saved. |
+| Anonymous visitors see "Too many requests" | They browsed very fast from one address (or a proxy hides client addresses, so everyone shares one). Send `X-Forwarded-For`. |
 
 ## Settings > Requests reference
 
@@ -255,11 +349,11 @@ You need the Manage settings permission to open this page.
 | Default quotas | See [Quotas](#quotas). |
 | Approval | Size, budgets and windows. |
 | Override rules | See [Override rules](#override-rules). |
-| Public request portal | See above. |
+| Public request portal | See [Public request portal](#public-request-portal): on/off, anonymous browsing, message, portal paths and portal hostnames. |
 
 ### Discover sliders
 
-The **Discover sliders** card controls the rows on Discover Home. Show or hide each one, move them up or down, then click **Save order**. The built-in sliders are Recently added, Recent requests, Watchlist, Trending, Popular movies, Movie genres, Upcoming movies, Studios, Popular TV, TV genres, Upcoming series and Networks. **Add slider** creates a custom one from a TMDB keyword, genre, search, studio or network. **Reset to defaults** removes custom sliders and restores the default order.
+The **Discover sliders** card controls the rows on Discover Home (in the app and in the portal). Show or hide each one, move them up or down, then click **Save order**. The built-in sliders are Recently added, Recent requests, Watchlist, Trending, Popular movies, Movie genres, Upcoming movies, Now playing, Top rated movies, Studios, Popular TV, TV genres, Upcoming series, Airing series, Top rated series, Networks and Streaming services. Sliders added in an update appear at the end of an existing order. Portal visitors who are not signed in never see Recent requests or Watchlist. **Add slider** creates a custom one from a TMDB keyword, genre, search, studio or network. **Reset to defaults** removes custom sliders and restores the default order.
 
 ## Discord bot
 

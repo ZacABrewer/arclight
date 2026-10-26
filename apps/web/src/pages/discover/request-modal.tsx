@@ -1,12 +1,13 @@
-import { useMemo, useState } from 'react';
-import type { CreateRequest, TitleDetail, TitleSeason } from '@arclight/shared';
+import { useEffect, useMemo, useState } from 'react';
+import type { CreateRequest, QuotaInfo, TitleDetail, TitleSeason } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { Button, Checkbox, Field, FormRow, Modal, Select, Table, type Column } from '../../arclight/index.js';
+import { Button, Checkbox, Field, FormRow, Modal, Segmented, Select, Table, type Column } from '../../arclight/index.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useToast } from '../../components/toast.js';
 import { seasonBlocker } from '../../features/requests/request-rules.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
-import { useCreateRequest, useRequestsSettings } from '../../hooks/requests.js';
+import { useAuth } from '../../auth/auth-context.js';
+import { useCreateRequest, useRequestsSettings, useUserQuota } from '../../hooks/requests.js';
 import { StatusLabelChip } from './discover-kit.js';
 import { t } from '../../i18n/index.js';
 
@@ -16,6 +17,10 @@ export interface RequestModalProps {
   onClose: () => void;
   /** Request the 4K track ("Request 4K" button). */
   is4k?: boolean;
+  /** Seasons ticked when the dialog opens (a season's own Request button). */
+  initialSeasons?: number[] | undefined;
+  /** Offer the Standard / 4K switch in the dialog. */
+  allow4k?: boolean | undefined;
 }
 
 export function seasonName(s: Pick<TitleSeason, 'seasonNumber' | 'name'>): string {
@@ -23,22 +28,64 @@ export function seasonName(s: Pick<TitleSeason, 'seasonNumber' | 'name'>): strin
 }
 
 /** Request dialog (Modal 560): season checklist table, quality target, root folder, tags. */
-export function RequestModal({ title, open, onClose, is4k = false }: RequestModalProps) {
+export function RequestModal({ title, open, onClose, is4k = false, initialSeasons, allow4k = false }: RequestModalProps) {
+  // The track can be switched in the dialog when 4K requests are open to the caller.
+  const [fourK, setFourK] = useState(is4k);
+  useEffect(() => {
+    if (open) setFourK(is4k);
+  }, [open, is4k]);
   return (
-    <Modal open={open} onClose={onClose} title={t('discover.requestModal.requestTitleValue', { title: title.title, value: is4k ? ' in 4K' : '' })} size={560}>
-      {open ? <RequestForm title={title} onClose={onClose} is4k={is4k} /> : null}
+    <Modal open={open} onClose={onClose} title={t('discover.requestModal.requestTitleValue', { title: title.title, value: fourK ? ' in 4K' : '' })} size={560}>
+      {open ? (
+        <div className="mk-stack-sm">
+          {allow4k ? (
+            <Segmented
+              aria-label={t('discover.requestModal.quality')}
+              value={fourK ? '4k' : 'standard'}
+              onChange={(v) => setFourK(v === '4k')}
+              options={[
+                { value: 'standard', label: t('common.standard') },
+                { value: '4k', label: '4K' },
+              ]}
+            />
+          ) : null}
+          <RequestForm key={fourK ? '4k' : 'standard'} title={title} onClose={onClose} is4k={fourK} initialSeasons={initialSeasons} />
+        </div>
+      ) : null}
     </Modal>
   );
 }
 
-function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: () => void; is4k: boolean }) {
+/** "Movie requests: 3 of 10 left (7 days)" for the signed-in user; nothing for exempt users. */
+export function quotaText(kind: 'movie' | 'series', info: QuotaInfo): string | null {
+  if (!info.limit) return null;
+  const left = info.remaining ?? Math.max(0, info.limit - info.used);
+  return kind === 'movie'
+    ? t('discover.requestModal.movieQuota', { left, limit: info.limit, days: info.days ?? 0 })
+    : t('discover.requestModal.seriesQuota', { left, limit: info.limit, days: info.days ?? 0 });
+}
+
+function QuotaLine({ kind }: { kind: 'movie' | 'series' }) {
+  const { user } = useAuth();
+  const quota = useUserQuota(user?.id ?? null);
+  if (!quota.data || quota.data.exempt) return null;
+  const info = kind === 'movie' ? quota.data.status.movie : quota.data.status.series;
+  const text = quotaText(kind, info);
+  if (!text) return null;
+  return (
+    <p className="dk-quota" data-tone={info.restricted ? 'warn' : undefined} role="status">
+      {text}
+      {info.restricted ? <span>{t('discover.requestModal.quotaReached')}</span> : null}
+    </p>
+  );
+}
+
+function RequestForm({ title, onClose, is4k, initialSeasons }: { title: TitleDetail; onClose: () => void; is4k: boolean; initialSeasons?: number[] | undefined }) {
   const settings = useRequestsSettings();
   const toast = useToast();
   const create = useCreateRequest();
-  const rootFolders = useRootFolders();
-  const profiles = useQualityProfiles();
   const isSeries = title.mediaType === 'series';
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<number[]>(initialSeasons ?? []);
   const [all, setAll] = useState(false);
   const [rootFolderPath, setRootFolderPath] = useState('');
   const [profileId, setProfileId] = useState('');
@@ -54,7 +101,6 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
   const requestable = seasons.filter((s) => seasonBlocker(s, is4k) === null).map((s) => s.seasonNumber);
   const allSelected = !partial || all;
   const chosen = allSelected ? requestable : selected.filter((n) => requestable.includes(n));
-  const folders = (rootFolders.data ?? []).filter((f) => f.mediaType === (isSeries ? 'series' : 'movie'));
 
   const toggleSeason = (n: number) => {
     setAll(false);
@@ -146,34 +192,10 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
         </>
       ) : null}
 
+      <QuotaLine kind={title.mediaType} />
+
       {title.canRequestAdvanced ? (
-        <div className="mk-stack-sm" data-testid="request-advanced">
-          <FormRow label={t('common.qualityTarget')} htmlFor="request-profile">
-            <Select id="request-profile" value={profileId} onChange={(e) => setProfileId(e.currentTarget.value)}>
-              <option value="">{t('common.defaultProfile')}</option>
-              {(profiles.data ?? []).map((p) => (
-                <option key={p.id} value={String(p.id)}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </FormRow>
-          <FormRow label={t('common.rootFolder')} htmlFor="request-root">
-            <Select id="request-root" value={rootFolderPath} onChange={(e) => setRootFolderPath(e.currentTarget.value)}>
-              <option value="">{t('common.defaultFolder')}</option>
-              {folders.map((f) => (
-                <option key={f.id} value={f.path}>
-                  {f.path}
-                </option>
-              ))}
-            </Select>
-          </FormRow>
-          <Field label={t('common.tags')}>
-            <div>
-              <TagPicker value={tags} onChange={setTags} />
-            </div>
-          </Field>
-        </div>
+        <AdvancedFields isSeries={isSeries} profileId={profileId} setProfileId={setProfileId} rootFolderPath={rootFolderPath} setRootFolderPath={setRootFolderPath} tags={tags} setTags={setTags} />
       ) : null}
 
       {error ? (
@@ -190,5 +212,49 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
         </Button>
       </div>
     </form>
+  );
+}
+
+/** Root folder, quality profile and tags (users with advanced requests); fetched only for them. */
+function AdvancedFields(props: {
+  isSeries: boolean;
+  profileId: string;
+  setProfileId: (v: string) => void;
+  rootFolderPath: string;
+  setRootFolderPath: (v: string) => void;
+  tags: number[];
+  setTags: (v: number[]) => void;
+}) {
+  const rootFolders = useRootFolders();
+  const profiles = useQualityProfiles();
+  const folders = (rootFolders.data ?? []).filter((f) => f.mediaType === (props.isSeries ? 'series' : 'movie'));
+  return (
+    <div className="mk-stack-sm" data-testid="request-advanced">
+      <FormRow label={t('common.qualityTarget')} htmlFor="request-profile">
+        <Select id="request-profile" value={props.profileId} onChange={(e) => props.setProfileId(e.currentTarget.value)}>
+          <option value="">{t('common.defaultProfile')}</option>
+          {(profiles.data ?? []).map((p) => (
+            <option key={p.id} value={String(p.id)}>
+              {p.name}
+            </option>
+          ))}
+        </Select>
+      </FormRow>
+      <FormRow label={t('common.rootFolder')} htmlFor="request-root">
+        <Select id="request-root" value={props.rootFolderPath} onChange={(e) => props.setRootFolderPath(e.currentTarget.value)}>
+          <option value="">{t('common.defaultFolder')}</option>
+          {folders.map((f) => (
+            <option key={f.id} value={f.path}>
+              {f.path}
+            </option>
+          ))}
+        </Select>
+      </FormRow>
+      <Field label={t('common.tags')}>
+        <div>
+          <TagPicker value={props.tags} onChange={props.setTags} />
+        </div>
+      </Field>
+    </div>
   );
 }

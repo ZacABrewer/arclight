@@ -44,6 +44,7 @@ If Arclight runs inside Gluetun's network, the web port is published on the glue
 - For the "local address" rule, Arclight checks the connection and every address in `X-Forwarded-For`. If any is public, sign-in is required. A proxy on the same machine therefore does not turn internet visitors into local users.
 - Two paths need WebSocket upgrades or the page looks stuck: `/api/v1/events` (live updates) and `/api/v1/log/stream` (live log).
 - Arclight lives at the root of its address. There is no base-URL setting, so `https://example.com/arclight/` does not work. Use a subdomain such as `arclight.example.com`.
+- Arclight reads the hostname from `Host`, or `X-Forwarded-Host` when the proxy sets it. Keep the original hostname (Caddy, Traefik, Nginx Proxy Manager and Cloudflare Tunnel do; plain Nginx needs `proxy_set_header Host $host;`, shown below). It matters for [portal hostnames](../using/discover-and-requests.md#portal-on-its-own-hostname).
 
 ## Option 1: do nothing
 
@@ -165,6 +166,16 @@ A tunnel makes an outbound connection from your network to Cloudflare, so you op
 
 Full hardening steps for this setup are in [users-and-security.md](../using/users-and-security.md#exposing-arclight-safely). Note that [CLOUDFLARE.md](../CLOUDFLARE.md) is about something different: it explains how Arclight gets past Cloudflare challenges when it talks to indexers. A tunnel is Cloudflare in front of Arclight; that page is Cloudflare in front of an indexer.
 
+## A separate hostname for requests
+
+To let family request titles without ever seeing the admin pages, give the [request portal](../using/discover-and-requests.md#public-request-portal) its own hostname, for example `requests.example.com`, next to `arclight.example.com`:
+
+1. Add a second site to your proxy, or a second public hostname to your tunnel, pointing at the same Arclight address (`http://192.168.1.50:7878` in the examples above). In Caddy that is a second block with `requests.example.com` and the same `reverse_proxy` line.
+2. In Arclight, Settings > Requests > Public request portal: turn the portal on and add `requests.example.com` under **Portal hostnames**. Leave **Portal only** on.
+3. Open `https://requests.example.com`: you get the portal at the root, and admin pages such as `/settings` send you back to it.
+
+A Cloudflare Access policy can then stay strict on `arclight.example.com` and be looser (or off) on `requests.example.com`. Sign-ins are per hostname: signing in on one does not sign you in on the other.
+
 ## If something goes wrong
 
 | Symptom | Likely cause |
@@ -174,6 +185,7 @@ Full hardening steps for this setup are in [users-and-security.md](../using/user
 | Blank page under `/arclight/` | Sub-paths are not supported; use a subdomain |
 | Everyone sees "Too many failed attempts" | The proxy hides client addresses, so all users share one counter. Send `X-Forwarded-For` |
 | You locked yourself out | See [locked out](../TROUBLESHOOTING.md#locked-out) |
+| The requests hostname shows the full app | It is not under Portal hostnames, the portal is off, or the proxy changes the `Host` header |
 
 ## Related
 

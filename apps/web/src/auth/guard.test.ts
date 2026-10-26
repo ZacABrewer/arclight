@@ -44,7 +44,10 @@ describe('resolveAuthRedirect', () => {
     expect(resolveAuthRedirect(status({ session: { user, via: 'session', isAdmin: true } }), '/portal')).toBeNull();
     expect(PUBLIC_PATHS.has('/portal')).toBe(true);
     expect(SHELLLESS_PATHS.has('/portal')).toBe(true);
-    expect(isPublicPath('/portal/x')).toBe(false);
+    // Every portal page is public (the portal is a whole catalogue now), nothing that merely starts with "portal".
+    expect(isPublicPath('/portal/movie/603')).toBe(true);
+    expect(resolveAuthRedirect(status({ authenticated: false }), '/portal/search')).toBeNull();
+    expect(isPublicPath('/portalx')).toBe(false);
   });
 
   it('sends the portal to /setup while setup is pending, and keeps other pages private', () => {

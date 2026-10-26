@@ -11,7 +11,11 @@ export interface RateLimitOptions {
   refillPerSecond: number;
 }
 
-export const DEFAULT_PORTAL_RATE_LIMIT: RateLimitOptions = { capacity: 30, refillPerSecond: 0.5 };
+/**
+ * A portal home page loads ~20 rows at once and grids page in as visitors scroll, so the burst
+ * covers a home page plus some browsing; TMDB itself is protected by the discover cache.
+ */
+export const DEFAULT_PORTAL_RATE_LIMIT: RateLimitOptions = { capacity: 120, refillPerSecond: 2 };
 const MAX_BUCKETS = 10_000;
 
 /** A token bucket per key (client IP). */

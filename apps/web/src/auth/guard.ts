@@ -26,7 +26,9 @@ export const BARE_PATHS: ReadonlySet<string> = new Set(['/login', '/setup']);
 export const PUBLIC_PATHS: ReadonlySet<string> = new Set(['/portal']);
 
 export function isPublicPath(pathname: string): boolean {
-  return PUBLIC_PATHS.has(pathname);
+  if (PUBLIC_PATHS.has(pathname)) return true;
+  // Every page of the portal (/portal/movie/603, /portal/search, ...).
+  return [...PUBLIC_PATHS].some((p) => pathname.startsWith(`${p}/`));
 }
 
 /** Pages that draw their own chrome (the component gallery renders a full demo shell). */

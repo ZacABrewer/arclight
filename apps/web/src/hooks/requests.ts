@@ -3,6 +3,7 @@ import type {
   ApproveRequest,
   CreateIssue,
   CreateRequest,
+  DiscoverEntityKind,
   DiscoverPage,
   DiscoverSliderInput,
   DiscoverSliderOrder,
@@ -92,13 +93,16 @@ export function useBulkRequestAction(action: 'approve' | 'decline') {
 // ---------------------------------------------------------------------------------------
 
 /** Infinite TMDB-backed grid: `fetchPage(page)` returns one DiscoverPage. */
-export function useDiscoverInfinite(key: QueryKey, fetchPage: (page: number) => Promise<DiscoverPage>, enabled = true) {
+export function useDiscoverInfinite<P extends { page: number; totalPages: number } = DiscoverPage>(key: QueryKey, fetchPage: (page: number) => Promise<P>, enabled = true) {
   return useInfiniteQuery({
     queryKey: key,
     queryFn: ({ pageParam }) => fetchPage(pageParam),
     initialPageParam: 1,
-    getNextPageParam: (last) => (last.page < last.totalPages ? last.page + 1 : undefined),
+    // TMDB stops at page 500.
+    getNextPageParam: (last) => (last.page < Math.min(last.totalPages, 500) ? last.page + 1 : undefined),
     enabled,
+    // Pages already seen stay put on Back, so the grid (and the scroll position) comes back at once.
+    staleTime: 5 * 60_000,
   });
 }
 
@@ -122,8 +126,34 @@ export function useSliders() {
   return useQuery({ queryKey: requestKeys.sliders, queryFn: slidersApi.list });
 }
 
-export function useSliderItems(id: number) {
-  return useQuery({ queryKey: requestKeys.discover.slider(id), queryFn: () => discoverApi.slider(id), staleTime: 60_000 });
+export function useSliderItems(id: number, timeWindow?: 'day' | 'week') {
+  return useQuery({ queryKey: requestKeys.discover.slider(id, timeWindow), queryFn: () => discoverApi.slider(id, 1, timeWindow), staleTime: 60_000 });
+}
+
+/** Home page tiles: genres with backdrops, studio/network logos, streaming services. */
+export function useDiscoverTiles(source: 'genres' | 'companies' | 'providers', kind: DiscoverKind, region?: string) {
+  return useQuery({
+    queryKey: requestKeys.discover.tiles(source, { kind, region: region ?? null }),
+    queryFn: () => (source === 'genres' ? discoverApi.genreTiles(kind) : source === 'companies' ? discoverApi.companies(kind) : discoverApi.providers(kind, region)),
+    staleTime: 3_600_000,
+  });
+}
+
+/** Filter vocabularies (regions, languages, certifications) and the instance region. */
+export function useDiscoverOptions() {
+  return useQuery({ queryKey: requestKeys.discover.options, queryFn: discoverApi.options, staleTime: 3_600_000 });
+}
+
+export function useDiscoverEntity(kind: DiscoverEntityKind, id: number) {
+  return useQuery({ queryKey: requestKeys.discover.entity(kind, id), queryFn: () => discoverApi.entity(kind, id), enabled: id > 0, staleTime: 3_600_000 });
+}
+
+export function useCollection(id: number) {
+  return useQuery({ queryKey: requestKeys.discover.collection(id), queryFn: () => discoverApi.collection(id), enabled: id > 0 });
+}
+
+export function useRequestCollection() {
+  return useInvalidatingMutation(({ id, is4k }: { id: number; is4k: boolean }) => discoverApi.requestCollection(id, is4k), REQUEST_AFFECTS, { silent: true });
 }
 
 const SLIDER_AFFECTS: readonly QueryKey[] = [requestKeys.sliders, requestKeys.discover.all];
@@ -295,8 +325,8 @@ export function useTestUserNotifications(id: number) {
   return useInvalidatingMutation(() => requestUsersApi.testNotifications(id), [], { silent: true });
 }
 
-export function useRequestsSettings() {
-  return useQuery({ queryKey: requestKeys.settings, queryFn: requestsSettingsApi.get, staleTime: 60_000 });
+export function useRequestsSettings(enabled = true) {
+  return useQuery({ queryKey: requestKeys.settings, queryFn: requestsSettingsApi.get, staleTime: 60_000, enabled });
 }
 
 export function useSaveRequestsSettings() {

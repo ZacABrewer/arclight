@@ -6,7 +6,7 @@ import { ErrorView } from './components/error-boundary.js';
 import { Skeleton } from './arclight/index.js';
 import { AppShell } from './layout/app-shell.js';
 import { AuthProvider } from './auth/auth-context.js';
-import { SHELLLESS_PATHS, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
+import { SHELLLESS_PATHS, isPublicPath, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
 import { LoginPage } from './pages/login.js';
 import { SetupWizard } from './pages/setup/setup-wizard.js';
 import { SecurityPage } from './pages/settings/security/security-page.js';
@@ -56,19 +56,7 @@ import { SubtitleHistoryPage } from './pages/subtitles/subtitle-history-page.js'
 import { SubtitleBlacklistPage } from './pages/subtitles/subtitle-blacklist-page.js';
 import { SubtitleSettingsPage } from './pages/settings/subtitles/subtitle-settings-page.js';
 import { DiscoverHomePage } from './pages/discover/discover-home.js';
-import { DiscoverMoviesPage, DiscoverTvPage } from './pages/discover/discover-browse.js';
-import {
-  DiscoverGenrePage,
-  DiscoverKeywordPage,
-  DiscoverNetworkPage,
-  DiscoverSearchPage,
-  DiscoverStudioPage,
-  DiscoverTrendingPage,
-  DiscoverUpcomingPage,
-  parseKindSearch,
-} from './pages/discover/discover-lists.js';
-import { MovieTitlePage, TvTitlePage } from './pages/discover/title-page.js';
-import { PersonPage } from './pages/discover/person-page.js';
+import { discoverChildren } from './pages/discover/discover-routes.js';
 import { RequestsPage } from './pages/requests/requests-page.js';
 import { MyRequestsPage } from './pages/requests/my-requests-page.js';
 import { WatchlistPage } from './pages/requests/watchlist-page.js';
@@ -89,7 +77,9 @@ import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
-import { PortalPage } from './pages/portal/portal-page.js';
+import { PortalHomePage, PortalLayout, PortalRequestsPage } from './pages/portal/portal-page.js';
+import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
+import type { PortalDocument } from '@arclight/shared';
 import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
 // Code-based route tree. Every page is a createRoute whose component is the page. The
@@ -97,16 +87,18 @@ import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
 export interface RouterContext {
   queryClient: QueryClient;
+  /** How this page relates to the request portal (portal paths / hostnames); null: plain app page. */
+  portal?: PortalDocument | null;
 }
 
 function RouteError({ error, reset }: ErrorComponentProps) {
   return <ErrorView error={error} onRetry={reset} />;
 }
 
-/** /login, /setup and /design draw their own chrome; everything else lives in the app shell. */
+/** /login, /setup, /design and the portal draw their own chrome; everything else lives in the app shell. */
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return <AuthProvider>{SHELLLESS_PATHS.has(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
+  return <AuthProvider>{SHELLLESS_PATHS.has(pathname) || isPublicPath(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
 }
 
 function PendingPage() {
@@ -128,6 +120,9 @@ const rootRoute = createRootRouteWithContext<RouterContext>()({
   notFoundComponent: NotFoundPage,
   // Guard every navigation: setup first, then sign-in, then admin-only sections.
   beforeLoad: async ({ context, location }) => {
+    // A portal-only hostname never shows the app (signed-in admins included).
+    const portalOnly = portalOnlyRedirect(context.portal, location.pathname);
+    if (portalOnly) throw redirect({ href: portalOnly, replace: true });
     const status = await loadAuthStatus(context.queryClient);
     const search = location.search as Record<string, unknown>;
     const target = resolveAuthRedirect(status, location.pathname, location.href, search['redirect']);
@@ -197,9 +192,10 @@ const manualImportRoute = createRoute({
   component: ManualImportPage,
 });
 
-// Discover (pages/discover): grid pages that take ?mediaType=movie|tv, and search ?q=.
-const kindRoute = <TPath extends string>(path: TPath, component: () => React.ReactNode) =>
-  createRoute({ getParentRoute: () => rootRoute, path, validateSearch: parseKindSearch, component });
+// Discover (pages/discover) in the app, and the same pages in the public request portal.
+const discoverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/discover', component: Outlet });
+const portalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/portal', component: PortalLayout });
+const portalRequestsRoute = createRoute({ getParentRoute: () => portalRoute, path: 'requests', component: PortalRequestsPage });
 
 // Notification deep links: /requests/:id?action=approve|decline.
 const requestDeepLinkRoute = createRoute({
@@ -209,20 +205,12 @@ const requestDeepLinkRoute = createRoute({
   component: RequestDeepLinkPage,
 });
 
-const discoverSearchRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/discover/search',
-  validateSearch: (search: Record<string, unknown>): { q: string } => ({
-    q: typeof search.q === 'string' ? search.q : '',
-  }),
-  component: DiscoverSearchPage,
-});
 
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   page('/setup', SetupWizard),
   // Public request portal: reachable without signing in (auth/guard.ts PUBLIC_PATHS).
-  page('/portal', PortalPage),
+  portalRoute.addChildren([...discoverChildren(() => portalRoute, PortalHomePage), portalRequestsRoute]),
   page('/', DashboardPage),
   searchRoute,
 
@@ -239,19 +227,7 @@ export const routeTree = rootRoute.addChildren([
   page('/library/hygiene', HygienePage),
 
   // Discover, requests, issues, watchlist (Phase 4).
-  page('/discover', DiscoverHomePage),
-  page('/discover/movies', DiscoverMoviesPage),
-  page('/discover/tv', DiscoverTvPage),
-  page('/discover/trending', DiscoverTrendingPage),
-  kindRoute('/discover/upcoming', DiscoverUpcomingPage),
-  kindRoute('/discover/genre/$id', DiscoverGenrePage),
-  kindRoute('/discover/keyword/$id', DiscoverKeywordPage),
-  page('/discover/studio/$id', DiscoverStudioPage),
-  page('/discover/network/$id', DiscoverNetworkPage),
-  discoverSearchRoute,
-  page('/discover/movie/$tmdbId', MovieTitlePage),
-  page('/discover/tv/$tmdbId', TvTitlePage),
-  page('/discover/person/$id', PersonPage),
+  discoverRoute.addChildren(discoverChildren(() => discoverRoute, DiscoverHomePage)),
   page('/requests', RequestsPage),
   page('/requests/mine', MyRequestsPage),
   requestDeepLinkRoute,
@@ -335,10 +311,12 @@ export const routeTree = rootRoute.addChildren([
   page('/design', DesignRoute),
 ]);
 
-export function createAppRouter(queryClient: QueryClient) {
+export function createAppRouter(queryClient: QueryClient, portal: PortalDocument | null = null) {
+  const rewrite = portalRewrite(portal);
   return createRouter({
     routeTree,
-    context: { queryClient },
+    context: { queryClient, portal },
+    ...(rewrite ? { rewrite } : {}),
     defaultPreload: 'intent',
     defaultPendingComponent: PendingPage,
     defaultErrorComponent: RouteError,
@@ -348,8 +326,11 @@ export function createAppRouter(queryClient: QueryClient) {
 }
 
 export type AppRouter = ReturnType<typeof createAppRouter>;
-/** Every concrete path in the app; the sidebar config is typed against it. */
-export type AppPath = keyof AppRouter['routesByPath'];
+/**
+ * Every concrete path in the app; the sidebar config is typed against it. Index routes of
+ * layout routes (/discover/, /portal/) are reached through their parent path.
+ */
+export type AppPath = Exclude<keyof AppRouter['routesByPath'], `${string}/`> | '/';
 
 declare module '@tanstack/react-router' {
   interface Register {

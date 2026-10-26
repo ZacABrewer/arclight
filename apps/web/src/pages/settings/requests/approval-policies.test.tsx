@@ -73,6 +73,19 @@ describe('settings → requests: approval policies and portal', () => {
     fireEvent.click(within(portal).getByRole('switch', { name: 'Public portal' }));
     fireEvent.click(anon);
     fireEvent.change(within(portal).getByLabelText('Portal message'), { target: { value: 'Ask for anything.' } });
+    // Portal paths: app paths are refused, others are normalised.
+    const addPath = within(portal).getByLabelText('Add portal path');
+    fireEvent.change(addPath, { target: { value: '/settings' } });
+    fireEvent.click(within(portal).getAllByRole('button', { name: 'Add' })[0]!);
+    expect(within(portal).getByRole('alert').textContent).toBe('Arclight uses that path itself. Pick another.');
+    fireEvent.change(addPath, { target: { value: 'Watch/' } });
+    fireEvent.keyDown(addPath, { key: 'Enter' });
+    expect(within(portal).getByText('/watch')).toBeTruthy();
+    // Portal hostnames: a pasted URL keeps its hostname; portal-only can be turned off.
+    const addHost = within(portal).getByLabelText('Add portal hostname');
+    fireEvent.change(addHost, { target: { value: 'https://Requests.Example.com/path' } });
+    fireEvent.keyDown(addHost, { key: 'Enter' });
+    fireEvent.click(within(portal).getByRole('switch', { name: 'Portal only on requests.example.com' }));
 
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
@@ -83,7 +96,13 @@ describe('settings → requests: approval policies and portal', () => {
       { scope: 'user', userIds: [3], tvSeasons: 6, periodDays: 14, autoApproveUnder: {} },
     ]);
     expect(sent.approvalWindows).toEqual([{ days: [1, 2, 3, 4, 5, 6], startHour: 22, endHour: 6, action: 'hold' }]);
-    expect(sent.publicPortal).toEqual({ enabled: true, allowAnonymousDiscover: true, message: 'Ask for anything.' });
+    expect(sent.publicPortal).toEqual({
+      enabled: true,
+      allowAnonymousDiscover: true,
+      message: 'Ask for anything.',
+      paths: ['/watch'],
+      hosts: [{ hostname: 'requests.example.com', portalOnly: false }],
+    });
   });
 
   it('blocks saving while a window has no days, and removes budgets and windows', async () => {

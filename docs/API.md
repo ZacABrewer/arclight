@@ -515,21 +515,46 @@ Public-portal visitors get `hideAdultContent`.
 
 ### Public request portal
 
-`RequestsSettings.publicPortal {enabled, allowAnonymousDiscover, message}`. While enabled,
+`RequestsSettings.publicPortal {enabled, allowAnonymousDiscover, message, paths, hosts}`.
+`paths` are extra portal paths (one segment each, normalised to `/slug`; segments the app or
+the server use, such as `/api`, `/settings` or `/assets`, are refused: `RESERVED_PORTAL_SEGMENTS`).
+`hosts` are `PortalHost {hostname, portalOnly}` entries. Page loads (the SPA fallback, not
+`/api`) on a portal path or a portal hostname get `<meta name="arclight-portal">` with a
+`PortalDocument` (`{mode: "path", base}` or `{mode: "host", portalOnly}`) in `index.html`; a
+portal-only hostname answers `302 /` for any page that is not a portal page, `/login` or
+`/setup`. The hostname comes from `Host` or `X-Forwarded-Host` (forwarded headers are always
+trusted). This hides the admin UI; it is not access control (the api checks every call). While enabled,
 `GET /public/portal` → `PublicPortal {enabled, title, applicationUrl, message,
 allowAnonymousDiscover, loginMethods {local, mediaServer {kind, name?} | null, plex}}` is
 public (signed-in callers may always read it). With `allowAnonymousDiscover` too, every
 `GET /discover/*` route and `GET /discoverslider` answer anonymous visitors (as a user without
 permissions: `canRequest: false`, no requests or watchlist). Anonymous calls are rate-limited
-per client IP by a token bucket (burst 30, 1 token / 2 s) answering
+per client IP by a token bucket (burst 120, 2 tokens / s) answering
 `429 {code: "RATE_LIMITED"}` with `Retry-After`; signed-in callers are not limited.
 Requesting always needs sign-in.
 
 ### Discover (TMDB proxy with Arclight status)
 
 Each result is a `DiscoverItem` carrying `mediaStatus`/`mediaStatus4k`, the newest active
-request and the library id. `hideAvailable`/`hideRequested` settings filter list pages; content
-caps filter them per user (see above).
+request (or `requestStatus: "declined"` when the newest request was declined) and the library
+id, looked up with one batched query per media type per page. `hideAvailable`/`hideRequested`
+settings filter list pages, and so do the same query flags per call; content caps filter them
+per user (see above). Paged routes answer `page`, `totalPages` (at most 500, TMDB's limit) and
+`totalResults`.
+
+TMDB answers are cached in the api (`DiscoverCache`, apps/api/src/modules/requests/discover-cache.ts):
+list and search pages 5 minutes, title/person/collection details 6 hours, vocabularies
+(genres, genre tiles, studio/network logos, watch providers, regions, languages,
+certifications) 24 hours; identical lookups in flight share one TMDB call, and saving the
+metadata settings clears the cache. Status is overlaid fresh on every answer. The TMDB client
+also shares in-flight requests and caps its own 10-minute response cache at 2000 URLs.
+Region-dependent answers (watch providers, certifications, release dates) use the instance
+region from Settings > Metadata unless the call names one.
+
+`DiscoverQuery` (movies/tv) takes `page`, `sortBy`, `genre` and `keywords` (ids; `,` = all,
+`|` = any), `studio`, `network`, `language`, `releaseDateGte/Lte`, `voteAverageGte/Lte`,
+`voteCountGte`, `runtimeGte/Lte`, `watchProviders` + `watchRegion`, `certification`,
+`certificationLte` + `certificationCountry`, `hideAvailable`, `hideRequested`.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -537,7 +562,7 @@ caps filter them per user (see above).
 | GET | `/discover/tv` | `DiscoverQuery` → `DiscoverPage` (TMDB discover/tv) |
 | GET | `/discover/trending` | `TrendingQuery` (`mediaType` all/movie/tv, `timeWindow` day/week, `page`) |
 | GET | `/discover/upcoming` | `DiscoverKindQuery` (`mediaType` movie/tv): release/first-air date from today |
-| GET | `/discover/search` | `DiscoverSearchQuery` (`query`, `page`): movies and series |
+| GET | `/discover/search` | `DiscoverSearchQuery` (`query`, `page`, `mediaType` all/movie/tv): movies and series |
 | GET | `/discover/genres` | `?mediaType=movie` or `tv` → `DiscoverGenre[]` |
 | GET | `/discover/genre/:id` | `DiscoverKindQuery`: titles in a genre |
 | GET | `/discover/network/:id` | Series on a network (`title` = network name) |
@@ -545,14 +570,24 @@ caps filter them per user (see above).
 | GET | `/discover/keyword/:id` | `DiscoverKindQuery`: titles with a keyword |
 | GET | `/discover/person/:id` | `PersonDetail` with annotated cast/crew credits |
 | GET | `/discover/movie/:tmdbId` | `TitleDetail`: details, cast, crew, videos, similar, recommendations, requests, flags |
-| GET | `/discover/tv/:tmdbId` | `TitleDetail` incl. per-season status |
-| GET | `/discover/slider/:id` | `?page`: the items of one slider (`recentlyAdded` needs `RECENT_VIEW`); genre/studio/network list sliders answer 400 (the web renders those from `/discover/genres` and the `POPULAR_STUDIOS`/`POPULAR_NETWORKS` constants) |
+| GET | `/discover/tv/:tmdbId` | `TitleDetail` incl. per-season status. Both title routes also carry `certification`, movie `releaseDates {inCinemas, digital, physical}` and `collection`, series `firstAirDate`/`lastAirDate` |
+| GET | `/discover/slider/:id` | `?page&timeWindow=day\|week` (trending): the items of one slider (`recentlyAdded` needs `RECENT_VIEW`); tile sliders (genres, studios, networks, providers) answer 400 (the web renders those from the tile routes below) |
+| GET | `/discover/list/:list` | `DiscoverListName` (`popularMovies`, `popularTv`, `upcomingMovies`, `upcomingTv`, `nowPlaying`, `topRatedMovies`, `topRatedTv`, `airingToday`, `onTheAir`) + `DiscoverListQuery` (`page`, hides) → `DiscoverPage` |
+| GET | `/discover/search/people` | `DiscoverTextQuery` (`query`, `page`) → `PersonPage` (`PersonSummary` rows with known-for titles) |
+| GET | `/discover/keywords` | `DiscoverTextQuery` → `KeywordPage` (keyword ids for the filter bar) |
+| GET | `/discover/genres/tiles` | `DiscoverTileQuery` (`mediaType`) → `DiscoverTile[]`: genres with the backdrop of their most popular title |
+| GET | `/discover/companies` | `DiscoverTileQuery` → `DiscoverTile[]`: the well-known studios (movie) or networks (tv) with logos |
+| GET | `/discover/providers` | `DiscoverTileQuery` (`mediaType`, `region`) → `DiscoverTile[]`: streaming services in the region, most prominent first |
+| GET | `/discover/info/:kind/:id` | `kind` studio/network/keyword → `DiscoverEntity {id, name, imageUrl}` (page headers) |
+| GET | `/discover/options` | `DiscoverFilterOptions`: instance region and language, regions, languages, certifications per media type |
+| GET | `/discover/collection/:id` | `CollectionDetail`: parts (annotated, capped), `missing`, `canRequest`, `canRequest4k` |
+| POST | `/discover/collection/:id/request` | Signed in. `CollectionRequestInput {is4k}` → `CollectionRequestResult {requested, skipped, failed}`: one request per part the library lacks and nobody requested (stops at the first quota refusal) |
 
 ### Discover sliders
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/discoverslider` | All sliders in order (users get enabled ones only) |
+| GET | `/discoverslider` | All sliders in order (`MANAGE_SETTINGS` gets all; others the enabled ones they can use: anonymous portal visitors get no `recentRequests`/`watchlist`, `recentlyAdded` needs `RECENT_VIEW`) |
 | POST | `/discoverslider` | `MANAGE_SETTINGS`: create a custom slider (`DiscoverSliderInput`) |
 | PUT | `/discoverslider/order` | `MANAGE_SETTINGS`: `DiscoverSliderOrder` rewrites order and enabled flags |
 | POST | `/discoverslider/reset` | `MANAGE_SETTINGS`: delete custom sliders, restore built-in defaults |
