@@ -1,0 +1,8 @@
+{
+  "page": 2, "all_pages": 2,
+  "data": [
+    { "id": "mNoP", "language": "en", "releases": ["Some.Movie.2019.Remake"], "flags": [],
+      "download": "/subtitles/mNoP/download", "movie": { "title": "Some Movie", "year": 2019, "type": "movie" } },
+    { "id": "aBcD", "language": "en", "releases": ["dup"], "flags": [], "movie": { "title": "Some Movie", "year": 2020 } }
+  ]
+}

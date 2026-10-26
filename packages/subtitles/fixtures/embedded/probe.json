@@ -1,0 +1,14 @@
+{
+  "streams": [
+    {"index": 0, "codec_type": "video", "codec_name": "hevc"},
+    {"index": 1, "codec_type": "audio", "codec_name": "eac3", "tags": {"language": "jpn"}},
+    {"index": 2, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "eng", "title": "English", "NUMBER_OF_FRAMES": "900"}, "disposition": {"default": 1, "forced": 0, "hearing_impaired": 0}},
+    {"index": 3, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "eng", "title": "English SDH", "NUMBER_OF_FRAMES": "1000"}, "disposition": {"forced": 0}},
+    {"index": 4, "codec_type": "subtitle", "codec_name": "ass", "tags": {"language": "eng", "title": "Signs", "NUMBER_OF_FRAMES": "40"}, "disposition": {"forced": 1}},
+    {"index": 5, "codec_type": "subtitle", "codec_name": "hdmv_pgs_subtitle", "tags": {"language": "eng"}},
+    {"index": 6, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"language": "spa", "NUMBER_OF_FRAMES": "100"}},
+    {"index": 7, "codec_type": "subtitle", "codec_name": "mov_text", "tags": {"language": "chi", "title": "Traditional Chinese"}},
+    {"index": 8, "codec_type": "subtitle", "codec_name": "webvtt", "tags": {"language": "fre"}},
+    {"index": 9, "codec_type": "subtitle", "codec_name": "subrip", "tags": {"title": "Unknown"}}
+  ]
+}

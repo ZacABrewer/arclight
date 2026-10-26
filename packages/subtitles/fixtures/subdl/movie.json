@@ -1,0 +1,10 @@
+{
+  "status": true,
+  "subtitles": [
+    { "release_name": "Some.Movie.2020.1080p.BluRay.x264-SPARKS", "name": "SUBDL::movie.zip", "language": "EN", "author": "erin", "url": "/subtitle/4000000-1.zip", "hi": false },
+    { "release_name": "Some.Movie.2020.AI", "name": "SUBDL::ai.zip", "language": "EN", "url": "/subtitle/4000001-1.zip", "ai_translated": true }
+  ],
+  "totalPages": 1,
+  "currentPage": 1,
+  "policy": { "max_pages": 1 }
+}

@@ -1,0 +1,13 @@
+{
+  "page": 1, "all_pages": 2,
+  "data": [
+    { "id": "aBcD", "language": "en", "releases": ["Some.Movie.2020.1080p.BluRay.x264-SPARKS", "Some.Movie.2020.720p.BluRay.x264-SPARKS"],
+      "flags": [], "download": "/subtitles/aBcD/download", "url": "/subtitles/en-some-movie-2020/aBcD",
+      "stats": { "downloads": 4200, "rating": 4.5 }, "contributors": [ { "name": "frank" } ],
+      "movie": { "title": "Some Movie", "year": 2020, "type": "movie" } },
+    { "id": "eFgH", "language": "en", "releases": ["Some.Movie.2020.WEB"], "flags": ["hearing_impaired"],
+      "download": "/subtitles/eFgH/download", "movie": { "title": "Some Movie", "year": 2020, "type": "movie" } },
+    { "id": "iJkL", "language": "en", "releases": ["Some.Movie.2020.FORCED"], "flags": ["foreign_only"],
+      "download": "/subtitles/iJkL/download", "movie": { "title": "Some Movie", "year": 2020, "type": "movie" } }
+  ]
+}

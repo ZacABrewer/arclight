@@ -1,0 +1,17 @@
+{
+  "id": 502,
+  "title": "[Erai-raws] Frieren - 05 [1080p][Multiple Subtitle].mkv",
+  "files": [
+    {
+      "id": 9001,
+      "filename": "[Erai-raws] Frieren - 05 [1080p][Multiple Subtitle].mkv",
+      "attachments": [
+        {"id": 306096, "type": "subtitle", "info": {"lang": "eng", "name": "English", "default": 1}},
+        {"id": 306097, "type": "subtitle", "info": {"lang": "por", "name": "Portuguese (Brazil)"}},
+        {"id": 306098, "type": "subtitle", "info": {"lang": "eng", "name": "Signs & Songs", "forced": 1}},
+        {"id": 306099, "type": "subtitle", "info": {"lang": "ger", "name": "Deutsch"}},
+        {"id": 306100, "type": "font", "info": {"name": "Arial.ttf"}}
+      ]
+    }
+  ]
+}
