@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TorrentPriorityRequest, TorrentSettingsUpdate } from '@media-tron/shared';
+import type { TorrentPriorityRequest, TorrentSettingsUpdate } from '@arclight/shared';
 import { torrentApi, type TorrentAction } from '../api/torrent.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 

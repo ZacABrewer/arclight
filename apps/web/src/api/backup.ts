@@ -1,4 +1,4 @@
-import { Backup, BackupRestoreResponse, BackupSettings, RestartResponse } from '@media-tron/shared';
+import { Backup, BackupRestoreResponse, BackupSettings, RestartResponse } from '@arclight/shared';
 import { API_BASE, request } from './client.js';
 
 // Paths mirror apps/api/src/modules/backup/routes.ts and the system module's restart route.

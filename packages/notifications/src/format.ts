@@ -30,7 +30,7 @@ export interface FormattedEvent {
   body: string;
   severity: Severity;
   fields: FormattedField[];
-  /** Link to the media (Media-Tron page when `applicationUrl` is set, otherwise TMDB). */
+  /** Link to the media (Arclight page when `applicationUrl` is set, otherwise TMDB). */
   link?: string;
   posterUrl?: string;
   fanartUrl?: string;

@@ -1,4 +1,4 @@
-# Development/compose-from-source stack with a VPN. Media-Tron and qBittorrent share
+# Development/compose-from-source stack with a VPN. Arclight and qBittorrent share
 # Gluetun's network namespace (network_mode: "service:gluetun"), so all their traffic leaves
 # through the ProtonVPN WireGuard tunnel and Gluetun's firewall blocks everything else
 # (a kill switch by construction). Ports are therefore published on the gluetun service.
@@ -16,11 +16,11 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_KEY}
       - SERVER_COUNTRIES=${VPN_COUNTRIES:-Netherlands}
-      # Proton assigns a forwarded port (NAT-PMP); Media-Tron pushes it to qBittorrent.
+      # Proton assigns a forwarded port (NAT-PMP); Arclight pushes it to qBittorrent.
       - VPN_PORT_FORWARDING=on
       # Let LAN clients reach the published UIs through Gluetun's firewall.
       - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET:-192.168.1.0/24}
-      # Control server polled by Media-Tron (status, public IP, forwarded port).
+      # Control server polled by Arclight (status, public IP, forwarded port).
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=off
       # Newer Gluetun releases require auth on the control server. If yours does, create a key
@@ -30,7 +30,7 @@ services:
     volumes:
       - ${CONFIG_ROOT:-./data}/gluetun:/gluetun
     ports:
-      - "7878:7878" # Media-Tron
+      - "7878:7878" # Arclight
       - "8080:8080" # qBittorrent WebUI
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
@@ -40,20 +40,20 @@ services:
       retries: 3
     restart: unless-stopped
 
-  media-tron:
+  arclight:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: media-tron
+    container_name: arclight
     network_mode: "service:gluetun"
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
       # Default for Settings -> VPN -> Gluetun control URL (same network namespace).
-      - MEDIATRON_VPN_CONTROL_URL=http://localhost:8000
+      - ARCLIGHT_VPN_CONTROL_URL=http://localhost:8000
     volumes:
-      - ${CONFIG_ROOT:-./data}/media-tron:/config
+      - ${CONFIG_ROOT:-./data}/arclight:/config
       - ${TV_ROOT:-./data/tv}:/tv
       - ${MOVIES_ROOT:-./data/movies}:/movies
       - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads

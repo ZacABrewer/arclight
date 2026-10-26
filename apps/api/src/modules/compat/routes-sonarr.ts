@@ -9,7 +9,7 @@ import {
   type Episode,
   type MediaFile,
   type UpdateSeriesRequest,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { CalendarService } from '../calendar/index.js';
 import { libraryService as lib } from '../library/index.js';
 import { compact, CompatError, parseOr400, qsBool, qsInt, qsIntList, type Json } from './common.js';

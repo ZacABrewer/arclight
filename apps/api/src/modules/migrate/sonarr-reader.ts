@@ -1,4 +1,4 @@
-import type { MigratePathMapping, SeriesStatus } from '@media-tron/shared';
+import type { MigratePathMapping, SeriesStatus } from '@arclight/shared';
 import { arrSchemaVersion, readArrInfrastructure, remappedRootFolders, rootFolderFor, warn, type ReaderContext } from './arr-common.js';
 import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, jsonArray, str, type ForeignRow } from './foreign-db.js';
 import { mapLanguageId, mapLanguageList } from './mappers/languages.js';
@@ -161,7 +161,7 @@ export function readSonarr(dbPath: string, mappings: readonly MigratePathMapping
     const episodes = series.reduce((n, s) => n + s.payload.episodes.length, 0);
     const files = series.reduce((n, s) => n + s.payload.files.length, 0);
     if (db.hasTable('LanguageProfiles')) {
-      warn(ctx, 'qualityProfiles', 'Sonarr v3 language profiles are not imported; Media-Tron filters languages per quality profile');
+      warn(ctx, 'qualityProfiles', 'Sonarr v3 language profiles are not imported; Arclight filters languages per quality profile');
     }
     return {
       app: 'sonarr',

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { QualityProfile } from '@media-tron/shared';
+import type { QualityProfile } from '@arclight/shared';
 import { Badge } from '../../../components/badge.js';
 import { Card } from '../../../components/card.js';
 import { ErrorView } from '../../../components/error-boundary.js';

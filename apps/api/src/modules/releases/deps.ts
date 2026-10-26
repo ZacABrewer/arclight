@@ -1,4 +1,4 @@
-import type { QualityModel, ReleaseProtocol } from '@media-tron/shared';
+import type { QualityModel, ReleaseProtocol } from '@arclight/shared';
 
 // Hooks the releases module needs from modules written in parallel (history, blocklist,
 // settings). Each has a no-op default so the module works stand-alone; the app wires the

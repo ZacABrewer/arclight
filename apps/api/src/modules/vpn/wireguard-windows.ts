@@ -1,6 +1,6 @@
 import { access } from 'node:fs/promises';
 import { win32 } from 'node:path';
-import { DEFAULT_WIREGUARD_EXE } from '@media-tron/shared';
+import { DEFAULT_WIREGUARD_EXE } from '@arclight/shared';
 import { VpnError, errorMessage } from './errors.js';
 import { findInterfaceIPv4, type InterfaceProbeDeps } from './interfaces.js';
 import type { ShellRunner } from './shell.js';
@@ -135,7 +135,7 @@ export class WireguardWindows {
         throw new VpnError('tunnel-not-found', `WireGuard tunnel "${name}" is not running.`);
       }
       if (/access is denied|permission/i.test(text)) {
-        throw new VpnError('unauthorized', 'wg.exe needs administrator rights: run Media-Tron elevated or as a service.');
+        throw new VpnError('unauthorized', 'wg.exe needs administrator rights: run Arclight elevated or as a service.');
       }
       throw this.commandError('read the tunnel status', res);
     }

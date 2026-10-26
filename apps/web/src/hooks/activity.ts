@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@media-tron/shared';
+import type { QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
 import { queueApi } from '../api/queue.js';

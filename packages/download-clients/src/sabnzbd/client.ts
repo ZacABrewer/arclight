@@ -106,7 +106,7 @@ export class SabnzbdClient implements DownloadClient {
     const { config } = await this.api.callJson('get_config', SabConfig);
     const category = this.settings.category;
     if (category === '') {
-      warnings.push('No category is set. A category keeps Media-Tron downloads apart from everything else.');
+      warnings.push('No category is set. A category keeps Arclight downloads apart from everything else.');
     } else if (!config.categories.some((c) => sameCategory(c.name, category))) {
       warnings.push(
         `SABnzbd has no category "${category}"; downloads would fall back to the default (*) category. Create it in Config > Categories.`,
@@ -117,7 +117,7 @@ export class SabnzbdClient implements DownloadClient {
     }
     if (removesCompletedDownloads(config.misc)) {
       warnings.push(
-        'SABnzbd removes jobs from its history on its own (Config > General > History Retention), which can happen before Media-Tron imports them. Set it to keep all jobs.',
+        'SABnzbd removes jobs from its history on its own (Config > General > History Retention), which can happen before Arclight imports them. Set it to keep all jobs.',
       );
     }
     return { version, apiVersion: 'api', warnings };

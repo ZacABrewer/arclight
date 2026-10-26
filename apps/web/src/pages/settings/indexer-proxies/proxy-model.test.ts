@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { INDEXER_PROXY_SECRET_MASK } from '@media-tron/shared';
+import { INDEXER_PROXY_SECRET_MASK } from '@arclight/shared';
 import { validateIndexerOptions, parseTagList } from '../indexer-options/indexer-options-page.js';
 import { newProxy, proxyFields, toProxyBody } from './proxy-model.js';
 

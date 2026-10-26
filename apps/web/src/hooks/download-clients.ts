@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { DownloadClientInput, RemotePathMappingInput } from '@media-tron/shared';
+import type { DownloadClientInput, RemotePathMappingInput } from '@arclight/shared';
 import { downloadClientsApi, remotePathMappingsApi } from '../api/download-clients.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
 

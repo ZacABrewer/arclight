@@ -1,4 +1,4 @@
-import { isMetadataError, type MovieMetadata, type SearchResult, type SeriesMetadata } from '@media-tron/metadata';
+import { isMetadataError, type MovieMetadata, type SearchResult, type SeriesMetadata } from '@arclight/metadata';
 import type { AppContext } from '../../app.js';
 import type { MovieMetadataInput, SeriesMetadataInput } from '../library/index.js';
 import { MetadataNotConfiguredError, MetadataService } from '../metadata/index.js';

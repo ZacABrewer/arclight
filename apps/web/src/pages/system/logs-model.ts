@@ -1,4 +1,4 @@
-import { LOG_LEVEL_VALUES, type LogLevel, type LogRecord } from '@media-tron/shared';
+import { LOG_LEVEL_VALUES, type LogLevel, type LogRecord } from '@arclight/shared';
 import type { BadgeTone } from '../../components/badge.js';
 
 // Log viewer helpers. The filter mirrors the api's (apps/api/src/logging.ts recordFilter) so

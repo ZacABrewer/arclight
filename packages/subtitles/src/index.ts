@@ -1,4 +1,4 @@
-// @media-tron/subtitles: the pure subtitle layer (Phase 3). No database, no HTTP server.
+// @arclight/subtitles: the pure subtitle layer (Phase 3). No database, no HTTP server.
 
 export * from './types.js';
 export {

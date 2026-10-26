@@ -1,8 +1,8 @@
-# Contributing to Media-Tron
+# Contributing to Arclight
 
 ## Clean-room rule (read this first)
 
-Media-Tron is a clean-room implementation. Sonarr, Radarr, Prowlarr, Bazarr, Seerr and other
+Arclight is a clean-room implementation. Sonarr, Radarr, Prowlarr, Bazarr, Seerr and other
 upstream projects are **behaviour references only**. Read them to learn *what* happens;
 write *how* yourself.
 

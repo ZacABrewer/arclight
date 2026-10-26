@@ -1,4 +1,4 @@
-import { VpnErrorResponse, VpnSettingsResponse, VpnSettingsUpdate, VpnStatus } from '@media-tron/shared';
+import { VpnErrorResponse, VpnSettingsResponse, VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { SettingsError } from '../settings/service.js';

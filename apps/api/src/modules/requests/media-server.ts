@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { MediaType } from '@media-tron/shared';
+import type { MediaType } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { notifications } from '../../db/schema.js';
 

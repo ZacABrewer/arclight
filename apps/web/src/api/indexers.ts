@@ -23,7 +23,7 @@ import {
   type SearchGrabRequest,
   ReleaseResource,
   type ManualSearchRequest,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { buildUrl, request, type QueryParams } from './client.js';
 
 // Paths mirror apps/api/src/modules/indexers/routes.ts.

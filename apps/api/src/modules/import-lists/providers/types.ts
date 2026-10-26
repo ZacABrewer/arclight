@@ -1,5 +1,5 @@
-import type { FetchLike, TmdbClient } from '@media-tron/metadata';
-import type { ImportListImplementation, ImportListMediaType, ImportListSettingsMap } from '@media-tron/shared';
+import type { FetchLike, TmdbClient } from '@arclight/metadata';
+import type { ImportListImplementation, ImportListMediaType, ImportListSettingsMap } from '@arclight/shared';
 import type { Logger } from 'pino';
 
 export type { FetchLike };

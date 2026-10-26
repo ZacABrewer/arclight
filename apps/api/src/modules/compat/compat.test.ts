@@ -5,8 +5,8 @@ import { join } from 'node:path';
 import pino from 'pino';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { LightMyRequestResponse } from 'fastify';
-import type { MovieMetadata, SearchResult, SeriesMetadata } from '@media-tron/metadata';
-import { QualityProfileInput, type ReleaseResource } from '@media-tron/shared';
+import type { MovieMetadata, SearchResult, SeriesMetadata } from '@arclight/metadata';
+import { QualityProfileInput, type ReleaseResource } from '@arclight/shared';
 import { buildApp, type AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import { createTestDb } from '../../db/test-utils.js';
@@ -415,13 +415,13 @@ describe('compat api', () => {
     expect((await h.app.inject({ method: 'GET', url: '/api/v1/series' })).statusCode).toBe(401);
   });
 
-  it('system/status matches the golden shape and reports Media-Tron', async () => {
+  it('system/status matches the golden shape and reports Arclight', async () => {
     const res = await h.call('GET', '/api/v3/system/status');
     expect(res.statusCode).toBe(200);
     const body = res.json<Record<string, unknown>>();
     expectShape(body, GOLDEN.system['systemStatus']);
-    expect(body['appName']).toBe('Media-Tron');
-    expect(body['instanceName']).toBe('Media-Tron');
+    expect(body['appName']).toBe('Arclight');
+    expect(body['instanceName']).toBe('Arclight');
     expect(res.headers['x-application-version']).toBe('4.0.4.0');
   });
 
@@ -945,7 +945,7 @@ describe('compat api', () => {
 
   it('honours compat.enabled and compat.instanceName from /api/v1/settings/compat', async () => {
     const current = (await h.call('GET', '/api/v1/settings/compat')).json<Record<string, unknown>>();
-    expect(current).toMatchObject({ enabled: true, instanceName: 'Media-Tron' });
+    expect(current).toMatchObject({ enabled: true, instanceName: 'Arclight' });
     const renamed = await h.call('PUT', '/api/v1/settings/compat', { ...current, instanceName: 'Basement' });
     expect(renamed.statusCode).toBe(200);
     expect((await h.call('GET', '/api/v3/system/status')).json<{ instanceName: string }>().instanceName).toBe('Basement');

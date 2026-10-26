@@ -6,7 +6,7 @@ import {
   type QueueBulkRemoveRequest,
   type QueueQueryInput,
   type QueueRemoveOptions,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
 // Paths mirror the queue block of apps/api/src/modules/download-clients/routes.ts.

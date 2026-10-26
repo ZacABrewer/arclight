@@ -9,7 +9,7 @@
  * - WARNING/* is 'warning': e.g. WARNING/SCRIPT means a post-processing script failed, but the
  *   files are usually fine; WARNING/SPACE is fixable by freeing disk space. A human decides.
  * - FAILURE/* is 'failed' (definitive) with a message naming the step that failed.
- * - DELETED/MANUAL is 'warning', not 'failed': a person (or Media-Tron itself via removeItem)
+ * - DELETED/MANUAL is 'warning', not 'failed': a person (or Arclight itself via removeItem)
  *   deleted it, which must not trigger blocklisting.
  * - DELETED/DUPE, DELETED/COPY, DELETED/GOOD are 'warning': NZBGet's duplicate check dropped
  *   the item because another copy exists; the release itself is not bad.

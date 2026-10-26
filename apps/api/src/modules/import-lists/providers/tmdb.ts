@@ -6,8 +6,8 @@ import {
   type SearchResult,
   type TmdbClient,
   type TmdbClientOptions,
-} from '@media-tron/metadata';
-import type { ImportListMediaType, TmdbKeywordSettings, TmdbPopularSettings } from '@media-tron/shared';
+} from '@arclight/metadata';
+import type { ImportListMediaType, TmdbKeywordSettings, TmdbPopularSettings } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
 import { asArray, asRecord, getJson, int, str } from './http.js';
 import { inYearRange, wants, yearOf, type FetchedItem, type FetchLike, type Provider, type TmdbAccess } from './types.js';

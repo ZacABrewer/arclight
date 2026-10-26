@@ -1,6 +1,6 @@
 import { useCallback, useState } from 'react';
 import { getRouteApi, useNavigate } from '@tanstack/react-router';
-import type { DiscoverPage } from '@media-tron/shared';
+import type { DiscoverPage } from '@arclight/shared';
 import { discoverApi, type DiscoverKind } from '../../api/requests.js';
 import { Page } from '../../components/page.js';
 import { DiscoverGrid } from '../../features/requests/discover-ui.js';

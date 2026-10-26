@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import type { Episode, QualityModel, Tag } from '@media-tron/shared';
+import type { Episode, QualityModel, Tag } from '@arclight/shared';
 import { cx } from '../../lib/cx.js';
 import { Badge } from '../badge.js';
 import { EPISODE_STATUS_META, episodeStatus } from './episode-status.js';

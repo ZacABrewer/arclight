@@ -32,7 +32,7 @@ jobs:
       - run: pnpm -r test
       - run: pnpm build
       - name: Parser fixture report
-        run: pnpm --filter @media-tron/parser report >> "$GITHUB_STEP_SUMMARY"
+        run: pnpm --filter @arclight/parser report >> "$GITHUB_STEP_SUMMARY"
 
   docker:
     runs-on: ubuntu-latest

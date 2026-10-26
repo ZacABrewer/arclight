@@ -8,8 +8,8 @@ import type {
   SeasonStatistics,
   Series,
   SeriesStatistics,
-} from '@media-tron/shared';
-import type { MovieMetadata, SearchResult, SeriesMetadata } from '@media-tron/metadata';
+} from '@arclight/shared';
+import type { MovieMetadata, SearchResult, SeriesMetadata } from '@arclight/metadata';
 import { baseName, compact, MIN_DATE, slugify, timeSpan, type Json } from './common.js';
 import { v3Language, v3Languages, v3QualityModel } from './quality.js';
 

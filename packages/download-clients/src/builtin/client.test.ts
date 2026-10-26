@@ -3,7 +3,7 @@ import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promise
 import { createServer, connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createTorrent, Session, toMagnetUri, type SessionSettings, type Torrent } from '@media-tron/torrent-engine';
+import { createTorrent, Session, toMagnetUri, type SessionSettings, type Torrent } from '@arclight/torrent-engine';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createBuiltinClient, createDownloadClient, DownloadClientError, type DownloadClient } from '../index.js';
 import type { BuiltinSettingsInput } from './settings.js';
@@ -415,9 +415,9 @@ describe('BuiltinClient queue', () => {
 
 describe('BuiltinClient status and connection', () => {
   it('reports the output root for the configured category', async () => {
-    const { dir, client } = await leecher({ category: 'media-tron' });
+    const { dir, client } = await leecher({ category: 'arclight' });
     expect(await client.getStatus()).toEqual({
-      outputRootDir: join(dir, 'media-tron'),
+      outputRootDir: join(dir, 'arclight'),
       isLocalhost: true,
       removesCompletedDownloads: false,
     });
@@ -440,7 +440,7 @@ describe('BuiltinClient status and connection', () => {
 
   it('test() reports the engine version and configuration warnings', async () => {
     const { client } = await leecher();
-    expect(await client.test()).toEqual({ version: 'Media-Tron engine 0.1.0', apiVersion: '1', warnings: [] });
+    expect(await client.test()).toEqual({ version: 'Arclight engine 0.1.0', apiVersion: '1', warnings: [] });
 
     const s = await session();
     const dupes = createBuiltinClient(
@@ -486,7 +486,7 @@ describe('BuiltinClient status and connection', () => {
     expect((error as Error).message).toContain('Settings > Torrent Engine');
 
     current = await session();
-    expect((await client.test()).version).toContain('Media-Tron engine');
+    expect((await client.test()).version).toContain('Arclight engine');
     expect(await client.getItems('')).toEqual([]);
   });
 

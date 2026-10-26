@@ -13,7 +13,7 @@ export const SECRET_MASK = '********';
 
 /** Stored form of the `metadata` section. */
 export const MetadataSettings = z.object({
-  /** TMDB v3 API key. Absent means fall back to MEDIATRON_TMDB_API_KEY. */
+  /** TMDB v3 API key. Absent means fall back to ARCLIGHT_TMDB_API_KEY. */
   tmdbApiKey: z.string().min(1).optional(),
   /** BCP-47 language tag passed to TMDB, e.g. en-US. */
   language: z.string().min(2).default('en-US'),

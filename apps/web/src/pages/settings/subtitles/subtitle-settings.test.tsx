@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import { SECRET_MASK, SubtitleSettings, type SubtitleProvidersResponse } from '@media-tron/shared';
+import { SECRET_MASK, SubtitleSettings, type SubtitleProvidersResponse } from '@arclight/shared';
 import { languageProfiles, languages, mockApi, renderAt, type Call } from '../../subtitles/test-harness.js';
 import { cutoffOptions, toProfileBody } from './language-profiles-card.js';
 import { moveProvider, orderedProviders } from './providers-card.js';

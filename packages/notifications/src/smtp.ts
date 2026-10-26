@@ -176,7 +176,7 @@ export function dotStuff(message: string): string {
 
 export async function sendMail(connect: SmtpConnect, options: SmtpSendOptions): Promise<void> {
   const timeoutMs = options.timeoutMs ?? 30_000;
-  const clientName = options.clientName ?? 'media-tron';
+  const clientName = options.clientName ?? 'arclight';
   let connection: SmtpConnection;
   try {
     connection = await connect({ host: options.host, port: options.port, tls: options.security === 'tls', timeoutMs });

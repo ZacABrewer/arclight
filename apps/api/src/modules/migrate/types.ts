@@ -21,12 +21,12 @@ import type {
   Ratings,
   SeriesStatus,
   SeriesType,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { NativeDownloadClientInput, StagedDownloadClient } from './mappers/download-clients.js';
 
 // The normalised, already-mapped view of a source installation that readers produce and the
 // service plans/applies. Cross references (tags, profiles, formats, indexers, parents) stay
-// as upstream ids (`source*`) and are resolved to Media-Tron ids at apply time.
+// as upstream ids (`source*`) and are resolved to Arclight ids at apply time.
 
 export interface SourceItem<P> {
   /** Upstream primary key (as text). */

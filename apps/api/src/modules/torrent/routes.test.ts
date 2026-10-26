@@ -2,7 +2,7 @@ import { mkdir } from 'node:fs/promises';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it } from 'vitest';
-import { TorrentDetail, TorrentSessionStatus, TorrentSettingsResponse } from '@media-tron/shared';
+import { TorrentDetail, TorrentSessionStatus, TorrentSettingsResponse } from '@arclight/shared';
 import { torrentRoutes } from './routes.js';
 import { harness, seededTorrent, waitFor, type Harness } from './test-support.js';
 

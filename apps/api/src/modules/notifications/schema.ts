@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
-import type { NotificationImplementation } from '@media-tron/shared';
+import type { NotificationImplementation } from '@arclight/shared';
 
 // Notifications module tables. Settings are the agent's JSON (validated by the agent package's
 // schema for `implementation`), stored unmasked; masking happens on read.

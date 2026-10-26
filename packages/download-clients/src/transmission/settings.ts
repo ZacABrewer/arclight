@@ -28,7 +28,7 @@ export const TransmissionSettings = z.object({
     .describe('RPC path prefix; "rpc" is appended. Transmission\'s default is "/transmission/". Change it only behind a reverse proxy or when rpc-url was customised.'),
   username: usernameField,
   password: passwordField,
-  category: categoryField('media-tron', 'Label'),
+  category: categoryField('arclight', 'Label'),
   postImportCategory: postImportCategoryField('Label'),
   directory: z
     .string()

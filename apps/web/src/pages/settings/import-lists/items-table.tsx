@@ -1,4 +1,4 @@
-import type { ImportListItem } from '@media-tron/shared';
+import type { ImportListItem } from '@arclight/shared';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
 import { ErrorView } from '../../../components/error-boundary.js';

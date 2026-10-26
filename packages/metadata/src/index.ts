@@ -1,4 +1,4 @@
-// Public API of @media-tron/metadata.
+// Public API of @arclight/metadata.
 
 export {
   createTmdbClient,

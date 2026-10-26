@@ -9,7 +9,7 @@ import {
   type NotificationAgent,
   type NotificationAgentKind,
   type NotificationEvent,
-} from '@media-tron/notifications';
+} from '@arclight/notifications';
 import {
   NOTIFICATION_TRIGGERS,
   NotificationInput,
@@ -20,7 +20,7 @@ import {
   type NotificationTestAllResult,
   type NotificationTestResult,
   type NotificationTrigger,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { tags as tagsTable } from '../../db/schema.js';
 import { allSchemas, capabilitiesFrom, maskSettings, supportedEventsFor, TRIGGER_EVENT, unmaskSettings } from './fields.js';
@@ -78,7 +78,7 @@ export class NotificationsService {
     this.log = options.log;
     this.factory = options.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
     this.now = options.now ?? (() => new Date());
-    this.instanceName = options.instanceName ?? 'Media-Tron';
+    this.instanceName = options.instanceName ?? 'Arclight';
   }
 
   // ---- CRUD ------------------------------------------------------------------------------

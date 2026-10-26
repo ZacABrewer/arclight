@@ -1,4 +1,4 @@
-import { ManualImportRequest, qualityById, type ManualImportRequestInput, type QualityModel } from '@media-tron/shared';
+import { ManualImportRequest, qualityById, type ManualImportRequestInput, type QualityModel } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { getImportsService } from '../imports/index.js';
 import { libraryService as lib } from '../library/index.js';
@@ -9,7 +9,7 @@ import { parseOr400, type Json } from './common.js';
 import type { CompatMetadata } from './lookup.js';
 import { languageCodeForId } from './quality.js';
 
-// Upstream command names -> Media-Tron work. Names are matched case-insensitively; anything
+// Upstream command names -> Arclight work. Names are matched case-insensitively; anything
 // else that exactly names a registered scheduler job (e.g. `RssSync`, `HealthCheck`) runs it.
 
 const summary = (r: SearchSummary): string =>

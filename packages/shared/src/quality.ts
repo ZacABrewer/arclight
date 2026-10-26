@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-// The quality vocabulary every part of Media-Tron speaks: parser output, profile ranking,
+// The quality vocabulary every part of Arclight speaks: parser output, profile ranking,
 // decision engine, UI labels. Names follow the vocabulary users already know from the
 // *arr ecosystem so quality profiles translate one-to-one.
 

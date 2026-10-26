@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useQueryClient, type QueryClient } from '@tanstack/react-query';
-import type { Job, ServerEvent } from '@media-tron/shared';
+import type { Job, ServerEvent } from '@arclight/shared';
 import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 import { requestKeys } from './hooks/request-keys.js';

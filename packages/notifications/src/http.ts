@@ -54,7 +54,7 @@ export async function httpRequest(
   try {
     const init: RequestInit = {
       method: options.method ?? 'GET',
-      headers: { 'User-Agent': 'Media-Tron', ...options.headers },
+      headers: { 'User-Agent': 'Arclight', ...options.headers },
       signal: controller.signal,
     };
     if (options.body !== undefined) init.body = options.body;

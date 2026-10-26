@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { POPULAR_NETWORKS, POPULAR_STUDIOS, type DiscoverSlider } from '@media-tron/shared';
+import { POPULAR_NETWORKS, POPULAR_STUDIOS, type DiscoverSlider } from '@arclight/shared';
 import { Card } from '../../components/card.js';
 import { EmptyState } from '../../components/empty-state.js';
 import { ErrorView } from '../../components/error-boundary.js';

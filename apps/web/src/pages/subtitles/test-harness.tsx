@@ -2,7 +2,7 @@ import { vi } from 'vitest';
 import { render } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import type { LanguageProfile, MediaFileSubtitles, SubtitleState } from '@media-tron/shared';
+import type { LanguageProfile, MediaFileSubtitles, SubtitleState } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';

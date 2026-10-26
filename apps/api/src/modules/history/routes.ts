@@ -10,7 +10,7 @@ import {
   HistoryRecord,
   HistorySeriesQuery,
   HistorySinceQuery,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { HistoryError, historyHttpStatus, type HistoryService } from './service.js';
 
 const IdParams = z.object({ id: z.coerce.number().int().positive() });

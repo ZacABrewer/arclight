@@ -1,5 +1,5 @@
 /**
- * Client-agnostic contract between Media-Tron and an external download client.
+ * Client-agnostic contract between Arclight and an external download client.
  *
  * Every concrete client (qBittorrent, Transmission, Deluge, rTorrent, SABnzbd, NZBGet)
  * implements `DownloadClient` and reports its queue as normalized `DownloadItem`s so the
@@ -98,7 +98,7 @@ export interface AddNzbResult {
 export interface DownloadClientStatus {
   /** Directory the client saves into for our category, as the client sees it. */
   outputRootDir: string;
-  /** True when the client runs on the same host as Media-Tron. */
+  /** True when the client runs on the same host as Arclight. */
   isLocalhost: boolean;
   /**
    * True when the client itself deletes torrents once seeding limits are hit, which

@@ -2,12 +2,12 @@
 
 A *definition* is a YAML file that describes one torrent website: how to log in, how to
 turn a search into HTTP requests, and how to turn the response (HTML, XML/RSS or JSON) into
-releases. It contains no code. The engine in this directory is Media-Tron's own
+releases. It contains no code. The engine in this directory is Arclight's own
 implementation of the Cardigann dialect used by Prowlarr/Jackett catalogues; the normative
 description is `docs/spec/indexer-definitions.md` (rule numbers `Sn.m` below refer to it).
 
 ```ts
-import { createDefinitionIndexer, loadDefinitionCatalogue } from '@media-tron/indexers';
+import { createDefinitionIndexer, loadDefinitionCatalogue } from '@arclight/indexers';
 
 const catalogue = await loadDefinitionCatalogue(['/config/indexers']); // bundled + user dir
 const indexer = createDefinitionIndexer(catalogue.get('yts')!, {}, { proxy: [{ type: 'flaresolverr', url: 'http://flaresolverr:8191' }] });
@@ -41,7 +41,7 @@ const file = await indexer.download(releases[0]!.downloadUrl); // { kind: 'torre
 | `followredirect` | follow redirects on the login landing page |
 | `testlinktorrent` | download selectors check that a candidate is really a torrent (default true) |
 | `timezone` | IANA zone for dates that have no zone (default UTC) |
-| `tested` | Media-Tron marker: `false` until someone confirms it against the live site |
+| `tested` | Arclight marker: `false` until someone confirms it against the live site |
 | `settings` | user settings (below). Leave it out to get `username` + `password`; use `[]` for none |
 | `caps`, `login`, `search`, `download` | see below |
 

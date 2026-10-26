@@ -1,5 +1,5 @@
-import { agentSettingsSchemas } from '@media-tron/notifications';
-import type { NotificationImplementation, NotificationTrigger } from '@media-tron/shared';
+import { agentSettingsSchemas } from '@arclight/notifications';
+import type { NotificationImplementation, NotificationTrigger } from '@arclight/shared';
 import { bool, field, int, str, type ForeignRow } from '../foreign-db.js';
 
 // Notification connections per upstream implementation. Settings are translated field by
@@ -45,7 +45,7 @@ function translateSettings(impl: NotificationImplementation, s: Record<string, u
   const g = (...names: string[]) => field(s, ...names);
   switch (impl) {
     case 'discord':
-      notes.push('Discord embed field lists use Media-Tron defaults');
+      notes.push('Discord embed field lists use Arclight defaults');
       return defined({ webhookUrl: str(g('webHookUrl', 'webhookUrl')), username: str(g('username')), avatarUrl: str(g('avatar')), author: str(g('author')) });
     case 'telegram': {
       const topic = int(g('topicId'));
@@ -134,7 +134,7 @@ function translateSettings(impl: NotificationImplementation, s: Record<string, u
   }
 }
 
-/** One Notifications row (any arr app) → Media-Tron connection parts. */
+/** One Notifications row (any arr app) → Arclight connection parts. */
 export function mapNotification(row: ForeignRow, settings: Record<string, unknown>): NotificationMapResult {
   const upstream = str(row['implementation']) ?? '';
   const name = str(row['name']) ?? '';

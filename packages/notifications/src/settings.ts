@@ -86,7 +86,7 @@ export const EmailSettings = z.object({
   to: z.array(z.email()).min(1).describe('Recipients.'),
   cc: z.array(z.email()).default([]).describe('CC recipients.'),
   bcc: z.array(z.email()).default([]).describe('BCC recipients.'),
-  subjectPrefix: z.string().max(100).default('[Media-Tron]').describe('Prepended to every subject line.'),
+  subjectPrefix: z.string().max(100).default('[Arclight]').describe('Prepended to every subject line.'),
 });
 export type EmailSettings = z.infer<typeof EmailSettings>;
 

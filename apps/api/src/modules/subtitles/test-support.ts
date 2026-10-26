@@ -2,8 +2,8 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import pino from 'pino';
-import { QUALITIES, SubtitleSettings, type LanguageProfileInput, type QualityModel, type ServerEvent } from '@media-tron/shared';
-import type { NotificationEvent } from '@media-tron/notifications';
+import { QUALITIES, SubtitleSettings, type LanguageProfileInput, type QualityModel, type ServerEvent } from '@arclight/shared';
+import type { NotificationEvent } from '@arclight/notifications';
 import type {
   ProbeResult,
   ProviderCapabilities,
@@ -14,7 +14,7 @@ import type {
   SubtitleProvider,
   SubtitleQuery,
   SupportResult,
-} from '@media-tron/subtitles';
+} from '@arclight/subtitles';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { IndexerProxy, IndexerProxyType } from '@media-tron/shared';
+import type { IndexerProxy, IndexerProxyType } from '@arclight/shared';
 import { indexersApi } from '../../../api/indexers.js';
 import { Badge } from '../../../components/badge.js';
 import { Card } from '../../../components/card.js';

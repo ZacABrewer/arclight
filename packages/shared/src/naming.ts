@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 // Naming configuration contract (one per installation) and the preview-sample response.
 // Behaviour: docs/spec/naming.md. Defaults are the upstream defaults (spec 1.1.2 / 1.1.3) so
-// "reset to default" restores them; Media-Tron may choose to seed rename on at install time.
+// "reset to default" restores them; Arclight may choose to seed rename on at install time.
 
 /**
  * How a `:` inside a token value is replaced (spec 3.2). `custom` uses

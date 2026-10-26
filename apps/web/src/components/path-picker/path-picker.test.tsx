@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import type { FileSystemListing } from '@media-tron/shared';
+import type { FileSystemListing } from '@arclight/shared';
 import { PathPickerDialog } from './path-picker.js';
 import { breadcrumbs, isValidFolderName } from './path-utils.js';
 

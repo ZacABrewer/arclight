@@ -16,7 +16,7 @@ import {
   QueueStatus,
   RemotePathMapping,
   RemotePathMappingInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { DownloadClientsError, type DownloadClientsErrorCode, type DownloadClientsService } from './service.js';

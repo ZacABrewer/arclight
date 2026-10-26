@@ -32,7 +32,7 @@ import {
   WantedEpisodesPage,
   WantedEpisodesQuery,
   WantedMoviesPage,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { httpStatusFor, LibraryError } from './errors.js';
 import * as svc from './service.js';

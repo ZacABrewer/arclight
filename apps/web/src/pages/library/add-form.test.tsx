@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import type { MetadataSearchResult } from '@media-tron/shared';
+import type { MetadataSearchResult } from '@arclight/shared';
 import { createQueryClient } from '../../query-client.js';
 import { createToastStore } from '../../lib/toast.js';
 import { ToastProvider } from '../../components/toast.js';

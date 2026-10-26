@@ -18,7 +18,7 @@ export const HealthResponse = z.object({
 export type HealthResponse = z.infer<typeof HealthResponse>;
 
 export const SystemStatus = z.object({
-  appName: z.literal('Media-Tron'),
+  appName: z.literal('Arclight'),
   version: z.string(),
   startTime: z.string().datetime(),
   uptimeSeconds: z.number().int().nonnegative(),

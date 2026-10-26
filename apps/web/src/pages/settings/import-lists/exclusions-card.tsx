@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react';
-import type { ImportListExclusion, MediaType } from '@media-tron/shared';
+import type { ImportListExclusion, MediaType } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';
 import { ErrorView } from '../../../components/error-boundary.js';

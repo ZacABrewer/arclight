@@ -4,7 +4,7 @@
 
 Status: draft for implementation. Source of behaviour: Bazarr and its subliminal_patch fork. This is a clean-room description: it states what the system does, not how Bazarr is built. Per-provider details (endpoints, auth, quirks) are out of scope and live in a separate spec.
 
-Conventions used here: rule ids are R<section>.<n>. "Item" means an episode or a movie. "Language code" means a lowercase two-letter code (alpha2) unless stated. Durations in the Media-Tron API are integer milliseconds, timestamps are ISO strings, sizes are bytes (per docs/CONVENTIONS.md). Where Bazarr uses hours, days or minutes in settings, the table in section 15 gives the unit; the stored value in Media-Tron should follow the convention and be converted at the edges.
+Conventions used here: rule ids are R<section>.<n>. "Item" means an episode or a movie. "Language code" means a lowercase two-letter code (alpha2) unless stated. Durations in the Arclight API are integer milliseconds, timestamps are ISO strings, sizes are bytes (per docs/CONVENTIONS.md). Where Bazarr uses hours, days or minutes in settings, the table in section 15 gives the unit; the stored value in Arclight should follow the convention and be converted at the edges.
 
 Target module layout: `apps/api/src/modules/subtitles/` (profiles, wanted, history, blacklist, jobs) and `packages/subtitles` (scoring, naming, matching, provider pool, embedded reader). Zod schemas live in `packages/shared`.
 
@@ -34,7 +34,7 @@ R2.1 A language profile has: id (integer), name, a list of items, a cutoff (an i
 
 R2.2 Each profile item has: item id (integer, unique inside the profile), language (two-letter code), forced ("True" or "False"), hi ("True", "False" or "Excluded"), audio_exclude ("True" or "False"), audio_only_include ("True" or "False").
 
-R2.3 Legacy data used the HI values "only", "also", "never"; Bazarr migrated these to the two values "True" and "False". Media-Tron stores the three-valued form natively. On import of legacy profiles map only to True, also to False, never to Excluded (see Q1; the source only shows the two-value migration).
+R2.3 Legacy data used the HI values "only", "also", "never"; Bazarr migrated these to the two values "True" and "False". Arclight stores the three-valued form natively. On import of legacy profiles map only to True, also to False, never to Excluded (see Q1; the source only shows the two-value migration).
 
 ### 2.2 HI modes
 
@@ -66,7 +66,7 @@ R2.14 Effect on upgrades: upgrades only consider language entries still desired 
 
 ### 2.5 Must-contain and must-not-contain
 
-R2.15 Both lists hold patterns matched case-insensitively against a candidate's release info text (the provider's release name or description). Bazarr treats entries as regular expressions; an invalid pattern is ignored. Media-Tron should accept either regex or plain substring entries, documented in the UI as "regular expression".
+R2.15 Both lists hold patterns matched case-insensitively against a candidate's release info text (the provider's release name or description). Bazarr treats entries as regular expressions; an invalid pattern is ignored. Arclight should accept either regex or plain substring entries, documented in the UI as "regular expression".
 
 R2.16 Must-not-contain: a candidate is excluded if ANY pattern matches its release info.
 
@@ -171,7 +171,7 @@ R3.17 Before each item the job checks provider availability (R13.11). If every e
 
 R3.18 If the item's subtitle index is incomplete or its missing list is null, the item is reindexed first.
 
-R3.19 After an arr import event (signalr-equivalent webhook/websocket), Media-Tron re-syncs that one episode or movie. If a new file was added or the path or file id changed, it recomputes missing and, if non-empty and the file exists on disk, queues an immediate search for that item (unless defer_search_signalr is true, in which case waiting for the scheduled run). If the path and file id are unchanged on update, search is deferred. If the file does not exist on disk yet, search is deferred to the scheduled run.
+R3.19 After an arr import event (signalr-equivalent webhook/websocket), Arclight re-syncs that one episode or movie. If a new file was added or the path or file id changed, it recomputes missing and, if non-empty and the file exists on disk, queues an immediate search for that item (unless defer_search_signalr is true, in which case waiting for the scheduled run). If the path and file id are unchanged on update, search is deferred. If the file does not exist on disk yet, search is deferred to the scheduled run.
 
 R3.20 Each successful result: re-store subtitle index, write history (action 1 automatic download), send a notification, emit an event for the UI.
 
@@ -460,12 +460,12 @@ R8.9 Upgrade run interval: upgrade_frequency hours; the job lists candidates the
 ### 9.1 File names
 
 R9.1 Subtitle path = video base name, a dot, the language, an optional tag, and the extension: `<video base>.<lang>[.<tag>]<ext>`.
-- lang: the two-letter code, or with regional or script variants the longer IETF-style code (for example pt-BR, zh-Hans, zh-Hant). Three-letter codes are used only when no two-letter exists. Bazarr's custom language names for Portuguese Brazilian (pob) and Chinese traditional (zht) normalize to pt-BR and zh-Hant for filenames in Media-Tron (open question: exact Bazarr output is a custom basename; default as stated).
+- lang: the two-letter code, or with regional or script variants the longer IETF-style code (for example pt-BR, zh-Hans, zh-Hant). Three-letter codes are used only when no two-letter exists. Bazarr's custom language names for Portuguese Brazilian (pob) and Chinese traditional (zht) normalize to pt-BR and zh-Hant for filenames in Arclight (open question: exact Bazarr output is a custom basename; default as stated).
 - tag: "forced" if forced; else the hi extension if HI; else none. Forced wins.
 - hi extension: setting hi_extension, one of hi, cc, sdh; default hi.
 - ext: .srt by default; original-format keeps the provider format (.ass, .vtt and so on).
 
-R9.2 single_language (default false): when true the language component is omitted entirely and the name is `<video base>.<ext>`. Only valid when the profile has one language; Media-Tron should warn if more.
+R9.2 single_language (default false): when true the language component is omitted entirely and the name is `<video base>.<ext>`. Only valid when the profile has one language; Arclight should warn if more.
 
 Examples:
 | Video | Request | File |
@@ -570,7 +570,7 @@ R11.5 Manual upload supplies: score 100, subtitle id "1", provider "manual", upl
 
 R11.6 Example: command `/usr/local/bin/notify.sh "{{episode_name}}" {{subtitles_language_code2}} {{score}}` with video Show.S01E01.mkv, a forced English subtitle at 97.5 percent runs the script with arguments Show.S01E01, en:forced, 97.5.
 
-R11.7 For Media-Tron, restrict by design: allow the command only from admin settings, run with a timeout (default 60 s; open question), never through a shell, and log exit codes.
+R11.7 For Arclight, restrict by design: allow the command only from admin settings, run with a timeout (default 60 s; open question), never through a shell, and log exit codes.
 
 R11.8 Since the command runs after sync and before notifications, the notification sees the final file.
 
@@ -578,7 +578,7 @@ R11.9 After the command finishes, chmod is applied again to the subtitle path.
 
 ### 11.2 Sync (timing correction)
 
-R11.10 Tool: audio-based sync (ffsubsync) is the only engine in Bazarr. alass is not used by Bazarr; Phase 3 of the Media-Tron roadmap names ffsubsync/alass. Default: implement ffsubsync first, alass behind the same interface, optional (open question).
+R11.10 Tool: audio-based sync (ffsubsync) is the only engine in Bazarr. alass is not used by Bazarr; Phase 3 of the Arclight roadmap names ffsubsync/alass. Default: implement ffsubsync first, alass behind the same interface, optional (open question).
 
 R11.11 Settings and defaults:
 | Key | Default | Meaning |
@@ -652,7 +652,7 @@ R12.10 Upload does not require the language to be in the profile; the file lands
 
 R13.1 When a provider call fails, the provider is "throttled" until a computed time. Throttled providers are skipped in all searches and downloads until the time passes. Throttle state is per provider (not per language or per item).
 
-R13.2 State is persisted so it survives restarts: a map from provider to (exception name, until-timestamp, description). Bazarr writes this to a text file; Media-Tron should use a database table. Entries are removed when they expire or when the provider is disabled.
+R13.2 State is persisted so it survives restarts: a map from provider to (exception name, until-timestamp, description). Bazarr writes this to a text file; Arclight should use a database table. Entries are removed when they expire or when the provider is disabled.
 
 ### 13.2 Default durations by error class
 
@@ -692,7 +692,7 @@ R13.11 Wanted and upgrade jobs check availability before each item and stop the 
 
 ### 13.4 Anti-captcha and network
 
-R13.12 Anti-captcha: general.anti_captcha_provider is one of none, anti-captcha, death-by-captcha, captchaai; each has its own key section. Providers that can face captchas use the configured solver; if none is set, the provider fails with an error that throttles it. Media-Tron: expose the setting; implementation optional (open question: default none).
+R13.12 Anti-captcha: general.anti_captcha_provider is one of none, anti-captcha, death-by-captcha, captchaai; each has its own key section. Providers that can face captchas use the configured solver; if none is set, the provider fails with an error that throttles it. Arclight: expose the setting; implementation optional (open question: default none).
 
 R13.13 Proxy: standard proxy environment variables (HTTP and HTTPS proxy and a no-proxy list) apply to all provider traffic. disable_all_providers_ssl_verify (default false) turns off certificate checks for providers.
 
@@ -738,7 +738,7 @@ R15.1 Scheduler properties: each job has at most one running instance, missed ru
 
 | Job | Schedule | Notes |
 |---|---|---|
-| Sync with Sonarr-equivalent (series library) | every series_sync minutes, default 60 | in Media-Tron this is the internal library change feed, not polling an external app |
+| Sync with Sonarr-equivalent (series library) | every series_sync minutes, default 60 | in Arclight this is the internal library change feed, not polling an external app |
 | Sync with Radarr-equivalent (movies) | every movies_sync minutes, default 60 | same |
 | Full library update | daily at hour 4 by default (full_update "Daily", full_update_day 6, full_update_hour 4) | also Weekly or Manually |
 | Index all existing episode subtitles | cron: daily at 4, or weekly on a day, or never | rescans disk for external and embedded |
@@ -751,7 +751,7 @@ R15.1 Scheduler properties: each job has at most one running instance, missed ru
 | Backup | weekly by default (day 6, hour 3) or daily | |
 | Update and announcements check | every 6 h or 3 h | |
 
-R15.2 "Never" is expressed as an interval of 876000 hours, or a cron schedule far in the future. In Media-Tron use an explicit "disabled" state instead.
+R15.2 "Never" is expressed as an interval of 876000 hours, or a cron schedule far in the future. In Arclight use an explicit "disabled" state instead.
 
 R15.3 Jobs share a worker pool limit concurrent_jobs, default min(4, CPU count). Wanted search, upgrade, indexing, sync and extraction jobs are queueable; each one is visible in a jobs list with name, state and progress.
 
@@ -808,7 +808,7 @@ R15.3 Jobs share a worker pool limit concurrent_jobs, default min(4, CPU count).
 
 R15.4 Constants: MINIMUM_VIDEO_SIZE 20480 bytes, MAXIMUM_SUBTITLE_SIZE 1 MiB (1048576 bytes), hash minimum file size 10485760 bytes, pool lifetime 12 h, manual cache lifetime 3600 s, download tries 3 with 6 s sleep, strike window 120 s with 5 strikes and 5 s sleep.
 
-R15.5 Settings keys in Media-Tron are stored under the subtitles module with the names above in camelCase; durations in ms, thresholds as 0 to 100 integers.
+R15.5 Settings keys in Arclight are stored under the subtitles module with the names above in camelCase; durations in ms, thresholds as 0 to 100 integers.
 
 ---
 
@@ -834,7 +834,7 @@ Q9 Embedded extraction precedence (R7.13). Default: embedded first when enabled,
 
 Q10 Translation (R11.18). Out of scope for Phase 3; reserve action 6.
 
-Q11 API surface of Bazarr (list endpoints, bulk actions) not read. Default: Media-Tron defines its own REST routes under `/api/v1/subtitles` following docs/CONVENTIONS.md.
+Q11 API surface of Bazarr (list endpoints, bulk actions) not read. Default: Arclight defines its own REST routes under `/api/v1/subtitles` following docs/CONVENTIONS.md.
 
 Q12 Mass download modules (bulk search on a whole series or season from the UI) not read. Default: same as wanted job but ignoring adaptive backoff and the eligibility clause.
 

@@ -5,7 +5,7 @@ import {
   type LanguageProfile,
   type LanguageProfileInput,
   type LanguageProfileItem,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ApiError } from '../../../api/client.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';

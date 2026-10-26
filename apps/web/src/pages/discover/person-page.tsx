@@ -1,5 +1,5 @@
 import { getRouteApi } from '@tanstack/react-router';
-import type { PersonCredit } from '@media-tron/shared';
+import type { PersonCredit } from '@arclight/shared';
 import { ErrorView } from '../../components/error-boundary.js';
 import { Facts, Poster } from '../../components/media/media-ui.js';
 import { Page } from '../../components/page.js';

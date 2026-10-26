@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { CreateRequest, RequestsSettings, RootFolder, TitleDetail, TitleSeason } from '@media-tron/shared';
+import type { CreateRequest, RequestsSettings, RootFolder, TitleDetail, TitleSeason } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

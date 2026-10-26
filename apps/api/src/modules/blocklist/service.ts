@@ -11,7 +11,7 @@ import {
   type MediaType,
   type QualityModel,
   type ReleaseProtocol,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { movies, series } from '../../db/schema.js';
 import { dataValue, parseProtocol, type DownloadFailedEvent, type HistoryTarget } from '../history/service.js';

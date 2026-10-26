@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { MediaType, OverrideRule, OverrideRuleInput } from '@media-tron/shared';
+import type { MediaType, OverrideRule, OverrideRuleInput } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
 import { authKeys } from '../../../auth/guard.js';
 import { Badge } from '../../../components/badge.js';

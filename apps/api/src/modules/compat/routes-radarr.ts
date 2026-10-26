@@ -1,7 +1,7 @@
 import { dirname } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AddMovieRequest, MovieListQuery, type MediaFile, type Movie, type UpdateMovieRequest } from '@media-tron/shared';
+import { AddMovieRequest, MovieListQuery, type MediaFile, type Movie, type UpdateMovieRequest } from '@arclight/shared';
 import { libraryService as lib } from '../library/index.js';
 import { CompatError, parseOr400, qsBool, qsInt, qsIntList, type Json } from './common.js';
 import { lookupMovies, tmdbIdForImdb } from './lookup.js';

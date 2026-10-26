@@ -113,7 +113,7 @@ export class QBittorrentClient implements DownloadClient {
     const warnings: string[] = [];
 
     if (this.settings.category === '') {
-      warnings.push('No category is set. A category keeps Media-Tron downloads apart from everything else.');
+      warnings.push('No category is set. A category keeps Arclight downloads apart from everything else.');
     } else {
       await this.ensureCategory(this.settings.category);
     }
@@ -121,7 +121,7 @@ export class QBittorrentClient implements DownloadClient {
     const prefs = await this.getPreferences();
     if (removesCompletedDownloads(prefs)) {
       warnings.push(
-        'qBittorrent removes torrents when they reach their seeding limit, which can happen before Media-Tron imports them. Set the share limit action to Stop instead.',
+        'qBittorrent removes torrents when they reach their seeding limit, which can happen before Arclight imports them. Set the share limit action to Stop instead.',
       );
     }
     const wantsTopPriority = this.settings.recentPriority === 'first' || this.settings.olderPriority === 'first';

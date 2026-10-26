@@ -1,4 +1,4 @@
-import type { TraktDeviceResponse, TraktListSettings, TraktPopularSettings } from '@media-tron/shared';
+import type { TraktDeviceResponse, TraktListSettings, TraktPopularSettings } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
 import { asArray, asRecord, getJson, imdbIdOf, int, request, str } from './http.js';
 import { wants, type FetchedItem, type FetchLike, type Provider, type ProviderContext } from './types.js';

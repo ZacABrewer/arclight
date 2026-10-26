@@ -12,8 +12,8 @@ import {
   protocolDelay,
   qualityIndex,
   scoreRelease,
-} from '@media-tron/profiles-engine';
-import type { ParsedRelease } from '@media-tron/parser';
+} from '@arclight/profiles-engine';
+import type { ParsedRelease } from '@arclight/parser';
 import {
   PROFILE_LANGUAGES,
   type CustomFormat,
@@ -30,7 +30,7 @@ import {
   type ReleaseResource,
   type ReleaseSource,
   type TrackedDownloadState,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { DownloadPropersAndRepacks, HistoryEventSummary, ReleaseSettings } from './deps.js';
 import type { MatchCriteria, MatchResult, MovieMatch, SeriesMatch, Unmatched } from './matcher.js';
 

@@ -1,5 +1,5 @@
 import { asc, desc, eq } from 'drizzle-orm';
-import type { DiscoverOptions, PagedResults, SearchResult, TmdbClient } from '@media-tron/metadata';
+import type { DiscoverOptions, PagedResults, SearchResult, TmdbClient } from '@arclight/metadata';
 import {
   BUILT_IN_SLIDERS,
   DISCOVER_MOVIE_SORTS,
@@ -22,7 +22,7 @@ import {
   type PersonDetail,
   type TitleDetail,
   type TitleSeason,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
@@ -35,7 +35,7 @@ import { userPermissions, findUserRow } from './users.js';
 import type { WatchlistService } from './watchlist.js';
 
 // Discover (docs/spec/requests.md section 15): TMDB lists and title pages, each result
-// annotated with Media-Tron's status (library + requests), plus the slider configuration.
+// annotated with Arclight's status (library + requests), plus the slider configuration.
 
 type SliderRow = typeof discoverSliders.$inferSelect;
 

@@ -7,7 +7,7 @@ import type {
   QueueItemClientStatus,
   ReleaseDecision,
   TrackedDownloadState,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { compact, timeSpan, type Json } from './common.js';
 import { v3Languages, v3QualityModel } from './quality.js';
 

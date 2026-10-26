@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { SubtitleHistoryAction, SUBTITLE_PROVIDER_IDS, type SubtitleHistoryRecord, type SubtitleMediaType } from '@media-tron/shared';
+import { SubtitleHistoryAction, SUBTITLE_PROVIDER_IDS, type SubtitleHistoryRecord, type SubtitleMediaType } from '@arclight/shared';
 import { ApiError } from '../../api/client.js';
 import type { SubtitleHistoryFilter } from '../../api/subtitles.js';
 import { Badge, type BadgeTone } from '../../components/badge.js';

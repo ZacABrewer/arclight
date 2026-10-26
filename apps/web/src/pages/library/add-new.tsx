@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { MetadataSearchResult, MetadataSearchType } from '@media-tron/shared';
+import type { MetadataSearchResult, MetadataSearchType } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { isMissingTmdbKey } from '../../api/metadata.js';
 import { Badge } from '../../components/badge.js';

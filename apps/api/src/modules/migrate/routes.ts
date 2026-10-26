@@ -7,7 +7,7 @@ import {
   MigrateSourcesResponse,
   MigrateStatus,
   MigrationPlan,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { requireAdmin } from '../auth/hook.js';
 import { MigrateError, migrateHttpStatus } from './errors.js';
 import type { MigrateService } from './service.js';

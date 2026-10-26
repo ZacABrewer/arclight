@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { ReleaseResource } from '@media-tron/shared';
+import type { ReleaseResource } from '@arclight/shared';
 
 // Tables owned by the releases module.
 

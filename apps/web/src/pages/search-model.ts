@@ -1,4 +1,4 @@
-import type { IndexerCategory, ManualSearchRequest, ManualSearchType, ReleaseResource } from '@media-tron/shared';
+import type { IndexerCategory, ManualSearchRequest, ManualSearchType, ReleaseResource } from '@arclight/shared';
 import { ApiError } from '../api/client.js';
 import { releaseDownloadHref } from '../api/indexers.js';
 

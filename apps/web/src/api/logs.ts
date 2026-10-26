@@ -1,4 +1,4 @@
-import { LogFile, LogPage, LogRecord, type LogQueryInput } from '@media-tron/shared';
+import { LogFile, LogPage, LogRecord, type LogQueryInput } from '@arclight/shared';
 import { API_BASE, request, type QueryParams } from './client.js';
 import { backoffDelay } from './events.js';
 

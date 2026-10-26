@@ -9,7 +9,7 @@ export function Sidebar({ id, pathname }: { id: string; pathname: string }) {
     <aside id={id} className="sidebar" aria-label="Main navigation">
       <div className="sidebar-brand">
         <Link to="/" className="brand">
-          MEDIA-TRON
+          ARCLIGHT
         </Link>
       </div>
       <nav className="sidebar-nav">

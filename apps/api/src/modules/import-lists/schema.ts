@@ -5,7 +5,7 @@ import type {
   MinimumAvailability,
   MonitorOption,
   SeriesType,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Import-lists module tables. Exclusions are not here: they share the library's
 // `import_exclusions` table so a title deleted "with exclusion" is never re-added by a list.

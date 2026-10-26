@@ -1,5 +1,5 @@
 {
-  "name": "@media-tron/organizer",
+  "name": "@arclight/organizer",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@media-tron/shared": "workspace:*",
+    "@arclight/shared": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

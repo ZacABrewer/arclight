@@ -82,7 +82,7 @@ export const ManualImportQuery = z
 export type ManualImportQuery = z.infer<typeof ManualImportQuery>;
 export type ManualImportQueryInput = z.input<typeof ManualImportQuery>;
 
-/** A candidate file with the mapping Media-Tron suggests and the reasons it would be rejected. */
+/** A candidate file with the mapping Arclight suggests and the reasons it would be rejected. */
 export const ManualImportItem = z.object({
   path: z.string(),
   /** Relative to the folder being listed. */

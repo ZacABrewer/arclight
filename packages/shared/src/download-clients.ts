@@ -9,8 +9,8 @@ import { ReleaseProtocol } from './profiles.js';
 // ---------------------------------------------------------------------------------------
 
 /**
- * Implementations Media-Tron can drive. Extend the enum, `DOWNLOAD_CLIENT_PROTOCOLS`, the
- * settings schema map and the unions below together. `builtin` is Media-Tron's own in-process
+ * Implementations Arclight can drive. Extend the enum, `DOWNLOAD_CLIENT_PROTOCOLS`, the
+ * settings schema map and the unions below together. `builtin` is Arclight's own in-process
  * torrent engine (engine-wide settings live in the `torrent` settings section).
  */
 export const DownloadClientImplementation = z.enum([
@@ -45,7 +45,7 @@ export const PASSWORD_MASK = '********';
 export const DOWNLOAD_CLIENT_SECRET_FIELDS = ['password', 'apiKey'] as const;
 
 // ---- settings schemas ------------------------------------------------------------------
-// These mirror the schemas in @media-tron/download-clients (which `shared` cannot depend on).
+// These mirror the schemas in @arclight/download-clients (which `shared` cannot depend on).
 // The api checks at compile time and at startup that both stay in sync. Every field carries a
 // `.describe()` text: the api turns them into the settings form's help texts.
 
@@ -65,14 +65,14 @@ const categoryField = (noun: string) =>
   z
     .string()
     .trim()
-    .default('media-tron')
-    .describe(`${noun} Media-Tron assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.`);
+    .default('arclight')
+    .describe(`${noun} Arclight assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.`);
 const postImportCategoryField = (noun: string) =>
   z
     .string()
     .trim()
     .optional()
-    .describe(`${noun} to move a download to after Media-Tron has imported it. Leave empty to keep it unchanged.`);
+    .describe(`${noun} to move a download to after Arclight has imported it. Leave empty to keep it unchanged.`);
 const addPausedField = z.boolean().default(false).describe('Add downloads in a paused state.');
 
 export const QBittorrentPriority = z.enum(['last', 'first']);
@@ -93,9 +93,9 @@ export const QBittorrentClientSettings = z.object({
   category: z
     .string()
     .trim()
-    .default('media-tron')
+    .default('arclight')
     .describe(
-      'Category Media-Tron adds its torrents with. Only torrents in this category are tracked; using a dedicated category is strongly recommended.',
+      'Category Arclight adds its torrents with. Only torrents in this category are tracked; using a dedicated category is strongly recommended.',
     ),
   postImportCategory: z
     .string()
@@ -164,7 +164,7 @@ export const DelugeClientSettings = z.object({
   ),
   category: categoryField('Label')
     .describe(
-      "Label Media-Tron assigns to its downloads via Deluge's Label plugin (enabled automatically when needed), keeping them apart from everything else. Converted to lowercase. Leave empty to not use one.",
+      "Label Arclight assigns to its downloads via Deluge's Label plugin (enabled automatically when needed), keeping them apart from everything else. Converted to lowercase. Leave empty to not use one.",
     )
     .refine(isValidDelugeLabel, DELUGE_LABEL_RULE),
   postImportCategory: postImportCategoryField('Label').refine(isValidDelugeLabel, DELUGE_LABEL_RULE),
@@ -199,7 +199,7 @@ export const RTorrentClientSettings = z.object({
     .string()
     .trim()
     .optional()
-    .describe("Directory rTorrent saves Media-Tron downloads into. Leave empty to use rTorrent's default directory."),
+    .describe("Directory rTorrent saves Arclight downloads into. Leave empty to use rTorrent's default directory."),
   addPaused: addPausedField,
   recentPriority: RTorrentPriority.default('normal').describe('rTorrent priority for content released recently.'),
   olderPriority: RTorrentPriority.default('normal').describe('rTorrent priority for older content.'),
@@ -415,7 +415,7 @@ export const RemotePathMapping = z.object({
   host: z.string(),
   /** Path prefix as the download client sees it (directory form). */
   remotePath: z.string(),
-  /** The same directory as Media-Tron sees it (directory form). */
+  /** The same directory as Arclight sees it (directory form). */
   localPath: z.string(),
 });
 export type RemotePathMapping = z.infer<typeof RemotePathMapping>;
@@ -519,7 +519,7 @@ export const QueueQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(1000).default(20),
   sortKey: QueueSortKey.default('added'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
-  /** Include downloads that are not linked to a series or movie (not grabbed by Media-Tron). */
+  /** Include downloads that are not linked to a series or movie (not grabbed by Arclight). */
   includeUnknownMediaItems: queryBool.default(false),
   downloadClientId: z.coerce.number().int().optional(),
   protocol: ReleaseProtocol.optional(),

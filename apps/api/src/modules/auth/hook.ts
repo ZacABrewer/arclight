@@ -64,7 +64,7 @@ export function credentialsOf(req: FastifyRequest): RequestCredentials {
 }
 
 function unauthorized(reply: FastifyReply, basic: boolean) {
-  if (basic) reply.header('www-authenticate', 'Basic realm="Media-Tron", charset="UTF-8"');
+  if (basic) reply.header('www-authenticate', 'Basic realm="Arclight", charset="UTF-8"');
   return reply.code(401).send({ error: 'authentication required', code: 'UNAUTHORIZED' });
 }
 

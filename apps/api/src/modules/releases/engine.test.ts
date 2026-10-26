@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DelayProfile, ReleaseProfile } from '@media-tron/shared';
+import type { DelayProfile, ReleaseProfile } from '@arclight/shared';
 import {
   buildDecision,
   evaluate,

@@ -8,7 +8,7 @@ import {
   TorrentSessionStatus,
   TorrentSettingsResponse,
   TorrentSettingsUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';

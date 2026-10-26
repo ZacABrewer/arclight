@@ -42,7 +42,7 @@ describe('settings', () => {
       useSsl: false,
       username: 'nzbget',
       password: '',
-      category: 'media-tron',
+      category: 'arclight',
       recentPriority: 'normal',
       olderPriority: 'normal',
       addPaused: false,
@@ -70,7 +70,7 @@ describe('transport and auth', () => {
 
   it('maps network failures to unreachable', async () => {
     fake.networkError = new TypeError('fetch failed', { cause: new Error('connect ECONNREFUSED 192.168.1.30:6789') });
-    const error = await expectError(client().getItems('media-tron'), 'unreachable');
+    const error = await expectError(client().getItems('arclight'), 'unreachable');
     expect(error.message).toContain('ECONNREFUSED');
   });
 
@@ -114,7 +114,7 @@ describe('addNzb', () => {
     const result = await client({ recentPriority: 'veryHigh', addPaused: true }).addNzb({
       nzb: NZB,
       title: 'Show.S01E09.1080p.WEB.h264-GRP',
-      category: 'media-tron',
+      category: 'arclight',
       isRecent: true,
     });
     expect(result).toEqual({ id: '100', warnings: [] });
@@ -123,7 +123,7 @@ describe('addNzb', () => {
     const appended = fake.appended[0]!;
     expect(appended).toMatchObject({
       filename: 'Show.S01E09.1080p.WEB.h264-GRP.nzb',
-      category: 'media-tron',
+      category: 'arclight',
       priority: 100,
       addToTop: false,
       addPaused: true,
@@ -136,14 +136,14 @@ describe('addNzb', () => {
   });
 
   it('uses an explicit priority over the configured ones and the older priority by default', async () => {
-    await client({ olderPriority: 'low' }).addNzb({ nzb: NZB, title: 'a', category: 'media-tron' });
-    await client().addNzb({ nzb: NZB, title: 'b', category: 'media-tron', priority: 'force' });
+    await client({ olderPriority: 'low' }).addNzb({ nzb: NZB, title: 'a', category: 'arclight' });
+    await client().addNzb({ nzb: NZB, title: 'b', category: 'arclight', priority: 'force' });
     expect(fake.appended.map((a) => a.priority)).toEqual([-50, 900]);
   });
 
   it('treats a non-positive NZBID as rejected and refuses torrents', async () => {
     fake.nextId = 0;
-    await expectError(client().addNzb({ nzb: NZB, title: 'x', category: 'media-tron' }), 'rejected');
+    await expectError(client().addNzb({ nzb: NZB, title: 'x', category: 'arclight' }), 'rejected');
     await expectError(client().addTorrent(), 'not-supported');
     expect(client().protocol).toBe('usenet');
   });
@@ -151,7 +151,7 @@ describe('addNzb', () => {
 
 describe('getItems', () => {
   it('lists queue and history for the category, skipping hidden duplicates', async () => {
-    const items = await client().getItems('media-tron');
+    const items = await client().getItems('arclight');
     const byId = new Map(items.map((i) => [i.id, i]));
     expect(items.map((i) => i.id)).toEqual(['11', '12', '13', '14', '16', '21', '22', '23', '24', '25', '26', '27', '28', '29', '30']);
     expect(byId.get('11')).toMatchObject({ status: 'downloading', etaSeconds: 204 });
@@ -177,7 +177,7 @@ describe('getItems', () => {
     expect((await client().getItems('MOVIES')).map((i) => i.id)).toEqual(['15', '32']);
     expect(await client().getItems('')).toHaveLength(17);
     fake.status['DownloadPaused'] = true;
-    const items = await client().getItems('media-tron');
+    const items = await client().getItems('arclight');
     expect(items.find((i) => i.id === '11')).toMatchObject({ status: 'paused', statusMessage: 'NZBGet downloading is paused' });
     expect(items.find((i) => i.id === '11')?.etaSeconds).toBeUndefined();
   });
@@ -244,7 +244,7 @@ describe('category, pause and resume', () => {
 describe('getStatus', () => {
   it('resolves the category directory through AppendCategoryDir and ${MainDir}', async () => {
     expect(await client().getStatus()).toEqual({
-      outputRootDir: '/downloads/completed/media-tron',
+      outputRootDir: '/downloads/completed/arclight',
       isLocalhost: false,
       removesCompletedDownloads: false,
     });

@@ -53,7 +53,7 @@ export class FakeSabnzbd extends FakeHttpServer {
     misc: { complete_dir: '/downloads/complete', download_dir: '/downloads/incomplete', history_retention: '' },
     categories: [
       { name: '*', dir: '' },
-      { name: 'media-tron', dir: 'media-tron' },
+      { name: 'arclight', dir: 'arclight' },
     ],
   };
   /** NZB uploads received by mode=addfile. */

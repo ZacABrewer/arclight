@@ -8,7 +8,7 @@ import {
   MESSAGE_EVENTS,
   type NotificationAgentKind,
   type NotificationEventType,
-} from '@media-tron/notifications';
+} from '@arclight/notifications';
 import {
   NOTIFICATION_SECRET_MASK,
   NOTIFICATION_TRIGGERS,
@@ -19,7 +19,7 @@ import {
   type NotificationFieldType,
   type NotificationSchema,
   type NotificationTrigger,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Everything derived from the agent package: field definitions for the settings form, which
 // settings are secrets, and which triggers each agent can serve.

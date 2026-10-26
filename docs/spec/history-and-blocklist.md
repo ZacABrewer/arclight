@@ -4,7 +4,7 @@ Behaviour derived from Sonarr (`History/`, `Blocklisting/`, `Download/History`, 
 `Download/IgnoredDownloadService`, `Download/RedownloadFailedDownloadService`) and Radarr (same areas).
 Written for an engineer implementing the rules in TypeScript without reading upstream.
 
-Media-Tron has one pipeline for two media types, so this spec uses neutral terms:
+Arclight has one pipeline for two media types, so this spec uses neutral terms:
 
 - **item** = an episode (TV) or a movie. A grab of a season pack or multi-episode file touches several episodes.
 - **parent** = series (TV) or the movie itself.
@@ -53,7 +53,7 @@ There are three related stores. Do not conflate them:
 | download ignored | 7 | 9 | user removed a queue item without blocklisting and left it in the client |
 | movie folder imported | - | 7 | defined in Radarr, "not used yet", never written. Do not implement. |
 
-Movies use different numbers for deleted/renamed/ignored because Radarr retained deprecated slots. Media-Tron is one
+Movies use different numbers for deleted/renamed/ignored because Radarr retained deprecated slots. Arclight is one
 app: pick one enum (`grabbed, imported, failed, fileDeleted, fileRenamed, ignored`) and provide a mapping table only
 if a Sonarr/Radarr compatibility API (roadmap phase 6) is built.
 
@@ -75,7 +75,7 @@ Unless stated, every data value is stored as a string. Age fields are integers r
 - [TV] additionally: `TvdbId`, `TvRageId`, `SeriesMatchType` (unknown, alias, title, id), `ReleaseType`
   (unknown, singleEpisode, multiEpisode, seasonPack).
 - [Movie] additionally: `TmdbId`, `MovieMatchType` (unknown, title, alias, id), `IndexerId` (numeric).
-- Media-Tron should record the same fields; keep at least `ReleaseSource`, `*MatchType`, `TorrentInfoHash`, `Protocol`,
+- Arclight should record the same fields; keep at least `ReleaseSource`, `*MatchType`, `TorrentInfoHash`, `Protocol`,
   `Indexer`, `PublishedDate`, `Size`, `DownloadClient`, `ReleaseGroup`, `IndexerFlags`, `CustomFormatScore` because other
   rules read them back (section 6).
 
@@ -182,7 +182,7 @@ Example (ambiguous): S01E01 has two grabbed rows (A, B) at the same quality, nei
 
 1. A periodic housekeeping job deletes history rows whose parent no longer exists. [TV] also deletes rows whose episode
    no longer exists. [Movie] only the parent check.
-2. There is **no age-based pruning** of history upstream. History grows until the parent is deleted. Media-Tron may add
+2. There is **no age-based pruning** of history upstream. History grows until the parent is deleted. Arclight may add
    an optional retention setting; default must be "keep forever".
 
 ### 1.7 Consumers of history (rules that read it)
@@ -253,7 +253,7 @@ queue item with the blocklist option). Values:
 - source title, quality, languages from the event (copied from the grabbed history row).
 - date = now.
 - published date = the grabbed row's `PublishedDate` data, parsed. Upstream requires it (a missing value throws and no
-  row is written). Media-Tron should treat missing as null instead of failing.
+  row is written). Arclight should treat missing as null instead of failing.
 - size = grabbed row's `Size` data, 0 if absent.
 - indexer = grabbed row's `Indexer` data.
 - protocol = grabbed row's `Protocol` data (integer) mapped to the enum.
@@ -299,7 +299,7 @@ Input: parent id and the release.
 - Usenet: select rows for this parent whose source title contains the release title, keep only usenet rows, then apply
   2.3.3.
 
-Recommended Media-Tron behaviour: use **case-insensitive equality** on title and hash instead of substring. This is
+Recommended Arclight behaviour: use **case-insensitive equality** on title and hash instead of substring. This is
 stricter than upstream only when a blocklisted title is a proper superstring of a new release's title (upstream: the
 blocklisted "Show.S01E01.1080p.WEB-DL-GRP.REPACK" would block the shorter candidate "Show.S01E01.1080p.WEB-DL-GRP",
 because the stored title contains the candidate). Record as a deliberate deviation.
@@ -315,7 +315,7 @@ ignoring case. (Title already matched in pre-selection.)
   the candidate's (the same release re-posted on another indexer), the candidate's publish date is within +/- 2 minutes
   of the row's (a row with no published date counts as within range), and size is within 2 MiB (a row with size 0 or null
   counts as same size). Radarr therefore catches the same NZB reposted to another indexer; Sonarr does not.
-- Media-Tron should use the Radarr rule for both media types; it is a superset. Flag as a deliberate unification.
+- Arclight should use the Radarr rule for both media types; it is a superset. Flag as a deliberate unification.
 
 2.3.4 **Hash-only check** used at grab time (2.4): true iff any row of this parent has a hash equal (ignore case) to
 the given hash.
@@ -344,7 +344,7 @@ Worked examples:
    grab throws "release blocked" with message "Release previously added to blocklist". The release is **not** added to
    the client and no new blocklist row is created.
 3. Interactive searches skip this check on purpose: the user can force a blocklisted release through.
-4. Media-Tron has one indexer registry; keep this as a per-indexer boolean on every torrent-capable indexer.
+4. Arclight has one indexer registry; keep this as a per-indexer boolean on every torrent-capable indexer.
 
 ### 2.5 Interactive search and blocklisted releases
 
@@ -504,7 +504,7 @@ I1 -> imported, not reprocessed even though the client still lists the item (e.g
 ## 5. Ordering and tie-break notes
 
 1. "Newest first" has no secondary key upstream; a season pack inserts N rows in the same instant so order among them is
-   undefined. Media-Tron should tie-break on `id desc`.
+   undefined. Arclight should tie-break on `id desc`.
 2. The "first grabbed row" used as a failure template is the newest by timestamp. For packs all rows are equal apart from
    item id, so any is acceptable.
 3. "Last grabbed" in the already-imported check is the first grabbed row in the newest-first list for the item.
@@ -581,7 +581,7 @@ An implementation is behaviourally compatible if at least these are persisted an
   ignored row; the item is no longer tracked or retried. No blocklist.
 
 **Scenario D: same release grabbed twice.** Two grabs with the same download id yield two grabbed rows per item. If it
-fails, the failed event covers all grabbed rows sharing the id, so failed rows may duplicate. Media-Tron may collapse
+fails, the failed event covers all grabbed rows sharing the id, so failed rows may duplicate. Arclight may collapse
 duplicates by item id.
 
 **Scenario E: renamed file.** The organizer renames `Show - S01E01 - Pilot.mkv` to `Show (2020) - S01E01 - Pilot

@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { MediaImage, MediaInfo, Ratings, MovieCollection, QualityModel } from '@media-tron/shared';
+import type { MediaImage, MediaInfo, Ratings, MovieCollection, QualityModel } from '@arclight/shared';
 
 // Library tables. One family of rows that every other module (releases, downloads, organizer,
 // subtitles, requests, calendar) reads and attaches to. JSON columns hold the small, rarely

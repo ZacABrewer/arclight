@@ -1,10 +1,10 @@
-# @media-tron/subtitles
+# @arclight/subtitles
 
 The pure subtitle layer for Phase 3. It covers languages, query building, scoring, selection, provider clients, throttling, archive handling, encoding normalisation, file naming and post-processing command descriptors. It has no database and no HTTP server. The `apps/api` subtitles module owns persistence (profiles, wanted, history, blacklist, throttle table), jobs and routes.
 
 Specs: `docs/spec/subtitles.md` and `docs/spec/subtitle-providers.md`.
 
-The only runtime dependencies are the workspace packages (`@media-tron/parser`, `@media-tron/shared`) and zod. HTTP uses native `fetch`. The package has its own zip reader (store and deflate through `node:zlib`), gzip support through `node:zlib`, and its own XZ/LZMA2 decoder in `src/xz.ts`. Encoding detection uses the ICU `TextDecoder`.
+The only runtime dependencies are the workspace packages (`@arclight/parser`, `@arclight/shared`) and zod. HTTP uses native `fetch`. The package has its own zip reader (store and deflate through `node:zlib`), gzip support through `node:zlib`, and its own XZ/LZMA2 decoder in `src/xz.ts`. Encoding detection uses the ICU `TextDecoder`.
 
 ## Public API (src/index.ts)
 
@@ -21,7 +21,7 @@ The only runtime dependencies are the workspace packages (`@media-tron/parser`, 
 | Formats | `detectFormat`, `convertToSrt` (ASS/SSA, VTT, MicroDVD), `isValidSrt`, `looksHearingImpaired` |
 | Encoding | `decodeSubtitle` (tries BOM, then declared encoding, strict UTF-8, language code pages, a statistical pick, and finally windows-1252), `toUtf8` |
 | Naming | `nameSubtitleFile(mediaPath, tag, {forced, hi}, style)` gives `Movie.en.srt`, `Movie.en.forced.srt`, `Movie.en.hi.srt`/`.sdh`/`.cc`, `Movie.pt-BR.srt`, or `Movie.srt` with singleLanguage. Also `parseSubtitleFileName` |
-| Post-processing | `buildFfsubsyncCommand`, `buildAlassCommand`, `shouldSync`, `buildPostProcessCommand` (placeholders plus `MEDIATRON_*` env vars), `shouldPostProcess` |
+| Post-processing | `buildFfsubsyncCommand`, `buildAlassCommand`, `shouldSync`, `buildPostProcessCommand` (placeholders plus `ARCLIGHT_*` env vars), `shouldPostProcess` |
 
 ## Providers
 

@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
-import type { TmdbClient } from '@media-tron/metadata';
+import type { TmdbClient } from '@arclight/metadata';
 import {
   CreateRequest,
   OverrideRuleInput,
@@ -23,7 +23,7 @@ import {
   type UserPermissions,
   type UserQuotaResponse,
   type ServerEvent,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { qualityProfiles, rootFolders } from '../../db/schema.js';
@@ -609,7 +609,7 @@ export class RequestsService {
   }
 
   // -------------------------------------------------------------------------------------
-  // approval: into the library (section 9, adapted to Media-Tron's own library)
+  // approval: into the library (section 9, adapted to Arclight's own library)
   // -------------------------------------------------------------------------------------
 
   private firstRootFolder(type: MediaType): string | null {

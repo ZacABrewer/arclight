@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Permission } from '@media-tron/shared';
+import { Permission } from '@arclight/shared';
 import { usersApi } from '../../api/auth.js';
 import { authKeys } from '../../auth/guard.js';
 import { Button } from '../../components/button.js';

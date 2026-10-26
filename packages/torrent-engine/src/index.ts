@@ -1,5 +1,5 @@
 /**
- * `@media-tron/torrent-engine`: a clean-room BitTorrent client library built on Node
+ * `@arclight/torrent-engine`: a clean-room BitTorrent client library built on Node
  * built-ins only.
  *
  * Most callers need just `Session`:

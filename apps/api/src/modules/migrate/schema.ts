@@ -1,16 +1,16 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { MigrateApp, MigrateStagingArea } from '@media-tron/shared';
+import type { MigrateApp, MigrateStagingArea } from '@arclight/shared';
 
 // Migrate module tables.
 //
-// `migrate_imported` remembers which upstream row became which Media-Tron row, so a re-run
+// `migrate_imported` remembers which upstream row became which Arclight row, so a re-run
 // skips what an earlier run already imported (and later areas can resolve references such
 // as a series' quality profile). `instance` identifies the source installation (app + db
 // path hash), `area` is a MigrateArea or an internal sub-key (`episodes`, `mediaFiles`).
 //
 // `migrate_staging` holds mapped data for modules that do not exist yet (subtitles,
 // requests, unsupported download clients...). Consumers select their `area` where
-// `consumed_at` is null and set it once imported. Payload shapes: @media-tron/shared migrate.ts.
+// `consumed_at` is null and set it once imported. Payload shapes: @arclight/shared migrate.ts.
 
 export const migrateImported = sqliteTable(
   'migrate_imported',

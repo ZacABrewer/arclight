@@ -6,7 +6,7 @@ Status: draft 1. Derived from reading Prowlarr (`NzbDrone.Core/Indexers/Definiti
 Audience: a TypeScript engineer implementing `packages/indexers` (definition engine) and
 `apps/api/src/modules/indexers` (registry, proxies, limits, stats) without reading upstream.
 
-Conventions: "MUST/SHOULD/MAY" are normative. Rules are numbered `Sn.m` (section n, rule m) so code comments and tests can cite them. "Upstream" = Prowlarr behaviour. "MT" = a deliberate Media-Tron decision that differs from or extends upstream; every MT item is listed again in section 20 (Open questions) if it is a judgement call.
+Conventions: "MUST/SHOULD/MAY" are normative. Rules are numbered `Sn.m` (section n, rule m) so code comments and tests can cite them. "Upstream" = Prowlarr behaviour. "MT" = a deliberate Arclight decision that differs from or extends upstream; every MT item is listed again in section 20 (Open questions) if it is a judgement call.
 
 Compatibility goal: a definition written for the Cardigann ecosystem (same YAML dialect that Prowlarr and Jackett catalogues use) SHOULD load and behave the same. MT extensions are additive and optional (marked `[MT]`).
 
@@ -806,12 +806,12 @@ Stats are derived from an append-only event log (the same `history` table the Ph
 - **S17.8** API: `GET /api/v1/indexers/stats?start&end&indexerIds=` -> `{indexers:[...], sources:[...], hosts:[...]}`; response shapes live in `packages/shared/src/indexers.ts`.
 - **S17.9** Privacy: `query` text may contain what the user searched; stats API requires auth like the rest of the API; exports and support bundles redact it.
 
-## 18. Application sync (concept) and why Media-Tron drops it
+## 18. Application sync (concept) and why Arclight drops it
 
 ### 18.1 What Prowlarr does
 Prowlarr is a separate service that holds indexers once and pushes them into external *arr apps as Torznab/Newznab indexers pointing back at its own proxy endpoint (`/{id}/api`, downloads via `/{id}/download`). An Application entity holds the target URL and key, a **sync level** (`Disabled`; `AddOnly` = add and remove only, later edits are not pushed; `FullSync` = every change is pushed and overwrites remote edits), **tags** (only indexers sharing a tag are synced; no tags = all valid indexers) and **sync categories** (an indexer is synced only if it supports one; the pushed list is the supported subset; defaults roughly Sonarr 5000 tree plus anime 5070, Radarr 2000 tree, Lidarr 3000 audio, Readarr 3030 and 7000 tree). Per indexer it pushes name `"<indexer> (Prowlarr)"`, categories, priority, minimum seeders, seed ratio and times, and RSS/automatic/interactive toggles taken from a shared *app sync profile*. An `AppIndexerMap(appId, indexerId, remoteId)` table reconciles local and remote rows on triggers (indexer or application changed, API key changed, manual command, periodic). Application failures reuse the S16 escalation table with a 5 minute initial grace.
 
-### 18.2 What Media-Tron does instead
+### 18.2 What Arclight does instead
 - **S18.1** There are no external applications to sync. The indexer **registry** is an in-process service; the `releases` module (RSS sync, automatic search, interactive search, requests auto-search) calls `registry.search({mediaType, query, categories, purpose})` directly and receives `IndexerRelease[]`. No Torznab encoding/decoding, no API keys between components, no mapping table, no `(Prowlarr)` suffix, no push, no sync levels, no sync failure status.
 - **S18.2** The **parts of app sync that carry real behaviour are preserved** as per-instance / per-purpose configuration:
       - *Media-type category scoping*: each instance declares which Torznab categories it will be used for per media type (movies: 2000 tree; TV: 5000 tree except 5070; anime: 5070; ...), defaulting to the Sonarr/Radarr defaults above intersected with what the definition supports. Searches for a media type only use instances that support at least one of its categories (S7.13). Stored in `indexer_instance.mediaCategories`.
@@ -823,7 +823,7 @@ Prowlarr is a separate service that holds indexers once and pushes them into ext
 - **S18.4** Optional interoperability, **not** in Phase 2: expose a Torznab endpoint (`/api/v1/torznab/{indexerId}/api`) so third-party tools can use our indexers, and import indexers from an external Prowlarr/Jackett. Marked Open question.
 - **S18.5** Migration helper `[MT]` (later): read an existing Prowlarr API to import its indexer instances (definition file key, settings, tags, priority, app profile flags) so a user's private-tracker credentials do not have to be re-entered.
 
-## 19. Implementation notes for Media-Tron
+## 19. Implementation notes for Arclight
 
 Suggested layout: `packages/indexers/src/cardigann/` with `schema.ts` (Zod, S2), `load.ts` (YAML to normalised definition; case-insensitive keys, duplicate-key preservation), `validate.ts`, `template.ts` (AST parser and evaluator), `filters.ts`, `dates.ts`, `numbers.ts`, `selectors.ts`, `categories.ts`, `caps.ts`, `login.ts`, `request.ts`, `parse.ts`, `download.ts`, `engine.ts` (login-if-needed, search, test, download facade); `packages/indexers/src/transport/` with `http.ts`, `rate-limit.ts`, `proxy.ts`, `flaresolverr.ts`; `categories-standard.ts` (Appendix A). Server side `apps/api/src/modules/indexers/` with `schema.ts` (tables `indexer_instance`, `indexer_status`, `indexer_proxy`), `service.ts` (registry and fan-out), `status.ts` (pure escalation functions), `stats.ts`, `limits.ts`, `routes.ts`, `jobs.ts` (health, cleanup).
 

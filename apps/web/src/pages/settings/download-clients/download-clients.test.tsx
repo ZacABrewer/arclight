@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import type { DownloadClientField, DownloadClientImplementationSchema, QueueItem } from '@media-tron/shared';
+import type { DownloadClientField, DownloadClientImplementationSchema, QueueItem } from '@arclight/shared';
 import { ProtocolBadge } from '../../../components/protocol-badge.js';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';

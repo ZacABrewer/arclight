@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@media-tron/shared';
+import type { IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@arclight/shared';
 import { indexersApi } from '../api/indexers.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
 

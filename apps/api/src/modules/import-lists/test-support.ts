@@ -1,6 +1,6 @@
 import pino from 'pino';
-import type { ImportListCreateInput } from '@media-tron/shared';
-import { ImportListCreate } from '@media-tron/shared';
+import type { ImportListCreateInput } from '@arclight/shared';
+import { ImportListCreate } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { qualityProfiles, rootFolders } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';

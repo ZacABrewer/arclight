@@ -52,9 +52,9 @@ describe('sendMail', () => {
     expect(conn.tlsStarted).toBe(true);
     expect(conn.closed).toBe(true);
     expect(conn.commands()).toEqual([
-      'EHLO media-tron',
+      'EHLO arclight',
       'STARTTLS',
-      'EHLO media-tron',
+      'EHLO arclight',
       `AUTH PLAIN ${Buffer.from('\0alice\0pw').toString('base64')}`,
       'MAIL FROM:<mt@example.com>',
       'RCPT TO:<a@example.com>',
@@ -93,7 +93,7 @@ describe('sendMail', () => {
     const conn = server.connections[0]!;
     expect(conn.tlsStarted).toBe(false);
     expect(conn.commands().slice(0, 4)).toEqual([
-      'EHLO media-tron',
+      'EHLO arclight',
       'AUTH LOGIN',
       Buffer.from('bob').toString('base64'),
       Buffer.from('secret').toString('base64'),

@@ -1,4 +1,4 @@
-# Authored for Media-Tron. Nyaa serves its search results as RSS with a `nyaa:` namespace
+# Authored for Arclight. Nyaa serves its search results as RSS with a `nyaa:` namespace
 # carrying seeders/leechers/size/info hash. Not yet verified (tested: false).
 schemaVersion: 1
 id: nyaa

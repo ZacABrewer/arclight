@@ -111,7 +111,7 @@ export class HttpTracker implements TrackerClient {
   private async get(url: string, signal?: AbortSignal): Promise<BDict> {
     const reqOpts: HttpRequestOptions = {
       timeoutMs: this.opts.timeoutMs ?? 15_000,
-      headers: { 'user-agent': this.opts.userAgent ?? 'Media-Tron/0.1', 'accept-encoding': 'identity' },
+      headers: { 'user-agent': this.opts.userAgent ?? 'Arclight/0.1', 'accept-encoding': 'identity' },
     };
     if (this.opts.localAddress) reqOpts.localAddress = this.opts.localAddress;
     if (signal) reqOpts.signal = signal;

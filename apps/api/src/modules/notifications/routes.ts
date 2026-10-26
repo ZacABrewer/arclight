@@ -7,7 +7,7 @@ import {
   NotificationTestAllResult,
   NotificationTestRequest,
   NotificationTestResult,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { NotificationsError, type NotificationsErrorCode, type NotificationsService } from './service.js';

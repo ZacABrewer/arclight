@@ -1,11 +1,11 @@
 import { inArray } from 'drizzle-orm';
-import type { MediaStatus, MediaType, RequestStatus } from '@media-tron/shared';
+import type { MediaStatus, MediaType, RequestStatus } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, seasons, series } from '../../db/schema.js';
 import type { SeasonStatusEntry } from './schema.js';
 
 // Availability of titles, computed from the library (docs/spec/requests.md section 10,
-// adapted: Media-Tron's own library replaces the Radarr/Sonarr/Plex scanners). Two tracks:
+// adapted: Arclight's own library replaces the Radarr/Sonarr/Plex scanners). Two tracks:
 // "normal" counts any file, "4K" counts files whose quality resolution is 2160 or more.
 
 export const UHD_RESOLUTION = 2160;

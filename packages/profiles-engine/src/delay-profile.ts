@@ -1,4 +1,4 @@
-import type { DelayProfile, QualityModel, QualityProfile, ReleaseProtocol } from '@media-tron/shared';
+import type { DelayProfile, QualityModel, QualityProfile, ReleaseProtocol } from '@arclight/shared';
 import { compareQuality, highestAllowedItem, isRevisionUpgrade, itemId } from './quality-profile.js';
 
 /**

@@ -18,7 +18,7 @@ import {
   VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { settings } from '../../db/schema.js';
 

@@ -181,10 +181,10 @@ export function splitCommandLine(line: string): string[] {
   return out;
 }
 
-/** Environment variables exposed to custom scripts: MEDIATRON_<PLACEHOLDER>. */
+/** Environment variables exposed to custom scripts: ARCLIGHT_<PLACEHOLDER>. */
 export function postProcessEnv(vars: Record<string, string>): Record<string, string> {
   const env: Record<string, string> = {};
-  for (const [k, v] of Object.entries(vars)) env[`MEDIATRON_${k.toUpperCase()}`] = v;
+  for (const [k, v] of Object.entries(vars)) env[`ARCLIGHT_${k.toUpperCase()}`] = v;
   return env;
 }
 

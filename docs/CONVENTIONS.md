@@ -49,13 +49,13 @@ A module never imports another module's `schema.ts` directly; it imports from
 ## Package layout (`packages/<name>/`)
 
 ```
-package.json  name "@media-tron/<name>", type module, exports "./src/index.ts"
+package.json  name "@arclight/<name>", type module, exports "./src/index.ts"
 src/index.ts  public API only
 src/**        implementation
 fixtures/**   test data
 ```
 
-Packages depend on `@media-tron/shared` for domain types when they are part of the API
+Packages depend on `@arclight/shared` for domain types when they are part of the API
 contract; otherwise they define their own types and `shared` re-exports what the API needs.
 
 ## Naming

@@ -1,11 +1,13 @@
-# Media-Tron
+# Arclight
 
 One content-acquisition service for a home media stack, written from scratch.
-Media-Tron does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
+Arclight does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
 (subtitles) and Seerr (requests) in a single application: one database, one API, one
 login, one UI, one background scheduler. It drives an external download client
 (qBittorrent by default) and notifies your media server (Jellyfin, Emby, Plex) when
 content lands. It is not a media server.
+
+Arclight was started under the working name Media-Tron.
 
 Status: **Phase 1 in progress** (library, metadata, profiles, indexers and download-client
 plumbing work; the release/import pipeline and most UI pages are still being built; no
@@ -14,7 +16,7 @@ authentication yet). See [docs/ROADMAP.md](docs/ROADMAP.md) and
 
 ## Deploy
 
-The recommended layout runs Media-Tron and qBittorrent behind [Gluetun](https://github.com/qdm12/gluetun)
+The recommended layout runs Arclight and qBittorrent behind [Gluetun](https://github.com/qdm12/gluetun)
 with ProtonVPN over WireGuard. Both containers use `network_mode: "service:gluetun"`, so all
 their traffic leaves through the tunnel and Gluetun's firewall drops anything else.
 
@@ -37,7 +39,7 @@ services:
       - HTTP_CONTROL_SERVER_LOG=off
       - TZ=Europe/London
     ports:
-      - 7878:7878   # Media-Tron
+      - 7878:7878   # Arclight
       - 8080:8080   # qBittorrent
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
@@ -45,14 +47,14 @@ services:
       start_period: 60s
     restart: unless-stopped
 
-  media-tron:
-    image: ghcr.io/media-tron/media-tron:latest
+  arclight:
+    image: ghcr.io/arclight/arclight:latest
     network_mode: "service:gluetun"
     environment:
       - PUID=1000
       - PGID=1000
       - TZ=Europe/London
-      - MEDIATRON_VPN_CONTROL_URL=http://localhost:8000
+      - ARCLIGHT_VPN_CONTROL_URL=http://localhost:8000
     volumes:
       - ./config:/config
       - /volume1/media/tv:/tv
@@ -94,39 +96,39 @@ environment or a `.env` file; copy `docker/.env.example` to start.
 ### How qBittorrent gets the forwarded port
 
 Proton forwards one incoming port per session and Gluetun reports it on its control server.
-Media-Tron polls Gluetun every minute (Settings → VPN, provider *Gluetun*, enabled) and, when
+Arclight polls Gluetun every minute (Settings → VPN, provider *Gluetun*, enabled) and, when
 the port changes, sets it as qBittorrent's listening port (`/api/v2/app/setPreferences`,
 random port off) on every enabled qBittorrent client. Because the three containers share one
-network namespace, add qBittorrent in Media-Tron with host `localhost`, port `8080`. With
-**Pause grabs when down** on (default), Media-Tron stops grabbing while the VPN is down or
+network namespace, add qBittorrent in Arclight with host `localhost`, port `8080`. With
+**Pause grabs when down** on (default), Arclight stops grabbing while the VPN is down or
 its public IP equals your **home public IP**; the dashboard card and the `VpnDisconnected`
 health check show the state. Newer Gluetun releases protect the control server: create an
 API key per the Gluetun wiki and enter it (or username/password) in Settings → VPN.
 
 ### Built-in torrent engine (no qBittorrent)
 
-Media-Tron ships its own BitTorrent engine, so the stack can run without a qBittorrent
+Arclight ships its own BitTorrent engine, so the stack can run without a qBittorrent
 container: `docker compose -f docker/docker-compose.builtin.yml up -d` starts only Gluetun and
-Media-Tron (7878 published on Gluetun; no 6881 publish, since Proton forwards a port dynamically
-and Media-Tron moves the engine's listener onto it). On first start a **Built-in** download
+Arclight (7878 published on Gluetun; no 6881 publish, since Proton forwards a port dynamically
+and Arclight moves the engine's listener onto it). On first start a **Built-in** download
 client is registered when none exists; engine options (limits, queue, seed goals, download
 folder `/downloads`) are under Settings → Torrent Engine. With **Bind to VPN** on (default) and
 the VPN integration enabled, the engine binds to the tunnel and, while the VPN is down or
 leaking, pauses every torrent and binds to 127.0.0.1 until it reconnects; set
-`MEDIATRON_TORRENT_ENGINE=0` to keep the engine from starting at all.
+`ARCLIGHT_TORRENT_ENGINE=0` to keep the engine from starting at all.
 
 ### Without a VPN
 
-Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Media-Tron on
+Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Arclight on
 7878, qBittorrent on 8080 and peer port 6881, no Gluetun). Leave Settings → VPN disabled.
 
 ### Native Windows VPN
 
-Running Media-Tron directly on Windows (no Docker), pick a provider in Settings → VPN:
+Running Arclight directly on Windows (no Docker), pick a provider in Settings → VPN:
 
 - **WireGuard for Windows**: install the official client (wireguard.com), download a Proton
   WireGuard `.conf` (steps above; keep NAT-PMP on), save it under a short name such as
-  `C:\vpn\proton-nl.conf`, and point Media-Tron at it. Media-Tron installs the tunnel service
+  `C:\vpn\proton-nl.conf`, and point Arclight at it. Arclight installs the tunnel service
   (`wireguard.exe /installtunnelservice`), reads `wg show <name>` for handshake, endpoint and
   transfer, and finds the adapter's IPv4 (the bind address the built-in torrent engine uses).
   It must run elevated (Administrator, or as a service under LocalSystem). With **auto-start**
@@ -134,7 +136,7 @@ Running Media-Tron directly on Windows (no Docker), pick a provider in Settings 
   With **kill switch** on, grabs stop and a `vpn` event tells the torrent engine to close its
   sockets whenever the adapter disappears or the handshake goes stale.
 - **Interface binding**: you run the VPN yourself (e.g. the ProtonVPN app); name its adapter
-  (e.g. `ProtonVPN`) and Media-Tron watches its IPv4 and exposes it as the bind address.
+  (e.g. `ProtonVPN`) and Arclight watches its IPv4 and exposes it as the bind address.
 
 Limitation: Node's `fetch` cannot bind to a local address, so the native public IP check
 (`publicIpCheckUrl`, default `https://api.ipify.org?format=json`) follows the OS routing
@@ -160,17 +162,17 @@ pnpm db:generate  # drizzle-kit generate: new migration in apps/api/drizzle
 Parser fixture report (pass rate per fixture file, first failures):
 
 ```bash
-pnpm --filter @media-tron/parser report              # all fixtures
-pnpm --filter @media-tron/parser report -- quality   # only paths containing "quality"
-pnpm --filter @media-tron/parser report -- --all     # list every failure
+pnpm --filter @arclight/parser report              # all fixtures
+pnpm --filter @arclight/parser report -- quality   # only paths containing "quality"
+pnpm --filter @arclight/parser report -- --all     # list every failure
 ```
 
 If port 7878 is already in use (Radarr uses 7878 too),
-start the api with another port: `MEDIATRON_PORT=7979 pnpm dev`. The Vite proxy target is
+start the api with another port: `ARCLIGHT_PORT=7979 pnpm dev`. The Vite proxy target is
 hard-coded to `http://localhost:7878` in `apps/web/vite.config.ts` (there is no
 `VITE_API_TARGET`), so change the target there when you move the api.
 
-Local data (SQLite database, logs) goes in `./config` unless `MEDIATRON_CONFIG` is set.
+Local data (SQLite database, logs) goes in `./config` unless `ARCLIGHT_CONFIG` is set.
 See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages and
 [docs/API.md](docs/API.md) for the routes.
 
@@ -178,20 +180,20 @@ See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages
 
 | Variable | Default | Meaning |
 |---|---|---|
-| `MEDIATRON_CONFIG` | `/config` in Docker, else `./config` | Config dir: `media-tron.db`, `logs/` |
-| `MEDIATRON_PORT` | `7878` | HTTP port |
-| `MEDIATRON_HOST` | `0.0.0.0` | Bind address |
-| `MEDIATRON_LOG_LEVEL` | `info` | pino log level |
-| `MEDIATRON_DOCKER` | auto (`/.dockerenv`) | Force Docker path defaults with `1` |
-| `MEDIATRON_WEB_DIST` | unset | Built web app to serve (set to `/app/web` in the image) |
-| `MEDIATRON_VERSION` | `0.1.0-dev` | Version reported by `/system/status` (set at image build) |
-| `MEDIATRON_TMDB_API_KEY` | unset | TMDB key fallback when none is stored in Settings |
-| `MEDIATRON_VPN_CONTROL_URL` | `http://localhost:8000` | Gluetun control server default when none is stored in Settings → VPN |
-| `MEDIATRON_TORRENT_ENGINE` | `1` | `0` keeps the built-in torrent engine from starting (and from auto-registering its client) at boot |
+| `ARCLIGHT_CONFIG` | `/config` in Docker, else `./config` | Config dir: `arclight.db`, `logs/` |
+| `ARCLIGHT_PORT` | `7878` | HTTP port |
+| `ARCLIGHT_HOST` | `0.0.0.0` | Bind address |
+| `ARCLIGHT_LOG_LEVEL` | `info` | pino log level |
+| `ARCLIGHT_DOCKER` | auto (`/.dockerenv`) | Force Docker path defaults with `1` |
+| `ARCLIGHT_WEB_DIST` | unset | Built web app to serve (set to `/app/web` in the image) |
+| `ARCLIGHT_VERSION` | `0.1.0-dev` | Version reported by `/system/status` (set at image build) |
+| `ARCLIGHT_TMDB_API_KEY` | unset | TMDB key fallback when none is stored in Settings |
+| `ARCLIGHT_VPN_CONTROL_URL` | `http://localhost:8000` | Gluetun control server default when none is stored in Settings → VPN |
+| `ARCLIGHT_TORRENT_ENGINE` | `1` | `0` keeps the built-in torrent engine from starting (and from auto-registering its client) at boot |
 
 The image also takes `PUID` and `PGID` (handled in `docker/entrypoint.sh`); compose passes `TZ`.
 
 ## Licence
 
-GPL-3.0. Media-Tron is an independent implementation; see [NOTICE.md](NOTICE.md) for
+GPL-3.0. Arclight is an independent implementation; see [NOTICE.md](NOTICE.md) for
 the projects whose behaviour informed it.

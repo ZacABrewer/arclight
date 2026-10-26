@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SystemStatus } from '@media-tron/shared';
+import { SystemStatus } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { EventBus } from '../../events.js';
 import { Scheduler } from '../../scheduler.js';
@@ -64,7 +64,7 @@ describe('backup routes', () => {
     const created = await app.inject({ method: 'POST', url: '/api/v1/system/backup' });
     expect(created.statusCode).toBe(201);
     const b = created.json();
-    expect(b).toMatchObject({ type: 'manual', id: expect.stringMatching(/^media-tron_manual_.*\.zip$/) });
+    expect(b).toMatchObject({ type: 'manual', id: expect.stringMatching(/^arclight_manual_.*\.zip$/) });
     const list = (await app.inject({ method: 'GET', url: '/api/v1/system/backup' })).json();
     expect(list).toEqual([b]);
 
@@ -77,7 +77,7 @@ describe('backup routes', () => {
 
     expect((await app.inject({ method: 'DELETE', url: `/api/v1/system/backup/${b.id}` })).statusCode).toBe(204);
     expect((await app.inject({ method: 'DELETE', url: `/api/v1/system/backup/${b.id}` })).statusCode).toBe(404);
-    expect((await app.inject({ method: 'GET', url: '/api/v1/system/backup/..%2Fmedia-tron.db/download' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/system/backup/..%2Farclight.db/download' })).statusCode).toBe(404);
   });
 
   it('restores by id and raises restartRequired in /system/status', async () => {
@@ -95,7 +95,7 @@ describe('backup routes', () => {
     // The harness service reports through its own callback; the module wires requestRestart.
     requestRestart(ctx, 'test');
     expect((await status()).restartRequired).toBe(true);
-    expect((await app.inject({ method: 'POST', url: '/api/v1/system/backup/restore/media-tron_manual_2000.01.01_00.00.00.zip' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'POST', url: '/api/v1/system/backup/restore/arclight_manual_2000.01.01_00.00.00.zip' })).statusCode).toBe(404);
   });
 
   it('restores from an uploaded archive and rejects invalid uploads', async () => {

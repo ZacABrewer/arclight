@@ -6,7 +6,7 @@ import type {
   QualityDefinitionLimits,
   QualityProfileInput,
   ReleaseProfileInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { profilesApi } from '../api/profiles.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
 

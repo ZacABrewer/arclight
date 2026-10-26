@@ -6,7 +6,7 @@ import type {
   ReleaseIndexerFlag,
   ReleaseKind,
   Resolution,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { bool, field, int, num, str } from '../foreign-db.js';
 import { mapLanguageId } from './languages.js';
 import type { ArrApp } from './quality.js';
@@ -14,7 +14,7 @@ import type { ArrApp } from './quality.js';
 // Custom format specifications. Upstream stores a list of `{type, body}` objects in the
 // database (the API/export format uses `{implementation, fields: [{name, value}]}`); both are
 // normalised to (implementation, name, negate, required, values) and translated to
-// Media-Tron's spec union. Specs with no equivalent are dropped and reported.
+// Arclight's spec union. Specs with no equivalent are dropped and reported.
 
 interface NormalizedSpec {
   implementation: string;

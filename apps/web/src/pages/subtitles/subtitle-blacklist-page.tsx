@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { SubtitleBlacklistRecord } from '@media-tron/shared';
+import type { SubtitleBlacklistRecord } from '@arclight/shared';
 import { ApiError } from '../../api/client.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

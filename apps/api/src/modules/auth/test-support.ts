@@ -49,7 +49,7 @@ export async function buildAuthApp(overrides: Partial<Omit<AuthServiceOptions, '
   return { app, auth, db, ctx };
 }
 
-/** The `mt_session=...` pair from a response's set-cookie header. */
+/** The `al_session=...` pair from a response's set-cookie header. */
 export function cookieFrom(res: { headers: Record<string, unknown> }): string {
   const header = res.headers['set-cookie'];
   const raw = Array.isArray(header) ? String(header[0]) : String(header ?? '');

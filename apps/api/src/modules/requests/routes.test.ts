@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission as P } from '@media-tron/shared';
+import { Permission as P } from '@arclight/shared';
 import { addUser, buildApp } from './test-support.js';
 
 async function app() {

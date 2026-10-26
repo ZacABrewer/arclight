@@ -1,5 +1,5 @@
 // Pure helpers for remote path mappings. Remote paths may be POSIX or Windows regardless
-// of the OS Media-Tron runs on, so `node:path` is not used for them.
+// of the OS Arclight runs on, so `node:path` is not used for them.
 
 export type PathPlatform = 'posix' | 'win32';
 
@@ -19,7 +19,7 @@ export function toDirectoryForm(path: string): string {
   return trimmed + sep;
 }
 
-/** True when `path` is an absolute path Media-Tron itself could open on `platform`. */
+/** True when `path` is an absolute path Arclight itself could open on `platform`. */
 export function isValidLocalPath(path: string, platform: PathPlatform): boolean {
   if (path.trim() === '') return false;
   if (platform === 'win32') return /^[A-Za-z]:[\\/]/.test(path) || /^\\\\[^\\]+\\[^\\]+/.test(path);

@@ -21,7 +21,7 @@ import {
   type MigrationUnsupported,
   type MigrationWarning,
   type MigrateProgress,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { jobs } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
@@ -42,7 +42,7 @@ import type { AreaPayloads, SourceBundle, SourceItem } from './types.js';
 // each area in its own transaction (each item in a savepoint, so one bad row does not undo
 // its area); a dry run wraps everything in one transaction that is rolled back. Imported
 // upstream ids are remembered in `migrate_imported`, so re-running skips them; existing
-// Media-Tron rows are never deleted, only skipped or (policy `overwrite`) updated.
+// Arclight rows are never deleted, only skipped or (policy `overwrite`) updated.
 
 export const MIGRATE_JOB = 'MigrateFromArr';
 

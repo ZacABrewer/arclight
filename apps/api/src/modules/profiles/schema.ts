@@ -5,7 +5,7 @@ import type {
   ProfileFormatItem,
   QualityProfileItem,
   ReleaseProtocol,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Profiles module tables. Ordered/nested structures (items, specs, term lists) are JSON
 // columns: they are always read and written whole, never queried by member.

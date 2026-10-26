@@ -6,8 +6,8 @@ import type {
   DownloadClientTestResult,
   RemotePathMapping,
   RemotePathMappingInput,
-} from '@media-tron/shared';
-import { downloadClientHost } from '@media-tron/shared';
+} from '@arclight/shared';
+import { downloadClientHost } from '@arclight/shared';
 import { downloadClientsApi } from '../../../api/download-clients.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
@@ -66,7 +66,7 @@ export function toDownloadClientBody(values: FormValues, fields: readonly FieldD
   return body as unknown as DownloadClientInput;
 }
 
-export const BUILTIN_DESCRIPTION = "Media-Tron's own BitTorrent engine, running in-process. No separate app or host to configure.";
+export const BUILTIN_DESCRIPTION = "Arclight's own BitTorrent engine, running in-process. No separate app or host to configure.";
 
 /** The add-dialog blurb: the api's description, or ours for the built-in engine. */
 export function schemaDescription(s: DownloadClientImplementationSchema): string {
@@ -186,7 +186,7 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
       <FormField label="Remote path" hint="The path as the download client reports it.">
         <Input value={draft.remotePath} onChange={(e) => setDraft({ ...draft, remotePath: e.currentTarget.value })} />
       </FormField>
-      <FormField label="Local path" hint="The same directory as Media-Tron sees it.">
+      <FormField label="Local path" hint="The same directory as Arclight sees it.">
         <Input value={draft.localPath} onChange={(e) => setDraft({ ...draft, localPath: e.currentTarget.value })} />
       </FormField>
       <SaveError error={save.error} />
@@ -212,7 +212,7 @@ function RemotePathMappingsCard() {
       ) : list.isError ? (
         <ErrorView error={list.error} onRetry={() => void list.refetch()} />
       ) : list.data.length === 0 ? (
-        <EmptyState title="No mappings">Only needed when the download client sees paths differently from Media-Tron (e.g. Docker).</EmptyState>
+        <EmptyState title="No mappings">Only needed when the download client sees paths differently from Arclight (e.g. Docker).</EmptyState>
       ) : (
         <div className="table-wrap">
           <table className="table">

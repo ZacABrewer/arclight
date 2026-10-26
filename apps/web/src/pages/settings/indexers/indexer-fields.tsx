@@ -1,5 +1,5 @@
-import type { Indexer, IndexerCategory, IndexerCreate, IndexerImplementation, IndexerTestResult } from '@media-tron/shared';
-import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@media-tron/shared';
+import type { Indexer, IndexerCategory, IndexerCreate, IndexerImplementation, IndexerTestResult } from '@arclight/shared';
+import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FieldRendererProps, FormValues } from '../../../components/forms/types.js';
 import type { TestOutcome } from '../../../components/forms/test-result.js';
 

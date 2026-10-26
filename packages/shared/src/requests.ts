@@ -515,7 +515,7 @@ export type DiscoverSliderUpdate = z.infer<typeof DiscoverSliderUpdate>;
 export const DiscoverSliderOrder = z.array(z.object({ id: z.number().int(), enabled: z.boolean() })).min(1);
 export type DiscoverSliderOrder = z.infer<typeof DiscoverSliderOrder>;
 
-/** A TMDB result annotated with what Media-Tron knows about it. */
+/** A TMDB result annotated with what Arclight knows about it. */
 export const DiscoverItem = z.object({
   mediaType: MediaType,
   tmdbId: z.number().int(),

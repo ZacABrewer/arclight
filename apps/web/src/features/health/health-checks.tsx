@@ -1,4 +1,4 @@
-import type { HealthCheck } from '@media-tron/shared';
+import type { HealthCheck } from '@arclight/shared';
 import { Badge, toneFor } from '../../components/badge.js';
 import { Card } from '../../components/card.js';
 import { EmptyState } from '../../components/empty-state.js';

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { LanguageProfileFlagMode, SubtitleHistoryAction, SubtitleLanguageOption, SubtitleLanguageRef, SubtitleState } from '@media-tron/shared';
+import type { LanguageProfileFlagMode, SubtitleHistoryAction, SubtitleLanguageOption, SubtitleLanguageRef, SubtitleState } from '@arclight/shared';
 import { Input } from '../../components/form.js';
 import { useSubtitleLanguages } from '../../hooks/subtitles.js';
 import { cx } from '../../lib/cx.js';

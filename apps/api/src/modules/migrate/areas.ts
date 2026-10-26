@@ -1,7 +1,7 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import type { Logger } from 'pino';
-import type { MediaManagementSettings, MigrateApp, MigrateArea, MigrateConflictPolicy, NamingConfig } from '@media-tron/shared';
+import type { MediaManagementSettings, MigrateApp, MigrateArea, MigrateConflictPolicy, NamingConfig } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import * as t from '../../db/schema.js';
 import { DownloadClientsService } from '../download-clients/service.js';
@@ -25,7 +25,7 @@ import type {
   SourceItem,
 } from './types.js';
 
-// One handler per importable area: how to find the Media-Tron row an upstream item collides
+// One handler per importable area: how to find the Arclight row an upstream item collides
 // with, how to create it, and how to overwrite the collision. Handlers go through the owning
 // module's service where it offers the operation; the library, root folders, remote path
 // mappings, history and blocklist are written directly because their services have no
@@ -48,7 +48,7 @@ export interface AreaEnv {
   policy: MigrateConflictPolicy;
   now: string;
   log: Logger;
-  /** `${area}:${sourceId}` → Media-Tron id, for this run. */
+  /** `${area}:${sourceId}` → Arclight id, for this run. */
   idMap: Map<string, number>;
   warn(area: MigrateArea, message: string, sourceId?: string): void;
   services: Services;
@@ -96,7 +96,7 @@ export function importedTarget(db: Db, instance: string, area: string, sourceId:
     .get();
 }
 
-/** Media-Tron id of an upstream row: this run, an earlier run, or the colliding existing row. */
+/** Arclight id of an upstream row: this run, an earlier run, or the colliding existing row. */
 export function resolveRef(env: AreaEnv, area: MigrateArea | 'episodes', sourceId: string | number | null): number | null {
   if (sourceId === null || sourceId === undefined) return null;
   const key = String(sourceId);
@@ -127,7 +127,7 @@ function resolveQualityProfile(env: AreaEnv, area: MigrateArea, sourceId: number
   const mapped = resolveRef(env, 'qualityProfiles', sourceId);
   if (mapped !== null) return mapped;
   const first = env.db.select({ id: t.qualityProfiles.id }).from(t.qualityProfiles).orderBy(asc(t.qualityProfiles.id)).get();
-  if (!first) throw new Error('no quality profile exists in Media-Tron; import quality profiles first');
+  if (!first) throw new Error('no quality profile exists in Arclight; import quality profiles first');
   env.warn(area, `${owner}: quality profile ${sourceId ?? '?'} was not imported; using profile ${first.id}`);
   return first.id;
 }
@@ -296,7 +296,7 @@ export const HANDLERS: Handlers = {
       return null;
     },
     create: (env, item) => {
-      if (!existsSync(item.payload.path)) env.warn('rootFolders', `${item.payload.path} is not accessible from Media-Tron (check the path mappings)`, item.sourceId);
+      if (!existsSync(item.payload.path)) env.warn('rootFolders', `${item.payload.path} is not accessible from Arclight (check the path mappings)`, item.sourceId);
       return env.db.insert(t.rootFolders).values({ path: item.payload.path, mediaType: item.payload.mediaType }).returning({ id: t.rootFolders.id }).get().id;
     },
     overwrite: (_env, _item, existing) => existing.id,

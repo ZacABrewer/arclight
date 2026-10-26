@@ -1,4 +1,4 @@
-import { HealthResponse } from '@media-tron/shared';
+import { HealthResponse } from '@arclight/shared';
 import { request } from './client.js';
 
 export const healthApi = {

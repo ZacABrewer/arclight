@@ -7,7 +7,7 @@ import {
   type DownloadClientInput,
   type DownloadClientTestRequest,
   type RemotePathMappingInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/download-clients/routes.ts. The queue lives in queue.ts.

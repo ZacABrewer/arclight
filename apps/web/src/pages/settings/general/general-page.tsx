@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { MetadataSettingsResponse, MetadataSettingsUpdate } from '@media-tron/shared';
+import type { MetadataSettingsResponse, MetadataSettingsUpdate } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';
 import { EmptyState } from '../../../components/empty-state.js';
@@ -17,7 +17,7 @@ export const METADATA_FIELDS: FieldDefinition[] = [
     name: 'tmdbApiKey',
     label: 'TMDB API key',
     type: 'password',
-    helpText: 'Your TMDB v3 API key. Leave empty to use the MEDIATRON_TMDB_API_KEY environment variable.',
+    helpText: 'Your TMDB v3 API key. Leave empty to use the ARCLIGHT_TMDB_API_KEY environment variable.',
   },
   { name: 'language', label: 'Metadata language', type: 'text', required: true, placeholder: 'en-US', helpText: 'BCP-47 tag, e.g. en-US, fr-FR.' },
   { name: 'region', label: 'Region', type: 'text', required: true, placeholder: 'US', helpText: 'Two-letter country code used for release dates and certifications.' },
@@ -84,11 +84,11 @@ export function GeneralPage() {
             </div>
             <div className="fields-row">
               <dt>Port</dt>
-              <dd>Set with the MEDIATRON_PORT environment variable.</dd>
+              <dd>Set with the ARCLIGHT_PORT environment variable.</dd>
             </div>
             <div className="fields-row">
               <dt>Log level</dt>
-              <dd className="muted">Not exposed by the api yet (set MEDIATRON_LOG_LEVEL).</dd>
+              <dd className="muted">Not exposed by the api yet (set ARCLIGHT_LOG_LEVEL).</dd>
             </div>
             <div className="fields-row">
               <dt>Config folder</dt>

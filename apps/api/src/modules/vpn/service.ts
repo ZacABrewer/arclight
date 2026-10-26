@@ -1,5 +1,5 @@
 import type { Logger } from 'pino';
-import type { VpnProviderType, VpnSettings, VpnSettingsUpdate, VpnStatus } from '@media-tron/shared';
+import type { VpnProviderType, VpnSettings, VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';

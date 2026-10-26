@@ -11,7 +11,7 @@ import {
   type DownloadClientDeps,
   type DownloadItem,
   type SessionSource,
-} from '@media-tron/download-clients';
+} from '@arclight/download-clients';
 import {
   DOWNLOAD_CLIENT_PROTOCOLS,
   DOWNLOAD_CLIENT_SECRET_FIELDS,
@@ -36,7 +36,7 @@ import {
   type RemotePathMapping,
   type TrackedDownloadState,
   type TrackedDownloadStatus,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import {
   isValidLocalPath,
@@ -173,7 +173,7 @@ const VISIBLE_STATES: TrackedDownloadState[] = ['pending', 'downloading', 'impor
 export const STATUS_TEXT = {
   clientWarning: 'The download client reported a problem with this download.',
   clientFailed: 'The download client reported this download as failed.',
-  failedNotGrabbed: "Download failed and wasn't grabbed by Media-Tron, skipping automatic failed download handling.",
+  failedNotGrabbed: "Download failed and wasn't grabbed by Arclight, skipping automatic failed download handling.",
   noOutputPath: "Download doesn't contain an output path, skipping.",
   missing: (client: string) => `Download is no longer reported by ${client}.`,
   clientUnavailable: (client: string, message: string) => `${client} is unavailable: ${message}`,
@@ -416,7 +416,7 @@ export class DownloadClientsService {
     this.db.delete(remotePathMappings).where(eq(remotePathMappings.id, id)).run();
   }
 
-  /** Converts a path reported by the client on `host` to the path Media-Tron sees. */
+  /** Converts a path reported by the client on `host` to the path Arclight sees. */
   remotePathToLocal(host: string, path: string): string {
     return mapRemoteToLocal(this.listMappings(), host, path);
   }

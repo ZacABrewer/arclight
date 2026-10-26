@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@media-tron/shared';
+import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@arclight/shared';
 import { Tabs } from '../../../components/tabs.js';
 import { CatalogueList } from './catalogue.js';
 import { DefinitionEditor } from './definition-editor.js';

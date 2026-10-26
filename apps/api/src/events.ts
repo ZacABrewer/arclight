@@ -1,5 +1,5 @@
 import { EventEmitter } from 'node:events';
-import type { ServerEvent } from '@media-tron/shared';
+import type { ServerEvent } from '@arclight/shared';
 
 // One in-process bus. Modules publish here; the WebSocket route fans out to clients.
 // Keeping it typed on ServerEvent means the web client's union is always the full truth.

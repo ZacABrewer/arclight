@@ -10,7 +10,7 @@ const isoDate = () => z.string().describe('ISO-8601 date or timestamp');
 export const SubtitleMediaType = z.enum(['series', 'movie']);
 export type SubtitleMediaType = z.infer<typeof SubtitleMediaType>;
 
-/** Provider ids served by @media-tron/subtitles, in the default priority order. */
+/** Provider ids served by @arclight/subtitles, in the default priority order. */
 export const SUBTITLE_PROVIDER_IDS = [
   'embeddedsubtitles',
   'opensubtitlescom',

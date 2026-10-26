@@ -1,4 +1,4 @@
-import type { MetadataSearchType } from '@media-tron/shared';
+import type { MetadataSearchType } from '@arclight/shared';
 
 // Query keys for the library pages. The first segment matches what live.ts invalidates on a
 // `library` event (`[mediaType]`, `['library']`, `['wanted']`), so everything under

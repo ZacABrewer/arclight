@@ -4,7 +4,7 @@ import {
   MigrationPlan,
   type MigrateApplyRequest,
   type MigrateSourceInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 /** Adoption importer: analyse and import an existing *arr / Bazarr / Seerr installation. */

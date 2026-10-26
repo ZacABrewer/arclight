@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs';
 import { homedir } from 'node:os';
-import type { MigrateApp, MigrateSourceCandidate } from '@media-tron/shared';
+import type { MigrateApp, MigrateSourceCandidate } from '@arclight/shared';
 
 // Auto-detection of existing installations: the usual container mounts (`/config/sonarr.db`
-// when the old app's config volume is mounted into Media-Tron), Windows service installs
+// when the old app's config volume is mounted into Arclight), Windows service installs
 // under %ProgramData%, and Linux package installs. Only paths that exist are returned.
 
 export interface DetectOptions {
@@ -65,7 +65,7 @@ export function detectSources(opts: DetectOptions = {}): MigrateSourceCandidate[
   };
 
   // Container mounts: the old app's config volume mounted at a well-known path.
-  const extra = (env['MEDIATRON_MIGRATE_DIRS'] ?? '').split(platform === 'win32' ? ';' : ':').filter(Boolean);
+  const extra = (env['ARCLIGHT_MIGRATE_DIRS'] ?? '').split(platform === 'win32' ? ';' : ':').filter(Boolean);
   const bases = ['/config', '/import', '/migrate', '/mnt/import', ...extra];
   for (const layout of LAYOUTS) {
     for (const base of bases) {

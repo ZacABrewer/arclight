@@ -1,4 +1,4 @@
-import { NamingConfig, NamingSamples, type NamingConfigInput } from '@media-tron/shared';
+import { NamingConfig, NamingSamples, type NamingConfigInput } from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
 // TODO(contract): /settings/naming and /settings/naming/samples are being built in parallel.

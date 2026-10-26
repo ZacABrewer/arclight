@@ -37,7 +37,7 @@ import {
   type UpdateRequest,
   type UserQuota,
   type WatchlistCreate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
 // Paths mirror docs/API.md "## requests" (apps/api/src/modules/requests). Every response is

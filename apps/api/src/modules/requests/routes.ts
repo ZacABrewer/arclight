@@ -44,7 +44,7 @@ import {
   WatchlistItem,
   WatchlistQuery,
   WatchlistSyncResult,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { DiscoverService } from './discover.js';

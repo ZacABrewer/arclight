@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { MigrateArea, MigrateSourceInput, MigrationResult } from '@media-tron/shared';
+import type { MigrateArea, MigrateSourceInput, MigrationResult } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import * as t from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
@@ -464,7 +464,7 @@ describe('Seerr', () => {
     expect(staged('requests.overrideRules')[0]!.payload).toMatchObject({ genre: '16', profileId: 7 });
     const everything = JSON.stringify(db.select().from(migrateStaging).all());
     for (const secret of ['PLEX-SECRET', 'PB-SECRET', '$2b$12$hash', 'SEERR-API-KEY', 'CLIENT-SECRET']) expect(everything).not.toContain(secret);
-    // Users are staged, never created as Media-Tron accounts.
+    // Users are staged, never created as Arclight accounts.
     expect(db.select().from(t.users).all()).toHaveLength(0);
   });
 });

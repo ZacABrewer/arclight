@@ -11,7 +11,7 @@ export interface PageProps {
 
 export function Page({ title, subtitle, actions, children }: PageProps) {
   useEffect(() => {
-    document.title = `${title} · Media-Tron`;
+    document.title = `${title} · Arclight`;
   }, [title]);
 
   return (

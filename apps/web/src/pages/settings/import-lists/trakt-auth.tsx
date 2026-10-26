@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { SECRET_MASK, type TraktDeviceResponse, type TraktPollResponse } from '@media-tron/shared';
+import { SECRET_MASK, type TraktDeviceResponse, type TraktPollResponse } from '@arclight/shared';
 import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
 import { Button } from '../../../components/button.js';

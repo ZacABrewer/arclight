@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { DiscoverSliderType, IssueStatus, IssueType, MediaStatus, MediaType, RequestStatus, WatchlistSource } from '@media-tron/shared';
+import type { DiscoverSliderType, IssueStatus, IssueType, MediaStatus, MediaType, RequestStatus, WatchlistSource } from '@arclight/shared';
 
 // Requests module tables. User ids are plain integers, not foreign keys: modules do not
 // reference each other's tables, so rows of deleted users are removed by the service

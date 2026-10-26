@@ -1,7 +1,7 @@
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { QueryKey } from '@tanstack/react-query';
-import type { DiscoverItem, DiscoverPage } from '@media-tron/shared';
+import type { DiscoverItem, DiscoverPage } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
@@ -20,7 +20,7 @@ export function titleLink(mediaType: 'movie' | 'series', tmdbId: number) {
     : ({ to: '/discover/tv/$tmdbId', params: { tmdbId: String(tmdbId) } } as const);
 }
 
-/** Poster card for a TMDB result, with the Media-Tron status badge. */
+/** Poster card for a TMDB result, with the Arclight status badge. */
 export function DiscoverCard({ item, subtitle }: { item: Pick<DiscoverItem, 'mediaType' | 'tmdbId' | 'title' | 'year' | 'posterUrl' | 'mediaStatus' | 'requestStatus'>; subtitle?: ReactNode | undefined }) {
   const badge = availabilityBadge(item.mediaStatus, item.requestStatus);
   return (

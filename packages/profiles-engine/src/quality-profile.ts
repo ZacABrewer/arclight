@@ -5,7 +5,7 @@ import {
   type QualityProfile,
   type QualityProfileItem,
   type Revision,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 export type QualityRef = number | QualityDefinition | QualityModel;
 

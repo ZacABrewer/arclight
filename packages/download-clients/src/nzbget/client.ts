@@ -84,7 +84,7 @@ export class NzbgetClient implements DownloadClient {
     const warnings: string[] = [];
     const category = this.settings.category;
     if (category === '') {
-      warnings.push('No category is set. A category keeps Media-Tron downloads apart from everything else.');
+      warnings.push('No category is set. A category keeps Arclight downloads apart from everything else.');
     } else if (categoryIndex(options, category) === undefined) {
       warnings.push(`Category "${category}" does not exist in NZBGet. Add it under Settings > Categories.`);
     }
@@ -94,7 +94,7 @@ export class NzbgetClient implements DownloadClient {
     }
     if (removesCompletedDownloads(options)) {
       warnings.push(
-        'NZBGet KeepHistory is 0, so finished downloads leave the history immediately, before Media-Tron can import them. Set KeepHistory to at least 1 day.',
+        'NZBGet KeepHistory is 0, so finished downloads leave the history immediately, before Arclight can import them. Set KeepHistory to at least 1 day.',
       );
     }
     return { version, apiVersion: 'jsonrpc', warnings };

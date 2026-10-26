@@ -10,7 +10,7 @@ import {
   type UserCreate,
   type UserSelfUpdate,
   type UserUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { sessions, users } from '../../db/schema.js';

@@ -1,4 +1,4 @@
-import type { ReleaseProtocol } from '@media-tron/shared';
+import type { ReleaseProtocol } from '@arclight/shared';
 import { Badge, type BadgeTone } from './badge.js';
 
 const PROTOCOL_TONES: Record<ReleaseProtocol, BadgeTone> = { usenet: 'info', torrent: 'ok' };

@@ -1,5 +1,5 @@
 /**
- * Zod shapes of the Deluge Web UI JSON-RPC responses Media-Tron reads. Only the fields we
+ * Zod shapes of the Deluge Web UI JSON-RPC responses Arclight reads. Only the fields we
  * use are declared; everything else is stripped.
  */
 import { z } from 'zod';

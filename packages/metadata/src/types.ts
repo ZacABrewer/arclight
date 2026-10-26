@@ -1,4 +1,4 @@
-// Normalized metadata domain objects. Everything the rest of Media-Tron sees from the
+// Normalized metadata domain objects. Everything the rest of Arclight sees from the
 // metadata package is one of these shapes; the TMDB wire format never leaks past
 // `src/tmdb/map.ts`. Dates are ISO-8601 strings (YYYY-MM-DD), image URLs are absolute.
 

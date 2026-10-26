@@ -18,7 +18,7 @@ import {
 } from '../types.js';
 import { detectFormatFromBytes } from '../formats.js';
 
-export const DEFAULT_USER_AGENT = 'Media-Tron/0.1';
+export const DEFAULT_USER_AGENT = 'Arclight/0.1';
 
 export interface HttpOptions {
   method?: string | undefined;

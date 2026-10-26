@@ -1,8 +1,8 @@
 import { statfs } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { desc, eq, inArray } from 'drizzle-orm';
-import type { MediaFileInfo, NotificationEvent, ReleaseInfo } from '@media-tron/notifications';
-import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, MediaFile } from '@media-tron/shared';
+import type { MediaFileInfo, NotificationEvent, ReleaseInfo } from '@arclight/notifications';
+import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, MediaFile } from '@arclight/shared';
 import type { AppContext } from './app.js';
 import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
@@ -395,7 +395,7 @@ export function buildImportNotification(ctx: AppContext, event: ImportedEvent): 
     : undefined;
 
   const common = {
-    instanceName: 'Media-Tron',
+    instanceName: 'Arclight',
     timestamp: new Date().toISOString(),
     media,
     ...(eps ? { episodes: eps } : {}),
@@ -432,7 +432,7 @@ function fileInfoFrom(file: MediaFile): MediaFileInfo {
 
 /**
  * Fail a tracked download through history (which blocklists and triggers the re-search
- * handlers). Downloads Media-Tron never grabbed have no history to fail; they are blocklisted
+ * handlers). Downloads Arclight never grabbed have no history to fail; they are blocklisted
  * directly from the queue item instead.
  */
 export async function failTrackedDownload(

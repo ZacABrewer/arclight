@@ -53,7 +53,7 @@ describe('settings', () => {
       urlBase: 'RPC2',
       username: '',
       password: '',
-      category: 'media-tron',
+      category: 'arclight',
       addPaused: false,
       recentPriority: 'normal',
       olderPriority: 'normal',

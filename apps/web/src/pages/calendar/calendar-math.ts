@@ -1,4 +1,4 @@
-import type { CalendarItem } from '@media-tron/shared';
+import type { CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, parseDateish } from '../../components/media/format.js';
 

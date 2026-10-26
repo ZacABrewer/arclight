@@ -15,7 +15,7 @@ import type {
   MediaType,
   QualityModel,
   ReleaseProtocol,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
@@ -605,7 +605,7 @@ export class HistoryService {
   async failTracked(tracked: TrackedDownloadInfo, opts: MarkFailedOptions = {}): Promise<HistoryRecord[]> {
     const grabbed = this.findByDownloadId(tracked.downloadId, 'grabbed');
     if (grabbed.length === 0) {
-      throw new HistoryError('NOT_GRABBED', `Download ${tracked.downloadId} was not grabbed by Media-Tron`);
+      throw new HistoryError('NOT_GRABBED', `Download ${tracked.downloadId} was not grabbed by Arclight`);
     }
     const eventOpts: Parameters<HistoryService['failedEventFromGrabbed']>[1] = {
       message: opts.message ?? 'Manually marked as failed',

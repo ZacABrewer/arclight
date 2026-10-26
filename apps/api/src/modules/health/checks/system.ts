@@ -9,7 +9,7 @@ export const metadataSourceCheck: HealthCheckDef = {
       finding(
         this.id,
         'error',
-        'TMDB API key is not configured; series and movie metadata cannot be fetched. Set it in Settings > Metadata or MEDIATRON_TMDB_API_KEY',
+        'TMDB API key is not configured; series and movie metadata cannot be fetched. Set it in Settings > Metadata or ARCLIGHT_TMDB_API_KEY',
         'tmdb-api-key-missing',
       ),
     ];
@@ -25,7 +25,7 @@ export const updateCheck: HealthCheckDef = {
 };
 
 /**
- * System clock skew. Needs an authoritative time source, which Media-Tron does not contact
+ * System clock skew. Needs an authoritative time source, which Arclight does not contact
  * (privacy); the extension point exists and always passes.
  */
 export const systemTimeCheck: HealthCheckDef = {

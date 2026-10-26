@@ -1,17 +1,19 @@
-# Media-Tron Architecture
+# Arclight Architecture
 
-Media-Tron is a single, Docker-deployable content-acquisition service written from
+Arclight is a single, Docker-deployable content-acquisition service written from
 scratch. It does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
 (subtitles) and Seerr (requests) in one process with one database, one API, one login,
 one UI and one scheduler. It drives an external download client (qBittorrent by default)
 and tells the media server (Jellyfin / Emby / Plex) when content lands. It is **not** a
 media server.
 
+Arclight was started under the working name Media-Tron.
+
 This is a clean-room rebuild. No upstream code is copied. The upstream projects are
 treated as *behaviour specifications*: what a release name should parse to, what fields
 an indexer returns, how a provider is queried, what a user expects on a page. Those
 specs are written down in `docs/spec/` as we go, derived from reading the upstream
-source and docs, and Media-Tron implements them in its own code.
+source and docs, and Arclight implements them in its own code.
 
 ## Why one app changes the design
 
@@ -58,7 +60,7 @@ TypeScript end to end, one language for the whole project.
 State as of 2026-10-26. Test counts come from one `pnpm -r test` run (all green).
 
 ```
-media-tron/
+arclight/
 ├── apps/
 │   ├── api/                 Fastify host: modules, scheduler, SQLite/Drizzle, serves web/dist
 │   └── web/                 React SPA shell; most pages are still ComingSoon placeholders
@@ -68,7 +70,7 @@ media-tron/
 │   ├── profiles-engine/     Quality profile / custom format / delay / release profile logic
 │   ├── indexers/            Torznab + Newznab clients, caps, query planning, rate limiting
 │   ├── download-clients/    qBittorrent client, torrent hash helpers
-│   ├── metadata/            TMDB client and mapping to Media-Tron shapes
+│   ├── metadata/            TMDB client and mapping to Arclight shapes
 │   ├── organizer/           Naming-template parsing, file/folder name builders
 │   └── notifications/       Notification agents behind one event model
 ├── docker/                  Dockerfile, compose (build-from-source), entrypoint (PUID/PGID)
@@ -81,14 +83,14 @@ Packages are pure logic and external-service clients: no database, no HTTP serve
 
 | Package | Purpose | Tests |
 |---|---|---|
-| `@media-tron/shared` | Zod schemas and inferred types for every API shape, the quality vocabulary and the WebSocket event union. Areas: system, jobs, events, quality, profiles, library, indexers, download-clients, naming, settings, metadata, releases, imports, history, notifications, calendar. The last five files (releases, imports, history, notifications, calendar) are new and uncommitted. | none (`--passWithNoTests`) |
-| `@media-tron/parser` | Release-name parsing: series and movie titles, numbering, quality and revision, languages, release group, hash/obfuscation detection. Fixture-driven; fixtures run at 2910/2932 (99.2%) in `pnpm --filter @media-tron/parser report`. In progress: the folder is untracked, `scripts/_dbg.ts` is scratch, and `series.ts`/`movie.ts` have no unit test files of their own. | 41 |
-| `@media-tron/profiles-engine` | Evaluate quality profiles (allowed, cutoff, upgrade, revision), custom formats (spec matching and scoring), delay and release profiles. Used by the profiles module and, later, the decision engine. | 64 |
-| `@media-tron/indexers` | `Indexer` abstraction over Torznab and Newznab: caps, RSS, search, test; search planning, URL redaction, category helpers, per-indexer rate limiter. No YAML site definitions yet. | 58 |
-| `@media-tron/download-clients` | `DownloadClient` interface and a qBittorrent WebUI v2 client; torrent file and magnet hash extraction. qBittorrent only. | 64 |
-| `@media-tron/metadata` | TMDB client (search, series, movie, trending/discover helpers), mapping to Media-Tron metadata shapes, image URL builder, title cleaning. No TVDB fallback, no image caching. | 57 |
-| `@media-tron/organizer` | Parse naming formats and build episode/movie file names and series/season/movie folder names. Spec: `docs/spec/naming.md`. | 224 |
-| `@media-tron/notifications` | Agents behind `createAgent(kind, settings)`: Discord, Telegram, webhook, email (own SMTP), custom script, Gotify, ntfy, Pushover, Plex and Jellyfin/Emby (media-browser) refresh; event formatting. | 67 |
+| `@arclight/shared` | Zod schemas and inferred types for every API shape, the quality vocabulary and the WebSocket event union. Areas: system, jobs, events, quality, profiles, library, indexers, download-clients, naming, settings, metadata, releases, imports, history, notifications, calendar. The last five files (releases, imports, history, notifications, calendar) are new and uncommitted. | none (`--passWithNoTests`) |
+| `@arclight/parser` | Release-name parsing: series and movie titles, numbering, quality and revision, languages, release group, hash/obfuscation detection. Fixture-driven; fixtures run at 2910/2932 (99.2%) in `pnpm --filter @arclight/parser report`. In progress: the folder is untracked, `scripts/_dbg.ts` is scratch, and `series.ts`/`movie.ts` have no unit test files of their own. | 41 |
+| `@arclight/profiles-engine` | Evaluate quality profiles (allowed, cutoff, upgrade, revision), custom formats (spec matching and scoring), delay and release profiles. Used by the profiles module and, later, the decision engine. | 64 |
+| `@arclight/indexers` | `Indexer` abstraction over Torznab and Newznab: caps, RSS, search, test; search planning, URL redaction, category helpers, per-indexer rate limiter. No YAML site definitions yet. | 58 |
+| `@arclight/download-clients` | `DownloadClient` interface and a qBittorrent WebUI v2 client; torrent file and magnet hash extraction. qBittorrent only. | 64 |
+| `@arclight/metadata` | TMDB client (search, series, movie, trending/discover helpers), mapping to Arclight metadata shapes, image URL builder, title cleaning. No TVDB fallback, no image caching. | 57 |
+| `@arclight/organizer` | Parse naming formats and build episode/movie file names and series/season/movie folder names. Spec: `docs/spec/naming.md`. | 224 |
+| `@arclight/notifications` | Agents behind `createAgent(kind, settings)`: Discord, Telegram, webhook, email (own SMTP), custom script, Gotify, ntfy, Pushover, Plex and Jellyfin/Emby (media-browser) refresh; event formatting. | 67 |
 
 There is no `packages/subtitles` yet (Phase 3).
 
@@ -140,8 +142,8 @@ feed, and a small component kit (table, form, modal, tabs, toast).
 
 ```
 docker compose up
-├── media-tron      Node 24, port 7878, serves API + SPA + WebSocket
-│     ├── /config   media-tron.db, logs, backups, image cache
+├── arclight      Node 24, port 7878, serves API + SPA + WebSocket
+│     ├── /config   arclight.db, logs, backups, image cache
 │     ├── /tv  /movies  /downloads
 │     └── scheduler (today): RssSync · IndexerStatusCheck · RefreshQueue ·
 │         RefreshSeries · RefreshMovie · HealthCheck

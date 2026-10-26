@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { LogLevel, type LogFile, type LogRecord } from '@media-tron/shared';
+import { LogLevel, type LogFile, type LogRecord } from '@arclight/shared';
 import { connectLogStream, logsApi } from '../../api/logs.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

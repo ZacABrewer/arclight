@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { PERMISSION_INFO, Permission, type User } from '@media-tron/shared';
+import { PERMISSION_INFO, Permission, type User } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { authKeys } from '../../../auth/guard.js';

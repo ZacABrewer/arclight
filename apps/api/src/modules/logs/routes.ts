@@ -1,6 +1,6 @@
 import { createReadStream } from 'node:fs';
 import { z } from 'zod';
-import { LogFile, LogPage, LogQuery, LogsErrorResponse } from '@media-tron/shared';
+import { LogFile, LogPage, LogQuery, LogsErrorResponse } from '@arclight/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { LogsError, type LogsService } from './service.js';

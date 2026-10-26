@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
-import { Permission } from '@media-tron/shared';
+import { Permission } from '@arclight/shared';
 import { defaultSettings, renderAt, stubApi } from '../../../features/requests/test-utils.js';
 import { moveItem } from './sliders-card.js';
 import { fromDraft, parseIdList, toDraft } from './override-rules-card.js';

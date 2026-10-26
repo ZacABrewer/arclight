@@ -8,8 +8,8 @@ import {
   type NotificationAgentKind,
   type NotificationEvent,
   type RequestInfo,
-} from '@media-tron/notifications';
-import { Permission, type UserNotificationTestResult, type UserNotificationTypes } from '@media-tron/shared';
+} from '@arclight/notifications';
+import { Permission, type UserNotificationTestResult, type UserNotificationTypes } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { movies, notifications, series, tags as tagTable } from '../../db/schema.js';
@@ -75,7 +75,7 @@ export class RequestNotifier {
     this.log = opts.log;
     this.agentFactory = opts.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
     this.systemDispatch = opts.systemDispatch;
-    this.instanceName = opts.instanceName ?? 'Media-Tron';
+    this.instanceName = opts.instanceName ?? 'Arclight';
     this.now = opts.now ?? (() => new Date());
   }
 

@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BackupSettings } from '@media-tron/shared';
+import type { BackupSettings } from '@arclight/shared';
 import { backupApi } from '../api/backup.js';
 import { queryKeys } from './query-keys.js';
 

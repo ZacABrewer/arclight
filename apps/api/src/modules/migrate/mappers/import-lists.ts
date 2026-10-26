@@ -1,4 +1,4 @@
-import type { ImportListImplementation, MinimumAvailability, MonitorOption, SeriesType } from '@media-tron/shared';
+import type { ImportListImplementation, MinimumAvailability, MonitorOption, SeriesType } from '@arclight/shared';
 import { bool, field, int, str, type ForeignRow } from '../foreign-db.js';
 import type { ArrApp } from './quality.js';
 
@@ -72,7 +72,7 @@ export function mapImportListSettings(upstream: string, s: Record<string, unknow
     case 'traktlistimport':
     case 'traktuserimport':
     case 'traktpopularimport':
-      return { implementation: null, settings: {}, unsupported: 'Trakt lists must be re-authorised in Media-Tron (tokens belong to the upstream app)', notes };
+      return { implementation: null, settings: {}, unsupported: 'Trakt lists must be re-authorised in Arclight (tokens belong to the upstream app)', notes };
     default:
       return { implementation: null, settings: {}, unsupported: `${upstream || 'unknown'} import lists are not supported`, notes };
   }

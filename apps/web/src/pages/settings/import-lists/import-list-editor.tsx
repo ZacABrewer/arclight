@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { ImportList, ImportListMediaType, ImportListSchema, ImportListTestResult, TraktPollResponse } from '@media-tron/shared';
+import type { ImportList, ImportListMediaType, ImportListSchema, ImportListTestResult, TraktPollResponse } from '@arclight/shared';
 import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
 import { Button } from '../../../components/button.js';

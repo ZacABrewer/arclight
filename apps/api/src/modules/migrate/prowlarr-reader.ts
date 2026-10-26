@@ -1,4 +1,4 @@
-import type { MigratePathMapping } from '@media-tron/shared';
+import type { MigratePathMapping } from '@arclight/shared';
 import { arrSchemaVersion, readTags, warn, type ReaderContext } from './arr-common.js';
 import { parseArrConfigXml, readTextFile } from './config-files.js';
 import { MigrateError } from './errors.js';
@@ -26,7 +26,7 @@ export function readProwlarr(dbPath: string, configPath: string | undefined, map
     const apiKey = config['apikey'] ?? null;
     const baseUrl = prowlarrBaseUrl(config);
     if (!apiKey) warn(ctx, 'indexers', 'Prowlarr config.xml not found or has no ApiKey; proxied indexers are imported without a key (set it in Settings → Indexers)');
-    else warn(ctx, 'indexers', `proxied indexers point at ${baseUrl}; change the host if Media-Tron reaches Prowlarr under another name`);
+    else warn(ctx, 'indexers', `proxied indexers point at ${baseUrl}; change the host if Arclight reaches Prowlarr under another name`);
 
     const indexers: SourceItem<IndexerPayload>[] = [];
     const cardigann: SourceItem<unknown>[] = [];

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { AuthStatus } from '@media-tron/shared';
+import type { AuthStatus } from '@arclight/shared';
 import { resolveAuthRedirect } from './auth/guard.js';
 import { NAV, visibleNav } from './nav.js';
 import { user } from './features/requests/test-utils.js';

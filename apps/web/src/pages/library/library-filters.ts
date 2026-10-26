@@ -1,4 +1,4 @@
-import type { Movie, Series } from '@media-tron/shared';
+import type { Movie, Series } from '@arclight/shared';
 import { imageUrl } from '../../components/media/format.js';
 
 // Library index model: series and movies are normalised to one row shape so filtering,

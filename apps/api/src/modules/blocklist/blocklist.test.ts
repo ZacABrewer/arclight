@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { BlocklistListQuery, type BlocklistAddRequestInput, type BlocklistListQueryInput } from '@media-tron/shared';
+import { BlocklistListQuery, type BlocklistAddRequestInput, type BlocklistListQueryInput } from '@arclight/shared';
 import { quality, setup, type Fixture } from '../history/test-support.js';
 import { blocklistRoutes } from './routes.js';
 import { BlocklistError, matchesBlocklistEntry, type BlocklistCandidate } from './service.js';

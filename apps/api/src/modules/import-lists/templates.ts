@@ -1,7 +1,7 @@
-import type { ImportListField, ImportListImplementation, ImportListMediaType, ImportListSchema } from '@media-tron/shared';
+import type { ImportListField, ImportListImplementation, ImportListMediaType, ImportListSchema } from '@arclight/shared';
 
 // Form definitions served by GET /importlist/schema. Field names match the settings schemas
-// in @media-tron/shared (importListSettingsSchemas); the server validates with those.
+// in @arclight/shared (importListSettingsSchemas); the server validates with those.
 
 const f = (
   name: string,

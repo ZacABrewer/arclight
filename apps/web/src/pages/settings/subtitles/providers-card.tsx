@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { SubtitleProviderConfig, SubtitleProviderField, SubtitleProviderSchema, SubtitleProviderStatus } from '@media-tron/shared';
+import type { SubtitleProviderConfig, SubtitleProviderField, SubtitleProviderSchema, SubtitleProviderStatus } from '@arclight/shared';
 import { subtitlesApi } from '../../../api/subtitles.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';

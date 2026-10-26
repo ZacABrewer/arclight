@@ -22,7 +22,7 @@
     },
     "categories": [
       { "name": "*", "order": 0, "pp": "3", "script": "None", "dir": "", "newzbin": "", "priority": 0 },
-      { "name": "media-tron", "order": 1, "pp": "", "script": "Default", "dir": "media-tron", "newzbin": "", "priority": -100 },
+      { "name": "arclight", "order": 1, "pp": "", "script": "Default", "dir": "arclight", "newzbin": "", "priority": -100 },
       { "name": "software", "order": 2, "pp": "", "script": "Default", "dir": "/mnt/software/*", "newzbin": "", "priority": -100 },
       { "name": "uhd", "order": 3, "pp": "", "script": "Default", "dir": "D:\\Media\\UHD", "newzbin": "", "priority": -100 }
     ]

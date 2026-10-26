@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { CalendarItem } from '@media-tron/shared';
+import type { CalendarItem } from '@arclight/shared';
 import { localIsoDate } from '../../components/media/episode-status.js';
 import { makeEpisode } from '../library/test-fixtures.js';
 import { buildFeedUrl } from './calendar-page.js';

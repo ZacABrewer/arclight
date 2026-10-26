@@ -11,7 +11,7 @@ import {
   TraktListSettings,
   TraktPopularSettings,
   TraktUserSettings,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ImportListFetchError } from './errors.js';
 import { parseCsv, parseFeed, parseImdbExport, providers, traktDeviceCode, traktPollToken, withTmdbErrors } from './providers/index.js';
 import { request } from './providers/http.js';

@@ -7,7 +7,7 @@ import {
   type SetupRootFolderRequest,
   type SetupStatus,
   type User,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { downloadClients, indexers, rootFolders } from '../../db/schema.js';
 import { libraryService } from '../library/index.js';
@@ -33,7 +33,7 @@ export class SetupService {
         { id: 'admin', complete: this.auth.hasUsers(), optional: false },
         {
           id: 'tmdb',
-          complete: getSection(this.db, 'metadata').tmdbApiKey !== undefined || Boolean(process.env['MEDIATRON_TMDB_API_KEY']),
+          complete: getSection(this.db, 'metadata').tmdbApiKey !== undefined || Boolean(process.env['ARCLIGHT_TMDB_API_KEY']),
           optional: false,
         },
         { id: 'rootFolders', complete: has(rootFolders), optional: false },

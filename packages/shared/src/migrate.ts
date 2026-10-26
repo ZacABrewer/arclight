@@ -1,14 +1,14 @@
 import { z } from 'zod';
 
 // Adoption importer contract: read an existing Sonarr / Radarr / Prowlarr / Bazarr / Seerr
-// installation (its SQLite database plus config file) and populate Media-Tron from it.
+// installation (its SQLite database plus config file) and populate Arclight from it.
 // `POST /migrate/plan` analyses without writing; `POST /migrate/apply` runs the import as a
 // background job whose progress is served by `GET /migrate/status`.
 
 export const MigrateApp = z.enum(['sonarr', 'radarr', 'prowlarr', 'bazarr', 'seerr']);
 export type MigrateApp = z.infer<typeof MigrateApp>;
 
-/** Rewrites a path prefix seen by the old app (`from`) to the one Media-Tron sees (`to`). */
+/** Rewrites a path prefix seen by the old app (`from`) to the one Arclight sees (`to`). */
 export const MigratePathMapping = z.object({
   from: z.string().min(1),
   to: z.string().min(1),
@@ -65,7 +65,7 @@ export type MigrateArea = z.infer<typeof MigrateArea>;
 export const MigrateConflictPolicy = z.enum(['skip', 'overwrite']);
 export type MigrateConflictPolicy = z.infer<typeof MigrateConflictPolicy>;
 
-/** What happens to an area on apply: written to Media-Tron, staged for a later module, or only reported. */
+/** What happens to an area on apply: written to Arclight, staged for a later module, or only reported. */
 export const MigrateAreaMode = z.enum(['import', 'stage', 'report']);
 export type MigrateAreaMode = z.infer<typeof MigrateAreaMode>;
 
@@ -101,7 +101,7 @@ export const MigrationAreaPlan = z.object({
   total: z.number().int().min(0),
   /** Rows that would be created (no conflict, supported, not imported before). */
   create: z.number().int().min(0),
-  /** Rows matching existing Media-Tron data (skipped or overwritten per policy). */
+  /** Rows matching existing Arclight data (skipped or overwritten per policy). */
   conflicts: z.number().int().min(0),
   /** Rows already imported by an earlier run (always skipped). */
   alreadyImported: z.number().int().min(0),
@@ -289,7 +289,7 @@ export const StagedSubtitleEvent = z.object({
 });
 export type StagedSubtitleEvent = z.infer<typeof StagedSubtitleEvent>;
 
-/** `requests.users`: Seerr users. Media-Tron users have no "must reset password" flag yet. */
+/** `requests.users`: Seerr users. Arclight users have no "must reset password" flag yet. */
 export const StagedRequestUser = z.object({
   email: z.string(),
   username: z.string().nullable(),

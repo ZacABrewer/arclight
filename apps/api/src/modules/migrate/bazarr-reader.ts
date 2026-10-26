@@ -1,5 +1,5 @@
 import { dirname, join } from 'node:path';
-import type { MigratePathMapping, StagedSubtitleEvent, StagedSubtitleLanguageProfile, StagedSubtitleProvider } from '@media-tron/shared';
+import type { MigratePathMapping, StagedSubtitleEvent, StagedSubtitleLanguageProfile, StagedSubtitleProvider } from '@arclight/shared';
 import { warn } from './arr-common.js';
 import { parseIni, parseSimpleYaml, readTextFile, section, type ConfigTree } from './config-files.js';
 import { MigrateError } from './errors.js';
@@ -7,12 +7,12 @@ import { bool, field, ForeignDb, int, isoDate, json, jsonArray, num, str, type F
 import { normalizeLanguageCode } from './mappers/languages.js';
 import { remapPath } from './paths.js';
 import type { SourceBundle, SourceItem } from './types.js';
-import type { MigrationWarning } from '@media-tron/shared';
+import type { MigrationWarning } from '@arclight/shared';
 
-// Bazarr. Nothing here maps onto an existing Media-Tron table yet: the subtitles module is
+// Bazarr. Nothing here maps onto an existing Arclight table yet: the subtitles module is
 // built in parallel, so languages profiles, providers (with credentials) and subtitle
 // history/blacklist are staged in `migrate_staging` (areas `subtitles.*`, payloads typed in
-// @media-tron/shared migrate.ts) for that module to import when it lands.
+// @arclight/shared migrate.ts) for that module to import when it lands.
 
 function flagMode(v: unknown): 'only' | 'also' | 'never' {
   const s = String(v ?? '').toLowerCase();

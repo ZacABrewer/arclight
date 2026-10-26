@@ -30,7 +30,7 @@ import {
   SubtitleUploadFields,
   WantedSubtitlesPage,
   WantedSubtitlesQuery,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { requireAdmin } from '../auth/hook.js';
 import { SubtitlesError, type SubtitlesService } from './service.js';
 

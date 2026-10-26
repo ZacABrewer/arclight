@@ -7,7 +7,7 @@ import {
   type MediaType,
   type QualityModel,
   type QueueItem,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Manual import wizard state: one row per candidate file with the user's mapping. Pure so the
 // mapping rules are unit-tested without rendering.

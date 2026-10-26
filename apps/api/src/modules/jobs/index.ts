@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { Job, RunJobRequest, ScheduledJob } from '@media-tron/shared';
+import { Job, RunJobRequest, ScheduledJob } from '@arclight/shared';
 import type { AppModule } from '../../app.js';
 
 export const jobsModule: AppModule = (ctx) => async (app) => {

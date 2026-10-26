@@ -1,5 +1,5 @@
 {
-  "name": "@media-tron/parser",
+  "name": "@arclight/parser",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -12,7 +12,7 @@
     "report": "tsx scripts/fixture-report.ts"
   },
   "dependencies": {
-    "@media-tron/shared": "workspace:*"
+    "@arclight/shared": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^24.7.2",

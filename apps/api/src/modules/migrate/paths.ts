@@ -1,6 +1,6 @@
-import type { MigratePathMapping } from '@media-tron/shared';
+import type { MigratePathMapping } from '@arclight/shared';
 
-// Path remapping between the old app's view of the filesystem and Media-Tron's (different
+// Path remapping between the old app's view of the filesystem and Arclight's (different
 // containers mount the same share at different places, or the old app ran on Windows).
 // The longest matching `from` prefix wins; matching is on whole path segments, separator
 // agnostic, and case-insensitive for Windows-style prefixes.

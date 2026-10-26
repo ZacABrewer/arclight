@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { ImportListCreateInput, ImportListExclusionCreate, ImportListSettings, MediaType } from '@media-tron/shared';
+import type { ImportListCreateInput, ImportListExclusionCreate, ImportListSettings, MediaType } from '@arclight/shared';
 import { importListsApi } from '../api/import-lists.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 

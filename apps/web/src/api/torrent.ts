@@ -7,7 +7,7 @@ import {
   type TorrentMoveRequest,
   type TorrentPriorityRequest,
   type TorrentSettingsUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/torrent/routes.ts (the built-in torrent engine).

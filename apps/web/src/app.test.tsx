@@ -21,12 +21,12 @@ class FakeSocket {
 
 const responses: Record<string, unknown> = {
   '/api/v1/system/status': {
-    appName: 'Media-Tron',
+    appName: 'Arclight',
     version: '0.1.0',
     startTime: '2026-10-25T09:00:00.000Z',
     uptimeSeconds: 3700,
     runtime: { node: 'v24.0.0', platform: 'linux', arch: 'x64' },
-    paths: { config: '/config', database: '/config/media-tron.db', logs: '/config/logs' },
+    paths: { config: '/config', database: '/config/arclight.db', logs: '/config/logs' },
     isDocker: true,
   },
   '/api/v1/health': { status: 'ok', checks: [] },
@@ -75,7 +75,7 @@ describe('app shell', () => {
   it('renders the system status page inside the shell', async () => {
     renderAt('/system/status');
     expect(await screen.findByRole('heading', { level: 1, name: 'Status' })).toBeTruthy();
-    expect(await screen.findByText('/config/media-tron.db')).toBeTruthy();
+    expect(await screen.findByText('/config/arclight.db')).toBeTruthy();
     expect(screen.getByRole('navigation')).toBeTruthy();
     expect(screen.getByRole('link', { name: 'Tasks' })).toBeTruthy();
   });

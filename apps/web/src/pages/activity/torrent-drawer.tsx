@@ -1,4 +1,4 @@
-import type { TorrentDetail, TorrentState } from '@media-tron/shared';
+import type { TorrentDetail, TorrentState } from '@arclight/shared';
 import { Badge, type BadgeTone } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { EmptyState } from '../../components/empty-state.js';

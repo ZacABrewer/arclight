@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
-import type { QualityModel } from '@media-tron/shared';
+import type { QualityModel } from '@arclight/shared';
 
 // The user-visible activity log: one row per item (episode or movie) per event. Append-only;
 // rows go away only with their parent (series/movie) or through housekeeping.

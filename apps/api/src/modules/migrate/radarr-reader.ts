@@ -1,4 +1,4 @@
-import type { MigratePathMapping, MovieStatus } from '@media-tron/shared';
+import type { MigratePathMapping, MovieStatus } from '@arclight/shared';
 import { arrSchemaVersion, readArrInfrastructure, remappedRootFolders, rootFolderFor, warn, type ReaderContext } from './arr-common.js';
 import { MigrateError } from './errors.js';
 import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, str, type ForeignRow } from './foreign-db.js';

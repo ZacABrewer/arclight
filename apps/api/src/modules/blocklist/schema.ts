@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
-import type { QualityModel } from '@media-tron/shared';
+import type { QualityModel } from '@arclight/shared';
 
 // Releases that must not be grabbed again, scoped to one parent (series or movie). Entries
 // never expire; they are removed by the user, with their parent, or by housekeeping.

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { IndexerDefinitionSummary, IndexerPrivacy, ReleaseProtocol } from '@media-tron/shared';
+import type { IndexerDefinitionSummary, IndexerPrivacy, ReleaseProtocol } from '@arclight/shared';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
 import { EmptyState } from '../../../components/empty-state.js';

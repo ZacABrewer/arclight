@@ -2,7 +2,7 @@ import type { FastifyReply, FastifyRequest } from 'fastify';
 
 // Minimal cookie handling for the one cookie we own; no cookie plugin needed.
 
-export const SESSION_COOKIE = 'mt_session';
+export const SESSION_COOKIE = 'al_session';
 
 export function readCookie(header: string | undefined, name: string): string | undefined {
   if (!header) return undefined;

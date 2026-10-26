@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Permission, type MediaRequest, type RequestFilter, type RequestListQuery } from '@media-tron/shared';
+import { Permission, type MediaRequest, type RequestFilter, type RequestListQuery } from '@arclight/shared';
 import { kindOf } from '../../api/requests.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

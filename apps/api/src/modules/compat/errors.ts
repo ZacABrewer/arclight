@@ -1,5 +1,5 @@
 import type { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
-import { isMetadataError } from '@media-tron/metadata';
+import { isMetadataError } from '@arclight/metadata';
 import { DownloadClientsError } from '../download-clients/index.js';
 import { HistoryError } from '../history/index.js';
 import { ImportsError } from '../imports/index.js';

@@ -1,7 +1,7 @@
 import { readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
-import type { MediaInfo } from '@media-tron/shared';
-import { parseLanguageTag, parseSubtitleFileName, type ProbeResult } from '@media-tron/subtitles';
+import type { MediaInfo } from '@arclight/shared';
+import { parseLanguageTag, parseSubtitleFileName, type ProbeResult } from '@arclight/subtitles';
 import type { ProcessRunner } from './runner.js';
 
 // Disk side of indexing (spec R7, R9.8): external subtitle files next to the video (and in the

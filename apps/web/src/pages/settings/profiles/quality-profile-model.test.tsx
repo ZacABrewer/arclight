@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { fireEvent, render, screen, within } from '@testing-library/react';
-import type { DelayProfile, QualityProfileInput, QualityProfileItem } from '@media-tron/shared';
+import type { DelayProfile, QualityProfileInput, QualityProfileItem } from '@arclight/shared';
 import { QualityItemList } from './quality-item-list.js';
 import {
   cutoffOptions,

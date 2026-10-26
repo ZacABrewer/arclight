@@ -52,7 +52,7 @@ describe('settings', () => {
       port: 8112,
       useSsl: false,
       password: '',
-      category: 'media-tron',
+      category: 'arclight',
       recentPriority: 'last',
       olderPriority: 'last',
       addPaused: false,

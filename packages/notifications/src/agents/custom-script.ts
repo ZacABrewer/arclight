@@ -18,12 +18,12 @@ export type SpawnLike = (
   options: { env: NodeJS.ProcessEnv; windowsHide: boolean },
 ) => ChildLike;
 
-export const ENV_PREFIX = 'MEDIATRON_';
+export const ENV_PREFIX = 'ARCLIGHT_';
 
 /**
  * Flatten an event into environment variables. Nested objects join with "_", arrays of
  * primitives join with "|", and arrays of objects become one variable per property with
- * values joined by "|" (so `episodes[].title` -> `MEDIATRON_EPISODES_TITLE=a|b`).
+ * values joined by "|" (so `episodes[].title` -> `ARCLIGHT_EPISODES_TITLE=a|b`).
  */
 export function eventToEnv(event: NotificationEvent): Record<string, string> {
   const env: Record<string, string> = {};

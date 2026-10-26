@@ -62,7 +62,7 @@ export class GestdownProvider extends BaseProvider {
   private readonly base: string;
 
   constructor(config: GestdownConfig = {}, ctx: ProviderContext = {}) {
-    super({ userAgent: 'Media-Tron', ...ctx });
+    super({ userAgent: 'Arclight', ...ctx });
     this.base = (config.baseUrl ?? 'https://api.gestdown.info').replace(/\/+$/, '');
   }
 

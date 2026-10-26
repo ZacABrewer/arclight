@@ -1,4 +1,4 @@
-# Runs Media-Tron on this PC against an isolated test environment, so nothing touches the NAS.
+# Runs Arclight on this PC against an isolated test environment, so nothing touches the NAS.
 #
 #   .\scripts\local-test.ps1            build web + start api on http://localhost:17878
 #   .\scripts\local-test.ps1 -NoBuild   skip the web build (api only picks up a previous build)
@@ -25,7 +25,7 @@ if ($Reset) {
 
 if (-not $NoBuild) {
   Write-Host "Building web app..."
-  pnpm --filter @media-tron/web build
+  pnpm --filter @arclight/web build
   if (-not $?) { throw "web build failed" }
 }
 
@@ -38,14 +38,14 @@ if (Test-Path $dotenv) {
   }
 }
 
-$env:MEDIATRON_CONFIG = Join-Path $env 'config'
-$env:MEDIATRON_PORT = "$Port"
-$env:MEDIATRON_HOST = '127.0.0.1'
-$env:MEDIATRON_WEB_DIST = Join-Path $repo 'apps\web\dist'
-$env:MEDIATRON_LOG_LEVEL = 'info'
+$env:ARCLIGHT_CONFIG = Join-Path $env 'config'
+$env:ARCLIGHT_PORT = "$Port"
+$env:ARCLIGHT_HOST = '127.0.0.1'
+$env:ARCLIGHT_WEB_DIST = Join-Path $repo 'apps\web\dist'
+$env:ARCLIGHT_LOG_LEVEL = 'info'
 
 Write-Host ""
-Write-Host "Media-Tron test instance"
+Write-Host "Arclight test instance"
 Write-Host "  UI/API     http://localhost:$Port"
 Write-Host "  config     $env\config"
 Write-Host "  tv         $env\tv"

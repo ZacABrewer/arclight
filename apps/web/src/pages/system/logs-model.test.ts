@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { LogRecord } from '@media-tron/shared';
+import type { LogRecord } from '@arclight/shared';
 import { formatCountdown } from '../activity/pending-page.js';
 import { matchesLogFilter, mergeLive, visibleRecords } from './logs-model.js';
 

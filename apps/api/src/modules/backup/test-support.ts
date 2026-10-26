@@ -25,7 +25,7 @@ export function harness(over: Partial<BackupServiceOptions> = {}): Harness {
   const dir = mkdtempSync(join(tmpdir(), 'mt-backup-'));
   const config: AppConfig = {
     configDir: dir,
-    dbPath: join(dir, 'media-tron.db'),
+    dbPath: join(dir, 'arclight.db'),
     logDir: join(dir, 'logs'),
     port: 0,
     host: '127.0.0.1',
@@ -34,7 +34,7 @@ export function harness(over: Partial<BackupServiceOptions> = {}): Harness {
     webDist: null,
   };
   mkdirSync(config.logDir, { recursive: true });
-  writeFileSync(join(config.logDir, 'media-tron.log'), 'log line\n');
+  writeFileSync(join(config.logDir, 'arclight.log'), 'log line\n');
   writeFileSync(join(dir, 'wg0.conf'), '[Interface]\nPrivateKey = abc\n');
   mkdirSync(join(dir, 'custom'), { recursive: true });
   writeFileSync(join(dir, 'custom', 'notes.txt'), 'hello');

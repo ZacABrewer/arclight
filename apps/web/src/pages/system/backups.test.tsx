@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import type { Backup, BackupSettings, SystemStatus } from '@media-tron/shared';
+import type { Backup, BackupSettings, SystemStatus } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { RestartBanner } from '../../layout/restart-banner.js';
 import { createToastStore, type ToastStore } from '../../lib/toast.js';
@@ -11,17 +11,17 @@ import { parseBackupDraft, SystemBackupsPage } from './backups.js';
 type Call = { url: string; method: string; body: unknown };
 
 const backups: Backup[] = [
-  { id: 'media-tron_manual_2026.10.25_04.00.00.zip', name: 'media-tron_manual_2026.10.25_04.00.00.zip', type: 'manual', size: 2_097_152, time: '2026-10-25T04:00:00.000Z' },
-  { id: 'media-tron_scheduled_2026.10.24_04.00.00.zip', name: 'media-tron_scheduled_2026.10.24_04.00.00.zip', type: 'scheduled', size: 1024, time: '2026-10-24T04:00:00.000Z' },
+  { id: 'arclight_manual_2026.10.25_04.00.00.zip', name: 'arclight_manual_2026.10.25_04.00.00.zip', type: 'manual', size: 2_097_152, time: '2026-10-25T04:00:00.000Z' },
+  { id: 'arclight_scheduled_2026.10.24_04.00.00.zip', name: 'arclight_scheduled_2026.10.24_04.00.00.zip', type: 'scheduled', size: 1024, time: '2026-10-24T04:00:00.000Z' },
 ];
 
 const status = (over: Partial<SystemStatus> = {}): SystemStatus => ({
-  appName: 'Media-Tron',
+  appName: 'Arclight',
   version: '0.1.0',
   startTime: '2026-10-25T00:00:00.000Z',
   uptimeSeconds: 10,
   runtime: { node: 'v24', platform: 'linux', arch: 'x64' },
-  paths: { config: '/config', database: '/config/media-tron.db', logs: '/config/logs' },
+  paths: { config: '/config', database: '/config/arclight.db', logs: '/config/logs' },
   isDocker: true,
   restartRequired: false,
   ...over,
@@ -53,7 +53,7 @@ beforeEach(() => {
         case key === 'GET /api/v1/system/backup':
           return json(list);
         case key === 'POST /api/v1/system/backup': {
-          const b: Backup = { ...backups[0]!, id: 'media-tron_manual_2026.10.25_05.00.00.zip', name: 'media-tron_manual_2026.10.25_05.00.00.zip' };
+          const b: Backup = { ...backups[0]!, id: 'arclight_manual_2026.10.25_05.00.00.zip', name: 'arclight_manual_2026.10.25_05.00.00.zip' };
           list = [b, ...list];
           return json(b, 201);
         }
@@ -114,7 +114,7 @@ describe('System → Backups', () => {
     renderWith(<SystemBackupsPage />);
     await rowOf(backups[0]!.name);
     fireEvent.click(screen.getByRole('button', { name: 'Back up now' }));
-    expect(await screen.findByText('media-tron_manual_2026.10.25_05.00.00.zip')).toBeTruthy();
+    expect(await screen.findByText('arclight_manual_2026.10.25_05.00.00.zip')).toBeTruthy();
     expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/system/backup')).toHaveLength(1);
   });
 
@@ -131,13 +131,13 @@ describe('System → Backups', () => {
 
   it('keeps the dialog open with the error when a restore is refused', async () => {
     overrides[`POST /api/v1/system/backup/restore/${backups[0]!.id}`] = () =>
-      new Response(JSON.stringify({ error: 'backup is from a newer Media-Tron version', code: 'INVALID_BACKUP' }), { status: 400 });
+      new Response(JSON.stringify({ error: 'backup is from a newer Arclight version', code: 'INVALID_BACKUP' }), { status: 400 });
     renderWith(<SystemBackupsPage />);
     const row = await rowOf(backups[0]!.name);
     fireEvent.click(within(row).getByRole('button', { name: `Restore ${backups[0]!.name}` }));
     const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
-    expect((await within(dialog).findByRole('alert')).textContent).toContain('newer Media-Tron version');
+    expect((await within(dialog).findByRole('alert')).textContent).toContain('newer Arclight version');
   });
 
   it('restores from an uploaded file as multipart form data', async () => {
@@ -205,7 +205,7 @@ describe('RestartBanner', () => {
     const reload = vi.fn();
     renderWith(<RestartBanner reload={reload} pollMs={20} />);
     fireEvent.click(await screen.findByRole('button', { name: 'Restart now' }));
-    expect(await screen.findByText(/Restarting Media-Tron/)).toBeTruthy();
+    expect(await screen.findByText(/Restarting Arclight/)).toBeTruthy();
     expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/system/restart')).toBe(true);
     // Still the old process: no reload yet.
     await new Promise((r) => setTimeout(r, 60));

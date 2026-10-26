@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { HistoryListQuery, type HistoryListQueryInput, type ServerEvent } from '@media-tron/shared';
+import { HistoryListQuery, type HistoryListQueryInput, type ServerEvent } from '@arclight/shared';
 import { episodes } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { historyRoutes } from './routes.js';
@@ -244,7 +244,7 @@ describe('failed downloads', () => {
     f.clock.advance(HOUR);
     const rows = await f.history.failTracked(
       { downloadId: 'HASH1', protocol: 'torrent', downloadClientName: 'Live qBit', sizeBytes: 1_999 },
-      { message: 'Disk full', source: 'Media-Tron Failed Download Handling' },
+      { message: 'Disk full', source: 'Arclight Failed Download Handling' },
     );
     expect(rows).toHaveLength(2);
     expect(rows[0]).toMatchObject({ eventType: 'downloadFailed', downloadId: 'HASH1', sourceTitle: 'Zeta.Show.S01E01.1080p.WEB-DL-GRP' });
@@ -255,7 +255,7 @@ describe('failed downloads', () => {
       releaseGroup: 'GRP',
       size: '1999',
       indexer: 'Tracker1',
-      source: 'Media-Tron Failed Download Handling',
+      source: 'Arclight Failed Download Handling',
     });
     const bl = f.blocklist.forSeries(f.seriesId);
     expect(bl).toHaveLength(1);
@@ -269,7 +269,7 @@ describe('failed downloads', () => {
       publishedDate: '2025-01-09T12:00:00.000Z',
       indexerFlags: ['freeleech'],
       releaseType: 'singleEpisode',
-      source: 'Media-Tron Failed Download Handling',
+      source: 'Arclight Failed Download Handling',
     });
   });
 

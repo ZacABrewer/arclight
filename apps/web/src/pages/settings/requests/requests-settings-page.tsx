@@ -6,7 +6,7 @@ import {
   type Request4kDefaults,
   type RequestsSettings,
   type RequestTypeDefaults,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';
 import { ErrorView } from '../../../components/error-boundary.js';

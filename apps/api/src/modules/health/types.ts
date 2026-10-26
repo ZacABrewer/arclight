@@ -1,4 +1,4 @@
-import type { HealthCheck, HealthStatus, TorrentSessionStatus, VpnStatus } from '@media-tron/shared';
+import type { HealthCheck, HealthStatus, TorrentSessionStatus, VpnStatus } from '@arclight/shared';
 
 // Health check framework types. A check is a named function over `HealthDeps` (everything it
 // may look at, injectable so tests use fakes) returning zero or more findings. A passing check

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Indexer, IndexerDefinitionSummary } from '@media-tron/shared';
+import type { Indexer, IndexerDefinitionSummary } from '@arclight/shared';
 import { indexersApi } from '../../../api/indexers.js';
 import { Badge } from '../../../components/badge.js';
 import { ErrorView } from '../../../components/error-boundary.js';

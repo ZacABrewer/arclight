@@ -11,7 +11,7 @@ import {
   synthesizeCaps,
   type Definition,
   type SettingDefinition,
-} from '@media-tron/indexers';
+} from '@arclight/indexers';
 import type {
   DefinitionFieldValue,
   DefinitionLoadError,
@@ -20,10 +20,10 @@ import type {
   IndexerDefinitionListQuery,
   IndexerDefinitionReloadResult,
   IndexerDefinitionSummary,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // The definition catalogue as the api serves it: definitions bundled with
-// @media-tron/indexers plus user YAML files in `<config>/definitions`, which override bundled
+// @arclight/indexers plus user YAML files in `<config>/definitions`, which override bundled
 // ones by id. The user directory is watched (debounced) and can be reloaded on demand.
 
 export type DefinitionSource = 'builtin' | 'custom';

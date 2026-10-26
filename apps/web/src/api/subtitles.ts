@@ -20,7 +20,7 @@ import {
   type SubtitleMediaType,
   type SubtitleProviderId,
   type SubtitleSearchCommand,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Subtitles (Phase 3). Every response is parsed with the shared contract in

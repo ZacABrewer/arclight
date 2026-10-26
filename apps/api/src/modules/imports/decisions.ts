@@ -1,7 +1,7 @@
 import { basename, isAbsolute } from 'node:path';
-import type { ParsedRelease } from '@media-tron/parser';
-import { requiresAbsoluteNumber, requiresEpisodeTitle } from '@media-tron/organizer';
-import { compareQuality, compareRevision } from '@media-tron/profiles-engine';
+import type { ParsedRelease } from '@arclight/parser';
+import { requiresAbsoluteNumber, requiresEpisodeTitle } from '@arclight/organizer';
+import { compareQuality, compareRevision } from '@arclight/profiles-engine';
 import {
   qualityById,
   type Episode,
@@ -15,7 +15,7 @@ import {
   type QualityModel,
   type QualityProfile,
   type Series,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { DANGEROUS_EXTENSIONS, EXECUTABLE_EXTENSIONS, detectSample, isMediaExtension, isUnpacking } from './scan.js';
 
 // Import specifications (spec section 7) as pure functions over a fully augmented local item

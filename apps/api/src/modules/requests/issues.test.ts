@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission as P } from '@media-tron/shared';
+import { Permission as P } from '@arclight/shared';
 import { notifications } from '../../db/schema.js';
 import { RequestsError } from './errors.js';
 import { addUser, NOW, setup } from './test-support.js';

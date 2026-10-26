@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { TorrentEngineState, TorrentSessionStatus, TorrentSettingsResponse, TorrentSettingsUpdate } from '@media-tron/shared';
+import type { TorrentEngineState, TorrentSessionStatus, TorrentSettingsResponse, TorrentSettingsUpdate } from '@arclight/shared';
 import { Badge, type BadgeTone } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MetadataSettingsResponse, type MetadataSettingsUpdate } from '@media-tron/shared';
+import { MetadataSettingsResponse, type MetadataSettingsUpdate } from '@arclight/shared';
 import { request } from './client.js';
 
 // /settings/metadata mirrors apps/api/src/modules/settings/routes.ts.

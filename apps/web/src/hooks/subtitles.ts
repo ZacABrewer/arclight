@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { LanguageProfileInput, SubtitleMediaType, SubtitleSearchCommand, SubtitleSettings } from '@media-tron/shared';
+import type { LanguageProfileInput, SubtitleMediaType, SubtitleSearchCommand, SubtitleSettings } from '@arclight/shared';
 import { languageProfilesApi, subtitlesApi, type SubtitleHistoryFilter, type SubtitleScope, type SubtitleUploadInput } from '../api/subtitles.js';
 import { subtitleKeys } from './query-keys.js';
 import { useInvalidatingMutation } from './settings-keys.js';

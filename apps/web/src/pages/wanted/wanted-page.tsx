@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { Movie, WantedEpisode } from '@media-tron/shared';
+import type { Movie, WantedEpisode } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
 import { Button } from '../../components/button.js';

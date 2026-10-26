@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { VpnSettingsUpdate, VpnStatus } from '@media-tron/shared';
+import type { VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import { vpnApi } from '../api/vpn.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 

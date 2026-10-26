@@ -1,4 +1,4 @@
-import type { MediaManagementSettings, MigratePathMapping } from '@media-tron/shared';
+import type { MediaManagementSettings, MigratePathMapping } from '@arclight/shared';
 import { bool, int, str } from '../foreign-db.js';
 import { remapPath } from '../paths.js';
 

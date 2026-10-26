@@ -1,12 +1,12 @@
-# @media-tron/torrent-engine
+# @arclight/torrent-engine
 
-A clean-room BitTorrent client library in TypeScript, so Media-Tron can download torrents
+A clean-room BitTorrent client library in TypeScript, so Arclight can download torrents
 itself instead of driving an external qBittorrent. It uses Node built-ins only (`node:net`,
 `node:dgram`, `node:crypto`, `node:fs/promises`, `node:dns`, `node:events`, `node:http(s)`),
 plus `zod` to validate resume files. Target runtime: Node 24.
 
 ```ts
-import { Session } from '@media-tron/torrent-engine';
+import { Session } from '@arclight/torrent-engine';
 
 const session = new Session({
   settings: { savePath: '/data/downloads', listenPort: 6881, listenAddress: '10.8.0.2', resumeDataDir: '/config/torrents' },
@@ -60,7 +60,7 @@ Magnets that never received metadata are restored from the saved magnet URI.
 
 ## Testing
 
-`pnpm --filter @media-tron/torrent-engine test` runs everything over localhost with no
+`pnpm --filter @arclight/torrent-engine test` runs everything over localhost with no
 internet access. The suite covers the in-process HTTP and UDP trackers, DHT networks of
 several nodes, and two or more `Session`s exchanging a generated multi-file torrent via a
 tracker, via DHT only, and via magnets with metadata exchange and PEX. The full suite takes

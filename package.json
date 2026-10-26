@@ -1,5 +1,5 @@
 {
-  "name": "media-tron",
+  "name": "arclight",
   "version": "0.1.0",
   "private": true,
   "license": "GPL-3.0",
@@ -12,7 +12,7 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "db:generate": "pnpm --filter @media-tron/api db:generate"
+    "db:generate": "pnpm --filter @arclight/api db:generate"
   },
   "devDependencies": {
     "typescript": "^5.9.3"

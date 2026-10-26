@@ -1,7 +1,7 @@
 // Name assembly (spec sections 4, 8, 10): episode/movie file names, series/season/movie folders,
 // and the UI preview samples.
 
-import type { MultiEpisodeStyle, NamingConfig, NamingSample, NamingSamples } from '@media-tron/shared';
+import type { MultiEpisodeStyle, NamingConfig, NamingSample, NamingSamples } from '@arclight/shared';
 import {
   EPISODE_TITLE_TOKENS,
   addCustomFormatTokens,
@@ -46,7 +46,7 @@ export class NamingFormatError extends Error {
 
 const DEFAULT_MAX_FILE_NAME_BYTES = 255;
 const DEFAULT_MAX_PATH_BYTES = 4096;
-const DEFAULT_RELEASE_GROUP = 'Media-Tron';
+const DEFAULT_RELEASE_GROUP = 'Arclight';
 
 function cleanOptions(config: NamingConfig, media: 'tv' | 'movie'): CleanOptions {
   const colon = media === 'movie' && config.colonReplacement === 'custom' ? 'smart' : config.colonReplacement;

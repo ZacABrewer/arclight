@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { hasAnyPermission, Permission as P } from '@media-tron/shared';
+import { hasAnyPermission, Permission as P } from '@arclight/shared';
 import { canAutoApprove, canAutoRequest, canRequest, canViewAllRequests, effectivePermissions, isQuotaExempt } from './permissions.js';
 
 describe('permission checks', () => {

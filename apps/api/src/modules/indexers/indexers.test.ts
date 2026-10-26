@@ -4,7 +4,7 @@ import { generateSQLiteDrizzleJson, generateSQLiteMigration } from 'drizzle-kit/
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import type { IndexerCreate, ReleaseResource } from '@media-tron/shared';
+import type { IndexerCreate, ReleaseResource } from '@arclight/shared';
 import * as dbSchema from '../../db/schema.js';
 import type { Db } from '../../db/index.js';
 import * as indexerSchema from './schema.js';

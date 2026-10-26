@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { IndexerCategory, ReleaseResource } from '@media-tron/shared';
+import type { IndexerCategory, ReleaseResource } from '@arclight/shared';
 import { libraryMatches } from '../layout/search-matches.js';
 import { toPushRequest } from '../api/releases.js';
 import { categoryNameMap, categoryOptions, downloadLink, EMPTY_SEARCH, filterResults, formatAge, peersLabel, toSearchRequest } from './search-model.js';

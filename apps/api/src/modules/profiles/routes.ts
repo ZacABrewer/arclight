@@ -15,8 +15,8 @@ import {
   ReleaseProfile,
   ReleaseProfileInput,
   SpecImplementationDefinition,
-} from '@media-tron/shared';
-import { specImplementations } from '@media-tron/profiles-engine';
+} from '@arclight/shared';
+import { specImplementations } from '@arclight/profiles-engine';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ProfileError, type ProfilesService } from './service.js';

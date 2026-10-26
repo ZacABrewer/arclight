@@ -3,7 +3,7 @@ import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join } from 'node:path';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { NotificationEvent } from '@media-tron/notifications';
+import type { NotificationEvent } from '@arclight/notifications';
 import {
   LANGUAGE_PROFILE_CUTOFF_ANY,
   SubtitleSettings as SubtitleSettingsSchema,
@@ -34,7 +34,7 @@ import {
   type WantedSubtitlesPage,
   type WantedSubtitlesQuery,
   SubtitleProviderId as SubtitleProviderIdSchema,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import {
   LANGUAGES,
   MAX_SCORE,
@@ -68,7 +68,7 @@ import {
   type SubtitleQuery,
   type ThrottleEntry,
   type WantedLanguage,
-} from '@media-tron/subtitles';
+} from '@arclight/subtitles';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
@@ -1163,7 +1163,7 @@ export class SubtitlesService {
       if (!media) return;
       await this.opts.notify({
         type: 'subtitleDownloaded',
-        instanceName: 'Media-Tron',
+        instanceName: 'Arclight',
         timestamp: this.iso(),
         media,
         ...(c.episodes.length

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { IndexerStatsDay, IndexerStatsEntry } from '@media-tron/shared';
+import type { IndexerStatsDay, IndexerStatsEntry } from '@arclight/shared';
 import { Card } from '../../components/card.js';
 import { EmptyState } from '../../components/empty-state.js';
 import { ErrorView } from '../../components/error-boundary.js';

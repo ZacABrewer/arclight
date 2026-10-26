@@ -1,4 +1,4 @@
-import type { QueueItem, QueueRemoveOptions } from '@media-tron/shared';
+import type { QueueItem, QueueRemoveOptions } from '@arclight/shared';
 
 // State of the "remove from queue" dialog, kept pure for testing.
 

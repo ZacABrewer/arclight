@@ -46,7 +46,7 @@ export function initializePayload(s: CompatServices): Json {
   return {
     apiRoot: '/api/v3',
     apiVersion: 'v3',
-    appName: 'Media-Tron',
+    appName: 'Arclight',
     instanceName: settings.instanceName,
     release: VERSION,
     version: VERSION,
@@ -96,7 +96,7 @@ export function systemRoutes(app: FastifyInstance, s: CompatServices): void {
     const auth = authServiceFor(ctx).security();
     const { sqliteVersion, migrationVersion } = sqlite();
     return {
-      appName: 'Media-Tron',
+      appName: 'Arclight',
       instanceName: settings.instanceName,
       version: VERSION,
       buildTime: ctx.startedAt.toISOString(),

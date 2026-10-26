@@ -1,5 +1,5 @@
-import type { IndexerProxy, IndexerProxyCreate, IndexerProxyTestResult, IndexerProxyType } from '@media-tron/shared';
-import { INDEXER_PROXY_SECRET_MASK } from '@media-tron/shared';
+import type { IndexerProxy, IndexerProxyCreate, IndexerProxyTestResult, IndexerProxyType } from '@arclight/shared';
+import { INDEXER_PROXY_SECRET_MASK } from '@arclight/shared';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import type { TestOutcome } from '../../../components/forms/test-result.js';
 

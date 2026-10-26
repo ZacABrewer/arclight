@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
-import { Session, type SessionOptions, type SessionSettings, type Torrent } from '@media-tron/torrent-engine';
+import { Session, type SessionOptions, type SessionSettings, type Torrent } from '@arclight/torrent-engine';
 import {
   TorrentSettings,
   type DownloadClientResource,
@@ -14,7 +14,7 @@ import {
   type TorrentSettingsResponse,
   type TorrentSettingsUpdate,
   type VpnStatus,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
@@ -24,7 +24,7 @@ import { getSection, setSection } from '../settings/service.js';
 //
 // VPN behaviour (only when `bindToVpn` is on and the VPN integration is enabled):
 // - connected: every socket is bound to the tunnel address (`getTunnelAddress()`); with Gluetun
-//   there is none (Media-Tron shares Gluetun's network namespace), so all interfaces are used,
+//   there is none (Arclight shares Gluetun's network namespace), so all interfaces are used,
 //   which are the tunnel's. A port forwarded by the VPN replaces `listenPort`.
 // - down, leaking, kill switch engaged, or not checked yet ("lockdown"): every running torrent
 //   is paused and the listener and DHT are re-bound to 127.0.0.1, so nothing can reach the

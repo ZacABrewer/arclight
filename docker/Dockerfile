@@ -11,15 +11,15 @@ COPY . .
 RUN pnpm install --offline --frozen-lockfile
 RUN pnpm build
 # Production node_modules only, for the api workspace.
-RUN pnpm --filter @media-tron/api deploy --prod --legacy /out
+RUN pnpm --filter @arclight/api deploy --prod --legacy /out
 
 FROM node:24-bookworm-slim
 ARG VERSION=0.1.0-dev
 ENV NODE_ENV=production \
-    MEDIATRON_DOCKER=1 \
-    MEDIATRON_CONFIG=/config \
-    MEDIATRON_WEB_DIST=/app/web \
-    MEDIATRON_VERSION=${VERSION} \
+    ARCLIGHT_DOCKER=1 \
+    ARCLIGHT_CONFIG=/config \
+    ARCLIGHT_WEB_DIST=/app/web \
+    ARCLIGHT_VERSION=${VERSION} \
     PUID=1000 \
     PGID=1000
 RUN apt-get update && apt-get install -y --no-install-recommends gosu tini && rm -rf /var/lib/apt/lists/*

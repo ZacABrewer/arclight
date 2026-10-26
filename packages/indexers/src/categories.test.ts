@@ -13,7 +13,7 @@ import {
 } from './categories.js';
 
 describe('categories', () => {
-  it('contains the standard ids Media-Tron relies on', () => {
+  it('contains the standard ids Arclight relies on', () => {
     expect(getCategory(2000)?.name).toBe('Movies');
     expect(getCategory(2040)?.name).toBe('Movies/HD');
     expect(getCategory(5000)?.name).toBe('TV');

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { Issue } from '@media-tron/shared';
+import type { Issue } from '@arclight/shared';
 import { authRoutes, renderAt, stubApi, user } from '../../features/requests/test-utils.js';
 
 afterEach(() => vi.unstubAllGlobals());

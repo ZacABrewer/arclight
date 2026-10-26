@@ -1,5 +1,5 @@
 /**
- * @media-tron/notifications: notification agents behind one event model.
+ * @arclight/notifications: notification agents behind one event model.
  *
  *   const agent = createAgent('discord', storedSettingsJson);
  *   await agent.send(event);

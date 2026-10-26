@@ -13,7 +13,7 @@ import type {
   UpdateSeriesRequest,
   WantedEpisodesPage,
   WantedMoviesPage,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ApiError } from '../api/client.js';
 import { libraryApi, type DeleteMediaOptions } from '../api/library.js';
 import { profilesApi } from '../api/profiles.js';

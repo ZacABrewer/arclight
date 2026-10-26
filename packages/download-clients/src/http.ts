@@ -131,7 +131,7 @@ export const categoryField = (defaultCategory: string, noun: string) =>
     .string()
     .trim()
     .default(defaultCategory)
-    .describe(`${noun} Media-Tron assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.`);
+    .describe(`${noun} Arclight assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.`);
 export const postImportCategoryField = (noun: string) =>
-  z.string().trim().optional().describe(`${noun} to move a download to after Media-Tron has imported it. Leave empty to keep it unchanged.`);
+  z.string().trim().optional().describe(`${noun} to move a download to after Arclight has imported it. Leave empty to keep it unchanged.`);
 export const addPausedField = z.boolean().default(false).describe('Add downloads in a paused state.');

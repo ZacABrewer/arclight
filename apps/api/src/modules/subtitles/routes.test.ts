@@ -2,7 +2,7 @@ import { readFile } from 'node:fs/promises';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SECRET_MASK } from '@media-tron/shared';
+import { SECRET_MASK } from '@arclight/shared';
 import { subtitlesRoutes } from './routes.js';
 import { EN_PROFILE, GOOD_EPISODE, SRT, WEAK_EPISODE, candidate, setup, type Fixture } from './test-support.js';
 

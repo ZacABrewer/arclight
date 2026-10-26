@@ -29,7 +29,7 @@ export const plexWatchlist: Provider<'plexWatchlist'> = async (settings, mediaTy
     url.searchParams.set('X-Plex-Container-Size', String(PAGE_SIZE));
     const body = asRecord(
       await getJson(ctx, 'Plex', url.toString(), {
-        headers: { 'X-Plex-Token': settings.plexToken, 'X-Plex-Client-Identifier': 'media-tron', 'X-Plex-Product': 'Media-Tron' },
+        headers: { 'X-Plex-Token': settings.plexToken, 'X-Plex-Client-Identifier': 'arclight', 'X-Plex-Product': 'Arclight' },
       }),
     );
     const container = asRecord(body?.['MediaContainer']);

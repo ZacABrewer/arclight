@@ -11,7 +11,7 @@ import {
   BlocklistRecord,
   BlocklistSeriesQuery,
   HistoryErrorResponse,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { BlocklistError, blocklistHttpStatus, type BlocklistService } from './service.js';
 
 const IdParams = z.object({ id: z.coerce.number().int().positive() });

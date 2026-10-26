@@ -70,7 +70,7 @@ describe('MediaBrowserAgent (Emby)', () => {
     await agent.send(GRAB);
     expect(http.calls).toHaveLength(1);
     expect(http.calls[0]!.url).toBe('http://jellyfin.local:8096/Notifications/Admin');
-    expect(http.calls[0]!.json()).toMatchObject({ Name: 'Media-Tron: Episode Grabbed', Description: expect.stringContaining('Quality: WEBDL-1080p') });
+    expect(http.calls[0]!.json()).toMatchObject({ Name: 'Arclight: Episode Grabbed', Description: expect.stringContaining('Quality: WEBDL-1080p') });
 
     await agent.send(IMPORT);
     expect(http.calls.slice(1).map((c) => c.url)).toEqual([
@@ -79,6 +79,6 @@ describe('MediaBrowserAgent (Emby)', () => {
     ]);
 
     await agent.send(HEALTH_ISSUE);
-    expect(http.calls.at(-1)!.json()).toMatchObject({ Name: 'Media-Tron: Health Issue: Error' });
+    expect(http.calls.at(-1)!.json()).toMatchObject({ Name: 'Arclight: Health Issue: Error' });
   });
 });

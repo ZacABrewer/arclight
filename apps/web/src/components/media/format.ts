@@ -1,4 +1,4 @@
-import type { MediaImage } from '@media-tron/shared';
+import type { MediaImage } from '@arclight/shared';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 

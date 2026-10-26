@@ -8,9 +8,9 @@ import {
   buildSeasonFolder,
   getSamples,
   type NamingFile,
-} from '@media-tron/organizer';
-import { parsePath, parseRelease, type ParsedQuality, type ParsedRelease } from '@media-tron/parser';
-import { scoreRelease } from '@media-tron/profiles-engine';
+} from '@arclight/organizer';
+import { parsePath, parseRelease, type ParsedQuality, type ParsedRelease } from '@arclight/parser';
+import { scoreRelease } from '@arclight/profiles-engine';
 import {
   MediaManagementSettings,
   MovieListQuery,
@@ -41,7 +41,7 @@ import {
   type RenameResult,
   type RescanResult,
   type Series,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { mediaFiles } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
