@@ -39,9 +39,7 @@
 }
 .lib-version-files__path {
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   flex: 1 1 160px;
 }
 @media (max-width: 767px) {

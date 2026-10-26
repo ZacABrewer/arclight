@@ -137,7 +137,7 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 .al-tabs > [aria-selected="true"] { color: var(--al-text-1); border-bottom-color: var(--al-cyan); }
 
 /* ---------- chips & tags ---------- */
-.al-chip { display: inline-flex; align-items: center; gap: 6px; height: 24px; padding: 0 8px; font: 500 12px var(--al-font); white-space: nowrap;
+.al-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; font: 500 12px var(--al-font); line-height: 1.35; white-space: normal; overflow-wrap: anywhere;
   border: 1px solid var(--al-line-3); color: var(--al-text-2); }
 .al-chip::before { content: ""; width: 6px; height: 6px; background: var(--al-cyan); }
 .al-chip[data-status="downloading"], .al-chip[data-status="importing"], .al-chip[data-status="monitored"] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
@@ -189,12 +189,12 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
   background: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.85)); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
   border: 1px solid rgba(110,246,255,.45); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
 .al-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 80; }
-.al-modal { position: relative; width: min(440px, calc(100vw - 32px)); background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
+.al-modal { position: relative; width: min(520px, calc(100vw - 32px)); background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
   border: 1px solid rgba(110,246,255,.3); clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px); z-index: 90; animation: al-rezz var(--t-base) var(--ease-out); }
 .al-modal__title { padding: 22px 24px 6px; font-size: 19px; font-weight: 600; color: var(--al-text-1); }
 .al-modal__body { padding: 6px 24px 18px; font-size: 14px; line-height: 1.5; color: var(--al-text-3); }
 .al-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid rgba(110,246,255,.14); }
-.al-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(520px, 100vw); z-index: 85; background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
+.al-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); z-index: 85; background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
   -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-left: 1px solid rgba(110,246,255,.3); animation: al-slide var(--t-base) var(--ease-out); }
 .al-toast { display: flex; align-items: flex-start; gap: 12px; width: 360px; padding: 12px 14px; background: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.88));
   border: 1px solid rgba(110,246,255,.25); border-left: 2px solid var(--al-cyan); animation: al-slide var(--t-base) var(--ease-out); }

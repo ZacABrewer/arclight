@@ -17,7 +17,7 @@
 .cal-event[data-tone="missing"] { border-left-color: var(--al-warn); }
 .cal-event[data-unmonitored] { opacity: .55; }
 .cal-event__time { color: var(--al-text-4); flex: none; }
-.cal-event__title { overflow: hidden; text-overflow: ellipsis; }
+.cal-event__title { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .cal-event--block { height: 100%; align-items: flex-start; flex-direction: column; gap: 2px; padding: 4px 6px; }
 
 /* Month */
@@ -65,7 +65,7 @@
 .cal-agenda__row:last-child { border-bottom: 0; }
 .cal-agenda__time { font-size: 13px; color: var(--al-text-4); }
 .cal-agenda__title .al-anchor { display: flex; }
-.cal-agenda__code { color: var(--al-text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-agenda__code { color: var(--al-text-3); overflow-wrap: anywhere; }
 
 /* iCal dialog */
 .cal-ical-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }

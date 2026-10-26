@@ -22,7 +22,7 @@
 .al-def-note strong { color: var(--al-text-1); font-weight: 600; }
 
 .al-card-priority { font-family: var(--al-mono); color: var(--al-text-2); }
-.al-card-line { flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-card-line { flex-basis: 100%; min-width: 0; overflow-wrap: anywhere; }
 .al-card-line--mono { font-family: var(--al-mono); font-size: 12px; }
 
 @media (max-width: 767px) {

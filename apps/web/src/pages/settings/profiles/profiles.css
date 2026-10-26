@@ -15,7 +15,7 @@
 .al-qlist__handle { font-family: var(--al-mono); color: var(--al-text-5); letter-spacing: -2px; user-select: none; width: 14px; }
 .al-qlist__name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .al-qlist__name .al-num { font-size: 13px; }
-.al-qlist__members { font-size: 12px; color: var(--al-text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-qlist__members { font-size: 12px; color: var(--al-text-4); overflow-wrap: anywhere; }
 .al-qlist__cutoff { font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; color: var(--al-cyan); }
 .al-qlist__actions { display: flex; align-items: center; gap: 2px; }
 .al-qlist__move { min-width: 32px; font-family: var(--al-mono); }

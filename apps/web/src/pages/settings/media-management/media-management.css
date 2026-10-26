@@ -6,7 +6,7 @@
 .al-root-list { list-style: none; margin: 0; padding: 0; }
 .al-row-list__row.al-root-row { grid-template-columns: minmax(0, 1fr) 140px 220px 44px; }
 .al-root-row__path { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.al-root-row__path-text { color: var(--al-text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.al-root-row__path-text { color: var(--al-text-1); min-width: 0; overflow-wrap: anywhere; }
 .al-root-row__kind { color: var(--al-text-3); }
 .al-root-row__remove { justify-self: end; }
 .al-row-list__row.al-root-row--pending { grid-template-columns: minmax(0, 1fr) 140px auto; padding-top: 6px; padding-bottom: 6px; border-style: dashed; }
