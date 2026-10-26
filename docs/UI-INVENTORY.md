@@ -1,7 +1,7 @@
 # Arclight UI Inventory
 
 Every screen, tab, list, dialog and component the application needs. This is the design
-brief for the Tron Legacy pass (Phase 5) and the checklist for functional completeness.
+brief for the light-grid theme pass (Phase 5) and the checklist for functional completeness.
 Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 
 ## 1. Application shell
@@ -13,7 +13,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - **Error boundary** page, **404** page ✅
 - **First-run setup wizard** (admin account → TMDB key → root folders → download client → indexer → VPN → done) 🔧 (all but VPN ✅)
 - **Login** page, **logout**, **session expired** ✅
-- **Theme**: Tron Legacy tokens (colour, glow, grid, motion), light-grid variant for daytime ⬜
+- **Theme**: light-grid tokens (colour, glow, grid, motion), light-grid variant for daytime ⬜
 - **Keyboard shortcuts** help sheet ⬜
 - **Command palette** (quick actions: add series, search, run task) ⬜ (nice-to-have)
 

@@ -130,7 +130,7 @@ Done when: subtitles arrive automatically after import for every configured lang
 Done when: a non-admin user requests a show, an admin approves, it is grabbed,
 imported, subtitled, and the user is notified it is available.
 
-## Phase 5 — Tron Legacy theme and polish
+## Phase 5 — neon light-grid theme and polish
 
 - Theme tokens (neon cyan / orange on near-black, grid, glow), motion, typography.
 - Dashboard as a live grid of activity; mobile layout; PWA.

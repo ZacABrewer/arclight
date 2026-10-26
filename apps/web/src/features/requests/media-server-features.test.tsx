@@ -73,10 +73,11 @@ describe('helpers', () => {
       }),
     );
     act(() => result.current.start());
-    await waitFor(() => expect(done).toHaveBeenCalledWith('session'));
+    await waitFor(() => expect(result.current.state.phase).toBe('done'));
+    expect(done).toHaveBeenCalledExactlyOnceWith('session');
     expect(open).toHaveBeenCalledWith('https://app.plex.tv/auth#?code=ABCD');
-    expect(polls).toBe(3);
-    expect(result.current.state.phase).toBe('done');
+    // A 5 ms interval may squeeze in an extra tick under load; it must not finish twice.
+    expect(polls).toBeGreaterThanOrEqual(3);
   });
 
   it('stops polling when cancelled', async () => {

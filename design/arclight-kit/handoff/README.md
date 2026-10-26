@@ -14,7 +14,6 @@ Arclight (formerly Media-Tron) is an all-in-one media downloader, indexer and re
 | `handoff/arclight-motion.js` | **v1.1** Backdrop motion layer (ESM, no deps). `mountBackdrop(canvas, opts)` + `backdropGeometry()` |
 | `handoff/tokens.json` | Same tokens as JSON (Tailwind/Style Dictionary friendly) |
 | `Media-Tron Mockups.dc.html` | Exploration history (rounds 1–4). **Not** a spec — 4a became Dashboard |
-| `uploads/` | Original film reference images (mood only) |
 
 Open any `.dc.html` directly in a browser (keep `support.js` alongside).
 
@@ -24,7 +23,7 @@ Open any `.dc.html` directly in a browser (keep `support.js` alongside).
 2. **Cyan is the only accent.** Orange `#ff9a4d` = needs attention (missing, stalled, low disk, rate-limited). Red `#ff5a46` = failed / destructive. Nothing else gets colour.
 3. **0° / 45° / 90°, square corners.** No border-radius on panes, buttons, inputs, chips. Round only dots, rings, avatar-less marks and device frames.
 4. **Mono is for data.** JetBrains Mono for numbers, sizes, times, paths, format strings, codes and the spaced CAPS section label. Everything else is Archivo.
-5. **Plain words.** No Tron vocabulary in UI copy. Report facts and causes: "Nyaa is rate-limited. Retry at 20:55." Never invented scores.
+5. **Plain words.** No sci-fi vocabulary in UI copy. Report facts and causes: "Nyaa is rate-limited. Retry at 20:55." Never invented scores.
 
 ## Shell
 
@@ -64,7 +63,7 @@ Open any `.dc.html` directly in a browser (keep `support.js` alongside).
 
 **11 System** — Status: two-column key/value panes (mono values). Tasks: table with last/next run and "Run now". Health: list of issue rows with tone chip, cause, fix link (same copy rules as Dashboard Issues). Logs: dense mono table, level chip (info = neutral, warn = warn, error = failed), filter bar, live-tail toggle (dot glows only while tailing). Backups: table + Create backup primary + Restore (danger confirm). Updates: changelog panes per version. Audit/events: table.
 
-**12 Components** — all in Design Kit §08; class names in `arclight.css`. Also needed: path picker (input + directory browser list, Page 08), date picker (7-col grid like Calendar, selected = cyan fill), paginator (mono "Page 1 of 4" + ‹ ›), filter bar (row of selects/segmented + "Clear"), accordion (Page 03), popover (= tooltip shell with padding 16), schema-driven form (form-row pattern). Tron-specifics: grid floor (Backdrop), scanline (in Backdrop), identity ring (`.al-ring`), light-trail progress (`.al-trail`), derezz delete (`.al-derezz`).
+**12 Components** — all in Design Kit §08; class names in `arclight.css`. Also needed: path picker (input + directory browser list, Page 08), date picker (7-col grid like Calendar, selected = cyan fill), paginator (mono "Page 1 of 4" + ‹ ›), filter bar (row of selects/segmented + "Clear"), accordion (Page 03), popover (= tooltip shell with padding 16), schema-driven form (form-row pattern). Theme specifics: grid floor (Backdrop), scanline (in Backdrop), identity ring (`.al-ring`), light-trail progress (`.al-trail`), derezz delete (`.al-derezz`).
 
 **13 Mobile / PWA** — Page 10. Single column, 20px side padding, panes keep chamfer on the first hero only. Bottom tab bar 86px incl. safe area, active tab = 2px top bar with glow. Swipe actions on rows: left reveals Search (cyan), right reveals Delete (danger). Hit targets ≥ 44px.
 

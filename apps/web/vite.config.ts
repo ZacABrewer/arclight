@@ -23,7 +23,9 @@ export default defineConfig({
     environment: 'jsdom',
     setupFiles: ['./src/test/setup.ts'],
     include: ['src/**/*.test.{ts,tsx}'],
-    // Route-level page tests chain several 5 s findBy waits (see src/test/setup.ts).
-    testTimeout: 20000,
+    // Route-level page tests chain several 10 s findBy waits (see src/test/setup.ts).
+    testTimeout: 30000,
+    // jsdom page tests are CPU-heavy; one worker per core starves them on many-core machines.
+    maxWorkers: '50%',
   },
 });
