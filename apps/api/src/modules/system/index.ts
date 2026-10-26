@@ -1,6 +1,7 @@
 import { z } from 'zod';
-import { RestartResponse, SystemStatus } from '@arclight/shared';
+import { FeedsResponse, RestartResponse, SystemStatus } from '@arclight/shared';
 import type { AppModule } from '../../app.js';
+import { feedsRegistry } from '../../feeds.js';
 import { VERSION } from '../../version.js';
 import { requireAdmin } from '../auth/hook.js';
 import { isRestartRequired } from './restart.js';
@@ -35,6 +36,11 @@ export const systemModuleWith =
       paths: { config: ctx.config.configDir, database: ctx.config.dbPath, logs: ctx.config.logDir },
       isDocker: ctx.config.isDocker,
       restartRequired: isRestartRequired(ctx),
+    }));
+
+    // Self-updating data feeds (guides, indexer definitions, others registered via feedsRegistry).
+    app.get('/system/feeds', { schema: { response: { 200: FeedsResponse } } }, async () => ({
+      feeds: await feedsRegistry(ctx).summary(),
     }));
 
     app.post(

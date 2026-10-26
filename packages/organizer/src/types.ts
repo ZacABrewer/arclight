@@ -73,6 +73,8 @@ export interface NamingFile {
   releaseGroup?: Opt<string>;
   releaseHash?: Opt<string>;
   edition?: Opt<string>;
+  /** Multi-version library slot (`4K`, `HDR`, `Remux`), rendered by `{Version}`. */
+  versionTag?: Opt<string>;
   quality?: Opt<NamingQuality>;
   mediaInfo?: Opt<NamingMediaInfo>;
 }

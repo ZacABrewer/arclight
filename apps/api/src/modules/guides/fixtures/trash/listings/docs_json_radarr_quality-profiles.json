@@ -1,0 +1,10 @@
+[
+  {
+    "name": "hd-bluray-web.json",
+    "path": "docs/json/radarr/quality-profiles/hd-bluray-web.json",
+    "sha": "409f22fd8ec4f217113d1b40e15a9b427ed21fb5",
+    "size": 2453,
+    "type": "file",
+    "download_url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/quality-profiles/hd-bluray-web.json"
+  }
+]

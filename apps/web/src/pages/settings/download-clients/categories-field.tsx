@@ -2,6 +2,7 @@ import type { BuiltinCategoryPath } from '@arclight/shared';
 import { Button, Input } from '../../../arclight/index.js';
 import './download-clients.css';
 import type { FieldRendererProps } from '../../../components/forms/types.js';
+import { t } from '../../../i18n/index.js';
 
 // Editor for the Built-in client's `settings.categories`: an array of {name, savePath} rows.
 // The schema serves it as a 'text' field whose value is the array, so it needs its own control.
@@ -26,26 +27,26 @@ export function CategoriesEditor({ id, value, onChange }: FieldRendererProps) {
   const rows = toCategoryRows(value);
   const update = (i: number, patch: Partial<BuiltinCategoryPath>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <div id={id} className="al-dc-cats" role="group" aria-label="Category folders">
-      {rows.length === 0 ? <p className="al-caption">No per-category folders.</p> : null}
+    <div id={id} className="al-dc-cats" role="group" aria-label={t('settings.downloadClients.categoriesField.categoryFolders')}>
+      {rows.length === 0 ? <p className="al-caption">{t('settings.downloadClients.categoriesField.noPerCategoryFolders')}</p> : null}
       {rows.map((row, i) => (
         <div key={i} className="al-dc-cats__row">
-          <Input aria-label={`Category ${i + 1} name`} placeholder="category" value={row.name} onChange={(e) => update(i, { name: e.currentTarget.value })} />
+          <Input aria-label={t('settings.downloadClients.categoriesField.categoryValueName', { value: i + 1 })} placeholder={t('settings.downloadClients.categoriesField.category')} value={row.name} onChange={(e) => update(i, { name: e.currentTarget.value })} />
           <Input
-            aria-label={`Category ${i + 1} save path`}
+            aria-label={t('settings.downloadClients.categoriesField.categoryValueSavePath', { value: i + 1 })}
             placeholder="/downloads/category"
             mono
             value={row.savePath}
             onChange={(e) => update(i, { savePath: e.currentTarget.value })}
           />
-          <Button size="sm" variant="ghost" aria-label={`Remove category ${i + 1}`} onClick={() => onChange(rows.filter((_, j) => j !== i))}>
-            Remove
+          <Button size="sm" variant="ghost" aria-label={t('settings.downloadClients.categoriesField.removeCategoryValue', { value: i + 1 })} onClick={() => onChange(rows.filter((_, j) => j !== i))}>
+            {t('common.remove')}
           </Button>
         </div>
       ))}
       <div>
         <Button size="sm" variant="secondary" onClick={() => onChange([...rows, { name: '', savePath: '' }])}>
-          Add category
+          {t('settings.downloadClients.categoriesField.addCategory')}
         </Button>
       </div>
     </div>

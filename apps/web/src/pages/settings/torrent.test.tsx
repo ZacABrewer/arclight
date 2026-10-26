@@ -7,7 +7,8 @@ import { ToastProvider } from '../../components/toast.js';
 import { formatRate } from '../../lib/format.js';
 import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
-import { TORRENT_SECTIONS, TorrentSettingsPage, toTorrentDraft, toTorrentUpdate } from './torrent.js';
+import { TorrentSessionStatus as TorrentSessionStatusSchema, TorrentSettingsResponse as TorrentSettingsResponseSchema } from '@arclight/shared';
+import { TORRENT_SECTIONS, TorrentSettingsPage, encryptedPeersText, toTorrentDraft, toTorrentUpdate } from './torrent.js';
 
 class FakeSocket {
   onopen = null;
@@ -196,6 +197,67 @@ describe('Settings -> Torrent engine', () => {
     expect(body.defaultSeedTimeMinutes).toBe(90);
     expect(body.defaultSeedRatio).toBe(2);
     expect(formatRate(0)).toBe('0 B/s');
+  });
+});
+
+describe('Settings -> Torrent engine transport and encryption', () => {
+  it('fills the transport defaults when never saved and shows Preferred encryption', async () => {
+    expect(TorrentSettingsResponseSchema.safeParse(settings).success).toBe(true);
+    renderPage();
+    const tcp = (await screen.findByLabelText('TCP', {}, { timeout: 5000 })) as HTMLInputElement;
+    expect(tcp.checked).toBe(true);
+    expect((screen.getByLabelText('uTP') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('IPv6') as HTMLInputElement).checked).toBe(true);
+    expect((screen.getByLabelText('Web seed connections') as HTMLInputElement).value).toBe('4');
+    const group = screen.getByRole('group', { name: 'Peer encryption' });
+    expect(within(group).getByRole('button', { name: 'Preferred' }).getAttribute('aria-pressed')).toBe('true');
+    expect(screen.getByText('Try an encrypted connection first and fall back to plain.')).toBeTruthy();
+  });
+
+  it('saves encryption, transports and web seed connections in the PUT body', async () => {
+    renderPage();
+    const group = await screen.findByRole('group', { name: 'Peer encryption' }, { timeout: 5000 });
+    fireEvent.click(within(group).getByRole('button', { name: 'Required' }));
+    expect(screen.getByText('Encrypted connections only. Fewer peers can connect.')).toBeTruthy();
+    fireEvent.click(screen.getByLabelText('uTP'));
+    fireEvent.click(screen.getByLabelText('IPv6'));
+    fireEvent.change(screen.getByLabelText('Web seed connections'), { target: { value: '8' } });
+    expect(screen.getByText('4 unsaved changes')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ encryption: 'required', tcp: true, utp: false, ipv6: false, webSeedConnectionsPerTorrent: 8 });
+  });
+
+  it('warns when TCP and uTP are both off', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByLabelText('TCP', {}, { timeout: 5000 }));
+    expect(screen.queryByText(/TCP and uTP are both off/)).toBeNull();
+    fireEvent.click(screen.getByLabelText('uTP'));
+    expect(screen.getByRole('alert').textContent).toMatch(/TCP and uTP are both off/);
+  });
+
+  it('keeps saved transport values in the draft and update body', () => {
+    const draft = toTorrentDraft({ ...settings, encryption: 'disabled', tcp: false, utp: true, ipv6: false, webSeedConnectionsPerTorrent: 0 });
+    expect(draft).toMatchObject({ encryption: 'disabled', tcp: false, utp: true, ipv6: false, webSeedConnectionsPerTorrent: '0' });
+    expect(toTorrentUpdate({ ...draft, webSeedConnectionsPerTorrent: '' })).not.toHaveProperty('webSeedConnectionsPerTorrent');
+  });
+
+  it('shows uTP connections, IPv6 DHT nodes and the encrypted peer ratio in the status pane', async () => {
+    status = { ...running, dht6Nodes: 88, utpConnections: 9, encryptedPeers: 12, encryptedPeerRatio: 12 / 17 };
+    expect(TorrentSessionStatusSchema.safeParse(status).success).toBe(true);
+    renderPage();
+    const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
+    expect(within(panel).getByText('uTP connections')).toBeTruthy();
+    expect(within(panel).getByText('9')).toBeTruthy();
+    expect(within(panel).getByText('IPv6 DHT nodes')).toBeTruthy();
+    expect(within(panel).getByText('88')).toBeTruthy();
+    expect(within(panel).getByText('12 of 17 (71%)')).toBeTruthy();
+  });
+
+  it('formats the encrypted peer share with or without the count', () => {
+    expect(encryptedPeersText({ peers: 0, encryptedPeers: 0, encryptedPeerRatio: 0 })).toBe('0 of 0 (0%)');
+    expect(encryptedPeersText({ peers: 4, encryptedPeerRatio: 0.5 })).toBe('50%');
+    expect(encryptedPeersText({ peers: 4, encryptedPeers: 1 })).toBe('1 of 4 (25%)');
   });
 });
 

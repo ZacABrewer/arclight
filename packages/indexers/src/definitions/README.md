@@ -217,6 +217,28 @@ When a release link points to a details page, a `download` block extracts the re
 
 `download()` returns `{ kind: 'torrent', data }` or `{ kind: 'magnet', magnetUrl }`.
 
+## account (Arclight extension)
+
+Optional. Names the logged-in page with the user's statistics on a private tracker; the
+tracker-stats module reads it through `DefinitionIndexer.accountStats()`.
+
+```yaml
+account:
+  path: user.php            # template, resolved against the site link
+  method: get               # or post
+  inputs: { id: me }        # query string (get) or form body (post)
+  fields:                   # selector blocks against the whole page
+    ratio: { selector: "#ratio" }
+    uploaded: { selector: "#up" }        # sizes: "1.5 TiB", "512 GB"
+    downloaded: { selector: "#down" }
+    buffer: { selector: "#buffer", optional: true }
+    hnrCount: { selector: "#hnr", filters: [{ name: regexp, args: "(\d+)" }] }
+    seedBonus: { selector: "#bonus", optional: true }
+```
+
+`ratio` and `seedBonus` go through the decimal parser, `uploaded`, `downloaded` and `buffer`
+through the size parser, `hnrCount` through the integer parser. Missing values are left out.
+
 ## Not supported
 
 - Captchas: a `login.captcha` block produces a load warning, and login fails if the page actually

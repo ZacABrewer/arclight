@@ -1,0 +1,6 @@
+{
+  "page.count": "{count, plural, one {# item} other {# items}}",
+  "page.title": "Library",
+  "status.failed": "Failed",
+  "status.queued": "Queued"
+}

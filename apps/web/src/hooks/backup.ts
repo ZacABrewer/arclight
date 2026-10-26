@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { BackupSettings } from '@arclight/shared';
 import { backupApi } from '../api/backup.js';
 import { queryKeys } from './query-keys.js';
+import { t } from '../i18n/index.js';
 
 export const backupKeys = {
   all: ['backup'] as const,
@@ -17,7 +18,7 @@ export function useCreateBackup() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: backupApi.create,
-    meta: { errorTitle: 'Backup failed' },
+    meta: { errorTitle: t('hooks.backup.backupFailed') },
     onSuccess: () => qc.invalidateQueries({ queryKey: backupKeys.list }),
   });
 }
@@ -51,11 +52,11 @@ export function useSaveBackupSettings() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (value: BackupSettings) => backupApi.saveSettings(value),
-    meta: { errorTitle: 'Could not save backup settings' },
+    meta: { errorTitle: t('hooks.backup.couldNotSaveBackupSettings') },
     onSuccess: (data) => qc.setQueryData(backupKeys.settings, data),
   });
 }
 
 export function useRestart() {
-  return useMutation({ mutationFn: backupApi.restart, meta: { errorTitle: 'Restart failed' } });
+  return useMutation({ mutationFn: backupApi.restart, meta: { errorTitle: t('hooks.backup.restartFailed') } });
 }

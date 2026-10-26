@@ -1,8 +1,17 @@
 import { join } from 'node:path';
 import type { AppContext, AppModule } from '../../app.js';
-import { getIndexerGlobalSettings, getSection, updateIndexerGlobalSettings } from '../settings/service.js';
+import { feedsRegistry } from '../../feeds.js';
+import { notificationsServiceFor } from '../notifications/index.js';
+import {
+  getDefinitionFeedSettings,
+  getIndexerGlobalSettings,
+  getSection,
+  updateDefinitionFeedSettings,
+  updateIndexerGlobalSettings,
+} from '../settings/service.js';
+import { DefinitionFeed, type DefinitionFeedOptions } from './definition-feed.js';
 import { DefinitionStore } from './definitions.js';
-import { registerIndexerJobs, rescheduleRssSync } from './jobs.js';
+import { registerDefinitionFeedJob, registerIndexerJobs, rescheduleDefinitionFeed, rescheduleRssSync } from './jobs.js';
 import { indexersRoutes } from './routes.js';
 import { IndexersService } from './service.js';
 
@@ -23,12 +32,15 @@ export {
   type SearchOptions,
 } from './service.js';
 export { DefinitionStore } from './definitions.js';
+export { DefinitionFeed, DefinitionFeedError, definitionSha256 } from './definition-feed.js';
 export {
   RSS_SYNC_JOB,
   INDEXER_STATUS_CHECK_JOB,
   INDEXER_STATS_CLEANUP_JOB,
   rssCronFor,
   rescheduleRssSync,
+  DEFINITION_FEED_SYNC_JOB,
+  definitionFeedCronFor,
 } from './jobs.js';
 export * from './schema.js';
 
@@ -44,7 +56,7 @@ export function indexersServiceFor(ctx: AppContext): IndexersService {
     const definitions = new DefinitionStore({
       log,
       watch: true,
-      ...(configDir ? { customDir: join(configDir, 'definitions') } : {}),
+      ...(configDir ? { customDir: join(configDir, 'definitions'), feedDir: join(configDir, 'definitions', 'feed') } : {}),
     });
     service = new IndexersService({ db: ctx.db, log, definitions });
     services.set(ctx, service);
@@ -52,8 +64,31 @@ export function indexersServiceFor(ctx: AppContext): IndexersService {
   return service;
 }
 
+const feeds = new WeakMap<AppContext, DefinitionFeed>();
+
+/** The definition feed of a context; undefined without a config directory. */
+export function definitionFeedFor(ctx: AppContext, overrides: Partial<DefinitionFeedOptions> = {}): DefinitionFeed | undefined {
+  let feed = feeds.get(ctx);
+  if (!feed) {
+    const store = indexersServiceFor(ctx).definitions;
+    const feedDir = store.feedDir;
+    if (!feedDir) return undefined;
+    feed = new DefinitionFeed({
+      store,
+      feedDir,
+      settings: () => getDefinitionFeedSettings(ctx.db),
+      log: ctx.log.child({ module: 'indexers', feature: 'definition-feed' }),
+      notify: (event) => notificationsServiceFor(ctx).dispatch(event),
+      ...overrides,
+    });
+    feeds.set(ctx, feed);
+  }
+  return feed;
+}
+
 export const indexersModule: AppModule = (ctx) => async (app) => {
   const service = indexersServiceFor(ctx);
+  const feed = definitionFeedFor(ctx);
   await service.definitions.ready();
   await service.definitions.startWatching();
   app.addHook('onClose', async () => service.definitions.stopWatching());
@@ -68,7 +103,25 @@ export const indexersModule: AppModule = (ctx) => async (app) => {
           return saved;
         },
       },
+      ...(feed
+        ? {
+            feed: {
+              feed,
+              getSettings: () => getDefinitionFeedSettings(ctx.db),
+              updateSettings: (value) => {
+                const saved = updateDefinitionFeedSettings(ctx.db, value);
+                rescheduleDefinitionFeed(ctx.scheduler, saved);
+                return saved;
+              },
+            },
+          }
+        : {}),
     }),
   );
+  if (feed) {
+    registerDefinitionFeedJob(ctx.scheduler, feed, () => getDefinitionFeedSettings(ctx.db));
+    const unregister = feedsRegistry(ctx).register({ id: 'definitions', name: 'Indexer definitions', status: () => feed.feedStatus() });
+    app.addHook('onClose', async () => unregister());
+  }
   registerIndexerJobs(ctx.scheduler, service, { rssIntervalMinutes: getSection(ctx.db, 'indexers').rssSyncIntervalMinutes });
 };

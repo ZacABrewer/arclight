@@ -14,28 +14,35 @@ import {
   type UiPreferences,
 } from '../../../lib/ui-preferences.js';
 import { SettingsSection } from '../shared.js';
+import { LanguageSelect } from '../../../components/language-select.js';
+import { t, chooseLocale, deviceLocale, type LocaleSetting } from '../../../i18n/index.js';
 
 const WEEK_STARTS = [
-  { value: '0', label: 'Sunday' },
-  { value: '1', label: 'Monday' },
+  { value: '0', get label() { return t('settings.general.uiPreferencesSection.sunday'); } },
+  { value: '1', get label() { return t('settings.general.uiPreferencesSection.monday'); } },
 ] as const;
 
 const TIME_FORMATS: ReadonlyArray<{ value: TimeFormat; label: string }> = [
-  { value: '24h', label: '24-hour' },
-  { value: '12h', label: '12-hour' },
+  { value: '24h', get label() { return t('settings.general.uiPreferencesSection.hour24'); } },
+  { value: '12h', get label() { return t('settings.general.uiPreferencesSection.hour12'); } },
 ];
 
-const COLUMN_OPTIONS = Array.from({ length: POSTER_COLUMNS_MAX - POSTER_COLUMNS_MIN + 1 }, (_, i) => {
-  const n = POSTER_COLUMNS_MIN + i;
-  const note = n === POSTER_COLUMNS_MIN ? ' (largest posters)' : n === POSTER_COLUMNS_MAX ? ' (smallest posters)' : '';
-  return { value: String(n), label: `${n} columns${note}` };
-});
+const columnOptions = () =>
+  Array.from({ length: POSTER_COLUMNS_MAX - POSTER_COLUMNS_MIN + 1 }, (_, i) => {
+    const n = POSTER_COLUMNS_MIN + i;
+    const size = n === POSTER_COLUMNS_MIN ? 'largest' : n === POSTER_COLUMNS_MAX ? 'smallest' : 'none';
+    return { value: String(n), label: t('settings.general.uiPreferencesSection.columnsOption', { count: n, size }) };
+  });
 
 /** A fixed sample instant for the format previews: 6 Oct 2026, 21:05 local. */
 const SAMPLE = new Date(2026, 9, 6, 21, 5);
 
 const samePrefs = (a: UiPreferences, b: UiPreferences) =>
-  a.firstDayOfWeek === b.firstDayOfWeek && a.timeFormat === b.timeFormat && a.dateFormat === b.dateFormat && a.posterColumns === b.posterColumns;
+  a.firstDayOfWeek === b.firstDayOfWeek &&
+  a.timeFormat === b.timeFormat &&
+  a.dateFormat === b.dateFormat &&
+  a.posterColumns === b.posterColumns &&
+  a.locale === b.locale;
 
 /**
  * Per-user UI preferences (stored in the signed-in user's settings, not the server-wide
@@ -50,61 +57,79 @@ export function UiPreferencesSection() {
   useEffect(() => setDraft(saved), [saved]);
   const dirty = !samePrefs(draft, saved);
   const set = (patch: Partial<UiPreferences>) => setDraft((d) => ({ ...d, ...patch }));
+  // Without a user account (API key / no-auth access) the language is a device choice.
+  const [deviceChoice, setDeviceChoice] = useState<LocaleSetting>(() => deviceLocale() ?? 'auto');
 
   const onSave = () =>
     save.mutate(draft, {
-      onSuccess: () => toast.push({ tone: 'ok', title: 'UI preferences saved' }),
+      onSuccess: () => toast.push({ tone: 'ok', title: t('settings.general.uiPreferencesSection.uiPreferencesSaved') }),
     });
 
   return (
     <SettingsSection
-      label="UI"
+      label={t('settings.general.uiPreferencesSection.ui')}
       action={
         user ? (
           <div className="mk-row">
             {dirty ? (
               <Button size="sm" variant="ghost" onClick={() => setDraft(saved)}>
-                Discard
+                {t('common.discard')}
               </Button>
             ) : null}
             <Button size="sm" variant="primary" disabled={!dirty} loading={save.isPending} onClick={onSave}>
-              Save preferences
+              {t('settings.general.uiPreferencesSection.savePreferences')}
             </Button>
           </div>
         ) : undefined
       }
     >
-      <FormRow label="Theme" htmlFor="ui-theme" caption="Arclight is the only theme for now.">
-        <Select id="ui-theme" value="arclight" disabled options={[{ value: 'arclight', label: 'Arclight' }]} />
+      <FormRow label={t('settings.general.uiPreferencesSection.theme')} htmlFor="ui-theme" caption={t('settings.general.uiPreferencesSection.arclightIsTheOnlyTheme')}>
+        <Select id="ui-theme" value="arclight" disabled options={[{ value: 'arclight', label: t('settings.general.uiPreferencesSection.arclight') }]} />
       </FormRow>
       {user ? (
+        <FormRow label={t('settings.general.uiPreferencesSection.language')} htmlFor="ui-language" caption={t('settings.general.uiPreferencesSection.languageCaption')}>
+          <LanguageSelect id="ui-language" value={draft.locale} onChange={(locale) => set({ locale })} />
+        </FormRow>
+      ) : (
+        <FormRow label={t('settings.general.uiPreferencesSection.language')} htmlFor="ui-language" caption={t('settings.general.uiPreferencesSection.languageDeviceCaption')}>
+          <LanguageSelect
+            id="ui-language"
+            value={deviceChoice}
+            onChange={(locale) => {
+              setDeviceChoice(locale);
+              void chooseLocale(locale);
+            }}
+          />
+        </FormRow>
+      )}
+      {user ? (
         <>
-          <FormRow label="First day of week" caption="Where weeks start in the calendar.">
+          <FormRow label={t('settings.general.uiPreferencesSection.firstDayOfWeek')} caption={t('settings.general.uiPreferencesSection.whereWeeksStartInThe')}>
             <Segmented
               variant="soft"
-              aria-label="First day of week"
+              aria-label={t('settings.general.uiPreferencesSection.firstDayOfWeek')}
               options={WEEK_STARTS}
               value={String(draft.firstDayOfWeek) as '0' | '1'}
               onChange={(v) => set({ firstDayOfWeek: v === '0' ? 0 : 1 })}
             />
           </FormRow>
-          <FormRow label="Time format" caption={`Example: ${formatTime(SAMPLE, draft)}`} captionMono>
-            <Segmented variant="soft" aria-label="Time format" options={TIME_FORMATS} value={draft.timeFormat} onChange={(v) => set({ timeFormat: v })} />
+          <FormRow label={t('settings.general.uiPreferencesSection.timeFormat')} caption={t('settings.general.uiPreferencesSection.exampleTime', { time: formatTime(SAMPLE, draft) })} captionMono>
+            <Segmented variant="soft" aria-label={t('settings.general.uiPreferencesSection.timeFormat')} options={TIME_FORMATS} value={draft.timeFormat} onChange={(v) => set({ timeFormat: v })} />
           </FormRow>
-          <FormRow label="Date format" htmlFor="ui-date-format" caption={`Example: ${formatDate(SAMPLE, draft)}`} captionMono>
+          <FormRow label={t('settings.general.uiPreferencesSection.dateFormat')} htmlFor="ui-date-format" caption={t('settings.general.uiPreferencesSection.exampleDate', { date: formatDate(SAMPLE, draft) })} captionMono>
             <Select id="ui-date-format" value={draft.dateFormat} options={DATE_FORMATS} onChange={(e) => set({ dateFormat: e.currentTarget.value as DateFormat })} />
           </FormRow>
-          <FormRow label="Poster size" htmlFor="ui-poster-columns" caption="Default for the library poster grid. The size slider there still changes it for a visit.">
+          <FormRow label={t('settings.general.uiPreferencesSection.posterSize')} htmlFor="ui-poster-columns" caption={t('settings.general.uiPreferencesSection.defaultForTheLibraryPoster')}>
             <Select
               id="ui-poster-columns"
               value={String(draft.posterColumns)}
-              options={COLUMN_OPTIONS}
+              options={columnOptions()}
               onChange={(e) => set({ posterColumns: Number(e.currentTarget.value) })}
             />
           </FormRow>
         </>
       ) : (
-        <p className="al-caption">UI preferences belong to a user account. Sign in with one to change them.</p>
+        <p className="al-caption">{t('settings.general.uiPreferencesSection.uiPreferencesBelongToA')}</p>
       )}
     </SettingsSection>
   );

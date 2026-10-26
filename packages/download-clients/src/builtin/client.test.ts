@@ -5,7 +5,18 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createTorrent, Session, toMagnetUri, type SessionSettings, type Torrent } from '@arclight/torrent-engine';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createBuiltinClient, createDownloadClient, DownloadClientError, type DownloadClient } from '../index.js';
+import {
+  announceHosts,
+  attachSeedRules,
+  BuiltinClient,
+  BuiltinSettings,
+  completeResumeData,
+  createBuiltinClient,
+  createDownloadClient,
+  DownloadClientError,
+  seedRulePending,
+  type DownloadClient,
+} from '../index.js';
 import type { BuiltinSettingsInput } from './settings.js';
 
 const cleanups: (() => Promise<unknown> | unknown)[] = [];
@@ -506,5 +517,153 @@ describe('BuiltinClient status and connection', () => {
     const orphan = createDownloadClient('builtin', {});
     expect(await codeOf(orphan.test())).toBe('unreachable');
     expect(() => createDownloadClient('builtin', { initialState: 'later' } as never)).toThrow();
+  });
+});
+
+describe('BuiltinClient per-torrent options, skip-check and hit-and-run guard', () => {
+  const ANNOUNCE = 'http://tracker.private.invalid:2710/announce';
+
+  /** A session that never contacts trackers (fake announce URLs stay offline). */
+  async function offlineSession(savePath: string): Promise<Session> {
+    const s = new Session({ settings: { ...FAST, savePath, seedLimitAction: 'none' }, trackerClientFactory: () => null });
+    await s.start();
+    cleanups.push(() => s.shutdown());
+    return s;
+  }
+
+  it('applies the default super-seeding flag and per-torrent limits from the client settings', async () => {
+    const { s, dir, client } = await leecher({ superSeeding: true, uploadLimitKbps: 100, peerDownloadLimitKbps: 5 });
+    const t = await addSeeding(client, s, dir, pack());
+    expect(t.superSeeding).toBe(true);
+    expect(t.rateLimits).toEqual({ uploadLimit: 102_400, downloadLimit: 0, peerUploadLimit: 0, peerDownloadLimit: 5_120 });
+  });
+
+  it('leaves super-seeding off and limits unlimited by default', async () => {
+    const { s, dir, client } = await leecher();
+    const t = await addSeeding(client, s, dir, pack());
+    expect(t.superSeeding).toBe(false);
+    expect(t.rateLimits.uploadLimit).toBe(0);
+  });
+
+  it('skipChecking trusts the payload without hashing it', async () => {
+    const { s, dir, client } = await leecher();
+    const p = pack();
+    await writePack(dir, p);
+    // Corrupt a middle byte: a hash check would find a bad piece, a skipped check does not.
+    const a = join(dir, p.name, 'a.bin');
+    const data = await readFile(a);
+    data[20_000] = (data[20_000]! + 1) % 256;
+    await writeFile(a, data);
+    const { id, warnings } = await client.addTorrent({
+      torrentFile: p.torrent,
+      title: p.name,
+      category: 'xs',
+      savePath: dir,
+      skipChecking: true,
+    });
+    expect(warnings).toEqual([]);
+    const t = s.getTorrent(id) as Torrent;
+    await waitFor(() => t.state !== 'checking');
+    expect(t.isComplete).toBe(true);
+    expect(t.getStats().piecesHave).toBe(t.getStats().pieceCount);
+  });
+
+  it('skipChecking falls back to a normal check when the files do not match', async () => {
+    const { s, dir, client } = await leecher();
+    const p = pack();
+    const { id, warnings } = await client.addTorrent({
+      torrentFile: p.torrent,
+      title: p.name,
+      category: 'xs',
+      savePath: dir,
+      skipChecking: true,
+      paused: true,
+    });
+    expect(warnings[0]).toMatch(/do not match/);
+    const t = s.getTorrent(id) as Torrent;
+    await waitFor(() => t.state !== 'checking');
+    expect(t.isComplete).toBe(false);
+  });
+
+  it('completeResumeData claims every piece only when sizes match', async () => {
+    const dir = await tmp();
+    const p = pack();
+    const created = createTorrent({ name: p.name, files: p.files, pieceLength: 16 * 1024 });
+    expect(await completeResumeData(created.metainfo, dir, { category: '', paused: false })).toBeUndefined();
+    await writePack(dir, p);
+    const r = await completeResumeData(created.metainfo, dir, { category: 'x', paused: false });
+    expect(r).toMatchObject({ infoHash: p.infoHash, pieceCount: created.metainfo.pieceCount, category: 'x' });
+    expect(r!.fileStats.every((f) => f !== null)).toBe(true);
+  });
+
+  it('refuses to remove a finished torrent before the tracker hit-and-run rule is met', async () => {
+    const dir = await tmp();
+    const s = await offlineSession(dir);
+    const seen: string[][] = [];
+    const client = new BuiltinClient(BuiltinSettings.parse({}), s, {
+      seedRules: (hosts) => {
+        seen.push([...hosts]);
+        return hosts.includes('tracker.private.invalid') ? { minSeedHours: 72, minRatio: 1, label: 'PrivateHD' } : null;
+      },
+    });
+    const t = await addSeeding(client, s, dir, pack({ private: true, announce: ANNOUNCE }), { seedRatioLimit: 0 });
+    await client.pause(t.infoHashHex);
+    const item = (await client.getItems('tv'))[0];
+    expect(item).toMatchObject({ status: 'completed', isReadOnly: true, canBeRemoved: false, canMoveFiles: false });
+    expect(seen.at(-1)).toContain('tracker.private.invalid');
+    const err = await client.removeItem(t.infoHashHex, false).then(
+      () => null,
+      (e: unknown) => e,
+    );
+    expect(err).toBeInstanceOf(DownloadClientError);
+    expect((err as DownloadClientError).code).toBe('rejected');
+    expect((err as Error).message).toMatch(/PrivateHD requires 72 h of seeding or ratio 1/);
+    expect(s.getTorrent(t.infoHashHex)).toBeDefined();
+  });
+
+  it('allows removal once the rule is met and ignores torrents of other trackers', async () => {
+    const dir = await tmp();
+    const s = await offlineSession(dir);
+    const client = new BuiltinClient(BuiltinSettings.parse({}), s, {
+      seedRules: (hosts) => (hosts.includes('other.invalid') ? { minRatio: 0 } : hosts.length > 0 ? { minSeedHours: 1 } : null),
+    });
+    const met = await addSeeding(client, s, dir, pack({ announce: 'http://other.invalid/announce' }));
+    const plain = await addSeeding(client, s, dir, pack());
+    await client.pause(met.infoHashHex);
+    await client.pause(plain.infoHashHex);
+    const items = await client.getItems('tv');
+    expect(items.every((i) => i.canBeRemoved)).toBe(true);
+    await client.removeItem(met.infoHashHex, false);
+    await client.removeItem(plain.infoHashHex, false);
+    expect(s.getTorrents()).toHaveLength(0);
+  });
+
+  it('uses rules attached to the session when the client has none of its own', async () => {
+    const dir = await tmp();
+    const s = await offlineSession(dir);
+    const client = createBuiltinClient({}, () => s);
+    const t = await addSeeding(client, s, dir, pack({ announce: ANNOUNCE }));
+    attachSeedRules(s, () => ({ minSeedHours: 10 }));
+    expect(await codeOf(client.removeItem(t.infoHashHex, false))).toBe('rejected');
+    attachSeedRules(s, null);
+    await client.removeItem(t.infoHashHex, false);
+  });
+
+  it('seedRulePending accepts either condition and reports what is missing', () => {
+    expect(seedRulePending({}, { seedingTimeMs: 0, ratio: 0 })).toBeNull();
+    expect(seedRulePending({ minSeedHours: 1, minRatio: 2 }, { seedingTimeMs: 3_600_000, ratio: 0 })).toBeNull();
+    expect(seedRulePending({ minSeedHours: 1, minRatio: 2 }, { seedingTimeMs: 0, ratio: 2.5 })).toBeNull();
+    expect(seedRulePending({ minRatio: 2 }, { seedingTimeMs: 9e9, ratio: 1 })).toMatch(/ratio 2 \(seeded/);
+  });
+
+  it('announceHosts collects tracker host names', () => {
+    const p = pack();
+    const meta = createTorrent({
+      name: p.name,
+      files: p.files,
+      announce: [['http://a.invalid/x'], ['udp://Tracker.Example.invalid:80/announce']],
+    }).metainfo;
+    const hosts = announceHosts({ metainfo: meta, magnet: null, getTrackers: () => [] });
+    expect(hosts.sort()).toEqual(['a.invalid', 'tracker.example.invalid']);
   });
 });

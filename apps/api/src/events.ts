@@ -6,6 +6,11 @@ import type { ServerEvent } from '@arclight/shared';
 export class EventBus {
   private readonly emitter = new EventEmitter({ captureRejections: false });
 
+  constructor() {
+    // Every module (and each WebSocket client) subscribes; more than 10 listeners is normal here.
+    this.emitter.setMaxListeners(0);
+  }
+
   publish(event: ServerEvent): void {
     this.emitter.emit('event', event);
   }

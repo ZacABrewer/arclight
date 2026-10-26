@@ -1,9 +1,30 @@
 import { useState } from 'react';
 import type { MediaFile } from '@arclight/shared';
-import { Button, EmptyState, Modal, Table, type Column } from '../../arclight/index.js';
+import { Button, EmptyState, Modal, Table, Tag, type Column } from '../../arclight/index.js';
 import { formatBytes, formatDate, seasonLabel } from '../../components/media/format.js';
 import { QualityLabel, QueryError } from '../../components/media/media-kit.js';
 import { useDeleteMediaFile } from '../../hooks/library.js';
+import { useAnalyzeMedia } from '../../hooks/media-analysis.js';
+import { MediaFileRowActions } from '../../features/transcode/file-row-actions.js';
+import { mediaBadges, mediaInfoSummary } from './media-info.js';
+import { versionColumn } from './versions/versions-editor.js';
+import './media-files.css';
+import { t } from '../../i18n/index.js';
+
+/** Codec / resolution / HDR / audio badges for one file; "Not analyzed" until ffprobe has run. */
+export function MediaInfoBadges({ file }: { file: Pick<MediaFile, 'mediaInfo'> }) {
+  const badges = mediaBadges(file.mediaInfo);
+  if (badges.length === 0) return <span className="al-caption">{file.mediaInfo ? t('library.mediaFilesTable.noStreamsFound') : t('library.mediaFilesTable.notAnalyzed')}</span>;
+  return (
+    <span className="al-media-badges" title={mediaInfoSummary(file.mediaInfo)}>
+      {badges.map((b) => (
+        <Tag key={b.kind} className="al-num" data-kind={b.kind}>
+          {b.label}
+        </Tag>
+      ))}
+    </span>
+  );
+}
 
 export function MediaFilesTable({
   files,
@@ -19,27 +40,33 @@ export function MediaFilesTable({
   ownerId: number;
 }) {
   const del = useDeleteMediaFile();
+  const analyze = useAnalyzeMedia();
   const [confirm, setConfirm] = useState<MediaFile | null>(null);
 
-  if (error) return <QueryError error={error} title="Could not load files" />;
+  if (error) return <QueryError error={error} title={t('library.mediaFilesTable.couldNotLoadFiles')} />;
 
   const columns: Column<MediaFile>[] = [
-    { key: 'path', header: 'Relative path', sortValue: (f) => f.relativePath, cell: (f) => f.relativePath, mono: true },
+    { key: 'path', header: t('library.mediaFilesTable.relativePath'), sortValue: (f) => f.relativePath, cell: (f) => f.relativePath, mono: true },
+    ...versionColumn(files, (f) => f.versionTag, t('common.version')),
     ...(mediaType === 'series'
-      ? [{ key: 'season', header: 'Season', sortValue: (f: MediaFile) => f.seasonNumber, cell: (f: MediaFile) => (f.seasonNumber == null ? '—' : seasonLabel(f.seasonNumber)), muted: true }]
+      ? [{ key: 'season', header: t('common.season'), sortValue: (f: MediaFile) => f.seasonNumber, cell: (f: MediaFile) => (f.seasonNumber == null ? '—' : seasonLabel(f.seasonNumber)), muted: true }]
       : []),
-    { key: 'quality', header: 'Quality', sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityLabel quality={f.quality} /> },
-    { key: 'languages', header: 'Languages', cell: (f) => (f.languages.length ? f.languages.join(', ') : '—'), mono: true },
-    { key: 'group', header: 'Group', cell: (f) => f.releaseGroup ?? '—', muted: true },
-    { key: 'size', header: 'Size', sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
-    { key: 'added', header: 'Added', sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },
+    { key: 'quality', header: t('common.quality'), sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityLabel quality={f.quality} /> },
+    { key: 'mediainfo', header: t('library.mediaFilesTable.mediaInfo'), cell: (f) => <MediaInfoBadges file={f} /> },
+    { key: 'languages', header: t('common.languages'), cell: (f) => (f.languages.length ? f.languages.join(', ') : '—'), mono: true },
+    { key: 'group', header: t('common.group'), cell: (f) => f.releaseGroup ?? '—', muted: true },
+    { key: 'size', header: t('common.size'), sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
+    { key: 'added', header: t('common.added'), sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       cell: (f) => (
-        <Button size="sm" variant="danger" aria-label={`Delete ${f.relativePath}`} onClick={() => setConfirm(f)}>
-          Delete
-        </Button>
+        <span style={{ display: 'inline-flex', gap: 8 }}>
+          <MediaFileRowActions file={f} />
+          <Button size="sm" variant="danger" aria-label={t('library.mediaFilesTable.deleteRelativepath', { relativePath: f.relativePath })} onClick={() => setConfirm(f)}>
+            {t('common.delete')}
+          </Button>
+        </span>
       ),
       align: 'right',
     },
@@ -47,6 +74,18 @@ export function MediaFilesTable({
 
   return (
     <>
+      <div className="al-media-files__bar">
+        <span className="al-caption">{t('library.mediaFilesTable.mediaInfoComesFromFfprobe')}</span>
+        <Button
+          size="sm"
+          variant="secondary"
+          loading={analyze.isPending}
+          disabled={!files || files.length === 0}
+          onClick={() => analyze.mutate(mediaType === 'series' ? { seriesId: ownerId } : { movieId: ownerId })}
+        >
+          {t('library.mediaFilesTable.analyze')}
+        </Button>
+      </div>
       <Table
         columns={columns}
         rows={files}
@@ -54,31 +93,31 @@ export function MediaFilesTable({
         rowKey={(f) => f.id}
         density="dense"
         defaultSort={{ key: 'path', direction: 'asc' }}
-        empty={<EmptyState title="No files on disk">Search or import to add one.</EmptyState>}
-        caption="Media files"
+        empty={<EmptyState title={t('library.mediaFilesTable.noFilesOnDisk')}>{t('library.mediaFilesTable.searchOrImportToAdd')}</EmptyState>}
+        caption={t('library.mediaFilesTable.mediaFiles')}
       />
       <Modal
         open={confirm !== null}
         onClose={() => setConfirm(null)}
-        title="Delete file?"
+        title={t('library.mediaFilesTable.deleteFile')}
         size={440}
         footer={
           <>
             <Button variant="ghost" onClick={() => setConfirm(null)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button
               variant="danger"
               loading={del.isPending}
               onClick={() => confirm && del.mutate({ fileId: confirm.id, mediaType, ownerId }, { onSuccess: () => setConfirm(null) })}
             >
-              Delete file
+              {t('library.mediaFilesTable.deleteFile2')}
             </Button>
           </>
         }
       >
         <p style={{ margin: 0 }}>
-          <span className="al-num">{confirm?.relativePath}</span> ({formatBytes(confirm?.sizeBytes)}) will be deleted from disk. This cannot be undone.
+          <span className="al-num">{confirm?.relativePath}</span> {t('library.mediaFilesTable.bytesWillBeDeletedFrom', { bytes: formatBytes(confirm?.sizeBytes) })}
         </p>
       </Modal>
     </>

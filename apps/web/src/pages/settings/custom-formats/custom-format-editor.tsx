@@ -15,6 +15,7 @@ import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { exportCustomFormat } from './custom-format-json.js';
 import { CustomFormatTestBox } from './custom-format-test-box.js';
 import './custom-formats.css';
+import { t } from '../../../i18n/index.js';
 
 type SpecDraft = { implementation: string; name: string; negate: boolean; required: boolean; fields: Record<string, unknown> };
 
@@ -39,7 +40,7 @@ export function validateSpecs(
       if (!r.success && Object.keys(fieldErrors[i]!).length === 0) {
         const issue = r.error.issues[0];
         const key = issue?.path[0] === 'fields' ? String(issue.path[1] ?? '') : '';
-        fieldErrors[i] = { ...fieldErrors[i], [key || '_spec']: issue?.message ?? 'Invalid specification' };
+        fieldErrors[i] = { ...fieldErrors[i], [key || '_spec']: issue?.message ?? t('settings.customFormats.customFormatEditor.invalidSpecification') };
       }
     });
     return { fieldErrors, parsed: null };
@@ -72,7 +73,7 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
   const submit = () => {
     const { fieldErrors, parsed } = validateSpecs(specs, schema);
     setSpecErrors(fieldErrors);
-    setNameError(name.trim() ? undefined : 'Name is required');
+    setNameError(name.trim() ? undefined : t('common.nameIsRequired'));
     if (!name.trim() || !parsed) return;
     save.mutate({ id: format?.id, body: { name: name.trim(), includeWhenRenaming, specifications: parsed } }, { onSuccess: onClose });
   };
@@ -85,42 +86,41 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
         open
         size={640}
         onClose={onClose}
-        title={format ? `Edit ${format.name}` : 'Add custom format'}
+        title={format ? t('settings.customFormats.customFormatEditor.editName', { name: format.name }) : t('settings.customFormats.customFormatEditor.addCustomFormat')}
         footer={
           <EditorFooter
             onCancel={onClose}
             onSave={submit}
             saving={save.isPending}
             onDelete={format ? () => setConfirmDelete(true) : undefined}
-            deleteLabel="Delete format"
+            deleteLabel={t('settings.customFormats.customFormatEditor.deleteFormat')}
             extra={
               <Button variant="ghost" onClick={() => setShowJson((v) => !v)}>
-                {showJson ? 'Hide JSON' : 'Export JSON'}
+                {showJson ? t('settings.customFormats.customFormatEditor.hideJson') : t('settings.customFormats.customFormatEditor.exportJson')}
               </Button>
             }
           />
         }
       >
         <div className="al-cf-editor">
-          <Field label="Name" error={nameError}>
+          <Field label={t('common.name')} error={nameError}>
             <Input value={name} onChange={(e) => setName(e.currentTarget.value)} />
           </Field>
           <Toggle
             checked={includeWhenRenaming}
-            label="Include in the {Custom Formats} renaming token"
+            label={t('settings.customFormats.customFormatEditor.includeInTheCustomFormats')}
             onChange={(e) => setIncludeWhenRenaming(e.currentTarget.checked)}
           />
 
           {showJson ? (
-            <Field label="JSON" hint="Copy this to share or back up the format.">
+            <Field label={t('settings.customFormats.customFormatEditor.json')} hint={t('settings.customFormats.customFormatEditor.copyThisToShareOr')}>
               <Textarea mono rows={10} readOnly value={json} onFocus={(e) => e.currentTarget.select()} />
             </Field>
           ) : null}
 
-          <SettingsSection label="Conditions" count={specs.length}>
+          <SettingsSection label={t('common.conditions')} count={specs.length}>
             <p className="al-caption">
-              The format matches when every required condition matches and, for each kind of condition, at least one of that kind matches.
-              Negate inverts a condition.
+              {t('settings.customFormats.customFormatEditor.theFormatMatchesWhenEvery')}
             </p>
             <ol className="al-cf-specs">
               {specs.map((spec, index) => {
@@ -129,10 +129,10 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
                 return (
                   <li key={index} className="al-cf-spec">
                     <fieldset className="al-cf-spec__set">
-                      <legend className="al-sr-only">Condition {index + 1}</legend>
+                      <legend className="al-sr-only">{t('settings.customFormats.customFormatEditor.conditionValue', { value: index + 1 })}</legend>
                       <div className="al-cf-spec__head">
                         <Select
-                          aria-label="Condition type"
+                          aria-label={t('settings.customFormats.customFormatEditor.conditionType')}
                           value={spec.implementation}
                           onChange={(e) => {
                             const next = schema.find((d) => d.implementation === e.currentTarget.value);
@@ -140,18 +140,18 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
                           }}
                           options={schema.map((d) => ({ value: d.implementation, label: d.label }))}
                         />
-                        <Input aria-label="Condition name" value={spec.name} onChange={(e) => updateSpec(index, { name: e.currentTarget.value })} />
+                        <Input aria-label={t('settings.customFormats.customFormatEditor.conditionName')} value={spec.name} onChange={(e) => updateSpec(index, { name: e.currentTarget.value })} />
                         <Button
                           variant="danger"
                           size="sm"
                           icon={<Icon name="close" />}
-                          aria-label={`Remove condition ${spec.name}`}
+                          aria-label={t('settings.customFormats.customFormatEditor.removeConditionName', { name: spec.name })}
                           onClick={() => setSpecs((list) => list.filter((_, i) => i !== index))}
                         />
                       </div>
                       <div className="al-cf-spec__flags">
-                        <Toggle size="sm" label="Negate" checked={spec.negate} onChange={(e) => updateSpec(index, { negate: e.currentTarget.checked })} />
-                        <Toggle size="sm" label="Required" checked={spec.required} onChange={(e) => updateSpec(index, { required: e.currentTarget.checked })} />
+                        <Toggle size="sm" label={t('settings.customFormats.customFormatEditor.negate')} checked={spec.negate} onChange={(e) => updateSpec(index, { negate: e.currentTarget.checked })} />
+                        <Toggle size="sm" label={t('settings.customFormats.customFormatEditor.required')} checked={spec.required} onChange={(e) => updateSpec(index, { required: e.currentTarget.checked })} />
                       </div>
                       <SchemaForm fields={specFields(def)} values={spec.fields} errors={errors} onChange={(fields) => updateSpec(index, { fields })} />
                       {errors._spec ? <p className="al-inline-error">{errors._spec}</p> : null}
@@ -161,10 +161,10 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
               })}
             </ol>
             <Select
-              aria-label="Add condition"
+              aria-label={t('settings.customFormats.customFormatEditor.addCondition')}
               className="al-cf-add"
               value=""
-              placeholder="Add condition…"
+              placeholder={t('settings.customFormats.customFormatEditor.addCondition2')}
               onChange={(e) => {
                 const def = schema.find((d) => d.implementation === e.currentTarget.value);
                 if (def) setSpecs((list) => [...list, newSpec(def)]);
@@ -173,7 +173,7 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
             />
           </SettingsSection>
 
-          <SettingsSection label="Test">
+          <SettingsSection label={t('common.test')}>
             <CustomFormatTestBox highlightId={format?.id} />
           </SettingsSection>
           <SaveError error={save.error} />
@@ -182,8 +182,8 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
       {format ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${format.name}?`}
-          confirmLabel="Delete format"
+          title={t('settings.customFormats.customFormatEditor.deleteName', { name: format.name })}
+          confirmLabel={t('settings.customFormats.customFormatEditor.deleteFormat')}
           onCancel={() => setConfirmDelete(false)}
           describeError={(err) => inUseMessage(err, 'custom format')}
           onConfirm={async () => {
@@ -192,7 +192,7 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
             onClose();
           }}
         >
-          <p>Its scores are removed from every quality profile.</p>
+          <p>{t('settings.customFormats.customFormatEditor.itsScoresAreRemovedFrom')}</p>
         </ConfirmDialog>
       ) : null}
     </>

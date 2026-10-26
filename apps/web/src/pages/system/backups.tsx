@@ -8,9 +8,10 @@ import { relativeTime } from '../../lib/format.js';
 import { ConfirmModal } from './confirm-modal.js';
 import { formatBytes, formatStamp } from './format.js';
 import { SystemHeader } from './system-header.js';
+import { t } from '../../i18n/index.js';
 
 const TYPE_TONES: Record<BackupType, ChipTone> = { scheduled: 'neutral', manual: 'accent', update: 'default' };
-const TYPE_LABELS: Record<BackupType, string> = { scheduled: 'Scheduled', manual: 'Manual', update: 'Before update' };
+const TYPE_LABELS: Record<BackupType, string> = { get scheduled() { return t('system.backups.scheduled'); }, get manual() { return t('system.backups.manual'); }, get update() { return t('system.backups.beforeUpdate'); } };
 
 type Pending = { kind: 'restore'; backup: Backup } | { kind: 'upload'; file: File } | { kind: 'delete'; backup: Backup };
 
@@ -26,7 +27,7 @@ export function SystemBackupsPage() {
 
   const restored = () => {
     setPending(null);
-    toast.push({ tone: 'warning', title: 'Backup restored', message: 'Restart Arclight to finish loading the restored data.' });
+    toast.push({ tone: 'warning', title: t('system.backups.backupRestored'), message: t('system.backups.restartArclightToFinishLoading') });
   };
 
   const confirm = async () => {
@@ -44,12 +45,12 @@ export function SystemBackupsPage() {
   };
 
   const columns: Column<Backup>[] = [
-    { key: 'name', header: 'Name', mono: true, cell: (b) => <span className="sys-break">{b.name}</span>, sortValue: (b) => b.name },
-    { key: 'type', header: 'Type', width: '140px', cell: (b) => <Chip tone={TYPE_TONES[b.type]}>{TYPE_LABELS[b.type]}</Chip>, sortValue: (b) => b.type },
-    { key: 'size', header: 'Size', width: '100px', align: 'right', mono: true, cell: (b) => formatBytes(b.size), sortValue: (b) => b.size },
+    { key: 'name', header: t('common.name'), mono: true, cell: (b) => <span className="sys-break">{b.name}</span>, sortValue: (b) => b.name },
+    { key: 'type', header: t('common.type'), width: '140px', cell: (b) => <Chip tone={TYPE_TONES[b.type]}>{TYPE_LABELS[b.type]}</Chip>, sortValue: (b) => b.type },
+    { key: 'size', header: t('common.size'), width: '100px', align: 'right', mono: true, cell: (b) => formatBytes(b.size), sortValue: (b) => b.size },
     {
       key: 'time',
-      header: 'Time',
+      header: t('common.time'),
       width: '180px',
       mono: true,
       sortValue: (b) => b.time,
@@ -61,19 +62,19 @@ export function SystemBackupsPage() {
     },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       width: '260px',
       align: 'right',
       cell: (b) => (
         <span className="sys-row-actions">
-          <LinkButton size="sm" variant="ghost" href={backupApi.downloadUrl(b.id)} download={b.name} aria-label={`Download ${b.name}`}>
-            Download
+          <LinkButton size="sm" variant="ghost" href={backupApi.downloadUrl(b.id)} download={b.name} aria-label={t('system.backups.downloadName', { name: b.name })}>
+            {t('common.download')}
           </LinkButton>
-          <Button size="sm" variant="ghost" aria-label={`Restore ${b.name}`} onClick={() => setPending({ kind: 'restore', backup: b })}>
-            Restore
+          <Button size="sm" variant="ghost" aria-label={t('system.backups.restoreName', { name: b.name })} onClick={() => setPending({ kind: 'restore', backup: b })}>
+            {t('system.backups.restore')}
           </Button>
-          <Button size="sm" variant="danger" aria-label={`Delete ${b.name}`} onClick={() => setPending({ kind: 'delete', backup: b })}>
-            Delete
+          <Button size="sm" variant="danger" aria-label={t('system.backups.deleteName', { name: b.name })} onClick={() => setPending({ kind: 'delete', backup: b })}>
+            {t('common.delete')}
           </Button>
         </span>
       ),
@@ -85,7 +86,7 @@ export function SystemBackupsPage() {
   return (
     <>
       <SystemHeader
-        title="Backups"
+        title={t('common.backups')}
         actions={
           <>
             <input
@@ -93,7 +94,7 @@ export function SystemBackupsPage() {
               type="file"
               accept=".zip,application/zip"
               className="al-sr-only"
-              aria-label="Backup file to restore"
+              aria-label={t('system.backups.backupFileToRestore')}
               data-testid="backup-upload"
               onChange={(e) => {
                 const file = e.currentTarget.files?.[0];
@@ -102,19 +103,19 @@ export function SystemBackupsPage() {
               }}
             />
             <Button variant="secondary" onClick={() => fileRef.current?.click()}>
-              Restore from file
+              {t('system.backups.restoreFromFile')}
             </Button>
             <Button variant="primary" loading={create.isPending} onClick={() => create.mutate()}>
-              Create backup
+              {t('system.backups.createBackup')}
             </Button>
           </>
         }
       />
       <div className="sys-stack">
-        <Pane flush title="Backups">
+        <Pane flush title={t('common.backups')}>
           {backups.isError ? (
             <div className="sys-pad">
-              <ErrorBlock title="Couldn't list backups" onRetry={() => void backups.refetch()} />
+              <ErrorBlock title={t('system.backups.couldntListBackups')} onRetry={() => void backups.refetch()} />
             </div>
           ) : (
             <Table
@@ -122,9 +123,9 @@ export function SystemBackupsPage() {
               rows={backups.data}
               rowKey={(b) => b.id}
               loading={backups.isLoading}
-              caption="Backups"
+              caption={t('common.backups')}
               defaultSort={{ key: 'time', direction: 'desc' }}
-              empty={<EmptyState title="No backups yet">Scheduled backups appear here. Create one now with Create backup.</EmptyState>}
+              empty={<EmptyState title={t('system.backups.noBackupsYet')}>{t('system.backups.scheduledBackupsAppearHereCreate')}</EmptyState>}
             />
           )}
         </Pane>
@@ -133,22 +134,21 @@ export function SystemBackupsPage() {
 
       <ConfirmModal
         open={pending !== null}
-        title={pending?.kind === 'delete' ? 'Delete backup' : 'Restore backup'}
-        confirmLabel={pending?.kind === 'delete' ? 'Delete backup' : 'Restore backup'}
+        title={pending?.kind === 'delete' ? t('system.backups.deleteBackup') : t('system.backups.restoreBackup')}
+        confirmLabel={pending?.kind === 'delete' ? t('system.backups.deleteBackup') : t('system.backups.restoreBackup')}
         onCancel={() => setPending(null)}
         onConfirm={confirm}
       >
         {pending?.kind === 'delete' ? (
           <p>
-            Delete <span className="al-num">{pendingName}</span>? This can't be undone.
+            {t('common.delete')} <span className="al-num">{pendingName}</span>{t('system.backups.thisCantBeUndone')}
           </p>
         ) : pending ? (
           <>
             <p>
-              Restore <span className="al-num">{pendingName}</span>? The backup replaces the current database and config files. A copy of the current database
-              is kept as <span className="al-num">arclight.db.pre-restore</span>.
+              {t('system.backups.restore')} <span className="al-num">{pendingName}</span>{t('system.backups.theBackupReplacesTheCurrent')} <span className="al-num">arclight.db.pre-restore</span>.
             </p>
-            <p>Arclight must be restarted afterwards.</p>
+            <p>{t('system.backups.arclightMustBeRestartedAfterwards')}</p>
           </>
         ) : null}
       </ConfirmModal>
@@ -182,11 +182,11 @@ export function parseBackupDraft(d: Draft): { value: BackupSettings } | { errors
   for (const key of Object.keys(LIMITS) as Array<keyof typeof LIMITS>) {
     const [min, max] = LIMITS[key];
     const n = Number(d[key]);
-    if (d[key].trim() === '' || !Number.isInteger(n) || n < min || n > max) errors[key] = `Enter a whole number from ${min} to ${max}`;
+    if (d[key].trim() === '' || !Number.isInteger(n) || n < min || n > max) errors[key] = t('system.backups.enterAWholeNumberFrom', { min, max });
     nums[key] = n;
   }
   const folder = d.folder.trim();
-  if (folder && !/^([a-zA-Z]:[\\/]|[\\/])/.test(folder)) errors.folder = 'Use an absolute path, or leave empty for the default';
+  if (folder && !/^([a-zA-Z]:[\\/]|[\\/])/.test(folder)) errors.folder = t('system.backups.useAnAbsolutePathOr');
   if (Object.keys(errors).length) return { errors };
   return { value: { folder, ...nums } };
 }
@@ -217,14 +217,14 @@ function BackupSettingsPane() {
     ) : null;
 
   return (
-    <Pane title="Settings">
+    <Pane title={t('common.settings')}>
       {query.isError ? (
-        <ErrorBlock title="Couldn't load backup settings" onRetry={() => void query.refetch()} />
+        <ErrorBlock title={t('system.backups.couldntLoadBackupSettings')} onRetry={() => void query.refetch()} />
       ) : !draft ? (
         <Skeleton lines={4} />
       ) : (
         <form
-          aria-label="Backup settings"
+          aria-label={t('system.backups.backupSettings')}
           className="sys-form"
           onSubmit={(e) => {
             e.preventDefault();
@@ -234,21 +234,21 @@ function BackupSettingsPane() {
               return;
             }
             setErrors({});
-            save.mutate(parsed.value, { onSuccess: () => toast.push({ tone: 'ok', title: 'Backup settings saved' }) });
+            save.mutate(parsed.value, { onSuccess: () => toast.push({ tone: 'ok', title: t('system.backups.backupSettingsSaved') }) });
           }}
         >
-          <FormSection label="Schedule">
-            {field('folder', 'Folder', 'Where archives are written. Empty: the backups folder inside the config directory.', { type: 'text' })}
-            {field('intervalDays', 'Interval (days)', 'Days between scheduled backups. 0 turns them off.', { min: 0, max: 365 })}
-            {field('hour', 'Hour of day', 'Local hour (0–23) at which a due scheduled backup runs.', { min: 0, max: 23 })}
+          <FormSection label={t('system.backups.schedule')}>
+            {field('folder', t('system.backups.folder'), t('system.backups.folderHelp'), { type: 'text' })}
+            {field('intervalDays', t('system.backups.intervalDays'), t('system.backups.intervalDaysHelp'), { min: 0, max: 365 })}
+            {field('hour', t('system.backups.hourOfDay'), t('system.backups.hourOfDayHelp'), { min: 0, max: 23 })}
           </FormSection>
-          <FormSection label="Retention">
-            {field('retentionCount', 'Keep at most', 'Automatic backups to keep. 0 for no limit. Manual backups stay until deleted.', { min: 0, max: 1000 })}
-            {field('retentionDays', 'Keep for (days)', 'Delete automatic backups older than this. 0 for no limit.', { min: 0, max: 3650 })}
+          <FormSection label={t('common.retention')}>
+            {field('retentionCount', t('system.backups.keepAtMost'), t('system.backups.keepAtMostHelp'), { min: 0, max: 1000 })}
+            {field('retentionDays', t('system.backups.keepForDays'), t('system.backups.keepForDaysHelp'), { min: 0, max: 3650 })}
           </FormSection>
           <div className="sys-form__actions">
             <Button type="submit" variant="primary" loading={save.isPending}>
-              Save changes
+              {t('common.saveChanges')}
             </Button>
           </div>
         </form>

@@ -4,6 +4,7 @@ import { errorMessage } from '../../api/client.js';
 import { filesystemApi } from '../../api/filesystem.js';
 import { Button, Modal, PathPickerField, type PathCrumb, type PathEntry } from '../../arclight/index.js';
 import { breadcrumbs } from '../path-picker/path-utils.js';
+import { t } from '../../i18n/index.js';
 
 /** Folder browser (Modal 640 + kit PathPickerField) over GET /filesystem. */
 export function FolderPickerModal({
@@ -11,7 +12,7 @@ export function FolderPickerModal({
   onClose,
   onSelect,
   initialPath,
-  title = 'Choose a folder',
+  title = t('components.media.folderPickerModal.chooseAFolder'),
 }: {
   open: boolean;
   onClose: () => void;
@@ -58,16 +59,16 @@ export function FolderPickerModal({
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" disabled={!chosen} onClick={() => onSelect(chosen)}>
-            Select folder
+            {t('components.media.folderPickerModal.selectFolder')}
           </Button>
         </>
       }
     >
       <PathPickerField
-        label="Folder path"
+        label={t('common.folderPath')}
         value={typed}
         onChange={setTyped}
         entries={entries}

@@ -7,7 +7,7 @@ import type { Session } from '@arclight/torrent-engine';
 import { torrentEngineCheck } from '../health/checks/torrent.js';
 import type { HealthDeps } from '../health/types.js';
 import { LOCKDOWN_ADDRESS, TorrentModuleError } from './service.js';
-import { harness, randomMagnet, seededTorrent, waitFor, type Harness } from './test-support.js';
+import { freePort, harness, randomMagnet, seededTorrent, waitFor, type Harness } from './test-support.js';
 
 const open: Harness[] = [];
 afterEach(async () => {
@@ -24,6 +24,14 @@ function running(h: Harness): Session {
   const s = h.service.session;
   if (!s) throw new Error('engine not running');
   return s;
+}
+
+/** A second free port (not h.port + n: a neighbouring port may be bound by a parallel test). */
+async function otherPort(h: Harness): Promise<number> {
+  for (;;) {
+    const port = await freePort();
+    if (port !== h.port) return port;
+  }
 }
 
 const healthDeps = (h: Harness) => ({ torrent: async () => h.service.status() }) as unknown as HealthDeps;
@@ -77,7 +85,7 @@ describe('engine lifecycle', () => {
     const h = await make({ settings: { enabled: true } });
     await h.service.start();
     const first = running(h);
-    const other = h.port + 1 > 65000 ? h.port - 1 : h.port + 1;
+    const other = await otherPort(h);
     await h.service.updateSettings({ listenPort: other });
     expect(first.listenPort).toBe(other);
     await h.service.updateSettings({ dht: true });
@@ -170,7 +178,7 @@ describe('VPN binding', () => {
     const h = await make({ vpn: true, settings: { enabled: true } });
     h.vpn.connect();
     await h.service.start();
-    const forwarded = h.port + 2 > 65000 ? h.port - 2 : h.port + 2;
+    const forwarded = await otherPort(h);
     h.vpn.connect({ forwardedPort: forwarded });
     h.bus.publish({ type: 'vpn', status: h.vpn.status });
     await h.service.applyBinding();
@@ -226,7 +234,7 @@ describe('download client integration', () => {
     await client.addTorrent({ torrentFile: torrent, title: 'pack', category: 'arclight' });
     const items = await client.getItems('arclight');
     expect(items[0]!.id).toBe(infoHash);
-    const other = h.port + 3 > 65000 ? h.port - 3 : h.port + 3;
+    const other = await otherPort(h);
     const results = await h.downloads.setListenPortOnAll(other);
     expect(results).toEqual([{ id: c.id, name: 'Built-in', ok: true }]);
     expect(running(h).listenPort).toBe(other);

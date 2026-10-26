@@ -20,7 +20,10 @@ import { episodeCode, formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { useToast } from '../../components/toast.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
+import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
+import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
 import './wanted.css';
+import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 50;
 /** Largest page the api allows; "Search all" collects ids with one request of this size. */
@@ -30,13 +33,13 @@ type Mode = 'missing' | 'cutoff';
 type Kind = 'episodes' | 'movies';
 
 const MODE_TABS = [
-  { id: 'missing', label: 'Missing' },
-  { id: 'cutoff', label: 'Cutoff unmet' },
+  { id: 'missing', get label() { return t('status.missing'); } },
+  { id: 'cutoff', get label() { return t('status.cutoffUnmet'); } },
 ] as const;
 
 const KIND_OPTIONS = [
-  { value: 'episodes' as const, label: 'Episodes' },
-  { value: 'movies' as const, label: 'Movies' },
+  { value: 'episodes' as const, get label() { return t('common.episodes'); } },
+  { value: 'movies' as const, get label() { return t('common.movies'); } },
 ];
 
 export function WantedMissingPage() {
@@ -56,19 +59,19 @@ function WantedPage({ mode }: { mode: Mode }) {
   const navigate = useNavigate();
   const [kind, setKind] = useState<Kind>('episodes');
   useEffect(() => {
-    document.title = `${mode === 'missing' ? 'Missing' : 'Cutoff unmet'} · Arclight`;
+    document.title = t('wanted.valueArclight', { value: mode === 'missing' ? 'Missing' : 'Cutoff unmet' });
   }, [mode]);
   return (
     <div className="wanted-page">
-      <PageHeader index="05" title="Wanted">
+      <PageHeader index="05" title={t('common.wanted')}>
         <Tabs
           compact
-          aria-label="Wanted lists"
+          aria-label={t('wanted.wantedLists')}
           value={mode}
           tabs={MODE_TABS}
           onChange={(id) => void navigate({ to: id === 'missing' ? '/wanted/missing' : '/wanted/cutoff' })}
         />
-        <Segmented aria-label="Media type" options={KIND_OPTIONS} value={kind} onChange={setKind} />
+        <Segmented aria-label={t('common.mediaType')} options={KIND_OPTIONS} value={kind} onChange={setKind} />
       </PageHeader>
       {kind === 'episodes' ? <EpisodesList key={`e-${mode}`} mode={mode} /> : <MoviesList key={`m-${mode}`} mode={mode} />}
     </div>
@@ -96,7 +99,7 @@ function useBatchSearch() {
     } finally {
       setRunning(false);
     }
-    if (requests.length > 1) toast.push({ tone: 'info', title: `Queued ${requests.length} searches` });
+    if (requests.length > 1) toast.push({ tone: 'info', title: t('wanted.queuedRequestscountSearches', { requestsCount: requests.length }) });
   };
   return { run, running, search };
 }
@@ -129,8 +132,8 @@ function ListShell<T>(p: ListShellProps<T>) {
   const mobile = useIsMobile();
   const pages = Math.max(1, Math.ceil((p.total ?? 0) / PAGE_SIZE));
   const empty = (
-    <EmptyState title={p.mode === 'missing' ? `No missing ${p.noun}` : `No ${p.noun} below cutoff`}>
-      {p.mode === 'missing' ? 'Every monitored item that has aired is on disk.' : 'Every file meets its profile cutoff.'}
+    <EmptyState title={p.mode === 'missing' ? t('wanted.noMissingNoun', { noun: p.noun }) : t('wanted.noNounBelowCutoff', { noun: p.noun })}>
+      {p.mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
     </EmptyState>
   );
   return (
@@ -139,7 +142,7 @@ function ListShell<T>(p: ListShellProps<T>) {
       title={p.total === undefined ? p.noun.toUpperCase() : `${p.total} ${p.noun}`}
       actions={
         <Button variant="primary" size="sm" disabled={!p.total} loading={p.running} onClick={p.onSearchAll}>
-          Search all
+          {t('wanted.searchAll')}
         </Button>
       }
     >
@@ -149,11 +152,11 @@ function ListShell<T>(p: ListShellProps<T>) {
         ) : (p.rows ?? []).length === 0 ? (
           empty
         ) : (
-          <div className="mk-mlist" role="list" aria-label={`Wanted ${p.noun}`}>
+          <div className="mk-mlist" role="list" aria-label={t('wanted.wantedNoun', { noun: p.noun })}>
             {(p.rows ?? []).map((r) => {
               const m = p.mobileRow(r);
               return (
-                <SwipeRow key={p.rowKey(r)} onSearch={() => p.onSearchRows([p.rowKey(r)])} searchLabel={`Search ${p.rowLabel(r)}`}>
+                <SwipeRow key={p.rowKey(r)} onSearch={() => p.onSearchRows([p.rowKey(r)])} searchLabel={t('wanted.searchRowlabel', { rowLabel: p.rowLabel(r) })}>
                   <div className="mk-mrow" role="listitem">
                     <div style={{ minWidth: 0 }}>
                       <div className="mk-mrow__title">{m.title}</div>
@@ -177,9 +180,9 @@ function ListShell<T>(p: ListShellProps<T>) {
           selectable
           selected={p.selected}
           onSelectionChange={p.onSelect}
-          rowLabel={(r) => `Select ${p.rowLabel(r)}`}
+          rowLabel={(r) => t('wanted.selectRowlabel', { rowLabel: p.rowLabel(r) })}
           empty={empty}
-          caption={`Wanted ${p.noun}`}
+          caption={t('wanted.wantedNoun', { noun: p.noun })}
           bulkActions={(keys, clear) => (
             <>
               <Button
@@ -190,10 +193,10 @@ function ListShell<T>(p: ListShellProps<T>) {
                   clear();
                 }}
               >
-                Search selected
+                {t('wanted.searchSelected')}
               </Button>
               <Button variant="ghost" loading={p.running} onClick={p.onSearchAll}>
-                Search all
+                {t('wanted.searchAll')}
               </Button>
             </>
           )}
@@ -215,7 +218,7 @@ function EpisodesList({ mode }: { mode: Mode }) {
   const batch = useBatchSearch();
   const toast = useToast();
 
-  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted episodes" />;
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedEpisodes')} />;
   const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
 
   const searchAll = async () => {
@@ -227,7 +230,7 @@ function EpisodesList({ mode }: { mode: Mode }) {
       const ids = all.records.map((r) => r.id);
       if (ids.length) await batch.run([{ episodeIds: ids }]);
     } catch (err) {
-      toast.error('Search failed', errorMessage(err));
+      toast.error(t('common.searchFailed'), errorMessage(err));
     }
   };
 
@@ -235,25 +238,26 @@ function EpisodesList({ mode }: { mode: Mode }) {
   const columns: Column<WantedEpisode>[] = [
     {
       key: 'series',
-      header: 'Series',
+      header: t('common.series'),
       cell: (r) => (
         <Link className="mk-link" to="/library/series/$id" params={{ id: String(r.seriesId) }}>
           {r.seriesTitle}
         </Link>
       ),
     },
-    { key: 'episode', header: 'Episode', mono: true, cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber), width: '96px' },
-    { key: 'title', header: 'Title', muted: true, cell: (r) => r.title || '—' },
-    { key: 'airDate', header: 'Air date', mono: true, cell: (r) => shortDate(r.airDateUtc ?? r.airDate), width: '130px' },
-    { key: 'status', header: 'Status', cell: () => statusChip(mode), width: '150px' },
+    { key: 'episode', header: t('common.episode'), mono: true, cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber), width: '96px' },
+    { key: 'title', header: t('common.title'), muted: true, cell: (r) => r.title || '—' },
+    { key: 'airDate', header: t('wanted.airDate'), mono: true, cell: (r) => shortDate(r.airDateUtc ?? r.airDate), width: '130px' },
+    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    ...wantedVersionsColumn(records, t('wanted.versions')),
     {
       key: 'search',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={`Search ${label(r)}`} onClick={() => batch.search.mutate({ episodeIds: [r.id] })}>
-          Search
+        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => batch.search.mutate({ episodeIds: [r.id] })}>
+          {t('common.search')}
         </Button>
       ),
     },
@@ -274,7 +278,7 @@ function EpisodesList({ mode }: { mode: Mode }) {
       columns={columns}
       rowKey={(r) => r.id}
       rowLabel={label}
-      mobileRow={(r) => ({ title: r.seriesTitle, sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}` })}
+      mobileRow={(r) => ({ title: r.seriesTitle, sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}${wantedVersionsSuffix(r.wantedVersions)}` })}
       selected={selected}
       onSelect={setSelected}
       running={batch.running}
@@ -292,7 +296,7 @@ function MoviesList({ mode }: { mode: Mode }) {
   const batch = useBatchSearch();
   const toast = useToast();
 
-  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted movies" />;
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedMovies')} />;
   const records = list.data ? (list.data.records as Movie[]) : undefined;
 
   const searchAll = async () => {
@@ -303,34 +307,35 @@ function MoviesList({ mode }: { mode: Mode }) {
           : await libraryApi.wanted.cutoffMovies({ page: 1, pageSize: MAX_PAGE });
       await batch.run(all.records.map((m) => ({ movieId: m.id })));
     } catch (err) {
-      toast.error('Search failed', errorMessage(err));
+      toast.error(t('common.searchFailed'), errorMessage(err));
     }
   };
 
   const columns: Column<Movie>[] = [
     {
       key: 'title',
-      header: 'Title',
+      header: t('common.title'),
       cell: (r) => (
         <Link className="mk-link" to="/library/movie/$id" params={{ id: String(r.id) }}>
           {r.title}
         </Link>
       ),
     },
-    { key: 'year', header: 'Year', mono: true, cell: (r) => r.year || '—', width: '72px' },
-    { key: 'profile', header: 'Profile', muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
-    { key: 'cinemas', header: 'In cinemas', mono: true, cell: (r) => shortDate(r.inCinemas) },
-    { key: 'digital', header: 'Digital', mono: true, cell: (r) => shortDate(r.digitalRelease) },
-    { key: 'physical', header: 'Physical', mono: true, cell: (r) => shortDate(r.physicalRelease) },
-    { key: 'status', header: 'Status', cell: () => statusChip(mode), width: '150px' },
+    { key: 'year', header: t('common.year'), mono: true, cell: (r) => r.year || '—', width: '72px' },
+    { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
+    { key: 'cinemas', header: t('common.inCinemas'), mono: true, cell: (r) => shortDate(r.inCinemas) },
+    { key: 'digital', header: t('wanted.digital'), mono: true, cell: (r) => shortDate(r.digitalRelease) },
+    { key: 'physical', header: t('wanted.physical'), mono: true, cell: (r) => shortDate(r.physicalRelease) },
+    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    ...wantedVersionsColumn(records, t('wanted.versions')),
     {
       key: 'search',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={`Search ${r.title}`} onClick={() => batch.search.mutate({ movieId: r.id })}>
-          Search
+        <Button size="sm" aria-label={t('wanted.searchTitle', { title: r.title })} onClick={() => batch.search.mutate({ movieId: r.id })}>
+          {t('common.search')}
         </Button>
       ),
     },
@@ -351,7 +356,7 @@ function MoviesList({ mode }: { mode: Mode }) {
       columns={columns}
       rowKey={(r) => r.id}
       rowLabel={(r) => r.title}
-      mobileRow={(r) => ({ title: r.title, sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}` })}
+      mobileRow={(r) => ({ title: r.title, sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}${wantedVersionsSuffix(r.wantedVersions)}` })}
       selected={selected}
       onSelect={setSelected}
       running={batch.running}

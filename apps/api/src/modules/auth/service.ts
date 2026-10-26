@@ -1,9 +1,11 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq, lt, ne, sql } from 'drizzle-orm';
 import {
+  ADMIN_MANAGED_USER_SETTINGS,
   AuthSettings,
   Permission,
   type AuthVia,
+  type LoginMethod,
   type SecuritySettings,
   type SessionRecord,
   type User,
@@ -17,6 +19,7 @@ import { sessions, users } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
 import { dummyHash, hashPassword, needsRehash, verifyPassword } from './password.js';
 import { allLocal } from './network.js';
+import { audit } from '../audit/recorder.js';
 
 export type AuthErrorCode =
   | 'VALIDATION'
@@ -84,6 +87,15 @@ export interface LoginResult {
   maxAgeSeconds: number | null;
 }
 
+/**
+ * Checks credentials against something other than Arclight's own passwords (a Jellyfin/Emby
+ * server). Registered by the requests module, which owns the media-server settings.
+ */
+export interface ExternalLoginProvider {
+  /** The local user id to sign in, or null for wrong credentials. Throws AuthError to refuse. */
+  login(method: Exclude<LoginMethod, 'local'>, username: string, password: string): Promise<number | null>;
+}
+
 export interface AuthServiceOptions {
   db: Db;
   log?: Logger;
@@ -140,6 +152,10 @@ export class AuthService {
   private readonly maxFailures: number;
   private readonly lockoutWindowMs: number;
   private readonly failures = new Map<string, { count: number; first: number }>();
+  /** Media-server sign-in (set by the requests module); absent: only local logins work. */
+  externalLogin: ExternalLoginProvider | undefined;
+  /** Media-server sign-in shown on the login page (set by the requests module); absent: none. */
+  mediaServerLogin: (() => { kind: 'jellyfin' | 'emby' | 'plex'; name?: string | undefined } | null) | undefined;
 
   constructor(opts: AuthServiceOptions) {
     this.db = opts.db;
@@ -311,7 +327,12 @@ export class AuthService {
     if (input.displayName !== undefined) patch.displayName = input.displayName;
     if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
     if (input.avatar !== undefined) patch.avatar = input.avatar;
-    if (input.settings !== undefined) patch.settings = { ...current.settings, ...input.settings };
+    if (input.settings !== undefined) {
+      // Manager-owned keys (quota, content caps, approval overrides, Discord link) keep their stored value.
+      const incoming: Record<string, unknown> = { ...input.settings };
+      for (const key of ADMIN_MANAGED_USER_SETTINGS) delete incoming[key];
+      patch.settings = { ...current.settings, ...incoming };
+    }
     return toUser(this.db.update(users).set(patch).where(eq(users.id, id)).returning().get()!);
   }
 
@@ -377,12 +398,57 @@ export class AuthService {
     if (!row) {
       this.recordFailure(address);
       this.log?.warn({ username, ip: meta.ip }, 'failed login');
+      audit(this.db).record({ action: 'login.failed', username, ip: meta.ip ?? null, details: { method: 'local' } });
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
     this.failures.delete(address);
+    audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local' } });
     const now = this.now();
     this.db.update(users).set({ lastLoginAt: now.toISOString() }).where(eq(users.id, row.id)).run();
     return { ...this.createSession(row.id, meta), user: toUser({ ...row, lastLoginAt: now.toISOString() }) };
+  }
+
+  /**
+   * Login by method: `local` checks Arclight's password, anything else asks the registered
+   * external provider (media server). Both share the failed-login rate limit.
+   */
+  async loginWith(
+    method: LoginMethod,
+    username: string,
+    password: string,
+    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
+  ): Promise<LoginResult> {
+    if (method === 'local') return this.login(username, password, meta);
+    const address = meta.ip ?? 'unknown';
+    this.checkRateLimit(address);
+    if (!this.externalLogin) throw new AuthError('VALIDATION', 'media server sign-in is not available');
+    let userId: number | null;
+    try {
+      userId = await this.externalLogin.login(method, username, password);
+    } catch (err) {
+      if (err instanceof AuthError && err.code === 'INVALID_CREDENTIALS') this.recordFailure(address);
+      throw err;
+    }
+    if (userId === null) {
+      this.recordFailure(address);
+      this.log?.warn({ username, ip: meta.ip, method }, 'failed media server login');
+      audit(this.db).record({ action: 'login.failed', username, ip: meta.ip ?? null, details: { method } });
+      throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
+    }
+    this.failures.delete(address);
+    audit(this.db).record({ action: 'login.success', userId, username, ip: meta.ip ?? null, details: { method } });
+    return this.loginAs(userId, meta);
+  }
+
+  /** Signs a user in whose identity was proven elsewhere (media server, Plex PIN). */
+  loginAs(
+    userId: number,
+    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
+  ): LoginResult {
+    const row = this.row(userId);
+    const now = this.now().toISOString();
+    this.db.update(users).set({ lastLoginAt: now }).where(eq(users.id, row.id)).run();
+    return { ...this.createSession(row.id, meta), user: toUser({ ...row, lastLoginAt: now }) };
   }
 
   /** Issues a session for a user (login and the setup wizard's first admin). */

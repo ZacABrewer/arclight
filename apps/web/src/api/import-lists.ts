@@ -17,6 +17,7 @@ import {
   type TraktPollRequest,
 } from '@arclight/shared';
 import { request } from './client.js';
+import { t } from '../i18n/index.js';
 
 // Client for the import-lists module (/importlist*, /importlistexclusion*, /settings/importlists).
 // Every response is parsed with the shared contract.
@@ -53,16 +54,40 @@ export const importListsApi = {
 
 /** The schema endpoint carries no prose; these one-liners drive the add dialog. */
 export const IMPORT_LIST_DESCRIPTIONS: Record<ImportListImplementation, string> = {
-  tmdbList: 'A public TMDB list by its id.',
-  tmdbPopular: 'TMDB popular, top rated or trending titles, with vote/year/language filters.',
-  tmdbCollection: 'Every movie in a TMDB collection (e.g. a franchise).',
-  tmdbPerson: 'Titles an actor or crew member worked on.',
-  tmdbKeyword: 'Titles tagged with a TMDB keyword.',
-  trakt: 'A Trakt user list. Needs a Trakt API app; private lists need authentication.',
-  traktPopular: 'Trakt trending, popular, anticipated, most watched or box office.',
-  traktUser: "A Trakt user's watchlist, watched history or collection.",
-  plexWatchlist: 'Your Plex watchlist (needs a Plex token).',
-  imdbList: 'A public IMDb list or a user watchlist.',
-  rss: 'A JSON or RSS feed of TMDB/IMDb ids.',
-  stevenLu: 'The StevenLu popular movies feed.',
+  get tmdbList() {
+    return t('api.importLists.aPublicTmdbListBy');
+  },
+  get tmdbPopular() {
+    return t('api.importLists.tmdbPopularTopRatedOr');
+  },
+  get tmdbCollection() {
+    return t('api.importLists.everyMovieInATmdb');
+  },
+  get tmdbPerson() {
+    return t('api.importLists.titlesAnActorOrCrew');
+  },
+  get tmdbKeyword() {
+    return t('api.importLists.titlesTaggedWithATmdb');
+  },
+  get trakt() {
+    return t('api.importLists.aTraktUserListNeeds');
+  },
+  get traktPopular() {
+    return t('api.importLists.traktTrendingPopularAnticipatedMost');
+  },
+  get traktUser() {
+    return t('api.importLists.aTraktUsersWatchlistWatched');
+  },
+  get plexWatchlist() {
+    return t('api.importLists.yourPlexWatchlistNeedsA');
+  },
+  get imdbList() {
+    return t('api.importLists.aPublicImdbListOr');
+  },
+  get rss() {
+    return t('api.importLists.aJsonOrRssFeed');
+  },
+  get stevenLu() {
+    return t('api.importLists.theStevenluPopularMoviesFeed');
+  },
 };

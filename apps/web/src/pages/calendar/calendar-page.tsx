@@ -39,23 +39,24 @@ import {
   type CalendarView,
 } from './calendar-math.js';
 import './calendar.css';
+import { t, intlLocale } from '../../i18n/index.js';
 
 const VIEWS: ReadonlyArray<{ value: CalendarView; label: string }> = [
-  { value: 'month', label: 'Month' },
-  { value: 'week', label: 'Week' },
-  { value: 'day', label: 'Day' },
-  { value: 'agenda', label: 'Agenda' },
+  { value: 'month', get label() { return t('calendar.month'); } },
+  { value: 'week', get label() { return t('calendar.week'); } },
+  { value: 'day', get label() { return t('calendar.day'); } },
+  { value: 'agenda', get label() { return t('calendar.agenda'); } },
 ];
 
 /** Header title for a view: "October 2026", "20 – 26 Oct 2026", "Tue 20 Oct 2026". */
 export function viewTitle(view: CalendarView, anchor: Date, days: readonly Date[]): string {
-  if (view === 'day') return anchor.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  if (view === 'day') return anchor.toLocaleDateString(intlLocale(), { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
   if (view === 'week') {
     const first = days[0] ?? anchor;
     const last = days[days.length - 1] ?? anchor;
-    return `${first.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })} – ${last.toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' })}`;
+    return `${first.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short' })} – ${last.toLocaleDateString(intlLocale(), { day: 'numeric', month: 'short', year: 'numeric' })}`;
   }
-  return anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+  return anchor.toLocaleDateString(intlLocale(), { month: 'long', year: 'numeric' });
 }
 
 export function CalendarPage() {
@@ -69,7 +70,7 @@ export function CalendarPage() {
   const weekStart = prefs.firstDayOfWeek;
 
   useEffect(() => {
-    document.title = 'Calendar · Arclight';
+    document.title = t('calendar.calendarArclight');
   }, []);
 
   // Agenda lists the anchor's month; the grid views their own range.
@@ -92,25 +93,25 @@ export function CalendarPage() {
         actions={
           <>
             <Legend />
-            <Toggle size="sm" label="Show unmonitored" checked={unmonitored} onChange={(e) => setUnmonitored(e.target.checked)} />
-            <Segmented variant="soft" aria-label="Calendar view" options={viewOptions} value={shownView} onChange={setView} />
+            <Toggle size="sm" label={t('calendar.showUnmonitored')} checked={unmonitored} onChange={(e) => setUnmonitored(e.target.checked)} />
+            <Segmented variant="soft" aria-label={t('calendar.calendarView')} options={viewOptions} value={shownView} onChange={setView} />
             <Button onClick={() => setIcalOpen(true)}>iCal</Button>
           </>
         }
       >
         <div className="cal-nav">
-          <Button size="sm" aria-label="Previous" icon={<Icon name="chevronLeft" />} onClick={() => setAnchor(stepAnchor(view === 'agenda' ? 'month' : view, anchor, -1))} />
-          <Button size="sm" aria-label="Next" icon={<Icon name="chevronRight" />} onClick={() => setAnchor(stepAnchor(view === 'agenda' ? 'month' : view, anchor, 1))} />
+          <Button size="sm" aria-label={t('calendar.previous')} icon={<Icon name="chevronLeft" />} onClick={() => setAnchor(stepAnchor(view === 'agenda' ? 'month' : view, anchor, -1))} />
+          <Button size="sm" aria-label={t('calendar.next')} icon={<Icon name="chevronRight" />} onClick={() => setAnchor(stepAnchor(view === 'agenda' ? 'month' : view, anchor, 1))} />
           <Button size="sm" onClick={() => setAnchor(new Date())}>
-            Today
+            {t('calendar.today')}
           </Button>
         </div>
       </PageHeader>
 
-      {calendar.data === null ? <Banner tone="warn">The calendar endpoint is not available yet. Events appear once the calendar module is running.</Banner> : null}
+      {calendar.data === null ? <Banner tone="warn">{t('calendar.theCalendarEndpointIsNot')}</Banner> : null}
 
       {calendar.isError ? (
-        <QueryError error={calendar.error} onRetry={() => void calendar.refetch()} title="Could not load the calendar" />
+        <QueryError error={calendar.error} onRetry={() => void calendar.refetch()} title={t('calendar.couldNotLoadTheCalendar')} />
       ) : calendar.isPending ? (
         <Loading />
       ) : view === 'month' && !mobile ? (
@@ -128,18 +129,18 @@ export function CalendarPage() {
 
 function Legend() {
   return (
-    <div className="cal-legend" aria-label="Legend">
+    <div className="cal-legend" aria-label={t('calendar.legend')}>
       <span>
         <i data-tone="downloaded" aria-hidden="true" />
-        Downloaded
+        {t('status.downloaded')}
       </span>
       <span>
         <i data-tone="upcoming" aria-hidden="true" />
-        Upcoming
+        {t('calendar.upcoming')}
       </span>
       <span>
         <i data-tone="missing" aria-hidden="true" />
-        Missing
+        {t('status.missing')}
       </span>
     </div>
   );
@@ -201,11 +202,11 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
         </div>
         <div className="cal-detail__actions">
           <Link {...entry.link} className={buttonClass({ variant: 'secondary', size: 'sm' })} onClick={onClose}>
-            Open
+            {t('common.open')}
           </Link>
           {entry.status !== 'downloaded' && entry.status !== 'unaired' && entry.status !== 'tba' ? (
             <Button size="sm" loading={search.isPending} onClick={() => search.mutate(entry.search)}>
-              Search
+              {t('common.search')}
             </Button>
           ) : null}
         </div>
@@ -218,7 +219,7 @@ function MonthGrid({ days, anchor, today, byDay, popover, weekStart }: { days: D
   const rows = days.length / 7;
   return (
     <Pane bare className="cal-month-pane">
-      <div className="cal-month" role="grid" aria-label={anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} style={{ gridTemplateRows: `32px repeat(${rows}, minmax(112px, 1fr))` }}>
+      <div className="cal-month" role="grid" aria-label={anchor.toLocaleDateString(intlLocale(), { month: 'long', year: 'numeric' })} style={{ gridTemplateRows: `32px repeat(${rows}, minmax(112px, 1fr))` }}>
         {weekdayLabels(weekStart).map((d) => (
           <div key={d} className="cal-weekday" role="columnheader">
             {d}
@@ -235,7 +236,7 @@ function MonthGrid({ days, anchor, today, byDay, popover, weekStart }: { days: D
             <div
               key={key}
               role="gridcell"
-              aria-label={d.toLocaleDateString(undefined, { dateStyle: 'full' })}
+              aria-label={d.toLocaleDateString(intlLocale(), { dateStyle: 'full' })}
               className="cal-cell"
               data-outside={d.getMonth() !== anchor.getMonth() || undefined}
               data-today={isToday || undefined}
@@ -260,18 +261,18 @@ function TimeGrid({ days, today, byDay, popover, timeFormat }: { days: Date[]; t
   const cols = { gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` };
   return (
     <Pane bare className="cal-time-pane">
-      <div className="cal-time" data-days={days.length} role="grid" aria-label={days.length === 1 ? 'Day' : 'Week'}>
+      <div className="cal-time" data-days={days.length} role="grid" aria-label={days.length === 1 ? t('calendar.day') : t('calendar.week')}>
         <div className="cal-time__head" style={cols}>
           <span />
           {days.map((d) => (
             <div key={localIsoDate(d)} className="cal-time__day" role="columnheader" data-today={isSameDay(d, today) || undefined}>
-              <span className="al-label">{d.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+              <span className="al-label">{d.toLocaleDateString(intlLocale(), { weekday: 'short' })}</span>
               <span className="cal-cell__date al-num">{d.getDate()}</span>
             </div>
           ))}
         </div>
         <div className="cal-time__allday" style={cols}>
-          <span className="cal-time__hour al-num">all day</span>
+          <span className="cal-time__hour al-num">{t('calendar.allDay')}</span>
           {days.map((d) => (
             <div key={localIsoDate(d)} className="cal-time__allday-cell">
               {(byDay.get(localIsoDate(d)) ?? [])
@@ -291,7 +292,7 @@ function TimeGrid({ days, today, byDay, popover, timeFormat }: { days: Date[]; t
             ))}
           </div>
           {days.map((d, col) => (
-            <div key={localIsoDate(d)} className="cal-time__col" role="gridcell" aria-label={d.toLocaleDateString(undefined, { dateStyle: 'full' })}>
+            <div key={localIsoDate(d)} className="cal-time__col" role="gridcell" aria-label={d.toLocaleDateString(intlLocale(), { dateStyle: 'full' })}>
               {HOURS.map((h) => (
                 <span key={h} className="cal-time__line" style={{ top: h * HOUR_PX }} aria-hidden="true" />
               ))}
@@ -312,20 +313,20 @@ function TimeGrid({ days, today, byDay, popover, timeFormat }: { days: Date[]; t
 
 function Agenda({ days, byDay, popover }: { days: Date[]; byDay: Map<string, CalendarEntry[]>; popover: PopoverState }) {
   const withEntries = days.filter((d) => (byDay.get(localIsoDate(d))?.length ?? 0) > 0);
-  if (withEntries.length === 0) return <EmptyState title="Nothing scheduled this month">Move to another month or show unmonitored items.</EmptyState>;
+  if (withEntries.length === 0) return <EmptyState title={t('calendar.nothingScheduledThisMonth')}>{t('calendar.moveToAnotherMonthOr')}</EmptyState>;
   return (
     <div className="cal-agenda">
       {withEntries.map((d) => {
         const key = localIsoDate(d);
         return (
           <section key={key} className="cal-agenda__day" aria-label={formatDate(key, { dateStyle: 'full' })}>
-            <SectionLabel as="h2">{d.toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' })}</SectionLabel>
+            <SectionLabel as="h2">{d.toLocaleDateString(intlLocale(), { weekday: 'short', day: 'numeric', month: 'short' })}</SectionLabel>
             <Pane bare>
               {(byDay.get(key) ?? []).map((e) => {
                 const chip = episodeChip(e.status);
                 return (
                   <div key={e.key} className="cal-agenda__row" data-tone={e.tone} data-unmonitored={e.monitored ? undefined : true}>
-                    <span className="al-num cal-agenda__time">{e.time ?? 'All day'}</span>
+                    <span className="al-num cal-agenda__time">{e.time ?? t('calendar.allDay2')}</span>
                     <span className="cal-agenda__title">
                       <EventBar entry={e} popover={popover} />
                     </span>
@@ -385,40 +386,40 @@ function ICalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
     <Modal
       open={open}
       onClose={onClose}
-      title="iCal feed"
+      title={t('calendar.icalFeed')}
       size={560}
       footer={
         <Button variant="ghost" onClick={onClose}>
-          Close
+          {t('common.close')}
         </Button>
       }
     >
       <div className="mk-stack-sm">
-        {feed.data === null ? <Banner tone="warn">The feed endpoint is not available yet. This is where it will live.</Banner> : null}
+        {feed.data === null ? <Banner tone="warn">{t('calendar.theFeedEndpointIsNot')}</Banner> : null}
         <div className="cal-ical-row">
-          <Field label="Past days">
+          <Field label={t('calendar.pastDays')}>
             <Input type="number" mono min={0} value={opts.pastDays} onChange={(e) => setOpts({ ...opts, pastDays: Math.max(0, Number(e.target.value)) })} />
           </Field>
-          <Field label="Future days">
+          <Field label={t('calendar.futureDays')}>
             <Input type="number" mono min={0} value={opts.futureDays} onChange={(e) => setOpts({ ...opts, futureDays: Math.max(0, Number(e.target.value)) })} />
           </Field>
         </div>
-        <Toggle label="Include unmonitored" checked={opts.unmonitored} onChange={(e) => setOpts({ ...opts, unmonitored: e.target.checked })} />
-        <Field label="Feed URL" hint="Subscribe to this URL in your calendar app.">
+        <Toggle label={t('calendar.includeUnmonitored')} checked={opts.unmonitored} onChange={(e) => setOpts({ ...opts, unmonitored: e.target.checked })} />
+        <Field label={t('calendar.feedUrl')} hint={t('calendar.subscribeToThisUrlIn')}>
           <Input mono readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
         </Field>
         {regenerated ? (
           <p className="al-caption" role="status" style={{ margin: 0 }}>
-            New feed URL ready. Update your calendar apps with it.
+            {t('calendar.newFeedUrlReadyUpdate')}
           </p>
         ) : null}
         <div className="mk-row">
           <Button variant="primary" icon={<Icon name="copy" />} onClick={() => void copyText(url).then(setCopied)}>
-            {copied ? 'Copied' : 'Copy'}
+            {copied ? t('calendar.copied') : t('common.copy')}
           </Button>
           {isAdmin && feed.data && !confirming ? (
             <Button variant="danger" onClick={() => setConfirming(true)}>
-              Regenerate
+              {t('calendar.regenerate')}
             </Button>
           ) : null}
         </div>
@@ -428,7 +429,7 @@ function ICalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
             action={
               <div className="mk-row">
                 <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
                 <Button
                   size="sm"
@@ -443,12 +444,12 @@ function ICalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
                     })
                   }
                 >
-                  Regenerate URL
+                  {t('calendar.regenerateUrl')}
                 </Button>
               </div>
             }
           >
-            Regenerating makes a new feed URL. The current URL stops working at once, so calendar apps subscribed to it stop updating until you give them the new one.
+            {t('calendar.regeneratingMakesANewFeed')}
           </Banner>
         ) : null}
       </div>

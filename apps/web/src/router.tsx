@@ -19,6 +19,10 @@ import { AddNewPage } from './pages/library/add-new.js';
 import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
 import { MovieDetailsPage } from './pages/library/movie-details.js';
 import { SeriesDetailsPage } from './pages/library/series-details.js';
+import { CollectionDetailPage, CollectionsPage } from './pages/library/collections.js';
+import { HealthDocsPage } from './pages/docs/health-docs-page.js';
+import { SolverSettingsPage } from './pages/settings/solver/solver-page.js';
+import { UpdatesSettingsPage } from './pages/settings/updates/updates-settings-page.js';
 import { WantedCutoffPage, WantedMissingPage } from './pages/wanted/wanted-page.js';
 import { SystemHealthPage } from './pages/system/health.js';
 import { SystemStatusPage } from './pages/system/status.js';
@@ -29,6 +33,7 @@ import { SystemMigratePage } from './pages/system/migrate.js';
 import { SystemUpdatesPage } from './pages/system/updates.js';
 import { BlocklistPage } from './pages/activity/blocklist-page.js';
 import { HistoryPage } from './pages/activity/history-page.js';
+import { parseHistorySearch } from './pages/activity/history-search.js';
 import { QueuePage } from './pages/activity/queue-page.js';
 import { PendingReleasesPage } from './pages/activity/pending-page.js';
 import { ManualImportPage, parseManualImportSearch } from './pages/activity/manual-import/manual-import-page.js';
@@ -71,6 +76,21 @@ import { IssueDetailPage, IssuesPage } from './pages/issues/issues-page.js';
 import { RequestsSettingsPage } from './pages/settings/requests/requests-settings-page.js';
 import { UsersPage } from './pages/settings/users/users-page.js';
 import { ProfilePage } from './pages/profile-page.js';
+import { GuidesSettingsPage } from './pages/settings/guides/guides-page.js';
+import { MediaServersPage } from './pages/settings/media-servers/media-servers-page.js';
+import { SystemFeedsPage } from './pages/system/feeds.js';
+import { SystemStatsPage } from './pages/system/stats/stats-page.js';
+import { SystemAuditPage } from './pages/system/audit/audit-page.js';
+import { RetentionPage } from './pages/library/retention/retention-page.js';
+import { HygienePage } from './pages/library/hygiene/hygiene-page.js';
+import { RequestDeepLinkPage, parseRequestActionSearch } from './pages/requests/request-deep-link.js';
+import { CrossSeedSettingsPage } from './pages/settings/cross-seed/cross-seed-settings-page.js';
+import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
+import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
+import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
+import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
+import { PortalPage } from './pages/portal/portal-page.js';
+import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
 
 // Code-based route tree. Every page is a createRoute whose component is the page. The
 // rail and the section sub-navs live in nav.ts.
@@ -161,6 +181,14 @@ const searchRoute = createRoute({
   component: SearchPage,
 });
 
+// ?eventType=&seriesId=|episodeId=|movieId= deep links (decision log "View grab in History").
+const historyRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/activity/history',
+  validateSearch: parseHistorySearch,
+  component: HistoryPage,
+});
+
 const manualImportRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity/manual-import',
@@ -171,6 +199,14 @@ const manualImportRoute = createRoute({
 // Discover (pages/discover): grid pages that take ?mediaType=movie|tv, and search ?q=.
 const kindRoute = <TPath extends string>(path: TPath, component: () => React.ReactNode) =>
   createRoute({ getParentRoute: () => rootRoute, path, validateSearch: parseKindSearch, component });
+
+// Notification deep links: /requests/:id?action=approve|decline.
+const requestDeepLinkRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/requests/$id',
+  validateSearch: parseRequestActionSearch,
+  component: RequestDeepLinkPage,
+});
 
 const discoverSearchRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -184,6 +220,8 @@ const discoverSearchRoute = createRoute({
 export const routeTree = rootRoute.addChildren([
   loginRoute,
   page('/setup', SetupWizard),
+  // Public request portal: reachable without signing in (auth/guard.ts PUBLIC_PATHS).
+  page('/portal', PortalPage),
   page('/', DashboardPage),
   searchRoute,
 
@@ -194,6 +232,10 @@ export const routeTree = rootRoute.addChildren([
   page('/library/add', AddNewPage),
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
+  page('/library/collections', CollectionsPage),
+  page('/library/collections/$tmdbId', CollectionDetailPage),
+  page('/library/retention', RetentionPage),
+  page('/library/hygiene', HygienePage),
 
   // Discover, requests, issues, watchlist (Phase 4).
   page('/discover', DiscoverHomePage),
@@ -211,6 +253,7 @@ export const routeTree = rootRoute.addChildren([
   page('/discover/person/$id', PersonPage),
   page('/requests', RequestsPage),
   page('/requests/mine', MyRequestsPage),
+  requestDeepLinkRoute,
   page('/issues', IssuesPage),
   page('/issues/$id', IssueDetailPage),
   page('/watchlist', WatchlistPage),
@@ -220,9 +263,11 @@ export const routeTree = rootRoute.addChildren([
   sectionRedirect('/activity', '/activity/queue'),
   // Activity (pages/activity).
   page('/activity/queue', QueuePage),
-  page('/activity/history', HistoryPage),
+  historyRoute,
   page('/activity/blocklist', BlocklistPage),
   page('/activity/pending', PendingReleasesPage),
+  page('/activity/crossseed', CrossSeedActivityPage),
+  page('/activity/transcode', TranscodeJobsPage),
   manualImportRoute,
 
   sectionRedirect('/wanted', '/wanted/missing'),
@@ -237,6 +282,7 @@ export const routeTree = rootRoute.addChildren([
   // Indexers (the list is shared with Settings → Indexers).
   page('/indexers', IndexersPage),
   page('/indexers/stats', IndexerStatsPage),
+  page('/indexers/trackers', TrackerStatsPage),
 
   // Settings (pages/settings). Paths follow the *arr convention (no hyphens); the earlier
   // hyphenated paths redirect so old links keep working.
@@ -245,6 +291,8 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/profiles', ProfilesPage),
   page('/settings/quality', QualityPage),
   page('/settings/customformats', CustomFormatsPage),
+  page('/settings/guides', GuidesSettingsPage),
+  page('/settings/mediaservers', MediaServersPage),
   page('/settings/indexers', IndexersPage),
   page('/settings/indexerproxies', IndexerProxiesPage),
   page('/settings/indexeroptions', IndexerOptionsPage),
@@ -257,7 +305,12 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/users', UsersPage),
   page('/settings/vpn', VpnSettingsPage),
   page('/settings/torrent', TorrentSettingsPage),
+  page('/settings/crossseed', CrossSeedSettingsPage),
+  page('/settings/transcode', TranscodeSettingsPage),
+  page('/settings/discordbot', DiscordBotSettingsPage),
   page('/settings/subtitles', SubtitleSettingsPage),
+  page('/settings/solver', SolverSettingsPage),
+  page('/settings/updates', UpdatesSettingsPage),
   sectionRedirect('/settings/media-management', '/settings/mediamanagement'),
   sectionRedirect('/settings/custom-formats', '/settings/customformats'),
   sectionRedirect('/settings/download-clients', '/settings/downloadclients'),
@@ -270,6 +323,11 @@ export const routeTree = rootRoute.addChildren([
   page('/system/health', SystemHealthPage),
   page('/system/migrate', SystemMigratePage),
   page('/system/updates', SystemUpdatesPage),
+  page('/system/feeds', SystemFeedsPage),
+  page('/system/stats', SystemStatsPage),
+  page('/system/audit', SystemAuditPage),
+  // In-app health check docs: the health checks' wikiUrl links point here.
+  page('/docs/system/health', HealthDocsPage),
 
   // Component gallery (admins; rendered without the shell, loaded on demand).
   page('/design', DesignRoute),

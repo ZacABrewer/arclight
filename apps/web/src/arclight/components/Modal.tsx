@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { cx } from '../cx.js';
 import { useFocusTrap } from '../hooks/use-focus-trap.js';
 import { Icon } from './Icon.js';
+import { t } from '../../i18n/index.js';
 
 /** 440 = destructive confirm (kit default), 560 = add dialog, 640 = palette/forms, 1100 = interactive search. */
 export type ModalWidth = 440 | 560 | 640 | 1100;
@@ -80,7 +81,7 @@ export function Modal({ open, onClose, title, children, footer, size = 440, hide
             {title}
           </h2>
           {hideClose ? null : (
-            <button type="button" className="al-btn al-btn--ghost al-btn--sm al-btn--icon al-modal__close" aria-label="Close" onClick={onClose}>
+            <button type="button" className="al-btn al-btn--ghost al-btn--sm al-btn--icon al-modal__close" aria-label={t('common.close')} onClick={onClose}>
               <Icon name="close" />
             </button>
           )}
@@ -129,7 +130,7 @@ export function Drawer({ open, onClose, title, children, footer, width, classNam
           <h2 id={titleId} className="al-drawer__title">
             {title}
           </h2>
-          <button type="button" className="al-btn al-btn--ghost al-btn--sm al-btn--icon" aria-label="Close" onClick={onClose}>
+          <button type="button" className="al-btn al-btn--ghost al-btn--sm al-btn--icon" aria-label={t('common.close')} onClick={onClose}>
             <Icon name="close" />
           </button>
         </div>

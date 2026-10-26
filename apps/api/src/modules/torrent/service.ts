@@ -1,13 +1,17 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
-import { Session, type SessionOptions, type SessionSettings, type Torrent } from '@arclight/torrent-engine';
+import { attachSeedRules, type SeedRuleProvider } from '@arclight/download-clients';
+import { Session, type SessionOptions, type SessionSettings, type Torrent, type TorrentRateLimits } from '@arclight/torrent-engine';
 import {
+  TORRENT_TRANSPORT_DEFAULTS,
   TorrentSettings,
   type DownloadClientResource,
   type TorrentCounts,
   type TorrentDetail,
+  type TorrentEncryptionMode,
   type TorrentEngineState,
+  type TorrentLimitsRequest,
   type TorrentListQuery,
   type TorrentPriorityRequest,
   type TorrentSessionStatus,
@@ -107,6 +111,7 @@ export class TorrentService {
   /** Serializes start/stop/re-bind so VPN events and settings changes never interleave. */
   private chain: Promise<unknown> = Promise.resolve();
   private unsubscribe: (() => void) | null = null;
+  private seedRules: SeedRuleProvider | null = null;
 
   constructor(opts: TorrentServiceOptions) {
     this.db = opts.db;
@@ -142,7 +147,16 @@ export class TorrentService {
   }
 
   settingsResponse(s: TorrentSettings = this.settings()): TorrentSettingsResponse {
-    return { ...s, effectiveDownloadsRoot: this.effectiveDownloadsRoot(s), resumeDir: this.resumeDir };
+    return { ...withTransportDefaults(s), effectiveDownloadsRoot: this.effectiveDownloadsRoot(s), resumeDir: this.resumeDir };
+  }
+
+  /**
+   * Hit-and-run rules for `builtin` download clients (the tracker-stats module sets them). They
+   * are attached to the running Session and to every Session started later.
+   */
+  setSeedRuleProvider(provider: SeedRuleProvider | null): void {
+    this.seedRules = provider;
+    if (this.sessionValue) attachSeedRules(this.sessionValue, provider);
   }
 
   /** Saves a partial update and applies it to the running engine right away. */
@@ -157,7 +171,13 @@ export class TorrentService {
   }
 
   private sessionSettings(s: TorrentSettings, binding: Binding): Partial<SessionSettings> {
+    const t = withTransportDefaults(s);
     return {
+      encryption: t.encryption,
+      tcp: t.tcp,
+      utp: t.utp,
+      ipv6: t.ipv6,
+      webSeedConnectionsPerTorrent: t.webSeedConnectionsPerTorrent,
       listenPort: binding.port,
       listenAddress: binding.address,
       maxConnections: s.maxConnections,
@@ -193,6 +213,12 @@ export class TorrentService {
     void _a;
     void _r;
     this.sessionValue.updateSettings(live);
+    // tcp / utp / ipv6 take effect when the Session re-opens its sockets (same port).
+    const p = withTransportDefaults(prev);
+    const n = withTransportDefaults(next);
+    if (p.tcp !== n.tcp || p.utp !== n.utp || p.ipv6 !== n.ipv6) {
+      await this.sessionValue.setListenPort(this.sessionValue.listenPort || this.desiredBinding(next).port);
+    }
     await this.doApplyBinding();
   }
 
@@ -250,6 +276,7 @@ export class TorrentService {
       this.killSwitchPaused = await this.loadKillSwitchSet();
       session = this.sessionFactory({ settings: this.sessionSettings(s, binding) });
       session.on('warning', (m) => this.log?.debug({ warning: m }, 'torrent engine warning'));
+      if (this.seedRules) attachSeedRules(session, this.seedRules);
       await session.start();
       this.sessionValue = session;
       this.state = 'running';
@@ -393,13 +420,23 @@ export class TorrentService {
     let down = 0;
     let up = 0;
     let dhtNodes = 0;
+    let dht6Nodes = 0;
+    let utpConnections = 0;
+    let encryptedPeers = 0;
+    let listedPeers = 0;
     if (session) {
       const st = session.getSessionStats();
       peers = st.connections;
       down = st.downloadRate;
       up = st.uploadRate;
       dhtNodes = st.dhtNodes;
+      dht6Nodes = st.dht6Nodes;
+      utpConnections = st.utpConnections;
       for (const t of session.getTorrents()) {
+        for (const p of t.getPeers()) {
+          listedPeers++;
+          if (p.encrypted) encryptedPeers++;
+        }
         counts.total++;
         const state = t.state;
         if (state === 'downloading' || state === 'downloadingMetadata') counts.downloading++;
@@ -425,6 +462,10 @@ export class TorrentService {
         ...(vst?.forwardedPort !== undefined ? { forwardedPort: vst.forwardedPort } : {}),
       },
       dhtNodes,
+      dht6Nodes,
+      utpConnections,
+      encryptedPeers,
+      encryptedPeerRatio: listedPeers > 0 ? encryptedPeers / listedPeers : 0,
       peers,
       downloadRate: down,
       uploadRate: up,
@@ -497,6 +538,45 @@ export class TorrentService {
     if (req.sequential !== undefined) torrent.setSequential(req.sequential);
     await session.saveResumeData(torrent);
   }
+
+  /** Per-torrent and per-peer rate limits in bytes/s (0 = unlimited); omitted keys keep their value. */
+  async setLimits(id: string, req: TorrentLimitsRequest): Promise<void> {
+    const { session, torrent } = this.require(id);
+    const patch: Partial<TorrentRateLimits> = {};
+    for (const key of ['uploadLimit', 'downloadLimit', 'peerUploadLimit', 'peerDownloadLimit'] as const) {
+      const v = req[key];
+      if (v !== undefined) patch[key] = v;
+    }
+    torrent.setRateLimits(patch);
+    await session.saveResumeData(torrent);
+  }
+
+  /** BEP 16 super-seeding on or off (takes effect while the torrent seeds). */
+  async setSuperSeeding(id: string, enabled: boolean): Promise<void> {
+    const { session, torrent } = this.require(id);
+    torrent.setSuperSeeding(enabled);
+    await session.saveResumeData(torrent);
+  }
+}
+
+/** The settings with the optional transport fields filled from the engine defaults. */
+export type TorrentSettingsFilled = Omit<TorrentSettings, keyof typeof TORRENT_TRANSPORT_DEFAULTS> & {
+  encryption: TorrentEncryptionMode;
+  tcp: boolean;
+  utp: boolean;
+  ipv6: boolean;
+  webSeedConnectionsPerTorrent: number;
+};
+
+export function withTransportDefaults(s: TorrentSettings): TorrentSettingsFilled {
+  return {
+    ...s,
+    encryption: s.encryption ?? TORRENT_TRANSPORT_DEFAULTS.encryption,
+    tcp: s.tcp ?? TORRENT_TRANSPORT_DEFAULTS.tcp,
+    utp: s.utp ?? TORRENT_TRANSPORT_DEFAULTS.utp,
+    ipv6: s.ipv6 ?? TORRENT_TRANSPORT_DEFAULTS.ipv6,
+    webSeedConnectionsPerTorrent: s.webSeedConnectionsPerTorrent ?? TORRENT_TRANSPORT_DEFAULTS.webSeedConnectionsPerTorrent,
+  };
 }
 
 function stripUndefined<T extends object>(o: T): Partial<T> {
@@ -546,6 +626,8 @@ function toDetail(t: Torrent): TorrentDetail {
       peerChoking: p.peerChoking,
       peerInterested: p.peerInterested,
       snubbed: p.snubbed,
+      encrypted: p.encrypted,
+      transport: p.transport,
     })),
     trackers: t.getTrackers().map((tr) => ({
       url: tr.url,
@@ -558,6 +640,17 @@ function toDetail(t: Torrent): TorrentDetail {
       ...(tr.nextAnnounceAt !== undefined ? { nextAnnounce: new Date(tr.nextAnnounceAt).toISOString() } : {}),
     })),
     files: t.getFiles().map((f) => ({ index: f.index, path: f.path, length: f.length, priority: f.priority, progress: f.progress })),
+    webSeeds: t.getWebSeeds().map((w) => ({
+      url: w.url,
+      downloadRate: w.downloadRate,
+      downloaded: Math.round(w.downloaded),
+      activeRequests: w.activeRequests,
+      failures: w.failures,
+      retryAt: w.retryAt === null ? null : new Date(w.retryAt).toISOString(),
+      lastError: w.lastError,
+    })),
+    superSeeding: t.superSeeding,
+    limits: { ...t.rateLimits },
   };
   if (s.etaSeconds !== undefined) detail.etaSeconds = s.etaSeconds;
   if (s.error !== undefined) detail.error = s.error;

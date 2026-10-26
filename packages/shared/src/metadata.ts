@@ -114,3 +114,25 @@ export type MetadataSearchQuery = z.infer<typeof MetadataSearchQuery>;
 
 export const MetadataErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type MetadataErrorResponse = z.infer<typeof MetadataErrorResponse>;
+
+/** One movie of a TMDB collection (GET /metadata/collection/:tmdbId). */
+export const MetadataCollectionPart = z.object({
+  tmdbId: z.number().int(),
+  title: z.string(),
+  year: z.number().int().optional(),
+  releaseDate: z.string().optional(),
+  overview: z.string(),
+  images: MetadataImageSet,
+  originalLanguage: z.string(),
+});
+export type MetadataCollectionPart = z.infer<typeof MetadataCollectionPart>;
+
+export const MetadataCollection = z.object({
+  tmdbId: z.number().int(),
+  name: z.string(),
+  overview: z.string(),
+  images: MetadataImageSet,
+  /** Ordered by release date (undated last). */
+  parts: z.array(MetadataCollectionPart),
+});
+export type MetadataCollection = z.infer<typeof MetadataCollection>;

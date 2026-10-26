@@ -3,7 +3,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from '@tanstack/react-router';
 import { PASSWORD_MIN_LENGTH, type AuthMethod, type MediaType, type SetupStatus, type SetupStepId } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { setupApi } from '../../api/auth.js';
+import { setupApi, usersApi } from '../../api/auth.js';
+import { LanguageSelect } from '../../components/language-select.js';
 import { filesystemApi } from '../../api/filesystem.js';
 import { libraryApi } from '../../api/library.js';
 import { metadataApi } from '../../api/metadata.js';
@@ -33,6 +34,7 @@ import { DownloadClientsPage } from '../settings/download-clients/download-clien
 import { IndexersPage } from '../settings/indexers/indexers-page.js';
 import { VpnSettingsPage } from '../settings/vpn.js';
 import { crumbsFor } from './path-crumbs.js';
+import { t, chooseLocale, deviceLocale, type LocaleSetting } from '../../i18n/index.js';
 
 // Page 08 first-run wizard: Admin → TMDB → Root folders → Download client → Indexer → VPN.
 // One chamfered card per step under a diamond stepper. The admin step signs the new admin
@@ -41,12 +43,12 @@ import { crumbsFor } from './path-crumbs.js';
 
 export type WizardStep = SetupStepId | 'vpn';
 export const WIZARD_STEPS: readonly { id: WizardStep; label: string; optional?: boolean }[] = [
-  { id: 'admin', label: 'Admin' },
-  { id: 'tmdb', label: 'TMDB' },
-  { id: 'rootFolders', label: 'Root folders' },
-  { id: 'downloadClient', label: 'Download client', optional: true },
-  { id: 'indexer', label: 'Indexer', optional: true },
-  { id: 'vpn', label: 'VPN', optional: true },
+  { id: 'admin', get label() { return t('common.admin'); } },
+  { id: 'tmdb', get label() { return t('setup.wizard.tmdb'); } },
+  { id: 'rootFolders', get label() { return t('common.rootFolders'); } },
+  { id: 'downloadClient', get label() { return t('setup.wizard.downloadClient'); }, optional: true },
+  { id: 'indexer', get label() { return t('common.indexer'); }, optional: true },
+  { id: 'vpn', get label() { return t('common.vpn'); }, optional: true },
 ];
 
 export type FieldErrors<K extends string> = Partial<Record<K, string>>;
@@ -61,11 +63,11 @@ export interface AdminDraft {
 export function validateAdmin(d: AdminDraft): FieldErrors<keyof AdminDraft> {
   const e: FieldErrors<keyof AdminDraft> = {};
   const username = d.username.trim();
-  if (username.length < 2) e.username = 'At least 2 characters.';
-  else if (!/^[A-Za-z0-9._@-]+$/.test(username)) e.username = 'Letters, digits and . _ @ - only.';
-  if (d.password.length < PASSWORD_MIN_LENGTH) e.password = `At least ${PASSWORD_MIN_LENGTH} characters.`;
-  if (d.confirm !== d.password) e.confirm = 'Passwords do not match.';
-  if (d.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) e.email = 'Not a valid email address.';
+  if (username.length < 2) e.username = t('setup.wizard.atLeast2Characters');
+  else if (!/^[A-Za-z0-9._@-]+$/.test(username)) e.username = t('setup.wizard.lettersDigitsAndOnly');
+  if (d.password.length < PASSWORD_MIN_LENGTH) e.password = t('setup.wizard.atLeastPasswordMinLength', { PASSWORD_MIN_LENGTH });
+  if (d.confirm !== d.password) e.confirm = t('setup.wizard.passwordsDoNotMatch');
+  if (d.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(d.email.trim())) e.email = t('setup.wizard.notAValidEmailAddress');
   return e;
 }
 
@@ -83,10 +85,10 @@ export function validateRootFolders(d: RootFolderDraft, alreadyHasOne: boolean):
   const e: FieldErrors<keyof RootFolderDraft | 'form'> = {};
   const tv = d.tv.trim();
   const movies = d.movies.trim();
-  if (tv && !isAbsolutePath(tv)) e.tv = 'Use an absolute path.';
-  if (movies && !isAbsolutePath(movies)) e.movies = 'Use an absolute path.';
-  if (tv && movies && tv === movies) e.movies = 'TV and movies need different folders.';
-  if (!tv && !movies && !alreadyHasOne) e.form = 'Add at least one root folder.';
+  if (tv && !isAbsolutePath(tv)) e.tv = t('setup.wizard.useAnAbsolutePath');
+  if (movies && !isAbsolutePath(movies)) e.movies = t('setup.wizard.useAnAbsolutePath');
+  if (tv && movies && tv === movies) e.movies = t('setup.wizard.tvAndMoviesNeedDifferent');
+  if (!tv && !movies && !alreadyHasOne) e.form = t('setup.wizard.addAtLeastOneRoot');
   return e;
 }
 
@@ -109,19 +111,19 @@ interface StepFooterProps {
 }
 
 /** Back (ghost) left; Skip for now (ghost) + Continue (primary) right. */
-function StepFooter({ onBack, onSkip, onContinue, continueLabel = 'Continue', busy, extra }: StepFooterProps) {
+function StepFooter({ onBack, onSkip, onContinue, continueLabel = t('setup.wizard.continue'), busy, extra }: StepFooterProps) {
   return (
     <div className="wiz-footer">
       {onBack ? (
         <Button variant="ghost" onClick={onBack}>
-          Back
+          {t('setup.wizard.back')}
         </Button>
       ) : null}
       <span className="wiz-footer__spacer" />
       {extra}
       {onSkip ? (
         <Button variant="ghost" onClick={onSkip}>
-          Skip for now
+          {t('setup.wizard.skipForNow')}
         </Button>
       ) : null}
       <Button variant="primary" loading={busy ?? false} onClick={onContinue}>
@@ -146,6 +148,7 @@ function AdminStep({ onDone }: { onDone: () => void }) {
   const [errors, setErrors] = useState<FieldErrors<keyof AdminDraft>>({});
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [language, setLanguage] = useState<LocaleSetting>(() => deviceLocale() ?? 'auto');
   const set = (k: keyof AdminDraft) => (e: React.ChangeEvent<HTMLInputElement>) => setDraft({ ...draft, [k]: e.currentTarget.value });
 
   const submit = async (e?: FormEvent) => {
@@ -157,6 +160,8 @@ function AdminStep({ onDone }: { onDone: () => void }) {
     setFailure(null);
     try {
       await setupApi.createAdmin({ username: draft.username.trim(), password: draft.password, ...(draft.email.trim() ? { email: draft.email.trim() } : {}) });
+      // The new admin is signed in now: keep the language on the account (best effort).
+      if (language !== 'auto') await usersApi.updateMe({ settings: { locale: language } }).catch(() => undefined);
       await refresh();
       onDone();
     } catch (err) {
@@ -168,24 +173,33 @@ function AdminStep({ onDone }: { onDone: () => void }) {
 
   return (
     <form className="wiz-body" onSubmit={(e) => void submit(e)} noValidate>
-      <StepHead title="Create the admin account">You sign in with this account. You can add more people later.</StepHead>
+      <StepHead title={t('setup.wizard.createTheAdminAccount')}>{t('setup.wizard.youSignInWithThis')}</StepHead>
       <div className="wiz-grid">
-        <Field label="Username" error={errors.username}>
+        <Field label={t('setup.wizard.language')} hint={t('setup.wizard.languageHint')}>
+          <LanguageSelect
+            value={language}
+            onChange={(v) => {
+              setLanguage(v);
+              void chooseLocale(v);
+            }}
+          />
+        </Field>
+        <Field label={t('common.username')} error={errors.username}>
           <Input size="lg" autoComplete="username" value={draft.username} onChange={set('username')} />
         </Field>
-        <Field label="Email (optional)" error={errors.email}>
+        <Field label={t('setup.wizard.emailOptional')} error={errors.email}>
           <Input size="lg" type="email" autoComplete="email" value={draft.email} onChange={set('email')} />
         </Field>
-        <Field label="Password" hint={`At least ${PASSWORD_MIN_LENGTH} characters.`} error={errors.password}>
+        <Field label={t('common.password')} hint={t('setup.wizard.atLeastPasswordMinLength', { PASSWORD_MIN_LENGTH })} error={errors.password}>
           <Input size="lg" type="password" autoComplete="new-password" value={draft.password} onChange={set('password')} />
         </Field>
-        <Field label="Confirm password" error={errors.confirm}>
+        <Field label={t('setup.wizard.confirmPassword')} error={errors.confirm}>
           <Input size="lg" type="password" autoComplete="new-password" value={draft.confirm} onChange={set('confirm')} />
         </Field>
       </div>
-      {failure ? <ErrorBlock title="Couldn't create the admin account">{failure}</ErrorBlock> : null}
+      {failure ? <ErrorBlock title={t('setup.wizard.couldntCreateTheAdminAccount')}>{failure}</ErrorBlock> : null}
       <button type="submit" hidden />
-      <StepFooter onContinue={() => void submit()} continueLabel="Create admin account" busy={busy} />
+      <StepFooter onContinue={() => void submit()} continueLabel={t('setup.wizard.createAdminAccount')} busy={busy} />
     </form>
   );
 }
@@ -200,27 +214,27 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
   };
 
   const test = async () => {
-    if (!key.trim() && !complete) return setResult({ ok: false, message: 'Enter a key first.' });
+    if (!key.trim() && !complete) return setResult({ ok: false, message: t('setup.wizard.enterAKeyFirst') });
     setBusy('test');
     try {
       await save();
       const found = await metadataApi.search('The Matrix', 'movie');
-      setResult({ ok: true, message: `The key works. A test search found ${found.length} results.` });
+      setResult({ ok: true, message: t('setup.wizard.theKeyWorksATest', { foundCount: found.length }) });
     } catch (err) {
-      setResult({ ok: false, message: `Test failed · ${errorMessage(err)}` });
+      setResult({ ok: false, message: t('setup.wizard.testFailedErrormessage', { errorMessage: errorMessage(err) }) });
     } finally {
       setBusy(null);
     }
   };
 
   const next = async () => {
-    if (!key.trim() && !complete) return setResult({ ok: false, message: 'A TMDB API key is required for series and movie information.' });
+    if (!key.trim() && !complete) return setResult({ ok: false, message: t('setup.wizard.aTmdbApiKeyIs') });
     setBusy('next');
     try {
       await save();
       onDone();
     } catch (err) {
-      setResult({ ok: false, message: `Save failed · ${errorMessage(err)}` });
+      setResult({ ok: false, message: t('setup.wizard.saveFailedErrormessage', { errorMessage: errorMessage(err) }) });
     } finally {
       setBusy(null);
     }
@@ -228,11 +242,10 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
 
   return (
     <div className="wiz-body">
-      <StepHead title="Connect TMDB">
-        Arclight reads series and movie information from TMDB. Create a free v3 API key at themoviedb.org under Settings › API.
-        {complete ? ' A key is already saved; enter a new one to replace it.' : ''}
+      <StepHead title={t('setup.wizard.connectTmdb')}>
+        {t('setup.wizard.arclightReadsSeriesAndMovie', { value: complete ? t('setup.wizard.aKeyIsAlreadySaved') : '' })}
       </StepHead>
-      <Field label="TMDB API key">
+      <Field label={t('setup.wizard.tmdbApiKey')}>
         <Input size="lg" mono value={key} autoComplete="off" spellCheck={false} onChange={(e) => setKey(e.currentTarget.value)} />
       </Field>
       {result ? (
@@ -250,7 +263,7 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
         busy={busy === 'next'}
         extra={
           <Button variant="secondary" loading={busy === 'test'} onClick={() => void test()}>
-            Test key
+            {t('setup.wizard.testKey')}
           </Button>
         }
       />
@@ -258,7 +271,7 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
   );
 }
 
-const ROOT_KIND_LABEL: Record<MediaType, string> = { series: 'TV', movie: 'Movies' };
+const ROOT_KIND_LABEL: Record<MediaType, string> = { get series() { return t('common.tv'); }, get movie() { return t('common.movies'); } };
 
 function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () => void }) {
   const qc = useQueryClient();
@@ -276,8 +289,8 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
   const add = async (value: string) => {
     const p = value.trim();
     if (!p) return;
-    if (!isAbsolutePath(p)) return setError('Use an absolute path, such as /media/tv.');
-    if (added.some((f) => f.path === p)) return setError(`${p} is already added.`);
+    if (!isAbsolutePath(p)) return setError(t('setup.wizard.useAnAbsolutePathSuch'));
+    if (added.some((f) => f.path === p)) return setError(t('setup.wizard.pIsAlreadyAdded', { p }));
     setBusy(true);
     setError(null);
     try {
@@ -287,7 +300,7 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
       // The other kind usually comes next.
       setKind(kind === 'series' ? 'movie' : 'series');
     } catch (err) {
-      setError(`Couldn't add ${p} · ${errorMessage(err)}`);
+      setError(t('setup.wizard.couldntAddPErrormessage', { p, errorMessage: errorMessage(err) }));
     } finally {
       setBusy(false);
     }
@@ -298,46 +311,46 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
       await libraryApi.rootFolders.remove(id);
       await qc.invalidateQueries({ queryKey: ['setup', 'rootfolders'] });
     } catch (err) {
-      setError(`Couldn't remove the folder · ${errorMessage(err)}`);
+      setError(t('setup.wizard.couldntRemoveTheFolderErrormessage', { errorMessage: errorMessage(err) }));
     }
   };
 
   const next = () => {
-    if (added.length === 0) return setError('Add at least one root folder.');
+    if (added.length === 0) return setError(t('setup.wizard.addAtLeastOneRoot'));
     onDone();
   };
 
   return (
     <div className="wiz-body">
-      <StepHead title="Where is your media stored?">Add a root folder for TV and one for movies. Arclight imports finished downloads into these.</StepHead>
+      <StepHead title={t('setup.wizard.whereIsYourMediaStored')}>{t('setup.wizard.addARootFolderFor')}</StepHead>
       <Segmented<MediaType>
-        aria-label="Folder for"
+        aria-label={t('setup.wizard.folderFor')}
         options={[
-          { value: 'series', label: 'TV' },
-          { value: 'movie', label: 'Movies' },
+          { value: 'series', label: t('common.tv') },
+          { value: 'movie', label: t('common.movies') },
         ]}
         value={kind}
         onChange={setKind}
       />
       <PathPickerField
-        label={`${ROOT_KIND_LABEL[kind]} root folder`}
+        label={t('setup.wizard.valueRootFolder', { value: ROOT_KIND_LABEL[kind] })}
         value={path}
         onChange={setPath}
         entries={entries}
         crumbs={crumbsFor(listing.data?.path ?? browse)}
         onNavigate={(p) => setBrowse(p)}
         onAdd={(p) => void add(p)}
-        addLabel={busy ? 'Adding…' : 'Add'}
+        addLabel={busy ? t('setup.wizard.adding') : t('common.add')}
         loading={listing.isLoading}
-        error={error ?? (listing.isError ? `Couldn't list folders · ${errorMessage(listing.error)}` : undefined)}
+        error={error ?? (listing.isError ? t('setup.wizard.couldntListFoldersErrormessage', { errorMessage: errorMessage(listing.error) }) : undefined)}
         placeholder={kind === 'series' ? '/media/tv' : '/media/movies'}
       />
       <div className="wiz-added">
-        <SectionLabel count={added.length || undefined}>Added</SectionLabel>
+        <SectionLabel count={added.length || undefined}>{t('common.added')}</SectionLabel>
         {folders.isLoading ? (
           <Skeleton lines={1} />
         ) : added.length === 0 ? (
-          <p className="wiz-muted">Nothing added yet.</p>
+          <p className="wiz-muted">{t('setup.wizard.nothingAddedYet')}</p>
         ) : (
           <ul>
             {added.map((f) => (
@@ -349,12 +362,12 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
                   {f.freeSpaceBytes != null ? (
                     <>
                       {' · '}
-                      <span className="al-num">{formatBytes(f.freeSpaceBytes)}</span> free
+                      <span className="al-num">{formatBytes(f.freeSpaceBytes)}</span> {t('setup.wizard.free')}
                     </>
                   ) : null}
                 </span>
-                <Button size="sm" variant="ghost" className="wiz-added__remove" aria-label={`Remove ${f.path}`} onClick={() => void remove(f.id)}>
-                  Remove
+                <Button size="sm" variant="ghost" className="wiz-added__remove" aria-label={t('setup.wizard.removePath', { path: f.path })} onClick={() => void remove(f.id)}>
+                  {t('common.remove')}
                 </Button>
               </li>
             ))}
@@ -397,25 +410,25 @@ function VpnStep({ onBack }: { onBack: () => void }) {
 
   return (
     <div className="wiz-body">
-      <StepHead title="Protect downloads with a VPN">Optional. Arclight pauses downloads whenever the tunnel drops. You can set this up later in Settings › VPN.</StepHead>
+      <StepHead title={t('setup.wizard.protectDownloadsWithAVpn')}>{t('setup.wizard.optionalArclightPausesDownloadsWhenever')}</StepHead>
       <div className="wiz-embed">
         <VpnSettingsPage />
       </div>
-      <FormSection label="Sign-in">
-        <Field label="How people sign in" hint="You can change this later in Settings › Security.">
+      <FormSection label={t('setup.wizard.signIn')}>
+        <Field label={t('setup.wizard.howPeopleSignIn')} hint={t('setup.wizard.youCanChangeThisLater')}>
           <Select
             value={method}
             onChange={(e) => setMethod(e.currentTarget.value as AuthMethod)}
             options={[
-              { value: 'forms', label: 'Login page (recommended)' },
-              { value: 'basic', label: 'Browser prompt (HTTP Basic)' },
-              { value: 'none', label: 'None on the local network' },
+              { value: 'forms', label: t('setup.wizard.loginPageRecommended') },
+              { value: 'basic', label: t('setup.wizard.browserPromptHttpBasic') },
+              { value: 'none', label: t('setup.wizard.noneOnTheLocalNetwork') },
             ]}
           />
         </Field>
       </FormSection>
-      {failure ? <ErrorBlock title="Couldn't finish setup">{failure}</ErrorBlock> : null}
-      <StepFooter onBack={onBack} onSkip={() => void finish()} onContinue={() => void finish()} continueLabel="Finish setup" busy={busy} />
+      {failure ? <ErrorBlock title={t('setup.wizard.couldntFinishSetup')}>{failure}</ErrorBlock> : null}
+      <StepFooter onBack={onBack} onSkip={() => void finish()} onContinue={() => void finish()} continueLabel={t('setup.wizard.finishSetup')} busy={busy} />
     </div>
   );
 }
@@ -426,12 +439,12 @@ function WizardFrame({ index, children }: { index: number; children: ReactNode }
       <Backdrop vx={0.5} horizon={0.625} spire={false} />
       <header className="wiz-bar">
         <Mark size={26} />
-        <span className="al-wordmark">ARCLIGHT</span>
-        <span className="wiz-bar__label">Setup</span>
+        <span className="al-wordmark">{t('common.arclight')}</span>
+        <span className="wiz-bar__label">{t('setup.wizard.setup')}</span>
         <span className="wiz-bar__spacer" />
         {index >= 0 ? (
           <span className="wiz-bar__count">
-            Step <span className="al-num">{index + 1}</span> of {WIZARD_STEPS.length}
+            {t('setup.wizard.step')} <span className="al-num">{index + 1}</span> {t('setup.wizard.ofWizardStepscount', { WIZARD_STEPSCount: WIZARD_STEPS.length })}
           </span>
         ) : null}
       </header>
@@ -447,7 +460,7 @@ export function SetupWizard() {
   const router = useRouter();
 
   useEffect(() => {
-    document.title = 'Setup · Arclight';
+    document.title = t('setup.wizard.setupArclight');
   }, []);
 
   useEffect(() => {
@@ -457,7 +470,7 @@ export function SetupWizard() {
   if (setup.isError) {
     return (
       <WizardFrame index={-1}>
-        <ErrorBlock title="Couldn't load setup" onRetry={() => void setup.refetch()}>
+        <ErrorBlock title={t('setup.wizard.couldntLoadSetup')} onRetry={() => void setup.refetch()}>
           {errorMessage(setup.error)}
         </ErrorBlock>
       </WizardFrame>
@@ -487,14 +500,14 @@ export function SetupWizard() {
   if (needsSignIn) {
     body = (
       <div className="wiz-body">
-        <StepHead title="Sign in to continue">An admin account already exists. Sign in with it to finish setup.</StepHead>
-        <StepFooter onContinue={() => void router.navigate({ to: '/login', search: { redirect: '/setup' } })} continueLabel="Sign in" />
+        <StepHead title={t('setup.wizard.signInToContinue')}>{t('setup.wizard.anAdminAccountAlreadyExists')}</StepHead>
+        <StepFooter onContinue={() => void router.navigate({ to: '/login', search: { redirect: '/setup' } })} continueLabel={t('setup.wizard.signIn2')} />
       </div>
     );
   } else if (step === 'admin') {
     body = complete('admin') ? (
       <div className="wiz-body">
-        <StepHead title="The admin account is ready">Continue to connect TMDB.</StepHead>
+        <StepHead title={t('setup.wizard.theAdminAccountIsReady')}>{t('setup.wizard.continueToConnectTmdb')}</StepHead>
         <StepFooter onContinue={next} />
       </div>
     ) : (
@@ -504,13 +517,13 @@ export function SetupWizard() {
   else if (step === 'rootFolders') body = <RootFoldersStep onBack={back} onDone={next} />;
   else if (step === 'downloadClient') {
     body = (
-      <EmbeddedStep title="Add a download client" lead="Optional. The client downloads the releases Arclight grabs." complete={complete('downloadClient')} onBack={back} onDone={next}>
+      <EmbeddedStep title={t('setup.wizard.addADownloadClient')} lead={t('setup.wizard.optionalTheClientDownloadsThe')} complete={complete('downloadClient')} onBack={back} onDone={next}>
         <DownloadClientsPage />
       </EmbeddedStep>
     );
   } else if (step === 'indexer') {
     body = (
-      <EmbeddedStep title="Add an indexer" lead="Optional. Indexers are where Arclight searches for releases." complete={complete('indexer')} onBack={back} onDone={next}>
+      <EmbeddedStep title={t('setup.wizard.addAnIndexer')} lead={t('setup.wizard.optionalIndexersAreWhereArclight')} complete={complete('indexer')} onBack={back} onDone={next}>
         <IndexersPage />
       </EmbeddedStep>
     );
@@ -519,7 +532,7 @@ export function SetupWizard() {
   return (
     <WizardFrame index={index}>
       <Stepper
-        aria-label="Setup steps"
+        aria-label={t('setup.wizard.setupSteps')}
         className="wiz-stepper"
         steps={WIZARD_STEPS.map((s) => ({ id: s.id, label: s.label }))}
         current={index}

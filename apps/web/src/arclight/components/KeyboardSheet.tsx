@@ -1,6 +1,7 @@
 import { Fragment, type ReactNode } from 'react';
 import { Modal } from './Modal.js';
 import { SectionLabel } from './SectionLabel.js';
+import { t } from '../../i18n/index.js';
 
 export interface Shortcut {
   /** Keys pressed together, e.g. ['Ctrl', 'K'] or ['/']. */
@@ -29,21 +30,25 @@ export function KeyCombo({ keys }: { keys: readonly string[] }) {
 
 export const DEFAULT_SHORTCUTS: readonly ShortcutGroup[] = [
   {
-    title: 'Global',
+    get title() {
+      return t('arclight.keyboardSheet.global');
+    },
     shortcuts: [
-      { keys: ['/'], label: 'Search' },
-      { keys: ['Ctrl', 'K'], label: 'Command palette' },
-      { keys: ['?'], label: 'Keyboard shortcuts' },
-      { keys: ['Esc'], label: 'Close dialog or overlay' },
+      { keys: ['/'], get label() { return t('common.search'); } },
+      { keys: ['Ctrl', 'K'], get label() { return t('common.commandPalette'); } },
+      { keys: ['?'], get label() { return t('common.keyboardShortcuts'); } },
+      { keys: ['Esc'], get label() { return t('arclight.keyboardSheet.closeDialogOrOverlay'); } },
     ],
   },
   {
-    title: 'Lists',
+    get title() {
+      return t('arclight.keyboardSheet.lists');
+    },
     shortcuts: [
-      { keys: ['↑'], label: 'Previous row' },
-      { keys: ['↓'], label: 'Next row' },
-      { keys: ['Enter'], label: 'Open' },
-      { keys: ['Space'], label: 'Select row' },
+      { keys: ['↑'], get label() { return t('arclight.keyboardSheet.previousRow'); } },
+      { keys: ['↓'], get label() { return t('arclight.keyboardSheet.nextRow'); } },
+      { keys: ['Enter'], get label() { return t('common.open'); } },
+      { keys: ['Space'], get label() { return t('arclight.keyboardSheet.selectRow'); } },
     ],
   },
 ];
@@ -57,7 +62,7 @@ export interface KeyboardSheetProps {
 /** Keyboard sheet: modal with a two-column mono key list. */
 export function KeyboardSheet({ open, onClose, groups = DEFAULT_SHORTCUTS }: KeyboardSheetProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Keyboard shortcuts" size={640}>
+    <Modal open={open} onClose={onClose} title={t('common.keyboardShortcuts')} size={640}>
       <div className="al-keys">
         {groups.map((g) => (
           <section key={g.title} className="al-keys__group" aria-label={g.title}>

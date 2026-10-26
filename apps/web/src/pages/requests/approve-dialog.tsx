@@ -7,6 +7,7 @@ import { useToast } from '../../components/toast.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
 import { useApproveRequest, useTitle } from '../../hooks/requests.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS } from '../library/add-form.js';
+import { t } from '../../i18n/index.js';
 
 /** Approver overrides as edited in the dialog. Empty strings mean "use the request or settings default". */
 export interface ApproveDraft {
@@ -64,7 +65,7 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
 
   const submit = () => {
     if (isSeries && draft.seasons.length === 0) {
-      setError('Keep at least one season.');
+      setError(t('requests.approveDialog.keepAtLeastOneSeason'));
       return;
     }
     setError(null);
@@ -72,7 +73,7 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
       { id: request.id, body: buildApproveBody(request, draft) },
       {
         onSuccess: () => {
-          toast.push({ tone: 'ok', title: `Approved ${request.mediaTitle}` });
+          toast.push({ tone: 'ok', title: t('requests.approveDialog.approvedMediatitle', { mediaTitle: request.mediaTitle }) });
           onClose();
         },
       },
@@ -83,23 +84,23 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
     <Modal
       open
       onClose={onClose}
-      title={`Approve ${request.mediaTitle}`}
+      title={t('requests.approveDialog.approveMediatitle', { mediaTitle: request.mediaTitle })}
       size={560}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" loading={approve.isPending} onClick={submit}>
-            Approve request
+            {t('requests.approveDialog.approveRequest')}
           </Button>
         </>
       }
     >
       <div className="mk-stack-sm">
-        <FormRow label="Root folder" htmlFor="approve-root">
+        <FormRow label={t('common.rootFolder')} htmlFor="approve-root">
           <Select id="approve-root" value={draft.rootFolderPath} onChange={(e) => set({ rootFolderPath: e.currentTarget.value })}>
-            <option value="">Default folder</option>
+            <option value="">{t('common.defaultFolder')}</option>
             {(rootFolders.data ?? [])
               .filter((f) => f.mediaType === request.type)
               .map((f) => (
@@ -109,9 +110,9 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
               ))}
           </Select>
         </FormRow>
-        <FormRow label="Quality target" htmlFor="approve-profile">
+        <FormRow label={t('common.qualityTarget')} htmlFor="approve-profile">
           <Select id="approve-profile" value={draft.qualityProfileId} onChange={(e) => set({ qualityProfileId: e.currentTarget.value })}>
-            <option value="">Default profile</option>
+            <option value="">{t('common.defaultProfile')}</option>
             {(profiles.data ?? []).map((p) => (
               <option key={p.id} value={String(p.id)}>
                 {p.name}
@@ -119,14 +120,14 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
             ))}
           </Select>
         </FormRow>
-        <FormRow label="Tags">
+        <FormRow label={t('common.tags')}>
           <TagPicker value={draft.tags} onChange={(tags) => set({ tags })} />
         </FormRow>
         {isSeries ? (
           <>
-            <FormRow label="Monitor" htmlFor="approve-monitor" caption="Which episodes are monitored when the series is added.">
+            <FormRow label={t('common.monitor')} htmlFor="approve-monitor" caption={t('requests.approveDialog.whichEpisodesAreMonitoredWhen')}>
               <Select id="approve-monitor" value={draft.monitorOption} onChange={(e) => set({ monitorOption: e.currentTarget.value as MonitorOption | '' })}>
-                <option value="">Requested seasons</option>
+                <option value="">{t('requests.approveDialog.requestedSeasons')}</option>
                 {(Object.keys(MONITOR_OPTION_LABELS) as MonitorOption[]).map((o) => (
                   <option key={o} value={o}>
                     {MONITOR_OPTION_LABELS[o]}
@@ -136,13 +137,13 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
             </FormRow>
             <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
               <legend className="al-label" style={{ marginBottom: 10 }}>
-                Seasons
+                {t('common.seasons')}
               </legend>
               <div className="mk-check-grid">
                 {seasonChoices.map((n) => (
                   <Checkbox
                     key={n}
-                    label={n === 0 ? 'Specials' : `Season ${n}`}
+                    label={n === 0 ? t('common.specials') : t('requests.approveDialog.seasonN', { n })}
                     checked={draft.seasons.includes(n)}
                     onChange={(e) => {
                       const on = e.currentTarget.checked;
@@ -154,13 +155,13 @@ export function ApproveDialog({ request, onClose }: { request: MediaRequest; onC
             </fieldset>
           </>
         ) : (
-          <FormRow label="Minimum availability" htmlFor="approve-availability">
+          <FormRow label={t('common.minimumAvailability')} htmlFor="approve-availability">
             <Select
               id="approve-availability"
               value={draft.minimumAvailability}
               onChange={(e) => set({ minimumAvailability: e.currentTarget.value as MinimumAvailability | '' })}
             >
-              <option value="">Requests default</option>
+              <option value="">{t('requests.approveDialog.requestsDefault')}</option>
               {(Object.keys(MINIMUM_AVAILABILITY_LABELS) as MinimumAvailability[]).map((o) => (
                 <option key={o} value={o}>
                   {MINIMUM_AVAILABILITY_LABELS[o]}

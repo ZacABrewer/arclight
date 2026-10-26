@@ -7,6 +7,7 @@ import { useCreateIssue } from '../../hooks/requests.js';
 import { EditorFooter } from '../../pages/settings/shared.js';
 import { ISSUE_TYPE_LABELS } from './status.js';
 import './requests.css';
+import { t } from '../../i18n/index.js';
 
 export interface ReportIssueTarget {
   mediaType: MediaType;
@@ -17,7 +18,7 @@ export interface ReportIssueTarget {
 
 export function ReportIssueDialog({ target, open, onClose }: { target: ReportIssueTarget; open: boolean; onClose: () => void }) {
   return (
-    <Modal open={open} onClose={onClose} title={`Report an issue with ${target.title}`} size={560}>
+    <Modal open={open} onClose={onClose} title={t('features.requests.issueDialog.reportAnIssueWithTitle', { title: target.title })} size={560}>
       {open ? <IssueForm target={target} onClose={onClose} /> : null}
     </Modal>
   );
@@ -35,7 +36,7 @@ function IssueForm({ target, onClose }: { target: ReportIssueTarget; onClose: ()
 
   const submit = () => {
     if (!message.trim()) {
-      setError('Describe the problem.');
+      setError(t('features.requests.issueDialog.describeTheProblem'));
       return;
     }
     setError(null);
@@ -50,7 +51,7 @@ function IssueForm({ target, onClose }: { target: ReportIssueTarget; onClose: ()
       },
       {
         onSuccess: () => {
-          toast.push({ tone: 'ok', title: 'Issue reported', message: target.title });
+          toast.push({ tone: 'ok', title: t('features.requests.issueDialog.issueReported'), message: target.title });
           onClose();
         },
         onError: (err) => setError(errorMessage(err)),
@@ -60,31 +61,31 @@ function IssueForm({ target, onClose }: { target: ReportIssueTarget; onClose: ()
 
   return (
     <div className="req-stack">
-      <Field label="Problem type">
+      <Field label={t('features.requests.issueDialog.problemType')}>
         <Select
           value={type}
           onChange={(e) => setType(e.currentTarget.value as IssueType)}
-          options={IssueType.options.map((t) => ({ value: t, label: ISSUE_TYPE_LABELS[t] }))}
+          options={IssueType.options.map((item) => ({ value: item, label: ISSUE_TYPE_LABELS[item] }))}
         />
       </Field>
       {isSeries ? (
         <div className="req-fields-2">
-          <Field label="Season">
+          <Field label={t('common.season')}>
             <Select value={String(season)} onChange={(e) => setSeason(Number(e.currentTarget.value))}>
-              <option value="0">All seasons</option>
+              <option value="0">{t('features.requests.issueDialog.allSeasons')}</option>
               {target.seasons.map((s) => (
                 <option key={s.seasonNumber} value={String(s.seasonNumber)}>
-                  {s.seasonNumber === 0 ? 'Specials' : `Season ${s.seasonNumber}`}
+                  {s.seasonNumber === 0 ? t('common.specials') : t('features.requests.issueDialog.seasonSeasonnumber', { seasonNumber: s.seasonNumber })}
                 </option>
               ))}
             </Select>
           </Field>
-          <Field label="Episode" hint="0: the whole season">
+          <Field label={t('common.episode')} hint="0: the whole season">
             <Input type="number" min={0} disabled={season === 0} value={episode} onChange={(e) => setEpisode(Math.max(0, Number(e.currentTarget.value) || 0))} />
           </Field>
         </div>
       ) : null}
-      <Field label="What is wrong?">
+      <Field label={t('features.requests.issueDialog.whatIsWrong')}>
         <Textarea rows={4} value={message} onChange={(e) => setMessage(e.currentTarget.value)} />
       </Field>
       {error ? (
@@ -92,7 +93,7 @@ function IssueForm({ target, onClose }: { target: ReportIssueTarget; onClose: ()
           {error}
         </p>
       ) : null}
-      <EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending} saveLabel="Report issue" />
+      <EditorFooter onCancel={onClose} onSave={submit} saving={create.isPending} saveLabel={t('features.requests.issueDialog.reportIssue')} />
     </div>
   );
 }

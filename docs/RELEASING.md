@@ -38,7 +38,7 @@ docker compose -f docker-compose.release.novpn.yml up -d    # without VPN
 ```
 
 These are the source-build files with `build:` replaced by
-`image: ${ARCLIGHT_IMAGE:-ghcr.io/arclight/arclight:latest}`. Set `ARCLIGHT_IMAGE` in
+`image: ${ARCLIGHT_IMAGE:-ghcr.io/zacheryabrewer/arclight:latest}`. Set `ARCLIGHT_IMAGE` in
 `.env` if your image lives under a different owner. Upgrade with
 `docker compose pull && docker compose up -d`.
 

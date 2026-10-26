@@ -8,6 +8,7 @@ import {
   type QualityModel,
   type QueueItem,
 } from '@arclight/shared';
+import { t } from '../../../i18n/index.js';
 
 // Manual import wizard state: one row per candidate file with the user's mapping. Pure so the
 // mapping rules are unit-tested without rendering.
@@ -28,6 +29,8 @@ export interface ImportRow {
   releaseGroup: string;
   rejections: ImportRejection[];
   downloadId: string | undefined;
+  /** Multi-version items: the version slot to fill; '' = best fit (chosen by the server). */
+  versionTag: string;
 }
 
 export type RowAction =
@@ -41,6 +44,7 @@ export type RowAction =
   | { type: 'quality'; path: string; qualityId: number }
   | { type: 'languages'; path: string; languages: string[] }
   | { type: 'releaseGroup'; path: string; releaseGroup: string }
+  | { type: 'version'; path: string; versionTag: string }
   | { type: 'reset'; rows: ImportRow[] };
 
 /** Rejections that mean the file is not a candidate at all (not a mapping problem). */
@@ -64,6 +68,7 @@ export function toRow(item: ManualImportItem, fallbackType: MediaType = 'series'
     releaseGroup: item.releaseGroup ?? '',
     rejections: item.rejections,
     downloadId: item.downloadId,
+    versionTag: '',
   };
   // Pre-select files that are fully mapped and not rejected for a reason mapping cannot fix.
   row.selected = rowProblems(row).length === 0 && !item.rejections.some((r) => UNMAPPABLE.has(r.reason));
@@ -78,11 +83,11 @@ export function initRows(items: readonly ManualImportItem[], fallbackType: Media
 export function rowProblems(row: ImportRow): string[] {
   const out: string[] = [];
   if (row.mediaType === 'series') {
-    if (row.seriesId === null) out.push('Choose a series');
-    else if (row.seasonNumber === null) out.push('Choose a season');
-    else if (row.episodeIds.length === 0) out.push('Choose episodes');
+    if (row.seriesId === null) out.push(t('activity.manualImport.mapping.chooseASeries'));
+    else if (row.seasonNumber === null) out.push(t('activity.manualImport.mapping.chooseASeason'));
+    else if (row.episodeIds.length === 0) out.push(t('activity.manualImport.mapping.chooseEpisodes'));
   } else if (row.movieId === null) {
-    out.push('Choose a movie');
+    out.push(t('activity.manualImport.mapping.chooseAMovie'));
   }
   return out;
 }
@@ -109,19 +114,21 @@ export function rowsReducer(rows: ImportRow[], action: RowAction): ImportRow[] {
       return rows.map((r) => ({ ...r, selected: action.selected && rowProblems(r).length === 0 }));
     case 'mediaType':
       return update(rows, action.path, (r) =>
-        r.mediaType === action.mediaType ? r : remap(r, { mediaType: action.mediaType, seriesId: null, seasonNumber: null, episodeIds: [], movieId: null }),
+        r.mediaType === action.mediaType ? r : remap(r, { mediaType: action.mediaType, seriesId: null, seasonNumber: null, episodeIds: [], movieId: null, versionTag: '' }),
       );
     case 'series':
-      // A different series invalidates the season and episodes.
+      // A different series invalidates the season, episodes and version slot.
       return update(rows, action.path, (r) =>
-        r.seriesId === action.seriesId ? r : remap(r, { seriesId: action.seriesId, seasonNumber: null, episodeIds: [] }),
+        r.seriesId === action.seriesId ? r : remap(r, { seriesId: action.seriesId, seasonNumber: null, episodeIds: [], versionTag: '' }),
       );
     case 'season':
       return update(rows, action.path, (r) => (r.seasonNumber === action.seasonNumber ? r : remap(r, { seasonNumber: action.seasonNumber, episodeIds: [] })));
     case 'episodes':
       return update(rows, action.path, (r) => remap(r, { episodeIds: [...new Set(action.episodeIds)] }));
     case 'movie':
-      return update(rows, action.path, (r) => remap(r, { movieId: action.movieId }));
+      return update(rows, action.path, (r) => (r.movieId === action.movieId ? r : remap(r, { movieId: action.movieId, versionTag: '' })));
+    case 'version':
+      return update(rows, action.path, (r) => ({ ...r, versionTag: action.versionTag }));
     case 'quality':
       return update(rows, action.path, (r) => ({ ...r, quality: { ...r.quality, quality: toQualityModelDefinition(action.qualityId) } }));
     case 'languages':
@@ -164,8 +171,19 @@ export function toImportRequest(rows: readonly ImportRow[], importMode: 'move' |
       languages: r.languages,
       releaseGroup: r.releaseGroup.trim() === '' ? null : r.releaseGroup.trim(),
       ...(r.downloadId ? { downloadId: r.downloadId } : {}),
+      ...(r.versionTag ? { versionTag: r.versionTag } : {}),
     }));
   return { items, importMode };
+}
+
+/** Version slots of the row's chosen series or movie (empty for unversioned items). */
+export function rowVersionTags(
+  row: Pick<ImportRow, 'mediaType' | 'seriesId' | 'movieId'>,
+  seriesList: ReadonlyArray<{ id: number; versions?: ReadonlyArray<{ tag: string }> | null | undefined }>,
+  movieList: ReadonlyArray<{ id: number; versions?: ReadonlyArray<{ tag: string }> | null | undefined }>,
+): string[] {
+  const owner = row.mediaType === 'series' ? seriesList.find((s) => s.id === row.seriesId) : movieList.find((m) => m.id === row.movieId);
+  return (owner?.versions ?? []).map((v) => v.tag);
 }
 
 export function selectedCount(rows: readonly ImportRow[]): number {

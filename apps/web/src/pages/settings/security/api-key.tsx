@@ -5,6 +5,7 @@ import { authKeys } from '../../../auth/guard.js';
 import { Button, Input } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { useInvalidatingMutation } from '../../../hooks/settings-keys.js';
+import { t } from '../../../i18n/index.js';
 
 /** GET /settings/security (the api key lives in that section). */
 export function useSecuritySettings() {
@@ -17,7 +18,7 @@ export function useSecuritySettings() {
  */
 export function ApiKeyControls({ id }: { id?: string | undefined }) {
   const query = useSecuritySettings();
-  const regenerate = useInvalidatingMutation(() => securityApi.regenerateApiKey(), [authKeys.security], { errorTitle: 'Could not regenerate the API key' });
+  const regenerate = useInvalidatingMutation(() => securityApi.regenerateApiKey(), [authKeys.security], { errorTitle: t('settings.security.apiKey.couldNotRegenerateTheApi') });
   const [shown, setShown] = useState(false);
   const [copied, setCopied] = useState(false);
   const [confirm, setConfirm] = useState(false);
@@ -40,26 +41,26 @@ export function ApiKeyControls({ id }: { id?: string | undefined }) {
         id={id}
         readOnly
         mono
-        aria-label="API key"
+        aria-label={t('common.apiKey')}
         className="al-api-key__input"
         value={shown ? key : key ? '•'.repeat(32) : ''}
-        placeholder={query.isPending ? 'Loading' : undefined}
+        placeholder={query.isPending ? t('common.loading') : undefined}
       />
       <div className="al-api-key__actions">
         <Button variant="ghost" onClick={() => setShown((v) => !v)} disabled={!key}>
-          {shown ? 'Hide' : 'Show'}
+          {shown ? t('settings.security.apiKey.hide') : t('settings.security.apiKey.show')}
         </Button>
         <Button variant="secondary" onClick={() => void copy()} disabled={!key}>
-          {copied ? 'Copied' : 'Copy'}
+          {copied ? t('settings.security.apiKey.copied') : t('common.copy')}
         </Button>
         <Button variant="danger" onClick={() => setConfirm(true)} disabled={query.isPending}>
-          Regenerate
+          {t('settings.security.apiKey.regenerate')}
         </Button>
       </div>
       <ConfirmDialog
         open={confirm}
-        title="Regenerate API key?"
-        confirmLabel="Regenerate API key"
+        title={t('settings.security.apiKey.regenerateApiKey')}
+        confirmLabel={t('settings.security.apiKey.regenerateApiKey2')}
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           await regenerate.mutateAsync(undefined);
@@ -67,7 +68,7 @@ export function ApiKeyControls({ id }: { id?: string | undefined }) {
           setShown(true);
         }}
       >
-        Every app using the current key stops working until it is given the new one.
+        {t('settings.security.apiKey.everyAppUsingTheCurrent')}
       </ConfirmDialog>
     </div>
   );

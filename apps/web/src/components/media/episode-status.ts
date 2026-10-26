@@ -1,5 +1,6 @@
 import type { Episode } from '@arclight/shared';
 import type { ChipTone } from '../../arclight/index.js';
+import { t } from '../../i18n/index.js';
 
 /**
  * - downloaded: has a file
@@ -15,8 +16,8 @@ type EpisodeLike = Pick<Episode, 'hasFile' | 'monitored' | 'airDate' | 'airDateU
 /** True once the episode has aired. Prefers the UTC instant; falls back to the date string. */
 export function hasAired(ep: Pick<Episode, 'airDate' | 'airDateUtc'>, now: Date = new Date()): boolean | null {
   if (ep.airDateUtc) {
-    const t = Date.parse(ep.airDateUtc);
-    if (!Number.isNaN(t)) return t <= now.getTime();
+    const item = Date.parse(ep.airDateUtc);
+    if (!Number.isNaN(item)) return item <= now.getTime();
   }
   if (ep.airDate) return ep.airDate <= localIsoDate(now);
   return null;
@@ -31,11 +32,11 @@ export function episodeStatus(ep: EpisodeLike, opts: { seriesMonitored?: boolean
 }
 
 export const EPISODE_STATUS_META: Record<EpisodeStatus, { label: string; tone: ChipTone }> = {
-  downloaded: { label: 'Downloaded', tone: 'accent' },
-  wanted: { label: 'Wanted', tone: 'danger' },
-  missing: { label: 'Missing', tone: 'warn' },
-  unaired: { label: 'Unaired', tone: 'default' },
-  tba: { label: 'TBA', tone: 'neutral' },
+  downloaded: { get label() { return t('status.downloaded'); }, tone: 'accent' },
+  wanted: { get label() { return t('common.wanted'); }, tone: 'danger' },
+  missing: { get label() { return t('status.missing'); }, tone: 'warn' },
+  unaired: { get label() { return t('status.unaired'); }, tone: 'default' },
+  tba: { get label() { return t('common.tba'); }, tone: 'neutral' },
 };
 
 /** YYYY-MM-DD in local time. */

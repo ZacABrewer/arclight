@@ -1,0 +1,38 @@
+# syntax=docker/dockerfile:1.7
+# Arclight engine agent: the built-in torrent engine on its own, for a seedbox or VPS, driven
+# by a main Arclight through a "Remote Engine" download client (docs/REMOTE-ENGINE.md).
+# Two stages: build (pnpm workspace -> one esbuild bundle, packages/engine-agent/dist/agent.mjs)
+# and a slim runtime holding only the node binary, tini and that bundle (no node_modules: the
+# agent has no runtime dependencies besides Node itself).
+FROM node:24-bookworm-slim AS build
+ENV CI=true
+RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
+WORKDIR /src
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
+COPY . .
+RUN pnpm install --offline --frozen-lockfile --filter @arclight/engine-agent...
+RUN pnpm --filter @arclight/engine-agent build
+
+FROM debian:bookworm-slim
+COPY --from=build /usr/local/bin/node /usr/local/bin/node
+RUN apt-get update && apt-get install -y --no-install-recommends tini ca-certificates && rm -rf /var/lib/apt/lists/* \
+ && groupadd -g 1000 agent && useradd -u 1000 -g 1000 -d /data -s /usr/sbin/nologin -M agent \
+ && mkdir -p /data /downloads && chown agent:agent /data /downloads
+ENV NODE_ENV=production \
+    AGENT_PORT=7879 \
+    AGENT_DATA=/data \
+    AGENT_DOWNLOADS=/downloads \
+    AGENT_LISTEN_PORT=6881
+WORKDIR /app
+COPY --from=build /src/packages/engine-agent/dist/agent.mjs /app/agent.mjs
+# /data holds fast-resume data and saved .torrent files; /downloads the payload.
+VOLUME ["/data", "/downloads"]
+EXPOSE 7879 6881 6881/udp
+# Run as 1000:1000 by default; override with `user:` in compose to match the volume owner.
+USER 1000:1000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD node -e "fetch('http://127.0.0.1:'+(process.env.AGENT_PORT||7879)+'/status',{headers:{'x-agent-token':process.env.AGENT_TOKEN||''}}).then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+# tini forwards SIGTERM so the agent saves resume data and announces `stopped` before exiting.
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["node", "agent.mjs"]

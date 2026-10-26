@@ -163,6 +163,11 @@ describe('error mapping', () => {
 });
 
 describe('addTorrent', () => {
+  it('sends skip_checking for a seed-only (cross-seed) add', async () => {
+    await client().addTorrent({ magnet: MAGNET, title: 'Show.S01E01', category: 'tv', savePath: '/data/tv', skipChecking: true });
+    expect(qbt.calls('/api/v2/torrents/add')[0]?.form).toMatchObject({ savepath: '/data/tv', skip_checking: 'true' });
+  });
+
   it('adds a magnet with category, stopped=false on qBittorrent 5 and returns the lowercase hash', async () => {
     const result = await client().addTorrent({ magnet: MAGNET, title: 'Show.S01E01', category: 'tv' });
     expect(result).toEqual({ id: MAGNET_HASH, warnings: [] });

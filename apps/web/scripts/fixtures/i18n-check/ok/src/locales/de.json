@@ -1,0 +1,6 @@
+{
+  "page.count": "{count, plural, one {# Eintrag} other {# Einträge}}",
+  "page.title": "Bibliothek",
+  "status.failed": "[de] Failed",
+  "status.queued": "In Warteschlange"
+}

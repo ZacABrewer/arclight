@@ -1,6 +1,7 @@
 import type { AppContext, AppModule } from '../../app.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { indexersServiceFor } from '../indexers/index.js';
+import { getSection } from '../settings/service.js';
 import type { ReleasesDeps } from './deps.js';
 import { registerReleaseJobs } from './jobs.js';
 import { releasesRoutes } from './routes.js';
@@ -18,11 +19,13 @@ export {
 } from './service.js';
 export {
   CUTOFF_UNMET_SEARCH_JOB,
+  DECISION_LOG_CLEANUP_JOB,
   MISSING_EPISODE_SEARCH_JOB,
   MISSING_MOVIE_SEARCH_JOB,
   PROCESS_PENDING_RELEASES_JOB,
 } from './jobs.js';
-export { cleanTitle, matchRelease, type LibrarySnapshot, type MatchResult } from './matcher.js';
+export { cleanTitle, mapSeriesEpisodes, matchRelease, type LibrarySnapshot, type MatchResult } from './matcher.js';
+export { DecisionLog, BATCHES_PER_ITEM } from './decision-log.js';
 export { cutoffNotMet, isUpgradable, isUpgradeAllowed, prioritize, specifications } from './engine.js';
 
 // One service per app context so other modules (e.g. library "search on add") can reach it.
@@ -52,7 +55,7 @@ export const releasesModuleWith =
     const service = releasesServiceFor(ctx, deps);
     service.attach();
     await app.register(releasesRoutes(service));
-    registerReleaseJobs(ctx.scheduler, service);
+    registerReleaseJobs(ctx.scheduler, service, { decisionLogDays: () => getSection(ctx.db, 'releases').decisionLogDays });
   };
 
 /** Stand-alone variant: no history, nothing blocklisted, propers `preferAndUpgrade`. */

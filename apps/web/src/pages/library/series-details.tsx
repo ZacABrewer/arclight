@@ -56,9 +56,14 @@ import {
   useMediaHistory,
   useQueueProgress,
 } from './details-kit.js';
+import { DecisionsPanel } from './decisions/decisions-panel.js';
 import { InteractiveSearchModal, ReleaseTable } from './interactive-search.js';
+import { SceneMappingPanel } from './scene-mapping/scene-mapping-panel.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
+import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
+import { EpisodeVersionFiles, VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
+import { t } from '../../i18n/index.js';
 
 const route = getRouteApi('/library/series/$id');
 
@@ -72,10 +77,10 @@ export function seasonSummary(season: Season, episodes: readonly Episode[] | und
   const stats = season.statistics;
   const total = stats?.totalEpisodeCount ?? episodes?.length ?? 0;
   const aired = episodes ? episodes.filter((e) => episodeStatus(e, { now }) !== 'unaired' && episodeStatus(e, { now }) !== 'tba').length : (stats?.episodeCount ?? 0);
-  if (total === 0) return 'No episodes';
-  if (stats && stats.episodeCount > 0 && stats.episodeFileCount >= stats.episodeCount && aired >= total) return 'Complete';
-  if (aired < total) return `Airing · ${aired} of ${total} aired`;
-  return `${stats?.episodeFileCount ?? 0} of ${total} on disk`;
+  if (total === 0) return t('library.seriesDetails.noEpisodes');
+  if (stats && stats.episodeCount > 0 && stats.episodeFileCount >= stats.episodeCount && aired >= total) return t('library.seriesDetails.complete');
+  if (aired < total) return t('library.seriesDetails.airingAiredOfTotalAired', { aired, total });
+  return t('library.seriesDetails.valueOfTotalOnDisk', { value: stats?.episodeFileCount ?? 0, total });
 }
 
 export function SeriesDetailsPage() {
@@ -95,9 +100,9 @@ export function SeriesDetailsPage() {
   const [interactive, setInteractive] = useState<InteractiveState | null>(null);
   const navigate = useNavigate();
 
-  if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(`Invalid series id: ${rawId}`)} title="Series not found" />;
+  if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.seriesDetails.invalidSeriesIdRawid', { rawId }))} title={t('library.seriesDetails.seriesNotFound')} />;
   if (series.isPending) return <Loading />;
-  if (series.isError) return <QueryError error={series.error} onRetry={() => void series.refetch()} title="Could not load this series" />;
+  if (series.isError) return <QueryError error={series.error} onRetry={() => void series.refetch()} title={t('library.seriesDetails.couldNotLoadThisSeries')} />;
   const s = series.data;
   const profile = profiles.data?.find((p) => p.id === s.qualityProfileId);
   const stats = s.statistics;
@@ -106,7 +111,7 @@ export function SeriesDetailsPage() {
   return (
     <div className="lib-details">
       <DetailsHero
-        label="Series overview"
+        label={t('library.seriesDetails.seriesOverview')}
         backdrop={imageUrl(s.images, 'fanart')}
         poster={imageUrl(s.images, 'poster')}
         title={s.title}
@@ -115,15 +120,15 @@ export function SeriesDetailsPage() {
         meta={[
           s.network,
           s.genres.slice(0, 3).join(', ') || null,
-          `${seasonCount} ${seasonCount === 1 ? 'season' : 'seasons'}`,
-          s.runtimeMinutes ? `${s.runtimeMinutes} min` : null,
+          t('library.seriesDetails.seasonCount', { count: seasonCount }),
+          s.runtimeMinutes ? t('library.seriesDetails.runtimeMinutes', { minutes: s.runtimeMinutes }) : null,
           STATUS_LABELS[s.status] ?? s.status,
         ]
           .filter(Boolean)
           .join(' · ')}
         chips={
           <>
-            <MonitorSwitch monitored={s.monitored} onChange={(m) => setMonitored.mutate({ id: s.id, monitored: m })} label={`${s.monitored ? 'Unmonitor' : 'Monitor'} ${s.title}`} />
+            <MonitorSwitch monitored={s.monitored} onChange={(m) => setMonitored.mutate({ id: s.id, monitored: m })} label={t('common.monitorTitle', { monitored: s.monitored, title: s.title })} />
             <StatusChip status={s.monitored ? 'monitored' : 'unmonitored'} large />
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
             <span className="al-chip al-chip--nodot al-chip--lg">{SERIES_TYPE_LABELS[s.seriesType]}</span>
@@ -135,10 +140,10 @@ export function SeriesDetailsPage() {
             layout="grid"
             columns={4}
             items={[
-              { label: 'Path', value: s.path },
-              { label: 'Size on disk', value: formatBytes(stats?.sizeOnDisk) },
-              { label: 'Episodes', value: `${stats?.episodeFileCount ?? 0} / ${stats?.episodeCount ?? 0}` },
-              { label: 'Next airing', value: formatDate(stats?.nextAiring, { dateStyle: 'medium', timeStyle: 'short' }) },
+              { label: t('common.path'), value: s.path },
+              { label: t('common.sizeOnDisk'), value: formatBytes(stats?.sizeOnDisk) },
+              { label: t('common.episodes'), value: `${stats?.episodeFileCount ?? 0} / ${stats?.episodeCount ?? 0}` },
+              { label: t('library.seriesDetails.nextAiring'), value: formatDate(stats?.nextAiring, { dateStyle: 'medium', timeStyle: 'short' }) },
             ]}
           />
         }
@@ -146,16 +151,17 @@ export function SeriesDetailsPage() {
         actions={
           <>
             <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ seriesId: s.id })}>
-              Search monitored
+              {t('library.seriesDetails.searchMonitored')}
             </Button>
-            <Button onClick={() => setInteractive({ target: { seriesId: s.id }, title: s.title })}>Interactive search</Button>
+            <Button onClick={() => setInteractive({ target: { seriesId: s.id }, title: s.title })}>{t('library.seriesDetails.interactiveSearch')}</Button>
             <RefreshButtons target={{ seriesId: s.id }} />
+            <CrossSeedSearchButton target={{ seriesId: s.id }} />
             <Link className={buttonClass({ variant: 'secondary' })} to="/activity/manual-import" search={{ seriesId: s.id }}>
-              Manual import
+              {t('common.manualImport')}
             </Link>
-            <Button onClick={() => setEditing(true)}>Edit</Button>
+            <Button onClick={() => setEditing(true)}>{t('common.edit')}</Button>
             <Button variant="danger" onClick={() => setDeleting(true)}>
-              Delete
+              {t('common.delete')}
             </Button>
           </>
         }
@@ -164,25 +170,27 @@ export function SeriesDetailsPage() {
       </DetailsHero>
 
       <Tabs
-        aria-label="Series sections"
+        aria-label={t('library.seriesDetails.seriesSections')}
         value={tab}
         onChange={setTab}
         tabs={[
           {
             id: 'episodes',
-            label: 'Seasons & episodes',
+            label: t('library.seriesDetails.seasonsEpisodes'),
             content: <SeasonList series={s} episodes={episodes.data} error={episodes.error} files={files.data} onInteractive={setInteractive} />,
           },
           {
             id: 'files',
-            label: 'Files',
+            label: t('common.files'),
             count: files.data?.length,
             content: <MediaFilesTable files={files.data} error={files.error} loading={files.isPending} mediaType="series" ownerId={s.id} />,
           },
-          { id: 'history', label: 'History', content: <HistoryTable scope={{ seriesId: s.id }} /> },
-          { id: 'search', label: 'Search', content: <SearchTab target={{ seriesId: s.id }} /> },
-          { id: 'subtitles', label: 'Subtitles', content: <SubtitlesTab scope={{ seriesId: s.id }} episodes={episodes.data} /> },
-          { id: 'requests', label: 'Requests', content: <RequestsTable kind="tv" tmdbId={s.tmdbId} /> },
+          { id: 'history', label: t('common.history'), content: <HistoryTable scope={{ seriesId: s.id }} /> },
+          { id: 'decisions', label: t('library.decisions.tab'), content: <DecisionsPanel scope={{ seriesId: s.id }} /> },
+          { id: 'search', label: t('common.search'), content: <SearchTab target={{ seriesId: s.id }} /> },
+          { id: 'scenemapping', label: t('library.sceneMapping.tab'), content: <SceneMappingPanel seriesId={s.id} /> },
+          { id: 'subtitles', label: t('common.subtitles'), content: <SubtitlesTab scope={{ seriesId: s.id }} episodes={episodes.data} /> },
+          { id: 'requests', label: t('common.requests'), content: <RequestsTable kind="tv" tmdbId={s.tmdbId} /> },
         ]}
       />
 
@@ -217,14 +225,14 @@ export function SearchTab({ target }: { target: ReleaseSearchTarget }) {
   if (!started) {
     return (
       <EmptyState
-        title="Search every indexer for releases"
+        title={t('library.seriesDetails.searchEveryIndexerForReleases')}
         action={
           <Button variant="primary" onClick={() => setStarted(true)}>
-            Search releases
+            {t('library.seriesDetails.searchReleases')}
           </Button>
         }
       >
-        Results list every release with its rejections. Grab sends one to the download client.
+        {t('library.seriesDetails.resultsListEveryReleaseWith')}
       </EmptyState>
     );
   }
@@ -269,8 +277,8 @@ function SeasonList({
   const [drawer, setDrawer] = useState<Episode | null>(null);
   const latest = seasons.find((x) => x.seasonNumber > 0)?.seasonNumber;
 
-  if (error) return <QueryError error={error} title="Could not load episodes" />;
-  if (seasons.length === 0) return <EmptyState title="No seasons yet">TMDB has not listed any seasons for this series.</EmptyState>;
+  if (error) return <QueryError error={error} title={t('library.seriesDetails.couldNotLoadEpisodes')} />;
+  if (seasons.length === 0) return <EmptyState title={t('library.seriesDetails.noSeasonsYet')}>{t('library.seriesDetails.tmdbHasNotListedAny')}</EmptyState>;
 
   return (
     <>
@@ -340,16 +348,16 @@ function SeasonPanel({
         <div className="mk-season-aside">
           <MonitorSwitch
             monitored={season.monitored}
-            label={`${season.monitored ? 'Unmonitor' : 'Monitor'} ${label}`}
+            label={t('common.monitorTitle', { monitored: season.monitored, title: label })}
             onChange={(m) => setSeason.mutate({ seriesId: series.id, seasonNumber: season.seasonNumber, monitored: m })}
           />
           <span className="mk-muted mk-hide-mobile" style={{ fontSize: 13 }}>
-            {season.monitored ? 'Monitored' : 'Unmonitored'}
+            {season.monitored ? t('status.monitored') : t('status.unmonitored')}
           </span>
           <Meter
             value={want > 0 ? (have / want) * 100 : 0}
             tone={counts.wanted > 0 ? 'warn' : 'default'}
-            label={`${label} progress`}
+            label={t('library.seriesDetails.labelProgress', { label })}
             valueText={`${have}/${want}${stats ? ` · ${formatBytes(stats.sizeOnDisk)}` : ''}`}
           />
           <span className="mk-spacer" />
@@ -359,15 +367,15 @@ function SeasonPanel({
             disabled={search.isPending && search.variables.seasonNumber === season.seasonNumber}
             onClick={() => search.mutate({ seriesId: series.id, seasonNumber: season.seasonNumber })}
           >
-            Search season
+            {t('library.seriesDetails.searchSeason')}
           </button>
           <button
             type="button"
             className="mk-action-link mk-hide-mobile"
-            aria-label={`Interactive search ${label}`}
+            aria-label={t('library.seriesDetails.interactiveSearchLabel', { label })}
             onClick={() => onInteractive({ target: { seriesId: series.id, seasonNumber: season.seasonNumber }, title: `${series.title} ${label}` })}
           >
-            Interactive
+            {t('library.seriesDetails.interactive')}
           </button>
         </div>
       }
@@ -375,20 +383,20 @@ function SeasonPanel({
       {loadingEpisodes ? (
         <Loading />
       ) : !episodes || episodes.length === 0 ? (
-        <EmptyState title="No episodes yet" />
+        <EmptyState title={t('library.seriesDetails.noEpisodesYet')} />
       ) : (
-        <div className="mk-eps" role="table" aria-label={`${label} episodes`}>
+        <div className="mk-eps" role="table" aria-label={t('library.seriesDetails.labelEpisodes', { label })}>
           <div className="mk-eps__head" role="row">
             <span role="columnheader">
-              <span className="al-sr-only">Monitored</span>
+              <span className="al-sr-only">{t('status.monitored')}</span>
             </span>
             <span role="columnheader">#</span>
-            <span role="columnheader">Title</span>
-            <span role="columnheader">Aired</span>
-            <span role="columnheader">Status</span>
-            <span role="columnheader">Size</span>
+            <span role="columnheader">{t('common.title')}</span>
+            <span role="columnheader">{t('library.seriesDetails.aired')}</span>
+            <span role="columnheader">{t('common.status')}</span>
+            <span role="columnheader">{t('common.size')}</span>
             <span role="columnheader">
-              <span className="al-sr-only">Actions</span>
+              <span className="al-sr-only">{t('common.actions')}</span>
             </span>
           </div>
           {episodes.map((ep) => (
@@ -434,7 +442,7 @@ function EpisodeRow({
       <span className="mk-ep__monitor" role="cell">
         <MonitorSwitch
           monitored={ep.monitored}
-          label={`${ep.monitored ? 'Unmonitor' : 'Monitor'} episode ${ep.episodeNumber}`}
+          label={t('library.seriesDetails.valueEpisodeEpisodenumber', { value: ep.monitored ? 'Unmonitor' : 'Monitor', episodeNumber: ep.episodeNumber })}
           onChange={(m) => setEpisode.mutate({ seriesId: series.id, episodeId: ep.id, monitored: m })}
         />
       </span>
@@ -442,8 +450,8 @@ function EpisodeRow({
         {String(ep.episodeNumber).padStart(2, '0')}
       </span>
       <span role="cell" style={{ minWidth: 0, display: 'flex' }}>
-        <button type="button" className="mk-ep__title" onClick={onOpen} title={ep.title || 'TBA'}>
-          {ep.title || 'TBA'}
+        <button type="button" className="mk-ep__title" onClick={onOpen} title={ep.title || t('common.tba')}>
+          {ep.title || t('common.tba')}
         </button>
       </span>
       <span className="mk-ep__date al-num" role="cell">
@@ -456,16 +464,16 @@ function EpisodeRow({
         {file ? formatBytes(file.sizeBytes) : '—'}
       </span>
       <span className="mk-ep__actions" role="cell">
-        <button type="button" className="mk-action-link" aria-label={`Search ${code}`} disabled={search.isPending} onClick={runSearch}>
-          Search
+        <button type="button" className="mk-action-link" aria-label={t('library.seriesDetails.searchCode', { code })} disabled={search.isPending} onClick={runSearch}>
+          {t('common.search')}
         </button>
         <button
           type="button"
           className="mk-action-link"
-          aria-label={`Interactive search ${code}`}
+          aria-label={t('library.seriesDetails.interactiveSearchCode', { code })}
           onClick={() => onInteractive({ target: { episodeId: ep.id }, title: `${series.title} ${code}` })}
         >
-          Interactive
+          {t('library.seriesDetails.interactive')}
         </button>
       </span>
     </div>
@@ -474,9 +482,9 @@ function EpisodeRow({
   return (
     <SwipeRow
       onSearch={runSearch}
-      searchLabel={`Search ${code}`}
+      searchLabel={t('library.seriesDetails.searchCode', { code })}
       onDelete={file ? () => delFile.mutate({ fileId: file.id, mediaType: 'series', ownerId: series.id }) : undefined}
-      deleteLabel={`Delete ${code} file`}
+      deleteLabel={t('library.seriesDetails.deleteCodeFile', { code })}
     >
       {row}
     </SwipeRow>
@@ -509,9 +517,9 @@ function EpisodeDrawer({
       title={`${code} · ${episode.title || 'TBA'}`}
       footer={
         <>
-          <Button onClick={() => onInteractive({ target: { episodeId: episode.id }, title: `${series.title} ${code}` })}>Interactive search</Button>
+          <Button onClick={() => onInteractive({ target: { episodeId: episode.id }, title: `${series.title} ${code}` })}>{t('library.seriesDetails.interactiveSearch')}</Button>
           <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ episodeIds: [episode.id] })}>
-            Search episode
+            {t('library.seriesDetails.searchEpisode')}
           </Button>
         </>
       }
@@ -522,39 +530,40 @@ function EpisodeDrawer({
         <StatusChip status={episode.monitored ? 'monitored' : 'unmonitored'} />
       </div>
       <p className="mk-hero__overview" style={{ fontSize: 14 }}>
-        {episode.overview || 'No overview available.'}
+        {episode.overview || t('common.noOverviewAvailable')}
       </p>
       <KeyValue
         items={[
-          { label: 'Aired', value: formatDate(episode.airDateUtc ?? episode.airDate, { dateStyle: 'medium', timeStyle: episode.airDateUtc ? 'short' : undefined }) },
-          { label: 'Runtime', value: episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : '—' },
-          ...(episode.absoluteEpisodeNumber ? [{ label: 'Absolute', value: String(episode.absoluteEpisodeNumber) }] : []),
+          { label: t('library.seriesDetails.aired'), value: formatDate(episode.airDateUtc ?? episode.airDate, { dateStyle: 'medium', timeStyle: episode.airDateUtc ? 'short' : undefined }) },
+          { label: t('common.runtime'), value: episode.runtimeMinutes ? `${episode.runtimeMinutes} min` : '—' },
+          ...(episode.absoluteEpisodeNumber ? [{ label: t('library.seriesDetails.absolute'), value: String(episode.absoluteEpisodeNumber) }] : []),
         ]}
       />
-      <section className="mk-drawer-section" aria-label="File">
-        <div className="al-label">File</div>
+      <section className="mk-drawer-section" aria-label={t('common.file')}>
+        <div className="al-label">{t('common.file')}</div>
         {file ? (
           <KeyValue
             items={[
-              { label: 'Path', value: file.relativePath },
-              { label: 'Size', value: formatBytes(file.sizeBytes) },
-              { label: 'Quality', value: qualityName(file.quality) ?? '—' },
-              { label: 'Video', value: [file.mediaInfo?.videoCodec, file.mediaInfo?.resolution, file.mediaInfo?.videoDynamicRange].filter(Boolean).join(' · ') || '—' },
-              { label: 'Audio', value: [file.mediaInfo?.audioCodec, file.mediaInfo?.audioChannels].filter(Boolean).join(' · ') || '—' },
-              { label: 'Languages', value: file.languages.join(', ') || '—' },
-              { label: 'Group', value: file.releaseGroup ?? '—' },
+              { label: t('common.path'), value: file.relativePath },
+              { label: t('common.size'), value: formatBytes(file.sizeBytes) },
+              { label: t('common.quality'), value: qualityName(file.quality) ?? '—' },
+              { label: t('library.seriesDetails.video'), value: [file.mediaInfo?.videoCodec, file.mediaInfo?.resolution, file.mediaInfo?.videoDynamicRange].filter(Boolean).join(' · ') || '—' },
+              { label: t('library.seriesDetails.audio'), value: [file.mediaInfo?.audioCodec, file.mediaInfo?.audioChannels].filter(Boolean).join(' · ') || '—' },
+              { label: t('common.languages'), value: file.languages.join(', ') || '—' },
+              { label: t('common.group'), value: file.releaseGroup ?? '—' },
             ]}
           />
         ) : (
-          <span className="mk-muted">No file on disk.</span>
+          <span className="mk-muted">{t('library.seriesDetails.noFileOnDisk')}</span>
         )}
       </section>
-      <section className="mk-drawer-section" aria-label="History">
-        <div className="al-label">History</div>
+      <EpisodeVersionFiles files={episode.files} />
+      <section className="mk-drawer-section" aria-label={t('common.history')}>
+        <div className="al-label">{t('common.history')}</div>
         {history.isPending ? (
           <Loading lines={2} />
         ) : history.isError || !history.data?.records.length ? (
-          <span className="mk-muted">No history for this episode.</span>
+          <span className="mk-muted">{t('library.seriesDetails.noHistoryForThisEpisode')}</span>
         ) : (
           <ol className="lib-history">
             {history.data.records.map((h) => (
@@ -566,6 +575,10 @@ function EpisodeDrawer({
             ))}
           </ol>
         )}
+      </section>
+      <section className="mk-drawer-section" aria-label={t('library.decisions.tab')}>
+        <div className="al-label">{t('library.decisions.tab')}</div>
+        <DecisionsPanel key={episode.id} scope={{ episodeId: episode.id }} pageSize={5} />
       </section>
     </Drawer>
   );
@@ -583,21 +596,22 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
   const [path, setPath] = useState(series.path);
   const [tags, setTags] = useState<number[]>([...series.tags]);
   const [languageProfileId, setLanguageProfileId] = useState<number | null>(series.languageProfileId ?? null);
+  const versions = useVersionsDraft(series.versions);
   const roots = (rootFolders.data ?? []).filter((r) => r.mediaType === 'series');
 
   return (
     <Modal
       open
       onClose={onClose}
-      title={`Edit ${series.title}`}
+      title={t('library.seriesDetails.editTitle', { title: series.title })}
       size={560}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button type="submit" form="edit-series-form" variant="primary" loading={update.isPending}>
-            Save changes
+            {t('common.saveChanges')}
           </Button>
         </>
       }
@@ -607,6 +621,7 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
       className="mk-stack-sm"
       onSubmit={(e) => {
         e.preventDefault();
+        if (!versions.valid) return;
         update.mutate(
           {
             id: series.id,
@@ -618,6 +633,7 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
               seasonFolder,
               tags,
               ...(languageProfileId !== (series.languageProfileId ?? null) ? { languageProfileId } : {}),
+              ...versions.patch,
               ...(path.trim() && path !== series.path ? { path: path.trim() } : {}),
             },
           },
@@ -625,16 +641,16 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
         );
       }}
     >
-      <FormRow label="Monitored" htmlFor="edit-monitored" captionInline caption="Search for missing episodes of this series.">
+      <FormRow label={t('status.monitored')} htmlFor="edit-monitored" captionInline caption={t('library.seriesDetails.searchForMissingEpisodesOf')}>
         <Toggle id="edit-monitored" checked={monitored} onChange={(e) => setMonitored(e.target.checked)} />
       </FormRow>
-      <FormRow label="Monitor new seasons" htmlFor="edit-new-seasons">
+      <FormRow label={t('library.seriesDetails.monitorNewSeasons')} htmlFor="edit-new-seasons">
         <Select id="edit-new-seasons" value={monitorNewItems} onChange={(e) => setMonitorNewItems(e.target.value as NewItemMonitor)}>
-          <option value="all">All new seasons</option>
-          <option value="none">None</option>
+          <option value="all">{t('library.seriesDetails.allNewSeasons')}</option>
+          <option value="none">{t('common.none')}</option>
         </Select>
       </FormRow>
-      <FormRow label="Quality profile" htmlFor="edit-profile">
+      <FormRow label={t('common.qualityProfile')} htmlFor="edit-profile">
         <Select id="edit-profile" value={String(qualityProfileId)} onChange={(e) => setProfile(Number(e.target.value))}>
           {(profiles.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>
@@ -644,7 +660,7 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
         </Select>
       </FormRow>
       <LanguageProfileSelect value={languageProfileId} onChange={setLanguageProfileId} />
-      <FormRow label="Series type" htmlFor="edit-type">
+      <FormRow label={t('common.seriesType')} htmlFor="edit-type">
         <Select id="edit-type" value={seriesType} onChange={(e) => setSeriesType(e.target.value as SeriesType)}>
           {Object.entries(SERIES_TYPE_LABELS).map(([v, l]) => (
             <option key={v} value={v}>
@@ -653,15 +669,16 @@ function EditSeriesModal({ series, onClose }: { series: Series; onClose: () => v
           ))}
         </Select>
       </FormRow>
-      <FormRow label="Season folders" htmlFor="edit-season-folder" captionInline caption="Put each season in its own folder.">
+      <FormRow label={t('common.seasonFolders')} htmlFor="edit-season-folder" captionInline caption={t('library.seriesDetails.putEachSeasonInIts')}>
         <Toggle id="edit-season-folder" checked={seasonFolder} onChange={(e) => setSeasonFolder(e.target.checked)} />
       </FormRow>
-      <FormRow label="Path" htmlFor="edit-path" caption={roots.length ? `Root folders: ${roots.map((r) => r.path).join(', ')}` : undefined} captionMono>
+      <FormRow label={t('common.path')} htmlFor="edit-path" caption={roots.length ? t('library.seriesDetails.rootFoldersMap', { map: roots.map((r) => r.path).join(', ') }) : undefined} captionMono>
         <Input id="edit-path" mono value={path} onChange={(e) => setPath(e.target.value)} />
       </FormRow>
-      <FormRow label="Tags">
+      <FormRow label={t('common.tags')}>
         <TagPicker value={tags} onChange={setTags} />
       </FormRow>
+      <VersionsEditor state={versions} profiles={profiles.data ?? []} defaultProfileId={qualityProfileId} idPrefix="edit-series" />
     </form>
     </Modal>
   );

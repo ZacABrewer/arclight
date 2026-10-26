@@ -5,6 +5,7 @@ import { usersApi } from '../api/auth.js';
 import { useAuth } from '../auth/auth-context.js';
 import { authKeys } from '../auth/guard.js';
 import { readUiPreferences, setActiveUiPreferences, type UiPreferences } from '../lib/ui-preferences.js';
+import { t, chooseLocale } from '../i18n/index.js';
 
 /** The signed-in user's UI preferences, with defaults for anything unset. */
 export function useUiPreferences(): UiPreferences {
@@ -24,9 +25,12 @@ export function useSaveUiPreferences() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (prefs: Partial<UiPreferences>) => usersApi.updateMe({ settings: { ...prefs } }),
-    meta: { errorTitle: 'Could not save UI preferences' },
+    meta: { errorTitle: t('hooks.uiPreferences.couldNotSaveUiPreferences') },
     onSuccess: (user) => {
-      setActiveUiPreferences(readUiPreferences(user.settings));
+      const prefs = readUiPreferences(user.settings);
+      setActiveUiPreferences(prefs);
+      // Remember the language on this device too, so the sign-in page uses it next time.
+      void chooseLocale(prefs.locale);
       writeCachedUser(qc, user);
     },
   });

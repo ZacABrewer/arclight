@@ -3,6 +3,7 @@ import { qualityById, type QualityProfileItem } from '@arclight/shared';
 import { Button, Checkbox, Input, Toggle, cx } from '../../../arclight/index.js';
 import { groupItems, itemId, itemName, moveItem, setAllowed, ungroupItem } from './quality-profile-model.js';
 import './profiles.css';
+import { t } from '../../../i18n/index.js';
 
 export interface QualityItemListProps {
   /** Display order: best first. */
@@ -46,10 +47,10 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
   return (
     <div className="al-qlist">
       <div className="al-qlist__bar">
-        <p className="al-caption al-qlist__hint">Best first. Drag to reorder or use the move buttons. Tick to allow.</p>
+        <p className="al-caption al-qlist__hint">{t('settings.profiles.qualityItemList.bestFirstDragToReorder')}</p>
         <Toggle
           size="sm"
-          label="Group qualities"
+          label={t('settings.profiles.qualityItemList.groupQualities')}
           checked={grouping}
           onChange={(e) => {
             setGrouping(e.currentTarget.checked);
@@ -57,7 +58,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
           }}
         />
       </div>
-      <ol className="al-qlist__rows" aria-label="Qualities">
+      <ol className="al-qlist__rows" aria-label={t('settings.profiles.qualityItemList.qualities')}>
         {items.map((item, index) => {
           const name = itemName(item);
           const isCutoff = cutoff !== undefined && itemId(item) === cutoff;
@@ -85,7 +86,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
               </span>
               {grouping ? (
                 <Checkbox
-                  aria-label={`Select ${name} for grouping`}
+                  aria-label={t('settings.profiles.qualityItemList.selectNameForGrouping', { name })}
                   checked={selected.includes(index)}
                   onChange={(e) => {
                     const on = e.currentTarget.checked;
@@ -94,7 +95,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
                 />
               ) : null}
               <span className="al-qlist__name">
-                <Checkbox aria-label={`Allow ${name}`} checked={item.allowed} onChange={(e) => update(setAllowed(items, index, e.currentTarget.checked))} />
+                <Checkbox aria-label={t('settings.profiles.qualityItemList.allowName', { name })} checked={item.allowed} onChange={(e) => update(setAllowed(items, index, e.currentTarget.checked))} />
                 <span className="al-num">{name}</span>
                 {item.kind === 'group' ? (
                   <span className="al-qlist__members">{item.qualityIds.map((q) => qualityById(q).name).join(', ')}</span>
@@ -102,20 +103,20 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
               </span>
               {isCutoff ? (
                 <span className="al-qlist__cutoff" data-testid="cutoff-marker">
-                  CUTOFF
+                  {t('settings.profiles.qualityItemList.cutoff')}
                 </span>
               ) : null}
               <span className="al-qlist__actions">
                 {item.kind === 'group' ? (
                   <Button size="sm" variant="ghost" onClick={() => update(ungroupItem(items, index))}>
-                    Ungroup
+                    {t('settings.profiles.qualityItemList.ungroup')}
                   </Button>
                 ) : null}
                 <Button
                   size="sm"
                   variant="ghost"
                   className="al-qlist__move"
-                  aria-label={`Move ${name} up`}
+                  aria-label={t('settings.profiles.qualityItemList.moveNameUp', { name })}
                   disabled={index === 0}
                   onClick={() => update(moveItem(items, index, index - 1))}
                 >
@@ -125,7 +126,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
                   size="sm"
                   variant="ghost"
                   className="al-qlist__move"
-                  aria-label={`Move ${name} down`}
+                  aria-label={t('settings.profiles.qualityItemList.moveNameDown', { name })}
                   disabled={index === items.length - 1}
                   onClick={() => update(moveItem(items, index, index + 1))}
                 >
@@ -138,7 +139,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
       </ol>
       {grouping ? (
         <div className="al-qlist__group">
-          <Input aria-label="New group name" placeholder="Group name" value={groupName} onChange={(e) => setGroupName(e.currentTarget.value)} />
+          <Input aria-label={t('settings.profiles.qualityItemList.newGroupName')} placeholder={t('settings.profiles.qualityItemList.groupName')} value={groupName} onChange={(e) => setGroupName(e.currentTarget.value)} />
           <Button
             size="sm"
             disabled={!canGroup}
@@ -147,7 +148,7 @@ export function QualityItemList({ items, onChange, cutoff }: QualityItemListProp
               setGroupName('');
             }}
           >
-            Group selected ({selected.length})
+            {t('settings.profiles.qualityItemList.groupSelectedSelectedcount', { selectedCount: selected.length })}
           </Button>
         </div>
       ) : null}

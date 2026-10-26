@@ -6,13 +6,24 @@ import { TagPicker } from '../../../components/forms/tag-picker.js';
 import { useImportListSettings, useSaveImportListSettings } from '../../../hooks/import-lists.js';
 import { useDraft, type Draft, type SaveBarProps } from '../settings-layout.js';
 import { SettingsSection } from '../shared.js';
+import { t } from '../../../i18n/index.js';
 
 export const CLEAN_LEVEL_LABELS: Record<CleanLibraryLevel, string> = {
-  disabled: 'Disabled',
-  logOnly: 'Log only',
-  unmonitor: 'Unmonitor',
-  remove: 'Remove from library',
-  removeAndDeleteFiles: 'Remove and delete files',
+  get disabled() {
+    return t('common.disabled');
+  },
+  get logOnly() {
+    return t('settings.importLists.optionsCard.logOnly');
+  },
+  get unmonitor() {
+    return t('common.unmonitor');
+  },
+  get remove() {
+    return t('settings.importLists.optionsCard.removeFromLibrary');
+  },
+  get removeAndDeleteFiles() {
+    return t('settings.importLists.optionsCard.removeAndDeleteFiles');
+  },
 };
 
 export interface ImportListOptionsForm {
@@ -56,8 +67,8 @@ export function OptionsCard({ form }: { form: ImportListOptionsForm }) {
 
   if (query.isError) {
     return (
-      <SettingsSection label="Options">
-        <ErrorBlock title="Could not load import list options" onRetry={() => void query.refetch()}>
+      <SettingsSection label={t('settings.importLists.optionsCard.options')}>
+        <ErrorBlock title={t('settings.importLists.optionsCard.couldNotLoadImportList')} onRetry={() => void query.refetch()}>
           {errorMessage(query.error)}
         </ErrorBlock>
       </SettingsSection>
@@ -65,7 +76,7 @@ export function OptionsCard({ form }: { form: ImportListOptionsForm }) {
   }
   if (!value) {
     return (
-      <SettingsSection label="Options">
+      <SettingsSection label={t('settings.importLists.optionsCard.options')}>
         <Skeleton lines={3} />
       </SettingsSection>
     );
@@ -74,13 +85,13 @@ export function OptionsCard({ form }: { form: ImportListOptionsForm }) {
   const interval = value.syncIntervalHours;
 
   return (
-    <form aria-label="Import list options" onSubmit={(e) => e.preventDefault()}>
-      <FormSection label="Options">
+    <form aria-label={t('settings.importLists.optionsCard.importListOptions')} onSubmit={(e) => e.preventDefault()}>
+      <FormSection label={t('settings.importLists.optionsCard.options')}>
         <FormRow
-          label="Sync interval (hours)"
+          label={t('settings.importLists.optionsCard.syncIntervalHours')}
           htmlFor={`${ids}-interval`}
-          caption="How often each list is fetched (1-168)."
-          error={intervalValid ? undefined : 'Enter 1 to 168 hours'}
+          caption={t('settings.importLists.optionsCard.howOftenEachListIs')}
+          error={intervalValid ? undefined : t('settings.importLists.optionsCard.enter1To168Hours')}
         >
           <Input
             id={`${ids}-interval`}
@@ -94,7 +105,7 @@ export function OptionsCard({ form }: { form: ImportListOptionsForm }) {
             onChange={(e) => set({ syncIntervalHours: Number(e.currentTarget.value) })}
           />
         </FormRow>
-        <FormRow label="Clean library level" htmlFor={`${ids}-clean`} caption="What to do with library items that are no longer on any enabled list.">
+        <FormRow label={t('settings.importLists.optionsCard.cleanLibraryLevel')} htmlFor={`${ids}-clean`} caption={t('settings.importLists.optionsCard.whatToDoWithLibrary')}>
           <Select
             id={`${ids}-clean`}
             className="al-select--fit"
@@ -104,7 +115,7 @@ export function OptionsCard({ form }: { form: ImportListOptionsForm }) {
           />
         </FormRow>
         {value.cleanLibraryLevel !== 'disabled' ? (
-          <FormRow label="Clean only tagged" caption="Only items with one of these tags are cleaned; empty means every item.">
+          <FormRow label={t('settings.importLists.optionsCard.cleanOnlyTagged')} caption={t('settings.importLists.optionsCard.onlyItemsWithOneOf')}>
             <TagPicker value={value.cleanLibraryTags} onChange={(tags) => set({ cleanLibraryTags: tags })} />
           </FormRow>
         ) : null}

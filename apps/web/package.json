@@ -7,7 +7,10 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run --passWithNoTests"
+    "test": "vitest run --passWithNoTests",
+    "i18n:check": "node scripts/i18n-check.mjs",
+    "i18n:extract": "node scripts/i18n-extract.mjs",
+    "i18n:locales": "node scripts/i18n-locales.mjs"
   },
   "dependencies": {
     "@fontsource-variable/archivo": "^5.3.0",

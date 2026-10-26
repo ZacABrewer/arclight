@@ -1,5 +1,6 @@
 import type { HTMLAttributes, ReactNode } from 'react';
 import { cx } from '../cx.js';
+import { t } from '../../i18n/index.js';
 
 export interface TagProps extends HTMLAttributes<HTMLSpanElement> {
   children: ReactNode;
@@ -18,7 +19,7 @@ export function Tag({ children, onRemove, removeLabel, className, ...rest }: Tag
         <button
           type="button"
           className="al-tag__remove"
-          aria-label={removeLabel ?? `Remove ${typeof children === 'string' ? children : 'tag'}`}
+          aria-label={removeLabel ?? t('arclight.tag.removeValue', { value: typeof children === 'string' ? children : 'tag' })}
           onClick={onRemove}
         >
           ✕
@@ -69,7 +70,7 @@ const PROTOCOL_CODES: Record<Protocol, string> = { torrent: 'TOR', usenet: 'NZB'
 /** `.al-proto` — TOR / NZB. Same prop as the old ProtocolBadge. */
 export function ProtocolBadge({ protocol, className }: { protocol: Protocol; className?: string | undefined }) {
   return (
-    <span className={cx('al-proto', className)} title={protocol === 'torrent' ? 'Torrent' : 'Usenet'}>
+    <span className={cx('al-proto', className)} title={protocol === 'torrent' ? t('common.torrent') : t('common.usenet')}>
       {PROTOCOL_CODES[protocol]}
     </span>
   );

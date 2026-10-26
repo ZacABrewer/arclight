@@ -1,5 +1,8 @@
 import { z } from 'zod';
 import {
+  DecisionLogBatch,
+  DecisionLogPage,
+  DecisionLogQuery,
   PendingRelease,
   ReleaseGrabRequest,
   ReleaseGrabResponse,
@@ -65,6 +68,18 @@ export function releasesRoutes(service: ReleasesService): FastifyPluginAsync<Rec
       '/release/push',
       { schema: { body: ReleasePushRequest, response: { 200: ReleasePushResponse, ...errors } } },
       async (req) => service.push(req.body),
+    );
+
+    app.get(
+      '/release/decisions',
+      { schema: { querystring: DecisionLogQuery, response: { 200: DecisionLogPage, ...errors } } },
+      async (req) => service.listDecisionBatches(req.query),
+    );
+
+    app.get(
+      '/release/decisions/:batchId',
+      { schema: { params: z.object({ batchId: z.string().min(1).max(64) }), response: { 200: DecisionLogBatch, ...errors } } },
+      async (req) => service.getDecisionBatch(req.params.batchId),
     );
 
     app.get('/release/pending', { schema: { response: { 200: z.array(PendingRelease) } } }, async () => service.listPending());

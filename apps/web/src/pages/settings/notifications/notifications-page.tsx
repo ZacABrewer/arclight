@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { supportFlagFor, type NotificationTrigger } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../../api/client.js';
 import {
   eventFlagLabel,
@@ -19,8 +20,9 @@ import { useDeleteNotification, useNotificationList, useNotificationSchema, useS
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
 import './notifications.css';
+import { t } from '../../../i18n/index.js';
 
-const NAME_FIELD: FieldDefinition = { name: 'name', label: 'Name', type: 'text', required: true };
+const NAME_FIELD: FieldDefinition = { name: 'name', get label() { return t('common.name'); }, type: 'text', required: true };
 
 export function notificationTestOutcome(r: NotificationTestResult): TestOutcome {
   return { ok: r.ok, warnings: r.warnings ?? [], errors: r.error ? [r.error.message] : [] };
@@ -29,8 +31,56 @@ export function notificationTestOutcome(r: NotificationTestResult): TestOutcome 
 /** `onGrab` -> "On grab", `onHealthIssue` -> "On health issue" (sentence case for tags). */
 export function eventFlagTag(flag: string): string {
   const words = eventFlagLabel(flag).toLowerCase();
-  return `On ${words}`;
+  return t('settings.notifications.onWords', { words });
 }
+
+/** The sitewide request and issue triggers, in display order. */
+export const REQUEST_TRIGGERS = [
+  'onRequestCreated',
+  'onRequestApproved',
+  'onRequestDeclined',
+  'onRequestAvailable',
+  'onIssueCreated',
+  'onIssueUpdated',
+] as const satisfies readonly NotificationTrigger[];
+
+const REQUEST_TRIGGER_LABELS: Record<(typeof REQUEST_TRIGGERS)[number], string> = {
+  get onRequestCreated() {
+    return t('settings.notifications.newRequest');
+  },
+  get onRequestApproved() {
+    return t('common.requestApproved');
+  },
+  get onRequestDeclined() {
+    return t('settings.notifications.requestDeclined');
+  },
+  get onRequestAvailable() {
+    return t('settings.notifications.requestAvailable');
+  },
+  get onIssueCreated() {
+    return t('settings.notifications.newIssue');
+  },
+  get onIssueUpdated() {
+    return t('settings.notifications.issueUpdated');
+  },
+};
+
+export function requestTriggerLabel(flag: (typeof REQUEST_TRIGGERS)[number]): string {
+  return REQUEST_TRIGGER_LABELS[flag];
+}
+
+/**
+ * Request/issue triggers the agent supports: a `supportsOn*` flag decides when the source
+ * carries one; otherwise the trigger shows when the source has the boolean at all.
+ */
+export function supportedRequestTriggers(source: Record<string, unknown>): Array<(typeof REQUEST_TRIGGERS)[number]> {
+  return REQUEST_TRIGGERS.filter((item) => {
+    const support = source[supportFlagFor(item)];
+    return typeof support === 'boolean' ? support : typeof source[item] === 'boolean';
+  });
+}
+
+const REQUEST_TRIGGER_SET = new Set<string>(REQUEST_TRIGGERS);
 
 function toBody(values: FormValues): NotificationInput {
   const { id: _id, ...rest } = values;
@@ -51,7 +101,9 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
   const remove = useDeleteNotification();
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Flags come from the template (complete list) merged with whatever the row carries.
-  const flags = [...new Set([...eventFlags((editing.schema?.template ?? {}) as Record<string, unknown>), ...eventFlags(form.values)])].sort();
+  const template = (editing.schema?.template ?? {}) as Record<string, unknown>;
+  const flags = [...new Set([...eventFlags(template), ...eventFlags(form.values)])].filter((f) => !REQUEST_TRIGGER_SET.has(f)).sort();
+  const requestFlags = supportedRequestTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const tags = Array.isArray(form.values.tags) ? (form.values.tags as number[]) : [];
 
   const submit = () => {
@@ -65,7 +117,7 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
         open
         size={640}
         onClose={onClose}
-        title={existing ? `Edit ${existing.name}` : `Add ${editing.schema?.implementationName ?? 'connection'}`}
+        title={existing ? t('settings.notifications.editName', { name: existing.name }) : t('settings.notifications.addValue', { value: editing.schema?.implementationName ?? 'connection' })}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -87,8 +139,8 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
           <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
           {flags.length ? (
             <fieldset className="al-event-flags">
-              <legend className="al-label">Notify on</legend>
-              <div className="al-check-grid" role="group" aria-label="Events">
+              <legend className="al-label">{t('settings.notifications.notifyOn')}</legend>
+              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.events')}>
                 {flags.map((flag) => (
                   <Checkbox
                     key={flag}
@@ -100,8 +152,26 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
               </div>
             </fieldset>
           ) : null}
+          {requestFlags.length ? (
+            <fieldset className="al-event-flags">
+              <legend className="al-label">{t('settings.notifications.requestsAndIssues')}</legend>
+              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.requestAndIssueEvents')}>
+                {requestFlags.map((flag) => (
+                  <Checkbox
+                    key={flag}
+                    label={requestTriggerLabel(flag)}
+                    checked={form.values[flag] === true}
+                    onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+                  />
+                ))}
+              </div>
+              <p className="al-caption" style={{ margin: '8px 0 0' }}>
+                {t('settings.notifications.sitewideEveryUsersRequestsAnd')}
+              </p>
+            </fieldset>
+          ) : null}
           {fields.some((f) => f.name === 'tags') ? null : (
-            <Field label="Tags" hint="Only notify for items with a matching tag; empty means all.">
+            <Field label={t('common.tags')} hint={t('settings.notifications.onlyNotifyForItemsWith')}>
               <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
             </Field>
           )}
@@ -111,15 +181,15 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${existing.name}?`}
-          confirmLabel="Delete notification"
+          title={t('settings.notifications.deleteName', { name: existing.name })}
+          confirmLabel={t('settings.notifications.deleteNotification')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
         >
-          Arclight stops sending events to this connection.
+          {t('settings.notifications.arclightStopsSendingEventsTo')}
         </ConfirmDialog>
       ) : null}
     </>
@@ -132,7 +202,7 @@ function NotificationCard({ notification: n, schema, onEdit }: { notification: N
     <ItemCard
       title={n.name}
       onClick={onEdit}
-      status={on.length ? null : <Chip tone="warn">No events</Chip>}
+      status={on.length ? null : <Chip tone="warn">{t('settings.notifications.noEvents')}</Chip>}
       actions={
         <>
           <TestButton
@@ -142,8 +212,8 @@ function NotificationCard({ notification: n, schema, onEdit }: { notification: N
               return notificationTestOutcome(await notificationsApi.test({ ...rest, id }));
             }}
           />
-          <Button size="sm" variant="secondary" onClick={onEdit} aria-label={`Edit ${n.name}`}>
-            Edit
+          <Button size="sm" variant="secondary" onClick={onEdit} aria-label={t('settings.notifications.editName', { name: n.name })}>
+            {t('common.edit')}
           </Button>
         </>
       }
@@ -165,45 +235,45 @@ export function NotificationsPage() {
 
   return (
     <SettingsPage
-      title="Notifications"
-      description="Connections tell other apps and services about grabs, imports and health issues."
+      title={t('common.notifications')}
+      description={t('settings.notifications.connectionsTellOtherAppsAnd')}
       actions={
         <Button variant="primary" onClick={() => setPicking(true)}>
-          Add connection
+          {t('settings.notifications.addConnection')}
         </Button>
       }
     >
-      <SettingsSection label="Connections" {...(list.data ? { count: list.data.length } : {})}>
+      <SettingsSection label={t('settings.notifications.connections')} {...(list.data ? { count: list.data.length } : {})}>
         {list.isPending ? (
           <Skeleton lines={3} />
         ) : pending ? (
-          <PendingApiNotice what="notifications" />
+          <PendingApiNotice what={t('settings.notifications.notifications')} />
         ) : list.isError ? (
-          <ErrorBlock title="Could not load notifications" onRetry={() => void list.refetch()}>
+          <ErrorBlock title={t('settings.notifications.couldNotLoadNotifications')} onRetry={() => void list.refetch()}>
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label="Connections">
+          <CardGrid label={t('settings.notifications.connections')}>
             {list.data.map((n) => {
               const schema = schemas.data?.find((s) => s.implementation === n.implementation);
               return <NotificationCard key={n.id} notification={n} schema={schema} onEdit={() => setEditing({ notification: n, schema })} />;
             })}
-            <AddCard label="Add notification" onClick={() => setPicking(true)} />
+            <AddCard label={t('settings.notifications.addNotification')} onClick={() => setPicking(true)} />
           </CardGrid>
         )}
       </SettingsSection>
       {picking ? (
-        <Modal open size={640} onClose={() => setPicking(false)} title="Add connection">
+        <Modal open size={640} onClose={() => setPicking(false)} title={t('settings.notifications.addConnection')}>
           {schemas.isPending ? (
             <Skeleton lines={4} />
           ) : schemas.isError ? (
             schemas.error instanceof ApiError && schemas.error.status === 404 ? (
-              <PendingApiNotice what="notifications" />
+              <PendingApiNotice what={t('settings.notifications.notifications')} />
             ) : (
-              <ErrorBlock title="Could not load connection types">{errorMessage(schemas.error)}</ErrorBlock>
+              <ErrorBlock title={t('settings.notifications.couldNotLoadConnectionTypes')}>{errorMessage(schemas.error)}</ErrorBlock>
             )
           ) : (
-            <div className="al-chooser" role="list" aria-label="Connection types">
+            <div className="al-chooser" role="list" aria-label={t('settings.notifications.connectionTypes')}>
               {schemas.data.map((s) => (
                 <div role="listitem" key={s.implementation}>
                   <button

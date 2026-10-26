@@ -7,9 +7,13 @@ import { hasAnyPermission, Permission, type MediaType } from '@arclight/shared';
 export interface Actor {
   userId: number | null;
   permissions: number;
+  /** An anonymous visitor of the public portal (no permissions, never a real user). */
+  anonymous?: boolean;
 }
 
 export const SYSTEM_ACTOR: Actor = { userId: null, permissions: Permission.ADMIN };
+/** Public-portal visitors: user id 0 matches nobody's rows. */
+export const ANONYMOUS_ACTOR: Actor = { userId: 0, permissions: Permission.NONE, anonymous: true };
 
 export function can(actor: Actor | number, ...flags: number[]): boolean {
   const held = typeof actor === 'number' ? actor : actor.permissions;

@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState, type KeyboardEvent } from 'react';
 import { Checkbox, cx } from '../arclight/index.js';
 import './pickers.css';
+import { t } from '../i18n/index.js';
 
 export interface MultiSelectOption {
   value: number;
@@ -19,9 +20,9 @@ export interface MultiSelectProps {
 }
 
 /** Summary text: the empty label, up to two names, or "N selected". */
-export function multiSelectSummary(options: readonly MultiSelectOption[], value: readonly number[], emptyLabel = 'Any'): string {
+export function multiSelectSummary(options: readonly MultiSelectOption[], value: readonly number[], emptyLabel = t('components.multiSelect.any')): string {
   if (value.length === 0) return emptyLabel;
-  if (value.length > 2) return `${value.length} selected`;
+  if (value.length > 2) return t('components.multiSelect.countSelected', { count: value.length });
   const chosen = new Set(value);
   return options
     .filter((o) => chosen.has(o.value))
@@ -33,7 +34,7 @@ export function multiSelectSummary(options: readonly MultiSelectOption[], value:
  * Arclight multi-select: a square `.al-selectmenu` button that opens a checkbox list.
  * Keyboard: Enter/Space/↓ open, ↑/↓ move between options, Space toggles, Esc closes.
  */
-export function MultiSelect({ label, options, value, onChange, emptyLabel = 'Any' }: MultiSelectProps) {
+export function MultiSelect({ label, options, value, onChange, emptyLabel = t('components.multiSelect.any') }: MultiSelectProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
@@ -98,7 +99,7 @@ export function MultiSelect({ label, options, value, onChange, emptyLabel = 'Any
         <div id={listId} className="al-listbox mt-multi__panel" role="group" aria-label={label} onKeyDown={onPanelKey}>
           {value.length > 0 ? (
             <button type="button" className="mt-multi__clear" onClick={() => onChange([])}>
-              Clear
+              {t('components.multiSelect.clear')}
             </button>
           ) : null}
           {options.map((o) => (
@@ -110,7 +111,7 @@ export function MultiSelect({ label, options, value, onChange, emptyLabel = 'Any
               onChange={(e) => toggle(o.value, e.currentTarget.checked)}
             />
           ))}
-          {options.length === 0 ? <span className="mt-multi__none">None available</span> : null}
+          {options.length === 0 ? <span className="mt-multi__none">{t('components.multiSelect.noneAvailable')}</span> : null}
         </div>
       ) : null}
     </div>

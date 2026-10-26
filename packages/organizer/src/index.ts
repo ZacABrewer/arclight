@@ -12,7 +12,7 @@ export {
   requiresAbsoluteNumber,
   getSamples,
 } from './build.js';
-export { parseFormat, normalizeTokenName, type FormatPart, type Token, type Literal } from './tokens.js';
+export { parseFormat, normalizeTokenName, hasVersionToken, type FormatPart, type Token, type Literal } from './tokens.js';
 export { cleanTitle, titleThe } from './text.js';
 export { SAMPLES } from './samples.js';
 export type * from './types.js';

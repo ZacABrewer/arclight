@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MetadataSettingsResponse, type MetadataSettingsUpdate } from '@arclight/shared';
 import { request } from './client.js';
+import { t } from '../i18n/index.js';
 
 // /settings/metadata mirrors apps/api/src/modules/settings/routes.ts.
 //
@@ -10,10 +11,10 @@ import { request } from './client.js';
 // delete this local copy) as soon as that lands. looseObject keeps unknown server fields so a
 // save never drops them.
 export const FILE_DATE_MODES = [
-  { value: 'none', label: 'None' },
-  { value: 'localAirDate', label: 'Local air date' },
-  { value: 'utcAirDate', label: 'UTC air date' },
-  { value: 'releaseDate', label: 'Release date (movies)' },
+  { value: 'none', get label() { return t('common.none'); } },
+  { value: 'localAirDate', get label() { return t('api.settings.localAirDate'); } },
+  { value: 'utcAirDate', get label() { return t('api.settings.utcAirDate'); } },
+  { value: 'releaseDate', get label() { return t('api.settings.releaseDateMovies'); } },
 ] as const;
 
 export const MediaManagementSettings = z.looseObject({

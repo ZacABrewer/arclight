@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, lte } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type { SearchRequest } from '@arclight/indexers';
@@ -6,11 +7,16 @@ import {
   MovieListQuery,
   SeriesListQuery,
   type CustomFormat,
+  type DecisionLogBatch,
+  type DecisionLogPage,
+  type DecisionLogQuery,
+  type DecisionLogSource,
   type DelayProfile,
   type Episode,
   type Indexer,
   type ManualSearchRequest,
   type MediaFile,
+  type MediaVersion,
   type Movie,
   type PendingReason,
   type PendingRelease,
@@ -29,8 +35,11 @@ import {
 import { selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
-import { createCutoffChecker, libraryService } from '../library/index.js';
+import { createCutoffChecker, isVersioned, libraryService, pickVersion, sameTag, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
+import { loadSceneRules } from '../scene-mapping/service.js';
+import type { SceneRule } from '../scene-mapping/mapping.js';
+import { DecisionLog, DecisionLogNotFound, toLogSource, type DecisionLogRow } from './decision-log.js';
 import {
   DEFAULT_RELEASE_SETTINGS,
   defaultPropers,
@@ -48,6 +57,7 @@ import {
   evaluateFormats,
   prioritize,
   qualityModelOf,
+  releaseIndexerFlags,
   releaseKindOf,
   runtimeMinutes,
   toLanguageCodes,
@@ -170,6 +180,8 @@ export interface ReleasesServiceOptions {
 /** A decision plus what the pipeline needs to act on it. */
 export interface Evaluated extends Ranked {
   candidate?: Candidate;
+  /** Decision-log batch the decision belongs to (attached to the grab's history record). */
+  batchId?: string;
 }
 
 export type SearchTarget =
@@ -209,12 +221,14 @@ class Batch implements LibrarySnapshot {
   readonly indexers: Map<number, Indexer>;
   readonly queue: Array<TrackedView & { parsedQuality: QualityModel }>;
   readonly pending: PendingRow[];
+  private sceneRules?: SceneRule[];
 
   constructor(
     private readonly db: Db,
     profiles: ProfilesService,
     indexers: IndexerPort,
     downloads: DownloadPort,
+    private readonly log?: Logger,
   ) {
     this.profiles = new Map(profiles.listQualityProfiles().map((p) => [p.id, p]));
     this.formats = profiles.listCustomFormats();
@@ -248,6 +262,19 @@ class Batch implements LibrarySnapshot {
     return this.movieList;
   }
 
+  private rules(): SceneRule[] {
+    this.sceneRules ??= loadSceneRules(this.db, this.log);
+    return this.sceneRules;
+  }
+
+  sceneMappings(seriesId: number): readonly SceneRule[] {
+    return this.rules().filter((r) => r.seriesId === seriesId);
+  }
+
+  sceneTitleRules(): readonly SceneRule[] {
+    return this.rules().filter((r) => r.kind === 'title');
+  }
+
   files(match: SeriesMatch | MovieMatch): MediaFile[] {
     const key = match.mediaType === 'series' ? `s${match.series.id}` : `m${match.movie.id}`;
     let list = this.fileCache.get(key);
@@ -275,6 +302,7 @@ export class ReleasesService {
   private readonly now: () => Date;
   private readonly downloadTimeoutMs: number;
   private readonly profilesService: ProfilesService;
+  readonly decisionLog: DecisionLog;
   /** Releases seen by recent searches/pushes, so POST /release can grab by guid. */
   private readonly releaseCache = new Map<string, { release: ReleaseResource; at: number }>();
   private unsubscribeRss: (() => void) | undefined;
@@ -290,6 +318,7 @@ export class ReleasesService {
     this.now = opts.now ?? (() => new Date());
     this.downloadTimeoutMs = opts.downloadTimeoutMs ?? 30_000;
     this.profilesService = new ProfilesService({ db: opts.db });
+    this.decisionLog = new DecisionLog(opts.db);
   }
 
   // ---- wiring -----------------------------------------------------------------------
@@ -330,19 +359,23 @@ export class ReleasesService {
       criteria?: SearchCriteria;
       override?: { seriesId?: number | undefined; episodeIds?: number[] | undefined; movieId?: number | undefined };
       batch?: Batch;
+      /** Decision-log batch id; a new one by default. */
+      batchId?: string;
     } = {},
   ): Promise<Evaluated[]> {
     const batch = opts.batch ?? this.newBatch();
+    const batchId = opts.batchId ?? randomUUID();
     const settings = this.settings();
     const propers = this.propers();
     const out: Evaluated[] = [];
     for (const release of releases) {
       try {
         const evaluated = await this.decideOne(release, source, batch, settings, propers, opts.criteria, opts.override);
-        if (evaluated) out.push(evaluated);
+        if (evaluated) out.push({ ...evaluated, batchId });
       } catch (err) {
         this.log?.warn({ err, title: release.title }, 'release decision failed');
         out.push({
+          batchId,
           decision: unmatchedDecision(source, release, null, null, {
             reason: 'error',
             message: 'Unexpected error processing release',
@@ -355,7 +388,7 @@ export class ReleasesService {
   }
 
   private newBatch(): Batch {
-    return new Batch(this.db, this.profilesService, this.indexers, this.downloads);
+    return new Batch(this.db, this.profilesService, this.indexers, this.downloads, this.log);
   }
 
   private async decideOne(
@@ -385,7 +418,14 @@ export class ReleasesService {
       return { decision: unmatchedDecision(source, release, parsed, match) };
     }
 
-    const profileId = match.mediaType === 'series' ? match.series.qualityProfileId : match.movie.qualityProfileId;
+    // Multi-version: evaluate against the version slot whose profile the release fits best.
+    const versions = match.mediaType === 'series' ? match.series.versions : match.movie.versions;
+    const version = isVersioned(versions)
+      ? pickVersion(versions, batch.profiles, qualityModelOf(parsed.quality), (p) =>
+          evaluateFormats(p, batch.formats, { title: release.title, quality: qualityModelOf(parsed.quality), mediaType: match.mediaType, sizeBytes: release.size }).score,
+        )
+      : null;
+    const profileId = version?.qualityProfileId ?? (match.mediaType === 'series' ? match.series.qualityProfileId : match.movie.qualityProfileId);
     const profile = batch.profiles.get(profileId);
     if (!profile) {
       return {
@@ -410,6 +450,7 @@ export class ReleasesService {
       releaseGroup: releaseGroup ?? null,
       ...(parsed.movie?.year ? { year: parsed.movie.year } : {}),
       releaseKind: releaseKindOf(match),
+      indexerFlags: releaseIndexerFlags(release),
     });
     const now = this.now();
     const ageMinutes = Math.max(0, (now.getTime() - Date.parse(release.publishDate)) / MINUTE) || 0;
@@ -425,9 +466,11 @@ export class ReleasesService {
       ageMinutes,
     };
 
-    const ctx = await this.buildContext(batch, candidate, profile, source, settings, propers, criteria, now);
+    const built = await this.buildContext(batch, candidate, profile, source, settings, propers, criteria, now);
+    const ctx = version ? narrowToVersion(built, versions, version.tag, batch.profiles) : built;
     const ev = evaluate(ctx, candidate);
     const decision = buildDecision(source, candidate, ev);
+    if (version) decision.versionTag = version.tag;
     const limits = batch.limits.get(quality.quality.id);
     return {
       decision,
@@ -439,6 +482,7 @@ export class ReleasesService {
         preferredSizeMbPerMinute: limits?.preferredSize ?? null,
         isAnime: match.mediaType === 'series' && match.series.seriesType === 'anime',
         firstEpisodeNumber: match.mediaType === 'series' ? Math.min(...match.episodes.map((e) => e.episodeNumber)) : 0,
+        preferIndexerFlags: settings.preferIndexerFlags,
       },
     };
   }
@@ -504,10 +548,13 @@ export class ReleasesService {
       dateAdded: f.dateAdded,
       episodeIds: f.episodeIds,
       sizeBytes: f.sizeBytes,
+      versionTag: f.versionTag ?? null,
     });
     const files = batch
       .files(match)
-      .filter((f) => (mediaType === 'movie' ? f.id === match.movie.movieFileId || match.movie.movieFileId == null : true))
+      .filter((f) =>
+        mediaType === 'movie' ? isVersioned(match.movie.versions) || f.id === match.movie.movieFileId || match.movie.movieFileId == null : true,
+      )
       .map(fileEval);
 
     const queue: QueuedItem[] = batch.queue
@@ -603,6 +650,7 @@ export class ReleasesService {
       criteria,
       freeSpaceBytes,
       minimumFreeSpaceMb: this.deps.minimumFreeSpaceMb ?? 100,
+      releaseFilter: this.deps.releaseFilter?.(c.release.indexerId, c.release) ?? null,
     };
   }
 
@@ -612,7 +660,8 @@ export class ReleasesService {
   async processReleases(releases: ReleaseResource[], source: ReleaseSource, criteria?: SearchCriteria): Promise<ReleaseDecision[]> {
     this.cacheReleases(releases);
     const evaluated = await this.decide(releases, source, criteria ? { criteria } : {});
-    await this.processDecisions(evaluated);
+    const result = await this.processDecisions(evaluated);
+    this.logDecisions(evaluated, toLogSource(source), result.grabbed, criteria);
     return evaluated.map((e) => e.decision);
   }
 
@@ -678,7 +727,9 @@ export class ReleasesService {
         `Cannot map release to a library item (${evaluated?.decision.rejections[0]?.message ?? 'unknown'}); pass seriesId/episodeIds or movieId`,
       );
     }
-    return this.grabEvaluated(evaluated, request.downloadClientId);
+    const tracked = await this.grabEvaluated(evaluated, request.downloadClientId);
+    this.logDecisions([evaluated], 'interactive', [evaluated]);
+    return tracked;
   }
 
   private async grabEvaluated(e: Evaluated, downloadClientId?: number): Promise<TrackedView> {
@@ -777,6 +828,7 @@ export class ReleasesService {
         downloadClientName: tracked.downloadClientName,
         downloadId: tracked.downloadId,
         source: d.source,
+        ...(e.batchId ? { batchId: e.batchId } : {}),
       });
     } catch (err) {
       this.log?.warn({ err }, 'history hook failed after grab');
@@ -798,6 +850,7 @@ export class ReleasesService {
     const rejections = evaluated?.decision.rejections.map((r) => r.message) ?? [];
     if (evaluated?.candidate) {
       const tracked = await this.grabEvaluated(evaluated, opts.downloadClientId);
+      this.logDecisions([evaluated], 'interactive', [evaluated]);
       return { kind: 'grabbed', ...grabResponse(tracked), matched: true, rejections };
     }
     if (!opts.force) return { kind: 'no-match', rejections };
@@ -989,10 +1042,13 @@ export class ReleasesService {
     let dropped = 0;
     for (const rows of groups) {
       const batch = this.newBatch();
+      const batchId = randomUUID();
       const evaluated: Array<Evaluated & { row: PendingRow }> = [];
+      const chosen: Evaluated[] = [];
       for (const row of rows) {
         const [e] = await this.decide([row.release], 'rss', {
           batch,
+          batchId,
           override: {
             seriesId: row.seriesId ?? undefined,
             episodeIds: row.episodeIds ?? undefined,
@@ -1006,6 +1062,7 @@ export class ReleasesService {
         if (e.decision.approved) {
           try {
             await this.grabEvaluated(e);
+            chosen.push(e);
             grabbed++;
           } catch (err) {
             if (err instanceof ReleasesError && err.code === 'CLIENT_UNAVAILABLE') {
@@ -1029,6 +1086,7 @@ export class ReleasesService {
         this.db.delete(pendingReleases).where(eq(pendingReleases.id, e.row.id)).run();
         dropped++;
       }
+      this.logDecisions(evaluated, 'pending', chosen);
     }
     return `pending: ${grabbed} grabbed, ${dropped} dropped`;
   }
@@ -1120,6 +1178,7 @@ export class ReleasesService {
     const releases = await this.runSearch(requests, 'automatic', opts.signal);
     const evaluated = await this.decide(releases, userInvoked ? 'userInvokedSearch' : 'search', { criteria });
     const result = await this.processDecisions(evaluated);
+    this.logDecisions(evaluated, 'search', result.grabbed, criteria);
     return {
       releases: releases.length,
       approved: evaluated.filter((e) => e.decision.approved).length,
@@ -1134,6 +1193,7 @@ export class ReleasesService {
     const { requests, criteria } = this.buildSearch(target, true);
     const releases = await this.runSearch(requests, 'interactive', signal);
     const evaluated = await this.decide(releases, 'interactiveSearch', { criteria });
+    this.logDecisions(evaluated, 'interactive', [], criteria);
     const sorted = prioritize(evaluated, this.propers()).map((e) => e.decision);
     return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
   }
@@ -1202,11 +1262,83 @@ export class ReleasesService {
     this.cacheReleases([release]);
     const evaluated = await this.decide([release], 'releasePush');
     const result = await this.processDecisions(evaluated, input.downloadClientId !== undefined ? { downloadClientId: input.downloadClientId } : {});
+    this.logDecisions(evaluated, 'push', result.grabbed);
     return {
       decision: evaluated[0]?.decision ?? null,
       grabbed: result.grabbed.length > 0,
       pending: result.pending > 0,
     };
+  }
+
+  // ---- decision log -----------------------------------------------------------------
+
+  /**
+   * Write one evaluation batch to the decision log. Unmatched releases of a search are logged
+   * against the searched item; elsewhere they have no item and are skipped. Never throws: the
+   * log must not break the pipeline.
+   */
+  private logDecisions(evaluated: readonly Evaluated[], source: DecisionLogSource, chosen: readonly Evaluated[], criteria?: SearchCriteria): void {
+    if (evaluated.length === 0) return;
+    try {
+      const chosenSet = new Set(chosen);
+      const ranks = new Map<Evaluated, number>();
+      const tier = (e: Evaluated) => (e.decision.approved ? 0 : e.decision.temporarilyRejected ? 1 : 2);
+      const ordered = prioritize(evaluated, this.propers()).filter((e) => e.rank);
+      const byItem = new Map<string, Evaluated[]>();
+      for (const e of ordered) {
+        const key = e.decision.movieId !== undefined ? `m${e.decision.movieId}` : `s${e.decision.seriesId ?? 0}`;
+        byItem.set(key, [...(byItem.get(key) ?? []), e]);
+      }
+      for (const group of byItem.values()) {
+        const stable = group.map((e, i) => ({ e, i })).sort((a, b) => tier(a.e) - tier(b.e) || a.i - b.i);
+        stable.forEach(({ e }, i) => ranks.set(e, i + 1));
+      }
+      const rows: DecisionLogRow[] = evaluated.map((e) => {
+        const d = e.decision;
+        const fallback = !e.candidate && d.seriesId === undefined && d.movieId === undefined ? criteria : undefined;
+        return {
+          mediaType: d.mediaType ?? fallback?.mediaType ?? null,
+          seriesId: d.seriesId ?? (fallback?.mediaType === 'series' ? (fallback.seriesId ?? null) : null),
+          episodeIds: d.episodeIds ?? (fallback?.episodeIds ? [...fallback.episodeIds] : []),
+          movieId: d.movieId ?? (fallback?.mediaType === 'movie' ? (fallback.movieId ?? null) : null),
+          guid: d.guid,
+          indexerId: d.indexerId,
+          title: d.title,
+          quality: d.quality,
+          formats: d.customFormats,
+          score: d.customFormatScore,
+          approved: d.approved,
+          rejections: d.rejections,
+          chosen: chosenSet.has(e),
+          rank: ranks.get(e) ?? null,
+        };
+      });
+      const batchId = evaluated.find((e) => e.batchId)?.batchId ?? randomUUID();
+      this.decisionLog.record({ batchId, time: this.now().toISOString(), source }, rows);
+    } catch (err) {
+      this.log?.warn({ err }, 'writing the release decision log failed');
+    }
+  }
+
+  /** GET /release/decisions. */
+  listDecisionBatches(query: DecisionLogQuery): DecisionLogPage {
+    return this.decisionLog.list(query, (episodeId) => this.seriesIdForEpisode(episodeId));
+  }
+
+  /** GET /release/decisions/:batchId. */
+  getDecisionBatch(batchId: string): DecisionLogBatch {
+    try {
+      return this.decisionLog.getBatch(batchId);
+    } catch (err) {
+      if (err instanceof DecisionLogNotFound) throw new ReleasesError('NOT_FOUND', err.message);
+      throw err;
+    }
+  }
+
+  /** DecisionLogCleanup: drop log rows older than `days`. */
+  cleanupDecisionLog(days: number): string {
+    const removed = this.decisionLog.cleanup(days, this.now());
+    return `decision log: removed ${removed} row${removed === 1 ? '' : 's'} older than ${days} days`;
   }
 
   // ---- scheduled searches -----------------------------------------------------------
@@ -1354,8 +1486,30 @@ function hintFromCategories(categories: readonly number[]): 'series' | 'movie' |
 
 /** Keys a decision covers, for "one release per episode set" bookkeeping. */
 function coverageKeys(d: ReleaseDecision): string[] {
-  if (d.movieId !== undefined) return [`m${d.movieId}`];
-  return (d.episodeIds ?? []).map((id) => `e${id}`);
+  const v = d.versionTag ? `:${d.versionTag}` : '';
+  if (d.movieId !== undefined) return [`m${d.movieId}${v}`];
+  return (d.episodeIds ?? []).map((id) => `e${id}${v}`);
+}
+
+/**
+ * Multi-version library: a release competes only with its own version slot. Files, queued
+ * downloads and history of other slots are dropped from the context (queue/history entries
+ * are assigned to the slot their quality fits best, the same rule the release went through).
+ */
+function narrowToVersion(
+  ctx: DecisionContext,
+  versions: readonly MediaVersion[] | null | undefined,
+  tag: string,
+  profiles: ReadonlyMap<number, QualityProfile>,
+): DecisionContext {
+  const fits = (quality: QualityModel): boolean => sameTag(pickVersion(versions, profiles, quality)?.tag ?? null, tag);
+  return {
+    ...ctx,
+    existingFiles: ctx.existingFiles.filter((f) => sameTag(slotOf(f.versionTag ?? null, versions), tag)),
+    queue: ctx.queue.filter((q) => fits(q.quality)),
+    latestHistory: ctx.latestHistory.filter((h) => fits(h.event.quality)),
+    importedGrabs: ctx.importedGrabs.filter((g) => fits(g.grab.quality)),
+  };
 }
 
 function mediaRef(d: ReleaseDecision): { mediaType?: 'series' | 'movie'; mediaId?: number } {

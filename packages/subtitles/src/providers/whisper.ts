@@ -222,3 +222,38 @@ export class WhisperProvider extends BaseProvider {
     if (!res.ok) throw this.statusError(res, 'docs');
   }
 }
+
+export interface WhisperProbeResult {
+  ok: boolean;
+  /** Which endpoint answered. */
+  via: 'docs' | 'asr' | null;
+  message: string;
+}
+
+/**
+ * Is a Whisper ASR web service answering at `baseUrl`? HEAD /docs (the service's OpenAPI page)
+ * counts when it is 2xx/3xx; otherwise HEAD /asr counts when the route exists (2xx, 405 or 422:
+ * it only accepts POST with a body). Never throws.
+ */
+export async function probeWhisperService(baseUrl: string, opts: { fetch?: typeof fetch; timeoutMs?: number } = {}): Promise<WhisperProbeResult> {
+  const base = baseUrl.trim().replace(/\/+$/, '');
+  if (!base) return { ok: false, via: null, message: 'no Whisper URL configured' };
+  const doFetch = opts.fetch ?? fetch;
+  const timeoutMs = opts.timeoutMs ?? 5000;
+  const head = async (path: string): Promise<number | Error> => {
+    try {
+      const res = await doFetch(`${base}${path}`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(timeoutMs) });
+      return res.status;
+    } catch (err) {
+      return err instanceof Error ? err : new Error(String(err));
+    }
+  };
+  const docs = await head('/docs');
+  if (typeof docs === 'number' && docs >= 200 && docs < 400) return { ok: true, via: 'docs', message: `Whisper answered at ${base}/docs (${docs})` };
+  const asr = await head('/asr');
+  if (typeof asr === 'number' && ((asr >= 200 && asr < 300) || asr === 405 || asr === 422)) {
+    return { ok: true, via: 'asr', message: `Whisper answered at ${base}/asr (${asr})` };
+  }
+  const why = (r: number | Error) => (typeof r === 'number' ? `HTTP ${r}` : r.message);
+  return { ok: false, via: null, message: `Whisper not reachable at ${base}: /docs ${why(docs)}, /asr ${why(asr)}` };
+}

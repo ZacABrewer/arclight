@@ -1,0 +1,4 @@
+/* Config as code: sections owned by the config file. */
+.al-managed-badge { display: inline-flex; }
+.al-managed-fieldset { border: 0; margin: 0; padding: 0; min-width: 0; display: flex; flex-direction: column; gap: 14px; }
+.al-managed-fieldset:disabled { opacity: .72; }

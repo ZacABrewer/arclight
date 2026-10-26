@@ -2,12 +2,14 @@ import {
   TorrentActionResult,
   TorrentDetail,
   TorrentErrorResponse,
+  TorrentLimitsRequest,
   TorrentListQuery,
   TorrentMoveRequest,
   TorrentPriorityRequest,
   TorrentSessionStatus,
   TorrentSettingsResponse,
   TorrentSettingsUpdate,
+  TorrentSuperSeedRequest,
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -69,6 +71,24 @@ export function torrentRoutes(service: TorrentService): FastifyPluginAsync<Recor
       { schema: { params: IdParams, body: TorrentPriorityRequest, response: { 200: TorrentActionResult, ...errors } } },
       async (req) => {
         await service.setPriority(req.params.id, req.body);
+        return OK;
+      },
+    );
+
+    app.post(
+      '/torrent/:id/limits',
+      { schema: { params: IdParams, body: TorrentLimitsRequest, response: { 200: TorrentActionResult, ...errors } } },
+      async (req) => {
+        await service.setLimits(req.params.id, req.body);
+        return OK;
+      },
+    );
+
+    app.post(
+      '/torrent/:id/superseed',
+      { schema: { params: IdParams, body: TorrentSuperSeedRequest, response: { 200: TorrentActionResult, ...errors } } },
+      async (req) => {
+        await service.setSuperSeeding(req.params.id, req.body.enabled);
         return OK;
       },
     );

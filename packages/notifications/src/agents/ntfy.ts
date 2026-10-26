@@ -33,6 +33,13 @@ export class NtfyAgent extends BaseAgent {
     const click = this.settings.clickUrl ?? formatted.link;
     if (click) headers.Click = click;
     if (formatted.posterUrl) headers.Attach = formatted.posterUrl;
+    if (formatted.actions && formatted.actions.length > 0) {
+      // ntfy supports up to three action buttons: "view, <label>, <url>; ...".
+      headers.Actions = formatted.actions
+        .slice(0, 3)
+        .map((a) => `view, ${a.label.replace(/[,;]/g, ' ')}, ${a.url}`)
+        .join('; ');
+    }
     if (this.settings.accessToken) {
       headers.Authorization = `Bearer ${this.settings.accessToken}`;
     } else if (this.settings.username && this.settings.password !== undefined) {

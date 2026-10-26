@@ -1,0 +1,80 @@
+# Arclight ENGINE AGENT on a seedbox / VPS, behind its own Gluetun VPN (docs/REMOTE-ENGINE.md).
+#   AGENT_TOKEN=$(openssl rand -hex 32) PROTON_WIREGUARD_KEY=... docker compose -f docker-compose.agent.yml up -d
+# The agent shares Gluetun's network namespace, binds every torrent socket to the tunnel
+# interface (tun0; loopback while the tunnel is down, a kill switch) and follows the port the VPN
+# forwards (Gluetun writes it to /tmp/gluetun/forwarded_port, shared through a volume).
+# The main Arclight adds a "Remote Engine" download client with URL http://<seedbox>:7879 and
+# the same token. Expose 7879 only to the main Arclight: a private network (WireGuard,
+# Tailscale), a firewall rule, or a TLS reverse proxy. Never publish it to the internet in plain
+# HTTP: the token travels in a header.
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun-agent
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_KEY}
+      - SERVER_COUNTRIES=${VPN_COUNTRIES:-Netherlands}
+      # The provider forwards a port; Gluetun writes it to the status file the agent watches.
+      - VPN_PORT_FORWARDING=on
+      - VPN_PORT_FORWARDING_STATUS_FILE=/tmp/gluetun/forwarded_port
+      # Networks allowed to reach the agent API through Gluetun's firewall (the main Arclight's
+      # LAN or VPN subnet when it connects over a private network).
+      - FIREWALL_OUTBOUND_SUBNETS=${AGENT_ALLOWED_SUBNETS:-192.168.0.0/16}
+      - FIREWALL_INPUT_PORTS=7879
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${AGENT_ROOT:-./agent}/gluetun:/gluetun
+      - gluetun-tmp:/tmp/gluetun
+    ports:
+      # Agent API. Bind to a private address (e.g. "10.0.0.5:7879:7879") when the host has one.
+      - "${AGENT_API_BIND:-7879}:7879"
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+
+  arclight-agent:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.agent
+    container_name: arclight-agent
+    network_mode: "service:gluetun"
+    # Owner of the download folder on the seedbox.
+    user: "${PUID:-1000}:${PGID:-1000}"
+    environment:
+      - AGENT_TOKEN=${AGENT_TOKEN:?set AGENT_TOKEN to a long random secret}
+      - AGENT_PORT=7879
+      - AGENT_DOWNLOADS=/downloads
+      - AGENT_DATA=/data
+      # Bind every torrent socket to the tunnel; loopback (no traffic) while it is missing.
+      - AGENT_LISTEN_INTERFACE=tun0
+      # Follow Gluetun's forwarded port (the agent then refuses port changes from Arclight).
+      - AGENT_PORT_FILE=/tmp/gluetun/forwarded_port
+      - AGENT_ENCRYPTION=${AGENT_ENCRYPTION:-preferred}
+      - AGENT_UTP=${AGENT_UTP:-1}
+      - AGENT_MAX_ACTIVE_DOWNLOADS=${AGENT_MAX_ACTIVE_DOWNLOADS:-3}
+      - AGENT_MAX_ACTIVE_SEEDS=${AGENT_MAX_ACTIVE_SEEDS:-5}
+      - TZ=${TZ:-UTC}
+    volumes:
+      # Fast-resume data and saved .torrent files.
+      - ${AGENT_ROOT:-./agent}/data:/data
+      - ${AGENT_DOWNLOADS_ROOT:-./agent/downloads}:/downloads
+      - gluetun-tmp:/tmp/gluetun:ro
+    # SIGTERM -> the agent saves resume data and announces `stopped`; give it time.
+    stop_grace_period: 30s
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
+volumes:
+  gluetun-tmp:

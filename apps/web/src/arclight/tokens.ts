@@ -1,3 +1,5 @@
+import { t } from '../i18n/store.js';
+
 // Typed mirror of design/arclight-kit/handoff/tokens.json for the parts components need in
 // code (status vocabulary, sizes, breakpoints, motion). Colours stay in CSS variables; the
 // status table below records which token each status uses so tests can pin the mapping.
@@ -74,9 +76,17 @@ export function resolveStatus(input: string): StatusKey | undefined {
   return LABEL_TO_KEY.get(head);
 }
 
-/** "Failed" + "sample only" → "Failed · sample only". */
+/**
+ * The label shown for a status in the active locale. English (en.json `status.*`) is exactly
+ * STATUS_LABELS; other locales translate it. Parsing (resolveStatus) stays on the English labels.
+ */
+export function statusText(status: StatusKey): string {
+  return t(`status.${status}`);
+}
+
+/** "Failed" + "sample only" → "Failed · sample only" (in the active locale). */
 export function statusLabel(status: StatusKey, cause?: string | undefined): string {
-  const base = STATUS_LABELS[status];
+  const base = statusText(status);
   return cause ? `${base} · ${cause}` : base;
 }
 

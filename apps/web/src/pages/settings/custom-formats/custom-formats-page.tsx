@@ -12,6 +12,7 @@ import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
 import { CustomFormatEditor } from './custom-format-editor.js';
 import { exportCustomFormat, parseCustomFormatJson, type ImportResult, type SourceApp } from './custom-format-json.js';
 import './custom-formats.css';
+import { t } from '../../../i18n/index.js';
 
 function download(filename: string, data: unknown) {
   const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
@@ -43,7 +44,7 @@ export function ImportDialog({ onClose, onEditSingle }: { onClose: () => void; o
       setParseError(null);
     } catch (err) {
       setResult(null);
-      setParseError(`Not valid JSON: ${errorMessage(err)}`);
+      setParseError(t('settings.customFormats.notValidJsonErrormessage', { errorMessage: errorMessage(err) }));
     }
   };
 
@@ -62,8 +63,8 @@ export function ImportDialog({ onClose, onEditSingle }: { onClose: () => void; o
     }
     setBusy(false);
     await qc.invalidateQueries({ queryKey: settingsKeys.customFormats });
-    if (failures.length) toast.error(`Imported ${created}, ${failures.length} failed`, failures.join('; '));
-    else toast.push({ tone: 'ok', title: `Imported ${created} custom format${created === 1 ? '' : 's'}` });
+    if (failures.length) toast.error(t('settings.customFormats.importedCreatedFailurescountFailed', { created, failuresCount: failures.length }), failures.join('; '));
+    else toast.push({ tone: 'ok', title: t('settings.customFormats.importedCreatedCustomFormats', { created }) });
     onClose();
   };
 
@@ -74,21 +75,21 @@ export function ImportDialog({ onClose, onEditSingle }: { onClose: () => void; o
       open
       size={640}
       onClose={onClose}
-      title="Import custom formats"
+      title={t('settings.customFormats.importCustomFormats')}
       footer={
         <>
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
-          {count === 1 ? <Button onClick={() => onEditSingle(result!.formats[0]!)}>Review in editor</Button> : null}
+          {count === 1 ? <Button onClick={() => onEditSingle(result!.formats[0]!)}>{t('settings.customFormats.reviewInEditor')}</Button> : null}
           <Button variant="primary" loading={busy} disabled={count === 0} onClick={() => void importAll()}>
-            {count === 1 ? 'Import format' : `Import ${count} formats`}
+            {count === 1 ? t('settings.customFormats.importFormat') : t('settings.customFormats.importCountFormats', { count })}
           </Button>
         </>
       }
     >
       <div className="al-cf-import">
-        <Field label="Source app" hint="Numeric values (sources, flags) differ between Sonarr and Radarr exports.">
+        <Field label={t('settings.customFormats.sourceApp')} hint={t('settings.customFormats.numericValuesSourcesFlagsDiffer')}>
           <Select
             value={app}
             onChange={(e) => {
@@ -97,12 +98,12 @@ export function ImportDialog({ onClose, onEditSingle }: { onClose: () => void; o
               parse(text, next);
             }}
             options={[
-              { value: 'sonarr', label: 'Sonarr / TRaSH (series)' },
-              { value: 'radarr', label: 'Radarr / TRaSH (movies)' },
+              { value: 'sonarr', label: t('settings.customFormats.sonarrTrashSeries') },
+              { value: 'radarr', label: t('settings.customFormats.radarrTrashMovies') },
             ]}
           />
         </Field>
-        <Field label="JSON file">
+        <Field label={t('settings.customFormats.jsonFile')}>
           <input
             id={fileId}
             className="al-cf-import__file"
@@ -114,25 +115,25 @@ export function ImportDialog({ onClose, onEditSingle }: { onClose: () => void; o
             }}
           />
         </Field>
-        <Field label="Or paste JSON" error={parseError ?? undefined}>
+        <Field label={t('settings.customFormats.orPasteJson')} error={parseError ?? undefined}>
           <Textarea
             mono
             rows={10}
             value={text}
             spellCheck={false}
-            placeholder='{"name": "…", "includeCustomFormatWhenRenaming": false, "specifications": [ … ]}'
+            placeholder={t('settings.customFormats.nameIncludecustomformatwhenrenamingFalseSpecific')}
             onChange={(e) => parse(e.currentTarget.value, app)}
           />
         </Field>
         {result ? (
           <div className="al-cf-import__result" role="status">
             <span className="al-cf-import__count">
-              <span className="al-num">{count}</span> {count === 1 ? 'format' : 'formats'} ready
+              <span className="al-num">{count}</span> {t('settings.customFormats.formatsReady', { count })}
             </span>
             <span className="al-chip-row">
               {result.formats.map((f) => (
                 <Tag key={f.name}>
-                  {f.name} · <span className="al-num">{f.specifications.length}</span> {f.specifications.length === 1 ? 'condition' : 'conditions'}
+                  {f.name} · <span className="al-num">{f.specifications.length}</span> {t('settings.customFormats.conditions', { specificationsCount: f.specifications.length })}
                 </Tag>
               ))}
             </span>
@@ -167,29 +168,29 @@ export function CustomFormatCard({ format, profiles, onEdit }: { format: CustomF
       status={
         format.includeWhenRenaming ? (
           <Chip tone="neutral" dot="none">
-            Renaming
+            {t('settings.customFormats.renaming')}
           </Chip>
         ) : null
       }
     >
-      <span className="al-cf-card__row" aria-label={`Conditions in ${format.name}`}>
-        {format.specifications.length === 0 ? <span className="al-muted">No conditions</span> : null}
+      <span className="al-cf-card__row" aria-label={t('settings.customFormats.conditionsInName', { name: format.name })}>
+        {format.specifications.length === 0 ? <span className="al-muted">{t('settings.customFormats.noConditions')}</span> : null}
         {format.specifications.map((s, i) => (
           <Tag key={i} className="al-cf-cond" data-negate={s.negate || undefined} data-required={s.required || undefined}>
-            {s.negate ? 'not ' : ''}
+            {s.negate ? t('settings.customFormats.not') : ''}
             {s.name}
-            {s.required ? <span className="al-cf-cond__req"> · required</span> : null}
+            {s.required ? <span className="al-cf-cond__req"> {t('settings.customFormats.required')}</span> : null}
           </Tag>
         ))}
       </span>
       {scores.length ? (
-        <span className="al-cf-card__row" aria-label={`Scores for ${format.name}`}>
+        <span className="al-cf-card__row" aria-label={t('settings.customFormats.scoresForName', { name: format.name })}>
           {scores.map((s) => (
             <ScoreTag key={s.profile} name={s.profile} score={s.score} />
           ))}
         </span>
       ) : (
-        <span className="al-caption">Not scored in any profile</span>
+        <span className="al-caption">{t('settings.customFormats.notScoredInAnyProfile')}</span>
       )}
     </ItemCard>
   );
@@ -210,40 +211,40 @@ export function CustomFormatsPage() {
 
   return (
     <SettingsPage
-      title="Custom formats"
-      description="Score releases by what their title and files say. Each quality profile sets how much a format is worth."
+      title={t('settings.customFormats.customFormats')}
+      description={t('settings.customFormats.scoreReleasesByWhatTheir')}
       actions={
         <>
           <Button size="sm" onClick={() => setImporting(true)}>
-            Import
+            {t('common.import')}
           </Button>
           <Button size="sm" disabled={!list.data?.length} onClick={() => download('custom-formats.json', (list.data ?? []).map(exportCustomFormat))}>
-            Export all
+            {t('settings.customFormats.exportAll')}
           </Button>
         </>
       }
     >
       <SettingsSection
-        label="Formats"
+        label={t('common.formats')}
         {...(list.data ? { count: list.data.length } : {})}
         action={
           <Button size="sm" variant="secondary" onClick={addNew} disabled={!schema.data}>
-            Add custom format
+            {t('settings.customFormats.addCustomFormat')}
           </Button>
         }
       >
         {list.isPending ? (
           <Skeleton lines={3} />
         ) : list.isError ? (
-          <ErrorBlock title="Couldn't load custom formats" onRetry={() => void list.refetch()}>
+          <ErrorBlock title={t('settings.customFormats.couldntLoadCustomFormats')} onRetry={() => void list.refetch()}>
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label="Custom formats">
+          <CardGrid label={t('settings.customFormats.customFormats')}>
             {list.data.map((cf) => (
               <CustomFormatCard key={cf.id} format={cf} profiles={profiles.data ?? []} onEdit={() => setEditing(cf)} />
             ))}
-            <AddCard label="Add custom format" onClick={addNew} />
+            <AddCard label={t('settings.customFormats.addCustomFormat')} onClick={addNew} />
           </CardGrid>
         )}
       </SettingsSection>

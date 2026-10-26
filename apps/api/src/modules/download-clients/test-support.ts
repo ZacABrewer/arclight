@@ -157,7 +157,7 @@ export function clientOf(
     name,
     implementation,
     ...extra,
-    settings: { host: 'nas', password: 'secret', ...settings },
+    settings: { host: 'nas', url: 'http://nas:7879', password: 'secret', ...settings },
     // Not narrowed per kind: `builtin` simply ignores host/password (unknown keys are stripped).
   } as DownloadClientInputRaw;
 }

@@ -12,7 +12,9 @@ import {
   SubtitleSearchCommandResult,
   SubtitleSettings,
   SubtitleState,
+  SubtitleSyncCheckResult,
   SubtitleSyncResult,
+  SubtitleWhisperStatus,
   WantedSubtitlesPage,
   type LanguageProfileInput,
   type SubtitleBlacklistRequest,
@@ -101,6 +103,9 @@ export const subtitlesApi = {
   upload: (input: SubtitleUploadInput) => request('/subtitle/upload', SubtitleState, { method: 'POST', body: uploadFormData(input) }),
   remove: (id: number) => request(`/subtitle/${id}`, null, { method: 'DELETE' }),
   sync: (id: number) => request(`/subtitle/sync/${id}`, SubtitleSyncResult, { method: 'POST' }),
+  /** Measure sync now (no auto actions); the result is stored on the subtitle and its history entry. */
+  syncCheck: (id: number) => request(`/subtitle/${id}/synccheck`, SubtitleSyncCheckResult, { method: 'POST' }),
+  whisperStatus: () => request('/subtitle/whisper/status', SubtitleWhisperStatus),
   extract: (id: number) => request(`/subtitle/extract/${id}`, SubtitleState, { method: 'POST' }),
 
   search: (scope: SubtitleSearchCommand) =>

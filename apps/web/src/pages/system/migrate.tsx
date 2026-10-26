@@ -17,23 +17,24 @@ import { migrateApi } from '../../api/migrate.js';
 import { Button, Checkbox, Chip, EmptyState, ErrorBlock, Field, Input, Pane, SectionLabel, Select, Table, Toggle, Trail, type ChipTone, type Column } from '../../arclight/index.js';
 import { formatClock } from './format.js';
 import { SystemHeader } from './system-header.js';
+import { t } from '../../i18n/index.js';
 
 // System → Import from existing apps. Point at an old Sonarr / Radarr / Prowlarr / Bazarr /
 // Seerr database, analyse it (nothing is written), pick areas and a conflict policy, then run
 // the import as a background job whose progress is polled from /migrate/status.
 
 const APP_OPTIONS: ReadonlyArray<{ value: MigrateApp; label: string }> = [
-  { value: 'sonarr', label: 'Sonarr' },
-  { value: 'radarr', label: 'Radarr' },
-  { value: 'prowlarr', label: 'Prowlarr' },
-  { value: 'bazarr', label: 'Bazarr' },
-  { value: 'seerr', label: 'Overseerr / Jellyseerr' },
+  { value: 'sonarr', get label() { return t('system.migrate.sonarr'); } },
+  { value: 'radarr', get label() { return t('system.migrate.radarr'); } },
+  { value: 'prowlarr', get label() { return t('system.migrate.prowlarr'); } },
+  { value: 'bazarr', get label() { return t('system.migrate.bazarr'); } },
+  { value: 'seerr', get label() { return t('system.migrate.overseerrJellyseerr'); } },
 ];
 
 const APP_LABEL: Record<MigrateApp, string> = Object.fromEntries(APP_OPTIONS.map((o) => [o.value, o.label])) as Record<MigrateApp, string>;
 
 const MODE_TONE: Record<MigrationAreaPlan['mode'], ChipTone> = { import: 'accent', stage: 'default', report: 'neutral' };
-const MODE_LABEL: Record<MigrationAreaPlan['mode'], string> = { import: 'Import', stage: 'Stage', report: 'Report only' };
+const MODE_LABEL: Record<MigrationAreaPlan['mode'], string> = { get import() { return t('common.import'); }, get stage() { return t('system.migrate.stage'); }, get report() { return t('system.migrate.reportOnly'); } };
 
 const STATUS_KEY = ['migrate', 'status'] as const;
 
@@ -72,7 +73,7 @@ export function SystemMigratePage() {
 
   const apply = useMutation({
     mutationFn: migrateApi.apply,
-    meta: { errorTitle: 'Import could not start' },
+    meta: { errorTitle: t('system.migrate.importCouldNotStart') },
     onSuccess: (next) => queryClient.setQueryData(STATUS_KEY, next),
   });
 
@@ -114,12 +115,12 @@ export function SystemMigratePage() {
 
   return (
     <>
-      <SystemHeader title="Import from existing apps" subtitle="Adopt a running Sonarr, Radarr, Prowlarr, Bazarr or Seerr installation in place." />
+      <SystemHeader title={t('system.migrate.importFromExistingApps')} subtitle={t('system.migrate.adoptARunningSonarrRadarr')} />
       <div className="sys-stack">
-        <Pane title="Source">
+        <Pane title={t('common.source')}>
           {sources.data && sources.data.length > 0 ? (
             <div className="sys-block">
-              <SectionLabel>Detected installations</SectionLabel>
+              <SectionLabel>{t('system.migrate.detectedInstallations')}</SectionLabel>
               <ul className="sys-list">
                 {sources.data.map((c) => (
                   <li key={`${c.app}:${c.dbPath}`}>
@@ -133,43 +134,43 @@ export function SystemMigratePage() {
             </div>
           ) : null}
           <div className="sys-form">
-            <Field inline label="Application">
+            <Field inline label={t('system.migrate.application')}>
               <Select value={app} onChange={(e) => setApp(e.target.value as MigrateApp)} options={APP_OPTIONS} />
             </Field>
-            <Field inline label="Database path" hint="For example /config/sonarr.db or C:\ProgramData\Sonarr\sonarr.db.">
+            <Field inline label={t('system.migrate.databasePath')} hint={t('system.migrate.forExampleConfigSonarrDb')}>
               <Input mono value={dbPath} onChange={(e) => setDbPath(e.target.value)} placeholder="/config/sonarr.db" />
             </Field>
-            <Field inline label="Config file (optional)" hint="config.xml, config.yaml or config.ini (Bazarr), settings.json (Seerr).">
+            <Field inline label={t('system.migrate.configFileOptional')} hint={t('system.migrate.configXmlConfigYamlOr')}>
               <Input mono value={configPath} onChange={(e) => setConfigPath(e.target.value)} />
             </Field>
           </div>
 
           <div className="sys-block">
-            <SectionLabel>Path mappings</SectionLabel>
-            <p className="sys-muted">Rewrite path prefixes that differ between the old app and Arclight, for example /tv to /data/tv.</p>
+            <SectionLabel>{t('system.migrate.pathMappings')}</SectionLabel>
+            <p className="sys-muted">{t('system.migrate.rewritePathPrefixesThatDiffer')}</p>
             {mappings.map((m, i) => (
               <div key={m.key} className="sys-mapping">
-                <Input mono aria-label={`Mapping ${i + 1} from`} placeholder="/tv" value={m.from} onChange={(e) => updateMapping(m.key, 'from', e.target.value)} />
+                <Input mono aria-label={t('system.migrate.mappingValueFrom', { value: i + 1 })} placeholder="/tv" value={m.from} onChange={(e) => updateMapping(m.key, 'from', e.target.value)} />
                 <span aria-hidden="true">→</span>
-                <Input mono aria-label={`Mapping ${i + 1} to`} placeholder="/data/tv" value={m.to} onChange={(e) => updateMapping(m.key, 'to', e.target.value)} />
-                <Button size="sm" variant="ghost" aria-label={`Remove mapping ${i + 1}`} onClick={() => removeMapping(m.key)}>
-                  Remove
+                <Input mono aria-label={t('system.migrate.mappingValueTo', { value: i + 1 })} placeholder="/data/tv" value={m.to} onChange={(e) => updateMapping(m.key, 'to', e.target.value)} />
+                <Button size="sm" variant="ghost" aria-label={t('system.migrate.removeMappingValue', { value: i + 1 })} onClick={() => removeMapping(m.key)}>
+                  {t('common.remove')}
                 </Button>
               </div>
             ))}
             <div>
               <Button size="sm" variant="secondary" onClick={addMapping}>
-                Add mapping
+                {t('system.migrate.addMapping')}
               </Button>
             </div>
           </div>
 
           <div className="sys-form__actions">
             <Button variant="primary" loading={plan.isPending} disabled={!dbPath.trim() || running} onClick={() => plan.mutate(source())}>
-              Analyze
+              {t('system.migrate.analyze')}
             </Button>
           </div>
-          {plan.isError ? <ErrorBlock title="Couldn't analyse the database">{errorMessage(plan.error)}</ErrorBlock> : null}
+          {plan.isError ? <ErrorBlock title={t('system.migrate.couldntAnalyseTheDatabase')}>{errorMessage(plan.error)}</ErrorBlock> : null}
         </Pane>
 
         {plan.data ? (
@@ -230,20 +231,20 @@ function PlanView({ plan, selected, onToggle, conflictPolicy, onConflictPolicy, 
   const columns: Column<MigrationAreaPlan>[] = [
     {
       key: 'include',
-      header: <span className="al-sr-only">Include</span>,
+      header: <span className="al-sr-only">{t('system.migrate.include')}</span>,
       width: '2.75rem',
-      cell: (a) => <Checkbox aria-label={`Include ${a.label}`} checked={selected.has(a.area)} disabled={a.mode === 'report'} onChange={(e) => onToggle(a.area, e.target.checked)} />,
+      cell: (a) => <Checkbox aria-label={t('system.migrate.includeLabel', { label: a.label })} checked={selected.has(a.area)} disabled={a.mode === 'report'} onChange={(e) => onToggle(a.area, e.target.checked)} />,
     },
-    { key: 'label', header: 'Area', cell: (a) => a.label, sortValue: (a) => a.label },
-    { key: 'mode', header: 'Action', cell: (a) => <Chip tone={MODE_TONE[a.mode]}>{MODE_LABEL[a.mode]}</Chip> },
-    { key: 'total', header: 'Found', align: 'right', mono: true, cell: (a) => a.total },
-    { key: 'create', header: 'New', align: 'right', mono: true, cell: (a) => a.create },
-    { key: 'conflicts', header: 'Conflicts', align: 'right', mono: true, cell: (a) => a.conflicts },
-    { key: 'already', header: 'Already imported', align: 'right', mono: true, cell: (a) => a.alreadyImported },
-    { key: 'unsupported', header: 'Unsupported', align: 'right', mono: true, cell: (a) => a.unsupported },
+    { key: 'label', header: t('system.migrate.area'), cell: (a) => a.label, sortValue: (a) => a.label },
+    { key: 'mode', header: t('common.action'), cell: (a) => <Chip tone={MODE_TONE[a.mode]}>{MODE_LABEL[a.mode]}</Chip> },
+    { key: 'total', header: t('system.migrate.found'), align: 'right', mono: true, cell: (a) => a.total },
+    { key: 'create', header: t('system.migrate.new'), align: 'right', mono: true, cell: (a) => a.create },
+    { key: 'conflicts', header: t('system.migrate.conflicts'), align: 'right', mono: true, cell: (a) => a.conflicts },
+    { key: 'already', header: t('system.migrate.alreadyImported'), align: 'right', mono: true, cell: (a) => a.alreadyImported },
+    { key: 'unsupported', header: t('system.migrate.unsupported'), align: 'right', mono: true, cell: (a) => a.unsupported },
     {
       key: 'details',
-      header: 'Details',
+      header: t('common.details'),
       muted: true,
       cell: (a) =>
         Object.entries(a.details)
@@ -254,32 +255,32 @@ function PlanView({ plan, selected, onToggle, conflictPolicy, onConflictPolicy, 
 
   return (
     <>
-      <Pane title={`Plan · ${APP_LABEL[plan.app]}${plan.schemaVersion ? ` · schema ${plan.schemaVersion}` : ''}`} flush>
-        <Table columns={columns} rows={plan.areas} rowKey={(a) => a.area} caption="Import plan" empty={<EmptyState title="Nothing to import" />} />
+      <Pane title={t('system.migrate.planValueValue2', { value: APP_LABEL[plan.app], value2: plan.schemaVersion ? ` · schema ${plan.schemaVersion}` : '' })} flush>
+        <Table columns={columns} rows={plan.areas} rowKey={(a) => a.area} caption={t('system.migrate.importPlan')} empty={<EmptyState title={t('system.migrate.nothingToImport')} />} />
       </Pane>
-      <NoteList label="Warnings" tone="warn" items={plan.warnings.map((w) => ({ area: w.area, text: w.message }))} />
-      <NoteList label="Conflicts with existing data" tone="neutral" items={plan.conflicts.map((c) => ({ area: c.area, text: `${c.name}: ${c.reason}` }))} />
-      <NoteList label="Not supported" tone="muted" items={plan.unsupported.map((u) => ({ area: u.area, text: `${u.name}: ${u.reason}` }))} />
+      <NoteList label={t('common.warnings')} tone="warn" items={plan.warnings.map((w) => ({ area: w.area, text: w.message }))} />
+      <NoteList label={t('system.migrate.conflictsWithExistingData')} tone="neutral" items={plan.conflicts.map((c) => ({ area: c.area, text: `${c.name}: ${c.reason}` }))} />
+      <NoteList label={t('system.migrate.notSupported')} tone="muted" items={plan.unsupported.map((u) => ({ area: u.area, text: `${u.name}: ${u.reason}` }))} />
 
-      <Pane title="Import">
+      <Pane title={t('common.import')}>
         <div className="sys-form">
-          <Field inline label="When an item already exists" hint="Overwrite updates the existing item. Nothing is ever deleted.">
+          <Field inline label={t('system.migrate.whenAnItemAlreadyExists')} hint={t('system.migrate.overwriteUpdatesTheExistingItem')}>
             <Select
               value={conflictPolicy}
               onChange={(e) => onConflictPolicy(e.target.value as MigrateConflictPolicy)}
               options={[
-                { value: 'skip', label: 'Skip it' },
-                { value: 'overwrite', label: 'Overwrite it' },
+                { value: 'skip', label: t('system.migrate.skipIt') },
+                { value: 'overwrite', label: t('system.migrate.overwriteIt') },
               ]}
             />
           </Field>
-          <Field inline label="Dry run" hint="Run the import and roll it back, to see what would change.">
+          <Field inline label={t('common.dryRun')} hint={t('system.migrate.runTheImportAndRoll')}>
             <Toggle checked={dryRun} onChange={(e) => onDryRun(e.target.checked)} />
           </Field>
         </div>
         <div className="sys-form__actions">
           <Button variant="primary" loading={importing} disabled={selected.size === 0} onClick={onImport}>
-            Import
+            {t('common.import')}
           </Button>
         </div>
       </Pane>
@@ -288,46 +289,46 @@ function PlanView({ plan, selected, onToggle, conflictPolicy, onConflictPolicy, 
 }
 
 const STATE_TONE: Record<MigrateStatus['state'], ChipTone> = { idle: 'neutral', running: 'default', completed: 'accent', failed: 'danger' };
-const STATE_LABEL: Record<MigrateStatus['state'], string> = { idle: 'Idle', running: 'Running', completed: 'Completed', failed: 'Failed' };
+const STATE_LABEL: Record<MigrateStatus['state'], string> = { get idle() { return t('system.migrate.idle'); }, get running() { return t('common.running'); }, get completed() { return t('common.completed'); }, get failed() { return t('status.failed'); } };
 
 function RunView({ status }: { status: MigrateStatus }) {
   const resultColumns: Column<MigrationAreaResult>[] = [
-    { key: 'area', header: 'Area', cell: (r) => r.area },
-    { key: 'created', header: 'Created', align: 'right', mono: true, cell: (r) => r.created },
-    { key: 'updated', header: 'Updated', align: 'right', mono: true, cell: (r) => r.updated },
-    { key: 'skipped', header: 'Skipped', align: 'right', mono: true, cell: (r) => r.skipped },
-    { key: 'staged', header: 'Staged', align: 'right', mono: true, cell: (r) => r.staged },
-    { key: 'failed', header: 'Failed', align: 'right', mono: true, cell: (r) => r.failed },
+    { key: 'area', header: t('system.migrate.area'), cell: (r) => r.area },
+    { key: 'created', header: t('system.migrate.created'), align: 'right', mono: true, cell: (r) => r.created },
+    { key: 'updated', header: t('system.migrate.updated'), align: 'right', mono: true, cell: (r) => r.updated },
+    { key: 'skipped', header: t('system.migrate.skipped'), align: 'right', mono: true, cell: (r) => r.skipped },
+    { key: 'staged', header: t('system.migrate.staged'), align: 'right', mono: true, cell: (r) => r.staged },
+    { key: 'failed', header: t('status.failed'), align: 'right', mono: true, cell: (r) => r.failed },
   ];
   const p = status.progress;
   return (
     <Pane
       title={
         <div className="sys-run-head">
-          <SectionLabel as="h2">{`Import${status.app ? ` · ${APP_LABEL[status.app]}` : ''}`}</SectionLabel>
+          <SectionLabel as="h2">{t('system.migrate.importValue', { value: status.app ? ` · ${APP_LABEL[status.app]}` : '' })}</SectionLabel>
           {status.state === 'failed' ? (
-            <Chip tone="danger">Failed · {status.error ?? 'see the log below'}</Chip>
+            <Chip tone="danger">{t('system.migrate.failedValue', { value: status.error ?? t('system.migrate.seeTheLogBelow') })}</Chip>
           ) : (
             <Chip tone={STATE_TONE[status.state]}>{STATE_LABEL[status.state]}</Chip>
           )}
-          {status.result?.dryRun ? <Chip tone="neutral">Dry run</Chip> : null}
+          {status.result?.dryRun ? <Chip tone="neutral">{t('common.dryRun')}</Chip> : null}
         </div>
       }
     >
       {status.state === 'running' && p ? (
         <div className="sys-run-progress" role="status">
           <p>
-            Area {p.areaIndex + 1} of {p.areaCount}: {p.area} ({p.done}/{p.total})
+            {t('system.migrate.areaValueOfAreacountArea', { value: p.areaIndex + 1, areaCount: p.areaCount, area: p.area, done: p.done, total: p.total })}
           </p>
-          <Trail value={(p.done / Math.max(p.total, 1)) * 100} state="active" showValue label={`${p.area} progress`} />
+          <Trail value={(p.done / Math.max(p.total, 1)) * 100} state="active" showValue label={t('system.migrate.areaProgress', { area: p.area })} />
         </div>
       ) : null}
-      {status.error && status.state !== 'failed' ? <ErrorBlock title="The import reported an error">{status.error}</ErrorBlock> : null}
-      {status.result ? <Table columns={resultColumns} rows={status.result.areas} rowKey={(r) => r.area} caption="Import result" sortable={false} /> : null}
+      {status.error && status.state !== 'failed' ? <ErrorBlock title={t('system.migrate.theImportReportedAnError')}>{status.error}</ErrorBlock> : null}
+      {status.result ? <Table columns={resultColumns} rows={status.result.areas} rowKey={(r) => r.area} caption={t('system.migrate.importResult')} sortable={false} /> : null}
       {status.log.length > 0 ? (
         <details className="sys-run-log" open={status.state === 'running'}>
           <summary>
-            Log · <span className="al-num">{status.log.length}</span>
+            {t('system.migrate.log')} <span className="al-num">{status.log.length}</span>
           </summary>
           <ol>
             {status.log.map((e, i) => (

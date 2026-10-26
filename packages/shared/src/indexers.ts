@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { ReleaseProtocol } from './profiles.js';
+import { ARCLIGHT_RAW_BASE } from './project.js';
+import { ReleaseIndexerFlag, ReleaseProtocol } from './profiles.js';
 
 // Indexers: persistent Torznab/Newznab endpoint configuration, health (failure backoff),
 // capabilities, and the release shape every search returns. The protocol clients live in
@@ -257,6 +258,11 @@ export const ReleaseResource = z.object({
   minimumRatio: z.number().optional(),
   /** Milliseconds. */
   minimumSeedTime: z.number().int().optional(),
+  /**
+   * Indexer flags (freeleech, double upload, ...). Filled from the Torznab volume factors when
+   * the indexer reports them; see `indexerFlagsFromVolumeFactors`.
+   */
+  indexerFlags: z.array(ReleaseIndexerFlag).optional(),
   /** Whole days since publishDate. */
   age: NonNegativeInt,
   ageHours: z.number().min(0),
@@ -267,6 +273,30 @@ export const ReleaseResource = z.object({
   approved: z.boolean(),
 });
 export type ReleaseResource = z.infer<typeof ReleaseResource>;
+
+const near = (a: number, b: number) => Math.abs(a - b) < 0.001;
+
+/**
+ * Flags implied by Torznab `downloadvolumefactor` / `uploadvolumefactor`: a download factor
+ * of 0 is freeleech, 0.25 / 0.5 / 0.75 count 25% / 50% / 75% of the size (freeleech75,
+ * halfleech, freeleech25); an upload factor of 2 or more is double upload.
+ */
+export function indexerFlagsFromVolumeFactors(r: {
+  downloadVolumeFactor?: number | undefined;
+  uploadVolumeFactor?: number | undefined;
+}): ReleaseIndexerFlag[] {
+  const flags: ReleaseIndexerFlag[] = [];
+  const dvf = r.downloadVolumeFactor;
+  if (dvf !== undefined && Number.isFinite(dvf)) {
+    if (near(dvf, 0)) flags.push('freeleech');
+    else if (near(dvf, 0.25)) flags.push('freeleech75');
+    else if (near(dvf, 0.5)) flags.push('halfleech');
+    else if (near(dvf, 0.75)) flags.push('freeleech25');
+  }
+  const uvf = r.uploadVolumeFactor;
+  if (uvf !== undefined && Number.isFinite(uvf) && uvf >= 2) flags.push('doubleUpload');
+  return flags;
+}
 
 /** Accepts `1,2,3`, repeated query params, or a JSON array. */
 const IdList = z
@@ -342,7 +372,10 @@ export const IndexerDefinitionSummary = z.object({
   categories: z.array(z.object({ id: z.number().int(), name: z.string() })),
   /** False until someone confirmed the definition against the live site. */
   tested: z.boolean(),
-  source: z.enum(['builtin', 'custom']),
+  /** builtin: shipped; feed: downloaded from the definition feed; custom: user YAML (wins). */
+  source: z.enum(['builtin', 'feed', 'custom']),
+  /** The definition sets `requiresFlareSolverr`: the site sits behind a browser challenge. */
+  requiresFlareSolverr: z.boolean().optional(),
 });
 export type IndexerDefinitionSummary = z.infer<typeof IndexerDefinitionSummary>;
 
@@ -375,6 +408,8 @@ export type DefinitionLoadError = z.infer<typeof DefinitionLoadError>;
 export const IndexerDefinitionReloadResult = z.object({
   total: z.number().int(),
   builtin: z.number().int(),
+  /** Definitions loaded from the definition feed (`<config>/definitions/feed`). */
+  feed: z.number().int().default(0),
   custom: z.number().int(),
   errors: z.array(DefinitionLoadError),
 });
@@ -402,6 +437,8 @@ export const IndexerProxy = z.object({
   password: z.string().optional(),
   requestTimeout: z.number().int().min(1).max(600).optional(),
   tags: z.array(z.number().int()),
+  /** Created and kept in sync by ProxyAutoDetect (FlareSolverr (bundled), Built-in solver). */
+  managed: z.boolean().optional(),
 });
 export type IndexerProxy = z.infer<typeof IndexerProxy>;
 
@@ -485,6 +522,31 @@ export type IndexerStatsQuery = z.infer<typeof IndexerStatsQuery>;
 
 // ---- global indexer options ---------------------------------------------------------
 
+// ---- definition feed settings (rest of the feed contract at the end of the file) ----
+
+/**
+ * Default definition feed: this repository's own builtin definitions folder on GitHub raw, which
+ * serves `index.json` (written by scripts/build-definition-index.mjs) and the YAML files.
+ */
+export const DEFAULT_DEFINITION_FEED_PATH = 'packages/indexers/src/definitions/builtin/';
+export const DEFAULT_DEFINITION_FEED_URL = `${ARCLIGHT_RAW_BASE}${DEFAULT_DEFINITION_FEED_PATH}`;
+
+/** Feed index format versions this build understands. */
+export const DEFINITION_FEED_SCHEMA_VERSION = 1;
+
+/** `indexers.definitionFeed` settings. */
+export const DefinitionFeedSettings = z.object({
+  enabled: z.boolean().default(true),
+  /** Base URL; `index.json` and every entry's `file` are resolved against it. */
+  url: z.string().url().default(DEFAULT_DEFINITION_FEED_URL),
+  /** 1-168 hours between automatic syncs. */
+  intervalHours: z.number().int().min(1).max(168).default(12),
+  /** auto: sync on the interval and install. manual: only POST /indexer/definition/feed/sync. */
+  mode: z.enum(['auto', 'manual']).default('auto'),
+});
+export type DefinitionFeedSettings = z.infer<typeof DefinitionFeedSettings>;
+export type DefinitionFeedSettingsInput = z.input<typeof DefinitionFeedSettings>;
+
 /**
  * Settings → Indexer options. Minimum age, retention and maximum size are the values the
  * decision engine reads from the `releases` settings section (one source of truth); the rest
@@ -518,6 +580,9 @@ export const IndexerOptionsSection = IndexerGlobalSettings.pick({
   allowHardcodedSubs: true,
   whitelistedHardcodedSubs: true,
   preferIndexerFlags: true,
+}).extend({
+  /** Definition feed (indexers module); edited through /indexer/definition/feed/settings. */
+  definitionFeed: DefinitionFeedSettings.default(() => DefinitionFeedSettings.parse({})),
 });
 export type IndexerOptionsSection = z.infer<typeof IndexerOptionsSection>;
 
@@ -550,3 +615,63 @@ export type SearchGrabResponse = z.infer<typeof SearchGrabResponse>;
 
 export const IndexersErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type IndexersErrorResponse = z.infer<typeof IndexersErrorResponse>;
+
+// ---- definition feed ------------------------------------------------------------------
+
+/**
+ * `index.json` of a definition feed. `sha256` is the hex digest of the file's UTF-8 text with
+ * CRLF normalised to LF (so a Windows checkout produces the same index).
+ */
+export const DefinitionFeedIndex = z.object({
+  schemaVersion: z.number().int(),
+  generatedAt: z.string().optional(),
+  definitions: z.array(
+    z.object({
+      id: z.string().regex(/^[a-z0-9._-]+$/),
+      version: z.string().min(1),
+      /** Path relative to the feed URL, e.g. `yts.yml` or `definitions/yts.yml`. */
+      file: z.string().regex(/^(?!\/)(?!.*\.\.)[A-Za-z0-9._/-]+\.ya?ml$/),
+      sha256: z.string().regex(/^[0-9a-f]{64}$/),
+    }),
+  ),
+});
+export type DefinitionFeedIndex = z.infer<typeof DefinitionFeedIndex>;
+
+export const DefinitionFeedRejection = z.object({ id: z.string(), version: z.string().nullable(), reason: z.string() });
+export type DefinitionFeedRejection = z.infer<typeof DefinitionFeedRejection>;
+
+export const DefinitionFeedInstalled = z.object({
+  id: z.string(),
+  version: z.string(),
+  sha256: z.string(),
+  installedAt: z.string(),
+  /** A previous version is kept and POST .../rollback/:id restores it. */
+  previousVersion: z.string().nullable(),
+  /** False when a user definition with the same id overrides it. */
+  active: z.boolean(),
+});
+export type DefinitionFeedInstalled = z.infer<typeof DefinitionFeedInstalled>;
+
+export const DefinitionFeedStatus = z.object({
+  settings: DefinitionFeedSettings,
+  lastSyncAt: z.string().nullable(),
+  lastSuccessAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+  /** schemaVersion of the last index read. */
+  schemaVersion: z.number().int().nullable(),
+  installed: z.array(DefinitionFeedInstalled),
+  /** Entries of the last sync that were not installed. */
+  rejected: z.array(DefinitionFeedRejection),
+});
+export type DefinitionFeedStatus = z.infer<typeof DefinitionFeedStatus>;
+
+export const DefinitionFeedSyncResult = z.object({
+  /** The index answered 304 / was byte-identical: nothing to do. */
+  notModified: z.boolean(),
+  added: z.array(z.string()),
+  updated: z.array(z.string()),
+  removed: z.array(z.string()),
+  unchanged: z.number().int(),
+  rejected: z.array(DefinitionFeedRejection),
+});
+export type DefinitionFeedSyncResult = z.infer<typeof DefinitionFeedSyncResult>;

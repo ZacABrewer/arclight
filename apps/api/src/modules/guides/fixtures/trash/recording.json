@@ -1,0 +1,48 @@
+{
+  "note": "Recorded 2026-10-26 through the VPN container (docker exec arclight node -e fetch), read-only GETs to raw.githubusercontent.com. Bodies are in files/<path>. The directory listings in listings/ are NOT recorded: they are hand-built in the GitHub contents-API shape from the recorded files (sha = git blob sha1 of the body), because only raw content was fetched.",
+  "recordedAt": "2026-10-26",
+  "responses": [
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/metadata.json",
+      "path": "metadata.json",
+      "status": 200,
+      "etag": "W/\"069c8cc3025fb473bb379f0978d2d2918d94383afaedff3ce66268a3a45be20e\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/quality-profiles/hd-bluray-web.json",
+      "path": "docs/json/radarr/quality-profiles/hd-bluray-web.json",
+      "status": 200,
+      "etag": "W/\"b21c17ab606f929456eae10d5a61e21bfd5051095288eb5afeaf8802f80a539b\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/hd-bluray-tier-01.json",
+      "path": "docs/json/radarr/cf/hd-bluray-tier-01.json",
+      "status": 200,
+      "etag": "W/\"bf02b31c181a6ea6d5cb6d4a420b674203e0b33322651c050766900cfaa383a3\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/web-tier-01.json",
+      "path": "docs/json/radarr/cf/web-tier-01.json",
+      "status": 200,
+      "etag": "W/\"09b488269324cfbd2bdeb8e228f1b39360f8d63ef4b466dcdbb540df7654a6d5\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/repack-proper.json",
+      "path": "docs/json/radarr/cf/repack-proper.json",
+      "status": 200,
+      "etag": "W/\"fa291a243d99439c4c3a963abbb0d644e76f5ce9f1f4f4db8c41564167b0a5aa\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/repack2.json",
+      "path": "docs/json/radarr/cf/repack2.json",
+      "status": 200,
+      "etag": "W/\"fffe9af63f800bd6a7c7ba14c41b8c8baf10b08eee22f2ea035a0fa8d28867ca\""
+    },
+    {
+      "url": "https://raw.githubusercontent.com/TRaSH-Guides/Guides/master/docs/json/radarr/cf/br-disk.json",
+      "path": "docs/json/radarr/cf/br-disk.json",
+      "status": 200,
+      "etag": "W/\"5da9a6f72fa1f789bb6961fc847d5bc29e8d951f6b8f2bb8c405547f59b9d933\""
+    }
+  ]
+}

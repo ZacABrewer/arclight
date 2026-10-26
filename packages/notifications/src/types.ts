@@ -121,7 +121,7 @@ export interface DownloadStatusMessage {
 
 export interface RequestInfo {
   id: number;
-  requestedBy: { id: number; username: string };
+  requestedBy: { id: number; username: string; avatar?: string; email?: string };
   status: 'pending' | 'approved' | 'declined' | 'available';
   /** Requested seasons, series only. Empty means the whole series. */
   seasons?: number[];
@@ -172,6 +172,9 @@ export const NOTIFICATION_EVENT_TYPES = [
   'requestDeclined',
   'issueCreated',
   'issueUpdated',
+  'requestsDigest',
+  'retention',
+  'fileTranscoded',
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 
@@ -300,6 +303,82 @@ export interface IssueUpdatedEvent extends MediaEventBase {
   issue: IssueInfo;
 }
 
+/** One line of the admin digest. */
+export interface DigestRequestLine {
+  id: number;
+  mediaType: MediaType;
+  title: string;
+  year?: number;
+  requestedBy: string;
+  is4k: boolean;
+  /** ISO-8601. */
+  createdAt: string;
+}
+
+export interface DigestIssueLine {
+  id: number;
+  mediaType: MediaType;
+  title: string;
+  issueType: IssueInfo['issueType'];
+  reportedBy: string;
+  createdAt: string;
+}
+
+/** Daily summary for admins: what waits for approval and which issues are open. */
+export interface RequestsDigestEvent extends EventBase {
+  type: 'requestsDigest';
+  /** Oldest first, at most a screenful; totals count everything. */
+  pendingRequests: DigestRequestLine[];
+  openIssues: DigestIssueLine[];
+  totalPendingRequests: number;
+  totalOpenIssues: number;
+}
+
+/** One item in a retention summary. */
+export interface RetentionLine {
+  mediaType: MediaType;
+  title: string;
+  year?: number;
+  /** Rule that matched. */
+  rule: string;
+  action: 'unmonitor' | 'deleteFiles' | 'deleteItem';
+  /** Bytes on disk. */
+  sizeBytes: number;
+  reasons: string[];
+  /** Staged lines: when the item will be applied (ISO-8601). */
+  applyAfter?: string;
+  /** Failed lines: what went wrong. */
+  error?: string;
+}
+
+/** Summary of a retention sweep for admins: newly staged, applied and failed items. */
+export interface RetentionEvent extends EventBase {
+  type: 'retention';
+  /** At most a screenful per list; totals count everything. */
+  staged: RetentionLine[];
+  applied: RetentionLine[];
+  failed: RetentionLine[];
+  totalStaged: number;
+  totalApplied: number;
+  totalFailed: number;
+  /** Bytes freed by the applied deletions. */
+  freedBytes: number;
+}
+
+/** A library file was remuxed/transcoded in place by a transcode rule. */
+export interface FileTranscodedEvent extends MediaEventBase {
+  type: 'fileTranscoded';
+  /** The file as it is now (path may have a new extension). */
+  file: MediaFileInfo;
+  previousPath: string;
+  action: 'remux' | 'transcode' | 'stripTracks' | 'addAudioTrack';
+  /** Rule name; absent when the rule was deleted. */
+  rule?: string;
+  /** Bytes. */
+  sizeBefore: number;
+  sizeAfter: number;
+}
+
 export type NotificationEvent =
   | TestEvent
   | GrabEvent
@@ -319,7 +398,10 @@ export type NotificationEvent =
   | RequestAvailableEvent
   | RequestDeclinedEvent
   | IssueCreatedEvent
-  | IssueUpdatedEvent;
+  | IssueUpdatedEvent
+  | RequestsDigestEvent
+  | RetentionEvent
+  | FileTranscodedEvent;
 
 export type NotificationEventOf<T extends NotificationEventType> = Extract<
   NotificationEvent,

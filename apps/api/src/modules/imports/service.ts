@@ -46,7 +46,7 @@ import type { Db } from '../../db/index.js';
 import { mediaFiles } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import type { DownloadClientsService, TrackedDownload } from '../download-clients/index.js';
-import { libraryService } from '../library/index.js';
+import { isVersioned, libraryService, pickVersion, profileIdForSlot, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import { getSection, setSection } from '../settings/service.js';
 import {
@@ -83,6 +83,7 @@ import {
   type ScannedFile,
 } from './scan.js';
 import { importedDownloads } from './schema.js';
+import { filesInSlot, formatFor, placeVersioned } from './versions.js';
 
 // The import pipeline: completed downloads → decisions → files placed in the library, plus
 // manual import, rescans and renames. Spec: docs/spec/import.md (paths per docs/spec/naming.md).
@@ -694,17 +695,21 @@ export class ImportsService {
 
     const libraryPath = series?.path ?? movie?.path;
     const existingFile = libraryPath ? isUnder(file.path, libraryPath) : false;
+    const sceneTitle = single && opts.clientTitle ? opts.clientTitle : stripExt(file.name);
+    // Multi-version: the slot whose profile this file fits best; it only competes with that slot.
+    const versionTag = this.versionFor(series ?? movie, quality, profileCache, (p) =>
+      this.score(p, formats, { title: sceneTitle, quality, languages, releaseGroup, sizeBytes: file.sizeBytes, mediaType: target.mediaType }),
+    );
     let existingFiles: MediaFile[] = [];
     if (series && episodes.length > 0) {
-      const fileIds = new Set(episodes.map((e) => e.episodeFileId).filter((v): v is number => typeof v === 'number'));
-      existingFiles = this.filesOf({ seriesId: series.id }).filter((f) => fileIds.has(f.id));
-    } else if (movie?.movieFileId) {
-      existingFiles = this.filesOf({ movieId: movie.id }).filter((f) => f.id === movie!.movieFileId);
+      existingFiles = filesInSlot(this.filesOf({ seriesId: series.id }), { series, episodes }, versionTag);
+    } else if (movie && (movie.movieFileId || isVersioned(movie.versions))) {
+      existingFiles = filesInSlot(this.filesOf({ movieId: movie.id }), { movie, episodes: [] }, versionTag);
     }
     existingFiles = existingFiles.filter((f) => resolve(f.path) !== resolve(file.path));
 
-    const profile = this.profileFor(series?.qualityProfileId ?? movie?.qualityProfileId, profileCache);
-    const sceneTitle = single && opts.clientTitle ? opts.clientTitle : stripExt(file.name);
+    const parent = series ?? movie;
+    const profile = this.profileFor(parent ? profileIdForSlot(parent, versionTag) : undefined, profileCache);
     const formatScore = this.score(profile, formats, {
       title: sceneTitle,
       quality,
@@ -748,12 +753,35 @@ export class ImportsService {
       parsedEpisodeCount,
       movie,
       existingFile,
+      versionTag,
       existingFiles,
       formatScore,
       existingFormatScores,
       runtimeSeconds,
       audioStreams,
     };
+  }
+
+  /** Version slot for a file of a versioned item (null when unversioned). */
+  private versionFor(
+    parent: Series | Movie | undefined,
+    quality: QualityModel,
+    profileCache: Map<number, QualityProfile | null>,
+    score: (profile: QualityProfile) => number,
+  ): string | null {
+    if (!parent || !isVersioned(parent.versions)) return null;
+    const profiles = new Map<number, QualityProfile>();
+    for (const v of parent.versions ?? []) {
+      const p = this.profileFor(v.qualityProfileId, profileCache);
+      if (p) profiles.set(v.qualityProfileId, p);
+    }
+    return pickVersion(parent.versions, profiles, quality, score)?.tag ?? slotOf(null, parent.versions);
+  }
+
+  /** Quality profile governing an item's version slot. */
+  private itemProfileId(item: Pick<LocalItem, 'series' | 'movie' | 'versionTag'>): number | undefined {
+    const parent = item.series ?? item.movie;
+    return parent ? profileIdForSlot(parent, item.versionTag) : undefined;
   }
 
   private async decide(
@@ -783,7 +811,7 @@ export class ImportsService {
       const ctx: DecisionContext = {
         settings,
         naming,
-        profile: this.profileFor(item.series?.qualityProfileId ?? item.movie?.qualityProfileId, profileCache),
+        profile: this.profileFor(this.itemProfileId(item), profileCache),
         freeSpaceBytes,
         grab: opts.grab,
         alreadyImported,
@@ -837,11 +865,12 @@ export class ImportsService {
     }
     const profileCache = new Map<number, QualityProfile | null>();
     const ordered = orderForImport(approved, this.profileFor(approved[0]?.item.series?.qualityProfileId ?? approved[0]?.item.movie?.qualityProfileId, profileCache));
-    const doneEpisodes = new Set<number>();
-    const doneMovies = new Set<number>();
+    const doneEpisodes = new Set<string>();
+    const doneMovies = new Set<string>();
     for (const d of ordered) {
       const item = d.item;
-      if (item.mediaType === 'series' && item.episodes.some((e) => doneEpisodes.has(e.id))) {
+      const slotKey = (id: number): string => `${id}:${item.versionTag ?? ''}`;
+      if (item.mediaType === 'series' && item.episodes.some((e) => doneEpisodes.has(slotKey(e.id)))) {
         outcomes.push({
           path: item.path,
           status: 'rejected',
@@ -849,7 +878,7 @@ export class ImportsService {
         });
         continue;
       }
-      if (item.mediaType === 'movie' && item.movie && doneMovies.has(item.movie.id)) {
+      if (item.mediaType === 'movie' && item.movie && doneMovies.has(slotKey(item.movie.id))) {
         outcomes.push({
           path: item.path,
           status: 'rejected',
@@ -859,8 +888,8 @@ export class ImportsService {
       }
       try {
         const placed = await this.importOne(item, opts);
-        for (const e of item.episodes) doneEpisodes.add(e.id);
-        if (item.movie) doneMovies.add(item.movie.id);
+        for (const e of item.episodes) doneEpisodes.add(slotKey(e.id));
+        if (item.movie) doneMovies.add(slotKey(item.movie.id));
         outcomes.push({
           path: item.path,
           status: 'imported',
@@ -880,12 +909,21 @@ export class ImportsService {
   }
 
   /** Destination path for an item (spec 9.4, naming spec 4). */
-  buildDestination(item: Pick<LocalItem, 'mediaType' | 'series' | 'movie' | 'episodes' | 'path' | 'quality' | 'releaseGroup' | 'extension'> & { sceneName?: string | null }, naming = this.getNaming()): string {
+  buildDestination(
+    item: Pick<LocalItem, 'mediaType' | 'series' | 'movie' | 'episodes' | 'path' | 'quality' | 'releaseGroup' | 'extension'> & {
+      sceneName?: string | null;
+      versionTag?: string | null | undefined;
+    },
+    naming = this.getNaming(),
+  ): string {
+    const tag = item.versionTag ?? null;
+    const format = formatFor(naming, item);
     const file: NamingFile = {
       path: item.path,
       relativePath: basename(item.path),
       releaseGroup: item.releaseGroup,
       quality: item.quality,
+      versionTag: tag,
       // With renaming off the original file name is kept (a scene name would rename it).
       sceneName: (item.mediaType === 'series' ? naming.renameEpisodes : naming.renameMovies) ? (item.sceneName ?? null) : null,
     };
@@ -898,7 +936,7 @@ export class ImportsService {
       const seasonFolder = series.seasonFolder ? buildSeasonFolder(naming, ns, season) : '';
       const folder = seasonFolder ? join(series.path, seasonFolder) : series.path;
       const name = buildEpisodeFileName(naming, ns, episodes, file, { ...extras, seasonPath: folder });
-      return join(folder, name);
+      return placeVersioned(folder, name, tag, naming, format, item.extension);
     }
     const movie = item.movie!;
     const nm = {
@@ -911,7 +949,7 @@ export class ImportsService {
       tmdbId: movie.tmdbId,
     };
     const name = buildMovieFileName(naming, nm, file, { ...extras, seasonPath: movie.path });
-    return join(movie.path, name);
+    return placeVersioned(movie.path, name, tag, naming, format, item.extension);
   }
 
   private async importOne(
@@ -989,6 +1027,7 @@ export class ImportsService {
       releaseGroup: item.releaseGroup,
       sceneName,
       edition: item.parsed?.movie?.edition ?? null,
+      versionTag: item.versionTag ?? null,
     });
     const allReplaced = [...new Set([...replacedFiles.map((f) => f.id), ...replacedFileIds])];
 
@@ -1185,10 +1224,17 @@ export class ImportsService {
           (parsed && parsed.quality.quality.id !== 0 ? toQualityModel(parsed.quality) : toQualityModel({ quality: qualityForExtension(ext) }));
         const libraryPath = series?.path ?? movie!.path;
         const existingFile = isUnder(req.path, libraryPath);
-        const fileIds = new Set(episodes.map((e) => e.episodeFileId).filter((v): v is number => typeof v === 'number'));
-        const existingFiles = (series ? this.filesOf({ seriesId: series.id }).filter((f) => fileIds.has(f.id)) : this.filesOf({ movieId: movie!.id })).filter(
-          (f) => resolve(f.path) !== resolve(req.path),
-        );
+        const parent = series ?? movie!;
+        const versionTag = isVersioned(parent.versions)
+          ? req.versionTag
+            ? slotOf(req.versionTag, parent.versions)
+            : this.versionFor(parent, quality, new Map(), () => 0)
+          : null;
+        const existingFiles = filesInSlot(
+          series ? this.filesOf({ seriesId: series.id }) : this.filesOf({ movieId: movie!.id }),
+          { series, movie, episodes },
+          versionTag,
+        ).filter((f) => resolve(f.path) !== resolve(req.path));
         const item: LocalItem = {
           path: req.path,
           sizeBytes: info.size,
@@ -1204,6 +1250,7 @@ export class ImportsService {
           parsedEpisodeCount: episodes.length,
           movie,
           existingFile,
+          versionTag,
           existingFiles,
           formatScore: 0,
           existingFormatScores: {},
@@ -1430,8 +1477,10 @@ export class ImportsService {
       edition: f.edition ?? null,
       quality: f.quality,
       mediaInfo: f.mediaInfo ?? null,
+      versionTag: f.versionTag ?? null,
     };
     const extras = { extension: extensionOf(f.path), pathSeparator: sep };
+    const tag = f.versionTag ?? null;
     if (t.mediaType === 'series') {
       const series = t.series!;
       const ns = { title: series.title, year: series.year, seriesType: series.seriesType, tvdbId: series.tvdbId ?? null, imdbId: series.imdbId ?? null, tmdbId: series.tmdbId };
@@ -1439,7 +1488,8 @@ export class ImportsService {
       const seasonFolder = series.seasonFolder ? buildSeasonFolder(naming, ns, season) : '';
       const folder = seasonFolder ? join(series.path, seasonFolder) : series.path;
       if (!naming.renameEpisodes) return join(folder, basename(f.path));
-      return join(folder, buildEpisodeFileName(naming, ns, t.episodes.map(namingEpisode), file, { ...extras, seasonPath: folder }));
+      const name = buildEpisodeFileName(naming, ns, t.episodes.map(namingEpisode), file, { ...extras, seasonPath: folder });
+      return placeVersioned(folder, name, tag, naming, formatFor(naming, { series }), extras.extension);
     }
     const movie = t.movie!;
     if (!naming.renameMovies) return f.path;
@@ -1452,7 +1502,8 @@ export class ImportsService {
       imdbId: movie.imdbId ?? null,
       tmdbId: movie.tmdbId,
     };
-    return join(movie.path, buildMovieFileName(naming, nm, file, { ...extras, seasonPath: movie.path }));
+    const name = buildMovieFileName(naming, nm, file, { ...extras, seasonPath: movie.path });
+    return placeVersioned(movie.path, name, tag, naming, naming.movieFormat, extras.extension);
   }
 
   async executeRename(command: RenameCommand): Promise<RenameResult> {

@@ -240,7 +240,11 @@ export const CustomFormatInput = z.object({
 });
 export type CustomFormatInput = z.infer<typeof CustomFormatInput>;
 
-export const CustomFormat = CustomFormatInput.extend({ id: z.number().int().min(1) });
+export const CustomFormat = CustomFormatInput.extend({
+  id: z.number().int().min(1),
+  /** Guide (TRaSH trash_id) the format is synced from; null/absent for user-created formats. Read-only. */
+  guideId: z.string().nullable().optional(),
+});
 export type CustomFormat = z.infer<typeof CustomFormat>;
 
 /** Describes one spec implementation so the UI can render its editor. */

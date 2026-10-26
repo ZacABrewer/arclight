@@ -13,7 +13,7 @@ export const history = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     eventType: text('event_type', {
-      enum: ['unknown', 'grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored'],
+      enum: ['unknown', 'grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored', 'fileTranscoded'],
     }).notNull(),
     mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),
     seriesId: integer('series_id'),

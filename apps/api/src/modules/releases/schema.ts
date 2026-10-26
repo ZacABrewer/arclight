@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { ReleaseResource } from '@arclight/shared';
+import type { QualityModel, ReleaseRejection, ReleaseResource } from '@arclight/shared';
 
 // Tables owned by the releases module.
 
@@ -40,4 +40,42 @@ export const releaseSearchState = sqliteTable(
     searchCount: integer('search_count').notNull().default(0),
   },
   (t) => [uniqueIndex('release_search_state_item_idx').on(t.mediaType, t.itemId)],
+);
+
+/**
+ * Decision log: one row per release per evaluation batch (RSS sync, search, interactive search,
+ * push, pending re-check), so the UI can answer "why was this (not) grabbed". Rows without a
+ * library item are not kept. Pruned to the last 20 batches per item (`item_key`: `s<seriesId>`
+ * or `m<movieId>`) on write and by age (DecisionLogCleanup, `releases.decisionLogDays`).
+ */
+export const releaseDecisions = sqliteTable(
+  'release_decisions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    batchId: text('batch_id').notNull(),
+    time: text('time').notNull(),
+    source: text('source', { enum: ['rss', 'search', 'interactive', 'push', 'pending'] }).notNull(),
+    mediaType: text('media_type', { enum: ['series', 'movie'] }),
+    itemKey: text('item_key').notNull(),
+    seriesId: integer('series_id'),
+    episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>().notNull(),
+    movieId: integer('movie_id'),
+    guid: text('guid').notNull(),
+    indexerId: integer('indexer_id').notNull(),
+    title: text('title').notNull(),
+    quality: text('quality', { mode: 'json' }).$type<QualityModel>().notNull(),
+    formats: text('formats', { mode: 'json' }).$type<Array<{ id: number; name: string }>>().notNull(),
+    score: integer('score').notNull(),
+    approved: integer('approved', { mode: 'boolean' }).notNull(),
+    rejections: text('rejections', { mode: 'json' }).$type<ReleaseRejection[]>().notNull(),
+    chosen: integer('chosen', { mode: 'boolean' }).notNull().default(false),
+    rank: integer('rank'),
+  },
+  (t) => [
+    index('release_decisions_batch_idx').on(t.batchId),
+    index('release_decisions_item_idx').on(t.itemKey, t.time),
+    index('release_decisions_series_idx').on(t.seriesId),
+    index('release_decisions_movie_idx').on(t.movieId),
+    index('release_decisions_time_idx').on(t.time),
+  ],
 );

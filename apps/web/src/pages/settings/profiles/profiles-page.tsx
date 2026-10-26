@@ -10,6 +10,7 @@ import { itemId, itemName, toDisplay } from './quality-profile-model.js';
 import { QualityProfileEditor } from './quality-profile-editor.js';
 import { ReleaseProfilesSection } from './release-profiles.js';
 import './profiles.css';
+import { t } from '../../../i18n/index.js';
 
 /** One quality profile card: cutoff + the allowed qualities (best first) as mono quality tags. */
 export function QualityProfileCard({ profile, onEdit }: { profile: QualityProfile; onEdit: () => void }) {
@@ -22,16 +23,16 @@ export function QualityProfileCard({ profile, onEdit }: { profile: QualityProfil
       status={
         profile.upgradeAllowed ? null : (
           <Chip tone="muted" dot="none">
-            Upgrades off
+            {t('settings.profiles.upgradesOff')}
           </Chip>
         )
       }
     >
       <span className="al-profile-card__cutoff">
-        <span className="al-profile-card__label">Cutoff</span>
-        {cutoff ? <QualityTag data-cutoff="true">{itemName(cutoff)}</QualityTag> : <span className="al-muted">Not set</span>}
+        <span className="al-profile-card__label">{t('settings.profiles.cutoff')}</span>
+        {cutoff ? <QualityTag data-cutoff="true">{itemName(cutoff)}</QualityTag> : <span className="al-muted">{t('settings.profiles.notSet')}</span>}
       </span>
-      <span className="al-profile-card__tags" aria-label={`Allowed qualities in ${profile.name}`}>
+      <span className="al-profile-card__tags" aria-label={t('settings.profiles.allowedQualitiesInName', { name: profile.name })}>
         {allowed.map((i) => (
           <QualityTag key={`${i.kind}-${itemId(i)}`}>{itemName(i)}</QualityTag>
         ))}
@@ -48,26 +49,26 @@ function QualityProfilesSection() {
 
   return (
     <SettingsSection
-      label="Quality profiles"
+      label={t('settings.profiles.qualityProfiles')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
         <Button size="sm" variant="secondary" onClick={() => setEditing('new')} disabled={!schema.data}>
-          Add quality profile
+          {t('settings.profiles.addQualityProfile')}
         </Button>
       }
     >
       {list.isPending ? (
         <Skeleton lines={3} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load quality profiles" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.profiles.couldntLoadQualityProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
-        <CardGrid label="Quality profiles">
+        <CardGrid label={t('settings.profiles.qualityProfiles')}>
           {list.data.map((p) => (
             <QualityProfileCard key={p.id} profile={p} onEdit={() => setEditing(p)} />
           ))}
-          <AddCard label="Add quality profile" onClick={() => setEditing('new')} />
+          <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing('new')} />
         </CardGrid>
       )}
       {editing && schema.data ? (
@@ -85,7 +86,7 @@ function QualityProfilesSection() {
 
 export function ProfilesPage() {
   return (
-    <SettingsPage title="Profiles" description="Which releases to grab, how long to wait for a better one, and which words to require or reject.">
+    <SettingsPage title={t('common.profiles')} description={t('settings.profiles.whichReleasesToGrabHow')}>
       <QualityProfilesSection />
       <DelayProfilesSection />
       <ReleaseProfilesSection />

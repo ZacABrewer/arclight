@@ -6,13 +6,24 @@ import { useSystemStatus } from '../../hooks/system.js';
 import { useTorrentStatus } from '../../hooks/torrent.js';
 import { formatRate, formatSpan, formatStamp } from './format.js';
 import { SystemHeader } from './system-header.js';
+import { t } from '../../i18n/index.js';
 
 const ENGINE_LABEL: Record<TorrentEngineState, [string, ChipTone]> = {
-  running: ['Running', 'accent'],
-  starting: ['Starting', 'neutral'],
-  lockdown: ['Lockdown', 'warn'],
-  error: ['Failed', 'danger'],
-  disabled: ['Disabled', 'muted'],
+  get running() {
+    return [t('common.running'), 'accent'] as [string, ChipTone];
+  },
+  get starting() {
+    return [t('system.status.starting'), 'neutral'] as [string, ChipTone];
+  },
+  get lockdown() {
+    return [t('system.status.lockdown'), 'warn'] as [string, ChipTone];
+  },
+  get error() {
+    return [t('status.failed'), 'danger'] as [string, ChipTone];
+  },
+  get disabled() {
+    return [t('common.disabled'), 'muted'] as [string, ChipTone];
+  },
 };
 
 /** The built-in engine's live numbers (moved here from the old dashboard card). */
@@ -21,24 +32,24 @@ function EnginePane() {
   const s = engine.data;
   if (engine.isError || !s) return null;
   const [label, tone] = ENGINE_LABEL[s.state];
-  const items: KeyValueItem[] = [{ label: 'State', value: <Chip tone={tone}>{label}</Chip>, mono: false }];
+  const items: KeyValueItem[] = [{ label: t('common.state'), value: <Chip tone={tone}>{label}</Chip>, mono: false }];
   if (s.state !== 'disabled') {
     items.push(
-      { label: 'Download', value: formatRate(s.downloadRate) },
-      { label: 'Upload', value: formatRate(s.uploadRate) },
-      { label: 'Torrents', value: `${s.torrents.downloading} downloading · ${s.torrents.seeding} seeding · ${s.torrents.total} total` },
-      { label: 'Peers', value: String(s.peers) },
+      { label: t('common.download'), value: formatRate(s.downloadRate) },
+      { label: t('common.upload'), value: formatRate(s.uploadRate) },
+      { label: t('system.status.torrents'), value: `${s.torrents.downloading} downloading · ${s.torrents.seeding} seeding · ${s.torrents.total} total` },
+      { label: t('common.peers'), value: String(s.peers) },
     );
   }
   if (s.state === 'lockdown') {
-    items.push({ label: 'Cause', value: `VPN down. Torrents are paused and bound to 127.0.0.1${s.lockdownReason ? ` (${s.lockdownReason})` : ''}.`, mono: false });
+    items.push({ label: t('system.status.cause'), value: t('system.status.vpnDownTorrentsArePaused', { value: s.lockdownReason ? ` (${s.lockdownReason})` : '' }), mono: false });
   }
   return (
     <Pane
-      title="Torrent engine"
+      title={t('common.torrentEngine')}
       actions={
         <Link to="/settings/torrent" className="al-link">
-          Settings
+          {t('common.settings')}
         </Link>
       }
     >
@@ -51,9 +62,9 @@ function EnginePane() {
 export function indexerChip(i: Pick<Indexer, 'status'>, now: number = Date.now()): { tone: ChipTone; label: string } {
   const st = i.status;
   const till = st?.disabledTill ? new Date(st.disabledTill).getTime() : NaN;
-  if (Number.isFinite(till) && till > now) return { tone: 'warn', label: `Paused · retry in ${formatSpan(till - now)}` };
-  if (st && st.failureCount > 0) return { tone: 'warn', label: `${st.failureCount} recent ${st.failureCount === 1 ? 'failure' : 'failures'}` };
-  return { tone: 'accent', label: 'OK' };
+  if (Number.isFinite(till) && till > now) return { tone: 'warn', label: t('system.status.pausedRetryInSpan', { span: formatSpan(till - now) }) };
+  if (st && st.failureCount > 0) return { tone: 'warn', label: t('system.status.failurecountRecentFailures', { failureCount: st.failureCount }) };
+  return { tone: 'accent', label: t('system.status.ok') };
 }
 
 function IndexersPane() {
@@ -62,17 +73,17 @@ function IndexersPane() {
   const rows = list.data ?? [];
   return (
     <Pane
-      title="Indexers"
+      title={t('common.indexers')}
       actions={
         <Link to="/indexers" className="al-link">
-          Manage
+          {t('system.status.manage')}
         </Link>
       }
     >
       {list.isLoading ? (
         <Skeleton lines={3} />
       ) : rows.length === 0 ? (
-        <p className="sys-muted">No indexers yet.</p>
+        <p className="sys-muted">{t('system.status.noIndexersYet')}</p>
       ) : (
         <ul className="sys-list">
           {rows.map((i) => {
@@ -95,40 +106,40 @@ export function SystemStatusPage() {
   const status = useSystemStatus();
   return (
     <>
-      <SystemHeader title="Status" />
+      <SystemHeader title={t('common.status')} />
       {status.isPending ? (
         <Pane>
           <Skeleton lines={5} />
         </Pane>
       ) : status.isError ? (
-        <ErrorBlock title="Couldn't read the system status" onRetry={() => void status.refetch()} />
+        <ErrorBlock title={t('system.status.couldntReadTheSystemStatus')} onRetry={() => void status.refetch()} />
       ) : (
         <div className="sys-cols">
-          <Pane title="About">
+          <Pane title={t('system.status.about')}>
             <KeyValue
               items={[
-                { label: 'Version', value: status.data.version },
-                { label: 'Started', value: formatStamp(status.data.startTime) },
-                { label: 'Uptime', value: formatSpan(status.data.uptimeSeconds * 1000) },
-                { label: 'Docker', value: status.data.isDocker ? 'Yes' : 'No' },
+                { label: t('common.version'), value: status.data.version },
+                { label: t('system.status.started'), value: formatStamp(status.data.startTime) },
+                { label: t('system.status.uptime'), value: formatSpan(status.data.uptimeSeconds * 1000) },
+                { label: t('system.status.docker'), value: status.data.isDocker ? t('common.yes') : t('common.no') },
               ]}
             />
           </Pane>
-          <Pane title="Runtime">
+          <Pane title={t('common.runtime')}>
             <KeyValue
               items={[
-                { label: 'Node', value: status.data.runtime.node },
-                { label: 'Platform', value: status.data.runtime.platform },
-                { label: 'Architecture', value: status.data.runtime.arch },
+                { label: t('system.status.node'), value: status.data.runtime.node },
+                { label: t('system.status.platform'), value: status.data.runtime.platform },
+                { label: t('system.status.architecture'), value: status.data.runtime.arch },
               ]}
             />
           </Pane>
-          <Pane title="Paths">
+          <Pane title={t('system.status.paths')}>
             <KeyValue
               items={[
-                { label: 'Config', value: status.data.paths.config },
-                { label: 'Database', value: status.data.paths.database },
-                { label: 'Logs', value: status.data.paths.logs },
+                { label: t('system.status.config'), value: status.data.paths.config },
+                { label: t('system.status.database'), value: status.data.paths.database },
+                { label: t('common.logs'), value: status.data.paths.logs },
               ]}
             />
           </Pane>

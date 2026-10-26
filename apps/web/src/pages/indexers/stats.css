@@ -8,3 +8,10 @@
 @media (max-width: 767px) {
   .mt-stats__totals { --al-kv-cols: 2 !important; }
 }
+
+/* Tracker stats (tracker-stats-page.tsx). */
+.mt-trackers { display: flex; flex-direction: column; gap: 20px; }
+.mt-tracker { display: flex; flex-direction: column; gap: 16px; }
+.mt-tracker__head { margin: 0 0 8px; }
+.mt-tracker__warnings { margin: 0; padding: 10px 14px; list-style: none; display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--al-warn); color: var(--al-text-2); font-size: 14px; }
+.mt-tracker__hosts { font-family: var(--al-mono); overflow-wrap: anywhere; }

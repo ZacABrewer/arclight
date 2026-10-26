@@ -1,5 +1,6 @@
 import type { MediaImage } from '@arclight/shared';
 import { formatDate as formatPreferredDate, formatDateTime as formatPreferredDateTime } from '../../lib/ui-preferences.js';
+import { t, intlLocale } from '../../i18n/index.js';
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'];
 
@@ -25,7 +26,7 @@ export function formatDate(value: string | null | undefined, opts?: Intl.DateTim
   const d = parseDateish(value);
   if (!d) return value;
   // toLocaleDateString rejects timeStyle; toLocaleString accepts both.
-  return opts.timeStyle ? d.toLocaleString(undefined, opts) : d.toLocaleDateString(undefined, opts);
+  return opts.timeStyle ? d.toLocaleString(intlLocale(), opts) : d.toLocaleDateString(intlLocale(), opts);
 }
 
 /** Parse "YYYY-MM-DD" as local midnight, anything else with Date. */
@@ -44,5 +45,5 @@ export function imageUrl(images: readonly MediaImage[] | undefined, type: MediaI
 }
 
 export function seasonLabel(seasonNumber: number): string {
-  return seasonNumber === 0 ? 'Specials' : `Season ${seasonNumber}`;
+  return seasonNumber === 0 ? t('common.specials') : t('components.media.format.seasonSeasonnumber', { seasonNumber });
 }

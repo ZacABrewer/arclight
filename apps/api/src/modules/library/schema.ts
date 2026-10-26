@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { MediaImage, MediaInfo, Ratings, MovieCollection, QualityModel } from '@arclight/shared';
+import type { MediaImage, MediaInfo, MediaVersion, Ratings, MovieCollection, QualityModel } from '@arclight/shared';
 
 // Library tables. One family of rows that every other module (releases, downloads, organizer,
 // subtitles, requests, calendar) reads and attaches to. JSON columns hold the small, rarely
@@ -55,6 +55,8 @@ export const series = sqliteTable(
     // Subtitle language profile (subtitles module); null = no subtitles wanted.
     languageProfileId: integer('language_profile_id'),
     tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
+    // Multi-version library: version slots [{tag, qualityProfileId, enabled}]; null = unversioned.
+    versions: text('versions', { mode: 'json' }).$type<MediaVersion[]>(),
     added: text('added').notNull(),
     lastRefreshed: text('last_refreshed'),
   },
@@ -150,6 +152,8 @@ export const movies = sqliteTable(
     lastRefreshed: text('last_refreshed'),
     hasFile: integer('has_file', { mode: 'boolean' }).notNull().default(false),
     movieFileId: integer('movie_file_id'),
+    // Multi-version library: version slots [{tag, qualityProfileId, enabled}]; null = unversioned.
+    versions: text('versions', { mode: 'json' }).$type<MediaVersion[]>(),
   },
   (t) => [
     uniqueIndex('movies_tmdb_id_idx').on(t.tmdbId),
@@ -178,11 +182,37 @@ export const mediaFiles = sqliteTable(
     sceneName: text('scene_name'),
     edition: text('edition'),
     mediaInfo: text('media_info', { mode: 'json' }).$type<MediaInfo>(),
+    // Version slot the file fills ('4K', 'HDR', 'Remux', ...); null = unversioned (classic).
+    versionTag: text('version_tag'),
   },
   (t) => [
     uniqueIndex('media_files_path_idx').on(t.path),
     index('media_files_series_season_idx').on(t.seriesId, t.seasonNumber),
     index('media_files_movie_idx').on(t.movieId),
+    // One file per (movie, version). NULL tags never collide, so unversioned rows keep the
+    // classic single-pointer behaviour (movies.movie_file_id).
+    uniqueIndex('media_files_movie_version_idx').on(t.movieId, t.versionTag),
+  ],
+);
+
+// Multi-version library, series side: which file fills which version slot of an episode. A
+// multi-episode file has one row per episode. One file per (episode, version); unversioned
+// files stay on episodes.episode_file_id only, which also points at the primary version.
+export const episodeVersionFiles = sqliteTable(
+  'episode_version_files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    episodeId: integer('episode_id')
+      .notNull()
+      .references(() => episodes.id, { onDelete: 'cascade' }),
+    versionTag: text('version_tag').notNull(),
+    mediaFileId: integer('media_file_id')
+      .notNull()
+      .references(() => mediaFiles.id, { onDelete: 'cascade' }),
+  },
+  (t) => [
+    uniqueIndex('episode_version_files_episode_version_idx').on(t.episodeId, t.versionTag),
+    index('episode_version_files_file_idx').on(t.mediaFileId),
   ],
 );
 

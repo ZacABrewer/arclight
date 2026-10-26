@@ -1,5 +1,6 @@
 import type { Movie, Series } from '@arclight/shared';
 import { imageUrl } from '../../components/media/format.js';
+import { t } from '../../i18n/index.js';
 
 // Library index model: series and movies are normalised to one row shape so filtering,
 // sorting and both views (poster grid, table) share one implementation.
@@ -126,7 +127,7 @@ export function filterRows(rows: readonly LibraryRow[], f: LibraryFilters): Libr
     if (f.qualityProfileId !== null && r.qualityProfileId !== f.qualityProfileId) return false;
     if (f.tagId !== null && !r.tags.includes(f.tagId)) return false;
     if (f.status !== null && r.status !== f.status) return false;
-    return terms.every((t) => r.searchText.includes(t));
+    return terms.every((item) => r.searchText.includes(item));
   });
 }
 
@@ -147,11 +148,21 @@ export interface LibrarySort {
 }
 
 export const SORT_LABELS: Record<LibrarySortKey, string> = {
-  title: 'Title',
-  added: 'Date added',
-  year: 'Year',
-  size: 'Size on disk',
-  progress: 'Progress',
+  get title() {
+    return t('common.title');
+  },
+  get added() {
+    return t('library.filters.dateAdded');
+  },
+  get year() {
+    return t('common.year');
+  },
+  get size() {
+    return t('common.sizeOnDisk');
+  },
+  get progress() {
+    return t('common.progress');
+  },
 };
 
 const collator = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
@@ -186,14 +197,30 @@ export const SERIES_STATUSES = ['continuing', 'ended', 'upcoming'] as const;
 export const MOVIE_STATUSES = ['tba', 'announced', 'inCinemas', 'released'] as const;
 
 export const STATUS_LABELS: Record<string, string> = {
-  continuing: 'Continuing',
-  ended: 'Ended',
-  upcoming: 'Upcoming',
-  deleted: 'Deleted',
-  tba: 'TBA',
-  announced: 'Announced',
-  inCinemas: 'In cinemas',
-  released: 'Released',
+  get continuing() {
+    return t('library.filters.continuing');
+  },
+  get ended() {
+    return t('library.filters.ended');
+  },
+  get upcoming() {
+    return t('library.filters.upcoming');
+  },
+  get deleted() {
+    return t('common.deleted');
+  },
+  get tba() {
+    return t('common.tba');
+  },
+  get announced() {
+    return t('library.filters.announced');
+  },
+  get inCinemas() {
+    return t('common.inCinemas');
+  },
+  get released() {
+    return t('common.released');
+  },
 };
 
 /** Caption under a poster: "2022 · Apple TV+". */

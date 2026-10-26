@@ -7,6 +7,7 @@ import {
   type ReleaseResource,
 } from '@arclight/shared';
 import { ApiError, request } from './client.js';
+import { t } from '../i18n/index.js';
 
 // Paths mirror apps/api/src/modules/releases/routes.ts.
 
@@ -59,6 +60,6 @@ export async function grabSearchResult(r: ReleaseResource): Promise<GrabOutcome>
   const pushed = await releasesApi.push(toPushRequest(r));
   if (pushed.grabbed) return { kind: 'grabbed', title: r.title };
   if (pushed.pending) return { kind: 'pending', title: r.title };
-  const reason = pushed.decision?.rejections.map((x) => x.message).join('; ') || 'Not matched to a library item';
+  const reason = pushed.decision?.rejections.map((x) => x.message).join('; ') || t('api.releases.notMatchedToALibrary');
   return { kind: 'rejected', title: r.title, reason };
 }

@@ -1,0 +1,26 @@
+/* Public request portal (/portal): own chrome on the open backdrop. Square corners, mono for data. */
+.portal { position: relative; min-height: 100vh; }
+.portal-main { position: relative; z-index: 1; max-width: 1180px; margin: 0 auto; padding: 32px 40px 64px; display: flex; flex-direction: column; gap: 24px; }
+.portal-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.portal-brand { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.portal-title { margin: 0; }
+.portal-stack { display: flex; flex-direction: column; gap: 20px; }
+.portal-top { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr); gap: 20px; align-items: start; }
+.portal-card { padding: 24px; }
+.portal-kicker { margin: 0 0 12px; }
+.portal-message { margin: 0; font-size: 16px; line-height: 1.55; color: var(--al-text-2); white-space: pre-wrap; overflow-wrap: anywhere; }
+.portal-url { margin: 12px 0 0; }
+.portal-logins { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.portal-search { display: flex; gap: 10px; align-items: center; margin: 0 0 20px; flex-wrap: wrap; }
+.portal-search .al-input { flex: 1 1 240px; }
+.portal-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 20px 16px; }
+.portal-card-link { display: flex; flex-direction: column; gap: 9px; color: inherit; text-decoration: none; }
+.portal-card-link:focus-visible { outline: var(--al-focus); outline-offset: 2px; }
+.portal-year { font-size: 11px; color: var(--al-text-4); }
+.portal-note { margin: 16px 0 0; }
+@media (max-width: 767px) {
+  .portal-main { padding: 20px 16px 48px; }
+  .portal-top { grid-template-columns: minmax(0, 1fr); }
+  .portal-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .portal-head .al-btn, .portal-logins .al-btn, .portal-search .al-btn { min-height: 44px; }
+}

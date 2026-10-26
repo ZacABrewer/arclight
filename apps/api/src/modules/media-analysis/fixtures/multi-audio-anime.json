@@ -1,0 +1,87 @@
+{
+  "streams": [
+    {
+      "index": 0,
+      "codec_name": "hevc",
+      "profile": "Main 10",
+      "codec_type": "video",
+      "codec_tag_string": "[0][0][0][0]",
+      "width": 1920,
+      "height": 1080,
+      "pix_fmt": "yuv420p10le",
+      "color_space": "bt709",
+      "color_transfer": "bt709",
+      "color_primaries": "bt709",
+      "r_frame_rate": "24000/1001",
+      "avg_frame_rate": "24000/1001",
+      "disposition": { "default": 1, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "BPS-eng": "3400211", "DURATION-eng": "00:23:40.044000000" }
+    },
+    {
+      "index": 1,
+      "codec_name": "flac",
+      "codec_type": "audio",
+      "sample_fmt": "s16",
+      "sample_rate": "48000",
+      "channels": 2,
+      "channel_layout": "stereo",
+      "bits_per_raw_sample": "16",
+      "disposition": { "default": 1, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "jpn", "title": "Japanese", "BPS-eng": "912345" }
+    },
+    {
+      "index": 2,
+      "codec_name": "dts",
+      "profile": "DTS-HD MA",
+      "codec_type": "audio",
+      "sample_rate": "48000",
+      "channels": 6,
+      "channel_layout": "5.1(side)",
+      "disposition": { "default": 0, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "eng", "title": "English Dub", "BPS-eng": "3012000" }
+    },
+    {
+      "index": 3,
+      "codec_name": "aac",
+      "profile": "LC",
+      "codec_type": "audio",
+      "channels": 2,
+      "channel_layout": "stereo",
+      "disposition": { "default": 0, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "ger", "BPS-eng": "192000" }
+    },
+    {
+      "index": 4,
+      "codec_name": "ass",
+      "codec_type": "subtitle",
+      "disposition": { "default": 1, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "eng", "title": "Full Subtitles" }
+    },
+    {
+      "index": 5,
+      "codec_name": "ass",
+      "codec_type": "subtitle",
+      "disposition": { "default": 0, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "eng", "title": "Signs & Songs [Forced]" }
+    },
+    {
+      "index": 6,
+      "codec_name": "subrip",
+      "codec_type": "subtitle",
+      "disposition": { "default": 0, "forced": 0, "hearing_impaired": 0, "attached_pic": 0 },
+      "tags": { "language": "und" }
+    },
+    {
+      "index": 7,
+      "codec_name": "ttf",
+      "codec_type": "attachment",
+      "tags": { "filename": "font.ttf", "mimetype": "application/x-truetype-font" }
+    }
+  ],
+  "format": {
+    "filename": "/anime/Anime Show/Season 01/Anime Show - S01E05 - Title [Bluray-1080p].mkv",
+    "format_name": "matroska,webm",
+    "duration": "1420.044000",
+    "bit_rate": "4630011"
+  }
+}

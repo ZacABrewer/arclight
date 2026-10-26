@@ -1,5 +1,6 @@
 import { PASSWORD_MASK } from '@arclight/shared';
 import type { FieldDefinition, FieldErrors, FieldOption, FieldType, FormValues } from './types.js';
+import { t } from '../../i18n/index.js';
 
 // Pure helpers behind the schema form: dotted-path access, defaults, validation and the
 // write-only secret round-trip. Kept free of React so they are unit-testable.
@@ -66,7 +67,7 @@ export function validateFields(fields: readonly FieldDefinition[], values: FormV
       }
     }
     if (f.type === 'select' && f.options && !f.options.some((o) => String(o.value) === String(value))) {
-      errors[f.name] = `Choose a valid ${f.label.toLowerCase()}`;
+      errors[f.name] = t('components.forms.values.chooseAValidLabel', { label: f.label.toLowerCase() });
     }
   }
   return errors;

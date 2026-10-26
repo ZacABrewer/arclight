@@ -9,6 +9,7 @@ import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { SubtitlesHeader } from './subtitles-header.js';
 import { MissingChips } from './subtitle-ui.js';
+import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 50;
 
@@ -18,10 +19,10 @@ export function WantedSubtitlesPage() {
     <>
       <SubtitlesHeader active="wanted" />
       <Tabs
-        aria-label="Media type"
+        aria-label={t('common.mediaType')}
         tabs={[
-          { id: 'series', label: 'TV', content: <WantedTab mediaType="series" /> },
-          { id: 'movie', label: 'Movies', content: <WantedTab mediaType="movie" /> },
+          { id: 'series', label: t('common.tv'), content: <WantedTab mediaType="series" /> },
+          { id: 'movie', label: t('common.movies'), content: <WantedTab mediaType="movie" /> },
         ]}
       />
     </>
@@ -53,8 +54,8 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
       }
       toast.push({
         tone: downloaded > 0 ? 'ok' : 'info',
-        title: 'Subtitle search finished',
-        message: `Searched ${searched} ${searched === 1 ? 'file' : 'files'}, downloaded ${downloaded} ${downloaded === 1 ? 'subtitle' : 'subtitles'}.`,
+        title: t('subtitles.wantedSubtitles.subtitleSearchFinished'),
+        message: t('subtitles.wantedSubtitles.searchedFilesDownloadedSubtitles', { searched, downloaded }),
       });
       clear();
     } catch {
@@ -67,7 +68,7 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
   const columns: Column<WantedSubtitleItem>[] = [
     {
       key: 'item',
-      header: mediaType === 'series' ? 'Episode' : 'Movie',
+      header: mediaType === 'series' ? t('common.episode') : t('common.movie'),
       cell: (r) => (
         <span className="sub-item__title">
           <span>
@@ -93,10 +94,10 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
         </span>
       ),
     },
-    { key: 'missing', header: 'Missing', cell: (r) => <MissingChips missing={r.missing} /> },
+    { key: 'missing', header: t('status.missing'), cell: (r) => <MissingChips missing={r.missing} /> },
     {
       key: 'lastSearch',
-      header: 'Last search',
+      header: t('subtitles.wantedSubtitles.lastSearch'),
       mono: true,
       cell: (r) =>
         r.lastSearch ? (
@@ -104,38 +105,38 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
             {relativeTime(r.lastSearch)}
           </time>
         ) : (
-          <span className="sub-none">Never</span>
+          <span className="sub-none">{t('common.never')}</span>
         ),
     },
-    { key: 'attempts', header: 'Attempts', align: 'right', mono: true, cell: (r) => r.attempts },
+    { key: 'attempts', header: t('subtitles.wantedSubtitles.attempts'), align: 'right', mono: true, cell: (r) => r.attempts },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) => (
         <Button
           size="sm"
           variant="secondary"
           icon={<Icon name="search" />}
-          aria-label={`Search subtitles for ${itemLabel(r)}`}
+          aria-label={t('subtitles.wantedSubtitles.searchSubtitlesForItemlabel', { itemLabel: itemLabel(r) })}
           loading={search.isPending && search.variables.mediaFileId === r.mediaFileId}
           onClick={() =>
             search.mutate(
               { mediaFileId: r.mediaFileId },
-              { onSuccess: (res) => toast.push({ tone: res.downloaded > 0 ? 'ok' : 'info', title: 'Subtitle search finished', message: res.message }) },
+              { onSuccess: (res) => toast.push({ tone: res.downloaded > 0 ? 'ok' : 'info', title: t('subtitles.wantedSubtitles.subtitleSearchFinished'), message: res.message }) },
             )
           }
         >
-          Search
+          {t('common.search')}
         </Button>
       ),
     },
   ];
 
-  if (pending) return <PendingApiNotice what="subtitles" />;
+  if (pending) return <PendingApiNotice what={t('subtitles.wantedSubtitles.subtitles')} />;
   if (list.isError)
     return (
-      <ErrorBlock title="Wanted subtitles did not load" onRetry={() => void list.refetch()}>
+      <ErrorBlock title={t('subtitles.wantedSubtitles.wantedSubtitlesDidNotLoad')} onRetry={() => void list.refetch()}>
         {errorMessage(list.error)}
       </ErrorBlock>
     );
@@ -145,7 +146,7 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
   return (
     <Pane flush bare>
       <Table
-        caption={mediaType === 'series' ? 'Wanted episode subtitles' : 'Wanted movie subtitles'}
+        caption={mediaType === 'series' ? t('subtitles.wantedSubtitles.wantedEpisodeSubtitles') : t('subtitles.wantedSubtitles.wantedMovieSubtitles')}
         columns={columns}
         rows={list.data?.records}
         rowKey={(r) => r.mediaFileId}
@@ -155,13 +156,13 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
         selectable
         selected={selected}
         onSelectionChange={setSelected}
-        rowLabel={(r) => `Select ${itemLabel(r)}`}
+        rowLabel={(r) => t('subtitles.wantedSubtitles.selectItemlabel', { itemLabel: itemLabel(r) })}
         bulkActions={(keys, clear) => (
           <Button variant="secondary" size="sm" icon={<Icon name="search" />} loading={bulkRunning} onClick={() => void searchSelected(keys, clear)}>
-            Search selected
+            {t('subtitles.wantedSubtitles.searchSelected')}
           </Button>
         )}
-        empty={<EmptyState title="Nothing wanted">Every file has the subtitles its language profile asks for.</EmptyState>}
+        empty={<EmptyState title={t('subtitles.wantedSubtitles.nothingWanted')}>{t('subtitles.wantedSubtitles.everyFileHasTheSubtitles')}</EmptyState>}
       />
       {pageCount > 1 ? (
         <div className="sub-pager">

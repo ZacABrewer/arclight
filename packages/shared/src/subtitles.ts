@@ -174,6 +174,12 @@ export type SubtitleEmbeddedMode = z.infer<typeof SubtitleEmbeddedMode>;
 export const SubtitleSyncTool = z.enum(['ffsubsync', 'alass']);
 export type SubtitleSyncTool = z.infer<typeof SubtitleSyncTool>;
 
+export const SubtitleSyncCheckMethod = z.enum(['builtin', 'tool']);
+export type SubtitleSyncCheckMethod = z.infer<typeof SubtitleSyncCheckMethod>;
+
+export const SubtitleAudioDetector = z.enum(['silencedetect', 'ebur128']);
+export type SubtitleAudioDetector = z.infer<typeof SubtitleAudioDetector>;
+
 export const SubtitleSearchSettings = z.object({
   /** Items searched per SubtitleSearchWanted run (every 15 minutes). */
   batchSize: z.number().int().min(1).max(1000).default(25),
@@ -257,6 +263,22 @@ export const SubtitleSettings = z.object({
       thresholdMovie: z.number().int().min(0).max(100).default(70),
       blacklistedProviders: z.array(z.string()).default([]),
       timeoutMs: z.number().int().min(1000).default(600_000),
+      // ---- sync-quality scoring (syncScore 0-100, offsetMs, driftPpm on each subtitle) ----
+      /** Score every downloaded subtitle against the audio, and run the SubtitleSyncCheck job. */
+      autoCheck: z.boolean().default(false),
+      /** builtin: ffmpeg audio activity vs cue starts; tool: the sync tool above in check mode. */
+      checkMethod: SubtitleSyncCheckMethod.default('builtin'),
+      audioDetector: SubtitleAudioDetector.default('silencedetect'),
+      /** Length of the analysed audio window (a second, half-length window is added for long media). */
+      checkWindowMinutes: z.number().int().min(1).max(60).default(10),
+      /** Run the sync tool when the score is below this (0 = never), then score again. */
+      autoFixBelow: z.number().int().min(0).max(100).default(0),
+      /** Blacklist the subtitle and try the next candidate when the score (after any fix) is below this (0 = never). */
+      autoRetryProviderBelow: z.number().int().min(0).max(100).default(0),
+      /** Candidates tried per language after a retry before giving up. */
+      maxProviderRetries: z.number().int().min(0).max(10).default(2),
+      /** Subtitles scored per SubtitleSyncCheck run. */
+      checkBatchSize: z.number().int().min(1).max(500).default(20),
     })
     .prefault({}),
   postProcessing: z
@@ -299,6 +321,15 @@ export const SubtitleState = z.object({
   size: z.number().int().nullable(),
   mtime: isoDate().nullable(),
   added: isoDate(),
+  /** Sync quality 0-100 from the last check; null when never checked or not measurable. */
+  syncScore: z.number().int().nullable().optional(),
+  /** Shift (ms) to add to the subtitle at t = 0 to align it; positive = subtitle early. */
+  syncOffsetMs: z.number().int().nullable().optional(),
+  /** Timing scale error in parts per million (25 vs 23.976 fps ~ 42700). */
+  syncDriftPpm: z.number().int().nullable().optional(),
+  syncCheckedAt: isoDate().nullable().optional(),
+  /** builtin, ffsubsync or alass. */
+  syncMethod: z.string().nullable().optional(),
 });
 export type SubtitleState = z.infer<typeof SubtitleState>;
 
@@ -404,6 +435,10 @@ export const SubtitleHistoryRecord = z.object({
   matched: z.array(z.string()),
   notMatched: z.array(z.string()),
   upgradedFromId: z.number().int().nullable(),
+  /** Sync check of the subtitle this entry wrote (latest check), when one ran. */
+  syncScore: z.number().int().nullable().optional(),
+  syncOffsetMs: z.number().int().nullable().optional(),
+  syncDriftPpm: z.number().int().nullable().optional(),
   date: isoDate(),
 });
 export type SubtitleHistoryRecord = z.infer<typeof SubtitleHistoryRecord>;
@@ -531,6 +566,50 @@ export const SubtitleSyncResult = z.object({
   subtitle: SubtitleState.nullable(),
 });
 export type SubtitleSyncResult = z.infer<typeof SubtitleSyncResult>;
+
+/** One sync-quality measurement. Numbers are null when `reliable` is false. */
+export const SubtitleSyncCheck = z.object({
+  method: z.enum(['builtin', 'ffsubsync', 'alass']),
+  reliable: z.boolean(),
+  syncScore: z.number().int().nullable(),
+  offsetMs: z.number().int().nullable(),
+  driftPpm: z.number().int().nullable(),
+  meanErrorMs: z.number().int().nullable(),
+  /** Correlation peak above chance (builtin), 0..1. */
+  confidence: z.number(),
+  matched: z.number().int(),
+  message: z.string(),
+});
+export type SubtitleSyncCheck = z.infer<typeof SubtitleSyncCheck>;
+
+/** POST /subtitle/:id/synccheck */
+export const SubtitleSyncCheckResult = z.object({
+  ok: z.boolean(),
+  message: z.string(),
+  check: SubtitleSyncCheck.nullable(),
+  /** Auto actions taken (`fixed`, `retried`); empty for an on-demand check. */
+  actions: z.array(z.string()),
+  subtitle: SubtitleState.nullable(),
+});
+export type SubtitleSyncCheckResult = z.infer<typeof SubtitleSyncCheckResult>;
+
+/** GET /subtitle/whisper/status */
+export const SubtitleWhisperStatus = z.object({
+  /** ARCLIGHT_WHISPER_URL, when set. */
+  envUrl: z.string().nullable(),
+  /** Endpoint of the whisperai provider in settings, when present. */
+  endpoint: z.string().nullable(),
+  registered: z.boolean(),
+  enabled: z.boolean(),
+  /** Registered by WhisperAutoDetect (vs. added by hand). */
+  autoRegistered: z.boolean(),
+  onlyWhenNoOtherResult: z.boolean(),
+  /** Live probe of the endpoint (or envUrl when not registered); null when there is nothing to probe. */
+  reachable: z.boolean().nullable(),
+  message: z.string(),
+  checkedAt: isoDate(),
+});
+export type SubtitleWhisperStatus = z.infer<typeof SubtitleWhisperStatus>;
 
 /** POST /command/subtitlesearch scope: series (optionally one season), episodes, movie, or one file. */
 export const SubtitleSearchCommand = z.object({

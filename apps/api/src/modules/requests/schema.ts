@@ -30,6 +30,10 @@ export const mediaRequests = sqliteTable(
     declineReason: text('decline_reason'),
     failureReason: text('failure_reason'),
     libraryId: integer('library_id'),
+    /** Best approved release size found by the approval-policy estimate (bytes), when known. */
+    estimatedSizeBytes: integer('estimated_size_bytes'),
+    /** 'window': pending because an approval window holds it (RequestsPolicySweep re-checks). */
+    policyHold: text('policy_hold').$type<'window'>(),
     createdAt: text('created_at').notNull(),
     updatedAt: text('updated_at').notNull(),
   },
@@ -70,6 +74,8 @@ export const requestMediaStatus = sqliteTable(
     status4k: text('status_4k').$type<MediaStatus>().notNull(),
     seasons: text('seasons', { mode: 'json' }).$type<SeasonStatusEntry[]>().notNull(),
     libraryId: integer('library_id'),
+    /** Media server the normal track was found on (useMediaServerAvailability), else null. */
+    availableOn: text('available_on'),
     lastSyncedAt: text('last_synced_at'),
     updatedAt: text('updated_at').notNull(),
   },

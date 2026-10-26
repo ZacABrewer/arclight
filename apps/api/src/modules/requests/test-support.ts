@@ -32,6 +32,8 @@ export interface FakeMovie {
   originalLanguage?: string;
   genreIds?: number[];
   keywordIds?: number[];
+  /** TMDB certification (US rating) returned by getMovie/getSeries. */
+  certification?: string;
 }
 
 export interface FakeSeries extends FakeMovie {
@@ -121,6 +123,7 @@ export class FakeTmdb {
           originalLanguage: m.originalLanguage ?? 'en',
           alternateTitles: [],
           runtimeMinutes: 120,
+          ...(m.certification ? { certification: m.certification } : {}),
         };
       },
       async getSeries(id): Promise<SeriesMetadata> {
@@ -141,6 +144,7 @@ export class FakeTmdb {
           originalLanguage: s.originalLanguage ?? 'en',
           seasons: s.seasons.map((count, n) => ({ seasonNumber: n, episodeCount: count, name: n === 0 ? 'Specials' : `Season ${n}` })),
           alternateTitles: [],
+          ...(s.certification ? { certification: s.certification } : {}),
         };
       },
       async getMovieExtras(id) {

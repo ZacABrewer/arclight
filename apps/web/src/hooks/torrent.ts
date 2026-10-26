@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TorrentPriorityRequest, TorrentSettingsUpdate } from '@arclight/shared';
+import type { TorrentLimitsRequest, TorrentPriorityRequest, TorrentSettingsUpdate } from '@arclight/shared';
 import { torrentApi, type TorrentAction } from '../api/torrent.js';
 import { useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 // Everything for the built-in torrent engine lives under ['torrent'].
 export const torrentKeys = {
@@ -28,7 +29,7 @@ export function useTorrentSettings() {
 
 export function useSaveTorrentSettings() {
   return useInvalidatingMutation((body: TorrentSettingsUpdate) => torrentApi.settings.update(body), [torrentKeys.all], {
-    errorTitle: 'Could not save torrent engine settings',
+    errorTitle: t('hooks.torrent.couldNotSaveTorrentEngine'),
   });
 }
 
@@ -46,7 +47,7 @@ export function useTorrentAction(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (action: TorrentAction) => torrentApi.action(id, action),
-    meta: { errorTitle: 'Torrent action failed' },
+    meta: { errorTitle: t('hooks.torrent.torrentActionFailed') },
     onSettled: () => qc.invalidateQueries({ queryKey: torrentKeys.detail(id) }),
   });
 }
@@ -55,7 +56,25 @@ export function useTorrentPriority(id: string) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: TorrentPriorityRequest) => torrentApi.priority(id, body),
-    meta: { errorTitle: 'Could not change priority' },
+    meta: { errorTitle: t('hooks.torrent.couldNotChangePriority') },
+    onSettled: () => qc.invalidateQueries({ queryKey: torrentKeys.detail(id) }),
+  });
+}
+
+export function useTorrentLimits(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (body: TorrentLimitsRequest) => torrentApi.limits(id, body),
+    meta: { errorTitle: t('hooks.torrent.couldNotSetLimits') },
+    onSettled: () => qc.invalidateQueries({ queryKey: torrentKeys.detail(id) }),
+  });
+}
+
+export function useTorrentSuperSeed(id: string) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (enabled: boolean) => torrentApi.superSeed(id, { enabled }),
+    meta: { errorTitle: t('hooks.torrent.couldNotChangeSuperSeeding') },
     onSettled: () => qc.invalidateQueries({ queryKey: torrentKeys.detail(id) }),
   });
 }

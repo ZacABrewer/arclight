@@ -467,6 +467,7 @@ const CLIENT_IMPL: Record<DownloadClientResource['implementation'], string> = {
   sabnzbd: 'Sabnzbd',
   nzbget: 'Nzbget',
   builtin: 'ArclightBuiltin',
+  remoteEngine: 'ArclightRemoteEngine',
 };
 
 export function toV3DownloadClient(c: DownloadClientResource): Json {

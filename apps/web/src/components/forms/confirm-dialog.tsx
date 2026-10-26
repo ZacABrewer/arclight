@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, Modal } from '../../arclight/index.js';
+import { t } from '../../i18n/index.js';
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -19,7 +20,7 @@ export interface ConfirmDialogProps {
 /** Message for a 409 IN_USE answer, or undefined for anything else. */
 export function inUseMessage(err: unknown, what: string): string | undefined {
   if (err instanceof ApiError && err.status === 409) {
-    return `This ${what} is still in use and cannot be deleted. Reassign whatever uses it first. (${err.message})`;
+    return t('components.forms.confirmDialog.thisWhatIsStillIn', { what, message: err.message });
   }
   return undefined;
 }
@@ -29,7 +30,7 @@ export function ConfirmDialog({
   open,
   title,
   children,
-  confirmLabel = 'Delete',
+  confirmLabel = t('common.delete'),
   danger = true,
   onCancel,
   onConfirm,
@@ -65,7 +66,7 @@ export function ConfirmDialog({
       footer={
         <>
           <Button variant="ghost" onClick={close}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant={danger ? 'danger-solid' : 'primary'} loading={busy} onClick={() => void confirm()}>
             {confirmLabel}

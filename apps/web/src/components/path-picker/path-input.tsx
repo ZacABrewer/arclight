@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Button, Icon, Input } from '../../arclight/index.js';
 import { PathPickerDialog } from './path-picker.js';
 import './path-picker.css';
+import { t } from '../../i18n/index.js';
 
 export interface PathInputProps {
   value: string;
@@ -21,13 +22,13 @@ export interface PathInputProps {
 }
 
 /** A mono path text box with a Browse button that opens the folder picker. Works inside Field / FormRow. */
-export function PathInput({ value, onChange, pickerTitle, selectFiles = false, browseLabel = 'Browse…', ...input }: PathInputProps) {
+export function PathInput({ value, onChange, pickerTitle, selectFiles = false, browseLabel = t('components.pathPicker.pathInput.browse'), ...input }: PathInputProps) {
   const [open, setOpen] = useState(false);
   const label = input['aria-label'] ?? 'path';
   return (
     <span className="mt-path-input">
       <Input {...input} mono value={value} onChange={(e) => onChange(e.currentTarget.value)} spellCheck={false} autoComplete="off" />
-      <Button variant="secondary" icon={<Icon name="folder" />} disabled={input.disabled ?? false} onClick={() => setOpen(true)} aria-label={`Browse for ${label}`}>
+      <Button variant="secondary" icon={<Icon name="folder" />} disabled={input.disabled ?? false} onClick={() => setOpen(true)} aria-label={t('components.pathPicker.pathInput.browseForLabel', { label })}>
         {browseLabel}
       </Button>
       <PathPickerDialog

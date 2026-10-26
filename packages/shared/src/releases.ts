@@ -36,6 +36,8 @@ export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
   movieTitle: z.string().optional(),
+  /** Multi-version items: the version slot the release was evaluated for (best-fitting profile). */
+  versionTag: z.string().optional(),
   quality: QualityModel,
   languages: z.array(z.string()),
   customFormats: z.array(z.object({ id: z.number().int(), name: z.string() })),
@@ -173,3 +175,73 @@ export type SearchCommandResponse = z.infer<typeof SearchCommandResponse>;
 
 export const ReleasesErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type ReleasesErrorResponse = z.infer<typeof ReleasesErrorResponse>;
+
+// ---- decision log -----------------------------------------------------------------------
+
+/** Where a logged evaluation batch came from (coarser than `ReleaseSource`; `pending` = re-decided held releases). */
+export const DecisionLogSource = z.enum(['rss', 'search', 'interactive', 'push', 'pending']);
+export type DecisionLogSource = z.infer<typeof DecisionLogSource>;
+
+/** One release as the engine judged it in one batch. */
+export const DecisionLogEntry = z.object({
+  id: z.number().int(),
+  batchId: z.string(),
+  /** ISO-8601 time of the batch. */
+  time: z.string(),
+  source: DecisionLogSource,
+  mediaType: MediaType.nullable(),
+  seriesId: z.number().int().nullable(),
+  episodeIds: z.array(z.number().int()),
+  movieId: z.number().int().nullable(),
+  guid: z.string(),
+  indexerId: z.number().int(),
+  title: z.string(),
+  quality: QualityModel,
+  formats: z.array(z.object({ id: z.number().int(), name: z.string() })),
+  score: z.number().int(),
+  approved: z.boolean(),
+  rejections: z.array(ReleaseRejection),
+  /** The release was grabbed from this batch. */
+  chosen: z.boolean(),
+  /** 1-based position in the engine's preference order among the batch's releases for the same item; null when unranked (unmatched). */
+  rank: z.number().int().nullable(),
+});
+export type DecisionLogEntry = z.infer<typeof DecisionLogEntry>;
+
+/** One evaluation batch, decisions in rank order. */
+export const DecisionLogBatch = z.object({
+  batchId: z.string(),
+  time: z.string(),
+  source: DecisionLogSource,
+  /** Rows in this batch (for the item when listed per item). */
+  total: z.number().int(),
+  approved: z.number().int(),
+  /** True when a release of this batch was grabbed. */
+  grabbed: z.boolean(),
+  /** The grabbed row, else the best-ranked approved row; null when nothing qualified. */
+  winnerId: z.number().int().nullable(),
+  decisions: z.array(DecisionLogEntry),
+});
+export type DecisionLogBatch = z.infer<typeof DecisionLogBatch>;
+
+/** GET /release/decisions: exactly one of seriesId, episodeId, movieId. */
+export const DecisionLogQuery = z
+  .object({
+    seriesId: z.coerce.number().int().min(1).optional(),
+    episodeId: z.coerce.number().int().min(1).optional(),
+    movieId: z.coerce.number().int().min(1).optional(),
+    page: z.coerce.number().int().min(1).default(1),
+    pageSize: z.coerce.number().int().min(1).max(100).default(10),
+  })
+  .refine((q) => [q.seriesId, q.episodeId, q.movieId].filter((v) => v !== undefined).length === 1, {
+    message: 'exactly one of seriesId, episodeId or movieId is required',
+  });
+export type DecisionLogQuery = z.infer<typeof DecisionLogQuery>;
+
+export const DecisionLogPage = z.object({
+  page: z.number().int(),
+  pageSize: z.number().int(),
+  totalRecords: z.number().int(),
+  records: z.array(DecisionLogBatch),
+});
+export type DecisionLogPage = z.infer<typeof DecisionLogPage>;

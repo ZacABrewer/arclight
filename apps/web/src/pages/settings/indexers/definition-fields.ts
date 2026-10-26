@@ -12,6 +12,7 @@ import type {
 import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import type { ChipTone } from '../../../arclight/index.js';
+import { t } from '../../../i18n/index.js';
 
 // Definition (catalogue) indexers: the editor's fields come from the definition's own
 // `settings` list (served as `settingsFields`); values live under `settings.fields.<name>`.
@@ -19,7 +20,7 @@ import type { ChipTone } from '../../../arclight/index.js';
 /** Privacy is a fact, not a state: no accent or warning colours (rule 2). */
 export const PRIVACY_TONES: Record<IndexerPrivacy, ChipTone> = { public: 'default', 'semi-private': 'neutral', private: 'neutral' };
 
-export const PRIVACY_LABELS: Record<IndexerPrivacy, string> = { public: 'Public', 'semi-private': 'Semi-private', private: 'Private' };
+export const PRIVACY_LABELS: Record<IndexerPrivacy, string> = { get public() { return t('settings.indexers.definitionFields.public'); }, get 'semi-private'() { return t('settings.indexers.definitionFields.semiPrivate'); }, get private() { return t('common.private'); } };
 
 /** Field path for one definition setting. */
 export const definitionFieldPath = (name: string) => `settings.fields.${name}`;
@@ -42,7 +43,7 @@ function settingField(f: DefinitionSettingField): FieldDefinition {
       return { ...base, type: 'select', options: (f.options ?? []).map((o) => ({ value: o.value, label: o.label })) };
     case 'multi-select':
       // Stored values are strings: multiple choices travel comma separated.
-      return { ...base, type: 'text', helpText: `Comma-separated. Choices: ${(f.options ?? []).map((o) => o.value).join(', ')}` };
+      return { ...base, type: 'text', helpText: t('settings.indexers.definitionFields.commaSeparatedChoicesMap', { map: (f.options ?? []).map((o) => o.value).join(', ') }) };
     default:
       return { ...base, type: 'text' };
   }
@@ -51,41 +52,41 @@ function settingField(f: DefinitionSettingField): FieldDefinition {
 /** Editor fields for a definition indexer. */
 export function definitionFields(def: IndexerDefinitionSummary, proxies: readonly IndexerProxy[] = []): FieldDefinition[] {
   const fields: FieldDefinition[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
-    { name: 'enableRss', label: 'Enable RSS', type: 'checkbox' },
-    { name: 'enableAutomaticSearch', label: 'Enable automatic search', type: 'checkbox' },
-    { name: 'enableInteractiveSearch', label: 'Enable interactive search', type: 'checkbox' },
+    { name: 'name', label: t('common.name'), type: 'text', required: true },
+    { name: 'enableRss', label: t('settings.indexers.definitionFields.enableRss'), type: 'checkbox' },
+    { name: 'enableAutomaticSearch', label: t('settings.indexers.definitionFields.enableAutomaticSearch'), type: 'checkbox' },
+    { name: 'enableInteractiveSearch', label: t('settings.indexers.definitionFields.enableInteractiveSearch'), type: 'checkbox' },
   ];
   if (def.links.length > 1) {
     fields.push({
       name: 'settings.baseUrl',
-      label: 'Site link',
+      label: t('settings.indexers.definitionFields.siteLink'),
       type: 'select',
       options: def.links.map((l) => ({ value: l, label: l })),
-      helpText: 'Mirror to use.',
+      helpText: t('settings.indexers.definitionFields.mirrorToUse'),
     });
   }
   fields.push(...def.settingsFields.filter((f) => !f.informational).map(settingField));
   fields.push(
     {
       name: 'proxyId',
-      label: 'Proxy',
+      label: t('settings.indexers.definitionFields.proxy'),
       type: 'select',
-      options: [{ value: '', label: 'By tag (automatic)' }, ...proxies.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }))],
-      helpText: 'Without an explicit proxy, proxies whose tags match this indexer apply.',
+      options: [{ value: '', label: t('settings.indexers.definitionFields.byTagAutomatic') }, ...proxies.map((p) => ({ value: p.id, label: `${p.name} (${p.type})` }))],
+      helpText: t('settings.indexers.definitionFields.withoutAnExplicitProxyProxies'),
     },
-    { name: 'settings.categories', label: 'Categories', type: 'multiSelect',
+    { name: 'settings.categories', label: t('common.categories'), type: 'multiSelect',
       advanced: true,
       options: def.categories.map((c) => ({ value: c.id, label: `${c.name} (${c.id})` })),
-      helpText: 'Empty searches every category the site maps.',
+      helpText: t('settings.indexers.definitionFields.emptySearchesEveryCategoryThe'),
     },
-    { name: 'settings.minimumSeeders', label: 'Minimum seeders', type: 'number', min: 0, advanced: true },
-    { name: 'settings.seedRatio', label: 'Seed ratio', type: 'number', min: 0, advanced: true },
-    { name: 'settings.seedTime', label: 'Seed time', type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
-    { name: 'settings.rateLimitSeconds', label: 'Rate limit', type: 'number', min: 0, unit: 's', advanced: true },
+    { name: 'settings.minimumSeeders', label: t('settings.indexers.definitionFields.minimumSeeders'), type: 'number', min: 0, advanced: true },
+    { name: 'settings.seedRatio', label: t('settings.indexers.definitionFields.seedRatio'), type: 'number', min: 0, advanced: true },
+    { name: 'settings.seedTime', label: t('settings.indexers.definitionFields.seedTime'), type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
+    { name: 'settings.rateLimitSeconds', label: t('settings.indexers.definitionFields.rateLimit'), type: 'number', min: 0, unit: 's', advanced: true },
     {
       name: 'priority',
-      label: 'Priority',
+      label: t('common.priority'),
       type: 'number',
       min: INDEXER_PRIORITY_MIN,
       max: INDEXER_PRIORITY_MAX,
@@ -93,7 +94,7 @@ export function definitionFields(def: IndexerDefinitionSummary, proxies: readonl
       required: true,
       advanced: true,
     },
-    { name: 'tags', label: 'Tags', type: 'text', advanced: true },
+    { name: 'tags', label: t('common.tags'), type: 'text', advanced: true },
   );
   return fields;
 }
@@ -197,9 +198,14 @@ export function catalogueLanguages(list: readonly IndexerDefinitionSummary[]): s
 export function filterTemplates(list: readonly IndexerTemplate[], text: string): IndexerTemplate[] {
   const words = text.toLowerCase().split(/\s+/).filter(Boolean);
   return list
-    .filter((t) => t.implementation !== 'definition')
-    .filter((t) => {
-      const hay = `${t.implementation} ${t.implementationName} ${t.protocol}`.toLowerCase();
+    .filter((item) => item.implementation !== 'definition')
+    .filter((entry) => {
+      const hay = `${entry.implementation} ${entry.implementationName} ${entry.protocol}`.toLowerCase();
       return words.every((w) => hay.includes(w));
     });
+}
+
+/** The definition sits behind a browser challenge (`requiresFlareSolverr`, or an `info_flaresolverr` note). */
+export function definitionNeedsSolver(def: Pick<IndexerDefinitionSummary, 'settingsFields'> & { requiresFlareSolverr?: boolean | undefined }): boolean {
+  return def.requiresFlareSolverr === true || def.settingsFields.some((f) => f.type === 'info_flaresolverr');
 }

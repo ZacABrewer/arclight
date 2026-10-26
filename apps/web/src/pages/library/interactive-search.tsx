@@ -17,6 +17,8 @@ import { formatBytes } from '../../components/media/format.js';
 import { Loading, QualityLabel, QueryError } from '../../components/media/media-kit.js';
 import { useGrabRelease, useInteractiveSearch, type ReleaseSearchTarget } from '../../hooks/library.js';
 import './library.css';
+import { versionColumn } from './versions/versions-editor.js';
+import { t } from '../../i18n/index.js';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
   if (r.age >= 1) return `${r.age}d`;
@@ -35,10 +37,10 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
   const grab = useGrabRelease();
 
   const columns: Column<ReleaseDecision>[] = [
-    { key: 'protocol', header: 'Source', sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} />, width: '64px' },
+    { key: 'protocol', header: t('common.source'), sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} />, width: '64px' },
     {
       key: 'title',
-      header: 'Title',
+      header: t('common.title'),
       sortValue: (r) => r.title,
       cell: (r) =>
         r.infoUrl ? (
@@ -51,44 +53,45 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
           </span>
         ),
     },
-    { key: 'indexer', header: 'Indexer', sortValue: (r) => r.indexerName, cell: (r) => r.indexerName, muted: true },
-    { key: 'age', header: 'Age', sortValue: (r) => r.ageMinutes, cell: formatAge, mono: true, align: 'right' },
-    { key: 'size', header: 'Size', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size), mono: true, align: 'right' },
+    { key: 'indexer', header: t('common.indexer'), sortValue: (r) => r.indexerName, cell: (r) => r.indexerName, muted: true },
+    { key: 'age', header: t('library.interactiveSearch.age'), sortValue: (r) => r.ageMinutes, cell: formatAge, mono: true, align: 'right' },
+    { key: 'size', header: t('common.size'), sortValue: (r) => r.size, cell: (r) => formatBytes(r.size), mono: true, align: 'right' },
     {
       key: 'peers',
-      header: 'Peers',
+      header: t('common.peers'),
       sortValue: (r) => r.seeders,
       cell: (r) => (r.protocol === 'torrent' ? `${r.seeders ?? '?'} / ${r.leechers ?? '?'}` : '—'),
       mono: true,
       align: 'right',
     },
-    { key: 'quality', header: 'Quality', sortValue: (r) => r.quality.quality.weight, cell: (r) => <QualityLabel quality={r.quality} /> },
+    { key: 'quality', header: t('common.quality'), sortValue: (r) => r.quality.quality.weight, cell: (r) => <QualityLabel quality={r.quality} /> },
+    ...versionColumn(releases.data, (r) => r.versionTag, t('common.version')),
     {
       key: 'score',
-      header: 'Formats',
+      header: t('common.formats'),
       sortValue: (r) => r.customFormatScore,
       cell: (r) => (
         <span className="mk-scores">
           {r.customFormats.map((c) => (
             <Tag key={c.id}>{c.name}</Tag>
           ))}
-          <ScoreTag name="Score" score={r.customFormatScore} />
+          <ScoreTag name={t('common.score')} score={r.customFormatScore} />
         </span>
       ),
     },
     {
       key: 'decision',
-      header: 'Decision',
+      header: t('library.interactiveSearch.decision'),
       sortValue: decisionRank,
       cell: (r) =>
         r.approved ? (
-          <Chip tone="accent">Approved</Chip>
+          <Chip tone="accent">{t('common.approved')}</Chip>
         ) : (
           <Tooltip content={<RejectionList reasons={r.rejections.map((x) => x.message)} />}>
             <button type="button" className="mk-action-link" aria-label={`${r.rejections.length} rejections: ${r.rejections.map((x) => x.message).join('; ')}`}>
               <StatusChip
                 status={r.temporarilyRejected ? 'queued' : 'missing'}
-                label={`${r.rejections.length} ${r.rejections.length === 1 ? 'rejection' : 'rejections'}`}
+                label={t('library.interactiveSearch.rejections', { rejectionsCount: r.rejections.length })}
               />
             </button>
           </Tooltip>
@@ -96,13 +99,13 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
     },
     {
       key: 'grab',
-      header: <span className="al-sr-only">Grab</span>,
+      header: <span className="al-sr-only">{t('library.interactiveSearch.grab')}</span>,
       align: 'right',
       cell: (r) => (
         <Button
           size="sm"
           variant="secondary"
-          aria-label={`Grab ${r.title}`}
+          aria-label={t('library.interactiveSearch.grabTitle', { title: r.title })}
           disabled={!r.downloadAllowed}
           loading={grab.isPending && grab.variables?.guid === r.guid}
           onClick={() =>
@@ -115,15 +118,15 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
             })
           }
         >
-          Grab
+          {t('library.interactiveSearch.grab')}
         </Button>
       ),
     },
   ];
 
   if (target === null) return null;
-  if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label="Searching indexers" />;
-  if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title="Search failed" />;
+  if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label={t('library.interactiveSearch.searchingIndexers')} />;
+  if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title={t('common.searchFailed')} />;
   return (
     <Table
       columns={columns}
@@ -132,8 +135,8 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
       density="dense"
       defaultSort={{ key: 'decision', direction: 'asc' }}
       maxHeight="62vh"
-      empty={<EmptyState title="No releases found">Every enabled indexer was searched.</EmptyState>}
-      caption="Releases"
+      empty={<EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>}
+      caption={t('library.interactiveSearch.releases')}
     />
   );
 }
@@ -141,7 +144,7 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
 /** Interactive search over GET /release: Modal 1100 with every decision and its rejections. */
 export function InteractiveSearchModal({ target, title, onClose }: { target: ReleaseSearchTarget | null; title: string; onClose: () => void }) {
   return (
-    <Modal open={target !== null} onClose={onClose} title={`Interactive search · ${title}`} size={1100}>
+    <Modal open={target !== null} onClose={onClose} title={t('library.interactiveSearch.interactiveSearchTitle', { title })} size={1100}>
       <ReleaseTable target={target} />
     </Modal>
   );

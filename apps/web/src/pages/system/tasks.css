@@ -1,0 +1,5 @@
+/* System → Tasks: one-line media analysis queue indicator (flat 1px line, wraps on mobile). */
+.sys-analysis { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 16px; padding: 12px 16px; border: 1px solid var(--al-line-2); }
+.sys-analysis__state { display: inline-flex; align-items: center; gap: 8px; }
+.sys-analysis__warn { color: var(--al-warn-text); font-size: 13px; }
+.sys-analysis__fail { flex-basis: 100%; overflow-wrap: anywhere; }

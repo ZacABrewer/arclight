@@ -1,3 +1,4 @@
+import { t } from '../../i18n/index.js';
 // Client-side preview of the folder the api will create for a new series/movie. Mirrors the
 // library service's rule: `<root>/<Title (Year)>`, colons become " - ", characters illegal in
 // file names are dropped, trailing dots/spaces trimmed. The server stays the authority; this
@@ -11,7 +12,7 @@ export function sanitizeFolderName(name: string): string {
     .replace(/\s+/g, ' ')
     .trim()
     .replace(/[. ]+$/g, '');
-  return cleaned.length > 0 ? cleaned : 'Untitled';
+  return cleaned.length > 0 ? cleaned : t('common.untitled');
 }
 
 export function folderName(title: string, year: number | null | undefined): string {

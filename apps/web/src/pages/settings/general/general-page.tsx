@@ -13,16 +13,23 @@ import { SettingsSection } from '../shared.js';
 import { ApiKeyControls } from '../security/api-key.js';
 import '../security/security.css';
 import { UiPreferencesSection } from './ui-preferences-section.js';
+import { ConfigAsCodeSection } from './config-as-code.js';
+import { isSectionManaged, managedSectionKeys, useManagedKeys } from '../../../hooks/config.js';
+import { t } from '../../../i18n/index.js';
 
 export const METADATA_FIELDS: FieldDefinition[] = [
   {
     name: 'tmdbApiKey',
-    label: 'TMDB API key',
+    get label() {
+      return t('settings.general.tmdbApiKey');
+    },
     type: 'password',
-    helpText: 'Your TMDB v3 API key. Leave empty to use the ARCLIGHT_TMDB_API_KEY environment variable.',
+    get helpText() {
+      return t('settings.general.yourTmdbV3ApiKey');
+    },
   },
-  { name: 'language', label: 'Metadata language', type: 'text', required: true, placeholder: 'en-US', helpText: 'BCP-47 tag, e.g. en-US, fr-FR.' },
-  { name: 'region', label: 'Region', type: 'text', required: true, placeholder: 'US', helpText: 'Two-letter country code used for release dates and certifications.' },
+  { name: 'language', get label() { return t('settings.general.metadataLanguage'); }, type: 'text', required: true, placeholder: 'en-US', get helpText() { return t('settings.general.bcp47TagEG'); } },
+  { name: 'region', get label() { return t('settings.general.region'); }, type: 'text', required: true, get placeholder() { return t('settings.general.us'); }, get helpText() { return t('settings.general.twoLetterCountryCodeUsed'); } },
 ];
 
 /** Form values -> PUT body: the mask keeps the stored key, an emptied field clears it. */
@@ -45,7 +52,7 @@ function metadataValues(data: MetadataSettingsResponse | undefined): FormValues 
 export function metadataErrors(values: FormValues): FieldErrors {
   const errors = validateFields(METADATA_FIELDS, values);
   const region = String(values.region ?? '').trim();
-  if (region && region.length !== 2) errors.region = 'Use a two-letter code';
+  if (region && region.length !== 2) errors.region = t('settings.general.useATwoLetterCode');
   return errors;
 }
 
@@ -53,6 +60,7 @@ export function GeneralPage() {
   const metadata = useMetadataSettings();
   const save = useSaveMetadataSettings();
   const status = useSystemStatus();
+  const managed = useManagedKeys();
   const [origin] = useState(() => (typeof location === 'undefined' ? '' : location.host));
   const saved = useMemo(() => metadataValues(metadata.data), [metadata.data]);
   const draft = useDraft<FormValues | null>(saved);
@@ -68,8 +76,8 @@ export function GeneralPage() {
 
   return (
     <SettingsPage
-      title="General"
-      description="Metadata source, host details and the API key apps use to reach Arclight."
+      title={t('common.general')}
+      description={t('settings.general.metadataSourceHostDetailsAnd')}
       save={{
         count: draft.changes,
         onSave,
@@ -81,11 +89,11 @@ export function GeneralPage() {
         disabled: invalid,
       }}
     >
-      <SettingsSection label="Metadata">
+      <SettingsSection label={t('settings.general.metadata')} managed={isSectionManaged(managed.data, 'metadata')} managedKeys={managedSectionKeys(managed.data, 'metadata')}>
         {metadata.isPending ? (
           <Skeleton lines={3} />
         ) : metadata.isError ? (
-          <ErrorBlock title="Could not load metadata settings" onRetry={() => void metadata.refetch()}>
+          <ErrorBlock title={t('settings.general.couldNotLoadMetadataSettings')} onRetry={() => void metadata.refetch()}>
             {errorMessage(metadata.error)}
           </ErrorBlock>
         ) : draft.value ? (
@@ -100,31 +108,33 @@ export function GeneralPage() {
         ) : null}
       </SettingsSection>
 
-      <SettingsSection label="Host">
+      <SettingsSection label={t('common.host')}>
         <KeyValue
           items={[
-            { label: 'Address', value: origin || '—' },
-            { label: 'Port', value: 'Set with the ARCLIGHT_PORT environment variable', mono: false },
-            { label: 'Log level', value: 'Set with the ARCLIGHT_LOG_LEVEL environment variable', mono: false },
-            { label: 'Config folder', value: status.data?.paths.config ?? '—' },
-            { label: 'Version', value: status.data?.version ?? '—' },
+            { label: t('common.address'), value: origin || '—' },
+            { label: t('common.port'), value: t('settings.general.setWithTheArclightPort'), mono: false },
+            { label: t('settings.general.logLevel'), value: t('settings.general.setWithTheArclightLog'), mono: false },
+            { label: t('settings.general.configFolder'), value: status.data?.paths.config ?? '—' },
+            { label: t('common.version'), value: status.data?.version ?? '—' },
           ]}
         />
       </SettingsSection>
 
-      <FormSection label="API key">
-        <FormRow label="API key" htmlFor="general-api-key" caption="Apps and scripts send this as the X-Api-Key header (or ?apikey=). It grants admin access.">
+      <FormSection label={t('common.apiKey')}>
+        <FormRow label={t('common.apiKey')} htmlFor="general-api-key" caption={t('settings.general.appsAndScriptsSendThis')}>
           <ApiKeyControls id="general-api-key" />
         </FormRow>
       </FormSection>
 
       <UiPreferencesSection />
 
-      <FormSection label="Backups">
-        <FormRow label="Database backups" caption="Create, download and restore backups on the System pages.">
+      <ConfigAsCodeSection />
+
+      <FormSection label={t('common.backups')}>
+        <FormRow label={t('settings.general.databaseBackups')} caption={t('settings.general.createDownloadAndRestoreBackups')}>
           <div>
             <Link to="/system/backup" className={buttonClass({ variant: 'secondary' })}>
-              Open backups
+              {t('settings.general.openBackups')}
             </Link>
           </div>
         </FormRow>

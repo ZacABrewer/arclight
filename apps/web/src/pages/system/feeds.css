@@ -1,0 +1,4 @@
+/* System → Feeds. */
+.sys-feed__name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.sys-feed__state { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.sys-feed__warn { color: var(--al-warn-text); }

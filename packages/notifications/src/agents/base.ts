@@ -37,6 +37,7 @@ export const LIBRARY_EVENTS: ReadonlySet<NotificationEventType> = new Set<Notifi
   'mediaDeleted',
   'fileDeleted',
   'subtitleDownloaded',
+  'fileTranscoded',
 ]);
 
 export function testEvent(instanceName = 'Arclight', now: () => Date = () => new Date()): TestEvent {

@@ -14,6 +14,7 @@ import { useDeleteLanguageProfile, useLanguageProfiles, useSaveLanguageProfile }
 import { FLAG_MODE_LABELS, LanguagePicker, useLanguageName } from '../../subtitles/subtitle-ui.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
 import './subtitle-settings.css';
+import { t } from '../../../i18n/index.js';
 
 export const EMPTY_LANGUAGE_PROFILE: LanguageProfileInput = {
   name: '',
@@ -33,8 +34,8 @@ export interface CutoffOption {
 export function cutoffOptions(languages: readonly LanguageProfileItem[], name: (code: string) => string = (c) => c): CutoffOption[] {
   const codes = [...new Set(languages.map((l) => l.code))];
   return [
-    { value: '', label: 'None' },
-    { value: LANGUAGE_PROFILE_CUTOFF_ANY, label: 'Any language' },
+    { value: '', label: t('common.none') },
+    { value: LANGUAGE_PROFILE_CUTOFF_ANY, label: t('settings.subtitles.languageProfilesCard.anyLanguage') },
     ...codes.map((c) => ({ value: c, label: name(c) })),
   ];
 }
@@ -100,10 +101,10 @@ function LanguageRows({
     setOver(null);
   };
 
-  if (languages.length === 0) return <p className="al-caption">No languages yet. Add one below; the first language is searched first.</p>;
+  if (languages.length === 0) return <p className="al-caption">{t('settings.subtitles.languageProfilesCard.noLanguagesYetAddOne')}</p>;
 
   return (
-    <ol className="al-lang-list" aria-label="Profile languages">
+    <ol className="al-lang-list" aria-label={t('settings.subtitles.languageProfilesCard.profileLanguages')}>
       {languages.map((l, i) => {
         const label = name(l.code);
         return (
@@ -118,35 +119,35 @@ function LanguageRows({
             onDrop={onDrop(i)}
             onDragEnd={end}
           >
-            <span className="al-lang-row__handle" aria-hidden="true" title="Drag to reorder">
+            <span className="al-lang-row__handle" aria-hidden="true" title={t('settings.subtitles.languageProfilesCard.dragToReorder')}>
               ⋮⋮
             </span>
             <span className="al-lang-row__name">
               {label} <span className="al-num al-lang-row__code">{l.code}</span>
-              {cutoff === l.code ? <Chip tone="accent">Cutoff</Chip> : null}
+              {cutoff === l.code ? <Chip tone="accent">{t('settings.subtitles.languageProfilesCard.cutoff')}</Chip> : null}
             </span>
             <label className="al-lang-row__flag">
-              <span className="al-lang-row__flag-label">Forced</span>
-              <Select aria-label={`Forced for ${l.code}`} value={l.forced} onChange={(e) => setItem(i, { forced: e.currentTarget.value as LanguageProfileFlagMode })} options={FLAG_OPTIONS} />
+              <span className="al-lang-row__flag-label">{t('common.forced')}</span>
+              <Select aria-label={t('settings.subtitles.languageProfilesCard.forcedForCode', { code: l.code })} value={l.forced} onChange={(e) => setItem(i, { forced: e.currentTarget.value as LanguageProfileFlagMode })} options={FLAG_OPTIONS} />
             </label>
             <label className="al-lang-row__flag">
-              <span className="al-lang-row__flag-label">HI</span>
-              <Select aria-label={`HI for ${l.code}`} value={l.hi} onChange={(e) => setItem(i, { hi: e.currentTarget.value as LanguageProfileFlagMode })} options={FLAG_OPTIONS} />
+              <span className="al-lang-row__flag-label">{t('common.hi')}</span>
+              <Select aria-label={t('settings.subtitles.languageProfilesCard.hiForCode', { code: l.code })} value={l.hi} onChange={(e) => setItem(i, { hi: e.currentTarget.value as LanguageProfileFlagMode })} options={FLAG_OPTIONS} />
             </label>
             <span className="al-lang-row__actions">
-              <Button size="sm" variant="ghost" aria-label={`Move ${l.code} up`} disabled={i === 0} onClick={() => onChange(moveLanguage(languages, i, i - 1))}>
+              <Button size="sm" variant="ghost" aria-label={t('settings.subtitles.languageProfilesCard.moveCodeUp', { code: l.code })} disabled={i === 0} onClick={() => onChange(moveLanguage(languages, i, i - 1))}>
                 ↑
               </Button>
               <Button
                 size="sm"
                 variant="ghost"
-                aria-label={`Move ${l.code} down`}
+                aria-label={t('settings.subtitles.languageProfilesCard.moveCodeDown', { code: l.code })}
                 disabled={i === languages.length - 1}
                 onClick={() => onChange(moveLanguage(languages, i, i + 1))}
               >
                 ↓
               </Button>
-              <Button size="sm" variant="ghost" aria-label={`Remove ${l.code}`} onClick={() => onChange(languages.filter((_, j) => j !== i))}>
+              <Button size="sm" variant="ghost" aria-label={t('settings.subtitles.languageProfilesCard.removeCode', { code: l.code })} onClick={() => onChange(languages.filter((_, j) => j !== i))}>
                 ✕
               </Button>
             </span>
@@ -167,8 +168,8 @@ export function LanguageProfileEditor({ profile, onClose }: { profile: LanguageP
   const ids = useId();
 
   const submit = () => {
-    if (!draft.name.trim()) return setError('Name is required');
-    if (draft.languages.length === 0) return setError('Add at least one language');
+    if (!draft.name.trim()) return setError(t('common.nameIsRequired'));
+    if (draft.languages.length === 0) return setError(t('settings.subtitles.languageProfilesCard.addAtLeastOneLanguage'));
     setError(null);
     save.mutate({ id: profile?.id, body: toProfileBody(draft) }, { onSuccess: onClose });
   };
@@ -179,39 +180,39 @@ export function LanguageProfileEditor({ profile, onClose }: { profile: LanguageP
         open
         size={640}
         onClose={onClose}
-        title={profile ? `Edit ${profile.name}` : 'Add language profile'}
+        title={profile ? t('settings.subtitles.languageProfilesCard.editName', { name: profile.name }) : t('settings.subtitles.languageProfilesCard.addLanguageProfile')}
         footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} onDelete={profile ? () => setConfirmDelete(true) : undefined} />}
       >
         <div className="al-editor-stack">
-          <Field label="Name">
+          <Field label={t('common.name')}>
             <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.currentTarget.value })} />
           </Field>
           <div className="al-editor-stack__group" role="group" aria-labelledby={`${ids}-langs`}>
             <div className="al-label" id={`${ids}-langs`}>
-              Languages · in search order
+              {t('settings.subtitles.languageProfilesCard.languagesInSearchOrder')}
             </div>
             <LanguageRows languages={draft.languages} cutoff={draft.cutoff} name={name} onChange={(languages) => setDraft((d) => ({ ...d, languages }))} />
             <LanguagePicker
-              label="Add language"
+              label={t('settings.subtitles.languageProfilesCard.addLanguage')}
               exclude={draft.languages.map((l) => l.code)}
               onPick={(code) => setDraft((d) => ({ ...d, languages: [...d.languages, { code, forced: 'never', hi: 'also' }] }))}
             />
           </div>
-          <Field label="Cutoff" hint="Once a subtitle for the cutoff exists nothing else is searched. None wants every language.">
+          <Field label={t('settings.subtitles.languageProfilesCard.cutoff')} hint={t('settings.subtitles.languageProfilesCard.onceASubtitleForThe')}>
             <Select
               value={draft.cutoff ?? ''}
               onChange={(e) => setDraft({ ...draft, cutoff: e.currentTarget.value || null })}
               options={cutoffOptions(draft.languages, name)}
             />
           </Field>
-          <Field label="Must contain" hint="Release info must match one of these (regex or text).">
+          <Field label={t('settings.subtitles.languageProfilesCard.mustContain')} hint={t('settings.subtitles.languageProfilesCard.releaseInfoMustMatchOne')}>
             <TermList value={draft.mustContain} onChange={(mustContain) => setDraft({ ...draft, mustContain })} />
           </Field>
-          <Field label="Must not contain" hint="Release info matching any of these is rejected.">
+          <Field label={t('settings.subtitles.languageProfilesCard.mustNotContain')} hint={t('settings.subtitles.languageProfilesCard.releaseInfoMatchingAnyOf')}>
             <TermList value={draft.mustNotContain} onChange={(mustNotContain) => setDraft({ ...draft, mustNotContain })} />
           </Field>
           <Toggle
-            label="Keep original format (do not convert to SubRip)"
+            label={t('settings.subtitles.languageProfilesCard.keepOriginalFormatDoNot')}
             checked={draft.originalFormat}
             onChange={(e) => setDraft({ ...draft, originalFormat: e.currentTarget.checked })}
           />
@@ -226,8 +227,8 @@ export function LanguageProfileEditor({ profile, onClose }: { profile: LanguageP
       {profile ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${profile.name}?`}
-          confirmLabel="Delete language profile"
+          title={t('settings.subtitles.languageProfilesCard.deleteName', { name: profile.name })}
+          confirmLabel={t('settings.subtitles.languageProfilesCard.deleteLanguageProfile')}
           describeError={(err) => inUseMessage(err, 'language profile')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
@@ -247,38 +248,38 @@ export function LanguageProfilesCard() {
   const pending = list.error instanceof ApiError && list.error.status === 404;
 
   return (
-    <SettingsSection label="Language profiles" {...(list.data ? { count: list.data.length } : {})}>
+    <SettingsSection label={t('settings.subtitles.languageProfilesCard.languageProfiles')} {...(list.data ? { count: list.data.length } : {})}>
       {list.isPending ? (
         <Skeleton lines={3} />
       ) : pending ? (
-        <PendingApiNotice what="language profiles" />
+        <PendingApiNotice what={t('settings.subtitles.languageProfilesCard.languageProfiles2')} />
       ) : list.isError ? (
-        <ErrorBlock title="Could not load language profiles" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.subtitles.languageProfilesCard.couldNotLoadLanguageProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
-        <CardGrid label="Language profiles">
+        <CardGrid label={t('settings.subtitles.languageProfilesCard.languageProfiles')}>
           {list.data.map((p) => (
             <ItemCard
               key={p.id}
               title={p.name}
               onClick={() => setEditing(p)}
               actions={
-                <Button size="sm" variant="secondary" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
-                  Edit
+                <Button size="sm" variant="secondary" onClick={() => setEditing(p)} aria-label={t('settings.subtitles.languageProfilesCard.editName', { name: p.name })}>
+                  {t('common.edit')}
                 </Button>
               }
             >
               {p.languages.map((l, i) => (
                 <Chip key={`${l.code}-${i}`} tone={p.cutoff === l.code ? 'accent' : 'neutral'} dot={p.cutoff === l.code ? 'fill' : 'none'}>
                   {name(l.code)}
-                  {l.forced !== 'never' ? ` · forced ${l.forced}` : ''}
-                  {l.hi !== 'also' ? ` · HI ${l.hi}` : ''}
+                  {l.forced !== 'never' ? t('settings.subtitles.languageProfilesCard.forcedForced', { forced: l.forced }) : ''}
+                  {l.hi !== 'also' ? t('settings.subtitles.languageProfilesCard.hiHi', { hi: l.hi }) : ''}
                 </Chip>
               ))}
             </ItemCard>
           ))}
-          <AddCard label="Add language profile" onClick={() => setEditing('new')} />
+          <AddCard label={t('settings.subtitles.languageProfilesCard.addLanguageProfile')} onClick={() => setEditing('new')} />
         </CardGrid>
       )}
       {editing ? (

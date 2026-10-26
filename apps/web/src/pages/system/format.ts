@@ -1,3 +1,4 @@
+import { formatDecimal, intlLocale } from '../../i18n/index.js';
 // Mono data formatting shared by the dashboard and the System pages (copy rules: numbers in
 // mono with units: "72.4 MB/s", "412 GB", "3d 7h", "03:00").
 
@@ -9,7 +10,7 @@ export function formatBytes(bytes: number | null | undefined): string {
   if (bytes === 0) return '0 B';
   const exp = Math.min(UNITS.length - 1, Math.floor(Math.log(bytes) / Math.log(1024)));
   const value = bytes / 1024 ** exp;
-  return `${value >= 99.95 || exp === 0 ? Math.round(value) : value.toFixed(1)} ${UNITS[exp]}`;
+  return `${value >= 99.95 || exp === 0 ? Math.round(value) : formatDecimal(value, 1)} ${UNITS[exp]}`;
 }
 
 export function formatRate(bytesPerSecond: number | null | undefined): string {
@@ -45,7 +46,7 @@ export function formatStamp(iso: string): string {
 
 /** "Sun 25 Oct" */
 export function formatDay(d: Date): string {
-  const wd = d.toLocaleDateString('en-GB', { weekday: 'short' });
-  const mon = d.toLocaleDateString('en-GB', { month: 'short' });
+  const wd = d.toLocaleDateString(intlLocale() ?? 'en-GB', { weekday: 'short' });
+  const mon = d.toLocaleDateString(intlLocale() ?? 'en-GB', { month: 'short' });
   return `${wd} ${d.getDate()} ${mon}`;
 }

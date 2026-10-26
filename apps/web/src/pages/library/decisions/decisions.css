@@ -1,0 +1,23 @@
+/* Decision log (details "Decisions" tab, episode drawer, History "Why this release"). */
+.dec-list { display: flex; flex-direction: column; gap: 20px; }
+.dec-batch { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.dec-batch__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 13px; padding-bottom: 8px; border-bottom: 1px solid var(--al-line-1); }
+.dec-batch__time { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-2); }
+.dec-batch__counts { color: var(--al-text-3); }
+.dec-batch__link { margin-left: auto; }
+.dec-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.dec-row { display: grid; grid-template-columns: 36px minmax(0, 1fr); gap: 4px 10px; padding: 8px 10px 8px 8px; border-left: 2px solid transparent; }
+.dec-row[data-state="grabbed"],
+.dec-row[data-state="winner"] { border-left-color: var(--al-cyan); background: var(--al-cyan-a06); }
+.dec-row__rank { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); padding-top: 2px; }
+.dec-row__main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dec-row__title { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.dec-row__title .mk-release-title { max-width: 100%; min-width: 0; flex: 0 1 auto; font-family: var(--al-mono); font-size: 12px; }
+.dec-row__meta { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.dec-chipbtn { padding: 0; border: 0; background: none; cursor: help; max-width: 100%; }
+.dec-chipbtn .al-chip { max-width: 280px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dec-foot { display: flex; justify-content: flex-end; padding-top: 12px; }
+@media (max-width: 767px) {
+  .dec-batch__link { margin-left: 0; }
+  .dec-row { grid-template-columns: 28px minmax(0, 1fr); }
+}

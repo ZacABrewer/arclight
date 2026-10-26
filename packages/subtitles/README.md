@@ -15,13 +15,14 @@ The only runtime dependencies are the workspace packages (`@arclight/parser`, `@
 | Query | `buildQuery({ mediaType, file: MediaFile-like, title, ids…, languages })`: parses the file name, fills gaps from the scene name, then from quality and mediaInfo |
 | Hashes | `computeOpenSubtitlesHash(path)`, `openSubtitlesHash(size, head, tail)`, `computeNapiprojektHash`, `computeFileHashes` |
 | Scoring | `EPISODE_SCORES`, `MOVIE_SCORES`, `minimumScore` (324/360, 126/180), `computeMatches`, `score`, `scoreCandidate`, `selectCandidates`, `chooseBest`, `passesReleaseFilters`, `matchReport` |
-| Search | `SubtitleSearcher` (`search`, `manualSearch`, `download`, `searchAndDownload`), `prepareSubtitle` |
+| Search | `SubtitleSearcher` (`search`, `manualSearch`, `download`, `searchAndDownload`), `prepareSubtitle`. `fallbackProviders` (onlyWhenNoOtherResult) are searched after the others, only for languages with no candidate at the minimum score |
 | Throttle | `ThrottleTracker`: strike counting (5 in 120 s), exponential backoff, daily limit until midnight UTC, per-provider overrides, serialisable entries |
 | Archives | `extractSubtitle`, `readZip`, `writeZip`, `gunzip`, `xzDecompress`, `pickEntry` (season-pack episode picker). rar and 7z raise `ArchiveError('unsupported-archive')` |
 | Formats | `detectFormat`, `convertToSrt` (ASS/SSA, VTT, MicroDVD), `isValidSrt`, `looksHearingImpaired` |
 | Encoding | `decodeSubtitle` (tries BOM, then declared encoding, strict UTF-8, language code pages, a statistical pick, and finally windows-1252), `toUtf8` |
 | Naming | `nameSubtitleFile(mediaPath, tag, {forced, hi}, style)` gives `Movie.en.srt`, `Movie.en.forced.srt`, `Movie.en.hi.srt`/`.sdh`/`.cc`, `Movie.pt-BR.srt`, or `Movie.srt` with singleLanguage. Also `parseSubtitleFileName` |
 | Post-processing | `buildFfsubsyncCommand`, `buildAlassCommand`, `shouldSync`, `buildPostProcessCommand` (placeholders plus `ARCLIGHT_*` env vars), `shouldPostProcess` |
+| Sync scoring | `buildAudioActivityCommand` (ffmpeg silencedetect/ebur128 per window), `planAudioWindows`, `parseSilenceDetect`, `parseEbur128`, `estimateSync` (speech onsets vs cue starts: Gaussian-kernel cross-correlation over offsets and frame-rate ratios, then a trimmed line fit → `syncScore` 0-100, `offsetMs`, `driftPpm`, `reliable`), `buildSyncCheckCommand` + `compareTimings` (sync tool in check mode), `syncAutoAction` |
 
 ## Providers
 
@@ -38,7 +39,7 @@ The only runtime dependencies are the workspace packages (`@arclight/parser`, `@
 | subf2m | `Subf2mProvider` | title, imdb verification | Implemented by HTML scraping. A Cloudflare challenge reports `captcha`. |
 | napisy24 | `Napisy24Provider` | OpenSubtitles hash + size | Implemented. Polish only, and the user must supply credentials (the upstream fallback account is not reproduced). |
 | embeddedsubtitles | `EmbeddedProvider` | local file | Uses an injected `probe`. `buildSubtitleExtractArgs` produces ffmpeg argv, and an injected `runFfmpeg` performs extraction. Bitmap codecs are never offered. |
-| whisperai | `WhisperProvider` | local file | Posts audio to an external Whisper-ASR web service (`/asr`, `/detect-language`). `buildAudioExtractArgs` produces the ffmpeg argv for extraction. |
+| whisperai | `WhisperProvider` | local file | Posts audio to an external Whisper-ASR web service (`/asr`, `/detect-language`). `buildAudioExtractArgs` produces the ffmpeg argv for extraction. `probeWhisperService` (HEAD `/docs`, then `/asr`) backs auto-detection. |
 
 ## Limitations
 

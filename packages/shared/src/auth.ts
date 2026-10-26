@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { MediaType } from './library.js';
-import { Permission } from './requests.js';
+import { MediaServerKind, Permission } from './requests.js';
 
 // Authentication, users and first-run setup. Behaviour: docs/API.md "Authentication".
 // Users carry a `permissions` bitfield and a free-form `settings` record now so that the
@@ -21,6 +21,12 @@ export function hasPermission(held: number, wanted: number): boolean {
 
 export const ThemeName = z.enum(['tron', 'dark', 'light']);
 export type ThemeName = z.infer<typeof ThemeName>;
+
+/**
+ * Keys of `users.settings` only managers may change (through their own routes); PUT /user/me
+ * drops them so users cannot lift their own quota, caps or approval overrides.
+ */
+export const ADMIN_MANAGED_USER_SETTINGS: readonly string[] = ['quota', 'contentRestrictions', 'approvalPolicy', 'discordUserId'];
 
 /** Per-user preferences. Unknown keys are kept so later phases can add their own. */
 export const UserSettings = z.looseObject({
@@ -103,8 +109,17 @@ export type PasswordChange = z.infer<typeof PasswordChange>;
 export const AuthMethod = z.enum(['forms', 'basic', 'none']);
 export type AuthMethod = z.infer<typeof AuthMethod>;
 
+/**
+ * How a login is checked: `local` against Arclight's own password; `jellyfin`/`emby` (or
+ * `mediaServer`, whichever kind is configured) against the media server in Settings > Media
+ * server. Plex signs in through the PIN flow (/auth/plex/pin + /auth/plex/poll) instead.
+ */
+export const LoginMethod = z.enum(['local', 'jellyfin', 'emby', 'mediaServer']);
+export type LoginMethod = z.infer<typeof LoginMethod>;
+
 /** POST /api/v1/auth/login. `rememberMe: false` makes the cookie end with the browser session. */
 export const LoginRequest = z.object({
+  method: LoginMethod.default('local'),
   username: z.string().trim().min(1),
   password: z.string().min(1),
   rememberMe: z.boolean().default(true),
@@ -130,6 +145,8 @@ export const AuthStatus = z.object({
   authMethod: AuthMethod,
   authenticated: z.boolean(),
   session: Session.nullable(),
+  /** Media-server sign-in offered on the login page: the first enabled server with loginEnabled, else null. */
+  mediaServerLogin: z.object({ kind: MediaServerKind, name: z.string().optional() }).nullable().optional(),
 });
 export type AuthStatus = z.infer<typeof AuthStatus>;
 

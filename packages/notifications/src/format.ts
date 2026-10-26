@@ -10,6 +10,7 @@ import type {
   NotificationEvent,
   NotificationEventType,
   ReleaseInfo,
+  RetentionLine,
 } from './types.js';
 
 export type Severity = 'info' | 'success' | 'upgrade' | 'warning' | 'error';
@@ -19,6 +20,12 @@ export interface FormattedField {
   value: string;
   /** Hint for agents that lay fields out in columns (Discord). */
   inline?: boolean;
+}
+
+/** A link a human can act on (approve/decline a request, open the admin page). */
+export interface FormattedAction {
+  label: string;
+  url: string;
 }
 
 export interface FormattedEvent {
@@ -34,6 +41,21 @@ export interface FormattedEvent {
   link?: string;
   posterUrl?: string;
   fanartUrl?: string;
+  /** Deep links into Arclight's admin pages; only when `applicationUrl` is set. */
+  actions?: FormattedAction[];
+  /** Who the event is about (request events): shown as author/footer by rich agents. */
+  person?: { name: string; avatarUrl?: string };
+}
+
+/** Arclight's request/issue pages for an event, when the instance URL is known. */
+export function requestLinks(applicationUrl: string | undefined, requestId: number): { view: string; approve: string; decline: string } | undefined {
+  if (!applicationUrl) return undefined;
+  const base = applicationUrl.replace(/\/+$/, '');
+  return {
+    view: `${base}/requests/${requestId}`,
+    approve: `${base}/requests/${requestId}?action=approve`,
+    decline: `${base}/requests/${requestId}?action=decline`,
+  };
 }
 
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB'] as const;
@@ -166,8 +188,20 @@ export function eventSubject(event: NotificationEvent): string {
       return `New ${ISSUE_TYPE_LABELS[event.issue.issueType]}Issue Reported`;
     case 'issueUpdated':
       return event.issue.change === 'resolved' ? 'Issue Resolved' : event.issue.change === 'reopened' ? 'Issue Reopened' : 'New Issue Comment';
+    case 'requestsDigest':
+      return 'Requests Digest';
+    case 'retention':
+      return 'Retention Summary';
+    case 'fileTranscoded':
+      return `${noun(event.media, event.episodes)} File Transcoded`;
   }
 }
+
+const RETENTION_ACTION_LABELS: Record<RetentionLine['action'], string> = {
+  unmonitor: 'unmonitor',
+  deleteFiles: 'delete files',
+  deleteItem: 'delete',
+};
 
 const ISSUE_TYPE_LABELS: Record<'video' | 'audio' | 'subtitles' | 'other', string> = {
   video: 'Video ',
@@ -188,6 +222,8 @@ export function eventSeverity(event: NotificationEvent): Severity {
       return 'upgrade';
     case 'healthIssue':
       return event.health.status === 'error' ? 'error' : 'warning';
+    case 'retention':
+      return event.totalFailed > 0 ? 'warning' : 'info';
     case 'manualInteractionRequired':
     case 'mediaDeleted':
     case 'fileDeleted':
@@ -219,6 +255,9 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   requestDeclined: 'On Request Declined',
   issueCreated: 'On Issue Reported',
   issueUpdated: 'On Issue Updated',
+  requestsDigest: 'Requests Digest',
+  retention: 'Retention Summary',
+  fileTranscoded: 'On File Transcoded',
 };
 
 function releaseFields(release: ReleaseInfo): FormattedField[] {
@@ -262,6 +301,9 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
   let link: string | undefined;
   let posterUrl: string | undefined;
   let fanartUrl: string | undefined;
+  const actions: FormattedAction[] = [];
+  let person: FormattedEvent['person'];
+  const base = event.applicationUrl?.replace(/\/+$/, '');
 
   const media = 'media' in event ? event.media : undefined;
   const episodes = 'episodes' in event ? event.episodes : undefined;
@@ -379,9 +421,67 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Path', value: event.subtitle.path });
       break;
     }
+    case 'requestsDigest': {
+      title = `${event.totalPendingRequests} pending request${event.totalPendingRequests === 1 ? '' : 's'}, ${event.totalOpenIssues} open issue${event.totalOpenIssues === 1 ? '' : 's'}`;
+      if (event.pendingRequests.length > 0) {
+        const lines = event.pendingRequests.map(
+          (r) => `${r.title}${r.year ? ` (${r.year})` : ''}${r.is4k ? ' [4K]' : ''} - ${r.requestedBy}`,
+        );
+        if (event.totalPendingRequests > lines.length) lines.push(`...and ${event.totalPendingRequests - lines.length} more`);
+        fields.push({ name: 'Pending Requests', value: lines.join('\n') });
+      }
+      if (event.openIssues.length > 0) {
+        const lines = event.openIssues.map((i) => `${i.title} (${i.issueType}) - ${i.reportedBy}`);
+        if (event.totalOpenIssues > lines.length) lines.push(`...and ${event.totalOpenIssues - lines.length} more`);
+        fields.push({ name: 'Open Issues', value: lines.join('\n') });
+      }
+      if (base) {
+        link = `${base}/requests?filter=pending`;
+        actions.push({ label: 'Review requests', url: link });
+        if (event.totalOpenIssues > 0) actions.push({ label: 'Open issues', url: `${base}/issues?filter=open` });
+      }
+      break;
+    }
+    case 'retention': {
+      const parts = [
+        `${event.totalStaged} staged`,
+        `${event.totalApplied} applied`,
+        ...(event.totalFailed > 0 ? [`${event.totalFailed} failed`] : []),
+      ];
+      title = parts.join(', ');
+      const line = (l: RetentionLine): string =>
+        `${l.title}${l.year ? ` (${l.year})` : ''} - ${l.rule}: ${RETENTION_ACTION_LABELS[l.action]}` +
+        (l.applyAfter ? ` after ${l.applyAfter.slice(0, 10)}` : '') +
+        (l.error ? ` (${truncate(l.error, 120)})` : '');
+      const list = (name: string, lines: RetentionLine[], total: number): void => {
+        if (lines.length === 0) return;
+        const out = lines.map(line);
+        if (total > out.length) out.push(`...and ${total - out.length} more`);
+        fields.push({ name, value: out.join('\n') });
+      };
+      list('Staged', event.staged, event.totalStaged);
+      list('Applied', event.applied, event.totalApplied);
+      list('Failed', event.failed, event.totalFailed);
+      if (event.freedBytes > 0) fields.push({ name: 'Freed', value: formatBytes(event.freedBytes), inline: true });
+      if (base) {
+        link = `${base}/retention`;
+        actions.push({ label: 'Review candidates', url: link });
+      }
+      break;
+    }
+    case 'fileTranscoded':
+      fields.push({ name: 'Action', value: event.action, inline: true });
+      if (event.rule) fields.push({ name: 'Rule', value: event.rule, inline: true });
+      fields.push({ name: 'Size', value: `${formatBytes(event.sizeBefore)} -> ${formatBytes(event.sizeAfter)}`, inline: true });
+      fields.push({ name: 'Path', value: event.file.relativePath });
+      break;
     case 'issueCreated':
     case 'issueUpdated': {
       const issue = event.issue;
+      if (base) {
+        link = `${base}/issues/${issue.id}`;
+        actions.push({ label: 'View issue', url: link });
+      }
       fields.push({ name: 'Reported By', value: issue.reportedBy.username, inline: true });
       fields.push({ name: 'Status', value: issue.status, inline: true });
       if (issue.problemSeason && issue.problemSeason > 0) {
@@ -397,10 +497,21 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
     case 'requestDeclined':
       if (event.reason) fields.push({ name: 'Reason', value: truncate(event.reason, 500) });
       fields.push({ name: 'Requested By', value: event.request.requestedBy.username, inline: true });
+      person = personOf(event.request.requestedBy);
+      if (base) link = `${base}/requests/${event.request.id}`;
       break;
     case 'requestCreated':
     case 'requestApproved':
-    case 'requestAvailable':
+    case 'requestAvailable': {
+      person = personOf(event.request.requestedBy);
+      const links = requestLinks(base, event.request.id);
+      if (links) {
+        link = links.view;
+        if (event.type === 'requestCreated' && event.request.status === 'pending') {
+          actions.push({ label: 'Approve', url: links.approve }, { label: 'Decline', url: links.decline });
+        }
+        actions.push({ label: 'View request', url: links.view });
+      }
       fields.push({ name: 'Requested By', value: event.request.requestedBy.username, inline: true });
       fields.push({ name: 'Status', value: event.request.status, inline: true });
       if (event.request.seasons && event.request.seasons.length > 0) {
@@ -408,6 +519,7 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       }
       if (event.request.is4k) fields.push({ name: '4K', value: 'Yes', inline: true });
       break;
+    }
   }
 
   if (media?.overview && (event.type === 'grab' || event.type === 'mediaAdded' || event.type.startsWith('request'))) {
@@ -415,11 +527,18 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
   }
 
   const bodyLines = [subject, ...fields.map((f) => `${f.name}: ${f.value}`)];
-  if (link) bodyLines.push(link);
+  if (actions.length > 0) bodyLines.push(...actions.map((a) => `${a.label}: ${a.url}`));
+  else if (link) bodyLines.push(link);
 
   const result: FormattedEvent = { subject, title, body: bodyLines.join('\n'), severity, fields };
   if (link) result.link = link;
   if (posterUrl) result.posterUrl = posterUrl;
   if (fanartUrl) result.fanartUrl = fanartUrl;
+  if (actions.length > 0) result.actions = actions;
+  if (person) result.person = person;
   return result;
+}
+
+function personOf(user: { username: string; avatar?: string }): NonNullable<FormattedEvent['person']> {
+  return user.avatar ? { name: user.username, avatarUrl: user.avatar } : { name: user.username };
 }

@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent, type MouseEvent } from 'react';
 import { cx } from '../cx.js';
 import { Mark } from '../components/Icon.js';
+import { t } from '../../i18n/index.js';
 
 export type RailCode = 'DB' | 'LB' | 'DS' | 'RQ' | 'CL' | 'WN' | 'AC' | 'SB' | 'IX' | 'ST' | 'SY';
 
@@ -17,17 +18,17 @@ export interface RailItem {
 
 /** The 11 rail codes from the handoff README, in order. */
 export const RAIL_ITEMS: readonly RailItem[] = [
-  { code: 'DB', label: 'DASH', title: 'Dashboard' },
-  { code: 'LB', label: 'LIB', title: 'Library' },
-  { code: 'DS', label: 'DISC', title: 'Discover' },
-  { code: 'RQ', label: 'REQ', title: 'Requests' },
-  { code: 'CL', label: 'CAL', title: 'Calendar' },
-  { code: 'WN', label: 'WANT', title: 'Wanted' },
-  { code: 'AC', label: 'ACT', title: 'Activity', adminOnly: true },
-  { code: 'SB', label: 'SUBS', title: 'Subtitles', adminOnly: true },
-  { code: 'IX', label: 'INDX', title: 'Indexers', adminOnly: true },
-  { code: 'ST', label: 'SET', title: 'Settings', adminOnly: true },
-  { code: 'SY', label: 'SYS', title: 'System', adminOnly: true },
+  { code: 'DB', get label() { return t('arclight.chrome.rail.dash'); }, get title() { return t('common.dashboard'); } },
+  { code: 'LB', get label() { return t('arclight.chrome.rail.lib'); }, get title() { return t('common.library'); } },
+  { code: 'DS', get label() { return t('arclight.chrome.rail.disc'); }, get title() { return t('common.discover'); } },
+  { code: 'RQ', get label() { return t('arclight.chrome.rail.req'); }, get title() { return t('common.requests'); } },
+  { code: 'CL', get label() { return t('arclight.chrome.rail.cal'); }, get title() { return t('common.calendar'); } },
+  { code: 'WN', get label() { return t('arclight.chrome.rail.want'); }, get title() { return t('common.wanted'); } },
+  { code: 'AC', get label() { return t('arclight.chrome.rail.act'); }, get title() { return t('common.activity'); }, adminOnly: true },
+  { code: 'SB', get label() { return t('arclight.chrome.rail.subs'); }, get title() { return t('common.subtitles'); }, adminOnly: true },
+  { code: 'IX', get label() { return t('arclight.chrome.rail.indx'); }, get title() { return t('common.indexers'); }, adminOnly: true },
+  { code: 'ST', get label() { return t('arclight.chrome.rail.set'); }, get title() { return t('common.settings'); }, adminOnly: true },
+  { code: 'SY', get label() { return t('arclight.chrome.rail.sys'); }, get title() { return t('common.system'); }, adminOnly: true },
 ];
 
 export interface RailProps {
@@ -73,14 +74,14 @@ export function Rail({ active, items = RAIL_ITEMS, onSelect, compact, homeHref, 
   };
 
   return (
-    <nav className={cx('al-rail', compact && 'al-rail--compact', className)} aria-label="Main">
+    <nav className={cx('al-rail', compact && 'al-rail--compact', className)} aria-label={t('arclight.chrome.rail.main')}>
       {homeHref ? (
-        <a className="al-rail__mark" href={homeHref} aria-label="Arclight home" onClick={(e) => onSelect?.('DB', e)}>
+        <a className="al-rail__mark" href={homeHref} aria-label={t('arclight.chrome.rail.arclightHome')} onClick={(e) => onSelect?.('DB', e)}>
           <Mark size={40} />
         </a>
       ) : (
         <span className="al-rail__mark">
-          <Mark size={40} label="Arclight" />
+          <Mark size={40} label={t('arclight.chrome.rail.arclight')} />
         </span>
       )}
       <ul ref={listRef} className="al-rail__list" onKeyDown={onKeyDown}>

@@ -46,9 +46,9 @@ import {
   type SearchKind,
 } from './search-model.js';
 import './search.css';
+import { t } from '../i18n/index.js';
 
 const route = getRouteApi('/search');
-const TITLE = 'Search';
 
 export interface ReleaseColumnOptions {
   categoryName: (id: number) => string;
@@ -64,7 +64,7 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
   return [
     {
       key: 'title',
-      header: 'Title',
+      header: t('common.title'),
       sortValue: (r) => r.title,
       cell: (r) => (
         <span className="mt-release__title">
@@ -80,19 +80,19 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
         </span>
       ),
     },
-    { key: 'indexer', header: 'Indexer', muted: true, sortValue: (r) => r.indexerName, cell: (r) => r.indexerName },
+    { key: 'indexer', header: t('common.indexer'), muted: true, sortValue: (r) => r.indexerName, cell: (r) => r.indexerName },
     {
       key: 'age',
-      header: 'Age',
+      header: t('search.age'),
       mono: true,
       align: 'right',
       sortValue: (r) => r.ageMinutes,
       cell: (r) => <span title={formatDateTime(r.publishDate)}>{formatAge(r)}</span>,
     },
-    { key: 'size', header: 'Size', mono: true, align: 'right', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size) },
+    { key: 'size', header: t('common.size'), mono: true, align: 'right', sortValue: (r) => r.size, cell: (r) => formatBytes(r.size) },
     {
       key: 'peers',
-      header: 'Peers',
+      header: t('common.peers'),
       mono: true,
       align: 'right',
       sortValue: (r) => (r.protocol === 'torrent' ? (r.seeders ?? -1) : (r.grabs ?? -1)),
@@ -100,7 +100,7 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
     },
     {
       key: 'quality',
-      header: 'Quality',
+      header: t('common.quality'),
       sortValue: (r) => releaseQuality(r.title),
       cell: (r) => {
         const q = releaseQuality(r.title);
@@ -109,7 +109,7 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
     },
     {
       key: 'scores',
-      header: 'Formats',
+      header: t('common.formats'),
       cell: (r) => {
         const scores = releaseScores(r);
         return scores.length ? (
@@ -125,7 +125,7 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
     },
     {
       key: 'rejections',
-      header: <span className="al-sr-only">Rejections</span>,
+      header: <span className="al-sr-only">{t('search.rejections')}</span>,
       align: 'center',
       cell: (r) =>
         r.rejections.length ? (
@@ -135,28 +135,28 @@ export function releaseColumns({ categoryName, onGrab, grabbing }: ReleaseColumn
               size="sm"
               className="mt-release__rejected"
               icon={<Icon name="alert" />}
-              aria-label={`${r.rejections.length} ${r.rejections.length === 1 ? 'rejection' : 'rejections'} for ${r.title}`}
+              aria-label={t('search.rejectionsForTitle', { rejectionsCount: r.rejections.length, title: r.title })}
             />
           </Tooltip>
         ) : null,
     },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (r) => {
         const link = downloadLink(r);
         const magnet = link?.startsWith('magnet:') ?? false;
-        const what = magnet ? 'Open magnet link' : r.protocol === 'torrent' ? 'Download .torrent' : 'Download .nzb';
+        const what = magnet ? t('search.openMagnetLink') : r.protocol === 'torrent' ? t('search.downloadTorrent') : t('search.downloadNzb');
         return (
           <span className="mt-release__actions">
             {link ? (
               <Tooltip content={what}>
-                <LinkButton variant="ghost" size="sm" icon={<Icon name={magnet ? 'link' : 'download'} />} href={link} rel="noreferrer noopener" aria-label={`Download ${r.title}`} />
+                <LinkButton variant="ghost" size="sm" icon={<Icon name={magnet ? 'link' : 'download'} />} href={link} rel="noreferrer noopener" aria-label={t('search.downloadTitle', { title: r.title })} />
               </Tooltip>
             ) : null}
-            <Button size="sm" variant="secondary" loading={grabbing(r)} onClick={() => onGrab(r)} aria-label={`Grab ${r.title}`}>
-              Grab
+            <Button size="sm" variant="secondary" loading={grabbing(r)} onClick={() => onGrab(r)} aria-label={t('search.grabTitle', { title: r.title })}>
+              {t('search.grab')}
             </Button>
           </span>
         );
@@ -178,7 +178,7 @@ export function SearchPage() {
   const indexers = useIndexerList();
 
   useEffect(() => {
-    document.title = `${TITLE} · Arclight`;
+    document.title = t('search.titleArclight', { title: t('search.title') });
   }, []);
 
   // The top bar (or a link) changed ?q=: search for it.
@@ -205,16 +205,16 @@ export function SearchPage() {
   const grab = useMutation({
     mutationFn: (r: ReleaseResource) => indexersApi.searchGrab({ guid: r.guid, indexerId: r.indexerId }),
     meta: { silent: true },
-    onSuccess: (res) => toast.push({ tone: 'ok', title: 'Sent to download client', message: res.title }),
+    onSuccess: (res) => toast.push({ tone: 'ok', title: t('search.sentToDownloadClient'), message: res.title }),
     onError: (err, r) => {
-      if (isNoMatch(err)) setForceTarget({ release: r, reason: err instanceof Error ? err.message : 'No library match' });
-      else toast.push({ tone: 'error', title: 'Grab failed', message: err instanceof Error ? err.message : String(err) });
+      if (isNoMatch(err)) setForceTarget({ release: r, reason: err instanceof Error ? err.message : t('search.noLibraryMatch') });
+      else toast.push({ tone: 'error', title: t('search.grabFailed'), message: err instanceof Error ? err.message : String(err) });
     },
   });
   const forceGrab = async (r: ReleaseResource) => {
     const res = await indexersApi.searchGrab({ guid: r.guid, indexerId: r.indexerId, force: true });
     setForceTarget(null);
-    toast.push({ tone: 'ok', title: res.matched ? 'Sent to download client' : 'Force-grabbed (not tracked in the library)', message: res.title });
+    toast.push({ tone: 'ok', title: res.matched ? t('search.sentToDownloadClient') : t('search.forceGrabbedNotTrackedIn'), message: res.title });
   };
 
   const names = useMemo(() => categoryNameMap(categories.data ?? []), [categories.data]);
@@ -240,28 +240,28 @@ export function SearchPage() {
 
   return (
     <>
-      <PageHeader index="08" title={TITLE} subtitle="Search every indexer at once." />
+      <PageHeader index="08" title={t('search.title')} subtitle={t('search.searchEveryIndexerAtOnce')} />
       <Pane className="mt-search">
-        <form className="mt-search__form" role="search" aria-label="Indexer search" onSubmit={onSubmit}>
+        <form className="mt-search__form" role="search" aria-label={t('search.indexerSearch')} onSubmit={onSubmit}>
           <div className="mt-search__bar">
-            <Input size="lg" aria-label="Search query" placeholder="Title, release name…" value={form.query} onChange={(e) => setForm({ ...form, query: e.currentTarget.value })} />
+            <Input size="lg" aria-label={t('search.searchQuery')} placeholder={t('search.titleReleaseName')} value={form.query} onChange={(e) => setForm({ ...form, query: e.currentTarget.value })} />
             <Button type="submit" variant="primary" size="lg" icon={<Icon name="search" />} loading={results.isFetching} disabled={!form.query.trim()}>
-              Search
+              {t('common.search')}
             </Button>
           </div>
           <FilterBar activeCount={activeFilters} onClear={() => setForm({ ...form, kind: 'all', categories: [], indexerIds: [] })}>
             <Select
-              aria-label="Type"
+              aria-label={t('common.type')}
               value={form.kind}
               onChange={(e) => setForm({ ...form, kind: e.currentTarget.value as SearchKind, categories: [] })}
               options={[
-                { value: 'all', label: 'All types' },
-                { value: 'series', label: 'TV' },
-                { value: 'movie', label: 'Movies' },
+                { value: 'all', label: t('search.allTypes') },
+                { value: 'series', label: t('common.tv') },
+                { value: 'movie', label: t('common.movies') },
               ]}
             />
-            <MultiSelect label="Categories" options={catOptions} value={form.categories} onChange={(c) => setForm({ ...form, categories: c })} emptyLabel="All categories" />
-            <MultiSelect label="Indexers" options={indexerOptions} value={form.indexerIds} onChange={(ids) => setForm({ ...form, indexerIds: ids })} emptyLabel="All indexers" />
+            <MultiSelect label={t('common.categories')} options={catOptions} value={form.categories} onChange={(c) => setForm({ ...form, categories: c })} emptyLabel={t('search.allCategories')} />
+            <MultiSelect label={t('common.indexers')} options={indexerOptions} value={form.indexerIds} onChange={(ids) => setForm({ ...form, indexerIds: ids })} emptyLabel={t('search.allIndexers')} />
           </FilterBar>
         </form>
       </Pane>
@@ -270,7 +270,7 @@ export function SearchPage() {
         <Pane
           flush
           className="mt-search__results"
-          title={results.data ? `${rows?.length ?? 0} of ${results.data.length} results` : 'Results'}
+          title={results.data ? t('search.valueOfDatacountResults', { value: rows?.length ?? 0, dataCount: results.data.length }) : t('common.results')}
           actions={
             <FilterBar
               activeCount={activeRefine}
@@ -279,54 +279,54 @@ export function SearchPage() {
                 setRefine('');
               }}
             >
-              <Input aria-label="Filter results" placeholder="Filter titles" value={refine} onChange={(e) => setRefine(e.currentTarget.value)} />
+              <Input aria-label={t('search.filterResults')} placeholder={t('search.filterTitles')} value={refine} onChange={(e) => setRefine(e.currentTarget.value)} />
               <Select
-                aria-label="Protocol"
+                aria-label={t('common.protocol')}
                 value={protocol}
                 onChange={(e) => setProtocol(e.currentTarget.value as ProtocolFilter)}
                 options={[
-                  { value: 'all', label: 'Any protocol' },
-                  { value: 'torrent', label: 'Torrent' },
-                  { value: 'usenet', label: 'Usenet' },
+                  { value: 'all', label: t('search.anyProtocol') },
+                  { value: 'torrent', label: t('common.torrent') },
+                  { value: 'usenet', label: t('common.usenet') },
                 ]}
               />
             </FilterBar>
           }
         >
           {results.isError ? (
-            <ErrorBlock title="Search failed" onRetry={() => void results.refetch()}>
+            <ErrorBlock title={t('common.searchFailed')} onRetry={() => void results.refetch()}>
               {errorMessage(results.error)}
             </ErrorBlock>
           ) : (
             <Table
-              caption="Search results"
+              caption={t('common.searchResults')}
               columns={columns}
               rows={rows}
               rowKey={(r) => `${r.indexerId}:${r.guid}`}
               loading={results.isFetching && !results.data}
               defaultSort={{ key: 'age', direction: 'asc' }}
-              empty={<EmptyState title="No results">Try fewer words, another type or more categories.</EmptyState>}
+              empty={<EmptyState title={t('search.noResults')}>{t('search.tryFewerWordsAnotherType')}</EmptyState>}
             />
           )}
         </Pane>
       ) : (
-        <EmptyState title="Search your indexers" className="mt-search__empty">
-          Type a title and press Search. Library matches show in the top bar as you type.
+        <EmptyState title={t('search.searchYourIndexers')} className="mt-search__empty">
+          {t('search.typeATitleAndPress')}
         </EmptyState>
       )}
       {forceTarget ? (
         <ConfirmDialog
           open
-          title="Force grab?"
-          confirmLabel="Force grab"
+          title={t('search.forceGrab')}
+          confirmLabel={t('search.forceGrab2')}
           danger={false}
           onCancel={() => setForceTarget(null)}
           onConfirm={() => forceGrab(forceTarget.release)}
         >
           <p>
-            <strong className="mt-release__name">{forceTarget.release.title}</strong> does not match anything in your library ({forceTarget.reason}).
+            <strong className="mt-release__name">{forceTarget.release.title}</strong> {t('search.doesNotMatchAnythingIn', { reason: forceTarget.reason })}
           </p>
-          <p>Force grabbing sends it to the default {forceTarget.release.protocol} client. It will show as unknown in the queue and will not be imported.</p>
+          <p>{t('search.forceGrabbingSendsItTo', { protocol: forceTarget.release.protocol })}</p>
         </ConfirmDialog>
       ) : null}
     </>

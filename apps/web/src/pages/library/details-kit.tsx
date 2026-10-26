@@ -12,6 +12,7 @@ import { useItemHistory, useQueue } from '../../hooks/activity.js';
 import { useRefreshMedia, type RefreshTarget } from '../../hooks/library.js';
 import { useTitle } from '../../hooks/requests.js';
 import './library.css';
+import { t } from '../../i18n/index.js';
 
 // Pieces shared by the series and movie details pages (Page 03).
 
@@ -40,7 +41,7 @@ export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips,
       <div className="mk-hero__grid">
         <Poster src={poster} title={title} className="mk-hero__poster" loading="eager" />
         <div className="mk-hero__body">
-          <nav className="mk-crumb" aria-label="Breadcrumb">
+          <nav className="mk-crumb" aria-label={t('library.detailsKit.breadcrumb')}>
             {crumb}
           </nav>
           <h1 className="mk-hero__title">
@@ -63,7 +64,7 @@ export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips,
 export function LibraryCrumb({ kind }: { kind: 'series' | 'movie' }) {
   return (
     <>
-      <Link to={kind === 'series' ? '/library/tv' : '/library/movies'}>Library</Link> / {kind === 'series' ? 'Series' : 'Movie'}
+      <Link to={kind === 'series' ? '/library/tv' : '/library/movies'}>{t('common.library')}</Link> / {kind === 'series' ? t('common.series') : t('common.movie')}
     </>
   );
 }
@@ -77,10 +78,10 @@ export function RefreshButtons({ target }: { target: RefreshTarget }) {
   return (
     <>
       <Button loading={running === 'refresh'} disabled={running === 'scan'} onClick={() => refresh.mutate({ target, rescan: false })}>
-        Refresh
+        {t('common.refresh')}
       </Button>
       <Button loading={running === 'scan'} disabled={running === 'refresh'} onClick={() => refresh.mutate({ target, rescan: true })}>
-        Refresh &amp; scan
+        {t('library.detailsKit.refreshScan')}
       </Button>
     </>
   );
@@ -140,13 +141,13 @@ export function HistoryTable({ scope }: { scope: { seriesId: number } | { movieI
   const history = useItemHistory(scope);
   const isSeries = 'seriesId' in scope;
   const columns: Column<HistoryRecord>[] = [
-    { key: 'date', header: 'Date', sortValue: (r) => r.date, cell: (r) => formatDate(r.date, { dateStyle: 'medium', timeStyle: 'short' }), mono: true, width: '190px' },
-    { key: 'event', header: 'Event', sortValue: (r) => historyEventLabel(r.eventType), cell: (r) => <HistoryEventChip type={r.eventType} />, width: '140px' },
+    { key: 'date', header: t('common.date'), sortValue: (r) => r.date, cell: (r) => formatDate(r.date, { dateStyle: 'medium', timeStyle: 'short' }), mono: true, width: '190px' },
+    { key: 'event', header: t('library.detailsKit.event'), sortValue: (r) => historyEventLabel(r.eventType), cell: (r) => <HistoryEventChip type={r.eventType} />, width: '140px' },
     ...(isSeries
       ? [
           {
             key: 'episode',
-            header: 'Episode',
+            header: t('common.episode'),
             mono: true,
             width: '96px',
             sortValue: (r: HistoryRecord) => (r.episode ? r.episode.seasonNumber * 10_000 + r.episode.episodeNumber : -1),
@@ -154,19 +155,19 @@ export function HistoryTable({ scope }: { scope: { seriesId: number } | { movieI
           } satisfies Column<HistoryRecord>,
         ]
       : []),
-    { key: 'source', header: 'Source title', sortValue: (r) => r.sourceTitle, cell: (r) => <span className="mk-release-title">{r.sourceTitle}</span> },
-    { key: 'quality', header: 'Quality', sortValue: (r) => r.quality?.quality?.name ?? '', cell: (r) => r.quality?.quality?.name ?? '—', mono: true },
-    { key: 'via', header: 'Via', muted: true, cell: (r) => historyVia(r) },
+    { key: 'source', header: t('common.sourceTitle'), sortValue: (r) => r.sourceTitle, cell: (r) => <span className="mk-release-title">{r.sourceTitle}</span> },
+    { key: 'quality', header: t('common.quality'), sortValue: (r) => r.quality?.quality?.name ?? '', cell: (r) => r.quality?.quality?.name ?? '—', mono: true },
+    { key: 'via', header: t('library.detailsKit.via'), muted: true, cell: (r) => historyVia(r) },
   ];
-  if (history.isError) return <QueryError error={history.error} title="Could not load history" onRetry={() => void history.refetch()} />;
+  if (history.isError) return <QueryError error={history.error} title={t('library.detailsKit.couldNotLoadHistory')} onRetry={() => void history.refetch()} />;
   return (
     <Table
       columns={columns}
       rows={history.data}
       loading={history.isPending}
       rowKey={(r) => r.id}
-      empty={<EmptyState title="No history yet">Grabs, imports and failures show up here.</EmptyState>}
-      caption="History"
+      empty={<EmptyState title={t('library.detailsKit.noHistoryYet')}>{t('library.detailsKit.grabsImportsAndFailuresShow')}</EmptyState>}
+      caption={t('common.history')}
     />
   );
 }
@@ -189,21 +190,21 @@ export function RequestStatusChip({ status }: { status: MediaRequest['status'] }
 export function RequestsTable({ kind, tmdbId }: { kind: 'movie' | 'tv'; tmdbId: number }) {
   const title = useTitle(kind, tmdbId);
   const columns: Column<MediaRequest>[] = [
-    { key: 'by', header: 'Requested by', cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
-    { key: 'track', header: 'Track', cell: (r) => (r.is4k ? '4K' : 'Standard'), mono: true },
-    { key: 'seasons', header: 'Seasons', cell: (r) => seasonsLabel(r.seasons) || '—', mono: true },
-    { key: 'status', header: 'Status', cell: (r) => <RequestStatusChip status={r.status} /> },
-    { key: 'created', header: 'Requested', sortValue: (r) => r.createdAt, cell: (r) => formatDate(r.createdAt, { dateStyle: 'medium', timeStyle: 'short' }), mono: true },
+    { key: 'by', header: t('common.requestedBy'), cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
+    { key: 'track', header: t('common.track'), cell: (r) => (r.is4k ? '4K' : t('common.standard')), mono: true },
+    { key: 'seasons', header: t('common.seasons'), cell: (r) => seasonsLabel(r.seasons) || '—', mono: true },
+    { key: 'status', header: t('common.status'), cell: (r) => <RequestStatusChip status={r.status} /> },
+    { key: 'created', header: t('common.requested'), sortValue: (r) => r.createdAt, cell: (r) => formatDate(r.createdAt, { dateStyle: 'medium', timeStyle: 'short' }), mono: true },
   ];
-  if (title.isError) return <QueryError error={title.error} title="Could not load requests" onRetry={() => void title.refetch()} />;
+  if (title.isError) return <QueryError error={title.error} title={t('library.detailsKit.couldNotLoadRequests')} onRetry={() => void title.refetch()} />;
   return (
     <Table
       columns={columns}
       rows={title.data?.requests}
       loading={title.isPending}
       rowKey={(r) => r.id}
-      empty={<EmptyState title="No requests">Nobody has requested this title.</EmptyState>}
-      caption="Requests"
+      empty={<EmptyState title={t('library.detailsKit.noRequests')}>{t('library.detailsKit.nobodyHasRequestedThisTitle')}</EmptyState>}
+      caption={t('common.requests')}
     />
   );
 }

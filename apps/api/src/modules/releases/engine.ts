@@ -15,6 +15,7 @@ import {
 } from '@arclight/profiles-engine';
 import type { ParsedRelease } from '@arclight/parser';
 import {
+  indexerFlagsFromVolumeFactors,
   PROFILE_LANGUAGES,
   type CustomFormat,
   type DelayProfile,
@@ -24,6 +25,7 @@ import {
   type QualityModel,
   type QualityProfile,
   type ReleaseDecision,
+  type ReleaseIndexerFlag,
   type ReleaseKind,
   type ReleaseProfile,
   type ReleaseRejection,
@@ -32,6 +34,7 @@ import {
   type TrackedDownloadState,
 } from '@arclight/shared';
 import type { DownloadPropersAndRepacks, HistoryEventSummary, ReleaseSettings } from './deps.js';
+import { detectHardcodedSubs, isWhitelistedHardcodedSubs } from './hardcoded-subs.js';
 import type { MatchCriteria, MatchResult, MovieMatch, SeriesMatch, Unmatched } from './matcher.js';
 
 // The decision engine (decision-engine spec §4–§11). Every specification is a pure
@@ -54,6 +57,8 @@ export interface ExistingFile {
   dateAdded: string;
   episodeIds: number[];
   sizeBytes: number;
+  /** Multi-version library: the version slot the file fills (null = unversioned). */
+  versionTag?: string | null;
 }
 
 export interface QueuedItem {
@@ -110,6 +115,8 @@ export interface DecisionContext {
   /** Free bytes at the item's folder; null = unknown (free-space spec accepts). */
   freeSpaceBytes: number | null;
   minimumFreeSpaceMb: number;
+  /** Indexer release filter verdict for this candidate (tracker freeleech-only); null/absent = pass. */
+  releaseFilter?: SpecResult | null;
 }
 
 export interface Candidate {
@@ -149,6 +156,31 @@ export function toLanguageCodes(names: readonly string[]): string[] {
   return [...new Set(names.map((n) => LANGUAGE_CODES.get(n.toLowerCase()) ?? n.toLowerCase()))];
 }
 
+/**
+ * Indexer flags of a release: those the indexer reported plus the ones implied by its
+ * Torznab volume factors (a release pushed or cached without `indexerFlags` still counts).
+ */
+export function releaseIndexerFlags(r: {
+  indexerFlags?: readonly ReleaseIndexerFlag[] | undefined;
+  downloadVolumeFactor?: number | undefined;
+  uploadVolumeFactor?: number | undefined;
+}): ReleaseIndexerFlag[] {
+  return [...new Set([...(r.indexerFlags ?? []), ...indexerFlagsFromVolumeFactors(r)])];
+}
+
+const FLAG_WEIGHT: Partial<Record<ReleaseIndexerFlag, number>> = {
+  freeleech: 4,
+  freeleech75: 3,
+  halfleech: 2,
+  freeleech25: 1,
+  doubleUpload: 1,
+};
+
+/** Higher is better: how much a release's flags save on ratio (preferIndexerFlags). */
+export function indexerFlagScore(flags: readonly ReleaseIndexerFlag[]): number {
+  return flags.reduce((sum, f) => sum + (FLAG_WEIGHT[f] ?? 0), 0);
+}
+
 export function releaseKindOf(match: SeriesMatch | MovieMatch): ReleaseKind {
   if (match.mediaType === 'movie') return 'single';
   if (match.fullSeason) return 'seasonPack';
@@ -168,6 +200,7 @@ export function evaluateFormats(
     releaseGroup?: string | null;
     year?: number;
     releaseKind?: ReleaseKind;
+    indexerFlags?: ReleaseIndexerFlag[];
   },
 ): { formats: CustomFormat[]; score: number } {
   const result = scoreRelease(profile, formats, {
@@ -179,6 +212,7 @@ export function evaluateFormats(
     ...(input.sizeBytes ? { sizeBytes: input.sizeBytes } : {}),
     ...(input.year ? { year: input.year } : {}),
     ...(input.releaseKind ? { releaseKind: input.releaseKind } : {}),
+    ...(input.indexerFlags?.length ? { indexerFlags: input.indexerFlags } : {}),
   });
   return { formats: formats.filter((f) => result.matchedFormatIds.includes(f.id)), score: result.score };
 }
@@ -428,6 +462,22 @@ export const specifications: readonly Specification[] = [
       if (!looksRaw && !rawQuality) return null;
       if (rawQuality && isQualityAllowed(ctx.profile, c.quality)) return null;
       return { reason: 'raw', message: /dvd/i.test(c.release.title) ? 'Raw DVD release' : 'Raw Bluray release' };
+    },
+  },
+  {
+    // Settings → Indexers: burned-in subtitles are refused unless allowed or whitelisted.
+    id: 'hardcodedSubs',
+    tier: 0,
+    type: 'permanent',
+    appliesTo: 'both',
+    evaluate: (ctx, c) => {
+      if (ctx.settings.allowHardcodedSubs) return null;
+      const found = detectHardcodedSubs(c.release.title, c.releaseGroup);
+      if (!found || isWhitelistedHardcodedSubs(found, ctx.settings.whitelistedHardcodedSubs)) return null;
+      return {
+        reason: 'hardcodedSubs',
+        message: found.generic ? 'Hardcoded subs found' : `Hardcoded subs found: ${found.tag}`,
+      };
     },
   },
   {
@@ -790,6 +840,13 @@ export const specifications: readonly Specification[] = [
     evaluate: (ctx) => (ctx.blocklisted ? { reason: 'blocklisted', message: 'Release is blocklisted' } : null),
   },
   {
+    id: 'indexerReleaseFilter',
+    tier: 0,
+    type: 'permanent',
+    appliesTo: 'both',
+    evaluate: (ctx) => ctx.releaseFilter ?? null,
+  },
+  {
     id: 'delay',
     tier: 0,
     type: 'temporary',
@@ -1032,13 +1089,17 @@ export interface Ranked {
     preferredSizeMbPerMinute: number | null;
     isAnime: boolean;
     firstEpisodeNumber: number;
+    /** Settings → Indexers `preferIndexerFlags`: flags break ties after indexer priority. */
+    preferIndexerFlags?: boolean;
   };
 }
 
 /** Key of the library item a decision belongs to (series or movie), for grouping. */
 export function itemKey(d: ReleaseDecision): string | undefined {
-  if (d.mediaType === 'movie' && d.movieId !== undefined) return `movie:${d.movieId}`;
-  if (d.mediaType === 'series' && d.seriesId !== undefined && d.episodeIds?.length) return `series:${d.seriesId}`;
+  // Multi-version items: each version slot is its own item (a 1080p and a 4K grab may both win).
+  const v = d.versionTag ? `:${d.versionTag}` : '';
+  if (d.mediaType === 'movie' && d.movieId !== undefined) return `movie:${d.movieId}${v}`;
+  if (d.mediaType === 'series' && d.seriesId !== undefined && d.episodeIds?.length) return `series:${d.seriesId}${v}`;
   return undefined;
 }
 
@@ -1088,6 +1149,7 @@ export function compareDecisions(a: Ranked, b: Ranked, propers: DownloadPropersA
     },
     () => (da.mediaType === 'series' ? ra.firstEpisodeNumber - rb.firstEpisodeNumber : 0),
     () => da.indexerPriority - db.indexerPriority,
+    () => (ra.preferIndexerFlags ? indexerFlagScore(releaseIndexerFlags(db)) - indexerFlagScore(releaseIndexerFlags(da)) : 0),
     () => {
       if (da.protocol !== 'torrent' || db.protocol !== 'torrent') return 0;
       return log10Round(db.seeders) - log10Round(da.seeders) || log10Round(db.peers ?? db.leechers) - log10Round(da.peers ?? da.leechers);

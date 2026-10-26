@@ -15,6 +15,7 @@ import { ImportListEditor, type Editing } from './import-list-editor.js';
 import { ItemsPreviewDialog } from './items-table.js';
 import { OptionsCard, useImportListOptions } from './options-card.js';
 import './import-lists.css';
+import { t } from '../../../i18n/index.js';
 
 function ListCard({
   list,
@@ -32,11 +33,11 @@ function ListCard({
   onPreview: () => void;
 }) {
   const status = list.lastSyncError ? (
-    <Chip tone="danger">Sync failed</Chip>
+    <Chip tone="danger">{t('common.syncFailed')}</Chip>
   ) : list.enabled ? (
-    <Chip tone="accent">Enabled</Chip>
+    <Chip tone="accent">{t('common.enabled')}</Chip>
   ) : (
-    <Chip tone="muted">Disabled</Chip>
+    <Chip tone="muted">{t('common.disabled')}</Chip>
   );
   return (
     <ItemCard
@@ -46,11 +47,11 @@ function ListCard({
       status={status}
       actions={
         <>
-          <Button size="sm" variant="secondary" onClick={onEdit} aria-label={`Edit ${list.name}`}>
-            Edit
+          <Button size="sm" variant="secondary" onClick={onEdit} aria-label={t('settings.importLists.editName', { name: list.name })}>
+            {t('common.edit')}
           </Button>
-          <Button size="sm" variant="ghost" onClick={onPreview} aria-label={`Preview items in ${list.name}`}>
-            Preview items
+          <Button size="sm" variant="ghost" onClick={onPreview} aria-label={t('settings.importLists.previewItemsInName', { name: list.name })}>
+            {t('settings.importLists.previewItems')}
           </Button>
         </>
       }
@@ -59,30 +60,30 @@ function ListCard({
       <Chip tone="neutral" dot="none">
         {MEDIA_TYPE_LABELS[list.mediaType]}
       </Chip>
-      {list.enableAutomaticAdd ? null : <Chip tone="warn">No auto add</Chip>}
-      {list.searchOnAdd ? <Chip dot="none">Search on add</Chip> : null}
+      {list.enableAutomaticAdd ? null : <Chip tone="warn">{t('settings.importLists.noAutoAdd')}</Chip>}
+      {list.searchOnAdd ? <Chip dot="none">{t('common.searchOnAdd')}</Chip> : null}
       <span className="al-card-line">
         {intervalHours !== undefined ? (
           <>
-            Syncs{' '}
+            {t('settings.importLists.syncs')}
             <span className="al-num" data-testid="sync-interval">
-              every {intervalHours} h
+              {t('settings.importLists.everyIntervalhoursH', { intervalHours })}
             </span>
             {' · '}
           </>
         ) : null}
-        Last sync{' '}
+        {t('common.lastSync')}
         {list.lastSyncAt ? (
           <time className="al-num" dateTime={list.lastSyncAt} title={formatDateTime(list.lastSyncAt)}>
             {relativeTime(list.lastSyncAt)}
           </time>
         ) : (
-          'never'
+          t('settings.importLists.never')
         )}
         {itemCount !== undefined ? (
           <>
             {' · '}
-            <span className="al-num">{itemCount}</span> item{itemCount === 1 ? '' : 's'}
+            <span className="al-num">{itemCount}</span> {t('settings.importLists.items', { itemCount })}
           </>
         ) : null}
       </span>
@@ -116,8 +117,8 @@ export function ImportListsPage() {
       onSuccess: (r) =>
         toast.push({
           tone: r.failed || r.errors.length ? 'warning' : 'ok',
-          title: `Synced ${r.lists} list${r.lists === 1 ? '' : 's'}`,
-          message: `${r.fetched} fetched, ${r.added} added, ${r.skippedExisting} already in library, ${r.skippedExcluded} excluded${r.errors.length ? `, ${r.errors.length} failed` : ''}`,
+          title: t('settings.importLists.syncedLists', { lists: r.lists }),
+          message: t('settings.importLists.fetchedFetchedAddedAddedSkippedexisting', { fetched: r.fetched, added: r.added, skippedExisting: r.skippedExisting, skippedExcluded: r.skippedExcluded, value: r.errors.length ? `, ${r.errors.length} failed` : '' }),
         }),
     });
 
@@ -125,29 +126,29 @@ export function ImportListsPage() {
 
   return (
     <SettingsPage
-      title="Import lists"
-      description="Add series and movies automatically from TMDB, Trakt, Plex, IMDb and feed lists."
+      title={t('settings.importLists.importLists')}
+      description={t('settings.importLists.addSeriesAndMoviesAutomatically')}
       actions={
         <>
           <Button variant="secondary" loading={sync.isPending} onClick={runSync}>
-            Sync now
+            {t('common.syncNow')}
           </Button>
           <Button variant="primary" onClick={() => setPicking(true)}>
-            Add list
+            {t('settings.importLists.addList')}
           </Button>
         </>
       }
       save={options.save}
     >
-      <SettingsSection label="Lists" {...(lists.data ? { count: lists.data.length } : {})}>
+      <SettingsSection label={t('settings.importLists.lists')} {...(lists.data ? { count: lists.data.length } : {})}>
         {lists.isPending ? (
           <Skeleton lines={3} />
         ) : lists.isError ? (
-          <ErrorBlock title="Could not load import lists" onRetry={() => void lists.refetch()}>
+          <ErrorBlock title={t('settings.importLists.couldNotLoadImportLists')} onRetry={() => void lists.refetch()}>
             {errorMessage(lists.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label="Import lists">
+          <CardGrid label={t('settings.importLists.importLists')}>
             {lists.data.map((l) => {
               const schema = schemas.data?.find((s) => s.implementation === l.implementation);
               return (
@@ -162,22 +163,22 @@ export function ImportListsPage() {
                 />
               );
             })}
-            <AddCard label="Add import list" onClick={() => setPicking(true)} />
+            <AddCard label={t('settings.importLists.addImportList')} onClick={() => setPicking(true)} />
           </CardGrid>
         )}
       </SettingsSection>
       <OptionsCard form={options} />
       <ExclusionsCard />
       {picking ? (
-        <Modal open size={640} onClose={() => setPicking(false)} title="Add import list">
+        <Modal open size={640} onClose={() => setPicking(false)} title={t('settings.importLists.addImportList')}>
           {schemas.isPending ? (
             <Skeleton lines={4} />
           ) : schemas.isError ? (
-            <ErrorBlock title="Could not load list types" onRetry={() => void schemas.refetch()}>
+            <ErrorBlock title={t('settings.importLists.couldNotLoadListTypes')} onRetry={() => void schemas.refetch()}>
               {errorMessage(schemas.error)}
             </ErrorBlock>
           ) : (
-            <div className="al-chooser" role="list" aria-label="List types">
+            <div className="al-chooser" role="list" aria-label={t('settings.importLists.listTypes')}>
               {schemas.data.map((s) => (
                 <div role="listitem" key={s.implementation}>
                   <button
@@ -198,7 +199,7 @@ export function ImportListsPage() {
                             {MEDIA_TYPE_LABELS[m]}
                           </Chip>
                         ))}
-                      {s.requiresTraktAuth ? <Chip>Trakt auth</Chip> : null}
+                      {s.requiresTraktAuth ? <Chip>{t('settings.importLists.traktAuth')}</Chip> : null}
                     </span>
                   </button>
                 </div>
@@ -217,9 +218,9 @@ export function ImportListsPage() {
             onClose={() => setEditing(null)}
           />
         ) : (
-          <Modal open size={560} onClose={() => setEditing(null)} title="Loading">
+          <Modal open size={560} onClose={() => setEditing(null)} title={t('common.loading')}>
             {rootFolders.isError || profiles.isError ? (
-              <ErrorBlock title="Could not load root folders or profiles">{errorMessage(rootFolders.error ?? profiles.error)}</ErrorBlock>
+              <ErrorBlock title={t('settings.importLists.couldNotLoadRootFolders')}>{errorMessage(rootFolders.error ?? profiles.error)}</ErrorBlock>
             ) : (
               <Skeleton lines={4} />
             )}

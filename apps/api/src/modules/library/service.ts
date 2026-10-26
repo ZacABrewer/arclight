@@ -14,7 +14,9 @@ import type {
   MediaFile,
   MediaFileListQuery,
   MediaImage,
+  MediaFileVersion,
   MediaInfo,
+  MediaVersion,
   MonitorOption,
   Movie,
   MovieCollection,
@@ -41,6 +43,7 @@ import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
 import * as t from './schema.js';
+import { enabledVersions, isVersioned, primaryOf, sameTag, slotOf } from './versions.js';
 
 // Business logic for the library. Every function is a plain function over a database handle
 // and typed inputs; no Fastify, no logger. Writes that touch several tables run in a
@@ -132,6 +135,11 @@ export interface AddMediaFileInput {
   sceneName?: string | null;
   edition?: string | null;
   mediaInfo?: MediaInfo | null;
+  /**
+   * Version slot to fill (`4K`, ...). Omitted/null: the unversioned slot, or the first
+   * configured slot of a versioned item.
+   */
+  versionTag?: string | null;
 }
 
 export interface EpisodeRefreshResult {
@@ -516,6 +524,7 @@ export function addSeries(db: Db, meta: SeriesMetadataInput, req: AddSeriesReque
         useSceneNumbering: false,
         languageProfileId,
         tags,
+        versions: versionsColumn(req.versions),
         added: now,
         lastRefreshed: now,
       })
@@ -615,6 +624,7 @@ export function updateSeries(db: Db, id: number, req: UpdateSeriesRequest, now: 
     if (req.useSceneNumbering !== undefined) patch.useSceneNumbering = req.useSceneNumbering;
     if (req.languageProfileId !== undefined) patch.languageProfileId = req.languageProfileId;
     if (req.tags !== undefined) patch.tags = requireTags(tx, req.tags);
+    if (req.versions !== undefined) patch.versions = versionsColumn(req.versions);
 
     if (req.rootFolderPath !== undefined) {
       patch.rootFolderPath = requireRootFolder(tx, req.rootFolderPath, 'series');
@@ -872,19 +882,26 @@ export function listEpisodes(db: LibraryDb, query: EpisodeListQuery): Episode[] 
   if (query.seasonNumber !== undefined) where.push(eq(t.episodes.seasonNumber, query.seasonNumber));
   if (query.monitored !== undefined) where.push(eq(t.episodes.monitored, query.monitored));
   if (query.hasFile !== undefined) where.push(eq(t.episodes.hasFile, query.hasFile));
-  return db
+  const rows = db
     .select()
     .from(t.episodes)
     .where(and(...where))
     .orderBy(asc(t.episodes.seasonNumber), asc(t.episodes.episodeNumber))
-    .all()
-    .map(toEpisode);
+    .all();
+  return withEpisodeFiles(db, query.seriesId, rows);
 }
 
 export function getEpisode(db: LibraryDb, id: number): Episode {
   const row = db.select().from(t.episodes).where(eq(t.episodes.id, id)).get();
   if (!row) throw LibraryError.notFound('episode', id);
-  return toEpisode(row);
+  return withEpisodeFiles(db, row.seriesId, [row])[0]!;
+}
+
+/** Episodes with their `files[]` (every version, primary first). */
+function withEpisodeFiles(db: LibraryDb, seriesId: number, rows: EpisodeRow[]): Episode[] {
+  const versions = db.select({ versions: t.series.versions }).from(t.series).where(eq(t.series.id, seriesId)).get()?.versions ?? null;
+  const files = fileRowsForEpisodes(db, rows.filter((r) => r.hasFile));
+  return rows.map((r) => ({ ...toEpisode(r), files: fileVersionsOf(files.get(r.id) ?? [], versions) }));
 }
 
 export function setEpisodeMonitored(db: LibraryDb, id: number, monitored: boolean): Episode {
@@ -941,11 +958,17 @@ export function isMovieAvailable(
 function toMovie(row: MovieRow, files: MediaFileRow[] | undefined, now: string): Movie {
   return {
     ...row,
+    ...(files ? { files: fileVersionsOf(files, row.versions) } : {}),
     isAvailable: isMovieAvailable(row, now),
     statistics: files
       ? { sizeOnDisk: files.reduce((sum, f) => sum + f.sizeBytes, 0), movieFileCount: files.length }
       : null,
   };
+}
+
+/** Stored form of a `versions` request field: an empty list means unversioned. */
+function versionsColumn(v: readonly MediaVersion[] | null | undefined): MediaVersion[] | null {
+  return v && v.length > 0 ? v.map((x) => ({ tag: x.tag.trim(), qualityProfileId: x.qualityProfileId, enabled: x.enabled })) : null;
 }
 
 function movieMetadataColumns(meta: MovieMetadataInput) {
@@ -1000,6 +1023,7 @@ export function addMovie(db: Db, meta: MovieMetadataInput, req: AddMovieRequest,
         lastRefreshed: now,
         hasFile: false,
         movieFileId: null,
+        versions: versionsColumn(req.versions),
       })
       .returning()
       .get();
@@ -1072,6 +1096,7 @@ export function updateMovie(db: Db, id: number, req: UpdateMovieRequest, now: st
     if (req.minimumAvailability !== undefined) patch.minimumAvailability = req.minimumAvailability;
     if (req.languageProfileId !== undefined) patch.languageProfileId = req.languageProfileId;
     if (req.tags !== undefined) patch.tags = requireTags(tx, req.tags);
+    if (req.versions !== undefined) patch.versions = versionsColumn(req.versions);
     if (req.rootFolderPath !== undefined) {
       patch.rootFolderPath = requireRootFolder(tx, req.rootFolderPath, 'movie');
       patch.path = req.path ?? buildMediaPath(patch.rootFolderPath, current.title, current.year);
@@ -1165,13 +1190,28 @@ function episodeIdsForFiles(db: LibraryDb, fileIds: number[]): Map<number, numbe
   const map = new Map<number, number[]>();
   if (fileIds.length === 0) return map;
   const rows = db
-    .select({ id: t.episodes.id, fileId: t.episodes.episodeFileId })
+    .select({ id: t.episodes.id, fileId: t.episodes.episodeFileId, season: t.episodes.seasonNumber, episode: t.episodes.episodeNumber })
     .from(t.episodes)
     .where(inArray(t.episodes.episodeFileId, fileIds))
-    .orderBy(asc(t.episodes.seasonNumber), asc(t.episodes.episodeNumber))
     .all();
-  for (const r of rows) {
-    if (r.fileId === null) continue;
+  const pairs = rows.filter((r) => r.fileId !== null).map((r) => ({ fileId: r.fileId!, id: r.id, season: r.season, episode: r.episode }));
+  // Version-slot files are linked through episode_version_files (the primary pointer covers one).
+  const links = db
+    .select({
+      fileId: t.episodeVersionFiles.mediaFileId,
+      id: t.episodes.id,
+      season: t.episodes.seasonNumber,
+      episode: t.episodes.episodeNumber,
+    })
+    .from(t.episodeVersionFiles)
+    .innerJoin(t.episodes, eq(t.episodeVersionFiles.episodeId, t.episodes.id))
+    .where(inArray(t.episodeVersionFiles.mediaFileId, fileIds))
+    .all();
+  const seen = new Set<string>();
+  for (const r of [...pairs, ...links].sort((a, b) => a.season - b.season || a.episode - b.episode)) {
+    const key = `${r.fileId}:${r.id}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
     const bucket = map.get(r.fileId);
     if (bucket) bucket.push(r.id);
     else map.set(r.fileId, [r.id]);
@@ -1204,91 +1244,222 @@ export function getMediaFile(db: LibraryDb, id: number): MediaFile {
 }
 
 /**
- * Record an imported file and link it to its episodes or movie. Any file those episodes (or
- * that movie) previously pointed at is unlinked; when nothing references it any more the row
- * is deleted (the caller, the import pipeline, is responsible for the bytes on disk). Returns
- * the new file and the ids of file rows it replaced.
+ * Record an imported file and link it to its episodes or movie, in its version slot. Files
+ * those episodes (or that movie) had in the same slot are unlinked; when nothing references
+ * one any more its row is deleted (the caller, the import pipeline, is responsible for the
+ * bytes on disk). Files in other version slots are left alone. Returns the new file and the
+ * ids of file rows it replaced.
+ *
+ * Slots: an unversioned item has the single slot `null` (the classic one-file behaviour). On
+ * a versioned item an untagged input goes to the first configured slot, and the stored row
+ * carries the slot's tag.
  */
 export function addMediaFile(db: Db, input: AddMediaFileInput, now: string = nowIso()): { file: MediaFile; replacedFileIds: number[] } {
   return db.transaction((tx) => {
+    let versions: MediaVersion[] | null = null;
     if (input.mediaType === 'series') {
       if (input.seriesId === undefined || !input.episodeIds?.length) {
         throw new LibraryError('VALIDATION', 'series media files need seriesId and at least one episodeId');
       }
-      if (!tx.select({ id: t.series.id }).from(t.series).where(eq(t.series.id, input.seriesId)).get()) {
-        throw LibraryError.notFound('series', input.seriesId);
-      }
+      const s = tx.select({ id: t.series.id, versions: t.series.versions }).from(t.series).where(eq(t.series.id, input.seriesId)).get();
+      if (!s) throw LibraryError.notFound('series', input.seriesId);
+      versions = s.versions;
     } else if (input.movieId === undefined) {
       throw new LibraryError('VALIDATION', 'movie media files need movieId');
-    } else if (!tx.select({ id: t.movies.id }).from(t.movies).where(eq(t.movies.id, input.movieId)).get()) {
-      throw LibraryError.notFound('movie', input.movieId);
+    } else {
+      const m = tx.select({ id: t.movies.id, versions: t.movies.versions }).from(t.movies).where(eq(t.movies.id, input.movieId)).get();
+      if (!m) throw LibraryError.notFound('movie', input.movieId);
+      versions = m.versions;
     }
     if (tx.select({ id: t.mediaFiles.id }).from(t.mediaFiles).where(eq(t.mediaFiles.path, input.path)).get()) {
       throw new LibraryError('CONFLICT', `a media file already exists at ${input.path}`);
     }
+    const slot = slotOf(input.versionTag ?? null, versions);
+    const inSlot = (tag: string | null): boolean => sameTag(slotOf(tag, versions), slot);
 
-    const row = tx
-      .insert(t.mediaFiles)
-      .values({
-        mediaType: input.mediaType,
-        seriesId: input.seriesId ?? null,
-        movieId: input.movieId ?? null,
-        seasonNumber: input.seasonNumber ?? null,
-        relativePath: input.relativePath,
-        path: input.path,
-        sizeBytes: input.sizeBytes,
-        dateAdded: input.dateAdded ?? now,
-        quality: input.quality,
-        languages: input.languages,
-        releaseGroup: input.releaseGroup ?? null,
-        sceneName: input.sceneName ?? null,
-        edition: input.edition ?? null,
-        mediaInfo: input.mediaInfo ?? null,
-      })
-      .returning()
-      .get();
+    const values = {
+      mediaType: input.mediaType,
+      seriesId: input.seriesId ?? null,
+      movieId: input.movieId ?? null,
+      seasonNumber: input.seasonNumber ?? null,
+      relativePath: input.relativePath,
+      path: input.path,
+      sizeBytes: input.sizeBytes,
+      dateAdded: input.dateAdded ?? now,
+      quality: input.quality,
+      languages: input.languages,
+      releaseGroup: input.releaseGroup ?? null,
+      sceneName: input.sceneName ?? null,
+      edition: input.edition ?? null,
+      mediaInfo: input.mediaInfo ?? null,
+      versionTag: slot,
+    };
 
-    const replaced = new Set<number>();
     if (input.mediaType === 'series' && input.episodeIds) {
       const episodeRows = tx.select().from(t.episodes).where(inArray(t.episodes.id, input.episodeIds)).all();
       if (episodeRows.length !== new Set(input.episodeIds).size) {
         throw new LibraryError('VALIDATION', 'one or more episodeIds do not exist');
       }
       if (episodeRows.some((e) => e.seriesId !== input.seriesId)) {
-        throw new LibraryError('VALIDATION', 'episodes must belong to the file\'s series');
+        throw new LibraryError('VALIDATION', "episodes must belong to the file's series");
       }
-      for (const e of episodeRows) if (e.episodeFileId !== null) replaced.add(e.episodeFileId);
-      tx.update(t.episodes)
-        .set({ hasFile: true, episodeFileId: row.id })
-        .where(inArray(t.episodes.id, input.episodeIds))
-        .run();
-    } else if (input.movieId !== undefined) {
-      const movie = tx.select().from(t.movies).where(eq(t.movies.id, input.movieId)).get();
-      if (movie?.movieFileId) replaced.add(movie.movieFileId);
-      tx.update(t.movies).set({ hasFile: true, movieFileId: row.id }).where(eq(t.movies.id, input.movieId)).run();
+      const row = tx.insert(t.mediaFiles).values(values).returning().get();
+      const candidates = new Set<number>();
+      for (const e of episodeRows) {
+        const current = episodeFileRows(tx, e);
+        const replaced = current.filter((f) => inSlot(f.versionTag));
+        for (const f of replaced) candidates.add(f.id);
+        const replacedIds = replaced.map((f) => f.id);
+        if (replacedIds.length > 0) {
+          tx.delete(t.episodeVersionFiles)
+            .where(and(eq(t.episodeVersionFiles.episodeId, e.id), inArray(t.episodeVersionFiles.mediaFileId, replacedIds)))
+            .run();
+        }
+        if (slot !== null) {
+          tx.insert(t.episodeVersionFiles).values({ episodeId: e.id, versionTag: slot, mediaFileId: row.id }).run();
+        }
+        const remaining = [...current.filter((f) => !replacedIds.includes(f.id)), row];
+        const primary = primaryOf(remaining, versions)!;
+        tx.update(t.episodes).set({ hasFile: true, episodeFileId: primary.id }).where(eq(t.episodes.id, e.id)).run();
+      }
+      const replacedFileIds: number[] = [];
+      for (const oldId of candidates) {
+        if (!isFileReferenced(tx, oldId)) {
+          tx.delete(t.mediaFiles).where(eq(t.mediaFiles.id, oldId)).run();
+          replacedFileIds.push(oldId);
+        }
+      }
+      return { file: getMediaFile(tx, row.id), replacedFileIds };
     }
 
-    const replacedFileIds: number[] = [];
-    for (const oldId of replaced) {
-      const stillLinked = tx.select({ id: t.episodes.id }).from(t.episodes).where(eq(t.episodes.episodeFileId, oldId)).get();
-      if (!stillLinked) {
-        tx.delete(t.mediaFiles).where(eq(t.mediaFiles.id, oldId)).run();
-        replacedFileIds.push(oldId);
-      }
+    // Movie: one row per (movie, slot). The unversioned slot keeps the classic rule (only the
+    // file the movie points at is replaced); versioned slots replace whatever fills them.
+    const movieId = input.movieId!;
+    const movie = tx.select().from(t.movies).where(eq(t.movies.id, movieId)).get()!;
+    const existing = tx.select().from(t.mediaFiles).where(eq(t.mediaFiles.movieId, movieId)).all();
+    const replaced = existing.filter((f) =>
+      slot === null ? f.versionTag === null && f.id === movie.movieFileId : inSlot(f.versionTag),
+    );
+    const replacedFileIds = replaced.map((f) => f.id);
+    if (replacedFileIds.length > 0) tx.delete(t.mediaFiles).where(inArray(t.mediaFiles.id, replacedFileIds)).run();
+    const row = tx.insert(t.mediaFiles).values(values).returning().get();
+    if (isVersioned(versions)) {
+      const remaining = [...existing.filter((f) => !replacedFileIds.includes(f.id)), row];
+      const primary = primaryOf(remaining, versions)!;
+      tx.update(t.movies).set({ hasFile: true, movieFileId: primary.id }).where(eq(t.movies.id, movieId)).run();
+    } else {
+      tx.update(t.movies).set({ hasFile: true, movieFileId: row.id }).where(eq(t.movies.id, movieId)).run();
     }
     return { file: getMediaFile(tx, row.id), replacedFileIds };
   });
+}
+
+/** Every file an episode has: its version links plus the primary pointer. */
+function episodeFileRows(db: LibraryDb, e: Pick<EpisodeRow, 'id' | 'episodeFileId'>): MediaFileRow[] {
+  const ids = new Set(
+    db
+      .select({ id: t.episodeVersionFiles.mediaFileId })
+      .from(t.episodeVersionFiles)
+      .where(eq(t.episodeVersionFiles.episodeId, e.id))
+      .all()
+      .map((r) => r.id),
+  );
+  if (e.episodeFileId !== null) ids.add(e.episodeFileId);
+  if (ids.size === 0) return [];
+  return db.select().from(t.mediaFiles).where(inArray(t.mediaFiles.id, [...ids])).all();
+}
+
+function isFileReferenced(db: LibraryDb, fileId: number): boolean {
+  if (db.select({ id: t.episodes.id }).from(t.episodes).where(eq(t.episodes.episodeFileId, fileId)).get()) return true;
+  return !!db.select({ id: t.episodeVersionFiles.id }).from(t.episodeVersionFiles).where(eq(t.episodeVersionFiles.mediaFileId, fileId)).get();
+}
+
+/** Re-point episodes at their best remaining file (or none) after a file went away. */
+function repointEpisodes(db: LibraryDb, episodeIds: readonly number[]): void {
+  for (const id of new Set(episodeIds)) {
+    const e = db.select().from(t.episodes).where(eq(t.episodes.id, id)).get();
+    if (!e) continue;
+    const s = db.select({ versions: t.series.versions }).from(t.series).where(eq(t.series.id, e.seriesId)).get();
+    const primary = primaryOf(episodeFileRows(db, e), s?.versions ?? null);
+    db.update(t.episodes).set({ hasFile: primary !== undefined, episodeFileId: primary?.id ?? null }).where(eq(t.episodes.id, id)).run();
+  }
 }
 
 export async function deleteMediaFile(db: Db, id: number, opts: { deleteFromDisk?: boolean } = {}): Promise<void> {
   const row = db.select().from(t.mediaFiles).where(eq(t.mediaFiles.id, id)).get();
   if (!row) throw LibraryError.notFound('media file', id);
   db.transaction((tx) => {
+    const affected = [
+      ...tx.select({ id: t.episodes.id }).from(t.episodes).where(eq(t.episodes.episodeFileId, id)).all().map((r) => r.id),
+      ...tx
+        .select({ id: t.episodeVersionFiles.episodeId })
+        .from(t.episodeVersionFiles)
+        .where(eq(t.episodeVersionFiles.mediaFileId, id))
+        .all()
+        .map((r) => r.id),
+    ];
     tx.update(t.episodes).set({ hasFile: false, episodeFileId: null }).where(eq(t.episodes.episodeFileId, id)).run();
-    tx.update(t.movies).set({ hasFile: false, movieFileId: null }).where(eq(t.movies.movieFileId, id)).run();
+    tx.delete(t.episodeVersionFiles).where(eq(t.episodeVersionFiles.mediaFileId, id)).run();
     tx.delete(t.mediaFiles).where(eq(t.mediaFiles.id, id)).run();
+    repointEpisodes(tx, affected);
+    const movie = row.movieId !== null ? tx.select().from(t.movies).where(eq(t.movies.id, row.movieId)).get() : undefined;
+    if (movie && isVersioned(movie.versions)) {
+      const rest = tx.select().from(t.mediaFiles).where(eq(t.mediaFiles.movieId, movie.id)).all();
+      const primary = primaryOf(rest, movie.versions);
+      tx.update(t.movies).set({ hasFile: primary !== undefined, movieFileId: primary?.id ?? null }).where(eq(t.movies.id, movie.id)).run();
+    } else {
+      tx.update(t.movies).set({ hasFile: false, movieFileId: null }).where(eq(t.movies.movieFileId, id)).run();
+    }
   });
   if (opts.deleteFromDisk) await rm(row.path, { force: true });
+}
+
+/** Version-tagged summaries of the files of one episode / movie, primary first. */
+export function fileVersionsOf(rows: readonly MediaFileRow[], versions: readonly MediaVersion[] | null | undefined): MediaFileVersion[] {
+  const primary = primaryOf(rows, versions);
+  return [...rows]
+    .sort((a, b) => (a.id === primary?.id ? -1 : b.id === primary?.id ? 1 : a.id - b.id))
+    .map((f) => ({ id: f.id, versionTag: f.versionTag, quality: f.quality, sizeBytes: f.sizeBytes, relativePath: f.relativePath }));
+}
+
+/**
+ * The enabled version slots of an item that have no file. Unversioned items: `[]` (their
+ * classic `hasFile` flag says it).
+ */
+export function missingVersions(versions: readonly MediaVersion[] | null | undefined, files: ReadonlyArray<{ versionTag: string | null }>): string[] {
+  const filled = new Set(files.map((f) => slotOf(f.versionTag, versions)?.toLowerCase()));
+  return enabledVersions(versions)
+    .filter((v) => !filled.has(v.tag.toLowerCase()))
+    .map((v) => v.tag);
+}
+
+/** Map episode id → every file row it has (links + primary pointer), for many episodes at once. */
+function fileRowsForEpisodes(db: LibraryDb, episodes: ReadonlyArray<Pick<EpisodeRow, 'id' | 'episodeFileId'>>): Map<number, MediaFileRow[]> {
+  const out = new Map<number, MediaFileRow[]>();
+  if (episodes.length === 0) return out;
+  const ids = episodes.map((e) => e.id);
+  const fileIdsByEpisode = new Map<number, Set<number>>();
+  for (const e of episodes) fileIdsByEpisode.set(e.id, new Set(e.episodeFileId !== null ? [e.episodeFileId] : []));
+  for (const chunk of chunks(ids, 500)) {
+    for (const l of db.select().from(t.episodeVersionFiles).where(inArray(t.episodeVersionFiles.episodeId, chunk)).all()) {
+      fileIdsByEpisode.get(l.episodeId)?.add(l.mediaFileId);
+    }
+  }
+  const allFileIds = [...new Set([...fileIdsByEpisode.values()].flatMap((s) => [...s]))];
+  const rows = new Map<number, MediaFileRow>();
+  for (const chunk of chunks(allFileIds, 500)) {
+    for (const f of db.select().from(t.mediaFiles).where(inArray(t.mediaFiles.id, chunk)).all()) rows.set(f.id, f);
+  }
+  for (const [episodeId, set] of fileIdsByEpisode) {
+    out.set(episodeId, [...set].map((id) => rows.get(id)).filter((f): f is MediaFileRow => f !== undefined));
+  }
+  return out;
+}
+
+function chunks<T>(items: readonly T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -1307,12 +1478,9 @@ function paginate<T>(items: T[], q: PageQuery): Page<T> {
   return { page: q.page, pageSize: q.pageSize, totalRecords: items.length, records: items.slice(start, start + q.pageSize) };
 }
 
-function monitoredEpisodesWithSeries(db: LibraryDb, hasFile: boolean, includeSpecials: boolean) {
-  const where: SQL[] = [
-    eq(t.episodes.monitored, true),
-    eq(t.episodes.hasFile, hasFile),
-    eq(t.series.monitored, true),
-  ];
+function monitoredEpisodesWithSeries(db: LibraryDb, hasFile: boolean | undefined, includeSpecials: boolean) {
+  const where: SQL[] = [eq(t.episodes.monitored, true), eq(t.series.monitored, true)];
+  if (hasFile !== undefined) where.push(eq(t.episodes.hasFile, hasFile));
   return db
     .select({ episode: t.episodes, series: t.series })
     .from(t.episodes)
@@ -1323,23 +1491,50 @@ function monitoredEpisodesWithSeries(db: LibraryDb, hasFile: boolean, includeSpe
     .filter((r) => includeSpecials || r.episode.seasonNumber > 0);
 }
 
-function toWanted(r: { episode: EpisodeRow; series: SeriesRow }): WantedEpisode {
+function toWanted(r: { episode: EpisodeRow; series: SeriesRow }, wantedVersions?: string[]): WantedEpisode {
   return {
     ...toEpisode(r.episode),
     seriesTitle: r.series.title,
     seriesTmdbId: r.series.tmdbId,
     qualityProfileId: r.series.qualityProfileId,
+    ...(wantedVersions ? { wantedVersions } : {}),
   };
 }
 
-/** Monitored episodes of monitored series that have aired and have no file. */
+function anyVersioned(db: LibraryDb, table: typeof t.series | typeof t.movies): boolean {
+  return db
+    .select({ versions: table.versions })
+    .from(table)
+    .all()
+    .some((r) => isVersioned(r.versions));
+}
+
+/**
+ * Monitored episodes of monitored series that have aired and have no file. On a versioned
+ * series an episode is missing while any enabled version slot is empty (`wantedVersions`).
+ */
 export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: string = nowIso()): Page<WantedEpisode> {
   const nowMs = Date.parse(now);
-  const rows = monitoredEpisodesWithSeries(db, false, q.includeSpecials).filter((r) => {
+  const versioned = anyVersioned(db, t.series);
+  const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials).filter((r) => {
     if (!r.episode.airDateUtc) return false;
     return Date.parse(r.episode.airDateUtc) <= nowMs;
   });
-  return paginate(rows.map(toWanted), q);
+  if (!versioned) return paginate(rows.map((r) => toWanted(r)), q);
+  const files = fileRowsForEpisodes(
+    db,
+    rows.filter((r) => isVersioned(r.series.versions)).map((r) => r.episode),
+  );
+  const out: WantedEpisode[] = [];
+  for (const r of rows) {
+    if (!isVersioned(r.series.versions)) {
+      if (!r.episode.hasFile) out.push(toWanted(r));
+      continue;
+    }
+    const missing = missingVersions(r.series.versions, files.get(r.episode.id) ?? []);
+    if (missing.length > 0) out.push(toWanted(r, missing));
+  }
+  return paginate(out, q);
 }
 
 /**
@@ -1347,7 +1542,10 @@ export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: 
  * to the profiles module; it is injected so this module stays ignorant of profile shapes.
  */
 export function listCutoffUnmetEpisodes(db: LibraryDb, q: WantedEpisodesQuery, isCutoffMet: IsCutoffMet): Page<WantedEpisode> {
-  const rows = monitoredEpisodesWithSeries(db, true, q.includeSpecials);
+  const all = monitoredEpisodesWithSeries(db, true, q.includeSpecials);
+  const versionedRows = all.filter((r) => isVersioned(r.series.versions));
+  if (versionedRows.length > 0) return paginate(cutoffUnmetVersioned(db, all, isCutoffMet), q);
+  const rows = all;
   const fileIds = [...new Set(rows.map((r) => r.episode.episodeFileId).filter((id): id is number => id !== null))];
   const files = new Map<number, MediaFile>();
   if (fileIds.length > 0) {
@@ -1360,22 +1558,76 @@ export function listCutoffUnmetEpisodes(db: LibraryDb, q: WantedEpisodesQuery, i
     const file = r.episode.episodeFileId !== null ? files.get(r.episode.episodeFileId) : undefined;
     return file !== undefined && !isCutoffMet(file);
   });
-  return paginate(unmet.map(toWanted), q);
+  return paginate(unmet.map((r) => toWanted(r)), q);
 }
 
-/** Monitored movies without a file that are available under their minimum availability. */
+/**
+ * Versioned rows of the cutoff list: one entry per episode with every enabled version slot
+ * whose file misses its own profile's cutoff. Unversioned rows keep the classic check.
+ */
+function cutoffUnmetVersioned(
+  db: LibraryDb,
+  rows: ReadonlyArray<{ episode: EpisodeRow; series: SeriesRow }>,
+  isCutoffMet: IsCutoffMet,
+): WantedEpisode[] {
+  const files = fileRowsForEpisodes(db, rows.map((r) => r.episode));
+  const links = episodeIdsForFiles(db, [...new Set([...files.values()].flat().map((f) => f.id))]);
+  const out: WantedEpisode[] = [];
+  for (const r of rows) {
+    const own = files.get(r.episode.id) ?? [];
+    if (!isVersioned(r.series.versions)) {
+      const file = own.find((f) => f.id === r.episode.episodeFileId);
+      if (file && !isCutoffMet(toMediaFile(file, links.get(file.id) ?? []))) out.push(toWanted(r));
+      continue;
+    }
+    const unmet = unmetSlots(r.series.versions, own, (f) => isCutoffMet(toMediaFile(f, links.get(f.id) ?? [])));
+    if (unmet.length > 0) out.push(toWanted(r, unmet));
+  }
+  return out;
+}
+
+/** Enabled slots whose file fails the cutoff check. */
+function unmetSlots(versions: readonly MediaVersion[] | null, files: readonly MediaFileRow[], met: (f: MediaFileRow) => boolean): string[] {
+  const out: string[] = [];
+  for (const v of enabledVersions(versions)) {
+    const file = files.find((f) => sameTag(slotOf(f.versionTag, versions), v.tag));
+    if (file && !met(file)) out.push(v.tag);
+  }
+  return out;
+}
+
+/**
+ * Monitored movies without a file that are available under their minimum availability. A
+ * versioned movie is missing while any enabled version slot is empty (`wantedVersions`).
+ */
 export function listMissingMovies(db: LibraryDb, q: PageQuery, now: string = nowIso()): Page<Movie> {
+  const versioned = anyVersioned(db, t.movies);
   const rows = db
     .select()
     .from(t.movies)
-    .where(and(eq(t.movies.monitored, true), eq(t.movies.hasFile, false)))
+    .where(versioned ? eq(t.movies.monitored, true) : and(eq(t.movies.monitored, true), eq(t.movies.hasFile, false)))
     .orderBy(asc(t.movies.sortTitle))
     .all()
     .filter((m) => isMovieAvailable(m, now));
-  return paginate(
-    rows.map((m) => toMovie(m, [], now)),
-    q,
-  );
+  if (!versioned) {
+    return paginate(
+      rows.map((m) => toMovie(m, [], now)),
+      q,
+    );
+  }
+  const ids = rows.filter((m) => isVersioned(m.versions)).map((m) => m.id);
+  const files = ids.length ? groupBy(db.select().from(t.mediaFiles).where(inArray(t.mediaFiles.movieId, ids)).all(), (f) => f.movieId ?? -1) : new Map<number, MediaFileRow[]>();
+  const out: Movie[] = [];
+  for (const m of rows) {
+    if (!isVersioned(m.versions)) {
+      if (!m.hasFile) out.push(toMovie(m, [], now));
+      continue;
+    }
+    const own = files.get(m.id) ?? [];
+    const missing = missingVersions(m.versions, own);
+    if (missing.length > 0) out.push({ ...toMovie(m, own, now), wantedVersions: missing });
+  }
+  return paginate(out, q);
 }
 
 export function listCutoffUnmetMovies(db: LibraryDb, q: PageQuery, isCutoffMet: IsCutoffMet, now: string = nowIso()): Page<Movie> {
@@ -1387,14 +1639,18 @@ export function listCutoffUnmetMovies(db: LibraryDb, q: PageQuery, isCutoffMet: 
     .all();
   const ids = rows.map((m) => m.id);
   const files = ids.length ? groupBy(db.select().from(t.mediaFiles).where(inArray(t.mediaFiles.movieId, ids)).all(), (f) => f.movieId ?? -1) : new Map<number, MediaFileRow[]>();
-  const unmet = rows.filter((m) => {
-    const file = (files.get(m.id) ?? []).find((f) => f.id === m.movieFileId);
-    return file !== undefined && !isCutoffMet(toMediaFile(file, []));
-  });
-  return paginate(
-    unmet.map((m) => toMovie(m, files.get(m.id) ?? [], now)),
-    q,
-  );
+  const out: Movie[] = [];
+  for (const m of rows) {
+    const own = files.get(m.id) ?? [];
+    if (isVersioned(m.versions)) {
+      const unmet = unmetSlots(m.versions, own, (f) => isCutoffMet(toMediaFile(f, [])));
+      if (unmet.length > 0) out.push({ ...toMovie(m, own, now), wantedVersions: unmet });
+      continue;
+    }
+    const file = own.find((f) => f.id === m.movieFileId);
+    if (file !== undefined && !isCutoffMet(toMediaFile(file, []))) out.push(toMovie(m, own, now));
+  }
+  return paginate(out, q);
 }
 
 // ---------------------------------------------------------------------------------------

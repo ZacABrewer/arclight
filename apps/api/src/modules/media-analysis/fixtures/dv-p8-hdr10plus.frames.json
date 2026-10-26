@@ -1,0 +1,12 @@
+{
+  "frames": [
+    {
+      "side_data_list": [
+        { "side_data_type": "Mastering display metadata" },
+        { "side_data_type": "Content light level metadata" },
+        { "side_data_type": "HDR Dynamic Metadata SMPTE2094-40 (HDR10+)" },
+        { "side_data_type": "Dolby Vision RPU Data" }
+      ]
+    }
+  ]
+}

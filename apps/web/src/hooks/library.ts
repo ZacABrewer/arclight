@@ -20,6 +20,7 @@ import { profilesApi } from '../api/profiles.js';
 import { useToast as useToastStore } from '../components/toast.js';
 import { upsertJob } from '../live.js';
 import { libraryKeys } from './library-keys.js';
+import { t } from '../i18n/index.js';
 
 // ---------------------------------------------------------------------------------------
 // Queries
@@ -155,7 +156,7 @@ export function useSetSeriesMonitored() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, monitored }: { id: number; monitored: boolean }) => libraryApi.series.update(id, { monitored }),
-    meta: { errorTitle: 'Could not change monitoring' },
+    meta: { errorTitle: t('hooks.library.couldNotChangeMonitoring') },
     onMutate: async ({ id, monitored }) => {
       const a = await patchQueries<Series>(qc, libraryKeys.series.detail(id), (s) => ({ ...s, monitored }));
       const b = await patchQueries<Series[]>(qc, libraryKeys.series.list(), (list) =>
@@ -173,7 +174,7 @@ export function useSetSeasonMonitored() {
   return useMutation({
     mutationFn: ({ seriesId, seasonNumber, monitored }: { seriesId: number; seasonNumber: number; monitored: boolean }) =>
       libraryApi.series.setSeasonMonitored(seriesId, seasonNumber, monitored),
-    meta: { errorTitle: 'Could not change season monitoring' },
+    meta: { errorTitle: t('hooks.library.couldNotChangeSeasonMonitoring') },
     onMutate: async ({ seriesId, seasonNumber, monitored }) => {
       const a = await patchQueries<Series>(qc, libraryKeys.series.detail(seriesId), (s) =>
         withSeasonMonitored(s, seasonNumber, monitored),
@@ -196,7 +197,7 @@ export function useSetEpisodeMonitored() {
   return useMutation({
     mutationFn: ({ episodeId, monitored }: { seriesId: number; episodeId: number; monitored: boolean }) =>
       libraryApi.episodes.setMonitored(episodeId, monitored),
-    meta: { errorTitle: 'Could not change episode monitoring' },
+    meta: { errorTitle: t('hooks.library.couldNotChangeEpisodeMonitoring') },
     onMutate: ({ seriesId, episodeId, monitored }) =>
       patchQueries<Episode[]>(qc, libraryKeys.series.episodes(seriesId), (eps) =>
         eps.map((e) => (e.id === episodeId ? { ...e, monitored } : e)),
@@ -226,7 +227,7 @@ export function useUpdateSeries() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: UpdateSeriesRequest }) => libraryApi.series.update(id, body),
-    meta: { errorTitle: 'Could not save series' },
+    meta: { errorTitle: t('hooks.library.couldNotSaveSeries') },
     onSuccess: (series) => storeSeries(qc, series),
   });
 }
@@ -235,7 +236,7 @@ export function useBulkUpdateSeries() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: BulkSeriesUpdateRequest) => libraryApi.series.bulk(body),
-    meta: { errorTitle: 'Could not update series' },
+    meta: { errorTitle: t('hooks.library.couldNotUpdateSeries') },
     onSuccess: (list) => {
       for (const s of list) storeSeries(qc, s);
       void qc.invalidateQueries({ queryKey: libraryKeys.series.all });
@@ -250,7 +251,7 @@ export function useDeleteSeries() {
       // No bulk delete route: delete one by one so a failure stops the batch.
       for (const id of ids) await libraryApi.series.remove(id, opts);
     },
-    meta: { errorTitle: 'Could not delete series' },
+    meta: { errorTitle: t('hooks.library.couldNotDeleteSeries') },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: libraryKeys.series.all });
       void qc.invalidateQueries({ queryKey: libraryKeys.wanted.all });
@@ -266,7 +267,7 @@ export function useSetMovieMonitored() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, monitored }: { id: number; monitored: boolean }) => libraryApi.movies.update(id, { monitored }),
-    meta: { errorTitle: 'Could not change monitoring' },
+    meta: { errorTitle: t('hooks.library.couldNotChangeMonitoring') },
     onMutate: async ({ id, monitored }) => {
       const a = await patchQueries<Movie>(qc, libraryKeys.movie.detail(id), (m) => ({ ...m, monitored }));
       const b = await patchQueries<Movie[]>(qc, libraryKeys.movie.list(), (list) =>
@@ -295,7 +296,7 @@ export function useUpdateMovie() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, body }: { id: number; body: UpdateMovieRequest }) => libraryApi.movies.update(id, body),
-    meta: { errorTitle: 'Could not save movie' },
+    meta: { errorTitle: t('hooks.library.couldNotSaveMovie') },
     onSuccess: (movie) => storeMovie(qc, movie),
   });
 }
@@ -304,7 +305,7 @@ export function useBulkUpdateMovies() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: BulkMovieUpdateRequest) => libraryApi.movies.bulk(body),
-    meta: { errorTitle: 'Could not update movies' },
+    meta: { errorTitle: t('hooks.library.couldNotUpdateMovies') },
     onSuccess: (list) => {
       for (const m of list) storeMovie(qc, m);
       void qc.invalidateQueries({ queryKey: libraryKeys.movie.all });
@@ -318,7 +319,7 @@ export function useDeleteMovies() {
     mutationFn: async ({ ids, ...opts }: { ids: number[] } & DeleteMediaOptions) => {
       for (const id of ids) await libraryApi.movies.remove(id, opts);
     },
-    meta: { errorTitle: 'Could not delete movie' },
+    meta: { errorTitle: t('hooks.library.couldNotDeleteMovie') },
     onSettled: () => {
       void qc.invalidateQueries({ queryKey: libraryKeys.movie.all });
       void qc.invalidateQueries({ queryKey: libraryKeys.wanted.all });
@@ -335,7 +336,7 @@ export function useDeleteMediaFile() {
   return useMutation({
     mutationFn: ({ fileId }: { fileId: number; mediaType: 'series' | 'movie'; ownerId: number }) =>
       libraryApi.mediaFiles.remove(fileId, true),
-    meta: { errorTitle: 'Could not delete file' },
+    meta: { errorTitle: t('hooks.library.couldNotDeleteFile') },
     onSettled: (_r, _e, { mediaType, ownerId }) => {
       void qc.invalidateQueries({
         queryKey: mediaType === 'series' ? libraryKeys.series.detail(ownerId) : libraryKeys.movie.detail(ownerId),
@@ -349,7 +350,7 @@ export function useCreateTag() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (label: string) => libraryApi.tags.create(label),
-    meta: { errorTitle: 'Could not create tag' },
+    meta: { errorTitle: t('hooks.library.couldNotCreateTag') },
     onSuccess: () => void qc.invalidateQueries({ queryKey: libraryKeys.library.tags }),
   });
 }
@@ -362,7 +363,7 @@ export function useCreateTag() {
 function notYet(feature: string) {
   return (err: unknown): never => {
     if (err instanceof ApiError && err.status === 404) {
-      throw new Error(`${feature} is not available yet: the api does not serve ${err.path}`);
+      throw new Error(t('hooks.library.notAvailableYet', { feature, path: err.path }));
     }
     throw err;
   };
@@ -374,13 +375,13 @@ export type ReleaseSearchTarget = { episodeId: number } | { seriesId: number; se
 export function useAutomaticSearch() {
   const toast = useToastStore();
   return useMutation({
-    mutationFn: (body: SearchCommandRequest) => libraryApi.command.search(body).catch(notYet('Automatic search')),
-    meta: { errorTitle: 'Search failed' },
+    mutationFn: (body: SearchCommandRequest) => libraryApi.command.search(body).catch(notYet(t('hooks.library.automaticSearch'))),
+    meta: { errorTitle: t('common.searchFailed') },
     onSuccess: (r) =>
       toast.push({
         tone: r.grabbed.length > 0 ? 'ok' : 'info',
-        title: r.grabbed.length > 0 ? `Grabbed ${r.grabbed.length} release${r.grabbed.length === 1 ? '' : 's'}` : 'Search finished',
-        message: `${r.releases} found · ${r.approved} approved${r.pending ? ` · ${r.pending} pending` : ''}`,
+        title: r.grabbed.length > 0 ? t('hooks.library.grabbedReleases', { grabbedCount: r.grabbed.length }) : t('hooks.library.searchFinished'),
+        message: t('hooks.library.releasesFoundApprovedApprovedValue', { releases: r.releases, approved: r.approved, value: r.pending ? ` · ${r.pending} pending` : '' }),
       }),
   });
 }
@@ -396,12 +397,12 @@ export function useRefreshMedia() {
   const toast = useToastStore();
   return useMutation({
     mutationFn: ({ target, rescan = false }: { target: RefreshTarget; rescan?: boolean }) => libraryApi.command.refresh({ ...target, rescan }),
-    meta: { errorTitle: 'Could not start refresh' },
+    meta: { errorTitle: t('hooks.library.couldNotStartRefresh') },
     onSuccess: (job, { target, rescan }) => {
       toast.push({
         tone: 'ok',
-        title: rescan ? 'Refresh and scan started' : 'Refresh started',
-        message: `Run #${job.id} is ${job.status}.`,
+        title: rescan ? t('hooks.library.refreshAndScanStarted') : t('hooks.library.refreshStarted'),
+        message: t('hooks.library.runIdIsStatus', { id: job.id, status: job.status }),
         durationMs: 4_000,
       });
       upsertJob(qc, job);
@@ -414,7 +415,7 @@ export function useRefreshMedia() {
 export function useInteractiveSearch(target: ReleaseSearchTarget | null) {
   return useQuery({
     queryKey: libraryKeys.releases(target),
-    queryFn: () => libraryApi.releases.search(target ?? {}).catch(notYet('Interactive search')),
+    queryFn: () => libraryApi.releases.search(target ?? {}).catch(notYet(t('hooks.library.interactiveSearch'))),
     enabled: target !== null,
     staleTime: 5 * 60_000,
     retry: false,
@@ -426,10 +427,10 @@ export function useGrabRelease() {
   const qc = useQueryClient();
   const toast = useToastStore();
   return useMutation({
-    mutationFn: (body: ReleaseGrabRequest) => libraryApi.releases.grab(body).catch(notYet('Grabbing')),
-    meta: { errorTitle: 'Grab failed' },
+    mutationFn: (body: ReleaseGrabRequest) => libraryApi.releases.grab(body).catch(notYet(t('hooks.library.grabbing'))),
+    meta: { errorTitle: t('hooks.library.grabFailed') },
     onSuccess: (r) => {
-      toast.push({ tone: 'ok', title: 'Grabbed', message: r.title });
+      toast.push({ tone: 'ok', title: t('common.grabbed'), message: r.title });
       void qc.invalidateQueries({ queryKey: ['queue'] });
     },
   });

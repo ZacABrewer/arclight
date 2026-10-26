@@ -7,6 +7,7 @@ import { usePendingReleases } from '../../hooks/releases.js';
 import { useTorrentStatus } from '../../hooks/torrent.js';
 import { formatRate } from '../../lib/format.js';
 import './activity.css';
+import { t } from '../../i18n/index.js';
 
 export function formatBytes(bytes: number | null | undefined): string {
   if (bytes == null) return '—';
@@ -35,7 +36,7 @@ export function formatEta(ms: number | null | undefined): string {
 /** Sets `<title>` the way the old Page wrapper did. */
 export function useDocumentTitle(title: string) {
   useEffect(() => {
-    document.title = `${title} · Arclight`;
+    document.title = t('activity.shared.titleArclight', { title });
   }, [title]);
 }
 
@@ -55,7 +56,7 @@ export function Pager({
   return (
     <div className="al-activity-pager">
       <span className="al-activity-muted">
-        <span className="al-num">{total}</span> total
+        <span className="al-num">{total}</span> {t('activity.shared.total')}
       </span>
       <Paginator page={page} pageCount={pages} onPageChange={onPage} />
     </div>
@@ -76,7 +77,7 @@ const TAB_ROUTES: Record<ActivityTab, '/activity/queue' | '/activity/history' | 
   pending: '/activity/pending',
 };
 
-const TAB_LABELS: Record<ActivityTab, string> = { queue: 'Queue', history: 'History', blocklist: 'Blocklist', pending: 'Pending' };
+const TAB_LABELS: Record<ActivityTab, string> = { get queue() { return t('common.queue'); }, get history() { return t('common.history'); }, get blocklist() { return t('common.blocklist'); }, get pending() { return t('common.pending'); } };
 
 /**
  * Shared Page 04 header: index 06, "Activity", route-driven compact tabs with mono counts,
@@ -93,17 +94,17 @@ export function ActivityHeader({ active, actions }: { active: ActivityTab; actio
   return (
     <PageHeader
       index="06"
-      title="Activity"
+      title={t('common.activity')}
       actions={
         <>
           {speeds ? (
             <span className="al-activity-speeds">
-              Down <span className="al-num">{formatRate(speeds.downloadRate)}</span> · Up <span className="al-num">{formatRate(speeds.uploadRate)}</span>
+              {t('common.down')} <span className="al-num">{formatRate(speeds.downloadRate)}</span> {t('activity.shared.up')} <span className="al-num">{formatRate(speeds.uploadRate)}</span>
             </span>
           ) : null}
           {actions}
           <Link className={buttonClass({ variant: 'secondary', size: 'md' })} to="/activity/manual-import">
-            Manual import
+            {t('common.manualImport')}
           </Link>
           <Button
             variant="secondary"
@@ -113,21 +114,21 @@ export function ActivityHeader({ active, actions }: { active: ActivityTab; actio
               void qc.invalidateQueries({ queryKey: ['torrent'] });
             }}
           >
-            Refresh
+            {t('common.refresh')}
           </Button>
         </>
       }
     >
       <Tabs
         compact
-        aria-label="Activity"
+        aria-label={t('common.activity')}
         value={active}
         onChange={(id) => void navigate({ to: TAB_ROUTES[id as ActivityTab] })}
         tabs={[
-          { id: 'queue', label: 'Queue', count: status.data?.totalCount },
-          { id: 'history', label: 'History' },
-          { id: 'blocklist', label: 'Blocklist' },
-          { id: 'pending', label: 'Pending', count: pending.data?.length },
+          { id: 'queue', label: t('common.queue'), count: status.data?.totalCount },
+          { id: 'history', label: t('common.history') },
+          { id: 'blocklist', label: t('common.blocklist') },
+          { id: 'pending', label: t('common.pending'), count: pending.data?.length },
         ]}
       />
     </PageHeader>

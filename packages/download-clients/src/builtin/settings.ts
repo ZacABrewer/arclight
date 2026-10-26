@@ -46,6 +46,34 @@ export const BuiltinSettings = z.object({
     .min(0)
     .optional()
     .describe('Stop seeding after this many minutes. Leave empty to use the engine default.'),
+  superSeeding: z
+    .boolean()
+    .optional()
+    .describe('Turn on super-seeding (BEP 16) for new torrents: while seeding, each peer is offered one piece at a time.'),
+  uploadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Upload limit per torrent in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  downloadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Download limit per torrent in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  peerUploadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Upload limit per peer connection in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  peerDownloadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Download limit per peer connection in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
 });
 export type BuiltinSettings = z.infer<typeof BuiltinSettings>;
 export type BuiltinSettingsInput = z.input<typeof BuiltinSettings>;

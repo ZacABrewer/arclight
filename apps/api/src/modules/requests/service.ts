@@ -1,21 +1,27 @@
-import { and, asc, desc, eq, inArray, ne, sql, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, ne, sql, type SQL } from 'drizzle-orm';
 import type { TmdbClient } from '@arclight/metadata';
 import {
+  ContentRestrictions,
   CreateRequest,
   OverrideRuleInput,
   Permission,
   RequestListQuery,
   REQUEST_SECRET_MASK,
   RequestsSettings,
+  UserApprovalPolicy,
   UserQuota,
   UserRequestSettings,
+  type ApprovalBudget,
   type ApproveRequest,
+  type PolicyStep,
+  type RequestPolicyExplanation,
   type BulkRequestResult,
   type MediaRequest,
   type MinimumAvailability,
   type MonitorOption,
   type MediaStatus,
   type MediaType,
+  type MediaVersion,
   type OverrideRule,
   type RequestCount,
   type RequestPage,
@@ -25,16 +31,26 @@ import {
   type UserPermissions,
   type UserQuotaResponse,
   type ServerEvent,
+  type RequestsDigestResult,
 } from '@arclight/shared';
+import type { RequestsDigestEvent } from '@arclight/notifications';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { qualityProfiles, rootFolders } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
-import { libraryService, type MovieMetadataInput, type SeriesMetadataInput } from '../library/index.js';
+import {
+  DEFAULT_VERSION_TAG,
+  UHD_VERSION_TAG,
+  libraryService,
+  sameTag,
+  upsertVersion,
+  type MovieMetadataInput,
+  type SeriesMetadataInput,
+} from '../library/index.js';
 import type { SearchTarget } from '../releases/index.js';
 import { getSection, setSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
-import { libraryOnlyAvailability, type MediaServerAvailability } from './media-server.js';
+import { libraryOnlyAvailability, type AvailabilityQuery, type MediaServerAvailability, type MediaServerLookup } from './media-server.js';
 import type { RequestNotifier } from './notify.js';
 import {
   type Actor,
@@ -48,11 +64,22 @@ import {
   canViewAllRequests,
   isQuotaExempt,
 } from './permissions.js';
+import { CertificationGuard, restrictionsOfSettings } from './certification.js';
+import { evaluatePolicy, needsSizeEstimate, type BudgetUsage, type PolicyDecision, type PolicyResult } from './policy.js';
 import { quotaFor } from './quota.js';
 import { mediaRequests, overrideRules, requestMediaStatus, seasonRequests, issues, issueComments, watchlistItems } from './schema.js';
-import { libraryAvailability, overlayRequests, seasonStatusMap, type LibraryAvailability } from './status.js';
+import {
+  libraryAvailability,
+  overlayRequests,
+  rollupSeasons,
+  seasonEpisodeCounts,
+  seasonStatusMap,
+  serverSeasonStatus,
+  type LibraryAvailability,
+} from './status.js';
 import {
   allUserRows,
+  approvalPolicyOf,
   findUserRow,
   ownerUser,
   patchUserSettings,
@@ -79,6 +106,11 @@ export interface TitleSource {
   lookupMovie(tmdbId: number): Promise<MovieMetadataInput | null>;
 }
 
+/** What a request would cost: the size of the best approved release, or null when unknown. */
+export type SizeEstimator = (query: { type: MediaType; tmdbId: number; is4k: boolean; seasons: number[] }) => Promise<number | null>;
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
 export interface RequestsServiceOptions {
   db: Db;
   bus: EventBus;
@@ -89,6 +121,8 @@ export interface RequestsServiceOptions {
   search?: (target: SearchTarget) => Promise<unknown>;
   /** Media-server availability used when settings.useMediaServerAvailability is on. */
   mediaServer?: MediaServerAvailability;
+  /** Release-size estimate for approval policies (default: none, size policies are skipped). */
+  estimateSize?: SizeEstimator;
   now?: () => Date;
 }
 
@@ -136,6 +170,9 @@ export class RequestsService {
   readonly notifier: RequestNotifier;
   private readonly search: ((target: SearchTarget) => Promise<unknown>) | undefined;
   private readonly mediaServer: MediaServerAvailability;
+  private readonly estimateSize: SizeEstimator | undefined;
+  /** Certification lookups and per-user content caps (shared with discover). */
+  readonly certifications: CertificationGuard;
   readonly now: () => Date;
 
   constructor(opts: RequestsServiceOptions) {
@@ -147,6 +184,8 @@ export class RequestsService {
     this.search = opts.search;
     this.mediaServer = opts.mediaServer ?? libraryOnlyAvailability;
     this.now = opts.now ?? (() => new Date());
+    this.estimateSize = opts.estimateSize;
+    this.certifications = new CertificationGuard({ db: this.db, titles: this.titles, now: this.now });
     this.notifier.seasonLookup = (id) => this.seasonRows(id).map((s) => s.seasonNumber);
   }
 
@@ -192,7 +231,10 @@ export class RequestsService {
     const out = new Map<number, TitleStatus>();
     const ids = [...new Set(tmdbIds)];
     if (ids.length === 0) return out;
-    const lib = libraryAvailability(this.db, type, ids, { now: this.now(), includeSpecials: this.settings().enableSpecialEpisodes });
+    const settings = this.settings();
+    const lib = libraryAvailability(this.db, type, ids, { now: this.now(), includeSpecials: settings.enableSpecialEpisodes });
+    // With media-server availability, the normal track is what the last sync saw on the server.
+    const cached = settings.useMediaServerAvailability ? this.cachedStatuses(type, ids) : new Map<number, typeof requestMediaStatus.$inferSelect>();
     const active = this.db
       .select()
       .from(mediaRequests)
@@ -201,7 +243,14 @@ export class RequestsService {
       .all();
     const seasonsByRequest = this.seasonsFor(active.map((r) => r.id));
     for (const tmdbId of ids) {
-      const entry: LibraryAvailability | undefined = lib.get(tmdbId);
+      const libEntry: LibraryAvailability | undefined = lib.get(tmdbId);
+      const synced = cached.get(tmdbId);
+      const entry: LibraryAvailability | undefined =
+        synced?.lastSyncedAt && libEntry
+          ? { ...libEntry, status: synced.status, seasons: mergeNormalSeasons(libEntry.seasons, synced.seasons) }
+          : synced?.lastSyncedAt && synced.status !== 'unknown'
+            ? { libraryId: synced.libraryId ?? 0, status: synced.status, status4k: 'unknown', seasons: synced.seasons }
+            : libEntry;
       const mine = active.filter((r) => r.tmdbId === tmdbId);
       const normal = mine.filter((r) => !r.is4k);
       const uhd = mine.filter((r) => r.is4k);
@@ -222,7 +271,7 @@ export class RequestsService {
       out.set(tmdbId, {
         status: overlayRequests(entry?.status ?? 'unknown', normal.map((r) => r.status)),
         status4k: overlayRequests(entry?.status4k ?? 'unknown', uhd.map((r) => r.status)),
-        libraryId: entry?.libraryId ?? null,
+        libraryId: libEntry?.libraryId ?? null,
         seasons,
         request: normal[0] ?? null,
         request4k: uhd[0] ?? null,
@@ -230,6 +279,18 @@ export class RequestsService {
       });
     }
     return out;
+  }
+
+  private cachedStatuses(type: MediaType, tmdbIds: readonly number[]): Map<number, typeof requestMediaStatus.$inferSelect> {
+    if (tmdbIds.length === 0) return new Map();
+    return new Map(
+      this.db
+        .select()
+        .from(requestMediaStatus)
+        .where(and(eq(requestMediaStatus.mediaType, type), inArray(requestMediaStatus.tmdbId, [...new Set(tmdbIds)])))
+        .all()
+        .map((r) => [r.tmdbId, r]),
+    );
   }
 
   private seasonsFor(requestIds: number[]): Map<number, (typeof seasonRequests.$inferSelect)[]> {
@@ -253,6 +314,15 @@ export class RequestsService {
       for (const [tmdbId, status] of this.titleStatuses(type, ids)) statuses.set(`${type}:${tmdbId}`, status);
     }
     const manage = canManageRequests(actor.permissions);
+    const serverMode = this.settings().useMediaServerAvailability;
+    const availableOn = new Map<string, string | null>();
+    if (serverMode) {
+      for (const type of ['movie', 'series'] as const) {
+        for (const [tmdbId, c] of this.cachedStatuses(type, rows.filter((r) => r.type === type).map((r) => r.tmdbId))) {
+          availableOn.set(`${type}:${tmdbId}`, c.availableOn);
+        }
+      }
+    }
     return rows.map((r) => {
       const status = statuses.get(`${r.type}:${r.tmdbId}`);
       const resource: MediaRequest = {
@@ -281,6 +351,8 @@ export class RequestsService {
         mediaStatus: (r.is4k ? status?.status4k : status?.status) ?? 'unknown',
         libraryId: r.libraryId ?? status?.libraryId ?? null,
         canRemove: manage || (r.requestedById === actor.userId && r.status === 'pending'),
+        availableOn: r.is4k ? null : (availableOn.get(`${r.type}:${r.tmdbId}`) ?? null),
+        ...(r.status === 'pending' && r.policyHold ? { heldByPolicy: true } : {}),
       };
       return resource;
     });
@@ -509,6 +581,9 @@ export class RequestsService {
       throw new RequestsError('VALIDATION', `4K ${type === 'movie' ? 'movie' : 'series'} requests are disabled`);
     }
     if (libraryService.isExcluded(this.db, type, input.tmdbId)) throw RequestsError.forbidden('this title is on the exclusion list');
+    // Content caps (kids accounts) are the requester's, checked against the TMDB rating.
+    const caps = this.certifications.restrictionsForUser(requester.id);
+    if (caps) await this.certifications.assertAllowedUnder(caps, type, input.tmdbId);
     if (opts.isAutoRequest) {
       const dup = this.db
         .select({ id: mediaRequests.id })
@@ -574,10 +649,19 @@ export class RequestsService {
       tags = [...new Set([...tags, ...rule.tags])];
     }
 
-    const autoApproved =
+    const baseApproved =
       canAutoApprove(held, type, is4k) ||
       settings.autoApprove[type === 'movie' ? (is4k ? 'movie4k' : 'movie') : is4k ? 'series4k' : 'series'] ||
       Boolean(rule?.autoApprove);
+    // Approval policies (size, budgets, windows) decide what nothing above approved.
+    let decision: PolicyDecision = baseApproved ? 'approve' : 'pending';
+    let estimatedSizeBytes: number | null = null;
+    if (!baseApproved) {
+      const evaluated = await this.runPolicy(requester, { type, is4k, tmdbId: input.tmdbId, seasons }, settings);
+      decision = evaluated.result.decision;
+      estimatedSizeBytes = evaluated.estimate;
+    }
+    const autoApproved = decision === 'approve';
     const status: RequestStatus = autoApproved ? 'approved' : 'pending';
     const now = this.iso();
     const row = this.db
@@ -593,12 +677,14 @@ export class RequestsService {
         poster: facts.poster,
         backdrop: facts.backdrop,
         requestedById: requester.id,
-        modifiedById: autoApproved ? requester.id : null,
+        modifiedById: baseApproved ? requester.id : null,
         rootFolderPath,
         qualityProfileId,
         tags,
         ignoreQuota,
         isAutoRequest: opts.isAutoRequest ?? false,
+        estimatedSizeBytes,
+        policyHold: decision === 'hold' ? 'window' : null,
         createdAt: now,
         updatedAt: now,
       })
@@ -607,7 +693,7 @@ export class RequestsService {
     for (const seasonNumber of seasons) {
       this.db.insert(seasonRequests).values({ requestId: row.id, seasonNumber, status }).run();
     }
-    this.log?.info({ requestId: row.id, type, tmdbId: input.tmdbId, status, rule: rule?.id }, 'request created');
+    this.log?.info({ requestId: row.id, type, tmdbId: input.tmdbId, status, rule: rule?.id, policy: baseApproved ? undefined : decision }, 'request created');
     this.publish('created', row.id);
     await this.notifier.request('created', row).catch((err: unknown) => this.log?.warn({ err }, 'request notification failed'));
 
@@ -665,7 +751,7 @@ export class RequestsService {
           libraryId = existing.id;
           libraryService.updateMovie(this.db, existing.id, {
             monitored: true,
-            ...(row.is4k ? { qualityProfileId: target.qualityProfileId } : {}),
+            ...versionPatch(existing, row.is4k, target.qualityProfileId),
             ...(extra.minimumAvailability ? { minimumAvailability: extra.minimumAvailability } : {}),
           });
           this.bus.publish({ type: 'library', action: 'updated', mediaType: 'movie', id: existing.id });
@@ -678,6 +764,7 @@ export class RequestsService {
             tmdbId: row.tmdbId,
             rootFolderPath: target.rootFolderPath,
             qualityProfileId: target.qualityProfileId,
+            ...(row.is4k ? { versions: [{ tag: UHD_VERSION_TAG, qualityProfileId: target.qualityProfileId, enabled: true }] } : {}),
             monitored: true,
             minimumAvailability: extra.minimumAvailability ?? defaults.minimumAvailability,
             tags: target.tags,
@@ -693,7 +780,7 @@ export class RequestsService {
         const existing = libraryService.findSeriesByTmdbId(this.db, row.tmdbId);
         if (existing) {
           seriesId = existing.id;
-          libraryService.updateSeries(this.db, existing.id, { monitored: true, ...(row.is4k ? { qualityProfileId: target.qualityProfileId } : {}) });
+          libraryService.updateSeries(this.db, existing.id, { monitored: true, ...versionPatch(existing, row.is4k, target.qualityProfileId) });
           if (extra.monitorOption) libraryService.applyMonitorOption(this.db, existing.id, extra.monitorOption);
         } else {
           const meta = await this.titles.lookupSeries(row.tmdbId);
@@ -702,6 +789,7 @@ export class RequestsService {
             tmdbId: row.tmdbId,
             rootFolderPath: target.rootFolderPath,
             qualityProfileId: target.qualityProfileId,
+            ...(row.is4k ? { versions: [{ tag: UHD_VERSION_TAG, qualityProfileId: target.qualityProfileId, enabled: true }] } : {}),
             monitored: true,
             monitorOption: extra.monitorOption ?? 'none',
             monitorNewItems: defaults.monitorNewItems,
@@ -774,6 +862,7 @@ export class RequestsService {
     const patch: Partial<typeof mediaRequests.$inferInsert> = {
       status: 'approved',
       modifiedById: actor.userId,
+      policyHold: null,
       updatedAt: this.iso(),
     };
     if (overrides.rootFolderPath !== undefined) patch.rootFolderPath = overrides.rootFolderPath;
@@ -816,7 +905,7 @@ export class RequestsService {
     this.requirePending(row);
     const declined = this.db
       .update(mediaRequests)
-      .set({ status: 'declined', modifiedById: actor.userId, declineReason: reason ?? null, updatedAt: this.iso() })
+      .set({ status: 'declined', modifiedById: actor.userId, declineReason: reason ?? null, policyHold: null, updatedAt: this.iso() })
       .where(eq(mediaRequests.id, id))
       .returning()
       .get()!;
@@ -914,7 +1003,7 @@ export class RequestsService {
   private upsertMediaStatus(
     type: MediaType,
     tmdbId: number,
-    patch: Partial<Pick<typeof requestMediaStatus.$inferInsert, 'status' | 'status4k' | 'seasons' | 'libraryId' | 'lastSyncedAt'>>,
+    patch: Partial<Pick<typeof requestMediaStatus.$inferInsert, 'status' | 'status4k' | 'seasons' | 'libraryId' | 'lastSyncedAt' | 'availableOn'>>,
   ): void {
     const now = this.iso();
     const existing = this.db
@@ -955,49 +1044,70 @@ export class RequestsService {
     const open = this.db.select().from(mediaRequests).where(inArray(mediaRequests.status, ACTIVE)).all();
     const cached = this.db.select().from(requestMediaStatus).all();
     const useServer = settings.useMediaServerAvailability;
+    const includeSpecials = settings.enableSpecialEpisodes;
     let checked = 0;
     let completed = 0;
     for (const type of ['movie', 'series'] as const) {
       const ids = [...new Set([...open.filter((r) => r.type === type).map((r) => r.tmdbId), ...cached.filter((c) => c.mediaType === type).map((c) => c.tmdbId)])];
       if (ids.length === 0) continue;
-      const lib = libraryAvailability(this.db, type, ids, { now: this.now(), includeSpecials: settings.enableSpecialEpisodes });
+      const lib = libraryAvailability(this.db, type, ids, { now: this.now(), includeSpecials });
       for (const tmdbId of ids) {
         if (signal?.aborted) throw new Error('cancelled');
         checked++;
         const entry = lib.get(tmdbId);
         let status: MediaStatus = entry?.status ?? 'unknown';
-        const seasons = (entry?.seasons ?? []).map((s) => ({ ...s }));
-        let onServer = false;
-        if (useServer && status !== 'available') {
-          const mine = open.find((r) => r.type === type && r.tmdbId === tmdbId);
-          onServer = (await this.mediaServer.isAvailable({ mediaType: type, tmdbId, tvdbId: mine?.tvdbId ?? null }, signal)) === true;
-          if (onServer) status = 'available';
+        let seasons = (entry?.seasons ?? []).map((s) => ({ ...s }));
+        const mine = open.find((r) => r.type === type && r.tmdbId === tmdbId);
+
+        // Normal track from the media server: requests complete only when the server has it.
+        let server: MediaServerLookup = { state: 'unconfigured' };
+        if (useServer) server = await this.serverLookup({ mediaType: type, tmdbId, tvdbId: mine?.tvdbId ?? null }, signal);
+        const serverMode = server.state !== 'unconfigured';
+        let wholeSeriesOnServer = false;
+        if (server.state === 'present') {
+          if (type === 'movie') status = 'available';
+          else if (server.seasons.length === 0) {
+            // A hook without season detail: present means the whole series is there.
+            status = 'available';
+            wholeSeriesOnServer = true;
+          } else {
+            const expected = await this.expectedEpisodes(tmdbId, entry !== undefined);
+            seasons = serverSeasonStatus(seasons, server.seasons, expected);
+            const counted = seasons.filter((e) => includeSpecials || e.seasonNumber > 0).map((e) => e.status);
+            status = rollupSeasons(counted, status);
+          }
+        } else if (server.state === 'absent') {
+          status = demote(status);
+          seasons = seasons.map((e) => ({ ...e, status: demote(e.status) }));
         }
+
         this.upsertMediaStatus(type, tmdbId, {
           status,
           status4k: entry?.status4k ?? 'unknown',
           seasons,
           libraryId: entry?.libraryId ?? null,
+          availableOn: server.state === 'present' ? server.serverName : null,
           lastSyncedAt: this.iso(),
         });
         for (const req of open.filter((r) => r.type === type && r.tmdbId === tmdbId && (r.status === 'approved' || r.status === 'pending'))) {
           if (entry && req.libraryId === null) {
             this.db.update(mediaRequests).set({ libraryId: entry.libraryId }).where(eq(mediaRequests.id, req.id)).run();
           }
+          // A server that could not answer blocks completion of the normal track (never guess).
+          if (!req.is4k && server.state === 'error') continue;
           let done: boolean;
           if (type === 'movie') {
-            done = (req.is4k ? entry?.status4k : status) === 'available';
+            done = req.is4k ? entry?.status4k === 'available' : serverMode ? server.state === 'present' : status === 'available';
           } else {
             const map = seasonStatusMap(seasons, req.is4k);
             const requested = this.seasonRows(req.id);
+            const seasonDone = (n: number) => (!req.is4k && wholeSeriesOnServer) || map.get(n) === 'available';
             for (const sr of requested) {
-              if (map.get(sr.seasonNumber) === 'available' && sr.status !== 'completed') {
+              if (seasonDone(sr.seasonNumber) && sr.status !== 'completed') {
                 this.db.update(seasonRequests).set({ status: 'completed' }).where(eq(seasonRequests.id, sr.id)).run();
               }
             }
-            done =
-              requested.length > 0 &&
-              ((onServer && !req.is4k) || requested.every((sr) => map.get(sr.seasonNumber) === 'available'));
+            done = requested.length > 0 && requested.every((sr) => seasonDone(sr.seasonNumber));
           }
           if (done) {
             await this.complete(this.row(req.id));
@@ -1007,6 +1117,254 @@ export class RequestsService {
       }
     }
     return `${checked} titles checked, ${completed} requests completed${purged ? `, ${purged} orphaned rows removed` : ''}`;
+  }
+
+  /** Asks the media-server hook; a hook without `lookup` answers through isAvailable. */
+  private async serverLookup(query: AvailabilityQuery, signal?: AbortSignal): Promise<MediaServerLookup> {
+    try {
+      if (this.mediaServer.lookup) return await this.mediaServer.lookup(query, signal);
+      const answer = await this.mediaServer.isAvailable(query, signal);
+      if (answer === true) return { state: 'present', serverName: this.mediaServer.name, itemId: '', seasons: [] };
+      return answer === false ? { state: 'absent' } : { state: 'unconfigured' };
+    } catch (err) {
+      this.log?.warn({ err, tmdbId: query.tmdbId }, 'media server availability lookup failed');
+      return { state: 'error', message: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  /** Episodes a season needs to count as complete: aired library episodes, else TMDB's count. */
+  private async expectedEpisodes(tmdbId: number, inLibrary: boolean): Promise<Map<number, number>> {
+    if (inLibrary) {
+      const counts = seasonEpisodeCounts(this.db, tmdbId, this.now());
+      if (counts.size > 0) return counts;
+    }
+    try {
+      const facts = await this.facts('series', tmdbId, false);
+      return new Map(facts.seasons.map((s) => [s.seasonNumber, s.episodeCount]));
+    } catch {
+      return new Map();
+    }
+  }
+
+  // -------------------------------------------------------------------------------------
+  // approval policies (budgets, windows, size) and RequestsPolicySweep
+  // -------------------------------------------------------------------------------------
+
+  /** Approved and completed usage of a budget's scope in its period, without `exceptId`. */
+  private budgetUsage(budget: ApprovalBudget, requester: UserRow, exceptId: number | undefined): BudgetUsage {
+    const since = new Date(this.now().getTime() - budget.periodDays * DAY_MS).toISOString();
+    const usersById = new Map(allUserRows(this.db).map((u) => [u.id, u]));
+    const rows = this.db
+      .select()
+      .from(mediaRequests)
+      .where(and(inArray(mediaRequests.status, ['approved', 'completed']), gte(mediaRequests.createdAt, since)))
+      .all()
+      .filter((r) => {
+        if (r.id === exceptId) return false;
+        const owner = usersById.get(r.requestedById);
+        if (!owner || approvalPolicyOf(owner).budgetExempt) return false;
+        if (budget.scope === 'user') return r.requestedById === requester.id;
+        if (budget.scope === 'role') return owner.role === requester.role;
+        return true;
+      });
+    const seasons = this.seasonsFor(rows.filter((r) => r.type === 'series').map((r) => r.id));
+    let movieBytes = 0;
+    let seasonCount = 0;
+    for (const r of rows) {
+      if (r.type === 'movie') movieBytes += r.estimatedSizeBytes ?? 0;
+      else seasonCount += seasons.get(r.id)?.length ?? 0;
+    }
+    return { movieBytes, seasons: seasonCount };
+  }
+
+  /**
+   * Runs the approval policies for a request of `requester`. `estimate` is the stored size
+   * estimate (undefined: estimate now when a policy needs it).
+   */
+  private async runPolicy(
+    requester: UserRow,
+    req: { type: MediaType; is4k: boolean; tmdbId: number; seasons: number[] },
+    settings: RequestsSettings,
+    opts: { exceptId?: number; estimate?: number | null } = {},
+  ): Promise<{ result: PolicyResult; estimate: number | null }> {
+    const user = { id: requester.id, role: requester.role, policy: approvalPolicyOf(requester) };
+    let estimate: number | null = opts.estimate ?? null;
+    if (opts.estimate === undefined && this.estimateSize && needsSizeEstimate({ settings, user, type: req.type })) {
+      try {
+        estimate = await this.estimateSize({ type: req.type, tmdbId: req.tmdbId, is4k: req.is4k, seasons: req.seasons });
+      } catch (err) {
+        this.log?.warn({ err, tmdbId: req.tmdbId }, 'release size estimate failed');
+        estimate = null;
+      }
+    }
+    const result = evaluatePolicy({
+      settings,
+      user,
+      type: req.type,
+      seasonCount: req.seasons.length,
+      estimatedSizeBytes: estimate,
+      usage: (b) => this.budgetUsage(b, requester, opts.exceptId),
+      now: this.now(),
+    });
+    return { result, estimate };
+  }
+
+  /** GET /request/:id/policy: the auto-approval chain for one request, evaluated now. */
+  async explainPolicy(actor: Actor, id: number): Promise<RequestPolicyExplanation> {
+    const row = this.row(id);
+    this.assertCanSee(actor, row);
+    const settings = this.settings();
+    const steps: PolicyStep[] = [];
+    const requester = findUserRow(this.db, row.requestedById);
+    const held = requester ? userPermissions(requester) : 0;
+    const perm = canAutoApprove(held, row.type, row.is4k);
+    steps.push({ rule: 'permission', outcome: perm ? 'pass' : 'fail', message: perm ? 'the requester may auto-approve this kind of request' : 'the requester has no auto-approve permission for this kind of request' });
+    const key = row.type === 'movie' ? (row.is4k ? 'movie4k' : 'movie') : row.is4k ? 'series4k' : 'series';
+    const global = settings.autoApprove[key];
+    steps.push({ rule: 'settings', outcome: global ? 'pass' : 'fail', message: global ? `every ${key} request is auto-approved` : `${key} requests are not auto-approved for everyone` });
+    let ruleApproved = false;
+    const rules = this.db.select().from(overrideRules).orderBy(asc(overrideRules.id)).all();
+    if (requester && rules.some((r) => r.enabled && r.autoApprove && r.mediaType === row.type)) {
+      try {
+        const facts = await this.facts(row.type, row.tmdbId, true);
+        const rule = this.matchRule(rules, {
+          type: row.type,
+          is4k: row.is4k,
+          userId: requester.id,
+          genreIds: facts.genreIds ?? [],
+          keywordIds: facts.keywordIds ?? [],
+          language: facts.originalLanguage,
+        });
+        ruleApproved = Boolean(rule?.autoApprove);
+        steps.push({ rule: 'overrideRule', outcome: ruleApproved ? 'pass' : 'fail', message: rule ? `override rule "${rule.name}" ${rule.autoApprove ? 'auto-approves' : 'does not auto-approve'}` : 'no auto-approving override rule matches' });
+      } catch {
+        steps.push({ rule: 'overrideRule', outcome: 'skip', message: 'override rules could not be checked (TMDB unavailable)' });
+      }
+    } else steps.push({ rule: 'overrideRule', outcome: 'skip', message: 'no auto-approving override rule applies' });
+
+    const base = { requestId: row.id, status: row.status, held: row.status === 'pending' && row.policyHold !== null, estimatedSizeBytes: row.estimatedSizeBytes };
+    if (perm || global || ruleApproved || !requester) {
+      return { ...base, decision: requester ? 'approve' : 'pending', nextWindowAt: null, steps };
+    }
+    const seasons = row.type === 'series' ? this.seasonRows(row.id).map((s) => s.seasonNumber) : [];
+    const { result } = await this.runPolicy(requester, { type: row.type, is4k: row.is4k, tmdbId: row.tmdbId, seasons }, settings, {
+      exceptId: row.id,
+      estimate: row.estimatedSizeBytes,
+    });
+    return { ...base, decision: result.decision, nextWindowAt: result.nextWindowAt?.toISOString() ?? null, steps: [...steps, ...result.steps] };
+  }
+
+  /** Approves a pending request on behalf of the policies (no human approver). */
+  private async approveByPolicy(row: RequestRow): Promise<RequestRow> {
+    const approved = this.db
+      .update(mediaRequests)
+      .set({ status: 'approved', modifiedById: null, policyHold: null, updatedAt: this.iso() })
+      .where(eq(mediaRequests.id, row.id))
+      .returning()
+      .get()!;
+    this.db.update(seasonRequests).set({ status: 'approved' }).where(eq(seasonRequests.requestId, row.id)).run();
+    this.publish('approved', row.id);
+    const sent = await this.sendToLibrary(approved);
+    if (sent.status === 'approved') {
+      await this.notifier.request('approved', sent).catch((err: unknown) => this.log?.warn({ err }, 'approved notification failed'));
+    }
+    return sent;
+  }
+
+  /**
+   * RequestsPolicySweep (hourly): re-evaluates requests held by a window. Approves those the
+   * policies now approve (an auto-approve window opened, a hold window closed); releases
+   * those the policies no longer hold to plain pending.
+   */
+  async policySweep(): Promise<string> {
+    const held = this.db
+      .select()
+      .from(mediaRequests)
+      .where(and(eq(mediaRequests.status, 'pending'), isNotNull(mediaRequests.policyHold)))
+      .orderBy(asc(mediaRequests.createdAt), asc(mediaRequests.id))
+      .all();
+    if (held.length === 0) return 'no held requests';
+    let approved = 0;
+    let released = 0;
+    for (const row of held) {
+      const requester = findUserRow(this.db, row.requestedById);
+      if (!requester) continue;
+      const settings = this.settings();
+      const seasons = row.type === 'series' ? this.seasonRows(row.id).map((s) => s.seasonNumber) : [];
+      const { result } = await this.runPolicy(requester, { type: row.type, is4k: row.is4k, tmdbId: row.tmdbId, seasons }, settings, {
+        exceptId: row.id,
+        estimate: row.estimatedSizeBytes,
+      });
+      if (result.decision === 'approve') {
+        await this.approveByPolicy(row);
+        approved++;
+      } else if (result.decision === 'pending') {
+        this.db.update(mediaRequests).set({ policyHold: null, updatedAt: this.iso() }).where(eq(mediaRequests.id, row.id)).run();
+        this.publish('updated', row.id);
+        released++;
+      }
+    }
+    return `${held.length} held requests: ${approved} approved, ${released} released to pending, ${held.length - approved - released} still held`;
+  }
+
+  // -------------------------------------------------------------------------------------
+  // admin digest (RequestsDigest)
+  // -------------------------------------------------------------------------------------
+
+  private lastDigestDay: string | null = null;
+
+  /** Builds and sends the digest now. Nothing pending and no open issues: nothing is sent. */
+  async digest(): Promise<RequestsDigestResult> {
+    const pending = this.db.select().from(mediaRequests).where(eq(mediaRequests.status, 'pending')).orderBy(asc(mediaRequests.createdAt), asc(mediaRequests.id)).all();
+    const open = this.db.select().from(issues).where(eq(issues.status, 'open')).orderBy(asc(issues.createdAt), asc(issues.id)).all();
+    const result: RequestsDigestResult = { sent: false, pendingRequests: pending.length, openIssues: open.length };
+    if (pending.length === 0 && open.length === 0) return result;
+    const names = requestUsers(this.db, [...pending.map((r) => r.requestedById), ...open.map((i) => i.createdById)]);
+    const nameOf = (id: number) => {
+      const u = names.get(id);
+      return u?.displayName ?? u?.username ?? `user ${id}`;
+    };
+    const LIMIT = 15;
+    const event: Omit<RequestsDigestEvent, 'instanceName' | 'timestamp'> = {
+      type: 'requestsDigest',
+      totalPendingRequests: pending.length,
+      totalOpenIssues: open.length,
+      pendingRequests: pending.slice(0, LIMIT).map((r) => ({
+        id: r.id,
+        mediaType: r.type,
+        title: r.title,
+        ...(r.year ? { year: r.year } : {}),
+        requestedBy: nameOf(r.requestedById),
+        is4k: r.is4k,
+        createdAt: r.createdAt,
+      })),
+      openIssues: open.slice(0, LIMIT).map((i) => ({
+        id: i.id,
+        mediaType: i.mediaType,
+        title: i.title,
+        issueType: i.type,
+        reportedBy: nameOf(i.createdById),
+        createdAt: i.createdAt,
+      })),
+    };
+    await this.notifier.digest(event);
+    return { ...result, sent: true };
+  }
+
+  /**
+   * RequestsDigest job tick (hourly): sends once a day at `digestHour` (server local time)
+   * when enabled. Returns the job message.
+   */
+  async digestTick(): Promise<string> {
+    const settings = this.settings();
+    if (!settings.digestEnabled) return 'digest disabled';
+    const now = this.now();
+    if (now.getHours() !== settings.digestHour) return `waiting for ${String(settings.digestHour).padStart(2, '0')}:00`;
+    const day = `${now.getFullYear()}-${now.getMonth() + 1}-${now.getDate()}`;
+    if (this.lastDigestDay === day) return 'digest already sent today';
+    this.lastDigestDay = day;
+    const r = await this.digest();
+    return r.sent ? `digest sent: ${r.pendingRequests} pending requests, ${r.openIssues} open issues` : 'nothing pending; no digest sent';
   }
 
   // -------------------------------------------------------------------------------------
@@ -1019,15 +1377,21 @@ export class RequestsService {
 
   permissions(actor: Actor, userId: number): UserPermissions {
     this.assertSelfOrManager(actor, userId);
-    return { permissions: userPermissions(userRow(this.db, userId)) };
+    const row = userRow(this.db, userId);
+    return { permissions: userPermissions(row), contentRestrictions: restrictionsOfSettings(row.settings), approvalPolicy: approvalPolicyOf(row) };
   }
 
-  setPermissions(actor: Actor, userId: number, permissions: number): UserPermissions {
+  /** Permission bits plus, when given, the content caps and approval override (MANAGE_USERS). */
+  setPermissions(actor: Actor, userId: number, input: UserPermissions): UserPermissions {
     if (!canManageUsers(actor.permissions)) throw RequestsError.forbidden();
     const target = userRow(this.db, userId);
     if (target.role === 'admin' && (actor.permissions & Permission.ADMIN) === 0) throw RequestsError.forbidden('only admins can change an admin');
-    const saved = setUserPermissions(this.db, userId, permissions, this.iso());
-    return { permissions: userPermissions(saved) };
+    setUserPermissions(this.db, userId, input.permissions, this.iso());
+    const patch: Record<string, unknown> = {};
+    if (input.contentRestrictions !== undefined) patch['contentRestrictions'] = ContentRestrictions.parse(input.contentRestrictions);
+    if (input.approvalPolicy !== undefined) patch['approvalPolicy'] = UserApprovalPolicy.parse(input.approvalPolicy);
+    if (Object.keys(patch).length > 0) patchUserSettings(this.db, userId, patch, this.iso());
+    return this.permissions(actor, userId);
   }
 
   quota(actor: Actor, userId: number): UserQuotaResponse {
@@ -1045,7 +1409,9 @@ export class RequestsService {
   requestSettings(actor: Actor, userId: number): UserRequestSettings {
     this.assertSelfOrManager(actor, userId);
     const settings = requestSettingsOf(userRow(this.db, userId));
-    return settings.plexToken ? { ...settings, plexToken: REQUEST_SECRET_MASK } : settings;
+    const out: UserRequestSettings = settings.plexToken ? { ...settings, plexToken: REQUEST_SECRET_MASK } : { ...settings };
+    if (out.mediaServerLink?.accessToken) out.mediaServerLink = { ...out.mediaServerLink, accessToken: REQUEST_SECRET_MASK };
+    return out;
   }
 
   setRequestSettings(actor: Actor, userId: number, input: UserRequestSettings): UserRequestSettings {
@@ -1063,6 +1429,8 @@ export class RequestsService {
         plexToken,
         watchlistSyncMovies: parsed.watchlistSyncMovies,
         watchlistSyncSeries: parsed.watchlistSyncSeries,
+        autoRequestFromWatchlist: parsed.autoRequestFromWatchlist,
+        // mediaServerLink is managed by /user/:id/mediaserver/link only.
       },
       this.iso(),
     );
@@ -1127,4 +1495,36 @@ export class RequestsService {
   userExists(id: number): boolean {
     return findUserRow(this.db, id) !== undefined;
   }
+}
+
+/** On-disk files the media server has not picked up yet count as "processing", not available. */
+function demote(status: MediaStatus): MediaStatus {
+  return status === 'available' || status === 'partiallyAvailable' ? 'processing' : status;
+}
+
+/** Library seasons with the normal-track status taken from the last server sync. */
+function mergeNormalSeasons(
+  library: readonly { seasonNumber: number; status: MediaStatus; status4k: MediaStatus }[],
+  synced: readonly { seasonNumber: number; status: MediaStatus; status4k: MediaStatus }[],
+): { seasonNumber: number; status: MediaStatus; status4k: MediaStatus }[] {
+  const out = library.map((s) => ({ ...s, status: synced.find((x) => x.seasonNumber === s.seasonNumber)?.status ?? s.status }));
+  for (const s of synced) if (!out.some((x) => x.seasonNumber === s.seasonNumber)) out.push({ ...s, status4k: 'unknown' });
+  return out.sort((a, b) => a.seasonNumber - b.seasonNumber);
+}
+
+/**
+ * Library patch for a request on a title that is already in the library. The 4K track maps to
+ * the multi-version slot `4K` (added next to whatever the item already has, which becomes the
+ * `Standard` slot), so a 4K request never replaces the normal copy. A normal request on an
+ * item that only has a 4K slot adds a `Standard` slot in front of it.
+ */
+function versionPatch(
+  existing: { qualityProfileId: number; versions?: MediaVersion[] | null | undefined },
+  is4k: boolean,
+  qualityProfileId: number,
+): { versions?: MediaVersion[] } {
+  if (is4k) return { versions: upsertVersion(existing, { tag: UHD_VERSION_TAG, qualityProfileId, enabled: true }) };
+  const versions = existing.versions ?? [];
+  if (versions.length === 0 || versions.some((v) => !sameTag(v.tag, UHD_VERSION_TAG))) return {};
+  return { versions: [{ tag: DEFAULT_VERSION_TAG, qualityProfileId, enabled: true }, ...versions] };
 }

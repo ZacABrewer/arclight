@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { DownloadClientInput, RemotePathMappingInput } from '@arclight/shared';
 import { downloadClientsApi, remotePathMappingsApi } from '../api/download-clients.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 export function useDownloadClientList() {
   return useQuery({ queryKey: settingsKeys.downloadClients, queryFn: downloadClientsApi.list });
@@ -22,12 +23,12 @@ export function useSaveDownloadClient() {
 
 export function useDeleteDownloadClient() {
   return useInvalidatingMutation((id: number) => downloadClientsApi.remove(id), [settingsKeys.downloadClients], {
-    errorTitle: 'Could not delete download client',
+    errorTitle: t('hooks.downloadClients.couldNotDeleteDownloadClient'),
   });
 }
 
 export function useTestAllDownloadClients() {
-  return useInvalidatingMutation(() => downloadClientsApi.testAll(), [], { errorTitle: 'Test all failed' });
+  return useInvalidatingMutation(() => downloadClientsApi.testAll(), [], { errorTitle: t('hooks.downloadClients.testAllFailed') });
 }
 
 export function useRemotePathMappings() {
@@ -45,6 +46,6 @@ export function useSaveRemotePathMapping() {
 
 export function useDeleteRemotePathMapping() {
   return useInvalidatingMutation((id: number) => remotePathMappingsApi.remove(id), [settingsKeys.remotePathMappings], {
-    errorTitle: 'Could not delete mapping',
+    errorTitle: t('hooks.downloadClients.couldNotDeleteMapping'),
   });
 }

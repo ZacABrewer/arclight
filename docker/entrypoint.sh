@@ -19,5 +19,26 @@ USER_NAME="$(getent passwd "$PUID" | cut -d: -f1)"
 mkdir -p /config
 chown -R "$PUID:$PGID" /config /app
 
+# Self-update (Settings > Updates) talks to the Docker API through the socket when it is mounted
+# (-v /var/run/docker.sock:/var/run/docker.sock). Give the app user the socket's group so it can
+# open it without running as root. ARCLIGHT_DOCKER_SOCKET overrides the path.
+SOCKET="${ARCLIGHT_DOCKER_SOCKET:-/var/run/docker.sock}"
+if [ -S "$SOCKET" ]; then
+  SOCK_GID="$(stat -c '%g' "$SOCKET")"
+  if [ "$SOCK_GID" != "$PGID" ]; then
+    if ! getent group "$SOCK_GID" >/dev/null; then
+      groupadd -g "$SOCK_GID" docker-sock
+    fi
+    SOCK_GROUP="$(getent group "$SOCK_GID" | cut -d: -f1)"
+    usermod -aG "$SOCK_GROUP" "$USER_NAME"
+    echo "Docker socket $SOCKET found: $USER_NAME added to group $SOCK_GROUP ($SOCK_GID)"
+  fi
+  # gosu sets supplementary groups only when given a user name without a group, so make PGID the
+  # primary group and switch by name.
+  usermod -g "$PGID" "$USER_NAME" >/dev/null 2>&1 || true
+  echo "Arclight starting as $USER_NAME:$GROUP_NAME ($PUID:$PGID)"
+  exec gosu "$USER_NAME" "$@"
+fi
+
 echo "Arclight starting as $USER_NAME:$GROUP_NAME ($PUID:$PGID)"
 exec gosu "$PUID:$PGID" "$@"

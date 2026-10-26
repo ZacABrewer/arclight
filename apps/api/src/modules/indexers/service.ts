@@ -11,6 +11,7 @@ import {
   SEARCH_PARAMS,
   STANDARD_CATEGORIES,
   torznab,
+  type AccountStats,
   type ClientOptions,
   type Definition,
   type DefinitionIndexer,
@@ -27,6 +28,7 @@ import {
   IndexerSettings,
   IndexerUpdate,
   INDEXER_PRIORITY_DEFAULT,
+  indexerFlagsFromVolumeFactors,
   protocolForImplementation,
   SearchGrabRequest,
   type DefinitionFieldValue,
@@ -585,6 +587,45 @@ export class IndexersService {
       throw new IndexersError('VALIDATION', 'url does not belong to this indexer; search again and use a result link');
     }
     return this.downloadRelease(indexerId, url);
+  }
+
+  // ---- account statistics (tracker-stats module) -------------------------------------
+
+  /** True when the indexer is a definition indexer whose definition has an `account` page. */
+  hasAccountPage(id: number): boolean {
+    const row = this.requireRow(id);
+    if (row.implementation !== 'definition' || !row.settings.definitionId) return false;
+    return this.definitions.get(row.settings.definitionId)?.account !== undefined;
+  }
+
+  /**
+   * Scrape the user's ratio, upload, download, buffer and H&R count from the definition's
+   * `account` page (logged in like a search). Not recorded as an indexer failure: an account
+   * page that moved says nothing about searching.
+   */
+  async accountStats(id: number, signal?: AbortSignal): Promise<AccountStats> {
+    const row = this.requireRow(id);
+    if (!this.hasAccountPage(id)) throw new IndexersError('VALIDATION', `${row.name} has no account statistics page`);
+    return withTimeout(this.indexerTimeoutMs, signal, row.name, async () => (await this.definitionClient(row)).accountStats());
+  }
+
+  /** Host names the indexer lives on: the configured base URL plus the definition's links. */
+  siteHosts(id: number): string[] {
+    const row = this.requireRow(id);
+    const hosts = new Set<string>();
+    const add = (u: string | undefined) => {
+      try {
+        if (u) hosts.add(new URL(u).hostname.toLowerCase());
+      } catch {
+        // not a URL
+      }
+    };
+    add(row.settings.baseUrl);
+    if (row.implementation === 'definition' && row.settings.definitionId) {
+      const def = this.definitions.get(row.settings.definitionId);
+      for (const link of [...(def?.links ?? []), ...(def?.legacylinks ?? [])]) add(link);
+    }
+    return [...hosts];
   }
 
   // ---- RSS --------------------------------------------------------------------------
@@ -1370,9 +1411,16 @@ function toRelease(info: ReleaseInfo, row: IndexerRow, now: number): ReleaseReso
     age: Math.floor(ageMs / DAY),
     ageHours: ageMs / (60 * MINUTE),
     ageMinutes: ageMs / MINUTE,
+    ...flagsOf(info),
     rejections: [],
     approved: false,
   };
+}
+
+/** `indexerFlags` from the volume factors; omitted when there are none. */
+function flagsOf(info: ReleaseInfo): { indexerFlags?: ReleaseResource['indexerFlags'] } {
+  const flags = indexerFlagsFromVolumeFactors(info);
+  return flags.length > 0 ? { indexerFlags: flags } : {};
 }
 
 /**

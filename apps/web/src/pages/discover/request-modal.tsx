@@ -8,6 +8,7 @@ import { seasonBlocker } from '../../features/requests/request-rules.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
 import { useCreateRequest, useRequestsSettings } from '../../hooks/requests.js';
 import { StatusLabelChip } from './discover-kit.js';
+import { t } from '../../i18n/index.js';
 
 export interface RequestModalProps {
   title: TitleDetail;
@@ -18,13 +19,13 @@ export interface RequestModalProps {
 }
 
 export function seasonName(s: Pick<TitleSeason, 'seasonNumber' | 'name'>): string {
-  return s.name ?? (s.seasonNumber === 0 ? 'Specials' : `Season ${s.seasonNumber}`);
+  return s.name ?? (s.seasonNumber === 0 ? t('common.specials') : t('discover.requestModal.seasonSeasonnumber', { seasonNumber: s.seasonNumber }));
 }
 
 /** Request dialog (Modal 560): season checklist table, quality target, root folder, tags. */
 export function RequestModal({ title, open, onClose, is4k = false }: RequestModalProps) {
   return (
-    <Modal open={open} onClose={onClose} title={`Request ${title.title}${is4k ? ' in 4K' : ''}`} size={560}>
+    <Modal open={open} onClose={onClose} title={t('discover.requestModal.requestTitleValue', { title: title.title, value: is4k ? ' in 4K' : '' })} size={560}>
       {open ? <RequestForm title={title} onClose={onClose} is4k={is4k} /> : null}
     </Modal>
   );
@@ -62,7 +63,7 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
 
   const submit = () => {
     if (isSeries && chosen.length === 0) {
-      setError('Pick at least one season.');
+      setError(t('discover.requestModal.pickAtLeastOneSeason'));
       return;
     }
     setError(null);
@@ -78,7 +79,7 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
     create.mutate(body, {
       onSuccess: (outcome) => {
         if (outcome.kind === 'accepted') toast.push({ tone: 'info', title: outcome.message });
-        else toast.push({ tone: 'ok', title: outcome.request.status === 'pending' ? 'Request sent for approval' : 'Request approved', message: title.title });
+        else toast.push({ tone: 'ok', title: outcome.request.status === 'pending' ? t('discover.requestModal.requestSentForApproval') : t('common.requestApproved'), message: title.title });
         onClose();
       },
       onError: (err) => setError(errorMessage(err)),
@@ -88,7 +89,7 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
   const columns: Column<TitleSeason>[] = [
     {
       key: 'pick',
-      header: <span className="al-sr-only">Request</span>,
+      header: <span className="al-sr-only">{t('common.request')}</span>,
       width: '40px',
       cell: (s) => {
         const blocker = seasonBlocker(s, is4k);
@@ -102,11 +103,11 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
         );
       },
     },
-    { key: 'season', header: 'Season', cell: (s) => seasonName(s) },
-    { key: 'episodes', header: 'Episodes', mono: true, align: 'right', cell: (s) => s.episodeCount },
+    { key: 'season', header: t('common.season'), cell: (s) => seasonName(s) },
+    { key: 'episodes', header: t('common.episodes'), mono: true, align: 'right', cell: (s) => s.episodeCount },
     {
       key: 'status',
-      header: 'Status',
+      header: t('common.status'),
       cell: (s) => {
         const blocker = seasonBlocker(s, is4k);
         return blocker ? <StatusLabelChip label={blocker} /> : <span className="mk-dim">—</span>;
@@ -127,8 +128,8 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
         <>
           {partial ? (
             <Checkbox
-              label="All seasons"
-              aria-label="All seasons"
+              label={t('discover.requestModal.allSeasons')}
+              aria-label={t('discover.requestModal.allSeasons')}
               checked={all}
               disabled={requestable.length === 0}
               onChange={(e) => {
@@ -138,18 +139,18 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
             />
           ) : (
             <p className="al-caption" style={{ margin: 0 }}>
-              Series requests cover every season not already requested or available.
+              {t('discover.requestModal.seriesRequestsCoverEverySeason')}
             </p>
           )}
-          <Table columns={columns} rows={seasons} rowKey={(s) => s.seasonNumber} sortable={false} caption="Seasons" maxHeight={320} empty={<span className="al-caption">No season information on TMDB.</span>} />
+          <Table columns={columns} rows={seasons} rowKey={(s) => s.seasonNumber} sortable={false} caption={t('common.seasons')} maxHeight={320} empty={<span className="al-caption">{t('discover.requestModal.noSeasonInformationOnTmdb')}</span>} />
         </>
       ) : null}
 
       {title.canRequestAdvanced ? (
         <div className="mk-stack-sm" data-testid="request-advanced">
-          <FormRow label="Quality target" htmlFor="request-profile">
+          <FormRow label={t('common.qualityTarget')} htmlFor="request-profile">
             <Select id="request-profile" value={profileId} onChange={(e) => setProfileId(e.currentTarget.value)}>
-              <option value="">Default profile</option>
+              <option value="">{t('common.defaultProfile')}</option>
               {(profiles.data ?? []).map((p) => (
                 <option key={p.id} value={String(p.id)}>
                   {p.name}
@@ -157,9 +158,9 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
               ))}
             </Select>
           </FormRow>
-          <FormRow label="Root folder" htmlFor="request-root">
+          <FormRow label={t('common.rootFolder')} htmlFor="request-root">
             <Select id="request-root" value={rootFolderPath} onChange={(e) => setRootFolderPath(e.currentTarget.value)}>
-              <option value="">Default folder</option>
+              <option value="">{t('common.defaultFolder')}</option>
               {folders.map((f) => (
                 <option key={f.id} value={f.path}>
                   {f.path}
@@ -167,7 +168,7 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
               ))}
             </Select>
           </FormRow>
-          <Field label="Tags">
+          <Field label={t('common.tags')}>
             <div>
               <TagPicker value={tags} onChange={setTags} />
             </div>
@@ -182,10 +183,10 @@ function RequestForm({ title, onClose, is4k }: { title: TitleDetail; onClose: ()
       ) : null}
       <div className="mk-row mk-row--end">
         <Button variant="ghost" onClick={onClose}>
-          Cancel
+          {t('common.cancel')}
         </Button>
         <Button type="submit" variant="primary" loading={create.isPending}>
-          {isSeries && !allSelected ? `Request ${chosen.length} season${chosen.length === 1 ? '' : 's'}` : is4k ? 'Request 4K' : 'Request'}
+          {isSeries && !allSelected ? t('discover.requestModal.requestSeasons', { chosenCount: chosen.length }) : is4k ? t('discover.requestModal.request4k') : t('common.request')}
         </Button>
       </div>
     </form>

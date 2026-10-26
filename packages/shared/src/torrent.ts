@@ -8,6 +8,24 @@ import { z } from 'zod';
 // Settings
 // ---------------------------------------------------------------------------------------
 
+export const TorrentEncryptionMode = z.enum(['preferred', 'required', 'disabled']);
+export type TorrentEncryptionMode = z.infer<typeof TorrentEncryptionMode>;
+
+/** Engine defaults for the optional transport settings (mirrors the engine's own defaults). */
+export const TORRENT_TRANSPORT_DEFAULTS = {
+  encryption: 'preferred',
+  tcp: true,
+  utp: true,
+  ipv6: true,
+  webSeedConnectionsPerTorrent: 4,
+} as const satisfies {
+  encryption: TorrentEncryptionMode;
+  tcp: boolean;
+  utp: boolean;
+  ipv6: boolean;
+  webSeedConnectionsPerTorrent: number;
+};
+
 export const TorrentSettings = z.object({
   enabled: z.boolean().default(true).describe('Run the built-in torrent engine.'),
   autoRegisterClient: z
@@ -48,11 +66,42 @@ export const TorrentSettings = z.object({
     .trim()
     .default('')
     .describe('Default download folder. Empty = /downloads in Docker, otherwise a "downloads" folder next to the config folder.'),
+  // Optional so rows saved before these existed stay valid; the service fills the defaults
+  // (encryption `preferred`, every transport on, 4 web seed connections) in its responses.
+  encryption: TorrentEncryptionMode.optional().describe(
+    'Peer connection encryption (MSE/PE). Preferred: try encrypted first, fall back to plaintext. Required: encrypted only. Disabled: plaintext only.',
+  ),
+  tcp: z.boolean().optional().describe('Accept and open TCP peer connections (default on).'),
+  utp: z.boolean().optional().describe('Accept and open uTP peer connections on the UDP port (default on).'),
+  ipv6: z.boolean().optional().describe('Also listen on IPv6 and use IPv6 peers when available (default on).'),
+  webSeedConnectionsPerTorrent: z
+    .number()
+    .int()
+    .min(0)
+    .max(32)
+    .optional()
+    .describe('Concurrent HTTP requests to web seeds per torrent (default 4; 0 disables web seeds).'),
 });
 export type TorrentSettings = z.infer<typeof TorrentSettings>;
 
+type WithoutDefault<T> = T extends z.ZodDefault<infer Inner> ? Inner : T;
+type UpdateShape<S extends z.ZodRawShape> = { [K in keyof S]: z.ZodOptional<WithoutDefault<S[K]>> };
+
+/**
+ * Every key optional and without its default: `.partial()` alone would still fill the defaults
+ * of omitted keys, so a partial update would reset them.
+ */
+function partialUpdate<S extends z.ZodRawShape>(schema: z.ZodObject<S>): z.ZodObject<UpdateShape<S>> {
+  const shape: Record<string, z.ZodType> = {};
+  for (const [key, field] of Object.entries(schema.shape)) {
+    const inner = field instanceof z.ZodDefault ? (field.unwrap() as z.ZodType) : (field as z.ZodType);
+    shape[key] = inner.optional();
+  }
+  return z.object(shape) as unknown as z.ZodObject<UpdateShape<S>>;
+}
+
 /** PUT /settings/torrent: any subset; omitted keys keep their stored value. */
-export const TorrentSettingsUpdate = TorrentSettings.partial();
+export const TorrentSettingsUpdate = partialUpdate(TorrentSettings);
 export type TorrentSettingsUpdate = z.infer<typeof TorrentSettingsUpdate>;
 
 export const TorrentSettingsResponse = TorrentSettings.extend({
@@ -105,6 +154,14 @@ export const TorrentSessionStatus = z.object({
     killSwitchEngaged: z.boolean(),
   }),
   dhtNodes: z.number().int(),
+  /** IPv6 DHT routing table size (0 when IPv6 is off). */
+  dht6Nodes: z.number().int().optional(),
+  /** Open uTP connections (including ones still handshaking). */
+  utpConnections: z.number().int().optional(),
+  /** Connected peers whose connection is RC4-encrypted (MSE). */
+  encryptedPeers: z.number().int().optional(),
+  /** encryptedPeers / peers (0 without peers). */
+  encryptedPeerRatio: z.number().min(0).max(1).optional(),
   /** Connected peers across all torrents. */
   peers: z.number().int(),
   /** Bytes per second. */
@@ -135,6 +192,9 @@ export const TorrentPeer = z.object({
   peerChoking: z.boolean(),
   peerInterested: z.boolean(),
   snubbed: z.boolean(),
+  /** The connection is RC4-encrypted (MSE). */
+  encrypted: z.boolean().optional(),
+  transport: z.enum(['tcp', 'utp']).optional(),
 });
 export type TorrentPeer = z.infer<typeof TorrentPeer>;
 
@@ -161,6 +221,36 @@ export const TorrentFile = z.object({
   progress: z.number(),
 });
 export type TorrentFile = z.infer<typeof TorrentFile>;
+
+export const TorrentWebSeed = z.object({
+  url: z.string(),
+  /** Bytes per second. */
+  downloadRate: z.number(),
+  downloaded: z.number().int(),
+  activeRequests: z.number().int(),
+  failures: z.number().int(),
+  /** ISO-8601; set while backing off after errors. */
+  retryAt: z.string().nullable(),
+  lastError: z.string().nullable(),
+});
+export type TorrentWebSeed = z.infer<typeof TorrentWebSeed>;
+
+/** Per-torrent and per-peer rate limits in bytes per second (0 = unlimited). */
+export const TorrentLimits = z.object({
+  uploadLimit: z.number().int().min(0),
+  downloadLimit: z.number().int().min(0),
+  peerUploadLimit: z.number().int().min(0),
+  peerDownloadLimit: z.number().int().min(0),
+});
+export type TorrentLimits = z.infer<typeof TorrentLimits>;
+
+/** POST /torrent/:id/limits: any subset; omitted keys keep their value. */
+export const TorrentLimitsRequest = TorrentLimits.partial();
+export type TorrentLimitsRequest = z.infer<typeof TorrentLimitsRequest>;
+
+/** POST /torrent/:id/superseed */
+export const TorrentSuperSeedRequest = z.object({ enabled: z.boolean() });
+export type TorrentSuperSeedRequest = z.infer<typeof TorrentSuperSeedRequest>;
 
 export const TorrentDetail = z.object({
   /** Lowercase v1 info-hash; equals the queue item's downloadId. */
@@ -196,6 +286,11 @@ export const TorrentDetail = z.object({
   peers: z.array(TorrentPeer),
   trackers: z.array(TorrentTracker),
   files: z.array(TorrentFile),
+  /** BEP 19 web seeds (empty while none are active). */
+  webSeeds: z.array(TorrentWebSeed).optional(),
+  /** BEP 16 super-seeding. */
+  superSeeding: z.boolean().optional(),
+  limits: TorrentLimits.optional(),
 });
 export type TorrentDetail = z.infer<typeof TorrentDetail>;
 

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MediaType, MinimumAvailability, MonitorOption, SeriesType } from './library.js';
+import { PushPreferences } from './push.js';
 
 // Requests, discover, issues, watchlists, override rules and per-user request settings.
 // Behaviour: docs/spec/requests.md (Seerr parity) and docs/API.md "Requests".
@@ -90,8 +91,56 @@ export const PERMISSION_INFO: readonly PermissionInfo[] = [
   { name: 'VOTE', value: Permission.VOTE, group: 'view', label: 'Vote', description: 'Reserved; no behaviour yet.' },
 ];
 
-/** GET/PUT /user/:id/permissions. */
-export const UserPermissions = z.object({ permissions: z.number().int().min(0) });
+// ---------------------------------------------------------------------------------------
+// Content restrictions (kids / certification caps; stored in users.settings.contentRestrictions)
+// ---------------------------------------------------------------------------------------
+
+/** US movie certifications, youngest audience first. NR as a cap allows everything, unrated included. */
+export const MOVIE_CERTIFICATIONS = ['G', 'PG', 'PG-13', 'R', 'NC-17', 'NR'] as const;
+export const MovieCertification = z.enum(MOVIE_CERTIFICATIONS);
+export type MovieCertification = z.infer<typeof MovieCertification>;
+
+/** US TV parental guidelines, youngest audience first. */
+export const TV_CERTIFICATIONS = ['TV-Y', 'TV-Y7', 'TV-G', 'TV-PG', 'TV-14', 'TV-MA'] as const;
+export const TvCertification = z.enum(TV_CERTIFICATIONS);
+export type TvCertification = z.infer<typeof TvCertification>;
+
+/**
+ * Per-user caps. A capped type hides (discover) and refuses (requests, title pages) titles
+ * rated above the cap; titles without a known US rating count as unrated, which only a movie
+ * cap of NR admits. `hideAdultContent` hides NC-17 movies and TV-MA series.
+ */
+export const ContentRestrictions = z.object({
+  maxCertification: z
+    .object({
+      movie: MovieCertification.nullable().default(null),
+      tv: TvCertification.nullable().default(null),
+    })
+    .default({ movie: null, tv: null }),
+  hideAdultContent: z.boolean().default(false),
+});
+export type ContentRestrictions = z.infer<typeof ContentRestrictions>;
+
+/** Per-user override of the approval policies (users.settings.approvalPolicy). */
+export const UserApprovalPolicy = z.object({
+  /** inherit: the global policies decide; always: policies always auto-approve; never: policies never do. */
+  autoApprove: z.enum(['inherit', 'always', 'never']).default('inherit'),
+  /** Replaces the global `autoApproveIfSizeBelowGb` for this user (null: inherit). */
+  autoApproveIfSizeBelowGb: z.number().min(0).nullable().default(null),
+  /** The user's requests are neither limited by nor counted against approval budgets. */
+  budgetExempt: z.boolean().default(false),
+});
+export type UserApprovalPolicy = z.infer<typeof UserApprovalPolicy>;
+
+/**
+ * GET/PUT /user/:id/permissions. PUT needs MANAGE_USERS; `contentRestrictions` and
+ * `approvalPolicy` are optional on PUT (absent: unchanged) and always present on GET.
+ */
+export const UserPermissions = z.object({
+  permissions: z.number().int().min(0),
+  contentRestrictions: ContentRestrictions.optional(),
+  approvalPolicy: UserApprovalPolicy.optional(),
+});
 export type UserPermissions = z.infer<typeof UserPermissions>;
 
 // ---------------------------------------------------------------------------------------
@@ -162,15 +211,109 @@ export const UserNotificationSettings = z.object({
   /** Defaults to the account email. */
   email: z.string().max(254).optional(),
   types: UserNotificationTypes.default(UserNotificationTypes.parse({})),
+  /** Browser (web push) notifications; managed by the push module (GET/PUT /push/preferences). */
+  push: PushPreferences.optional(),
 });
 export type UserNotificationSettings = z.infer<typeof UserNotificationSettings>;
 
-/** GET/PUT /user/:id/requestsettings. `plexToken` reads back masked. */
+// ---------------------------------------------------------------------------------------
+// Media server (Settings > Media server; user links, sign-in, import, availability)
+// ---------------------------------------------------------------------------------------
+
+export const MediaServerKind = z.enum(['jellyfin', 'emby', 'plex']);
+export type MediaServerKind = z.infer<typeof MediaServerKind>;
+
+/**
+ * Stored form of the `mediaServer` settings section. `apiKey` is a Jellyfin/Emby API key or
+ * the Plex owner's X-Plex-Token. `kind: null` means no media server is configured.
+ */
+export const MediaServerSettings = z.object({
+  kind: MediaServerKind.nullable().default(null),
+  /** Base URL, e.g. http://jellyfin.lan:8096 (a URL base path is kept). */
+  url: z.string().trim().max(2048).default(''),
+  apiKey: z.string().max(512).default(''),
+  /** Shown in "available on <name>"; defaults to the kind's product name. */
+  name: z.string().trim().max(100).default(''),
+  /** Users may sign in with their media-server account (Seerr mediaServerLogin). */
+  loginEnabled: z.boolean().default(true),
+  /** A first media-server sign-in creates a local account (role user, default permissions). */
+  createUsersOnLogin: z.boolean().default(true),
+});
+export type MediaServerSettings = z.infer<typeof MediaServerSettings>;
+
+/** POST /settings/mediaserver/test. */
+export const MediaServerTestResult = z.object({
+  ok: z.boolean(),
+  serverName: z.string().optional(),
+  version: z.string().optional(),
+  message: z.string().optional(),
+});
+export type MediaServerTestResult = z.infer<typeof MediaServerTestResult>;
+
+/** A user's link to their media-server account, stored in users.settings.mediaServerLink. */
+export const MediaServerLink = z.object({
+  kind: MediaServerKind,
+  /** Jellyfin/Emby user id or the plex.tv account id. */
+  externalId: z.string().min(1),
+  username: z.string(),
+  /** Jellyfin/Emby access token or Plex auth token. Masked on read. */
+  accessToken: z.string().optional(),
+  /** Stable Jellyfin/Emby device id used for the token. */
+  deviceId: z.string().optional(),
+  linkedAt: z.string(),
+});
+export type MediaServerLink = z.infer<typeof MediaServerLink>;
+
+/** POST /user/:id/mediaserver/link: Jellyfin/Emby credentials, or a completed Plex PIN. */
+export const MediaServerLinkRequest = z.union([
+  z.object({ username: z.string().trim().min(1), password: z.string() }),
+  z.object({ pinId: z.number().int().positive() }),
+]);
+export type MediaServerLinkRequest = z.infer<typeof MediaServerLinkRequest>;
+
+/** One account on the media server (GET /user/import/mediaserver). */
+export const MediaServerUser = z.object({
+  externalId: z.string(),
+  username: z.string(),
+  email: z.string().optional(),
+  isAdmin: z.boolean(),
+  isDisabled: z.boolean(),
+  /** Local user already linked to this account. */
+  linkedUserId: z.number().int().nullable(),
+});
+export type MediaServerUser = z.infer<typeof MediaServerUser>;
+
+/** POST /user/import/mediaserver. Absent `externalIds`: every enabled, unlinked account. */
+export const MediaServerImportRequest = z.object({ externalIds: z.array(z.string().min(1)).optional() });
+export type MediaServerImportRequest = z.infer<typeof MediaServerImportRequest>;
+
+export const MediaServerImportResult = z.object({
+  created: z.array(z.object({ id: z.number().int(), username: z.string(), externalId: z.string() })),
+  skipped: z.array(z.object({ externalId: z.string(), reason: z.string() })),
+});
+export type MediaServerImportResult = z.infer<typeof MediaServerImportResult>;
+
+/** POST /auth/plex/pin: open `authUrl` in a popup, then poll with `id`. */
+export const PlexPin = z.object({ id: z.number().int(), code: z.string(), authUrl: z.string() });
+export type PlexPin = z.infer<typeof PlexPin>;
+
+export const PlexPollRequest = z.object({ id: z.number().int().positive(), rememberMe: z.boolean().default(true) });
+export type PlexPollRequest = z.input<typeof PlexPollRequest>;
+
+/** POST /auth/plex/poll while the user has not finished in the popup. */
+export const PlexPollPending = z.object({ pending: z.literal(true) });
+export type PlexPollPending = z.infer<typeof PlexPollPending>;
+
+/** GET/PUT /user/:id/requestsettings. `plexToken` and the link's token read back masked; the link is read-only here. */
 export const UserRequestSettings = z.object({
   notifications: UserNotificationSettings.default(UserNotificationSettings.parse({})),
   plexToken: z.string().max(256).optional(),
   watchlistSyncMovies: z.boolean().default(false),
   watchlistSyncSeries: z.boolean().default(false),
+  /** Master switch: watchlist sync may create requests (still needs AUTO_REQUEST and the per-type flag). */
+  autoRequestFromWatchlist: z.boolean().default(true),
+  /** Set through /user/:id/mediaserver/link; ignored on PUT. */
+  mediaServerLink: MediaServerLink.optional(),
 });
 export type UserRequestSettings = z.infer<typeof UserRequestSettings>;
 
@@ -242,6 +385,10 @@ export const MediaRequest = z.object({
   libraryId: z.number().int().nullish(),
   /** Whether the caller may delete this request. */
   canRemove: z.boolean(),
+  /** Name of the media server the title was found on (useMediaServerAvailability), else null. */
+  availableOn: z.string().nullish(),
+  /** Pending because an approval window holds it (GET /request/:id/policy explains). */
+  heldByPolicy: z.boolean().optional(),
 });
 export type MediaRequest = z.infer<typeof MediaRequest>;
 
@@ -762,7 +909,7 @@ export const POPULAR_NETWORKS: readonly { id: number; name: string }[] = [
 // Watchlist (section 11)
 // ---------------------------------------------------------------------------------------
 
-export const WatchlistSource = z.enum(['manual', 'plex', 'jellyfin']);
+export const WatchlistSource = z.enum(['manual', 'plex', 'jellyfin', 'emby']);
 export type WatchlistSource = z.infer<typeof WatchlistSource>;
 
 export const WatchlistItem = z.object({
@@ -788,6 +935,14 @@ export const WatchlistQuery = z.object({ userId: z.coerce.number().int().positiv
 export type WatchlistQuery = z.input<typeof WatchlistQuery>;
 
 export const WatchlistSyncResult = z.object({ users: z.number().int(), added: z.number().int(), requested: z.number().int() });
+
+/** POST /request/digest: what the digest contained (sent: false when nothing was pending). */
+export const RequestsDigestResult = z.object({
+  sent: z.boolean(),
+  pendingRequests: z.number().int(),
+  openIssues: z.number().int(),
+});
+export type RequestsDigestResult = z.infer<typeof RequestsDigestResult>;
 export type WatchlistSyncResult = z.infer<typeof WatchlistSyncResult>;
 
 // ---------------------------------------------------------------------------------------
@@ -818,6 +973,61 @@ export const Request4kDefaults = z.object({
 });
 export type Request4kDefaults = z.infer<typeof Request4kDefaults>;
 
+// ---------------------------------------------------------------------------------------
+// Approval policies (budgets, windows, size) and the public portal
+// ---------------------------------------------------------------------------------------
+
+/**
+ * A rolling auto-approval budget. Requests it covers are auto-approved while the usage of the
+ * last `periodDays` (approved and completed requests of the scope) plus this request stays
+ * within `movieGb` (estimated sizes of movie requests) / `tvSeasons` (seasons of series
+ * requests). A limit left out means the budget does not cover that media type.
+ * `autoApproveUnder.sizeGb` additionally requires the request itself to be smaller.
+ */
+export const ApprovalBudget = z.object({
+  /** user: each user has their own budget; role: one budget per role; all: one shared budget. */
+  scope: z.enum(['user', 'role', 'all']),
+  /** scope role: the role it applies to (absent: every role, each with its own budget). */
+  role: z.enum(['admin', 'user']).optional(),
+  /** scope user: limit to these users (absent: everyone). */
+  userIds: z.array(z.number().int().positive()).optional(),
+  movieGb: z.number().min(0).optional(),
+  tvSeasons: z.number().int().min(0).optional(),
+  periodDays: z.number().int().min(1).max(365),
+  autoApproveUnder: z.object({ sizeGb: z.number().min(0).optional() }).default({}),
+});
+export type ApprovalBudget = z.infer<typeof ApprovalBudget>;
+
+/**
+ * A weekly window (server local time). `days` are 0 (Sunday) to 6; `endHour` is exclusive and
+ * may be at or below `startHour` to wrap past midnight (the window belongs to the day it
+ * starts on). autoApprove: requests made inside are approved, and requests held outside are
+ * approved when it opens (RequestsPolicySweep). hold: nothing is auto-approved inside;
+ * requests that would have been are held until it closes.
+ */
+export const ApprovalWindow = z.object({
+  days: z.array(z.number().int().min(0).max(6)).min(1),
+  startHour: z.number().int().min(0).max(23),
+  endHour: z.number().int().min(0).max(24),
+  action: z.enum(['autoApprove', 'hold']),
+});
+export type ApprovalWindow = z.infer<typeof ApprovalWindow>;
+
+export const PolicyStep = z.object({
+  rule: z.enum(['permission', 'settings', 'overrideRule', 'userOverride', 'size', 'budget', 'window']),
+  outcome: z.enum(['pass', 'fail', 'skip']),
+  message: z.string(),
+});
+export type PolicyStep = z.infer<typeof PolicyStep>;
+
+export const PublicPortalSettings = z.object({
+  enabled: z.boolean().default(false),
+  /** Anonymous visitors may browse GET /discover/* (rate-limited per IP); requesting needs sign-in. */
+  allowAnonymousDiscover: z.boolean().default(false),
+  message: z.string().max(2000).default(''),
+});
+export type PublicPortalSettings = z.infer<typeof PublicPortalSettings>;
+
 export const RequestsSettings = z.object({
   movie: RequestTypeDefaults.default(RequestTypeDefaults.parse({})),
   series: RequestTypeDefaults.default(RequestTypeDefaults.parse({})),
@@ -841,9 +1051,55 @@ export const RequestsSettings = z.object({
   hideAvailable: z.boolean().default(false),
   hideRequested: z.boolean().default(false),
   /**
-   * Also ask the media servers configured under Settings > Notifications (Jellyfin/Emby)
-   * whether a title is available. false: availability comes from the library only.
+   * Availability comes from the media server (Settings > Media server; falling back to the
+   * Jellyfin/Emby connections under Settings > Notifications): requests complete only once the
+   * server has the title (series: every requested season fully present). false: library only.
    */
   useMediaServerAvailability: z.boolean().default(false),
+  /** Public URL of this Arclight, used for links (approve/decline) in notifications. */
+  applicationUrl: z.string().trim().max(2048).default(''),
+  /** Daily admin digest of pending requests and open issues (RequestsDigest job). */
+  digestEnabled: z.boolean().default(false),
+  /** Local hour (0-23) the digest is sent at. */
+  digestHour: z.number().int().min(0).max(23).default(9),
+  /** Auto-approval budgets (approval policies; evaluated after permissions and override rules). */
+  approvalBudgets: z.array(ApprovalBudget).default([]),
+  /** Weekly windows that auto-approve or hold requests (server local time). */
+  approvalWindows: z.array(ApprovalWindow).default([]),
+  /** Auto-approve when the best approved release (quick interactive search) is smaller; null: off. */
+  autoApproveIfSizeBelowGb: z.number().min(0).nullable().default(null),
+  /** Public request portal: anonymous discover and the login page's portal message. */
+  publicPortal: PublicPortalSettings.default(PublicPortalSettings.parse({})),
 });
 export type RequestsSettings = z.infer<typeof RequestsSettings>;
+
+/** GET /request/:id/policy: why a request is (or would be) pending, held or approved. */
+export const RequestPolicyExplanation = z.object({
+  requestId: z.number().int(),
+  status: RequestStatus,
+  /** What the policies decide now. */
+  decision: z.enum(['approve', 'hold', 'pending']),
+  /** The request waits for a window (RequestsPolicySweep approves it). */
+  held: z.boolean(),
+  estimatedSizeBytes: z.number().int().nullable(),
+  /** Next autoApprove window opening (for held requests), else null. */
+  nextWindowAt: z.string().nullable(),
+  steps: z.array(PolicyStep),
+});
+export type RequestPolicyExplanation = z.infer<typeof RequestPolicyExplanation>;
+
+/** GET /public/portal (public while the portal is enabled). */
+export const PublicPortal = z.object({
+  enabled: z.boolean(),
+  /** Branding. */
+  title: z.string(),
+  applicationUrl: z.string(),
+  message: z.string(),
+  allowAnonymousDiscover: z.boolean(),
+  loginMethods: z.object({
+    local: z.boolean(),
+    mediaServer: z.object({ kind: MediaServerKind, name: z.string().optional() }).nullable(),
+    plex: z.boolean(),
+  }),
+});
+export type PublicPortal = z.infer<typeof PublicPortal>;

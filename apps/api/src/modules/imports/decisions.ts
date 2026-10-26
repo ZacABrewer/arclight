@@ -41,7 +41,12 @@ export interface LocalItem {
   movie?: Movie | undefined;
   /** The file already lives inside the series/movie folder (spec ExistingFile). */
   existingFile: boolean;
-  /** Library files currently attached to the matched episodes/movie, de-duplicated. */
+  /**
+   * Multi-version library: the version slot this file fills (best-fitting version profile).
+   * null/absent on unversioned items.
+   */
+  versionTag?: string | null | undefined;
+  /** Library files currently attached to the matched episodes/movie in the same version slot, de-duplicated. */
   existingFiles: MediaFile[];
   formatScore: number;
   /** Custom-format score of each existing file, by media file id. */

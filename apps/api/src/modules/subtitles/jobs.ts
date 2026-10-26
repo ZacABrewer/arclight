@@ -1,10 +1,13 @@
 import type { Scheduler } from '../../scheduler.js';
 import type { SubtitlesService } from './service.js';
+import { WHISPER_AUTODETECT_CRON, WHISPER_AUTODETECT_JOB } from './whisper.js';
 
 export const SUBTITLE_JOBS = {
   searchWanted: 'SubtitleSearchWanted',
   upgrade: 'SubtitleUpgrade',
   scan: 'SubtitleScan',
+  syncCheck: 'SubtitleSyncCheck',
+  whisperAutoDetect: WHISPER_AUTODETECT_JOB,
 } as const;
 
 export function registerSubtitleJobs(scheduler: Scheduler, service: SubtitlesService): void {
@@ -20,4 +23,7 @@ export function registerSubtitleJobs(scheduler: Scheduler, service: SubtitlesSer
     },
   });
   scheduler.register({ name: SUBTITLE_JOBS.scan, cron: '0 4 * * 0', handler: ({ signal }) => service.scanAll(signal) });
+  // Scores subtitles never checked (only while sync.autoCheck is on), applying the auto actions.
+  scheduler.register({ name: SUBTITLE_JOBS.syncCheck, cron: '20 * * * *', handler: ({ signal }) => service.syncCheckBatch(signal) });
+  scheduler.register({ name: SUBTITLE_JOBS.whisperAutoDetect, cron: WHISPER_AUTODETECT_CRON, handler: () => service.whisperAutoDetect() });
 }

@@ -169,6 +169,7 @@ export class QBittorrentClient implements DownloadClient {
       form.append('autoTMM', 'false');
     }
     form.append(usesStopNaming(apiVersion) ? 'stopped' : 'paused', initialState === 'pause' ? 'true' : 'false');
+    if (input.skipChecking === true) form.append('skip_checking', 'true');
 
     const hasShareLimits = input.seedRatioLimit !== undefined || input.seedTimeLimitMinutes !== undefined;
     const shareLimitsOnAdd = hasShareLimits && acceptsShareLimitsOnAdd(apiVersion);

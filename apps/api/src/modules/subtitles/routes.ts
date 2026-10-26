@@ -26,8 +26,10 @@ import {
   SubtitleSearchCommandResult,
   SubtitleSettings,
   SubtitleState,
+  SubtitleSyncCheckResult,
   SubtitleSyncResult,
   SubtitleUploadFields,
+  SubtitleWhisperStatus,
   WantedSubtitlesPage,
   WantedSubtitlesQuery,
 } from '@arclight/shared';
@@ -157,6 +159,10 @@ export function subtitlesRoutes(
     app.post('/subtitle/sync/:id', { preHandler: admin, schema: { params: IdParams, response: { 200: SubtitleSyncResult, ...errors } } }, async (req) =>
       service.sync(req.params.id),
     );
+    app.post('/subtitle/:id/synccheck', { preHandler: admin, schema: { params: IdParams, response: { 200: SubtitleSyncCheckResult, ...errors } } }, async (req) =>
+      service.syncCheck(req.params.id),
+    );
+    app.get('/subtitle/whisper/status', { preHandler: admin, schema: { response: { 200: SubtitleWhisperStatus } } }, async () => service.whisperStatus());
     app.post('/subtitle/extract/:id', { preHandler: admin, schema: { params: IdParams, response: { 200: SubtitleState, ...errors } } }, async (req) =>
       service.extract(req.params.id),
     );

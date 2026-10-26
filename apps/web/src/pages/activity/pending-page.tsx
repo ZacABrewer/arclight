@@ -8,11 +8,18 @@ import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { useGrabPending, usePendingReleases, useRemovePending } from '../../hooks/releases.js';
 import { formatDateTime } from '../../lib/format.js';
 import { ActivityHeader, formatBytes } from './activity-shared.js';
+import { t } from '../../i18n/index.js';
 
 const REASON_LABELS: Record<PendingReason, string> = {
-  delay: 'Delay profile',
-  fallback: 'Waiting for preferred protocol',
-  downloadClientUnavailable: 'Download client unavailable',
+  get delay() {
+    return t('activity.pending.delayProfile');
+  },
+  get fallback() {
+    return t('activity.pending.waitingForPreferredProtocol');
+  },
+  get downloadClientUnavailable() {
+    return t('activity.pending.downloadClientUnavailable');
+  },
 };
 const REASON_TONES: Record<PendingReason, ChipTone> = { delay: 'default', fallback: 'neutral', downloadClientUnavailable: 'warn' };
 
@@ -49,8 +56,8 @@ export function formatDelay(eligibleAt: string, now: number): string {
 export function useNow(intervalMs = 1000): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), intervalMs);
-    return () => clearInterval(t);
+    const item = setInterval(() => setNow(Date.now()), intervalMs);
+    return () => clearInterval(item);
   }, [intervalMs]);
   return now;
 }
@@ -59,14 +66,14 @@ function MediaCell({ p, seriesTitles, movieTitles }: { p: PendingRelease; series
   if (p.mediaType === 'series' && p.seriesId !== undefined) {
     return (
       <Link className="al-link" to="/library/series/$id" params={{ id: String(p.seriesId) }}>
-        {seriesTitles.get(p.seriesId) ?? `Series ${p.seriesId}`}
+        {seriesTitles.get(p.seriesId) ?? t('activity.pending.seriesSeriesid', { seriesId: p.seriesId })}
       </Link>
     );
   }
   if (p.movieId !== undefined) {
     return (
       <Link className="al-link" to="/library/movie/$id" params={{ id: String(p.movieId) }}>
-        {movieTitles.get(p.movieId) ?? `Movie ${p.movieId}`}
+        {movieTitles.get(p.movieId) ?? t('activity.pending.movieMovieid', { movieId: p.movieId })}
       </Link>
     );
   }
@@ -97,7 +104,7 @@ export function PendingReleasesPage() {
   const columns: Column<PendingRelease>[] = [
     {
       key: 'title',
-      header: 'Release',
+      header: t('common.release'),
       sortValue: (p) => p.title,
       cell: (p) => (
         <div className="al-activity-title">
@@ -110,14 +117,14 @@ export function PendingReleasesPage() {
         </div>
       ),
     },
-    { key: 'quality', header: 'Quality', mono: true, sortValue: (p) => p.quality.quality.weight, cell: (p) => p.quality.quality.name },
-    { key: 'indexer', header: 'Indexer', muted: true, sortValue: (p) => p.indexerName, cell: (p) => p.indexerName },
-    { key: 'protocol', header: 'Prot', width: '64px', sortValue: (p) => p.protocol, cell: (p) => <ProtocolBadge protocol={p.protocol} /> },
-    { key: 'size', header: 'Size', mono: true, align: 'right', sortValue: (p) => p.size, cell: (p) => formatBytes(p.size) },
-    { key: 'reason', header: 'Reason', sortValue: (p) => p.reason, cell: (p) => <Chip tone={REASON_TONES[p.reason]}>{REASON_LABELS[p.reason]}</Chip> },
+    { key: 'quality', header: t('common.quality'), mono: true, sortValue: (p) => p.quality.quality.weight, cell: (p) => p.quality.quality.name },
+    { key: 'indexer', header: t('common.indexer'), muted: true, sortValue: (p) => p.indexerName, cell: (p) => p.indexerName },
+    { key: 'protocol', header: t('common.prot'), width: '64px', sortValue: (p) => p.protocol, cell: (p) => <ProtocolBadge protocol={p.protocol} /> },
+    { key: 'size', header: t('common.size'), mono: true, align: 'right', sortValue: (p) => p.size, cell: (p) => formatBytes(p.size) },
+    { key: 'reason', header: t('activity.pending.reason'), sortValue: (p) => p.reason, cell: (p) => <Chip tone={REASON_TONES[p.reason]}>{REASON_LABELS[p.reason]}</Chip> },
     {
       key: 'eligible',
-      header: 'Grabs in',
+      header: t('activity.pending.grabsIn'),
       align: 'right',
       mono: true,
       sortValue: (p) => p.eligibleAt,
@@ -125,7 +132,7 @@ export function PendingReleasesPage() {
     },
     {
       key: 'actions',
-      header: <span className="al-sr-only">Actions</span>,
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       cell: (p) => (
         <span className="al-activity-actions">
@@ -133,12 +140,12 @@ export function PendingReleasesPage() {
             size="sm"
             variant="secondary"
             loading={grab.isPending && grab.variables?.id === p.id}
-            onClick={() => grab.mutate(p, { onSuccess: (r) => toast.push({ tone: 'ok', title: 'Grabbed', message: r.title }) })}
+            onClick={() => grab.mutate(p, { onSuccess: (r) => toast.push({ tone: 'ok', title: t('common.grabbed'), message: r.title }) })}
           >
-            Grab now
+            {t('activity.pending.grabNow')}
           </Button>
-          <Button size="sm" variant="ghost" loading={remove.isPending && remove.variables === p.id} onClick={() => remove.mutate(p.id)} aria-label={`Remove ${p.title}`}>
-            Remove
+          <Button size="sm" variant="ghost" loading={remove.isPending && remove.variables === p.id} onClick={() => remove.mutate(p.id)} aria-label={t('activity.pending.removeTitle', { title: p.title })}>
+            {t('common.remove')}
           </Button>
         </span>
       ),
@@ -151,20 +158,20 @@ export function PendingReleasesPage() {
       <Pane flush bare className="al-activity-pane">
         {pending.isError ? (
           <div className="al-activity-pad">
-            <ErrorBlock title="Couldn't load pending releases" onRetry={() => void pending.refetch()}>
+            <ErrorBlock title={t('activity.pending.couldntLoadPendingReleases')} onRetry={() => void pending.refetch()}>
               {errorMessage(pending.error)}
             </ErrorBlock>
           </div>
         ) : (
           <Table
-            caption="Pending releases"
+            caption={t('activity.pending.pendingReleases')}
             density="rich"
             columns={columns}
             rows={pending.data}
             rowKey={(p) => p.id}
             loading={pending.isPending}
             defaultSort={{ key: 'eligible', direction: 'asc' }}
-            empty={<EmptyState title="Nothing pending">Releases held back by a delay profile or an unavailable download client wait here.</EmptyState>}
+            empty={<EmptyState title={t('activity.pending.nothingPending')}>{t('activity.pending.releasesHeldBackByA')}</EmptyState>}
           />
         )}
       </Pane>

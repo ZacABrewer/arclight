@@ -60,6 +60,12 @@ export interface AddTorrentInput {
    * `recentPriority` and `olderPriority` settings. Defaults to false (older).
    */
   isRecent?: boolean;
+  /**
+   * The payload is already complete at `savePath` (cross-seeding): skip the hash check and
+   * seed right away. qBittorrent sends `skip_checking`; the built-in engine trusts the files
+   * when their sizes match. Clients without the concept ignore it and check normally.
+   */
+  skipChecking?: boolean;
 }
 
 export interface AddTorrentResult {

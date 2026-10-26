@@ -2,6 +2,7 @@ import type { DiscoverItem, ScheduledJob } from '@arclight/shared';
 import type { ResultGroup, ResultItem } from '../arclight/index.js';
 import { NAV, visibleNav, type NavLeaf } from '../nav.js';
 import { libraryMatches, type LibraryMatch } from './search-matches.js';
+import { t } from '../i18n/index.js';
 
 // Pure builders for the global search overlay and the command palette. The shell components
 // fetch the data and pass a `go` callback; everything here is plain data in, groups out.
@@ -40,14 +41,14 @@ function norm(s: string): string {
 export function matchesWords(text: string, query: string): boolean {
   const q = norm(query);
   if (!q) return false;
-  const t = norm(text);
-  return q.split(/\s+/).every((w) => t.includes(w));
+  const item = norm(text);
+  return q.split(/\s+/).every((w) => item.includes(w));
 }
 
 /** Settings and System pages a role may open, as "Settings › Indexers" search targets. */
 export function settingsPages(isAdmin: boolean): Array<NavLeaf & { section: string }> {
   return visibleNav(isAdmin, NAV)
-    .filter((s) => s.label === 'Settings' || s.label === 'System')
+    .filter((s) => s.rail === 'ST' || s.rail === 'SY')
     .flatMap((s) => (s.children ?? []).map((c) => ({ ...c, section: s.label })));
 }
 
@@ -55,7 +56,7 @@ function libraryItem(m: LibraryMatch, go: SearchInput['go']): ResultItem {
   return {
     id: `${m.kind}-${m.id}`,
     label: m.title,
-    meta: m.year ? `${m.year} · In library` : 'In library',
+    meta: m.year ? t('layout.searchGroups.yearInLibrary', { year: m.year }) : t('common.inLibrary'),
     onSelect: () => go({ to: m.kind === 'series' ? '/library/series/$id' : '/library/movie/$id', params: { id: String(m.id) } }),
   };
 }
@@ -89,14 +90,14 @@ export function buildSearchGroups({ query, series, movies, discover = [], isAdmi
   const tmdb = (kind: 'series' | 'movie') => discover.filter((d) => d.mediaType === kind && !seen(kind, d.libraryId));
 
   const groups: ResultGroup[] = [
-    { label: 'Series', items: [...libSeries.map((m) => libraryItem(m, go)), ...tmdb('series').map((d) => discoverItem(d, go))].slice(0, limit) },
-    { label: 'Movies', items: [...libMovies.map((m) => libraryItem(m, go)), ...tmdb('movie').map((d) => discoverItem(d, go))].slice(0, limit) },
+    { label: t('common.series'), items: [...libSeries.map((m) => libraryItem(m, go)), ...tmdb('series').map((d) => discoverItem(d, go))].slice(0, limit) },
+    { label: t('common.movies'), items: [...libMovies.map((m) => libraryItem(m, go)), ...tmdb('movie').map((d) => discoverItem(d, go))].slice(0, limit) },
     {
-      label: 'People',
-      items: [{ id: 'people', label: `Find people named "${q}"`, meta: 'Discover', onSelect: () => go({ to: '/discover/search', search: { q } }) }],
+      label: t('layout.searchGroups.people'),
+      items: [{ id: 'people', label: t('layout.searchGroups.findPeopleNamedQ', { q }), meta: t('common.discover'), onSelect: () => go({ to: '/discover/search', search: { q } }) }],
     },
     {
-      label: 'Settings',
+      label: t('common.settings'),
       items: settingsPages(isAdmin)
         .filter((p) => matchesWords(`${p.section} ${p.label}`, q))
         .slice(0, limit)
@@ -105,8 +106,8 @@ export function buildSearchGroups({ query, series, movies, discover = [], isAdmi
   ];
   if (isAdmin) {
     groups.push({
-      label: 'Indexers',
-      items: [{ id: 'indexers', label: `Search indexers for "${q}"`, hint: '↵', onSelect: () => go({ to: '/search', search: { q } }) }],
+      label: t('common.indexers'),
+      items: [{ id: 'indexers', label: t('layout.searchGroups.searchIndexersForQ', { q }), hint: '↵', onSelect: () => go({ to: '/search', search: { q } }) }],
     });
   }
   return groups.filter((g) => g.items.length > 0);
@@ -126,30 +127,30 @@ export function buildCommandGroups({ query, isAdmin, go, openTasks, openShortcut
   const q = query.trim();
   const actions: ResultItem[] = isAdmin
     ? [
-        { id: 'add-series', label: 'Add series', onSelect: () => go({ to: '/library/add' }) },
-        { id: 'add-movie', label: 'Add movie', onSelect: () => go({ to: '/library/add' }) },
-        { id: 'search', label: q ? `Search indexers for "${q}"` : 'Search indexers', hint: '/', onSelect: () => go({ to: '/search', search: { q } }) },
-        { id: 'run-task', label: 'Run task…', onSelect: openTasks },
-        { id: 'manual-import', label: 'Import files manually', onSelect: () => go({ to: '/activity/manual-import' }) },
-        { id: 'shortcuts', label: 'Show keyboard shortcuts', hint: '?', onSelect: openShortcuts },
+        { id: 'add-series', label: t('layout.searchGroups.addSeries'), onSelect: () => go({ to: '/library/add' }) },
+        { id: 'add-movie', label: t('layout.searchGroups.addMovie'), onSelect: () => go({ to: '/library/add' }) },
+        { id: 'search', label: q ? t('layout.searchGroups.searchIndexersForQ', { q }) : t('layout.searchGroups.searchIndexers'), hint: '/', onSelect: () => go({ to: '/search', search: { q } }) },
+        { id: 'run-task', label: t('layout.searchGroups.runTask'), onSelect: openTasks },
+        { id: 'manual-import', label: t('layout.searchGroups.importFilesManually'), onSelect: () => go({ to: '/activity/manual-import' }) },
+        { id: 'shortcuts', label: t('layout.searchGroups.showKeyboardShortcuts'), hint: '?', onSelect: openShortcuts },
       ]
     : [
-        { id: 'request', label: 'Request a title', onSelect: () => go({ to: '/discover' }) },
-        { id: 'shortcuts', label: 'Show keyboard shortcuts', hint: '?', onSelect: openShortcuts },
+        { id: 'request', label: t('layout.searchGroups.requestATitle'), onSelect: () => go({ to: '/discover' }) },
+        { id: 'shortcuts', label: t('layout.searchGroups.showKeyboardShortcuts'), hint: '?', onSelect: openShortcuts },
       ];
   const pages: ResultItem[] = visibleNav(isAdmin, NAV).flatMap((s) =>
     (s.children ?? [{ label: s.label, to: s.to }]).map((c) => ({
       id: `go-${c.to}`,
       label: s.children ? `${s.label} › ${c.label}` : c.label,
-      meta: 'Go to',
+      meta: t('layout.searchGroups.goTo'),
       onSelect: () => go({ to: c.to }),
     })),
   );
   // The search action always matches (it carries the query); others filter by label.
   const keep = (i: ResultItem) => !q || i.id === 'search' || matchesWords(String(i.label), q);
   return [
-    { label: 'Actions', items: actions.filter(keep) },
-    { label: 'Navigate', items: pages.filter(keep) },
+    { label: t('common.actions'), items: actions.filter(keep) },
+    { label: t('layout.searchGroups.navigate'), items: pages.filter(keep) },
   ].filter((g) => g.items.length > 0);
 }
 
@@ -158,6 +159,6 @@ export function buildTaskGroups(query: string, jobs: readonly ScheduledJob[], ru
   const q = query.trim();
   const items = jobs
     .filter((j) => !q || matchesWords(j.name, q))
-    .map((j) => ({ id: `task-${j.name}`, label: j.name, meta: j.enabled ? j.interval : 'Disabled', onSelect: () => run(j.name) }));
-  return items.length ? [{ label: 'Run task', items }] : [];
+    .map((j) => ({ id: `task-${j.name}`, label: j.name, meta: j.enabled ? j.interval : t('common.disabled'), onSelect: () => run(j.name) }));
+  return items.length ? [{ label: t('layout.searchGroups.runTask2'), items }] : [];
 }

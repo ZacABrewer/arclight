@@ -116,6 +116,8 @@ export const ManualImportRequestItem = z
     languages: z.array(z.string()).optional(),
     releaseGroup: z.string().nullable().optional(),
     downloadId: z.string().optional(),
+    /** Multi-version items: the version slot to fill; omitted = the best-fitting version. */
+    versionTag: z.string().optional(),
   })
   .refine(
     (i) => (i.mediaType === 'series' ? i.seriesId !== undefined && (i.episodeIds?.length ?? 0) > 0 : i.movieId !== undefined),

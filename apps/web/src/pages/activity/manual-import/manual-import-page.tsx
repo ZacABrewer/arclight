@@ -42,9 +42,12 @@ import {
   rowsReducer,
   selectedCount,
   toImportRequest,
+  rowVersionTags,
   type ImportRow,
   type RowAction,
 } from './mapping.js';
+import { VersionPicker } from '../../library/versions/versions-editor.js';
+import { t } from '../../../i18n/index.js';
 
 const route = getRouteApi('/activity/manual-import');
 
@@ -78,11 +81,11 @@ export function toManualImportQuery(s: ManualImportSearch): ManualImportQueryInp
 }
 
 export const WIZARD_STEPS = [
-  { id: 'path', label: 'Path' },
-  { id: 'files', label: 'Files' },
-  { id: 'mapping', label: 'Mapping' },
-  { id: 'mode', label: 'Mode' },
-  { id: 'results', label: 'Results' },
+  { id: 'path', get label() { return t('common.path'); } },
+  { id: 'files', get label() { return t('common.files'); } },
+  { id: 'mapping', get label() { return t('activity.manualImport.mapping'); } },
+  { id: 'mode', get label() { return t('common.mode'); } },
+  { id: 'results', get label() { return t('common.results'); } },
 ] as const;
 
 export type WizardStep = (typeof WIZARD_STEPS)[number]['id'];
@@ -90,9 +93,9 @@ export type WizardStep = (typeof WIZARD_STEPS)[number]['id'];
 const stepIndex = (s: WizardStep) => WIZARD_STEPS.findIndex((x) => x.id === s);
 
 export const MODE_OPTIONS: ReadonlyArray<{ value: ImportMode; label: string; hint: string }> = [
-  { value: 'auto', label: 'Auto', hint: 'Moves files out of ordinary folders; copies or hardlinks out of an active download so seeding continues.' },
-  { value: 'move', label: 'Move', hint: 'Moves the files into the library. The download client loses them.' },
-  { value: 'copy', label: 'Copy or hardlink', hint: 'Hardlinks when the library is on the same disk, otherwise copies. The original stays in place.' },
+  { value: 'auto', get label() { return t('activity.manualImport.auto'); }, get hint() { return t('activity.manualImport.movesFilesOutOfOrdinary'); } },
+  { value: 'move', get label() { return t('activity.manualImport.move'); }, get hint() { return t('activity.manualImport.movesTheFilesIntoThe'); } },
+  { value: 'copy', get label() { return t('activity.manualImport.copyOrHardlink'); }, get hint() { return t('activity.manualImport.hardlinksWhenTheLibraryIs'); } },
 ];
 
 // ---- Path ---------------------------------------------------------------------------------
@@ -102,15 +105,15 @@ function PathStep({ folder, onFolder, onChoose }: { folder: string; onFolder: (v
   const candidates = (queue.data?.records ?? []).filter((q) => q.outputPath !== undefined);
   return (
     <div className="al-mi-step">
-      <Field label="Folder" hint="Every video file under it is listed. Nothing moves until you confirm.">
-        <PathInput aria-label="Folder" value={folder} onChange={onFolder} placeholder="/downloads/complete" pickerTitle="Choose a folder to import from" />
+      <Field label={t('activity.manualImport.folder')} hint={t('activity.manualImport.everyVideoFileUnderIt')}>
+        <PathInput aria-label={t('activity.manualImport.folder')} value={folder} onChange={onFolder} placeholder="/downloads/complete" pickerTitle={t('activity.manualImport.chooseAFolderToImport')} />
       </Field>
       <section className="al-mi-section">
-        <SectionLabel as="h3">FROM THE QUEUE</SectionLabel>
+        <SectionLabel as="h3">{t('activity.manualImport.fromTheQueue')}</SectionLabel>
         {queue.isPending ? (
           <Skeleton lines={3} />
         ) : candidates.length === 0 ? (
-          <EmptyState title="No downloads with files on disk" />
+          <EmptyState title={t('activity.manualImport.noDownloadsWithFilesOn')} />
         ) : (
           <ul className="al-mi-list">
             {candidates.map((q) => {
@@ -119,7 +122,7 @@ function PathStep({ folder, onFolder, onChoose }: { folder: string; onFolder: (v
                 <li key={q.id}>
                   <button type="button" className="al-mi-list__row" onClick={() => onChoose({ downloadId: q.downloadId })}>
                     <span className="al-mi-list__title">{q.title}</span>
-                    {needsManualImport(q) ? <Chip tone="warn">Needs import</Chip> : <StatusChip status={chip.status} cause={chip.cause} />}
+                    {needsManualImport(q) ? <Chip tone="warn">{t('activity.manualImport.needsImport')}</Chip> : <StatusChip status={chip.status} cause={chip.cause} />}
                   </button>
                 </li>
               );
@@ -142,7 +145,7 @@ function MappingChip({ row }: { row: ImportRow }) {
     ) : problems.length ? (
       <Chip tone="warn">{problems[0]}</Chip>
     ) : (
-      <Chip tone="accent">Mapped</Chip>
+      <Chip tone="accent">{t('activity.manualImport.mapped')}</Chip>
     );
   if (row.rejections.length === 0) return chip;
   return (
@@ -155,10 +158,10 @@ function MappingChip({ row }: { row: ImportRow }) {
 }
 
 const FILE_COLUMNS: Column<ImportRow>[] = [
-  { key: 'path', header: 'File', mono: true, cell: (r) => <span className="al-activity-break">{r.relativePath}</span> },
-  { key: 'size', header: 'Size', mono: true, align: 'right', width: '100px', cell: (r) => formatBytes(r.sizeBytes) },
-  { key: 'quality', header: 'Quality', mono: true, width: '140px', cell: (r) => r.quality.quality.name },
-  { key: 'state', header: 'Mapping', cell: (r) => <MappingChip row={r} /> },
+  { key: 'path', get header() { return t('common.file'); }, mono: true, cell: (r) => <span className="al-activity-break">{r.relativePath}</span> },
+  { key: 'size', get header() { return t('common.size'); }, mono: true, align: 'right', width: '100px', cell: (r) => formatBytes(r.sizeBytes) },
+  { key: 'quality', get header() { return t('common.quality'); }, mono: true, width: '140px', cell: (r) => r.quality.quality.name },
+  { key: 'state', get header() { return t('activity.manualImport.mapping'); }, cell: (r) => <MappingChip row={r} /> },
 ];
 
 function FilesStep({ rows }: { rows: ImportRow[] }) {
@@ -166,9 +169,9 @@ function FilesStep({ rows }: { rows: ImportRow[] }) {
   return (
     <div className="al-mi-step">
       <p className="al-activity-muted">
-        <span className="al-num">{rows.length}</span> files found · <span className="al-num">{mapped}</span> already mapped. Map the rest on the next step.
+        <span className="al-num">{rows.length}</span> {t('activity.manualImport.filesFound')} <span className="al-num">{mapped}</span> {t('activity.manualImport.alreadyMappedMapTheRest')}
       </p>
-      <Table caption="Files found" columns={FILE_COLUMNS} rows={rows} rowKey={(r) => r.path} sortable={false} />
+      <Table caption={t('activity.manualImport.filesFound2')} columns={FILE_COLUMNS} rows={rows} rowKey={(r) => r.path} sortable={false} />
     </div>
   );
 }
@@ -181,20 +184,20 @@ function EpisodesPicker({ row, dispatch }: { row: ImportRow; dispatch: (a: RowAc
   const episodes = useEpisodes(row.seriesId!);
   const inSeason = (episodes.data ?? []).filter((e) => e.seasonNumber === row.seasonNumber).sort((a, b) => a.episodeNumber - b.episodeNumber);
   const chosen = new Set(row.episodeIds);
-  if (row.seasonNumber === null) return <span className="al-activity-muted">Pick a season</span>;
+  if (row.seasonNumber === null) return <span className="al-activity-muted">{t('activity.manualImport.pickASeason')}</span>;
   const summary =
     row.episodeIds.length === 0
-      ? 'Choose…'
+      ? t('activity.manualImport.choose')
       : inSeason
           .filter((e) => chosen.has(e.id))
           .map((e) => ep(e.episodeNumber))
-          .join(', ') || `${row.episodeIds.length} selected`;
+          .join(', ') || t('activity.manualImport.episodeidscountSelected', { episodeIdsCount: row.episodeIds.length });
   return (
     <Popover
       width={280}
-      label={`Episodes for ${row.name}`}
+      label={t('activity.manualImport.episodesForName', { name: row.name })}
       trigger={(props) => (
-        <Button {...props} size="sm" variant="secondary" aria-label={`Episodes for ${row.name}`}>
+        <Button {...props} size="sm" variant="secondary" aria-label={t('activity.manualImport.episodesForName', { name: row.name })}>
           <span className="al-num">{summary}</span>
         </Button>
       )}
@@ -216,7 +219,7 @@ function EpisodesPicker({ row, dispatch }: { row: ImportRow; dispatch: (a: RowAc
             }}
           />
         ))}
-        {!episodes.isPending && inSeason.length === 0 ? <p className="al-activity-muted">No episodes in this season.</p> : null}
+        {!episodes.isPending && inSeason.length === 0 ? <p className="al-activity-muted">{t('activity.manualImport.noEpisodesInThisSeason')}</p> : null}
       </div>
     </Popover>
   );
@@ -225,15 +228,32 @@ function EpisodesPicker({ row, dispatch }: { row: ImportRow; dispatch: (a: RowAc
 interface MappingContext {
   dispatch: (a: RowAction) => void;
   seriesList: readonly Series[];
+  movieList: readonly Movie[];
   seriesOptions: EntityOption[];
   movieOptions: EntityOption[];
 }
 
-function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: MappingContext): Column<ImportRow>[] {
+function mappingColumns({ dispatch, seriesList, movieList, seriesOptions, movieOptions }: MappingContext): Column<ImportRow>[] {
+  const versionCol: Column<ImportRow>[] = [...seriesList, ...movieList].some((x) => (x.versions?.length ?? 0) > 0)
+    ? [
+        {
+          key: 'version',
+          header: t('common.version'),
+          cell: (r) => (
+            <VersionPicker
+              tags={rowVersionTags(r, seriesList, movieList)}
+              value={r.versionTag}
+              label={t('activity.manualImport.versionForName', { name: r.name })}
+              onChange={(versionTag) => dispatch({ type: 'version', path: r.path, versionTag })}
+            />
+          ),
+        },
+      ]
+    : [];
   return [
     {
       key: 'file',
-      header: 'File',
+      header: t('common.file'),
       cell: (r) => (
         <div className="al-activity-title">
           <span className="al-activity-title__main al-num" title={r.relativePath}>
@@ -248,38 +268,38 @@ function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: M
     },
     {
       key: 'type',
-      header: 'Type',
+      header: t('common.type'),
       cell: (r) => (
         <Select
-          aria-label={`Type for ${r.name}`}
+          aria-label={t('activity.manualImport.typeForName', { name: r.name })}
           value={r.mediaType}
           onChange={(e) => dispatch({ type: 'mediaType', path: r.path, mediaType: e.currentTarget.value as MediaType })}
           options={[
-            { value: 'series', label: 'Episode' },
-            { value: 'movie', label: 'Movie' },
+            { value: 'series', label: t('common.episode') },
+            { value: 'movie', label: t('common.movie') },
           ]}
         />
       ),
     },
     {
       key: 'target',
-      header: 'Series / movie',
+      header: t('activity.manualImport.seriesMovie'),
       cell: (r) =>
         r.mediaType === 'series' ? (
-          <EntityPicker aria-label={`Series for ${r.name}`} options={seriesOptions} value={r.seriesId} onChange={(id) => dispatch({ type: 'series', path: r.path, seriesId: id })} />
+          <EntityPicker aria-label={t('activity.manualImport.seriesForName', { name: r.name })} options={seriesOptions} value={r.seriesId} onChange={(id) => dispatch({ type: 'series', path: r.path, seriesId: id })} />
         ) : (
-          <EntityPicker aria-label={`Movie for ${r.name}`} options={movieOptions} value={r.movieId} onChange={(id) => dispatch({ type: 'movie', path: r.path, movieId: id })} />
+          <EntityPicker aria-label={t('activity.manualImport.movieForName', { name: r.name })} options={movieOptions} value={r.movieId} onChange={(id) => dispatch({ type: 'movie', path: r.path, movieId: id })} />
         ),
     },
     {
       key: 'season',
-      header: 'Season',
+      header: t('common.season'),
       cell: (r) => {
         if (r.mediaType !== 'series') return <span className="al-activity-muted">—</span>;
         const series = r.seriesId !== null ? seriesList.find((s) => s.id === r.seriesId) : undefined;
         return (
           <Select
-            aria-label={`Season for ${r.name}`}
+            aria-label={t('activity.manualImport.seasonForName', { name: r.name })}
             value={r.seasonNumber?.toString() ?? ''}
             disabled={!series}
             onChange={(e) => dispatch({ type: 'season', path: r.path, seasonNumber: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })}
@@ -287,7 +307,7 @@ function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: M
             <option value="">—</option>
             {(series?.seasons ?? []).map((s) => (
               <option key={s.seasonNumber} value={s.seasonNumber}>
-                {s.seasonNumber === 0 ? 'Specials' : `Season ${s.seasonNumber}`}
+                {s.seasonNumber === 0 ? t('common.specials') : t('activity.manualImport.seasonSeasonnumber', { seasonNumber: s.seasonNumber })}
               </option>
             ))}
           </Select>
@@ -296,16 +316,17 @@ function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: M
     },
     {
       key: 'episodes',
-      header: 'Episodes',
+      header: t('common.episodes'),
       cell: (r) =>
         r.mediaType === 'series' && r.seriesId !== null ? <EpisodesPicker row={r} dispatch={dispatch} /> : <span className="al-activity-muted">—</span>,
     },
+    ...versionCol,
     {
       key: 'quality',
-      header: 'Quality',
+      header: t('common.quality'),
       cell: (r) => (
         <Select
-          aria-label={`Quality for ${r.name}`}
+          aria-label={t('activity.manualImport.qualityForName', { name: r.name })}
           value={String(r.quality.quality.id)}
           onChange={(e) => dispatch({ type: 'quality', path: r.path, qualityId: Number(e.currentTarget.value) })}
           options={qualityOptions(r.mediaType).map((q) => ({ value: String(q.id), label: q.name }))}
@@ -314,10 +335,10 @@ function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: M
     },
     {
       key: 'languages',
-      header: 'Languages',
+      header: t('common.languages'),
       cell: (r) => (
         <Input
-          aria-label={`Languages for ${r.name}`}
+          aria-label={t('activity.manualImport.languagesForName', { name: r.name })}
           className="al-mi-small"
           defaultValue={r.languages.join(', ')}
           onBlur={(e) => dispatch({ type: 'languages', path: r.path, languages: parseLanguages(e.currentTarget.value) })}
@@ -326,10 +347,10 @@ function mappingColumns({ dispatch, seriesList, seriesOptions, movieOptions }: M
     },
     {
       key: 'group',
-      header: 'Group',
+      header: t('common.group'),
       cell: (r) => (
         <Input
-          aria-label={`Release group for ${r.name}`}
+          aria-label={t('activity.manualImport.releaseGroupForName', { name: r.name })}
           className="al-mi-small"
           mono
           value={r.releaseGroup}
@@ -352,15 +373,15 @@ export function FilesTable({ rows, dispatch }: { rows: ImportRow[]; dispatch: (a
     () => (movies.data ?? []).map((m: Movie) => ({ id: m.id, label: m.title, detail: m.year ? String(m.year) : undefined })).sort((a, b) => a.label.localeCompare(b.label)),
     [movies.data],
   );
-  const columns = mappingColumns({ dispatch, seriesList: series.data ?? [], seriesOptions, movieOptions });
+  const columns = mappingColumns({ dispatch, seriesList: series.data ?? [], movieList: movies.data ?? [], seriesOptions, movieOptions });
   const selected = new Set(rows.filter((r) => r.selected).map((r) => r.path));
   return (
     <Table
-      caption="Files to import"
+      caption={t('activity.manualImport.filesToImport')}
       columns={columns}
       rows={rows}
       rowKey={(r) => r.path}
-      rowLabel={(r) => `Import ${r.name}`}
+      rowLabel={(r) => t('activity.manualImport.importName', { name: r.name })}
       sortable={false}
       selectable
       selected={selected}
@@ -387,13 +408,13 @@ function ModeStep({ mode, onMode, count, error }: { mode: ImportMode; onMode: (m
   return (
     <div className="al-mi-step">
       <p>
-        Import <span className="al-num">{count}</span> {count === 1 ? 'file' : 'files'} into the library.
+        {t('common.import')} <span className="al-num">{count}</span> {t('activity.manualImport.filesIntoTheLibrary', { count })}
       </p>
-      <Field label="Import mode" hint={current.hint}>
-        <Segmented aria-label="Import mode" variant="soft" value={mode} onChange={onMode} options={MODE_OPTIONS.map(({ value, label }) => ({ value, label }))} />
+      <Field label={t('activity.manualImport.importMode')} hint={current.hint}>
+        <Segmented aria-label={t('activity.manualImport.importMode')} variant="soft" value={mode} onChange={onMode} options={MODE_OPTIONS.map(({ value, label }) => ({ value, label }))} />
       </Field>
       {error ? (
-        <ErrorBlock title="Import failed">{errorMessage(error)}</ErrorBlock>
+        <ErrorBlock title={t('activity.manualImport.importFailed')}>{errorMessage(error)}</ErrorBlock>
       ) : null}
     </div>
   );
@@ -410,12 +431,14 @@ interface ResultRow {
 const RESULT_COLUMNS: Column<ResultRow>[] = [
   {
     key: 'status',
-    header: 'Result',
+    get header() {
+      return t('activity.manualImport.result');
+    },
     width: '220px',
-    cell: (r) => (r.ok ? <StatusChip status="downloaded" label="Imported" /> : <StatusChip status="failed" cause={r.detail.toLowerCase().replace(/[.\s]+$/, '').slice(0, 40)} />),
+    cell: (r) => (r.ok ? <StatusChip status="downloaded" label={t('common.imported')} /> : <StatusChip status="failed" cause={r.detail.toLowerCase().replace(/[.\s]+$/, '').slice(0, 40)} />),
   },
-  { key: 'path', header: 'File', mono: true, cell: (r) => <span className="al-activity-break">{r.path}</span> },
-  { key: 'detail', header: 'Destination / error', mono: true, muted: true, cell: (r) => <span className="al-activity-break">{r.detail}</span> },
+  { key: 'path', get header() { return t('common.file'); }, mono: true, cell: (r) => <span className="al-activity-break">{r.path}</span> },
+  { key: 'detail', get header() { return t('activity.manualImport.destinationError'); }, mono: true, muted: true, cell: (r) => <span className="al-activity-break">{r.detail}</span> },
 ];
 
 export function ResultsView({ result }: { result: ManualImportResult }) {
@@ -426,9 +449,9 @@ export function ResultsView({ result }: { result: ManualImportResult }) {
   return (
     <div className="al-mi-step">
       <p>
-        Imported <span className="al-num">{result.imported.length}</span>, failed <span className="al-num">{result.failed.length}</span>.
+        {t('common.imported')} <span className="al-num">{result.imported.length}</span>{t('activity.manualImport.failed')} <span className="al-num">{result.failed.length}</span>.
       </p>
-      <Table caption="Import results" columns={RESULT_COLUMNS} rows={rows} rowKey={(r) => `${r.ok}-${r.path}`} sortable={false} />
+      <Table caption={t('activity.manualImport.importResults')} columns={RESULT_COLUMNS} rows={rows} rowKey={(r) => `${r.ok}-${r.path}`} sortable={false} />
     </div>
   );
 }
@@ -436,7 +459,7 @@ export function ResultsView({ result }: { result: ManualImportResult }) {
 // ---- page ---------------------------------------------------------------------------------
 
 export function ManualImportPage() {
-  useDocumentTitle('Manual import');
+  useDocumentTitle(t('activity.manualImport.documentTitle'));
   const search = route.useSearch();
   const navigate = route.useNavigate();
   const qc = useQueryClient();
@@ -466,7 +489,7 @@ export function ManualImportPage() {
 
   const run = useMutation({
     mutationFn: () => manualImportApi.execute(toImportRequest(rows, mode)),
-    meta: { errorTitle: 'Manual import failed', silent: true },
+    meta: { errorTitle: t('activity.manualImport.manualImportFailed'), silent: true },
     onSuccess: async () => {
       setStep('results');
       await Promise.all([qc.invalidateQueries({ queryKey: ['queue'] }), qc.invalidateQueries({ queryKey: ['history'] }), qc.invalidateQueries({ queryKey: ['library'] })]);
@@ -474,7 +497,7 @@ export function ManualImportPage() {
   });
 
   const chosen = selectedCount(rows);
-  const sourceLabel = search.folder ?? (search.downloadId ? `download ${search.downloadId}` : search.seriesId !== undefined ? 'series folder' : search.movieId !== undefined ? 'movie folder' : null);
+  const sourceLabel = search.folder ?? (search.downloadId ? t('activity.manualImport.downloadDownloadid', { downloadId: search.downloadId }) : search.seriesId !== undefined ? t('activity.manualImport.seriesFolder') : search.movieId !== undefined ? t('activity.manualImport.movieFolder') : null);
   const index = stepIndex(step);
 
   const startOver = () => {
@@ -492,7 +515,7 @@ export function ManualImportPage() {
   let body: ReactNode;
   let canContinue = false;
   let onContinue: () => void = () => {};
-  let continueLabel = 'Continue';
+  let continueLabel = t('activity.manualImport.continue');
   if (step === 'path') {
     body = <PathStep folder={folder} onFolder={setFolder} onChoose={(s) => void navigate({ search: s })} />;
     canContinue = folder.trim() !== '';
@@ -501,12 +524,12 @@ export function ManualImportPage() {
     if (files.isPending) body = <Skeleton lines={5} />;
     else if (files.isError)
       body = (
-        <ErrorBlock title="Couldn't list files" onRetry={() => void files.refetch()}>
+        <ErrorBlock title={t('activity.manualImport.couldntListFiles')} onRetry={() => void files.refetch()}>
           {errorMessage(files.error)}
         </ErrorBlock>
       );
     else if (rows.length === 0)
-      body = <EmptyState title="No importable files found">Nothing under this source looks like a video file that is not already in the library.</EmptyState>;
+      body = <EmptyState title={t('activity.manualImport.noImportableFilesFound')}>{t('activity.manualImport.nothingUnderThisSourceLooks')}</EmptyState>;
     else body = step === 'files' ? <FilesStep rows={rows} /> : <FilesTable rows={rows} dispatch={dispatch} />;
     if (step === 'files') {
       canContinue = rows.length > 0;
@@ -518,7 +541,7 @@ export function ManualImportPage() {
   } else if (step === 'mode') {
     body = <ModeStep mode={mode} onMode={setMode} count={chosen} error={run.error} />;
     canContinue = chosen > 0;
-    continueLabel = `Import ${chosen} ${chosen === 1 ? 'file' : 'files'}`;
+    continueLabel = t('activity.manualImport.importFiles', { chosen });
     onContinue = () => run.mutate();
   } else {
     body = run.data ? <ResultsView result={run.data} /> : null;
@@ -528,20 +551,20 @@ export function ManualImportPage() {
     <div className="al-activity">
       <PageHeader
         index="06"
-        title="Manual import"
-        subtitle={sourceLabel ? <span className="al-num al-activity-break">{sourceLabel}</span> : 'Choose files, map them to the library, and import.'}
+        title={t('common.manualImport')}
+        subtitle={sourceLabel ? <span className="al-num al-activity-break">{sourceLabel}</span> : t('activity.manualImport.chooseFilesMapThemTo')}
         actions={
           <Link className={buttonClass({ variant: 'secondary', size: 'md' })} to="/activity/queue">
-            Back to queue
+            {t('activity.manualImport.backToQueue')}
           </Link>
         }
       />
       <Pane chamfer="tl" bare className="al-mi-wizard">
         <div className="al-mi-wizard__head">
-          <Stepper aria-label="Manual import steps" steps={WIZARD_STEPS} current={index} onStepClick={step === 'results' ? undefined : (i) => goTo(WIZARD_STEPS[i]!.id)} />
+          <Stepper aria-label={t('activity.manualImport.manualImportSteps')} steps={WIZARD_STEPS} current={index} onStepClick={step === 'results' ? undefined : (i) => goTo(WIZARD_STEPS[i]!.id)} />
           {step === 'mapping' ? (
             <span className="al-activity-muted">
-              <span className="al-num">{chosen}</span> of <span className="al-num">{rows.length}</span> selected
+              <span className="al-num">{chosen}</span> {t('common.of')} <span className="al-num">{rows.length}</span> {t('activity.manualImport.selected')}
             </span>
           ) : null}
         </div>
@@ -550,21 +573,21 @@ export function ManualImportPage() {
           {step === 'results' ? (
             <>
               <Button variant="ghost" onClick={startOver}>
-                Start over
+                {t('activity.manualImport.startOver')}
               </Button>
               <span className="al-activity-spacer" />
               <Button variant="secondary" onClick={() => void files.refetch().then(() => setStep('files'))}>
-                Import more from this source
+                {t('activity.manualImport.importMoreFromThisSource')}
               </Button>
               <Link className={buttonClass({ variant: 'primary', size: 'md' })} to="/activity/queue">
-                Go to queue
+                {t('activity.manualImport.goToQueue')}
               </Link>
             </>
           ) : (
             <>
               {index > 0 ? (
                 <Button variant="ghost" onClick={() => goTo(WIZARD_STEPS[index - 1]!.id)}>
-                  Back
+                  {t('activity.manualImport.back')}
                 </Button>
               ) : null}
               <span className="al-activity-spacer" />

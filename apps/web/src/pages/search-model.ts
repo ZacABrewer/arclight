@@ -1,6 +1,7 @@
 import type { IndexerCategory, ManualSearchRequest, ManualSearchType, ReleaseResource } from '@arclight/shared';
 import { ApiError } from '../api/client.js';
 import { releaseDownloadHref } from '../api/indexers.js';
+import { t } from '../i18n/index.js';
 
 // Cross-indexer search page state and the pure helpers it renders with.
 
@@ -62,7 +63,7 @@ export function categoryNameMap(categories: readonly IndexerCategory[]): Map<num
 /** Seeders/leechers for torrents, grabs for usenet. */
 export function peersLabel(r: ReleaseResource): string {
   if (r.protocol === 'torrent') return `${r.seeders ?? '?'} / ${r.leechers ?? '?'}`;
-  return r.grabs !== undefined ? `${r.grabs} grabs` : '—';
+  return r.grabs !== undefined ? t('search.grabsGrabs', { grabs: r.grabs }) : '—';
 }
 
 /** `45m`, `5h`, `3d`. */
@@ -148,5 +149,5 @@ export function releaseScores(r: object): ScoreItem[] {
     ? customFormats.map((f) => (f && typeof f === 'object' && 'name' in f ? String((f as { name: unknown }).name) : '')).filter(Boolean)
     : [];
   if (names.length === 0 && customFormatScore === 0) return [];
-  return [{ name: names.length ? names.join(' · ') : 'Score', score: customFormatScore }];
+  return [{ name: names.length ? names.join(' · ') : t('common.score'), score: customFormatScore }];
 }

@@ -1,11 +1,12 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { errorMessage } from '../api/client.js';
 import { ErrorBlock } from '../arclight/index.js';
+import { t } from '../i18n/index.js';
 
 /** Panel shown for a crashed page or a failed route load: what failed, the cause, Retry. */
 export function ErrorView({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <ErrorBlock title="This page failed to load" onRetry={onRetry} retryLabel="Try again">
+    <ErrorBlock title={t('components.errorBoundary.thisPageFailedToLoad')} onRetry={onRetry} retryLabel={t('components.errorBoundary.tryAgain')}>
       {errorMessage(error)}
     </ErrorBlock>
   );

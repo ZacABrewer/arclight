@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useCreateTag, useTags } from '../../hooks/library.js';
 import { Button, Checkbox, Input } from '../../arclight/index.js';
 import './media-kit.css';
+import { t } from '../../i18n/index.js';
 
 /** Checkbox list of existing tags plus an inline "New tag" field. */
 export function TagPicker({ value, onChange }: { value: readonly number[]; onChange: (ids: number[]) => void }) {
@@ -24,16 +25,16 @@ export function TagPicker({ value, onChange }: { value: readonly number[]; onCha
 
   return (
     <div className="mk-stack-sm">
-      <div className="mk-row" role="group" aria-label="Tags">
-        {(tags.data ?? []).map((t) => (
-          <Checkbox key={t.id} label={t.label} checked={value.includes(t.id)} onChange={() => toggle(t.id)} />
+      <div className="mk-row" role="group" aria-label={t('common.tags')}>
+        {(tags.data ?? []).map((item) => (
+          <Checkbox key={item.id} label={item.label} checked={value.includes(item.id)} onChange={() => toggle(item.id)} />
         ))}
-        {tags.data?.length === 0 ? <span className="mk-muted">No tags yet</span> : null}
+        {tags.data?.length === 0 ? <span className="mk-muted">{t('components.media.tagPicker.noTagsYet')}</span> : null}
       </div>
       <div className="mk-row" style={{ flexWrap: 'nowrap' }}>
         <Input
-          aria-label="New tag"
-          placeholder="New tag"
+          aria-label={t('components.media.tagPicker.newTag')}
+          placeholder={t('components.media.tagPicker.newTag')}
           value={label}
           onChange={(e) => setLabel(e.target.value)}
           onKeyDown={(e) => {
@@ -44,7 +45,7 @@ export function TagPicker({ value, onChange }: { value: readonly number[]; onCha
           }}
         />
         <Button size="sm" onClick={add} loading={create.isPending} disabled={!label.trim()}>
-          Add tag
+          {t('components.media.tagPicker.addTag')}
         </Button>
       </div>
     </div>

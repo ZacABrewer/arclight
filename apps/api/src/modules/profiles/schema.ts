@@ -23,12 +23,22 @@ export const qualityProfiles = sqliteTable('quality_profiles', {
   languages: text('languages', { mode: 'json' }).$type<LanguageCode[]>().notNull(),
 });
 
-export const customFormats = sqliteTable('custom_formats', {
-  id: integer('id').primaryKey({ autoIncrement: true }),
-  name: text('name').notNull().unique(),
-  includeWhenRenaming: integer('include_when_renaming', { mode: 'boolean' }).notNull().default(false),
-  specifications: text('specifications', { mode: 'json' }).$type<CustomFormatSpec[]>().notNull(),
-});
+export const customFormats = sqliteTable(
+  'custom_formats',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull().unique(),
+    includeWhenRenaming: integer('include_when_renaming', { mode: 'boolean' }).notNull().default(false),
+    specifications: text('specifications', { mode: 'json' }).$type<CustomFormatSpec[]>().notNull(),
+    /**
+     * Guide (TRaSH `trash_id`) this format is synced from; null for user-created formats. Set
+     * and read only by the guides module; formats with a guideId may be overwritten by a sync,
+     * the others are never touched (and never deleted) by it.
+     */
+    guideId: text('guide_id'),
+  },
+  (t) => [index('custom_formats_guide_id_idx').on(t.guideId)],
+);
 
 export const delayProfiles = sqliteTable(
   'delay_profiles',

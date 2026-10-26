@@ -11,6 +11,7 @@ describe('ui preferences', () => {
       timeFormat: '12h',
       dateFormat: 'DD/MM/YYYY',
       posterColumns: 9,
+      locale: 'en',
     });
     expect(readUiPreferences({ firstDayOfWeek: 3, timeFormat: 'x', dateFormat: 'nope', posterColumns: 42 })).toEqual(DEFAULT_UI_PREFERENCES);
   });

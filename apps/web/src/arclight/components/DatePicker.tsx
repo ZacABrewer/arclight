@@ -2,9 +2,8 @@ import { useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { cx } from '../cx.js';
 import { Button } from './Button.js';
 import { Icon } from './Icon.js';
+import { t, monthNames, weekdayNames } from '../../i18n/index.js';
 
-const WEEKDAYS = ['MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT', 'SUN'];
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 /** 'YYYY-MM-DD' for a local date. */
 export function toIsoDate(d: Date): string {
@@ -74,16 +73,16 @@ export function DatePicker({ value, onChange, min, max, today, className, ...ari
   };
 
   return (
-    <div className={cx('al-datepicker', className)} role="group" aria-label={aria['aria-label'] ?? 'Choose a date'}>
+    <div className={cx('al-datepicker', className)} role="group" aria-label={aria['aria-label'] ?? t('arclight.datePicker.chooseADate')}>
       <div className="al-datepicker__head">
         <span className="al-datepicker__month" aria-live="polite">
-          {MONTHS[view.m]} <span className="al-num">{view.y}</span>
+          {monthNames()[view.m]} <span className="al-num">{view.y}</span>
         </span>
-        <Button size="sm" aria-label="Previous month" icon={<Icon name="chevronLeft" />} onClick={() => shiftMonth(-1)} style={{ width: 28, height: 28 }} />
-        <Button size="sm" aria-label="Next month" icon={<Icon name="chevronRight" />} onClick={() => shiftMonth(1)} style={{ width: 28, height: 28 }} />
+        <Button size="sm" aria-label={t('arclight.datePicker.previousMonth')} icon={<Icon name="chevronLeft" />} onClick={() => shiftMonth(-1)} style={{ width: 28, height: 28 }} />
+        <Button size="sm" aria-label={t('arclight.datePicker.nextMonth')} icon={<Icon name="chevronRight" />} onClick={() => shiftMonth(1)} style={{ width: 28, height: 28 }} />
       </div>
       <div ref={gridRef} className="al-datepicker__grid" role="grid" onKeyDown={onKeyDown}>
-        {WEEKDAYS.map((w) => (
+        {weekdayNames(1, 'short').map((w) => w.replace('.', '').toUpperCase()).map((w) => (
           <div key={w} className="al-datepicker__wd" role="columnheader" aria-label={w}>
             {w.slice(0, 2)}
           </div>
@@ -102,7 +101,7 @@ export function DatePicker({ value, onChange, min, max, today, className, ...ari
               data-outside={outside || undefined}
               data-today={iso === todayIso || undefined}
               aria-selected={isSel}
-              aria-label={`${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`}
+              aria-label={`${d.getDate()} ${monthNames()[d.getMonth()]} ${d.getFullYear()}`}
               tabIndex={iso === tabIso ? 0 : -1}
               disabled={outOfRange(iso)}
               onClick={() => {

@@ -11,6 +11,9 @@ services:
   gluetun:
     image: qmcgaw/gluetun:latest
     container_name: gluetun
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
     cap_add:
       - NET_ADMIN
     devices:
@@ -23,7 +26,8 @@ services:
       # Proton assigns a forwarded port (NAT-PMP); Arclight moves its built-in engine onto it.
       - VPN_PORT_FORWARDING=on
       # Let LAN clients reach the published UIs through Gluetun's firewall.
-      - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET:-192.168.1.0/24}
+      # The compose subnet (see `networks` below) is allowed too, so Arclight reaches whisper.
+      - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET:-192.168.1.0/24},${ARCLIGHT_SUBNET:-172.30.53.0/24}
       # Control server polled by Arclight (status, public IP, forwarded port).
       - HTTP_CONTROL_SERVER_ADDRESS=:8000
       - HTTP_CONTROL_SERVER_LOG=off
@@ -31,6 +35,9 @@ services:
       # (docker run --rm qmcgaw/gluetun genkey), configure it per the Gluetun wiki
       # ("Control server" / auth roles) and enter the same key in Settings -> VPN.
       - TZ=${TZ:-UTC}
+    # Containers sharing this network namespace (Arclight) share this hosts file.
+    extra_hosts:
+      - "whisper:${WHISPER_IP:-172.30.53.200}"
     volumes:
       - ${CONFIG_ROOT:-./data}/gluetun:/gluetun
     ports:
@@ -49,6 +56,9 @@ services:
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
     network_mode: "service:gluetun"
     environment:
       - LOG_LEVEL=info
@@ -69,6 +79,7 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: arclight
+    # Built from source: not auto-updated (Settings > Updates pulls published images only).
     network_mode: "service:gluetun"
     environment:
       - PUID=${PUID:-1000}
@@ -80,15 +91,21 @@ services:
       - ARCLIGHT_VPN_API_KEY=${GLUETUN_API_KEY:-}
       # Bundled FlareSolverr (same network namespace); registered as an indexer proxy on boot.
       - ARCLIGHT_FLARESOLVERR_URL=http://localhost:8191
+      # Bundled Whisper (profile "whisper"), resolved through gluetun's extra_hosts entry.
+      - ARCLIGHT_WHISPER_URL=http://whisper:9000
     volumes:
       # /config/torrents holds the engine's fast-resume data.
       - ${CONFIG_ROOT:-./data}/arclight:/config
+      # Self-update (Settings > Updates, mode "auto"): uncomment to let Arclight pull images and
+      # recreate the containers labelled arclight.autoupdate=true. This gives Arclight root-equivalent
+      # control of the Docker host; leave it commented to stay in "notify only" mode.
+      # - /var/run/docker.sock:/var/run/docker.sock
       - ${TV_ROOT:-./data/tv}:/tv
       - ${MOVIES_ROOT:-./data/movies}:/movies
       # The engine's default download folder (Settings -> Torrent Engine).
       - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7878/api/v1/system/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7878/api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 20s
@@ -99,3 +116,50 @@ services:
         condition: service_healthy
       flaresolverr:
         condition: service_started
+
+  # Opt-in speech-to-text for subtitles (the "whisperai" provider): start it with
+  #   docker compose -f <this file> --profile whisper up -d
+  # Arclight's WhisperAutoDetect job finds it through ARCLIGHT_WHISPER_URL and registers it as the
+  # lowest-priority subtitle provider, used only when no other provider has a result. Models are
+  # cached under ${CONFIG_ROOT}/whisper. CPU by default; ASR_MODEL=small/medium is slower but better.
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    # GPU (NVIDIA Container Toolkit): use the -gpu image and uncomment the deploy block.
+    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    container_name: whisper
+    profiles: ["whisper"]
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
+    environment:
+      - ASR_MODEL=base
+      - ASR_ENGINE=faster_whisper
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${CONFIG_ROOT:-./data}/whisper:/root/.cache
+    # Not behind the VPN: it sits on the compose network with a fixed address. Arclight lives in
+    # Gluetun's network namespace, so it reaches whisper through Gluetun: the `extra_hosts` entry
+    # on gluetun resolves the name and FIREWALL_OUTBOUND_SUBNETS lets the traffic out of the tunnel's
+    # firewall to the compose subnet.
+    networks:
+      default:
+        ipv4_address: ${WHISPER_IP:-172.30.53.200}
+    restart: unless-stopped
+
+# Fixed compose subnet so Gluetun's firewall can allow it (FIREWALL_OUTBOUND_SUBNETS) and the
+# whisper service can have a fixed address. Dynamic addresses stay in the lower half. If the
+# subnet collides with another Docker network, set ARCLIGHT_SUBNET / ARCLIGHT_SUBNET_DYNAMIC /
+# WHISPER_IP in .env. Changing it needs `docker compose down` once (the network is recreated).
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: ${ARCLIGHT_SUBNET:-172.30.53.0/24}
+          ip_range: ${ARCLIGHT_SUBNET_DYNAMIC:-172.30.53.0/25}

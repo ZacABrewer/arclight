@@ -9,6 +9,7 @@ import type {
 } from '@arclight/shared';
 import { profilesApi } from '../api/profiles.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 export function useQualityProfileList() {
   return useQuery({ queryKey: settingsKeys.qualityProfiles, queryFn: profilesApi.quality.list });
@@ -78,13 +79,13 @@ export function useSaveDelayProfile() {
 
 export function useDeleteDelayProfile() {
   return useInvalidatingMutation((id: number) => profilesApi.delay.remove(id), [settingsKeys.delayProfiles], {
-    errorTitle: 'Could not delete delay profile',
+    errorTitle: t('hooks.profiles.couldNotDeleteDelayProfile'),
   });
 }
 
 export function useReorderDelayProfile() {
   return useInvalidatingMutation((body: DelayProfileReorderRequest) => profilesApi.delay.reorder(body), [settingsKeys.delayProfiles], {
-    errorTitle: 'Could not reorder delay profiles',
+    errorTitle: t('hooks.profiles.couldNotReorderDelayProfiles'),
   });
 }
 
@@ -103,7 +104,7 @@ export function useSaveReleaseProfile() {
 
 export function useDeleteReleaseProfile() {
   return useInvalidatingMutation((id: number) => profilesApi.release.remove(id), [settingsKeys.releaseProfiles], {
-    errorTitle: 'Could not delete release profile',
+    errorTitle: t('hooks.profiles.couldNotDeleteReleaseProfile'),
   });
 }
 
@@ -117,6 +118,6 @@ export function useSaveQualityDefinitions() {
     (changes: Array<{ qualityId: number; limits: QualityDefinitionLimits }>) =>
       Promise.all(changes.map((c) => profilesApi.qualityDefinitions.update(c.qualityId, c.limits))),
     [settingsKeys.qualityDefinitions],
-    { errorTitle: 'Could not save quality definitions' },
+    { errorTitle: t('hooks.profiles.couldNotSaveQualityDefinitions') },
   );
 }

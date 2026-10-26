@@ -3,7 +3,7 @@ import type { AuthStatus } from '@arclight/shared';
 import { request, setUnauthorizedHandler } from '../api/client.js';
 import { isAbsolutePath, validateAdmin, validateRootFolders, firstIncompleteStep } from '../pages/setup/setup-wizard.js';
 import { visibleNav } from '../nav.js';
-import { resolveAuthRedirect, safeRedirect } from './guard.js';
+import { PUBLIC_PATHS, SHELLLESS_PATHS, isPublicPath, resolveAuthRedirect, safeRedirect } from './guard.js';
 
 const user = { id: 1, username: 'amy', role: 'user' as const, permissions: 0, createdAt: '2026-01-01T00:00:00.000Z', settings: {} };
 const status = (over: Partial<AuthStatus>): AuthStatus => ({ needsSetup: false, authMethod: 'forms', authenticated: true, session: null, ...over });
@@ -36,6 +36,20 @@ describe('resolveAuthRedirect', () => {
     expect(resolveAuthRedirect(s, '/settings/security')).toBe('/');
     expect(resolveAuthRedirect(s, '/system/status')).toBe('/');
     expect(resolveAuthRedirect(s, '/calendar')).toBeNull();
+  });
+
+  it('lets anyone open the public portal once setup is done, without the app shell', () => {
+    expect(resolveAuthRedirect(status({ authenticated: false }), '/portal')).toBeNull();
+    expect(resolveAuthRedirect(status({ session: { user, via: 'session', isAdmin: false } }), '/portal')).toBeNull();
+    expect(resolveAuthRedirect(status({ session: { user, via: 'session', isAdmin: true } }), '/portal')).toBeNull();
+    expect(PUBLIC_PATHS.has('/portal')).toBe(true);
+    expect(SHELLLESS_PATHS.has('/portal')).toBe(true);
+    expect(isPublicPath('/portal/x')).toBe(false);
+  });
+
+  it('sends the portal to /setup while setup is pending, and keeps other pages private', () => {
+    expect(resolveAuthRedirect(status({ needsSetup: true, authenticated: false }), '/portal')).toBe('/setup');
+    expect(resolveAuthRedirect(status({ authenticated: false }), '/discover')).toBe('/login?redirect=%2Fdiscover');
   });
 
   it('stays put when the api does not report auth status', () => {

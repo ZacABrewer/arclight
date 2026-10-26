@@ -89,6 +89,8 @@ export interface GrabMapping {
   matchType?: string;
   /** Obfuscation hash extracted by the parser, if any. */
   releaseHash?: string;
+  /** Release decision-log batch the grab came from (GET /release/decisions/:batchId). */
+  decisionBatchId?: string;
 }
 
 /** A download client name, or name + implementation type. */
@@ -424,6 +426,7 @@ export class HistoryService {
       releaseType: mapping.target.mediaType === 'series' ? mapping.releaseType : undefined,
       seriesMatchType: mapping.target.mediaType === 'series' ? mapping.matchType : undefined,
       movieMatchType: mapping.target.mediaType === 'movie' ? mapping.matchType : undefined,
+      decisionBatchId: mapping.decisionBatchId,
     });
     return this.insert(mapping.target, {
       eventType: 'grabbed',

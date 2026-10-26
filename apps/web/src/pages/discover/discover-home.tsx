@@ -7,6 +7,7 @@ import { SLIDER_LABELS } from '../../features/requests/status.js';
 import { useDiscoverGenres, useSliderItems, useSliders } from '../../hooks/requests.js';
 import type { DiscoverKind } from '../../api/requests.js';
 import { DiscoverRow } from './discover-kit.js';
+import { t } from '../../i18n/index.js';
 
 export function sliderTitle(slider: Pick<DiscoverSlider, 'title' | 'type'>): string {
   return slider.title ?? SLIDER_LABELS[slider.type];
@@ -22,7 +23,7 @@ export function DiscoverHomePage() {
     <>
       <PageHeader
         index="02"
-        title="Discover"
+        title={t('common.discover')}
         actions={
           <form
             role="search"
@@ -32,28 +33,28 @@ export function DiscoverHomePage() {
               if (term.trim()) void navigate({ to: '/discover/search', search: { q: term.trim() } });
             }}
           >
-            <Input type="search" aria-label="Search movies and series" placeholder="Search movies and series" value={term} onChange={(e) => setTerm(e.target.value)} />
+            <Input type="search" aria-label={t('discover.home.searchMoviesAndSeries')} placeholder={t('discover.home.searchMoviesAndSeries')} value={term} onChange={(e) => setTerm(e.target.value)} />
           </form>
         }
       >
-        <nav className="mk-row" aria-label="Browse">
+        <nav className="mk-row" aria-label={t('discover.home.browse')}>
           <Link className="mk-chip-link" to="/discover/movies">
-            Movies
+            {t('common.movies')}
           </Link>
           <Link className="mk-chip-link" to="/discover/tv">
-            Series
+            {t('common.series')}
           </Link>
           <Link className="mk-chip-link" to="/discover/trending">
-            Trending
+            {t('common.trending')}
           </Link>
         </nav>
       </PageHeader>
       {sliders.isPending ? (
         <Skeleton lines={6} />
       ) : sliders.isError ? (
-        <QueryError error={sliders.error} title="Could not load Discover" onRetry={() => void sliders.refetch()} />
+        <QueryError error={sliders.error} title={t('discover.home.couldNotLoadDiscover')} onRetry={() => void sliders.refetch()} />
       ) : enabled.length === 0 ? (
-        <EmptyState title="No sliders enabled">An admin can turn sliders on in Settings → Requests.</EmptyState>
+        <EmptyState title={t('discover.home.noSlidersEnabled')}>{t('discover.home.anAdminCanTurnSliders')}</EmptyState>
       ) : (
         <div className="mk-stack" style={{ gap: 40 }}>
           {enabled.map((s) => (
@@ -112,7 +113,7 @@ function GenreChips({ kind, title }: { kind: DiscoverKind; title: string }) {
       {genres.isPending ? (
         <Skeleton width={320} height={32} />
       ) : genres.isError ? (
-        <span className="al-caption">Genres are unavailable. TMDB did not answer.</span>
+        <span className="al-caption">{t('discover.home.genresAreUnavailableTmdbDid')}</span>
       ) : (
         genres.data.map((g) => (
           <Link key={g.id} className="mk-chip-link" to="/discover/genre/$id" params={{ id: String(g.id) }} search={{ mediaType: kind }}>
@@ -133,31 +134,31 @@ export function SeeAll({ slider }: { slider: Pick<DiscoverSlider, 'type' | 'data
   const firstId = slider.data?.split(/[,|]/)[0] ?? '';
   switch (slider.type) {
     case 'trending':
-      return <Link className="mk-action-link" to="/discover/trending">See all</Link>;
+      return <Link className="mk-action-link" to="/discover/trending">{t('discover.home.seeAll')}</Link>;
     case 'popularMovies':
-      return <Link className="mk-action-link" to="/discover/movies">See all</Link>;
+      return <Link className="mk-action-link" to="/discover/movies">{t('discover.home.seeAll')}</Link>;
     case 'popularTv':
-      return <Link className="mk-action-link" to="/discover/tv">See all</Link>;
+      return <Link className="mk-action-link" to="/discover/tv">{t('discover.home.seeAll')}</Link>;
     case 'upcomingMovies':
-      return <Link className="mk-action-link" to="/discover/upcoming" search={{ mediaType: 'movie' }}>See all</Link>;
+      return <Link className="mk-action-link" to="/discover/upcoming" search={{ mediaType: 'movie' }}>{t('discover.home.seeAll')}</Link>;
     case 'upcomingTv':
-      return <Link className="mk-action-link" to="/discover/upcoming" search={{ mediaType: 'tv' }}>See all</Link>;
+      return <Link className="mk-action-link" to="/discover/upcoming" search={{ mediaType: 'tv' }}>{t('discover.home.seeAll')}</Link>;
     case 'watchlist':
-      return <Link className="mk-action-link" to="/watchlist">See all</Link>;
+      return <Link className="mk-action-link" to="/watchlist">{t('discover.home.seeAll')}</Link>;
     case 'recentRequests':
-      return <Link className="mk-action-link" to="/requests">See all</Link>;
+      return <Link className="mk-action-link" to="/requests">{t('discover.home.seeAll')}</Link>;
     case 'tmdbMovieKeyword':
     case 'tmdbTvKeyword':
-      return firstId ? <Link className="mk-action-link" to="/discover/keyword/$id" params={{ id: firstId }} search={{ mediaType: slider.type === 'tmdbMovieKeyword' ? 'movie' : 'tv' }}>See all</Link> : null;
+      return firstId ? <Link className="mk-action-link" to="/discover/keyword/$id" params={{ id: firstId }} search={{ mediaType: slider.type === 'tmdbMovieKeyword' ? 'movie' : 'tv' }}>{t('discover.home.seeAll')}</Link> : null;
     case 'tmdbMovieGenre':
     case 'tmdbTvGenre':
-      return firstId ? <Link className="mk-action-link" to="/discover/genre/$id" params={{ id: firstId }} search={{ mediaType: slider.type === 'tmdbMovieGenre' ? 'movie' : 'tv' }}>See all</Link> : null;
+      return firstId ? <Link className="mk-action-link" to="/discover/genre/$id" params={{ id: firstId }} search={{ mediaType: slider.type === 'tmdbMovieGenre' ? 'movie' : 'tv' }}>{t('discover.home.seeAll')}</Link> : null;
     case 'tmdbStudio':
-      return firstId ? <Link className="mk-action-link" to="/discover/studio/$id" params={{ id: firstId }}>See all</Link> : null;
+      return firstId ? <Link className="mk-action-link" to="/discover/studio/$id" params={{ id: firstId }}>{t('discover.home.seeAll')}</Link> : null;
     case 'tmdbNetwork':
-      return firstId ? <Link className="mk-action-link" to="/discover/network/$id" params={{ id: firstId }}>See all</Link> : null;
+      return firstId ? <Link className="mk-action-link" to="/discover/network/$id" params={{ id: firstId }}>{t('discover.home.seeAll')}</Link> : null;
     case 'tmdbSearch':
-      return slider.data ? <Link className="mk-action-link" to="/discover/search" search={{ q: slider.data }}>See all</Link> : null;
+      return slider.data ? <Link className="mk-action-link" to="/discover/search" search={{ q: slider.data }}>{t('discover.home.seeAll')}</Link> : null;
     default:
       return null;
   }

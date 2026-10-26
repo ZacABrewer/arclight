@@ -27,7 +27,9 @@ import {
   OverrideRuleInput,
   Permission,
   PersonDetail,
+  PublicPortal,
   RequestAccepted,
+  RequestPolicyExplanation,
   RequestCount,
   RequestListQuery,
   RequestPage,
@@ -45,12 +47,13 @@ import {
   WatchlistQuery,
   WatchlistSyncResult,
 } from '@arclight/shared';
-import type { FastifyPluginAsync, FastifyRequest, RawServerDefault } from 'fastify';
+import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { DiscoverService } from './discover.js';
 import { REQUESTS_ERROR_STATUS, RequestsError } from './errors.js';
 import type { IssuesService } from './issues.js';
-import { SYSTEM_ACTOR, canManageUsers, type Actor } from './permissions.js';
+import { ANONYMOUS_ACTOR, SYSTEM_ACTOR, canManageUsers, type Actor } from './permissions.js';
+import { publicPortal, type MediaServerLoginOption, type TokenBuckets } from './portal.js';
 import type { RequestsService } from './service.js';
 import type { WatchlistService } from './watchlist.js';
 
@@ -61,7 +64,7 @@ const TmdbParams = z.object({ tmdbId: z.coerce.number().int().positive() });
 const PageQuery = z.object({ page: z.coerce.number().int().min(1).max(500).default(1) });
 const GenresQuery = z.object({ mediaType: z.enum(['movie', 'tv']).default('movie') });
 const Empty = z.null();
-const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
+const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 429: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
 /** Users with role `user` may call every route; the services check the permission bits. */
 const user = { allowUser: true } as const;
 
@@ -72,6 +75,10 @@ export interface RequestsRouteServices {
   watchlist: WatchlistService;
   /** Runs the WatchlistSync job now. */
   runWatchlistSync: () => Promise<WatchlistSyncResult>;
+  /** Per-IP limit for anonymous discover (public portal). */
+  portalLimiter?: TokenBuckets;
+  /** Media-server sign-in offered on the login page. */
+  mediaServerLogin?: () => MediaServerLoginOption;
 }
 
 /** Who is calling, in permission terms. API-key and bypass callers act as admin. */
@@ -83,8 +90,29 @@ export function actorOf(req: FastifyRequest): Actor {
   return { userId: auth.user.id, permissions: bits };
 }
 
+/** Discover callers: signed-in users act as themselves, portal visitors as ANONYMOUS_ACTOR. */
+export function discoverActorOf(req: FastifyRequest): Actor {
+  return req.auth ? actorOf(req) : ANONYMOUS_ACTOR;
+}
+
 export function requestsRoutes(s: RequestsRouteServices): Plugin {
   const { requests, issues, discover, watchlist } = s;
+  const guard = requests.certifications;
+  const portalOn = () => requests.settings().publicPortal.enabled;
+  const anonymousDiscover = () => {
+    const p = requests.settings().publicPortal;
+    return p.enabled && p.allowAnonymousDiscover;
+  };
+  /** Discover routes: public while the portal allows anonymous discover; anonymous callers are rate-limited. */
+  const pub = { allowUser: true, publicWhen: anonymousDiscover } as const;
+  const limit = async (req: FastifyRequest, reply: FastifyReply) => {
+    if (req.auth || !s.portalLimiter) return;
+    if (!s.portalLimiter.take(req.ip)) {
+      reply.header('retry-after', String(Math.max(1, s.portalLimiter.retryAfter(req.ip))));
+      return reply.code(429).send({ error: 'too many requests; sign in or slow down', code: 'RATE_LIMITED' });
+    }
+  };
+  const page = async (req: FastifyRequest, p: DiscoverPage): Promise<DiscoverPage> => ({ ...p, results: await guard.filter(discoverActorOf(req), p.results) });
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof RequestsError) return reply.code(REQUESTS_ERROR_STATUS[err.code]).send({ error: err.message, code: err.code });
@@ -134,60 +162,82 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
       { config: user, schema: { params: IdParams, body: DeclineRequest.nullish(), response: { 200: MediaRequest, ...errors } } },
       async (req) => requests.decline(actorOf(req), req.params.id, req.body?.reason),
     );
+    app.get('/request/:id/policy', { config: user, schema: { params: IdParams, response: { 200: RequestPolicyExplanation, ...errors } } }, async (req) =>
+      requests.explainPolicy(actorOf(req), req.params.id),
+    );
     app.post('/request/:id/retry', { config: user, schema: { params: IdParams, response: { 200: MediaRequest, ...errors } } }, async (req) =>
       requests.retry(actorOf(req), req.params.id),
     );
 
     // ------------------------------------------------------------------------- discover
-    app.get('/discover/movies', { config: user, schema: { querystring: DiscoverQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.movies(req.query),
+    // Public while publicPortal.enabled && allowAnonymousDiscover; results honour content caps.
+    const d = { config: pub, preHandler: limit } as const;
+    app.get('/discover/movies', { ...d, schema: { querystring: DiscoverQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.movies(req.query)),
     );
-    app.get('/discover/tv', { config: user, schema: { querystring: DiscoverQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.tv(req.query),
+    app.get('/discover/tv', { ...d, schema: { querystring: DiscoverQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.tv(req.query)),
     );
-    app.get('/discover/trending', { config: user, schema: { querystring: TrendingQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.trending(req.query),
+    app.get('/discover/trending', { ...d, schema: { querystring: TrendingQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.trending(req.query)),
     );
-    app.get('/discover/upcoming', { config: user, schema: { querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.upcoming(req.query),
+    app.get('/discover/upcoming', { ...d, schema: { querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.upcoming(req.query)),
     );
-    app.get('/discover/search', { config: user, schema: { querystring: DiscoverSearchQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.search(req.query),
+    app.get('/discover/search', { ...d, schema: { querystring: DiscoverSearchQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.search(req.query)),
     );
-    app.get('/discover/genres', { config: user, schema: { querystring: GenresQuery, response: { 200: z.array(DiscoverGenre), ...errors } } }, async (req) =>
+    app.get('/discover/genres', { ...d, schema: { querystring: GenresQuery, response: { 200: z.array(DiscoverGenre), ...errors } } }, async (req) =>
       discover.genres(req.query.mediaType),
     );
     app.get(
       '/discover/genre/:id',
-      { config: user, schema: { params: IdParams, querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } },
-      async (req) => discover.genre(req.params.id, req.query),
+      { ...d, schema: { params: IdParams, querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } },
+      async (req) => page(req, await discover.genre(req.params.id, req.query)),
     );
     app.get(
       '/discover/keyword/:id',
-      { config: user, schema: { params: IdParams, querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } },
-      async (req) => discover.keyword(req.params.id, req.query),
+      { ...d, schema: { params: IdParams, querystring: DiscoverKindQuery, response: { 200: DiscoverPage, ...errors } } },
+      async (req) => page(req, await discover.keyword(req.params.id, req.query)),
     );
-    app.get('/discover/network/:id', { config: user, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.network(req.params.id, req.query.page),
+    app.get('/discover/network/:id', { ...d, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.network(req.params.id, req.query.page)),
     );
-    app.get('/discover/studio/:id', { config: user, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.studio(req.params.id, req.query.page),
+    app.get('/discover/studio/:id', { ...d, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.studio(req.params.id, req.query.page)),
     );
-    app.get('/discover/person/:id', { config: user, schema: { params: IdParams, response: { 200: PersonDetail, ...errors } } }, async (req) =>
-      discover.person(req.params.id),
+    app.get('/discover/person/:id', { ...d, schema: { params: IdParams, response: { 200: PersonDetail, ...errors } } }, async (req) => {
+      const actor = discoverActorOf(req);
+      const person = await discover.person(req.params.id);
+      return { ...person, cast: await guard.filter(actor, person.cast), crew: await guard.filter(actor, person.crew) };
+    });
+    const title = async (req: FastifyRequest, type: 'movie' | 'series', tmdbId: number) => {
+      const actor = discoverActorOf(req);
+      await guard.assertAllowed(actor, type, tmdbId);
+      const detail = await discover.title(actor, type, tmdbId);
+      return { ...detail, similar: await guard.filter(actor, detail.similar), recommendations: await guard.filter(actor, detail.recommendations) };
+    };
+    app.get('/discover/movie/:tmdbId', { ...d, schema: { params: TmdbParams, response: { 200: TitleDetail, ...errors } } }, async (req) =>
+      title(req, 'movie', req.params.tmdbId),
     );
-    app.get('/discover/movie/:tmdbId', { config: user, schema: { params: TmdbParams, response: { 200: TitleDetail, ...errors } } }, async (req) =>
-      discover.title(actorOf(req), 'movie', req.params.tmdbId),
+    app.get('/discover/tv/:tmdbId', { ...d, schema: { params: TmdbParams, response: { 200: TitleDetail, ...errors } } }, async (req) =>
+      title(req, 'series', req.params.tmdbId),
     );
-    app.get('/discover/tv/:tmdbId', { config: user, schema: { params: TmdbParams, response: { 200: TitleDetail, ...errors } } }, async (req) =>
-      discover.title(actorOf(req), 'series', req.params.tmdbId),
+    app.get('/discover/slider/:id', { ...d, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.sliderItems(discoverActorOf(req), req.params.id, req.query.page)),
     );
-    app.get('/discover/slider/:id', { config: user, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      discover.sliderItems(actorOf(req), req.params.id, req.query.page),
+
+    // ------------------------------------------------------------------------- public portal
+    app.get(
+      '/public/portal',
+      { config: { publicWhen: portalOn }, preHandler: limit, schema: { response: { 200: PublicPortal, ...errors } } },
+      async () => publicPortal(requests, s.mediaServerLogin ?? (() => null)),
     );
 
     // ------------------------------------------------------------------------- sliders
-    app.get('/discoverslider', { config: user, schema: { response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) => discover.sliders(actorOf(req)));
+    app.get('/discoverslider', { config: pub, preHandler: limit, schema: { response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
+      discover.sliders(discoverActorOf(req)),
+    );
     app.post('/discoverslider', { config: user, schema: { body: DiscoverSliderInput, response: { 201: DiscoverSlider, ...errors } } }, async (req, reply) =>
       reply.code(201).send(discover.createSlider(actorOf(req), req.body)),
     );
@@ -278,7 +328,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.put(
       '/user/:id/permissions',
       { config: user, schema: { params: IdParams, body: UserPermissions, response: { 200: UserPermissions, ...errors } } },
-      async (req) => requests.setPermissions(actorOf(req), req.params.id, req.body.permissions),
+      async (req) => requests.setPermissions(actorOf(req), req.params.id, req.body),
     );
     app.get('/user/:id/quota', { config: user, schema: { params: IdParams, response: { 200: UserQuotaResponse, ...errors } } }, async (req) =>
       requests.quota(actorOf(req), req.params.id),

@@ -2,6 +2,7 @@ import { useId, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { Button } from './Button.js';
 import { Input } from './Input.js';
+import { t } from '../../i18n/index.js';
 
 export interface PathEntry {
   name: string;
@@ -52,10 +53,10 @@ export function PathPickerField({
   selectedPath,
   onSelectFile,
   onAdd,
-  addLabel = 'Add',
+  addLabel = t('common.add'),
   loading,
   error,
-  label = 'Path',
+  label = t('common.path'),
   placeholder = '/media',
   collapsed,
   className,
@@ -101,7 +102,7 @@ export function PathPickerField({
       {collapsed ? null : (
         <div className="al-browser">
           {crumbs && crumbs.length > 0 ? (
-            <nav className="al-browser__crumbs" aria-label="Current folder">
+            <nav className="al-browser__crumbs" aria-label={t('arclight.pathPickerField.currentFolder')}>
               {crumbs.map((c, i) => (
                 <span key={c.path} style={{ display: 'contents' }}>
                   {i > 0 ? <span aria-hidden="true">›</span> : null}
@@ -119,12 +120,12 @@ export function PathPickerField({
           ) : null}
           {loading ? (
             <div className="al-browser__status" aria-busy="true">
-              Loading folders…
+              {t('arclight.pathPickerField.loadingFolders')}
             </div>
           ) : entries.length === 0 ? (
-            <div className="al-browser__status">This folder is empty.</div>
+            <div className="al-browser__status">{t('arclight.pathPickerField.thisFolderIsEmpty')}</div>
           ) : (
-            <ul id={listId} className="al-browser__list" role="listbox" aria-label="Folders">
+            <ul id={listId} className="al-browser__list" role="listbox" aria-label={t('arclight.pathPickerField.folders')}>
               {entries.map((e) => {
                 const kind = e.kind ?? 'folder';
                 const inert = kind === 'file' && !onSelectFile;
@@ -137,7 +138,7 @@ export function PathPickerField({
                       data-kind={kind}
                       aria-selected={e.path === selected}
                       disabled={inert}
-                      title={kind === 'file' ? undefined : 'Double-click or → to open'}
+                      title={kind === 'file' ? undefined : t('arclight.pathPickerField.doubleClickOrToOpen')}
                       onClick={() => {
                         if (kind === 'file') onSelectFile?.(e.path);
                         else onChange(e.path);

@@ -10,6 +10,7 @@ import { ShellOptionsProvider, useResolvedBackdrop } from './shell-options.js';
 import { ShellOverlays } from './shell-overlays.js';
 import { useStatusCluster } from './status-cluster.js';
 import { useUserMenu } from './user-menu.js';
+import { t } from '../i18n/index.js';
 
 /** Plain left clicks route client-side; modified clicks keep the browser's behaviour. */
 function isPlainClick(e: MouseEvent<HTMLElement>): boolean {
@@ -24,7 +25,7 @@ function ShellBackdrop() {
 /** Mobile "More": every section the role can open, as 44px rows. */
 function MoreDrawer({ open, onClose, isAdmin }: { open: boolean; onClose: () => void; isAdmin: boolean }) {
   return (
-    <Drawer open={open} onClose={onClose} title="More" width={320}>
+    <Drawer open={open} onClose={onClose} title={t('common.more')} width={320}>
       <ul className="al-more-list">
         {visibleNav(isAdmin).map((s) => (
           <li key={s.label}>
@@ -56,12 +57,12 @@ function Shell() {
   };
 
   const rail: RailItem[] = railFor(isAdmin).map((r) => ({ code: r.code, label: r.label, title: r.title, href: r.href }));
-  const tabs: TabBarItem[] = mobileTabsFor(isAdmin).map((t) => ({ id: t.id, label: t.label, icon: t.icon, href: t.href ?? undefined }));
+  const tabs: TabBarItem[] = mobileTabsFor(isAdmin).map((mobileTab) => ({ id: mobileTab.id, label: mobileTab.label, icon: mobileTab.icon, href: mobileTab.href ?? undefined }));
 
   return (
     <div className="al-app">
       <a className="al-skip-link" href="#main">
-        Skip to content
+        {t('layout.appShell.skipToContent')}
       </a>
       <ShellBackdrop />
       <Rail
@@ -83,7 +84,7 @@ function Shell() {
         userLabel={user.label}
         userMenu={user.menu}
       >
-        <Button variant="ghost" size="sm" className="al-topbar__search-icon" icon={<Icon name="search" size={20} />} aria-label="Search" onClick={() => setSearch(true)} />
+        <Button variant="ghost" size="sm" className="al-topbar__search-icon" icon={<Icon name="search" size={20} />} aria-label={t('common.search')} onClick={() => setSearch(true)} />
       </TopBar>
       <ContentInset id="main">
         <RestartBanner />
@@ -99,7 +100,7 @@ function Shell() {
             setMore(true);
             return;
           }
-          go(tabs.find((t) => t.id === id)?.href, e);
+          go(tabs.find((tabBar) => tabBar.id === id)?.href, e);
         }}
       />
       <MoreDrawer open={more} onClose={() => setMore(false)} isAdmin={isAdmin} />

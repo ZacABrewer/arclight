@@ -6,6 +6,7 @@ import { filesystemApi } from '../../api/filesystem.js';
 import { Button, Icon, Input, Modal, PathPickerField, type PathEntry } from '../../arclight/index.js';
 import { breadcrumbs, isValidFolderName } from './path-utils.js';
 import './path-picker.css';
+import { t } from '../../i18n/index.js';
 
 /** Enter runs `action` without submitting any enclosing form. */
 function onEnter(e: KeyboardEvent<HTMLInputElement>, action: () => void) {
@@ -47,7 +48,7 @@ function formatSize(bytes: number | undefined): string {
  * a click selects a folder, a double-click or → opens it, Enter in the input opens what was
  * typed. Drives, optional files and "New folder".
  */
-export function PathPickerDialog({ open, onClose, onSelect, initialPath, title = 'Choose a folder', includeFiles = false, selectFiles = false }: PathPickerDialogProps) {
+export function PathPickerDialog({ open, onClose, onSelect, initialPath, title = t('components.pathPicker.chooseAFolder'), includeFiles = false, selectFiles = false }: PathPickerDialogProps) {
   const withFiles = includeFiles || selectFiles;
   const [path, setPath] = useState(initialPath?.trim() ?? '');
   const [typed, setTyped] = useState(path);
@@ -116,14 +117,14 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
       footer={
         <>
           <Button variant="ghost" icon={<Icon name="plus" />} disabled={atRoots || newName !== null} onClick={() => setNewName('')}>
-            New folder
+            {t('components.pathPicker.newFolder')}
           </Button>
           <span className="mt-path-picker__spacer" />
           <Button variant="ghost" onClick={onClose}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="primary" disabled={!listing.data || choice === ''} onClick={() => onSelect(choice)}>
-            Select
+            {t('common.select')}
           </Button>
         </>
       }
@@ -138,13 +139,13 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
             disabled={!listing.data || listing.data.parent === null}
             onClick={() => go(listing.data?.parent ?? '')}
           >
-            Up one level
+            {t('components.pathPicker.upOneLevel')}
           </Button>
-          <p className="mt-path-picker__hint">Click a folder to select it. Double-click or press → to open it.</p>
+          <p className="mt-path-picker__hint">{t('components.pathPicker.clickAFolderToSelect')}</p>
         </div>
         <PathPickerField
-          label="Folder path"
-          placeholder="Type a path and press Enter"
+          label={t('common.folderPath')}
+          placeholder={t('components.pathPicker.typeAPathAndPress')}
           value={typed}
           onChange={setTyped}
           onNavigate={(p) => go(p.trim())}
@@ -159,7 +160,7 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
         {listing.isError ? (
           <div>
             <Button size="sm" variant="secondary" onClick={() => go('')}>
-              Back to {crumbs[0]?.label ?? 'roots'}
+              {t('components.pathPicker.backToValue', { value: crumbs[0]?.label ?? t('components.pathPicker.roots') })}
             </Button>
           </div>
         ) : null}
@@ -167,19 +168,19 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
         {newName !== null ? (
           <div className="mt-path-picker__row">
             <Input
-              aria-label="New folder name"
+              aria-label={t('components.pathPicker.newFolderName')}
               mono
               autoFocus
               value={newName}
-              placeholder="Folder name"
+              placeholder={t('components.pathPicker.folderName')}
               onChange={(e) => setNewName(e.currentTarget.value)}
               onKeyDown={(e) => onEnter(e, createFolder)}
             />
             <Button size="sm" variant="primary" loading={mkdir.isPending} disabled={!isValidFolderName(newName)} onClick={createFolder}>
-              Create folder
+              {t('components.pathPicker.createFolder')}
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setNewName(null)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
           </div>
         ) : null}

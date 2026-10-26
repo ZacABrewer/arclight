@@ -15,11 +15,11 @@ export {
   PUBLIC_PREFIXES,
   type PublicRoutePredicate,
 } from './hook.js';
-export { AuthService, AuthError, type RequestAuth } from './service.js';
+export { AuthService, AuthError, toUser, type RequestAuth, type ExternalLoginProvider, type LoginResult } from './service.js';
 export { SetupService } from './setup.js';
 export { hashPassword, verifyPassword } from './password.js';
 export { isLocalAddress } from './network.js';
-export { SESSION_COOKIE } from './cookies.js';
+export { SESSION_COOKIE, setSessionCookie } from './cookies.js';
 export * from './schema.js';
 
 /**

@@ -1,0 +1,85 @@
+{
+  "systemInfo": { "ServerName": "Basement Jellyfin", "Version": "10.10.3", "Id": "f00dcafe" },
+  "virtualFolders": [
+    { "Name": "Movies", "ItemId": "lib-movies", "CollectionType": "movies", "Locations": ["/data/movies"] },
+    { "Name": "Shows", "ItemId": "lib-tv", "CollectionType": "tvshows", "Locations": ["/data/tv", "/data/anime"] },
+    { "Name": "Music", "ItemId": "lib-music", "CollectionType": "music", "Locations": ["/data/music"] }
+  ],
+  "users": [
+    {
+      "Id": "u-alice",
+      "Name": "alice",
+      "LastActivityDate": "2026-10-20T21:14:05.0000000Z",
+      "Policy": { "IsAdministrator": true, "IsDisabled": false }
+    },
+    {
+      "Id": "u-bob",
+      "Name": "bob",
+      "LastActivityDate": "0001-01-01T00:00:00.0000000Z",
+      "Policy": { "IsAdministrator": false, "IsDisabled": false }
+    },
+    { "Id": "u-carol", "Name": "carol", "Policy": { "IsAdministrator": false, "IsDisabled": true } }
+  ],
+  "movies": {
+    "Items": [
+      {
+        "Id": "m1",
+        "Name": "Harbour Lights",
+        "Type": "Movie",
+        "ProductionYear": 2021,
+        "Path": "/data/movies/Harbour Lights (2021)/Harbour Lights (2021).mkv",
+        "ParentId": "lib-movies",
+        "ProviderIds": { "Tmdb": "98765", "Imdb": "tt7654321" }
+      },
+      {
+        "Id": "m2",
+        "Name": "Paper Moons",
+        "Type": "Movie",
+        "ProductionYear": 2019,
+        "ParentId": "lib-movies",
+        "ProviderIds": { "tmdb": "555" }
+      }
+    ],
+    "TotalRecordCount": 2
+  },
+  "userMovies": {
+    "Items": [
+      {
+        "Id": "m1",
+        "Name": "Harbour Lights",
+        "Type": "Movie",
+        "ProductionYear": 2021,
+        "RunTimeTicks": 72000000000,
+        "ProviderIds": { "Tmdb": "98765" },
+        "UserData": { "Played": true, "PlayCount": 2, "LastPlayedDate": "2026-09-01T20:00:00.0000000Z", "PlaybackPositionTicks": 0 }
+      },
+      {
+        "Id": "m2",
+        "Name": "Paper Moons",
+        "Type": "Movie",
+        "ProductionYear": 2019,
+        "RunTimeTicks": 60000000000,
+        "ProviderIds": { "Tmdb": "555" },
+        "UserData": { "Played": false, "PlayCount": 0, "PlaybackPositionTicks": 18000000000 }
+      }
+    ],
+    "TotalRecordCount": 2
+  },
+  "userSeries": {
+    "Items": [
+      { "Id": "s1", "Name": "Signal Lost", "Type": "Series", "ProductionYear": 2023, "ProviderIds": { "Tmdb": "123456", "Tvdb": "424242" } },
+      { "Id": "s2", "Name": "Quiet Rooms", "Type": "Series", "ProductionYear": 2020, "ProviderIds": { "Tvdb": "777" } }
+    ],
+    "TotalRecordCount": 2
+  },
+  "userEpisodes": {
+    "Items": [
+      { "Id": "e1", "Type": "Episode", "SeriesId": "s1", "LocationType": "FileSystem", "RunTimeTicks": 27000000000, "UserData": { "Played": true, "PlayCount": 1, "LastPlayedDate": "2026-10-01T20:00:00Z" } },
+      { "Id": "e2", "Type": "Episode", "SeriesId": "s1", "LocationType": "FileSystem", "RunTimeTicks": 27000000000, "UserData": { "Played": true, "PlayCount": 3, "LastPlayedDate": "2026-10-02T20:00:00Z" } },
+      { "Id": "e3", "Type": "Episode", "SeriesId": "s1", "LocationType": "Virtual", "UserData": { "Played": false } },
+      { "Id": "e4", "Type": "Episode", "SeriesId": "s2", "LocationType": "FileSystem", "RunTimeTicks": 18000000000, "UserData": { "Played": true, "PlayCount": 0, "LastPlayedDate": "2026-08-10T10:00:00Z" } },
+      { "Id": "e5", "Type": "Episode", "SeriesId": "s2", "LocationType": "FileSystem", "RunTimeTicks": 18000000000, "UserData": { "Played": false, "PlayCount": 0, "PlaybackPositionTicks": 6000000000 } }
+    ],
+    "TotalRecordCount": 5
+  }
+}

@@ -41,6 +41,13 @@ export const NOTIFICATION_TRIGGERS = [
   'onHealthRestored',
   'onApplicationUpdate',
   'onManualInteractionRequired',
+  // Requests and issues (sitewide: admins hear about every user's activity here).
+  'onRequestCreated',
+  'onRequestApproved',
+  'onRequestDeclined',
+  'onRequestAvailable',
+  'onIssueCreated',
+  'onIssueUpdated',
 ] as const;
 export type NotificationTrigger = (typeof NOTIFICATION_TRIGGERS)[number];
 

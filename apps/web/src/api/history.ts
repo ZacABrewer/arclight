@@ -1,27 +1,43 @@
 import { z } from 'zod';
 import { Job, type HistoryMarkFailedRequest } from '@arclight/shared';
 import { request } from './client.js';
+import { t } from '../i18n/index.js';
 
 // Paths mirror apps/api/src/modules/history/routes.ts. The row schema is a loose reading of
 // packages/shared HistoryRecord: the pages only rely on the fields named here, so a new field
 // on the server never breaks the parse.
 
 /** The filterable event types (packages/shared HistoryEventType, minus `unknown`). */
-export const HISTORY_EVENT_TYPES = ['grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored'] as const;
+export const HISTORY_EVENT_TYPES = ['grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored', 'fileTranscoded'] as const;
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
 
 export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
-  grabbed: 'Grabbed',
-  downloadFolderImported: 'Imported',
-  downloadFailed: 'Failed',
-  fileDeleted: 'File deleted',
-  fileRenamed: 'File renamed',
-  downloadIgnored: 'Ignored',
+  get grabbed() {
+    return t('common.grabbed');
+  },
+  get downloadFolderImported() {
+    return t('common.imported');
+  },
+  get downloadFailed() {
+    return t('status.failed');
+  },
+  get fileDeleted() {
+    return t('api.history.fileDeleted');
+  },
+  get fileRenamed() {
+    return t('api.history.fileRenamed');
+  },
+  get downloadIgnored() {
+    return t('api.history.ignored');
+  },
+  get fileTranscoded() {
+    return t('api.history.fileTranscoded');
+  },
 };
 
 /** Label for any event type string; unknown values are shown as they are. */
 export function historyEventLabel(type: string): string {
-  if (type === 'unknown') return 'Unknown';
+  if (type === 'unknown') return t('api.history.unknown');
   return HISTORY_EVENT_LABELS[type as HistoryEventType] ?? type;
 }
 
@@ -57,6 +73,10 @@ export interface HistoryFilter {
   /** Empty = every event type. */
   eventTypes: readonly HistoryEventType[];
   sortDirection: 'asc' | 'desc';
+  /** One item only (deep links, e.g. from the decision log). */
+  seriesId?: number;
+  episodeId?: number;
+  movieId?: number;
 }
 
 export const DEFAULT_HISTORY_FILTER: HistoryFilter = { page: 1, pageSize: 25, eventTypes: [], sortDirection: 'desc' };
@@ -70,6 +90,9 @@ export function historyQuery(filter: HistoryFilter): Record<string, string | num
     sortDirection: filter.sortDirection,
   };
   if (filter.eventTypes.length > 0) q.eventType = filter.eventTypes.join(',');
+  if (filter.seriesId !== undefined) q.seriesId = filter.seriesId;
+  if (filter.episodeId !== undefined) q.episodeId = filter.episodeId;
+  if (filter.movieId !== undefined) q.movieId = filter.movieId;
   return q;
 }
 

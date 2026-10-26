@@ -8,14 +8,21 @@ services:
       context: ..
       dockerfile: docker/Dockerfile
     container_name: arclight
+    # Built from source: not auto-updated (Settings > Updates pulls published images only).
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
       # Bundled FlareSolverr; registered as an indexer proxy on boot.
       - ARCLIGHT_FLARESOLVERR_URL=http://flaresolverr:8191
+      # Bundled Whisper (profile "whisper"); auto-registered as a subtitle provider when it answers.
+      - ARCLIGHT_WHISPER_URL=http://whisper:9000
     volumes:
       - ${CONFIG_ROOT:-./data}/arclight:/config
+      # Self-update (Settings > Updates, mode "auto"): uncomment to let Arclight pull images and
+      # recreate the containers labelled arclight.autoupdate=true. This gives Arclight root-equivalent
+      # control of the Docker host; leave it commented to stay in "notify only" mode.
+      # - /var/run/docker.sock:/var/run/docker.sock
       - ${TV_ROOT:-./data/tv}:/tv
       - ${MOVIES_ROOT:-./data/movies}:/movies
       - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
@@ -29,6 +36,9 @@ services:
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
@@ -48,6 +58,9 @@ services:
   flaresolverr:
     image: ghcr.io/flaresolverr/flaresolverr:latest
     container_name: flaresolverr
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
     environment:
       - LOG_LEVEL=info
       - TZ=${TZ:-UTC}
@@ -57,4 +70,34 @@ services:
       timeout: 10s
       start_period: 30s
       retries: 3
+    restart: unless-stopped
+
+  # Opt-in speech-to-text for subtitles (the "whisperai" provider): start it with
+  #   docker compose -f <this file> --profile whisper up -d
+  # Arclight's WhisperAutoDetect job finds it through ARCLIGHT_WHISPER_URL and registers it as the
+  # lowest-priority subtitle provider, used only when no other provider has a result. Models are
+  # cached under ${CONFIG_ROOT}/whisper. CPU by default; ASR_MODEL=small/medium is slower but better.
+  whisper:
+    image: onerahmet/openai-whisper-asr-webservice:latest
+    # GPU (NVIDIA Container Toolkit): use the -gpu image and uncomment the deploy block.
+    # image: onerahmet/openai-whisper-asr-webservice:latest-gpu
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+    container_name: whisper
+    profiles: ["whisper"]
+    labels:
+      # Opt in to Arclight self-update (Settings > Updates, mode "auto").
+      - arclight.autoupdate=true
+    environment:
+      - ASR_MODEL=base
+      - ASR_ENGINE=faster_whisper
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${CONFIG_ROOT:-./data}/whisper:/root/.cache
+    # Internal only: Arclight reaches it as http://whisper:9000 on the compose network.
     restart: unless-stopped

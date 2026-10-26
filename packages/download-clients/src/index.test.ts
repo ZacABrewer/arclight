@@ -27,6 +27,7 @@ describe('createDownloadClient', () => {
       ['sabnzbd', createDownloadClient('sabnzbd', { host: 'h', apiKey: 'k' }, { fetch: fetchStub })],
       ['nzbget', createDownloadClient('nzbget', { host: 'h' }, { fetch: fetchStub })],
       ['builtin', createDownloadClient('builtin', {})],
+      ['remoteEngine', createDownloadClient('remoteEngine', { url: 'http://h:7879' }, { fetch: fetchStub })],
     ];
     for (const [kind, client] of clients) {
       expect(client.protocol, kind).toBe(downloadClientProtocols[kind]);

@@ -11,7 +11,8 @@ import { useDeleteIndexerProxy, useIndexerProxies, useSaveIndexerProxy } from '.
 import { SettingsPage } from '../settings-layout.js';
 import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
 import '../indexers/indexers.css';
-import { newProxy, PROXY_TYPE_LABELS, proxyAddress, proxyFields, proxyTestOutcome, testSavedProxy, toProxyBody } from './proxy-model.js';
+import { isManagedProxy, newProxy, PROXY_TYPE_LABELS, proxyAddress, proxyFields, proxyTestOutcome, testSavedProxy, toProxyBody } from './proxy-model.js';
+import { t } from '../../../i18n/index.js';
 
 function ProxyEditor({ proxy, onClose }: { proxy: IndexerProxy | null; onClose: () => void }) {
   const [type, setType] = useState<IndexerProxyType>(proxy?.type ?? 'flaresolverr');
@@ -38,7 +39,7 @@ function ProxyEditor({ proxy, onClose }: { proxy: IndexerProxy | null; onClose: 
         open
         size={640}
         onClose={onClose}
-        title={proxy ? `Edit ${proxy.name}` : 'Add indexer proxy'}
+        title={proxy ? t('settings.indexerProxies.editName', { name: proxy.name }) : t('settings.indexerProxies.addIndexerProxy')}
         footer={
           <EditorFooter
             onCancel={onClose}
@@ -55,15 +56,15 @@ function ProxyEditor({ proxy, onClose }: { proxy: IndexerProxy | null; onClose: 
       {proxy ? (
         <ConfirmDialog
           open={confirmDelete}
-          title={`Delete ${proxy.name}?`}
-          confirmLabel="Delete proxy"
+          title={t('settings.indexerProxies.deleteName', { name: proxy.name })}
+          confirmLabel={t('settings.indexerProxies.deleteProxy')}
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(proxy.id);
             onClose();
           }}
         >
-          <p>Indexers that use {proxy.name} connect directly afterwards.</p>
+          <p>{t('settings.indexerProxies.indexersThatUseNameConnect', { name: proxy.name })}</p>
         </ConfirmDialog>
       ) : null}
     </>
@@ -78,45 +79,53 @@ export function IndexerProxiesPage() {
 
   return (
     <SettingsPage
-      title="Indexer proxies"
-      description="FlareSolverr and HTTP/SOCKS5 proxies for indexer requests."
+      title={t('settings.indexerProxies.indexerProxies')}
+      description={t('settings.indexerProxies.flaresolverrAndHttpSocks5Proxies')}
       actions={
         <Button variant="primary" onClick={() => setEditing('new')}>
-          Add proxy
+          {t('settings.indexerProxies.addProxy')}
         </Button>
       }
     >
       {list.isPending ? (
         <Skeleton lines={3} />
       ) : list.isError ? (
-        <ErrorBlock title="Couldn't load indexer proxies" onRetry={() => void list.refetch()}>
+        <ErrorBlock title={t('settings.indexerProxies.couldntLoadIndexerProxies')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : list.data.length === 0 ? (
-        <EmptyState title="No proxies">Only needed for sites behind Cloudflare or when indexers must go through a proxy.</EmptyState>
+        <EmptyState title={t('settings.indexerProxies.noProxies')}>{t('settings.indexerProxies.onlyNeededForSitesBehind')}</EmptyState>
       ) : (
-        <CardGrid label="Indexer proxies">
+        <CardGrid label={t('settings.indexerProxies.indexerProxies')}>
           {list.data.map((p) => (
             <ItemCard
               key={p.id}
               title={p.name}
               onClick={() => setEditing(p)}
               status={
-                <Chip tone="default" dot="none">
-                  {PROXY_TYPE_LABELS[p.type]}
-                </Chip>
+                <span className="al-proxy-chips">
+                  {isManagedProxy(p) ? (
+                    <Chip tone="accent" dot="none" title={t('settings.indexerProxies.createdByArclightsProxyAuto')}>
+                      {t('settings.indexerProxies.managed')}
+                    </Chip>
+                  ) : null}
+                  <Chip tone="default" dot="none">
+                    {PROXY_TYPE_LABELS[p.type]}
+                  </Chip>
+                </span>
               }
               actions={
                 <>
                   <TestButton size="sm" onTest={async () => proxyTestOutcome(await testSavedProxy(p.id))} />
-                  <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label={`Edit ${p.name}`}>
-                    Edit
+                  <Button size="sm" variant="ghost" onClick={() => setEditing(p)} aria-label={t('settings.indexerProxies.editName', { name: p.name })}>
+                    {t('common.edit')}
                   </Button>
                 </>
               }
             >
               <span className="al-card-line al-card-line--mono">{proxyAddress(p)}</span>
-              <span className="al-card-line">{p.tags.length ? `Tags: ${tagLabels(p.tags).join(', ')}` : 'No tags · used only where an indexer picks it'}</span>
+              {isManagedProxy(p) ? <span className="al-card-line">{t('settings.indexerProxies.addedAutomaticallyByProxyDetection')}</span> : null}
+              <span className="al-card-line">{p.tags.length ? t('settings.indexerProxies.tagsTaglabels', { tagLabels: tagLabels(p.tags).join(', ') }) : t('settings.indexerProxies.noTagsUsedOnlyWhere')}</span>
             </ItemCard>
           ))}
         </CardGrid>

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useId, useMemo, useState, type ReactNode } from
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Button, FloatBar, PageHeader, Pane, Select, Toggle, cx } from '../../arclight/index.js';
 import './settings.css';
+import { t } from '../../i18n/index.js';
 
 // Page 06 shell shared by every settings page: a 240px sub-nav with mono CAPS group labels
 // and a 2px active bar, one form Pane (title-m + "Show advanced" top right), and the sticky
@@ -19,45 +20,62 @@ export interface SettingsNavGroup {
 
 export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
   {
-    label: 'Media',
+    get label() {
+      return t('settings.layout.media');
+    },
     items: [
-      { label: 'Media management', to: '/settings/mediamanagement' },
-      { label: 'Profiles', to: '/settings/profiles' },
-      { label: 'Quality', to: '/settings/quality' },
-      { label: 'Custom formats', to: '/settings/customformats' },
+      { get label() { return t('common.mediaManagement'); }, to: '/settings/mediamanagement' },
+      { get label() { return t('common.profiles'); }, to: '/settings/profiles' },
+      { get label() { return t('common.quality'); }, to: '/settings/quality' },
+      { get label() { return t('settings.layout.customFormats'); }, to: '/settings/customformats' },
+      { get label() { return t('common.guides'); }, to: '/settings/guides' },
     ],
   },
   {
-    label: 'Indexers',
+    get label() {
+      return t('common.indexers');
+    },
     items: [
-      { label: 'Indexers', to: '/settings/indexers' },
-      { label: 'Indexer proxies', to: '/settings/indexerproxies' },
-      { label: 'Indexer options', to: '/settings/indexeroptions' },
+      { get label() { return t('common.indexers'); }, to: '/settings/indexers' },
+      { get label() { return t('settings.layout.indexerProxies'); }, to: '/settings/indexerproxies' },
+      { get label() { return t('settings.layout.indexerOptions'); }, to: '/settings/indexeroptions' },
+      { get label() { return t('common.challengeSolver'); }, to: '/settings/solver' },
     ],
   },
   {
-    label: 'Downloads',
+    get label() {
+      return t('settings.layout.downloads');
+    },
     items: [
-      { label: 'Download clients', to: '/settings/downloadclients' },
-      { label: 'Torrent engine', to: '/settings/torrent' },
-      { label: 'VPN', to: '/settings/vpn' },
+      { get label() { return t('common.downloadClients'); }, to: '/settings/downloadclients' },
+      { get label() { return t('common.torrentEngine'); }, to: '/settings/torrent' },
+      { get label() { return t('nav.crossSeed'); }, to: '/settings/crossseed' },
+      { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
     ],
   },
   {
-    label: 'Automation',
+    get label() {
+      return t('settings.layout.automation');
+    },
     items: [
-      { label: 'Import lists', to: '/settings/importlists' },
-      { label: 'Notifications', to: '/settings/notifications' },
-      { label: 'Subtitles', to: '/settings/subtitles' },
-      { label: 'Requests', to: '/settings/requests' },
+      { get label() { return t('settings.layout.importLists'); }, to: '/settings/importlists' },
+      { get label() { return t('common.notifications'); }, to: '/settings/notifications' },
+      { get label() { return t('settings.layout.mediaServers'); }, to: '/settings/mediaservers' },
+      { get label() { return t('common.subtitles'); }, to: '/settings/subtitles' },
+      { get label() { return t('common.requests'); }, to: '/settings/requests' },
+      { get label() { return t('nav.discordBot'); }, to: '/settings/discordbot' },
+      { get label() { return t('nav.transcode'); }, to: '/settings/transcode' },
     ],
   },
   {
-    label: 'System',
+    get label() {
+      return t('common.system');
+    },
     items: [
-      { label: 'General', to: '/settings/general' },
-      { label: 'Security', to: '/settings/security' },
-      { label: 'Users', to: '/settings/users' },
+      { get label() { return t('common.general'); }, to: '/settings/general' },
+      { get label() { return t('common.security'); }, to: '/settings/security' },
+      { get label() { return t('common.users'); }, to: '/settings/users' },
+      { get label() { return t('common.updates'); }, to: '/settings/updates' },
     ],
   },
 ];
@@ -70,16 +88,16 @@ export function SettingsNav({ pathname }: { pathname: string }) {
   const selectId = useId();
   const active = SETTINGS_NAV_ITEMS.find((i) => pathname === i.to || pathname.startsWith(`${i.to}/`));
   return (
-    <nav className="al-settings-nav" aria-label="Settings sections">
+    <nav className="al-settings-nav" aria-label={t('settings.layout.settingsSections')}>
       <div className="al-settings-nav__head">
         <span className="al-index" aria-hidden="true">
           09
         </span>
-        <span className="al-title-l">Settings</span>
+        <span className="al-title-l">{t('common.settings')}</span>
       </div>
       <div className="al-settings-nav__mobile">
         <label className="al-sr-only" htmlFor={selectId}>
-          Settings section
+          {t('settings.layout.settingsSection')}
         </label>
         <Select
           id={selectId}
@@ -137,10 +155,10 @@ export function SaveBar({ count, onSave, onDiscard, saving, disabled, label }: S
   return (
     <FloatBar variant="save" count={count} label={label} className="al-settings-savebar">
       <Button variant="ghost" onClick={onDiscard} disabled={saving}>
-        Discard
+        {t('common.discard')}
       </Button>
       <Button variant="primary" onClick={onSave} loading={saving ?? false} disabled={disabled}>
-        Save changes
+        {t('common.saveChanges')}
       </Button>
     </FloatBar>
   );
@@ -171,7 +189,7 @@ export function SettingsPage({ title, advanced, actions, description, save, stan
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const inSettings = pathname.startsWith('/settings');
   useEffect(() => {
-    document.title = `${standalone && !inSettings ? standalone.title : title} · Arclight`;
+    document.title = t('settings.layout.valueArclight', { value: standalone && !inSettings ? standalone.title : title });
   }, [title, standalone, inSettings]);
 
   const head = (
@@ -183,7 +201,7 @@ export function SettingsPage({ title, advanced, actions, description, save, stan
       <div className="al-settings-pane__actions">
         {actions}
         {advanced ? (
-          <Toggle label="Show advanced" checked={advanced.value} onChange={(e) => advanced.onChange(e.currentTarget.checked)} className="al-settings-advanced" />
+          <Toggle label={t('settings.layout.showAdvanced')} checked={advanced.value} onChange={(e) => advanced.onChange(e.currentTarget.checked)} className="al-settings-advanced" />
         ) : null}
       </div>
     </div>

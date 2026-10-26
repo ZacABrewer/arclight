@@ -8,6 +8,7 @@ import type {
   RootFolder,
   SeriesType,
 } from '@arclight/shared';
+import { t } from '../../i18n/index.js';
 
 // Add-new dialog state, validation and request mapping. Kept pure so it is unit-tested
 // without rendering.
@@ -31,26 +32,54 @@ export interface AddFormState {
 export type AddFormErrors = Partial<Record<'rootFolderPath' | 'qualityProfileId', string>>;
 
 export const MONITOR_OPTION_LABELS: Record<MonitorOption, string> = {
-  all: 'All episodes',
-  future: 'Future episodes',
-  missing: 'Missing episodes',
-  existing: 'Existing episodes',
-  firstSeason: 'First season',
-  latestSeason: 'Latest season',
-  pilot: 'Pilot episode',
-  none: 'None',
+  get all() {
+    return t('library.addForm.allEpisodes');
+  },
+  get future() {
+    return t('library.addForm.futureEpisodes');
+  },
+  get missing() {
+    return t('library.addForm.missingEpisodes');
+  },
+  get existing() {
+    return t('library.addForm.existingEpisodes');
+  },
+  get firstSeason() {
+    return t('library.addForm.firstSeason');
+  },
+  get latestSeason() {
+    return t('library.addForm.latestSeason');
+  },
+  get pilot() {
+    return t('library.addForm.pilotEpisode');
+  },
+  get none() {
+    return t('common.none');
+  },
 };
 
 export const MINIMUM_AVAILABILITY_LABELS: Record<MinimumAvailability, string> = {
-  announced: 'Announced',
-  inCinemas: 'In cinemas',
-  released: 'Released',
+  get announced() {
+    return t('library.addForm.announced');
+  },
+  get inCinemas() {
+    return t('common.inCinemas');
+  },
+  get released() {
+    return t('common.released');
+  },
 };
 
 export const SERIES_TYPE_LABELS: Record<SeriesType, string> = {
-  standard: 'Standard',
-  daily: 'Daily',
-  anime: 'Anime',
+  get standard() {
+    return t('library.addForm.standard');
+  },
+  get daily() {
+    return t('library.addForm.daily');
+  },
+  get anime() {
+    return t('library.addForm.anime');
+  },
 };
 
 export interface AddDefaults {
@@ -84,8 +113,8 @@ export function initialAddForm(
 
 export function validateAddForm(state: AddFormState): AddFormErrors {
   const errors: AddFormErrors = {};
-  if (!state.rootFolderPath.trim()) errors.rootFolderPath = 'Choose a root folder';
-  if (state.qualityProfileId === null) errors.qualityProfileId = 'Choose a quality profile';
+  if (!state.rootFolderPath.trim()) errors.rootFolderPath = t('common.chooseARootFolder');
+  if (state.qualityProfileId === null) errors.qualityProfileId = t('library.addForm.chooseAQualityProfile');
   return errors;
 }
 
@@ -132,7 +161,7 @@ export function toAddMovieRequest(tmdbId: number, s: AddFormState): AddMovieRequ
 /** "Series · first aired 2015-12-14 · en" for a TMDB result row. */
 export function resultMeta(r: MetadataSearchResult): string {
   const date = r.mediaType === 'series' ? r.firstAired : r.releaseDate;
-  return [r.mediaType === 'series' ? 'Series' : 'Movie', date ? (r.mediaType === 'series' ? `first aired ${date}` : `released ${date}`) : null, r.originalLanguage]
+  return [r.mediaType === 'series' ? t('common.series') : t('common.movie'), date ? (r.mediaType === 'series' ? t('library.addForm.firstAired', { date }) : t('library.addForm.released', { date })) : null, r.originalLanguage]
     .filter(Boolean)
     .join(' · ');
 }

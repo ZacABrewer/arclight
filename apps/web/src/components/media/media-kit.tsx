@@ -13,6 +13,7 @@ import {
 } from '../../arclight/index.js';
 import { episodeStatus, type EpisodeStatus } from './episode-status.js';
 import './media-kit.css';
+import { t } from '../../i18n/index.js';
 
 // Arclight building blocks shared by the media pages (library, calendar, wanted, discover,
 // requests). Thin compositions over src/arclight — no new colours, radii or glows.
@@ -25,7 +26,7 @@ export function useIsMobile(): boolean {
 }
 
 /** Failed query: object + cause + Retry (`.al-error`). */
-export function QueryError({ error, onRetry, title = 'Could not load this page' }: { error: unknown; onRetry?: (() => void) | undefined; title?: string }) {
+export function QueryError({ error, onRetry, title = t('components.media.kit.couldNotLoadThisPage') }: { error: unknown; onRetry?: (() => void) | undefined; title?: string }) {
   return (
     <ErrorBlock title={title} onRetry={onRetry}>
       {errorMessage(error)}
@@ -34,7 +35,7 @@ export function QueryError({ error, onRetry, title = 'Could not load this page' 
 }
 
 /** Skeleton lines while a query loads. */
-export function Loading({ lines = 4, label = 'Loading' }: { lines?: number; label?: string }) {
+export function Loading({ lines = 4, label = t('common.loading') }: { lines?: number; label?: string }) {
   return (
     <div className="mk-loading" aria-busy="true" aria-label={label} role="status">
       <Skeleton lines={lines} />
@@ -45,7 +46,7 @@ export function Loading({ lines = 4, label = 'Loading' }: { lines?: number; labe
 /** Skeleton poster grid. */
 export function PosterSkeletons({ count = 12 }: { count?: number }) {
   return (
-    <div className="mk-poster-grid" aria-busy="true" aria-label="Loading" role="status">
+    <div className="mk-poster-grid" aria-busy="true" aria-label={t('common.loading')} role="status">
       {Array.from({ length: count }, (_, i) => (
         <Skeleton key={i} shape="poster" />
       ))}
@@ -65,7 +66,7 @@ export interface ChipStatus {
  * a file below the profile cutoff reads "Cutoff unmet".
  */
 export function episodeChip(status: EpisodeStatus, extra: { downloading?: number | null | undefined; cutoffUnmet?: boolean | undefined } = {}): ChipStatus {
-  if (extra.downloading != null) return { status: 'downloading', label: `Downloading ${Math.round(extra.downloading * 100)}%` };
+  if (extra.downloading != null) return { status: 'downloading', label: t('components.media.kit.downloadingValue', { value: Math.round(extra.downloading * 100) }) };
   switch (status) {
     case 'downloaded':
       return extra.cutoffUnmet ? { status: 'cutoffUnmet' } : { status: 'downloaded' };
@@ -97,7 +98,7 @@ export function EpisodeChip({
 
 /** Movie file state in the kit vocabulary. */
 export function movieChip(m: Pick<Movie, 'hasFile' | 'monitored' | 'isAvailable'>, downloading?: number | null): ChipStatus {
-  if (downloading != null) return { status: 'downloading', label: `Downloading ${Math.round(downloading * 100)}%` };
+  if (downloading != null) return { status: 'downloading', label: t('components.media.kit.downloadingValue', { value: Math.round(downloading * 100) }) };
   if (m.hasFile) return { status: 'downloaded' };
   if (!m.isAvailable) return { status: 'unaired' };
   return m.monitored ? { status: 'missing' } : { status: 'unmonitored' };
@@ -110,7 +111,7 @@ export function MonitorSwitch({ monitored, onChange, label, disabled }: { monito
   // The wrapper keeps the click from reaching a clickable row or card underneath.
   return (
     <span className="mk-switch" onClick={(e) => e.stopPropagation()}>
-      <SwitchButton size="sm" checked={monitored} aria-label={label} title={monitored ? 'Monitored' : 'Unmonitored'} disabled={disabled} onChange={onChange} />
+      <SwitchButton size="sm" checked={monitored} aria-label={label} title={monitored ? t('status.monitored') : t('status.unmonitored')} disabled={disabled} onChange={onChange} />
     </span>
   );
 }
@@ -131,7 +132,7 @@ export function TagChips({ ids, tags }: { ids: readonly number[]; tags: readonly
   return (
     <span className="mk-tags">
       {ids.map((id) => (
-        <Tag key={id}>{tags?.find((t) => t.id === id)?.label ?? `#${id}`}</Tag>
+        <Tag key={id}>{tags?.find((item) => item.id === id)?.label ?? `#${id}`}</Tag>
       ))}
     </span>
   );
@@ -162,7 +163,7 @@ const SWIPE_OPEN = 88;
  * reveal Delete (danger). The actions are real buttons, so keyboard and screen-reader users
  * reach them without swiping (they sit in the tab order behind the row).
  */
-export function SwipeRow({ children, onSearch, searchLabel = 'Search', onDelete, deleteLabel = 'Delete', className }: SwipeRowProps) {
+export function SwipeRow({ children, onSearch, searchLabel = t('common.search'), onDelete, deleteLabel = t('common.delete'), className }: SwipeRowProps) {
   const [offset, setOffset] = useState(0);
   const start = useRef<{ x: number; base: number } | null>(null);
   const clamp = (v: number) => Math.max(onSearch ? -SWIPE_OPEN : 0, Math.min(onDelete ? SWIPE_OPEN : 0, v));

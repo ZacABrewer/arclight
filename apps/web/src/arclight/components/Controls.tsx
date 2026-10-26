@@ -10,6 +10,7 @@ import {
   type Ref,
 } from 'react';
 import { cx } from '../cx.js';
+import { t } from '../../i18n/index.js';
 
 /* ------------------------------------------------------------------ Segmented */
 
@@ -188,7 +189,7 @@ export function Toggle({ label, size = 'md', className, disabled, id, ...rest }:
     <label className={cx('al-switch', className)} htmlFor={inputId} data-disabled={disabled || undefined}>
       <input id={inputId} type="checkbox" role="switch" className="al-switch__input" disabled={disabled} {...rest} />
       <span className={cx('al-toggle', size === 'sm' && 'al-toggle--sm')} aria-hidden="true" />
-      {label !== undefined ? <span>{label}</span> : <span className="al-sr-only">Toggle</span>}
+      {label !== undefined ? <span>{label}</span> : <span className="al-sr-only">{t('arclight.controls.toggle')}</span>}
     </label>
   );
 }

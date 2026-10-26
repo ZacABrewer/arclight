@@ -5,6 +5,7 @@ import { Button, ErrorBlock, QualityTag, Skeleton, Slider, Table, type Column } 
 import { useQualityDefinitions, useSaveQualityDefinitions } from '../../../hooks/profiles.js';
 import { SettingsPage, useDraft } from '../settings-layout.js';
 import './quality.css';
+import { t } from '../../../i18n/index.js';
 
 /** Slider ceiling in MB/min; the top position of the max/preferred sliders means "no limit". */
 export const SLIDER_MAX = 400;
@@ -43,8 +44,8 @@ const sameLimits = (a: QualityDefinitionLimits, b: QualityDefinitionLimits) =>
 
 /** Mono value with unit: "12.5 MB/min", or "Unlimited" / "0" at the ends. */
 export function sizeLabel(value: number | null, unlimitedAtTop: boolean): string {
-  if (value === null) return unlimitedAtTop ? 'Unlimited' : '0 MB/min';
-  return `${value.toFixed(1)} MB/min`;
+  if (value === null) return unlimitedAtTop ? t('settings.quality.unlimited') : '0 MB/min';
+  return t('settings.quality.valueMbMin', { value: value.toFixed(1) });
 }
 
 /** MB/min as GB per hour of runtime, for the hint under each row. */
@@ -90,15 +91,15 @@ export function QualityPage() {
   const columns: Column<QualityDefinitionItem>[] = [
     {
       key: 'quality',
-      header: 'Quality',
+      header: t('common.quality'),
       width: '200px',
       cell: (d) => {
         const l = limitsFor(d);
         return (
           <div className="al-size-quality">
             <QualityTag>{d.title}</QualityTag>
-            <span className="al-num al-size-quality__hint" title="GB per hour of runtime">
-              {gbPerHour(l.minSize ?? 0)}–{gbPerHour(l.maxSize)} GB/h
+            <span className="al-num al-size-quality__hint" title={t('settings.quality.gbPerHourOfRuntime')}>
+              {t('settings.quality.gbperhourGbperhour2GbH', { gbPerHour: gbPerHour(l.minSize ?? 0), gbPerHour2: gbPerHour(l.maxSize) })}
             </span>
           </div>
         );
@@ -106,35 +107,35 @@ export function QualityPage() {
     },
     {
       key: 'min',
-      header: 'Min',
-      cell: (d) => <SizeSlider label={`${d.title} minimum`} value={limitsFor(d).minSize} unlimitedAtTop={false} onChange={(v) => update(d.qualityId, 'minSize', v)} />,
+      header: t('settings.quality.min'),
+      cell: (d) => <SizeSlider label={t('settings.quality.titleMinimum', { title: d.title })} value={limitsFor(d).minSize} unlimitedAtTop={false} onChange={(v) => update(d.qualityId, 'minSize', v)} />,
     },
     {
       key: 'preferred',
-      header: 'Preferred',
-      cell: (d) => <SizeSlider label={`${d.title} preferred`} value={limitsFor(d).preferredSize} unlimitedAtTop onChange={(v) => update(d.qualityId, 'preferredSize', v)} />,
+      header: t('settings.quality.preferred'),
+      cell: (d) => <SizeSlider label={t('settings.quality.titlePreferred', { title: d.title })} value={limitsFor(d).preferredSize} unlimitedAtTop onChange={(v) => update(d.qualityId, 'preferredSize', v)} />,
     },
     {
       key: 'max',
-      header: 'Max',
-      cell: (d) => <SizeSlider label={`${d.title} maximum`} value={limitsFor(d).maxSize} unlimitedAtTop onChange={(v) => update(d.qualityId, 'maxSize', v)} />,
+      header: t('common.max'),
+      cell: (d) => <SizeSlider label={t('settings.quality.titleMaximum', { title: d.title })} value={limitsFor(d).maxSize} unlimitedAtTop onChange={(v) => update(d.qualityId, 'maxSize', v)} />,
     },
   ];
 
   return (
     <SettingsPage
-      title="Quality"
-      description="Size limits per quality in MB per minute of runtime. A 45-minute episode at 10 MB/min is about 450 MB."
+      title={t('common.quality')}
+      description={t('settings.quality.sizeLimitsPerQualityIn')}
       actions={
         <Button variant="ghost" size="sm" onClick={resetDefaults} disabled={!defs.data}>
-          Reset to defaults
+          {t('settings.quality.resetToDefaults')}
         </Button>
       }
       save={{
         count: changed.length,
         label: changed.length ? (
           <span>
-            <span className="al-num">{changed.length}</span> {changed.length === 1 ? 'quality' : 'qualities'} changed
+            <span className="al-num">{changed.length}</span> {t('settings.quality.qualitiesChanged', { changedCount: changed.length })}
           </span>
         ) : undefined,
         onSave: () => save.mutate(changed.map((d) => ({ qualityId: d.qualityId, limits: draft.value[d.qualityId]! }))),
@@ -145,13 +146,13 @@ export function QualityPage() {
       {defs.isPending ? (
         <Skeleton lines={6} />
       ) : defs.isError ? (
-        <ErrorBlock title="Couldn't load quality sizes" onRetry={() => void defs.refetch()}>
+        <ErrorBlock title={t('settings.quality.couldntLoadQualitySizes')} onRetry={() => void defs.refetch()}>
           {errorMessage(defs.error)}
         </ErrorBlock>
       ) : (
         <Table
           className="al-size-table"
-          caption="Quality size limits"
+          caption={t('settings.quality.qualitySizeLimits')}
           columns={columns}
           rows={[...defs.data].sort((a, b) => a.weight - b.weight)}
           rowKey={(d) => d.qualityId}

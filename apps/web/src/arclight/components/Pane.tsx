@@ -1,6 +1,7 @@
 import type { ElementType, HTMLAttributes, ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { SectionLabel } from './SectionLabel.js';
+import { t } from '../../i18n/index.js';
 
 export type Chamfer = 'tl' | 'tr' | 'bl' | 'br' | 'both';
 
@@ -81,16 +82,16 @@ export function FloatBar({ variant = 'bulk', count, label, position, className, 
   const lead =
     label ??
     (count === undefined ? null : variant === 'bulk' ? (
-      <span className="al-floatbar__count">{count} selected</span>
+      <span className="al-floatbar__count">{t('arclight.pane.countSelected', { count })}</span>
     ) : (
       <span>
-        {count} unsaved {count === 1 ? 'change' : 'changes'}
+        {t('arclight.pane.countUnsavedChanges', { count })}
       </span>
     ));
   return (
     <div
       role={variant === 'bulk' ? 'toolbar' : 'region'}
-      aria-label={variant === 'bulk' ? 'Bulk actions' : 'Unsaved changes'}
+      aria-label={variant === 'bulk' ? t('arclight.pane.bulkActions') : t('arclight.pane.unsavedChanges')}
       className={cx('al-floatbar', variant === 'save' && 'al-floatbar--save', pos === 'fixed' && 'al-floatbar--fixed', pos === 'sticky' && 'al-floatbar--sticky', className)}
       data-variant={variant}
       {...rest}

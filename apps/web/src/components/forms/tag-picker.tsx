@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { libraryApi } from '../../api/library.js';
 import type { FieldRendererProps } from './types.js';
+import { t } from '../../i18n/index.js';
 
 // Query key matches libraryKeys.library.tags so the library pages share the cache.
 const TAGS_KEY = ['library', 'tags'] as const;
@@ -14,27 +15,27 @@ export interface TagPickerProps {
 /** Toggle tags for every known tag. Empty selection means "applies to everything". */
 export function TagPicker({ id, value, onChange }: TagPickerProps) {
   const tags = useQuery({ queryKey: TAGS_KEY, queryFn: libraryApi.tags.list, staleTime: 60_000 });
-  if (tags.isPending) return <span className="al-caption">Loading tags…</span>;
+  if (tags.isPending) return <span className="al-caption">{t('components.forms.tagPicker.loadingTags')}</span>;
   if (tags.isError || tags.data.length === 0) {
     return (
       <span id={id} className="al-caption">
-        No tags yet.
+        {t('components.forms.tagPicker.noTagsYet')}
       </span>
     );
   }
   return (
-    <div id={id} className="al-tag-toggles" role="group" aria-label="Tags">
-      {tags.data.map((t) => {
-        const on = value.includes(t.id);
+    <div id={id} className="al-tag-toggles" role="group" aria-label={t('common.tags')}>
+      {tags.data.map((item) => {
+        const on = value.includes(item.id);
         return (
           <button
-            key={t.id}
+            key={item.id}
             type="button"
             className="al-tag al-tag-toggle"
             aria-pressed={on}
-            onClick={() => onChange(on ? value.filter((v) => v !== t.id) : [...value, t.id])}
+            onClick={() => onChange(on ? value.filter((v) => v !== item.id) : [...value, item.id])}
           >
-            {t.label}
+            {item.label}
           </button>
         );
       })}
@@ -51,5 +52,5 @@ export function tagRenderer({ id, value, onChange }: FieldRendererProps) {
 /** Labels for tag ids, for read-only display on cards. */
 export function useTagLabels(): (ids: readonly number[]) => string[] {
   const tags = useQuery({ queryKey: TAGS_KEY, queryFn: libraryApi.tags.list, staleTime: 60_000 });
-  return (ids) => ids.map((id) => tags.data?.find((t) => t.id === id)?.label ?? `#${id}`);
+  return (ids) => ids.map((id) => tags.data?.find((entry) => entry.id === id)?.label ?? `#${id}`);
 }

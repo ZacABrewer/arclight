@@ -1,6 +1,8 @@
 // Per-user UI preferences, stored in the user's `settings` record (PUT /user/me shallow-merges
 // it, and UserSettings keeps unknown keys). Pure: no React here, so formatters can import it.
 // The hook lives in hooks/ui-preferences.ts; AuthProvider keeps the active copy in sync.
+import { t, getLocale } from '../i18n/store.js';
+import { isLocaleCode, type LocaleSetting } from '../i18n/locales-meta.js';
 
 export type WeekStartDay = 0 | 1;
 export type TimeFormat = '24h' | '12h';
@@ -14,6 +16,8 @@ export interface UiPreferences {
   dateFormat: DateFormat;
   /** Library poster grid columns (5-10, the library size slider's range). */
   posterColumns: number;
+  /** UI language: a shipped locale, or 'auto' (this device's choice → browser → English). */
+  locale: LocaleSetting;
 }
 
 export const POSTER_COLUMNS_MIN = 5;
@@ -24,10 +28,11 @@ export const DEFAULT_UI_PREFERENCES: Readonly<UiPreferences> = Object.freeze({
   timeFormat: '24h',
   dateFormat: 'locale',
   posterColumns: 7,
+  locale: 'auto',
 });
 
 export const DATE_FORMATS: ReadonlyArray<{ value: DateFormat; label: string }> = [
-  { value: 'locale', label: 'Browser default' },
+  { value: 'locale', get label() { return t('lib.uiPreferences.browserDefault'); } },
   { value: 'YYYY-MM-DD', label: 'YYYY-MM-DD' },
   { value: 'DD/MM/YYYY', label: 'DD/MM/YYYY' },
   { value: 'MM/DD/YYYY', label: 'MM/DD/YYYY' },
@@ -45,6 +50,7 @@ export function readUiPreferences(settings: Readonly<Record<string, unknown>> | 
     timeFormat: s.timeFormat === '12h' || s.timeFormat === '24h' ? s.timeFormat : DEFAULT_UI_PREFERENCES.timeFormat,
     dateFormat: typeof s.dateFormat === 'string' && DATE_FORMAT_VALUES.has(s.dateFormat) ? (s.dateFormat as DateFormat) : DEFAULT_UI_PREFERENCES.dateFormat,
     posterColumns: cols >= POSTER_COLUMNS_MIN && cols <= POSTER_COLUMNS_MAX ? cols : DEFAULT_UI_PREFERENCES.posterColumns,
+    locale: s.locale === 'auto' || isLocaleCode(s.locale) ? s.locale : DEFAULT_UI_PREFERENCES.locale,
   };
 }
 
@@ -75,7 +81,15 @@ export function toDate(value: DateInput): Date | null {
 
 const pad = (n: number) => String(n).padStart(2, '0');
 
-function dateOf(d: Date, format: DateFormat): string {
+/**
+ * Intl locale for dates: the UI language. English keeps the browser's own regional style
+ * (en-GB and en-US users both read English), other languages use their own conventions.
+ */
+function dateLocale(locale: string): string | undefined {
+  return locale === 'en' ? undefined : locale;
+}
+
+function dateOf(d: Date, format: DateFormat, locale: string): string {
   switch (format) {
     case 'YYYY-MM-DD':
       return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
@@ -84,43 +98,63 @@ function dateOf(d: Date, format: DateFormat): string {
     case 'MM/DD/YYYY':
       return `${pad(d.getMonth() + 1)}/${pad(d.getDate())}/${d.getFullYear()}`;
     case 'D MMM YYYY':
-      return `${d.getDate()} ${d.toLocaleDateString('en-GB', { month: 'short' })} ${d.getFullYear()}`;
+      return `${d.getDate()} ${d.toLocaleDateString(locale === 'en' ? 'en-GB' : locale, { month: 'short' })} ${d.getFullYear()}`;
     default:
-      return d.toLocaleDateString(undefined, { dateStyle: 'medium' });
+      return d.toLocaleDateString(dateLocale(locale), { dateStyle: 'medium' });
   }
 }
 
-/** Hours and minutes: "21:05" (24h) or "9:05 PM" (12h). */
-export function clockLabel(hours: number, minutes: number, format: TimeFormat): string {
+const periodCache = new Map<string, string>();
+
+/** "AM"/"PM" in the UI language (Intl dayPeriod; English stays AM/PM). */
+function dayPeriod(hours: number, locale: string): string {
+  const am = hours < 12;
+  if (locale === 'en') return am ? 'AM' : 'PM';
+  const id = `${locale}:${am}`;
+  let v = periodCache.get(id);
+  if (v === undefined) {
+    const parts = new Intl.DateTimeFormat(locale, { hour: 'numeric', hourCycle: 'h12' }).formatToParts(new Date(2026, 0, 1, am ? 9 : 21));
+    v = parts.find((p) => p.type === 'dayPeriod')?.value ?? (am ? 'AM' : 'PM');
+    periodCache.set(id, v);
+  }
+  return v;
+}
+
+/** Hours and minutes: "21:05" (24h) or "9:05 PM" (12h), the period in the UI language. */
+export function clockLabel(hours: number, minutes: number, format: TimeFormat, locale: string = getLocale()): string {
   if (format === '24h') return `${pad(hours)}:${pad(minutes)}`;
   const h = hours % 12 === 0 ? 12 : hours % 12;
-  return `${h}:${pad(minutes)} ${hours < 12 ? 'AM' : 'PM'}`;
+  return `${h}:${pad(minutes)} ${dayPeriod(hours, locale)}`;
 }
 
 /** An hour-axis label: "21:00" (24h) or "9 PM" (12h). */
-export function hourLabel(hour: number, format: TimeFormat): string {
+export function hourLabel(hour: number, format: TimeFormat, locale: string = getLocale()): string {
   if (format === '24h') return `${pad(hour)}:00`;
   const h = hour % 12 === 0 ? 12 : hour % 12;
-  return `${h} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${h} ${dayPeriod(hour, locale)}`;
 }
 
 /** A date in the preferred format; "—" for empty input, the raw string when unparseable. */
-export function formatDate(value: DateInput | null | undefined, prefs: Pick<UiPreferences, 'dateFormat'> = active): string {
+export function formatDate(value: DateInput | null | undefined, prefs: Pick<UiPreferences, 'dateFormat'> = active, locale: string = getLocale()): string {
   if (value === null || value === undefined || value === '') return '—';
   const d = toDate(value);
-  return d ? dateOf(d, prefs.dateFormat) : String(value);
+  return d ? dateOf(d, prefs.dateFormat, locale) : String(value);
 }
 
 /** A time of day in the preferred format. */
-export function formatTime(value: DateInput | null | undefined, prefs: Pick<UiPreferences, 'timeFormat'> = active): string {
+export function formatTime(value: DateInput | null | undefined, prefs: Pick<UiPreferences, 'timeFormat'> = active, locale: string = getLocale()): string {
   if (value === null || value === undefined || value === '') return '—';
   const d = toDate(value);
-  return d ? clockLabel(d.getHours(), d.getMinutes(), prefs.timeFormat) : String(value);
+  return d ? clockLabel(d.getHours(), d.getMinutes(), prefs.timeFormat, locale) : String(value);
 }
 
 /** Date and time: "2026-10-20 21:05". */
-export function formatDateTime(value: DateInput | null | undefined, prefs: Pick<UiPreferences, 'dateFormat' | 'timeFormat'> = active): string {
+export function formatDateTime(
+  value: DateInput | null | undefined,
+  prefs: Pick<UiPreferences, 'dateFormat' | 'timeFormat'> = active,
+  locale: string = getLocale(),
+): string {
   if (value === null || value === undefined || value === '') return '—';
   const d = toDate(value);
-  return d ? `${dateOf(d, prefs.dateFormat)} ${clockLabel(d.getHours(), d.getMinutes(), prefs.timeFormat)}` : String(value);
+  return d ? `${dateOf(d, prefs.dateFormat, locale)} ${clockLabel(d.getHours(), d.getMinutes(), prefs.timeFormat, locale)}` : String(value);
 }

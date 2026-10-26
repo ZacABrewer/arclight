@@ -22,6 +22,21 @@ export class HealthService {
     return this.latest ?? this.run();
   }
 
+  /**
+   * Add a check contributed by another module (it keeps its own dependencies in a closure).
+   * Returns a function that removes it again. Ids are unique: a second check with the same id
+   * replaces the first.
+   */
+  register(check: HealthCheckDef): () => void {
+    const existing = this.checks.findIndex((c) => c.id === check.id);
+    if (existing >= 0) this.checks.splice(existing, 1, check);
+    else this.checks.push(check);
+    return () => {
+      const i = this.checks.indexOf(check);
+      if (i >= 0) this.checks.splice(i, 1);
+    };
+  }
+
   lastRunAt(): Date | null {
     return this.latestAt;
   }

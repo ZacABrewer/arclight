@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
-import type { IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@arclight/shared';
+import type { DefinitionFeedSettings, IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@arclight/shared';
 import { indexersApi } from '../api/indexers.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 export function useIndexerList() {
   return useQuery({ queryKey: settingsKeys.indexers, queryFn: indexersApi.list });
@@ -23,18 +24,18 @@ export function useUpdateIndexer(options: { silent?: boolean } = {}) {
   return useInvalidatingMutation(
     ({ id, body }: { id: number; body: IndexerUpdate }) => indexersApi.update(id, body),
     [settingsKeys.indexers],
-    options.silent ? { silent: true } : { errorTitle: 'Could not update indexer' },
+    options.silent ? { silent: true } : { errorTitle: t('hooks.indexers.couldNotUpdateIndexer') },
   );
 }
 
 export function useDeleteIndexer() {
   return useInvalidatingMutation((id: number) => indexersApi.remove(id), [settingsKeys.indexers], {
-    errorTitle: 'Could not delete indexer',
+    errorTitle: t('hooks.indexers.couldNotDeleteIndexer'),
   });
 }
 
 export function useTestAllIndexers() {
-  return useInvalidatingMutation(() => indexersApi.testAll(), [settingsKeys.indexers], { errorTitle: 'Test all failed' });
+  return useInvalidatingMutation(() => indexersApi.testAll(), [settingsKeys.indexers], { errorTitle: t('hooks.indexers.testAllFailed') });
 }
 
 // ---- definitions catalogue, proxies, stats, global options -------------------------
@@ -54,7 +55,7 @@ export function useIndexerDefinition(id: string | undefined) {
 
 export function useReloadDefinitions() {
   return useInvalidatingMutation(() => indexersApi.definitions.reload(), [['indexers', 'definitions']], {
-    errorTitle: 'Could not reload definitions',
+    errorTitle: t('hooks.indexers.couldNotReloadDefinitions'),
   });
 }
 
@@ -77,7 +78,7 @@ export function useSaveIndexerProxy() {
 
 export function useDeleteIndexerProxy() {
   return useInvalidatingMutation((id: number) => indexersApi.proxies.remove(id), [settingsKeys.indexerProxies, settingsKeys.indexers], {
-    errorTitle: 'Could not delete proxy',
+    errorTitle: t('hooks.indexers.couldNotDeleteProxy'),
   });
 }
 
@@ -91,6 +92,41 @@ export function useIndexerOptions() {
 
 export function useSaveIndexerOptions() {
   return useInvalidatingMutation((body: IndexerGlobalSettings) => indexersApi.settings.save(body), [settingsKeys.indexerOptions], {
-    errorTitle: 'Could not save indexer options',
+    errorTitle: t('hooks.indexers.couldNotSaveIndexerOptions'),
+  });
+}
+
+// ---- definition feed -------------------------------------------------------------------
+
+export const definitionFeedKeys = {
+  status: ['indexers', 'definitionfeed', 'status'] as const,
+  settings: ['settings', 'indexers', 'definitionfeed'] as const,
+};
+
+export function useDefinitionFeedStatus() {
+  return useQuery({ queryKey: definitionFeedKeys.status, queryFn: indexersApi.definitions.feed.status, retry: false });
+}
+
+export function useDefinitionFeedSettings() {
+  return useQuery({ queryKey: definitionFeedKeys.settings, queryFn: indexersApi.definitions.feed.settings.get, retry: false });
+}
+
+export function useSaveDefinitionFeedSettings() {
+  return useInvalidatingMutation(
+    (body: DefinitionFeedSettings) => indexersApi.definitions.feed.settings.save(body),
+    [definitionFeedKeys.settings, definitionFeedKeys.status, ['feeds']],
+    { errorTitle: t('hooks.indexers.couldNotSaveDefinitionFeed') },
+  );
+}
+
+export function useSyncDefinitionFeed() {
+  return useInvalidatingMutation(() => indexersApi.definitions.feed.sync(), [definitionFeedKeys.status, ['indexers', 'definitions'], ['feeds']], {
+    errorTitle: t('hooks.indexers.definitionFeedSyncFailed'),
+  });
+}
+
+export function useRollbackDefinition() {
+  return useInvalidatingMutation((id: string) => indexersApi.definitions.feed.rollback(id), [definitionFeedKeys.status, ['indexers', 'definitions']], {
+    errorTitle: t('hooks.indexers.couldNotRollBackThe'),
   });
 }

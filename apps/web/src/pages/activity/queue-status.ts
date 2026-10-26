@@ -1,5 +1,6 @@
 import type { QueueItem } from '@arclight/shared';
 import type { StatusKey, TrailState } from '../../arclight/index.js';
+import { t } from '../../i18n/index.js';
 
 // Pure mapping from a queue row to the Arclight status vocabulary (handoff §7: warn/failed rows
 // explain the cause in the chip) and to the matching light-trail state. Kept free of React so
@@ -45,14 +46,14 @@ export function causeFromMessage(text: string | undefined): string | undefined {
 
 function firstMessage(item: Pick<QueueItem, 'statusMessages'>): string | undefined {
   for (const m of item.statusMessages) {
-    const text = m.messages.find((t) => t.trim()) ?? m.title;
+    const text = m.messages.find((entry) => entry.trim()) ?? m.title;
     if (text.trim()) return text;
   }
   return undefined;
 }
 
 function allMessages(item: Pick<QueueItem, 'statusMessages'>): string | undefined {
-  const lines = item.statusMessages.flatMap((m) => (m.messages.length ? m.messages.map((t) => (m.title ? `${m.title}: ${t}` : t)) : [m.title]));
+  const lines = item.statusMessages.flatMap((m) => (m.messages.length ? m.messages.map((row) => (m.title ? `${m.title}: ${row}` : row)) : [m.title]));
   return lines.length ? lines.join('\n') : undefined;
 }
 
@@ -62,12 +63,12 @@ export function queueChip(item: ChipInput): QueueChip {
   const msgCause = causeFromMessage(firstMessage(item));
   const failed = item.trackedState === 'failed' || item.trackedState === 'failedPending' || item.status === 'failed' || item.trackedStatus === 'error';
   if (failed) {
-    const fallback = item.trackedState === 'failedPending' ? 'import failed' : item.status === 'failed' ? 'client error' : 'download failed';
+    const fallback = item.trackedState === 'failedPending' ? t('activity.queueStatus.importFailed') : item.status === 'failed' ? t('activity.queueStatus.clientError') : t('activity.queueStatus.downloadFailed');
     return { status: 'failed', cause: msgCause ?? fallback, detail };
   }
   const blocked = item.trackedState === 'importPending' && (item.trackedStatus === 'warning' || item.statusMessages.length > 0);
   if (item.trackedStatus === 'warning' || item.status === 'warning' || blocked) {
-    const fallback = item.trackedState === 'importPending' ? 'import blocked' : 'no peers';
+    const fallback = item.trackedState === 'importPending' ? t('activity.queueStatus.importBlocked') : t('activity.queueStatus.noPeers');
     return { status: 'stalled', cause: msgCause ?? fallback, detail };
   }
   if (item.trackedState === 'pending' || item.downloadClientId === null || item.downloadId.startsWith('pending:')) return { status: 'queued', detail };

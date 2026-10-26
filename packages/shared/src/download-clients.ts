@@ -21,6 +21,7 @@ export const DownloadClientImplementation = z.enum([
   'sabnzbd',
   'nzbget',
   'builtin',
+  'remoteEngine',
 ]);
 export type DownloadClientImplementation = z.infer<typeof DownloadClientImplementation>;
 
@@ -33,6 +34,7 @@ export const DOWNLOAD_CLIENT_PROTOCOLS: Readonly<Record<DownloadClientImplementa
   sabnzbd: 'usenet',
   nzbget: 'usenet',
   builtin: 'torrent',
+  remoteEngine: 'torrent',
 };
 
 /**
@@ -42,7 +44,7 @@ export const DOWNLOAD_CLIENT_PROTOCOLS: Readonly<Record<DownloadClientImplementa
 export const PASSWORD_MASK = '********';
 
 /** Settings keys that hold secrets (masked on read, kept when the mask is sent back). */
-export const DOWNLOAD_CLIENT_SECRET_FIELDS = ['password', 'apiKey'] as const;
+export const DOWNLOAD_CLIENT_SECRET_FIELDS = ['password', 'apiKey', 'token'] as const;
 
 // ---- settings schemas ------------------------------------------------------------------
 // These mirror the schemas in @arclight/download-clients (which `shared` cannot depend on).
@@ -286,8 +288,76 @@ export const BuiltinClientSettings = z.object({
     .min(0)
     .optional()
     .describe('Stop seeding after this many minutes. Leave empty to use the engine default.'),
+  superSeeding: z
+    .boolean()
+    .optional()
+    .describe('Turn on super-seeding (BEP 16) for new torrents: while seeding, each peer is offered one piece at a time.'),
+  uploadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Upload limit per torrent in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  downloadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Download limit per torrent in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  peerUploadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Upload limit per peer connection in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
+  peerDownloadLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Download limit per peer connection in KiB/s for new torrents. Leave empty or 0 for unlimited.'),
 });
 export type BuiltinClientSettings = z.infer<typeof BuiltinClientSettings>;
+
+/**
+ * Arclight's torrent engine on another machine: the standalone engine agent (docker/Dockerfile.agent)
+ * or another Arclight with the engine-agent module enabled. See docs/REMOTE-ENGINE.md.
+ */
+export const RemoteEngineClientSettings = z.object({
+  url: z
+    .string()
+    .trim()
+    .regex(/^https?:\/\/[^\s/]+/i, 'Enter an http:// or https:// URL')
+    .describe(
+      'Address of the engine agent, e.g. http://seedbox:7879, or http://other-arclight:7878/api/v1/engine-agent for another Arclight.',
+    ),
+  token: z
+    .string()
+    .default('')
+    .describe("The agent's AGENT_TOKEN (or the other Arclight's API key). Write-only: never returned by the API."),
+  category: categoryField('Category'),
+  postImportCategory: postImportCategoryField('Category'),
+  pullMode: z
+    .boolean()
+    .default(false)
+    .describe(
+      'Copy finished downloads from the agent over HTTP into the local download folder (resumable, SHA-256 verified) before importing. Off: the agent shares storage with Arclight; add a Remote Path Mapping when the paths differ.',
+    ),
+  localDownloadPath: z.string().trim().default('').describe('Pull mode: local folder finished downloads are copied into before import.'),
+  bandwidthLimitKbps: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Pull mode: limit for copying from the agent in KiB/s. Leave empty or 0 for unlimited.'),
+  followVpnPort: z
+    .boolean()
+    .default(false)
+    .describe(
+      "Apply this Arclight's VPN forwarded port to the agent's listener. Only for an agent behind the same VPN connection; an agent with its own VPN follows its own forwarded port (AGENT_PORT_FILE).",
+    ),
+});
+export type RemoteEngineClientSettings = z.infer<typeof RemoteEngineClientSettings>;
 
 /** Settings schema per implementation (validation and settings-form rendering). */
 export const downloadClientSettingsSchemas = {
@@ -298,6 +368,7 @@ export const downloadClientSettingsSchemas = {
   sabnzbd: SabnzbdClientSettings,
   nzbget: NzbgetClientSettings,
   builtin: BuiltinClientSettings,
+  remoteEngine: RemoteEngineClientSettings,
 } as const satisfies Record<DownloadClientImplementation, z.ZodObject>;
 
 export type DownloadClientSettingsFor<K extends DownloadClientImplementation> = z.infer<(typeof downloadClientSettingsSchemas)[K]>;
@@ -307,9 +378,20 @@ export type DownloadClientSettingsFor<K extends DownloadClientImplementation> = 
  */
 export type DownloadClientSettings = DownloadClientSettingsFor<DownloadClientImplementation>;
 
-/** The host remote path mappings key on: the configured host, or "localhost" for `builtin`. */
-export function downloadClientHost(settings: DownloadClientSettings): string {
-  return 'host' in settings ? settings.host : 'localhost';
+/**
+ * The host remote path mappings key on: the configured host, the URL's host name for
+ * `remoteEngine`, or "localhost" for `builtin`.
+ */
+export function downloadClientHost(settings: DownloadClientSettings | Readonly<Record<string, unknown>>): string {
+  if ('host' in settings && typeof settings.host === 'string') return settings.host;
+  if ('url' in settings && typeof settings.url === 'string') {
+    try {
+      return new URL(settings.url).hostname;
+    } catch {
+      return '';
+    }
+  }
+  return 'localhost';
 }
 
 const downloadClientCommon = {
@@ -328,7 +410,7 @@ const downloadClientCommon = {
 function variants<E extends z.ZodRawShape>(extra: E) {
   const v = <K extends DownloadClientImplementation>(kind: K) =>
     z.object({ ...extra, implementation: z.literal(kind), settings: downloadClientSettingsSchemas[kind] });
-  return [v('qbittorrent'), v('transmission'), v('deluge'), v('rtorrent'), v('sabnzbd'), v('nzbget'), v('builtin')] as const;
+  return [v('qbittorrent'), v('transmission'), v('deluge'), v('rtorrent'), v('sabnzbd'), v('nzbget'), v('builtin'), v('remoteEngine')] as const;
 }
 
 /** Create/update body. One variant per implementation, discriminated on `implementation`. */

@@ -4,20 +4,37 @@ import { Input } from '../../arclight/index.js';
 import { useSubtitleLanguages } from '../../hooks/subtitles.js';
 import { cx } from '../../lib/cx.js';
 import './subtitles.css';
+import { t } from '../../i18n/index.js';
 
 // Small pieces shared by the subtitles pages, settings and the per-item Subtitles tab.
 
-export const FLAG_MODE_LABELS: Record<LanguageProfileFlagMode, string> = { never: 'Never', also: 'Also', only: 'Only' };
+export const FLAG_MODE_LABELS: Record<LanguageProfileFlagMode, string> = { get never() { return t('common.never'); }, get also() { return t('subtitles.subtitleUi.also'); }, get only() { return t('subtitles.subtitleUi.only'); } };
 
 export const HISTORY_ACTION_LABELS: Record<SubtitleHistoryAction, string> = {
-  deleted: 'Deleted',
-  downloaded: 'Downloaded',
-  manualDownload: 'Manual download',
-  upgraded: 'Upgraded',
-  uploaded: 'Uploaded',
-  synced: 'Synced',
-  translated: 'Translated',
-  extracted: 'Extracted',
+  get deleted() {
+    return t('common.deleted');
+  },
+  get downloaded() {
+    return t('status.downloaded');
+  },
+  get manualDownload() {
+    return t('subtitles.subtitleUi.manualDownload');
+  },
+  get upgraded() {
+    return t('subtitles.subtitleUi.upgraded');
+  },
+  get uploaded() {
+    return t('subtitles.subtitleUi.uploaded');
+  },
+  get synced() {
+    return t('subtitles.subtitleUi.synced');
+  },
+  get translated() {
+    return t('subtitles.subtitleUi.translated');
+  },
+  get extracted() {
+    return t('subtitles.subtitleUi.extracted');
+  },
 };
 
 /** code -> display name, falling back to the code until the language list loads. */
@@ -41,8 +58,8 @@ export function formatPercent(score: number | null, outOf: number | null): strin
 function Markers({ forced, hi }: { forced: boolean; hi: boolean }) {
   return (
     <>
-      {forced ? <span className="sub-chip-marker" title="Forced">F</span> : null}
-      {hi ? <span className="sub-chip-marker" title="Hearing impaired">HI</span> : null}
+      {forced ? <span className="sub-chip-marker" title={t('common.forced')}>{t('subtitles.subtitleUi.f')}</span> : null}
+      {hi ? <span className="sub-chip-marker" title={t('subtitles.subtitleUi.hearingImpaired')}>{t('common.hi')}</span> : null}
     </>
   );
 }
@@ -51,7 +68,7 @@ function Markers({ forced, hi }: { forced: boolean; hi: boolean }) {
 export function MissingChip({ refItem }: { refItem: SubtitleLanguageRef }) {
   const name = useLanguageName();
   return (
-    <span className="sub-chip sub-chip-missing" data-testid="missing-chip" title={`Missing: ${refLabel(refItem, name)}`}>
+    <span className="sub-chip sub-chip-missing" data-testid="missing-chip" title={t('subtitles.subtitleUi.missingReflabel', { refLabel: refLabel(refItem, name) })}>
       {refItem.language}
       <Markers forced={refItem.forced} hi={refItem.hi} />
     </span>
@@ -81,7 +98,7 @@ export function SubtitleChip({ subtitle, children }: { subtitle: SubtitleState; 
       title={`${refLabel(subtitle, name)} · ${kind}${subtitle.codec ? ` · ${subtitle.codec}` : ''}${subtitle.provider ? ` · ${subtitle.provider}` : ''}`}
     >
       {subtitle.language}
-      <span className="sub-chip-marker">{subtitle.embedded ? 'emb' : 'ext'}</span>
+      <span className="sub-chip-marker">{subtitle.embedded ? t('subtitles.subtitleUi.emb') : t('subtitles.subtitleUi.ext')}</span>
       <Markers forced={subtitle.forced} hi={subtitle.hi} />
       {children}
     </span>
@@ -97,7 +114,7 @@ export function filterLanguages(all: readonly SubtitleLanguageOption[], query: s
 export function LanguagePicker({
   onPick,
   exclude = [],
-  label = 'Search languages',
+  label = t('subtitles.subtitleUi.searchLanguages'),
 }: {
   onPick: (code: string) => void;
   exclude?: readonly string[];
@@ -108,9 +125,9 @@ export function LanguagePicker({
   const matches = filterLanguages(languages.data ?? [], query, exclude).slice(0, 50);
   return (
     <div className="sub-language-picker">
-      <Input aria-label={label} placeholder="Type to search languages" value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
+      <Input aria-label={label} placeholder={t('subtitles.subtitleUi.typeToSearchLanguages')} value={query} onChange={(e) => setQuery(e.currentTarget.value)} />
       {query.trim() ? (
-        <ul role="listbox" aria-label="Languages">
+        <ul role="listbox" aria-label={t('common.languages')}>
           {matches.map((l) => (
             <li key={l.code}>
               <button
@@ -126,7 +143,7 @@ export function LanguagePicker({
               </button>
             </li>
           ))}
-          {matches.length === 0 ? <li className="sub-none">No match</li> : null}
+          {matches.length === 0 ? <li className="sub-none">{t('subtitles.subtitleUi.noMatch')}</li> : null}
         </ul>
       ) : null}
     </div>

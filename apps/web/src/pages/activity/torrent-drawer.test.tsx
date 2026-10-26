@@ -2,13 +2,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
-import type { QueueItem, TorrentDetail } from '@arclight/shared';
+import { TorrentDetail as TorrentDetailSchema, type QueueItem, type TorrentDetail } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
 import { parseManualImportSearch } from './manual-import/manual-import-page.js';
 import { QueuePage } from './queue-page.js';
 import { priorityOption } from './torrent-drawer.js';
+import { bytesToKibText, kibTextToBytes, toLimitsDraft, toLimitsRequest } from './torrent-extras.js';
 
 class FakeSocket {
   onopen = null;
@@ -81,8 +82,23 @@ const torrent: TorrentDetail = {
       peerChoking: false,
       peerInterested: false,
       snubbed: false,
+      encrypted: true,
+      transport: 'utp',
     },
   ],
+  webSeeds: [
+    {
+      url: 'https://mirror.example/Builtin.Release.1080p/',
+      downloadRate: 2048,
+      downloaded: 3 * 1024 * 1024,
+      activeRequests: 2,
+      failures: 1,
+      retryAt: null,
+      lastError: 'HTTP 503',
+    },
+  ],
+  superSeeding: false,
+  limits: { uploadLimit: 0, downloadLimit: 0, peerUploadLimit: 102400, peerDownloadLimit: 0 },
   trackers: [{ url: 'udp://tracker.example:1337/announce', tier: 0, state: 'working', peers: 12 }],
   files: [
     { index: 0, path: 'Builtin.Release.1080p/episode.mkv', length: 2000, priority: 1, progress: 0.5 },
@@ -209,5 +225,69 @@ describe('queue torrent drawer', () => {
 
   it('snaps engine priorities to the select options', () => {
     expect([0, 1, 2, 3, 4, 5, 6, 7].map(priorityOption)).toEqual(['0', '1', '1', '1', '4', '4', '4', '7']);
+  });
+});
+
+async function openDrawer() {
+  renderAt('/activity/queue');
+  fireEvent.click(await screen.findByRole('button', { name: 'Details Builtin.Release' }, { timeout: 5000 }));
+  const dialog = await screen.findByRole('dialog', { name: 'Builtin.Release.1080p' }, { timeout: 5000 });
+  await within(dialog).findByText('21/42', {}, { timeout: 5000 });
+  return dialog;
+}
+
+describe('torrent drawer: connections, web seeds and limits', () => {
+  it('fixture matches the contract', () => {
+    expect(TorrentDetailSchema.safeParse(torrent).success).toBe(true);
+  });
+
+  it('shows encryption and transport badges per peer', async () => {
+    const dialog = await openDrawer();
+    fireEvent.click(within(dialog).getByRole('tab', { name: /^Peers/ }));
+    const row = within(within(dialog).getByRole('table', { name: 'Peers' })).getByText('203.0.113.5:51413').closest('tr')!;
+    expect(within(row).getByText('Encrypted').className).toContain('al-chip');
+    expect(within(row).getByText('uTP')).toBeTruthy();
+  });
+
+  it('lists web seeds with rate, downloaded, requests, failures and the last error', async () => {
+    const dialog = await openDrawer();
+    fireEvent.click(within(dialog).getByRole('tab', { name: /^Web seeds/ }));
+    const table = within(dialog).getByRole('table', { name: 'Web seeds' });
+    const row = within(table).getByText('https://mirror.example/Builtin.Release.1080p/').closest('tr')!;
+    expect(within(row).getByText('2.0 KiB/s')).toBeTruthy();
+    expect(within(row).getByText('3.0 MiB')).toBeTruthy();
+    expect(within(row).getByText('2')).toBeTruthy();
+    expect(within(row).getByText('1')).toBeTruthy();
+    expect(within(row).getByText('HTTP 503')).toBeTruthy();
+  });
+
+  it('saves changed limits in bytes/s and toggles super-seeding', async () => {
+    const dialog = await openDrawer();
+    fireEvent.click(within(dialog).getByRole('tab', { name: 'Limits' }));
+    expect((within(dialog).getByLabelText('Upload limit per peer') as HTMLInputElement).value).toBe('100');
+    const save = within(dialog).getByRole('button', { name: 'Save limits' }) as HTMLButtonElement;
+    expect(save.disabled).toBe(true);
+    fireEvent.change(within(dialog).getByLabelText('Download limit'), { target: { value: '512' } });
+    fireEvent.change(within(dialog).getByLabelText('Upload limit per peer'), { target: { value: '' } });
+    fireEvent.click(save);
+    await waitFor(() => expect(calls.some((c) => c.url === `/api/v1/torrent/${HASH}/limits`)).toBe(true));
+    expect(calls.find((c) => c.url === `/api/v1/torrent/${HASH}/limits`)!.body).toEqual({ downloadLimit: 524288, peerUploadLimit: 0 });
+
+    fireEvent.click(within(dialog).getByLabelText('Super-seeding'));
+    await waitFor(() => expect(calls.some((c) => c.url === `/api/v1/torrent/${HASH}/superseed`)).toBe(true));
+    expect(calls.find((c) => c.url === `/api/v1/torrent/${HASH}/superseed`)!.body).toEqual({ enabled: true });
+  });
+
+  it('converts limits between KiB/s text and bytes/s', () => {
+    expect(bytesToKibText(0)).toBe('');
+    expect(bytesToKibText(524288)).toBe('512');
+    expect(bytesToKibText(1500)).toBe('1.5');
+    expect(kibTextToBytes('')).toBe(0);
+    expect(kibTextToBytes('-3')).toBe(0);
+    expect(kibTextToBytes('1.5')).toBe(1536);
+    expect(toLimitsDraft(undefined)).toEqual({ downloadLimit: '', uploadLimit: '', peerDownloadLimit: '', peerUploadLimit: '' });
+    const current = { uploadLimit: 1024, downloadLimit: 0, peerUploadLimit: 0, peerDownloadLimit: 0 };
+    expect(toLimitsRequest(toLimitsDraft(current), current)).toEqual({});
+    expect(toLimitsRequest({ ...toLimitsDraft(current), uploadLimit: '0' }, current)).toEqual({ uploadLimit: 0 });
   });
 });

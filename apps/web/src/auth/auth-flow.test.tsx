@@ -150,6 +150,7 @@ describe('login form', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/system/status'));
     expect(calls.find((c) => c.url === '/api/v1/auth/login' && (c.body as { password: string }).password === 'password1')?.body).toEqual({
+      method: 'local',
       username: 'admin',
       password: 'password1',
       rememberMe: true,

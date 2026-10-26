@@ -13,6 +13,7 @@ import type {
   RequestListQuery,
   RequestsSettings,
   UpdateRequest,
+  UserPermissions,
   UserQuota,
   UserRequestSettings,
   WatchlistCreate,
@@ -31,6 +32,7 @@ import {
 import { authKeys } from '../auth/guard.js';
 import { requestKeys } from './request-keys.js';
 import { useInvalidatingMutation, type MutationOptions } from './settings-keys.js';
+import { t } from '../i18n/index.js';
 
 // ---------------------------------------------------------------------------------------
 // Requests
@@ -58,30 +60,30 @@ export function useUpdateRequest() {
 }
 
 export function useDeleteRequest() {
-  return useInvalidatingMutation((id: number) => requestsApi.remove(id), REQUEST_AFFECTS, { errorTitle: 'Could not delete the request' });
+  return useInvalidatingMutation((id: number) => requestsApi.remove(id), REQUEST_AFFECTS, { errorTitle: t('hooks.requests.couldNotDeleteTheRequest') });
 }
 
 export function useApproveRequest() {
   return useInvalidatingMutation(({ id, body }: { id: number; body?: ApproveRequest }) => requestsApi.approve(id, body ?? {}), REQUEST_AFFECTS, {
-    errorTitle: 'Could not approve the request',
+    errorTitle: t('hooks.requests.couldNotApproveTheRequest'),
   });
 }
 
 export function useDeclineRequest() {
   return useInvalidatingMutation(({ id, reason }: { id: number; reason?: string }) => requestsApi.decline(id, reason), REQUEST_AFFECTS, {
-    errorTitle: 'Could not decline the request',
+    errorTitle: t('hooks.requests.couldNotDeclineTheRequest'),
   });
 }
 
 export function useRetryRequest() {
-  return useInvalidatingMutation((id: number) => requestsApi.retry(id), REQUEST_AFFECTS, { errorTitle: 'Retry failed' });
+  return useInvalidatingMutation((id: number) => requestsApi.retry(id), REQUEST_AFFECTS, { errorTitle: t('hooks.requests.retryFailed') });
 }
 
 export function useBulkRequestAction(action: 'approve' | 'decline') {
   return useInvalidatingMutation(
     (ids: number[]) => (action === 'approve' ? requestsApi.bulkApprove(ids) : requestsApi.bulkDecline(ids)),
     REQUEST_AFFECTS,
-    { errorTitle: `Bulk ${action} failed` },
+    { errorTitle: t('hooks.requests.bulkActionFailed', { action }) },
   );
 }
 
@@ -137,11 +139,11 @@ export function useUpdateSlider() {
 }
 
 export function useOrderSliders() {
-  return useInvalidatingMutation((body: DiscoverSliderOrder) => slidersApi.order(body), SLIDER_AFFECTS, { errorTitle: 'Could not save slider order' });
+  return useInvalidatingMutation((body: DiscoverSliderOrder) => slidersApi.order(body), SLIDER_AFFECTS, { errorTitle: t('hooks.requests.couldNotSaveSliderOrder') });
 }
 
 export function useResetSliders() {
-  return useInvalidatingMutation(() => slidersApi.reset(), SLIDER_AFFECTS, { errorTitle: 'Could not reset sliders' });
+  return useInvalidatingMutation(() => slidersApi.reset(), SLIDER_AFFECTS, { errorTitle: t('hooks.requests.couldNotResetSliders') });
 }
 
 export function useDeleteSlider() {
@@ -172,7 +174,7 @@ export function useCreateIssue() {
 
 export function useIssueComment() {
   return useInvalidatingMutation(({ id, message }: { id: number; message: string }) => issuesApi.comment(id, message), ISSUE_AFFECTS, {
-    errorTitle: 'Could not add the comment',
+    errorTitle: t('hooks.requests.couldNotAddTheComment'),
   });
 }
 
@@ -180,19 +182,19 @@ export function useEditIssueComment() {
   return useInvalidatingMutation(
     ({ commentId, message }: { commentId: number; message: string }) => issuesApi.editComment(commentId, message),
     ISSUE_AFFECTS,
-    { errorTitle: 'Could not edit the comment' },
+    { errorTitle: t('hooks.requests.couldNotEditTheComment') },
   );
 }
 
 export function useDeleteIssueComment() {
   return useInvalidatingMutation((commentId: number) => issuesApi.deleteComment(commentId), ISSUE_AFFECTS, {
-    errorTitle: 'Could not delete the comment',
+    errorTitle: t('hooks.requests.couldNotDeleteTheComment'),
   });
 }
 
 export function useSetIssueStatus() {
   return useInvalidatingMutation(({ id, status }: { id: number; status: IssueStatus }) => issuesApi.setStatus(id, status), ISSUE_AFFECTS, {
-    errorTitle: 'Could not change the issue status',
+    errorTitle: t('hooks.requests.couldNotChangeTheIssue'),
   });
 }
 
@@ -228,18 +230,18 @@ export function useWatchlist(userId?: number, enabled = true) {
 
 export function useAddToWatchlist() {
   return useInvalidatingMutation((body: WatchlistCreate) => watchlistApi.add(body), WATCHLIST_AFFECTS, {
-    errorTitle: 'Could not add to the watchlist',
+    errorTitle: t('hooks.requests.couldNotAddToThe'),
   });
 }
 
 export function useRemoveFromWatchlist() {
   return useInvalidatingMutation((id: number) => watchlistApi.remove(id), WATCHLIST_AFFECTS, {
-    errorTitle: 'Could not remove from the watchlist',
+    errorTitle: t('hooks.requests.couldNotRemoveFromThe'),
   });
 }
 
 export function useSyncWatchlists() {
-  return useInvalidatingMutation(() => watchlistApi.sync(), [...WATCHLIST_AFFECTS, requestKeys.requests.all], { errorTitle: 'Watchlist sync failed' });
+  return useInvalidatingMutation(() => watchlistApi.sync(), [...WATCHLIST_AFFECTS, requestKeys.requests.all], { errorTitle: t('hooks.requests.watchlistSyncFailed') });
 }
 
 // ---------------------------------------------------------------------------------------
@@ -260,6 +262,11 @@ export function useSetUserPermissions(id: number) {
     [requestKeys.users.permissions(id), requestKeys.users.quota(id), authKeys.users, authKeys.me],
     { silent: true },
   );
+}
+
+/** PUT /user/:id/permissions with content caps and the approval override. */
+export function useSetUserPolicy(id: number) {
+  return useInvalidatingMutation((body: UserPermissions) => requestUsersApi.setPolicy(id, body), [requestKeys.users.permissions(id)], { silent: true });
 }
 
 export function useUserQuota(id: number | null) {
@@ -296,4 +303,18 @@ export function useSaveRequestsSettings() {
   return useInvalidatingMutation((body: RequestsSettings) => requestsSettingsApi.update(body), [requestKeys.settings, requestKeys.discover.all], {
     silent: true,
   });
+}
+
+/** Why a request is held: GET /request/:id/policy (read when the policy drawer opens). */
+export function useRequestPolicy(id: number, enabled = true) {
+  return useQuery({ queryKey: [...requestKeys.requests.detail(id), 'policy'], queryFn: () => requestsApi.policy(id), enabled: enabled && id > 0, retry: false });
+}
+
+/** One request by id (deep links from notifications). */
+export function useRequest(id: number) {
+  return useQuery({ queryKey: requestKeys.requests.detail(id), queryFn: () => requestsApi.get(id), enabled: id > 0, retry: false });
+}
+
+export function useSendDigest() {
+  return useInvalidatingMutation(() => requestsApi.digest(), [], { errorTitle: t('hooks.requests.couldNotSendTheDigest') });
 }

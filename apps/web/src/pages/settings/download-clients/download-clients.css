@@ -6,3 +6,5 @@
   .al-dc-cats__row { grid-template-columns: minmax(0, 1fr); }
 }
 .al-dc-desc { margin: 0 0 16px; }
+
+.al-dc-agent-url { overflow-wrap: anywhere; }

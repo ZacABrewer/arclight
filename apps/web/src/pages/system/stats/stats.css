@@ -1,0 +1,19 @@
+/* System → Stats: panes in auto-fit grids; everything collapses to one column at 375px. */
+.al-stats { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.al-stats__grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 20px; min-width: 0; }
+.al-stats__grid--hero { grid-template-columns: repeat(auto-fit, minmax(min(100%, 440px), 1fr)); }
+.al-stats__grid > * { min-width: 0; }
+.al-stats-kv { margin-bottom: 16px; }
+.al-stats-roots, .al-stats-buckets { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+.al-stats-root__head { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+.al-stats-root__path { overflow-wrap: anywhere; color: var(--al-text-2); }
+.al-stats-root__foot { margin: 4px 0 0; }
+.al-stats-root [data-tone='warn'] { color: var(--al-warn-text); }
+.al-stats-bucket { display: grid; grid-template-columns: minmax(72px, 120px) 1fr; align-items: center; gap: 12px; }
+.al-stats-bucket__label { overflow-wrap: anywhere; color: var(--al-text-2); }
+.al-stats-library { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr)); gap: 16px 24px; }
+.al-stats-library h3 { margin: 0 0 8px; }
+@media (max-width: 767px) {
+  .al-stats-kv { --al-kv-cols: 1 !important; }
+  .al-stats-bucket { grid-template-columns: 1fr; gap: 4px; }
+}

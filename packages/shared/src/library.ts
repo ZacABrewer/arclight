@@ -121,6 +121,48 @@ export const SeriesStatistics = SeasonStatistics.extend({
 });
 export type SeriesStatistics = z.infer<typeof SeriesStatistics>;
 
+// ---------------------------------------------------------------------------------------
+// Versions (multi-version library: e.g. a 1080p and a 4K copy kept on purpose)
+// ---------------------------------------------------------------------------------------
+
+/** A version tag such as `4K`, `HDR`, `Remux`: used in file names and folders, so no path characters. */
+export const VersionTag = z
+  .string()
+  .trim()
+  .min(1)
+  .max(32)
+  .regex(/^[^\\/<>:?*|"]+$/, 'must not contain \\ / < > : ? * | "');
+export type VersionTag = z.infer<typeof VersionTag>;
+
+/**
+ * One version slot of a series or movie. Each enabled slot is monitored, searched and upgraded
+ * on its own against its own quality profile; a disabled slot keeps its file but is not wanted.
+ */
+export const MediaVersion = z.object({
+  tag: VersionTag,
+  qualityProfileId: z.number().int(),
+  enabled: z.boolean().default(true),
+});
+export type MediaVersion = z.infer<typeof MediaVersion>;
+
+/** The `versions` config of a series or movie. null/absent = one unversioned file per item (classic). */
+export const MediaVersions = z
+  .array(MediaVersion)
+  .max(8)
+  .refine((v) => new Set(v.map((x) => x.tag.toLowerCase())).size === v.length, { message: 'version tags must be unique' });
+export type MediaVersions = z.infer<typeof MediaVersions>;
+
+/** A file of an episode/movie as listed on the item: which version slot it fills. */
+export const MediaFileVersion = z.object({
+  id: z.number().int(),
+  /** null = unversioned (classic) file. */
+  versionTag: z.string().nullish(),
+  quality: QualityModel,
+  sizeBytes: z.number().int(),
+  relativePath: z.string(),
+});
+export type MediaFileVersion = z.infer<typeof MediaFileVersion>;
+
 export const Season = z.object({
   seasonNumber: z.number().int().min(0),
   monitored: z.boolean(),
@@ -157,6 +199,8 @@ export const Series = z.object({
   /** Subtitle language profile (subtitles module); null = no subtitles wanted. */
   languageProfileId: z.number().int().nullish(),
   tags: z.array(z.number().int()),
+  /** Version slots; null = unversioned (one file per episode). */
+  versions: z.array(MediaVersion).nullish(),
   added: isoDate(),
   lastRefreshed: isoDate().nullish(),
   seasons: z.array(Season),
@@ -177,9 +221,13 @@ export const Episode = z.object({
   airDateUtc: isoDate().nullish(),
   runtimeMinutes: z.number().int().nullish(),
   monitored: z.boolean(),
+  /** True when any version has a file. */
   hasFile: z.boolean(),
+  /** The primary file (the unversioned one, else the first configured version's). */
   episodeFileId: z.number().int().nullish(),
   unverifiedSceneNumbering: z.boolean(),
+  /** Every file of the episode with its version tag (filled on single-series reads). */
+  files: z.array(MediaFileVersion).optional(),
 });
 export type Episode = z.infer<typeof Episode>;
 
@@ -195,6 +243,8 @@ export const AddSeriesRequest = z.object({
   /** Subtitle language profile; omitted = the subtitles default profile, null = none. */
   languageProfileId: z.number().int().nullable().optional(),
   tags: z.array(z.number().int()).default([]),
+  /** Version slots; omit for an unversioned series. */
+  versions: MediaVersions.nullable().optional(),
   searchOnAdd: z.boolean().default(false),
 });
 export type AddSeriesRequest = z.infer<typeof AddSeriesRequest>;
@@ -219,6 +269,8 @@ export const UpdateSeriesRequest = z.object({
   path: z.string().min(1).optional(),
   tags: z.array(z.number().int()).optional(),
   seasons: z.array(SeasonMonitorUpdate).optional(),
+  /** Version slots; null clears them (back to one unversioned file per episode). */
+  versions: MediaVersions.nullable().optional(),
 });
 export type UpdateSeriesRequest = z.infer<typeof UpdateSeriesRequest>;
 
@@ -341,8 +393,16 @@ export const Movie = z.object({
   tags: z.array(z.number().int()),
   added: isoDate(),
   lastRefreshed: isoDate().nullish(),
+  /** Version slots; null = unversioned (one file per movie). */
+  versions: z.array(MediaVersion).nullish(),
+  /** True when any version has a file. */
   hasFile: z.boolean(),
+  /** The primary file (the unversioned one, else the first configured version's). */
   movieFileId: z.number().int().nullish(),
+  /** Every file of the movie with its version tag. */
+  files: z.array(MediaFileVersion).optional(),
+  /** Wanted lists only: the enabled version slots that are missing / below cutoff. */
+  wantedVersions: z.array(z.string()).optional(),
   /** True when the movie is considered obtainable under its minimumAvailability. */
   isAvailable: z.boolean(),
   statistics: MovieStatistics.nullish(),
@@ -358,6 +418,8 @@ export const AddMovieRequest = z.object({
   /** Subtitle language profile; omitted = the subtitles default profile, null = none. */
   languageProfileId: z.number().int().nullable().optional(),
   tags: z.array(z.number().int()).default([]),
+  /** Version slots; omit for an unversioned movie. */
+  versions: MediaVersions.nullable().optional(),
   searchOnAdd: z.boolean().default(false),
 });
 export type AddMovieRequest = z.infer<typeof AddMovieRequest>;
@@ -372,6 +434,8 @@ export const UpdateMovieRequest = z.object({
   rootFolderPath: z.string().min(1).optional(),
   path: z.string().min(1).optional(),
   tags: z.array(z.number().int()).optional(),
+  /** Version slots; null clears them (back to one unversioned file per movie). */
+  versions: MediaVersions.nullable().optional(),
 });
 export type UpdateMovieRequest = z.infer<typeof UpdateMovieRequest>;
 
@@ -411,15 +475,76 @@ export type MovieListQuery = z.infer<typeof MovieListQuery>;
 // Media files
 // ---------------------------------------------------------------------------------------
 
+/** One audio track as read by the media-analysis module (ffprobe). */
+export const MediaAudioStream = z.object({
+  /** Probe codec id, e.g. `eac3`, `truehd`, `dts`. */
+  codec: z.string(),
+  /** Probe profile, e.g. `DTS-HD MA`, `Dolby TrueHD + Dolby Atmos`. */
+  profile: z.string().nullish(),
+  channels: z.number().int().nullish(),
+  /** e.g. `5.1(side)`, `stereo`. */
+  channelLayout: z.string().nullish(),
+  /** ISO 639-2 code as tagged in the container (`eng`); null when untagged/`und`. */
+  language: z.string().nullish(),
+  bitrate: z.number().int().nullish().describe('bits per second'),
+  title: z.string().nullish(),
+  default: z.boolean().optional(),
+});
+export type MediaAudioStream = z.infer<typeof MediaAudioStream>;
+
+/** One embedded subtitle track. */
+export const MediaSubtitleStream = z.object({
+  /** e.g. `subrip`, `ass`, `hdmv_pgs_subtitle`. */
+  codec: z.string(),
+  language: z.string().nullish(),
+  forced: z.boolean(),
+  /** Hearing impaired / SDH. */
+  hearingImpaired: z.boolean(),
+  default: z.boolean().optional(),
+  title: z.string().nullish(),
+});
+export type MediaSubtitleStream = z.infer<typeof MediaSubtitleStream>;
+
 export const MediaInfo = z.object({
+  /** Friendly name (`x265`, `HEVC`, `AVC`, `AV1` ...). */
   videoCodec: z.string().nullish(),
+  /** Friendly name of the primary audio track (`EAC3 Atmos`, `DTS-HD MA` ...). */
   audioCodec: z.string().nullish(),
   audioChannels: z.number().nullish(),
   resolution: z.string().nullish().describe('e.g. 1920x1080'),
   runtimeSeconds: z.number().int().nullish(),
-  videoDynamicRange: z.string().nullish().describe('SDR, HDR10, DV ...'),
+  videoDynamicRange: z.string().nullish().describe('SDR, HDR10, HDR10Plus, HLG, PQ, DV, DV HDR10 ...'),
   subtitles: z.array(z.string()).nullish(),
   audioLanguages: z.array(z.string()).nullish(),
+  // ---- richer probe fields (media-analysis module); all optional ------------------------
+  /** Container format, e.g. `matroska`, `mp4`. */
+  container: z.string().nullish(),
+  durationMs: z.number().int().nullish(),
+  overallBitrate: z.number().int().nullish().describe('bits per second'),
+  /** Probe codec id of the video track, e.g. `hevc`, `h264`. */
+  videoFormat: z.string().nullish(),
+  /** Codec tag, e.g. `hvc1`, `xvid`, when meaningful. */
+  videoCodecId: z.string().nullish(),
+  videoProfile: z.string().nullish(),
+  videoBitDepth: z.number().int().nullish(),
+  videoBitrate: z.number().int().nullish(),
+  videoFps: z.number().nullish(),
+  width: z.number().int().nullish(),
+  height: z.number().int().nullish(),
+  /** Same vocabulary as `videoDynamicRange` (the organizer's `{MediaInfo VideoDynamicRangeType}`). */
+  videoDynamicRangeType: z.string().nullish(),
+  /** Dolby Vision profile (5, 7, 8 ...) when present. */
+  doviProfile: z.number().int().nullish(),
+  colorPrimaries: z.string().nullish(),
+  colorTransfer: z.string().nullish(),
+  scanType: z.enum(['Progressive', 'Interlaced']).nullish(),
+  audioFormat: z.string().nullish(),
+  audioProfile: z.string().nullish(),
+  audioChannelPositions: z.string().nullish(),
+  audioBitrate: z.number().int().nullish(),
+  audioStreamCount: z.number().int().nullish(),
+  audioStreams: z.array(MediaAudioStream).nullish(),
+  subtitleStreams: z.array(MediaSubtitleStream).nullish(),
 });
 export type MediaInfo = z.infer<typeof MediaInfo>;
 
@@ -441,6 +566,8 @@ export const MediaFile = z.object({
   sceneName: z.string().nullish(),
   edition: z.string().nullish(),
   mediaInfo: MediaInfo.nullish(),
+  /** Version slot the file fills (`4K`, `HDR`, ...); null = unversioned. */
+  versionTag: z.string().nullish(),
 });
 export type MediaFile = z.infer<typeof MediaFile>;
 
@@ -479,6 +606,8 @@ export const WantedEpisode = Episode.extend({
   seriesTitle: z.string(),
   seriesTmdbId: z.number().int(),
   qualityProfileId: z.number().int(),
+  /** Versioned series: the enabled version slots that are missing / below cutoff. */
+  wantedVersions: z.array(z.string()).optional(),
 });
 export type WantedEpisode = z.infer<typeof WantedEpisode>;
 

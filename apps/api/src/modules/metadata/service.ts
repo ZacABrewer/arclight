@@ -8,7 +8,8 @@ import {
   type TmdbClient,
   type TmdbClientOptions,
 } from '@arclight/metadata';
-import type { MetadataSearchType } from '@arclight/shared';
+import type { MetadataCollection, MetadataSearchType } from '@arclight/shared';
+import { fetchTmdbCollection } from './collection.js';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import type { MovieMetadataInput, SeriesMetadataInput } from '../library/index.js';
@@ -31,6 +32,8 @@ export interface MetadataServiceOptions {
   env?: NodeJS.ProcessEnv;
   /** Client factory; injectable so tests never talk to TMDB. */
   createClient?: (options: TmdbClientOptions) => TmdbClient;
+  /** fetch used for raw TMDB endpoints the client does not cover (collections); tests inject it. */
+  fetchImpl?: typeof fetch;
 }
 
 interface EffectiveOptions {
@@ -48,12 +51,14 @@ export class MetadataService {
   private readonly env: NodeJS.ProcessEnv;
   private readonly createClient: (options: TmdbClientOptions) => TmdbClient;
   private cached: { fingerprint: string; client: TmdbClient } | null = null;
+  private readonly fetchImpl: typeof fetch | undefined;
 
   constructor(opts: MetadataServiceOptions) {
     this.db = opts.db;
     this.log = opts.log;
     this.env = opts.env ?? process.env;
     this.createClient = opts.createClient ?? createTmdbClient;
+    this.fetchImpl = opts.fetchImpl;
   }
 
   private effectiveOptions(): EffectiveOptions | null {
@@ -98,6 +103,13 @@ export class MetadataService {
 
   getMovie(tmdbId: number): Promise<MovieMetadata> {
     return this.client().getMovie(tmdbId);
+  }
+
+  /** A TMDB movie collection with its parts (GET /collection/:id). */
+  getCollection(tmdbId: number): Promise<MetadataCollection> {
+    const options = this.effectiveOptions();
+    if (!options) throw new MetadataNotConfiguredError();
+    return fetchTmdbCollection(tmdbId, { apiKey: options.apiKey, language: options.language, ...(this.fetchImpl ? { fetchImpl: this.fetchImpl } : {}) });
   }
 
   /** Series details plus every season's episodes, fetched one season at a time to respect rate limits. */

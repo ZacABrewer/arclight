@@ -1,4 +1,4 @@
-import type { HealthCheck, HealthStatus, TorrentSessionStatus, VpnStatus } from '@arclight/shared';
+import type { FeedSummary, HealthCheck, HealthStatus, SubtitleWhisperStatus, TorrentSessionStatus, VpnStatus } from '@arclight/shared';
 
 // Health check framework types. A check is a named function over `HealthDeps` (everything it
 // may look at, injectable so tests use fakes) returning zero or more findings. A passing check
@@ -100,6 +100,12 @@ export interface HealthDeps {
   torrent?(): Promise<TorrentSessionStatus>;
   /** Liveness of every FlareSolverr-type indexer proxy (indexers module); optional so deps without it skip the check. */
   flareSolverrs?(): Promise<HealthFlareSolverr[]>;
+  /** Reachability of Remote Engine download clients; optional so deps without it skip the check. */
+  remoteEngines?(): Promise<Array<{ id: number; name: string; url: string; ok: boolean; message?: string }>>;
+  /** Self-updating data feeds (feeds registry); optional so deps without it skip the check. */
+  feeds?(): Promise<FeedSummary[]>;
+  /** Whisper ASR provider status (subtitles module); optional so deps without it skip the check. */
+  whisper?(): Promise<SubtitleWhisperStatus>;
 }
 
 export interface HealthFlareSolverr {

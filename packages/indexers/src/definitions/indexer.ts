@@ -8,6 +8,7 @@ import { synthesizeCaps } from './categories.js';
 import { parseDefinitionYaml } from './catalogue.js';
 import {
   DefinitionRuntime,
+  type AccountStats,
   type DefinitionSearchRequest,
   type DownloadResult,
   type RuntimeOptions,
@@ -24,6 +25,8 @@ export interface DefinitionIndexer extends Indexer {
   download(url: string): Promise<DownloadResult>;
   /** Force a login now (normally lazy). */
   login(): Promise<void>;
+  /** Account statistics from the definition's `account` page (Arclight extension). */
+  accountStats(): Promise<AccountStats>;
 }
 
 export interface DefinitionIndexerOptions extends RuntimeOptions {
@@ -60,6 +63,7 @@ export function createDefinitionIndexer(
     search: (request) => runtime.search(request),
     download: (url) => runtime.download(url),
     login: () => runtime.login(),
+    accountStats: () => runtime.accountStats(),
     async test(): Promise<IndexerTestResult> {
       const result = await runtime.test();
       return result.ok ? { ok: true, caps, releaseCount: result.releaseCount } : result;

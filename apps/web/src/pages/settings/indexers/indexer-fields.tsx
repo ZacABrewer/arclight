@@ -4,6 +4,7 @@ import type { FieldDefinition, FieldRendererProps, FormValues } from '../../../c
 import type { TestOutcome } from '../../../components/forms/test-result.js';
 import { Checkbox } from '../../../arclight/index.js';
 import './indexers.css';
+import { t } from '../../../i18n/index.js';
 
 // /indexer/schema returns ready-to-fill templates but no field definitions, so the field list
 // for the schema form lives here, written against IndexerSettings in packages/shared.
@@ -11,39 +12,39 @@ import './indexers.css';
 export function indexerFields(implementation: IndexerImplementation): FieldDefinition[] {
   const torrent = implementation === 'torznab';
   const fields: FieldDefinition[] = [
-    { name: 'name', label: 'Name', type: 'text', required: true },
-    { name: 'enableRss', label: 'Enable RSS', type: 'checkbox', helpText: 'Poll this indexer for new releases.' },
-    { name: 'enableAutomaticSearch', label: 'Enable automatic search', type: 'checkbox', helpText: 'Used by automatic and wanted searches.' },
-    { name: 'enableInteractiveSearch', label: 'Enable interactive search', type: 'checkbox', helpText: 'Used by manual (interactive) searches.' },
-    { name: 'settings.baseUrl', label: 'URL', type: 'text', required: true, placeholder: 'https://indexer.example' },
-    { name: 'settings.apiPath', label: 'API path', type: 'text', advanced: true, default: '/api', helpText: 'Path to the API, usually /api.' },
-    { name: 'settings.apiKey', label: 'API key', type: 'password' },
-    { name: 'settings.categories', label: 'Categories', type: 'multiSelect', helpText: 'Categories searched for standard content.' },
-    { name: 'settings.animeCategories', label: 'Anime categories', type: 'multiSelect', advanced: true, helpText: 'Categories searched for anime.' },
+    { name: 'name', label: t('common.name'), type: 'text', required: true },
+    { name: 'enableRss', label: t('settings.indexers.indexerFields.enableRss'), type: 'checkbox', helpText: t('settings.indexers.indexerFields.pollThisIndexerForNew') },
+    { name: 'enableAutomaticSearch', label: t('settings.indexers.indexerFields.enableAutomaticSearch'), type: 'checkbox', helpText: t('settings.indexers.indexerFields.usedByAutomaticAndWanted') },
+    { name: 'enableInteractiveSearch', label: t('settings.indexers.indexerFields.enableInteractiveSearch'), type: 'checkbox', helpText: t('settings.indexers.indexerFields.usedByManualInteractiveSearches') },
+    { name: 'settings.baseUrl', label: t('common.url'), type: 'text', required: true, placeholder: 'https://indexer.example' },
+    { name: 'settings.apiPath', label: t('settings.indexers.indexerFields.apiPath'), type: 'text', advanced: true, default: '/api', helpText: t('settings.indexers.indexerFields.pathToTheApiUsually') },
+    { name: 'settings.apiKey', label: t('common.apiKey'), type: 'password' },
+    { name: 'settings.categories', label: t('common.categories'), type: 'multiSelect', helpText: t('settings.indexers.indexerFields.categoriesSearchedForStandardContent') },
+    { name: 'settings.animeCategories', label: t('settings.indexers.indexerFields.animeCategories'), type: 'multiSelect', advanced: true, helpText: t('settings.indexers.indexerFields.categoriesSearchedForAnime') },
   ];
   if (torrent) {
     fields.push(
-      { name: 'settings.minimumSeeders', label: 'Minimum seeders', type: 'number', min: 0, advanced: true },
-      { name: 'settings.seedRatio', label: 'Seed ratio', type: 'number', min: 0, advanced: true, helpText: 'Empty uses the download client default.' },
-      { name: 'settings.seedTime', label: 'Seed time', type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
-      { name: 'settings.seasonPackSeedTime', label: 'Season-pack seed time', type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
+      { name: 'settings.minimumSeeders', label: t('settings.indexers.indexerFields.minimumSeeders'), type: 'number', min: 0, advanced: true },
+      { name: 'settings.seedRatio', label: t('settings.indexers.indexerFields.seedRatio'), type: 'number', min: 0, advanced: true, helpText: t('settings.indexers.indexerFields.emptyUsesTheDownloadClient') },
+      { name: 'settings.seedTime', label: t('settings.indexers.indexerFields.seedTime'), type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
+      { name: 'settings.seasonPackSeedTime', label: t('settings.indexers.indexerFields.seasonPackSeedTime'), type: 'number', min: 0, unit: 'min', scale: 60_000, advanced: true },
     );
   }
   fields.push(
-    { name: 'settings.additionalParameters', label: 'Additional parameters', type: 'text', advanced: true, placeholder: '&attrs=poster' },
-    { name: 'settings.rateLimitSeconds', label: 'Rate limit', type: 'number', min: 0, unit: 's', advanced: true, helpText: 'Minimum seconds between requests.' },
+    { name: 'settings.additionalParameters', label: t('settings.indexers.indexerFields.additionalParameters'), type: 'text', advanced: true, placeholder: '&attrs=poster' },
+    { name: 'settings.rateLimitSeconds', label: t('settings.indexers.indexerFields.rateLimit'), type: 'number', min: 0, unit: 's', advanced: true, helpText: t('settings.indexers.indexerFields.minimumSecondsBetweenRequests') },
     {
       name: 'priority',
-      label: 'Priority',
+      label: t('common.priority'),
       type: 'number',
       min: INDEXER_PRIORITY_MIN,
       max: INDEXER_PRIORITY_MAX,
       default: INDEXER_PRIORITY_DEFAULT,
       required: true,
       advanced: true,
-      helpText: '1 is the highest, 50 the lowest. Breaks ties between equally good releases.',
+      helpText: t('settings.indexers.indexerFields.n1IsTheHighest50'),
     },
-    { name: 'tags', label: 'Tags', type: 'text', advanced: true, helpText: 'Only use for items with a matching tag; empty means all.' },
+    { name: 'tags', label: t('common.tags'), type: 'text', advanced: true, helpText: t('settings.indexers.indexerFields.onlyUseForItemsWith') },
   );
   return fields;
 }
@@ -69,7 +70,7 @@ export function toIndexerBody(values: FormValues): IndexerCreate {
 export function indexerTestOutcome(r: IndexerTestResult): TestOutcome {
   return {
     ok: r.ok,
-    message: r.ok ? `${r.releaseCount ?? 0} releases returned${r.caps?.serverTitle ? ` by ${r.caps.serverTitle}` : ''}` : undefined,
+    message: r.ok ? t('settings.indexers.indexerFields.valueReleasesReturnedValue2', { value: r.releaseCount ?? 0, value2: r.caps?.serverTitle ? ` by ${r.caps.serverTitle}` : '' }) : undefined,
     warnings: [],
     errors: r.error ? [`${r.error.message} (${r.error.code})`] : [],
   };
@@ -108,9 +109,9 @@ export function CategoryTree({
   value: readonly number[];
   onChange: (ids: number[]) => void;
 }) {
-  if (categories.length === 0) return <p className="al-caption">No categories reported yet. Test the indexer to load them.</p>;
+  if (categories.length === 0) return <p className="al-caption">{t('settings.indexers.indexerFields.noCategoriesReportedYetTest')}</p>;
   return (
-    <ul id={id} className="al-cat-tree" aria-label="Categories">
+    <ul id={id} className="al-cat-tree" aria-label={t('common.categories')}>
       {categories.map((cat) => {
         const state = parentState(cat, value);
         return (

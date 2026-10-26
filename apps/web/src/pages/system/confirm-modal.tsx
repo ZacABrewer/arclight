@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { errorMessage } from '../../api/client.js';
 import { Button, ErrorBlock, Modal } from '../../arclight/index.js';
+import { t } from '../../i18n/index.js';
 
 export interface ConfirmModalProps {
   open: boolean;
@@ -40,7 +41,7 @@ export function ConfirmModal({ open, title, children, confirmLabel, onCancel, on
       footer={
         <>
           <Button variant="ghost" onClick={close}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button variant="danger-solid" loading={busy} onClick={() => void confirm()}>
             {confirmLabel}
@@ -49,7 +50,7 @@ export function ConfirmModal({ open, title, children, confirmLabel, onCancel, on
       }
     >
       {children}
-      {error ? <ErrorBlock title={`${confirmLabel} failed`}>{error}</ErrorBlock> : null}
+      {error ? <ErrorBlock title={t('system.confirmModal.confirmlabelFailed', { confirmLabel })}>{error}</ErrorBlock> : null}
     </Modal>
   );
 }

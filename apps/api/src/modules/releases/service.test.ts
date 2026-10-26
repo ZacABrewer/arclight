@@ -99,6 +99,20 @@ describe('RSS processing', () => {
     expect(h.downloads.grabs.map((g) => g.request.title)).toEqual(['Show.Name.S01E01.720p.HDTV-OK']);
   });
 
+  it('rejects releases the injected release filter refuses (tracker freeleech-only)', async () => {
+    const releaseFilter = vi.fn((_indexerId: number, r: { downloadVolumeFactor?: number | undefined }) =>
+      r.downloadVolumeFactor === 0 ? null : { reason: 'notFreeleech', message: 'not freeleech' },
+    );
+    const h = await tvSetup({ deps: { releaseFilter } });
+    const decisions = await h.service.processReleases(
+      [makeRelease('Show.Name.S01E01.1080p.WEB-DL-PAID', { seeders: 999 }), makeRelease('Show.Name.S01E01.720p.HDTV-FL', { downloadVolumeFactor: 0 })],
+      'rss',
+    );
+    expect(releaseFilter).toHaveBeenCalledWith(1, expect.objectContaining({ title: 'Show.Name.S01E01.1080p.WEB-DL-PAID' }));
+    expect(decisions.find((d) => d.title.endsWith('-PAID'))?.rejections).toContainEqual(expect.objectContaining({ reason: 'notFreeleech', type: 'permanent' }));
+    expect(h.downloads.grabs.map((g) => g.request.title)).toEqual(['Show.Name.S01E01.720p.HDTV-FL']);
+  });
+
   it('downloads a usenet release as NZB bytes and passes them as `nzb`', async () => {
     const h = await tvSetup();
     await h.service.processReleases([makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP', { protocol: 'usenet' })], 'rss');
