@@ -48,6 +48,15 @@ export const NOTIFICATION_TRIGGERS = [
   'onRequestAvailable',
   'onIssueCreated',
   'onIssueUpdated',
+  // Download problems (download timeline, VPN kill switch, disk space health checks).
+  'onDownloadStalled',
+  'onKillSwitch',
+  'onKillSwitchResumed',
+  'onImportProblem',
+  'onDiskSpaceLow',
+  // Any other timeline entry worth hearing about (recovered, replaced release, ...).
+  'onDownloadRecovered',
+  'onDailySummary',
 ] as const;
 export type NotificationTrigger = (typeof NOTIFICATION_TRIGGERS)[number];
 
@@ -83,6 +92,8 @@ export const NotificationConnection = z.object({
   ...triggerShape,
   /** Send health Warnings too (Errors are always sent when onHealthIssue is on). */
   includeHealthWarnings: z.boolean(),
+  /** Hold non-urgent alerts during quiet hours and send them as one batch afterwards. */
+  respectQuietHours: z.boolean(),
   /** Tag ids. Empty: all media. Otherwise only media sharing a tag (non-media events always pass). */
   tags: z.array(z.number().int()),
   settings: NotificationSettingsJson,
@@ -97,6 +108,7 @@ export const NotificationInput = z.object({
   enabled: z.boolean().default(true),
   ...triggerInputShape,
   includeHealthWarnings: z.boolean().default(false),
+  respectQuietHours: z.boolean().default(true),
   tags: z.array(z.number().int()).default([]),
   settings: NotificationSettingsJson.default({}),
 });

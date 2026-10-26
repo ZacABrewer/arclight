@@ -28,6 +28,7 @@ import { blocklistModule } from './modules/blocklist/index.js';
 import { releasesModuleWith } from './modules/releases/index.js';
 import { importsModuleWith } from './modules/imports/index.js';
 import { notificationsModuleWith } from './modules/notifications/index.js';
+import { summaryModule } from './modules/summary/index.js';
 import { calendarModule } from './modules/calendar/index.js';
 import { importListsModule } from './modules/import-lists/index.js';
 import { logsModule } from './modules/logs/index.js';
@@ -131,6 +132,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     sceneMappingModule,
     // Imports dispatch their own import/upgrade notifications through the wiring.
     notificationsModuleWith({ translateImported: false }),
+    // Daily summary and alert settings (quiet hours) over notifications, health and the queue.
+    summaryModule,
     mediaServersModule,
     retentionModule,
     mediaAnalysisModule,

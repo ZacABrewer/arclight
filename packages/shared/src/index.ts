@@ -17,6 +17,7 @@ export * from './scene-mapping.js';
 export * from './imports.js';
 export * from './history.js';
 export * from './notifications.js';
+export * from './alerts.js';
 export * from './calendar.js';
 export * from './vpn.js';
 export * from './auth.js';

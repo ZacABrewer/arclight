@@ -194,8 +194,42 @@ export function eventSubject(event: NotificationEvent): string {
       return 'Retention Summary';
     case 'fileTranscoded':
       return `${noun(event.media, event.episodes)} File Transcoded`;
+    case 'downloadStalled':
+      return 'Download Stalled';
+    case 'killSwitch':
+      return event.pausedMinutes !== undefined ? 'Downloads Still Paused by Kill Switch' : 'Downloads Paused by Kill Switch';
+    case 'killSwitchResumed':
+      return 'Downloads Resumed';
+    case 'importProblem':
+      return event.problem === 'failed' ? 'Import Failed' : 'Import Blocked';
+    case 'diskSpaceLow':
+      return event.health.status === 'error' ? 'Disk Full' : 'Disk Space Low';
+    case 'downloadUpdate':
+      return `Download ${timelineTypeLabel(event.timelineType)}`;
+    case 'dailySummary':
+      return 'Daily Summary';
+    case 'heldAlerts':
+      return 'Alerts From Quiet Hours';
   }
 }
+
+/** `recovered` -> "Recovered", `releaseReplaced` -> "Release Replaced". */
+export function timelineTypeLabel(type: string): string {
+  const spaced = type.replace(/([a-z0-9])([A-Z])/g, '$1 $2').replace(/[_-]+/g, ' ').trim();
+  return spaced.replace(/\b\w/g, (c) => c.toUpperCase()) || 'Update';
+}
+
+/** "1 h 5 min", "12 min", "45 s". */
+export function formatDuration(ms: number): string {
+  const totalMinutes = Math.floor(Math.max(0, ms) / 60_000);
+  if (totalMinutes === 0) return `${Math.round(Math.max(0, ms) / 1000)} s`;
+  const hours = Math.floor(totalMinutes / 60);
+  const minutes = totalMinutes % 60;
+  if (hours === 0) return `${minutes} min`;
+  return minutes === 0 ? `${hours} h` : `${hours} h ${minutes} min`;
+}
+
+const SEVERITY_RANK: Record<Severity, number> = { info: 0, success: 0, upgrade: 0, warning: 1, error: 2 };
 
 const RETENTION_ACTION_LABELS: Record<RetentionLine['action'], string> = {
   unmonitor: 'unmonitor',
@@ -224,6 +258,27 @@ export function eventSeverity(event: NotificationEvent): Severity {
       return event.health.status === 'error' ? 'error' : 'warning';
     case 'retention':
       return event.totalFailed > 0 ? 'warning' : 'info';
+    case 'killSwitchResumed':
+      return 'success';
+    case 'importProblem':
+      return event.problem === 'failed' ? 'error' : 'warning';
+    case 'diskSpaceLow':
+      return event.health.status === 'error' ? 'error' : 'warning';
+    case 'downloadUpdate':
+      return event.severity === 'ok' ? 'success' : event.severity;
+    case 'dailySummary':
+      return event.summary.counts.failed > 0 || event.summary.healthIssues.some((h) => h.status === 'error') ? 'warning' : 'info';
+    case 'heldAlerts': {
+      let worst: Severity = 'info';
+      for (const inner of event.events) {
+        const s = eventSeverity(inner);
+        if (SEVERITY_RANK[s] > SEVERITY_RANK[worst]) worst = s;
+      }
+      return worst;
+    }
+    case 'killSwitch':
+      return event.pausedMinutes !== undefined ? 'error' : 'warning';
+    case 'downloadStalled':
     case 'manualInteractionRequired':
     case 'mediaDeleted':
     case 'fileDeleted':
@@ -258,6 +313,14 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   requestsDigest: 'Requests Digest',
   retention: 'Retention Summary',
   fileTranscoded: 'On File Transcoded',
+  downloadStalled: 'On Download Stalled',
+  killSwitch: 'On Kill Switch',
+  killSwitchResumed: 'On Kill Switch Resumed',
+  importProblem: 'On Import Problem',
+  diskSpaceLow: 'On Disk Space Low',
+  downloadUpdate: 'On Download Recovered',
+  dailySummary: 'Daily Summary',
+  heldAlerts: 'Held Alerts',
 };
 
 function releaseFields(release: ReleaseInfo): FormattedField[] {
@@ -475,6 +538,117 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Size', value: `${formatBytes(event.sizeBefore)} -> ${formatBytes(event.sizeAfter)}`, inline: true });
       fields.push({ name: 'Path', value: event.file.relativePath });
       break;
+    case 'downloadStalled':
+    case 'importProblem':
+    case 'downloadUpdate':
+      title = event.download.title;
+      if (event.message) fields.push({ name: 'Message', value: truncate(event.message, 500) });
+      if (event.type === 'downloadUpdate') fields.push({ name: 'Event', value: timelineTypeLabel(event.timelineType), inline: true });
+      fields.push({ name: 'Download Id', value: event.download.downloadId, inline: true });
+      if (base) {
+        link = `${base}/activity/queue`;
+        actions.push({ label: 'Open queue', url: link });
+      }
+      break;
+    case 'killSwitch': {
+      title = `${event.pausedCount} download${event.pausedCount === 1 ? '' : 's'} paused`;
+      if (event.reason) fields.push({ name: 'Reason', value: truncate(event.reason, 300) });
+      fields.push({ name: 'Since', value: event.since, inline: true });
+      if (event.pausedMinutes !== undefined) {
+        fields.push({ name: 'Paused For', value: formatDuration(event.pausedMinutes * 60_000), inline: true });
+      }
+      if (event.titles.length > 0) {
+        const lines = [...event.titles];
+        if (event.pausedCount > lines.length) lines.push(`...and ${event.pausedCount - lines.length} more`);
+        fields.push({ name: 'Downloads', value: lines.join('\n') });
+      }
+      break;
+    }
+    case 'killSwitchResumed':
+      title = `${event.resumedCount} download${event.resumedCount === 1 ? '' : 's'} resumed`;
+      fields.push({ name: 'Paused For', value: formatDuration(event.durationMs), inline: true });
+      if (event.reason) fields.push({ name: 'Reason', value: truncate(event.reason, 300) });
+      break;
+    case 'diskSpaceLow':
+      title = truncate(event.health.message, 200);
+      fields.push({ name: 'Source', value: event.health.source, inline: true });
+      fields.push({ name: 'Level', value: event.health.status, inline: true });
+      fields.push({ name: 'Message', value: event.health.message });
+      if (event.health.wikiUrl) fields.push({ name: 'More Info', value: event.health.wikiUrl });
+      break;
+    case 'dailySummary': {
+      const s = event.summary;
+      const c = s.counts;
+      title = `${c.grabbed} grabbed, ${c.imported} imported, ${c.failed} failed`;
+      fields.push({
+        name: 'Downloads',
+        value: [
+          `Grabbed: ${c.grabbed}`,
+          `Imported: ${c.imported}`,
+          `Failed: ${c.failed}`,
+          `Stalled: ${c.stalled}`,
+          `Recovered: ${c.recovered}`,
+          `Replaced: ${c.replaced}`,
+        ].join('\n'),
+      });
+      if (s.killSwitch.pauses > 0) {
+        fields.push({
+          name: 'Kill Switch',
+          value: `${s.killSwitch.pauses} pause${s.killSwitch.pauses === 1 ? '' : 's'}, ${formatDuration(s.killSwitch.totalMs)} in total`,
+        });
+      }
+      if (s.disk.length > 0) {
+        fields.push({
+          name: 'Disk Free',
+          value: s.disk
+            .map((d) => {
+              if (d.freeBytes === null) return `${d.path}: unknown`;
+              const change = d.changeBytes === null || d.changeBytes === 0 ? '' : ` (${d.changeBytes > 0 ? '+' : '-'}${formatBytes(Math.abs(d.changeBytes))})`;
+              return `${d.path}: ${formatBytes(d.freeBytes)}${change}`;
+            })
+            .join('\n'),
+        });
+      }
+      if (s.problems.length > 0) {
+        fields.push({
+          name: 'Problems',
+          value: s.problems
+            .slice(0, 5)
+            .map((p) => `${timelineTypeLabel(p.type)}: ${p.title}${p.message ? ` (${truncate(p.message, 120)})` : ''}`)
+            .join('\n'),
+        });
+      }
+      fields.push({
+        name: 'Health',
+        value: s.healthIssues.length === 0 ? 'No issues' : s.healthIssues.map((h) => `${h.status}: ${truncate(h.message, 160)}`).join('\n'),
+      });
+      const dl = s.downloading;
+      fields.push({
+        name: 'Downloading',
+        value:
+          dl.count === 0
+            ? 'Nothing'
+            : [
+                ...dl.items.map((d) => `${d.title} (${Math.round(d.progress * 100)}%)`),
+                ...(dl.count > dl.items.length ? [`...and ${dl.count - dl.items.length} more`] : []),
+              ].join('\n'),
+      });
+      if (base) {
+        link = `${base}/activity/history`;
+        actions.push({ label: 'Open history', url: link });
+      }
+      break;
+    }
+    case 'heldAlerts': {
+      title = `${event.events.length} alert${event.events.length === 1 ? '' : 's'} held during quiet hours`;
+      const lines = event.events.slice(0, 20).map((inner) => {
+        const f = formatEvent(inner);
+        return f.title === f.subject ? f.subject : `${f.subject}: ${f.title}`;
+      });
+      if (event.events.length > lines.length) lines.push(`...and ${event.events.length - lines.length} more`);
+      fields.push({ name: 'Alerts', value: lines.join('\n') });
+      break;
+    }
     case 'issueCreated':
     case 'issueUpdated': {
       const issue = event.issue;

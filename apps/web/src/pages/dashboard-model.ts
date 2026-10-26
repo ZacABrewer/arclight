@@ -1,7 +1,7 @@
-import type { CalendarItem, HealthCheck, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
+import type { CalendarItem, DailySummary, HealthCheck, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
 import type { TrailState } from '../arclight/index.js';
 import { formatBytes, formatClock, formatSpan } from './system/format.js';
-import { t } from '../i18n/index.js';
+import { formatRelative, t } from '../i18n/index.js';
 
 // Pure view models for the dashboard panes (Page 01), tested without rendering.
 
@@ -165,5 +165,69 @@ export function queueRow(item: QueueItem): QueueRowModel {
     eta: trail === 'active' && item.eta != null ? formatSpan(item.eta) : trail === 'complete' ? 'done' : '—',
     trail,
     chip,
+  };
+}
+
+// ---- daily summary card -------------------------------------------------------------------
+
+/** "+1.2 GB" / "−340 MB" / "±0 B"; "—" when unknown. Positive means more free space. */
+export function formatBytesChange(bytes: number | null | undefined): string {
+  if (bytes == null || !Number.isFinite(bytes)) return '—';
+  if (bytes === 0) return '±0 B';
+  return `${bytes > 0 ? '+' : '−'}${formatBytes(Math.abs(bytes))}`;
+}
+
+export interface SummaryCount {
+  key: keyof DailySummary['counts'];
+  label: string;
+  value: number;
+  /** Failures and stalls are tinted when above zero. */
+  warn: boolean;
+}
+
+export interface SummaryDiskRow {
+  key: string;
+  path: string;
+  free: string;
+  change: string;
+  /** Free space shrank since the previous summary. */
+  shrinking: boolean;
+}
+
+export interface SummaryCardModel {
+  generatedAt: string;
+  /** "5 hours ago" */
+  generatedAgo: string;
+  counts: SummaryCount[];
+  killSwitch: { pauses: number; total: string };
+  disk: SummaryDiskRow[];
+  healthIssues: number;
+  downloading: number;
+}
+
+const SUMMARY_COUNTS: ReadonlyArray<{ key: SummaryCount['key']; readonly label: string; warnable: boolean }> = [
+  { key: 'grabbed', get label() { return t('dashboard.summary.grabbed'); }, warnable: false },
+  { key: 'imported', get label() { return t('dashboard.summary.imported'); }, warnable: false },
+  { key: 'failed', get label() { return t('dashboard.summary.failed'); }, warnable: true },
+  { key: 'stalled', get label() { return t('dashboard.summary.stalled'); }, warnable: true },
+  { key: 'replaced', get label() { return t('dashboard.summary.replaced'); }, warnable: false },
+];
+
+/** The dashboard's daily summary card: counts, kill-switch time, disk deltas, open problems. */
+export function summaryCard(summary: DailySummary, now: number = Date.now()): SummaryCardModel {
+  return {
+    generatedAt: summary.generatedAt,
+    generatedAgo: formatRelative(summary.generatedAt, now),
+    counts: SUMMARY_COUNTS.map((c) => ({ key: c.key, label: c.label, value: summary.counts[c.key], warn: c.warnable && summary.counts[c.key] > 0 })),
+    killSwitch: { pauses: summary.killSwitch.pauses, total: formatSpan(summary.killSwitch.totalMs) },
+    disk: summary.disk.map((d) => ({
+      key: `${d.kind}:${d.path}`,
+      path: d.path,
+      free: d.freeBytes == null ? t('dashboard.freeSpaceUnknown') : t('dashboard.summary.free', { size: formatBytes(d.freeBytes) }),
+      change: formatBytesChange(d.changeBytes),
+      shrinking: d.changeBytes != null && d.changeBytes < 0,
+    })),
+    healthIssues: summary.healthIssues.filter((c) => c.status !== 'ok').length,
+    downloading: summary.downloading.count,
   };
 }

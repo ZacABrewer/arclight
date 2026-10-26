@@ -22,6 +22,7 @@ import type { FieldDefinition, FormValues } from '../../../components/forms/type
 import { useDeleteNotification, useNotificationList, useNotificationSchema, useSaveNotification } from '../../../hooks/settings.js';
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
+import { AlertSettingsSection } from './alert-settings-section.js';
 import './notifications.css';
 import { t } from '../../../i18n/index.js';
 
@@ -72,18 +73,83 @@ export function requestTriggerLabel(flag: (typeof REQUEST_TRIGGERS)[number]): st
   return REQUEST_TRIGGER_LABELS[flag];
 }
 
+/** Download-problem triggers (timeline, kill switch, disk space) and the daily summary, in display order. */
+export const DOWNLOAD_TRIGGERS = [
+  'onDownloadStalled',
+  'onImportProblem',
+  'onDownloadRecovered',
+  'onKillSwitch',
+  'onKillSwitchResumed',
+  'onDiskSpaceLow',
+  'onDailySummary',
+] as const satisfies readonly NotificationTrigger[];
+
+type DownloadTrigger = (typeof DOWNLOAD_TRIGGERS)[number];
+
+const DOWNLOAD_TRIGGER_LABELS: Record<DownloadTrigger, string> = {
+  get onDownloadStalled() {
+    return t('settings.notifications.downloadStalled');
+  },
+  get onImportProblem() {
+    return t('settings.notifications.importProblem');
+  },
+  get onDownloadRecovered() {
+    return t('settings.notifications.downloadRecovered');
+  },
+  get onKillSwitch() {
+    return t('settings.notifications.killSwitchEngaged');
+  },
+  get onKillSwitchResumed() {
+    return t('settings.notifications.killSwitchResumed');
+  },
+  get onDiskSpaceLow() {
+    return t('settings.notifications.diskSpaceLow');
+  },
+  get onDailySummary() {
+    return t('settings.notifications.dailySummary');
+  },
+};
+
+export function downloadTriggerLabel(flag: DownloadTrigger): string {
+  return DOWNLOAD_TRIGGER_LABELS[flag];
+}
+
+/** Card tag for any flag: the grouped triggers keep their own labels. */
+function flagTag(flag: string): string {
+  return DOWNLOAD_TRIGGER_SET.has(flag) ? downloadTriggerLabel(flag as DownloadTrigger) : eventFlagTag(flag);
+}
+
 /**
- * Request/issue triggers the agent supports: a `supportsOn*` flag decides when the source
- * carries one; otherwise the trigger shows when the source has the boolean at all.
+ * Triggers of `list` the agent supports: a `supportsOn*` flag decides when the source carries
+ * one; otherwise the trigger shows when the source has the boolean at all.
  */
-export function supportedRequestTriggers(source: Record<string, unknown>): Array<(typeof REQUEST_TRIGGERS)[number]> {
-  return REQUEST_TRIGGERS.filter((item) => {
+function supportedTriggers<T extends NotificationTrigger>(list: readonly T[], source: Record<string, unknown>): T[] {
+  return list.filter((item) => {
     const support = source[supportFlagFor(item)];
     return typeof support === 'boolean' ? support : typeof source[item] === 'boolean';
   });
 }
 
+/** Request/issue triggers the agent supports. */
+export function supportedRequestTriggers(source: Record<string, unknown>): Array<(typeof REQUEST_TRIGGERS)[number]> {
+  return supportedTriggers(REQUEST_TRIGGERS, source);
+}
+
+/** Download-problem and summary triggers the agent supports. */
+export function supportedDownloadTriggers(source: Record<string, unknown>): DownloadTrigger[] {
+  return supportedTriggers(DOWNLOAD_TRIGGERS, source);
+}
+
 const REQUEST_TRIGGER_SET = new Set<string>(REQUEST_TRIGGERS);
+const DOWNLOAD_TRIGGER_SET = new Set<string>(DOWNLOAD_TRIGGERS);
+
+/**
+ * Editor values for a connection or template. Rows saved before quiet hours existed carry no
+ * `respectQuietHours`; they read as on, the server default.
+ */
+export function notificationFormBase(source: Record<string, unknown>): FormValues {
+  return { ...source, respectQuietHours: typeof source.respectQuietHours === 'boolean' ? source.respectQuietHours : true };
+}
 
 function toBody(values: FormValues, schema: NotificationSchema | undefined): NotificationInput {
   const { id: _id, ...rest } = fromNotificationForm(values, schema?.fields ?? []);
@@ -99,7 +165,7 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
     return defs.some((f) => f.name === 'name') ? defs : [NAME_FIELD, ...defs];
   }, [editing.schema]);
   const base = toNotificationForm(
-    (existing ?? { ...editing.schema!.template, name: editing.schema!.template.name || editing.schema!.implementationName }) as FormValues,
+    notificationFormBase(existing ?? { ...editing.schema!.template, name: editing.schema!.template.name || editing.schema!.implementationName }),
     editing.schema?.fields ?? [],
   );
   const form = useSchemaForm(fields, base);
@@ -108,8 +174,9 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Flags come from the template (complete list) merged with whatever the row carries.
   const template = (editing.schema?.template ?? {}) as Record<string, unknown>;
-  const flags = [...new Set([...eventFlags(template), ...eventFlags(form.values)])].filter((f) => !REQUEST_TRIGGER_SET.has(f)).sort();
+  const flags = [...new Set([...eventFlags(template), ...eventFlags(form.values)])].filter((f) => !REQUEST_TRIGGER_SET.has(f) && !DOWNLOAD_TRIGGER_SET.has(f)).sort();
   const requestFlags = supportedRequestTriggers({ ...template, ...(existing ?? {}), ...form.values });
+  const downloadFlags = supportedDownloadTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const tags = Array.isArray(form.values.tags) ? (form.values.tags as number[]) : [];
 
   const submit = () => {
@@ -176,6 +243,30 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
               </p>
             </fieldset>
           ) : null}
+          {downloadFlags.length ? (
+            <fieldset className="al-event-flags">
+              <legend className="al-label">{t('settings.notifications.downloadProblems')}</legend>
+              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.downloadProblemEvents')}>
+                {downloadFlags.map((flag) => (
+                  <Checkbox
+                    key={flag}
+                    label={downloadTriggerLabel(flag)}
+                    checked={form.values[flag] === true}
+                    onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          ) : null}
+          <fieldset className="al-event-flags">
+            <legend className="al-label">{t('settings.notifications.delivery')}</legend>
+            <Checkbox
+              label={t('settings.notifications.respectQuietHours')}
+              hint={t('settings.notifications.respectQuietHoursHint')}
+              checked={form.values.respectQuietHours !== false}
+              onChange={(e) => form.setValues({ ...form.values, respectQuietHours: e.currentTarget.checked })}
+            />
+          </fieldset>
           {fields.some((f) => f.name === 'tags') ? null : (
             <Field label={t('common.tags')} hint={t('settings.notifications.onlyNotifyForItemsWith')}>
               <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
@@ -226,7 +317,7 @@ function NotificationCard({ notification: n, schema, onEdit }: { notification: N
     >
       <span className="al-card-line">{schema?.implementationName ?? n.implementation}</span>
       {on.map((f) => (
-        <Tag key={f}>{eventFlagTag(f)}</Tag>
+        <Tag key={f}>{flagTag(f)}</Tag>
       ))}
     </ItemCard>
   );
@@ -268,6 +359,7 @@ export function NotificationsPage() {
           </CardGrid>
         )}
       </SettingsSection>
+      <AlertSettingsSection />
       {picking ? (
         <Modal open size={640} onClose={() => setPicking(false)} title={t('settings.notifications.addConnection')}>
           {schemas.isPending ? (

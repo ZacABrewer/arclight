@@ -43,6 +43,7 @@ export * from '../modules/blocklist/schema.js';
 export * from '../modules/releases/schema.js';
 export * from '../modules/imports/schema.js';
 export * from '../modules/notifications/schema.js';
+export * from '../modules/summary/schema.js';
 export * from '../modules/auth/schema.js';
 export * from '../modules/import-lists/schema.js';
 export * from '../modules/migrate/schema.js';

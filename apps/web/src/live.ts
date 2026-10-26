@@ -77,6 +77,10 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       void qc.invalidateQueries({ queryKey: requestKeys.discover.titles });
       void qc.invalidateQueries({ queryKey: requestKeys.watchlist.all });
       return;
+    case 'summary':
+      // A daily summary was stored: the dashboard card and the summary list.
+      void qc.invalidateQueries({ queryKey: ['summary'] });
+      return;
     case 'issue':
       void qc.invalidateQueries({ queryKey: requestKeys.issues.all });
       // Title pages show the open-issue count.

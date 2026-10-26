@@ -53,6 +53,13 @@ export const TRIGGER_EVENT: Record<NotificationTrigger, NotificationEventType> =
   onRequestAvailable: 'requestAvailable',
   onIssueCreated: 'issueCreated',
   onIssueUpdated: 'issueUpdated',
+  onDownloadStalled: 'downloadStalled',
+  onKillSwitch: 'killSwitch',
+  onKillSwitchResumed: 'killSwitchResumed',
+  onImportProblem: 'importProblem',
+  onDiskSpaceLow: 'diskSpaceLow',
+  onDownloadRecovered: 'downloadUpdate',
+  onDailySummary: 'dailySummary',
 };
 
 const IMPLEMENTATION_NAMES: Record<NotificationAgentKind, string> = {
@@ -246,6 +253,7 @@ export function schemaFor(kind: NotificationAgentKind): NotificationSchema {
       enabled: true,
       ...triggers,
       includeHealthWarnings: false,
+      respectQuietHours: true,
       tags: [],
       settings: defaults,
     },

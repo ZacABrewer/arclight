@@ -2,12 +2,32 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import type { CalendarItem, MediaRequest, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
+import type { CalendarItem, DailySummary, MediaRequest, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
 import { ToastProvider } from '../components/toast.js';
 import { createToastStore } from '../lib/toast.js';
 import { createQueryClient } from '../query-client.js';
 import { routeTree } from '../router.js';
-import { LOW_DISK_BYTES, attentionChecks, queueRow, storageRows, upcomingRows, vpnSummary } from './dashboard-model.js';
+import { LOW_DISK_BYTES, attentionChecks, formatBytesChange, queueRow, storageRows, summaryCard, upcomingRows, vpnSummary } from './dashboard-model.js';
+
+const summary = (over: Partial<DailySummary> = {}): DailySummary => ({
+  id: 7,
+  generatedAt: '2026-10-25T08:00:00.000Z',
+  periodStart: '2026-10-24T08:00:00.000Z',
+  periodEnd: '2026-10-25T08:00:00.000Z',
+  counts: { grabbed: 12, imported: 10, failed: 1, stalled: 0, recovered: 2, replaced: 3 },
+  killSwitch: { pauses: 2, totalMs: 14 * 60_000 },
+  disk: [
+    { path: '/media/tv', kind: 'rootFolder', freeBytes: 412 * 1024 ** 3, changeBytes: -(1.5 * 1024 ** 3) },
+    { path: '/downloads', kind: 'download', freeBytes: null, changeBytes: null },
+  ],
+  problems: [],
+  healthIssues: [
+    { source: 'a', status: 'warning', message: 'w' },
+    { source: 'b', status: 'ok', message: '' },
+  ],
+  downloading: { count: 4, items: [] },
+  ...over,
+});
 
 class FakeSocket {
   onopen = null;
@@ -128,15 +148,44 @@ describe('dashboard view models', () => {
     expect(queueRow(queueItem({ status: 'paused' }))).toMatchObject({ trail: 'paused', eta: '—' });
     expect(attentionChecks([{ source: 'a', status: 'ok', message: '' }, { source: 'b', status: 'warning', message: 'w' }, { source: 'c', status: 'error', message: 'e' }]).map((c) => c.source)).toEqual(['c', 'b']);
   });
+
+  it('formats a disk-space change with its sign', () => {
+    expect(formatBytesChange(1.5 * 1024 ** 3)).toBe('+1.5 GB');
+    expect(formatBytesChange(-340 * 1024 ** 2)).toBe('−340 MB');
+    expect(formatBytesChange(0)).toBe('±0 B');
+    expect(formatBytesChange(null)).toBe('—');
+  });
+
+  it('builds the daily summary card: counts, kill-switch time, disk deltas, open problems', () => {
+    const card = summaryCard(summary(), Date.parse('2026-10-25T13:00:00.000Z'));
+    expect(card.generatedAgo).toBe('5 hours ago');
+    expect(card.counts.map((c) => [c.label, c.value, c.warn])).toEqual([
+      ['Grabbed', 12, false],
+      ['Imported', 10, false],
+      ['Failed', 1, true],
+      ['Stalled', 0, false],
+      ['Replaced', 3, false],
+    ]);
+    expect(card.killSwitch).toEqual({ pauses: 2, total: '14m' });
+    expect(card.disk.map((d) => [d.path, d.free, d.change, d.shrinking])).toEqual([
+      ['/media/tv', '412 GB free', '−1.5 GB', true],
+      ['/downloads', 'Free space unknown', '—', false],
+    ]);
+    expect(card.healthIssues).toBe(1);
+    expect(card.downloading).toBe(4);
+  });
 });
 
 describe('dashboard page', () => {
   let calls: Array<{ url: string; method: string }>;
+  let responses: Record<string, unknown>;
 
   beforeEach(() => {
     calls = [];
     vi.stubGlobal('WebSocket', FakeSocket);
-    const responses: Record<string, unknown> = {
+    responses = {
+      '/api/v1/summary/latest': summary(),
+      '/api/v1/summary': summary({ id: 8 }),
       '/api/v1/calendar': [episodeItem(1, inHours(1), { title: 'Severance', network: 'Apple TV+' })],
       '/api/v1/vpn/status': { enabled: true, connected: true, city: 'Amsterdam', country: 'Netherlands', provider: 'wireguard-windows', forwardedPort: 51413, lastChecked: null, lastChanged: null },
       '/api/v1/rootfolder': [{ id: 1, path: '/media/tv', mediaType: 'series', freeSpaceBytes: Math.round(0.9 * 1024 ** 4), accessible: true }],
@@ -206,5 +255,25 @@ describe('dashboard page', () => {
     expect(screen.getByText('Movie · Maya')).toBeTruthy();
     fireEvent.click(approve);
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/request/11/approve' && c.method === 'POST')).toBe(true));
+  });
+
+  it('shows the latest daily summary with a link to History', async () => {
+    renderDashboard();
+    const card = (await screen.findByText('Daily summary')).closest('section') as HTMLElement;
+    expect(await within(card).findByText('Grabbed')).toBeTruthy();
+    expect(within(card).getByText('12')).toBeTruthy();
+    expect(card.textContent).toContain('2 kill-switch pauses · 14m');
+    expect(within(card).getByText('−1.5 GB')).toBeTruthy();
+    expect(within(card).getByText('1 health issue · 4 still downloading')).toBeTruthy();
+    expect(within(card).getByRole('link', { name: 'History' }).getAttribute('href')).toBe('/activity/history');
+  });
+
+  it('offers to build the first summary when there is none', async () => {
+    responses['/api/v1/summary/latest'] = null;
+    renderDashboard();
+    const card = (await screen.findByText('Daily summary')).closest('section') as HTMLElement;
+    expect(await within(card).findByText('No summary yet')).toBeTruthy();
+    fireEvent.click(within(card).getByRole('button', { name: 'Build now' }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/summary' && c.method === 'POST')).toBe(true));
   });
 });

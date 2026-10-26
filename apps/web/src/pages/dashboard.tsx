@@ -5,15 +5,16 @@ import { Button, EmptyState, ErrorBlock, PageHeader, Pane, SectionLabel, Skeleto
 import { useAuth } from '../auth/auth-context.js';
 import { usePermissions } from '../features/requests/status.js';
 import { useQueue } from '../hooks/activity.js';
+import { useGenerateSummary, useLatestSummary } from '../hooks/alerts.js';
 import { useCalendar } from '../hooks/library-calendar.js';
 import { useRootFolders } from '../hooks/library.js';
 import { useApproveRequest, useRequestCount, useRequests } from '../hooks/requests.js';
 import { useHealth } from '../hooks/system.js';
 import { useTorrentStatus } from '../hooks/torrent.js';
 import { useVpnStatus } from '../hooks/vpn.js';
-import { attentionChecks, queueRow, storageRows, upcomingRows, vpnSummary } from './dashboard-model.js';
+import { attentionChecks, queueRow, storageRows, summaryCard, upcomingRows, vpnSummary } from './dashboard-model.js';
 import { formatClock, formatDay, formatRate } from './system/format.js';
-import { t } from '../i18n/index.js';
+import { formatDateTime, t } from '../i18n/index.js';
 
 // Page 01. Two hero panes (chamfer tl / br) frame the open centre where the backdrop spire
 // stands; two decorative traces lead from them toward it. Queue and Requests sit below.
@@ -344,6 +345,82 @@ function RequestsPane() {
   );
 }
 
+/** The latest daily summary in brief; "Build now" makes the first one. */
+function SummaryPane() {
+  const latest = useLatestSummary();
+  const generate = useGenerateSummary();
+  const card = latest.data ? summaryCard(latest.data) : null;
+  return (
+    <Pane
+      className="dash-summary"
+      title={t('dashboard.summary.title')}
+      actions={
+        <Link to="/activity/history" className="al-link">
+          {t('common.history')}
+        </Link>
+      }
+    >
+      {latest.isLoading ? (
+        <Skeleton lines={3} />
+      ) : latest.isError ? (
+        <ErrorBlock title={t('dashboard.summary.couldntLoad')} onRetry={() => void latest.refetch()} />
+      ) : !card ? (
+        <EmptyState
+          title={t('dashboard.summary.noSummaryYet')}
+          action={
+            <Button size="sm" variant="secondary" loading={generate.isPending} onClick={() => generate.mutate(false)}>
+              {t('dashboard.summary.buildNow')}
+            </Button>
+          }
+        >
+          {t('dashboard.summary.noSummaryHint')}
+        </EmptyState>
+      ) : (
+        <div className="dash-summary__body">
+          <p className="dash-muted">
+            {t('dashboard.summary.built')}{' '}
+            <time className="al-num dash-data" dateTime={card.generatedAt} title={formatDateTime(card.generatedAt)}>
+              {card.generatedAgo}
+            </time>
+          </p>
+          <dl className="dash-summary__counts">
+            {card.counts.map((c) => (
+              <div key={c.key} data-tone={c.warn ? 'warn' : undefined}>
+                <dt>{c.label}</dt>
+                <dd className="al-num">{c.value}</dd>
+              </div>
+            ))}
+          </dl>
+          <p className="dash-muted">
+            {t('dashboard.summary.killSwitchPauses', { count: card.killSwitch.pauses })}
+            {card.killSwitch.pauses > 0 ? (
+              <>
+                {' · '}
+                <span className="al-num dash-data">{card.killSwitch.total}</span>
+              </>
+            ) : null}
+          </p>
+          {card.disk.length ? (
+            <ul className="dash-storage">
+              {card.disk.map((d) => (
+                <li key={d.key}>
+                  <span className="al-num dash-storage__path">{d.path}</span>
+                  <span className="al-num">
+                    {d.free} <span data-tone={d.shrinking ? 'warn' : undefined}>{d.change}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="dash-muted">
+            {t('dashboard.summary.healthIssues', { count: card.healthIssues })} · {t('dashboard.summary.stillDownloading', { count: card.downloading })}
+          </p>
+        </div>
+      )}
+    </Pane>
+  );
+}
+
 /** Two decorative traces from the hero panes toward the spire (kit Page 01 geometry). */
 function Traces() {
   return (
@@ -388,7 +465,10 @@ export function DashboardPage() {
       </div>
       <div className="dash-lower" data-admin={isAdmin || undefined}>
         {isAdmin ? <QueuePane /> : null}
-        <RequestsPane />
+        <div className="dash-side">
+          <RequestsPane />
+          {isAdmin ? <SummaryPane /> : null}
+        </div>
       </div>
     </div>
   );
