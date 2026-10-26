@@ -1,0 +1,53 @@
+{
+  "schemaVersion": 1,
+  "definitions": [
+    {
+      "id": "1337x",
+      "version": "ba7cdf4cc2e3",
+      "file": "1337x.yml",
+      "sha256": "ba7cdf4cc2e3ba3ae64e1c0018149817071088e7f3a7ea9371c1466d984af088"
+    },
+    {
+      "id": "eztv",
+      "version": "4be4ab93ad6e",
+      "file": "eztv.yml",
+      "sha256": "4be4ab93ad6e2d09ccf90820088e47fd574c865a4139d0f68df09c49d79538ef"
+    },
+    {
+      "id": "limetorrents",
+      "version": "498fe2ab58c1",
+      "file": "limetorrents.yml",
+      "sha256": "498fe2ab58c10737d709b16a87f9f40e448010e881f246e413bc0c9733610dc2"
+    },
+    {
+      "id": "nyaa",
+      "version": "51a62ac21cac",
+      "file": "nyaa.yml",
+      "sha256": "51a62ac21cace5a68add3da99e2c692b7560086ebf84e9e83b2526e0ebfef07f"
+    },
+    {
+      "id": "thepiratebay",
+      "version": "9ca2ad3423ba",
+      "file": "thepiratebay.yml",
+      "sha256": "9ca2ad3423badbeabecb9f88f8d8648da8bb5f15f351f05fc37ad9a7f3f0307e"
+    },
+    {
+      "id": "torlock",
+      "version": "15191da088e9",
+      "file": "torlock.yml",
+      "sha256": "15191da088e9f20bee386fd21554027c98187ac8ee3ebd889041a23130ab650d"
+    },
+    {
+      "id": "torrentgalaxy",
+      "version": "1c2933b0bd96",
+      "file": "torrentgalaxy.yml",
+      "sha256": "1c2933b0bd96591c635e313378b47f8a4bfb499666c31850e46f0be491559526"
+    },
+    {
+      "id": "yts",
+      "version": "593a2f50bc58",
+      "file": "yts.yml",
+      "sha256": "593a2f50bc58b974856df5fec32419063cb347145d79852bf3f1eb263a29624d"
+    }
+  ]
+}
