@@ -1,6 +1,8 @@
 # Authored for Arclight from general knowledge of the site layout (div-based result
-# table). Not yet verified against the live site (tested: false). The site sometimes
-# shows a JavaScript/Cloudflare check; attach a FlareSolverr proxy if searches fail.
+# table). torrentgalaxy.to stopped answering in 2025; the successor domains below come from
+# public knowledge and are NOT verified (tested: false). The successor may use a different
+# layout; re-check the selectors when verifying. The site sometimes shows a
+# JavaScript/Cloudflare check; attach a FlareSolverr proxy if searches fail.
 schemaVersion: 1
 id: torrentgalaxy
 name: TorrentGalaxy
@@ -11,8 +13,12 @@ encoding: UTF-8
 tested: false
 requestDelay: 3
 links:
-  - https://torrentgalaxy.to/
+  - https://torrentgalaxy.one/
+  - https://torrentgalaxy.info/
   - https://tgx.rs/
+legacylinks:
+  - https://torrentgalaxy.to/
+  - https://torrentgalaxy.mx/
 
 settings:
   - name: info_flaresolverr

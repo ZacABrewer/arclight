@@ -1,6 +1,8 @@
 # Authored for Arclight. EZTV's JSON API lists recent TV torrents and can filter by IMDb
 # id; keyword searches fall back to the latest list filtered with `andmatch`.
-# Not yet verified against the live service (tested: false).
+# `test` requests the plain latest-torrents listing (no imdb_id, no keyword), which the
+# API always fills, instead of the generic keyword probe that `andmatch` filters to nothing.
+# Mirrors are from public knowledge; not yet verified against the live service (tested: false).
 schemaVersion: 1
 id: eztv
 name: EZTV
@@ -11,9 +13,12 @@ encoding: UTF-8
 tested: false
 links:
   - https://eztvx.to/
+  - https://eztv.wf/
+  - https://eztv.tf/
+  - https://eztv.yt/
 legacylinks:
   - https://eztv.re/
-  - https://eztv.wf/
+  - https://eztv.ag/
 
 settings: []
 
@@ -26,6 +31,15 @@ caps:
   modes:
     search: [q]
     tv-search: [q, season, ep, imdbid]
+
+test:
+  path: "api/get-torrents"
+  inheritInputs: false
+  inputs:
+    limit: 30
+    page: 1
+  response:
+    type: json
 
 search:
   paths:

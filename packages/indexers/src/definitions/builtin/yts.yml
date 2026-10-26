@@ -1,5 +1,7 @@
 # Authored for Arclight. YTS publishes a JSON API where each movie carries several
-# torrents (one per quality); each torrent becomes a release. Not yet verified (tested: false).
+# torrents (one per quality); each torrent becomes a release. The runtime falls back through
+# `links` on DNS failures/5xx (yts.mx stopped resolving for some resolvers). Mirror list is
+# from public knowledge; not yet verified against the live service (tested: false).
 schemaVersion: 1
 id: yts
 name: YTS
@@ -10,9 +12,11 @@ encoding: UTF-8
 tested: false
 links:
   - https://yts.mx/
-legacylinks:
-  - https://yts.am/
   - https://yts.lt/
+  - https://yts.am/
+  - https://yts.ag/
+legacylinks:
+  - https://yts.rs/
 
 settings: []
 

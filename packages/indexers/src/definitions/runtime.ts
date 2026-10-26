@@ -95,6 +95,23 @@ const IMPLICIT_OPTIONAL = new Set([
 
 class FieldError extends Error {}
 
+/** A request that never got an HTTP response (DNS, refused, reset, timeout). */
+class NetworkFailure extends IndexerError {
+  readonly timedOut: boolean;
+  constructor(message: string, timedOut: boolean, cause: unknown) {
+    super('unreachable', message, { cause });
+    this.timedOut = timedOut;
+  }
+}
+
+function hostOf(url: string): string | undefined {
+  try {
+    return new URL(url).host.toLowerCase();
+  } catch {
+    return undefined;
+  }
+}
+
 interface HttpRequest {
   url: string;
   method: 'GET' | 'POST';
@@ -348,7 +365,7 @@ export class DefinitionRuntime {
   readonly definition: Definition;
   readonly jar: CookieJar;
   readonly categoryMap: CategoryMap;
-  readonly siteLink: string;
+  private currentLink: string;
   private readonly config: TemplateVars;
   private readonly fetchImpl: typeof fetch;
   private readonly limiter: () => Promise<void>;
@@ -364,7 +381,7 @@ export class DefinitionRuntime {
     this.jar = options.jar ?? new CookieJar();
     this.now = options.now ?? Date.now;
     this.config = resolveConfig(definition, settings);
-    this.siteLink = String(this.config['Config.sitelink']);
+    this.currentLink = String(this.config['Config.sitelink']);
     this.categoryMap = buildCategoryMap(definition);
     const base = options.fetchImpl ?? globalThis.fetch;
     this.fetchImpl = options.proxy ? createProxiedFetch(options.proxy, { fetchImpl: base, jar: this.jar }) : base;
@@ -373,6 +390,34 @@ export class DefinitionRuntime {
     const delay = Math.max(options.rateLimitMs ?? 0, (definition.requestdelay ?? 0) * 1000);
     this.limiter = createRateLimiter(delay, this.now, options.sleep ?? defaultSleep);
     if (this.jar.size > 0 && !this.jar.isExpired(this.now())) this.loggedIn = true;
+  }
+
+  /** Base URL in use; may move to another `links` mirror after a fallback or a followed redirect. */
+  get siteLink(): string {
+    return this.currentLink;
+  }
+
+  private useLink(link: string): void {
+    if (link === this.currentLink) return;
+    this.currentLink = link;
+    this.config['Config.sitelink'] = link;
+  }
+
+  /** Mirrors to try, current first. A custom base URL outside `links` gets no fallback. */
+  private linkCandidates(): string[] {
+    const links = this.definition.links;
+    if (!links.includes(this.currentLink)) return [this.currentLink];
+    return [this.currentLink, ...links.filter((l) => l !== this.currentLink)];
+  }
+
+  /** The `links` entry on the given host, or undefined. */
+  private linkForHost(host: string | undefined): string | undefined {
+    return host === undefined ? undefined : this.definition.links.find((l) => hostOf(l) === host);
+  }
+
+  private isDefinitionHost(host: string | undefined): boolean {
+    if (host === undefined) return false;
+    return [...this.definition.links, ...(this.definition.legacylinks ?? [])].some((l) => hostOf(l) === host);
   }
 
   private log(level: LogLevel, message: string): void {
@@ -395,7 +440,52 @@ export class DefinitionRuntime {
 
   // ------------------------------------------------------------------ HTTP
 
+  /**
+   * Send a request, falling back through the definition's `links` when a site URL fails
+   * with a network error (DNS, refused, reset; not a timeout) or an HTTP 5xx. The first
+   * mirror that answers becomes the site link for later requests.
+   */
   private async request(req: HttpRequest): Promise<HttpResult> {
+    const origin = this.currentLink;
+    if (!origin || !req.url.startsWith(origin)) return this.requestOnce(req);
+    const candidates = this.linkCandidates();
+    if (candidates.length === 1) return this.requestOnce(req);
+    const failures: string[] = [];
+    for (const [i, link] of candidates.entries()) {
+      const last = i === candidates.length - 1;
+      const url = link + req.url.slice(origin.length);
+      let result: HttpResult;
+      try {
+        result = await this.requestOnce({ ...req, url });
+      } catch (err) {
+        if (!(err instanceof NetworkFailure) || err.timedOut) throw err;
+        failures.push(`${link} (${err.message})`);
+        if (last) {
+          throw new IndexerError('unreachable', `All site links failed: ${failures.join('; ')}`, { cause: err });
+        }
+        this.log('warn', `${link} unreachable (${err.message}); trying next link`);
+        continue;
+      }
+      if (result.status >= 500 && result.status < 600 && !last) {
+        failures.push(`${link} (HTTP ${result.status})`);
+        this.log('warn', `${link} answered HTTP ${result.status}; trying next link`);
+        continue;
+      }
+      if (i > 0 && this.currentLink === origin) {
+        this.log('info', `using link ${link} (${origin} failed)`);
+        this.useLink(link);
+      }
+      return result;
+    }
+    throw new IndexerError('unreachable', 'No site link to try');
+  }
+
+  /**
+   * One request with manual redirect handling. A redirect to another host is followed once,
+   * even when `followRedirects` is off, if that host belongs to the definition's
+   * `links`/`legacylinks`; landing on a `links` host makes it the site link.
+   */
+  private async requestOnce(req: HttpRequest): Promise<HttpResult> {
     if (this.jar.isExpired(this.now())) {
       this.jar.clear();
       this.loggedIn = false;
@@ -407,6 +497,7 @@ export class DefinitionRuntime {
     let contentType = req.contentType;
     const timeout = AbortSignal.timeout(this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS);
     const signal = this.options.signal ? AbortSignal.any([this.options.signal, timeout]) : timeout;
+    let crossHostFollowed = false;
 
     for (let hop = 0; ; hop++) {
       const headers: Record<string, string> = {
@@ -429,8 +520,9 @@ export class DefinitionRuntime {
         });
       } catch (cause) {
         if (this.options.signal?.aborted) throw cause;
-        const message = cause instanceof Error ? cause.message : String(cause);
-        throw new IndexerError('unreachable', `${timeout.aborted ? 'Timed out' : 'Request failed'}: ${message}`, { cause });
+        const inner = cause instanceof Error && cause.cause instanceof Error ? ` (${cause.cause.message})` : '';
+        const message = `${cause instanceof Error ? cause.message : String(cause)}${inner}`;
+        throw new NetworkFailure(`${timeout.aborted ? 'Timed out' : 'Request failed'}: ${message}`, timeout.aborted, cause);
       }
       this.jar.importResponse(response, this.now());
       const bytes = new Uint8Array(await response.arrayBuffer());
@@ -439,8 +531,21 @@ export class DefinitionRuntime {
       if (isRedirect && location.startsWith('magnet:')) {
         return { status: response.status, headers: response.headers, body: bytes, url, location };
       }
-      if (isRedirect && req.followRedirects && hop < MAX_REDIRECTS) {
-        url = resolveUrl(location, url);
+      const target = isRedirect ? resolveUrl(location, url) : undefined;
+      const targetHost = target === undefined ? undefined : hostOf(target);
+      const crossHost = target !== undefined && targetHost !== hostOf(url);
+      const followKnownHost =
+        crossHost && !req.followRedirects && !crossHostFollowed && hop < MAX_REDIRECTS && this.isDefinitionHost(targetHost);
+      if (target !== undefined && ((req.followRedirects && hop < MAX_REDIRECTS) || followKnownHost)) {
+        if (crossHost) {
+          crossHostFollowed = true;
+          const moved = this.linkForHost(targetHost);
+          if (moved && this.isDefinitionHost(hostOf(url))) {
+            this.log('info', `site redirected to ${moved}; using it as the site link`);
+            this.useLink(moved);
+          }
+        }
+        url = target;
         if (response.status === 303 || ((response.status === 301 || response.status === 302) && method === 'POST')) {
           method = 'GET';
           body = undefined;
@@ -726,7 +831,17 @@ export class DefinitionRuntime {
     return result;
   }
 
+  private flareSolverrRequired(): IndexerError {
+    return new IndexerError(
+      'unreachable',
+      `${this.definition.name} is behind Cloudflare and requires a FlareSolverr proxy; attach a FlareSolverr proxy to this indexer`,
+    );
+  }
+
   private checkResponse(result: HttpResult): void {
+    if (this.definition.requiresflaresolverr && !this.hasFlareSolverr && (result.status === 403 || result.status === 503)) {
+      throw this.flareSolverrRequired();
+    }
     if (!this.hasFlareSolverr) {
       const body = result.status === 403 || result.status === 503 ? this.text(result) : '';
       if (body && isChallengeResponse(result.status, result.headers, body)) {
@@ -742,6 +857,21 @@ export class DefinitionRuntime {
         this.jar.clear();
         this.loggedIn = false;
         throw new IndexerError('auth', 'Session expired or killed; recheck cookie/credentials');
+      }
+      const newHost = hostOf(result.location);
+      if (newHost !== undefined && newHost !== hostOf(result.url) && this.isDefinitionHost(newHost)) {
+        throw new IndexerError(
+          'bad-response',
+          `Redirected to ${result.location}: only one redirect to another site link is followed per request`,
+          { status: result.status },
+        );
+      }
+      if (newHost !== undefined && newHost !== hostOf(result.url)) {
+        throw new IndexerError(
+          'bad-response',
+          `Redirected to ${result.location}: the site appears to have moved to ${newHost}, which is not in this definition's links`,
+          { status: result.status },
+        );
       }
       throw new IndexerError('bad-response', `Redirected to ${result.location}`, { status: result.status });
     }
@@ -821,7 +951,11 @@ export class DefinitionRuntime {
 
   // ------------------------------------------------------------------ search (S9, S10)
 
-  async search(request: DefinitionSearchRequest): Promise<ReleaseInfo[]> {
+  search(request: DefinitionSearchRequest): Promise<ReleaseInfo[]> {
+    return this.runSearch(request, this.definition.search.paths);
+  }
+
+  private async runSearch(request: DefinitionSearchRequest, paths: readonly SearchPathDefinition[]): Promise<ReleaseInfo[]> {
     const search = this.definition.search;
     const vars: TemplateVars = { ...this.baseVars(), ...queryVariables(request) };
     const keywords = vars['Query.Keywords'];
@@ -831,7 +965,7 @@ export class DefinitionRuntime {
 
     const seenUrls = new Set<string>();
     const drafts: Array<{ draft: Draft }> = [];
-    for (const path of search.paths) {
+    for (const path of paths) {
       const pathCats = this.narrowCategories(path, trackerCats);
       if (pathCats === undefined) continue;
       const pathVars: TemplateVars = { ...vars, Categories: pathCats };
@@ -1349,10 +1483,21 @@ export class DefinitionRuntime {
   // ------------------------------------------------------------------ test (S12)
 
   async test(): Promise<{ ok: true; releaseCount: number } | { ok: false; error: IndexerError }> {
+    if (this.definition.requiresflaresolverr && !this.hasFlareSolverr) {
+      return { ok: false, error: this.flareSolverrRequired() };
+    }
     try {
       if (this.definition.login) {
         this.loggedIn = false;
         await this.login();
+      }
+      // A definition `test` block names a known-good listing; otherwise probe RSS, then a keyword.
+      if (this.definition.test) {
+        const listed = await this.runSearch({ kind: 'rss' }, [this.definition.test]);
+        if (listed.length === 0) {
+          throw new IndexerError('bad-response', 'Test request succeeded but returned no releases');
+        }
+        return { ok: true, releaseCount: listed.length };
       }
       let releases = await this.search({ kind: 'rss' });
       if (releases.length === 0) releases = await this.search({ kind: 'search', query: 'test' });

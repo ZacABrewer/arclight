@@ -1,5 +1,6 @@
-# Authored for Arclight from general knowledge of the site layout. Not yet verified
-# against the live site (tested: false).
+# Authored for Arclight from general knowledge of the site layout. The .lol domain now
+# redirects to .fun, so .fun leads (the runtime also follows a redirect to any host listed
+# here). Not yet verified against the live site (tested: false).
 schemaVersion: 1
 id: limetorrents
 name: LimeTorrents
@@ -10,8 +11,11 @@ encoding: UTF-8
 tested: false
 requestDelay: 2
 links:
-  - https://www.limetorrents.lol/
   - https://www.limetorrents.fun/
+  - https://www.limetorrents.lol/
+legacylinks:
+  - https://www.limetorrents.pro/
+  - https://www.limetorrents.info/
 
 settings: []
 

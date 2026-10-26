@@ -8,6 +8,8 @@ language: en-US
 type: public
 encoding: UTF-8
 tested: false
+# 1337x sits behind a Cloudflare challenge; searches need a FlareSolverr proxy.
+requiresFlareSolverr: true
 requestDelay: 2
 links:
   - https://1337x.to/
