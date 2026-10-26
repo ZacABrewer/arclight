@@ -1,54 +1,42 @@
-# Authored for Arclight from general knowledge of the site layout (div-based result
-# table). torrentgalaxy.to stopped answering in 2025; the successor domains below come from
-# public knowledge and are NOT verified (tested: false). The successor may use a different
-# layout; re-check the selectors when verifying. The site sometimes shows a
-# JavaScript/Cloudflare check; attach a FlareSolverr proxy if searches fail.
+# Authored for Arclight. Verified 2026-10-26 through VPN-routed requests: torrentgalaxy.one
+# (and .info, same site) moved to a new layout. The old `torrents.php` search answers 404;
+# searches are now `get-posts/?keywords=<terms>` and list rows in `div.tgxtable` with a
+# category *name* (Movies, TV, ...), a details link (`/post-detail/<id>/<slug>/`), size,
+# seeders/leechers and a relative age ("6 months", "1 year, 2 months"). Result rows carry no
+# magnet: the magnet (and an itorrents.org .torrent link) sit on the details page, so the
+# details URL is the download link and `download.selectors` picks the magnet there.
+# No Cloudflare challenge was seen. tgx.rs no longer resolves and was removed.
 schemaVersion: 1
 id: torrentgalaxy
 name: TorrentGalaxy
-description: "Public general tracker (HTML, magnets in result rows)"
+description: "Public general tracker (HTML, magnet on the details page)"
 language: en-US
 type: public
 encoding: UTF-8
-tested: false
+tested: true
 requestDelay: 3
 links:
   - https://torrentgalaxy.one/
   - https://torrentgalaxy.info/
-  - https://tgx.rs/
 legacylinks:
   - https://torrentgalaxy.to/
   - https://torrentgalaxy.mx/
+  - https://tgx.rs/
 
-settings:
-  - name: info_flaresolverr
-    type: info_flaresolverr
-    label: Cloudflare
-    default: "This site may require a FlareSolverr proxy."
+settings: []
 
 caps:
   categorymappings:
-    - {id: 3, cat: Movies/UHD, desc: "Movies : 4K UHD"}
-    - {id: 46, cat: Movies/Foreign, desc: "Movies : Bollywood"}
-    - {id: 45, cat: Movies/Other, desc: "Movies : CAM/TS"}
-    - {id: 42, cat: Movies/HD, desc: "Movies : HD"}
-    - {id: 4, cat: Movies, desc: "Movies : Packs"}
-    - {id: 1, cat: Movies/SD, desc: "Movies : SD"}
-    - {id: 11, cat: TV/UHD, desc: "TV : 4K UHD"}
-    - {id: 41, cat: TV/HD, desc: "TV : Episodes HD"}
-    - {id: 5, cat: TV/SD, desc: "TV : Episodes SD"}
-    - {id: 6, cat: TV, desc: "TV : Packs"}
-    - {id: 7, cat: TV/Sport, desc: "TV : Sports"}
-    - {id: 28, cat: TV/Anime, desc: "Anime : All"}
-    - {id: 9, cat: TV/Documentary, desc: "Documentaries : All"}
-    - {id: 10, cat: PC/Games, desc: "Games : Windows"}
-    - {id: 18, cat: PC, desc: "Apps : Windows"}
-    - {id: 22, cat: Audio/MP3, desc: "Music : Albums"}
-    - {id: 23, cat: Audio/Lossless, desc: "Music : Discography"}
-    - {id: 25, cat: Audio/Video, desc: "Music : Musicvideo"}
-    - {id: 12, cat: Books/EBook, desc: "Books : Ebooks"}
-    - {id: 13, cat: Audio/Audiobook, desc: "Books : Audiobooks"}
-    - {id: 17, cat: Other, desc: "Other : Other"}
+    - {id: Movies, cat: Movies, desc: "Movies"}
+    - {id: TV, cat: TV, desc: "TV"}
+    - {id: Anime, cat: TV/Anime, desc: "Anime"}
+    - {id: Documentaries, cat: TV/Documentary, desc: "Documentaries"}
+    - {id: Games, cat: PC/Games, desc: "Games"}
+    - {id: Apps, cat: PC, desc: "Apps"}
+    - {id: Music, cat: Audio, desc: "Music"}
+    - {id: Books, cat: Books, desc: "Books"}
+    - {id: XXX, cat: XXX, desc: "XXX"}
+    - {id: Other, cat: Other, desc: "Other"}
   modes:
     search: [q]
     tv-search: [q, season, ep, imdbid]
@@ -56,34 +44,32 @@ caps:
 
 search:
   paths:
-    - path: "torrents.php"
+    - path: "get-posts/"
   inputs:
-    $raw: "{{ range .Categories }}c{{.}}=1&{{end}}"
-    search: "{{ if .Query.IMDBID }}{{ .Query.IMDBID }}{{ else }}{{ .Keywords }}{{ end }}"
-    sort: id
-    order: desc
-    lang: 0
-    nox: 2
+    keywords: "{{ if .Query.IMDBID }}{{ .Query.IMDBID }}{{ else }}{{ .Keywords }}{{ end }}"
   rows:
-    selector: "div.tgxtable > div.tgxtablerow:has(a[href^=\"magnet:\"])"
+    selector: "div.tgxtable div.tgxtablerow:has(a[href^=\"/post-detail/\"])"
   fields:
     category:
-      selector: "div.tgxtablecell a[href*=\"cat=\"]"
+      selector: "a[href^=\"/get-posts/category:\"]"
       attribute: href
+      optional: true
+      default: "Other"
       filters:
-        - {name: querystring, args: cat}
+        - {name: regexp, args: "category:([A-Za-z]+)"}
     title:
-      selector: "div.tgxtablecell a[href^=\"/torrent/\"]"
+      selector: "div.tgxtablecell a[href^=\"/post-detail/\"][title]"
       attribute: title
     details:
-      selector: "div.tgxtablecell a[href^=\"/torrent/\"]"
+      selector: "div.tgxtablecell a[href^=\"/post-detail/\"][title]"
       attribute: href
     download:
-      selector: "a[href^=\"magnet:\"]"
+      selector: "div.tgxtablecell a[href^=\"/post-detail/\"][title]"
       attribute: href
     imdbid:
-      selector: "a[href*=\"search=tt\"]"
+      selector: "a[href^=\"/imdb-detail/tt\"]"
       attribute: href
+      optional: true
     size:
       selector: "span.badge-secondary"
     grabs:
@@ -96,10 +82,20 @@ search:
       selector: "span[title=\"Seeders/Leechers\"] font:nth-of-type(2)"
     date:
       selector: "div.tgxtablecell:last-child"
+      remove: "div"
       optional: true
       filters:
-        - {name: fuzzytime, args: UK}
+        - {name: timeago}
     downloadvolumefactor:
       text: 0
     uploadvolumefactor:
       text: 1
+
+download:
+  selectors:
+    - selector: "a.dl-magnet[href^=\"magnet:\"]"
+      attribute: href
+    - selector: "a[href^=\"magnet:\"]"
+      attribute: href
+    - selector: "a.dl-torrent[href*=\".torrent\"]"
+      attribute: href

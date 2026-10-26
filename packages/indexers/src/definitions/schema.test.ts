@@ -229,7 +229,7 @@ describe('catalogue', () => {
     if (dir) await rm(dir, { recursive: true, force: true });
   });
 
-  it('loads the builtin definitions, all marked untested', async () => {
+  it('loads the builtin definitions; only live-verified ones are marked tested', async () => {
     const catalogue = await loadDefinitionCatalogue();
     expect(catalogue.errors).toEqual([]);
     expect(catalogue.size).toBeGreaterThanOrEqual(8);
@@ -237,7 +237,8 @@ describe('catalogue', () => {
       expect.arrayContaining(['1337x', 'thepiratebay', 'yts', 'eztv', 'nyaa', 'limetorrents', 'torrentgalaxy', 'torlock']),
     );
     for (const def of catalogue.list()) {
-      expect(def.tested, def.id).toBe(false);
+      // yts, eztv and torrentgalaxy were verified against the live sites on 2026-10-26.
+      expect(def.tested, def.id).toBe(['yts', 'eztv', 'torrentgalaxy'].includes(def.id));
       expect(def.type, def.id).toBe('public');
       expect(def.schemaVersion).toBe(1);
     }

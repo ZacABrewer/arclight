@@ -2,7 +2,11 @@
 # id; keyword searches fall back to the latest list filtered with `andmatch`.
 # `test` requests the plain latest-torrents listing (no imdb_id, no keyword), which the
 # API always fills, instead of the generic keyword probe that `andmatch` filters to nothing.
-# Mirrors are from public knowledge; not yet verified against the live service (tested: false).
+# Verified 2026-10-26 through a VPN-routed request to
+# https://eztvx.to/api/get-torrents?limit=30&page=1 (and ?imdb_id=0944947): the API no longer
+# returns `torrent_url` or `episode_url`, only `magnet_url`, so the magnet is the download link
+# and there is no details URL (the /ep/ pages sit behind a Cloudflare challenge).
+# Only eztvx.to was checked; the other links are kept as mirrors.
 schemaVersion: 1
 id: eztv
 name: EZTV
@@ -10,7 +14,7 @@ description: "Public TV tracker via its JSON API"
 language: en-US
 type: public
 encoding: UTF-8
-tested: false
+tested: true
 links:
   - https://eztvx.to/
   - https://eztv.wf/
@@ -68,13 +72,8 @@ search:
         - {name: re_replace, args: ["^(?!UHD$|HD$).*$", "SD"]}
     category_all:
       text: TV
-    details:
-      selector: episode_url
     download:
-      selector: torrent_url
-    magnet:
       selector: magnet_url
-      optional: true
     infohash:
       selector: hash
     size:
@@ -87,8 +86,10 @@ search:
       selector: peers
     imdbid:
       selector: imdb_id
+      optional: true
     poster:
       selector: small_screenshot
+      optional: true
     downloadvolumefactor:
       text: 0
     uploadvolumefactor:

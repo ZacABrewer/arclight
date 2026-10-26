@@ -340,7 +340,7 @@ describe('builtin markers', async () => {
       limit: 30,
       page: 1,
       torrents: [
-        { title: 'Show S01E01 1080p WEB', torrent_url: 'https://e/1.torrent', hash: 'a'.repeat(40), size_bytes: '1000', date_released_unix: 1709000000, seeds: 5, peers: 1, imdb_id: '1234567', episode_url: 'https://e/ep/1' },
+        { title: 'Show S01E01 1080p WEB', magnet_url: `magnet:?xt=urn:btih:${'a'.repeat(40)}`, hash: 'a'.repeat(40), size_bytes: '1000', date_released_unix: 1709000000, seeds: 5, peers: 1, imdb_id: '1234567' },
       ],
     });
     const fakeFetch: typeof fetch = async (input) => {

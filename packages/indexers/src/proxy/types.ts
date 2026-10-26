@@ -16,6 +16,8 @@ export interface FlareSolverrConfig {
   timeoutMs?: number;
   /** Default false. When true, one session is created lazily and reused for every solve. */
   useSession?: boolean;
+  /** Sent as `X-Api-Key` on every call (Arclight's built-in solver endpoint needs it; FlareSolverr ignores it). */
+  apiKey?: string;
 }
 
 export type ProxyConfig = NetworkProxy | FlareSolverrConfig;
