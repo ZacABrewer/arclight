@@ -2,6 +2,19 @@ import { z } from 'zod';
 import {
   ApproveRequest,
   BulkRequestAction,
+  CollectionDetail,
+  CollectionRequestInput,
+  CollectionRequestResult,
+  DiscoverEntity,
+  DiscoverEntityKind,
+  DiscoverFilterOptions,
+  DiscoverListName,
+  DiscoverListQuery,
+  DiscoverTextQuery,
+  DiscoverTile,
+  DiscoverTileQuery,
+  KeywordPage,
+  PersonPage,
   BulkRequestResult,
   CreateIssue,
   CreateRequest,
@@ -63,6 +76,9 @@ const IdParams = z.object({ id: z.coerce.number().int().positive() });
 const TmdbParams = z.object({ tmdbId: z.coerce.number().int().positive() });
 const PageQuery = z.object({ page: z.coerce.number().int().min(1).max(500).default(1) });
 const GenresQuery = z.object({ mediaType: z.enum(['movie', 'tv']).default('movie') });
+const SliderQuery = PageQuery.extend({ timeWindow: z.enum(['day', 'week']).default('day') });
+const ListParams = z.object({ list: DiscoverListName });
+const EntityParams = z.object({ kind: DiscoverEntityKind, id: z.coerce.number().int().positive() });
 const Empty = z.null();
 const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 429: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
 /** Users with role `user` may call every route; the services check the permission bits. */
@@ -223,8 +239,42 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.get('/discover/tv/:tmdbId', { ...d, schema: { params: TmdbParams, response: { 200: TitleDetail, ...errors } } }, async (req) =>
       title(req, 'series', req.params.tmdbId),
     );
-    app.get('/discover/slider/:id', { ...d, schema: { params: IdParams, querystring: PageQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
-      page(req, await discover.sliderItems(discoverActorOf(req), req.params.id, req.query.page)),
+    app.get('/discover/slider/:id', { ...d, schema: { params: IdParams, querystring: SliderQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.sliderItems(discoverActorOf(req), req.params.id, req.query.page, req.query.timeWindow)),
+    );
+    // Full catalogue: ready-made lists, people, tiles for the home page, filter vocabularies, collections.
+    app.get('/discover/list/:list', { ...d, schema: { params: ListParams, querystring: DiscoverListQuery, response: { 200: DiscoverPage, ...errors } } }, async (req) =>
+      page(req, await discover.list(req.params.list, req.query)),
+    );
+    app.get('/discover/search/people', { ...d, schema: { querystring: DiscoverTextQuery, response: { 200: PersonPage, ...errors } } }, async (req) =>
+      discover.searchPeople(req.query),
+    );
+    app.get('/discover/keywords', { ...d, schema: { querystring: DiscoverTextQuery, response: { 200: KeywordPage, ...errors } } }, async (req) =>
+      discover.keywords(req.query),
+    );
+    app.get('/discover/genres/tiles', { ...d, schema: { querystring: DiscoverTileQuery, response: { 200: z.array(DiscoverTile), ...errors } } }, async (req) =>
+      discover.genreTiles(req.query.mediaType),
+    );
+    app.get('/discover/companies', { ...d, schema: { querystring: DiscoverTileQuery, response: { 200: z.array(DiscoverTile), ...errors } } }, async (req) =>
+      discover.companies(req.query.mediaType),
+    );
+    app.get('/discover/providers', { ...d, schema: { querystring: DiscoverTileQuery, response: { 200: z.array(DiscoverTile), ...errors } } }, async (req) =>
+      discover.providers(req.query.mediaType, req.query.region),
+    );
+    app.get('/discover/info/:kind/:id', { ...d, schema: { params: EntityParams, response: { 200: DiscoverEntity, ...errors } } }, async (req) =>
+      discover.entity(req.params.kind, req.params.id),
+    );
+    app.get('/discover/options', { ...d, schema: { response: { 200: DiscoverFilterOptions, ...errors } } }, async () => discover.filterOptions());
+    app.get('/discover/collection/:id', { ...d, schema: { params: IdParams, response: { 200: CollectionDetail, ...errors } } }, async (req) => {
+      const actor = discoverActorOf(req);
+      const detail = await discover.collection(actor, req.params.id);
+      const parts = await guard.filter(actor, detail.parts);
+      return { ...detail, parts, missing: parts.filter((p) => p.mediaStatus === 'unknown').length };
+    });
+    app.post(
+      '/discover/collection/:id/request',
+      { config: user, schema: { params: IdParams, body: CollectionRequestInput.nullish(), response: { 200: CollectionRequestResult, ...errors } } },
+      async (req) => discover.requestCollection(actorOf(req), req.params.id, req.body ?? {}),
     );
 
     // ------------------------------------------------------------------------- public portal

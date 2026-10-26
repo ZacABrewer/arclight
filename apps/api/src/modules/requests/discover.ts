@@ -1,41 +1,60 @@
-import { asc, desc, eq } from 'drizzle-orm';
-import type { DiscoverOptions, PagedResults, SearchResult, TmdbClient } from '@arclight/metadata';
+import { and, desc, eq, inArray, asc } from 'drizzle-orm';
+import type { DiscoverOptions, MediaKind, MovieMetadata, PagedResults, SearchResult, SeriesMetadata, TmdbClient, TmdbListName } from '@arclight/metadata';
 import {
   BUILT_IN_SLIDERS,
+  CollectionRequestInput,
   DISCOVER_MOVIE_SORTS,
   DISCOVER_TV_SORTS,
   DiscoverKindQuery,
+  DiscoverListQuery,
   DiscoverQuery,
   DiscoverSearchQuery,
   DiscoverSliderInput,
+  DiscoverTextQuery,
+  PERSONAL_SLIDERS,
+  POPULAR_NETWORKS,
+  POPULAR_STUDIOS,
   Permission,
   TrendingQuery,
+  type CollectionDetail,
+  type CollectionRequestResult,
+  type DiscoverEntity,
+  type DiscoverEntityKind,
+  type DiscoverFilterOptions,
   type DiscoverGenre,
   type DiscoverItem,
+  type DiscoverListName,
   type DiscoverPage,
   type DiscoverSlider,
   type DiscoverSliderOrder,
   type DiscoverSliderUpdate,
+  type DiscoverTile,
+  type KeywordPage,
   type MediaImage,
   type MediaType,
   type PersonCredit,
   type PersonDetail,
+  type PersonPage,
   type TitleDetail,
   type TitleSeason,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
+import { getSection } from '../settings/service.js';
+import { DETAIL_TTL_MS, DiscoverCache, LIST_TTL_MS, STATIC_TTL_MS } from './discover-cache.js';
 import { RequestsError } from './errors.js';
 import type { IssuesService } from './issues.js';
 import { type Actor, can, canManageSettings, canRequest, canRequestAdvanced } from './permissions.js';
-import { discoverSliders } from './schema.js';
+import { discoverSliders, mediaRequests } from './schema.js';
 import type { RequestsService } from './service.js';
 import { userPermissions, findUserRow } from './users.js';
 import type { WatchlistService } from './watchlist.js';
 
 // Discover (docs/spec/requests.md section 15): TMDB lists and title pages, each result
 // annotated with Arclight's status (library + requests), plus the slider configuration.
+// TMDB data goes through a DiscoverCache (see discover-cache.ts for the TTLs); the status
+// overlay is computed per response with one batched query per media type.
 
 type SliderRow = typeof discoverSliders.$inferSelect;
 
@@ -45,10 +64,26 @@ export interface DiscoverServiceOptions {
   requests: RequestsService;
   issues: IssuesService;
   watchlist: WatchlistService;
+  /** Injectable for tests. */
+  cache?: DiscoverCache;
 }
 
-/** List-type sliders the web renders itself (genre chips, studio/network logos). */
-const LIST_SLIDERS = new Set(['movieGenres', 'tvGenres', 'studios', 'networks']);
+/** List-type sliders the web renders itself (genre tiles, studio/network/provider logos). */
+const LIST_SLIDERS = new Set(['movieGenres', 'tvGenres', 'studios', 'networks', 'providers']);
+
+/** TMDB lists behind each ready-made list name. */
+const LISTS: Record<Exclude<DiscoverListName, 'upcomingMovies' | 'upcomingTv'>, { kind: MediaKind; list: TmdbListName }> = {
+  popularMovies: { kind: 'movie', list: 'popular' },
+  popularTv: { kind: 'tv', list: 'popular' },
+  nowPlaying: { kind: 'movie', list: 'nowPlaying' },
+  topRatedMovies: { kind: 'movie', list: 'topRated' },
+  topRatedTv: { kind: 'tv', list: 'topRated' },
+  airingToday: { kind: 'tv', list: 'airingToday' },
+  onTheAir: { kind: 'tv', list: 'onTheAir' },
+};
+
+/** How many genre tiles get a backdrop looked up (one TMDB discover call each, cached a day). */
+const MAX_GENRE_TILES = 24;
 
 function localDate(now: Date): string {
   const y = now.getFullYear();
@@ -69,12 +104,23 @@ function imageOf(images: MediaImage[], cover: 'poster' | 'fanart'): string | nul
   return img ? (img.remoteUrl ?? img.url) : null;
 }
 
+const dateOnly = (iso: string | undefined | null): string | null => (iso ? iso.slice(0, 10) : null);
+
+interface EnrichOptions {
+  /** Apply Settings > Requests hideAvailable / hideRequested. */
+  filter?: boolean;
+  /** Per-query hides (browse filter bar), on top of the settings. */
+  hideAvailable?: boolean | undefined;
+  hideRequested?: boolean | undefined;
+}
+
 export class DiscoverService {
   private readonly db: Db;
   private readonly bus: EventBus;
   private readonly requests: RequestsService;
   private readonly issues: IssuesService;
   private readonly watchlist: WatchlistService;
+  readonly cache: DiscoverCache;
 
   constructor(opts: DiscoverServiceOptions) {
     this.db = opts.db;
@@ -82,6 +128,11 @@ export class DiscoverService {
     this.requests = opts.requests;
     this.issues = opts.issues;
     this.watchlist = opts.watchlist;
+    this.cache = opts.cache ?? new DiscoverCache();
+    // A new TMDB key, language or region makes every cached page stale.
+    this.bus.subscribe((event) => {
+      if (event.type === 'settings' && event.section === 'metadata') this.cache.clear();
+    });
   }
 
   private client(): TmdbClient {
@@ -106,20 +157,54 @@ export class DiscoverService {
     }
   }
 
+  /** A TMDB call through the discover cache. `key` must identify the call and its arguments. */
+  private cached<T>(key: string, ttlMs: number, fn: (c: TmdbClient) => Promise<T>): Promise<T> {
+    return this.cache.get(key, ttlMs, () => this.tmdb(fn));
+  }
+
+  /** Instance TMDB region and language (Settings > Metadata). */
+  private locale(): { region: string; language: string } {
+    const m = getSection(this.db, 'metadata');
+    return { region: m.region.toUpperCase(), language: m.language };
+  }
+
   // -------------------------------------------------------------------------------------
   // enrichment
   // -------------------------------------------------------------------------------------
 
-  /** Annotates TMDB results with library/request status. `filter` applies hideAvailable/hideRequested. */
-  enrich(results: readonly SearchResult[], opts: { filter?: boolean } = {}): DiscoverItem[] {
+  /** Titles whose newest normal-track request was declined (and none is active), batched per type. */
+  private declined(type: MediaType, tmdbIds: readonly number[]): Set<number> {
+    const ids = [...new Set(tmdbIds)];
+    if (ids.length === 0) return new Set();
+    const rows = this.db
+      .select({ tmdbId: mediaRequests.tmdbId, status: mediaRequests.status })
+      .from(mediaRequests)
+      .where(and(eq(mediaRequests.type, type), eq(mediaRequests.is4k, false), inArray(mediaRequests.tmdbId, ids)))
+      .orderBy(desc(mediaRequests.id))
+      .all();
+    const newest = new Map<number, string>();
+    for (const r of rows) if (!newest.has(r.tmdbId)) newest.set(r.tmdbId, r.status);
+    return new Set([...newest].filter(([, status]) => status === 'declined').map(([id]) => id));
+  }
+
+  /**
+   * Annotates TMDB results with library/request status: one batched lookup per media type
+   * however many results there are. `filter` applies hideAvailable/hideRequested.
+   */
+  enrich(results: readonly SearchResult[], opts: EnrichOptions = {}): DiscoverItem[] {
+    const idsOf = (type: MediaType) => results.filter((r) => r.mediaType === type).map((r) => r.tmdbId);
     const statuses = {
-      movie: this.requests.titleStatuses('movie', results.filter((r) => r.mediaType === 'movie').map((r) => r.tmdbId)),
-      series: this.requests.titleStatuses('series', results.filter((r) => r.mediaType === 'series').map((r) => r.tmdbId)),
+      movie: this.requests.titleStatuses('movie', idsOf('movie')),
+      series: this.requests.titleStatuses('series', idsOf('series')),
     };
+    const declined = { movie: this.declined('movie', idsOf('movie')), series: this.declined('series', idsOf('series')) };
     const settings = opts.filter ? this.requests.settings() : null;
+    const hideAvailable = (settings?.hideAvailable ?? false) || opts.hideAvailable === true;
+    const hideRequested = (settings?.hideRequested ?? false) || opts.hideRequested === true;
     const items: DiscoverItem[] = [];
     for (const r of results) {
       const st = statuses[r.mediaType].get(r.tmdbId);
+      const request = st?.request ?? null;
       const item: DiscoverItem = {
         mediaType: r.mediaType,
         tmdbId: r.tmdbId,
@@ -136,23 +221,24 @@ export class DiscoverService {
         originalLanguage: r.originalLanguage,
         mediaStatus: st?.status ?? 'unknown',
         mediaStatus4k: st?.status4k ?? 'unknown',
-        requestId: st?.request?.id ?? null,
-        requestStatus: st?.request?.status ?? null,
+        requestId: request?.id ?? null,
+        requestStatus: request?.status ?? (declined[r.mediaType].has(r.tmdbId) ? 'declined' : null),
         libraryId: st?.libraryId ?? null,
       };
-      if (settings?.hideAvailable && item.mediaStatus === 'available') continue;
-      if (settings?.hideRequested && (item.requestStatus === 'pending' || item.requestStatus === 'approved')) continue;
+      if (hideAvailable && item.mediaStatus === 'available') continue;
+      if (hideRequested && (item.requestStatus === 'pending' || item.requestStatus === 'approved')) continue;
       items.push(item);
     }
     return items;
   }
 
-  private page(raw: PagedResults<SearchResult>, extra: { title?: string; imageUrl?: string } = {}): DiscoverPage {
+  private page(raw: PagedResults<SearchResult>, extra: { title?: string; imageUrl?: string } = {}, hide: EnrichOptions = {}): DiscoverPage {
     return {
       page: raw.page,
-      totalPages: raw.totalPages,
+      // TMDB serves at most 500 pages of any list.
+      totalPages: Math.min(raw.totalPages, 500),
       totalResults: raw.totalResults,
-      results: this.enrich(raw.results, { filter: true }),
+      results: this.enrich(raw.results, { ...hide, filter: true }),
       ...(extra.title ? { title: extra.title } : {}),
       ...(extra.imageUrl ? { imageUrl: extra.imageUrl } : {}),
     };
@@ -180,6 +266,9 @@ export class DiscoverService {
     if (parsed.runtimeLte !== undefined) opts.withRuntimeLte = parsed.runtimeLte;
     if (parsed.watchProviders) opts.withWatchProviders = parsed.watchProviders;
     if (parsed.watchRegion) opts.watchRegion = parsed.watchRegion;
+    if (parsed.certification) opts.certification = parsed.certification;
+    if (parsed.certificationLte) opts.certificationLte = parsed.certificationLte;
+    if (parsed.certificationCountry) opts.certificationCountry = parsed.certificationCountry;
     if (kind === 'movie' && parsed.studio) opts.withCompanies = String(parsed.studio);
     if (kind === 'tv' && parsed.network) opts.withNetworks = String(parsed.network);
     // TMDB needs both ends of a date range (section 15.3.3).
@@ -190,43 +279,155 @@ export class DiscoverService {
     return opts;
   }
 
+  private discoverCall(kind: MediaKind, opts: DiscoverOptions): Promise<PagedResults<SearchResult>> {
+    return this.cached(`discover:${kind}:${JSON.stringify(opts)}`, LIST_TTL_MS, (c) => c.discover(kind, opts));
+  }
+
   async movies(q: DiscoverQuery): Promise<DiscoverPage> {
-    return this.page(await this.tmdb((c) => c.discover('movie', this.options('movie', q))));
+    const parsed = DiscoverQuery.parse(q);
+    return this.page(await this.discoverCall('movie', this.options('movie', q)), {}, parsed);
   }
 
   async tv(q: DiscoverQuery): Promise<DiscoverPage> {
-    return this.page(await this.tmdb((c) => c.discover('tv', this.options('tv', q))));
+    const parsed = DiscoverQuery.parse(q);
+    return this.page(await this.discoverCall('tv', this.options('tv', q)), {}, parsed);
   }
 
   async trending(raw: TrendingQuery): Promise<DiscoverPage> {
     const q = TrendingQuery.parse(raw);
-    return this.page(await this.tmdb((c) => c.getTrending(q.mediaType, q.timeWindow, q.page)));
+    return this.page(await this.cached(`trending:${q.mediaType}:${q.timeWindow}:${q.page}`, LIST_TTL_MS, (c) => c.getTrending(q.mediaType, q.timeWindow, q.page)));
   }
 
-  async upcoming(raw: DiscoverKindQuery): Promise<DiscoverPage> {
+  async upcoming(raw: DiscoverKindQuery, hide: EnrichOptions = {}): Promise<DiscoverPage> {
     const q = DiscoverKindQuery.parse(raw);
     const today = localDate(this.requests.now());
     return this.page(
-      await this.tmdb((c) =>
-        c.discover(q.mediaType, { page: q.page, sortBy: q.mediaType === 'movie' ? 'primary_release_date.asc' : 'first_air_date.asc', releaseDateGte: today, releaseDateLte: '2999-12-31' }),
-      ),
+      await this.discoverCall(q.mediaType, {
+        page: q.page,
+        sortBy: q.mediaType === 'movie' ? 'primary_release_date.asc' : 'first_air_date.asc',
+        releaseDateGte: today,
+        releaseDateLte: '2999-12-31',
+      }),
+      {},
+      hide,
     );
+  }
+
+  /** GET /discover/list/:list: ready-made lists (popular, top rated, now playing, airing). */
+  async list(name: DiscoverListName, raw: DiscoverListQuery): Promise<DiscoverPage> {
+    const q = DiscoverListQuery.parse(raw);
+    if (name === 'upcomingMovies' || name === 'upcomingTv') return this.upcoming({ page: q.page, mediaType: name === 'upcomingMovies' ? 'movie' : 'tv' }, q);
+    const { kind, list } = LISTS[name];
+    return this.page(await this.cached(`list:${kind}:${list}:${q.page}`, LIST_TTL_MS, (c) => c.getList(kind, list, q.page)), {}, q);
   }
 
   async search(raw: DiscoverSearchQuery): Promise<DiscoverPage> {
     const q = DiscoverSearchQuery.parse(raw);
-    return this.page(await this.tmdb((c) => c.searchMulti(q.query, { page: q.page })));
+    const key = `search:${q.mediaType}:${q.query.toLowerCase()}:${q.page}`;
+    const result = await this.cached(key, LIST_TTL_MS, (c) =>
+      q.mediaType === 'movie'
+        ? c.searchMovies(q.query, { page: q.page })
+        : q.mediaType === 'tv'
+          ? c.searchSeries(q.query, { page: q.page })
+          : c.searchMulti(q.query, { page: q.page }),
+    );
+    return this.page(result);
+  }
+
+  async searchPeople(raw: DiscoverTextQuery): Promise<PersonPage> {
+    const q = DiscoverTextQuery.parse(raw);
+    const raw2 = await this.cached(`people:${q.query.toLowerCase()}:${q.page}`, LIST_TTL_MS, (c) => c.searchPeople(q.query, { page: q.page }));
+    return {
+      page: raw2.page,
+      totalPages: Math.min(raw2.totalPages, 500),
+      totalResults: raw2.totalResults,
+      results: raw2.results.map((p) => ({
+        tmdbId: p.tmdbId,
+        name: p.name,
+        profileUrl: p.profile ?? null,
+        knownForDepartment: p.knownForDepartment ?? null,
+        knownFor: p.knownFor.map((k) => k.title).slice(0, 3),
+      })),
+    };
+  }
+
+  async keywords(raw: DiscoverTextQuery): Promise<KeywordPage> {
+    const q = DiscoverTextQuery.parse(raw);
+    const page = await this.cached(`keywords:${q.query.toLowerCase()}:${q.page}`, LIST_TTL_MS, (c) => c.searchKeywords(q.query, q.page));
+    return { page: page.page, totalPages: page.totalPages, totalResults: page.totalResults, results: page.results.map((k) => ({ id: k.tmdbId, name: k.name })) };
   }
 
   async genres(kind: 'movie' | 'tv'): Promise<DiscoverGenre[]> {
-    const list = await this.tmdb((c) => c.getGenres(kind));
+    const list = await this.cached(`genres:${kind}`, STATIC_TTL_MS, (c) => c.getGenres(kind));
     return list.map((g) => ({ id: g.tmdbId, name: g.name }));
+  }
+
+  /** Genres with a backdrop from their most popular title (home page tiles). */
+  async genreTiles(kind: 'movie' | 'tv'): Promise<DiscoverTile[]> {
+    const genres = await this.genres(kind);
+    return Promise.all(
+      genres.slice(0, MAX_GENRE_TILES).map(async (g): Promise<DiscoverTile> => {
+        const top = await this.cache
+          .get(`genreTile:${kind}:${g.id}`, STATIC_TTL_MS, () => this.tmdb((c) => c.discover(kind, { page: 1, withGenres: String(g.id), sortBy: 'popularity.desc' })))
+          .catch(() => null);
+        const backdrop = top?.results.find((r) => r.images.backdrop)?.images.backdrop ?? null;
+        return { id: g.id, name: g.name, imageUrl: backdrop };
+      }),
+    );
+  }
+
+  /** The well-known studios (movie) or networks (tv) with their logos. */
+  async companies(kind: 'movie' | 'tv'): Promise<DiscoverTile[]> {
+    const list = kind === 'movie' ? POPULAR_STUDIOS : POPULAR_NETWORKS;
+    return Promise.all(
+      list.map(async (entry): Promise<DiscoverTile> => {
+        const info = await this.entity(kind === 'movie' ? 'studio' : 'network', entry.id).catch(() => null);
+        return { id: entry.id, name: entry.name, imageUrl: info?.imageUrl ?? null };
+      }),
+    );
+  }
+
+  /** Streaming services in a region (default: the instance region), most prominent first. */
+  async providers(kind: 'movie' | 'tv', region?: string): Promise<DiscoverTile[]> {
+    const r = (region ?? this.locale().region).toUpperCase();
+    const list = await this.cached(`providers:${kind}:${r}`, STATIC_TTL_MS, (c) => c.getWatchProviders(kind, r));
+    return list.map((p) => ({ id: p.tmdbId, name: p.name, imageUrl: p.logo ?? null }));
+  }
+
+  /** Name (and logo) of a studio, network or keyword for a grid page header. */
+  async entity(kind: DiscoverEntityKind, id: number): Promise<DiscoverEntity> {
+    if (kind === 'keyword') {
+      const k = await this.cached(`keyword:${id}`, STATIC_TTL_MS, (c) => c.getKeyword(id));
+      return { id: k.tmdbId, name: k.name, imageUrl: null };
+    }
+    const info = await this.cached(`${kind}:${id}`, STATIC_TTL_MS, (c) => (kind === 'studio' ? c.getCompany(id) : c.getNetwork(id)));
+    return { id: info.tmdbId, name: info.name, imageUrl: info.logo ?? null };
+  }
+
+  /** Filter vocabularies: regions, languages, certifications, and the instance defaults. */
+  async filterOptions(): Promise<DiscoverFilterOptions> {
+    const { region, language } = this.locale();
+    const safe = <T>(p: Promise<T>, fallback: T) => p.catch(() => fallback);
+    const [regions, languages, movieCerts, tvCerts] = await Promise.all([
+      safe(this.cached('regions', STATIC_TTL_MS, (c) => c.getWatchRegions()), []),
+      safe(this.cached('languages', STATIC_TTL_MS, (c) => c.getLanguages()), []),
+      safe(this.cached(`certs:movie:${region}`, STATIC_TTL_MS, (c) => c.getCertifications('movie', region)), []),
+      safe(this.cached(`certs:tv:${region}`, STATIC_TTL_MS, (c) => c.getCertifications('tv', region)), []),
+    ]);
+    const cert = (c: { certification: string; meaning: string }) => ({ certification: c.certification, meaning: c.meaning });
+    return {
+      region,
+      language,
+      regions,
+      languages,
+      certifications: { movie: movieCerts.map(cert), tv: tvCerts.map(cert) },
+    };
   }
 
   async genre(id: number, raw: DiscoverKindQuery): Promise<DiscoverPage> {
     const q = DiscoverKindQuery.parse(raw);
     const [results, genres] = await Promise.all([
-      this.tmdb((c) => c.discover(q.mediaType, { page: q.page, withGenres: String(id) })),
+      this.discoverCall(q.mediaType, { page: q.page, withGenres: String(id) }),
       this.genres(q.mediaType).catch(() => [] as DiscoverGenre[]),
     ]);
     const name = genres.find((g) => g.id === id)?.name;
@@ -235,27 +436,21 @@ export class DiscoverService {
 
   async keyword(id: number, raw: DiscoverKindQuery): Promise<DiscoverPage> {
     const q = DiscoverKindQuery.parse(raw);
-    return this.page(await this.tmdb((c) => c.discover(q.mediaType, { page: q.page, withKeywords: String(id) })));
+    return this.page(await this.discoverCall(q.mediaType, { page: q.page, withKeywords: String(id) }));
   }
 
   async network(id: number, page: number): Promise<DiscoverPage> {
-    const [results, info] = await Promise.all([
-      this.tmdb((c) => c.discover('tv', { page, withNetworks: String(id) })),
-      this.tmdb((c) => c.getNetwork(id)).catch(() => null),
-    ]);
-    return this.page(results, { ...(info ? { title: info.name } : {}), ...(info?.logo ? { imageUrl: info.logo } : {}) });
+    const [results, info] = await Promise.all([this.discoverCall('tv', { page, withNetworks: String(id) }), this.entity('network', id).catch(() => null)]);
+    return this.page(results, { ...(info ? { title: info.name } : {}), ...(info?.imageUrl ? { imageUrl: info.imageUrl } : {}) });
   }
 
   async studio(id: number, page: number): Promise<DiscoverPage> {
-    const [results, info] = await Promise.all([
-      this.tmdb((c) => c.discover('movie', { page, withCompanies: String(id) })),
-      this.tmdb((c) => c.getCompany(id)).catch(() => null),
-    ]);
-    return this.page(results, { ...(info ? { title: info.name } : {}), ...(info?.logo ? { imageUrl: info.logo } : {}) });
+    const [results, info] = await Promise.all([this.discoverCall('movie', { page, withCompanies: String(id) }), this.entity('studio', id).catch(() => null)]);
+    return this.page(results, { ...(info ? { title: info.name } : {}), ...(info?.imageUrl ? { imageUrl: info.imageUrl } : {}) });
   }
 
   async person(id: number): Promise<PersonDetail> {
-    const p = await this.tmdb((c) => c.getPerson(id));
+    const p = await this.cached(`person:${id}`, DETAIL_TTL_MS, (c) => c.getPerson(id));
     const all = this.enrich([...p.cast, ...p.crew]);
     const key = (r: { mediaType: MediaType; tmdbId: number }) => `${r.mediaType}:${r.tmdbId}`;
     const byKey = new Map(all.map((i) => [key(i), i]));
@@ -279,22 +474,70 @@ export class DiscoverService {
   }
 
   // -------------------------------------------------------------------------------------
+  // collections
+  // -------------------------------------------------------------------------------------
+
+  private requestableMovie(item: DiscoverItem, is4k: boolean): boolean {
+    const status = is4k ? item.mediaStatus4k : item.mediaStatus;
+    return status === 'unknown';
+  }
+
+  async collection(actor: Actor, id: number): Promise<CollectionDetail> {
+    const c = await this.cached(`collection:${id}`, DETAIL_TTL_MS, (client) => client.getCollection(id));
+    const parts = this.enrich(c.parts);
+    const settings = this.requests.settings();
+    const held = this.actorPermissions(actor);
+    return {
+      tmdbId: c.tmdbId,
+      name: c.name,
+      overview: c.overview,
+      posterUrl: c.images.poster ?? null,
+      backdropUrl: c.images.backdrop ?? null,
+      parts,
+      missing: parts.filter((p) => this.requestableMovie(p, false)).length,
+      canRequest: canRequest(held, 'movie', false),
+      canRequest4k: canRequest(held, 'movie', true) && settings.movie4k.enabled,
+    };
+  }
+
+  /** Requests every part of a collection the library lacks and nobody has requested yet. */
+  async requestCollection(actor: Actor, id: number, raw: CollectionRequestInput): Promise<CollectionRequestResult> {
+    const input = CollectionRequestInput.parse(raw);
+    const detail = await this.collection(actor, id);
+    if (!(input.is4k ? detail.canRequest4k : detail.canRequest)) throw RequestsError.forbidden();
+    const result: CollectionRequestResult = { requested: [], skipped: 0, failed: [] };
+    for (const part of detail.parts) {
+      if (!this.requestableMovie(part, input.is4k)) {
+        result.skipped += 1;
+        continue;
+      }
+      try {
+        const outcome = await this.requests.create(actor, { mediaType: 'movie', tmdbId: part.tmdbId, is4k: input.is4k });
+        result.requested.push({ tmdbId: part.tmdbId, title: part.title, status: outcome.kind === 'created' ? outcome.request.status : null });
+      } catch (err) {
+        result.failed.push({ tmdbId: part.tmdbId, title: part.title, error: err instanceof Error ? err.message : String(err) });
+        // Over quota: the remaining parts would fail the same way.
+        if (err instanceof RequestsError && /quota/i.test(err.message)) break;
+      }
+    }
+    return result;
+  }
+
+  // -------------------------------------------------------------------------------------
   // title pages
   // -------------------------------------------------------------------------------------
 
   private actorPermissions(actor: Actor): number {
-    if (actor.userId === null) return actor.permissions;
+    if (actor.userId === null || actor.anonymous) return actor.permissions;
     const row = findUserRow(this.db, actor.userId);
     return row ? userPermissions(row) : actor.permissions;
   }
 
   async title(actor: Actor, type: MediaType, tmdbId: number): Promise<TitleDetail> {
-    const [core, extras] = await this.tmdb((c) =>
-      Promise.all([
-        type === 'movie' ? c.getMovie(tmdbId) : c.getSeries(tmdbId),
-        type === 'movie' ? c.getMovieExtras(tmdbId) : c.getSeriesExtras(tmdbId),
-      ]),
-    );
+    const [core, extras] = await Promise.all([
+      this.cached<MovieMetadata | SeriesMetadata>(`${type}:${tmdbId}`, DETAIL_TTL_MS, (c) => (type === 'movie' ? c.getMovie(tmdbId) : c.getSeries(tmdbId))),
+      this.cached(`${type}Extras:${tmdbId}`, DETAIL_TTL_MS, (c) => (type === 'movie' ? c.getMovieExtras(tmdbId) : c.getSeriesExtras(tmdbId))),
+    ]);
     const settings = this.requests.settings();
     const status = this.requests.titleStatuses(type, [tmdbId]).get(tmdbId);
     const held = this.actorPermissions(actor);
@@ -395,12 +638,24 @@ export class DiscoverService {
       similar: this.enrich(extras.similar),
       recommendations: this.enrich(extras.recommendations),
       seasons,
-      requests: this.requests.forTitle(actor, type, tmdbId),
+      requests: actor.anonymous ? [] : this.requests.forTitle(actor, type, tmdbId),
       canRequest: requestable(false),
       canRequest4k: requestable(true),
       canRequestAdvanced: canRequestAdvanced(held),
-      onWatchlist: actor.userId !== null && this.watchlist.has(actor.userId, type, tmdbId),
-      openIssues: this.issues.openCount(actor, type, tmdbId),
+      onWatchlist: !actor.anonymous && actor.userId !== null && this.watchlist.has(actor.userId, type, tmdbId),
+      openIssues: actor.anonymous ? 0 : this.issues.openCount(actor, type, tmdbId),
+      collection: 'collection' in core && core.collection ? { id: core.collection.tmdbId, name: core.collection.name } : null,
+      releaseDates:
+        type === 'movie'
+          ? {
+              inCinemas: dateOnly('inCinemas' in core ? core.inCinemas : null),
+              digital: dateOnly('digitalRelease' in core ? core.digitalRelease : null),
+              physical: dateOnly('physicalRelease' in core ? core.physicalRelease : null),
+            }
+          : null,
+      certification: core.certification ?? null,
+      firstAirDate: dateOnly('firstAired' in core ? core.firstAired : null),
+      lastAirDate: dateOnly('lastAired' in core ? core.lastAired : null),
     };
   }
 
@@ -434,11 +689,23 @@ export class DiscoverService {
     }
   }
 
+  /**
+   * Sliders in display order. Managers of settings see every slider (to edit them); everyone
+   * else sees the enabled ones they can use: anonymous portal visitors get no personal sliders
+   * (their requests, their watchlist) and "Recently added" needs View recently added.
+   */
   sliders(actor: Actor): DiscoverSlider[] {
     this.ensureDefaultSliders();
     const rows = this.db.select().from(discoverSliders).orderBy(asc(discoverSliders.sortOrder), asc(discoverSliders.id)).all();
     const all = rows.map((r) => this.toSlider(r));
-    return canManageSettings(actor.permissions) ? all : all.filter((s) => s.enabled);
+    if (canManageSettings(actor.permissions)) return all;
+    const held = this.actorPermissions(actor);
+    return all.filter((s) => {
+      if (!s.enabled) return false;
+      if (actor.anonymous && PERSONAL_SLIDERS.includes(s.type)) return false;
+      if (s.type === 'recentlyAdded' && !can(held, Permission.RECENT_VIEW)) return false;
+      return true;
+    });
   }
 
   private sliderRow(id: number): SliderRow {
@@ -513,23 +780,24 @@ export class DiscoverService {
     return this.sliders(actor);
   }
 
-  /** The items of one slider. */
-  async sliderItems(actor: Actor, id: number, page = 1): Promise<DiscoverPage> {
+  /** The items of one slider. `timeWindow` applies to the trending slider. */
+  async sliderItems(actor: Actor, id: number, page = 1, timeWindow: 'day' | 'week' = 'day'): Promise<DiscoverPage> {
     const row = this.sliderRow(id);
     if (!row.enabled && !canManageSettings(actor.permissions)) throw RequestsError.notFound('slider', id);
-    if (LIST_SLIDERS.has(row.type)) throw new RequestsError('VALIDATION', `${row.type} is a list slider; use /discover/genres or the studio/network constants`);
+    if (LIST_SLIDERS.has(row.type)) throw new RequestsError('VALIDATION', `${row.type} is a list slider; use /discover/genres/tiles, /discover/companies or /discover/providers`);
     const one = (results: DiscoverItem[]): DiscoverPage => ({ page: 1, totalPages: 1, totalResults: results.length, results });
     const data = row.data ?? '';
+    const titled = { title: row.title ?? '' };
     switch (row.type) {
       case 'recentlyAdded':
         if (!can(this.actorPermissions(actor), Permission.RECENT_VIEW)) throw RequestsError.forbidden('the recently added slider needs View recently added');
         return one(this.recentlyAdded());
       case 'recentRequests':
-        return one(this.recentRequests(actor));
+        return one(actor.anonymous ? [] : this.recentRequests(actor));
       case 'watchlist':
-        return one(actor.userId === null ? [] : this.watchlist.asDiscoverItems(actor.userId));
+        return one(actor.userId === null || actor.anonymous ? [] : this.watchlist.asDiscoverItems(actor.userId));
       case 'trending':
-        return this.trending({ page, mediaType: 'all', timeWindow: 'day' });
+        return this.trending({ page, mediaType: 'all', timeWindow });
       case 'popularMovies':
         return this.movies({ page });
       case 'popularTv':
@@ -538,20 +806,28 @@ export class DiscoverService {
         return this.upcoming({ page, mediaType: 'movie' });
       case 'upcomingTv':
         return this.upcoming({ page, mediaType: 'tv' });
+      case 'nowPlaying':
+        return this.list('nowPlaying', { page });
+      case 'topRatedMovies':
+        return this.list('topRatedMovies', { page });
+      case 'topRatedTv':
+        return this.list('topRatedTv', { page });
+      case 'airingTv':
+        return this.list('onTheAir', { page });
       case 'tmdbMovieKeyword':
-        return this.page(await this.tmdb((c) => c.discover('movie', { page, withKeywords: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('movie', { page, withKeywords: data }), titled);
       case 'tmdbTvKeyword':
-        return this.page(await this.tmdb((c) => c.discover('tv', { page, withKeywords: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('tv', { page, withKeywords: data }), titled);
       case 'tmdbMovieGenre':
-        return this.page(await this.tmdb((c) => c.discover('movie', { page, withGenres: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('movie', { page, withGenres: data }), titled);
       case 'tmdbTvGenre':
-        return this.page(await this.tmdb((c) => c.discover('tv', { page, withGenres: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('tv', { page, withGenres: data }), titled);
       case 'tmdbSearch':
-        return this.page(await this.tmdb((c) => c.searchMulti(data, { page })), { title: row.title ?? '' });
+        return this.page(await this.cached(`search:all:${data.toLowerCase()}:${page}`, LIST_TTL_MS, (c) => c.searchMulti(data, { page })), titled);
       case 'tmdbStudio':
-        return this.page(await this.tmdb((c) => c.discover('movie', { page, withCompanies: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('movie', { page, withCompanies: data }), titled);
       case 'tmdbNetwork':
-        return this.page(await this.tmdb((c) => c.discover('tv', { page, withNetworks: data })), { title: row.title ?? '' });
+        return this.page(await this.discoverCall('tv', { page, withNetworks: data }), titled);
       default:
         throw new RequestsError('VALIDATION', `unsupported slider type ${row.type}`);
     }
@@ -567,31 +843,21 @@ export class DiscoverService {
       .sort((a, b) => b.added.localeCompare(a.added))
       .slice(0, 20);
     return this.enrich(
-      merged.map(({ type, row }) =>
-        type === 'movie'
-          ? {
-              mediaType: 'movie' as const,
-              tmdbId: row.tmdbId,
-              title: row.title,
-              originalTitle: row.title,
-              year: row.year,
-              overview: row.overview,
-              originalLanguage: row.originalLanguage,
-              images: { ...(imageOf(row.images, 'poster') ? { poster: imageOf(row.images, 'poster')! } : {}), ...(imageOf(row.images, 'fanart') ? { backdrop: imageOf(row.images, 'fanart')! } : {}) },
-              ratings: { tmdb: { value: row.ratings['tmdb']?.value ?? 0, votes: row.ratings['tmdb']?.votes ?? 0 } },
-            }
-          : {
-              mediaType: 'series' as const,
-              tmdbId: row.tmdbId,
-              title: row.title,
-              originalTitle: row.title,
-              year: row.year,
-              overview: row.overview,
-              originalLanguage: row.originalLanguage,
-              images: { ...(imageOf(row.images, 'poster') ? { poster: imageOf(row.images, 'poster')! } : {}), ...(imageOf(row.images, 'fanart') ? { backdrop: imageOf(row.images, 'fanart')! } : {}) },
-              ratings: { tmdb: { value: row.ratings['tmdb']?.value ?? 0, votes: row.ratings['tmdb']?.votes ?? 0 } },
-            },
-      ),
+      merged.map(({ type, row }) => {
+        const poster = imageOf(row.images, 'poster');
+        const backdrop = imageOf(row.images, 'fanart');
+        const common = {
+          tmdbId: row.tmdbId,
+          title: row.title,
+          originalTitle: row.title,
+          year: row.year,
+          overview: row.overview,
+          originalLanguage: row.originalLanguage,
+          images: { ...(poster ? { poster } : {}), ...(backdrop ? { backdrop } : {}) },
+          ratings: { tmdb: { value: row.ratings['tmdb']?.value ?? 0, votes: row.ratings['tmdb']?.votes ?? 0 } },
+        };
+        return type === 'movie' ? { ...common, mediaType: 'movie' as const } : { ...common, mediaType: 'series' as const };
+      }),
     );
   }
 

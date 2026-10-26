@@ -628,11 +628,41 @@ export const DiscoverSliderType = z.enum([
   'tmdbSearch',
   'tmdbStudio',
   'tmdbNetwork',
+  // Built-ins added with the full catalogue (existing installs get them appended).
+  'nowPlaying',
+  'topRatedMovies',
+  'airingTv',
+  'topRatedTv',
+  'providers',
 ]);
 export type DiscoverSliderType = z.infer<typeof DiscoverSliderType>;
 
-/** Built-in slider types, in default order. */
-export const BUILT_IN_SLIDERS: readonly DiscoverSliderType[] = DiscoverSliderType.options.slice(0, 12);
+/** Built-in slider types, in default order (a fresh install shows them like this). */
+export const BUILT_IN_SLIDERS: readonly DiscoverSliderType[] = [
+  'recentlyAdded',
+  'recentRequests',
+  'watchlist',
+  'trending',
+  'popularMovies',
+  'movieGenres',
+  'upcomingMovies',
+  'nowPlaying',
+  'topRatedMovies',
+  'studios',
+  'popularTv',
+  'tvGenres',
+  'upcomingTv',
+  'airingTv',
+  'topRatedTv',
+  'networks',
+  'providers',
+];
+
+/** Sliders that render a list of tiles (genres, logos) rather than posters. */
+export const TILE_SLIDERS: readonly DiscoverSliderType[] = ['movieGenres', 'tvGenres', 'studios', 'networks', 'providers'];
+
+/** Sliders about the caller (their requests, their watchlist): hidden from anonymous portal visitors. */
+export const PERSONAL_SLIDERS: readonly DiscoverSliderType[] = ['recentRequests', 'watchlist'];
 
 export const DiscoverSlider = z.object({
   id: z.number().int(),
@@ -687,6 +717,10 @@ export const DiscoverItem = z.object({
   mediaStatus4k: MediaStatus,
   /** The newest active request on the normal track, if any. */
   requestId: z.number().int().nullish(),
+  /**
+   * Status of that request; `declined` when there is no active request and the newest request
+   * on the normal track was declined (so posters can show a Declined badge).
+   */
   requestStatus: RequestStatus.nullish(),
   libraryId: z.number().int().nullish(),
 });
@@ -738,6 +772,16 @@ const dateOnly = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/)
   .optional();
+/** A query-string flag: true/1 or false/0 (z.coerce.boolean would read "false" as true). */
+const queryFlag = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((v) => v === true || v === 'true' || v === '1')
+  .optional();
+const regionCode = z
+  .string()
+  .regex(/^[A-Za-z]{2}$/)
+  .transform((v) => v.toUpperCase())
+  .optional();
 
 /** GET /discover/movies and /discover/tv. Invalid sort values fall back to popularity.desc. */
 export const DiscoverQuery = z.object({
@@ -756,9 +800,41 @@ export const DiscoverQuery = z.object({
   runtimeGte: z.coerce.number().int().min(0).optional(),
   runtimeLte: z.coerce.number().int().min(0).optional(),
   watchProviders: csvIds,
-  watchRegion: z.string().length(2).optional(),
+  /** Region for watchProviders; defaults to the instance region (Settings > Metadata). */
+  watchRegion: regionCode,
+  /** Exact certification, e.g. PG-13 or TV-14. */
+  certification: z.string().trim().min(1).max(12).optional(),
+  /** Certifications up to and including this one. */
+  certificationLte: z.string().trim().min(1).max(12).optional(),
+  /** Country of the certification filters; defaults to the instance region. */
+  certificationCountry: regionCode,
+  /** Leave out titles already available in the library (this page only). */
+  hideAvailable: queryFlag,
+  /** Leave out titles with an active request (this page only). */
+  hideRequested: queryFlag,
 });
 export type DiscoverQuery = z.input<typeof DiscoverQuery>;
+
+/** Ready-made lists: GET /discover/list/:list. */
+export const DiscoverListName = z.enum([
+  'popularMovies',
+  'popularTv',
+  'upcomingMovies',
+  'upcomingTv',
+  'nowPlaying',
+  'topRatedMovies',
+  'topRatedTv',
+  'airingToday',
+  'onTheAir',
+]);
+export type DiscoverListName = z.infer<typeof DiscoverListName>;
+
+export const DiscoverListQuery = z.object({
+  page: z.coerce.number().int().min(1).max(500).default(1),
+  hideAvailable: queryFlag,
+  hideRequested: queryFlag,
+});
+export type DiscoverListQuery = z.input<typeof DiscoverListQuery>;
 
 export const TrendingQuery = z.object({
   page: z.coerce.number().int().min(1).max(500).default(1),
@@ -776,11 +852,111 @@ export type DiscoverKindQuery = z.input<typeof DiscoverKindQuery>;
 export const DiscoverSearchQuery = z.object({
   query: z.string().trim().min(1).max(200),
   page: z.coerce.number().int().min(1).max(500).default(1),
+  /** all: movies and series (multi search). */
+  mediaType: z.enum(['all', 'movie', 'tv']).default('all'),
 });
 export type DiscoverSearchQuery = z.input<typeof DiscoverSearchQuery>;
 
+/** GET /discover/search/people and /discover/keywords. */
+export const DiscoverTextQuery = z.object({
+  query: z.string().trim().min(1).max(200),
+  page: z.coerce.number().int().min(1).max(500).default(1),
+});
+export type DiscoverTextQuery = z.input<typeof DiscoverTextQuery>;
+
 export const DiscoverGenre = z.object({ id: z.number().int(), name: z.string() });
 export type DiscoverGenre = z.infer<typeof DiscoverGenre>;
+
+/** A home-page tile: genre with a backdrop, studio/network/provider with a logo. */
+export const DiscoverTile = z.object({
+  id: z.number().int(),
+  name: z.string(),
+  imageUrl: z.string().nullish(),
+});
+export type DiscoverTile = z.infer<typeof DiscoverTile>;
+
+/** GET /discover/genres/tiles, /discover/companies, /discover/providers. */
+export const DiscoverTileQuery = z.object({
+  mediaType: z.enum(['movie', 'tv']).default('movie'),
+  /** Providers only; defaults to the instance region. */
+  region: regionCode,
+});
+export type DiscoverTileQuery = z.input<typeof DiscoverTileQuery>;
+
+/** GET /discover/info/:kind/:id: the name (and logo) of what a grid page is about. */
+export const DiscoverEntityKind = z.enum(['studio', 'network', 'keyword']);
+export type DiscoverEntityKind = z.infer<typeof DiscoverEntityKind>;
+export const DiscoverEntity = z.object({ id: z.number().int(), name: z.string(), imageUrl: z.string().nullish() });
+export type DiscoverEntity = z.infer<typeof DiscoverEntity>;
+
+export const DiscoverCode = z.object({ code: z.string(), name: z.string() });
+export type DiscoverCode = z.infer<typeof DiscoverCode>;
+
+export const DiscoverCertification = z.object({ certification: z.string(), meaning: z.string() });
+export type DiscoverCertification = z.infer<typeof DiscoverCertification>;
+
+/** GET /discover/options: filter vocabularies for the browse filter bar. */
+export const DiscoverFilterOptions = z.object({
+  /** Instance defaults (Settings > Metadata). */
+  region: z.string(),
+  language: z.string(),
+  regions: z.array(DiscoverCode),
+  languages: z.array(DiscoverCode),
+  certifications: z.object({ movie: z.array(DiscoverCertification), tv: z.array(DiscoverCertification) }),
+});
+export type DiscoverFilterOptions = z.infer<typeof DiscoverFilterOptions>;
+
+export const PersonSummary = z.object({
+  tmdbId: z.number().int(),
+  name: z.string(),
+  profileUrl: z.string().nullish(),
+  knownForDepartment: z.string().nullish(),
+  /** Titles of what the person is known for. */
+  knownFor: z.array(z.string()),
+});
+export type PersonSummary = z.infer<typeof PersonSummary>;
+
+export const PersonPage = z.object({
+  page: z.number().int(),
+  totalPages: z.number().int(),
+  totalResults: z.number().int(),
+  results: z.array(PersonSummary),
+});
+export type PersonPage = z.infer<typeof PersonPage>;
+
+export const KeywordPage = z.object({
+  page: z.number().int(),
+  totalPages: z.number().int(),
+  totalResults: z.number().int(),
+  results: z.array(DiscoverGenre),
+});
+export type KeywordPage = z.infer<typeof KeywordPage>;
+
+/** GET /discover/collection/:id. */
+export const CollectionDetail = z.object({
+  tmdbId: z.number().int(),
+  name: z.string(),
+  overview: z.string(),
+  posterUrl: z.string().nullish(),
+  backdropUrl: z.string().nullish(),
+  parts: z.array(DiscoverItem),
+  /** Parts nobody has requested and the library lacks (what "Request all missing" sends). */
+  missing: z.number().int(),
+  canRequest: z.boolean(),
+  canRequest4k: z.boolean(),
+});
+export type CollectionDetail = z.infer<typeof CollectionDetail>;
+
+/** POST /discover/collection/:id/request. */
+export const CollectionRequestInput = z.object({ is4k: z.boolean().default(false) });
+export type CollectionRequestInput = z.input<typeof CollectionRequestInput>;
+
+export const CollectionRequestResult = z.object({
+  requested: z.array(z.object({ tmdbId: z.number().int(), title: z.string(), status: RequestStatus.nullable() })),
+  skipped: z.number().int(),
+  failed: z.array(z.object({ tmdbId: z.number().int(), title: z.string(), error: z.string() })),
+});
+export type CollectionRequestResult = z.infer<typeof CollectionRequestResult>;
 
 export const CastMember = z.object({
   tmdbId: z.number().int(),
@@ -851,6 +1027,17 @@ export const TitleDetail = DiscoverItem.extend({
   canRequestAdvanced: z.boolean(),
   onWatchlist: z.boolean(),
   openIssues: z.number().int(),
+  /** Movies: the collection the movie belongs to. */
+  collection: z.object({ id: z.number().int(), name: z.string() }).nullish(),
+  /** Movies: release dates in the instance region (YYYY-MM-DD). */
+  releaseDates: z
+    .object({ inCinemas: z.string().nullish(), digital: z.string().nullish(), physical: z.string().nullish() })
+    .nullish(),
+  /** Age rating in the instance region (US fallback), e.g. PG-13 or TV-14. */
+  certification: z.string().nullish(),
+  /** Series: first and last air date. */
+  firstAirDate: z.string().nullish(),
+  lastAirDate: z.string().nullish(),
 });
 export type TitleDetail = z.infer<typeof TitleDetail>;
 
@@ -1020,11 +1207,74 @@ export const PolicyStep = z.object({
 });
 export type PolicyStep = z.infer<typeof PolicyStep>;
 
+/** The built-in portal path; always on while the portal is enabled. */
+export const DEFAULT_PORTAL_PATH = '/portal';
+
+/**
+ * First path segments the portal path list may not use: the app's own pages, the api, the
+ * Sonarr/Radarr compatibility routes and the static files the server answers at the root.
+ */
+export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
+  // app pages (apps/web/src/router.tsx)
+  'activity', 'calendar', 'design', 'discover', 'docs', 'indexers', 'issues', 'library', 'login', 'portal',
+  'profile', 'requests', 'search', 'settings', 'setup', 'subtitles', 'system', 'wanted', 'watchlist',
+  // server routes and static files
+  'api', 'assets', 'icons', 'metrics', 'ping', 'initialize.json', 'initialize.js', 'sw.js', 'manifest.webmanifest',
+  'offline.html', 'index.html', 'favicon.ico', 'robots.txt',
+];
+
+/**
+ * The portal's own pages, by first segment below the portal root (`<path>/movie/603`). On a
+ * portal hostname these answer at the root (`/movie/603`); the root itself is portal home.
+ */
+export const PORTAL_ROUTE_SEGMENTS: readonly string[] = [
+  'movies', 'tv', 'movie', 'person', 'search', 'trending', 'upcoming', 'list', 'collection',
+  'genre', 'keyword', 'studio', 'network', 'provider', 'requests',
+];
+
+/** "/watch", "watch" or "/Watch/" → "/watch". */
+export function normalizePortalPath(raw: string): string {
+  return `/${raw.trim().toLowerCase().replace(/^\/+|\/+$/g, '')}`;
+}
+
+/** A portal path: one segment of letters, digits, '-' or '_', not used by the app. */
+export const PortalPath = z
+  .string()
+  .max(64)
+  .transform(normalizePortalPath)
+  .refine((p) => /^\/[a-z0-9][a-z0-9_-]{0,62}$/.test(p), { message: 'one path segment of letters, digits, - or _' })
+  .refine((p) => !RESERVED_PORTAL_SEGMENTS.includes(p.slice(1)), { message: 'this path is used by Arclight itself' });
+
+/** A hostname that serves the portal at its root (e.g. requests.example.com). */
+export const PortalHost = z.object({
+  hostname: z
+    .string()
+    .trim()
+    .toLowerCase()
+    .max(253)
+    .regex(/^(?=.{1,253}$)([a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)*$/, 'a hostname without scheme, port or path'),
+  /** Admin pages on this hostname send visitors to the portal (signed-in admins too). */
+  portalOnly: z.boolean().default(true),
+});
+export type PortalHost = z.infer<typeof PortalHost>;
+
 export const PublicPortalSettings = z.object({
   enabled: z.boolean().default(false),
   /** Anonymous visitors may browse GET /discover/* (rate-limited per IP); requesting needs sign-in. */
   allowAnonymousDiscover: z.boolean().default(false),
   message: z.string().max(2000).default(''),
+  /** Extra paths that open the portal on any hostname, besides /portal (e.g. /watch). */
+  paths: z
+    .array(PortalPath)
+    .max(20)
+    .default([])
+    .refine((list) => new Set(list).size === list.length, { message: 'each path once' }),
+  /** Hostnames that show the portal at their root. */
+  hosts: z
+    .array(PortalHost)
+    .max(20)
+    .default([])
+    .refine((list) => new Set(list.map((h) => h.hostname)).size === list.length, { message: 'each hostname once' }),
 });
 export type PublicPortalSettings = z.infer<typeof PublicPortalSettings>;
 
@@ -1103,3 +1353,15 @@ export const PublicPortal = z.object({
   }),
 });
 export type PublicPortal = z.infer<typeof PublicPortal>;
+
+/**
+ * How the page the server sent relates to the portal; the server writes it into index.html
+ * (`<meta name="arclight-portal">`) so the web router can map the address bar onto its routes.
+ * path: the portal answers below `base` (e.g. /watch). host: this hostname is a portal hostname
+ * and the portal answers at the root.
+ */
+export const PortalDocument = z.discriminatedUnion('mode', [
+  z.object({ mode: z.literal('path'), base: z.string() }),
+  z.object({ mode: z.literal('host'), portalOnly: z.boolean() }),
+]);
+export type PortalDocument = z.infer<typeof PortalDocument>;

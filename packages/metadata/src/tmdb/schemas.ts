@@ -353,3 +353,86 @@ export const tmdbPersonSchema = z
 export type TmdbPerson = z.infer<typeof tmdbPersonSchema>;
 
 export const tmdbCompanyDetailsSchema = tmdbCompanySchema;
+
+// ---------------------------------------------------------------------------
+// Discover catalogue: people search, collections, watch providers, filter vocabularies.
+
+export const tmdbPersonSearchResponseSchema = pagedSchema.extend({
+  results: z.array(
+    z
+      .object({
+        id: z.number(),
+        name: z.string().default(''),
+        profile_path: nullableString,
+        known_for_department: nullableString,
+        popularity: nullableNumber,
+        known_for: z.array(z.object({ media_type: z.string().optional() }).loose()).default([]),
+      })
+      .loose(),
+  ),
+});
+
+export const tmdbCollectionSchema = z
+  .object({
+    id: z.number(),
+    name: z.string().default(''),
+    overview: nullableString,
+    poster_path: nullableString,
+    backdrop_path: nullableString,
+    parts: z.array(tmdbMovieSearchItemSchema).default([]),
+  })
+  .loose();
+
+export const tmdbWatchProvidersSchema = z
+  .object({
+    results: z
+      .array(
+        z
+          .object({
+            provider_id: z.number(),
+            provider_name: z.string().default(''),
+            logo_path: nullableString,
+            display_priority: nullableNumber,
+          })
+          .loose(),
+      )
+      .default([]),
+  })
+  .loose();
+
+export const tmdbWatchRegionsSchema = z
+  .object({
+    results: z
+      .array(
+        z
+          .object({ iso_3166_1: z.string(), english_name: z.string().default(''), native_name: nullableString })
+          .loose(),
+      )
+      .default([]),
+  })
+  .loose();
+
+export const tmdbCertificationsSchema = z
+  .object({
+    certifications: z
+      .record(
+        z.string(),
+        z.array(
+          z
+            .object({ certification: z.string(), meaning: nullableString, order: nullableNumber })
+            .loose(),
+        ),
+      )
+      .default({}),
+  })
+  .loose();
+
+export const tmdbLanguagesSchema = z.array(
+  z.object({ iso_639_1: z.string(), english_name: z.string().default(''), name: nullableString }).loose(),
+);
+
+export const tmdbKeywordSearchResponseSchema = pagedSchema.extend({
+  results: z.array(tmdbKeywordSchema),
+});
+
+export const tmdbKeywordDetailsSchema = tmdbKeywordSchema;
