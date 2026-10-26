@@ -16,6 +16,12 @@ import { systemModule } from './modules/system/index.js';
 import { jobsModule } from './modules/jobs/index.js';
 import { eventsModule } from './modules/events/index.js';
 import { healthModule } from './modules/health/index.js';
+import { profilesModule } from './modules/profiles/index.js';
+import { settingsModule } from './modules/settings/index.js';
+import { metadataModule, metadata } from './modules/metadata/index.js';
+import { libraryModuleWith } from './modules/library/index.js';
+import { indexersModule } from './modules/indexers/index.js';
+import { downloadClientsModule } from './modules/download-clients/index.js';
 
 export interface AppContext {
   config: AppConfig;
@@ -45,7 +51,18 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger) {
   await app.register(cors, { origin: true, credentials: true });
   await app.register(websocket);
 
-  const modules: AppModule[] = [systemModule, healthModule, jobsModule, eventsModule];
+  const modules: AppModule[] = [
+    systemModule,
+    healthModule,
+    jobsModule,
+    eventsModule,
+    settingsModule,
+    metadataModule,
+    libraryModuleWith({ metadata }),
+    profilesModule,
+    indexersModule,
+    downloadClientsModule,
+  ];
   await app.register(
     async (api) => {
       for (const mod of modules) await api.register(mod(ctx));

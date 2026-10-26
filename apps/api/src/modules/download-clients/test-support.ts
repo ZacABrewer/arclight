@@ -1,0 +1,132 @@
+import type {
+  AddTorrentInput,
+  AddTorrentResult,
+  DownloadClient,
+  DownloadClientStatus,
+  DownloadClientTestResult,
+  DownloadItem,
+} from '@media-tron/download-clients';
+import { DownloadClientError } from '@media-tron/download-clients';
+import type { DownloadClientResource } from '@media-tron/shared';
+import { createTestDb } from '../../db/test-utils.js';
+import * as tables from './schema.js';
+import { DownloadClientsService, type DownloadClientsServiceOptions } from './service.js';
+
+/** In-memory download client for tests. Not used by production code. */
+export class FakeDownloadClient implements DownloadClient {
+  readonly name = 'fake';
+  items: DownloadItem[] = [];
+  added: AddTorrentInput[] = [];
+  removed: Array<{ id: string; deleteData: boolean }> = [];
+  categoryChanges: Array<{ id: string; category: string }> = [];
+  failGetItems: Error | null = null;
+  failAdd: Error | null = null;
+  failRemove: Error | null = null;
+  testResult: DownloadClientTestResult | Error = { version: '5.0.2', apiVersion: '2.11.2', warnings: [] };
+  nextId = 'abc123';
+
+  constructor(readonly config: DownloadClientResource) {}
+
+  async test(): Promise<DownloadClientTestResult> {
+    if (this.testResult instanceof Error) throw this.testResult;
+    return this.testResult;
+  }
+
+  async addTorrent(input: AddTorrentInput): Promise<AddTorrentResult> {
+    if (this.failAdd) throw this.failAdd;
+    this.added.push(input);
+    return { id: this.nextId, warnings: [] };
+  }
+
+  async getItems(): Promise<DownloadItem[]> {
+    if (this.failGetItems) throw this.failGetItems;
+    return this.items;
+  }
+
+  async removeItem(id: string, deleteData: boolean): Promise<void> {
+    if (this.failRemove) throw this.failRemove;
+    this.removed.push({ id, deleteData });
+    this.items = this.items.filter((i) => i.id !== id);
+  }
+
+  async getStatus(): Promise<DownloadClientStatus> {
+    return { outputRootDir: '/downloads', isLocalhost: true, removesCompletedDownloads: false };
+  }
+
+  async setCategory(id: string, category: string): Promise<void> {
+    this.categoryChanges.push({ id, category });
+  }
+
+  async pause(): Promise<void> {}
+  async resume(): Promise<void> {}
+}
+
+export function item(overrides: Partial<DownloadItem> & { id: string }): DownloadItem {
+  return {
+    title: `Release.${overrides.id}`,
+    category: 'media-tron',
+    totalBytes: 1000,
+    remainingBytes: 500,
+    downloadedBytes: 500,
+    progress: 0.5,
+    status: 'downloading',
+    outputPath: `/downloads/Release.${overrides.id}`,
+    etaSeconds: 60,
+    isReadOnly: true,
+    canMoveFiles: false,
+    canBeRemoved: false,
+    ...overrides,
+  };
+}
+
+export { DownloadClientError };
+
+export async function setup(options: Partial<DownloadClientsServiceOptions> = {}) {
+  const db = await createTestDb({ ...tables });
+  const fakes = new Map<number, FakeDownloadClient>();
+  let built = 0;
+  let clock = new Date('2026-01-01T00:00:00.000Z');
+  const service = new DownloadClientsService({
+    db,
+    platform: 'posix',
+    directoryExists: async () => true,
+    now: () => clock,
+    clientFactory: (config) => {
+      built++;
+      // Keep one fake per id so tests can stage items across rebuilds.
+      const existing = fakes.get(config.id);
+      const fake = new FakeDownloadClient(config);
+      if (existing) {
+        fake.items = existing.items;
+        fake.added = existing.added;
+        fake.removed = existing.removed;
+      }
+      if (config.id !== 0) fakes.set(config.id, fake);
+      return fake;
+    },
+    ...options,
+  });
+  return {
+    db,
+    service,
+    fake: (id: number) => {
+      service.clientById(id);
+      const f = fakes.get(id);
+      if (!f) throw new Error(`no fake for ${id}`);
+      return f;
+    },
+    builds: () => built,
+    advance: (ms: number) => {
+      clock = new Date(clock.getTime() + ms);
+    },
+  };
+}
+
+export function qbit(name: string, extra: Record<string, unknown> = {}, settings: Record<string, unknown> = {}) {
+  return {
+    name,
+    implementation: 'qbittorrent' as const,
+    ...extra,
+    settings: { host: 'seedbox', username: 'admin', password: 'secret', ...settings },
+  };
+}

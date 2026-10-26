@@ -1,0 +1,79 @@
+import Fastify from 'fastify';
+import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
+import { beforeEach, describe, expect, it } from 'vitest';
+import { SECRET_MASK } from '@media-tron/shared';
+import type { Db } from '../../db/index.js';
+import { createTestDb } from '../../db/test-utils.js';
+import { settingsRoutes } from './routes.js';
+import { applyMetadataUpdate, getSection, maskMetadataSettings, setSection } from './service.js';
+
+let db: Db;
+
+beforeEach(async () => {
+  db = await createTestDb();
+});
+
+describe('settings sections', () => {
+  it('returns defaults when nothing is stored', () => {
+    expect(getSection(db, 'metadata')).toEqual({ language: 'en-US', region: 'US' });
+  });
+
+  it('persists and reads back a section', () => {
+    setSection(db, 'metadata', { tmdbApiKey: 'abc', language: 'de-DE', region: 'DE' });
+    expect(getSection(db, 'metadata')).toEqual({ tmdbApiKey: 'abc', language: 'de-DE', region: 'DE' });
+  });
+
+  it('rejects an invalid section', () => {
+    expect(() => setSection(db, 'metadata', { language: 'en-US', region: 'USA' })).toThrow();
+  });
+});
+
+describe('metadata masking', () => {
+  it('masks a stored key and reports null when none', () => {
+    expect(maskMetadataSettings({ tmdbApiKey: 'secret', language: 'en-US', region: 'US' }).tmdbApiKey).toBe(SECRET_MASK);
+    expect(maskMetadataSettings({ language: 'en-US', region: 'US' }).tmdbApiKey).toBeNull();
+  });
+
+  it('keeps the stored key when the mask or nothing is sent back', () => {
+    const current = { tmdbApiKey: 'secret', language: 'en-US', region: 'US' };
+    expect(applyMetadataUpdate(current, { tmdbApiKey: SECRET_MASK, region: 'GB' })).toEqual({
+      tmdbApiKey: 'secret',
+      language: 'en-US',
+      region: 'GB',
+    });
+    expect(applyMetadataUpdate(current, {}).tmdbApiKey).toBe('secret');
+  });
+
+  it('replaces or clears the key', () => {
+    const current = { tmdbApiKey: 'secret', language: 'en-US', region: 'US' };
+    expect(applyMetadataUpdate(current, { tmdbApiKey: ' fresh ' }).tmdbApiKey).toBe('fresh');
+    expect(applyMetadataUpdate(current, { tmdbApiKey: null })).not.toHaveProperty('tmdbApiKey');
+    expect(applyMetadataUpdate(current, { tmdbApiKey: '' })).not.toHaveProperty('tmdbApiKey');
+  });
+});
+
+describe('GET/PUT /settings/metadata', () => {
+  async function app() {
+    const a = Fastify().withTypeProvider<ZodTypeProvider>();
+    a.setValidatorCompiler(validatorCompiler);
+    a.setSerializerCompiler(serializerCompiler);
+    await a.register(settingsRoutes(db), { prefix: '/api/v1' });
+    return a;
+  }
+
+  it('round-trips with the key masked and preserved', async () => {
+    const a = await app();
+    const empty = await a.inject({ method: 'GET', url: '/api/v1/settings/metadata' });
+    expect(empty.json()).toEqual({ tmdbApiKey: null, language: 'en-US', region: 'US' });
+
+    const put = await a.inject({ method: 'PUT', url: '/api/v1/settings/metadata', payload: { tmdbApiKey: 'k1' } });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toEqual({ tmdbApiKey: SECRET_MASK, language: 'en-US', region: 'US' });
+
+    await a.inject({ method: 'PUT', url: '/api/v1/settings/metadata', payload: { tmdbApiKey: SECRET_MASK, language: 'fr-FR' } });
+    expect(getSection(db, 'metadata')).toEqual({ tmdbApiKey: 'k1', language: 'fr-FR', region: 'US' });
+
+    const bad = await a.inject({ method: 'PUT', url: '/api/v1/settings/metadata', payload: { region: 'FRA' } });
+    expect(bad.statusCode).toBe(400);
+  });
+});
