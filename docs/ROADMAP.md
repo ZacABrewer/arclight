@@ -1,5 +1,31 @@
 # Media-Tron Roadmap
 
+## Phase 1 status (2026-10-26)
+
+Phase 1 is partway through. The foundations and the data layer are built and tested:
+metadata (TMDB), library, profiles, indexers, download clients, the naming and
+notification packages, and the web shell. The release pipeline is the gap: the decision
+engine, grab, import, history, blocklist, calendar and notifications api modules do not
+exist yet (shared contracts for them are being written), and most web pages are
+placeholders. The parser package is being finished. Phase 0 is complete except
+authentication.
+
+| Phase 1 item | Status |
+|---|---|
+| metadata (package, routes, refresh jobs) | done |
+| library module | done, except disk scan |
+| parser | in progress |
+| profiles module | done, except separate language profiles |
+| indexers module + package | done, except interactive-search UI and auto search |
+| releases / decision engine | not started (contracts in progress) |
+| downloads + download-clients package | in progress |
+| organizer | in progress |
+| history, blocklist, calendar, notifications | in progress |
+| web | in progress |
+
+Status markers below: **[done]**, **[in progress]**, **[not started]**.
+Tests: 778 passing across the workspace.
+
 Clean-room build. Each phase ends with something that runs in Docker on the NAS and does
 real work. Functionality first; the Tron theme is a layer in Phase 5 and does not block
 anything before it. Behaviour specs for each area are written to `docs/spec/` before the
@@ -7,11 +33,16 @@ code, derived from how the upstream apps behave.
 
 ## Phase 0 — Skeleton that boots
 
-- pnpm monorepo, `apps/api` (Fastify + Drizzle/SQLite), `apps/web` (React + Vite),
+- **[done]** pnpm monorepo, `apps/api` (Fastify + Drizzle/SQLite), `apps/web` (React + Vite),
   `packages/shared` (Zod contract).
-- Auth (first-run setup, sessions, API key), settings store, system info, health,
-  structured logging, in-process scheduler with a persistent job table, WebSocket feed.
-- Multi-stage Dockerfile + compose with qBittorrent; PUID/PGID entrypoint.
+- **[not started]** Auth (first-run setup, sessions, API key). The api has no auth module
+  and is unauthenticated today.
+- **[done]** Settings store, system info, health,
+  structured logging, in-process scheduler with a persistent job table, WebSocket feed
+  (all present; the auth line above is the exception).
+- **[done]** Multi-stage Dockerfile + compose with qBittorrent; PUID/PGID entrypoint.
+  (The Dockerfile's install layer copies only the api, web and shared manifests; verify the
+  image still builds now that more packages exist.)
 
 Done when: `docker compose up` on the NAS → setup wizard → dashboard, jobs visible.
 
@@ -19,28 +50,44 @@ Done when: `docker compose up` on the NAS → setup wizard → dashboard, jobs v
 
 The core loop, for both media types from day one:
 
-- `packages/metadata`: TMDB search/lookup for series and movies, images, refresh jobs.
-- `library` module: root folders, series/seasons/episodes, movies, monitored flags,
+- **[done]** `packages/metadata`: TMDB search/lookup for series and movies, images, refresh jobs.
+- **[done]** `library` module: root folders, series/seasons/episodes, movies, monitored flags,
   media files, disk scan, free-space.
-- `packages/parser`: release-name parser (title, year, season/episode/daily/anime/absolute
+- **[in progress]** `packages/parser`: release-name parser (title, year, season/episode/daily/anime/absolute
   numbering, quality source + resolution, codecs, HDR, audio, release group, proper/repack,
   languages, edition for movies, hash/scene checks). Fixture suite built from the
   documented upstream parser test cases (as data, not code).
-- `profiles` module: quality definitions and profiles, custom formats (spec engine),
+- **[done]** `profiles` module: quality definitions and profiles, custom formats (spec engine),
   language profiles, delay profiles, release profiles (must/must-not contain, preferred).
-- `indexers` module + `packages/indexers`: Torznab/Newznab clients, categories,
+- **[in progress]** `indexers` module + `packages/indexers`: Torznab/Newznab clients, categories,
   per-indexer settings, RSS sync, interactive + automatic search, indexer health/backoff.
-- `releases` module: decision engine (quality cutoff/upgrade, custom-format score,
+- **[not started]** `releases` module: decision engine (quality cutoff/upgrade, custom-format score,
   language, size limits, seeders, blocklist, already-grabbed, delay, protocol priority).
-- `downloads` module + `packages/download-clients`: qBittorrent client (add/track/remove,
+- **[in progress]** `downloads` module (api module is named `download-clients`) + `packages/download-clients`: qBittorrent client (add/track/remove,
   categories, seed limits, path mapping), queue, completed-download handling, import with
   episode/movie matching, failed-download handling and auto re-search.
-- `organizer` module: naming tokens, rename preview, file moves/hardlinks, media
+- **[in progress]** `organizer` module (the package exists with tests; no api module yet): naming tokens, rename preview, file moves/hardlinks, media
   management settings.
-- `history`, `blocklist`, `calendar`, `notifications` (Discord, Telegram, webhook,
+- **[in progress]** `history`, `blocklist`, `calendar`, `notifications` (Discord, Telegram, webhook,
   email, custom script, Jellyfin/Emby/Plex library refresh).
-- Web: Library (one grid, TV + movies), item pages, add-new, Activity (queue/history/
+- **[in progress]** Web: Library (one grid, TV + movies), item pages, add-new, Activity (queue/history/
   blocklist), Calendar, Settings for everything above, interactive search modal.
+
+Notes on partial items:
+
+- metadata: image URL building only, no image caching yet.
+- library: root-folder free space is reported; there is no disk scan.
+- parser: 2910 of 2932 fixture cases pass (99.2%); package is uncommitted.
+- profiles: language lives on the quality profile; no separate language-profile entity.
+- indexers: Torznab/Newznab, caps, rate limit, backoff, RSS sync and manual search
+  (`GET /search`) work. Automatic search needs the releases module.
+- downloads: qBittorrent client, remote path mappings, tracked downloads, queue and
+  refresh job work. Completed-download handling, import and failed-download re-search
+  need the imports module (in progress).
+- history/blocklist/calendar/notifications: the `notifications` package (agents for Discord, Telegram, webhook, email, script, push, media servers) is
+  tested; the four api modules have no folders yet and only shared contracts exist.
+- web: shell, dashboard, search and the System pages are real; Library, Activity,
+  Calendar, Wanted and all Settings pages are `ComingSoon` placeholders.
 
 Done when: add a series and a movie, both get searched, grabbed through qBittorrent,
 imported, renamed, and the media server is refreshed, with no other \*arr installed.
