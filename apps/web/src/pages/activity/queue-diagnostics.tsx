@@ -23,6 +23,7 @@ import { formatDateTime, formatRate, formatSize, relativeTime } from '../../lib/
 import { formatEta } from './activity-shared.js';
 import { trailState, queueChip } from './queue-status.js';
 import { PeerConnectionBadges } from './torrent-extras.js';
+import { DownloadTransferHistory } from './transfer-history.js';
 import { t } from '../../i18n/index.js';
 
 // "Why is it not moving": the engine/VPN banner above the queue, the per-row state chip and
@@ -246,6 +247,7 @@ export function QueueItemDetail({ item, builtin, id }: { item: QueueItem; builti
           <DownloadTimelineView id={item.id} />
         </div>
       </div>
+      <DownloadTransferHistory id={item.id} title={item.title} />
       {builtin ? (
         <div className="al-activity-stack-xs">
           <SectionLabel>{t('common.peers')}</SectionLabel>

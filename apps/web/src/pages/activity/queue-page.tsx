@@ -34,6 +34,7 @@ import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStat
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
 import { TorrentDrawer } from './torrent-drawer.js';
+import { EngineTransferSection } from './transfer-history.js';
 import { t } from '../../i18n/index.js';
 
 /** Server job that retries imports blocked only by temporary rejections. */
@@ -265,6 +266,7 @@ export function QueuePage() {
     <div className="al-activity">
       <ActivityHeader active="queue" />
       <EngineBannerSlot engine={engine.data ?? undefined} vpn={vpn.data ?? undefined} />
+      <EngineTransferSection engine={engine.data ?? undefined} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         {queue.isError ? (
           <div className="al-activity-pad">

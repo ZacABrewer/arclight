@@ -987,6 +987,23 @@ Implemented in `apps/api/src/modules/metrics`. The scrape endpoint lives at the 
 | GET | `/metrics` (root) | Prometheus text format 0.0.4. Same credentials as the API (`X-Api-Key`, `?apikey=`, Basic, session); anonymous when `metrics.allowAnonymous` |
 | GET/PUT | `/settings/metrics` | `{allowAnonymous}` (default `false`) |
 
+## transfer-metrics (transfer history)
+
+Implemented in `apps/api/src/modules/transfer-metrics` (contract:
+`packages/shared/src/transfer-metrics.ts`). A sampler reads the queue (with the built-in engine's
+live overlay), the engine totals and the VPN status every 10 s and writes one averaged point per
+minute (`1m`, kept 7 days); `TransferMetricsRollup` folds finished hours into `1h` points (kept
+90 days). VPN transitions (connect/disconnect, kill switch, forwarded port, warnings) are stored
+as they are seen, from samples and `vpn` events. `range` is `1h`, `6h` (1-minute points), `24h`
+(5-minute) or `7d` (hourly); missing steps are gaps. Annotations (oldest first, at most 200) are
+download timeline entries and VPN transitions.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/metrics/downloads/:queueId?range=` | Rates, peers, seeds and progress of one tracked download; annotations: its timeline plus VPN drops and kill-switch changes. 404 when the id was never tracked |
+| GET | `/metrics/engine?range=` | Built-in engine totals (rates, peers, downloading + seeding torrents); annotations: stalls, errors and kill-switch pauses of any download plus VPN drops |
+| GET | `/metrics/vpn?range=` | Share of samples connected / kill switch engaged / with a warning, forwarded port per step, `uptime` over the window; annotations: every VPN transition |
+
 ## discord-bot
 
 Implemented in `apps/api/src/modules/discord-bot`. A Discord bot user (not a webhook) that
@@ -1135,6 +1152,8 @@ of them with `POST /jobs/run`.
 | `DecisionLogCleanup` | `50 4 * * *` | releases | Deletes `release_decisions` rows older than `releases.decisionLogDays` (default 14) |
 | `SceneMappingSync` | `23 5 * * *` | scene-mapping | Pulls the community scene-mapping feed and replaces the `feed` rules (404 = not published) |
 | `DownloadEventsCleanup` | `41 3 * * *` | download-clients | Deletes download timeline entries (`download_events`) older than 30 days |
+| `TransferMetricsRollup` | `2 * * * *` | transfer-metrics | Folds finished hours of 1-minute transfer points into hourly points |
+| `TransferMetricsPrune` | `53 3 * * *` | transfer-metrics | Deletes 1-minute transfer points older than 7 days, hourly points and VPN transitions older than 90 |
 | `AuditCleanup` | `17 3 * * *` | audit | Deletes `audit_events` older than `audit.retentionDays` (nothing at 0) |
 | `TrackerStatsSync` | `*/30 * * * *` | tracker-stats | Engine totals per tracker, then the account pages of enabled accounts with `scrapeAccount` |
 | `CrossSeedSearch` | `crossSeed.schedule` (default `0 4 * * *`) | cross-seed | Searches up to `maxPerRun` files not searched within `searchIntervalDays`, newest first (nothing while disabled) |
