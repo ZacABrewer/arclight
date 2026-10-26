@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { systemApi } from '../api/system.js';
-import { Button } from '../components/button.js';
+import { Banner, Button } from '../arclight/index.js';
 import { useRestart } from '../hooks/backup.js';
 import { useSystemStatus } from '../hooks/system.js';
 
@@ -22,7 +22,7 @@ function useReloadWhenBack(previousStart: string | null, reload: () => void, int
 
 const reloadPage = () => window.location.reload();
 
-/** Shown under the top bar when /system/status says state changed that only a restart picks up. */
+/** Warn banner at the top of the content when /system/status says a restart is needed. */
 export function RestartBanner({ reload = reloadPage, pollMs = 2000 }: { reload?: () => void; pollMs?: number }) {
   const status = useSystemStatus();
   const restart = useRestart();
@@ -30,25 +30,20 @@ export function RestartBanner({ reload = reloadPage, pollMs = 2000 }: { reload?:
   useReloadWhenBack(waitingOn, reload, pollMs);
 
   if (!status.data?.restartRequired && waitingOn === null) return null;
+  if (waitingOn !== null) {
+    return <Banner className="al-shell-banner">Restarting Arclight. This page reloads when it is back.</Banner>;
+  }
   return (
-    <div className="restart-banner" role="status">
-      {waitingOn !== null ? (
-        <span>Restarting Arclight… this page reloads when it is back.</span>
-      ) : (
-        <>
-          <span>
-            <strong>Restart required.</strong> A backup was restored; restart Arclight to load it.
-          </span>
-          <Button
-            size="sm"
-            variant="primary"
-            loading={restart.isPending}
-            onClick={() => restart.mutate(undefined, { onSuccess: () => setWaitingOn(status.data?.startTime ?? '') })}
-          >
-            Restart now
-          </Button>
-        </>
-      )}
-    </div>
+    <Banner
+      tone="warn"
+      className="al-shell-banner"
+      action={
+        <Button size="sm" variant="primary" loading={restart.isPending} onClick={() => restart.mutate(undefined, { onSuccess: () => setWaitingOn(status.data?.startTime ?? '') })}>
+          Restart now
+        </Button>
+      }
+    >
+      Restart required. A backup was restored; restart Arclight to load it.
+    </Banner>
   );
 }

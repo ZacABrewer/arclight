@@ -1,0 +1,18 @@
+/* Library pages (Page 02 / 03). Shared layout lives in components/media/media-kit.css. */
+.lib-poster-link { display: block; color: inherit; }
+.lib-poster-link:hover { text-decoration: none; }
+.lib-poster-link:hover .al-poster-card__title { color: var(--al-cyan); }
+.lib-filters { margin-bottom: 24px; }
+.lib-collection-meter { width: 260px; }
+.lib-page { padding-bottom: 96px; }
+.lib-add-search { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin-bottom: 24px; }
+.lib-add-search .al-input { min-width: 320px; }
+.lib-add-head { display: grid; grid-template-columns: 72px minmax(0, 1fr); gap: 16px; align-items: start; margin-bottom: 20px; }
+.lib-add-head p { margin: 4px 0 0; font-size: 13px; line-height: 1.5; color: var(--al-text-3); display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.lib-path-preview { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); word-break: break-all; }
+.lib-path-preview::before { content: "→ "; }
+@media (max-width: 767.98px) { .lib-add-search .al-input { min-width: 0; width: 100%; } .lib-collection-meter { width: 140px; } }
+.lib-disabled { opacity: .45; cursor: not-allowed; }
+.lib-history { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.lib-history li { display: grid; grid-template-columns: 112px auto minmax(0, 1fr); gap: 10px; align-items: center; font-size: 13px; }
+.lib-form-foot { display: flex; justify-content: flex-end; gap: 10px; padding-top: 16px; margin-top: 4px; border-top: 1px solid var(--al-line-1); }

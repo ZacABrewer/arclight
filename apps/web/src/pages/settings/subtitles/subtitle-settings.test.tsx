@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { SECRET_MASK, SubtitleSettings, type SubtitleProvidersResponse } from '@arclight/shared';
 import { languageProfiles, languages, mockApi, renderAt, type Call } from '../../subtitles/test-harness.js';
-import { cutoffOptions, toProfileBody } from './language-profiles-card.js';
+import { cutoffOptions, moveLanguage, toProfileBody } from './language-profiles-card.js';
 import { moveProvider, orderedProviders } from './providers-card.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -62,6 +62,12 @@ describe('language profile helpers', () => {
     expect(body).toMatchObject({ name: 'X', cutoff: null });
   });
 
+  it('moves a language from one position to another', () => {
+    expect(moveLanguage(['a', 'b', 'c'], 0, 2)).toEqual(['b', 'c', 'a']);
+    expect(moveLanguage(['a', 'b', 'c'], 2, 0)).toEqual(['c', 'a', 'b']);
+    expect(moveLanguage(['a', 'b'], 0, 5)).toEqual(['a', 'b']);
+  });
+
   it('lists every schema provider in priority order and moves them', () => {
     const list = orderedProviders([{ id: 'podnapisi', enabled: true, settings: {} }], providers.schema);
     expect(list.map((p) => p.id)).toEqual(['podnapisi', 'opensubtitlescom']);
@@ -106,22 +112,21 @@ describe('subtitle settings page', () => {
     expect((screen.getByLabelText(/Adaptive delay/) as HTMLInputElement).value).toBe('21');
 
     fireEvent.click(screen.getByRole('switch', { name: 'Enable Podnapisi' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Edit OpenSubtitles.com' }));
-    const dialog = await screen.findByRole('dialog', { name: 'OpenSubtitles.com settings' });
-    const password = within(dialog).getByLabelText(/Password/) as HTMLInputElement;
+    const card = screen.getByRole('region', { name: 'OpenSubtitles.com' });
+    const password = within(card).getByLabelText(/Password/) as HTMLInputElement;
     expect(password.value).toBe('');
     expect(password.placeholder).toContain('unchanged');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Test' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Test' }));
     await waitFor(() => expect(calls.find((c) => c.path === '/subtitle/providers/test')).toBeTruthy());
     expect(calls.find((c) => c.path === '/subtitle/providers/test')!.body).toEqual({
       id: 'opensubtitlescom',
       settings: { username: 'bob', password: SECRET_MASK },
     });
-    expect(await within(dialog).findByText('Test passed')).toBeTruthy();
-    fireEvent.change(within(dialog).getByLabelText(/Username/), { target: { value: 'alice' } });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }));
+    expect(await within(card).findByText('Test passed')).toBeTruthy();
+    fireEvent.change(within(card).getByLabelText(/Username/), { target: { value: 'alice' } });
 
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByRole('region', { name: 'Unsaved changes' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'PUT')).toBeTruthy());
     const body = calls.find((c) => c.method === 'PUT')!.body as SubtitleSettings;
     expect(body.providers).toEqual([
@@ -133,5 +138,49 @@ describe('subtitle settings page', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Reset throttles' }));
     await waitFor(() => expect(calls.find((c) => c.path === '/subtitle/providers/reset')?.body).toEqual({ onlyAuthOrConfig: false }));
+  });
+
+  it('draws providers as a card grid whose Test shows the result inline', async () => {
+    mockApi({ ...routes, 'POST /subtitle/providers/test': { ok: false, message: 'Invalid credentials' } });
+    renderAt('/settings/subtitles');
+    const grid = await screen.findByRole('list', { name: 'Subtitle providers' });
+    expect(grid.classList.contains('al-card-grid')).toBe(true);
+    const card = within(grid).getByRole('region', { name: 'OpenSubtitles.com' });
+    expect(card.classList.contains('al-pane')).toBe(true);
+    expect(within(card).getByRole('switch', { name: 'Enable OpenSubtitles.com' })).toBeTruthy();
+    const test = within(card).getByRole('button', { name: 'Test' });
+    expect(test.className).toContain('al-btn--secondary');
+    fireEvent.click(test);
+    expect(await within(card).findByText('Test failed')).toBeTruthy();
+    expect(within(card).getByText('Invalid credentials')).toBeTruthy();
+    // The other card is untouched.
+    expect(within(within(grid).getByRole('region', { name: 'Podnapisi' })).queryByText('Test failed')).toBeNull();
+  });
+
+  it('lists profile languages as rows with ⋮⋮ handles that move up and down', async () => {
+    const calls = mockApi({ ...routes, 'PUT /languageprofile/2': (c: Call) => ({ id: 2, ...(c.body as object) }) });
+    renderAt('/settings/subtitles');
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Euro' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Euro' });
+    const list = within(dialog).getByRole('list', { name: 'Profile languages' });
+    const rows = () => within(list).getAllByRole('listitem');
+    expect(rows()).toHaveLength(2);
+    for (const row of rows()) {
+      const handle = row.querySelector('.al-lang-row__handle');
+      expect(handle?.textContent).toBe('⋮⋮');
+      expect(row.getAttribute('draggable')).toBe('true');
+    }
+    const codes = () => rows().map((r) => r.querySelector('.al-lang-row__code')?.textContent);
+    expect(codes()).toEqual(['de', 'fr']);
+    expect((within(dialog).getByRole('button', { name: 'Move de up' }) as HTMLButtonElement).disabled).toBe(true);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move de down' }));
+    expect(codes()).toEqual(['fr', 'de']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move de up' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Move de down' }));
+    expect(codes()).toEqual(['fr', 'de']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.path === '/languageprofile/2')).toBeTruthy());
+    const body = calls.find((c) => c.method === 'PUT' && c.path === '/languageprofile/2')!.body as { languages: Array<{ code: string }> };
+    expect(body.languages.map((l) => l.code)).toEqual(['fr', 'de']);
   });
 });

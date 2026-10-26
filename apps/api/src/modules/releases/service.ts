@@ -29,7 +29,7 @@ import {
 import { selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
-import { libraryService } from '../library/index.js';
+import { createCutoffChecker, libraryService } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import {
   DEFAULT_RELEASE_SETTINGS,
@@ -44,7 +44,6 @@ import {
 } from './deps.js';
 import {
   buildDecision,
-  cutoffNotMet,
   evaluate,
   evaluateFormats,
   prioritize,
@@ -1324,28 +1323,12 @@ export class ReleasesService {
     return `missing movies: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
-  /** The library's cutoff hook, evaluated with the item's current profile (§6.5). */
+  /**
+   * The library's cutoff hook, evaluated with the item's current profile (§6.5). The same
+   * checker backs GET /wanted/cutoff/*, so the job and the Wanted page agree.
+   */
   isFileCutoffMet(): (file: MediaFile) => boolean {
-    const profiles = new Map(this.profilesService.listQualityProfiles().map((p) => [p.id, p]));
-    const formats = this.profilesService.listCustomFormats();
-    const seriesProfiles = new Map(
-      libraryService.listSeries(this.db, SeriesListQuery.parse({ includeStatistics: false })).map((s) => [s.id, s.qualityProfileId]),
-    );
-    const movieProfiles = new Map(libraryService.listMovies(this.db, MovieListQuery.parse({})).map((m) => [m.id, m.qualityProfileId]));
-    return (file) => {
-      const profileId = file.seriesId != null ? seriesProfiles.get(file.seriesId) : file.movieId != null ? movieProfiles.get(file.movieId) : undefined;
-      const profile = profileId !== undefined ? profiles.get(profileId) : undefined;
-      if (!profile) return true;
-      const score = evaluateFormats(profile, formats, {
-        title: file.sceneName ?? file.relativePath,
-        quality: file.quality,
-        mediaType: file.mediaType,
-        sizeBytes: file.sizeBytes,
-        languages: file.languages,
-        releaseGroup: file.releaseGroup ?? null,
-      }).score;
-      return !cutoffNotMetForFile(profile, file.quality, score);
-    };
+    return createCutoffChecker(this.db, this.profilesService);
   }
 
   async cutoffUnmetSearch(signal?: AbortSignal, limit = 100): Promise<string> {
@@ -1361,10 +1344,6 @@ export class ReleasesService {
 }
 
 // ---- helpers ------------------------------------------------------------------------
-
-function cutoffNotMetForFile(profile: QualityProfile, quality: QualityModel, score: number): boolean {
-  return cutoffNotMet(profile, { quality, formatScore: score });
-}
 
 function hintFromCategories(categories: readonly number[]): 'series' | 'movie' | 'auto' {
   if (categories.length === 0) return 'auto';

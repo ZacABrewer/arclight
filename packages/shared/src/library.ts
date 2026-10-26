@@ -239,6 +239,10 @@ export const BulkSeriesUpdateRequest = z.object({
   seasonFolder: z.boolean().optional(),
   rootFolderPath: z.string().min(1).optional(),
   tags: TagListChange.optional(),
+  /** Queue a metadata refresh of every listed series after the update. */
+  refresh: z.boolean().optional(),
+  /** Queue a search for every listed series after the update. */
+  search: z.boolean().optional(),
 });
 export type BulkSeriesUpdateRequest = z.infer<typeof BulkSeriesUpdateRequest>;
 
@@ -378,6 +382,10 @@ export const BulkMovieUpdateRequest = z.object({
   minimumAvailability: MinimumAvailability.optional(),
   rootFolderPath: z.string().min(1).optional(),
   tags: TagListChange.optional(),
+  /** Queue a metadata refresh of every listed movie after the update. */
+  refresh: z.boolean().optional(),
+  /** Queue a search for every listed movie after the update. */
+  search: z.boolean().optional(),
 });
 export type BulkMovieUpdateRequest = z.infer<typeof BulkMovieUpdateRequest>;
 

@@ -1,20 +1,25 @@
 import { useState, type DragEvent } from 'react';
 import { qualityById, type QualityProfileItem } from '@arclight/shared';
-import { Button } from '../../../components/button.js';
-import { Input } from '../../../components/form.js';
-import { cx } from '../../../lib/cx.js';
+import { Button, Checkbox, Input, Toggle, cx } from '../../../arclight/index.js';
 import { groupItems, itemId, itemName, moveItem, setAllowed, ungroupItem } from './quality-profile-model.js';
+import './profiles.css';
 
 export interface QualityItemListProps {
   /** Display order: best first. */
   items: readonly QualityProfileItem[];
   onChange: (items: QualityProfileItem[]) => void;
+  /** Id of the cutoff quality or group; that row carries the CUTOFF marker. */
+  cutoff?: number | undefined;
 }
 
-/** Orderable list of qualities/groups: drag rows or use the arrows; tick to allow; group/ungroup. */
-export function QualityItemList({ items, onChange }: QualityItemListProps) {
+/**
+ * Orderable list of qualities and groups: drag a row (⋮⋮) or use the move buttons; tick to
+ * allow. "Group qualities" reveals selection boxes to merge rows into one equal-rank group.
+ */
+export function QualityItemList({ items, onChange, cutoff }: QualityItemListProps) {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
+  const [grouping, setGrouping] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [groupName, setGroupName] = useState('');
 
@@ -39,15 +44,28 @@ export function QualityItemList({ items, onChange }: QualityItemListProps) {
   const canGroup = selected.length >= 2 && groupName.trim() !== '';
 
   return (
-    <div className="quality-items">
-      <p className="field-hint">Best first. Drag to reorder (or use the arrows); tick to allow. Members of a group rank equal.</p>
-      <ol className="quality-item-list" aria-label="Qualities">
+    <div className="al-qlist">
+      <div className="al-qlist__bar">
+        <p className="al-caption al-qlist__hint">Best first. Drag to reorder or use the move buttons. Tick to allow.</p>
+        <Toggle
+          size="sm"
+          label="Group qualities"
+          checked={grouping}
+          onChange={(e) => {
+            setGrouping(e.currentTarget.checked);
+            setSelected([]);
+          }}
+        />
+      </div>
+      <ol className="al-qlist__rows" aria-label="Qualities">
         {items.map((item, index) => {
           const name = itemName(item);
+          const isCutoff = cutoff !== undefined && itemId(item) === cutoff;
           return (
             <li
               key={`${item.kind}-${itemId(item)}`}
-              className={cx('quality-item', !item.allowed && 'quality-item-off', dragOver === index && 'quality-item-over')}
+              className={cx('al-qlist__row', !item.allowed && 'is-off', dragOver === index && 'is-over', isCutoff && 'is-cutoff')}
+              data-cutoff={isCutoff || undefined}
               draggable
               onDragStart={onDragStart(index)}
               onDragOver={(e) => {
@@ -62,77 +80,77 @@ export function QualityItemList({ items, onChange }: QualityItemListProps) {
               }}
               data-testid="quality-item"
             >
-              <span className="drag-handle" aria-hidden="true">
+              <span className="al-qlist__handle" aria-hidden="true">
                 ⋮⋮
               </span>
-              <input
-                type="checkbox"
-                aria-label={`Select ${name} for grouping`}
-                checked={selected.includes(index)}
-                onChange={(e) => {
-                  const on = e.currentTarget.checked;
-                  setSelected((s) => (on ? [...s, index] : s.filter((i) => i !== index)));
-                }}
-              />
-              <label className="quality-item-name">
-                <input
-                  type="checkbox"
-                  aria-label={`Allow ${name}`}
-                  checked={item.allowed}
-                  onChange={(e) => update(setAllowed(items, index, e.currentTarget.checked))}
+              {grouping ? (
+                <Checkbox
+                  aria-label={`Select ${name} for grouping`}
+                  checked={selected.includes(index)}
+                  onChange={(e) => {
+                    const on = e.currentTarget.checked;
+                    setSelected((s) => (on ? [...s, index] : s.filter((i) => i !== index)));
+                  }}
                 />
-                <span>{name}</span>
+              ) : null}
+              <span className="al-qlist__name">
+                <Checkbox aria-label={`Allow ${name}`} checked={item.allowed} onChange={(e) => update(setAllowed(items, index, e.currentTarget.checked))} />
+                <span className="al-num">{name}</span>
                 {item.kind === 'group' ? (
-                  <span className="muted quality-item-members">{item.qualityIds.map((q) => qualityById(q).name).join(', ')}</span>
+                  <span className="al-qlist__members">{item.qualityIds.map((q) => qualityById(q).name).join(', ')}</span>
                 ) : null}
-              </label>
-              <span className="quality-item-actions">
+              </span>
+              {isCutoff ? (
+                <span className="al-qlist__cutoff" data-testid="cutoff-marker">
+                  CUTOFF
+                </span>
+              ) : null}
+              <span className="al-qlist__actions">
                 {item.kind === 'group' ? (
                   <Button size="sm" variant="ghost" onClick={() => update(ungroupItem(items, index))}>
                     Ungroup
                   </Button>
                 ) : null}
-                <button
-                  type="button"
-                  className="icon-btn"
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="al-qlist__move"
                   aria-label={`Move ${name} up`}
                   disabled={index === 0}
                   onClick={() => update(moveItem(items, index, index - 1))}
                 >
                   ↑
-                </button>
-                <button
-                  type="button"
-                  className="icon-btn"
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="al-qlist__move"
                   aria-label={`Move ${name} down`}
                   disabled={index === items.length - 1}
                   onClick={() => update(moveItem(items, index, index + 1))}
                 >
                   ↓
-                </button>
+                </Button>
               </span>
             </li>
           );
         })}
       </ol>
-      <div className="row">
-        <Input
-          aria-label="New group name"
-          placeholder="Group name"
-          value={groupName}
-          onChange={(e) => setGroupName(e.currentTarget.value)}
-        />
-        <Button
-          size="sm"
-          disabled={!canGroup}
-          onClick={() => {
-            update(groupItems(items, selected, groupName));
-            setGroupName('');
-          }}
-        >
-          Group selected ({selected.length})
-        </Button>
-      </div>
+      {grouping ? (
+        <div className="al-qlist__group">
+          <Input aria-label="New group name" placeholder="Group name" value={groupName} onChange={(e) => setGroupName(e.currentTarget.value)} />
+          <Button
+            size="sm"
+            disabled={!canGroup}
+            onClick={() => {
+              update(groupItems(items, selected, groupName));
+              setGroupName('');
+            }}
+          >
+            Group selected ({selected.length})
+          </Button>
+        </div>
+      ) : null}
     </div>
   );
 }

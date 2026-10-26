@@ -1,22 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { PASSWORD_MIN_LENGTH, type AuthMethod, type AuthSettings, type User, type UserRole } from '@arclight/shared';
-import { securityApi, usersApi } from '../../../api/auth.js';
+import { PASSWORD_MIN_LENGTH, type AuthMethod, type AuthSettings, type SessionRecord, type User, type UserRole } from '@arclight/shared';
+import { authApi, securityApi, usersApi } from '../../../api/auth.js';
 import { errorMessage } from '../../../api/client.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { authKeys } from '../../../auth/guard.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input, Select, Toggle } from '../../../components/form.js';
+import { Button, Chip, ErrorBlock, Field, FormRow, FormSection, Input, Modal, Select, Skeleton, Table, Toggle, buttonClass, type Column } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
-import { Modal } from '../../../components/modal.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useInvalidatingMutation } from '../../../hooks/settings-keys.js';
-import { EditorFooter, SaveError } from '../shared.js';
+import { formatDateTime, relativeTime } from '../../../lib/format.js';
+import { SettingsPage, useDraft } from '../settings-layout.js';
+import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
+import { ApiKeyControls, useSecuritySettings } from './api-key.js';
+import './security.css';
 
 const METHOD_OPTIONS = [
   { value: 'forms', label: 'Login page' },
@@ -24,84 +21,80 @@ const METHOD_OPTIONS = [
   { value: 'none', label: 'None on the local network' },
 ];
 
-function AuthSettingsCard() {
-  const query = useQuery({ queryKey: authKeys.security, queryFn: securityApi.get });
-  const save = useInvalidatingMutation((body: AuthSettings) => securityApi.update(body), [authKeys.security, authKeys.status], {
-    errorTitle: 'Could not save security settings',
-  });
-  const [draft, setDraft] = useState<AuthSettings | null>(null);
-  useEffect(() => {
-    if (query.data && !draft) setDraft({ method: query.data.method, requireForLocal: query.data.requireForLocal, sessionDays: query.data.sessionDays });
-  }, [query.data, draft]);
-
-  if (query.isPending || !draft) return <Card title="Authentication">{query.isError ? <ErrorView error={query.error} /> : <LoadingBlock />}</Card>;
+/** Mono timestamp: relative text, full date on hover. */
+function When({ iso, empty = 'Never' }: { iso: string | null | undefined; empty?: string }) {
+  if (!iso) return <span className="al-muted">{empty}</span>;
   return (
-    <Card
-      title="Authentication"
-      actions={
-        <Button variant="primary" loading={save.isPending} onClick={() => save.mutate(draft)}>
-          Save
-        </Button>
-      }
-    >
-      <FormField label="Method" inline hint="How people sign in from a browser. The API key always works for apps.">
-        <Select value={draft.method} options={METHOD_OPTIONS} onChange={(e) => setDraft({ ...draft, method: e.currentTarget.value as AuthMethod })} />
-      </FormField>
-      <FormField label="Require for local addresses" inline hint="Off: requests from this machine and the private network (192.168.x, 10.x, ...) skip sign-in.">
-        <Toggle checked={draft.requireForLocal} onChange={(e) => setDraft({ ...draft, requireForLocal: e.currentTarget.checked })} />
-      </FormField>
-      <FormField label="Session length (days)" inline>
-        <Input type="number" min={1} max={365} value={draft.sessionDays} onChange={(e) => setDraft({ ...draft, sessionDays: Number(e.currentTarget.value) || 1 })} />
-      </FormField>
-    </Card>
+    <time className="al-num" dateTime={iso} title={formatDateTime(iso)}>
+      {relativeTime(iso)}
+    </time>
   );
 }
 
-function ApiKeyCard() {
-  const query = useQuery({ queryKey: authKeys.security, queryFn: securityApi.get });
-  const regenerate = useInvalidatingMutation(() => securityApi.regenerateApiKey(), [authKeys.security], { errorTitle: 'Could not regenerate the API key' });
-  const [shown, setShown] = useState(false);
-  const [copied, setCopied] = useState(false);
-  const [confirm, setConfirm] = useState(false);
-  const key = query.data?.apiKey ?? '';
+function useAuthSettingsForm() {
+  const query = useSecuritySettings();
+  const save = useInvalidatingMutation((body: AuthSettings) => securityApi.update(body), [authKeys.security, authKeys.status], {
+    errorTitle: 'Could not save security settings',
+  });
+  const saved = useMemo<AuthSettings | null>(
+    () => (query.data ? { method: query.data.method, requireForLocal: query.data.requireForLocal, sessionDays: query.data.sessionDays } : null),
+    [query.data],
+  );
+  const draft = useDraft<AuthSettings | null>(saved);
+  const days = draft.value?.sessionDays ?? 30;
+  const daysValid = Number.isInteger(days) && days >= 1 && days <= 365;
+  return { query, save, draft, daysValid };
+}
 
-  const copy = async () => {
-    try {
-      await navigator.clipboard.writeText(key);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    } catch {
-      setShown(true);
-    }
-  };
-
+function AuthSettingsSection({ form }: { form: ReturnType<typeof useAuthSettingsForm> }) {
+  const { query, draft, daysValid } = form;
+  const ids = useId();
+  const value = draft.value;
+  if (query.isError) {
+    return (
+      <SettingsSection label="Authentication">
+        <ErrorBlock title="Could not load security settings" onRetry={() => void query.refetch()}>
+          {errorMessage(query.error)}
+        </ErrorBlock>
+      </SettingsSection>
+    );
+  }
+  if (!value) {
+    return (
+      <SettingsSection label="Authentication">
+        <Skeleton lines={3} />
+      </SettingsSection>
+    );
+  }
+  const set = (patch: Partial<AuthSettings>) => draft.set((d) => (d ? { ...d, ...patch } : d));
   return (
-    <Card title="API key">
-      <p className="muted">Apps and scripts send this as the X-Api-Key header (or ?apikey=). It grants admin access.</p>
-      <div className="row">
-        <Input readOnly aria-label="API key" className="api-key-input" value={shown ? key : key ? '•'.repeat(32) : ''} />
-        <Button onClick={() => setShown((v) => !v)}>{shown ? 'Hide' : 'Show'}</Button>
-        <Button onClick={() => void copy()} disabled={!key}>
-          {copied ? 'Copied' : 'Copy'}
-        </Button>
-        <Button variant="danger" onClick={() => setConfirm(true)}>
-          Regenerate
-        </Button>
-      </div>
-      <ConfirmDialog
-        open={confirm}
-        title="Regenerate the API key?"
-        confirmLabel="Regenerate"
-        onCancel={() => setConfirm(false)}
-        onConfirm={async () => {
-          await regenerate.mutateAsync(undefined);
-          setConfirm(false);
-          setShown(true);
-        }}
-      >
-        Every app using the current key stops working until it is given the new one.
-      </ConfirmDialog>
-    </Card>
+    <FormSection label="Authentication">
+      <FormRow label="Method" htmlFor={`${ids}-method`} caption="How people sign in from a browser. The API key always works for apps.">
+        <Select
+          id={`${ids}-method`}
+          className="al-select--fit"
+          value={value.method}
+          options={METHOD_OPTIONS}
+          onChange={(e) => set({ method: e.currentTarget.value as AuthMethod })}
+        />
+      </FormRow>
+      <FormRow label="Require for local addresses" captionInline caption="Off: requests from this machine and the private network (192.168.x, 10.x, ...) skip sign-in.">
+        <Toggle aria-label="Require for local addresses" checked={value.requireForLocal} onChange={(e) => set({ requireForLocal: e.currentTarget.checked })} />
+      </FormRow>
+      <FormRow label="Session length (days)" htmlFor={`${ids}-days`} caption="Sign-ins last this long (1-365)." error={daysValid ? undefined : 'Enter 1 to 365 days'}>
+        <Input
+          id={`${ids}-days`}
+          type="number"
+          mono
+          min={1}
+          max={365}
+          className="al-input--num"
+          invalid={!daysValid}
+          value={Number.isFinite(value.sessionDays) ? String(value.sessionDays) : ''}
+          onChange={(e) => set({ sessionDays: Number(e.currentTarget.value) })}
+        />
+      </FormRow>
+    </FormSection>
   );
 }
 
@@ -153,7 +146,8 @@ function UserEditor({ user, mode, onClose }: { user: User | null; mode: 'edit' |
   );
 
   const submit = () => {
-    const problem = mode === 'password' ? (draft.password.length < PASSWORD_MIN_LENGTH ? `Password needs at least ${PASSWORD_MIN_LENGTH} characters.` : null) : validateUserDraft(draft, !user);
+    const problem =
+      mode === 'password' ? (draft.password.length < PASSWORD_MIN_LENGTH ? `Password needs at least ${PASSWORD_MIN_LENGTH} characters.` : null) : validateUserDraft(draft, !user);
     setError(problem);
     if (!problem) save.mutate(draft, { onSuccess: onClose });
   };
@@ -162,112 +156,126 @@ function UserEditor({ user, mode, onClose }: { user: User | null; mode: 'edit' |
   return (
     <Modal
       open
+      size={560}
       onClose={onClose}
       title={mode === 'password' ? `Reset password for ${user?.username}` : user ? `Edit ${user.username}` : 'Add user'}
-      footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} />}
+      footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} saveLabel={mode === 'password' ? 'Reset password' : 'Save'} />}
     >
-      {mode === 'edit' ? (
-        <>
-          <FormField label="Username">
-            <Input value={draft.username} onChange={set('username')} />
-          </FormField>
-          <FormField label="Display name">
-            <Input value={draft.displayName} onChange={set('displayName')} />
-          </FormField>
-          <FormField label="Email">
-            <Input type="email" value={draft.email} onChange={set('email')} />
-          </FormField>
-          <FormField label="Role" hint="Admins manage settings and users; users can browse and (later) request.">
-            <Select value={draft.role} onChange={set('role')} options={[{ value: 'user', label: 'User' }, { value: 'admin', label: 'Admin' }]} />
-          </FormField>
-        </>
-      ) : null}
-      {mode === 'password' || !user ? (
-        <FormField label={user ? 'New password' : 'Password'} hint={user ? 'Signs the user out everywhere.' : undefined}>
-          <Input type="password" autoComplete="new-password" value={draft.password} onChange={set('password')} />
-        </FormField>
-      ) : null}
-      {error ? <p className="text-error" role="alert">{error}</p> : null}
-      <SaveError error={save.error} />
+      <div className="al-editor-stack">
+        {mode === 'edit' ? (
+          <>
+            <Field label="Username">
+              <Input value={draft.username} onChange={set('username')} autoComplete="off" />
+            </Field>
+            <Field label="Display name">
+              <Input value={draft.displayName} onChange={set('displayName')} />
+            </Field>
+            <Field label="Email">
+              <Input type="email" value={draft.email} onChange={set('email')} />
+            </Field>
+            <Field label="Role" hint="Admins manage settings and users; users can browse and request.">
+              <Select
+                value={draft.role}
+                onChange={set('role')}
+                options={[
+                  { value: 'user', label: 'User' },
+                  { value: 'admin', label: 'Admin' },
+                ]}
+              />
+            </Field>
+          </>
+        ) : null}
+        {mode === 'password' || !user ? (
+          <Field label={user ? 'New password' : 'Password'} hint={user ? 'Signs the user out everywhere.' : `At least ${PASSWORD_MIN_LENGTH} characters.`}>
+            <Input type="password" autoComplete="new-password" value={draft.password} onChange={set('password')} />
+          </Field>
+        ) : null}
+        {error ? (
+          <p className="al-inline-error" role="alert">
+            {error}
+          </p>
+        ) : null}
+        <SaveError error={save.error} />
+      </div>
     </Modal>
   );
 }
 
-function UsersCard() {
+function UsersSection() {
   const { user: me } = useAuth();
   const users = useQuery({ queryKey: authKeys.users, queryFn: usersApi.list });
   const remove = useInvalidatingMutation((id: number) => usersApi.remove(id), [authKeys.users], { silent: true });
   const [editing, setEditing] = useState<{ user: User | null; mode: 'edit' | 'password' } | null>(null);
   const [deleting, setDeleting] = useState<User | null>(null);
 
+  const columns: Array<Column<User>> = [
+    {
+      key: 'username',
+      header: 'Username',
+      sortValue: (u) => u.username,
+      cell: (u) => (
+        <>
+          {u.username}
+          {u.id === me?.id ? <span className="al-you">(you)</span> : null}
+        </>
+      ),
+    },
+    { key: 'name', header: 'Name', cell: (u) => u.displayName ?? '', muted: true },
+    { key: 'email', header: 'Email', cell: (u) => u.email ?? '', mono: true },
+    {
+      key: 'role',
+      header: 'Role',
+      sortValue: (u) => u.role,
+      cell: (u) => (u.role === 'admin' ? <Chip tone="accent">Admin</Chip> : <Chip tone="neutral">User</Chip>),
+    },
+    { key: 'last', header: 'Last sign-in', sortValue: (u) => u.lastLoginAt ?? null, cell: (u) => <When iso={u.lastLoginAt} /> },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (u) => (
+        <span className="al-row-actions">
+          <Button size="sm" variant="ghost" onClick={() => setEditing({ user: u, mode: 'edit' })} aria-label={`Edit ${u.username}`}>
+            Edit
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setEditing({ user: u, mode: 'password' })} aria-label={`Reset password for ${u.username}`}>
+            Reset password
+          </Button>
+          <Button size="sm" variant="danger" disabled={u.id === me?.id} onClick={() => setDeleting(u)} aria-label={`Delete ${u.username}`}>
+            Delete
+          </Button>
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <Card
-      title="Users"
-      flush
-      actions={
-        <div className="row">
-          <Link to="/settings/users" className="link-subtle">
+    <SettingsSection
+      label="Users"
+      {...(users.data ? { count: users.data.length } : {})}
+      action={
+        <div className="al-section-actions">
+          <Link to="/settings/users" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
             Permissions and quotas
           </Link>
-          <Button variant="primary" onClick={() => setEditing({ user: null, mode: 'edit' })}>
+          <Button size="sm" variant="secondary" onClick={() => setEditing({ user: null, mode: 'edit' })}>
             Add user
           </Button>
         </div>
       }
     >
-      {users.isPending ? (
-        <LoadingBlock />
-      ) : users.isError ? (
-        <ErrorView error={users.error} onRetry={() => void users.refetch()} />
+      {users.isError ? (
+        <ErrorBlock title="Could not load users" onRetry={() => void users.refetch()}>
+          {errorMessage(users.error)}
+        </ErrorBlock>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Username</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Role</th>
-                <th>Last sign-in</th>
-                <th className="align-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.data.map((u) => (
-                <tr key={u.id}>
-                  <td>
-                    {u.username}
-                    {u.id === me?.id ? <span className="muted"> (you)</span> : null}
-                  </td>
-                  <td>{u.displayName ?? ''}</td>
-                  <td>{u.email ?? ''}</td>
-                  <td>
-                    <Badge tone={u.role === 'admin' ? 'info' : 'neutral'}>{u.role}</Badge>
-                  </td>
-                  <td>{u.lastLoginAt ? new Date(u.lastLoginAt).toLocaleString() : 'never'}</td>
-                  <td className="align-right">
-                    <div className="row row-end">
-                      <Button size="sm" variant="ghost" onClick={() => setEditing({ user: u, mode: 'edit' })}>
-                        Edit
-                      </Button>
-                      <Button size="sm" variant="ghost" onClick={() => setEditing({ user: u, mode: 'password' })}>
-                        Reset password
-                      </Button>
-                      <Button size="sm" variant="ghost" disabled={u.id === me?.id} onClick={() => setDeleting(u)}>
-                        Delete
-                      </Button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table caption="Users" density="dense" columns={columns} rows={users.data} loading={users.isPending} rowKey={(u) => u.id} sortable empty="No users." />
       )}
       {editing ? <UserEditor key={`${editing.user?.id ?? 'new'}-${editing.mode}`} user={editing.user} mode={editing.mode} onClose={() => setEditing(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
         title={`Delete ${deleting?.username ?? ''}?`}
+        confirmLabel="Delete user"
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (deleting) await remove.mutateAsync(deleting.id);
@@ -277,18 +285,103 @@ function UsersCard() {
       >
         Their sessions end immediately.
       </ConfirmDialog>
-    </Card>
+    </SettingsSection>
+  );
+}
+
+function SessionsSection() {
+  const sessions = useQuery({ queryKey: authKeys.sessions, queryFn: authApi.sessions, retry: false });
+  const revoke = useInvalidatingMutation((id: number) => authApi.revokeSession(id), [authKeys.sessions], { silent: true });
+  const [revoking, setRevoking] = useState<SessionRecord | null>(null);
+
+  const columns: Array<Column<SessionRecord>> = [
+    {
+      key: 'device',
+      header: 'Device',
+      cell: (s) => (
+        <>
+          <span className="al-ua" title={s.userAgent}>
+            {s.userAgent ?? 'Unknown browser'}
+          </span>
+          {s.current ? <Chip tone="accent">This session</Chip> : null}
+        </>
+      ),
+    },
+    { key: 'ip', header: 'IP address', cell: (s) => s.ip ?? '—', mono: true },
+    { key: 'created', header: 'Signed in', sortValue: (s) => s.createdAt, cell: (s) => <When iso={s.createdAt} /> },
+    { key: 'seen', header: 'Last seen', sortValue: (s) => s.lastSeenAt, cell: (s) => <When iso={s.lastSeenAt} /> },
+    { key: 'expires', header: 'Expires', sortValue: (s) => s.expiresAt, cell: (s) => <When iso={s.expiresAt} /> },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (s) => (
+        <Button size="sm" variant="danger" disabled={s.current} onClick={() => setRevoking(s)} aria-label={`Revoke session from ${s.ip ?? 'unknown address'}`}>
+          Revoke
+        </Button>
+      ),
+    },
+  ];
+
+  return (
+    <SettingsSection label="Sessions" {...(sessions.data ? { count: sessions.data.length } : {})}>
+      {sessions.isError ? (
+        <ErrorBlock title="Could not load sessions" onRetry={() => void sessions.refetch()}>
+          {errorMessage(sessions.error)}
+        </ErrorBlock>
+      ) : (
+        <Table
+          caption="Your sessions"
+          density="dense"
+          columns={columns}
+          rows={sessions.data}
+          loading={sessions.isPending}
+          rowKey={(s) => s.id}
+          sortable
+          defaultSort={{ key: 'seen', direction: 'desc' }}
+          empty="No other sessions."
+        />
+      )}
+      <ConfirmDialog
+        open={revoking !== null}
+        title="Revoke session?"
+        confirmLabel="Revoke session"
+        onCancel={() => setRevoking(null)}
+        onConfirm={async () => {
+          if (revoking) await revoke.mutateAsync(revoking.id);
+          setRevoking(null);
+        }}
+      >
+        The browser at <span className="al-num">{revoking?.ip ?? 'an unknown address'}</span> is signed out on its next request.
+      </ConfirmDialog>
+    </SettingsSection>
   );
 }
 
 export function SecurityPage() {
+  const auth = useAuthSettingsForm();
   return (
-    <Page title="Security">
-      <div className="stack">
-        <AuthSettingsCard />
-        <ApiKeyCard />
-        <UsersCard />
-      </div>
-    </Page>
+    <SettingsPage
+      title="Security"
+      description="How people sign in, who has an account, active sessions and the API key."
+      save={{
+        count: auth.draft.changes,
+        onDiscard: auth.draft.discard,
+        onSave: () => {
+          if (auth.draft.value && auth.daysValid) auth.save.mutate(auth.draft.value);
+        },
+        saving: auth.save.isPending,
+        disabled: !auth.daysValid,
+      }}
+    >
+      <AuthSettingsSection form={auth} />
+      <SettingsSection label="API keys">
+        <FormRow label="Admin API key" htmlFor="security-api-key" caption="Apps and scripts send this as the X-Api-Key header (or ?apikey=). It grants admin access.">
+          <ApiKeyControls id="security-api-key" />
+        </FormRow>
+      </SettingsSection>
+      <UsersSection />
+      <SessionsSection />
+    </SettingsPage>
   );
 }

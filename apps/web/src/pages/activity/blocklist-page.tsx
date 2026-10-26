@@ -1,58 +1,36 @@
 import { useState } from 'react';
-import { ApiError } from '../../api/client.js';
+import { ApiError, errorMessage } from '../../api/client.js';
 import type { BlocklistItem } from '../../api/blocklist.js';
-import { Button } from '../../components/button.js';
-import { Card } from '../../components/card.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { Page } from '../../components/page.js';
-import { Table, type Column } from '../../components/table.js';
+import { Button, EmptyState, ErrorBlock, Pane, ProtocolBadge, Table, type Column, type RowKey } from '../../arclight/index.js';
 import { useBlocklist, useRemoveBlocklist } from '../../hooks/activity.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
-import { Pager } from './activity-shared.js';
+import { ActivityHeader, Pager } from './activity-shared.js';
 
 export function BlocklistPage() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
-  const [selected, setSelected] = useState<number[]>([]);
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useBlocklist(page, pageSize);
   const remove = useRemoveBlocklist();
   const pending = list.error instanceof ApiError && list.error.status === 404;
-  const records = list.data?.records ?? [];
 
   const columns: Column<BlocklistItem>[] = [
+    { key: 'sourceTitle', header: 'Source title', cell: (r) => <span className="al-activity-break">{r.sourceTitle}</span> },
+    { key: 'quality', header: 'Quality', mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
     {
-      key: 'select',
-      width: '32px',
-      header: (
-        <input
-          type="checkbox"
-          aria-label="Select all"
-          checked={records.length > 0 && records.every((r) => selected.includes(r.id))}
-          onChange={(e) => setSelected(e.currentTarget.checked ? records.map((r) => r.id) : [])}
-        />
-      ),
-      cell: (r) => (
-        <input
-          type="checkbox"
-          aria-label={`Select ${r.sourceTitle}`}
-          checked={selected.includes(r.id)}
-          onChange={(e) => {
-            const on = e.currentTarget.checked;
-            setSelected((s) => (on ? [...s, r.id] : s.filter((id) => id !== r.id)));
-          }}
-        />
-      ),
+      key: 'protocol',
+      header: 'Prot',
+      width: '64px',
+      cell: (r) => (r.protocol === 'torrent' || r.protocol === 'usenet' ? <ProtocolBadge protocol={r.protocol} /> : (r.protocol ?? '—')),
     },
-    { key: 'sourceTitle', header: 'Source title', cell: (r) => <span className="break">{r.sourceTitle}</span> },
-    { key: 'quality', header: 'Quality', cell: (r) => r.quality?.quality?.name ?? '—' },
-    { key: 'protocol', header: 'Protocol', cell: (r) => r.protocol ?? '—' },
-    { key: 'indexer', header: 'Indexer', cell: (r) => r.indexer ?? '—' },
-    { key: 'message', header: 'Reason', cell: (r) => <span className="muted">{r.message ?? ''}</span> },
+    { key: 'indexer', header: 'Indexer', muted: true, cell: (r) => r.indexer ?? '—' },
+    { key: 'message', header: 'Reason', muted: true, cell: (r) => r.message ?? '' },
     {
       key: 'date',
       header: 'Date',
+      mono: true,
+      align: 'right',
       cell: (r) => (
         <time dateTime={r.date} title={formatDateTime(r.date)}>
           {relativeTime(r.date)}
@@ -61,7 +39,7 @@ export function BlocklistPage() {
     },
     {
       key: 'actions',
-      header: <span className="sr-only">Actions</span>,
+      header: <span className="al-sr-only">Actions</span>,
       align: 'right',
       cell: (r) => (
         <Button size="sm" variant="ghost" aria-label={`Remove ${r.sourceTitle} from blocklist`} onClick={() => remove.mutate([r.id])}>
@@ -72,26 +50,19 @@ export function BlocklistPage() {
   ];
 
   return (
-    <Page
-      title="Blocklist"
-      actions={
-        <Button
-          variant="danger"
-          disabled={selected.length === 0}
-          loading={remove.isPending}
-          onClick={() => remove.mutate(selected, { onSuccess: () => setSelected([]) })}
-        >
-          Remove selected{selected.length ? ` (${selected.length})` : ''}
-        </Button>
-      }
-    >
-      <Card flush>
+    <div className="al-activity">
+      <ActivityHeader active="blocklist" />
+      <Pane flush bare className="al-activity-pane">
         {pending ? (
-          <div className="card-body">
+          <div className="al-activity-pad">
             <PendingApiNotice what="blocklist" />
           </div>
         ) : list.isError ? (
-          <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+          <div className="al-activity-pad">
+            <ErrorBlock title="Couldn't load the blocklist" onRetry={() => void list.refetch()}>
+              {errorMessage(list.error)}
+            </ErrorBlock>
+          </div>
         ) : (
           <>
             <Table
@@ -99,16 +70,32 @@ export function BlocklistPage() {
               columns={columns}
               rows={list.data?.records}
               rowKey={(r) => r.id}
+              rowLabel={(r) => `Select ${r.sourceTitle}`}
               loading={list.isPending}
               sortable={false}
+              selectable
+              selected={selected}
+              onSelectionChange={setSelected}
+              bulkActions={(keys, clear) => (
+                <Button
+                  variant="danger"
+                  loading={remove.isPending}
+                  onClick={() => remove.mutate([...keys].map(Number), { onSuccess: clear })}
+                >
+                  {keys.size === 1 ? 'Remove 1 release' : `Remove ${keys.size} releases`}
+                </Button>
+              )}
               empty={<EmptyState title="Blocklist is empty">Releases that failed or were rejected manually are listed here.</EmptyState>}
             />
             {list.data && list.data.totalRecords > pageSize ? (
-              <Pager page={page} pageSize={pageSize} total={list.data.totalRecords} onPage={setPage} />
+              <footer className="al-activity-foot">
+                <span className="al-activity-spacer" />
+                <Pager page={page} pageSize={pageSize} total={list.data.totalRecords} onPage={setPage} />
+              </footer>
             ) : null}
           </>
         )}
-      </Card>
-    </Page>
+      </Pane>
+    </div>
   );
 }

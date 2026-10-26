@@ -1,30 +1,25 @@
 import { useState } from 'react';
 import { SubtitleHistoryAction, SUBTITLE_PROVIDER_IDS, type SubtitleHistoryRecord, type SubtitleMediaType } from '@arclight/shared';
-import { ApiError } from '../../api/client.js';
+import { ApiError, errorMessage } from '../../api/client.js';
 import type { SubtitleHistoryFilter } from '../../api/subtitles.js';
-import { Badge, type BadgeTone } from '../../components/badge.js';
-import { Card } from '../../components/card.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { FormField, Select } from '../../components/form.js';
-import { Page } from '../../components/page.js';
-import { Table, type Column } from '../../components/table.js';
+import { Chip, EmptyState, ErrorBlock, FilterBar, Paginator, Pane, Select, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { useSubtitleHistory } from '../../hooks/subtitles.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
-import { Pager } from '../activity/activity-shared.js';
 import { PendingApiNotice } from '../settings/shared.js';
+import { SubtitlesHeader } from './subtitles-header.js';
 import { HISTORY_ACTION_LABELS, formatPercent, refLabel } from './subtitle-ui.js';
 
-const ACTION_TONES: Partial<Record<SubtitleHistoryAction, BadgeTone>> = {
-  downloaded: 'ok',
-  manualDownload: 'ok',
-  upgraded: 'info',
-  uploaded: 'info',
-  deleted: 'warning',
+const ACTION_TONES: Partial<Record<SubtitleHistoryAction, ChipTone>> = {
+  downloaded: 'accent',
+  manualDownload: 'accent',
+  upgraded: 'default',
+  uploaded: 'default',
+  deleted: 'warn',
 };
 
 export const DEFAULT_SUBTITLE_HISTORY_FILTER: SubtitleHistoryFilter = { page: 1, pageSize: 25 };
 
+/** Subtitles → History: downloads, upgrades, uploads and deletions. */
 export function SubtitleHistoryPage() {
   const [filter, setFilter] = useState<SubtitleHistoryFilter>(DEFAULT_SUBTITLE_HISTORY_FILTER);
   const list = useSubtitleHistory(filter);
@@ -34,16 +29,17 @@ export function SubtitleHistoryPage() {
     {
       key: 'action',
       header: 'Action',
-      cell: (r) => <Badge tone={ACTION_TONES[r.action] ?? 'neutral'}>{HISTORY_ACTION_LABELS[r.action]}</Badge>,
+      cell: (r) => <Chip tone={ACTION_TONES[r.action] ?? 'neutral'}>{HISTORY_ACTION_LABELS[r.action]}</Chip>,
     },
-    { key: 'title', header: 'Item', cell: (r) => <span className="break">{r.title}</span> },
+    { key: 'title', header: 'Item', cell: (r) => <span className="mt-break">{r.title}</span> },
     { key: 'language', header: 'Language', cell: (r) => refLabel(r) },
-    { key: 'provider', header: 'Provider', cell: (r) => r.provider ?? '—' },
-    { key: 'score', header: 'Score', align: 'right', cell: (r) => formatPercent(r.score, r.scoreOutOf) },
-    { key: 'description', header: 'Description', cell: (r) => <span className="muted">{r.description}</span> },
+    { key: 'provider', header: 'Provider', muted: true, cell: (r) => r.provider ?? '—' },
+    { key: 'score', header: 'Score', align: 'right', mono: true, cell: (r) => formatPercent(r.score, r.scoreOutOf) },
+    { key: 'description', header: 'Description', muted: true, cell: (r) => r.description },
     {
       key: 'date',
       header: 'Date',
+      mono: true,
       cell: (r) => (
         <time dateTime={r.date} title={formatDateTime(r.date)}>
           {relativeTime(r.date)}
@@ -53,47 +49,44 @@ export function SubtitleHistoryPage() {
   ];
 
   const set = (patch: Partial<SubtitleHistoryFilter>) => setFilter((f) => ({ ...f, ...patch, page: patch.page ?? 1 }));
+  const active = (filter.mediaType ? 1 : 0) + (filter.action ? 1 : 0) + (filter.provider ? 1 : 0);
+  const pageCount = list.data ? Math.ceil(list.data.totalRecords / filter.pageSize) : 1;
 
   return (
-    <Page title="Subtitle history">
-      <div className="toolbar">
-        <FormField label="Media">
-          <Select value={filter.mediaType ?? ''} onChange={(e) => set({ mediaType: (e.currentTarget.value || undefined) as SubtitleMediaType | undefined })}>
-            <option value="">All</option>
+    <>
+      <SubtitlesHeader active="history" />
+      <div className="sub-page">
+        <FilterBar activeCount={active} onClear={() => setFilter(DEFAULT_SUBTITLE_HISTORY_FILTER)}>
+          <Select aria-label="Media" value={filter.mediaType ?? ''} onChange={(e) => set({ mediaType: (e.currentTarget.value || undefined) as SubtitleMediaType | undefined })}>
+            <option value="">All media</option>
             <option value="series">TV</option>
             <option value="movie">Movies</option>
           </Select>
-        </FormField>
-        <FormField label="Action">
-          <Select value={filter.action ?? ''} onChange={(e) => set({ action: (e.currentTarget.value || undefined) as SubtitleHistoryAction | undefined })}>
-            <option value="">All</option>
+          <Select aria-label="Action" value={filter.action ?? ''} onChange={(e) => set({ action: (e.currentTarget.value || undefined) as SubtitleHistoryAction | undefined })}>
+            <option value="">All actions</option>
             {SubtitleHistoryAction.options.map((a) => (
               <option key={a} value={a}>
                 {HISTORY_ACTION_LABELS[a]}
               </option>
             ))}
           </Select>
-        </FormField>
-        <FormField label="Provider">
-          <Select value={filter.provider ?? ''} onChange={(e) => set({ provider: e.currentTarget.value || undefined })}>
-            <option value="">All</option>
+          <Select aria-label="Provider" value={filter.provider ?? ''} onChange={(e) => set({ provider: e.currentTarget.value || undefined })}>
+            <option value="">All providers</option>
             {SUBTITLE_PROVIDER_IDS.map((p) => (
               <option key={p} value={p}>
                 {p}
               </option>
             ))}
           </Select>
-        </FormField>
-      </div>
-      <Card flush>
+        </FilterBar>
         {pending ? (
-          <div className="card-body">
-            <PendingApiNotice what="subtitle history" />
-          </div>
+          <PendingApiNotice what="subtitle history" />
         ) : list.isError ? (
-          <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+          <ErrorBlock title="Subtitle history did not load" onRetry={() => void list.refetch()}>
+            {errorMessage(list.error)}
+          </ErrorBlock>
         ) : (
-          <>
+          <Pane flush bare>
             <Table
               caption="Subtitle history"
               columns={columns}
@@ -103,12 +96,14 @@ export function SubtitleHistoryPage() {
               sortable={false}
               empty={<EmptyState title="No subtitle history">Downloads, upgrades, uploads and deletions are listed here.</EmptyState>}
             />
-            {list.data && list.data.totalRecords > filter.pageSize ? (
-              <Pager page={filter.page} pageSize={filter.pageSize} total={list.data.totalRecords} onPage={(page) => set({ page })} />
+            {pageCount > 1 ? (
+              <div className="sub-pager">
+                <Paginator page={filter.page} pageCount={pageCount} onPageChange={(page) => set({ page })} />
+              </div>
             ) : null}
-          </>
+          </Pane>
         )}
-      </Card>
-    </Page>
+      </div>
+    </>
   );
 }

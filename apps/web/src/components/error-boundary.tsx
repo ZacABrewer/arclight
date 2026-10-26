@@ -1,19 +1,13 @@
 import { Component, type ErrorInfo, type ReactNode } from 'react';
 import { errorMessage } from '../api/client.js';
-import { Button } from './button.js';
+import { ErrorBlock } from '../arclight/index.js';
 
-/** Panel shown for a crashed page or a failed route load. */
+/** Panel shown for a crashed page or a failed route load: what failed, the cause, Retry. */
 export function ErrorView({ error, onRetry }: { error: unknown; onRetry?: () => void }) {
   return (
-    <div className="error-view" role="alert">
-      <h2>Something went wrong</h2>
-      <p className="muted">{errorMessage(error)}</p>
-      {onRetry ? (
-        <Button variant="primary" onClick={onRetry}>
-          Try again
-        </Button>
-      ) : null}
-    </div>
+    <ErrorBlock title="This page failed to load" onRetry={onRetry} retryLabel="Try again">
+      {errorMessage(error)}
+    </ErrorBlock>
   );
 }
 

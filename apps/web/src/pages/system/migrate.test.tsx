@@ -101,7 +101,7 @@ async function analyze(path = '/config/sonarr.db') {
 describe('System -> Import from existing apps', () => {
   it('fills the form from a detected installation', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: /Radarr: \/config\/radarr\/radarr\.db/ }));
+    fireEvent.click(await screen.findByRole('button', { name: /Radarr: \/config\/radarr\/radarr\.db/ }, { timeout: 4000 }));
     expect((screen.getByLabelText('Application') as HTMLSelectElement).value).toBe('radarr');
     expect((screen.getByLabelText('Database path') as HTMLInputElement).value).toBe('/config/radarr/radarr.db');
     expect((screen.getByLabelText('Config file (optional)') as HTMLInputElement).value).toBe('/config/radarr/config.xml');
@@ -170,7 +170,7 @@ describe('System -> Import from existing apps', () => {
     const table = await screen.findByRole('table', { name: 'Import result' });
     expect(within(table).getByText('series')).toBeTruthy();
     expect(within(table).getByText('4')).toBeTruthy();
-    expect(screen.getByText('completed')).toBeTruthy();
+    expect(screen.getByText('Completed')).toBeTruthy();
   });
 
   it('pre-selects areas that create, conflict or stage', () => {

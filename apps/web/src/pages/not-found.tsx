@@ -1,25 +1,46 @@
-import { Link } from '@tanstack/react-router';
-import { Card } from '../components/card.js';
-import { EmptyState } from '../components/empty-state.js';
-import { Page } from '../components/page.js';
+import { useEffect } from 'react';
+import { useRouter } from '@tanstack/react-router';
+import { Button } from '../arclight/index.js';
+import { useAuth } from '../auth/auth-context.js';
+import { useBackdropOptions } from '../layout/shell-options.js';
 
+/** Page 09: mono 404, plain explanation, the way back. The vanishing point moves right. */
 export function NotFoundPage() {
+  const router = useRouter();
+  const { isAdmin } = useAuth();
+  useBackdropOptions({ vx: 0.78, horizon: 0.65, circuit: false });
+  useEffect(() => {
+    document.title = 'Page not found · Arclight';
+  }, []);
+  const path = typeof location === 'undefined' ? '' : location.pathname;
   return (
-    <Page title="Not found">
-      <Card>
-        <EmptyState
-          title="There is nothing at this address"
-          action={
-            <Link to="/" className="btn btn-primary btn-md">
-              Back to the dashboard
-            </Link>
-          }
-        >
-          <p className="muted">
-            <code>{typeof location === 'undefined' ? '' : location.pathname}</code>
-          </p>
-        </EmptyState>
-      </Card>
-    </Page>
+    <section className="nf" aria-labelledby="nf-title">
+      <div className="nf__code al-num" aria-hidden="true">
+        404
+      </div>
+      <h1 id="nf-title" className="nf__title">
+        Page not found
+      </h1>
+      <p className="nf__body">
+        This page doesn't exist or has moved. Check the address, or go back to the dashboard.
+        {path ? (
+          <>
+            {' '}
+            <span className="al-num nf__path">{path}</span>
+          </>
+        ) : null}
+      </p>
+      <div className="nf__actions">
+        <Button variant="primary" onClick={() => void router.navigate({ to: '/' })}>
+          Go to dashboard
+        </Button>
+        {isAdmin ? (
+          // There is no bug tracker in the app; the logs are where a problem gets reported from.
+          <Button variant="secondary" onClick={() => void router.navigate({ to: '/system/logs' })}>
+            Report a problem
+          </Button>
+        ) : null}
+      </div>
+    </section>
   );
 }

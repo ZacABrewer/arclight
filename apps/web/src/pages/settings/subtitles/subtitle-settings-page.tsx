@@ -1,19 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { SUBTITLE_PROVIDER_IDS, type SubtitleSettings } from '@arclight/shared';
-import { ApiError } from '../../../api/client.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Select } from '../../../components/form.js';
+import { ApiError, errorMessage } from '../../../api/client.js';
+import { ErrorBlock, Select, Skeleton } from '../../../arclight/index.js';
 import { SchemaForm } from '../../../components/forms/schema-form.js';
 import type { FieldDefinition, FieldRendererProps, FieldRenderers, FormValues } from '../../../components/forms/types.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useToast } from '../../../components/toast.js';
 import { useLanguageProfiles, useSaveSubtitleSettings, useSubtitleLanguages, useSubtitleSettings } from '../../../hooks/subtitles.js';
-import { PendingApiNotice } from '../shared.js';
+import { SettingsPage, useDraft } from '../settings-layout.js';
+import { PendingApiNotice, SettingsSection } from '../shared.js';
 import { LanguageProfilesCard } from './language-profiles-card.js';
 import { ProvidersCard } from './providers-card.js';
+import './subtitle-settings.css';
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -137,7 +134,7 @@ function nullableSelect(options: Array<{ value: string; label: string }>, noneLa
     const current = value === null || value === undefined ? '' : String(value);
     const list = current && !options.some((o) => o.value === current) ? [...options, { value: current, label: current }] : options;
     return (
-      <Select id={id} value={current} onChange={(e) => onChange(e.currentTarget.value === '' ? null : numeric ? Number(e.currentTarget.value) : e.currentTarget.value)}>
+      <Select id={id} className="al-select--fit" value={current} onChange={(e) => onChange(e.currentTarget.value === '' ? null : numeric ? Number(e.currentTarget.value) : e.currentTarget.value)}>
         <option value="">{noneLabel}</option>
         {list.map((o) => (
           <option key={o.value} value={o.value}>
@@ -155,12 +152,9 @@ export function SubtitleSettingsPage() {
   const languages = useSubtitleLanguages();
   const save = useSaveSubtitleSettings();
   const toast = useToast();
-  const [draft, setDraft] = useState<SubtitleSettings | null>(null);
+  const draft = useDraft<SubtitleSettings | null>(settings.data ?? null);
+  const [advanced, setAdvanced] = useState(false);
   const pending = settings.error instanceof ApiError && settings.error.status === 404;
-
-  useEffect(() => {
-    if (settings.data && draft === null) setDraft(structuredClone(settings.data));
-  }, [settings.data, draft]);
 
   const renderers = useMemo<FieldRenderers>(() => {
     const profileOptions = (profiles.data ?? []).map((p) => ({ value: String(p.id), label: p.name }));
@@ -172,65 +166,53 @@ export function SubtitleSettingsPage() {
     };
   }, [profiles.data, languages.data]);
 
-  const dirty = draft !== null && settings.data !== undefined && JSON.stringify(draft) !== JSON.stringify(settings.data);
-  const onChange = (next: FormValues) => setDraft(next as unknown as SubtitleSettings);
-  const values = draft as unknown as FormValues;
+  const value = draft.value;
+  const onChange = (next: FormValues) => draft.set(next as unknown as SubtitleSettings);
+  const values = value as unknown as FormValues;
 
-  const actions = (
-    <>
-      <Button variant="ghost" disabled={!dirty} onClick={() => settings.data && setDraft(structuredClone(settings.data))}>
-        Discard
-      </Button>
-      <Button
-        variant="primary"
-        disabled={!dirty}
-        loading={save.isPending}
-        onClick={() =>
-          draft &&
-          save.mutate(draft, {
-            onSuccess: (saved) => {
-              setDraft(structuredClone(saved));
-              toast.push({ tone: 'ok', title: 'Subtitle settings saved' });
-            },
-          })
-        }
-      >
-        Save
-      </Button>
-    </>
-  );
+  const onSave = () => {
+    if (!value) return;
+    save.mutate(value, { onSuccess: () => toast.push({ tone: 'ok', title: 'Subtitle settings saved' }) });
+  };
 
   return (
-    <Page title="Subtitles" subtitle="Language profiles, providers and how subtitles are searched, named and processed." actions={draft ? actions : undefined}>
+    <SettingsPage
+      title="Subtitles"
+      description="Language profiles, providers and how subtitles are searched, named and processed."
+      advanced={{ value: advanced, onChange: setAdvanced }}
+      save={{ count: draft.changes, onSave, onDiscard: draft.discard, saving: save.isPending }}
+    >
       <LanguageProfilesCard />
       {settings.isPending ? (
-        <LoadingBlock />
+        <Skeleton lines={6} />
       ) : pending ? (
         <PendingApiNotice what="subtitle settings" />
       ) : settings.isError ? (
-        <ErrorView error={settings.error} onRetry={() => void settings.refetch()} />
-      ) : draft ? (
+        <ErrorBlock title="Could not load subtitle settings" onRetry={() => void settings.refetch()}>
+          {errorMessage(settings.error)}
+        </ErrorBlock>
+      ) : value ? (
         <>
-          <ProvidersCard providers={draft.providers} onChange={(providers) => setDraft({ ...draft, providers })} />
-          <Card title="General">
-            <SchemaForm fields={GENERAL_FIELDS} values={values} onChange={onChange} renderers={renderers} inline />
-          </Card>
-          <Card title="Sync">
-            <SchemaForm fields={SYNC_FIELDS} values={values} onChange={onChange} inline />
-          </Card>
-          <Card title="Post-processing">
-            <SchemaForm fields={POST_PROCESSING_FIELDS} values={values} onChange={onChange} inline />
-            <div className="field-hint sub-placeholders">
+          <ProvidersCard providers={value.providers} showAdvanced={advanced} onChange={(providers) => draft.set((d) => (d ? { ...d, providers } : d))} />
+          <SettingsSection label="General">
+            <SchemaForm fields={GENERAL_FIELDS} values={values} onChange={onChange} renderers={renderers} showAdvanced={advanced} inline />
+          </SettingsSection>
+          <SettingsSection label="Sync">
+            <SchemaForm fields={SYNC_FIELDS} values={values} onChange={onChange} showAdvanced={advanced} inline />
+          </SettingsSection>
+          <SettingsSection label="Post-processing">
+            <SchemaForm fields={POST_PROCESSING_FIELDS} values={values} onChange={onChange} showAdvanced={advanced} inline />
+            <div className="al-placeholders">
               Placeholders:{' '}
               {POST_PROCESSING_PLACEHOLDERS.map((p) => (
                 <code key={p}>{`{{${p}}}`}</code>
               ))}
             </div>
-          </Card>
+          </SettingsSection>
         </>
       ) : (
-        <LoadingBlock />
+        <Skeleton lines={6} />
       )}
-    </Page>
+    </SettingsPage>
   );
 }

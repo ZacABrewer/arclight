@@ -1,0 +1,9 @@
+/* VPN settings: form rows + live status pane (chamfer tl, mono key/values). */
+.al-vpn-rows { display: flex; flex-direction: column; gap: 16px; }
+.al-vpn-select { max-width: 320px; }
+.al-vpn-num { max-width: 160px; }
+.al-vpn-status { display: flex; flex-direction: column; gap: 14px; }
+.al-vpn-status__line { display: flex; align-items: center; gap: 10px; margin: 0; font-size: 15px; color: var(--al-text-1); }
+.al-vpn-status__line[data-tone='warn'] { color: var(--al-warn-text); }
+.al-vpn-status__line[data-tone='danger'] { color: var(--al-danger-text); }
+.al-vpn-status__line[data-tone='off'] { color: var(--al-text-4); }

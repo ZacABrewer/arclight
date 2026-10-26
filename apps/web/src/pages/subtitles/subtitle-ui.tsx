@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { LanguageProfileFlagMode, SubtitleHistoryAction, SubtitleLanguageOption, SubtitleLanguageRef, SubtitleState } from '@arclight/shared';
-import { Input } from '../../components/form.js';
+import { Input } from '../../arclight/index.js';
 import { useSubtitleLanguages } from '../../hooks/subtitles.js';
 import { cx } from '../../lib/cx.js';
 import './subtitles.css';
@@ -59,7 +59,7 @@ export function MissingChip({ refItem }: { refItem: SubtitleLanguageRef }) {
 }
 
 export function MissingChips({ missing }: { missing: readonly SubtitleLanguageRef[] }) {
-  if (missing.length === 0) return <span className="muted">—</span>;
+  if (missing.length === 0) return <span className="sub-none">—</span>;
   return (
     <span className="sub-chips">
       {missing.map((m) => (
@@ -122,11 +122,11 @@ export function LanguagePicker({
                   setQuery('');
                 }}
               >
-                {l.name} <span className="muted">({l.code})</span>
+                {l.name} <span className="sub-code">{l.code}</span>
               </button>
             </li>
           ))}
-          {matches.length === 0 ? <li className="muted">No match</li> : null}
+          {matches.length === 0 ? <li className="sub-none">No match</li> : null}
         </ul>
       ) : null}
     </div>

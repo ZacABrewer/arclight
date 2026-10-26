@@ -1,0 +1,170 @@
+import { useMemo, type ReactNode } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useQuery } from '@tanstack/react-query';
+import type { MediaRequest } from '@arclight/shared';
+import { request } from '../../api/client.js';
+import { HISTORY_EVENT_LABELS, HistoryPage, type HistoryEventType, type HistoryRecord } from '../../api/history.js';
+import { BackdropFrame, Chip, EmptyState, Poster, Table, type ChipTone, type Column } from '../../arclight/index.js';
+import { formatDate } from '../../components/media/format.js';
+import { QueryError } from '../../components/media/media-kit.js';
+import { REQUEST_STATUS_META, seasonsLabel } from '../../features/requests/status.js';
+import { useQueue } from '../../hooks/activity.js';
+import { useTitle } from '../../hooks/requests.js';
+import './library.css';
+
+// Pieces shared by the series and movie details pages (Page 03).
+
+export interface DetailsHeroProps {
+  backdrop?: string | undefined;
+  poster?: string | undefined;
+  title: string;
+  year?: number | null | undefined;
+  crumb: ReactNode;
+  /** "Apple TV+ · Drama, Sci-Fi · 3 seasons · 55 min · Continuing". */
+  meta?: ReactNode;
+  chips?: ReactNode;
+  /** Usually a KeyValue grid with mono values. */
+  facts?: ReactNode;
+  overview?: string | null | undefined;
+  actions?: ReactNode;
+  children?: ReactNode;
+  label: string;
+}
+
+/** Backdrop (fade left 92%→20% and bottom), 208px poster, title-xl + mono year, meta, chips, facts, verbs. */
+export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips, facts, overview, actions, children, label }: DetailsHeroProps) {
+  return (
+    <section className="mk-hero" aria-label={label}>
+      <BackdropFrame src={backdrop} title="" fade bleed loading="eager" />
+      <div className="mk-hero__grid">
+        <Poster src={poster} title={title} className="mk-hero__poster" loading="eager" />
+        <div className="mk-hero__body">
+          <nav className="mk-crumb" aria-label="Breadcrumb">
+            {crumb}
+          </nav>
+          <h1 className="mk-hero__title">
+            <span className="al-title-xl">{title}</span>
+            {year ? <span className="mk-hero__year">{year}</span> : null}
+          </h1>
+          {meta ? <div className="mk-hero__meta">{meta}</div> : null}
+          {chips ? <div className="mk-hero__chips">{chips}</div> : null}
+          {facts}
+          {overview ? <p className="mk-hero__overview">{overview}</p> : null}
+          {children}
+          {actions ? <div className="mk-hero__actions">{actions}</div> : null}
+        </div>
+      </div>
+    </section>
+  );
+}
+
+/** "Library / Series" crumb. */
+export function LibraryCrumb({ kind }: { kind: 'series' | 'movie' }) {
+  return (
+    <>
+      <Link to={kind === 'series' ? '/library/tv' : '/library/movies'}>Library</Link> / {kind === 'series' ? 'Series' : 'Movie'}
+    </>
+  );
+}
+
+/* ------------------------------------------------------------------ queue progress */
+
+/** Live queue progress (0–1) keyed by episode id, plus the movie's own progress. */
+export function useQueueProgress(scope: { seriesId: number } | { movieId: number }) {
+  const queue = useQueue('seriesId' in scope ? { seriesId: scope.seriesId, pageSize: 200 } : { mediaType: 'movie', pageSize: 200 });
+  return useMemo(() => {
+    const episodes = new Map<number, number>();
+    let movie: number | null = null;
+    for (const item of queue.data?.records ?? []) {
+      if ('seriesId' in scope && item.seriesId === scope.seriesId) for (const id of item.episodeIds ?? []) episodes.set(id, item.progress);
+      if ('movieId' in scope && item.movieId === scope.movieId) movie = item.progress;
+    }
+    return { episodes, movie };
+  }, [queue.data, scope]);
+}
+
+/* ------------------------------------------------------------------ history tab */
+
+const EVENT_TONE: Partial<Record<HistoryEventType, ChipTone>> = {
+  grabbed: 'default',
+  imported: 'accent',
+  failed: 'danger',
+  fileDeleted: 'muted',
+  fileRenamed: 'neutral',
+  ignored: 'muted',
+};
+
+export function historyEventLabel(type: string): string {
+  return HISTORY_EVENT_LABELS[type as HistoryEventType] ?? type;
+}
+
+export function useMediaHistory(scope: { seriesId: number } | { movieId: number } | { episodeId: number }, enabled = true) {
+  return useQuery({
+    queryKey: ['history', 'media', scope],
+    queryFn: () => request('/history', HistoryPage, { query: { page: 1, pageSize: 100, sortKey: 'date', sortDirection: 'desc', includeEpisode: true, ...scope } }),
+    enabled,
+    retry: false,
+  });
+}
+
+export function HistoryEventChip({ type }: { type: string }) {
+  return <Chip tone={EVENT_TONE[type as HistoryEventType] ?? 'neutral'}>{historyEventLabel(type)}</Chip>;
+}
+
+export function HistoryTable({ scope }: { scope: { seriesId: number } | { movieId: number } }) {
+  const history = useMediaHistory(scope);
+  const columns: Column<HistoryRecord>[] = [
+    { key: 'event', header: 'Event', cell: (r) => <HistoryEventChip type={r.eventType} />, width: '140px' },
+    { key: 'source', header: 'Release', cell: (r) => <span className="mk-release-title">{r.sourceTitle}</span> },
+    { key: 'quality', header: 'Quality', cell: (r) => r.quality?.quality?.name ?? '—', mono: true },
+    { key: 'date', header: 'Date', sortValue: (r) => r.date, cell: (r) => formatDate(r.date, { dateStyle: 'medium', timeStyle: 'short' }), mono: true },
+  ];
+  if (history.isError) return <QueryError error={history.error} title="Could not load history" onRetry={() => void history.refetch()} />;
+  return (
+    <Table
+      columns={columns}
+      rows={history.data?.records}
+      loading={history.isPending}
+      rowKey={(r) => r.id}
+      empty={<EmptyState title="No history yet">Grabs, imports and failures show up here.</EmptyState>}
+      caption="History"
+    />
+  );
+}
+
+/* ------------------------------------------------------------------ requests tab */
+
+const REQUEST_TONE: Record<MediaRequest['status'], ChipTone> = {
+  pending: 'warn',
+  approved: 'accent',
+  declined: 'danger',
+  failed: 'danger',
+  completed: 'accent',
+};
+
+export function RequestStatusChip({ status }: { status: MediaRequest['status'] }) {
+  return <Chip tone={REQUEST_TONE[status]}>{REQUEST_STATUS_META[status].label}</Chip>;
+}
+
+/** Requests for this title (from the Discover title detail). */
+export function RequestsTable({ kind, tmdbId }: { kind: 'movie' | 'tv'; tmdbId: number }) {
+  const title = useTitle(kind, tmdbId);
+  const columns: Column<MediaRequest>[] = [
+    { key: 'by', header: 'Requested by', cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
+    { key: 'track', header: 'Track', cell: (r) => (r.is4k ? '4K' : 'Standard'), mono: true },
+    { key: 'seasons', header: 'Seasons', cell: (r) => seasonsLabel(r.seasons) || '—', mono: true },
+    { key: 'status', header: 'Status', cell: (r) => <RequestStatusChip status={r.status} /> },
+    { key: 'created', header: 'Requested', sortValue: (r) => r.createdAt, cell: (r) => formatDate(r.createdAt, { dateStyle: 'medium', timeStyle: 'short' }), mono: true },
+  ];
+  if (title.isError) return <QueryError error={title.error} title="Could not load requests" onRetry={() => void title.refetch()} />;
+  return (
+    <Table
+      columns={columns}
+      rows={title.data?.requests}
+      loading={title.isPending}
+      rowKey={(r) => r.id}
+      empty={<EmptyState title="No requests">Nobody has requested this title.</EmptyState>}
+      caption="Requests"
+    />
+  );
+}

@@ -1,21 +1,12 @@
 import { useMemo, useState } from 'react';
 import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@arclight/shared';
-import { Tabs } from '../../../components/tabs.js';
-import { CatalogueList } from './catalogue.js';
-import { DefinitionEditor } from './definition-editor.js';
+import { errorMessage } from '../../../api/client.js';
 import { indexersApi } from '../../../api/indexers.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Toggle } from '../../../components/form.js';
+import { Button, Chip, EmptyState, ErrorBlock, Input, Modal, ProtocolBadge, Skeleton, Tabs, type ChipTone } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
-import { TestButton } from '../../../components/forms/test-result.js';
-import { Modal } from '../../../components/modal.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import { TestButton, TestResultView } from '../../../components/forms/test-result.js';
 import {
   useCreateIndexer,
   useDeleteIndexer,
@@ -25,17 +16,40 @@ import {
   useTestAllIndexers,
   useUpdateIndexer,
 } from '../../../hooks/indexers.js';
-import { formatDateTime, relativeTime } from '../../../lib/format.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
+import { formatDateTime } from '../../../lib/format.js';
+import { SettingsPage } from '../settings-layout.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
+import { CatalogueList, TemplateList } from './catalogue.js';
+import { DefinitionEditor } from './definition-editor.js';
+import { filterTemplates } from './definition-fields.js';
 import { categoryRenderer, indexerFields, indexerTestOutcome, toIndexerBody } from './indexer-fields.js';
+import './indexers.css';
 
-export function indexerHealth(indexer: Pick<Indexer, 'status'>, now = Date.now()): { tone: 'ok' | 'warning' | 'error'; label: string; title?: string } {
+/** "20:55" — local 24h clock time for retry hints. */
+function clockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+/**
+ * Status chip for an indexer card: always a label plus the cause, never colour alone.
+ * Enabled (accent) · Disabled (muted) · Backing off · retry 20:55 (warn) · Failed · 3 recent failures (danger).
+ */
+export function indexerHealth(
+  indexer: Pick<Indexer, 'status'> & Partial<Pick<Indexer, 'enableRss' | 'enableAutomaticSearch' | 'enableInteractiveSearch'>>,
+  now = Date.now(),
+): { tone: ChipTone; label: string; title?: string } {
+  const off = indexer.enableRss === false && indexer.enableAutomaticSearch === false && indexer.enableInteractiveSearch === false;
+  if (off) return { tone: 'muted', label: 'Disabled' };
   const s = indexer.status;
   if (s?.disabledTill && new Date(s.disabledTill).getTime() > now) {
-    return { tone: 'error', label: `disabled ${relativeTime(s.disabledTill, now).replace(/^in /, 'for ')}`, title: `Disabled until ${formatDateTime(s.disabledTill)} after ${s.failureCount} failures` };
+    return {
+      tone: 'warn',
+      label: `Backing off · retry ${clockTime(s.disabledTill)}`,
+      title: `Skipped until ${formatDateTime(s.disabledTill)} after ${s.failureCount} failures`,
+    };
   }
-  if (s && s.failureCount > 0) return { tone: 'warning', label: `failing (${s.failureCount})` };
-  return { tone: 'ok', label: 'ok' };
+  if (s && s.failureCount > 0) return { tone: 'danger', label: `Failed · ${s.failureCount} recent ${s.failureCount === 1 ? 'failure' : 'failures'}` };
+  return { tone: 'accent', label: 'Enabled' };
 }
 
 type Editing = { indexer: Indexer } | { template: IndexerTemplate };
@@ -68,7 +82,7 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
     <>
       <Modal
         open
-        size="lg"
+        size={640}
         onClose={onClose}
         title={existing ? `Edit ${existing.name}` : `Add ${'template' in editing ? editing.template.implementationName : ''} indexer`}
         footer={
@@ -81,25 +95,29 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
           />
         }
       >
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={renderers} inline />
+        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={renderers} />
         <SaveError error={create.error ?? update.error} />
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${existing.name}?`}
+          confirmLabel="Delete indexer"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
-        />
+        >
+          <p>Searches and RSS stop using {existing.name}.</p>
+        </ConfirmDialog>
       ) : null}
     </>
   );
 }
 
-function TemplatePicker({
+/** Add chooser (640): one search field over Torznab/Newznab endpoints and the site catalogue. */
+export function IndexerChooser({
   onPick,
   onPickDefinition,
   onClose,
@@ -109,30 +127,34 @@ function TemplatePicker({
   onClose: () => void;
 }) {
   const templates = useIndexerTemplates();
+  const [text, setText] = useState('');
   const endpoints = templates.isPending ? (
-    <LoadingBlock />
+    <Skeleton lines={3} />
   ) : templates.isError ? (
-    <ErrorView error={templates.error} />
+    <ErrorBlock title="Couldn't load endpoint types" onRetry={() => void templates.refetch()}>
+      {errorMessage(templates.error)}
+    </ErrorBlock>
   ) : (
-    <CardGrid>
-      {templates.data
-        .filter((t) => t.implementation !== 'definition')
-        .map((t) => (
-          <button key={t.implementation} type="button" className="item-card add-card" onClick={() => onPick(t)}>
-            <strong>{t.implementationName}</strong>
-            <span className="muted">{t.protocol}</span>
-          </button>
-        ))}
-    </CardGrid>
+    <TemplateList templates={filterTemplates(templates.data, text)} onPick={onPick} />
   );
   return (
-    <Modal open size="lg" onClose={onClose} title="Add indexer">
-      <Tabs
-        tabs={[
-          { id: 'endpoint', label: 'Torznab/Newznab', content: endpoints },
-          { id: 'catalogue', label: 'Catalogue', content: <CatalogueList onPick={onPickDefinition} /> },
-        ]}
-      />
+    <Modal open size={640} onClose={onClose} title="Add indexer">
+      <div className="al-chooser">
+        <Input
+          type="search"
+          aria-label="Search indexers"
+          placeholder="Search by name, description or language"
+          value={text}
+          onChange={(e) => setText(e.currentTarget.value)}
+        />
+        <Tabs
+          aria-label="Indexer sources"
+          tabs={[
+            { id: 'endpoint', label: 'Torznab/Newznab', content: endpoints },
+            { id: 'catalogue', label: 'Catalogue', content: <CatalogueList text={text} onPick={onPickDefinition} /> },
+          ]}
+        />
+      </div>
     </Modal>
   );
 }
@@ -147,87 +169,98 @@ export function indexerSourceLine(indexer: Pick<Indexer, 'implementation' | 'def
   return parts.join(' · ');
 }
 
+const IMPLEMENTATION_LABELS: Record<string, string> = { torznab: 'Torznab', newznab: 'Newznab', definition: 'Catalogue' };
+
+/** One indexer card: name, status chip, protocol, priority (mono), Test / Edit. */
+export function IndexerCard({ indexer, onEdit, result }: { indexer: Indexer; onEdit: () => void; result?: IndexerTestAllItem | undefined }) {
+  const health = indexerHealth(indexer);
+  const source = indexerSourceLine(indexer);
+  return (
+    <ItemCard
+      title={indexer.name}
+      muted={health.label === 'Disabled'}
+      onClick={onEdit}
+      status={
+        <Chip tone={health.tone} title={health.title}>
+          {health.label}
+        </Chip>
+      }
+      actions={
+        <>
+          <TestButton size="sm" onTest={async () => indexerTestOutcome(await indexersApi.test(toIndexerBody(indexer as unknown as Record<string, unknown>)))} />
+          <Button size="sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${indexer.name}`}>
+            Edit
+          </Button>
+        </>
+      }
+    >
+      <ProtocolBadge protocol={indexer.protocol} />
+      <span>{IMPLEMENTATION_LABELS[indexer.implementation] ?? indexer.implementation}</span>
+      <span>
+        Priority <span className="al-card-priority">{indexer.priority}</span>
+      </span>
+      {source ? <span className="al-card-line">{source}</span> : null}
+      {result ? (
+        <TestResultView
+          outcome={{
+            ok: result.ok,
+            message: result.ok ? `${result.releaseCount ?? 0} releases` : undefined,
+            warnings: [],
+            errors: result.ok ? [] : [result.error?.message ?? 'Unknown error'],
+          }}
+        />
+      ) : null}
+    </ItemCard>
+  );
+}
+
+/** Settings → Indexers (also /indexers): card grid + add chooser + editors. */
 export function IndexersPage() {
   const list = useIndexerList();
-  const update = useUpdateIndexer();
   const testAll = useTestAllIndexers();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [definitionEditing, setDefinitionEditing] = useState<{ definition: IndexerDefinitionSummary } | { indexer: Indexer } | null>(null);
-  const openIndexer = (indexer: Indexer) =>
-    indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer });
+  const openIndexer = (indexer: Indexer) => (indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer }));
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
 
-  const toggle = (indexer: Indexer, key: 'enableRss' | 'enableAutomaticSearch' | 'enableInteractiveSearch', value: boolean) =>
-    update.mutate({ id: indexer.id, body: { [key]: value } });
-
   return (
-    <Page
+    <SettingsPage
       title="Indexers"
+      standalone={{ index: '08', title: 'Indexers' }}
       actions={
-        <Button
-          loading={testAll.isPending}
-          disabled={!list.data?.length}
-          onClick={() => testAll.mutate(undefined, { onSuccess: (r) => setResults(Object.fromEntries(r.map((x) => [x.id, x]))) })}
-        >
-          Test all
-        </Button>
+        <>
+          <Button
+            variant="secondary"
+            loading={testAll.isPending}
+            disabled={!list.data?.length}
+            onClick={() => testAll.mutate(undefined, { onSuccess: (r) => setResults(Object.fromEntries(r.map((x) => [x.id, x]))) })}
+          >
+            Test all
+          </Button>
+          <Button variant="primary" onClick={() => setPicking(true)}>
+            Add indexer
+          </Button>
+        </>
       }
     >
-      <Card>
-        {list.isPending ? (
-          <LoadingBlock />
-        ) : list.isError ? (
-          <ErrorView error={list.error} onRetry={() => void list.refetch()} />
-        ) : (
-          <CardGrid>
-            {list.data.map((indexer) => {
-              const health = indexerHealth(indexer);
-              const result = results[indexer.id];
-              const off = !indexer.enableRss && !indexer.enableAutomaticSearch && !indexer.enableInteractiveSearch;
-              return (
-                <ItemCard
-                  key={indexer.id}
-                  title={indexer.name}
-                  muted={off}
-                  onClick={() => openIndexer(indexer)}
-                  status={
-                    <span title={health.title}>
-                      <Badge tone={off ? 'neutral' : health.tone}>{off ? 'disabled' : health.label}</Badge>
-                    </span>
-                  }
-                >
-                  <div className="muted">
-                    {indexer.implementation} · {indexer.protocol} · priority {indexer.priority}
-                  </div>
-                  {indexerSourceLine(indexer) ? <div className="muted">{indexerSourceLine(indexer)}</div> : null}
-                  <div className="toggle-row">
-                    <Toggle label="RSS" checked={indexer.enableRss} onChange={(e) => toggle(indexer, 'enableRss', e.currentTarget.checked)} />
-                    <Toggle
-                      label="Automatic"
-                      checked={indexer.enableAutomaticSearch}
-                      onChange={(e) => toggle(indexer, 'enableAutomaticSearch', e.currentTarget.checked)}
-                    />
-                    <Toggle
-                      label="Interactive"
-                      checked={indexer.enableInteractiveSearch}
-                      onChange={(e) => toggle(indexer, 'enableInteractiveSearch', e.currentTarget.checked)}
-                    />
-                  </div>
-                  {result ? (
-                    <div className={result.ok ? 'text-ok' : 'text-error'}>
-                      {result.ok ? `Test passed (${result.releaseCount ?? 0} releases)` : `Test failed: ${result.error?.message ?? 'unknown error'}`}
-                    </div>
-                  ) : null}
-                </ItemCard>
-              );
-            })}
-            <AddCard label="Add indexer" onClick={() => setPicking(true)} />
-          </CardGrid>
-        )}
-      </Card>
+      {list.isPending ? (
+        <Skeleton lines={4} />
+      ) : list.isError ? (
+        <ErrorBlock title="Couldn't load indexers" onRetry={() => void list.refetch()}>
+          {errorMessage(list.error)}
+        </ErrorBlock>
+      ) : list.data.length === 0 ? (
+        <EmptyState title="No indexers yet">Add a Torznab or Newznab endpoint, or pick a site from the catalogue.</EmptyState>
+      ) : (
+        <CardGrid label="Indexers">
+          {list.data.map((indexer) => (
+            <IndexerCard key={indexer.id} indexer={indexer} onEdit={() => openIndexer(indexer)} result={results[indexer.id]} />
+          ))}
+        </CardGrid>
+      )}
       {picking ? (
-        <TemplatePicker
+        <IndexerChooser
           onClose={() => setPicking(false)}
           onPick={(template) => {
             setPicking(false);
@@ -247,12 +280,8 @@ export function IndexersPage() {
         />
       ) : null}
       {editing ? (
-        <IndexerEditor
-          key={'indexer' in editing ? editing.indexer.id : editing.template.implementation}
-          editing={editing}
-          onClose={() => setEditing(null)}
-        />
+        <IndexerEditor key={'indexer' in editing ? editing.indexer.id : editing.template.implementation} editing={editing} onClose={() => setEditing(null)} />
       ) : null}
-    </Page>
+    </SettingsPage>
   );
 }

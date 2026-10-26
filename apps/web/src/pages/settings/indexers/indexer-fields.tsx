@@ -2,6 +2,8 @@ import type { Indexer, IndexerCategory, IndexerCreate, IndexerImplementation, In
 import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FieldRendererProps, FormValues } from '../../../components/forms/types.js';
 import type { TestOutcome } from '../../../components/forms/test-result.js';
+import { Checkbox } from '../../../arclight/index.js';
+import './indexers.css';
 
 // /indexer/schema returns ready-to-fill templates but no field definitions, so the field list
 // for the schema form lives here, written against IndexerSettings in packages/shared.
@@ -88,6 +90,13 @@ export function toggleParent(cat: IndexerCategory, selected: readonly number[]):
   return parentState(cat, selected) === 'all' ? without : [...without, cat.id];
 }
 
+/** Indent per tree level (handoff §9: checkbox tree, 20px per level). */
+export const CATEGORY_INDENT = 20;
+
+/**
+ * Category checkbox tree: parents at level 0, subcategories 20px in. A parent is checked when
+ * it (or every subcategory) is selected and indeterminate when only some are.
+ */
 export function CategoryTree({
   id,
   categories,
@@ -99,45 +108,46 @@ export function CategoryTree({
   value: readonly number[];
   onChange: (ids: number[]) => void;
 }) {
+  if (categories.length === 0) return <p className="al-caption">No categories reported yet. Test the indexer to load them.</p>;
   return (
-    <ul id={id} className="category-tree">
+    <ul id={id} className="al-cat-tree" aria-label="Categories">
       {categories.map((cat) => {
         const state = parentState(cat, value);
         return (
-          <li key={cat.id}>
-            <details>
-              <summary>
-                <label className="check" onClick={(e) => e.stopPropagation()}>
-                  <input
-                    type="checkbox"
-                    checked={state === 'all'}
-                    ref={(el) => {
-                      if (el) el.indeterminate = state === 'some';
-                    }}
-                    onChange={() => onChange(toggleParent(cat, value))}
-                  />
-                  {cat.name} <span className="muted">({cat.id})</span>
-                </label>
-              </summary>
-              <ul className="category-tree-sub">
+          <li key={cat.id} className="al-cat-tree__node">
+            <div className="al-cat-tree__row" data-level={0} style={{ paddingLeft: 0 }}>
+              <Checkbox
+                label={
+                  <>
+                    {cat.name} <span className="al-cat-tree__id">{cat.id}</span>
+                  </>
+                }
+                checked={state === 'all'}
+                indeterminate={state === 'some'}
+                onChange={() => onChange(toggleParent(cat, value))}
+              />
+            </div>
+            {cat.subCategories.length > 0 ? (
+              <ul className="al-cat-tree__children">
                 {cat.subCategories.map((sub) => {
                   const on = value.includes(sub.id) || value.includes(cat.id);
                   return (
-                    <li key={sub.id}>
-                      <label className="check">
-                        <input
-                          type="checkbox"
-                          checked={on}
-                          disabled={value.includes(cat.id)}
-                          onChange={() => onChange(on ? value.filter((v) => v !== sub.id) : [...value, sub.id])}
-                        />
-                        {sub.name} <span className="muted">({sub.id})</span>
-                      </label>
+                    <li key={sub.id} className="al-cat-tree__row" data-level={1} style={{ paddingLeft: CATEGORY_INDENT }}>
+                      <Checkbox
+                        label={
+                          <>
+                            {sub.name} <span className="al-cat-tree__id">{sub.id}</span>
+                          </>
+                        }
+                        checked={on}
+                        disabled={value.includes(cat.id)}
+                        onChange={() => onChange(on ? value.filter((v) => v !== sub.id) : [...value, sub.id])}
+                      />
                     </li>
                   );
                 })}
               </ul>
-            </details>
+            ) : null}
           </li>
         );
       })}

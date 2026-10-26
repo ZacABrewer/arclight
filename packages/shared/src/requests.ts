@@ -280,6 +280,12 @@ export const ApproveRequest = z.object({
   rootFolderPath: z.string().min(1).optional(),
   qualityProfileId: z.number().int().optional(),
   tags: z.array(z.number().int()).optional(),
+  /** Series only: how episodes are monitored when the series is added (default: the requested seasons only). */
+  monitorOption: MonitorOption.optional(),
+  /** Movies only: minimum availability for the library movie (default: the requests settings). */
+  minimumAvailability: MinimumAvailability.optional(),
+  /** Series only: replaces the requested seasons before the request is sent to the library. */
+  seasons: z.array(z.number().int().min(0)).min(1).optional(),
 });
 export type ApproveRequest = z.infer<typeof ApproveRequest>;
 

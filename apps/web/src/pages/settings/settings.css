@@ -1,0 +1,75 @@
+/* Settings (Page 06) + shared form pieces. Square corners only; mono for data. */
+
+.al-settings { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 28px; align-items: start; }
+.al-settings-standalone { display: flex; flex-direction: column; gap: 22px; }
+
+/* ---- sub-nav ---- */
+.al-settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 96px; }
+.al-settings-nav__head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
+.al-settings-nav__groups { display: flex; flex-direction: column; gap: 18px; }
+.al-settings-nav__group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
+.al-settings-nav__label { padding: 0 0 8px 16px; }
+.al-settings-nav__item { position: relative; display: flex; align-items: center; height: 36px; padding-left: 16px; font-size: 14px; color: var(--al-text-4); text-decoration: none; }
+.al-settings-nav__item:hover { color: var(--al-text-1); text-decoration: none; background: var(--al-cyan-a06); }
+.al-settings-nav__item.is-active { color: var(--al-text-1); background: var(--al-cyan-a06); }
+.al-settings-nav__item.is-active::before { content: ''; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px; background: var(--al-cyan); box-shadow: var(--al-glow); }
+.al-settings-nav__mobile { display: none; }
+
+/* ---- form pane ---- */
+.al-settings-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; min-width: 0; }
+.al-settings-main--aside { grid-template-columns: minmax(0, 1fr) 320px; }
+.al-settings-main__col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
+.al-settings-main__aside { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 20px; }
+.al-settings-pane { padding: 28px 36px 0; display: flex; flex-direction: column; }
+.al-settings-pane__head { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 30px; }
+.al-settings-pane__titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.al-settings-pane__title { margin: 0; }
+.al-settings-pane__desc { margin: 0; }
+.al-settings-pane__actions { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; font-size: 13px; color: var(--al-text-4); }
+.al-settings-pane__body { position: relative; display: flex; flex-direction: column; gap: 30px; padding-bottom: 28px; }
+.al-settings-savebar { margin: 0 -12px 20px; }
+
+/* Sections inside the pane: mono CAPS label, then rows / tables / card grids. */
+.al-settings-section { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-settings-section__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+
+/* ---- card grid (indexers, clients, profiles, formats, notifications) ---- */
+.al-card-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+.al-item-card { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.al-item-card[data-muted='true'] { opacity: .62; }
+.al-item-card .al-pane__body { display: flex; flex-direction: column; gap: 12px; }
+.al-item-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
+.al-item-card__title { margin: 0; font-size: 18px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-family: var(--al-font); }
+.al-item-card__title:hover { color: var(--al-cyan); }
+.al-item-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--al-text-4); }
+.al-item-card__actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
+.al-add-card { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 120px; border: 1px dashed var(--al-line-3); background: transparent; color: var(--al-text-3); font: inherit; font-size: 14px; cursor: pointer; }
+.al-add-card:hover { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a06); }
+
+/* ---- editor footer inside modals ---- */
+.al-editor-footer { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; flex-wrap: wrap; }
+.al-editor-footer__side { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* ---- row lists (root folders, mappings) ---- */
+.al-row-list { display: flex; flex-direction: column; gap: 8px; }
+.al-row-list__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; min-height: 46px; padding: 0 14px; border: 1px solid var(--al-line-1); background: rgba(0,0,0,.2); font-size: 14px; }
+
+.al-notice { padding: 12px 16px; border: 1px solid var(--al-warn-line); color: var(--al-warn-text); background: rgba(40,16,4,.4); font-size: 14px; }
+.al-inline-error { margin: 0; font-size: 13px; color: var(--al-danger-text); }
+.al-muted { color: var(--al-text-4); }
+
+@media (max-width: 1100px) {
+  .al-settings-main--aside { grid-template-columns: minmax(0, 1fr); }
+  .al-settings-main__aside { position: static; }
+}
+@media (max-width: 767px) {
+  .al-settings { grid-template-columns: minmax(0, 1fr); gap: 16px; }
+  .al-settings-nav { position: static; }
+  .al-settings-nav__head { margin-bottom: 8px; }
+  .al-settings-nav__groups { display: none; }
+  .al-settings-nav__mobile { display: block; }
+  .al-settings-nav__mobile .al-select { width: 100%; }
+  .al-settings-pane { padding: 20px 20px 0; }
+  .al-card-grid { grid-template-columns: minmax(0, 1fr); }
+  .al-row-list__row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 14px; }
+}

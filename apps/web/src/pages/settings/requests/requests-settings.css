@@ -1,0 +1,22 @@
+/* Settings → Requests. Square corners; mono for data. */
+.al-requests-embed { min-width: 0; }
+.al-section-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.al-row-actions { display: inline-flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.al-editor-stack { display: flex; flex-direction: column; gap: 16px; }
+.al-field-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.al-field-grid--2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* Ordered rows (discover sliders, language lists). */
+.al-order-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.al-order-row { display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 46px; padding: 0 10px 0 14px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); font-size: 14px; }
+.al-order-row__index { font-size: 12px; color: var(--al-text-5); }
+.al-order-row__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; color: var(--al-text-1); }
+.al-order-row__actions { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
+
+@media (max-width: 767px) {
+  .al-field-grid, .al-field-grid--2 { grid-template-columns: minmax(0, 1fr); }
+  .al-order-row { grid-template-columns: auto minmax(0, 1fr); padding: 10px 14px; }
+  .al-order-row__index { display: none; }
+  .al-order-row__actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .al-order-row__actions .al-btn { min-height: 44px; min-width: 44px; }
+}

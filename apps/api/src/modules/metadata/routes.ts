@@ -1,14 +1,17 @@
 import { z } from 'zod';
 import { isMetadataError, type MetadataErrorCode } from '@arclight/metadata';
 import {
+  Job,
   MetadataErrorResponse,
   MetadataMovie,
   MetadataSearchQuery,
   MetadataSearchResult,
   MetadataSeries,
+  RefreshCommand,
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { RefreshTargetNotFound, type MetadataRefresher } from './commands.js';
 import { MetadataNotConfiguredError, type MetadataService } from './service.js';
 
 const TmdbIdParams = z.object({ tmdbId: z.coerce.number().int().positive() });
@@ -31,11 +34,15 @@ const errors = {
 
 export function metadataRoutes(
   service: MetadataService,
+  refresher?: MetadataRefresher,
 ): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof MetadataNotConfiguredError) {
         return reply.code(400).send({ error: err.message, code: err.code });
+      }
+      if (err instanceof RefreshTargetNotFound) {
+        return reply.code(404).send({ error: err.message, code: err.code });
       }
       if (isMetadataError(err)) {
         return reply.code(statusFor[err.code]).send({ error: err.message, code: err.code });
@@ -64,5 +71,15 @@ export function metadataRoutes(
       { schema: { params: TmdbIdParams, response: { 200: MetadataMovie, ...errors } } },
       async (req) => service.getMovie(req.params.tmdbId),
     );
+
+    // On-demand refresh of one item (or the library). Answers 202 with the started job; the
+    // outcome arrives as a `job` event and in GET /jobs (see MetadataRefresher).
+    if (refresher) {
+      app.post(
+        '/command/refresh',
+        { schema: { body: RefreshCommand, response: { 202: Job, 400: MetadataErrorResponse, 404: MetadataErrorResponse } } },
+        async (req, reply) => reply.code(202).send(refresher.start(req.body).job),
+      );
+    }
   };
 }

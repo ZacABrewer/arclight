@@ -12,6 +12,8 @@ import {
   type ApproveRequest,
   type BulkRequestResult,
   type MediaRequest,
+  type MinimumAvailability,
+  type MonitorOption,
   type MediaStatus,
   type MediaType,
   type OverrideRule,
@@ -93,6 +95,12 @@ export interface RequestsServiceOptions {
 export type CreateOutcome = { kind: 'created'; request: MediaRequest } | { kind: 'accepted'; message: string };
 
 const ACTIVE: RequestStatus[] = ['pending', 'approved', 'failed'];
+
+/** Approver overrides that are applied to the library item but not stored on the request. */
+interface LibraryOverrides {
+  monitorOption?: MonitorOption;
+  minimumAvailability?: MinimumAvailability;
+}
 /** TMDB keyword that marks anime; rules skip anime unless they name it (section 8.2.3). */
 export const ANIME_KEYWORD = 210024;
 
@@ -644,7 +652,7 @@ export class RequestsService {
    * with monitor "none" and then exactly the requested seasons are monitored. Failures mark
    * the request failed (retry re-runs this). Returns the updated row.
    */
-  async sendToLibrary(row: RequestRow): Promise<RequestRow> {
+  async sendToLibrary(row: RequestRow, extra: LibraryOverrides = {}): Promise<RequestRow> {
     const settings = this.settings();
     const defaults = settings[row.type];
     try {
@@ -655,7 +663,11 @@ export class RequestsService {
         const existing = libraryService.findMovieByTmdbId(this.db, row.tmdbId);
         if (existing) {
           libraryId = existing.id;
-          libraryService.updateMovie(this.db, existing.id, { monitored: true, ...(row.is4k ? { qualityProfileId: target.qualityProfileId } : {}) });
+          libraryService.updateMovie(this.db, existing.id, {
+            monitored: true,
+            ...(row.is4k ? { qualityProfileId: target.qualityProfileId } : {}),
+            ...(extra.minimumAvailability ? { minimumAvailability: extra.minimumAvailability } : {}),
+          });
           this.bus.publish({ type: 'library', action: 'updated', mediaType: 'movie', id: existing.id });
           const lib = libraryAvailability(this.db, 'movie', [row.tmdbId]).get(row.tmdbId);
           alreadyAvailable = (row.is4k ? lib?.status4k : lib?.status) === 'available';
@@ -667,7 +679,7 @@ export class RequestsService {
             rootFolderPath: target.rootFolderPath,
             qualityProfileId: target.qualityProfileId,
             monitored: true,
-            minimumAvailability: defaults.minimumAvailability,
+            minimumAvailability: extra.minimumAvailability ?? defaults.minimumAvailability,
             tags: target.tags,
             searchOnAdd: defaults.searchOnAdd,
           });
@@ -682,6 +694,7 @@ export class RequestsService {
         if (existing) {
           seriesId = existing.id;
           libraryService.updateSeries(this.db, existing.id, { monitored: true, ...(row.is4k ? { qualityProfileId: target.qualityProfileId } : {}) });
+          if (extra.monitorOption) libraryService.applyMonitorOption(this.db, existing.id, extra.monitorOption);
         } else {
           const meta = await this.titles.lookupSeries(row.tmdbId);
           if (!meta) throw RequestsError.notFound('TMDB series', row.tmdbId);
@@ -690,7 +703,7 @@ export class RequestsService {
             rootFolderPath: target.rootFolderPath,
             qualityProfileId: target.qualityProfileId,
             monitored: true,
-            monitorOption: 'none',
+            monitorOption: extra.monitorOption ?? 'none',
             monitorNewItems: defaults.monitorNewItems,
             seriesType: defaults.seriesType,
             seasonFolder: defaults.seasonFolder,
@@ -766,10 +779,31 @@ export class RequestsService {
     if (overrides.rootFolderPath !== undefined) patch.rootFolderPath = overrides.rootFolderPath;
     if (overrides.qualityProfileId !== undefined) patch.qualityProfileId = overrides.qualityProfileId;
     if (overrides.tags !== undefined) patch.tags = overrides.tags;
+    if (row.type === 'movie' && (overrides.monitorOption !== undefined || overrides.seasons !== undefined)) {
+      throw new RequestsError('VALIDATION', 'monitorOption and seasons apply to series requests only');
+    }
+    if (row.type === 'series' && overrides.minimumAvailability !== undefined) {
+      throw new RequestsError('VALIDATION', 'minimumAvailability applies to movie requests only');
+    }
+    // Validate the season override before anything is written.
+    let newSeasons: number[] | null = null;
+    if (overrides.seasons !== undefined) {
+      const facts = await this.facts('series', row.tmdbId, false);
+      newSeasons = this.requestableSeasons(facts, overrides.seasons, row.tmdbId, row.is4k, this.settings(), row.id);
+      if (newSeasons.length === 0) throw new RequestsError('VALIDATION', 'no seasons available to request');
+    }
     const approved = this.db.update(mediaRequests).set(patch).where(eq(mediaRequests.id, id)).returning().get()!;
-    this.db.update(seasonRequests).set({ status: 'approved' }).where(eq(seasonRequests.requestId, id)).run();
+    if (newSeasons) {
+      this.db.delete(seasonRequests).where(eq(seasonRequests.requestId, id)).run();
+      for (const seasonNumber of newSeasons) this.db.insert(seasonRequests).values({ requestId: id, seasonNumber, status: 'approved' }).run();
+    } else {
+      this.db.update(seasonRequests).set({ status: 'approved' }).where(eq(seasonRequests.requestId, id)).run();
+    }
     this.publish('approved', id);
-    const sent = await this.sendToLibrary(approved);
+    const sent = await this.sendToLibrary(approved, {
+      ...(overrides.monitorOption ? { monitorOption: overrides.monitorOption } : {}),
+      ...(overrides.minimumAvailability ? { minimumAvailability: overrides.minimumAvailability } : {}),
+    });
     if (sent.status === 'approved') {
       await this.notifier.request('approved', sent).catch((err: unknown) => this.log?.warn({ err }, 'approved notification failed'));
     }

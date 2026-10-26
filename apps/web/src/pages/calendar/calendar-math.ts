@@ -1,6 +1,6 @@
 import type { CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
-import { episodeCode, parseDateish } from '../../components/media/format.js';
+import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 
 // Pure calendar math: month grids, request ranges, grouping items by local day.
 
@@ -46,6 +46,42 @@ export function gridRange(days: readonly Date[]): { start: string; end: string }
   return { start: first.toISOString(), end: end.toISOString() };
 }
 
+/** Monday (or Sunday) starting the week that contains `d`. */
+export function startOfWeek(d: Date, weekStart: WeekStart = 1): Date {
+  return addDays(new Date(d.getFullYear(), d.getMonth(), d.getDate()), -((d.getDay() - weekStart + 7) % 7));
+}
+
+/** The 7 days of the week containing `anchor`. */
+export function weekDays(anchor: Date, weekStart: WeekStart = 1): Date[] {
+  const start = startOfWeek(anchor, weekStart);
+  return Array.from({ length: 7 }, (_, i) => addDays(start, i));
+}
+
+export type CalendarView = 'month' | 'week' | 'day' | 'agenda';
+
+/** Days a view shows around its anchor. */
+export function viewDays(view: CalendarView, anchor: Date, weekStart: WeekStart = 1): Date[] {
+  if (view === 'week') return weekDays(anchor, weekStart);
+  if (view === 'day') return [new Date(anchor.getFullYear(), anchor.getMonth(), anchor.getDate())];
+  return monthGrid(anchor, weekStart);
+}
+
+/** Move the anchor one view-length back/forward. */
+export function stepAnchor(view: CalendarView, anchor: Date, dir: 1 | -1): Date {
+  if (view === 'week') return addDays(anchor, 7 * dir);
+  if (view === 'day') return addDays(anchor, dir);
+  return addMonths(anchor, dir);
+}
+
+/** Event bar tone (Page 05): cyan solid = downloaded, cyan 40% = upcoming, orange = missing. */
+export type BarTone = 'downloaded' | 'upcoming' | 'missing';
+
+export function barTone(status: EpisodeStatus): BarTone {
+  if (status === 'downloaded') return 'downloaded';
+  if (status === 'unaired' || status === 'tba') return 'upcoming';
+  return 'missing';
+}
+
 export function isSameDay(a: Date, b: Date): boolean {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 }
@@ -63,7 +99,17 @@ export interface CalendarEntry {
   title: string;
   detail: string;
   status: EpisodeStatus;
+  tone: BarTone;
   monitored: boolean;
+  /** Local hour as a fraction (21.5 = 21:30); null for date-only items. */
+  hour: number | null;
+  /** "S02E03" for episodes, the release label for movies. */
+  code: string;
+  /** Episode title (episodes only). */
+  subtitle: string | null;
+  posterUrl: string | undefined;
+  /** Automatic search body for this item. */
+  search: { episodeIds: number[] } | { movieId: number };
   link: { to: '/library/series/$id' | '/library/movie/$id'; params: { id: string } };
 }
 
@@ -74,11 +120,15 @@ export function toEntry(item: CalendarItem, now: Date = new Date()): CalendarEnt
   if (!parsed) return null;
   const hasTime = !/^\d{4}-\d{2}-\d{2}$/.test(item.date);
   const day = localIsoDate(parsed);
-  const time = hasTime ? parsed.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' }) : null;
+  // 24h mono times, as the kit draws them (21:00, 03:00).
+  const time = hasTime ? `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}` : null;
   const sortTime = hasTime ? parsed.getTime() : parsed.getTime() - 1;
+  const hour = hasTime ? parsed.getHours() + parsed.getMinutes() / 60 : null;
   if (item.type === 'episode') {
     const ep = item.episode;
     const seriesMonitored = item.series?.monitored ?? true;
+    const status = episodeStatus(ep, { seriesMonitored, now });
+    const code = episodeCode(ep.seasonNumber, ep.episodeNumber);
     return {
       key: `e${ep.id}`,
       day,
@@ -86,14 +136,21 @@ export function toEntry(item: CalendarItem, now: Date = new Date()): CalendarEnt
       time,
       kind: 'episode',
       title: item.seriesTitle,
-      detail: `${episodeCode(ep.seasonNumber, ep.episodeNumber)}${ep.title ? ` · ${ep.title}` : ''}`,
-      status: episodeStatus(ep, { seriesMonitored, now }),
+      detail: `${code}${ep.title ? ` · ${ep.title}` : ''}`,
+      status,
+      tone: barTone(status),
       monitored: ep.monitored && seriesMonitored,
+      hour,
+      code,
+      subtitle: ep.title || null,
+      posterUrl: imageUrl(item.series?.images, 'poster'),
+      search: { episodeIds: [ep.id] },
       link: { to: '/library/series/$id', params: { id: String(item.seriesId) } },
     };
   }
   const m = item.movie;
   const released = parsed.getTime() <= now.getTime();
+  const status: EpisodeStatus = m.hasFile ? 'downloaded' : !released ? 'unaired' : m.monitored ? 'wanted' : 'missing';
   return {
     key: `m${m.id}-${item.releaseKind}`,
     day,
@@ -102,8 +159,14 @@ export function toEntry(item: CalendarItem, now: Date = new Date()): CalendarEnt
     kind: 'movie',
     title: m.title,
     detail: RELEASE_LABELS[item.releaseKind],
-    status: m.hasFile ? 'downloaded' : !released ? 'unaired' : m.monitored ? 'wanted' : 'missing',
+    status,
+    tone: barTone(status),
     monitored: m.monitored,
+    hour,
+    code: RELEASE_LABELS[item.releaseKind],
+    subtitle: null,
+    posterUrl: imageUrl(m.images, 'poster'),
+    search: { movieId: m.id },
     link: { to: '/library/movie/$id', params: { id: String(m.id) } },
   };
 }

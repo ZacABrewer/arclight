@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import type {
   DownloadClientImplementationSchema,
   DownloadClientInput,
@@ -8,24 +9,15 @@ import type {
   RemotePathMappingInput,
 } from '@arclight/shared';
 import { downloadClientHost } from '@arclight/shared';
+import { errorMessage } from '../../../api/client.js';
 import { downloadClientsApi } from '../../../api/download-clients.js';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { Card } from '../../../components/card.js';
-import { EmptyState } from '../../../components/empty-state.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { FormField, Input } from '../../../components/form.js';
+import { Button, Chip, EmptyState, ErrorBlock, Field, Input, Modal, ProtocolBadge, Skeleton, Table, buttonClass, type Column } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
-import { TestButton, type TestOutcome } from '../../../components/forms/test-result.js';
+import { TestButton, TestResultView, type TestOutcome } from '../../../components/forms/test-result.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { getPath, setPath } from '../../../components/forms/values.js';
-import { categoriesRenderer, cleanCategories } from './categories-field.js';
-import { Modal } from '../../../components/modal.js';
-import { Page } from '../../../components/page.js';
-import { ProtocolBadge } from '../../../components/protocol-badge.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import {
   useDeleteDownloadClient,
   useDeleteRemotePathMapping,
@@ -36,7 +28,11 @@ import {
   useSaveRemotePathMapping,
   useTestAllDownloadClients,
 } from '../../../hooks/download-clients.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
+import { SettingsPage } from '../settings-layout.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
+import { categoriesRenderer, cleanCategories } from './categories-field.js';
+import '../indexers/indexers.css';
+import './download-clients.css';
 
 export function downloadClientTestOutcome(r: DownloadClientTestResult): TestOutcome {
   return {
@@ -94,6 +90,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
   const save = useSaveDownloadClient();
   const remove = useDeleteDownloadClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const description = schemaDescription(editing.schema);
 
   const submit = () => {
     if (!form.validate()) return;
@@ -104,7 +101,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
     <>
       <Modal
         open
-        size="lg"
+        size={640}
         onClose={onClose}
         title={existing ? `Edit ${existing.name}` : `Add ${editing.schema.implementationName}`}
         footer={
@@ -126,22 +123,61 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
           />
         }
       >
-        {editing.schema.description ? <p className="muted">{editing.schema.description}</p> : null}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer, 'settings.categories': categoriesRenderer }} inline />
+        {description ? <p className="al-caption al-dc-desc">{description}</p> : null}
+        <SchemaForm
+          fields={fields}
+          values={form.values}
+          errors={form.errors}
+          onChange={form.setValues}
+          renderers={{ tags: tagRenderer, 'settings.categories': categoriesRenderer }}
+        />
         <SaveError error={save.error} />
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${existing.name}?`}
+          confirmLabel="Delete download client"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
-        />
+        >
+          <p>Arclight stops sending releases to {existing.name}.</p>
+        </ConfirmDialog>
       ) : null}
     </>
+  );
+}
+
+/** Add chooser (640): torrent clients first, each row with its protocol badge and description. */
+function ClientChooser({ onPick, onClose }: { onPick: (s: DownloadClientImplementationSchema) => void; onClose: () => void }) {
+  const schemas = useDownloadClientSchema();
+  return (
+    <Modal open size={640} onClose={onClose} title="Add download client">
+      {schemas.isPending ? (
+        <Skeleton lines={4} />
+      ) : schemas.isError ? (
+        <ErrorBlock title="Couldn't load client types" onRetry={() => void schemas.refetch()}>
+          {errorMessage(schemas.error)}
+        </ErrorBlock>
+      ) : (
+        <ul className="al-chooser__list" aria-label="Client types">
+          {sortedSchemas(schemas.data).map((s) => (
+            <li key={s.implementation}>
+              <button type="button" className="al-chooser__row" onClick={() => onPick(s)}>
+                <span className="al-chooser__head">
+                  <span className="al-chooser__name">{s.implementationName}</span>
+                  <ProtocolBadge protocol={s.protocol} />
+                </span>
+                {schemaDescription(s) ? <span className="al-chooser__desc">{schemaDescription(s)}</span> : null}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
   );
 }
 
@@ -151,9 +187,12 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
   );
   const [error, setError] = useState<string>();
   const save = useSaveRemotePathMapping();
-  const remove = useDeleteRemotePathMapping();
   const clients = useDownloadClientList();
-  const hosts = [...new Set((clients.data ?? []).map((c) => downloadClientHost(c.settings)))];
+  const hosts = [...new Set((clients.data ?? []).filter((c) => c.implementation !== 'builtin').map((c) => downloadClientHost(c.settings)))];
+  const hostId = useId();
+  const remoteId = useId();
+  const localId = useId();
+  const listId = useId();
 
   const submit = () => {
     if (!draft.host.trim() || !draft.remotePath || !draft.localPath.trim()) return setError('Host, remote path and local path are all required');
@@ -164,94 +203,151 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
   return (
     <Modal
       open
+      size={560}
       onClose={onClose}
       title={mapping ? 'Edit remote path mapping' : 'Add remote path mapping'}
-      footer={
-        <EditorFooter
-          onCancel={onClose}
-          onSave={submit}
-          saving={save.isPending}
-          onDelete={mapping ? () => remove.mutate(mapping.id, { onSuccess: onClose }) : undefined}
-        />
-      }
+      footer={<EditorFooter onCancel={onClose} onSave={submit} saving={save.isPending} />}
     >
-      <FormField label="Host" hint="The download client host this mapping applies to." error={error}>
-        <Input list="rpm-hosts" value={draft.host} onChange={(e) => setDraft({ ...draft, host: e.currentTarget.value })} />
-      </FormField>
-      <datalist id="rpm-hosts">
-        {hosts.map((h) => (
-          <option key={h} value={h} />
-        ))}
-      </datalist>
-      <FormField label="Remote path" hint="The path as the download client reports it.">
-        <Input value={draft.remotePath} onChange={(e) => setDraft({ ...draft, remotePath: e.currentTarget.value })} />
-      </FormField>
-      <FormField label="Local path" hint="The same directory as Arclight sees it.">
-        <Input value={draft.localPath} onChange={(e) => setDraft({ ...draft, localPath: e.currentTarget.value })} />
-      </FormField>
+      <div className="al-schema-form__stack">
+        <Field label="Host" htmlFor={hostId} hint="The download client host this mapping applies to." error={error}>
+          <Input id={hostId} mono list={listId} value={draft.host} onChange={(e) => setDraft({ ...draft, host: e.currentTarget.value })} />
+        </Field>
+        <datalist id={listId}>
+          {hosts.map((h) => (
+            <option key={h} value={h} />
+          ))}
+        </datalist>
+        <Field label="Remote path" htmlFor={remoteId} hint="The path as the download client reports it.">
+          <Input id={remoteId} mono value={draft.remotePath} onChange={(e) => setDraft({ ...draft, remotePath: e.currentTarget.value })} />
+        </Field>
+        <Field label="Local path" htmlFor={localId} hint="The same folder as Arclight sees it.">
+          <Input id={localId} mono value={draft.localPath} onChange={(e) => setDraft({ ...draft, localPath: e.currentTarget.value })} />
+        </Field>
+      </div>
       <SaveError error={save.error} />
     </Modal>
   );
 }
 
-function RemotePathMappingsCard() {
+/** REMOTE PATH MAPPINGS: host, remote path (mono), local path (mono), Edit / Delete. */
+function RemotePathMappingsSection() {
   const list = useRemotePathMappings();
+  const remove = useDeleteRemotePathMapping();
   const [editing, setEditing] = useState<RemotePathMapping | 'new' | null>(null);
+  const [deleting, setDeleting] = useState<RemotePathMapping | null>(null);
+
+  const columns: Column<RemotePathMapping>[] = [
+    { key: 'host', header: 'Host', cell: (m) => m.host, mono: true },
+    { key: 'remote', header: 'Remote path', cell: (m) => m.remotePath, mono: true },
+    { key: 'local', header: 'Local path', cell: (m) => m.localPath, mono: true },
+    {
+      key: 'actions',
+      header: <span className="al-sr-only">Actions</span>,
+      align: 'right',
+      cell: (m) => (
+        <span className="al-dc-actions">
+          <Button size="sm" variant="ghost" onClick={() => setEditing(m)} aria-label={`Edit mapping ${m.remotePath}`}>
+            Edit
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => setDeleting(m)} aria-label={`Delete mapping ${m.remotePath}`}>
+            Delete
+          </Button>
+        </span>
+      ),
+    },
+  ];
+
   return (
-    <Card
-      title="Remote path mappings"
-      flush
-      actions={
-        <Button size="sm" onClick={() => setEditing('new')}>
-          Add
+    <SettingsSection
+      label="Remote path mappings"
+      action={
+        <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+          Add mapping
         </Button>
       }
     >
       {list.isPending ? (
-        <LoadingBlock />
+        <Skeleton lines={2} />
       ) : list.isError ? (
-        <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+        <ErrorBlock title="Couldn't load remote path mappings" onRetry={() => void list.refetch()}>
+          {errorMessage(list.error)}
+        </ErrorBlock>
       ) : list.data.length === 0 ? (
         <EmptyState title="No mappings">Only needed when the download client sees paths differently from Arclight (e.g. Docker).</EmptyState>
       ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                <th>Host</th>
-                <th>Remote path</th>
-                <th>Local path</th>
-                <th className="align-right">
-                  <span className="sr-only">Actions</span>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {list.data.map((m) => (
-                <tr key={m.id}>
-                  <td>{m.host}</td>
-                  <td>
-                    <code>{m.remotePath}</code>
-                  </td>
-                  <td>
-                    <code>{m.localPath}</code>
-                  </td>
-                  <td className="align-right">
-                    <Button size="sm" variant="ghost" onClick={() => setEditing(m)}>
-                      Edit
-                    </Button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+        <Table columns={columns} rows={list.data} rowKey={(m) => m.id} caption="Remote path mappings" stickyHeader={false} />
       )}
       {editing ? <MappingEditor key={editing === 'new' ? 'new' : editing.id} mapping={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
-    </Card>
+      <ConfirmDialog
+        open={deleting !== null}
+        title="Delete remote path mapping?"
+        confirmLabel="Delete mapping"
+        onCancel={() => setDeleting(null)}
+        onConfirm={async () => {
+          if (deleting) await remove.mutateAsync(deleting.id);
+          setDeleting(null);
+        }}
+      >
+        {deleting ? (
+          <p>
+            Paths from <span className="al-num">{deleting.host}</span> under <span className="al-num">{deleting.remotePath}</span> are no longer translated.
+          </p>
+        ) : null}
+      </ConfirmDialog>
+    </SettingsSection>
   );
 }
 
+/** One client card: name, status chip, protocol, priority (mono), location (mono), Test / Edit. */
+export function DownloadClientCard({
+  client,
+  schema,
+  onEdit,
+  result,
+}: {
+  client: DownloadClientResource;
+  schema: DownloadClientImplementationSchema | undefined;
+  onEdit: (() => void) | undefined;
+  result?: TestOutcome | undefined;
+}) {
+  const builtin = client.implementation === 'builtin';
+  return (
+    <ItemCard
+      title={client.name}
+      muted={!client.enable}
+      onClick={onEdit}
+      status={client.enable ? <Chip tone="accent">Enabled</Chip> : <Chip tone="muted">Disabled</Chip>}
+      actions={
+        <>
+          <TestButton
+            size="sm"
+            onTest={async () => downloadClientTestOutcome(await downloadClientsApi.test({ ...toDownloadClientBody(client as unknown as FormValues), id: client.id }))}
+          />
+          {onEdit ? (
+            <Button size="sm" variant="ghost" onClick={onEdit} aria-label={`Edit ${client.name}`}>
+              Edit
+            </Button>
+          ) : null}
+          {builtin ? (
+            <Link to="/settings/torrent" className={buttonClass({ variant: 'ghost', size: 'sm' })}>
+              Engine settings
+            </Link>
+          ) : null}
+        </>
+      }
+    >
+      <ProtocolBadge protocol={client.protocol} />
+      <span>{schema?.implementationName ?? client.implementation}</span>
+      <span>
+        Priority <span className="al-card-priority">{client.priority}</span>
+      </span>
+      <span className="al-card-line al-card-line--mono">{clientLocation(client)}</span>
+      {result ? <TestResultView outcome={result} /> : null}
+    </ItemCard>
+  );
+}
+
+/** Settings → Download clients: card grid, add chooser, editor and remote path mappings. */
 export function DownloadClientsPage() {
   const list = useDownloadClientList();
   const schemas = useDownloadClientSchema();
@@ -263,100 +359,65 @@ export function DownloadClientsPage() {
   const schemaFor = (impl: string) => schemas.data?.find((s) => s.implementation === impl);
 
   return (
-    <Page
-      title="Download Clients"
+    <SettingsPage
+      title="Download clients"
       actions={
-        <Button
-          loading={testAll.isPending}
-          disabled={!list.data?.length}
-          onClick={() =>
-            testAll.mutate(undefined, {
-              onSuccess: (r) => setResults(Object.fromEntries(r.map((x) => [x.id, downloadClientTestOutcome(x)]))),
-            })
-          }
-        >
-          Test all
-        </Button>
+        <>
+          <Button
+            variant="secondary"
+            loading={testAll.isPending}
+            disabled={!list.data?.length}
+            onClick={() =>
+              testAll.mutate(undefined, {
+                onSuccess: (r) => setResults(Object.fromEntries(r.map((x) => [x.id, downloadClientTestOutcome(x)]))),
+              })
+            }
+          >
+            Test all
+          </Button>
+          <Button variant="primary" onClick={() => setPicking(true)}>
+            Add download client
+          </Button>
+        </>
       }
     >
-      <div className="stack">
-        <Card>
-          {list.isPending ? (
-            <LoadingBlock />
-          ) : list.isError ? (
-            <ErrorView error={list.error} onRetry={() => void list.refetch()} />
-          ) : (
-            <CardGrid>
-              {list.data.map((c) => {
-                const schema = schemaFor(c.implementation);
-                const result = results[c.id];
-                return (
-                  <ItemCard
-                    key={c.id}
-                    title={c.name}
-                    muted={!c.enable}
-                    onClick={schema ? () => setEditing({ client: c, schema }) : undefined}
-                    status={
-                      <span className="chip-stack">
-                        <ProtocolBadge protocol={c.protocol} />
-                        <Badge tone={c.enable ? 'ok' : 'neutral'}>{c.enable ? 'enabled' : 'disabled'}</Badge>
-                      </span>
-                    }
-                  >
-                    <div className="muted">
-                      {schema?.implementationName ?? c.implementation} · priority {c.priority}
-                    </div>
-                    <div className="muted">{clientLocation(c)}</div>
-                    {result ? (
-                      <div className={result.ok ? 'text-ok' : 'text-error'}>
-                        {result.ok ? `Test passed${result.message ? ` · ${result.message}` : ''}` : `Test failed: ${result.errors.join('; ')}`}
-                      </div>
-                    ) : null}
-                  </ItemCard>
-                );
-              })}
-              <AddCard label="Add download client" onClick={() => setPicking(true)} />
-            </CardGrid>
-          )}
-        </Card>
-        <RemotePathMappingsCard />
-      </div>
+      {list.isPending ? (
+        <Skeleton lines={4} />
+      ) : list.isError ? (
+        <ErrorBlock title="Couldn't load download clients" onRetry={() => void list.refetch()}>
+          {errorMessage(list.error)}
+        </ErrorBlock>
+      ) : list.data.length === 0 ? (
+        <EmptyState title="No download clients yet">Add the built-in engine or a client such as qBittorrent or SABnzbd.</EmptyState>
+      ) : (
+        <CardGrid label="Download clients">
+          {list.data.map((c) => {
+            const schema = schemaFor(c.implementation);
+            return (
+              <DownloadClientCard
+                key={c.id}
+                client={c}
+                schema={schema}
+                onEdit={schema ? () => setEditing({ client: c, schema }) : undefined}
+                result={results[c.id]}
+              />
+            );
+          })}
+        </CardGrid>
+      )}
+      <RemotePathMappingsSection />
       {picking ? (
-        <Modal open onClose={() => setPicking(false)} title="Add download client">
-          {schemas.isPending ? (
-            <LoadingBlock />
-          ) : schemas.isError ? (
-            <ErrorView error={schemas.error} />
-          ) : (
-            <CardGrid>
-              {sortedSchemas(schemas.data).map((s) => (
-                <button
-                  key={s.implementation}
-                  type="button"
-                  className="item-card add-card"
-                  onClick={() => {
-                    setPicking(false);
-                    setEditing({ schema: s });
-                  }}
-                >
-                  <span className="chip-stack">
-                    <strong>{s.implementationName}</strong>
-                    <ProtocolBadge protocol={s.protocol} />
-                  </span>
-                  <span className="muted">{schemaDescription(s)}</span>
-                </button>
-              ))}
-            </CardGrid>
-          )}
-        </Modal>
-      ) : null}
-      {editing ? (
-        <DownloadClientEditor
-          key={'client' in editing ? editing.client.id : editing.schema.implementation}
-          editing={editing}
-          onClose={() => setEditing(null)}
+        <ClientChooser
+          onClose={() => setPicking(false)}
+          onPick={(s) => {
+            setPicking(false);
+            setEditing({ schema: s });
+          }}
         />
       ) : null}
-    </Page>
+      {editing ? (
+        <DownloadClientEditor key={'client' in editing ? editing.client.id : editing.schema.implementation} editing={editing} onClose={() => setEditing(null)} />
+      ) : null}
+    </SettingsPage>
   );
 }

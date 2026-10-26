@@ -57,6 +57,20 @@ describe('requests routes', () => {
     expect(count).toMatchObject({ total: 2, approved: 1, declined: 1 });
   });
 
+  it('approve accepts override options over HTTP and validates them', async () => {
+    const h = await app();
+    await h.app.inject({ method: 'POST', url: '/api/v1/request', headers: { cookie: h.userCookie }, payload: { mediaType: 'series', tmdbId: 1399, seasons: [1] } });
+    const id = (await h.app.inject({ method: 'GET', url: '/api/v1/request', headers: { cookie: h.adminCookie } })).json().results[0].id;
+    const approve = (payload: unknown, cookie = h.adminCookie) =>
+      h.app.inject({ method: 'POST', url: `/api/v1/request/${id}/approve`, headers: { cookie }, payload: payload as object });
+    expect((await approve({ monitorOption: 'sometimes' })).statusCode).toBe(400);
+    expect((await approve({ seasons: [] })).statusCode).toBe(400);
+    expect((await approve({ monitorOption: 'all', seasons: [2] }, h.userCookie)).statusCode).toBe(403);
+    const ok = await approve({ monitorOption: 'all', seasons: [1] });
+    expect(ok.statusCode).toBe(200);
+    expect(ok.json()).toMatchObject({ status: 'approved', seasons: [{ seasonNumber: 1, status: 'approved' }] });
+  });
+
   it('quota, permissions and personal settings follow self-or-manager rules', async () => {
     const h = await app();
     const other = addUser(h.db);

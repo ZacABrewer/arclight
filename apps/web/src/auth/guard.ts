@@ -19,8 +19,11 @@ export const authKeys = {
 /** Pages rendered without the app shell and reachable before sign-in. */
 export const BARE_PATHS: ReadonlySet<string> = new Set(['/login', '/setup']);
 
+/** Pages that draw their own chrome (the component gallery renders a full demo shell). */
+export const SHELLLESS_PATHS: ReadonlySet<string> = new Set([...BARE_PATHS, '/design']);
+
 /** Sections only admins may open; users are sent home. */
-export const ADMIN_ONLY_PREFIXES: readonly string[] = ['/settings', '/system', '/activity', '/indexers', '/subtitles'];
+export const ADMIN_ONLY_PREFIXES: readonly string[] = ['/settings', '/system', '/activity', '/indexers', '/subtitles', '/design'];
 
 export function isAdminOnlyPath(pathname: string): boolean {
   return ADMIN_ONLY_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`));
@@ -33,8 +36,12 @@ export function safeRedirect(target: unknown): string {
   return target;
 }
 
-export function loginHref(returnTo: string): string {
-  return returnTo === '/' ? '/login' : `/login?redirect=${encodeURIComponent(returnTo)}`;
+/** /login, returning to `returnTo`; `expired` shows the "session expired" banner (Page 07). */
+export function loginHref(returnTo: string, expired = false): string {
+  const params: string[] = [];
+  if (returnTo !== '/') params.push(`redirect=${encodeURIComponent(returnTo)}`);
+  if (expired) params.push('expired=1');
+  return params.length ? `/login?${params.join('&')}` : '/login';
 }
 
 /**

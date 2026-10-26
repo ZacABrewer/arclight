@@ -5,8 +5,8 @@ Compiled from the `routes.ts` and `index.ts` files in `apps/api/src/modules/*` o
 prefixed with `/api/v1`. Every route requires authentication unless listed as public in
 [Authentication](#authentication).
 
-Modules still being written (releases, imports, history, blocklist, notifications,
-calendar) have no routes and are not listed.
+Some modules (releases, imports, notifications) are not fully listed here yet; history,
+blocklist and calendar are.
 
 Errors: modules map typed service errors to JSON `{ "error": "..." }` bodies (400, 404,
 409, 5xx). Deletes answer `204` with a null body unless noted.
@@ -123,6 +123,15 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | GET | `/metadata/search` | Search TMDB for series or movies (`query`, `type`) |
 | GET | `/metadata/series/:tmdbId` | Full series metadata from TMDB |
 | GET | `/metadata/movie/:tmdbId` | Full movie metadata from TMDB |
+| POST | `/command/refresh` | Refresh metadata on demand. Body `RefreshCommand`: exactly one of `{seriesId}`, `{movieId}` or `{all: true}`, plus optional `rescan: true` (re-read the folder from disk afterwards through the imports module). Answers **202** with the started `Job` (status `running`); the outcome arrives as a `job` WebSocket event and in `GET /jobs`. 400 for a bad body, 404 for an unknown id (no job is started) |
+
+**On-demand jobs.** Per-item refreshes, redownloads and library searches run as *ad-hoc jobs*
+(`Scheduler.runTask`): each gets a `jobs` row and `job` events like a scheduled job, but it is
+not registered, so it is not in `GET /jobs/scheduled` and cannot be started with
+`POST /jobs/run`. Names: `RefreshSeriesItem`, `RefreshMovieItem` (one at a time per item or id
+set; a single-item refresh that fails is a `failed` job carrying the reason), `RefreshLibrary`
+(`{all: true}`: all series, then all movies, then an optional full rescan), `HistoryRedownload`,
+`SeriesSearch`, `MovieSearch`.
 
 ## library
 
@@ -139,8 +148,8 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | DELETE | `/tag/:id` | Delete a tag |
 | GET | `/series` | List series (filterable) |
 | GET | `/series/:id` | One series with seasons |
-| POST | `/series` | Add a series (looks up by `tmdbId` through metadata) |
-| PUT | `/series/bulk` | Bulk edit series |
+| POST | `/series` | Add a series (looks up by `tmdbId` through metadata); `searchOnAdd: true` queues a `SeriesSearch` job for it |
+| PUT | `/series/bulk` | Bulk edit series: `ids` plus any of `monitored` (+ `monitorOption`), `monitorNewItems`, `qualityProfileId`, `seriesType`, `seasonFolder`, `rootFolderPath`, `tags: {add?, remove?}`; `refresh: true` queues a `RefreshSeriesItem` job for the ids and `search: true` a `SeriesSearch` job (user-invoked search per series), both after the update commits. Answers the updated series. 400 when refresh/search are asked for but the commands are not wired (nothing is changed); unknown ids 404, unknown tags or root folder 400 |
 | PUT | `/series/:id` | Update a series |
 | PUT | `/series/:id/seasons/:seasonNumber/monitor` | Set a season's monitored flag |
 | DELETE | `/series/:id` | Delete a series |
@@ -150,8 +159,8 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | PUT | `/episode/:id` | Update an episode |
 | GET | `/movie` | List movies (filterable) |
 | GET | `/movie/:id` | One movie |
-| POST | `/movie` | Add a movie (looks up by `tmdbId` through metadata) |
-| PUT | `/movie/bulk` | Bulk edit movies |
+| POST | `/movie` | Add a movie (looks up by `tmdbId` through metadata); `searchOnAdd: true` queues a `MovieSearch` job for it |
+| PUT | `/movie/bulk` | Bulk edit movies: `ids` plus any of `monitored`, `qualityProfileId`, `minimumAvailability`, `rootFolderPath`, `tags: {add?, remove?}`, `refresh: true` (`RefreshMovieItem` job), `search: true` (`MovieSearch` job); same rules as `/series/bulk` |
 | PUT | `/movie/:id` | Update a movie |
 | DELETE | `/movie/:id` | Delete a movie |
 | GET | `/mediafile` | List media files |
@@ -159,6 +168,16 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 | DELETE | `/mediafile/:id` | Delete a media file record |
 | GET | `/wanted/missing/episodes` | Paged monitored episodes without a file |
 | GET | `/wanted/missing/movies` | Paged monitored movies without a file |
+| GET | `/wanted/cutoff/episodes` | Paged (`page`, `pageSize`, `includeSpecials`) monitored episodes of monitored series whose file has not met cutoff, as `WantedEpisodesPage` |
+| GET | `/wanted/cutoff/movies` | Paged (`page`, `pageSize`) monitored movies whose file has not met cutoff, as `WantedMoviesPage` |
+
+**Cutoff.** A file meets cutoff when, under its series' or movie's *current* quality profile,
+its quality reaches the profile cutoff **and** its custom-format score reaches the format cutoff
+(`cutoffFormatScore`, or `minFormatScore` when upgrades are off). The score comes from matching
+the profile's custom formats against the file (scene name or relative path, quality, languages,
+size, release group, edition). Files whose parent or profile is gone count as met. The same
+checker (`library/cutoff.ts`, `createCutoffChecker`) drives the `CutoffUnmetSearch` job, so the
+job searches exactly what these routes list.
 | GET | `/library/exclusions` | List import exclusions |
 | DELETE | `/library/exclusions/:id` | Remove an import exclusion |
 | GET | `/library/statistics` | Library counts and sizes |
@@ -292,7 +311,7 @@ create a request without `userId` it is owned by the oldest admin account. Error
 | POST | `/request` | `CreateRequest` → 201 `MediaRequest`, or 202 `{ message }` when every season is already requested/available. Checks permission (`REQUEST`/`REQUEST_MOVIE`/`REQUEST_TV`, 4K variants), quota, duplicates, import exclusions; applies override rules; auto-approves when permitted, globally enabled or a matching rule says so |
 | PUT | `/request/:id` | `UpdateRequest` on a pending request (owner or `MANAGE_REQUESTS`; overrides need `REQUEST_ADVANCED`) |
 | DELETE | `/request/:id` | `MANAGE_REQUESTS`, or the owner while pending |
-| POST | `/request/:id/approve` | `MANAGE_REQUESTS`; optional `ApproveRequest` overrides. Adds the title to the library (series: only the requested seasons monitored) and searches |
+| POST | `/request/:id/approve` | `MANAGE_REQUESTS` (admins included). Optional `ApproveRequest` overrides: `rootFolderPath`, `qualityProfileId`, `tags` (stored on the request), `monitorOption` (series: applied when the series is added, or re-applied to an existing one; the requested seasons are always monitored too), `minimumAvailability` (movies), `seasons: number[]` (series: replaces the requested seasons, checked like `PUT /request/:id`). Series-only fields on a movie request (and `minimumAvailability` on a series) answer 400 and leave the request pending. Adds the title to the library and searches when the settings say so |
 | POST | `/request/:id/decline` | `MANAGE_REQUESTS`; optional `{ reason }` |
 | POST | `/request/:id/retry` | `MANAGE_REQUESTS`; re-runs a failed approval |
 | POST | `/request/bulk/approve` | `BulkRequestAction` → `BulkRequestResult` |
@@ -414,6 +433,45 @@ providers and manual-search routes are admin-only.
 | DELETE | `/subtitle/:id` | Delete an external subtitle file |
 | POST | `/command/subtitlesearch` | `{seriesId, seasonNumber?}` \| `{episodeIds}` \| `{movieId}` \| `{mediaFileId}`: search now, ignoring backoff |
 
+## history
+
+Contract: `packages/shared/src/history.ts`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/history` | Paged, sortable, filterable history (`eventType`, `mediaType`, `seriesId`, `episodeId`, `movieId`, `downloadId`, `quality`, `language`, `include*`) |
+| GET | `/history/since` | Records since `date` (optional `eventType`) |
+| GET | `/history/series` | Records of a series (`seriesId`, `seasonNumber?`, `eventType?`) |
+| GET | `/history/movie` | Records of a movie (`movieId`, `eventType?`) |
+| POST | `/history/failed/:id` | Mark the grab failed (`{message?, skipRedownload?}`): writes `downloadFailed`, blocklists the release, and unless `skipRedownload` is set (or `mediaManagement.autoRedownloadFailed` is off) re-searches the record's episodes/movie in the background (wiring.ts, priority-100 handler). Answers the new `downloadFailed` records |
+| POST | `/history/:id/redownload` | Re-run the automatic search for the record's movie, or its episode plus every episode recorded under the same download id and event type. Answers **202** with the started `HistoryRedownload` `Job`; 404 unknown id, 400 for a record without an episode or movie, 503 when release search is not wired |
+
+## blocklist
+
+Contract: `packages/shared/src/history.ts`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/blocklist` | Paged, sortable list (`mediaType`, `seriesId`, `movieId`, `protocol` filters) |
+| GET | `/blocklist/series` | Entries of a series (`seriesId`) |
+| GET | `/blocklist/movie` | Entries of a movie (`movieId`) |
+| POST | `/blocklist` | Add an entry by hand (`BlocklistAddRequest`: `mediaType`, `seriesId` + `episodeIds` or `movieId`, `sourceTitle`, `quality`, `protocol`, optional indexer, hash, size, message), 201 |
+| POST | `/blocklist/clear` | Remove every entry, answers `{deleted}` |
+| DELETE | `/blocklist/bulk` | Body `{ids: number[]}` (at least one positive id; anything else is 400), answers `{deleted}` |
+| DELETE | `/blocklist/:id` | Remove one entry |
+
+## calendar
+
+Contract: `packages/shared/src/calendar.ts`. Episodes by air date, movies once per release date
+(cinema, digital, physical). Week and day views are client-side over `start`/`end`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/calendar` | Items in `[start, end]` (defaults: today, +7 days). Filters: `mediaType` (`all` default, `series`, `movie`), `tags` (any of), `unmonitored` (include unmonitored items, default false), plus `includeSeries`, `includeEpisodeFile` |
+| GET | `/calendar/feed` | `{token, path}` of the iCal feed |
+| POST | `/calendar/feed/regenerate` | Admin. Rotates the feed token, answers `{token, path}`; the old feed URL answers 401 from then on |
+| GET | `/calendar/feed.ics` | Public, `?token=` required; `pastDays`, `futureDays`, `tags`, `unmonitored` |
+
 ## Scheduler jobs
 
 Registered through `scheduler.register` (defined in `apps/api/src/scheduler.ts`). Run any
@@ -428,6 +486,7 @@ of them with `POST /jobs/run`.
 | `IndexerStatsCleanup` | `20 3 * * *` | indexers | Deletes `indexer_stats` rows older than 90 days |
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |
+| `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), least recently searched first |
 | `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library (plus an optional media-server availability hook), completes requests, sends available notifications |
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists of users with a token and sync enabled; auto-requests when they hold `AUTO_REQUEST*` |
 | `SubtitleSearchWanted` | `*/15 * * * *` | subtitles | Searches wanted subtitles, least recently searched first, up to `search.batchSize` items; adaptive backoff per language; stops when every provider is throttled |

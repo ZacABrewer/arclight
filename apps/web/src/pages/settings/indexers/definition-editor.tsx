@@ -1,19 +1,17 @@
 import { useMemo, useState } from 'react';
 import type { Indexer, IndexerDefinitionSummary } from '@arclight/shared';
+import { errorMessage } from '../../../api/client.js';
 import { indexersApi } from '../../../api/indexers.js';
-import { Badge } from '../../../components/badge.js';
-import { ErrorView } from '../../../components/error-boundary.js';
+import { Chip, ErrorBlock, Modal, ProtocolBadge, Skeleton } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import { TestButton } from '../../../components/forms/test-result.js';
-import { Modal } from '../../../components/modal.js';
-import { ProtocolBadge } from '../../../components/protocol-badge.js';
-import { LoadingBlock } from '../../../components/spinner.js';
 import { useCreateIndexer, useDeleteIndexer, useIndexerDefinition, useIndexerProxies, useUpdateIndexer } from '../../../hooks/indexers.js';
 import { EditorFooter, SaveError } from '../shared.js';
-import { definitionBase, definitionFields, definitionNotes, definitionValuesOf, PRIVACY_TONES, toDefinitionBody } from './definition-fields.js';
+import { definitionBase, definitionFields, definitionNotes, definitionValuesOf, PRIVACY_LABELS, PRIVACY_TONES, toDefinitionBody } from './definition-fields.js';
 import { indexerTestOutcome } from './indexer-fields.js';
+import './indexers.css';
 
 export type DefinitionEditing = { definition: IndexerDefinitionSummary } | { indexer: Indexer };
 
@@ -27,19 +25,18 @@ export function DefinitionEditor({ editing, onClose }: { editing: DefinitionEdit
 
   if (!def) {
     return (
-      <Modal open onClose={onClose} title={'indexer' in editing ? `Edit ${editing.indexer.name}` : 'Add indexer'}>
-        {detail.isError ? <ErrorView error={detail.error} /> : <LoadingBlock />}
+      <Modal open size={640} onClose={onClose} title={'indexer' in editing ? `Edit ${editing.indexer.name}` : 'Add indexer'}>
+        {detail.isError ? (
+          <ErrorBlock title="Couldn't load the definition" onRetry={() => void detail.refetch()}>
+            {errorMessage(detail.error)}
+          </ErrorBlock>
+        ) : (
+          <Skeleton lines={5} />
+        )}
       </Modal>
     );
   }
-  return (
-    <DefinitionForm
-      def={def}
-      existing={'indexer' in editing ? editing.indexer : null}
-      proxies={proxies.data ?? []}
-      onClose={onClose}
-    />
-  );
+  return <DefinitionForm def={def} existing={'indexer' in editing ? editing.indexer : null} proxies={proxies.data ?? []} onClose={onClose} />;
 }
 
 function DefinitionForm({
@@ -72,7 +69,7 @@ function DefinitionForm({
     <>
       <Modal
         open
-        size="lg"
+        size={640}
         onClose={onClose}
         title={existing ? `Edit ${existing.name}` : `Add ${def.name}`}
         footer={
@@ -85,31 +82,40 @@ function DefinitionForm({
           />
         }
       >
-        <div className="row definition-meta">
-          <Badge tone={PRIVACY_TONES[def.privacy]}>{def.privacy}</Badge>
+        <div className="al-def-meta">
+          <Chip tone={PRIVACY_TONES[def.privacy]} dot="none">
+            {PRIVACY_LABELS[def.privacy]}
+          </Chip>
           <ProtocolBadge protocol={def.protocol} />
-          {def.tested ? <Badge tone="ok">tested</Badge> : <Badge tone="warning">untested definition</Badge>}
-          <span className="muted">{def.description}</span>
+          {def.tested ? null : (
+            <Chip tone="warn" dot="none">
+              Untested definition
+            </Chip>
+          )}
+          {def.description ? <span>{def.description}</span> : null}
         </div>
         {notes.map((n) => (
-          <div key={n.name} className="notice notice-info" role="note">
+          <p key={n.name} className="al-def-note" role="note">
             <strong>{n.label || n.name}</strong>
             {typeof n.default === 'string' && n.default ? <span> {n.default.replace(/<[^>]*>/g, '')}</span> : null}
-          </div>
+          </p>
         ))}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} inline />
+        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
         <SaveError error={create.error ?? update.error} />
       </Modal>
       {existing ? (
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${existing.name}?`}
+          confirmLabel="Delete indexer"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
-        />
+        >
+          <p>Searches and RSS stop using {existing.name}.</p>
+        </ConfirmDialog>
       ) : null}
     </>
   );

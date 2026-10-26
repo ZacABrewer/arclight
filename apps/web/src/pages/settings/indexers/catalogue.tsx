@@ -1,35 +1,81 @@
 import { useMemo, useState } from 'react';
-import type { IndexerDefinitionSummary, IndexerPrivacy, ReleaseProtocol } from '@arclight/shared';
-import { Badge } from '../../../components/badge.js';
-import { Button } from '../../../components/button.js';
-import { EmptyState } from '../../../components/empty-state.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Input, Select } from '../../../components/form.js';
-import { ProtocolBadge } from '../../../components/protocol-badge.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import type { IndexerDefinitionSummary, IndexerPrivacy, IndexerTemplate, ReleaseProtocol } from '@arclight/shared';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, EmptyState, ErrorBlock, ProtocolBadge, Select, Skeleton } from '../../../arclight/index.js';
 import { useIndexerDefinitions, useReloadDefinitions } from '../../../hooks/indexers.js';
-import { catalogueLanguages, EMPTY_CATALOGUE_FILTER, filterDefinitions, PRIVACY_TONES, type CatalogueFilter } from './definition-fields.js';
+import { catalogueLanguages, EMPTY_CATALOGUE_FILTER, filterDefinitions, PRIVACY_LABELS, PRIVACY_TONES, type CatalogueFilter } from './definition-fields.js';
+import './indexers.css';
 
-/** Searchable list of site definitions; picking one opens the editor. */
-export function CatalogueList({ onPick }: { onPick: (def: IndexerDefinitionSummary) => void }) {
+/** One chooser row: name, privacy chip, protocol badge, then the description. */
+export function DefinitionRow({ def, onPick }: { def: IndexerDefinitionSummary; onPick: (def: IndexerDefinitionSummary) => void }) {
+  return (
+    <li>
+      <button type="button" className="al-chooser__row" onClick={() => onPick(def)} aria-label={`Add ${def.name}`}>
+        <span className="al-chooser__head">
+          <span className="al-chooser__name">{def.name}</span>
+          <Chip tone={PRIVACY_TONES[def.privacy]} dot="none">
+            {PRIVACY_LABELS[def.privacy]}
+          </Chip>
+          <ProtocolBadge protocol={def.protocol} />
+          {def.tested ? null : (
+            <Chip tone="muted" dot="none">
+              Untested
+            </Chip>
+          )}
+          {def.source === 'custom' ? (
+            <Chip tone="default" dot="none">
+              Custom
+            </Chip>
+          ) : null}
+          {def.language ? <span className="al-chooser__lang">{def.language}</span> : null}
+        </span>
+        {def.description ? <span className="al-chooser__desc">{def.description}</span> : null}
+      </button>
+    </li>
+  );
+}
+
+/** Generic Torznab / Newznab endpoints as chooser rows. */
+export function TemplateList({ templates, onPick }: { templates: readonly IndexerTemplate[]; onPick: (t: IndexerTemplate) => void }) {
+  if (templates.length === 0) return <EmptyState title="No endpoint types match">Try fewer words.</EmptyState>;
+  return (
+    <ul className="al-chooser__list" aria-label="Endpoint types">
+      {templates.map((t) => (
+        <li key={t.implementation}>
+          <button type="button" className="al-chooser__row" onClick={() => onPick(t)} aria-label={`Add ${t.implementationName}`}>
+            <span className="al-chooser__head">
+              <span className="al-chooser__name">{t.implementationName}</span>
+              <ProtocolBadge protocol={t.protocol} />
+            </span>
+            <span className="al-chooser__desc">
+              Any {t.implementationName} endpoint: a URL and an API key ({t.protocol === 'torrent' ? 'Jackett, Prowlarr or a tracker API' : 'a usenet indexer API'}).
+            </span>
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Catalogue tab: site definitions filtered by the chooser's search text plus privacy, protocol and language. */
+export function CatalogueList({ onPick, text = '' }: { onPick: (def: IndexerDefinitionSummary) => void; text?: string }) {
   const defs = useIndexerDefinitions();
   const reload = useReloadDefinitions();
-  const [filter, setFilter] = useState<CatalogueFilter>(EMPTY_CATALOGUE_FILTER);
-  const rows = useMemo(() => filterDefinitions(defs.data ?? [], filter), [defs.data, filter]);
+  const [filter, setFilter] = useState<Omit<CatalogueFilter, 'text'>>(EMPTY_CATALOGUE_FILTER);
+  const rows = useMemo(() => filterDefinitions(defs.data ?? [], { ...filter, text }), [defs.data, filter, text]);
   const languages = useMemo(() => catalogueLanguages(defs.data ?? []), [defs.data]);
 
-  if (defs.isPending) return <LoadingBlock />;
-  if (defs.isError) return <ErrorView error={defs.error} onRetry={() => void defs.refetch()} />;
+  if (defs.isPending) return <Skeleton lines={4} />;
+  if (defs.isError)
+    return (
+      <ErrorBlock title="Couldn't load the catalogue" onRetry={() => void defs.refetch()}>
+        {errorMessage(defs.error)}
+      </ErrorBlock>
+    );
 
   return (
-    <div className="catalogue">
-      <div className="row catalogue-filters">
-        <Input
-          aria-label="Search definitions"
-          placeholder="Search by name, description, language"
-          value={filter.text}
-          onChange={(e) => setFilter({ ...filter, text: e.currentTarget.value })}
-        />
+    <div className="al-chooser">
+      <div className="al-chooser__filters">
         <Select
           aria-label="Privacy"
           value={filter.privacy}
@@ -58,27 +104,15 @@ export function CatalogueList({ onPick }: { onPick: (def: IndexerDefinitionSumma
           options={[{ value: '', label: 'Any language' }, ...languages.map((l) => ({ value: l, label: l }))]}
         />
         <Button size="sm" variant="ghost" loading={reload.isPending} onClick={() => reload.mutate()}>
-          Reload
+          Reload definitions
         </Button>
       </div>
       {rows.length === 0 ? (
         <EmptyState title="No definitions match">Try fewer words or another filter.</EmptyState>
       ) : (
-        <ul className="catalogue-list" aria-label="Definitions">
+        <ul className="al-chooser__list" aria-label="Definitions">
           {rows.map((d) => (
-            <li key={d.id}>
-              <button type="button" className="catalogue-item link-button" onClick={() => onPick(d)} aria-label={`Add ${d.name}`}>
-                <span className="catalogue-item-head">
-                  <strong>{d.name}</strong>
-                  <Badge tone={PRIVACY_TONES[d.privacy]}>{d.privacy}</Badge>
-                  <ProtocolBadge protocol={d.protocol} />
-                  {d.tested ? <Badge tone="ok">tested</Badge> : <Badge tone="neutral">untested</Badge>}
-                  {d.source === 'custom' ? <Badge tone="info">custom</Badge> : null}
-                  <span className="muted">{d.language}</span>
-                </span>
-                {d.description ? <span className="muted catalogue-item-desc">{d.description}</span> : null}
-              </button>
-            </li>
+            <DefinitionRow key={d.id} def={d} onPick={onPick} />
           ))}
         </ul>
       )}

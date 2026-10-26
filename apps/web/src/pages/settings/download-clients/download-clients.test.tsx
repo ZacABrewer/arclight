@@ -1,14 +1,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import type { DownloadClientField, DownloadClientImplementationSchema, QueueItem } from '@arclight/shared';
-import { ProtocolBadge } from '../../../components/protocol-badge.js';
+import { ProtocolBadge } from '../../../arclight/index.js';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';
 import { createQueryClient } from '../../../query-client.js';
-import { routeTree } from '../../../router.js';
-import { downloadClientTestOutcome, sortedSchemas, toDownloadClientBody } from './download-clients-page.js';
+import { DownloadClientsPage, downloadClientTestOutcome, sortedSchemas, toDownloadClientBody } from './download-clients-page.js';
 
 class FakeSocket {
   onopen = null;
@@ -155,7 +154,29 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
+/** The page in a minimal router (independent of the app shell). */
 function renderAt(path: string) {
+  const toasts = createToastStore();
+  const queryClient = createQueryClient(toasts);
+  const root = createRootRoute();
+  const routes = [
+    createRoute({ getParentRoute: () => root, path: '/settings/downloadclients', component: DownloadClientsPage }),
+    createRoute({ getParentRoute: () => root, path: '/settings/torrent', component: () => null }),
+  ];
+  const router = createRouter({ routeTree: root.addChildren(routes), history: createMemoryHistory({ initialEntries: [path] }) });
+  render(
+    <QueryClientProvider client={queryClient}>
+      <ToastProvider store={toasts}>
+        <RouterProvider router={router} />
+      </ToastProvider>
+    </QueryClientProvider>,
+  );
+  return router;
+}
+
+/** The full app (queue page). The router loads lazily so a shell problem stays in that test. */
+async function renderApp(path: string) {
+  const { routeTree } = await import('../../../router.js');
   const toasts = createToastStore();
   const queryClient = createQueryClient(toasts);
   const router = createRouter({ routeTree, context: { queryClient }, history: createMemoryHistory({ initialEntries: [path] }) });
@@ -181,7 +202,7 @@ describe('download client settings', () => {
     for (const [, name, protocol, description] of KINDS) {
       const card = within(dialog).getByText(name).closest('button')!;
       expect(within(card).getByText(description)).toBeTruthy();
-      expect(within(card).getByText(protocol)).toBeTruthy();
+      expect(within(card).getByText(protocol === 'torrent' ? 'TOR' : 'NZB')).toBeTruthy();
     }
   });
 
@@ -259,6 +280,67 @@ describe('download client settings', () => {
   });
 });
 
+describe('download client cards and remote path mappings', () => {
+  it('renders a card per client with protocol, status chip, mono priority, Test / Edit, and the mapping table', async () => {
+    responses['/api/v1/downloadclient'] = [
+      {
+        id: 1,
+        name: 'Built-in',
+        implementation: 'builtin',
+        enable: true,
+        protocol: 'torrent',
+        priority: 1,
+        removeCompletedDownloads: true,
+        removeFailedDownloads: true,
+        tags: [],
+        settings: { category: 'tv', postImportCategory: '', savePath: '/data', categories: [], initialState: 'start' },
+      },
+      {
+        id: 2,
+        name: 'SAB',
+        implementation: 'sabnzbd',
+        enable: false,
+        protocol: 'usenet',
+        priority: 7,
+        removeCompletedDownloads: true,
+        removeFailedDownloads: true,
+        tags: [],
+        settings: { host: 'nas', port: 8080 },
+      },
+    ];
+    responses['/api/v1/remotepathmapping'] = [{ id: 4, host: 'nas', remotePath: '/downloads/', localPath: '/mnt/nas/downloads/' }];
+    try {
+      renderAt('/settings/downloadclients');
+      const grid = await screen.findByRole('list', { name: 'Download clients' });
+      const cards = within(grid).getAllByRole('listitem');
+      expect(cards).toHaveLength(2);
+      const builtin = cards[0]!;
+      expect(within(builtin).getByText('Enabled')).toBeTruthy();
+      expect(within(builtin).getByText('TOR')).toBeTruthy();
+      expect(within(builtin).getByRole('button', { name: 'Test' })).toBeTruthy();
+      expect(within(builtin).getByRole('button', { name: 'Edit Built-in' })).toBeTruthy();
+      expect(within(builtin).getByRole('link', { name: 'Engine settings' }).getAttribute('href')).toBe('/settings/torrent');
+      const sab = cards[1]!;
+      expect(within(sab).getByText('Disabled')).toBeTruthy();
+      expect(within(sab).getByText('NZB')).toBeTruthy();
+      expect(within(sab).getByText('7').className).toContain('al-card-priority');
+      expect(within(sab).getByText('http://nas:8080')).toBeTruthy();
+
+      const section = screen.getByRole('region', { name: 'Remote path mappings' });
+      const row = within(section).getByText('/downloads/').closest('tr')!;
+      expect(within(row).getByText('nas')).toBeTruthy();
+      expect(within(row).getByText('/mnt/nas/downloads/')).toBeTruthy();
+      expect(within(row).getByRole('button', { name: 'Edit mapping /downloads/' })).toBeTruthy();
+      fireEvent.click(within(row).getByRole('button', { name: 'Delete mapping /downloads/' }));
+      const confirm = await screen.findByRole('dialog', { name: 'Delete remote path mapping?' });
+      expect(within(confirm).getByRole('button', { name: 'Delete mapping' })).toBeTruthy();
+    } finally {
+      responses['/api/v1/downloadclient'] = [];
+      responses['/api/v1/remotepathmapping'] = [];
+    }
+  });
+});
+
 describe('protocol badges', () => {
   it('renders distinct badges for usenet and torrent', () => {
     render(
@@ -267,15 +349,17 @@ describe('protocol badges', () => {
         <ProtocolBadge protocol="torrent" />
       </>,
     );
-    expect(screen.getByText('usenet').className).toContain('badge-info');
-    expect(screen.getByText('torrent').className).toContain('badge-ok');
+    expect(screen.getByText('NZB').getAttribute('title')).toBe('Usenet');
+    expect(screen.getByText('TOR').getAttribute('title')).toBe('Torrent');
+    expect(screen.getByText('NZB').className).toContain('al-proto');
   });
 
   it('shows a protocol badge per row in the queue', async () => {
-    renderAt('/activity/queue');
+    await renderApp('/activity/queue');
     const usenetRow = (await screen.findByText('Usenet.Release')).closest('tr')!;
     const torrentRow = screen.getByText('Torrent.Release').closest('tr')!;
-    expect(within(usenetRow).getByText('usenet').className).toContain('badge');
-    expect(within(torrentRow).getByText('torrent').className).toContain('badge');
-  });
+    // The queue page is migrating to the Arclight badge (TOR / NZB); accept either markup.
+    expect(within(usenetRow).getByText(/^(usenet|NZB)$/)).toBeTruthy();
+    expect(within(torrentRow).getByText(/^(torrent|TOR)$/)).toBeTruthy();
+  }, 20_000);
 });

@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { useCreateTag, useTags } from '../../hooks/library.js';
-import { Button } from '../button.js';
-import { Input } from '../form.js';
-import './media.css';
+import { Button, Checkbox, Input } from '../../arclight/index.js';
+import './media-kit.css';
 
-/** Checkbox list of existing tags plus an inline "new tag" field. */
+/** Checkbox list of existing tags plus an inline "New tag" field. */
 export function TagPicker({ value, onChange }: { value: readonly number[]; onChange: (ids: number[]) => void }) {
   const tags = useTags();
   const create = useCreateTag();
@@ -24,17 +23,14 @@ export function TagPicker({ value, onChange }: { value: readonly number[]; onCha
   };
 
   return (
-    <div className="tag-picker">
-      <div className="tag-picker-options" role="group" aria-label="Tags">
+    <div className="mk-stack-sm">
+      <div className="mk-row" role="group" aria-label="Tags">
         {(tags.data ?? []).map((t) => (
-          <label key={t.id} className="tag-option">
-            <input type="checkbox" checked={value.includes(t.id)} onChange={() => toggle(t.id)} />
-            {t.label}
-          </label>
+          <Checkbox key={t.id} label={t.label} checked={value.includes(t.id)} onChange={() => toggle(t.id)} />
         ))}
-        {tags.data?.length === 0 ? <span className="muted">No tags yet</span> : null}
+        {tags.data?.length === 0 ? <span className="mk-muted">No tags yet</span> : null}
       </div>
-      <div className="tag-picker-new">
+      <div className="mk-row" style={{ flexWrap: 'nowrap' }}>
         <Input
           aria-label="New tag"
           placeholder="New tag"

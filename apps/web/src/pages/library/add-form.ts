@@ -1,3 +1,4 @@
+import type { MetadataSearchResult } from '@arclight/shared';
 import type {
   AddMovieRequest,
   AddSeriesRequest,
@@ -127,3 +128,12 @@ export function toAddMovieRequest(tmdbId: number, s: AddFormState): AddMovieRequ
     ...languageProfileField(s),
   };
 }
+
+/** "Series · first aired 2015-12-14 · en" for a TMDB result row. */
+export function resultMeta(r: MetadataSearchResult): string {
+  const date = r.mediaType === 'series' ? r.firstAired : r.releaseDate;
+  return [r.mediaType === 'series' ? 'Series' : 'Movie', date ? (r.mediaType === 'series' ? `first aired ${date}` : `released ${date}`) : null, r.originalLanguage]
+    .filter(Boolean)
+    .join(' · ');
+}
+

@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
+import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import type { ImportList, ImportListFoundItem, ImportListSchema } from '@arclight/shared';
 import { FoundInLists } from '../../../components/media/found-in-lists.js';
 import { ToastProvider } from '../../../components/toast.js';
@@ -161,9 +161,15 @@ afterEach(() => {
 function renderPage(node = <ImportListsPage />): ToastStore {
   const toasts = createToastStore();
   const queryClient = createQueryClient(toasts);
+  // SettingsPage reads the router location, so the page renders inside a one-route router.
+  const root = createRootRoute();
+  const route = createRoute({ getParentRoute: () => root, path: '/settings/importlists', component: () => node });
+  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: ['/settings/importlists'] }) });
   render(
     <QueryClientProvider client={queryClient}>
-      <ToastProvider store={toasts}>{node}</ToastProvider>
+      <ToastProvider store={toasts}>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>,
   );
   return toasts;
@@ -172,7 +178,7 @@ function renderPage(node = <ImportListsPage />): ToastStore {
 const posted = (path: string) => calls.filter((c) => c.method === 'POST' && c.url === `/api/v1${path}`);
 
 async function openAdd(name: string) {
-  fireEvent.click(await screen.findByRole('button', { name: /Add list/ }));
+  fireEvent.click(await screen.findByRole('button', { name: 'Add list' }));
   const picker = await screen.findByRole('dialog', { name: 'Add import list' });
   fireEvent.click(within(picker).getByRole('button', { name: new RegExp(`^${name}`) }));
   return screen.findByRole('dialog', { name: `Add ${name}` });
@@ -182,25 +188,43 @@ describe('Settings -> Import Lists', () => {
   it('renders list cards with type, media type, state, last sync, item count and errors', async () => {
     renderPage();
     const title = await screen.findByRole('button', { name: 'Marvel' });
-    const card = title.closest('.item-card') as HTMLElement;
+    const card = title.closest('.al-item-card') as HTMLElement;
     expect(within(card).getByText('TMDB List')).toBeTruthy();
     expect(within(card).getByText('Movies')).toBeTruthy();
     expect(within(card).getByText('Enabled')).toBeTruthy();
     expect(within(card).getByText('2h ago')).toBeTruthy();
-    expect(await within(card).findByText(/2 items/)).toBeTruthy();
+    await waitFor(() => expect(card.textContent).toMatch(/2 items/));
 
-    const broken = screen.getByRole('button', { name: 'Broken feed' }).closest('.item-card') as HTMLElement;
-    expect(within(broken).getByText('Error')).toBeTruthy();
+    const broken = screen.getByRole('button', { name: 'Broken feed' }).closest('.al-item-card') as HTMLElement;
+    expect(within(broken).getByText('Sync failed')).toBeTruthy();
     expect(within(broken).getByRole('alert').textContent).toBe('HTTP 500 from feed');
     expect(within(broken).getByText(/never/)).toBeTruthy();
   });
 
+  it('draws the lists as an Arclight card grid with kind, enabled chip, mono sync interval and Edit', async () => {
+    renderPage();
+    const grid = await screen.findByRole('list', { name: 'Import lists' });
+    expect(grid.classList.contains('al-card-grid')).toBe(true);
+    const card = (await within(grid).findByRole('button', { name: 'Marvel' })).closest('.al-item-card') as HTMLElement;
+    expect(card.classList.contains('al-pane')).toBe(true);
+    expect(within(card).getByText('TMDB List')).toBeTruthy();
+    const chip = within(card).getByText('Enabled');
+    expect(chip.classList.contains('al-chip')).toBe(true);
+    const interval = await within(card).findByTestId('sync-interval');
+    expect(interval.textContent).toBe('every 6 h');
+    expect(interval.classList.contains('al-num')).toBe(true);
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit Marvel' }));
+    expect(await screen.findByRole('dialog', { name: 'Edit Marvel' })).toBeTruthy();
+    // The Add tile closes the grid.
+    expect(within(grid).getByRole('button', { name: /Add import list/ })).toBeTruthy();
+  });
+
   it('offers every implementation from the schema with a description', async () => {
     renderPage();
-    fireEvent.click(await screen.findByRole('button', { name: /Add list/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add list' }));
     const picker = await screen.findByRole('dialog', { name: 'Add import list' });
-    const choices = within(picker).getAllByRole('button').filter((b) => b.classList.contains('add-card'));
-    expect(choices.map((b) => b.querySelector('strong')?.textContent)).toEqual(['TMDB List', 'Trakt List', 'StevenLu Popular Movies']);
+    const choices = within(picker).getAllByRole('button').filter((b) => b.classList.contains('al-chooser__item'));
+    expect(choices.map((b) => b.querySelector('.al-chooser__name')?.textContent)).toEqual(['TMDB List', 'Trakt List', 'StevenLu Popular Movies']);
     expect(within(picker).getByText('A public TMDB list by its id.')).toBeTruthy();
     expect(within(picker).getByText('Trakt auth')).toBeTruthy();
   });
@@ -238,7 +262,7 @@ describe('Settings -> Import Lists', () => {
     expect(within(dialog).getByLabelText(/^Minimum availability/)).toBeTruthy();
     expect((within(dialog).getByLabelText(/^Feed URL/) as HTMLInputElement).value).toBe('https://example.test/movies.json');
 
-    fireEvent.click(await screen.findByRole('button', { name: /Add list/ }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add list' }));
     const picker = await screen.findByRole('dialog', { name: 'Add import list' });
     fireEvent.click(within(picker).getByRole('button', { name: /^TMDB List/ }));
     const tmdb = await screen.findByRole('dialog', { name: 'Add TMDB List' });
@@ -269,7 +293,11 @@ describe('Settings -> Import Lists', () => {
     fireEvent.change(within(dialog).getByLabelText(/^List name/), { target: { value: 'watch-later' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Authenticate with Trakt' }));
 
-    expect((await within(dialog).findByTestId('trakt-user-code')).textContent).toBe('ABCD-1234');
+    const code = await within(dialog).findByTestId('trakt-user-code');
+    expect(code.textContent).toBe('ABCD-1234');
+    expect(code.classList.contains('al-trakt__code')).toBe(true);
+    expect(within(dialog).getByText(/Waiting for Trakt to confirm/)).toBeTruthy();
+    expect(within(within(dialog).getByRole('group', { name: 'Trakt authentication' })).getByRole('button', { name: 'Cancel' }).className).toContain('al-btn--ghost');
     expect(within(dialog).getByRole('link', { name: 'https://trakt.tv/activate' })).toBeTruthy();
     expect(posted('/importlist/trakt/device')[0]!.body).toEqual({ clientId: 'cid' });
 
@@ -355,7 +383,7 @@ describe('Settings -> Import Lists', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Preview items in Marvel' }));
     const dialog = await screen.findByRole('dialog', { name: 'Items in Marvel' });
     expect(await within(dialog).findByText('The Incredible Hulk')).toBeTruthy();
-    expect(within(dialog).getByText('2 items from the last sync.')).toBeTruthy();
+    expect(within(dialog).getByText((_, el) => el?.tagName === 'P' && el.textContent === '2 items from the last sync.')).toBeTruthy();
     fireEvent.click(within(dialog).getByRole('button', { name: 'Exclude The Incredible Hulk' }));
     await waitFor(() => expect(posted('/importlistexclusion')).toHaveLength(1));
     expect(posted('/importlistexclusion')[0]!.body).toEqual({ mediaType: 'movie', tmdbId: 1724, title: 'The Incredible Hulk', year: 2008 });
@@ -390,6 +418,17 @@ describe('Settings -> Import Lists', () => {
     expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/v1/importlistexclusion/5')).toBe(true);
   });
 
+  it('removes an exclusion from the exclusions table', async () => {
+    renderPage();
+    const table = await screen.findByRole('table', { name: 'List exclusions' });
+    expect(await within(table).findByText('Captain America: The First Avenger')).toBeTruthy();
+    const year = within(table).getByText('2011');
+    expect(year.closest('td')?.className ?? '').toMatch(/mono/);
+    fireEvent.click(within(table).getByRole('button', { name: 'Remove Captain America: The First Avenger' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url === '/api/v1/importlistexclusion/5')).toBe(true));
+    await waitFor(() => expect(within(table).queryByText('Captain America: The First Avenger')).toBeNull());
+  });
+
   it('saves the import list options', async () => {
     renderPage();
     const form = await screen.findByRole('form', { name: 'Import list options' });
@@ -398,7 +437,7 @@ describe('Settings -> Import Lists', () => {
     fireEvent.change(interval, { target: { value: '12' } });
     fireEvent.change(within(form).getByLabelText('Clean library level'), { target: { value: 'unmonitor' } });
     fireEvent.click(await within(form).findByRole('button', { name: 'kids' }));
-    fireEvent.click(within(form).getByRole('button', { name: 'Save options' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/v1/settings/importlists')).toBe(true));
     expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ syncIntervalHours: 12, cleanLibraryLevel: 'unmonitor', cleanLibraryTags: [7] });
   });
@@ -408,7 +447,7 @@ describe('Settings -> Import Lists', () => {
     const form = await screen.findByRole('form', { name: 'Import list options' });
     fireEvent.change(await within(form).findByLabelText('Sync interval (hours)'), { target: { value: '500' } });
     expect(within(form).getByText('Enter 1 to 168 hours')).toBeTruthy();
-    expect((within(form).getByRole('button', { name: 'Save options' }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole('button', { name: 'Save changes' }) as HTMLButtonElement).disabled).toBe(true);
   });
 });
 
@@ -463,8 +502,8 @@ describe('import list helpers and routing', () => {
         </ToastProvider>
       </QueryClientProvider>,
     );
-    expect(await screen.findByRole('heading', { level: 1, name: 'Import Lists' })).toBeTruthy();
-    expect(screen.getAllByRole('link', { name: 'Import Lists' }).length).toBeGreaterThan(0);
+    expect(await screen.findByRole('heading', { level: 2, name: 'Import lists' })).toBeTruthy();
+    expect(screen.getAllByRole('link', { name: 'Import lists' }).length).toBeGreaterThan(0);
     expect(await screen.findByRole('button', { name: 'Marvel' })).toBeTruthy();
   });
 });

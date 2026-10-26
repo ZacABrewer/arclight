@@ -1,0 +1,26 @@
+/* Schema form + test result on Arclight controls. Square corners; mono for numbers. */
+.al-schema-form { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.al-schema-form__toolbar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.al-schema-form__stack { display: flex; flex-direction: column; gap: 16px; }
+.al-req { color: var(--al-text-4); }
+.al-adv-tag { margin-left: 8px; font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; color: var(--al-text-5); }
+.al-input--num { max-width: 200px; }
+.al-select--fit { max-width: 360px; }
+.al-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 8px 16px; }
+
+.al-test-box { display: flex; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.al-test-result { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.al-test-result__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; min-height: 32px; }
+.al-test-result__message { font-size: 13px; color: var(--al-text-3); }
+.al-test-result__list { margin: 0; padding: 0 0 0 16px; font-size: 13px; }
+.al-test-result__list[data-tone='danger'] { color: var(--al-danger-text); }
+.al-test-result__list[data-tone='warn'] { color: var(--al-warn-text); }
+
+.al-tag-toggles { display: flex; flex-wrap: wrap; gap: 6px; }
+.al-tag-toggle { cursor: pointer; font: inherit; font-size: 12px; background: transparent; }
+.al-tag-toggle[aria-pressed='true'] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
+
+.al-term-list { display: flex; flex-direction: column; gap: 8px; }
+.al-term-list__terms { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.al-term-list__add { display: flex; gap: 8px; align-items: center; }
+.al-term-list__add .al-input { flex: 1; min-width: 0; }

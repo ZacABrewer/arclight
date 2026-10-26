@@ -1,0 +1,31 @@
+/* Indexers (handoff §9): chooser rows, category tree, definition notes. Square corners; mono for data. */
+
+.al-chooser { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-chooser__filters { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.al-chooser__filters .al-select { min-width: 0; }
+.al-chooser__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; max-height: 52vh; overflow-y: auto; }
+.al-chooser__row { display: flex; flex-direction: column; gap: 4px; width: 100%; min-height: 44px; padding: 10px 14px; text-align: left; font: inherit; color: var(--al-text-1); background: rgba(0,0,0,.2); border: 1px solid var(--al-line-1); cursor: pointer; }
+.al-chooser__row:hover, .al-chooser__row:focus-visible { border-color: var(--al-cyan); background: var(--al-cyan-a06); }
+.al-chooser__head { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.al-chooser__name { font-size: 15px; font-weight: 600; }
+.al-chooser__lang { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+.al-chooser__desc { font-size: 13px; color: var(--al-text-4); }
+
+.al-cat-tree, .al-cat-tree__children { list-style: none; margin: 0; padding: 0; }
+.al-cat-tree { display: flex; flex-direction: column; gap: 6px; max-height: 320px; overflow-y: auto; padding: 10px 12px; border: 1px solid var(--al-line-1); background: rgba(0,0,0,.2); }
+.al-cat-tree__children { display: flex; flex-direction: column; gap: 4px; margin-top: 4px; }
+.al-cat-tree__row { min-height: 28px; display: flex; align-items: center; }
+.al-cat-tree__id { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+
+.al-def-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 16px; font-size: 13px; color: var(--al-text-4); }
+.al-def-note { margin: 0 0 16px; padding: 10px 14px; border: 1px solid var(--al-line-2); font-size: 13px; color: var(--al-text-3); }
+.al-def-note strong { color: var(--al-text-1); font-weight: 600; }
+
+.al-card-priority { font-family: var(--al-mono); color: var(--al-text-2); }
+.al-card-line { flex-basis: 100%; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-card-line--mono { font-family: var(--al-mono); font-size: 12px; }
+
+@media (max-width: 767px) {
+  .al-chooser__filters > * { flex: 1 1 140px; }
+  .al-chooser__list { max-height: none; }
+}

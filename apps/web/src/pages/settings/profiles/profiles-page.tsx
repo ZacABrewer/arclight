@@ -1,16 +1,44 @@
 import { useState } from 'react';
 import type { QualityProfile } from '@arclight/shared';
-import { Badge } from '../../../components/badge.js';
-import { Card } from '../../../components/card.js';
-import { ErrorView } from '../../../components/error-boundary.js';
-import { Page } from '../../../components/page.js';
-import { LoadingBlock } from '../../../components/spinner.js';
+import { errorMessage } from '../../../api/client.js';
+import { Button, Chip, ErrorBlock, QualityTag, Skeleton } from '../../../arclight/index.js';
 import { useCustomFormatList, useQualityProfileList, useQualityProfileSchema } from '../../../hooks/profiles.js';
-import { AddCard, CardGrid, ItemCard } from '../shared.js';
+import { SettingsPage } from '../settings-layout.js';
+import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
 import { DelayProfilesSection } from './delay-profiles.js';
 import { itemId, itemName, toDisplay } from './quality-profile-model.js';
 import { QualityProfileEditor } from './quality-profile-editor.js';
 import { ReleaseProfilesSection } from './release-profiles.js';
+import './profiles.css';
+
+/** One quality profile card: cutoff + the allowed qualities (best first) as mono quality tags. */
+export function QualityProfileCard({ profile, onEdit }: { profile: QualityProfile; onEdit: () => void }) {
+  const cutoff = profile.items.find((i) => itemId(i) === profile.cutoff);
+  const allowed = toDisplay(profile.items).filter((i) => i.allowed);
+  return (
+    <ItemCard
+      title={profile.name}
+      onClick={onEdit}
+      status={
+        profile.upgradeAllowed ? null : (
+          <Chip tone="muted" dot="none">
+            Upgrades off
+          </Chip>
+        )
+      }
+    >
+      <span className="al-profile-card__cutoff">
+        <span className="al-profile-card__label">Cutoff</span>
+        {cutoff ? <QualityTag data-cutoff="true">{itemName(cutoff)}</QualityTag> : <span className="al-muted">Not set</span>}
+      </span>
+      <span className="al-profile-card__tags" aria-label={`Allowed qualities in ${profile.name}`}>
+        {allowed.map((i) => (
+          <QualityTag key={`${i.kind}-${itemId(i)}`}>{itemName(i)}</QualityTag>
+        ))}
+      </span>
+    </ItemCard>
+  );
+}
 
 function QualityProfilesSection() {
   const list = useQualityProfileList();
@@ -19,33 +47,26 @@ function QualityProfilesSection() {
   const [editing, setEditing] = useState<QualityProfile | 'new' | null>(null);
 
   return (
-    <Card title="Quality profiles">
+    <SettingsSection
+      label="Quality profiles"
+      {...(list.data ? { count: list.data.length } : {})}
+      action={
+        <Button size="sm" variant="secondary" onClick={() => setEditing('new')} disabled={!schema.data}>
+          Add quality profile
+        </Button>
+      }
+    >
       {list.isPending ? (
-        <LoadingBlock />
+        <Skeleton lines={3} />
       ) : list.isError ? (
-        <ErrorView error={list.error} onRetry={() => void list.refetch()} />
+        <ErrorBlock title="Couldn't load quality profiles" onRetry={() => void list.refetch()}>
+          {errorMessage(list.error)}
+        </ErrorBlock>
       ) : (
-        <CardGrid>
-          {list.data.map((p) => {
-            const cutoff = p.items.find((i) => itemId(i) === p.cutoff);
-            return (
-              <ItemCard key={p.id} title={p.name} onClick={() => setEditing(p)}>
-                <div className="muted">
-                  Cutoff: {cutoff ? itemName(cutoff) : '—'}
-                  {p.upgradeAllowed ? '' : ' · upgrades off'}
-                </div>
-                <div className="badge-row">
-                  {toDisplay(p.items)
-                    .filter((i) => i.allowed)
-                    .map((i) => (
-                      <Badge key={`${i.kind}-${itemId(i)}`} tone={itemId(i) === p.cutoff ? 'info' : 'neutral'}>
-                        {itemName(i)}
-                      </Badge>
-                    ))}
-                </div>
-              </ItemCard>
-            );
-          })}
+        <CardGrid label="Quality profiles">
+          {list.data.map((p) => (
+            <QualityProfileCard key={p.id} profile={p} onEdit={() => setEditing(p)} />
+          ))}
           <AddCard label="Add quality profile" onClick={() => setEditing('new')} />
         </CardGrid>
       )}
@@ -58,18 +79,16 @@ function QualityProfilesSection() {
           onClose={() => setEditing(null)}
         />
       ) : null}
-    </Card>
+    </SettingsSection>
   );
 }
 
 export function ProfilesPage() {
   return (
-    <Page title="Profiles">
-      <div className="stack">
-        <QualityProfilesSection />
-        <DelayProfilesSection />
-        <ReleaseProfilesSection />
-      </div>
-    </Page>
+    <SettingsPage title="Profiles" description="Which releases to grab, how long to wait for a better one, and which words to require or reject.">
+      <QualityProfilesSection />
+      <DelayProfilesSection />
+      <ReleaseProfilesSection />
+    </SettingsPage>
   );
 }

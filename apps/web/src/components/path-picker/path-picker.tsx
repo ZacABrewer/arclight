@@ -3,11 +3,9 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import type { FileSystemEntry } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { filesystemApi } from '../../api/filesystem.js';
-import { Button } from '../button.js';
-import { Input } from '../form.js';
-import { Modal } from '../modal.js';
-import { Spinner } from '../spinner.js';
+import { Button, Icon, Input, Modal, PathPickerField, type PathEntry } from '../../arclight/index.js';
 import { breadcrumbs, isValidFolderName } from './path-utils.js';
+import './path-picker.css';
 
 /** Enter runs `action` without submitting any enclosing form. */
 function onEnter(e: KeyboardEvent<HTMLInputElement>, action: () => void) {
@@ -44,7 +42,11 @@ function formatSize(bytes: number | undefined): string {
   return `${n.toFixed(i >= 3 ? 1 : 0)} ${units[i]}`;
 }
 
-/** Folder browser over GET /filesystem with breadcrumbs, drives, optional files and "new folder". */
+/**
+ * Folder browser over GET /filesystem on the Arclight path picker: mono path input, crumbs,
+ * a click selects a folder, a double-click or → opens it, Enter in the input opens what was
+ * typed. Drives, optional files and "New folder".
+ */
 export function PathPickerDialog({ open, onClose, onSelect, initialPath, title = 'Choose a folder', includeFiles = false, selectFiles = false }: PathPickerDialogProps) {
   const withFiles = includeFiles || selectFiles;
   const [path, setPath] = useState(initialPath?.trim() ?? '');
@@ -87,80 +89,86 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
   const current = listing.data?.path ?? path;
   const atRoots = listing.data ? listing.data.path === '' : path === '';
   const crumbs = breadcrumbs(current);
+  const directories = listing.data?.directories ?? [];
+
+  // Select picks the highlighted folder of this listing, otherwise the folder being browsed.
+  const candidate = typed.trim();
+  const choice = candidate !== '' && (candidate === current || directories.some((d) => d.path === candidate)) ? candidate : current;
 
   const createFolder = () => {
     if (newName !== null && isValidFolderName(newName)) mkdir.mutate(newName);
   };
 
-  const entryButton = (entry: FileSystemEntry) => {
-    const isFile = entry.type === 'file';
-    const glyph = entry.type === 'drive' ? '🖴' : isFile ? '📄' : '📁';
-    return (
-      <li key={entry.path}>
-        <button
-          type="button"
-          className="path-picker-entry"
-          disabled={isFile && !selectFiles}
-          onClick={() => (isFile ? onSelect(entry.path) : go(entry.path))}
-        >
-          <span aria-hidden="true">{glyph}</span>
-          <span className="path-picker-name">{entry.name}</span>
-          {isFile ? <span className="muted">{formatSize(entry.sizeBytes)}</span> : null}
-        </button>
-      </li>
-    );
-  };
+  const toEntry = (entry: FileSystemEntry): PathEntry => ({
+    name: entry.name,
+    path: entry.path,
+    kind: entry.type === 'drive' ? 'drive' : entry.type === 'file' ? 'file' : 'folder',
+    meta: entry.type === 'file' ? formatSize(entry.sizeBytes) : undefined,
+  });
+  const entries: PathEntry[] = listing.data ? [...listing.data.directories.map(toEntry), ...(withFiles ? listing.data.files.map(toEntry) : [])] : [];
 
   return (
     <Modal
       open={open}
       onClose={onClose}
       title={title}
-      size="lg"
+      size={640}
       footer={
         <>
-          <Button variant="ghost" disabled={atRoots || newName !== null} onClick={() => setNewName('')}>
+          <Button variant="ghost" icon={<Icon name="plus" />} disabled={atRoots || newName !== null} onClick={() => setNewName('')}>
             New folder
           </Button>
-          <span className="spacer" />
+          <span className="mt-path-picker__spacer" />
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
-          <Button variant="primary" disabled={atRoots || !listing.data} onClick={() => onSelect(current)}>
+          <Button variant="primary" disabled={!listing.data || choice === ''} onClick={() => onSelect(choice)}>
             Select
           </Button>
         </>
       }
     >
-      <div className="path-picker">
-        {/* No <form>s in here: the picker is often rendered inside another form. */}
-        <div className="row">
-          <Input
-            aria-label="Folder path"
-            value={typed}
-            placeholder="Type a path and press Enter"
-            onChange={(e) => setTyped(e.currentTarget.value)}
-            onKeyDown={(e) => onEnter(e, () => go(typed.trim()))}
-          />
-          <Button size="sm" onClick={() => go(typed.trim())}>
-            Go
+      {/* No <form>s in here: the picker is often rendered inside another form. */}
+      <div className="mt-path-picker">
+        <div className="mt-path-picker__row">
+          <Button
+            variant="secondary"
+            size="sm"
+            icon={<Icon name="arrowUp" />}
+            disabled={!listing.data || listing.data.parent === null}
+            onClick={() => go(listing.data?.parent ?? '')}
+          >
+            Up one level
           </Button>
+          <p className="mt-path-picker__hint">Click a folder to select it. Double-click or press → to open it.</p>
         </div>
-        <nav aria-label="Breadcrumbs" className="path-picker-crumbs">
-          {crumbs.map((c, i) => (
-            <span key={`${c.path}-${i}`}>
-              {i > 0 ? <span className="muted"> › </span> : null}
-              <button type="button" className="link-subtle" onClick={() => go(c.path)} aria-current={i === crumbs.length - 1 ? 'location' : undefined}>
-                {c.label}
-              </button>
-            </span>
-          ))}
-        </nav>
+        <PathPickerField
+          label="Folder path"
+          placeholder="Type a path and press Enter"
+          value={typed}
+          onChange={setTyped}
+          onNavigate={(p) => go(p.trim())}
+          selectedPath={typed}
+          onSelectFile={selectFiles ? onSelect : undefined}
+          entries={entries}
+          crumbs={crumbs.map((c) => ({ label: c.label, path: c.path }))}
+          loading={listing.isPending}
+          error={listing.isError ? errorMessage(listing.error) : undefined}
+          collapsed={listing.isError}
+        />
+        {listing.isError ? (
+          <div>
+            <Button size="sm" variant="secondary" onClick={() => go('')}>
+              Back to {crumbs[0]?.label ?? 'roots'}
+            </Button>
+          </div>
+        ) : null}
 
         {newName !== null ? (
-          <div className="row">
+          <div className="mt-path-picker__row">
             <Input
               aria-label="New folder name"
+              mono
               autoFocus
               value={newName}
               placeholder="Folder name"
@@ -168,7 +176,7 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
               onKeyDown={(e) => onEnter(e, createFolder)}
             />
             <Button size="sm" variant="primary" loading={mkdir.isPending} disabled={!isValidFolderName(newName)} onClick={createFolder}>
-              Create
+              Create folder
             </Button>
             <Button size="sm" variant="ghost" onClick={() => setNewName(null)}>
               Cancel
@@ -176,42 +184,10 @@ export function PathPickerDialog({ open, onClose, onSelect, initialPath, title =
           </div>
         ) : null}
         {mkdir.error ? (
-          <p className="field-error-text" role="alert">
+          <p className="mt-path-picker__error" role="alert">
             {errorMessage(mkdir.error)}
           </p>
         ) : null}
-
-        <div className="path-picker-list" aria-busy={listing.isFetching || undefined}>
-          {listing.isPending ? (
-            <Spinner />
-          ) : listing.isError ? (
-            <div className="stack-sm">
-              <p className="field-error-text" role="alert">
-                {errorMessage(listing.error)}
-              </p>
-              <Button size="sm" onClick={() => go('')}>
-                Back to {crumbs[0]?.label ?? 'roots'}
-              </Button>
-            </div>
-          ) : (
-            <ul className="path-picker-entries" aria-label="Folder contents">
-              {listing.data.parent !== null ? (
-                <li>
-                  <button type="button" className="path-picker-entry" onClick={() => go(listing.data.parent ?? '')}>
-                    <span aria-hidden="true">↰</span>
-                    <span className="path-picker-name">..</span>
-                    <span className="sr-only">Up one level</span>
-                  </button>
-                </li>
-              ) : null}
-              {listing.data.directories.map(entryButton)}
-              {withFiles ? listing.data.files.map(entryButton) : null}
-              {listing.data.directories.length === 0 && (!withFiles || listing.data.files.length === 0) ? (
-                <li className="muted path-picker-empty">Empty folder</li>
-              ) : null}
-            </ul>
-          )}
-        </div>
       </div>
     </Modal>
   );

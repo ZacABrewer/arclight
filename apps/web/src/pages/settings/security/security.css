@@ -1,0 +1,15 @@
+/* Security + General settings pieces. Square corners; mono for data. */
+.al-api-key { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.al-api-key__input { flex: 1 1 280px; min-width: 0; max-width: 460px; }
+.al-api-key__actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.al-section-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.al-row-actions { display: inline-flex; gap: 4px; justify-content: flex-end; flex-wrap: wrap; }
+.al-you { margin-left: 6px; color: var(--al-text-4); font-size: 13px; }
+.al-sub { display: block; font-size: 12px; color: var(--al-text-4); }
+.al-editor-stack { display: flex; flex-direction: column; gap: 16px; }
+.al-ua { display: block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+@media (max-width: 767px) {
+  .al-api-key__input { max-width: none; flex-basis: 100%; }
+  .al-api-key__actions .al-btn { min-height: 44px; }
+}

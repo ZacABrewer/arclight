@@ -1,5 +1,5 @@
 import { LOG_LEVEL_VALUES, type LogLevel, type LogRecord } from '@arclight/shared';
-import type { BadgeTone } from '../../components/badge.js';
+import type { ChipTone } from '../../arclight/index.js';
 
 // Log viewer helpers. The filter mirrors the api's (apps/api/src/logging.ts recordFilter) so
 // records arriving over the live stream are filtered exactly like the paged ones.
@@ -10,13 +10,23 @@ export interface LogFilter {
   search?: string | undefined;
 }
 
-export const LEVEL_TONES: Record<LogLevel, BadgeTone> = {
-  trace: 'neutral',
-  debug: 'neutral',
-  info: 'info',
-  warn: 'warning',
-  error: 'error',
-  fatal: 'error',
+/** Level chips: info = neutral, warn = warn, error/fatal = failed; trace/debug fade out. */
+export const LEVEL_TONES: Record<LogLevel, ChipTone> = {
+  trace: 'muted',
+  debug: 'muted',
+  info: 'neutral',
+  warn: 'warn',
+  error: 'danger',
+  fatal: 'danger',
+};
+
+export const LEVEL_LABELS: Record<LogLevel, string> = {
+  trace: 'Trace',
+  debug: 'Debug',
+  info: 'Info',
+  warn: 'Warn',
+  error: 'Error',
+  fatal: 'Fatal',
 };
 
 export function matchesLogFilter(r: LogRecord, f: LogFilter): boolean {

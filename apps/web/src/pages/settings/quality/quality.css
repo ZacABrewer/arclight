@@ -1,0 +1,7 @@
+/* Quality sizes: one row per quality, three diamond-thumb sliders with mono values. */
+.al-size-table .al-table { min-width: 760px; }
+.al-size-quality { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.al-size-quality__hint { font-size: 11px; color: var(--al-text-4); }
+.al-size-slider { min-width: 0; }
+.al-size-slider .al-range { flex: 1; min-width: 80px; }
+.al-size-slider .al-slider__value { min-width: 11ch; font-size: 12px; }

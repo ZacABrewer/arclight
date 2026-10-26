@@ -2,13 +2,12 @@ import { useMemo, useState } from 'react';
 import type { ImportList, ImportListMediaType, ImportListSchema, ImportListTestResult, TraktPollResponse } from '@arclight/shared';
 import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
-import { Button } from '../../../components/button.js';
+import { Button, Modal } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { TestResultView } from '../../../components/forms/test-result.js';
 import type { FormValues } from '../../../components/forms/types.js';
 import { getPath, setPath } from '../../../components/forms/values.js';
-import { Modal } from '../../../components/modal.js';
 import { useDeleteImportList, useSaveImportList } from '../../../hooks/import-lists.js';
 import { EditorFooter, SaveError } from '../shared.js';
 import { existingListValues, listFields, newListValues, rootsFor, settingsFields, toListBody, type RootFolderOption } from './fields.js';
@@ -101,7 +100,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
     <>
       <Modal
         open
-        size="lg"
+        size={640}
         onClose={onClose}
         title={title}
         footer={
@@ -111,7 +110,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
             saving={save.isPending}
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
             extra={
-              <Button loading={testing} onClick={() => void runTest()}>
+              <Button variant="secondary" loading={testing} onClick={() => void runTest()}>
                 Test
               </Button>
             }
@@ -119,13 +118,13 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
         }
       >
         {schema?.infoLink ? (
-          <p className="muted">
+          <p className="al-caption">
             <a href={schema.infoLink} target="_blank" rel="noreferrer">
               About {schema.implementationName}
             </a>
           </p>
         ) : null}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={change} renderers={settings.renderers} inline />
+        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={change} renderers={settings.renderers} />
         {schema?.requiresTraktAuth ? (
           <TraktAuth
             clientId={typeof clientId === 'string' ? clientId : ''}
@@ -153,12 +152,15 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${existing.name}?`}
+          confirmLabel="Delete import list"
           onCancel={() => setConfirmDelete(false)}
           onConfirm={async () => {
             await remove.mutateAsync(existing.id);
             onClose();
           }}
-        />
+        >
+          The list stops syncing. Titles it already added stay in the library.
+        </ConfirmDialog>
       ) : null}
     </>
   );

@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import { SECRET_MASK, type TraktDeviceResponse, type TraktPollResponse } from '@arclight/shared';
 import { importListsApi } from '../../../api/import-lists.js';
 import { errorMessage } from '../../../api/client.js';
-import { Button } from '../../../components/button.js';
+import { Button } from '../../../arclight/index.js';
 
 // Trakt device-code flow: ask the api for a device code, show the user code and verification
 // URL, then poll at the interval Trakt gave until it is authorized, denied or expired.
@@ -108,33 +108,42 @@ export function TraktAuth({ clientId, clientSecret, importListId, onAuthorized }
   };
 
   return (
-    <div className="trakt-auth" aria-label="Trakt authentication" role="group">
+    <div className="al-trakt" aria-label="Trakt authentication" role="group">
       {state.phase === 'waiting' ? (
-        <div className="notice" role="status">
-          <p>
-            Go to{' '}
-            <a href={state.device.verificationUrl} target="_blank" rel="noreferrer">
+        <>
+          <p className="al-trakt__step">
+            Open{' '}
+            <a className="al-trakt__url" href={state.device.verificationUrl} target="_blank" rel="noreferrer">
               {state.device.verificationUrl}
             </a>{' '}
-            and enter the code <strong data-testid="trakt-user-code">{state.device.userCode}</strong>.
+            and enter this code:
           </p>
-          <p className="muted">Waiting for authorization…</p>
-          <Button size="sm" variant="ghost" onClick={cancel}>
-            Cancel
+          <div className="al-trakt__code" data-testid="trakt-user-code" aria-label="Trakt user code">
+            {state.device.userCode}
+          </div>
+          <p className="al-trakt__status" role="status">
+            Waiting for Trakt to confirm. Checking every <span className="al-num">{Math.max(1, state.device.interval)} s</span>.
+          </p>
+          <div className="al-trakt__actions">
+            <Button size="sm" variant="ghost" onClick={cancel}>
+              Cancel
+            </Button>
+          </div>
+        </>
+      ) : (
+        <div className="al-trakt__actions">
+          <Button variant="secondary" loading={state.phase === 'starting'} onClick={() => void start()}>
+            {state.phase === 'authorized' ? 'Re-authenticate with Trakt' : 'Authenticate with Trakt'}
           </Button>
         </div>
-      ) : (
-        <Button loading={state.phase === 'starting'} onClick={() => void start()}>
-          {state.phase === 'authorized' ? 'Re-authenticate with Trakt' : 'Authenticate with Trakt'}
-        </Button>
       )}
       {state.phase === 'authorized' ? (
-        <p className="muted" role="status">
+        <p className="al-trakt__status" role="status">
           Authorized with Trakt. Save the list to keep the tokens.
         </p>
       ) : null}
       {state.phase === 'failed' ? (
-        <p className="inline-error" role="alert">
+        <p className="al-inline-error" role="alert">
           {state.message}
         </p>
       ) : null}

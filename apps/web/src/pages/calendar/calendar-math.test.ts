@@ -3,7 +3,7 @@ import type { CalendarItem } from '@arclight/shared';
 import { localIsoDate } from '../../components/media/episode-status.js';
 import { makeEpisode } from '../library/test-fixtures.js';
 import { buildFeedUrl } from './calendar-page.js';
-import { addMonths, gridRange, groupByDay, monthGrid, toEntry, weekdayLabels } from './calendar-math.js';
+import { addMonths, barTone, gridRange, groupByDay, monthGrid, stepAnchor, toEntry, viewDays, weekDays, weekdayLabels } from './calendar-math.js';
 
 describe('monthGrid', () => {
   it('covers whole Monday-first weeks around the month', () => {
@@ -110,5 +110,36 @@ describe('calendar entries', () => {
     expect(buildFeedUrl('http://nas:7878', '/api/v1/calendar/feed.ics', { pastDays: 7, futureDays: 28, unmonitored: false })).toBe(
       'http://nas:7878/api/v1/calendar/feed.ics?pastDays=7&futureDays=28',
     );
+  });
+
+  it('tones bars: downloaded solid, unaired/tba upcoming, everything else missing', () => {
+    expect(barTone('downloaded')).toBe('downloaded');
+    expect(barTone('unaired')).toBe('upcoming');
+    expect(barTone('tba')).toBe('upcoming');
+    expect(barTone('wanted')).toBe('missing');
+    expect(barTone('missing')).toBe('missing');
+  });
+
+  it('keeps a 24h mono time, the hour and a search body on timed entries', () => {
+    const t = new Date(2026, 9, 21, 21, 30).toISOString();
+    const e = toEntry(episodeItem(t, { id: 7, seasonNumber: 1, episodeNumber: 2, airDateUtc: t }), now)!;
+    expect(e).toMatchObject({ time: '21:30', hour: 21.5, code: 'S01E02', search: { episodeIds: [7] } });
+    expect(toEntry(movieItem('2026-12-01', false), now)!).toMatchObject({ hour: null, search: { movieId: 9 }, code: 'Digital release' });
+  });
+});
+
+describe('view ranges', () => {
+  it('week starts on Monday and day is a single date', () => {
+    const days = weekDays(new Date(2026, 9, 15));
+    expect(days.map(localIsoDate)).toEqual(['2026-10-12', '2026-10-13', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17', '2026-10-18']);
+    expect(viewDays('day', new Date(2026, 9, 15, 13)).map(localIsoDate)).toEqual(['2026-10-15']);
+    expect(viewDays('month', new Date(2026, 9, 15))).toHaveLength(35);
+  });
+
+  it('steps by a week, a day or a month', () => {
+    const a = new Date(2026, 9, 15);
+    expect(localIsoDate(stepAnchor('week', a, 1))).toBe('2026-10-22');
+    expect(localIsoDate(stepAnchor('day', a, -1))).toBe('2026-10-14');
+    expect(localIsoDate(stepAnchor('month', a, 1))).toBe('2026-11-01');
   });
 });

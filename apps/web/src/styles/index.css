@@ -1,8 +1,16 @@
-/* Plain CSS, no framework. tokens.css is the only file the Phase 5 theme needs to replace. */
+/* Stylesheet entry.
+   1. Legacy page CSS, kept only while the other page re-skins still use the old primitives
+      (components/*). The coordinator removes these imports with the primitives. The old
+      base.css (body, focus ring with radius) and the old shell rules are no longer loaded.
+   2. Arclight: the kit (verbatim) + our layers, then the shell and the core pages. Loaded
+      last so Arclight wins on shared selectors (html, body, :focus-visible). */
 @import './tokens.css';
-@import './base.css';
 @import './layout.css';
 @import './components.css';
 @import './settings.css';
 @import './auth.css';
 @import './tools.css';
+
+@import './arclight/index.css';
+@import '../layout/shell.css';
+@import '../layout/core-pages.css';

@@ -1,0 +1,8 @@
+/* Download clients (handoff §10): category folder rows, client cards, mapping table. */
+.al-dc-cats { display: flex; flex-direction: column; gap: 8px; }
+.al-dc-cats__row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr) auto; gap: 8px; align-items: center; }
+.al-dc-actions { display: flex; justify-content: flex-end; gap: 6px; }
+@media (max-width: 767px) {
+  .al-dc-cats__row { grid-template-columns: minmax(0, 1fr); }
+}
+.al-dc-desc { margin: 0 0 16px; }

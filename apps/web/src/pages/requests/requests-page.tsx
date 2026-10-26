@@ -2,19 +2,27 @@ import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Permission, type MediaRequest, type RequestFilter, type RequestListQuery } from '@arclight/shared';
 import { kindOf } from '../../api/requests.js';
-import { Badge } from '../../components/badge.js';
-import { Button } from '../../components/button.js';
-import { Card } from '../../components/card.js';
-import { EmptyState } from '../../components/empty-state.js';
-import { ErrorView } from '../../components/error-boundary.js';
-import { FormField, Select } from '../../components/form.js';
-import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
-import { TagPicker } from '../../components/forms/tag-picker.js';
-import { Poster } from '../../components/media/media-ui.js';
-import { Modal } from '../../components/modal.js';
-import { Page } from '../../components/page.js';
-import { LoadingBlock } from '../../components/spinner.js';
-import { Tabs } from '../../components/tabs.js';
+import {
+  Button,
+  Checkbox,
+  EmptyState,
+  Field,
+  FloatBar,
+  FloatBarDivider,
+  FormRow,
+  Modal,
+  PageHeader,
+  Pane,
+  Paginator,
+  Poster,
+  Select,
+  Table,
+  Tabs,
+  Textarea,
+  type Column,
+} from '../../arclight/index.js';
+import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
+import { TagPicker } from '../../components/media/tag-picker.js';
 import { useToast } from '../../components/toast.js';
 import { titleLink } from '../../features/requests/discover-ui.js';
 import { MEDIA_STATUS_META, REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
@@ -29,9 +37,8 @@ import {
   useTitle,
   useUpdateRequest,
 } from '../../hooks/requests.js';
-import { EditorFooter } from '../settings/shared.js';
-import '../../features/requests/requests.css';
-import '../../components/media/media.css';
+import { StatusLabelChip } from '../discover/discover-kit.js';
+import '../../components/media/media-kit.css';
 
 export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> = [
   { id: 'pending', label: 'Pending' },
@@ -43,43 +50,46 @@ export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> =
 
 const PAGE_SIZE = 20;
 
+type MediaFilter = 'all' | 'movie' | 'series';
+
 export function RequestsPage() {
   const { can } = usePermissions();
   const manage = can(Permission.MANAGE_REQUESTS);
   const [tab, setTab] = useState<RequestFilter>(manage ? 'pending' : 'all');
-  const [mediaType, setMediaType] = useState<'all' | 'movie' | 'series'>('all');
+  const [mediaType, setMediaType] = useState<MediaFilter>('all');
 
   return (
-    <Page
-      title="Requests"
-      subtitle={can(Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW) ? 'Everyone’s requests' : 'Your requests'}
-      actions={
-        <Select
-          aria-label="Media type filter"
-          value={mediaType}
-          onChange={(e) => setMediaType(e.currentTarget.value as typeof mediaType)}
-          options={[
-            { value: 'all', label: 'Movies and series' },
-            { value: 'movie', label: 'Movies' },
-            { value: 'series', label: 'Series' },
-          ]}
-        />
-      }
-    >
-      <Tabs
-        value={tab}
-        onChange={(id) => setTab(id as RequestFilter)}
-        tabs={REQUEST_TABS.map((t) => ({
-          id: t.id,
-          label: t.label,
-          content: <RequestList key={`${t.id}-${mediaType}`} filter={t.id} mediaType={mediaType} manage={manage} />,
-        }))}
-      />
-    </Page>
+    <>
+      <PageHeader
+        index="03"
+        title="Requests"
+        subtitle={can(Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW) ? 'Everyone’s requests' : 'Your requests'}
+        actions={
+          <>
+            <Select
+              aria-label="Media type filter"
+              value={mediaType}
+              onChange={(e) => setMediaType(e.currentTarget.value as MediaFilter)}
+              options={[
+                { value: 'all', label: 'Movies and series' },
+                { value: 'movie', label: 'Movies' },
+                { value: 'series', label: 'Series' },
+              ]}
+            />
+            <Link className="al-btn al-btn--secondary" to="/requests/mine">
+              My requests
+            </Link>
+          </>
+        }
+      >
+        <Tabs compact aria-label="Request status" value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((t) => ({ id: t.id, label: t.label }))} />
+      </PageHeader>
+      <RequestList key={`${tab}-${mediaType}`} filter={tab} mediaType={mediaType} manage={manage} />
+    </>
   );
 }
 
-function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: 'all' | 'movie' | 'series'; manage: boolean }) {
+function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: MediaFilter; manage: boolean }) {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
   const query: RequestListQuery = { filter, mediaType, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'added', sortDirection: 'desc' };
@@ -87,12 +97,14 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
   const bulkApprove = useBulkRequestAction('approve');
   const bulkDecline = useBulkRequestAction('decline');
   const toast = useToast();
+  const mobile = useIsMobile();
 
-  if (list.isPending) return <LoadingBlock />;
-  if (list.isError) return <ErrorView error={list.error} onRetry={() => void list.refetch()} />;
+  if (list.isPending) return <Loading />;
+  if (list.isError) return <QueryError error={list.error} title="Could not load requests" onRetry={() => void list.refetch()} />;
   const { results, pageInfo } = list.data;
   const pending = results.filter((r) => r.status === 'pending');
   const pages = Math.max(1, Math.ceil(pageInfo.total / PAGE_SIZE));
+  const toggle = (id: number, on: boolean) => setSelected((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
 
   const runBulk = (action: 'approve' | 'decline') => {
     const m = action === 'approve' ? bulkApprove : bulkDecline;
@@ -108,173 +120,219 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
     });
   };
 
+  const columns: Column<MediaRequest>[] = [
+    ...(manage
+      ? [
+          {
+            key: 'select',
+            width: '44px',
+            header: (
+              <Checkbox
+                aria-label="Select all pending"
+                disabled={pending.length === 0}
+                checked={pending.length > 0 && pending.every((r) => selected.includes(r.id))}
+                onChange={(e) => setSelected(e.currentTarget.checked ? pending.map((r) => r.id) : [])}
+              />
+            ),
+            cell: (r: MediaRequest) => (
+              <Checkbox aria-label={`Select ${r.mediaTitle}`} disabled={r.status !== 'pending'} checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.currentTarget.checked)} />
+            ),
+          },
+        ]
+      : []),
+    { key: 'title', header: 'Title', cell: (r) => <RequestTitle r={r} /> },
+    { key: 'by', header: 'Requested by', cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
+    { key: 'seasons', header: 'Seasons', mono: true, cell: (r) => seasonsLabel(r.seasons) || '—' },
+    { key: 'status', header: 'Status', cell: (r) => <RequestStatusCell r={r} /> },
+    { key: 'created', header: 'Requested', mono: true, muted: true, cell: (r) => formatDateTime(r.createdAt) },
+    {
+      key: 'modified',
+      header: 'Modified',
+      mono: true,
+      muted: true,
+      cell: (r) => (
+        <>
+          {formatDateTime(r.updatedAt)}
+          {r.modifiedBy ? <div className="mk-title-cell__sub">by {r.modifiedBy.displayName ?? r.modifiedBy.username}</div> : null}
+        </>
+      ),
+    },
+    { key: 'actions', header: <span className="al-sr-only">Actions</span>, align: 'right', cell: (r) => <RequestActions r={r} manage={manage} /> },
+  ];
+
   return (
-    <Card flush>
-      {manage && selected.length > 0 ? (
-        <div className="bulk-bar" role="toolbar" aria-label="Bulk actions">
-          <span>{selected.length} selected</span>
-          <Button size="sm" variant="primary" loading={bulkApprove.isPending} onClick={() => runBulk('approve')}>
-            Approve selected
-          </Button>
-          <Button size="sm" variant="danger" loading={bulkDecline.isPending} onClick={() => runBulk('decline')}>
-            Decline selected
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setSelected([])}>
-            Clear
-          </Button>
-        </div>
-      ) : null}
+    <>
       {results.length === 0 ? (
-        <EmptyState title="No requests" />
-      ) : (
-        <div className="table-wrap">
-          <table className="table">
-            <thead>
-              <tr>
-                {manage ? (
-                  <th>
-                    <input
-                      type="checkbox"
-                      aria-label="Select all pending"
-                      disabled={pending.length === 0}
-                      checked={pending.length > 0 && pending.every((r) => selected.includes(r.id))}
-                      onChange={(e) => setSelected(e.currentTarget.checked ? pending.map((r) => r.id) : [])}
-                    />
-                  </th>
-                ) : null}
-                <th>Title</th>
-                <th>Requested by</th>
-                <th>Seasons</th>
-                <th>Status</th>
-                <th>Requested</th>
-                <th>Modified</th>
-                <th className="align-right">Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {results.map((r) => (
-                <RequestRow
-                  key={r.id}
-                  r={r}
-                  manage={manage}
-                  selected={selected.includes(r.id)}
-                  onSelect={(on) => setSelected((prev) => (on ? [...prev, r.id] : prev.filter((x) => x !== r.id)))}
-                />
-              ))}
-            </tbody>
-          </table>
+        <EmptyState title="No requests">Requests made from Discover show up here.</EmptyState>
+      ) : mobile ? (
+        <div className="mk-mlist">
+          {results.map((r) => (
+            <MobileRequestRow key={r.id} r={r} manage={manage} />
+          ))}
         </div>
+      ) : (
+        <Pane flush bare>
+          <Table columns={columns} rows={results} rowKey={(r) => r.id} density="rich" sortable={false} caption="Requests" />
+        </Pane>
       )}
       {pages > 1 ? (
-        <div className="pager">
-          <Button size="sm" disabled={page === 0} onClick={() => setPage(page - 1)}>
-            Previous
-          </Button>
-          <span className="pager-info">
-            Page {page + 1} of {pages}
-          </span>
-          <Button size="sm" disabled={page + 1 >= pages} onClick={() => setPage(page + 1)}>
-            Next
-          </Button>
+        <div className="mk-row mk-row--end" style={{ marginTop: 16 }}>
+          <Paginator page={page + 1} pageCount={pages} onPageChange={(p) => setPage(p - 1)} />
         </div>
       ) : null}
-    </Card>
+      {manage && selected.length > 0 ? (
+        <FloatBar count={selected.length}>
+          <Button variant="secondary" loading={bulkApprove.isPending} onClick={() => runBulk('approve')}>
+            Approve selected
+          </Button>
+          <FloatBarDivider />
+          <Button variant="danger" loading={bulkDecline.isPending} onClick={() => runBulk('decline')}>
+            Decline selected
+          </Button>
+          <Button variant="ghost" className="al-floatbar__cancel" onClick={() => setSelected([])}>
+            Cancel
+          </Button>
+        </FloatBar>
+      ) : null}
+    </>
   );
 }
 
+/** Poster + linked title + "1999 · Movie · 4K". Also used by the dashboard requests card. */
 export function RequestTitle({ r }: { r: MediaRequest }) {
   return (
-    <div className="request-row-title">
-      <Poster url={r.mediaPoster ?? undefined} title={r.mediaTitle} size="sm" />
-      <div>
-        <Link {...titleLink(r.type, r.mediaTmdbId)}>{r.mediaTitle}</Link>
-        <div className="muted small">
-          {[r.mediaYear, r.type === 'movie' ? 'Movie' : 'Series', r.is4k ? '4K' : null].filter(Boolean).join(' · ')}
-        </div>
+    <div className="mk-title-cell">
+      <Poster src={r.mediaPoster} title={r.mediaTitle} width={32} />
+      <div className="mk-title-cell__text">
+        <Link className="mk-link" {...titleLink(r.type, r.mediaTmdbId)}>
+          {r.mediaTitle}
+        </Link>
+        <span className="mk-title-cell__sub">
+          {r.mediaYear ? <span className="al-num">{r.mediaYear}</span> : null}
+          {r.mediaYear ? ' · ' : ''}
+          {[r.type === 'movie' ? 'Movie' : 'Series', r.is4k ? '4K' : null].filter(Boolean).join(' · ')}
+        </span>
       </div>
     </div>
   );
 }
 
-function RequestRow({ r, manage, selected, onSelect }: { r: MediaRequest; manage: boolean; selected: boolean; onSelect: (on: boolean) => void }) {
-  const approve = useApproveRequest();
-  const retry = useRetryRequest();
-  const del = useDeleteRequest();
+function RequestStatusCell({ r }: { r: MediaRequest }) {
+  return (
+    <div className="mk-stack-sm" style={{ gap: 4, alignItems: 'flex-start' }}>
+      <div className="mk-row" style={{ gap: 6 }}>
+        <StatusLabelChip label={REQUEST_STATUS_META[r.status].label} />
+        {r.status === 'approved' || r.status === 'completed' ? <StatusLabelChip label={MEDIA_STATUS_META[r.mediaStatus].label} /> : null}
+      </div>
+      {r.declineReason ? <span className="mk-title-cell__sub">{r.declineReason}</span> : null}
+      {r.failureReason ? <span className="mk-title-cell__sub" style={{ color: 'var(--al-danger-text)' }}>{r.failureReason}</span> : null}
+    </div>
+  );
+}
+
+function useRowDialogs() {
   const [declining, setDeclining] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  const status = REQUEST_STATUS_META[r.status];
+  return { declining, setDeclining, editing, setEditing, deleting, setDeleting };
+}
 
+function RequestActions({ r, manage }: { r: MediaRequest; manage: boolean }) {
+  const approve = useApproveRequest();
+  const retry = useRetryRequest();
+  const d = useRowDialogs();
   return (
-    <tr>
-      {manage ? (
-        <td>
-          <input type="checkbox" aria-label={`Select ${r.mediaTitle}`} disabled={r.status !== 'pending'} checked={selected} onChange={(e) => onSelect(e.currentTarget.checked)} />
-        </td>
+    <div className="mk-row mk-row--end">
+      {manage && r.status === 'pending' ? (
+        <>
+          <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate({ id: r.id })}>
+            Approve
+          </Button>
+          <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>
+            Decline
+          </Button>
+        </>
       ) : null}
-      <td>
-        <RequestTitle r={r} />
-      </td>
-      <td>{r.requestedBy.displayName ?? r.requestedBy.username}</td>
-      <td>{seasonsLabel(r.seasons) || '—'}</td>
-      <td>
-        <div className="chip-stack">
-          <Badge tone={status.tone}>{status.label}</Badge>
-          {r.status === 'approved' || r.status === 'completed' ? (
-            <Badge tone={MEDIA_STATUS_META[r.mediaStatus].tone}>{MEDIA_STATUS_META[r.mediaStatus].label}</Badge>
-          ) : null}
-          {r.declineReason ? <span className="muted small">{r.declineReason}</span> : null}
-          {r.failureReason ? <span className="text-error small">{r.failureReason}</span> : null}
+      {r.status === 'pending' && (manage || r.canRemove) ? (
+        <Button size="sm" variant="ghost" onClick={() => d.setEditing(true)}>
+          Edit
+        </Button>
+      ) : null}
+      {manage && r.status === 'failed' ? (
+        <Button size="sm" loading={retry.isPending} onClick={() => retry.mutate(r.id)}>
+          Retry
+        </Button>
+      ) : null}
+      {r.canRemove ? (
+        <Button size="sm" variant="ghost" onClick={() => d.setDeleting(true)}>
+          Delete
+        </Button>
+      ) : null}
+      <RowDialogs r={r} {...d} />
+    </div>
+  );
+}
+
+function RowDialogs({ r, declining, setDeclining, editing, setEditing, deleting, setDeleting }: { r: MediaRequest } & ReturnType<typeof useRowDialogs>) {
+  return (
+    <>
+      {declining ? <DeclineDialog request={r} onClose={() => setDeclining(false)} /> : null}
+      {editing ? <EditRequestDialog request={r} onClose={() => setEditing(false)} /> : null}
+      {deleting ? <DeleteRequestDialog request={r} onClose={() => setDeleting(false)} /> : null}
+    </>
+  );
+}
+
+/** Mobile row: swipe right reveals Delete; approve/decline stay visible for admins. */
+function MobileRequestRow({ r, manage }: { r: MediaRequest; manage: boolean }) {
+  const approve = useApproveRequest();
+  const d = useRowDialogs();
+  return (
+    <SwipeRow onDelete={r.canRemove ? () => d.setDeleting(true) : undefined} deleteLabel="Delete">
+      <div className="mk-mrow">
+        <div style={{ minWidth: 0 }}>
+          <RequestTitle r={r} />
+          <div style={{ marginTop: 6 }}>
+            <StatusLabelChip label={REQUEST_STATUS_META[r.status].label} />
+          </div>
         </div>
-      </td>
-      <td>{formatDateTime(r.createdAt)}</td>
-      <td>
-        {formatDateTime(r.updatedAt)}
-        {r.modifiedBy ? <div className="muted small">by {r.modifiedBy.displayName ?? r.modifiedBy.username}</div> : null}
-      </td>
-      <td className="align-right">
-        <div className="row row-end">
-          {manage && r.status === 'pending' ? (
-            <>
-              <Button size="sm" variant="primary" loading={approve.isPending} onClick={() => approve.mutate({ id: r.id })}>
-                Approve
-              </Button>
-              <Button size="sm" variant="danger" onClick={() => setDeclining(true)}>
-                Decline
-              </Button>
-            </>
-          ) : null}
-          {r.status === 'pending' && (manage || r.canRemove) ? (
-            <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-              Edit
+        {manage && r.status === 'pending' ? (
+          <div className="mk-stack-sm" style={{ gap: 6 }}>
+            <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate({ id: r.id })}>
+              Approve
             </Button>
-          ) : null}
-          {manage && r.status === 'failed' ? (
-            <Button size="sm" loading={retry.isPending} onClick={() => retry.mutate(r.id)}>
-              Retry
+            <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>
+              Decline
             </Button>
-          ) : null}
-          {r.canRemove ? (
-            <Button size="sm" variant="ghost" onClick={() => setDeleting(true)}>
-              Delete
-            </Button>
-          ) : null}
-        </div>
-        {declining ? <DeclineDialog request={r} onClose={() => setDeclining(false)} /> : null}
-        {editing ? <EditRequestDialog request={r} onClose={() => setEditing(false)} /> : null}
-        <ConfirmDialog
-          open={deleting}
-          title={`Delete the request for ${r.mediaTitle}?`}
-          onCancel={() => setDeleting(false)}
-          onConfirm={async () => {
-            await del.mutateAsync(r.id);
-            setDeleting(false);
-          }}
-        >
-          The title stays in the library if it was already added.
-        </ConfirmDialog>
-      </td>
-    </tr>
+          </div>
+        ) : null}
+      </div>
+      <RowDialogs r={r} {...d} />
+    </SwipeRow>
+  );
+}
+
+function DeleteRequestDialog({ request, onClose }: { request: MediaRequest; onClose: () => void }) {
+  const del = useDeleteRequest();
+  return (
+    <Modal
+      open
+      onClose={onClose}
+      title={`Delete the request for ${request.mediaTitle}?`}
+      size={440}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="danger" loading={del.isPending} onClick={() => del.mutate(request.id, { onSuccess: onClose })}>
+            Delete request
+          </Button>
+        </>
+      }
+    >
+      <p style={{ margin: 0 }}>The title stays in the library if it was already added.</p>
+    </Modal>
   );
 }
 
@@ -286,19 +344,25 @@ export function DeclineDialog({ request, onClose }: { request: MediaRequest; onC
       open
       onClose={onClose}
       title={`Decline ${request.mediaTitle}?`}
-      size="sm"
+      size={440}
       footer={
-        <EditorFooter
-          onCancel={onClose}
-          saveLabel="Decline"
-          saving={decline.isPending}
-          onSave={() => decline.mutate({ id: request.id, ...(reason.trim() ? { reason: reason.trim() } : {}) }, { onSuccess: onClose })}
-        />
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            variant="danger"
+            loading={decline.isPending}
+            onClick={() => decline.mutate({ id: request.id, ...(reason.trim() ? { reason: reason.trim() } : {}) }, { onSuccess: onClose })}
+          >
+            Decline request
+          </Button>
+        </>
       }
     >
-      <FormField label="Reason (optional)" hint="Shown to the requester.">
-        <textarea className="input textarea" rows={3} value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
-      </FormField>
+      <Field label="Reason (optional)" hint="Shown to the requester.">
+        <Textarea rows={3} value={reason} onChange={(e) => setReason(e.currentTarget.value)} />
+      </Field>
     </Modal>
   );
 }
@@ -336,28 +400,43 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
   };
 
   return (
-    <Modal open onClose={onClose} title={`Edit request: ${request.mediaTitle}`} footer={<EditorFooter onCancel={onClose} onSave={save} saving={update.isPending} />}>
-      <div className="stack-sm">
+    <Modal
+      open
+      onClose={onClose}
+      title={`Edit request: ${request.mediaTitle}`}
+      size={560}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={update.isPending} onClick={save}>
+            Save changes
+          </Button>
+        </>
+      }
+    >
+      <div className="mk-stack-sm">
         {isSeries ? (
-          <fieldset className="perm-group">
-            <legend>Seasons</legend>
-            <div className="check-grid">
+          <fieldset style={{ border: 0, padding: 0, margin: 0 }}>
+            <legend className="al-label" style={{ marginBottom: 10 }}>
+              Seasons
+            </legend>
+            <div className="mk-check-grid">
               {seasonChoices.map((n) => (
-                <label key={n} className="check">
-                  <input
-                    type="checkbox"
-                    checked={seasons.includes(n)}
-                    onChange={(e) => setSeasons((prev) => (e.currentTarget.checked ? [...prev, n] : prev.filter((x) => x !== n)))}
-                  />
-                  {n === 0 ? 'Specials' : `Season ${n}`}
-                </label>
+                <Checkbox
+                  key={n}
+                  label={n === 0 ? 'Specials' : `Season ${n}`}
+                  checked={seasons.includes(n)}
+                  onChange={(e) => setSeasons((prev) => (e.currentTarget.checked ? [...prev, n] : prev.filter((x) => x !== n)))}
+                />
               ))}
             </div>
           </fieldset>
         ) : null}
-        <FormField label="Root folder">
-          <Select value={rootFolderPath} onChange={(e) => setRootFolderPath(e.currentTarget.value)}>
-            <option value="">Default</option>
+        <FormRow label="Root folder" htmlFor="edit-request-root">
+          <Select id="edit-request-root" value={rootFolderPath} onChange={(e) => setRootFolderPath(e.currentTarget.value)}>
+            <option value="">Default folder</option>
             {(rootFolders.data ?? [])
               .filter((f) => f.mediaType === request.type)
               .map((f) => (
@@ -366,22 +445,22 @@ function EditRequestDialog({ request, onClose }: { request: MediaRequest; onClos
                 </option>
               ))}
           </Select>
-        </FormField>
-        <FormField label="Quality profile">
-          <Select value={profileId} onChange={(e) => setProfileId(e.currentTarget.value)}>
-            <option value="">Default</option>
+        </FormRow>
+        <FormRow label="Quality target" htmlFor="edit-request-profile">
+          <Select id="edit-request-profile" value={profileId} onChange={(e) => setProfileId(e.currentTarget.value)}>
+            <option value="">Default profile</option>
             {(profiles.data ?? []).map((p) => (
               <option key={p.id} value={String(p.id)}>
                 {p.name}
               </option>
             ))}
           </Select>
-        </FormField>
-        <FormField label="Tags">
+        </FormRow>
+        <FormRow label="Tags">
           <TagPicker value={tags} onChange={setTags} />
-        </FormField>
+        </FormRow>
         {error ? (
-          <p className="inline-error" role="alert">
+          <p className="al-field__error" role="alert" style={{ margin: 0 }}>
             {error}
           </p>
         ) : null}

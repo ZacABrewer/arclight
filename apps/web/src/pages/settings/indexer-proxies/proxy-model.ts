@@ -1,5 +1,6 @@
 import type { IndexerProxy, IndexerProxyCreate, IndexerProxyTestResult, IndexerProxyType } from '@arclight/shared';
-import { INDEXER_PROXY_SECRET_MASK } from '@arclight/shared';
+import { INDEXER_PROXY_SECRET_MASK, IndexerProxyTestResult as IndexerProxyTestResultSchema } from '@arclight/shared';
+import { request } from '../../../api/client.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import type { TestOutcome } from '../../../components/forms/test-result.js';
 
@@ -79,3 +80,8 @@ export function proxyAddress(p: Pick<IndexerProxy, 'host' | 'port'>): string {
 }
 
 export const hasStoredPassword = (p: Pick<IndexerProxy, 'password'>) => p.password === INDEXER_PROXY_SECRET_MASK;
+
+/** Test a saved proxy with its stored password (POST /indexerproxy/:id/test). */
+export function testSavedProxy(id: number): Promise<IndexerProxyTestResult> {
+  return request(`/indexerproxy/${id}/test`, IndexerProxyTestResultSchema, { method: 'POST', json: {} });
+}

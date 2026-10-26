@@ -1,12 +1,12 @@
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { PROFILE_LANGUAGES, type CustomFormat, type QualityProfile, type QualityProfileInput } from '@arclight/shared';
-import { FormField, Input, Select, Toggle } from '../../../components/form.js';
+import { Field, Input, Modal, ScoreTag, Select, Table, Toggle, type Column } from '../../../arclight/index.js';
 import { ConfirmDialog, inUseMessage } from '../../../components/forms/confirm-dialog.js';
-import { Modal } from '../../../components/modal.js';
 import { useDeleteQualityProfile, useSaveQualityProfile } from '../../../hooks/profiles.js';
-import { EditorFooter, SaveError } from '../shared.js';
+import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { QualityItemList } from './quality-item-list.js';
 import { cutoffOptions, formatScore, fromDisplay, setFormatScore, toDisplay, validateProfile, type ProfileErrors } from './quality-profile-model.js';
+import './profiles.css';
 
 export interface QualityProfileEditorProps {
   /** Existing profile, or null to create one from `template`. */
@@ -30,6 +30,7 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
   const [confirmDelete, setConfirmDelete] = useState(false);
   const save = useSaveQualityProfile();
   const remove = useDeleteQualityProfile();
+  const upgradeId = useId();
 
   const set = <K extends keyof QualityProfileInput>(key: K, value: QualityProfileInput[K]) => {
     const next = { ...draft, [key]: value };
@@ -46,12 +47,37 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
 
   const cutoffs = cutoffOptions(draft.items);
 
+  const scoreColumns: Column<CustomFormat>[] = [
+    { key: 'name', header: 'Custom format', cell: (cf) => cf.name },
+    {
+      key: 'preview',
+      header: 'Effect',
+      cell: (cf) => <ScoreTag name={cf.name} score={formatScore(draft.formatItems, cf.id)} />,
+    },
+    {
+      key: 'score',
+      header: 'Score',
+      align: 'right',
+      width: '140px',
+      cell: (cf) => (
+        <Input
+          type="number"
+          mono
+          className="al-score-input"
+          aria-label={`Score for ${cf.name}`}
+          value={formatScore(draft.formatItems, cf.id)}
+          onChange={(e) => set('formatItems', setFormatScore(draft.formatItems, cf.id, intOr(e.currentTarget.value, 0)))}
+        />
+      ),
+    },
+  ];
+
   return (
     <>
       <Modal
         open
         onClose={onClose}
-        size="lg"
+        size={640}
         title={profile ? `Edit ${profile.name}` : 'Add quality profile'}
         footer={
           <EditorFooter
@@ -59,112 +85,90 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
             onSave={submit}
             saving={save.isPending}
             onDelete={profile ? () => setConfirmDelete(true) : undefined}
+            deleteLabel="Delete profile"
           />
         }
       >
-        <div className="editor-columns">
-          <div>
-            <FormField label="Name" error={errors.name}>
-              <Input value={draft.name} onChange={(e) => set('name', e.currentTarget.value)} />
-            </FormField>
-            <FormField label="Upgrades allowed" hint="Keep grabbing better releases until the cutoff is met.">
-              <Toggle checked={draft.upgradeAllowed} onChange={(e) => set('upgradeAllowed', e.currentTarget.checked)} />
-            </FormField>
-            <FormField label="Upgrade until" hint="Stop upgrading once this quality is reached." error={errors.cutoff}>
-              <Select
-                value={String(draft.cutoff)}
-                onChange={(e) => set('cutoff', Number(e.currentTarget.value))}
-                options={cutoffs.map((o) => ({ value: String(o.value), label: o.label }))}
-                {...(cutoffs.some((o) => o.value === draft.cutoff) ? {} : { placeholder: 'Choose an allowed quality' })}
-              />
-            </FormField>
-            <FormField label="Minimum custom format score" hint="Releases scoring below this are rejected.">
-              <Input type="number" value={draft.minFormatScore} onChange={(e) => set('minFormatScore', intOr(e.currentTarget.value, 0))} />
-            </FormField>
-            <FormField label="Upgrade until custom format score" hint="Stop upgrading once a file reaches this score.">
-              <Input
-                type="number"
-                value={draft.cutoffFormatScore}
-                onChange={(e) => set('cutoffFormatScore', intOr(e.currentTarget.value, 0))}
-              />
-            </FormField>
-            <FormField
-              label="Minimum custom format score increment"
-              hint="An upgrade must beat the current file's score by at least this much."
-              error={errors.minUpgradeFormatScore}
-            >
-              <Input
-                type="number"
-                min={1}
-                value={draft.minUpgradeFormatScore}
-                onChange={(e) => set('minUpgradeFormatScore', intOr(e.currentTarget.value, 1))}
-              />
-            </FormField>
-            <FormField label="Languages" hint="Accepted languages. None selected means any language.">
-              <div className="chip-group" role="group" aria-label="Languages">
-                {PROFILE_LANGUAGES.map((l) => {
-                  const on = draft.languages.includes(l.code);
-                  return (
-                    <button
-                      key={l.code}
-                      type="button"
-                      className={`chip ${on ? 'chip-on' : ''}`}
-                      aria-pressed={on}
-                      onClick={() => set('languages', on ? draft.languages.filter((c) => c !== l.code) : [...draft.languages, l.code])}
-                    >
-                      {l.name}
-                    </button>
-                  );
-                })}
-              </div>
-            </FormField>
-          </div>
-          <div>
-            <h3 className="section-title">Qualities</h3>
+        <div className="al-profile-editor">
+          <Field label="Name" error={errors.name}>
+            <Input value={draft.name} onChange={(e) => set('name', e.currentTarget.value)} />
+          </Field>
+          <Toggle
+            id={upgradeId}
+            checked={draft.upgradeAllowed}
+            label="Upgrades allowed: keep grabbing better releases until the cutoff is met"
+            onChange={(e) => set('upgradeAllowed', e.currentTarget.checked)}
+          />
+          <Field label="Upgrade until" hint="Stop upgrading once this quality is reached. The CUTOFF line marks it below." error={errors.cutoff}>
+            <Select
+              value={String(draft.cutoff)}
+              onChange={(e) => set('cutoff', Number(e.currentTarget.value))}
+              options={cutoffs.map((o) => ({ value: String(o.value), label: o.label }))}
+              {...(cutoffs.some((o) => o.value === draft.cutoff) ? {} : { placeholder: 'Choose an allowed quality' })}
+            />
+          </Field>
+
+          <SettingsSection label="Qualities">
             {errors.items ? (
-              <p className="inline-error" role="alert">
+              <p className="al-inline-error" role="alert">
                 {errors.items}
               </p>
             ) : null}
-            <QualityItemList items={draft.items} onChange={(items) => set('items', items)} />
-          </div>
-        </div>
+            <QualityItemList items={draft.items} cutoff={draft.cutoff} onChange={(items) => set('items', items)} />
+          </SettingsSection>
 
-        <h3 className="section-title">Custom format scores</h3>
-        {customFormats.length === 0 ? (
-          <p className="muted">No custom formats yet. Add some under Settings → Custom Formats.</p>
-        ) : (
-          <table className="table table-compact">
-            <thead>
-              <tr>
-                <th>Custom format</th>
-                <th className="align-right">Score</th>
-              </tr>
-            </thead>
-            <tbody>
-              {customFormats.map((cf) => (
-                <tr key={cf.id}>
-                  <td>{cf.name}</td>
-                  <td className="align-right">
-                    <Input
-                      type="number"
-                      className="input-narrow"
-                      aria-label={`Score for ${cf.name}`}
-                      value={formatScore(draft.formatItems, cf.id)}
-                      onChange={(e) => set('formatItems', setFormatScore(draft.formatItems, cf.id, intOr(e.currentTarget.value, 0)))}
-                    />
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-        <SaveError error={save.error} />
+          <SettingsSection label="Custom format scores">
+            <div className="al-profile-editor__scores">
+              <Field label="Minimum score" hint="Releases scoring below this are rejected.">
+                <Input type="number" mono value={draft.minFormatScore} onChange={(e) => set('minFormatScore', intOr(e.currentTarget.value, 0))} />
+              </Field>
+              <Field label="Upgrade until score" hint="Stop upgrading once a file reaches this score.">
+                <Input type="number" mono value={draft.cutoffFormatScore} onChange={(e) => set('cutoffFormatScore', intOr(e.currentTarget.value, 0))} />
+              </Field>
+              <Field label="Minimum increment" hint="An upgrade must beat the current score by this much." error={errors.minUpgradeFormatScore}>
+                <Input
+                  type="number"
+                  mono
+                  min={1}
+                  value={draft.minUpgradeFormatScore}
+                  onChange={(e) => set('minUpgradeFormatScore', intOr(e.currentTarget.value, 1))}
+                />
+              </Field>
+            </div>
+            {customFormats.length === 0 ? (
+              <p className="al-muted">No custom formats yet. Add some under Settings → Custom formats.</p>
+            ) : (
+              <Table columns={scoreColumns} rows={customFormats} rowKey={(cf) => cf.id} caption="Custom format scores" />
+            )}
+          </SettingsSection>
+
+          <SettingsSection label="Languages">
+            <p className="al-caption">Accepted languages. None selected means any language.</p>
+            <div className="al-tag-toggles" role="group" aria-label="Languages">
+              {PROFILE_LANGUAGES.map((l) => {
+                const on = draft.languages.includes(l.code);
+                return (
+                  <button
+                    key={l.code}
+                    type="button"
+                    className="al-tag al-tag-toggle"
+                    aria-pressed={on}
+                    onClick={() => set('languages', on ? draft.languages.filter((c) => c !== l.code) : [...draft.languages, l.code])}
+                  >
+                    {l.name}
+                  </button>
+                );
+              })}
+            </div>
+          </SettingsSection>
+          <SaveError error={save.error} />
+        </div>
       </Modal>
       {profile ? (
         <ConfirmDialog
           open={confirmDelete}
           title={`Delete ${profile.name}?`}
+          confirmLabel="Delete profile"
           onCancel={() => setConfirmDelete(false)}
           describeError={(err) => inUseMessage(err, 'quality profile')}
           onConfirm={async () => {

@@ -1,0 +1,39 @@
+/* Arclight app shell additions (layered on styles/arclight/*). Square corners only. */
+
+/* utilities the legacy page CSS expected from the old base.css */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.muted { color: var(--al-text-4); }
+html, body, #root { min-height: 100%; }
+body { font-size: 14px; line-height: 1.45; }
+a { color: var(--al-cyan); text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+.al-skip-link { position: absolute; left: 8px; top: -100px; z-index: 120; padding: 8px 12px; background: var(--al-cyan); color: var(--al-cyan-ink); font-weight: 600; }
+.al-skip-link:focus { top: 8px; }
+
+/* restart banner + section tabs sit at the top of the content */
+.al-shell-banner { margin-bottom: 20px; }
+.al-section-nav { margin: -12px 0 20px; }
+.al-section-nav .al-tabs { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.al-section-nav .al-tabs > a { flex: none; padding: 0 0 8px; border-bottom: 2px solid transparent; font: 500 14px var(--al-font); color: var(--al-text-4); white-space: nowrap; text-decoration: none; }
+.al-section-nav .al-tabs > a:hover { color: var(--al-text-2); }
+.al-section-nav .al-tabs > a[aria-current="page"] { color: var(--al-text-1); border-bottom-color: var(--al-cyan); }
+
+/* mobile: search icon replaces the underline field */
+.al-topbar__search-icon { display: none; }
+@media (max-width: 767.98px) {
+  .al-topbar__search-icon { display: inline-flex; margin-left: auto; }
+  .al-topbar { gap: 12px; }
+  .al-topbar__status { gap: 12px; }
+}
+
+/* mobile "More" drawer */
+.al-more-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; }
+.al-more-list__item { display: flex; align-items: center; min-height: 44px; padding: 0 4px; border-bottom: 1px solid var(--al-line-1); color: var(--al-text-2); font-size: 15px; }
+.al-more-list__item:hover { color: var(--al-text-1); background: var(--al-cyan-a06); text-decoration: none; }
+
+/* no element in the shell may widen the page on phones */
+@media (max-width: 767.98px) {
+  .al-app { overflow-x: clip; }
+  .al-content { max-width: 100vw; }
+}

@@ -1,0 +1,24 @@
+/* Arclight look for MultiSelect and EntityPicker (square, field-tinted, mono-free labels). */
+.mt-multi,
+.mt-entity { width: 220px; max-width: 100%; }
+.mt-multi .al-selectmenu__button,
+.mt-entity .al-selectmenu__button { min-height: 44px; }
+@media (min-width: 768px) {
+  .mt-multi .al-selectmenu__button,
+  .mt-entity .al-selectmenu__button { min-height: 40px; }
+}
+.mt-multi__summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.mt-multi__summary--empty,
+.mt-entity__placeholder { color: var(--al-text-4); }
+.mt-multi__panel { display: flex; flex-direction: column; padding: 4px 0; }
+.mt-multi__option { min-height: 36px; padding: 0 12px; align-items: center; }
+.mt-multi__option:hover { background: var(--al-cyan-a06); }
+.mt-multi__option--child { padding-left: 32px; }
+.mt-multi__clear { align-self: flex-start; margin: 4px 12px; padding: 0; border: 0; background: none; font: 13px var(--al-font); color: var(--al-cyan); cursor: pointer; }
+.mt-multi__none,
+.mt-entity__none { padding: 9px 12px; font-size: 13px; color: var(--al-text-4); }
+.mt-entity__pop { position: absolute; left: 0; right: 0; top: 100%; z-index: 70; display: flex; flex-direction: column; gap: 0;
+  border: 1px solid var(--al-line-3); border-top: 0; background: rgba(2, 10, 14, 0.95); }
+.mt-entity__pop .al-input { border-width: 0 0 1px; }
+.mt-entity__pop .al-listbox { position: static; border: 0; }
+.mt-entity__detail { margin-left: 6px; color: var(--al-text-4); font-family: var(--al-mono); font-size: 12px; }

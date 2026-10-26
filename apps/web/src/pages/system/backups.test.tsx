@@ -113,7 +113,7 @@ describe('System → Backups', () => {
   it('creates a backup now and refreshes the list', async () => {
     renderWith(<SystemBackupsPage />);
     await rowOf(backups[0]!.name);
-    fireEvent.click(screen.getByRole('button', { name: 'Back up now' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Create backup' }));
     expect(await screen.findByText('arclight_manual_2026.10.25_05.00.00.zip')).toBeTruthy();
     expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/system/backup')).toHaveLength(1);
   });
@@ -124,7 +124,7 @@ describe('System → Backups', () => {
     fireEvent.click(within(row).getByRole('button', { name: `Restore ${backups[1]!.name}` }));
     const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
     expect(within(dialog).getByText(/must be restarted/)).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === `/api/v1/system/backup/restore/${backups[1]!.id}`)).toBe(true));
     await waitFor(() => expect(toasts.list().some((t) => t.title === 'Backup restored')).toBe(true));
   });
@@ -136,7 +136,7 @@ describe('System → Backups', () => {
     const row = await rowOf(backups[0]!.name);
     fireEvent.click(within(row).getByRole('button', { name: `Restore ${backups[0]!.name}` }));
     const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
     expect((await within(dialog).findByRole('alert')).textContent).toContain('newer Arclight version');
   });
 
@@ -147,7 +147,7 @@ describe('System → Backups', () => {
     fireEvent.change(screen.getByTestId('backup-upload'), { target: { files: [file] } });
     const dialog = await screen.findByRole('dialog', { name: 'Restore backup' });
     expect(within(dialog).getByText('old.zip')).toBeTruthy();
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Restore backup' }));
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/system/backup/restore/upload')).toBe(true));
     const upload = calls.find((c) => c.url === '/api/v1/system/backup/restore/upload')!;
     expect(upload.body).toBeInstanceOf(FormData);
@@ -159,7 +159,7 @@ describe('System → Backups', () => {
     const row = await rowOf(backups[1]!.name);
     fireEvent.click(within(row).getByRole('button', { name: `Delete ${backups[1]!.name}` }));
     const dialog = await screen.findByRole('dialog', { name: 'Delete backup' });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete backup' }));
     await waitFor(() => expect(screen.queryByText(backups[1]!.name)).toBeNull());
     expect(calls.some((c) => c.method === 'DELETE' && c.url === `/api/v1/system/backup/${backups[1]!.id}`)).toBe(true);
   });
@@ -176,7 +176,7 @@ describe('System → Backups', () => {
 
     fireEvent.change(hour, { target: { value: '2' } });
     fireEvent.change(within(form).getByLabelText('Keep at most'), { target: { value: '3' } });
-    fireEvent.click(within(form).getByRole('button', { name: 'Save' }));
+    fireEvent.click(within(form).getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(settings).toEqual({ folder: '', intervalDays: 1, hour: 2, retentionCount: 3, retentionDays: 28 });
   });

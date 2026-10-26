@@ -125,32 +125,59 @@ export class Scheduler {
   async run(name: string, trigger: JobTrigger): Promise<Job> {
     const def = this.definitions.get(name);
     if (!def) throw new Error(`unknown job: ${name}`);
-    if (this.running.has(name)) {
-      const row = this.insert({ name, trigger, status: 'cancelled', message: 'already running' });
-      this.bus.publish({ type: 'job', job: row });
-      return row;
-    }
-
-    const ctrl = new AbortController();
-    this.running.set(name, ctrl);
-    let job = this.insert({ name, trigger, status: 'running', startedAt: now() });
-    this.bus.publish({ type: 'job', job });
-    const log = this.log.child({ job: name, jobId: job.id });
-
-    try {
-      const message = await def.handler({ signal: ctrl.signal, log });
-      job = this.finish(job.id, 'completed', message ?? null);
-    } catch (err) {
-      log.error({ err }, 'job failed');
-      job = this.finish(job.id, ctrl.signal.aborted ? 'cancelled' : 'failed', errorMessage(err));
-    } finally {
-      this.running.delete(name);
+    return this.execute(name, name, trigger, def.handler, () => {
       if (def.cron) {
         this.db.update(schema.scheduledJobs).set({ lastRun: now() }).where(eq(schema.scheduledJobs.name, name)).run();
       }
+    }).done;
+  }
+
+  /**
+   * Run a one-off task as a job without registering it: it gets a `jobs` row and `job` bus
+   * events like any registered job, so it shows in GET /jobs and the live UI. Returns the
+   * initial row (status `running`, or `cancelled` when a task with the same `key` is already
+   * running) at once, plus a promise for the final row. `key` (default: the name) scopes the
+   * one-at-a-time rule, e.g. `RefreshSeriesItem:12` so refreshes of different series overlap.
+   */
+  runTask(name: string, trigger: JobTrigger, handler: JobHandler, opts: { key?: string } = {}): { job: Job; done: Promise<Job> } {
+    return this.execute(opts.key ?? name, name, trigger, handler);
+  }
+
+  private execute(
+    key: string,
+    name: string,
+    trigger: JobTrigger,
+    handler: JobHandler,
+    onSettled?: () => void,
+  ): { job: Job; done: Promise<Job> } {
+    if (this.running.has(key)) {
+      const row = this.insert({ name, trigger, status: 'cancelled', message: 'already running' });
+      this.bus.publish({ type: 'job', job: row });
+      return { job: row, done: Promise.resolve(row) };
     }
-    this.bus.publish({ type: 'job', job });
-    return job;
+
+    const ctrl = new AbortController();
+    this.running.set(key, ctrl);
+    const started = this.insert({ name, trigger, status: 'running', startedAt: now() });
+    this.bus.publish({ type: 'job', job: started });
+    const log = this.log.child({ job: name, jobId: started.id });
+
+    const done = (async () => {
+      let job: Job;
+      try {
+        const message = await handler({ signal: ctrl.signal, log });
+        job = this.finish(started.id, 'completed', message ?? null);
+      } catch (err) {
+        log.error({ err }, 'job failed');
+        job = this.finish(started.id, ctrl.signal.aborted ? 'cancelled' : 'failed', errorMessage(err));
+      } finally {
+        this.running.delete(key);
+        onSettled?.();
+      }
+      this.bus.publish({ type: 'job', job });
+      return job;
+    })();
+    return { job: started, done };
   }
 
   private insert(values: {

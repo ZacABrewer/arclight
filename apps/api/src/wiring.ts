@@ -2,7 +2,7 @@ import { statfs } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { desc, eq, inArray } from 'drizzle-orm';
 import type { MediaFileInfo, NotificationEvent, ReleaseInfo } from '@arclight/notifications';
-import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, MediaFile } from '@arclight/shared';
+import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, Job, MediaFile } from '@arclight/shared';
 import type { AppContext } from './app.js';
 import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
@@ -24,6 +24,8 @@ import {
   type ImportsDeps,
 } from './modules/imports/index.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
+import type { LibraryCommands, LibraryCommandTarget } from './modules/library/index.js';
+import { metadataRefresherFor } from './modules/metadata/index.js';
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
   releasesServiceFor,
@@ -70,6 +72,14 @@ import { getSection } from './modules/settings/service.js';
 //   wired: history.failTracked already wrote the row and the priority-100 handler is the one
 //   re-search path (wiring both would search twice).
 //
+// * Redownload: POST /history/:id/redownload -> history.redownload -> the handler registered
+//   here, which runs releases.searchFor for the record's episodes/movie inside an ad-hoc
+//   `HistoryRedownload` job (Scheduler.runTask) and hands the job back for the 202 answer.
+//
+// * Library commands: the bulk editor's `refresh` / `search` flags and "search on add" call
+//   libraryCommands below: refresh -> the metadata module's MetadataRefresher, search ->
+//   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` job.
+//
 // * Library deletes: the history and blocklist modules subscribe to `library deleted` on the
 //   bus themselves; the library routes publish added/updated/deleted/fileDeleted and the
 //   imports module publishes fileAdded.
@@ -87,12 +97,18 @@ export interface WiringOptions {
 export interface Wiring {
   releases: ReleasesDeps;
   imports: ImportsDeps;
+  /** Bulk-editor refresh/search and search-on-add for the library routes. */
+  library: LibraryCommands;
   /** Unsubscribes the hooks registered on history and download-clients. */
   dispose(): void;
 }
 
 /** Priority of the automatic re-search handler on history's download-failed pipeline. */
 export const REDOWNLOAD_PRIORITY = 100;
+
+export const REDOWNLOAD_JOB = 'HistoryRedownload';
+export const SERIES_SEARCH_JOB = 'SeriesSearch';
+export const MOVIE_SEARCH_JOB = 'MovieSearch';
 
 export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wiring {
   const log = ctx.log.child({ module: 'wiring' });
@@ -112,6 +128,18 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
       .catch((err: unknown) => log.warn({ err, target }, 'automatic re-search after failed download failed'));
   }, REDOWNLOAD_PRIORITY));
 
+  // Manual redownload of a history record: one search, run as a job so the UI can follow it.
+  const history = historyServiceFor(ctx);
+  history.setRedownloadHandler((target, record) => {
+    const search = searchTargetFor(target);
+    if (!search) throw new HistoryError('VALIDATION', `history item ${record.id} has no episodes to search for`);
+    return ctx.scheduler.runTask(REDOWNLOAD_JOB, 'manual', async ({ signal }) => {
+      const summary = await releasesServiceFor(ctx).searchFor(search, { signal });
+      return `searched for "${record.sourceTitle}": ${summary.releases} releases, ${summary.grabbed.length} grabbed`;
+    }, { key: `${REDOWNLOAD_JOB}:${record.id}` }).job;
+  });
+  disposers.push(() => history.setRedownloadHandler(undefined));
+
   // Queue removal with "blocklist" goes through the same failed pipeline.
   disposers.push(getDownloadClientsService(ctx).onBlocklist(async (item, { skipRedownload }) => {
     await failTrackedDownload(ctx, item, { source: 'Queue', skipRedownload });
@@ -127,10 +155,56 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   return {
     releases: releasesDeps(ctx),
     imports: importsDeps(ctx),
+    library: libraryCommands(ctx),
     dispose: () => {
       for (const d of disposers.splice(0)) d();
     },
   };
+}
+
+// ---------------------------------------------------------------------------------------
+// library commands
+// ---------------------------------------------------------------------------------------
+
+export function libraryCommands(ctx: AppContext): LibraryCommands {
+  const log = ctx.log.child({ module: 'wiring' });
+  return {
+    refresh: (target) => {
+      const refresher = metadataRefresherFor(ctx);
+      if (!refresher) {
+        log.warn('metadata module not registered; refresh skipped');
+        return;
+      }
+      if (target.seriesIds?.length) refresher.series(target.seriesIds);
+      if (target.movieIds?.length) refresher.movies(target.movieIds);
+    },
+    search: (target) => {
+      startLibrarySearch(ctx, target);
+    },
+  };
+}
+
+/** One job per media type that searches each item in turn; returns the started jobs. */
+export function startLibrarySearch(ctx: AppContext, target: LibraryCommandTarget): Array<{ job: Job; done: Promise<Job> }> {
+  const started: Array<{ job: Job; done: Promise<Job> }> = [];
+  const run = (name: string, targets: SearchTarget[]) =>
+    ctx.scheduler.runTask(name, 'manual', async ({ signal, log }) => {
+      let grabbed = 0;
+      let failed = 0;
+      for (const t of targets) {
+        if (signal.aborted) break;
+        try {
+          grabbed += (await releasesServiceFor(ctx).searchFor(t, { userInvoked: true, signal })).grabbed.length;
+        } catch (err) {
+          failed++;
+          log.warn({ err, target: t }, 'library search failed');
+        }
+      }
+      return `searched ${targets.length}, grabbed ${grabbed}${failed ? `, ${failed} failed` : ''}`;
+    }, { key: `${name}:${targets.map((t) => ('movieId' in t ? t.movieId : t.seriesId)).join(',')}` });
+  if (target.seriesIds?.length) started.push(run(SERIES_SEARCH_JOB, target.seriesIds.map((seriesId) => ({ seriesId }))));
+  if (target.movieIds?.length) started.push(run(MOVIE_SEARCH_JOB, target.movieIds.map((movieId) => ({ movieId }))));
+  return started;
 }
 
 // ---------------------------------------------------------------------------------------

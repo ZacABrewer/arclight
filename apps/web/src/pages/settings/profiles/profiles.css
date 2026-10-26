@@ -1,0 +1,42 @@
+/* Profiles: quality list with the cutoff marker, profile cards, delay table. Square corners. */
+.al-profile-editor { display: flex; flex-direction: column; gap: 18px; min-width: 0; }
+.al-profile-editor__scores { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.al-score-input { max-width: 120px; text-align: right; margin-left: auto; }
+
+/* Quality list */
+.al-qlist { display: flex; flex-direction: column; gap: 10px; }
+.al-qlist__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.al-qlist__hint { margin: 0; }
+.al-qlist__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.al-qlist__row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 8px 0 10px; border: 1px solid var(--al-line-1); background: rgba(0,0,0,.2); font-size: 14px; cursor: grab; }
+.al-qlist__row.is-off { color: var(--al-text-4); }
+.al-qlist__row.is-over { border-color: var(--al-cyan); background: var(--al-cyan-a06); }
+.al-qlist__row.is-cutoff { border-bottom: 2px solid var(--al-cyan); }
+.al-qlist__handle { font-family: var(--al-mono); color: var(--al-text-5); letter-spacing: -2px; user-select: none; width: 14px; }
+.al-qlist__name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.al-qlist__name .al-num { font-size: 13px; }
+.al-qlist__members { font-size: 12px; color: var(--al-text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-qlist__cutoff { font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; color: var(--al-cyan); }
+.al-qlist__actions { display: flex; align-items: center; gap: 2px; }
+.al-qlist__move { min-width: 32px; font-family: var(--al-mono); }
+.al-qlist__group { display: flex; gap: 8px; align-items: center; }
+.al-qlist__group .al-input { flex: 1; min-width: 0; }
+
+/* Cards */
+.al-profile-card__cutoff,
+.al-profile-card__terms { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; width: 100%; }
+.al-profile-card__tags { display: flex; gap: 6px; flex-wrap: wrap; width: 100%; }
+.al-profile-card__label { font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; text-transform: uppercase; color: var(--al-text-5); margin-right: 4px; }
+.al-profile-card__terms[data-negative] .al-tag { border-color: var(--al-danger-line); color: var(--al-danger-text); }
+
+/* Delay table */
+.al-delay-table tbody tr[draggable='true'] { cursor: grab; }
+.al-delay-table tbody tr.is-over td { background: var(--al-cyan-a06); box-shadow: inset 0 1px 0 var(--al-cyan); }
+.al-chip-row { display: inline-flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.al-row-actions { display: inline-flex; gap: 2px; align-items: center; justify-content: flex-end; }
+
+@media (max-width: 767px) {
+  .al-profile-editor__scores { grid-template-columns: minmax(0, 1fr); }
+  .al-qlist__row { min-height: 48px; flex-wrap: wrap; padding: 4px 8px; }
+  .al-qlist__move, .al-row-actions .al-btn { min-width: 44px; min-height: 44px; }
+}

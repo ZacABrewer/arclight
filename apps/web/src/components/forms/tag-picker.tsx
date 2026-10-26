@@ -11,26 +11,26 @@ export interface TagPickerProps {
   onChange: (ids: number[]) => void;
 }
 
-/** Toggle chips for every known tag. Empty selection means "applies to everything". */
+/** Toggle tags for every known tag. Empty selection means "applies to everything". */
 export function TagPicker({ id, value, onChange }: TagPickerProps) {
   const tags = useQuery({ queryKey: TAGS_KEY, queryFn: libraryApi.tags.list, staleTime: 60_000 });
-  if (tags.isPending) return <span className="muted">Loading tags…</span>;
+  if (tags.isPending) return <span className="al-caption">Loading tags…</span>;
   if (tags.isError || tags.data.length === 0) {
     return (
-      <span id={id} className="muted">
-        No tags defined yet.
+      <span id={id} className="al-caption">
+        No tags yet.
       </span>
     );
   }
   return (
-    <div id={id} className="chip-group" role="group" aria-label="Tags">
+    <div id={id} className="al-tag-toggles" role="group" aria-label="Tags">
       {tags.data.map((t) => {
         const on = value.includes(t.id);
         return (
           <button
             key={t.id}
             type="button"
-            className={`chip ${on ? 'chip-on' : ''}`}
+            className="al-tag al-tag-toggle"
             aria-pressed={on}
             onClick={() => onChange(on ? value.filter((v) => v !== t.id) : [...value, t.id])}
           >

@@ -1,6 +1,6 @@
 import type { BuiltinCategoryPath } from '@arclight/shared';
-import { Button } from '../../../components/button.js';
-import { Input } from '../../../components/form.js';
+import { Button, Input } from '../../../arclight/index.js';
+import './download-clients.css';
 import type { FieldRendererProps } from '../../../components/forms/types.js';
 
 // Editor for the Built-in client's `settings.categories`: an array of {name, savePath} rows.
@@ -26,14 +26,15 @@ export function CategoriesEditor({ id, value, onChange }: FieldRendererProps) {
   const rows = toCategoryRows(value);
   const update = (i: number, patch: Partial<BuiltinCategoryPath>) => onChange(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
-    <div id={id} className="stack-sm" role="group" aria-label="Category folders">
-      {rows.length === 0 ? <p className="field-hint">No per-category folders.</p> : null}
+    <div id={id} className="al-dc-cats" role="group" aria-label="Category folders">
+      {rows.length === 0 ? <p className="al-caption">No per-category folders.</p> : null}
       {rows.map((row, i) => (
-        <div key={i} className="chip-stack">
+        <div key={i} className="al-dc-cats__row">
           <Input aria-label={`Category ${i + 1} name`} placeholder="category" value={row.name} onChange={(e) => update(i, { name: e.currentTarget.value })} />
           <Input
             aria-label={`Category ${i + 1} save path`}
             placeholder="/downloads/category"
+            mono
             value={row.savePath}
             onChange={(e) => update(i, { savePath: e.currentTarget.value })}
           />
@@ -43,7 +44,7 @@ export function CategoriesEditor({ id, value, onChange }: FieldRendererProps) {
         </div>
       ))}
       <div>
-        <Button size="sm" onClick={() => onChange([...rows, { name: '', savePath: '' }])}>
+        <Button size="sm" variant="secondary" onClick={() => onChange([...rows, { name: '', savePath: '' }])}>
           Add category
         </Button>
       </div>

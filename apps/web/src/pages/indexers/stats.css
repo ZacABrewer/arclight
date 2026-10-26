@@ -1,0 +1,10 @@
+/* Indexer stats (Arclight): hand-drawn SVG charts, 1px cyan, no glow, square. */
+.mt-stats { display: flex; flex-direction: column; gap: 20px; }
+.mt-stats__charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 20px; }
+.mt-chart { display: block; width: 100%; height: auto; overflow: visible; }
+.mt-chart-figure { margin: 0; }
+.mt-chart__legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-top: 10px; font-size: 12px; color: var(--al-text-4); }
+.mt-chart__key { display: inline-flex; align-items: center; gap: 6px; }
+@media (max-width: 767px) {
+  .mt-stats__totals { --al-kv-cols: 2 !important; }
+}
