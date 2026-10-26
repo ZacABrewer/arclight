@@ -1,7 +1,11 @@
 # Authored for Arclight. YTS publishes a JSON API where each movie carries several
 # torrents (one per quality); each torrent becomes a release. The runtime falls back through
-# `links` on DNS failures/5xx (yts.mx stopped resolving for some resolvers). Mirror list is
-# from public knowledge; not yet verified against the live service (tested: false).
+# `links` on DNS failures/5xx (yts.mx stopped resolving for some resolvers).
+# Verified 2026-10-26 through a VPN-routed request: yts.mx redirects to yts.gg, and
+# https://yts.gg/api/v2/list_movies.json?query_term=matrix returned the same JSON shape
+# (data.movies[].torrents[]). Its status_message announces a move of the API base to
+# movies-api.accel.li, which answered with the same shape, so it is the second link.
+# The older domains are kept as mirrors (not re-checked).
 schemaVersion: 1
 id: yts
 name: YTS
@@ -9,8 +13,10 @@ description: "Public movie tracker (small x264/x265 encodes) via its JSON API"
 language: en-US
 type: public
 encoding: UTF-8
-tested: false
+tested: true
 links:
+  - https://yts.gg/
+  - https://movies-api.accel.li/
   - https://yts.mx/
   - https://yts.lt/
   - https://yts.am/

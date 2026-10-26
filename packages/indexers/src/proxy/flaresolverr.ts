@@ -123,6 +123,7 @@ export class FlareSolverrClient {
   private readonly useSession: boolean;
   private readonly fetchImpl: typeof fetch | undefined;
   private readonly proxy: NetworkProxy | undefined;
+  private readonly apiKey: string | undefined;
   private sessionPromise: Promise<string> | undefined;
 
   constructor(config: FlareSolverrConfig, options: FlareSolverrClientOptions = {}) {
@@ -131,6 +132,7 @@ export class FlareSolverrClient {
     this.useSession = config.useSession ?? false;
     this.fetchImpl = options.fetchImpl;
     this.proxy = options.proxy;
+    this.apiKey = config.apiKey;
   }
 
   /** `request.get` */
@@ -219,7 +221,11 @@ export class FlareSolverrClient {
     try {
       response = await f(this.endpoint, {
         method: 'POST',
-        headers: { 'content-type': 'application/json', accept: 'application/json' },
+        headers: {
+          'content-type': 'application/json',
+          accept: 'application/json',
+          ...(this.apiKey ? { 'x-api-key': this.apiKey } : {}),
+        },
         body: JSON.stringify(payload),
         signal: AbortSignal.timeout(httpTimeout),
       });

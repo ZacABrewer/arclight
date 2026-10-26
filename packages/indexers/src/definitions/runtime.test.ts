@@ -231,7 +231,7 @@ describe('builtin definitions against fixtures', () => {
     const ff = fakeFetch((url) => json(url.searchParams.get('query_term') === 'none' ? ytsEmpty : ytsList));
     const indexer = createDefinitionIndexer(builtin('yts'), {}, { fetchImpl: ff.fetch, now: () => NOW, sleep: noSleep });
     const releases = await indexer.search({ kind: 'movie', query: 'The Matrix', year: 1999 });
-    expect(ff.calls[0]?.url).toBe('https://yts.mx/api/v2/list_movies.json?query_term=The+Matrix&limit=50&sort_by=date_added');
+    expect(ff.calls[0]?.url).toBe('https://yts.gg/api/v2/list_movies.json?query_term=The+Matrix&limit=50&sort_by=date_added');
     expect(releases.map((r) => r.title)).toEqual([
       'The Matrix (1999) [720p] [bluray] [x264] [YTS]',
       'The Matrix (1999) [2160p] [web] [x265] [YTS]',
@@ -376,8 +376,8 @@ describe('helpers', () => {
     const body = JSON.stringify({
       torrents_count: 2,
       torrents: [
-        { title: 'Big Show S01E01 1080p WEB', torrent_url: 'https://e/1.torrent', hash: 'a'.repeat(40), size_bytes: '1000', date_released_unix: 1709000000, seeds: 5, peers: 1, imdb_id: '1234567', episode_url: 'https://e/ep/1' },
-        { title: 'Other Thing S02E03 480p', torrent_url: 'https://e/2.torrent', hash: 'b'.repeat(40), size_bytes: '2000', date_released_unix: 1709000000, seeds: 1, peers: 0, imdb_id: '7654321', episode_url: 'https://e/ep/2' },
+        { title: 'Big Show S01E01 1080p WEB', magnet_url: `magnet:?xt=urn:btih:${'a'.repeat(40)}`, hash: 'a'.repeat(40), size_bytes: '1000', date_released_unix: 1709000000, seeds: 5, peers: 1, imdb_id: '1234567' },
+        { title: 'Other Thing S02E03 480p', magnet_url: `magnet:?xt=urn:btih:${'b'.repeat(40)}`, hash: 'b'.repeat(40), size_bytes: '2000', date_released_unix: 1709000000, seeds: 1, peers: 0, imdb_id: '7654321' },
       ],
     });
     const indexer = createDefinitionIndexer(builtin('eztv'), {}, { fetchImpl: fakeFetch(() => json(body)).fetch, now: () => NOW, sleep: noSleep });
