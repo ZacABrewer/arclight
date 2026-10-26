@@ -939,7 +939,9 @@ export class IndexersService {
   private proxyOptions(row: Pick<ClientRow, 'implementation' | 'settings'>): { needsSolver?: boolean } {
     if (row.implementation !== 'definition' || !row.settings.definitionId) return {};
     const def: unknown = this.definitions.get(row.settings.definitionId);
-    const needs = typeof def === 'object' && def !== null && (def as { requiresFlareSolverr?: unknown }).requiresFlareSolverr === true;
+    // The definition parser lowercases keys, so the parsed form is `requiresflaresolverr`.
+    const flag = def as { requiresFlareSolverr?: unknown; requiresflaresolverr?: unknown } | null;
+    const needs = typeof flag === 'object' && flag !== null && (flag.requiresflaresolverr === true || flag.requiresFlareSolverr === true);
     return needs ? { needsSolver: true } : {};
   }
 
