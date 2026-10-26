@@ -172,6 +172,11 @@ export interface DownloadClient {
   pause(id: string): Promise<void>;
   resume(id: string): Promise<void>;
   /**
+   * Optional: ask the trackers (and the DHT, where the client does that) for fresh peers of a
+   * torrent now, e.g. when it stalled. Clients without the concept (usenet) omit it.
+   */
+  reannounce?(id: string): Promise<void>;
+  /**
    * Optional: set the port the client listens on for incoming peer connections (used to
    * follow a VPN's forwarded port). Clients without the concept omit it.
    */

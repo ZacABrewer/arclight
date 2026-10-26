@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import type { DownloadEvent, QueueItem, QueueSeverity, TorrentPeer, TorrentSessionStatus, VpnStatus } from '@arclight/shared';
 import {
   Banner,
@@ -216,7 +217,7 @@ function liveStats(item: QueueItem): KeyValueItem[] {
  * Expanded queue row: why it is (not) moving, live stats, a pieces/progress bar, the peers of
  * a built-in engine torrent and the download's timeline.
  */
-export function QueueItemDetail({ item, builtin, id }: { item: QueueItem; builtin: boolean; id: string }) {
+export function QueueItemDetail({ item, builtin, id, actions }: { item: QueueItem; builtin: boolean; id: string; actions?: ReactNode }) {
   const live = item.live;
   const pieces = live?.pieceCount ? live.piecesHave ?? 0 : undefined;
   const value = live?.pieceCount && pieces !== undefined ? (pieces / live.pieceCount) * 100 : item.progress * 100;
@@ -227,6 +228,7 @@ export function QueueItemDetail({ item, builtin, id }: { item: QueueItem; builti
           <QueueStateChip item={item} /> <span>{item.stateReason}</span>
         </p>
       ) : null}
+      {actions}
       <div className="al-queue-detail__grid">
         <div className="al-activity-stack-xs">
           <SectionLabel>{t('activity.queueDetail.liveStats')}</SectionLabel>

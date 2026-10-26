@@ -307,6 +307,11 @@ export class QBittorrentClient implements DownloadClient {
     });
   }
 
+  /** qBittorrent announces to every tracker of the torrent (and the DHT when it uses it). */
+  async reannounce(id: string): Promise<void> {
+    await this.post('/api/v2/torrents/reannounce', { hashes: id.toLowerCase() });
+  }
+
   async setListenPort(port: number): Promise<void> {
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       throw new DownloadClientError('rejected', `Invalid listen port ${port}.`);

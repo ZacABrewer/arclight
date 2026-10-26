@@ -32,6 +32,7 @@ import {
   rootFolderCheck,
   rootFolderFreeSpaceCheck,
   stalledDownloadsCheck,
+  diskGuardCheck,
   systemTimeCheck,
   updateCheck,
   vpnDisconnectedCheck,
@@ -491,6 +492,22 @@ describe('download checks', () => {
     const deps = fakeDeps({ activeDownloads: async () => [{ id: 1, title: 'A', path: '/downloads/new/A', sizeLeft: 2 * GIB }] });
     deps.fs.freeSpace = async (p) => (p === '/downloads' ? GIB : null);
     expect(await run(downloadDiskSpaceCheck, deps)).toEqual([expect.objectContaining({ status: 'error' })]);
+  });
+
+  it('reports what the disk-space guard paused or holds, and clears when nothing is', async () => {
+    expect(await run(diskGuardCheck, fakeDeps())).toEqual([]);
+    const idle = { pausedTitles: [], heldTitles: [], volumes: [], minimumFreeBytes: 100 * MIB };
+    expect(await run(diskGuardCheck, fakeDeps({ diskGuard: async () => idle }))).toEqual([]);
+    const busy = fakeDeps({
+      diskGuard: async () => ({ ...idle, pausedTitles: ['A'], heldTitles: ['B', 'C'], volumes: [{ path: '/downloads/tv', freeBytes: 50 * MIB }] }),
+    });
+    const findings = await run(diskGuardCheck, busy);
+    expect(findings).toEqual([
+      expect.objectContaining({ source: 'DownloadDiskGuard', status: 'error', wikiUrl: expect.stringContaining('download-disk-guard-paused') }),
+      expect.objectContaining({ status: 'warning', wikiUrl: expect.stringContaining('download-disk-guard-held') }),
+    ]);
+    expect(findings[0]!.message).toContain('Paused 1 download(s) because the download volume is below the 100 MiB minimum free space: /downloads/tv (50 MiB free)');
+    expect(findings[1]!.message).toContain('2 grab(s) are held until the download volume has room');
   });
 
   it('lists stalled downloads', async () => {

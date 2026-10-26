@@ -12,8 +12,11 @@ import {
   QueueItem,
   QueuePage,
   QueueQuery,
+  QueueReannounceResult,
   QueueRemoveOptions,
   QueueRemoveResult,
+  QueueReplaceRequest,
+  QueueReplaceResult,
   QueueStatus,
   RemotePathMapping,
   RemotePathMappingInput,
@@ -179,9 +182,23 @@ export function downloadClientsRoutes(
       '/queue/grab/:id',
       { schema: { params: IdParams, response: { 200: QueueItem, ...errors } } },
       async (req) => {
-        const item = await service.retryPending(req.params.id);
+        // "Send now": the user overrides a disk-space hold.
+        const item = await service.retryPending(req.params.id, { force: true });
         return service.getQueueItem(item.id);
       },
+    );
+
+    // "Try another release": remove, (blocklist,) search again.
+    app.post(
+      '/queue/:id/replace',
+      { schema: { params: IdParams, body: QueueReplaceRequest.default({ blocklist: true, removeData: true }), response: { 200: QueueReplaceResult, ...errors } } },
+      async (req) => service.replace(req.params.id, req.body),
+    );
+
+    app.post(
+      '/queue/:id/reannounce',
+      { schema: { params: IdParams, response: { 200: QueueReannounceResult, ...errors } } },
+      async (req) => service.reannounce(req.params.id),
     );
   };
 }

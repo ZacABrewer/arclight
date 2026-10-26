@@ -175,6 +175,21 @@ export class TrackerManager extends EventEmitter<TrackerManagerEvents> {
     }
   }
 
+  /**
+   * Re-announces to every tracker group now, min interval or not (a stalled download asking for
+   * fresh peers; callers keep this rare). Returns the number of groups contacted.
+   */
+  forceAnnounce(): number {
+    if (!this.running) return 0;
+    let count = 0;
+    for (const g of this.groups) {
+      if (g.busy) continue;
+      void this.runGroup(g, undefined);
+      count++;
+    }
+    return count;
+  }
+
   /** Sends `stopped` to every tracker that saw `started`, bounded by `timeoutMs`. */
   async stop(timeoutMs = 5000): Promise<void> {
     const wasRunning = this.running;

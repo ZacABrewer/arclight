@@ -58,7 +58,7 @@ beforeEach(() => {
   qbt.on('GET', '/api/v2/torrents/info', { body: torrentsFixture });
   qbt.on('GET', '/api/v2/torrents/properties', { body: propertiesFixture });
   qbt.on('GET', '/api/v2/torrents/files', { body: filesFixture });
-  for (const path of ['add', 'delete', 'setCategory', 'createCategory', 'topPrio', 'setForceStart', 'setShareLimits', 'stop', 'start', 'pause', 'resume']) {
+  for (const path of ['add', 'delete', 'setCategory', 'createCategory', 'topPrio', 'setForceStart', 'setShareLimits', 'stop', 'start', 'pause', 'resume', 'reannounce']) {
     qbt.on('POST', `/api/v2/torrents/${path}`, { body: path === 'add' ? 'Ok.' : '' });
   }
 });
@@ -330,6 +330,11 @@ describe('item actions', () => {
       '/api/v2/torrents/pause',
       '/api/v2/torrents/resume',
     ]);
+  });
+
+  it('re-announces through torrents/reannounce', async () => {
+    await client().reannounce?.(MAGNET_HASH.toUpperCase());
+    expect(qbt.calls('/api/v2/torrents/reannounce').map((r) => r.form)).toEqual([{ hashes: MAGNET_HASH }]);
   });
 
   it('sets a category, creating it first when unknown', async () => {

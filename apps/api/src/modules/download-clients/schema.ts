@@ -57,6 +57,12 @@ export interface PendingGrabPayload {
   protocol: ReleaseProtocol;
   tags: number[];
   reason?: string;
+  /** Set when the disk-space guard held the grab back; the HeldGrabs job retries it. */
+  hold?: 'diskSpace';
+  /** Client the grab was meant for (null/absent: picked again when it is sent). */
+  clientId?: number;
+  /** Release size, for the disk-space guard. */
+  sizeBytes?: number;
 }
 
 export const trackedDownloads = sqliteTable(
@@ -107,6 +113,10 @@ export const trackedDownloads = sqliteTable(
     stateCode: text('state_code').$type<QueueItemStateCode>(),
     /** Bytes missing on the save volume for this and its neighbours to finish (0 / null: fits). */
     diskShortfall: integer('disk_shortfall'),
+    /** Stall recovery: when fresh peers were last asked for during the current stall. */
+    reannouncedAt: text('reannounced_at'),
+    /** Set while the disk-space guard holds this download paused (it resumes it later). */
+    diskPausedAt: text('disk_paused_at'),
   },
   (t) => [
     uniqueIndex('tracked_downloads_client_download_idx').on(t.clientId, t.downloadId),

@@ -128,6 +128,10 @@ export const IMPORT_FIELDS: FieldDefinition[] = [
   { name: 'skipFreeSpaceCheck', get label() { return t('settings.mediaManagement.skipFreeSpaceCheck'); }, type: 'checkbox', advanced: true },
   { name: 'minimumFreeSpaceMb', get label() { return t('settings.mediaManagement.minimumFreeSpace'); }, type: 'number', unit: 'MB', min: 0, advanced: true, get helpText() { return t('settings.mediaManagement.refuseToImportWhenLess'); } },
   { name: 'stalledDownloadMinutes', get label() { return t('settings.mediaManagement.stalledDownloadMinutes'); }, type: 'number', unit: 'min', min: 0, max: 1440, get helpText() { return t('settings.mediaManagement.stalledDownloadHelp'); } },
+  { name: 'stallRecovery', get label() { return t('settings.mediaManagement.stallRecovery'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.stallRecoveryHelp'); } },
+  { name: 'stallReplaceMinutes', get label() { return t('settings.mediaManagement.stallReplaceMinutes'); }, type: 'number', unit: 'min', min: 0, max: 10080, get helpText() { return t('settings.mediaManagement.stallReplaceMinutesHelp'); } },
+  { name: 'stallReplaceMaxProgress', get label() { return t('settings.mediaManagement.stallReplaceMaxProgress'); }, type: 'number', unit: '%', min: 0, max: 100, advanced: true, get helpText() { return t('settings.mediaManagement.stallReplaceMaxProgressHelp'); } },
+  { name: 'diskSpaceGuard', get label() { return t('settings.mediaManagement.diskSpaceGuard'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.diskSpaceGuardHelp'); } },
 ];
 
 export const PROPER_FIELDS: FieldDefinition[] = [

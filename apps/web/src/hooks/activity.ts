@@ -1,5 +1,12 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { BlocklistAddRequestInput, QueuePage, QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
+import type {
+  BlocklistAddRequestInput,
+  QueuePage,
+  QueueBulkRemoveRequest,
+  QueueQueryInput,
+  QueueRemoveOptions,
+  QueueReplaceRequestInput,
+} from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
 import { queueApi } from '../api/queue.js';
@@ -53,6 +60,20 @@ export function useRemoveQueueItems() {
 
 export function useGrabQueueItem() {
   return useInvalidatingMutation((id: number) => queueApi.grab(id), [['queue']], { errorTitle: t('hooks.activity.couldNotSendToClient') });
+}
+
+/** "Try another release": removes the download, optionally blocklists it, searches again. */
+export function useReplaceQueueItem() {
+  return useInvalidatingMutation(
+    ({ id, options }: { id: number; options: QueueReplaceRequestInput }) => queueApi.replace(id, options),
+    [['queue'], ['history']],
+    { errorTitle: t('hooks.activity.couldNotReplace') },
+  );
+}
+
+/** Asks the download client for fresh peers of one download. */
+export function useReannounceQueueItem() {
+  return useInvalidatingMutation((id: number) => queueApi.reannounce(id), [['queue']], { errorTitle: t('hooks.activity.couldNotReannounce') });
 }
 
 /** Pending api route: no retry so the "not available yet" notice shows at once. */

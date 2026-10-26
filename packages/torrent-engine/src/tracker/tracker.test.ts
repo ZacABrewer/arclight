@@ -262,6 +262,21 @@ describe('TrackerManager', () => {
     expect(a.calls.at(-1)).toBe('stopped');
   });
 
+  it('force-announces inside the min interval, but not while stopped', async () => {
+    const a = new FakeTracker('a', { intervalSec: 3600, minIntervalSec: 3600 });
+    const m = manager([['a']], new Map([['a', a]]));
+    expect(m.forceAnnounce()).toBe(0);
+    m.start();
+    await tick();
+    m.announceNow();
+    await tick();
+    expect(a.calls).toEqual(['started']);
+    expect(m.forceAnnounce()).toBe(1);
+    await tick();
+    expect(a.calls).toEqual(['started', undefined]);
+    m.close();
+  });
+
   it('does not send stopped to trackers that never saw started', async () => {
     const a = new FakeTracker('a');
     a.fail = true;

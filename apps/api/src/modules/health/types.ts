@@ -108,6 +108,8 @@ export interface HealthDeps {
   activeDownloads?(): Promise<HealthActiveDownload[]>;
   /** Free space to keep on volumes (Settings > Media Management), bytes. */
   minimumFreeSpaceBytes?(): number;
+  /** What the disk-space guard holds (download-clients module); optional so deps without it skip the check. */
+  diskGuard?(): Promise<HealthDiskGuard>;
   /** Whisper ASR provider status (subtitles module); optional so deps without it skip the check. */
   whisper?(): Promise<SubtitleWhisperStatus>;
 }
@@ -120,6 +122,16 @@ export interface HealthActiveDownload {
   sizeLeft: number;
   /** ISO-8601, set while the download counts as stalled. */
   stalledSince?: string;
+}
+
+export interface HealthDiskGuard {
+  /** Titles of downloads paused because their volume fell below the minimum free space. */
+  pausedTitles: string[];
+  /** Titles of grabs held back until there is room. */
+  heldTitles: string[];
+  /** Download folders below the minimum, with their free bytes. */
+  volumes: Array<{ path: string; freeBytes: number }>;
+  minimumFreeBytes: number;
 }
 
 export interface HealthFlareSolverr {

@@ -427,6 +427,13 @@ export class BuiltinClient implements DownloadClient {
     await session.resumeTorrent(this.torrent(session, id).infoHashHex);
   }
 
+  /** Trackers (min interval ignored) plus a DHT lookup; `rejected` while the torrent is not active. */
+  async reannounce(id: string): Promise<void> {
+    const session = this.session();
+    const result = session.reannounceTorrent(this.torrent(session, id).infoHashHex);
+    if (!result) throw new DownloadClientError('rejected', `Torrent ${id} is not active (paused or queued); nothing to re-announce.`);
+  }
+
   async setListenPort(port: number): Promise<void> {
     const session = this.session();
     if (session.listenPort === port) return;

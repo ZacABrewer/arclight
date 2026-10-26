@@ -36,7 +36,9 @@ import {
   type QueueItemStateCode,
   type QueuePage,
   type QueueQueryInput,
+  type QueueReannounceResult,
   type QueueRemoveResult,
+  type QueueReplaceResult,
   type QueueStatus,
   type QueueStatusMessage,
   type ReleaseProtocol,
@@ -62,7 +64,16 @@ import {
   type PendingGrabPayload,
   type TrackedDownloadRow,
 } from './schema.js';
-import { deriveState, NOT_TRANSFERRING, type StateReason } from './state-reason.js';
+import {
+  DEFAULT_RECOVERY_SETTINGS,
+  DISK_RESUME_MARGIN_BYTES,
+  diskGuardAction,
+  grabHoldReason,
+  planStallRecovery,
+  stallReplaceReason,
+  type RecoverySettings,
+} from './recovery.js';
+import { deriveState, formatBytes, NOT_TRANSFERRING, type StateReason } from './state-reason.js';
 import { implementationSchemas } from './templates.js';
 import { DownloadTimelineStore, type RecordOptions } from './timeline.js';
 
@@ -99,7 +110,16 @@ export type TrackedDownload = QueueItem & {
 };
 
 export type TrackedDownloadHook = (item: TrackedDownload) => void | Promise<void>;
-export type BlocklistHook = (item: TrackedDownload, options: { skipRedownload: boolean }) => void | Promise<void>;
+export type BlocklistHook = (
+  item: TrackedDownload,
+  options: { skipRedownload: boolean; message?: string | undefined },
+) => void | Promise<void>;
+
+/** Starts a search for another release of a replaced download; false when there is nothing to search for. */
+export type ReplacementSearch = (item: TrackedDownload) => boolean | Promise<boolean>;
+
+/** A pending grab (held or delayed) was sent: its `pending:*` download id became the client's. */
+export type PendingSentHook = (item: TrackedDownload, pendingDownloadId: string) => void | Promise<void>;
 
 export interface GrabRequest {
   title: string;
@@ -115,6 +135,8 @@ export interface GrabRequest {
   seedConfig?: { ratioLimit?: number; seedTimeLimitMinutes?: number };
   /** Defaults to 'torrent'. */
   protocol?: ReleaseProtocol;
+  /** Release size when known; the disk-space guard holds grabs that would not fit. */
+  sizeBytes?: number;
 }
 
 export interface TrackingInfo {
@@ -198,6 +220,8 @@ export interface DownloadClientsServiceOptions {
   minimumFreeSpaceBytes?: () => number;
   /** Bytes free on the volume holding `path`, null when unknown. Default: statfs. */
   freeSpace?: (path: string) => Promise<number | null>;
+  /** Stall recovery and disk-space guard knobs. Default: settings (mediaManagement). */
+  recoverySettings?: () => RecoverySettings;
   clientFactory?: DownloadClientFactory;
   /** Runtime overrides (fetch, timeouts) for clients built by the default factory. */
   clientRuntime?: Partial<ClientRuntime>;
@@ -234,6 +258,7 @@ export const STATUS_TEXT = {
   missing: (client: string) => `Download is no longer reported by ${client}.`,
   clientUnavailable: (client: string, message: string) => `${client} is unavailable: ${message}`,
   stalled: (minutes: number) => `No new data received for ${minutes} minutes.`,
+  diskPaused: 'Paused by Arclight: the download volume is below the minimum free space. It resumes automatically when there is room.',
   invalidLocalPath: (path: string) => `"${path}" is not a valid local path. You may need a Remote Path Mapping.`,
   noFilesEligible: (path: string) => `No files found are eligible for import in ${path}`,
 } as const;
@@ -262,6 +287,13 @@ export class DownloadClientsService {
   private readonly completedHooks = new Set<TrackedDownloadHook>();
   private readonly failedHooks = new Set<TrackedDownloadHook>();
   private readonly blocklistHooks = new Set<BlocklistHook>();
+  private readonly pendingSentHooks = new Set<PendingSentHook>();
+  private replacementSearch: ReplacementSearch | undefined;
+  /** Answers false while an automatic replacement must wait (e.g. the VPN is down). */
+  private replaceGuard: (() => boolean | Promise<boolean>) | undefined;
+  /** Download folders below the minimum free space as of the last refresh (disk-space guard). */
+  private lowVolumes: Array<{ path: string; freeBytes: number }> = [];
+  private readonly recovery: () => RecoverySettings;
   private readonly clientHealth = new Map<number, { ok: boolean; at: string; message?: string }>();
   private lastRefreshAt: number | null = null;
   private dirty = true;
@@ -296,6 +328,7 @@ export class DownloadClientsService {
     this.minimumFreeSpaceBytes =
       options.minimumFreeSpaceBytes ?? (() => getSection(this.db, 'mediaManagement').minimumFreeSpaceMb * 1024 * 1024);
     this.freeSpace = options.freeSpace ?? defaultFreeSpace;
+    this.recovery = options.recoverySettings ?? (() => recoveryFromSettings(this.db));
     this.timeline = new DownloadTimelineStore(this.db, this.now, this.bus);
     // Kill-switch pauses can be shorter than a queue poll: record them as they happen.
     this.bus?.subscribe((event) => {
@@ -557,6 +590,22 @@ export class DownloadClientsService {
     return () => this.blocklistHooks.delete(cb);
   }
 
+  /** Fired when a pending grab is finally sent (its download id changes). Returns an unsubscribe. */
+  onPendingSent(cb: PendingSentHook): () => void {
+    this.pendingSentHooks.add(cb);
+    return () => this.pendingSentHooks.delete(cb);
+  }
+
+  /** The search `replace` starts for another release (the app wires the releases module). */
+  setReplacementSearch(search: ReplacementSearch | undefined): void {
+    this.replacementSearch = search;
+  }
+
+  /** Automatic replacements wait while this answers false (the app wires the VPN grab guard). */
+  setReplaceGuard(guard: (() => boolean | Promise<boolean>) | undefined): void {
+    this.replaceGuard = guard;
+  }
+
   // ---- queue refresh -------------------------------------------------------------------
 
   /** Asks the next scheduled refresh to run even when the queue is idle. */
@@ -642,7 +691,16 @@ export class DownloadClientsService {
     }
 
     summary.removed += this.purgeTerminal(now);
-    await this.updateDiskShortfall(mappings).catch((err: unknown) => this.log?.warn({ err }, 'download disk space check failed'));
+    try {
+      await this.guardDiskSpace(await this.updateDiskShortfall(mappings));
+    } catch (err) {
+      this.log?.warn({ err }, 'download disk space check failed');
+    }
+    try {
+      await this.recoverStalled(now, stallMs);
+    } catch (err) {
+      this.log?.warn({ err }, 'stall recovery failed');
+    }
     this.lastRefreshAt = now.getTime();
     this.dirty = false;
     summary.completed = completedIds.length;
@@ -731,6 +789,9 @@ export class DownloadClientsService {
       if (killSwitch) {
         if (trackedStatus === 'ok') trackedStatus = 'warning';
         messages.push({ title, messages: [killSwitchText(killSwitch.reason)] });
+      } else if (existing?.diskPausedAt) {
+        if (trackedStatus === 'ok') trackedStatus = 'warning';
+        messages.push({ title, messages: [STATUS_TEXT.diskPaused] });
       } else if (clock.stalledSince) {
         if (trackedStatus === 'ok') trackedStatus = 'warning';
         messages.push({ title, messages: [STATUS_TEXT.stalled(Math.round(stallMs / 60_000))] });
@@ -748,6 +809,7 @@ export class DownloadClientsService {
       diskShortfall: existing?.diskShortfall,
       clientName: config.name,
       killSwitch,
+      diskPaused: existing?.diskPausedAt ? this.diskPausedInfo() : undefined,
     });
 
     if (existing) {
@@ -758,6 +820,8 @@ export class DownloadClientsService {
           state,
           progressAt: clock.progressAt,
           stalledSince: clock.stalledSince,
+          // A new stall starts the recovery ladder from the first step again.
+          reannouncedAt: clock.stalledSince ? existing.reannouncedAt : null,
           stateCode: derived.code,
           ...(messages ? { statusMessages: messages } : {}),
           ...(trackedStatus ? { trackedStatus } : {}),
@@ -942,7 +1006,8 @@ export class DownloadClientsService {
    * Free space of each download folder against the bytes its downloads still need. Sets
    * `diskShortfall` on downloads that would not fit (0 when they do, null when unknown).
    */
-  private async updateDiskShortfall(mappings: RemotePathMapping[]): Promise<void> {
+  private async updateDiskShortfall(mappings: RemotePathMapping[]): Promise<Map<string, VolumeGroup>> {
+    const out = new Map<string, VolumeGroup>();
     const rows = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.state, 'downloading')).all();
     const ctx = this.queueContext(mappings);
     const groups = new Map<string, TrackedDownloadRow[]>();
@@ -965,7 +1030,331 @@ export class DownloadClientsService {
         if (row.diskShortfall === shortfall) continue;
         this.db.update(trackedDownloads).set({ diskShortfall: shortfall }).where(eq(trackedDownloads.id, row.id)).run();
       }
+      out.set(dir, { free, rows: group });
     }
+    return out;
+  }
+
+  // ---- disk-space guard ----------------------------------------------------------------
+
+  /**
+   * Pauses the downloads of a folder whose volume fell below the minimum free space and
+   * resumes them once it has the minimum plus a margin again (or the guard is switched off).
+   * Each pause/resume goes on the download's timeline.
+   */
+  private async guardDiskSpace(groups: Map<string, VolumeGroup>): Promise<void> {
+    const enabled = this.recovery().diskGuard;
+    const minimum = this.minimumFreeSpaceBytes();
+    const low: Array<{ path: string; freeBytes: number }> = [];
+    const handled = new Set<number>();
+    let changed = false;
+    for (const [dir, { free, rows }] of groups) {
+      const action = diskGuardAction(free, minimum, enabled);
+      if (enabled && free !== null && free < minimum) low.push({ path: dir, freeBytes: free });
+      for (const row of rows) {
+        handled.add(row.id);
+        if (action === 'pause' && !row.diskPausedAt && isTransferring(row)) {
+          changed = (await this.diskPause(row, dir, free ?? 0, minimum)) || changed;
+        } else if (action === 'resume' && row.diskPausedAt) {
+          changed = (await this.diskResume(row, enabled ? `${formatBytes(free ?? 0)} is free in ${dir} again.` : 'The disk-space guard was switched off.')) || changed;
+        }
+      }
+    }
+    // Paused rows that no longer sit in a measured folder (path gone, finished, ...): let go.
+    const stranded = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(and(eq(trackedDownloads.state, 'downloading'), isNotNull(trackedDownloads.diskPausedAt)))
+      .all()
+      .filter((r) => !handled.has(r.id) && (!enabled || r.sizeLeft <= 0));
+    for (const row of stranded) changed = (await this.diskResume(row, 'The disk-space guard no longer applies to it.')) || changed;
+    this.lowVolumes = low;
+    if (changed) this.bus?.publish({ type: 'queue', action: 'changed' });
+  }
+
+  private async diskPause(row: TrackedDownloadRow, dir: string, free: number, minimum: number): Promise<boolean> {
+    if (row.clientId === null) return false;
+    try {
+      await this.clientById(row.clientId).pause(row.downloadId);
+    } catch (err) {
+      this.log?.warn({ err, id: row.id }, 'disk-space guard could not pause a download');
+      return false;
+    }
+    const nowIso = this.now().toISOString();
+    this.db
+      .update(trackedDownloads)
+      .set({
+        diskPausedAt: nowIso,
+        stateCode: 'diskPaused',
+        stalledSince: null,
+        progressAt: nowIso,
+        trackedStatus: 'warning',
+        statusMessages: [{ title: row.title, messages: [STATUS_TEXT.diskPaused] }],
+        updatedAt: nowIso,
+      })
+      .where(eq(trackedDownloads.id, row.id))
+      .run();
+    this.timeline.record(subjectOf(row), 'paused', {
+      message: `Paused: only ${formatBytes(free)} is free in ${dir}, below the ${formatBytes(minimum)} minimum. It resumes automatically once ${formatBytes(minimum + DISK_RESUME_MARGIN_BYTES)} is free.`,
+      severity: 'warning',
+      data: { reason: 'diskSpace', freeBytes: free },
+    });
+    return true;
+  }
+
+  private async diskResume(row: TrackedDownloadRow, why: string): Promise<boolean> {
+    if (row.clientId !== null) {
+      try {
+        await this.clientById(row.clientId).resume(row.downloadId);
+      } catch (err) {
+        if (!(err instanceof DownloadClientError && err.code === 'not-found')) {
+          this.log?.warn({ err, id: row.id }, 'disk-space guard could not resume a download');
+          return false;
+        }
+      }
+    }
+    const nowIso = this.now().toISOString();
+    this.db
+      .update(trackedDownloads)
+      // 'queued' restarts the stall clock: the client needs a moment to reconnect.
+      .set({ diskPausedAt: null, stateCode: 'queued', progressAt: nowIso, trackedStatus: 'ok', statusMessages: [], updatedAt: nowIso })
+      .where(eq(trackedDownloads.id, row.id))
+      .run();
+    this.timeline.record(subjectOf(row), 'resumed', { message: `Resumed: ${why}`, data: { reason: 'diskSpace' } });
+    return true;
+  }
+
+  private diskPausedInfo(): { minimumBytes: number; resumeAboveBytes: number } {
+    const minimumBytes = this.minimumFreeSpaceBytes();
+    return { minimumBytes, resumeAboveBytes: minimumBytes + DISK_RESUME_MARGIN_BYTES };
+  }
+
+  /**
+   * Why a grab must wait for disk space on its target client, or null when it fits (or the
+   * size, the client's folder or its free space is unknown: the grab then goes ahead).
+   */
+  private async diskHoldReason(config: DownloadClientResource, client: DownloadClient, request: GrabRequest): Promise<string | null> {
+    const size = request.sizeBytes ?? 0;
+    if (size <= 0 || !this.recovery().diskGuard) return null;
+    let root: string;
+    try {
+      root = (await client.getStatus()).outputRootDir;
+    } catch (err) {
+      this.log?.debug({ err, client: config.name }, 'disk-space guard: client folder unknown');
+      return null;
+    }
+    if (!root) return null;
+    const host = config.implementation === 'builtin' ? 'localhost' : downloadClientHost(config.settings);
+    const dir = mapRemoteToLocal(this.listMappings(), host, root);
+    const free = await this.freeSpace(dir).catch(() => null);
+    if (free === null) return null;
+    // What downloads already in that folder still need comes off the free space first.
+    const ctx = this.queueContext();
+    const prefix = dir.replace(/[\\/]+$/, '');
+    const committed = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(and(eq(trackedDownloads.state, 'downloading'), eq(trackedDownloads.clientId, config.id)))
+      .all()
+      .filter((r) => r.diskPausedAt === null)
+      .reduce((sum, r) => {
+        const path = this.toTracked(r, ctx, { overlay: false }).outputPath;
+        return path !== undefined && path.startsWith(prefix) ? sum + Math.max(0, r.sizeLeft) : sum;
+      }, 0);
+    return grabHoldReason({ sizeBytes: size, free, committed, minimumBytes: this.minimumFreeSpaceBytes(), dir });
+  }
+
+  /** Sends every grab the disk-space guard holds, where there is room now (the RetryHeldGrabs job). */
+  async retryHeldGrabs(): Promise<{ held: number; sent: number }> {
+    const rows = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(eq(trackedDownloads.state, 'pending'))
+      .all()
+      .filter((r) => r.pendingGrab?.hold === 'diskSpace');
+    let sent = 0;
+    for (const row of rows) {
+      try {
+        const item = await this.retryPending(row.id);
+        if (item.trackedState !== 'pending') sent++;
+      } catch (err) {
+        this.log?.warn({ err, id: row.id }, 'held grab could not be sent');
+      }
+    }
+    return { held: rows.length - sent, sent };
+  }
+
+  /** What the disk-space guard holds right now (queue status banner, health check). */
+  diskGuardStatus(): NonNullable<QueueStatus['diskGuard']> & { pausedTitles: string[]; heldTitles: string[] } {
+    const paused = this.db
+      .select({ title: trackedDownloads.title })
+      .from(trackedDownloads)
+      .where(and(eq(trackedDownloads.state, 'downloading'), isNotNull(trackedDownloads.diskPausedAt)))
+      .all();
+    const held = this.db
+      .select({ title: trackedDownloads.title, pendingGrab: trackedDownloads.pendingGrab })
+      .from(trackedDownloads)
+      .where(eq(trackedDownloads.state, 'pending'))
+      .all()
+      .filter((r) => r.pendingGrab?.hold === 'diskSpace');
+    return {
+      paused: paused.length,
+      held: held.length,
+      volumes: this.lowVolumes.map((v) => ({ path: v.path, freeBytes: Math.round(v.freeBytes) })),
+      minimumFreeBytes: this.minimumFreeSpaceBytes(),
+      pausedTitles: paused.map((r) => r.title),
+      heldTitles: held.map((r) => r.title),
+    };
+  }
+
+  // ---- stall recovery ------------------------------------------------------------------
+
+  /**
+   * The escalation ladder for stalled downloads: re-announce once per stall, then replace the
+   * release when it stays stalled. Never replaces during an engine lockdown, a VPN outage, a
+   * pause (user or disk guard), above the progress limit, or downloads Arclight did not grab.
+   */
+  private async recoverStalled(now: Date, stallMs: number): Promise<void> {
+    const settings = this.recovery();
+    if (!settings.stallRecovery) return;
+    const rows = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(and(eq(trackedDownloads.state, 'downloading'), isNotNull(trackedDownloads.stalledSince)))
+      .all();
+    let guardOk: boolean | undefined;
+    for (const row of rows) {
+      if (row.clientId === null || row.stalledSince === null) continue;
+      const plan = planStallRecovery(
+        { stalledSince: row.stalledSince, reannouncedAt: row.reannouncedAt, progress: row.progress },
+        settings,
+        now,
+        stallMs,
+      );
+      if (!plan) return;
+      if (plan.reannounce) await this.autoReannounce(row);
+      if (!plan.replace || !isGrabbed(row) || row.diskPausedAt !== null || row.clientStatus === 'paused') continue;
+      if (this.engineLockedDown(row.clientId)) continue;
+      guardOk ??= this.replaceGuard ? await this.replaceGuard() : true;
+      if (!guardOk) continue;
+      const reason = stallReplaceReason(plan.stalledMinutes);
+      try {
+        await this.replace(row.id, { blocklist: true, removeData: true }, { reason, automatic: true });
+        this.log?.info({ id: row.id, title: row.title, reason }, 'replaced a stalled download');
+      } catch (err) {
+        this.log?.warn({ err, id: row.id }, 'could not replace a stalled download');
+      }
+    }
+  }
+
+  /** Step 1: one re-announce per stall; clients without re-announce just skip the step. */
+  private async autoReannounce(row: TrackedDownloadRow): Promise<void> {
+    if (row.clientId === null) return;
+    const nowIso = this.now().toISOString();
+    this.db.update(trackedDownloads).set({ reannouncedAt: nowIso }).where(eq(trackedDownloads.id, row.id)).run();
+    const client = this.clientById(row.clientId);
+    if (!client.reannounce) return;
+    try {
+      await client.reannounce(row.downloadId);
+      this.timeline.record(subjectOf(row), 'reannounced', {
+        message: 'Stalled: asked the trackers (and the DHT) for fresh peers.',
+        data: { trigger: 'stall' },
+      });
+    } catch (err) {
+      this.log?.warn({ err, id: row.id }, 'stall recovery: re-announce failed');
+    }
+  }
+
+  /** True when `clientId` is the built-in engine and it is locked down by the VPN kill switch. */
+  private engineLockedDown(clientId: number): boolean {
+    const row = this.db.select({ implementation: downloadClients.implementation }).from(downloadClients).where(eq(downloadClients.id, clientId)).get();
+    return row?.implementation === 'builtin' && (this.engineInsights?.lockdown() ?? null) !== null;
+  }
+
+  /** Re-announce action (POST /queue/:id/reannounce): fresh peers for one download. */
+  async reannounce(id: number): Promise<QueueReannounceResult> {
+    const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!row) throw notFound('Queue item', id);
+    if (row.clientId === null || row.state === 'pending') {
+      throw new DownloadClientsError('VALIDATION', 'This download has not been sent to a download client yet');
+    }
+    const config = rowToResource(this.requireRow(row.clientId));
+    const client = this.clientFor(config);
+    if (!client.reannounce) throw new DownloadClientsError('VALIDATION', `${config.name} cannot re-announce downloads`);
+    try {
+      await client.reannounce(row.downloadId);
+    } catch (err) {
+      const code = err instanceof DownloadClientError && (err.code === 'rejected' || err.code === 'not-found') ? 'VALIDATION' : 'CLIENT_ERROR';
+      throw new DownloadClientsError(code, `${config.name}: ${errorMessage(err)}`, { cause: err });
+    }
+    const message = `Asked ${config.name} for fresh peers.`;
+    this.timeline.record(subjectOf(row), 'reannounced', { message, data: { trigger: 'manual' } });
+    this.db.update(trackedDownloads).set({ reannouncedAt: this.now().toISOString() }).where(eq(trackedDownloads.id, id)).run();
+    return { id, message };
+  }
+
+  /**
+   * Gives up on a download's release: removes it from the client (with or without its data),
+   * blocklists it through the failed-download pipeline (history `downloadFailed` + blocklist,
+   * with `reason`) and starts a search for another release. Used by the "Try another release"
+   * action and by stall recovery (`automatic`).
+   */
+  async replace(
+    id: number,
+    options: { blocklist: boolean; removeData: boolean },
+    meta: { reason?: string; automatic?: boolean } = {},
+  ): Promise<QueueReplaceResult> {
+    const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!row) throw notFound('Queue item', id);
+    if (!VISIBLE_STATES.includes(row.state) || row.state === 'importing') {
+      throw new DownloadClientsError('VALIDATION', `Queue item ${id} cannot be replaced while ${row.state}`);
+    }
+    const item = this.toTracked(row, this.queueContext());
+    const sent = row.clientId !== null && row.state !== 'pending';
+    const clientName = item.downloadClientName ?? 'the download client';
+    if (sent && row.clientId !== null) {
+      try {
+        await this.clientById(row.clientId).removeItem(row.downloadId, options.removeData);
+      } catch (err) {
+        if (!(err instanceof DownloadClientError && err.code === 'not-found')) {
+          throw new DownloadClientsError('CLIENT_ERROR', `${clientName}: ${errorMessage(err)}`, { cause: err });
+        }
+      }
+    }
+    const reason = meta.reason ?? 'replaced by the user';
+    if (options.blocklist) {
+      if (this.blocklistHooks.size === 0) this.log?.warn({ id }, 'blocklist requested but no blocklist handler is registered');
+      for (const hook of this.blocklistHooks) {
+        try {
+          // The search below is the one re-search; the failed pipeline must not start another.
+          await hook(item, { skipRedownload: true, message: capitalize(reason) });
+        } catch (err) {
+          this.log?.error({ err, id }, 'blocklist hook failed');
+        }
+      }
+    }
+    let searchStarted = false;
+    if (this.replacementSearch) {
+      try {
+        searchStarted = await this.replacementSearch(item);
+      } catch (err) {
+        this.log?.warn({ err, id }, 'replacement search could not start');
+      }
+    }
+    const steps = [
+      sent ? `removed from ${clientName}${options.removeData ? ' with its data' : ''}` : 'dropped from the queue',
+      options.blocklist ? 'release blocklisted' : null,
+      searchStarted ? 'searching for another release' : 'nothing to search for',
+    ].filter(Boolean);
+    const message = `${meta.automatic ? 'Gave up on this release' : 'Replaced on request'} (${reason}): ${steps.join(', ')}.`;
+    this.timeline.record(subjectOf(row), 'replaced', {
+      message,
+      data: { trigger: meta.automatic ? 'stall' : 'manual', blocklisted: options.blocklist, search: searchStarted },
+    });
+    this.db.delete(trackedDownloads).where(eq(trackedDownloads.id, id)).run();
+    this.dirty = true;
+    this.bus?.publish({ type: 'queue', action: 'changed' });
+    return { id, blocklisted: options.blocklist, searchStarted, message };
   }
 
   /** Downloads still transferring, with local paths (disk-space and stall health checks). */
@@ -1176,9 +1565,20 @@ export class DownloadClientsService {
 
   /** Records a grab that could not be sent yet (state `pending`); retry with `retryPending`. */
   addPending(request: GrabRequest, tracking: TrackingInfo = {}, reason?: string): TrackedDownload {
+    return this.insertPending(request, tracking, reason);
+  }
+
+  private insertPending(
+    request: GrabRequest,
+    tracking: TrackingInfo,
+    reason: string | undefined,
+    hold?: { clientId: number | null },
+  ): TrackedDownload {
     validateGrab(request);
     const nowIso = this.now().toISOString();
     const pendingGrab: PendingGrabPayload = {
+      ...(hold ? { hold: 'diskSpace' as const, ...(hold.clientId !== null ? { clientId: hold.clientId } : {}) } : {}),
+      ...(request.sizeBytes !== undefined ? { sizeBytes: request.sizeBytes } : {}),
       title: request.title,
       isRecent: request.isRecent ?? false,
       protocol: request.protocol ?? 'torrent',
@@ -1207,15 +1607,19 @@ export class DownloadClientsService {
       })
       .returning()
       .get();
-    this.timeline.record({ id: row.id, downloadId: row.downloadId, title: row.title }, 'pending', {
+    this.timeline.record(subjectOf(row), hold ? 'held' : 'pending', {
       message: reason ?? 'Waiting to be sent to a download client.',
       ...(reason ? { severity: 'warning' as const } : {}),
     });
+    this.bus?.publish({ type: 'queue', action: 'changed' });
     return this.toTracked(row, this.queueContext());
   }
 
-  /** Retries a `pending` queue item (POST /queue/grab/:id). */
-  async retryPending(id: number): Promise<TrackedDownload> {
+  /**
+   * Retries a `pending` queue item (POST /queue/grab/:id, and the RetryHeldGrabs job for grabs
+   * the disk-space guard holds). `force` sends it even when the guard would hold it again.
+   */
+  async retryPending(id: number, options: { force?: boolean } = {}): Promise<TrackedDownload> {
     const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
     if (!row) throw notFound('Queue item', id);
     if (row.state !== 'pending' || !row.pendingGrab) {
@@ -1231,10 +1635,16 @@ export class DownloadClientsService {
       ...(p.nzbBase64 !== undefined ? { nzb: new Uint8Array(Buffer.from(p.nzbBase64, 'base64')) } : {}),
       ...(p.category !== undefined ? { category: p.category } : {}),
       ...(p.seedConfig !== undefined ? { seedConfig: p.seedConfig } : {}),
+      ...(p.sizeBytes !== undefined && !options.force ? { sizeBytes: p.sizeBytes } : {}),
     };
     const tracking: TrackingInfo = { tags: p.tags, grabbedRelease: row.grabbedRelease, ...trackingFromRow(row) };
+    // The client it was meant for, while that client still exists; otherwise pick again.
+    const clientId =
+      p.clientId !== undefined && this.db.select({ id: downloadClients.id }).from(downloadClients).where(eq(downloadClients.id, p.clientId)).get()
+        ? p.clientId
+        : null;
     try {
-      return await this.sendAndRecord(null, request, tracking, row.id);
+      return await this.sendAndRecord(clientId, request, tracking, row.id);
     } catch (err) {
       this.db
         .update(trackedDownloads)
@@ -1270,6 +1680,10 @@ export class DownloadClientsService {
       if (!picked) throw new DownloadClientsError('NO_CLIENT', `No enabled ${protocol} download client is available`);
       target = { config: rowToResource(this.requireRow(picked.id)), client: picked.client };
     }
+
+    // Disk-space guard: a grab that would not leave the minimum free waits as a held item.
+    const hold = await this.diskHoldReason(target.config, target.client, request);
+    if (hold) return this.holdGrab(request, tracking, hold, clientId, pendingRowId);
 
     const category = request.category ?? target.config.settings.category;
     const isRecent = request.isRecent ?? false;
@@ -1321,6 +1735,11 @@ export class DownloadClientsService {
       .where(and(eq(trackedDownloads.clientId, target.config.id), eq(trackedDownloads.downloadId, result.id)))
       .get();
 
+    const pendingDownloadId =
+      pendingRowId === null
+        ? undefined
+        : this.db.select({ downloadId: trackedDownloads.downloadId }).from(trackedDownloads).where(eq(trackedDownloads.id, pendingRowId)).get()
+            ?.downloadId;
     let id: number;
     if (existing) {
       // Re-grab of a known id: start over (drops a previous imported/failed/ignored state).
@@ -1339,7 +1758,52 @@ export class DownloadClientsService {
       message: `Sent to ${target.config.name}${warning}.`,
       data: { client: target.config.name },
     });
-    return this.getTracked(id);
+    const sent = this.getTracked(id);
+    if (pendingDownloadId !== undefined && pendingDownloadId !== sent.downloadId) {
+      for (const hook of this.pendingSentHooks) {
+        try {
+          await hook(sent, pendingDownloadId);
+        } catch (err) {
+          this.log?.warn({ err, id }, 'pending-sent hook failed');
+        }
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * Keeps a grab back for disk space: a new held queue item, or (a retry of one) the same item
+   * with the current reason. Only a new or changed hold goes on the timeline.
+   */
+  private holdGrab(
+    request: GrabRequest,
+    tracking: TrackingInfo,
+    reason: string,
+    clientId: number | null,
+    pendingRowId: number | null,
+  ): TrackedDownload {
+    if (pendingRowId === null) {
+      this.log?.info({ title: request.title, reason }, 'grab held for disk space');
+      return this.insertPending(request, tracking, reason, { clientId });
+    }
+    const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, pendingRowId)).get();
+    if (!row) throw notFound('Queue item', pendingRowId);
+    const wasHeld = row.pendingGrab?.hold === 'diskSpace';
+    const nowIso = this.now().toISOString();
+    this.db
+      .update(trackedDownloads)
+      .set({
+        trackedStatus: 'warning',
+        statusMessages: [{ title: row.title, messages: [reason] }],
+        updatedAt: nowIso,
+        ...(row.pendingGrab
+          ? { pendingGrab: { ...row.pendingGrab, hold: 'diskSpace' as const, reason, ...(clientId !== null ? { clientId } : {}) } }
+          : {}),
+      })
+      .where(eq(trackedDownloads.id, pendingRowId))
+      .run();
+    if (!wasHeld) this.timeline.record(subjectOf(row), 'held', { message: reason });
+    return this.getTracked(pendingRowId);
   }
 
   // ---- queue view ----------------------------------------------------------------------
@@ -1382,11 +1846,13 @@ export class DownloadClientsService {
   queueStatus(): QueueStatus {
     const items = this.visibleItems();
     const unknownCount = items.filter(isUnknownMedia).length;
+    const guard = this.diskGuardStatus();
     return {
       totalCount: items.length - unknownCount,
       unknownCount,
       errors: items.filter((i) => i.trackedStatus === 'error').length,
       warnings: items.filter((i) => i.trackedStatus === 'warning').length,
+      diskGuard: { paused: guard.paused, held: guard.held, volumes: guard.volumes, minimumFreeBytes: guard.minimumFreeBytes },
     };
   }
 
@@ -1476,6 +1942,10 @@ export class DownloadClientsService {
       engineStarting: insights?.starting?.() ?? false,
       maxActiveDownloads: insights?.maxActiveDownloads?.() ?? null,
       stallMinutes: Math.round(Math.max(0, this.stallAfterMs()) / 60_000),
+      stallMs: Math.max(0, this.stallAfterMs()),
+      recovery: this.recovery(),
+      diskPaused: this.diskPausedInfo(),
+      now: this.now(),
     };
   }
 
@@ -1509,6 +1979,17 @@ export class DownloadClientsService {
       ...(builtin && ctx.engineStarting ? { engineStarting: true } : health && !health.ok ? { clientError: health.message ?? 'unknown error' } : {}),
       killSwitch,
       maxActiveDownloads: builtin ? ctx.maxActiveDownloads : null,
+      diskPaused: row.state === 'downloading' && row.diskPausedAt !== null ? ctx.diskPaused : undefined,
+      diskHeld: row.state === 'pending' && row.pendingGrab?.hold === 'diskSpace',
+      stallRecovery:
+        row.stalledSince === null
+          ? undefined
+          : planStallRecovery(
+              { stalledSince: row.stalledSince, reannouncedAt: row.reannouncedAt, progress },
+              ctx.recovery,
+              ctx.now,
+              ctx.stallMs,
+            )?.info,
     });
     const etaMs = engine ? engine.etaMs : row.etaMs ?? undefined;
     return {
@@ -1600,6 +2081,44 @@ interface QueueContext {
   engineStarting?: boolean;
   maxActiveDownloads: number | null;
   stallMinutes: number;
+  stallMs: number;
+  recovery: RecoverySettings;
+  diskPaused: { minimumBytes: number; resumeAboveBytes: number };
+  now: Date;
+}
+
+/** Downloads sharing a folder, with the free space of its volume (null when unknown). */
+interface VolumeGroup {
+  free: number | null;
+  rows: TrackedDownloadRow[];
+}
+
+/** Stall recovery and disk-guard knobs from Settings > Media Management. */
+function recoveryFromSettings(db: Db): RecoverySettings {
+  const m = getSection(db, 'mediaManagement');
+  return {
+    stallRecovery: m.stallRecovery ?? DEFAULT_RECOVERY_SETTINGS.stallRecovery,
+    replaceAfterMs: (m.stallReplaceMinutes ?? 30) * 60_000,
+    replaceMaxProgress: (m.stallReplaceMaxProgress ?? 90) / 100,
+    diskGuard: (m.diskSpaceGuard ?? DEFAULT_RECOVERY_SETTINGS.diskGuard) && !m.skipFreeSpaceCheck,
+  };
+}
+
+/** A download still expected to transfer (the disk-space guard pauses only those). */
+function isTransferring(row: TrackedDownloadRow): boolean {
+  return (
+    row.state === 'downloading' &&
+    (row.clientStatus === 'downloading' || row.clientStatus === 'queued' || row.clientStatus === 'warning') &&
+    row.progress < 1
+  );
+}
+
+function subjectOf(row: Pick<TrackedDownloadRow, 'id' | 'downloadId' | 'title'>): { id: number; downloadId: string; title: string } {
+  return { id: row.id, downloadId: row.downloadId, title: row.title };
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
 }
 
 function killSwitchText(reason: string | undefined): string {

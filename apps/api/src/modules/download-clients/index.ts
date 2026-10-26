@@ -13,13 +13,23 @@ export {
   type EngineInsights,
   type EngineLive,
   type GrabRequest,
+  type PendingSentHook,
   type PickedClient,
   type RefreshSummary,
+  type ReplacementSearch,
   type TrackedDownload,
   type TrackedDownloadHook,
   type TrackingInfo,
 } from './service.js';
-export { DOWNLOAD_EVENTS_CLEANUP_JOB, REFRESH_QUEUE_JOB } from './jobs.js';
+export { DOWNLOAD_EVENTS_CLEANUP_JOB, REFRESH_QUEUE_JOB, RETRY_HELD_GRABS_JOB } from './jobs.js';
+export {
+  DEFAULT_RECOVERY_SETTINGS,
+  DISK_RESUME_MARGIN_BYTES,
+  diskGuardAction,
+  grabHoldReason,
+  planStallRecovery,
+  type RecoverySettings,
+} from './recovery.js';
 export { deriveState, type StateInput, type StateReason } from './state-reason.js';
 export { DownloadTimelineStore, DEFAULT_EVENT_RETENTION_DAYS } from './timeline.js';
 export * from './schema.js';

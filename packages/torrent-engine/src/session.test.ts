@@ -225,6 +225,9 @@ describe('Session management', () => {
     await waitFor(() => b.state === 'downloading');
     await s.resumeTorrent(a.infoHashHex);
     await waitFor(() => a.state === 'downloading' && b.state === 'queued');
+    // Re-announce only applies to a torrent that is networking.
+    expect(s.reannounceTorrent(a.infoHashHex)).toMatchObject({ trackers: 0 });
+    expect(s.reannounceTorrent(b.infoHashHex)).toBeNull();
     // b wrote nothing, but a sparse file may exist; removing with deleteData cleans it up
     await s.removeTorrent(a.infoHashHex, true);
     expect(s.getTorrent(a.infoHashHex)).toBeUndefined();

@@ -71,6 +71,44 @@ export const downloadDiskSpaceCheck: HealthCheckDef = {
   },
 };
 
+/**
+ * The disk-space guard is holding things: downloads paused because their volume fell below the
+ * minimum free space, grabs held until there is room. Clears itself once both are back.
+ */
+export const diskGuardCheck: HealthCheckDef = {
+  id: 'DownloadDiskGuard',
+  async run(deps) {
+    if (!deps.diskGuard) return [];
+    const g = await deps.diskGuard();
+    const out: HealthCheck[] = [];
+    const min = formatMiB(g.minimumFreeBytes);
+    if (g.pausedTitles.length > 0) {
+      const where = g.volumes.map((v) => `${v.path} (${formatMiB(v.freeBytes)} free)`).join(', ');
+      out.push(
+        finding(
+          this.id,
+          'error',
+          `Paused ${g.pausedTitles.length} download(s) because the download volume is below the ${min} minimum free space${where ? `: ${where}` : ''}. They resume automatically when space is freed.`,
+          'download-disk-guard-paused',
+        ),
+      );
+    }
+    if (g.heldTitles.length > 0) {
+      const names = g.heldTitles.slice(0, 3).join(' | ');
+      const more = g.heldTitles.length > 3 ? ` and ${g.heldTitles.length - 3} more` : '';
+      out.push(
+        finding(
+          this.id,
+          'warning',
+          `${g.heldTitles.length} grab(s) are held until the download volume has room (minimum free space ${min}): ${names}${more}`,
+          'download-disk-guard-held',
+        ),
+      );
+    }
+    return out;
+  },
+};
+
 /** Downloads without new data for longer than the stall threshold. */
 export const stalledDownloadsCheck: HealthCheckDef = {
   id: 'DownloadStalled',

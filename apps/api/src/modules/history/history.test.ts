@@ -317,6 +317,14 @@ describe('look-ups', () => {
     expect(f.history.findByDownloadId('none')).toEqual([]);
   });
 
+  it('re-keys the rows of a held grab once it got the client id', () => {
+    grab(tv(f.ep.s1e1), 'pending:1');
+    expect(f.history.rekeyDownloadId('pending:1', 'D2')).toBe(1);
+    expect(f.history.findByDownloadId('pending:1')).toEqual([]);
+    expect(f.history.mostRecentForDownloadId('D2', 'grabbed')).not.toBeNull();
+    expect(f.history.rekeyDownloadId('D2', 'D2')).toBe(0);
+  });
+
   it('returns the most recent row for an episode or movie with id tie-break', () => {
     expect(f.history.mostRecentForEpisode(f.ep.s1e1)).toBeNull();
     grab(tv(f.ep.s1e1), 'X');

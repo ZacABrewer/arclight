@@ -31,6 +31,7 @@ import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { ActivityHeader, formatBytes, formatEta } from './activity-shared.js';
 import { needsManualImport } from './manual-import/mapping.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
+import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
 import { TorrentDrawer } from './torrent-drawer.js';
@@ -216,7 +217,8 @@ export function QueuePage() {
       align: 'right',
       cell: (r) => (
         <span className="al-activity-actions">
-          {isPendingItem(r) ? null : (
+          {/* Pending rows only when held for disk space: their timeline and "Try another release". */}
+          {isPendingItem(r) && r.stateCode !== 'diskHeld' ? null : (
             <Button
               size="sm"
               variant="ghost"
@@ -265,6 +267,7 @@ export function QueuePage() {
     <div className="al-activity">
       <ActivityHeader active="queue" />
       <EngineBannerSlot engine={engine.data ?? undefined} vpn={vpn.data ?? undefined} />
+      <DiskGuardBanner guard={status.data?.diskGuard} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         {queue.isError ? (
           <div className="al-activity-pad">
@@ -291,7 +294,9 @@ export function QueuePage() {
             selected={selected}
             onSelectionChange={setSelected}
             expandedRows={expanded}
-            renderExpanded={(r) => <QueueItemDetail item={r} builtin={isBuiltin(r)} id={detailId(r.id)} />}
+            renderExpanded={(r) => (
+              <QueueItemDetail item={r} builtin={isBuiltin(r)} id={detailId(r.id)} actions={<QueueRecoveryActions item={r} />} />
+            )}
             bulkActions={(keys) => {
               const items = records.filter((r) => keys.has(r.id));
               const pendingItems = items.filter(isPendingItem);

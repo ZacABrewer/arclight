@@ -37,6 +37,21 @@ export interface StateInput {
   killSwitch?: { reason?: string | undefined } | undefined;
   /** Active-download limit of the client, when known (for "queued" sentences). */
   maxActiveDownloads?: number | null | undefined;
+  /** Paused by the disk-space guard; resumes once the volume has `resumeAboveBytes` free. */
+  diskPaused?: { minimumBytes: number; resumeAboveBytes: number } | undefined;
+  /** A pending grab the disk-space guard holds back. */
+  diskHeld?: boolean | undefined;
+  /** Where stall recovery stands, appended to the "stalled" sentence. */
+  stallRecovery?: StallRecoveryInfo | undefined;
+}
+
+export interface StallRecoveryInfo {
+  /** Minutes since fresh peers were asked for (step 1), when they were. */
+  reannouncedMinutesAgo?: number | undefined;
+  /** Minutes until the release is replaced (step 2); 0 = at the next check. */
+  replaceInMinutes?: number | undefined;
+  /** Not replaced because the download is at least this far (percent). */
+  keptAtProgress?: number | undefined;
 }
 
 export interface StateReason {
@@ -57,6 +72,8 @@ export const STATE_SEVERITY: Readonly<Record<QueueItemStateCode, QueueSeverity>>
   noPeers: 'warning',
   stalled: 'warning',
   diskSpace: 'error',
+  diskPaused: 'warning',
+  diskHeld: 'warning',
   clientUnavailable: 'error',
   missing: 'warning',
   warning: 'warning',
@@ -76,6 +93,8 @@ export const NOT_TRANSFERRING: ReadonlySet<QueueItemStateCode> = new Set<QueueIt
   'queued',
   'paused',
   'killSwitch',
+  'diskPaused',
+  'diskHeld',
   'clientUnavailable',
   'missing',
   'error',
@@ -96,6 +115,9 @@ export function deriveState(input: StateInput): StateReason {
 
   switch (input.state) {
     case 'pending':
+      if (input.diskHeld) {
+        return r('diskHeld', first ?? 'Held back: not enough free disk space on the download volume. It is sent automatically when there is room.');
+      }
       return r('pendingGrab', first ?? 'Waiting to be sent to a download client.', input.trackedStatus === 'ok' ? 'info' : 'warning');
     case 'importing':
       return r('importing', 'Importing into the library.');
@@ -121,6 +143,13 @@ export function deriveState(input: StateInput): StateReason {
     const why = input.killSwitch.reason ? ` (${trimDot(input.killSwitch.reason)})` : '';
     return r('killSwitch', `Paused by the VPN kill switch${why}. It resumes on its own when the VPN reconnects.`);
   }
+  if (input.diskPaused) {
+    const { minimumBytes, resumeAboveBytes } = input.diskPaused;
+    return r(
+      'diskPaused',
+      `Paused by Arclight: the download volume is below the ${formatBytes(minimumBytes)} minimum free space. It resumes automatically once ${formatBytes(resumeAboveBytes)} is free.`,
+    );
+  }
   if (input.diskShortfall && input.diskShortfall > 0) {
     return r('diskSpace', `Not enough free disk space to finish: ${formatBytes(input.diskShortfall)} short on the download volume.`);
   }
@@ -141,7 +170,7 @@ export function deriveState(input: StateInput): StateReason {
   }
   if (input.stalledSince) {
     const minutes = input.stallMinutes ? ` for ${input.stallMinutes}+ minutes` : '';
-    return r('stalled', `No new data received${minutes}.${peerSentence(input.live)}`);
+    return r('stalled', `No new data received${minutes}.${peerSentence(input.live)}${recoverySentence(input.stallRecovery)}`);
   }
   const live = input.live;
   if (live && live.connectedPeers === 0 && input.progress < 1) {
@@ -156,6 +185,23 @@ export function deriveState(input: StateInput): StateReason {
     return r('downloading', `Downloading from ${plural(live.connectedPeers, 'peer')}${seeds}.`);
   }
   return r('downloading', 'Downloading.');
+}
+
+/** Stall recovery's progress as sentences: fresh peers asked for, replacement due or ruled out. */
+function recoverySentence(info: StallRecoveryInfo | undefined): string {
+  if (!info) return '';
+  let out = '';
+  const ago = info.reannouncedMinutesAgo;
+  if (ago !== undefined) out += ago < 1 ? ' Asked for fresh peers just now.' : ` Asked for fresh peers ${plural(ago, 'minute')} ago.`;
+  if (info.keptAtProgress !== undefined) {
+    out += ` Not replaced automatically: it is past ${info.keptAtProgress}%.`;
+  } else if (info.replaceInMinutes !== undefined) {
+    out +=
+      info.replaceInMinutes < 1
+        ? ' It is replaced with another release at the next check if no data arrives.'
+        : ` If no data arrives it is replaced with another release in about ${plural(info.replaceInMinutes, 'minute')}.`;
+  }
+  return out;
 }
 
 function peerSentence(live: QueueItemLive | null | undefined): string {

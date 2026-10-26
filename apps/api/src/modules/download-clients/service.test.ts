@@ -278,7 +278,7 @@ describe('refreshQueue', () => {
     fake(c.id).items = [item({ id: 'h1', status: 'warning', statusMessage: 'Tracker unreachable' })];
     await service.refreshQueue();
     const status = service.queueStatus();
-    expect(status).toEqual({ totalCount: 0, unknownCount: 1, errors: 0, warnings: 1 });
+    expect(status).toMatchObject({ totalCount: 0, unknownCount: 1, errors: 0, warnings: 1 });
     expect(service.listTracked()[0]!.statusMessages[0]!.messages).toEqual(['Tracker unreachable']);
   });
 

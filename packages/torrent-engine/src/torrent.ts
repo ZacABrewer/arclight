@@ -424,6 +424,21 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     return p;
   }
 
+  /**
+   * Asks for fresh peers now: announces to every tracker (ignoring their min interval), runs a
+   * DHT lookup when DHT applies (not for private torrents) and retries known candidates. Null
+   * while the torrent is not networking (paused, queued, failed); otherwise what was contacted.
+   */
+  reannounce(): { trackers: number; dht: boolean } | null {
+    if (!this.networking) return null;
+    const trackers = this.trackers?.forceAnnounce() ?? 0;
+    const dht = this.ctx.settings().dht && !(this.metainfo?.private ?? false) && this.ctx.dhts().some((d) => d.listening);
+    if (dht) void this.dhtAnnounce();
+    for (const c of this.candidates.values()) if (!c.connected && !c.banned) c.nextAttemptAt = 0;
+    this.connectMore();
+    return { trackers, dht };
+  }
+
   /** Clears the paused flag; the session's queue decides when networking starts. */
   resume(): void {
     this.userPaused = false;
