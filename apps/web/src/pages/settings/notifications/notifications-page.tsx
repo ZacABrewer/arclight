@@ -4,7 +4,10 @@ import { ApiError, errorMessage } from '../../../api/client.js';
 import {
   eventFlagLabel,
   eventFlags,
+  fromNotificationForm,
+  notificationFormFields,
   notificationsApi,
+  toNotificationForm,
   type Notification,
   type NotificationInput,
   type NotificationSchema,
@@ -82,8 +85,8 @@ export function supportedRequestTriggers(source: Record<string, unknown>): Array
 
 const REQUEST_TRIGGER_SET = new Set<string>(REQUEST_TRIGGERS);
 
-function toBody(values: FormValues): NotificationInput {
-  const { id: _id, ...rest } = values;
+function toBody(values: FormValues, schema: NotificationSchema | undefined): NotificationInput {
+  const { id: _id, ...rest } = fromNotificationForm(values, schema?.fields ?? []);
   return rest as NotificationInput;
 }
 
@@ -92,10 +95,13 @@ type Editing = { notification: Notification; schema: NotificationSchema | undefi
 function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: () => void }) {
   const existing = 'notification' in editing ? editing.notification : null;
   const fields = useMemo<FieldDefinition[]>(() => {
-    const defs = (editing.schema?.fields ?? []) as FieldDefinition[];
+    const defs = notificationFormFields(editing.schema?.fields ?? []);
     return defs.some((f) => f.name === 'name') ? defs : [NAME_FIELD, ...defs];
   }, [editing.schema]);
-  const base = (existing ?? { ...editing.schema!.template, name: editing.schema!.template.name || editing.schema!.implementationName }) as FormValues;
+  const base = toNotificationForm(
+    (existing ?? { ...editing.schema!.template, name: editing.schema!.template.name || editing.schema!.implementationName }) as FormValues,
+    editing.schema?.fields ?? [],
+  );
   const form = useSchemaForm(fields, base);
   const save = useSaveNotification();
   const remove = useDeleteNotification();
@@ -108,7 +114,7 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
 
   const submit = () => {
     if (!form.validate()) return;
-    save.mutate({ id: existing?.id, body: toBody(form.values) }, { onSuccess: onClose });
+    save.mutate({ id: existing?.id, body: toBody(form.values, editing.schema) }, { onSuccess: onClose });
   };
 
   return (
@@ -128,7 +134,7 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
               <TestButton
                 beforeTest={form.validate}
                 onTest={async () =>
-                  notificationTestOutcome(await notificationsApi.test({ ...toBody(form.values), ...(existing ? { id: existing.id } : {}) }))
+                  notificationTestOutcome(await notificationsApi.test({ ...toBody(form.values, editing.schema), ...(existing ? { id: existing.id } : {}) }))
                 }
               />
             }

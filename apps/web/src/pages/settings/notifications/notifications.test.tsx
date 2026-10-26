@@ -11,14 +11,18 @@ type Call = { url: string; method: string; body: unknown };
 let calls: Call[];
 
 const notifications = [
-  { id: 1, name: 'Discord', implementation: 'discord', tags: [], settings: { webhookUrl: 'https://discord.test/hook' }, onGrab: true, onDownload: true, onHealthIssue: false },
+  { id: 1, name: 'Discord', implementation: 'discord', tags: [], settings: { webhookUrl: 'https://discord.test/hook', mentions: ['@here'] }, onGrab: true, onDownload: true, onHealthIssue: false },
 ];
 const schemas = [
   {
     implementation: 'discord',
     implementationName: 'Discord',
     description: 'Post to a Discord channel',
-    fields: [{ name: 'settings.webhookUrl', label: 'Webhook URL', type: 'text', required: true }],
+    // The server's shape: names are keys of `settings`, list types have no widget of their own.
+    fields: [
+      { name: 'webhookUrl', label: 'Webhook URL', type: 'url', required: true, secret: true },
+      { name: 'mentions', label: 'Mentions', type: 'textList', required: false, secret: false },
+    ],
     template: { name: '', implementation: 'discord', tags: [], settings: {}, onGrab: false, onDownload: false, onHealthIssue: false },
   },
 ];
@@ -95,6 +99,21 @@ describe('Settings -> Notifications', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ onGrab: false, onDownload: true, onHealthIssue: true });
+  });
+
+  it('edits settings fields and saves them under settings, lists as arrays', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Discord' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Discord' });
+    expect((within(dialog).getByLabelText(/Webhook URL/) as HTMLInputElement).value).toBe('https://discord.test/hook');
+    const mentions = within(dialog).getByLabelText(/Mentions/) as HTMLTextAreaElement;
+    expect(mentions.value).toBe('@here');
+    fireEvent.change(mentions, { target: { value: '@here\n@everyone' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    const body = calls.find((c) => c.method === 'PUT')!.body as Record<string, unknown>;
+    expect(body.settings).toEqual({ webhookUrl: 'https://discord.test/hook', mentions: ['@here', '@everyone'] });
+    expect(body).not.toHaveProperty('webhookUrl');
   });
 
   it('names the object in the delete confirm', async () => {
