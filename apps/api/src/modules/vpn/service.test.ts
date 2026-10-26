@@ -103,7 +103,7 @@ describe('forwarded port sync', () => {
     expect(ports.setListenPortOnAll.mock.calls).toEqual([[41000], [42000]]);
   });
 
-  it('tolerates client errors, flags the status and retries on the next poll', async () => {
+  it('tolerates client errors, flags the status and retries after a back-off', async () => {
     const ports = {
       setListenPortOnAll: vi
         .fn<ListenPortSync['setListenPortOnAll']>()
@@ -112,6 +112,9 @@ describe('forwarded port sync', () => {
     };
     const h = await setup({ settings: { enabled: true }, probe: () => ({ connected: true, forwardedPort: 41000 }), ports });
     await expect(h.service.refresh()).resolves.toMatchObject({ downloadClientPortSynced: false });
+    await expect(h.service.refresh()).resolves.toMatchObject({ downloadClientPortSynced: false });
+    expect(ports.setListenPortOnAll).toHaveBeenCalledTimes(1);
+    h.advance(10 * 60_000);
     await expect(h.service.refresh()).resolves.toMatchObject({ downloadClientPortSynced: true });
     expect(ports.setListenPortOnAll).toHaveBeenCalledTimes(2);
   });

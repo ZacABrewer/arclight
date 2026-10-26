@@ -19,6 +19,9 @@ import { nodeShellRunner } from './shell.js';
 // address for the built-in torrent engine. The kill switch is the `vpn` event with
 // `killSwitchEngaged: true` (and `getTunnelAddress()` returning null).
 
+/** Wait before retrying a failed forwarded-port sync for the same port. */
+const SYNC_RETRY_MS = 10 * 60_000;
+
 export interface ListenPortSync {
   setListenPortOnAll(port: number): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>>;
 }
@@ -71,6 +74,8 @@ export class VpnService {
 
   private status: VpnStatus = initialStatus();
   private lastSyncedPort: number | undefined;
+  /** Last failed sync; retrying every poll can get Arclight banned by qBittorrent's login guard. */
+  private syncFailure: { port: number; at: number } | undefined;
   private inFlight: Promise<VpnStatus> | null = null;
   private manuallyDisconnected = false;
   private watchTimer: ReturnType<typeof setInterval> | null = null;
@@ -111,6 +116,7 @@ export class VpnService {
     this.bus?.publish({ type: 'settings', section: 'vpn' });
     // Provider or credentials may have changed: re-sync the port and re-check soon.
     this.lastSyncedPort = undefined;
+    this.syncFailure = undefined;
     void this.refresh().catch((err: unknown) => this.log?.warn({ err }, 'vpn refresh after settings change failed'));
     return maskVpnSettings(saved, this.env);
   }
@@ -268,17 +274,24 @@ export class VpnService {
     const port = next.forwardedPort;
     if (s.provider.type !== 'gluetun' || !s.syncForwardedPortToDownloadClient || !this.downloadClients) return;
     if (port === undefined || !next.connected || port === this.lastSyncedPort) return;
+    const failure = this.syncFailure;
+    if (failure && failure.port === port && this.now().getTime() - failure.at < SYNC_RETRY_MS) {
+      next.downloadClientPortSynced = false;
+      return;
+    }
     let results: Awaited<ReturnType<ListenPortSync['setListenPortOnAll']>>;
     try {
       results = await this.downloadClients.setListenPortOnAll(port);
     } catch (err) {
       this.log?.warn({ err, port }, 'forwarded port sync failed');
       next.downloadClientPortSynced = false;
+      this.syncFailure = { port, at: this.now().getTime() };
       return;
     }
     if (results.length === 0) return; // no qBittorrent client yet: try again next poll
     const ok = results.every((r) => r.ok);
     next.downloadClientPortSynced = ok;
+    this.syncFailure = ok ? undefined : { port, at: this.now().getTime() };
     if (ok) {
       this.lastSyncedPort = port;
       this.log?.info({ port, clients: results.map((r) => r.name) }, 'forwarded port synced to download clients');

@@ -126,7 +126,17 @@
 .wiz-added__dot { width: 6px; height: 6px; flex: none; background: var(--al-cyan); }
 .wiz-added__path { font-size: 13px; color: var(--al-text-1); min-width: 0; overflow-wrap: anywhere; }
 .wiz-added__remove { margin-left: auto; color: var(--al-danger-text); }
-.wiz-embed { max-height: 420px; overflow: auto; border: 1px solid var(--al-line-1); padding: 12px; }
+.wiz-embed { container-type: inline-size; max-height: 520px; overflow: auto; border: 1px solid var(--al-line-1); padding: 12px; }
+/* An embedded settings page sits under the step's own heading: drop its page header and pane title.
+   Its layout rules are viewport media queries, so re-flow it by the box's width instead. */
+.wiz-embed .al-settings-standalone > .al-page-header, .wiz-embed .al-settings-pane__title { display: none; }
+.wiz-embed .al-settings-pane__head { margin-bottom: 18px; }
+@container (max-width: 860px) {
+  .wiz-embed .al-settings-main--aside { grid-template-columns: minmax(0, 1fr); }
+  .wiz-embed .al-settings-main__aside { position: static; }
+  .wiz-embed .al-settings-pane { padding: 16px 16px 0; }
+  .wiz-embed .al-form-grid, .wiz-embed .al-form-row { grid-template-columns: minmax(0, 1fr); gap: 8px; }
+}
 .wiz-footer { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .wiz-footer__spacer { flex: 1; }
 @media (max-width: 1023.98px) { .wiz-stepper { margin: 0; } }
