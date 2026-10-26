@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:absolute;inset:0;pointer-events:none;font-family:Archivo,sans-serif">
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.18);background:linear-gradient(180deg,rgba(6,22,28,.5),rgba(1,6,9,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px;pointer-events:auto">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff"></div></div>
+    <sc-for list="{{ rail }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;letter-spacing:.06em">{{ r.code }}</div>
+        <div style="font-size:9px;font-stretch:110%;letter-spacing:.1em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="position:absolute;left:84px;right:0;top:0;height:60px;border-bottom:1px solid rgba(110,246,255,.14);background:linear-gradient(180deg,rgba(4,16,20,.55),rgba(1,6,9,.2));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;gap:28px;padding:0 28px 0 40px;font-size:14px;color:#9fc3cc;pointer-events:auto">
+    <div style="font-stretch:125%;font-weight:600;font-size:15px;letter-spacing:.14em;color:#e9fdff">ARCLIGHT</div>
+    <div style="flex:1;max-width:420px;height:34px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid rgba(110,246,255,.25);color:#6f939b">Search<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff">/</span></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;color:#c9f9ff"><div style="width:7px;height:7px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>Connected</div>
+    <div>VPN Amsterdam</div>
+    <div><span style="font-family:'JetBrains Mono',monospace;color:#e9fdff">4</span> requests</div>
+    <div style="color:#ffc79e"><span style="font-family:'JetBrains Mono',monospace">2</span> issues</div>
+    <div style="width:34px;height:34px;border:1px solid rgba(110,246,255,.35);display:flex;align-items:center;justify-content:center;font-stretch:120%;font-size:12px;font-weight:600;color:#e9fdff">SK</div>
+  </div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;active&quot;:{&quot;editor&quot;:&quot;enum&quot;,&quot;options&quot;:[&quot;DB&quot;,&quot;LB&quot;,&quot;DS&quot;,&quot;RQ&quot;,&quot;CL&quot;,&quot;WN&quot;,&quot;AC&quot;,&quot;SB&quot;,&quot;IX&quot;,&quot;ST&quot;,&quot;SY&quot;],&quot;default&quot;:&quot;DB&quot;,&quot;tsType&quot;:&quot;string&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const active = this.props.active ?? 'DB';
+    const codes = [['DB','DASH'],['LB','LIB'],['DS','DISC'],['RQ','REQ'],['CL','CAL'],['WN','WANT'],['AC','ACT'],['SB','SUBS'],['IX','INDX'],['ST','SET'],['SY','SYS']];
+    return { rail: codes.map(([code, label]) => { const on = code === active; return { code, label, color: on ? '#e9fdff' : '#5d8790', bg: on ? 'rgba(110,246,255,.1)' : 'transparent', bar: on ? '#6ef6ff' : 'transparent', glow: on ? '0 0 10px #6ef6ff' : 'none' }; }) };
+  }
+}
+</script>
+</body>
+</html>
