@@ -14,7 +14,7 @@ import { Button, Chip, Drawer, EmptyState, ErrorBlock, FilterBar, KeyValue, Pane
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { useToast } from '../../components/toast.js';
 import { useHistory, useMarkHistoryFailed, useRedownloadHistory } from '../../hooks/activity.js';
-import { formatDateTime, relativeTime } from '../../lib/format.js';
+import { formatDateTime, languageNames, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { DecisionBatchModal } from '../library/decisions/decisions-panel.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
@@ -121,9 +121,14 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
     { label: t('common.date'), value: formatDateTime(record.date) },
   ];
   if (record.quality?.quality?.name) items.push({ label: t('common.quality'), value: record.quality.quality.name });
-  if (record.languages?.length) items.push({ label: t('common.languages'), value: record.languages.join(', '), mono: false });
+  if (record.languages?.length) {
+    const assumed = record.data?.languageAssumed === 'true';
+    const names = languageNames(record.languages);
+    items.push({ label: t('common.languages'), value: assumed ? t('activity.history.languageAssumed', { names }) : names, mono: false });
+  }
   if (record.downloadId) items.push({ label: t('activity.history.downloadId'), value: <span className="al-activity-break">{record.downloadId}</span> });
   for (const [k, v] of Object.entries(record.data ?? {})) {
+    if (k === 'languageAssumed') continue;
     items.push({ key: `data-${k}`, label: k, value: <span className="al-activity-break">{typeof v === 'string' ? v : JSON.stringify(v)}</span> });
   }
   return (

@@ -1,3 +1,4 @@
+import { languageNames } from '../../lib/format.js';
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
@@ -549,7 +550,7 @@ function EpisodeDrawer({
               { label: t('common.quality'), value: qualityName(file.quality) ?? '—' },
               { label: t('library.seriesDetails.video'), value: [file.mediaInfo?.videoCodec, file.mediaInfo?.resolution, file.mediaInfo?.videoDynamicRange].filter(Boolean).join(' · ') || '—' },
               { label: t('library.seriesDetails.audio'), value: [file.mediaInfo?.audioCodec, file.mediaInfo?.audioChannels].filter(Boolean).join(' · ') || '—' },
-              { label: t('common.languages'), value: file.languages.join(', ') || '—' },
+              { label: t('common.languages'), value: languageNames(file.languages) },
               { label: t('common.group'), value: file.releaseGroup ?? '—' },
             ]}
           />

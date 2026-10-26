@@ -1,5 +1,5 @@
 import { formatDateTime as formatPreferredDateTime } from './ui-preferences.js';
-import { t, formatDecimal } from '../i18n/index.js';
+import { t, formatDecimal, intlLocale } from '../i18n/index.js';
 
 export function formatUptime(totalSeconds: number): string {
   const d = Math.floor(totalSeconds / 86_400);
@@ -50,4 +50,26 @@ export function formatSize(bytes: number | null | undefined): string {
 export function formatRate(bytesPerSecond: number | null | undefined): string {
   if (bytesPerSecond == null || !Number.isFinite(bytesPerSecond)) return '—';
   return `${formatSize(bytesPerSecond)}/s`;
+}
+
+/** Language codes as names in the UI language ("en" -> "English"); unknown codes pass through. */
+export function languageNames(codes: readonly string[] | null | undefined): string {
+  if (!codes || codes.length === 0) return '—';
+  let names: Intl.DisplayNames | null = null;
+  try {
+    const locale = intlLocale();
+    names = new Intl.DisplayNames(locale ? [locale] : [], { type: 'language' });
+  } catch {
+    names = null;
+  }
+  return codes
+    .map((code) => {
+      if (code.toLowerCase() === 'unknown') return t('common.unknownLanguage');
+      try {
+        return names?.of(code) ?? code;
+      } catch {
+        return code;
+      }
+    })
+    .join(', ');
 }

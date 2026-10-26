@@ -1,3 +1,4 @@
+import { languageNames } from '../../lib/format.js';
 import { useState } from 'react';
 import type { MediaFile } from '@arclight/shared';
 import { Button, EmptyState, Modal, Table, Tag, type Column } from '../../arclight/index.js';
@@ -53,7 +54,7 @@ export function MediaFilesTable({
       : []),
     { key: 'quality', header: t('common.quality'), sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityLabel quality={f.quality} /> },
     { key: 'mediainfo', header: t('library.mediaFilesTable.mediaInfo'), cell: (f) => <MediaInfoBadges file={f} /> },
-    { key: 'languages', header: t('common.languages'), cell: (f) => (f.languages.length ? f.languages.join(', ') : '—'), mono: true },
+    { key: 'languages', header: t('common.languages'), cell: (f) => languageNames(f.languages), mono: false },
     { key: 'group', header: t('common.group'), cell: (f) => f.releaseGroup ?? '—', muted: true },
     { key: 'size', header: t('common.size'), sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
     { key: 'added', header: t('common.added'), sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },

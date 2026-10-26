@@ -985,6 +985,7 @@ export class HistoryService {
     base: Omit<NewHistoryRow, 'id' | 'date' | 'mediaType' | 'seriesId' | 'episodeId' | 'movieId'>,
   ): HistoryRecord[] {
     const date = this.now().toISOString();
+    base = this.withLanguages(target, base);
     const values: NewHistoryRow[] =
       target.mediaType === 'movie'
         ? [{ ...base, date, mediaType: 'movie', seriesId: null, episodeId: null, movieId: target.movieId }]
@@ -999,6 +1000,22 @@ export class HistoryService {
     const rows = this.db.insert(history).values(values).returning().all();
     if (rows.length > 0) this.bus?.publish({ type: 'history', action: 'added' });
     return rows.map((r) => this.toRecord(r));
+  }
+
+  /**
+   * Release names rarely state their language (most single-language releases carry no tag), so
+   * "unknown" alone is recorded as the item's original language with `languageAssumed` set.
+   * Codes are lower-case either way ("Unknown" and "unknown" were both being stored).
+   */
+  private withLanguages<T extends { languages: readonly string[]; data: Record<string, string> }>(target: HistoryTarget, base: T): T {
+    const known = [...new Set(base.languages.map((l) => l.toLowerCase()))].filter((l) => l !== 'unknown');
+    if (known.length > 0) return { ...base, languages: known };
+    const original =
+      target.mediaType === 'movie'
+        ? this.db.select({ l: movies.originalLanguage }).from(movies).where(eq(movies.id, target.movieId)).get()?.l
+        : this.db.select({ l: series.originalLanguage }).from(series).where(eq(series.id, target.seriesId)).get()?.l;
+    if (!original || original.toLowerCase() === 'unknown') return { ...base, languages: ['unknown'] };
+    return { ...base, languages: [original.toLowerCase()], data: { ...base.data, languageAssumed: 'true' } };
   }
 
   private select(where: SQL | undefined, order: 'newest' | 'oldest'): HistoryRecord[] {
