@@ -303,7 +303,7 @@ describe('definition feed wiring', () => {
   it('settings live in indexers.definitionFeed and survive Indexer options saves', async () => {
     const db = await createTestDb();
     expect(getDefinitionFeedSettings(db)).toMatchObject({ enabled: true, intervalHours: 12, mode: 'auto' });
-    expect(getDefinitionFeedSettings(db).url).toBe('https://raw.githubusercontent.com/zacheryabrewer/arclight/main/packages/indexers/src/definitions/builtin/');
+    expect(getDefinitionFeedSettings(db).url).toBe('https://raw.githubusercontent.com/ZacABrewer/arclight/main/packages/indexers/src/definitions/builtin/');
     updateDefinitionFeedSettings(db, { enabled: true, url: 'https://example.test/defs/', intervalHours: 6, mode: 'manual' });
     updateIndexerGlobalSettings(db, { ...getIndexerGlobalSettings(db), rssSyncIntervalMinutes: 30 });
     expect(getDefinitionFeedSettings(db)).toMatchObject({ url: 'https://example.test/defs/', mode: 'manual' });

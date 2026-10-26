@@ -6,7 +6,7 @@
 # when you do not use a VPN. For the published image, see README.md.
 services:
   arclight:
-    image: ${ARCLIGHT_IMAGE:-ghcr.io/zacheryabrewer/arclight:latest}
+    image: ${ARCLIGHT_IMAGE:-ghcr.io/zacabrewer/arclight:latest}
     container_name: arclight
     labels:
       # Opt in to Arclight self-update (Settings > Updates, mode "auto").

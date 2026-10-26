@@ -172,7 +172,7 @@ elevated (Administrator) PowerShell.
 | `ARCLIGHT_TORRENT_ENGINE` | `1` | `0` stops the built-in engine from starting or registering its client |
 | `ARCLIGHT_DOCKER` | auto | Force Docker path defaults with `1` |
 | `ARCLIGHT_VERSION` | `0.1.0-dev` | Version reported by the app (set at image build) |
-| `ARCLIGHT_IMAGE` | `ghcr.io/zacheryabrewer/arclight:latest` | Release compose files only: which image to pull |
+| `ARCLIGHT_IMAGE` | `ghcr.io/zacabrewer/arclight:latest` | Release compose files only: which image to pull |
 | `PUID`, `PGID`, `TZ` | `1000`, `1000`, `UTC` | Handled by the container entrypoint |
 
 ### 2.8 Exposing it outside your home
