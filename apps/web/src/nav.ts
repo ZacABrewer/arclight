@@ -1,6 +1,7 @@
 import type { RailCode } from './arclight/index.js';
 import type { AppPath } from './router.js';
 import { t } from './i18n/index.js';
+import { canOpenAppPath, toAccess, type Access } from './auth/access.js';
 
 // The navigation tree. Each section sits under one of the 11 rail codes (several sections can
 // share a code: Issues and Watchlist live under RQ, Search under IX); the shell turns the
@@ -11,8 +12,10 @@ export interface NavLeaf {
   label: string;
   to: AppPath;
   phase?: string;
-  /** Hidden from users with role `user` (the api refuses them anyway). */
+  /** Hidden from everyone but admins (the api refuses them anyway). */
   adminOnly?: boolean;
+  /** Shown only to non-admins (the way back to the request portal). */
+  userOnly?: boolean;
 }
 
 export interface NavSection extends NavLeaf {
@@ -27,6 +30,8 @@ export interface NavSection extends NavLeaf {
 
 export const NAV: readonly NavSection[] = [
   { get label() { return t('common.dashboard'); }, to: '/', rail: 'DB' },
+  // Non-admins: their home is the request portal (discover, requests, account).
+  { get label() { return t('nav.requestPortal'); }, to: '/portal', rail: 'DS', userOnly: true },
   {
     get label() {
       return t('common.library');
@@ -194,12 +199,22 @@ export const NAV: readonly NavSection[] = [
   { get label() { return t('nav.healthDocs'); }, to: '/docs/system/health', base: '/docs', rail: 'SY', adminOnly: true },
 ];
 
-/** The navigation as a given role sees it. */
-export function visibleNav(isAdmin: boolean, nav: readonly NavSection[] = NAV): NavSection[] {
-  if (isAdmin) return [...nav];
-  return nav
-    .filter((s) => !s.adminOnly)
-    .map((s) => (s.children ? { ...s, children: s.children.filter((c) => !c.adminOnly) } : s));
+/**
+ * The navigation as a person sees it (`true`/`false`: admin or a portal-only user). Admins see
+ * every section; anyone else only the pages they may open (the granted app areas, request and
+ * issue management with those permissions) and the link back to the portal.
+ */
+export function visibleNav(who: Access | boolean, nav: readonly NavSection[] = NAV): NavSection[] {
+  const access = toAccess(who);
+  if (access.admin) return nav.filter((s) => !s.userOnly);
+  const may = (leaf: NavLeaf) => !leaf.adminOnly && (leaf.userOnly === true || canOpenAppPath(access, leaf.to));
+  return nav.flatMap((s): NavSection[] => {
+    if (!s.children) return may(s) ? [s] : [];
+    if (s.adminOnly) return [];
+    const children = s.children.filter(may);
+    if (children.length === 0) return [];
+    return [{ ...s, to: children[0]!.to, children }];
+  });
 }
 
 /** Find the nav entry for a path (used for placeholder titles and the document title). */
@@ -248,8 +263,8 @@ export interface RailEntry {
 }
 
 /** Rail items for a role: a code shows when at least one section under it is visible. */
-export function railFor(isAdmin: boolean, nav: readonly NavSection[] = NAV): RailEntry[] {
-  const visible = visibleNav(isAdmin, nav);
+export function railFor(who: Access | boolean, nav: readonly NavSection[] = NAV): RailEntry[] {
+  const visible = visibleNav(who, nav);
   return RAIL_CODES.flatMap((r) => {
     const first = visible.find((s) => s.rail === r.code);
     return first ? [{ ...r, href: first.to }] : [];
@@ -271,10 +286,10 @@ export function activeRailCode(pathname: string, nav: readonly NavSection[] = NA
  * every visible section under that code, and childless sections as one tab each. Empty when
  * the page draws its own sub-nav or there is only one destination.
  */
-export function sectionTabs(pathname: string, isAdmin: boolean, nav: readonly NavSection[] = NAV): NavLeaf[] {
+export function sectionTabs(pathname: string, who: Access | boolean, nav: readonly NavSection[] = NAV): NavLeaf[] {
   const code = activeRailCode(pathname, nav);
   if (!code) return [];
-  const sections = visibleNav(isAdmin, nav).filter((s) => s.rail === code);
+  const sections = visibleNav(who, nav).filter((s) => s.rail === code && !s.userOnly);
   if (sections.some((s) => s.pageNav)) return [];
   const leaves = sections.flatMap((s): NavLeaf[] => (s.children ? [...s.children] : [{ label: s.label, to: s.to }]));
   return leaves.length > 1 ? leaves : [];
@@ -299,24 +314,34 @@ export interface MobileTab {
   icon: 'home' | 'library' | 'discover' | 'activity' | 'inbox' | 'more';
 }
 
-/** Bottom tab bar (Page 10): Home, Library, Discover, Activity (Requests for role user), More. */
-export function mobileTabsFor(isAdmin: boolean): MobileTab[] {
+/**
+ * Bottom tab bar (Page 10): Home, Library, Discover, Activity, More for admins. Anyone else:
+ * the portal, Library when granted, More (the rest of what they may open).
+ */
+export function mobileTabsFor(who: Access | boolean): MobileTab[] {
+  const access = toAccess(who);
+  if (!access.admin) {
+    return [
+      { id: 'home', label: t('nav.requestPortal'), href: '/portal', icon: 'home' },
+      ...(access.areas.includes('library') ? [{ id: 'library' as const, label: t('common.library'), href: '/library/tv' as const, icon: 'library' as const }] : []),
+      { id: 'more', label: t('common.more'), href: null, icon: 'more' },
+    ];
+  }
   return [
     { id: 'home', label: t('nav.home'), href: '/', icon: 'home' },
     { id: 'library', label: t('common.library'), href: '/library/tv', icon: 'library' },
     { id: 'discover', label: t('common.discover'), href: '/discover', icon: 'discover' },
-    isAdmin
-      ? { id: 'activity', label: t('common.activity'), href: '/activity/queue', icon: 'activity' }
-      : { id: 'requests', label: t('common.requests'), href: '/requests', icon: 'inbox' },
+    { id: 'activity', label: t('common.activity'), href: '/activity/queue', icon: 'activity' },
     { id: 'more', label: t('common.more'), href: null, icon: 'more' },
   ];
 }
 
-export function activeMobileTab(pathname: string, isAdmin: boolean): MobileTabId {
+export function activeMobileTab(pathname: string, who: Access | boolean): MobileTabId {
+  const isAdmin = toAccess(who).admin;
   const code = activeRailCode(pathname);
   if (code === 'DB') return 'home';
   if (code === 'LB') return 'library';
-  if (code === 'DS') return 'discover';
+  if (code === 'DS') return isAdmin ? 'discover' : 'home';
   if (code === 'AC' && isAdmin) return 'activity';
   if (code === 'RQ' && !isAdmin) return 'requests';
   return 'more';

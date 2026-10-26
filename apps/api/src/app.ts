@@ -1,4 +1,4 @@
-import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault, type RouteOptions } from 'fastify';
 import cors from '@fastify/cors';
 import websocket from '@fastify/websocket';
 import {
@@ -88,12 +88,15 @@ export interface BuildAppOptions {
   probe?: boolean;
   /** Replaces the compat API's TMDB lookups (tests). */
   compatMetadata?: CompatMetadata;
+  /** Sees every route as it is registered (the route-table access test). */
+  onRoute?: (route: RouteOptions) => void;
 }
 
 export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: BuildAppOptions = {}) {
   const app = Fastify({ loggerInstance: log, trustProxy: true }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
+  if (opts.onRoute) app.addHook('onRoute', opts.onRoute);
 
   const bus = new EventBus();
   const scheduler = new Scheduler(db, bus, log.child({ component: 'scheduler' }));

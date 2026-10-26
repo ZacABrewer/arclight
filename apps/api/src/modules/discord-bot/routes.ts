@@ -40,10 +40,10 @@ export function discordBotRoutes(service: DiscordBotService): Plugin {
 
     app.post(
       '/user/me/discord/link-code',
-      { config: { allowUser: true }, schema: { response: { 200: DiscordLinkCode, ...errors } } },
+      { config: { access: { portal: true } }, schema: { response: { 200: DiscordLinkCode, ...errors } } },
       async (req) => service.createLinkCode(selfId(req)),
     );
-    app.delete('/user/me/discord/link', { config: { allowUser: true }, schema: { response: { 204: Empty, ...errors } } }, async (req, reply) => {
+    app.delete('/user/me/discord/link', { config: { access: { portal: true } }, schema: { response: { 204: Empty, ...errors } } }, async (req, reply) => {
       service.unlink(selfId(req));
       return reply.code(204).send(null);
     });

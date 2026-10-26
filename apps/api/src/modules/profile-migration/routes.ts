@@ -77,7 +77,7 @@ export function profileMigrationRoutes(
       async (req) => service.apply(req.body),
     );
 
-    app.get('/profilemigration/mismatch', { schema: { querystring: ProfileMismatchQuery, response: { 200: ProfileMismatchPage } } }, async (req) =>
+    app.get('/profilemigration/mismatch', { config: { access: { areas: ['wanted'] } }, schema: { querystring: ProfileMismatchQuery, response: { 200: ProfileMismatchPage } } }, async (req) =>
       service.mismatchPage(req.query),
     );
     app.get('/profilemigration/items', { schema: { response: { 200: z.array(ProfileItemStatus) } } }, async () => service.itemStatuses());

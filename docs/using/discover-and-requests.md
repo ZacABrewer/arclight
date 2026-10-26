@@ -4,6 +4,8 @@ Discover is where you browse movies and series to find something new. Requests a
 
 Most of the settings live in **Settings > Requests**, **Settings > Users** and **Settings > Discord bot**. The region in **Settings > Metadata** decides which streaming services, age ratings and release dates Discover shows.
 
+Everyone who is not an admin uses all of this in the [request portal](#public-request-portal): Discover, **My requests**, **Issues** and **Account**. The Discover, Requests and Issues pages described below with the left menu are the admin app's; users with the request or issue management permissions also get those Requests and Issues pages.
+
 ## Discover
 
 **Discover** in the left menu is a full catalogue of movies and series from TMDB. Its tabs are **Home**, **Movies**, **TV** and **Trending**. Every poster shows where the title stands in Arclight:
@@ -272,7 +274,7 @@ Issues let people report that something is wrong with a title you already have, 
 2. Under **What is wrong?** pick the Problem type: Video, Audio, Subtitles or Other. For a series, choose the season or episode.
 3. Describe it. The description becomes the first comment.
 
-Open **Issues** in the left menu to see them. Filter by status (open or resolved) and type. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues.
+Open **Issues** in the left menu (or in the portal header) to see them. Users see their own issues; View issues or Manage issues shows everyone's. Filter by status (open or resolved) and type. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues.
 
 ## Watchlist
 
@@ -290,7 +292,7 @@ Per-user settings in **Settings > Users > Manage**:
 
 ## Public request portal
 
-The portal is the request side of Arclight on its own, for people who do not use the full app: the same Discover home, browsing, search, title, person and collection pages, plus **My requests**, in a simple layout without the admin menu. It is off by default. Turn it on in **Settings > Requests > Public request portal**:
+The portal is the request side of Arclight on its own: the same Discover home, browsing, search, title, person and collection pages, plus **My requests**, **Issues** and **Account**, in a simple layout without the admin menu. It is where every signed-in user who is not an admin lands, and the only part of Arclight they see unless an admin grants app access (see [App access](users-and-security.md#app-access)). Signed-in users always have it. The **public** portal (for visitors who have not signed in, on extra paths and hostnames) is off by default. Turn it on in **Settings > Requests > Public request portal**:
 
 | Setting | Default | What it does |
 | --- | --- | --- |
@@ -302,7 +304,7 @@ The portal is the request side of Arclight on its own, for people who do not use
 
 Click **Open portal** to see it. Visitors sign in with a local account or with your media server (Plex, Jellyfin or Emby), and come back to the page they were on. Without **Anonymous browsing**, visitors who are not signed in see the welcome and sign-in panes and nothing else. Anonymous visitors never see adult titles, never see anyone's requests, and are limited to a burst of 120 page requests, then 2 a second, per address. If the portal is off, visitors see "The request portal is off".
 
-The portal header has **Home**, **Movies**, **Series**, **Search** and (signed in) **My requests**; on a phone they move to a tab bar at the bottom. Signed-in users also get **Open Arclight** (to the full app) and **Sign out**.
+The portal header has **Home**, **Movies**, **Series**, **Search** and (signed in) **My requests**, **Issues** and **Account** (password, linked media-server account, notifications, sessions); on a phone they move to a tab bar at the bottom. Signed-in users also get **Sign out**, and **Open Arclight** when they may open part of the app (admins, and users with app access).
 
 ### Portal paths
 

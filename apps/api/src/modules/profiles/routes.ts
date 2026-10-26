@@ -20,6 +20,7 @@ import { specImplementations } from '@arclight/profiles-engine';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { ProfileError, type ProfilesService } from './service.js';
+import { ADVANCED_REQUESTERS } from '../auth/hook.js';
 
 const IdParams = z.object({ id: z.coerce.number().int().min(1) });
 const QualityIdParams = z.object({ qualityId: z.coerce.number().int().min(0) });
@@ -60,7 +61,7 @@ export function profilesRoutes(
 
     // ---- quality profiles --------------------------------------------------------------
 
-    app.get('/qualityprofile', { schema: { response: { 200: z.array(QualityProfile) } } }, async () =>
+    app.get('/qualityprofile', { config: { access: { areas: ['library', 'wanted'], permissions: ADVANCED_REQUESTERS } }, schema: { response: { 200: z.array(QualityProfile) } } }, async () =>
       service.listQualityProfiles(),
     );
 
@@ -69,7 +70,7 @@ export function profilesRoutes(
       service.qualityProfileTemplate(),
     );
 
-    app.get('/qualityprofile/:id', { schema: { params: IdParams, response: { 200: QualityProfile, ...errors } } }, async (req) =>
+    app.get('/qualityprofile/:id', { config: { access: { areas: ['library', 'wanted'] } }, schema: { params: IdParams, response: { 200: QualityProfile, ...errors } } }, async (req) =>
       service.getQualityProfile(req.params.id),
     );
 

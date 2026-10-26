@@ -1,13 +1,14 @@
 import { Link } from '@tanstack/react-router';
 import { activeTab, sectionTabs } from '../nav.js';
+import type { Access } from '../auth/access.js';
 import { t } from '../i18n/index.js';
 
 /**
  * Route-driven tabs for the section the rail has active (Library: TV / Movies / Add new …).
  * Hidden when the section has a single page or draws its own sub-nav (Settings).
  */
-export function SectionNav({ pathname, isAdmin }: { pathname: string; isAdmin: boolean }) {
-  const tabs = sectionTabs(pathname, isAdmin);
+export function SectionNav({ pathname, access }: { pathname: string; access: Access | boolean }) {
+  const tabs = sectionTabs(pathname, access);
   if (tabs.length === 0) return null;
   const current = activeTab(pathname, tabs);
   return (

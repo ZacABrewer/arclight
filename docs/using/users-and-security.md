@@ -24,20 +24,53 @@ Local bypass applies only when both of these hold: the setup wizard is finished,
 - Your Jellyfin or Emby account, when a media server is connected ("Sign in with ..."). See [media-servers.md](media-servers.md).
 - Plex ("Sign in with Plex"), through Plex's sign-in pin.
 
+Admins always sign in with their Arclight username and password. A media-server sign-in never leads to an admin: see [Media-server accounts and admins](#media-server-accounts-and-admins).
+
+### Who may sign in (Settings > Users > User defaults)
+
+The same settings as the setup wizard's "User defaults" step:
+
+| Setting | Default | What it does |
+|---|---|---|
+| Arclight accounts | On | Users may sign in with an Arclight username and password (login page and Basic). Off: only admins can. |
+| Jellyfin, Emby, Plex | On | That media server may be used to sign in. The server's own "sign-in" switch under Settings > Media servers must be on too. |
+| New people | Create an account on first sign-in | **Only people an admin added**: a media-server sign-in works only for accounts an admin created, imported or linked first. The server's "create users on sign-in" switch must also be on for automatic accounts. |
+| Default request permissions, Default quotas | Request, Report issues; unlimited | The defaults of Settings > Requests, shown here too. |
+| Default app access | Request portal only | Fixed; app access is granted per user. |
+
 ## Users and roles
 
-Go to Settings > Security > Users. The first administrator is created in the setup wizard ([first-run-wizard.md](../getting-started/first-run-wizard.md)).
+Go to Settings > Security > Users. The first administrator is created in the setup wizard ([first-run-wizard.md](../getting-started/first-run-wizard.md)); until it exists, Arclight answers nothing but the wizard.
 
 | Role | What they can do |
 |---|---|
-| Admin | Everything: settings, users, indexers, download clients, system pages |
-| User | Browse and request. Read-only for almost everything else |
+| Admin | Everything: dashboard, library, settings, users, indexers, download clients, system pages |
+| User | The request portal: Discover, their own requests and issues, their account. Nothing else, unless you grant app access |
 
 Add a user with "Add user". Usernames are 2 to 64 characters: letters, digits and `. _ @ -`. Passwords need at least 8 characters.
 
-You can edit a user, reset their password ("Reset password": signs the user out everywhere) and delete them (their sessions end immediately). Rules: the last administrator cannot be demoted or deleted, and you cannot delete yourself.
+You can edit a user, reset their password ("Reset password": signs the user out everywhere) and delete them (their sessions end immediately). Rules: the last administrator cannot be demoted or deleted, you cannot delete yourself, and changing someone's role signs them out everywhere.
 
 Request permissions, quotas and notification options for each user are separate: Settings > Users ("User settings"). See [discover-and-requests.md](discover-and-requests.md).
+
+### App access
+
+A user sees the request portal and nothing more: signing in takes them to `/portal`, and any app address (the dashboard, `/library`, `/settings` and so on) sends them back there. To let someone look at more, edit the user and set **App access** to "Request portal and parts of the app", then tick the areas:
+
+| Area | What they can open (read-only) |
+|---|---|
+| Library | Series and movies lists and detail pages, collections |
+| Calendar | The calendar |
+| Activity | Queue, history and blocklist |
+| Wanted | Missing, cutoff unmet and profile mismatch |
+
+App access is read-only. Adding, editing, deleting, searching and every setting stay admin-only, and the api enforces this whatever the browser shows. The Users table shows each person's access ("Portal only", "Portal + Library", "Everything" for admins). People an admin gave the request or issue management permissions also get the Requests or Issues pages of the app.
+
+### Media-server accounts and admins
+
+- Signing in with Jellyfin, Emby or Plex only ever creates a `user` with the request portal, even for an administrator of that media server. The account has no Arclight password.
+- An admin account cannot sign in through a media server ("admins sign in with their Arclight username and password"), and a media-server account cannot be linked to an admin, from the profile page or otherwise.
+- To make a user an admin, edit them and choose the role Admin. If the account came from a media server (or an import), the editor asks for a password first; the api refuses the promotion without one. The promoted user is signed out everywhere and signs in again with that password.
 
 To change your own password open your Profile page and use "Change password". That signs out your other sessions.
 
@@ -106,7 +139,7 @@ Checklist before you expose anything:
 
 - Keep Settings > Security > Method on "Login page" and "Require for local addresses" on.
 - Put Cloudflare Access (or another identity check) in front of the hostname, so strangers never reach the Arclight login page.
-- Use a long, unique admin password. Make every person a "User", not an "Admin", unless they need to manage settings.
+- Use a long, unique admin password. Make every person a "User", not an "Admin", unless they need to manage settings. Users only reach the request portal.
 - Never choose "None on the local network" while exposed.
 - Do not publish the API key anywhere. Regenerate it if in doubt.
 - Add a rule in Cloudflare to block the `/metrics` path from the internet. Do not block `/api/`: the web interface itself uses it.

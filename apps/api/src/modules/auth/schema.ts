@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { UserRole, UserSettings } from '@arclight/shared';
+import type { AppArea, UserRole, UserSettings } from '@arclight/shared';
 
 // Auth module tables. The API key and auth method live in the `settings` table (section
 // `security`), not here. `permissions` and `settings` exist now so the requests phase can
@@ -19,6 +19,17 @@ export const users = sqliteTable(
     role: text('role').$type<UserRole>().notNull(),
     /** Permission bitfield (Permission in @arclight/shared). */
     permissions: integer('permissions').notNull().default(0),
+    /**
+     * Read-only admin-app areas an admin granted this (non-admin) user; [] = request portal
+     * only. Enforced by the auth hook (route `config.access.areas`).
+     */
+    appAccess: text('app_access', { mode: 'json' }).$type<AppArea[]>().notNull().default([]),
+    /**
+     * The password hash is one the user (or an admin) chose. false for accounts created by a
+     * media-server sign-in or an import, whose hash is random or unusable; such an account
+     * cannot be made admin until an admin sets a password.
+     */
+    localPassword: integer('local_password', { mode: 'boolean' }).notNull().default(true),
     avatar: text('avatar'),
     settings: text('settings', { mode: 'json' }).$type<UserSettings>().notNull(),
     createdAt: text('created_at').notNull(),

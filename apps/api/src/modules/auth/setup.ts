@@ -30,7 +30,7 @@ export class SetupService {
     return {
       needsSetup: this.auth.needsSetup(),
       steps: [
-        { id: 'admin', complete: this.auth.hasUsers(), optional: false },
+        { id: 'admin', complete: this.auth.hasAdmin(), optional: false },
         {
           id: 'tmdb',
           complete: getSection(this.db, 'metadata').tmdbApiKey !== undefined || Boolean(process.env['ARCLIGHT_TMDB_API_KEY']),
@@ -43,18 +43,20 @@ export class SetupService {
     };
   }
 
-  /** Setup writes are allowed only before completion, and only by an admin once one exists. */
+  /**
+   * Setup writes (after the admin step) are allowed only before completion and only by the
+   * signed-in admin: the admin account always comes first, so nothing is written anonymously.
+   */
   assertCanWrite(caller: RequestAuth | null): void {
     if (!this.auth.needsSetup()) throw new AuthError('SETUP_COMPLETE', 'setup is already complete');
-    if (this.auth.hasUsers()) {
-      if (!caller) throw new AuthError('UNAUTHORIZED', 'sign in as the admin to continue setup');
-      if (!caller.isAdmin) throw new AuthError('FORBIDDEN', 'admin only');
-    }
+    if (!this.auth.hasAdmin()) throw new AuthError('SETUP_REQUIRED', 'create the admin account first');
+    if (!caller) throw new AuthError('UNAUTHORIZED', 'sign in as the admin to continue setup');
+    if (!caller.isAdmin) throw new AuthError('FORBIDDEN', 'admin only');
   }
 
+  /** The first admin: a local account (username + password), only while no admin exists. */
   async createAdmin(input: SetupAdminRequest): Promise<User> {
-    if (!this.auth.needsSetup()) throw new AuthError('SETUP_COMPLETE', 'setup is already complete');
-    if (this.auth.hasUsers()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
+    if (this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
     return this.auth.createUser({ ...input, role: 'admin' });
   }
 
@@ -85,9 +87,8 @@ export class SetupService {
    */
   async complete(body: SetupRequest, caller: RequestAuth | null): Promise<SetupStatus> {
     const input = SetupRequest.parse(body);
-    const creatingAdmin = !this.auth.hasUsers();
+    const creatingAdmin = !this.auth.hasAdmin();
     if (creatingAdmin) {
-      if (!this.auth.needsSetup()) throw new AuthError('SETUP_COMPLETE', 'setup is already complete');
       if (!input.username || !input.password) {
         throw new AuthError('VALIDATION', 'username and password are required to create the admin');
       }
@@ -106,6 +107,7 @@ export class SetupService {
         role: 'admin',
       });
     }
+    if (input.signIn) this.auth.updateSignInSettings(input.signIn);
     this.auth.updateAuthSettings({ ...this.auth.authSettings(), method: input.authMethod });
     this.auth.markSetupComplete();
     return this.status();

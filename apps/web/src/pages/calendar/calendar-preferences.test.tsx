@@ -63,8 +63,8 @@ describe('calendar preferences', () => {
     expect(within(dialog).getByRole('status').textContent).toMatch(/New feed URL ready/);
   });
 
-  it('hides Regenerate from non-admins', async () => {
-    stubApi({ ...authRoutes(user()), '/api/v1/calendar': items, '/api/v1/calendar/feed': feed });
+  it('hides Regenerate from non-admins (a user granted Calendar access)', async () => {
+    stubApi({ ...authRoutes(user({ appAccess: ['calendar'] })), '/api/v1/calendar': items, '/api/v1/calendar/feed': feed });
     renderAt('/calendar');
     fireEvent.click(await screen.findByRole('button', { name: 'iCal' }));
     const dialog = await screen.findByRole('dialog', { name: 'iCal feed' });

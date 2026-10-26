@@ -62,6 +62,7 @@ import {
 } from '@arclight/shared';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { requireSelfOrAdmin } from '../auth/hook.js';
 import type { DiscoverService } from './discover.js';
 import { REQUESTS_ERROR_STATUS, RequestsError } from './errors.js';
 import type { IssuesService } from './issues.js';
@@ -81,8 +82,13 @@ const ListParams = z.object({ list: DiscoverListName });
 const EntityParams = z.object({ kind: DiscoverEntityKind, id: z.coerce.number().int().positive() });
 const Empty = z.null();
 const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 429: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
-/** Users with role `user` may call every route; the services check the permission bits. */
-const user = { allowUser: true } as const;
+/**
+ * Portal routes: every signed-in user may call them (the auth hook); the services scope the work
+ * to the caller (own requests, issues, watchlist, account) or check the permission bits.
+ * Routes without a config are admin-only (sliders, override rules, settings writes, user
+ * permissions and quotas, watchlist sync).
+ */
+const user = { access: { portal: true } } as const;
 
 export interface RequestsRouteServices {
   requests: RequestsService;
@@ -120,7 +126,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     return p.enabled && p.allowAnonymousDiscover;
   };
   /** Discover routes: public while the portal allows anonymous discover; anonymous callers are rate-limited. */
-  const pub = { allowUser: true, publicWhen: anonymousDiscover } as const;
+  const pub = { access: { portal: true }, publicWhen: anonymousDiscover } as const;
   const limit = async (req: FastifyRequest, reply: FastifyReply) => {
     if (req.auth || !s.portalLimiter) return;
     if (!s.portalLimiter.take(req.ip)) {
@@ -280,7 +286,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     // ------------------------------------------------------------------------- public portal
     app.get(
       '/public/portal',
-      { config: { publicWhen: portalOn }, preHandler: limit, schema: { response: { 200: PublicPortal, ...errors } } },
+      { config: { access: { portal: true }, publicWhen: portalOn }, preHandler: limit, schema: { response: { 200: PublicPortal, ...errors } } },
       async () => publicPortal(requests, s.mediaServerLogin ?? (() => null)),
     );
 
@@ -288,21 +294,21 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.get('/discoverslider', { config: pub, preHandler: limit, schema: { response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
       discover.sliders(discoverActorOf(req)),
     );
-    app.post('/discoverslider', { config: user, schema: { body: DiscoverSliderInput, response: { 201: DiscoverSlider, ...errors } } }, async (req, reply) =>
+    app.post('/discoverslider', { schema: { body: DiscoverSliderInput, response: { 201: DiscoverSlider, ...errors } } }, async (req, reply) =>
       reply.code(201).send(discover.createSlider(actorOf(req), req.body)),
     );
-    app.put('/discoverslider/order', { config: user, schema: { body: DiscoverSliderOrder, response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
+    app.put('/discoverslider/order', { schema: { body: DiscoverSliderOrder, response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
       discover.orderSliders(actorOf(req), req.body),
     );
-    app.post('/discoverslider/reset', { config: user, schema: { response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
+    app.post('/discoverslider/reset', { schema: { response: { 200: z.array(DiscoverSlider), ...errors } } }, async (req) =>
       discover.resetSliders(actorOf(req)),
     );
     app.put(
       '/discoverslider/:id',
-      { config: user, schema: { params: IdParams, body: DiscoverSliderUpdate, response: { 200: DiscoverSlider, ...errors } } },
+      { schema: { params: IdParams, body: DiscoverSliderUpdate, response: { 200: DiscoverSlider, ...errors } } },
       async (req) => discover.updateSlider(actorOf(req), req.params.id, req.body),
     );
-    app.delete('/discoverslider/:id', { config: user, schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
+    app.delete('/discoverslider/:id', { schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       discover.deleteSlider(actorOf(req), req.params.id);
       return reply.code(204).send(null);
     });
@@ -341,16 +347,16 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     });
 
     // ------------------------------------------------------------------------- override rules
-    app.get('/overriderule', { config: user, schema: { response: { 200: z.array(OverrideRule), ...errors } } }, async (req) => requests.listRules(actorOf(req)));
-    app.post('/overriderule', { config: user, schema: { body: OverrideRuleInput, response: { 201: OverrideRule, ...errors } } }, async (req, reply) =>
+    app.get('/overriderule', { schema: { response: { 200: z.array(OverrideRule), ...errors } } }, async (req) => requests.listRules(actorOf(req)));
+    app.post('/overriderule', { schema: { body: OverrideRuleInput, response: { 201: OverrideRule, ...errors } } }, async (req, reply) =>
       reply.code(201).send(requests.createRule(actorOf(req), req.body)),
     );
     app.put(
       '/overriderule/:id',
-      { config: user, schema: { params: IdParams, body: OverrideRuleInput, response: { 200: OverrideRule, ...errors } } },
+      { schema: { params: IdParams, body: OverrideRuleInput, response: { 200: OverrideRule, ...errors } } },
       async (req) => requests.updateRule(actorOf(req), req.params.id, req.body),
     );
-    app.delete('/overriderule/:id', { config: user, schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
+    app.delete('/overriderule/:id', { schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       requests.deleteRule(actorOf(req), req.params.id);
       return reply.code(204).send(null);
     });
@@ -362,7 +368,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.post('/watchlist', { config: user, schema: { body: WatchlistCreate, response: { 201: WatchlistItem, ...errors } } }, async (req, reply) =>
       reply.code(201).send(await watchlist.add(actorOf(req), req.body)),
     );
-    app.post('/watchlist/sync', { config: user, schema: { response: { 200: WatchlistSyncResult, ...errors } } }, async (req) => {
+    app.post('/watchlist/sync', { schema: { response: { 200: WatchlistSyncResult, ...errors } } }, async (req) => {
       if (!canManageUsers(actorOf(req).permissions)) throw RequestsError.forbidden();
       return s.runWatchlistSync();
     });
@@ -372,37 +378,37 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     });
 
     // ------------------------------------------------------------------------- users
-    app.get('/user/:id/permissions', { config: user, schema: { params: IdParams, response: { 200: UserPermissions, ...errors } } }, async (req) =>
+    app.get('/user/:id/permissions', { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, response: { 200: UserPermissions, ...errors } } }, async (req) =>
       requests.permissions(actorOf(req), req.params.id),
     );
     app.put(
       '/user/:id/permissions',
-      { config: user, schema: { params: IdParams, body: UserPermissions, response: { 200: UserPermissions, ...errors } } },
+      { schema: { params: IdParams, body: UserPermissions, response: { 200: UserPermissions, ...errors } } },
       async (req) => requests.setPermissions(actorOf(req), req.params.id, req.body),
     );
-    app.get('/user/:id/quota', { config: user, schema: { params: IdParams, response: { 200: UserQuotaResponse, ...errors } } }, async (req) =>
+    app.get('/user/:id/quota', { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, response: { 200: UserQuotaResponse, ...errors } } }, async (req) =>
       requests.quota(actorOf(req), req.params.id),
     );
-    app.put('/user/:id/quota', { config: user, schema: { params: IdParams, body: UserQuota, response: { 200: UserQuotaResponse, ...errors } } }, async (req) =>
+    app.put('/user/:id/quota', { schema: { params: IdParams, body: UserQuota, response: { 200: UserQuotaResponse, ...errors } } }, async (req) =>
       requests.setQuota(actorOf(req), req.params.id, req.body),
     );
-    app.get('/user/:id/requestsettings', { config: user, schema: { params: IdParams, response: { 200: UserRequestSettings, ...errors } } }, async (req) =>
+    app.get('/user/:id/requestsettings', { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, response: { 200: UserRequestSettings, ...errors } } }, async (req) =>
       requests.requestSettings(actorOf(req), req.params.id),
     );
     app.put(
       '/user/:id/requestsettings',
-      { config: user, schema: { params: IdParams, body: UserRequestSettings, response: { 200: UserRequestSettings, ...errors } } },
+      { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, body: UserRequestSettings, response: { 200: UserRequestSettings, ...errors } } },
       async (req) => requests.setRequestSettings(actorOf(req), req.params.id, req.body),
     );
     app.post(
       '/user/:id/requestsettings/test',
-      { config: user, schema: { params: IdParams, response: { 200: UserNotificationTestResult, ...errors } } },
+      { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, response: { 200: UserNotificationTestResult, ...errors } } },
       async (req) => requests.testNotifications(actorOf(req), req.params.id),
     );
 
     // ------------------------------------------------------------------------- settings
     app.get('/settings/requests', { config: user, schema: { response: { 200: RequestsSettings, ...errors } } }, async () => requests.settings());
-    app.put('/settings/requests', { config: user, schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors } } }, async (req) =>
+    app.put('/settings/requests', { schema: { body: RequestsSettings, response: { 200: RequestsSettings, ...errors } } }, async (req) =>
       requests.updateSettings(actorOf(req), req.body),
     );
   };

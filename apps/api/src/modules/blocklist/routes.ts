@@ -26,19 +26,19 @@ export const blocklistRoutes =
       throw err;
     });
 
-    app.get('/blocklist', { schema: { querystring: BlocklistListQuery, response: { 200: BlocklistPage } } }, async (req) =>
+    app.get('/blocklist', { config: { access: { areas: ['activity'] } }, schema: { querystring: BlocklistListQuery, response: { 200: BlocklistPage } } }, async (req) =>
       service.list(req.query),
     );
 
     app.get(
       '/blocklist/series',
-      { schema: { querystring: BlocklistSeriesQuery, response: { 200: z.array(BlocklistRecord) } } },
+      { config: { access: { areas: ['activity'] } }, schema: { querystring: BlocklistSeriesQuery, response: { 200: z.array(BlocklistRecord) } } },
       async (req) => service.forSeries(req.query.seriesId),
     );
 
     app.get(
       '/blocklist/movie',
-      { schema: { querystring: BlocklistMovieQuery, response: { 200: z.array(BlocklistRecord) } } },
+      { config: { access: { areas: ['activity'] } }, schema: { querystring: BlocklistMovieQuery, response: { 200: z.array(BlocklistRecord) } } },
       async (req) => service.forMovie(req.query.movieId),
     );
 

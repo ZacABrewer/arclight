@@ -50,7 +50,8 @@ export function compatApi(ctx: AppContext, opts: CompatApiOptions = {}): Fastify
     // Same credentials as /api/v1: session cookie, Basic, X-Api-Key / ?apikey=, local bypass.
     const auth = authServiceFor(ctx);
     auth.ensureApiKey();
-    installAuthHook(app, auth, isCompatPublicRoute);
+    // Before an admin exists only the ping answers (like /api/v1/system/ping).
+    installAuthHook(app, auth, { isPublic: isCompatPublicRoute, setupBootstrap: (url) => url === '/ping' });
     // Prowlarr gates application sync on this header.
     app.addHook('onSend', async (_req, reply, payload) => {
       reply.header('X-Application-Version', getSection(ctx.db, 'compat').advertisedVersion);

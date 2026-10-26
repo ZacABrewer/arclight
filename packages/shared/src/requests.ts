@@ -1229,7 +1229,7 @@ export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
  */
 export const PORTAL_ROUTE_SEGMENTS: readonly string[] = [
   'movies', 'tv', 'movie', 'person', 'search', 'trending', 'upcoming', 'list', 'collection',
-  'genre', 'keyword', 'studio', 'network', 'provider', 'requests',
+  'genre', 'keyword', 'studio', 'network', 'provider', 'requests', 'issues', 'profile',
 ];
 
 /** "/watch", "watch" or "/Watch/" → "/watch". */

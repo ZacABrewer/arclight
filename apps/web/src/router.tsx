@@ -78,7 +78,7 @@ import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
-import { PortalHomePage, PortalLayout, PortalRequestsPage } from './pages/portal/portal-page.js';
+import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
 import type { PortalDocument } from '@arclight/shared';
 import { TrackerStatsPage } from './pages/indexers/tracker-stats-page.js';
@@ -119,7 +119,8 @@ function DesignRoute() {
 const rootRoute = createRootRouteWithContext<RouterContext>()({
   component: RootLayout,
   notFoundComponent: NotFoundPage,
-  // Guard every navigation: setup first, then sign-in, then admin-only sections.
+  // Guard every navigation: the admin account first (first launch), setup, sign-in, then what
+  // the person may open (non-admins: the portal plus any app areas an admin granted).
   beforeLoad: async ({ context, location }) => {
     // A portal-only hostname never shows the app (signed-in admins included).
     const portalOnly = portalOnlyRedirect(context.portal, location.pathname);
@@ -197,6 +198,9 @@ const manualImportRoute = createRoute({
 const discoverRoute = createRoute({ getParentRoute: () => rootRoute, path: '/discover', component: Outlet });
 const portalRoute = createRoute({ getParentRoute: () => rootRoute, path: '/portal', component: PortalLayout });
 const portalRequestsRoute = createRoute({ getParentRoute: () => portalRoute, path: 'requests', component: PortalRequestsPage });
+const portalProfileRoute = createRoute({ getParentRoute: () => portalRoute, path: 'profile', component: PortalProfilePage });
+const portalIssuesRoute = createRoute({ getParentRoute: () => portalRoute, path: 'issues', component: PortalIssuesPage });
+const portalIssueRoute = createRoute({ getParentRoute: () => portalRoute, path: 'issues/$id', component: PortalIssueDetailPage });
 
 // Notification deep links: /requests/:id?action=approve|decline.
 const requestDeepLinkRoute = createRoute({
@@ -211,7 +215,7 @@ export const routeTree = rootRoute.addChildren([
   loginRoute,
   page('/setup', SetupWizard),
   // Public request portal: reachable without signing in (auth/guard.ts PUBLIC_PATHS).
-  portalRoute.addChildren([...discoverChildren(() => portalRoute, PortalHomePage), portalRequestsRoute]),
+  portalRoute.addChildren([...discoverChildren(() => portalRoute, PortalHomePage), portalRequestsRoute, portalProfileRoute, portalIssuesRoute, portalIssueRoute]),
   page('/', DashboardPage),
   searchRoute,
 

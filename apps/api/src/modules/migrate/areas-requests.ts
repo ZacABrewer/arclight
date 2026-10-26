@@ -107,7 +107,10 @@ function fillUser(env: AreaEnv, id: number, p: SeerrUserPayload, opts: { permiss
   if (!row) throw new SkipItem('user disappeared');
   const settings: Record<string, unknown> = { ...(row.settings ?? {}) };
   const link = linkFor(p, env.now);
-  if (link && !mediaServerLinkOf(row)) {
+  if (link && row.role === 'admin') {
+    // Admins sign in with their Arclight password only; a media-server identity is never linked to one.
+    env.warn('users', `${row.username} is an Arclight admin; the ${link.kind} account was not linked`);
+  } else if (link && !mediaServerLinkOf(row)) {
     const other = userWithLink(env, link);
     if (!other) settings['mediaServerLink'] = link;
     else if (other.id !== id) env.warn('users', `${row.username}: the ${link.kind} account is already linked to ${other.username}; link not added`);
@@ -144,7 +147,10 @@ function createUser(env: AreaEnv, p: SeerrUserPayload): number {
       passwordHash: IMPORTED_PASSWORD_HASH,
       displayName: p.displayName && p.displayName !== username ? p.displayName : null,
       email: email || null,
+      // Seerr users (Seerr admins included) become portal users: never admin, no app access.
       role: 'user',
+      appAccess: [],
+      localPassword: false,
       permissions: effectivePermissions({ role: 'user', permissions: mapSeerrPermissions(p.permissions) }),
       avatar: p.avatar,
       settings,

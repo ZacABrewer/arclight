@@ -40,13 +40,21 @@ in this order:
 2. **HTTP Basic** credentials, only when the auth method is `basic`.
 3. **API key** in the `X-Api-Key` header or `?apikey=` query. One key per install, generated
    on first boot and stored in the `security` settings section. It grants admin access.
-4. **Local bypass**: once setup is complete, requests where the socket peer *and* every
+4. **Local bypass**: once setup is complete and an admin exists, requests where the socket peer *and* every
    `X-Forwarded-For` hop are loopback, RFC 1918, IPv4 link-local, IPv6 ULA or link-local skip
    sign-in when the method is `none` or `requireForLocal` is false. Public addresses always
    need credentials, so `none` never opens the api to the internet.
 
 Anonymous requests to protected routes get `401 {"error","code":"UNAUTHORIZED"}` (plus
 `WWW-Authenticate: Basic` when the method is `basic`). Unknown routes answer 404.
+
+**First launch.** Until an admin account exists, every route answers
+`403 {"code":"SETUP_REQUIRED"}`, whatever the credentials (the API key included), except
+`GET /auth/status`, `GET /setup/status`, `POST /setup/admin`, `POST /setup/complete` and
+`GET /system/ping` (and `/ping` on the compat surface). `/api/v3`, `/metrics` and the event
+socket are closed too. `GET /auth/status` reports `adminExists`; `needsSetup` stays true while
+no admin exists. `POST /setup/admin` and the headless `POST /setup/complete` create the admin
+only while none exists (409 afterwards); `POST /setup/rootfolder` needs the signed-in admin.
 
 **Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
 `GET /auth/status`, `POST /auth/plex/pin`, `POST /auth/plex/poll`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
@@ -60,18 +68,39 @@ enabled media server with `loginEnabled` (the login page shows the Jellyfin/Emby
 Plex button from it). `PUT /user/me` ignores the manager-owned settings keys
 `ADMIN_MANAGED_USER_SETTINGS` (`quota`, `contentRestrictions`, `approvalPolicy`, `discordUserId`).
 
-**Roles.** `admin` can do everything. `user` may call `GET`/`HEAD` routes; any other method
-needs admin unless the route sets `config: { allowUser: true }`. Admin-only routes add the
-`requireAdmin` preHandler exported by the auth module:
+**Roles and access (deny by default).** `admin` (and API-key / bypass callers) can do
+everything. Anyone else may call a route only when it opts in with `config.access`, for every
+method, `GET`, `HEAD` and the WebSocket upgrade included; without it the hook answers
+`403 FORBIDDEN`. Three kinds of opt-in:
 
 ```ts
-import { requireAdmin } from '../auth/index.js';
-app.get('/thing', { preHandler: requireAdmin }, handler);   // one route
-app.addHook('preHandler', requireAdmin);                    // a whole plugin
-app.post('/request', { config: { allowUser: true } }, h);   // let users change state
+import { ADVANCED_REQUESTERS, requireAdmin, requireSelfOrAdmin } from '../auth/index.js';
+app.post('/request', { config: { access: { portal: true } } }, h);              // any signed-in user, any method
+app.get('/series', { config: { access: { areas: ['library'] } } }, h);          // read-only, users granted the Library area
+app.get('/rootfolder', { config: { access: { areas: ['library'], permissions: ADVANCED_REQUESTERS } } }, h);
+app.get('/user/:id/quota', { config: { access: { portal: true } }, preHandler: requireSelfOrAdmin }, h); // own account only
+app.get('/thing', { preHandler: requireAdmin }, handler);                       // belt and braces for admin-only
 ```
 
-`req.auth` (`{ user, via, isAdmin, sessionId?, expiresAt? }`) is available in every
+`portal` routes must scope the work to the caller (own requests, issues, account) or check the
+permission bitfield in the service. `areas` grants are per user (`users.app_access`, set by an
+admin: `appAccess` on `POST`/`PUT /user`; `library`, `calendar`, `activity`, `wanted`), and only
+ever admit `GET`/`HEAD`. The full list of routes open to non-admins is the allow-list in
+`apps/api/src/access.test.ts`; that test enumerates every registered route and fails when a
+route opens without being listed. The event socket (`/events`) is open to signed-in users but
+filtered: non-admins get their own request and issue events (everyone's with View requests /
+View issues), library events with the Library, Calendar or Wanted area and queue, download,
+history, release and import events with the Activity area; nothing else.
+
+Media-server sign-in (`POST /auth/login` with a media-server method, `POST /auth/plex/poll`)
+never signs in an admin (`403`), and only ever creates `role: 'user'` accounts with no app
+access and no local password (`localPassword: false`). `PUT /user/:id` refuses to promote such
+an account (`400 PASSWORD_REQUIRED`) unless the same request sets `password`; any role change
+or password reset ends the user's sessions. `GET`/`PUT /settings/signin` (admin) hold
+`SignInSettings`: `local`, `jellyfin`, `emby`, `plex` (booleans) and `newUsers`
+(`automatic` | `invite`). Admins always sign in locally.
+
+`req.auth` (`{ user, via, isAdmin, appAccess, sessionId?, expiresAt? }`) is available in every
 handler; `user` is null for API-key and bypass callers. `authServiceFor(ctx)` returns the
 shared `AuthService`. Users carry a `permissions` bitfield (`Permission` in shared; `ADMIN`
 = 2 implies all) and a free-form `settings` record, ready for the requests phase. Failed
@@ -498,8 +527,11 @@ unfinished downloads) and `forceStart` when the client reports them.
 ## requests
 
 Implemented in `apps/api/src/modules/requests` (contract: `packages/shared/src/requests.ts`;
-behaviour: `docs/spec/requests.md`). Every route below is open to role `user` (state-changing
-ones carry `config.allowUser`); the service enforces the permission bitfield
+behaviour: `docs/spec/requests.md`). The request, discover, issue, watchlist and own-account
+routes below are open to role `user` (`config.access.portal`); slider, override-rule and settings
+writes, user permission/quota edits, media-server settings and imports, the watchlist sync and
+the digest are admin-only. `/user/:id/...` routes open to users act on the caller's own account
+only. The service enforces the permission bitfield
 (`Permission` in the contract). API-key and local-bypass callers act as an admin; when they
 create a request without `userId` it is owned by the oldest admin account. Errors are
 `{ error, code }` with `403 FORBIDDEN` (permission or quota), `404 NOT_FOUND`,

@@ -152,6 +152,8 @@ describe('AuthService API key and bypass', () => {
     auth.updateAuthSettings({ method: 'none', requireForLocal: true, sessionDays: 30 });
     expect(auth.bypasses(['192.168.1.4'])).toBe(false); // setup not complete
     auth.markSetupComplete();
+    expect(auth.bypasses(['192.168.1.4'])).toBe(false); // no admin account yet: fails closed
+    await auth.createUser({ username: 'root', password: 'correct horse battery', role: 'admin' });
     expect(auth.bypasses(['192.168.1.4'])).toBe(true);
     expect(auth.bypasses(['203.0.113.9'])).toBe(false);
     auth.updateAuthSettings({ method: 'forms', requireForLocal: true, sessionDays: 30 });

@@ -11,7 +11,7 @@ import { buildApp, type AppContext } from './app.js';
 import type { AppConfig } from './config.js';
 import type { Db } from './db/index.js';
 import { mediaFiles } from './db/schema.js';
-import { createTestDb } from './db/test-utils.js';
+import { createTestDb, seedAdmin } from './db/test-utils.js';
 import { FakeDownloadClient, item, qbit } from './modules/download-clients/test-support.js';
 import { getDownloadClientsService } from './modules/download-clients/index.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
@@ -32,6 +32,7 @@ let db: Db;
 beforeEach(async () => {
   tmp = await mkdtemp(join(tmpdir(), 'mt-pipeline-'));
   db = await createTestDb();
+  seedAdmin(db);
 });
 
 afterEach(async () => {

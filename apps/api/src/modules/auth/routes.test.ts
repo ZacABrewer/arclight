@@ -212,8 +212,12 @@ describe('admin guard and user management', () => {
     expect(dup.statusCode).toBe(409);
 
     const userCookie = cookieFrom(await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: { username: 'viewer', password: 'password1' } }));
-    expect((await app.inject({ method: 'GET', url: '/api/v1/probe', headers: { cookie: userCookie } })).statusCode).toBe(200);
+    // Deny by default: a route without config.access is admin-only for reads too.
+    expect((await app.inject({ method: 'GET', url: '/api/v1/probe', headers: { cookie: userCookie } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'HEAD', url: '/api/v1/probe', headers: { cookie: userCookie } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'POST', url: '/api/v1/probe', headers: { cookie: userCookie } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/user/me', headers: { cookie: userCookie } })).statusCode).toBe(200);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/auth/me', headers: { cookie: userCookie } })).json()).toMatchObject({ isAdmin: false, user: { appAccess: [] } });
     expect((await app.inject({ method: 'GET', url: '/api/v1/user', headers: { cookie: userCookie } })).statusCode).toBe(403);
     expect((await app.inject({ method: 'GET', url: '/api/v1/settings/security', headers: { cookie: userCookie } })).statusCode).toBe(403);
     const self = await app.inject({ method: 'PUT', url: '/api/v1/user/me', headers: { cookie: userCookie }, payload: { displayName: 'Vee', settings: { theme: 'light' } } });
@@ -245,11 +249,15 @@ describe('app wiring', () => {
     const config = { configDir: tmp, dbPath: ':memory:', logDir: tmp, port: 0, host: '127.0.0.1', logLevel: 'silent', isDocker: false, webDist: null };
     const app = await buildApp(config, db, pino({ level: 'silent' }), { probe: false });
     try {
-      expect((await app.inject({ method: 'GET', url: '/api/v1/system/status' })).statusCode).toBe(401);
+      // No admin yet: everything but the setup bootstrap answers SETUP_REQUIRED.
+      const early = await app.inject({ method: 'GET', url: '/api/v1/system/status' });
+      expect(early.statusCode).toBe(403);
+      expect(early.json().code).toBe('SETUP_REQUIRED');
       expect((await app.inject({ method: 'GET', url: '/api/v1/system/ping' })).json()).toEqual({ status: 'ok' });
       expect((await app.inject({ method: 'GET', url: '/api/v1/setup/status' })).json().needsSetup).toBe(true);
       const created = await app.inject({ method: 'POST', url: '/api/v1/setup/admin', payload: ADMIN });
       const cookie = cookieFrom(created);
+      expect((await app.inject({ method: 'GET', url: '/api/v1/system/status' })).statusCode).toBe(401);
       expect((await app.inject({ method: 'GET', url: '/api/v1/system/status', headers: { cookie } })).statusCode).toBe(200);
       // The calendar feed authenticates with its own token, no session needed.
       const feed = await app.inject({ method: 'GET', url: '/api/v1/calendar/feed', headers: { cookie } });

@@ -17,7 +17,7 @@ import {
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { AppContext } from '../../app.js';
-import { AuthError, authServiceFor, setSessionCookie } from '../auth/index.js';
+import { AuthError, authServiceFor, requireSelfOrAdmin, setSessionCookie } from '../auth/index.js';
 import type { MediaServerAccounts } from './accounts.js';
 import { REQUESTS_ERROR_STATUS, RequestsError } from './errors.js';
 import { canManageRequests } from './permissions.js';
@@ -33,7 +33,8 @@ const IdParams = z.object({ id: z.coerce.number().int().positive() });
 const PlexLinkPoll = z.object({ id: z.number().int().positive() });
 const Empty = z.null();
 const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
-const user = { allowUser: true } as const;
+/** The signed-in user's own media-server link (the services refuse other users unless MANAGE_USERS). */
+const user = { access: { portal: true } } as const;
 
 export function mediaServerRoutes(ctx: AppContext, accounts: MediaServerAccounts, requests: RequestsService): Plugin {
   return async (app) => {
@@ -47,27 +48,27 @@ export function mediaServerRoutes(ctx: AppContext, accounts: MediaServerAccounts
     });
 
     // ------------------------------------------------------------------------- settings
-    app.get('/settings/mediaserver', { config: user, schema: { response: { 200: MediaServerSettings, ...errors } } }, async (req) =>
+    app.get('/settings/mediaserver', { schema: { response: { 200: MediaServerSettings, ...errors } } }, async (req) =>
       accounts.settings(actorOf(req)),
     );
-    app.put('/settings/mediaserver', { config: user, schema: { body: MediaServerSettings, response: { 200: MediaServerSettings, ...errors } } }, async (req) =>
+    app.put('/settings/mediaserver', { schema: { body: MediaServerSettings, response: { 200: MediaServerSettings, ...errors } } }, async (req) =>
       accounts.updateSettings(actorOf(req), req.body),
     );
     app.post(
       '/settings/mediaserver/test',
-      { config: user, schema: { body: MediaServerSettings.optional().nullable(), response: { 200: MediaServerTestResult, ...errors } } },
+      { schema: { body: MediaServerSettings.optional().nullable(), response: { 200: MediaServerTestResult, ...errors } } },
       async (req) => accounts.test(actorOf(req), req.body ?? undefined),
     );
 
     // ------------------------------------------------------------------------- links
     app.post(
       '/user/:id/mediaserver/link',
-      { config: user, schema: { params: IdParams, body: MediaServerLinkRequest, response: { 200: UserRequestSettings, ...errors } } },
+      { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, body: MediaServerLinkRequest, response: { 200: UserRequestSettings, ...errors } } },
       async (req) => accounts.link(actorOf(req), req.params.id, req.body),
     );
     app.delete(
       '/user/:id/mediaserver/link',
-      { config: user, schema: { params: IdParams, response: { 200: UserRequestSettings, ...errors } } },
+      { config: user, preHandler: requireSelfOrAdmin, schema: { params: IdParams, response: { 200: UserRequestSettings, ...errors } } },
       async (req) => accounts.unlink(actorOf(req), req.params.id),
     );
 
@@ -88,12 +89,12 @@ export function mediaServerRoutes(ctx: AppContext, accounts: MediaServerAccounts
     );
 
     // ------------------------------------------------------------------------- import
-    app.get('/user/import/mediaserver', { config: user, schema: { response: { 200: z.array(MediaServerUser), ...errors } } }, async (req) =>
+    app.get('/user/import/mediaserver', { schema: { response: { 200: z.array(MediaServerUser), ...errors } } }, async (req) =>
       accounts.listServerUsers(actorOf(req)),
     );
     app.post(
       '/user/import/mediaserver',
-      { config: user, schema: { body: MediaServerImportRequest.optional().nullable(), response: { 200: MediaServerImportResult, ...errors } } },
+      { schema: { body: MediaServerImportRequest.optional().nullable(), response: { 200: MediaServerImportResult, ...errors } } },
       async (req) => accounts.importUsers(actorOf(req), req.body ?? {}),
     );
 
@@ -106,14 +107,14 @@ export function mediaServerRoutes(ctx: AppContext, accounts: MediaServerAccounts
         const userId = await accounts.plexSignIn(req.body.id);
         if (userId === null) return reply.code(202).send({ pending: true as const });
         const auth = authServiceFor(ctx);
-        const result = auth.loginAs(userId, { ip: req.ip, userAgent: req.headers['user-agent'], rememberMe: req.body.rememberMe });
+        const result = auth.loginExternal(userId, { ip: req.ip, userAgent: req.headers['user-agent'], rememberMe: req.body.rememberMe });
         setSessionCookie(req, reply, result.token, result.maxAgeSeconds);
         return { user: result.user, via: 'session' as const, isAdmin: result.user.role === 'admin', expiresAt: result.expiresAt };
       },
     );
 
     // ------------------------------------------------------------------------- digest
-    app.post('/request/digest', { config: user, schema: { body: Empty.optional(), response: { 200: RequestsDigestResult, ...errors } } }, async (req) => {
+    app.post('/request/digest', { schema: { body: Empty.optional(), response: { 200: RequestsDigestResult, ...errors } } }, async (req) => {
       if (!canManageRequests(actorOf(req).permissions)) throw RequestsError.forbidden();
       return requests.digest();
     });

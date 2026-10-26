@@ -74,7 +74,7 @@ async function remoteArclight(opts: { enabled?: boolean; running?: boolean } = {
   await app.register(websocket);
   app.decorateRequest('auth', null);
   app.addHook('onRequest', async (req) => {
-    if (req.headers['x-api-key'] === API_KEY) req.auth = { user: null, via: 'apikey', isAdmin: true };
+    if (req.headers['x-api-key'] === API_KEY) req.auth = { user: null, via: 'apikey', isAdmin: true, appAccess: [] };
     else if (req.headers.cookie) req.auth = { user: null, via: 'session', isAdmin: true } as unknown as typeof req.auth;
   });
   await app.register(engineAgentRoutes(service), { prefix: '/api/v1' });

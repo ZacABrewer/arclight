@@ -161,10 +161,13 @@ Arclight serves a Sonarr and Radarr v3 compatible API under `/api/v3`, and [API.
 ## Requests and users
 
 ### Can my family use it without admin rights?
-Yes. Create accounts under Settings > Users; the role `user` can browse, request titles, report issues and keep a watchlist, but cannot see Activity, Indexers, Settings or System. Fine-grained rights (request, 4K, auto-approve) are permission switches per user. See [Discover and requests](using/discover-and-requests.md) and [Users and security](using/users-and-security.md).
+Yes, and that is the default for everyone but you. Accounts with the role `user` get the request portal only: Discover, their own requests and issues, and their account. They never see the dashboard, the library, Activity, Settings or System, and the api refuses those to them (reads included). If you want someone to see more, give them read-only app access (Library, Calendar, Activity, Wanted) under Settings > Security > Users > Edit. Fine-grained request rights (request, 4K, auto-approve) are permission switches per user. See [Discover and requests](using/discover-and-requests.md) and [Users and security](using/users-and-security.md).
 
 ### Can people sign in with their Jellyfin, Emby or Plex account?
-Yes, when a media server is configured with sign-in enabled, the login page offers it, and imported media-server accounts become Arclight users who sign in with their media-server password. See [Media servers](using/media-servers.md).
+Yes, when a media server is configured with sign-in enabled, the login page offers it, and imported media-server accounts become Arclight users who sign in with their media-server password. Those accounts are always users with the request portal. See [Media servers](using/media-servers.md).
+
+### Can a Jellyfin user become admin?
+No, not through Jellyfin, Emby or Plex. Signing in with a media server only ever creates a `user`, even for an administrator of that media server, and an admin account can never sign in through a media server or have one linked to it. Admins sign in with their Arclight username and password. An admin can promote a user, but only after the account has an Arclight password (the editor asks for one), and the promotion signs that person out everywhere.
 
 ### Do requests need approval?
 That is up to you. Users with an auto-approve permission are approved automatically; everyone else's requests wait for an admin in Requests. Quotas and approval rules are in Settings > Requests. See [Discover and requests](using/discover-and-requests.md).

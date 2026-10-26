@@ -28,6 +28,7 @@ import { users } from '../../db/schema.js';
 import { AuthError, hashPassword, type ExternalLoginProvider } from '../auth/index.js';
 import { createMediaServerClient } from '@arclight/media-servers';
 import { mediaServerView, saveMediaServerView } from '../media-servers/index.js';
+import { getSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
 import { DEFAULT_SERVER_NAMES } from './media-server.js';
 import { canManageSettings, canManageUsers, type Actor } from './permissions.js';
@@ -70,6 +71,9 @@ function toRequestsError(err: unknown, what: string): RequestsError {
   }
   return new RequestsError('UPSTREAM', `${what}: ${err instanceof Error ? err.message : String(err)}`);
 }
+
+/** Admins never sign in through, or link, a media server: they use their Arclight password. */
+const ADMIN_MEDIA_SERVER_MESSAGE = 'admins sign in with their Arclight username and password, not a media server';
 
 export class MediaServerAccounts implements ExternalLoginProvider {
   private readonly db: Db;
@@ -185,8 +189,11 @@ export class MediaServerAccounts implements ExternalLoginProvider {
         passwordHash: await hashPassword(randomBytes(24).toString('base64url')),
         displayName: account.username !== username ? account.username : null,
         email: account.email?.toLowerCase() ?? null,
+        // Always a portal user: never admin, no app access, no usable local password.
         role: 'user',
         permissions: this.requests.settings().defaultPermissions,
+        appAccess: [],
+        localPassword: false,
         avatar: account.thumb ?? null,
         settings,
         createdAt: now,
@@ -211,7 +218,7 @@ export class MediaServerAccounts implements ExternalLoginProvider {
 
   async link(actor: Actor, userId: number, raw: MediaServerLinkRequest): Promise<UserRequestSettings> {
     if (actor.userId !== userId && !canManageUsers(actor.permissions)) throw RequestsError.forbidden();
-    userRow(this.db, userId);
+    if (userRow(this.db, userId).role === 'admin') throw new RequestsError('FORBIDDEN', `a media server account cannot be linked to an admin: ${ADMIN_MEDIA_SERVER_MESSAGE}`);
     const body = MediaServerLinkRequest.parse(raw);
     let link: MediaServerLink;
     if ('pinId' in body) {
@@ -249,7 +256,7 @@ export class MediaServerAccounts implements ExternalLoginProvider {
    */
   async plexLinkPoll(actor: Actor, pinId: number): Promise<UserRequestSettings | null> {
     if (actor.userId === null || actor.anonymous) throw new RequestsError('VALIDATION', 'this request is not signed in as a user');
-    userRow(this.db, actor.userId);
+    if (userRow(this.db, actor.userId).role === 'admin') throw new RequestsError('FORBIDDEN', `a media server account cannot be linked to an admin: ${ADMIN_MEDIA_SERVER_MESSAGE}`);
     let token: string | null;
     try {
       token = await this.plexTv.checkPin(pinId);
@@ -285,6 +292,8 @@ export class MediaServerAccounts implements ExternalLoginProvider {
     if (!s.kind || s.kind === 'plex' || !s.url) throw new AuthError('VALIDATION', 'Jellyfin/Emby sign-in is not configured');
     if (method !== 'mediaServer' && method !== s.kind) throw new AuthError('VALIDATION', `this server signs in with ${s.kind}, not ${method}`);
     if (!s.loginEnabled) throw new AuthError('FORBIDDEN', 'media server sign-in is disabled');
+    const policy = getSection(this.db, 'signIn');
+    if (!policy[s.kind]) throw new AuthError('FORBIDDEN', `${DEFAULT_SERVER_NAMES[s.kind]} sign-in is turned off`);
     const deviceId = deviceIdFor(s.kind, username);
     let result;
     try {
@@ -305,10 +314,13 @@ export class MediaServerAccounts implements ExternalLoginProvider {
     };
     const existing = this.linkedUser(s.kind, result.account.id);
     if (existing) {
+      if (existing.role === 'admin') throw new AuthError('FORBIDDEN', ADMIN_MEDIA_SERVER_MESSAGE);
       this.saveLink(existing.id, { ...link, linkedAt: mediaServerLinkOf(existing)?.linkedAt ?? link.linkedAt });
       return existing.id;
     }
-    if (!s.createUsersOnLogin) throw new AuthError('FORBIDDEN', 'no Arclight account is linked to this media server account');
+    if (!s.createUsersOnLogin || policy.newUsers !== 'automatic') {
+      throw new AuthError('FORBIDDEN', 'no Arclight account is linked to this media server account; ask an admin to add you');
+    }
     return (await this.createLinkedUser(result.account, link)).id;
   }
 
@@ -328,6 +340,8 @@ export class MediaServerAccounts implements ExternalLoginProvider {
   async plexSignIn(pinId: number): Promise<number | null> {
     const s = this.stored();
     if (!s.loginEnabled) throw new RequestsError('FORBIDDEN', 'media server sign-in is disabled');
+    const policy = getSection(this.db, 'signIn');
+    if (!policy.plex) throw new RequestsError('FORBIDDEN', 'Plex sign-in is turned off');
     let token: string | null;
     try {
       token = await this.plexTv.checkPin(pinId);
@@ -341,11 +355,14 @@ export class MediaServerAccounts implements ExternalLoginProvider {
     const link: MediaServerLink = { kind: 'plex', externalId: account.id, username: account.username, accessToken: token, linkedAt: this.iso() };
     const existing = this.linkedUser('plex', account.id);
     if (existing) {
+      if (existing.role === 'admin') throw new RequestsError('FORBIDDEN', ADMIN_MEDIA_SERVER_MESSAGE);
       this.saveLink(existing.id, { ...link, linkedAt: mediaServerLinkOf(existing)?.linkedAt ?? link.linkedAt });
       return existing.id;
     }
     if (s.kind !== 'plex' || !s.url || !s.apiKey) throw new RequestsError('FORBIDDEN', 'this Plex account is not linked to an Arclight user');
-    if (!s.createUsersOnLogin) throw new RequestsError('FORBIDDEN', 'no Arclight account is linked to this Plex account');
+    if (!s.createUsersOnLogin || policy.newUsers !== 'automatic') {
+      throw new RequestsError('FORBIDDEN', 'no Arclight account is linked to this Plex account; ask an admin to add you');
+    }
     const machineId = await new PlexServerClient({ url: s.url, token: s.apiKey, fetch: this.fetchImpl })
       .info()
       .then((i) => i.id)

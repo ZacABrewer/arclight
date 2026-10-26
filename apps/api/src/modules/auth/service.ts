@@ -2,8 +2,12 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { and, eq, lt, ne, sql } from 'drizzle-orm';
 import {
   ADMIN_MANAGED_USER_SETTINGS,
+  APP_AREAS,
+  AppAccess,
   AuthSettings,
   Permission,
+  SignInSettings,
+  type AppArea,
   type AuthVia,
   type LoginMethod,
   type SecuritySettings,
@@ -30,7 +34,9 @@ export type AuthErrorCode =
   | 'USER_EXISTS'
   | 'LAST_ADMIN'
   | 'RATE_LIMITED'
-  | 'SETUP_COMPLETE';
+  | 'SETUP_COMPLETE'
+  | 'SETUP_REQUIRED'
+  | 'PASSWORD_REQUIRED';
 
 export class AuthError extends Error {
   constructor(
@@ -52,6 +58,8 @@ export const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   LAST_ADMIN: 409,
   RATE_LIMITED: 429,
   SETUP_COMPLETE: 409,
+  SETUP_REQUIRED: 403,
+  PASSWORD_REQUIRED: 400,
 };
 
 /** Who a request is, as decided by the auth hook. `user` is null for API-key and bypass callers. */
@@ -59,6 +67,8 @@ export interface RequestAuth {
   user: User | null;
   via: AuthVia;
   isAdmin: boolean;
+  /** Read-only admin-app areas; every area for admins, [] for portal users. */
+  appAccess: readonly AppArea[];
   sessionId?: number;
   expiresAt?: string;
 }
@@ -111,12 +121,28 @@ const SHORT_SESSION_MS = DAY_MS;
 
 type UserRow = typeof users.$inferSelect;
 
+/** A stored app-access value, cleaned; admins have no grants (they have everything). */
+export function appAccessOf(row: Pick<UserRow, 'role' | 'appAccess'>): AppArea[] {
+  if (row.role === 'admin') return [];
+  const parsed = AppAccess.safeParse(row.appAccess ?? []);
+  return parsed.success ? parsed.data : [];
+}
+
+/** What the auth hook checks app areas against. */
+export function effectiveAppAccess(user: Pick<User, 'role' | 'appAccess'> | null, isAdmin: boolean): readonly AppArea[] {
+  if (isAdmin) return APP_AREAS;
+  if (!user || user.role === 'admin') return [];
+  return user.appAccess ?? [];
+}
+
 export function toUser(row: UserRow): User {
   const user: User = {
     id: row.id,
     username: row.username,
     role: row.role,
     permissions: row.permissions,
+    appAccess: appAccessOf(row),
+    localPassword: row.localPassword ?? true,
     createdAt: row.createdAt,
     settings: row.settings ?? {},
   };
@@ -214,8 +240,18 @@ export class AuthService {
     return this.authSettings();
   }
 
+  /** Setup is needed until it was completed and while no admin account exists. */
   needsSetup(): boolean {
-    return !this.security().setupComplete;
+    return !this.security().setupComplete || !this.hasAdmin();
+  }
+
+  /** How non-admins sign in (settings section `signIn`). */
+  signInSettings(): SignInSettings {
+    return getSection(this.db, 'signIn');
+  }
+
+  updateSignInSettings(update: SignInSettings): SignInSettings {
+    return setSection(this.db, 'signIn', SignInSettings.parse(update), this.now().toISOString());
   }
 
   markSetupComplete(): void {
@@ -228,6 +264,11 @@ export class AuthService {
 
   hasUsers(): boolean {
     return this.db.select({ id: users.id }).from(users).limit(1).get() !== undefined;
+  }
+
+  /** An admin account exists (until then only setup answers; see the auth hook). */
+  hasAdmin(): boolean {
+    return this.db.select({ id: users.id }).from(users).where(eq(users.role, 'admin')).limit(1).get() !== undefined;
   }
 
   private adminCount(): number {
@@ -278,6 +319,8 @@ export class AuthService {
         email: input.email?.toLowerCase() ?? null,
         role,
         permissions: permissionsFor(role, input.permissions),
+        appAccess: role === 'admin' ? [] : AppAccess.parse(input.appAccess ?? []),
+        localPassword: true,
         avatar: input.avatar ?? null,
         settings: input.settings ?? {},
         createdAt: now,
@@ -288,27 +331,44 @@ export class AuthService {
     return toUser(row);
   }
 
-  /** Admin update. Refuses to demote the last admin. A password reset ends the user's sessions. */
+  /**
+   * Admin update. Refuses to demote the last admin, and to promote an account without a local
+   * password (one made by a media-server sign-in or an import) unless this update sets one. A
+   * password reset or a role change ends the user's sessions, so a session opened through a
+   * media server never carries admin rights.
+   */
   async updateUser(id: number, input: UserUpdate): Promise<User> {
     const current = this.row(id);
     if (input.role === 'user' && current.role === 'admin' && this.adminCount() <= 1) {
       throw new AuthError('LAST_ADMIN', 'cannot demote the only admin');
     }
     const role = input.role ?? current.role;
+    const promoting = role === 'admin' && current.role !== 'admin';
+    if (promoting && input.password === undefined && !current.localPassword) {
+      throw new AuthError(
+        'PASSWORD_REQUIRED',
+        'set a password for this account before making it an admin: admins sign in with their Arclight username and password',
+      );
+    }
     const patch: Partial<typeof users.$inferInsert> = { updatedAt: this.now().toISOString(), role };
     if (input.username !== undefined) {
       this.assertUsernameFree(input.username, id);
       patch.username = input.username.trim();
       patch.usernameKey = patch.username.toLowerCase();
     }
-    if (input.password !== undefined) patch.passwordHash = await hashPassword(input.password);
+    if (input.password !== undefined) {
+      patch.passwordHash = await hashPassword(input.password);
+      patch.localPassword = true;
+    }
     if (input.displayName !== undefined) patch.displayName = input.displayName;
     if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
     if (input.avatar !== undefined) patch.avatar = input.avatar;
     if (input.settings !== undefined) patch.settings = { ...current.settings, ...input.settings };
     patch.permissions = permissionsFor(role, input.permissions ?? current.permissions);
+    if (role === 'admin') patch.appAccess = [];
+    else if (input.appAccess !== undefined) patch.appAccess = AppAccess.parse(input.appAccess);
     const row = this.db.update(users).set(patch).where(eq(users.id, id)).returning().get()!;
-    if (input.password !== undefined) this.revokeAllSessions(id);
+    if (input.password !== undefined || role !== current.role) this.revokeAllSessions(id);
     return toUser(row);
   }
 
@@ -344,7 +404,7 @@ export class AuthService {
     }
     this.db
       .update(users)
-      .set({ passwordHash: await hashPassword(newPassword), updatedAt: this.now().toISOString() })
+      .set({ passwordHash: await hashPassword(newPassword), localPassword: true, updatedAt: this.now().toISOString() })
       .where(eq(users.id, id))
       .run();
     this.revokeAllSessions(id, keepSessionId);
@@ -402,6 +462,10 @@ export class AuthService {
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
     this.failures.delete(address);
+    if (!this.localLoginAllowed(row)) {
+      audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local', reason: 'local sign-in off' } });
+      throw new AuthError('FORBIDDEN', 'signing in with an Arclight password is turned off for user accounts; sign in with your media server');
+    }
     audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local' } });
     const now = this.now();
     this.db.update(users).set({ lastLoginAt: now.toISOString() }).where(eq(users.id, row.id)).run();
@@ -436,12 +500,34 @@ export class AuthService {
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
     this.failures.delete(address);
+    const result = this.loginExternal(userId, meta);
     audit(this.db).record({ action: 'login.success', userId, username, ip: meta.ip ?? null, details: { method } });
+    return result;
+  }
+
+  /** Admins (role admin) and accounts that may use local sign-in pass; others need `signIn.local`. */
+  private localLoginAllowed(row: Pick<UserRow, 'role'>): boolean {
+    return row.role === 'admin' || this.signInSettings().local;
+  }
+
+  /**
+   * Signs in a user whose identity a media server proved (Jellyfin/Emby password, Plex PIN).
+   * Never an admin: admins sign in with their Arclight username and password only.
+   */
+  loginExternal(
+    userId: number,
+    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
+  ): LoginResult {
+    const row = this.row(userId);
+    if (row.role === 'admin') {
+      audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { reason: 'admin via media server' } });
+      throw new AuthError('FORBIDDEN', 'admins sign in with their Arclight username and password, not a media server');
+    }
     return this.loginAs(userId, meta);
   }
 
-  /** Signs a user in whose identity was proven elsewhere (media server, Plex PIN). */
-  loginAs(
+  /** Issues a session for a user whose identity is already established (internal; see loginExternal). */
+  private loginAs(
     userId: number,
     meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
   ): LoginResult {
@@ -567,7 +653,7 @@ export class AuthService {
   /** True when the bypass rule lets this request through without credentials. */
   bypasses(addresses: readonly (string | undefined)[]): boolean {
     const s = this.security();
-    if (!s.setupComplete) return false;
+    if (!s.setupComplete || !this.hasAdmin()) return false;
     if (s.method !== 'none' && s.requireForLocal) return false;
     return allLocal(addresses);
   }
@@ -580,11 +666,13 @@ export class AuthService {
     if (creds.sessionToken) {
       const found = this.resolveSession(creds.sessionToken);
       if (found) {
+        const isAdmin = found.user.role === 'admin';
         return {
           auth: {
             user: found.user,
             via: 'session',
-            isAdmin: found.user.role === 'admin',
+            isAdmin,
+            appAccess: effectiveAppAccess(found.user, isAdmin),
             sessionId: found.sessionId,
             expiresAt: found.expiresAt,
           },
@@ -596,17 +684,18 @@ export class AuthService {
       const address = creds.addresses[0] ?? 'unknown';
       this.checkRateLimit(address);
       const row = await this.verifyCredentials(creds.basic.username, creds.basic.password);
-      if (row) {
+      if (row && this.localLoginAllowed(row)) {
         const user = toUser(row);
-        return { auth: { user, via: 'basic', isAdmin: user.role === 'admin' } };
+        const isAdmin = user.role === 'admin';
+        return { auth: { user, via: 'basic', isAdmin, appAccess: effectiveAppAccess(user, isAdmin) } };
       }
-      this.recordFailure(address);
+      if (!row) this.recordFailure(address);
     }
     if (creds.apiKey && this.verifyApiKey(creds.apiKey)) {
-      return { auth: { user: null, via: 'apikey', isAdmin: true } };
+      return { auth: { user: null, via: 'apikey', isAdmin: true, appAccess: APP_AREAS } };
     }
     if (this.bypasses(creds.addresses)) {
-      return { auth: { user: null, via: 'bypass', isAdmin: true } };
+      return { auth: { user: null, via: 'bypass', isAdmin: true, appAccess: APP_AREAS } };
     }
     return { auth: null };
   }

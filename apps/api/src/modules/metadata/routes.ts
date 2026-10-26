@@ -75,7 +75,7 @@ export function metadataRoutes(
 
     app.get(
       '/metadata/collection/:tmdbId',
-      { schema: { params: TmdbIdParams, response: { 200: MetadataCollection, ...errors } } },
+      { config: { access: { areas: ['library'] } }, schema: { params: TmdbIdParams, response: { 200: MetadataCollection, ...errors } } },
       async (req) => service.getCollection(req.params.tmdbId),
     );
 

@@ -8,8 +8,11 @@ import { useAuth } from '../../../auth/auth-context.js';
 import { authKeys } from '../../../auth/guard.js';
 import { Button, Chip, ErrorBlock, Modal, Table, Tabs, buttonClass, type Column } from '../../../arclight/index.js';
 import { UserPermissionsEditor, UserPolicyEditor, UserQuotaEditor, UserRequestSettingsForm } from '../../../features/requests/user-editors.js';
+import { UserDefaultsFields, useUserDefaults } from '../../../features/users/user-defaults.js';
+import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
 import { SettingsSection } from '../shared.js';
+import { useToast } from '../../../components/toast.js';
 import '../security/security.css';
 import { t } from '../../../i18n/index.js';
 
@@ -19,6 +22,27 @@ export function permissionSummary(bits: number): string {
   const labels = PERMISSION_INFO.filter((p) => p.value !== Permission.ADMIN && (bits & p.value) === p.value).map((p) => p.label);
   if (labels.length === 0) return t('common.none');
   return labels.length > 3 ? `${labels.slice(0, 3).join(', ')} +${labels.length - 3}` : labels.join(', ');
+}
+
+/** Settings > Users > User defaults: sign-in, new accounts' permissions, quotas, app access. */
+function UserDefaultsSection() {
+  const state = useUserDefaults();
+  const toast = useToast();
+  const save = async () => {
+    if (await state.save()) toast.push({ tone: 'ok', title: t('userDefaults.saved') });
+  };
+  return (
+    <SettingsSection
+      label={t('setup.wizard.userDefaults')}
+      action={
+        <Button size="sm" variant="primary" loading={state.saving} disabled={!state.draft} onClick={() => void save()}>
+          {t('common.save')}
+        </Button>
+      }
+    >
+      <UserDefaultsFields state={state} />
+    </SettingsSection>
+  );
 }
 
 export function UsersPage() {
@@ -46,6 +70,7 @@ export function UsersPage() {
       cell: (u) => (u.role === 'admin' ? <Chip tone="accent">{t('common.admin')}</Chip> : <Chip tone="neutral">{t('common.user')}</Chip>),
     },
     { key: 'permissions', header: t('settings.users.permissions'), cell: (u) => permissionSummary(u.permissions), muted: true },
+    { key: 'access', header: t('settings.security.appAccess'), cell: (u) => appAccessSummary(u), muted: true },
     {
       key: 'actions',
       header: <span className="al-sr-only">{t('common.actions')}</span>,
@@ -77,6 +102,7 @@ export function UsersPage() {
           <Table caption={t('common.users')} density="dense" columns={columns} rows={users.data} loading={users.isPending} rowKey={(u) => u.id} sortable empty={t('settings.users.noUsers')} />
         )}
       </SettingsSection>
+      <UserDefaultsSection />
       {open ? (
         <Modal open size={640} onClose={() => setOpen(null)} title={t('settings.users.manageValue', { value: open.displayName ?? open.username })}>
           <Tabs

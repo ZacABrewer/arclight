@@ -39,6 +39,7 @@ import { createCutoffChecker, type CutoffProfiles } from './cutoff.js';
 import * as svc from './service.js';
 import { ProfilesService } from '../profiles/index.js';
 import type { MovieMetadataInput, SeriesMetadataInput } from './service.js';
+import { ADVANCED_REQUESTERS } from '../auth/hook.js';
 
 /**
  * Looks up metadata for a title being added. The metadata module registers the real
@@ -131,8 +132,8 @@ export const libraryRoutes = (
     };
 
     // ----------------------------------------------------------------------------- root folders
-    app.get('/rootfolder', { schema: { response: { 200: z.array(RootFolder) } } }, async () => svc.listRootFolders(db));
-    app.get('/rootfolder/:id', { schema: { params: IdParams, response: { 200: RootFolder, 404: ErrorResponse } } }, async (req) =>
+    app.get('/rootfolder', { config: { access: { areas: ['library'], permissions: ADVANCED_REQUESTERS } }, schema: { response: { 200: z.array(RootFolder) } } }, async () => svc.listRootFolders(db));
+    app.get('/rootfolder/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: RootFolder, 404: ErrorResponse } } }, async (req) =>
       svc.getRootFolder(db, req.params.id),
     );
     app.post(
@@ -146,8 +147,8 @@ export const libraryRoutes = (
     });
 
     // ----------------------------------------------------------------------------- tags
-    app.get('/tag', { schema: { response: { 200: z.array(Tag) } } }, async () => svc.listTags(db));
-    app.get('/tag/:id', { schema: { params: IdParams, response: { 200: Tag, 404: ErrorResponse } } }, async (req) =>
+    app.get('/tag', { config: { access: { areas: ['library'], permissions: ADVANCED_REQUESTERS } }, schema: { response: { 200: z.array(Tag) } } }, async () => svc.listTags(db));
+    app.get('/tag/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: Tag, 404: ErrorResponse } } }, async (req) =>
       svc.getTag(db, req.params.id),
     );
     app.post('/tag', { schema: { body: TagRequest, response: { 201: Tag, 409: ErrorResponse } } }, async (req, reply) =>
@@ -164,10 +165,10 @@ export const libraryRoutes = (
     });
 
     // ----------------------------------------------------------------------------- series
-    app.get('/series', { schema: { querystring: SeriesListQuery, response: { 200: z.array(Series) } } }, async (req) =>
+    app.get('/series', { config: { access: { areas: ['library'] } }, schema: { querystring: SeriesListQuery, response: { 200: z.array(Series) } } }, async (req) =>
       svc.listSeries(db, req.query),
     );
-    app.get('/series/:id', { schema: { params: IdParams, response: { 200: Series, 404: ErrorResponse } } }, async (req) =>
+    app.get('/series/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: Series, 404: ErrorResponse } } }, async (req) =>
       svc.getSeries(db, req.params.id),
     );
     app.post(
@@ -222,10 +223,10 @@ export const libraryRoutes = (
     );
 
     // ----------------------------------------------------------------------------- episodes
-    app.get('/episode', { schema: { querystring: EpisodeListQuery, response: { 200: z.array(Episode) } } }, async (req) =>
+    app.get('/episode', { config: { access: { areas: ['library'] } }, schema: { querystring: EpisodeListQuery, response: { 200: z.array(Episode) } } }, async (req) =>
       svc.listEpisodes(db, req.query),
     );
-    app.get('/episode/:id', { schema: { params: IdParams, response: { 200: Episode, 404: ErrorResponse } } }, async (req) =>
+    app.get('/episode/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: Episode, 404: ErrorResponse } } }, async (req) =>
       svc.getEpisode(db, req.params.id),
     );
     app.put(
@@ -248,10 +249,10 @@ export const libraryRoutes = (
     );
 
     // ----------------------------------------------------------------------------- movies
-    app.get('/movie', { schema: { querystring: MovieListQuery, response: { 200: z.array(Movie) } } }, async (req) =>
+    app.get('/movie', { config: { access: { areas: ['library'] } }, schema: { querystring: MovieListQuery, response: { 200: z.array(Movie) } } }, async (req) =>
       svc.listMovies(db, req.query),
     );
-    app.get('/movie/:id', { schema: { params: IdParams, response: { 200: Movie, 404: ErrorResponse } } }, async (req) =>
+    app.get('/movie/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: Movie, 404: ErrorResponse } } }, async (req) =>
       svc.getMovie(db, req.params.id),
     );
     app.post(
@@ -297,10 +298,10 @@ export const libraryRoutes = (
     );
 
     // ----------------------------------------------------------------------------- media files
-    app.get('/mediafile', { schema: { querystring: MediaFileListQuery, response: { 200: z.array(MediaFile) } } }, async (req) =>
+    app.get('/mediafile', { config: { access: { areas: ['library'] } }, schema: { querystring: MediaFileListQuery, response: { 200: z.array(MediaFile) } } }, async (req) =>
       svc.listMediaFiles(db, req.query),
     );
-    app.get('/mediafile/:id', { schema: { params: IdParams, response: { 200: MediaFile, 404: ErrorResponse } } }, async (req) =>
+    app.get('/mediafile/:id', { config: { access: { areas: ['library'] } }, schema: { params: IdParams, response: { 200: MediaFile, 404: ErrorResponse } } }, async (req) =>
       svc.getMediaFile(db, req.params.id),
     );
     app.delete(
@@ -316,18 +317,18 @@ export const libraryRoutes = (
     );
 
     // ----------------------------------------------------------------------------- wanted
-    app.get('/wanted/missing/episodes', { schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
+    app.get('/wanted/missing/episodes', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
       svc.listMissingEpisodes(db, req.query),
     );
-    app.get('/wanted/missing/movies', { schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
+    app.get('/wanted/missing/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
       svc.listMissingMovies(db, req.query),
     );
     // Cutoff unmet: monitored items with a file below their profile's quality or format-score
     // cutoff. Same checker as the CutoffUnmetSearch job (releases.isFileCutoffMet).
-    app.get('/wanted/cutoff/episodes', { schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
+    app.get('/wanted/cutoff/episodes', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
       svc.listCutoffUnmetEpisodes(db, req.query, createCutoffChecker(db, profiles)),
     );
-    app.get('/wanted/cutoff/movies', { schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
+    app.get('/wanted/cutoff/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
       svc.listCutoffUnmetMovies(db, req.query, createCutoffChecker(db, profiles)),
     );
 
@@ -339,7 +340,7 @@ export const libraryRoutes = (
       svc.deleteImportExclusion(db, req.params.id);
       return reply.code(204).send(null);
     });
-    app.get('/library/statistics', { schema: { response: { 200: LibraryStatistics } } }, async () => svc.getLibraryStatistics(db));
+    app.get('/library/statistics', { config: { access: { areas: ['library'] } }, schema: { response: { 200: LibraryStatistics } } }, async () => svc.getLibraryStatistics(db));
   };
 };
 

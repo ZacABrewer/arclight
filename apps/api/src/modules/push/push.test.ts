@@ -357,7 +357,7 @@ describe('push routes', () => {
     a.decorateRequest('auth', null);
     a.addHook('onRequest', async (req) => {
       const id = req.headers['x-user'];
-      req.auth = typeof id === 'string' ? { user: { id: Number(id) } as User, via: 'session', isAdmin: false } : { user: null, via: 'apikey', isAdmin: true };
+      req.auth = typeof id === 'string' ? { user: { id: Number(id) } as User, via: 'session', isAdmin: false, appAccess: [] } : { user: null, via: 'apikey', isAdmin: true, appAccess: [] };
     });
     await a.register(pushRoutes(env.service), { prefix: '/api/v1' });
     return { ...env, app: a, alice };

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
+import { Link, useNavigate, useParams, type LinkProps } from '@tanstack/react-router';
 import { IssueType, Permission, type Issue, type IssueComment, type RequestUser } from '@arclight/shared';
 import {
   Button,
@@ -18,7 +18,7 @@ import {
   type Column,
 } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
-import { titleLink } from '../../features/requests/title-link.js';
+import { DLink, titleTarget, useInPortal } from '../../features/discover/base.js';
 import { ISSUE_TYPE_LABELS, formatDateTime, usePermissions } from '../../features/requests/status.js';
 import {
   useDeleteIssue,
@@ -65,9 +65,9 @@ const columns: Column<Issue>[] = [
       <div className="mk-title-cell">
         <Poster src={i.mediaPoster} title={i.mediaTitle} width={32} />
         <div className="mk-title-cell__text">
-          <Link className="mk-link" to="/issues/$id" params={{ id: String(i.id) }}>
+          <IssueLink className="mk-link" id={i.id}>
             {i.mediaTitle}
-          </Link>
+          </IssueLink>
           <span className="mk-title-cell__sub al-num">{[i.mediaYear, problemLabel(i)].filter(Boolean).join(' · ')}</span>
         </div>
       </div>
@@ -85,6 +85,7 @@ export function IssuesPage() {
   const [type, setType] = useState<IssueType | 'all'>('all');
   const [page, setPage] = useState(0);
   const navigate = useNavigate();
+  const inPortal = useInPortal();
   const list = useIssues({ filter, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'modified' });
   // The api filters by status; the type filter applies to the page client-side (no type param in IssueListQuery).
   const rows = (list.data?.results ?? []).filter((i) => type === 'all' || i.type === type);
@@ -131,7 +132,7 @@ export function IssuesPage() {
               density="rich"
               sortable={false}
               caption={t('common.issues')}
-              onRowClick={(i) => void navigate({ to: '/issues/$id', params: { id: String(i.id) } })}
+              onRowClick={(i) => void navigate(issueTarget(inPortal, i.id))}
             />
           </Pane>
         )}
@@ -145,10 +146,27 @@ export function IssuesPage() {
   );
 }
 
-const detailRoute = getRouteApi('/issues/$id');
+/**
+ * Issue pages answer in the app (/issues, for admins and people with the issue permissions) and
+ * in the request portal (/portal/issues, everyone's own issues): links stay in the tree they
+ * were opened in.
+ */
+function issueTarget(inPortal: boolean, id?: number): LinkProps {
+  if (id === undefined) return { to: inPortal ? '/portal/issues' : '/issues' };
+  return { to: inPortal ? '/portal/issues/$id' : '/issues/$id', params: { id: String(id) } };
+}
+
+function IssueLink({ id, className, children }: { id?: number; className?: string; children: React.ReactNode }) {
+  const inPortal = useInPortal();
+  return (
+    <Link className={className} {...issueTarget(inPortal, id)}>
+      {children}
+    </Link>
+  );
+}
 
 export function IssueDetailPage() {
-  const { id } = detailRoute.useParams();
+  const { id } = useParams({ strict: false }) as { id?: string };
   const issue = useIssue(Number(id));
   if (issue.isPending) return <Loading />;
   if (issue.isError) return <QueryError error={issue.error} title={t('issues.couldNotLoadThisIssue')} onRetry={() => void issue.refetch()} />;
@@ -158,6 +176,7 @@ export function IssueDetailPage() {
 function IssueView({ issue }: { issue: Issue }) {
   const { can, userId } = usePermissions();
   const navigate = useNavigate();
+  const inPortal = useInPortal();
   const comment = useIssueComment();
   const setStatus = useSetIssueStatus();
   const del = useDeleteIssue();
@@ -172,7 +191,7 @@ function IssueView({ issue }: { issue: Issue }) {
   return (
     <>
       <div className="mk-crumb" style={{ marginBottom: 10 }}>
-        <Link to="/issues">{t('common.issues')}</Link> / #{issue.id}
+        <IssueLink>{t('common.issues')}</IssueLink> / #{issue.id}
       </div>
       <PageHeader
         title={`${ISSUE_TYPE_LABELS[issue.type]} issue: ${issue.mediaTitle}`}
@@ -187,9 +206,9 @@ function IssueView({ issue }: { issue: Issue }) {
         }
         actions={
           <>
-            <Link className="al-btn al-btn--secondary" {...titleLink(issue.mediaType, issue.mediaTmdbId)}>
+            <DLink className="al-btn al-btn--secondary" {...titleTarget(issue.mediaType, issue.mediaTmdbId)}>
               {t('issues.viewTitle')}
-            </Link>
+            </DLink>
             {canComment ? (
               <Button loading={setStatus.isPending} onClick={() => setStatus.mutate({ id: issue.id, status: issue.status === 'open' ? 'resolved' : 'open' })}>
                 {issue.status === 'open' ? t('issues.resolve') : t('issues.reopen')}
@@ -245,7 +264,7 @@ function IssueView({ issue }: { issue: Issue }) {
               onClick={async () => {
                 await del.mutateAsync(issue.id);
                 setDeleting(false);
-                await navigate({ to: '/issues' });
+                await navigate(issueTarget(inPortal));
               }}
             >
               {t('issues.deleteIssue')}

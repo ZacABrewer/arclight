@@ -9,13 +9,20 @@ export { authServiceFor } from './context.js';
 export {
   requireAdmin,
   requireAuth,
+  requireSelfOrAdmin,
   installAuthHook,
   isPublicRoute,
+  isSetupBootstrapRoute,
+  nonAdminMay,
+  ADVANCED_REQUESTERS,
   PUBLIC_ROUTES,
   PUBLIC_PREFIXES,
+  SETUP_BOOTSTRAP_ROUTES,
+  type AuthHookOptions,
   type PublicRoutePredicate,
+  type RouteAccess,
 } from './hook.js';
-export { AuthService, AuthError, toUser, type RequestAuth, type ExternalLoginProvider, type LoginResult } from './service.js';
+export { AuthService, AuthError, toUser, effectiveAppAccess, type RequestAuth, type ExternalLoginProvider, type LoginResult } from './service.js';
 export { SetupService } from './setup.js';
 export { hashPassword, verifyPassword } from './password.js';
 export { isLocalAddress } from './network.js';

@@ -26,19 +26,19 @@ export const historyRoutes =
       throw err;
     });
 
-    app.get('/history', { schema: { querystring: HistoryListQuery, response: { 200: HistoryPage } } }, async (req) =>
+    app.get('/history', { config: { access: { areas: ['activity'] } }, schema: { querystring: HistoryListQuery, response: { 200: HistoryPage } } }, async (req) =>
       service.list(req.query),
     );
 
     app.get(
       '/history/since',
-      { schema: { querystring: HistorySinceQuery, response: { 200: z.array(HistoryRecord), 400: HistoryErrorResponse } } },
+      { config: { access: { areas: ['activity'] } }, schema: { querystring: HistorySinceQuery, response: { 200: z.array(HistoryRecord), 400: HistoryErrorResponse } } },
       async (req) => service.since(req.query.date, req.query.eventType, req.query),
     );
 
     app.get(
       '/history/series',
-      { schema: { querystring: HistorySeriesQuery, response: { 200: z.array(HistoryRecord) } } },
+      { config: { access: { areas: ['library', 'activity'] } }, schema: { querystring: HistorySeriesQuery, response: { 200: z.array(HistoryRecord) } } },
       async (req) => {
         const { seriesId, seasonNumber, eventType, includeSeries, includeEpisode } = req.query;
         return service.forSeries(seriesId, {
@@ -52,7 +52,7 @@ export const historyRoutes =
 
     app.get(
       '/history/movie',
-      { schema: { querystring: HistoryMovieQuery, response: { 200: z.array(HistoryRecord) } } },
+      { config: { access: { areas: ['library', 'activity'] } }, schema: { querystring: HistoryMovieQuery, response: { 200: z.array(HistoryRecord) } } },
       async (req) => {
         const { movieId, eventType, includeMovie } = req.query;
         return service.forMovie(movieId, { ...(eventType === undefined ? {} : { eventType }), includeMovie });

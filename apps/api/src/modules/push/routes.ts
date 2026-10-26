@@ -12,10 +12,10 @@ import { z } from 'zod';
 import { PushError, type PushService } from './service.js';
 import { WebPushError } from './webpush.js';
 
-// /api/v1/push/*: every route acts on the signed-in user (`allowUser`); API-key callers
+// /api/v1/push/*: every route acts on the signed-in user (portal access); API-key callers
 // without a user get 400 NO_USER.
 
-const user = { allowUser: true } as const;
+const user = { access: { portal: true } } as const;
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
 const errors = { 400: ErrorBody, 404: ErrorBody };
 

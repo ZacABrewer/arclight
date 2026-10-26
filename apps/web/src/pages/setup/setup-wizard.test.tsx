@@ -6,7 +6,8 @@ import { ToastProvider } from '../../components/toast.js';
 import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
 import { routeTree } from '../../router.js';
-import { WIZARD_STEPS } from './setup-wizard.js';
+import { Permission, RequestsSettings, SignInSettings } from '@arclight/shared';
+import { WIZARD_STEPS, wizardTarget } from './setup-wizard.js';
 import { I18nProvider, setLocale } from '../../i18n/index.js';
 
 class FakeSocket {
@@ -45,7 +46,7 @@ beforeEach(() => {
       const path = url.split('?')[0]!;
       calls.push({ url: path, method, body });
       const json = (b: unknown, status = 200) => new Response(JSON.stringify(b), { status });
-      if (path === '/api/v1/auth/status') return json({ needsSetup: !completed, authMethod: 'forms', authenticated: true, session });
+      if (path === '/api/v1/auth/status') return json({ needsSetup: !completed, adminExists: true, authMethod: 'forms', authenticated: true, session });
       if (path === '/api/v1/auth/me') return json(session);
       if (path === '/api/v1/setup/status') return json({ needsSetup: true, steps });
       if (path === '/api/v1/rootfolder' && method === 'GET') return json(folders);
@@ -62,6 +63,8 @@ beforeEach(() => {
         return json(session, 201);
       }
       if (path === '/api/v1/user/me' && method === 'PUT') return json({ ...admin, settings: body.settings });
+      if (path === '/api/v1/settings/signin') return json(method === 'PUT' ? body : SignInSettings.parse({}));
+      if (path === '/api/v1/settings/requests') return json(method === 'PUT' ? body : RequestsSettings.parse({}));
       if (path === '/api/v1/setup/complete' && method === 'POST') {
         completed = true;
         return json({ needsSetup: false, steps });
@@ -93,15 +96,15 @@ function renderSetup() {
 }
 
 describe('setup wizard (Page 08)', () => {
-  it('has six steps ending with VPN, drawn as a diamond stepper with the current step marked', async () => {
-    expect(WIZARD_STEPS.map((s) => s.label)).toEqual(['Admin', 'TMDB', 'Root folders', 'Download client', 'Indexer', 'VPN']);
+  it('has seven steps ending with VPN, drawn as a diamond stepper with the current step marked', async () => {
+    expect(WIZARD_STEPS.map((s) => s.label)).toEqual(['Admin', 'User defaults', 'TMDB', 'Root folders', 'Download client', 'Indexer', 'VPN']);
     renderSetup();
     await screen.findByRole('heading', { name: 'Where is your media stored?' });
     const stepper = screen.getByRole('list', { name: 'Setup steps' });
     const items = within(stepper).getAllByRole('listitem');
-    expect(items.map((li) => li.getAttribute('data-state'))).toEqual(['done', 'done', 'active', 'todo', 'todo', 'todo']);
-    expect(items[2]!.getAttribute('aria-current')).toBe('step');
-    expect(screen.getByText(/Step/).textContent).toBe('Step 3 of 6');
+    expect(items.map((li) => li.getAttribute('data-state'))).toEqual(['done', 'done', 'done', 'active', 'todo', 'todo', 'todo']);
+    expect(items[3]!.getAttribute('aria-current')).toBe('step');
+    expect(screen.getByText(/Step/).textContent).toBe('Step 4 of 7');
     // One chamfered card per step.
     expect(document.querySelectorAll('[data-chamfer]')).toHaveLength(1);
   });
@@ -137,7 +140,7 @@ describe('setup wizard (Page 08)', () => {
     await screen.findByRole('heading', { name: 'Add an indexer' });
     fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
     await screen.findByRole('heading', { name: 'Protect downloads with a VPN' });
-    expect(screen.getByText(/Step/).textContent).toBe('Step 6 of 6');
+    expect(screen.getByText(/Step/).textContent).toBe('Step 7 of 7');
     fireEvent.click(screen.getByRole('button', { name: 'Finish setup' }));
     await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/setup/complete')?.body).toEqual({ authMethod: 'forms' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
@@ -178,6 +181,46 @@ describe('setup wizard (Page 08)', () => {
     fireEvent.change(confirm!, { target: { value: 'correct horse battery' } });
     fireEvent.submit(picker.closest('form')!);
     await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/user/me' && c.method === 'PUT')?.body).toEqual({ settings: { locale: 'de' } }));
+  });
+
+  it('cannot leave the admin step before the admin account exists', async () => {
+    steps = steps.map((s) => (s.id === 'admin' ? { ...s, complete: false } : s));
+    renderSetup();
+    await screen.findByRole('heading', { name: 'Create the admin account' });
+    const stepper = screen.getByRole('list', { name: 'Setup steps' });
+    for (const label of ['TMDB', 'VPN']) {
+      const item = within(stepper).getByText(label).closest('li') as HTMLElement;
+      fireEvent.click(within(item).queryByRole('button') ?? item);
+    }
+    expect(screen.getByRole('heading', { name: 'Create the admin account' })).toBeTruthy();
+    expect(wizardTarget(5, false)).toBe('admin');
+    expect(wizardTarget(2, true)).toBe('tmdb');
+    // No media-server option on the admin step: the first admin is always a local account.
+    expect(screen.queryByRole('button', { name: /Jellyfin|Emby|Plex/ })).toBeNull();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.getByText(/never with Jellyfin, Emby or Plex/)).toBeTruthy();
+  });
+
+  it('saves the user defaults: sign-in methods, invite-only, request permissions and quotas', async () => {
+    renderSetup();
+    await screen.findByRole('heading', { name: 'Where is your media stored?' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await screen.findByRole('heading', { name: 'Connect TMDB' });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await screen.findByRole('heading', { name: 'Who else can sign in?' });
+    await screen.findByTestId('user-defaults');
+    fireEvent.click(screen.getByLabelText('Plex'));
+    fireEvent.click(screen.getByRole('radio', { name: /Only people an admin added/ }));
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Request in 4K' }));
+    fireEvent.change(screen.getByLabelText('Movie requests'), { target: { value: '5' } });
+    fireEvent.change(screen.getByLabelText('Movie quota days'), { target: { value: '7' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    await screen.findByRole('heading', { name: 'Connect TMDB' });
+    expect(calls.find((c) => c.url === '/api/v1/settings/signin' && c.method === 'PUT')?.body).toEqual({ local: true, jellyfin: true, emby: true, plex: false, newUsers: 'invite' });
+    const saved = calls.find((c) => c.url === '/api/v1/settings/requests' && c.method === 'PUT')?.body as { defaultPermissions: number; defaultQuotas: unknown };
+    expect(saved.defaultPermissions).toBe(Permission.REQUEST | Permission.REQUEST_4K | Permission.CREATE_ISSUES);
+    expect(saved.defaultPermissions & Permission.AUTO_APPROVE).toBe(0);
+    expect(saved.defaultQuotas).toEqual({ movieLimit: 5, movieDays: 7, tvLimit: null, tvDays: null });
   });
 
   it('goes back to a finished step from the stepper', async () => {

@@ -26,7 +26,7 @@ export function calendarRoutes(
 
     app.get(
       '/calendar',
-      { schema: { querystring: CalendarQuery, response: { 200: z.array(CalendarItem), 400: CalendarErrorResponse } } },
+      { config: { access: { areas: ['calendar'] } }, schema: { querystring: CalendarQuery, response: { 200: z.array(CalendarItem), 400: CalendarErrorResponse } } },
       async (req) => service.list(req.query),
     );
 
