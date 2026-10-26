@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { configure, fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { MediaFile, Movie, NAMING_DEFAULTS, QUALITIES, WantedEpisode } from '@arclight/shared';
-import { MEDIA_MANAGEMENT_DEFAULTS } from '../../../api/settings.js';
+import { MEDIA_MANAGEMENT_WIRE_DEFAULTS } from '../../../api/settings.js';
 import { renderAt, stubApi } from '../../../test/route-harness.js';
 import { makeEpisode, makeMovie } from '../test-fixtures.js';
 
@@ -117,7 +117,7 @@ describe('settings: version layout', () => {
     const api = stubApi({
       '/api/v1/settings/naming': { ...NAMING_DEFAULTS, renameMovies: true },
       'PUT /api/v1/settings/naming': (init: RequestInit | undefined) => JSON.parse(String(init?.body)) as unknown,
-      '/api/v1/settings/mediamanagement': MEDIA_MANAGEMENT_DEFAULTS,
+      '/api/v1/settings/mediamanagement': MEDIA_MANAGEMENT_WIRE_DEFAULTS,
       '/api/v1/rootfolder': [],
     });
     renderAt('/settings/mediamanagement');

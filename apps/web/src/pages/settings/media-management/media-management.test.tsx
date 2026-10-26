@@ -3,7 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
 import { NAMING_DEFAULTS } from '@arclight/shared';
-import { MEDIA_MANAGEMENT_DEFAULTS } from '../../../api/settings.js';
+import { MEDIA_MANAGEMENT_WIRE_DEFAULTS } from '../../../api/settings.js';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';
 import { createQueryClient } from '../../../query-client.js';
@@ -41,7 +41,7 @@ beforeEach(() => {
       const body = init?.body ? JSON.parse(String(init.body)) : undefined;
       calls.push({ url, method, body });
       if (url === '/api/v1/settings/naming') return new Response(JSON.stringify(method === 'PUT' ? body : naming), { status: 200 });
-      if (url === '/api/v1/settings/mediamanagement') return new Response(JSON.stringify(method === 'PUT' ? body : MEDIA_MANAGEMENT_DEFAULTS), { status: 200 });
+      if (url === '/api/v1/settings/mediamanagement') return new Response(JSON.stringify(method === 'PUT' ? body : MEDIA_MANAGEMENT_WIRE_DEFAULTS), { status: 200 });
       if (url === '/api/v1/rootfolder') return new Response(JSON.stringify(folders), { status: 200 });
       return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
     }),
@@ -106,6 +106,17 @@ describe('Settings -> Media management', () => {
     const puts = calls.filter((c) => c.method === 'PUT');
     expect(puts.map((c) => c.url)).toEqual(['/api/v1/settings/naming']);
     expect(puts[0]!.body).toMatchObject({ seasonFolderFormat: 'S{season:00}' });
+  });
+
+  it('shows the extension list as text and saves it back as an array', async () => {
+    renderAt('/settings/mediamanagement');
+    const field = (await screen.findByLabelText('Extra file extensions')) as HTMLInputElement;
+    expect(field.value).toBe('srt');
+    fireEvent.change(field, { target: { value: 'srt, .nfo' } });
+    fireEvent.click(within(screen.getByRole('region', { name: 'Unsaved changes' })).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.method === 'PUT' && c.url === '/api/v1/settings/mediamanagement');
+    expect(put!.body).toMatchObject({ extraFileExtensions: ['srt', 'nfo'] });
   });
 
   it('hides advanced rows until Show advanced is on', async () => {

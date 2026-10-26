@@ -1,15 +1,13 @@
 import { z } from 'zod';
-import { MetadataSettingsResponse, type MetadataSettingsUpdate } from '@arclight/shared';
+import { MediaManagementSettings as MediaManagementWire, MetadataSettingsResponse, type MetadataSettingsUpdate } from '@arclight/shared';
 import { request } from './client.js';
 import { t } from '../i18n/index.js';
 
 // /settings/metadata mirrors apps/api/src/modules/settings/routes.ts.
 //
-// TODO(contract): /settings/mediamanagement is being built in parallel and
-// packages/shared/src/imports.ts is still a stub. The schema below follows the field list in
-// the imports-module brief; replace it with the shared `MediaManagementSettings` export (and
-// delete this local copy) as soon as that lands. looseObject keeps unknown server fields so a
-// save never drops them.
+// /settings/mediamanagement speaks the shared `MediaManagementSettings` (the wire form). The
+// page edits a form-shaped copy: extensions as one comma-separated string and the recycle bin
+// as '' instead of absent. looseObject keeps the other server fields so a save never drops them.
 export const FILE_DATE_MODES = [
   { value: 'none', get label() { return t('common.none'); } },
   { value: 'localAirDate', get label() { return t('api.settings.localAirDate'); } },
@@ -39,6 +37,18 @@ export const MediaManagementSettings = z.looseObject({
 export type MediaManagementSettings = z.infer<typeof MediaManagementSettings>;
 
 export const MEDIA_MANAGEMENT_DEFAULTS: MediaManagementSettings = MediaManagementSettings.parse({});
+/** What the server returns for a fresh install (test fixtures). */
+export const MEDIA_MANAGEMENT_WIRE_DEFAULTS = MediaManagementWire.parse({});
+
+const MediaManagementResponse = MediaManagementWire.transform((wire) =>
+  MediaManagementSettings.parse({ ...wire, recycleBinPath: wire.recycleBinPath ?? '', extraFileExtensions: wire.extraFileExtensions.join(', ') }),
+);
+
+/** Form → wire: split the extension list ("srt, .nfo" → ["srt", "nfo"]). */
+export function mediaManagementToWire(form: MediaManagementSettings): Record<string, unknown> {
+  const extensions = form.extraFileExtensions.split(/[\s,]+/).map((e) => e.replace(/^\./, '')).filter(Boolean);
+  return { ...form, extraFileExtensions: extensions };
+}
 
 export const settingsApi = {
   metadata: {
@@ -47,8 +57,8 @@ export const settingsApi = {
       request('/settings/metadata', MetadataSettingsResponse, { method: 'PUT', json: body }),
   },
   mediaManagement: {
-    get: () => request('/settings/mediamanagement', MediaManagementSettings),
+    get: () => request('/settings/mediamanagement', MediaManagementResponse),
     update: (body: MediaManagementSettings) =>
-      request('/settings/mediamanagement', MediaManagementSettings, { method: 'PUT', json: body }),
+      request('/settings/mediamanagement', MediaManagementResponse, { method: 'PUT', json: mediaManagementToWire(body) }),
   },
 };

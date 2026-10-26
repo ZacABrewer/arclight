@@ -1,24 +1,14 @@
 import { z } from 'zod';
+import { NotificationField } from '@arclight/shared';
 import { request } from './client.js';
+import type { FieldDefinition, FieldType, FormValues } from '../components/forms/types.js';
 
-// TODO(contract): packages/shared/src/notifications.ts is still empty and the /notification
-// routes are being built in parallel. These loose schemas follow the brief (connection list,
-// schema templates with field definitions shaped like the download-client ones, `on*` event
-// flags, tags, test). Swap in the shared exports when they land.
+// Connection rows and schema templates stay loose so a save never drops server fields; the
+// field definitions are the shared `NotificationField`. Its names are keys of `settings` and its
+// list/map types have no form widget of their own, so the editor works on a form-shaped copy:
+// see notificationFormFields / toNotificationForm / fromNotificationForm below.
 
-export const NotificationField = z.object({
-  name: z.string(),
-  label: z.string(),
-  type: z.enum(['text', 'number', 'password', 'checkbox', 'select']),
-  helpText: z.string().optional(),
-  required: z.boolean().optional(),
-  advanced: z.boolean().optional(),
-  default: z.union([z.string(), z.number(), z.boolean()]).optional(),
-  options: z.array(z.object({ value: z.string(), label: z.string() })).optional(),
-  min: z.number().optional(),
-  max: z.number().optional(),
-});
-export type NotificationField = z.infer<typeof NotificationField>;
+export { NotificationField };
 
 export const Notification = z.looseObject({
   id: z.number().int(),
@@ -76,3 +66,77 @@ export const notificationsApi = {
   test: (body: NotificationInput & { id?: number }) =>
     request('/notification/test', NotificationTestResult, { method: 'POST', json: body }),
 };
+
+// ---- form mapping -------------------------------------------------------------------------
+
+const FORM_TYPE: Record<NotificationField['type'], FieldType> = {
+  text: 'text',
+  url: 'text',
+  email: 'text',
+  password: 'password',
+  number: 'number',
+  boolean: 'checkbox',
+  select: 'select',
+  multiSelect: 'multiSelect',
+  // One entry per line ("key=value" for maps).
+  textList: 'textarea',
+  emailList: 'textarea',
+  keyValue: 'textarea',
+};
+
+/** Schema fields as form fields bound to `settings.<name>`. */
+export function notificationFormFields(fields: readonly NotificationField[]): FieldDefinition[] {
+  return fields.map((f) => ({
+    name: `settings.${f.name}`,
+    label: f.label,
+    type: FORM_TYPE[f.type],
+    helpText: f.helpText,
+    required: f.required,
+    default: toFormValue(f.type, f.default),
+    options: f.options,
+    min: f.min,
+    max: f.max,
+  }));
+}
+
+function toFormValue(type: NotificationField['type'], value: unknown): unknown {
+  if (value === undefined || value === null) return value;
+  if ((type === 'textList' || type === 'emailList') && Array.isArray(value)) return value.join('\n');
+  if (type === 'keyValue' && typeof value === 'object') {
+    return Object.entries(value as Record<string, unknown>)
+      .map(([k, v]) => `${k}=${String(v)}`)
+      .join('\n');
+  }
+  return value;
+}
+
+function fromFormValue(type: NotificationField['type'], value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  const lines = value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  if (type === 'textList' || type === 'emailList') return lines;
+  if (type === 'keyValue') {
+    return Object.fromEntries(
+      lines.map((l) => {
+        const eq = l.indexOf('=');
+        return eq === -1 ? [l, ''] : [l.slice(0, eq).trim(), l.slice(eq + 1).trim()];
+      }),
+    );
+  }
+  return value;
+}
+
+function mapSettings(values: FormValues, fields: readonly NotificationField[], map: (type: NotificationField['type'], v: unknown) => unknown): FormValues {
+  const settings = { ...((values.settings as Record<string, unknown> | undefined) ?? {}) };
+  for (const f of fields) if (f.name in settings) settings[f.name] = map(f.type, settings[f.name]);
+  return { ...values, settings };
+}
+
+/** A connection or template as editor values (lists and maps as text). */
+export function toNotificationForm(values: FormValues, fields: readonly NotificationField[]): FormValues {
+  return mapSettings(values, fields, toFormValue);
+}
+
+/** Editor values back to the api shape. */
+export function fromNotificationForm(values: FormValues, fields: readonly NotificationField[]): FormValues {
+  return mapSettings(values, fields, fromFormValue);
+}
