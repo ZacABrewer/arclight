@@ -3,12 +3,16 @@
 
 import type { z } from 'zod';
 import type {
+  CompanyRef,
   EpisodeMetadata,
   Genre,
   MovieMetadata,
+  PersonMetadata,
   SearchResult,
   SeriesMetadata,
+  TitleExtras,
 } from '../types.js';
+import { mapMovieExtras, mapPerson, mapTvExtras } from './extras.js';
 import { MetadataError } from '../types.js';
 import {
   createImageUrlBuilder,
@@ -23,8 +27,12 @@ import {
   type ImageUrlBuilder,
 } from './map.js';
 import {
+  tmdbCompanyDetailsSchema,
   tmdbConfigurationSchema,
   tmdbFindResponseSchema,
+  tmdbMovieExtrasSchema,
+  tmdbPersonSchema,
+  tmdbTvExtrasSchema,
   tmdbGenreListSchema,
   tmdbMovieDetailsSchema,
   tmdbMovieSearchResponseSchema,
@@ -74,7 +82,7 @@ export interface SearchOptions {
 export type MediaKind = 'tv' | 'movie';
 export type TrendingWindow = 'day' | 'week';
 
-/** Basic discover filters; Phase 4 widens this. Keys map 1:1 to TMDB query params. */
+/** Discover filters. Keys map 1:1 to TMDB query params. */
 export interface DiscoverOptions {
   page?: number;
   sortBy?: string;
@@ -84,6 +92,19 @@ export interface DiscoverOptions {
   voteCountGte?: number;
   withOriginalLanguage?: string;
   includeAdult?: boolean;
+  /** Primary release date (movies) or first air date (series) range, YYYY-MM-DD. */
+  releaseDateGte?: string;
+  releaseDateLte?: string;
+  voteAverageLte?: number;
+  withRuntimeGte?: number;
+  withRuntimeLte?: number;
+  withKeywords?: string;
+  /** Movies only (TMDB company ids). */
+  withCompanies?: string;
+  /** Series only (TMDB network ids). */
+  withNetworks?: string;
+  withWatchProviders?: string;
+  watchRegion?: string;
 }
 
 export interface TmdbClient {
@@ -103,6 +124,13 @@ export interface TmdbClient {
   ): Promise<PagedResults<SearchResult>>;
   discover(kind: MediaKind, options?: DiscoverOptions): Promise<PagedResults<SearchResult>>;
   getGenres(kind: MediaKind): Promise<Genre[]>;
+  /** Credits, similar, recommendations, videos, keywords, companies for a movie. */
+  getMovieExtras(tmdbId: number): Promise<TitleExtras>;
+  /** Credits, similar, recommendations, videos, keywords, networks for a series. */
+  getSeriesExtras(tmdbId: number): Promise<TitleExtras>;
+  getPerson(personId: number): Promise<PersonMetadata>;
+  getCompany(companyId: number): Promise<CompanyRef>;
+  getNetwork(networkId: number): Promise<CompanyRef>;
   /** Clears the response cache (including /configuration). */
   clearCache(): void;
 }
@@ -290,9 +318,26 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
       'vote_count.gte': opts.voteCountGte,
       with_original_language: opts.withOriginalLanguage,
       include_adult: opts.includeAdult,
+      'vote_average.lte': opts.voteAverageLte,
+      'with_runtime.gte': opts.withRuntimeGte,
+      'with_runtime.lte': opts.withRuntimeLte,
+      with_keywords: opts.withKeywords,
+      with_watch_providers: opts.withWatchProviders,
+      watch_region: opts.watchRegion ?? (opts.withWatchProviders ? region : undefined),
       ...(kind === 'movie'
-        ? { primary_release_year: opts.year, region }
-        : { first_air_date_year: opts.year }),
+        ? {
+            primary_release_year: opts.year,
+            region,
+            'primary_release_date.gte': opts.releaseDateGte,
+            'primary_release_date.lte': opts.releaseDateLte,
+            with_companies: opts.withCompanies,
+          }
+        : {
+            first_air_date_year: opts.year,
+            'first_air_date.gte': opts.releaseDateGte,
+            'first_air_date.lte': opts.releaseDateLte,
+            with_networks: opts.withNetworks,
+          }),
     };
   }
 
@@ -431,6 +476,48 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
     async getGenres(kind) {
       const raw = await request(`/genre/${kind}/list`, {}, tmdbGenreListSchema, CONFIGURATION_TTL_MS);
       return mapGenres(raw);
+    },
+
+    async getMovieExtras(tmdbId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/movie/${tmdbId}`, { append_to_response: 'credits,similar,recommendations,videos,keywords' }, tmdbMovieExtrasSchema),
+      ]);
+      return mapMovieExtras(raw, images);
+    },
+
+    async getSeriesExtras(tmdbId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/tv/${tmdbId}`, { append_to_response: 'credits,similar,recommendations,videos,keywords' }, tmdbTvExtrasSchema),
+      ]);
+      return mapTvExtras(raw, images);
+    },
+
+    async getPerson(personId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/person/${personId}`, { append_to_response: 'combined_credits' }, tmdbPersonSchema),
+      ]);
+      return mapPerson(raw, images);
+    },
+
+    async getCompany(companyId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/company/${companyId}`, {}, tmdbCompanyDetailsSchema, CONFIGURATION_TTL_MS),
+      ]);
+      const logo = images('logo', raw.logo_path);
+      return { tmdbId: raw.id, name: raw.name, ...(logo ? { logo } : {}) };
+    },
+
+    async getNetwork(networkId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/network/${networkId}`, {}, tmdbCompanyDetailsSchema, CONFIGURATION_TTL_MS),
+      ]);
+      const logo = images('logo', raw.logo_path);
+      return { tmdbId: raw.id, name: raw.name, ...(logo ? { logo } : {}) };
     },
 
     clearCache() {

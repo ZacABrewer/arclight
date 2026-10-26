@@ -1,4 +1,4 @@
-import type { HealthCheck, HealthStatus, VpnStatus } from '@media-tron/shared';
+import type { HealthCheck, HealthStatus, TorrentSessionStatus, VpnStatus } from '@media-tron/shared';
 
 // Health check framework types. A check is a named function over `HealthDeps` (everything it
 // may look at, injectable so tests use fakes) returning zero or more findings. A passing check
@@ -96,6 +96,8 @@ export interface HealthDeps {
   };
   /** VPN status (vpn module); optional so deps built without it skip the VPN check. */
   vpn?(): Promise<VpnStatus>;
+  /** Built-in torrent engine status (torrent module); optional so deps without it skip the check. */
+  torrent?(): Promise<TorrentSessionStatus>;
 }
 
 export interface HealthCheckDef {

@@ -8,8 +8,11 @@ import { Poster } from '../../components/media/media-ui.js';
 import { destinationPath } from '../../components/media/path-preview.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { Modal } from '../../components/modal.js';
+import { PathPickerDialog } from '../../components/path-picker/index.js';
+import { useAddRootFolder } from '../../hooks/settings.js';
 import { useAddMovie, useAddSeries } from '../../hooks/library.js';
 import { useToast } from '../../components/toast.js';
+import { LanguageProfileSelect } from '../subtitles/language-profile-select.js';
 import {
   MINIMUM_AVAILABILITY_LABELS,
   MONITOR_OPTION_LABELS,
@@ -66,6 +69,8 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
   const mutation = mediaType === 'series' ? addSeries : addMovie;
   const navigate = useNavigate();
   const toast = useToast();
+  const addRoot = useAddRootFolder();
+  const [browsing, setBrowsing] = useState(false);
 
   // Profiles / root folders can arrive after the dialog opened.
   useEffect(() => {
@@ -122,7 +127,18 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
       </div>
 
       <div className="fields">
-        <FormField label="Root folder" error={touched ? errors.rootFolderPath : undefined} hint={roots.length === 0 ? 'Add a root folder in Settings → Media Management first.' : undefined}>
+        <FormField
+          label="Root folder"
+          error={touched ? errors.rootFolderPath : undefined}
+          hint={
+            <>
+              {roots.length === 0 ? 'No root folder yet. ' : null}
+              <Button size="sm" variant="ghost" loading={addRoot.isPending} onClick={() => setBrowsing(true)}>
+                Browse for a folder…
+              </Button>
+            </>
+          }
+        >
           <Select value={form.rootFolderPath} onChange={(e) => set('rootFolderPath', e.target.value)}>
             <option value="">Select a root folder…</option>
             {roots.map((r) => (
@@ -185,6 +201,8 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
           </>
         )}
 
+        <LanguageProfileSelect allowDefault value={form.languageProfileId} onChange={(v) => set('languageProfileId', v)} />
+
         <div className="field">
           <span className="field-label">Tags</span>
           <TagPicker value={form.tags} onChange={(ids) => set('tags', ids)} />
@@ -216,6 +234,21 @@ export function AddForm({ result, onClose, rootFolders, profiles }: { result: Me
           Add {mediaType === 'series' ? 'series' : 'movie'}
         </Button>
       </div>
+      <PathPickerDialog
+        open={browsing}
+        onClose={() => setBrowsing(false)}
+        title="Choose a root folder"
+        initialPath={form.rootFolderPath}
+        onSelect={(path) => {
+          setBrowsing(false);
+          if (roots.some((r) => r.path === path)) {
+            set('rootFolderPath', path);
+            return;
+          }
+          // A new folder becomes a root folder first; the add request needs a known root.
+          addRoot.mutate({ path, mediaType }, { onSuccess: (root) => set('rootFolderPath', root.path) });
+        }}
+      />
     </form>
   );
 }

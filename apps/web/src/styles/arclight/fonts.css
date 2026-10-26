@@ -1,0 +1,8 @@
+/* Arclight — self-hosted font wiring (layered on top of arclight.css, never edits it).
+   arclight/fonts.ts imports the @fontsource files. @fontsource-variable registers Archivo
+   under the family name "Archivo Variable"; the kit's stack names "Archivo" first, so the
+   stack is extended (kit name kept first) rather than replaced. JetBrains Mono registers
+   under its own name, so --al-mono needs no change. */
+:root {
+  --al-font: "Archivo", "Archivo Variable", system-ui, sans-serif;
+}

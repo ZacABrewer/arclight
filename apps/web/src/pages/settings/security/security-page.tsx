@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { PASSWORD_MIN_LENGTH, type AuthMethod, type AuthSettings, type User, type UserRole } from '@media-tron/shared';
 import { securityApi, usersApi } from '../../../api/auth.js';
 import { errorMessage } from '../../../api/client.js';
@@ -204,9 +205,14 @@ function UsersCard() {
       title="Users"
       flush
       actions={
-        <Button variant="primary" onClick={() => setEditing({ user: null, mode: 'edit' })}>
-          Add user
-        </Button>
+        <div className="row">
+          <Link to="/settings/users" className="link-subtle">
+            Permissions and quotas
+          </Link>
+          <Button variant="primary" onClick={() => setEditing({ user: null, mode: 'edit' })}>
+            Add user
+          </Button>
+        </div>
       }
     >
       {users.isPending ? (

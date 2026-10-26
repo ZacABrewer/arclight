@@ -1,0 +1,74 @@
+# Build-from-source stack with a VPN and Media-Tron's BUILT-IN torrent engine: no qBittorrent.
+#   docker compose -f docker-compose.builtin.yml up -d
+# Media-Tron shares Gluetun's network namespace (network_mode: "service:gluetun"), so every
+# torrent socket leaves through the ProtonVPN WireGuard tunnel and Gluetun's firewall blocks
+# everything else. Only the web UI (7878) is published, on the gluetun service. No 6881 publish
+# is needed: Proton forwards a port dynamically, Media-Tron reads it from Gluetun's control
+# server and moves the engine's listener onto it (Settings -> VPN: provider Gluetun, enabled;
+# Settings -> Torrent Engine: "Bind to VPN" on). A "Built-in" download client is added on first
+# start when no download client exists.
+services:
+  gluetun:
+    image: qmcgaw/gluetun:latest
+    container_name: gluetun
+    cap_add:
+      - NET_ADMIN
+    devices:
+      - /dev/net/tun:/dev/net/tun
+    environment:
+      - VPN_SERVICE_PROVIDER=protonvpn
+      - VPN_TYPE=wireguard
+      - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_KEY}
+      - SERVER_COUNTRIES=${VPN_COUNTRIES:-Netherlands}
+      # Proton assigns a forwarded port (NAT-PMP); Media-Tron moves its built-in engine onto it.
+      - VPN_PORT_FORWARDING=on
+      # Let LAN clients reach the published UIs through Gluetun's firewall.
+      - FIREWALL_OUTBOUND_SUBNETS=${LAN_SUBNET:-192.168.1.0/24}
+      # Control server polled by Media-Tron (status, public IP, forwarded port).
+      - HTTP_CONTROL_SERVER_ADDRESS=:8000
+      - HTTP_CONTROL_SERVER_LOG=off
+      # Newer Gluetun releases require auth on the control server. If yours does, create a key
+      # (docker run --rm qmcgaw/gluetun genkey), configure it per the Gluetun wiki
+      # ("Control server" / auth roles) and enter the same key in Settings -> VPN.
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ${CONFIG_ROOT:-./data}/gluetun:/gluetun
+    ports:
+      - "7878:7878" # Media-Tron
+    healthcheck:
+      test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
+      interval: 30s
+      timeout: 10s
+      start_period: 60s
+      retries: 3
+    restart: unless-stopped
+
+  media-tron:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: media-tron
+    network_mode: "service:gluetun"
+    environment:
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - TZ=${TZ:-UTC}
+      # Default for Settings -> VPN -> Gluetun control URL (same network namespace).
+      - MEDIATRON_VPN_CONTROL_URL=http://localhost:8000
+    volumes:
+      # /config/torrents holds the engine's fast-resume data.
+      - ${CONFIG_ROOT:-./data}/media-tron:/config
+      - ${TV_ROOT:-./data/tv}:/tv
+      - ${MOVIES_ROOT:-./data/movies}:/movies
+      # The engine's default download folder (Settings -> Torrent Engine).
+      - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7878/api/v1/system/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy

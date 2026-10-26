@@ -1,5 +1,11 @@
-import { sqliteTable, integer, text } from 'drizzle-orm/sqlite-core';
-import type { IndexerCapabilitiesResource, IndexerImplementation, IndexerSettings } from '@media-tron/shared';
+import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
+import type {
+  IndexerCapabilitiesResource,
+  IndexerImplementation,
+  IndexerProxyType,
+  IndexerSettings,
+  IndexerStatKind,
+} from '@media-tron/shared';
 
 // Indexers module tables. Settings and caps are JSON: always read and written whole.
 
@@ -12,6 +18,8 @@ export const indexers = sqliteTable('indexers', {
   enableInteractiveSearch: integer('enable_interactive_search', { mode: 'boolean' }).notNull().default(true),
   priority: integer('priority').notNull().default(25),
   downloadClientId: integer('download_client_id'),
+  /** Explicit indexer proxy (no FK so the column could be added in place; cleared on proxy delete). */
+  proxyId: integer('proxy_id'),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
   settings: text('settings', { mode: 'json' }).$type<IndexerSettings>().notNull(),
   addedAt: text('added_at').notNull(),
@@ -47,3 +55,34 @@ export const indexerRssState = sqliteTable('indexer_rss_state', {
   recentGuids: text('recent_guids', { mode: 'json' }).$type<string[]>().notNull(),
   lastSyncAt: text('last_sync_at').notNull(),
 });
+
+/** Proxies indexer requests can go through; applied by explicit `indexers.proxy_id` or by matching tags. */
+export const indexerProxies = sqliteTable('indexer_proxies', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  type: text('type').$type<IndexerProxyType>().notNull(),
+  host: text('host').notNull(),
+  port: integer('port').notNull(),
+  username: text('username'),
+  password: text('password'),
+  /** Seconds. */
+  requestTimeout: integer('request_timeout'),
+  tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),
+});
+
+/** Append-only log of indexer queries, RSS fetches and grabs; pruned after 90 days. */
+export const indexerStats = sqliteTable(
+  'indexer_stats',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    indexerId: integer('indexer_id')
+      .notNull()
+      .references(() => indexers.id, { onDelete: 'cascade' }),
+    kind: text('kind').$type<IndexerStatKind>().notNull(),
+    durationMs: integer('duration_ms').notNull(),
+    success: integer('success', { mode: 'boolean' }).notNull(),
+    /** ISO-8601. */
+    at: text('at').notNull(),
+  },
+  (t) => [index('indexer_stats_at_idx').on(t.at), index('indexer_stats_indexer_idx').on(t.indexerId)],
+);

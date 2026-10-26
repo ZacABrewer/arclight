@@ -80,10 +80,10 @@ describe('app shell', () => {
     expect(screen.getByRole('link', { name: 'Tasks' })).toBeTruthy();
   });
 
-  it('renders ComingSoon for routes that are not built yet', async () => {
-    renderAt('/discover');
-    expect(await screen.findByRole('heading', { level: 1, name: 'Discover' })).toBeTruthy();
-    expect(screen.getByText(/coming soon/i)).toBeTruthy();
+  it('renders the top-level Indexers section', async () => {
+    renderAt('/indexers');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Indexers' })).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Stats' })).toBeTruthy();
   });
 
   it('redirects a section root to its first child', async () => {

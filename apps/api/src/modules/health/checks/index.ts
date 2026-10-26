@@ -9,6 +9,7 @@ import {
 import { indexerCheck, indexerLongTermStatusCheck, indexerRssCheck, indexerSearchCheck, indexerStatusCheck } from './indexers.js';
 import { notificationConfigCheck, notificationStatusCheck } from './notifications.js';
 import { mountReadOnlyCheck, recycleBinCheck, rootFolderCheck } from './root-folders.js';
+import { torrentEngineCheck } from './torrent.js';
 import { vpnDisconnectedCheck } from './vpn.js';
 import { dockerPermissionsCheck, metadataSourceCheck, systemTimeCheck, updateCheck } from './system.js';
 
@@ -18,6 +19,7 @@ export * from './indexers.js';
 export * from './notifications.js';
 export * from './root-folders.js';
 export * from './system.js';
+export * from './torrent.js';
 export * from './vpn.js';
 
 /** The Phase-1 catalogue, in display order. Fresh instances (some checks keep state). */
@@ -44,5 +46,6 @@ export function createChecks(): HealthCheckDef[] {
     notificationConfigCheck,
     notificationStatusCheck,
     vpnDisconnectedCheck,
+    torrentEngineCheck,
   ];
 }

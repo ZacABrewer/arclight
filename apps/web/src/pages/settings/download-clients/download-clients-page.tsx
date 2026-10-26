@@ -7,6 +7,7 @@ import type {
   RemotePathMapping,
   RemotePathMappingInput,
 } from '@media-tron/shared';
+import { downloadClientHost } from '@media-tron/shared';
 import { downloadClientsApi } from '../../../api/download-clients.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
@@ -18,9 +19,12 @@ import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import { TestButton, type TestOutcome } from '../../../components/forms/test-result.js';
-import type { FormValues } from '../../../components/forms/types.js';
+import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
+import { getPath, setPath } from '../../../components/forms/values.js';
+import { categoriesRenderer, cleanCategories } from './categories-field.js';
 import { Modal } from '../../../components/modal.js';
 import { Page } from '../../../components/page.js';
+import { ProtocolBadge } from '../../../components/protocol-badge.js';
 import { LoadingBlock } from '../../../components/spinner.js';
 import {
   useDeleteDownloadClient,
@@ -43,17 +47,49 @@ export function downloadClientTestOutcome(r: DownloadClientTestResult): TestOutc
   };
 }
 
-/** Form values -> create/update body: drop read-only keys (id). */
-export function toDownloadClientBody(values: FormValues): DownloadClientInput {
+/** Form values -> create/update body: drop read-only keys (id), omit empty optional numbers. */
+export function toDownloadClientBody(values: FormValues, fields: readonly FieldDefinition[] = []): DownloadClientInput {
   const { id: _id, ...rest } = values;
-  return rest as unknown as DownloadClientInput;
+  let body: FormValues = rest;
+  for (const f of fields) {
+    if (f.type !== 'number') continue;
+    const v = getPath(body, f.name);
+    if (v === '' || v === null || (typeof v === 'number' && Number.isNaN(v))) body = setPath(body, f.name, undefined);
+  }
+  // JSON drops undefined keys, but strip them here too so the body is what the api receives.
+  const settings = body.settings;
+  if (settings !== null && typeof settings === 'object' && !Array.isArray(settings)) {
+    const cleaned = Object.fromEntries(Object.entries(settings as FormValues).filter(([, v]) => v !== undefined));
+    if (Array.isArray(cleaned.categories)) cleaned.categories = cleanCategories(cleaned.categories);
+    body = { ...body, settings: cleaned };
+  }
+  return body as unknown as DownloadClientInput;
+}
+
+export const BUILTIN_DESCRIPTION = "Media-Tron's own BitTorrent engine, running in-process. No separate app or host to configure.";
+
+/** The add-dialog blurb: the api's description, or ours for the built-in engine. */
+export function schemaDescription(s: DownloadClientImplementationSchema): string {
+  return s.description || (s.implementation === 'builtin' ? BUILTIN_DESCRIPTION : '');
+}
+
+/** Second line of a client card: where it lives. */
+export function clientLocation(c: DownloadClientResource): string {
+  if (c.implementation === 'builtin') return c.settings.savePath ? `built-in engine · ${c.settings.savePath}` : 'built-in engine';
+  const s = c.settings;
+  return `${s.useSsl ? 'https' : 'http'}://${s.host}:${s.port}${s.urlBase ?? ''}`;
+}
+
+/** Add-dialog order: torrent clients first, then usenet, each in the api's order. */
+export function sortedSchemas(schemas: readonly DownloadClientImplementationSchema[]): DownloadClientImplementationSchema[] {
+  return [...schemas.filter((s) => s.protocol === 'torrent'), ...schemas.filter((s) => s.protocol !== 'torrent')];
 }
 
 type Editing = { client: DownloadClientResource; schema: DownloadClientImplementationSchema } | { schema: DownloadClientImplementationSchema };
 
 function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose: () => void }) {
   const existing = 'client' in editing ? editing.client : null;
-  const fields = editing.schema.fields;
+  const fields = editing.schema.fields as readonly FieldDefinition[];
   const form = useSchemaForm(fields, (existing ?? editing.schema.template) as unknown as FormValues);
   const save = useSaveDownloadClient();
   const remove = useDeleteDownloadClient();
@@ -61,7 +97,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
 
   const submit = () => {
     if (!form.validate()) return;
-    save.mutate({ id: existing?.id, body: toDownloadClientBody(form.values) }, { onSuccess: onClose });
+    save.mutate({ id: existing?.id, body: toDownloadClientBody(form.values, fields) }, { onSuccess: onClose });
   };
 
   return (
@@ -82,7 +118,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
                 beforeTest={form.validate}
                 onTest={async () =>
                   downloadClientTestOutcome(
-                    await downloadClientsApi.test({ ...toDownloadClientBody(form.values), ...(existing ? { id: existing.id } : {}) }),
+                    await downloadClientsApi.test({ ...toDownloadClientBody(form.values, fields), ...(existing ? { id: existing.id } : {}) }),
                   )
                 }
               />
@@ -91,7 +127,7 @@ function DownloadClientEditor({ editing, onClose }: { editing: Editing; onClose:
         }
       >
         {editing.schema.description ? <p className="muted">{editing.schema.description}</p> : null}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} inline />
+        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer, 'settings.categories': categoriesRenderer }} inline />
         <SaveError error={save.error} />
       </Modal>
       {existing ? (
@@ -117,7 +153,7 @@ function MappingEditor({ mapping, onClose }: { mapping: RemotePathMapping | null
   const save = useSaveRemotePathMapping();
   const remove = useDeleteRemotePathMapping();
   const clients = useDownloadClientList();
-  const hosts = [...new Set((clients.data ?? []).map((c) => c.settings.host))];
+  const hosts = [...new Set((clients.data ?? []).map((c) => downloadClientHost(c.settings)))];
 
   const submit = () => {
     if (!draft.host.trim() || !draft.remotePath || !draft.localPath.trim()) return setError('Host, remote path and local path are all required');
@@ -260,15 +296,17 @@ export function DownloadClientsPage() {
                     title={c.name}
                     muted={!c.enable}
                     onClick={schema ? () => setEditing({ client: c, schema }) : undefined}
-                    status={<Badge tone={c.enable ? 'ok' : 'neutral'}>{c.enable ? 'enabled' : 'disabled'}</Badge>}
+                    status={
+                      <span className="chip-stack">
+                        <ProtocolBadge protocol={c.protocol} />
+                        <Badge tone={c.enable ? 'ok' : 'neutral'}>{c.enable ? 'enabled' : 'disabled'}</Badge>
+                      </span>
+                    }
                   >
                     <div className="muted">
-                      {schema?.implementationName ?? c.implementation} · {c.protocol} · priority {c.priority}
+                      {schema?.implementationName ?? c.implementation} · priority {c.priority}
                     </div>
-                    <div className="muted">
-                      {c.settings.useSsl ? 'https' : 'http'}://{c.settings.host}:{c.settings.port}
-                      {c.settings.urlBase ?? ''}
-                    </div>
+                    <div className="muted">{clientLocation(c)}</div>
                     {result ? (
                       <div className={result.ok ? 'text-ok' : 'text-error'}>
                         {result.ok ? `Test passed${result.message ? ` · ${result.message}` : ''}` : `Test failed: ${result.errors.join('; ')}`}
@@ -291,7 +329,7 @@ export function DownloadClientsPage() {
             <ErrorView error={schemas.error} />
           ) : (
             <CardGrid>
-              {schemas.data.map((s) => (
+              {sortedSchemas(schemas.data).map((s) => (
                 <button
                   key={s.implementation}
                   type="button"
@@ -301,8 +339,11 @@ export function DownloadClientsPage() {
                     setEditing({ schema: s });
                   }}
                 >
-                  <strong>{s.implementationName}</strong>
-                  <span className="muted">{s.description}</span>
+                  <span className="chip-stack">
+                    <strong>{s.implementationName}</strong>
+                    <ProtocolBadge protocol={s.protocol} />
+                  </span>
+                  <span className="muted">{schemaDescription(s)}</span>
                 </button>
               ))}
             </CardGrid>

@@ -1,5 +1,8 @@
 import { useMemo, useState } from 'react';
-import type { Indexer, IndexerTemplate, IndexerTestAllItem } from '@media-tron/shared';
+import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@media-tron/shared';
+import { Tabs } from '../../../components/tabs.js';
+import { CatalogueList } from './catalogue.js';
+import { DefinitionEditor } from './definition-editor.js';
 import { indexersApi } from '../../../api/indexers.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
@@ -96,26 +99,52 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
   );
 }
 
-function TemplatePicker({ onPick, onClose }: { onPick: (t: IndexerTemplate) => void; onClose: () => void }) {
+function TemplatePicker({
+  onPick,
+  onPickDefinition,
+  onClose,
+}: {
+  onPick: (t: IndexerTemplate) => void;
+  onPickDefinition: (d: IndexerDefinitionSummary) => void;
+  onClose: () => void;
+}) {
   const templates = useIndexerTemplates();
+  const endpoints = templates.isPending ? (
+    <LoadingBlock />
+  ) : templates.isError ? (
+    <ErrorView error={templates.error} />
+  ) : (
+    <CardGrid>
+      {templates.data
+        .filter((t) => t.implementation !== 'definition')
+        .map((t) => (
+          <button key={t.implementation} type="button" className="item-card add-card" onClick={() => onPick(t)}>
+            <strong>{t.implementationName}</strong>
+            <span className="muted">{t.protocol}</span>
+          </button>
+        ))}
+    </CardGrid>
+  );
   return (
-    <Modal open onClose={onClose} title="Add indexer">
-      {templates.isPending ? (
-        <LoadingBlock />
-      ) : templates.isError ? (
-        <ErrorView error={templates.error} />
-      ) : (
-        <CardGrid>
-          {templates.data.map((t) => (
-            <button key={t.implementation} type="button" className="item-card add-card" onClick={() => onPick(t)}>
-              <strong>{t.implementationName}</strong>
-              <span className="muted">{t.protocol}</span>
-            </button>
-          ))}
-        </CardGrid>
-      )}
+    <Modal open size="lg" onClose={onClose} title="Add indexer">
+      <Tabs
+        tabs={[
+          { id: 'endpoint', label: 'Torznab/Newznab', content: endpoints },
+          { id: 'catalogue', label: 'Catalogue', content: <CatalogueList onPick={onPickDefinition} /> },
+        ]}
+      />
     </Modal>
   );
+}
+
+/** "via <definition>" and proxy names shown under an indexer's title. */
+export function indexerSourceLine(indexer: Pick<Indexer, 'implementation' | 'definitionName' | 'settings' | 'proxyNames'>): string {
+  const parts: string[] = [];
+  if (indexer.implementation === 'definition') {
+    parts.push(`definition: ${indexer.definitionName ?? indexer.settings.definitionId ?? 'unknown'}`);
+  }
+  if (indexer.proxyNames?.length) parts.push(`proxy: ${indexer.proxyNames.join(', ')}`);
+  return parts.join(' · ');
 }
 
 export function IndexersPage() {
@@ -124,6 +153,9 @@ export function IndexersPage() {
   const testAll = useTestAllIndexers();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const [definitionEditing, setDefinitionEditing] = useState<{ definition: IndexerDefinitionSummary } | { indexer: Indexer } | null>(null);
+  const openIndexer = (indexer: Indexer) =>
+    indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer });
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
 
   const toggle = (indexer: Indexer, key: 'enableRss' | 'enableAutomaticSearch' | 'enableInteractiveSearch', value: boolean) =>
@@ -158,7 +190,7 @@ export function IndexersPage() {
                   key={indexer.id}
                   title={indexer.name}
                   muted={off}
-                  onClick={() => setEditing({ indexer })}
+                  onClick={() => openIndexer(indexer)}
                   status={
                     <span title={health.title}>
                       <Badge tone={off ? 'neutral' : health.tone}>{off ? 'disabled' : health.label}</Badge>
@@ -168,6 +200,7 @@ export function IndexersPage() {
                   <div className="muted">
                     {indexer.implementation} · {indexer.protocol} · priority {indexer.priority}
                   </div>
+                  {indexerSourceLine(indexer) ? <div className="muted">{indexerSourceLine(indexer)}</div> : null}
                   <div className="toggle-row">
                     <Toggle label="RSS" checked={indexer.enableRss} onChange={(e) => toggle(indexer, 'enableRss', e.currentTarget.checked)} />
                     <Toggle
@@ -200,6 +233,17 @@ export function IndexersPage() {
             setPicking(false);
             setEditing({ template });
           }}
+          onPickDefinition={(definition) => {
+            setPicking(false);
+            setDefinitionEditing({ definition });
+          }}
+        />
+      ) : null}
+      {definitionEditing ? (
+        <DefinitionEditor
+          key={'indexer' in definitionEditing ? definitionEditing.indexer.id : definitionEditing.definition.id}
+          editing={definitionEditing}
+          onClose={() => setDefinitionEditing(null)}
         />
       ) : null}
       {editing ? (

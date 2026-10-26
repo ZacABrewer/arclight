@@ -1,0 +1,5 @@
+/* Arclight tokens + component classes.
+   The kit's variables and .al-* classes live verbatim in styles/arclight/arclight.css;
+   our additions are layered in separate files. Import this once (with ./fonts.ts) at the
+   app entry when the shell switches to Arclight. */
+@import '../styles/arclight/index.css';

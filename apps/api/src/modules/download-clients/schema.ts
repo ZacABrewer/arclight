@@ -44,6 +44,8 @@ export interface PendingGrabPayload {
   magnet?: string;
   /** Base64 of the .torrent file. */
   torrentFileBase64?: string;
+  /** Base64 of the .nzb document (usenet). */
+  nzbBase64?: string;
   category?: string;
   isRecent: boolean;
   seedConfig?: { ratioLimit?: number; seedTimeLimitMinutes?: number };

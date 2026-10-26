@@ -128,6 +128,21 @@ export interface RequestInfo {
   is4k?: boolean;
 }
 
+export interface IssueInfo {
+  id: number;
+  issueType: 'video' | 'audio' | 'subtitles' | 'other';
+  status: 'open' | 'resolved';
+  reportedBy: { id: number; username: string };
+  /** The first comment (the report itself). */
+  message: string;
+  problemSeason?: number;
+  problemEpisode?: number;
+  /** For comment events: the new comment. */
+  comment?: { user: { id: number; username: string }; message: string };
+  /** What changed: a new comment, or a status change. */
+  change?: 'comment' | 'resolved' | 'reopened';
+}
+
 export interface SubtitleInfo {
   language: string;
   provider: string;
@@ -154,6 +169,9 @@ export const NOTIFICATION_EVENT_TYPES = [
   'requestCreated',
   'requestApproved',
   'requestAvailable',
+  'requestDeclined',
+  'issueCreated',
+  'issueUpdated',
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 
@@ -266,6 +284,22 @@ export interface RequestAvailableEvent extends MediaEventBase {
   request: RequestInfo;
 }
 
+export interface RequestDeclinedEvent extends MediaEventBase {
+  type: 'requestDeclined';
+  request: RequestInfo;
+  reason?: string;
+}
+
+export interface IssueCreatedEvent extends MediaEventBase {
+  type: 'issueCreated';
+  issue: IssueInfo;
+}
+
+export interface IssueUpdatedEvent extends MediaEventBase {
+  type: 'issueUpdated';
+  issue: IssueInfo;
+}
+
 export type NotificationEvent =
   | TestEvent
   | GrabEvent
@@ -282,7 +316,10 @@ export type NotificationEvent =
   | SubtitleDownloadedEvent
   | RequestCreatedEvent
   | RequestApprovedEvent
-  | RequestAvailableEvent;
+  | RequestAvailableEvent
+  | RequestDeclinedEvent
+  | IssueCreatedEvent
+  | IssueUpdatedEvent;
 
 export type NotificationEventOf<T extends NotificationEventType> = Extract<
   NotificationEvent,

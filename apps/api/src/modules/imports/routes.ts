@@ -1,5 +1,7 @@
 import {
+  FileSystemEntry,
   FileSystemListing,
+  FileSystemMkdirRequest,
   FileSystemQuery,
   ImportsErrorResponse,
   ManualImportItem,
@@ -101,6 +103,11 @@ export function importsRoutes(service: ImportsService): FastifyPluginAsync<Recor
       '/filesystem',
       { schema: { querystring: FileSystemQuery, response: { 200: FileSystemListing, ...errors } } },
       async (req) => service.listFileSystem(req.query),
+    );
+    app.post(
+      '/filesystem/mkdir',
+      { schema: { body: FileSystemMkdirRequest, response: { 201: FileSystemEntry, ...errors } } },
+      async (req, reply) => reply.code(201).send(await service.makeDirectory(req.body)),
     );
   };
 }

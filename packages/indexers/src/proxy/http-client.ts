@@ -128,7 +128,7 @@ function setDefaultHeader(headers: Headers, name: string, value: string): void {
   if (!headers.has(name)) headers.set(name, value);
 }
 
-async function encodeBody(body: BodyInit | null | undefined, headers: Headers): Promise<Uint8Array | undefined> {
+async function encodeBody(body: RequestInit['body'] | null | undefined, headers: Headers): Promise<Uint8Array | undefined> {
   if (body === null || body === undefined) return undefined;
   if (typeof body === 'string') {
     setDefaultHeader(headers, 'content-type', 'text/plain;charset=UTF-8');

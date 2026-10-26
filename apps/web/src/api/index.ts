@@ -14,3 +14,23 @@ export { historyApi } from './history.js';
 export { blocklistApi } from './blocklist.js';
 export { notificationsApi } from './notifications.js';
 export { connectEvents, backoffDelay, type ConnectionState } from './events.js';
+export { filesystemApi } from './filesystem.js';
+export { manualImportApi } from './manual-import.js';
+export { releasesApi, grabSearchResult, toPushRequest, type GrabOutcome } from './releases.js';
+export { logsApi, connectLogStream, logStreamUrl } from './logs.js';
+export { migrateApi } from './migrate.js';
+export {
+  requestsApi,
+  discoverApi,
+  slidersApi,
+  issuesApi,
+  overrideRulesApi,
+  watchlistApi,
+  requestUsersApi,
+  requestsSettingsApi,
+  kindOf,
+  type CreateRequestOutcome,
+  type DiscoverKind,
+} from './requests.js';
+export { subtitlesApi, languageProfilesApi, uploadFormData } from './subtitles.js';
+export { torrentApi, type TorrentAction } from './torrent.js';

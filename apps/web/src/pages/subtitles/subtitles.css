@@ -1,0 +1,75 @@
+/* Subtitles (Phase 3): language chips and markers. */
+.sub-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-items: center;
+}
+.sub-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid var(--color-border, #2a3a4a);
+  font-size: 0.8rem;
+  line-height: 1.5;
+  background: var(--color-surface-2, transparent);
+}
+.sub-chip-external {
+  border-color: var(--color-accent, #3cf);
+}
+.sub-chip-embedded {
+  border-style: dashed;
+}
+.sub-chip-missing {
+  background: transparent;
+  border-color: var(--color-error, #e55);
+  color: var(--color-error, #e55);
+}
+.sub-chip-marker {
+  font-size: 0.7rem;
+  opacity: 0.8;
+  text-transform: uppercase;
+}
+.sub-chip-menu {
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  padding: 0 2px;
+}
+.sub-chip-actions {
+  display: inline-flex;
+  gap: 4px;
+  margin-left: 4px;
+}
+.sub-language-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.sub-language-picker ul {
+  max-height: 180px;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--color-border, #2a3a4a);
+  border-radius: 4px;
+}
+.sub-language-picker li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: inherit;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+.sub-language-picker li button:hover {
+  background: var(--color-surface-2, rgba(255, 255, 255, 0.05));
+}
+.sub-placeholders code {
+  margin-right: 6px;
+}

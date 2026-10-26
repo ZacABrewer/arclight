@@ -8,9 +8,32 @@ import { ReleaseProtocol } from './profiles.js';
 // Download clients
 // ---------------------------------------------------------------------------------------
 
-/** Implementations Media-Tron can drive. Extend the enum and the settings union together. */
-export const DownloadClientImplementation = z.enum(['qbittorrent']);
+/**
+ * Implementations Media-Tron can drive. Extend the enum, `DOWNLOAD_CLIENT_PROTOCOLS`, the
+ * settings schema map and the unions below together. `builtin` is Media-Tron's own in-process
+ * torrent engine (engine-wide settings live in the `torrent` settings section).
+ */
+export const DownloadClientImplementation = z.enum([
+  'qbittorrent',
+  'transmission',
+  'deluge',
+  'rtorrent',
+  'sabnzbd',
+  'nzbget',
+  'builtin',
+]);
 export type DownloadClientImplementation = z.infer<typeof DownloadClientImplementation>;
+
+/** The protocol each implementation downloads; a client's `protocol` is always derived from this. */
+export const DOWNLOAD_CLIENT_PROTOCOLS: Readonly<Record<DownloadClientImplementation, ReleaseProtocol>> = {
+  qbittorrent: 'torrent',
+  transmission: 'torrent',
+  deluge: 'torrent',
+  rtorrent: 'torrent',
+  sabnzbd: 'usenet',
+  nzbget: 'usenet',
+  builtin: 'torrent',
+};
 
 /**
  * Write-only secrets are never returned. Reads carry this mask instead; sending the mask
@@ -18,27 +41,276 @@ export type DownloadClientImplementation = z.infer<typeof DownloadClientImplemen
  */
 export const PASSWORD_MASK = '********';
 
+/** Settings keys that hold secrets (masked on read, kept when the mask is sent back). */
+export const DOWNLOAD_CLIENT_SECRET_FIELDS = ['password', 'apiKey'] as const;
+
+// ---- settings schemas ------------------------------------------------------------------
+// These mirror the schemas in @media-tron/download-clients (which `shared` cannot depend on).
+// The api checks at compile time and at startup that both stay in sync. Every field carries a
+// `.describe()` text: the api turns them into the settings form's help texts.
+
+const hostField = z.string().trim().min(1).describe('Hostname or IP address of the download client.');
+const portField = (defaultPort: number) =>
+  z.number().int().min(1).max(65535).default(defaultPort).describe("Port the client's web interface or API listens on.");
+const useSslField = z.boolean().default(false).describe('Connect over HTTPS.');
+const urlBaseField = (example: string) =>
+  z
+    .string()
+    .trim()
+    .optional()
+    .describe(`Path prefix when the client sits behind a reverse proxy or uses a non-default RPC path, e.g. "${example}".`);
+const usernameField = z.string().default('').describe('Username, if the client requires authentication.');
+const passwordField = z.string().default('').describe('Password. Write-only: never returned by the API.');
+const categoryField = (noun: string) =>
+  z
+    .string()
+    .trim()
+    .default('media-tron')
+    .describe(`${noun} Media-Tron assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.`);
+const postImportCategoryField = (noun: string) =>
+  z
+    .string()
+    .trim()
+    .optional()
+    .describe(`${noun} to move a download to after Media-Tron has imported it. Leave empty to keep it unchanged.`);
+const addPausedField = z.boolean().default(false).describe('Add downloads in a paused state.');
+
 export const QBittorrentPriority = z.enum(['last', 'first']);
 export const QBittorrentInitialState = z.enum(['start', 'pause', 'forceStart']);
 export const QBittorrentContentLayout = z.enum(['default', 'original', 'subfolder', 'noSubfolder']);
 
 export const QBittorrentClientSettings = z.object({
-  host: z.string().trim().min(1),
-  port: z.number().int().min(1).max(65535).default(8080),
-  useSsl: z.boolean().default(false),
-  urlBase: z.string().trim().optional(),
-  username: z.string().default(''),
-  password: z.string().default(''),
-  category: z.string().trim().default('media-tron'),
-  postImportCategory: z.string().trim().optional(),
-  recentPriority: QBittorrentPriority.default('last'),
-  olderPriority: QBittorrentPriority.default('last'),
-  initialState: QBittorrentInitialState.default('start'),
-  sequentialOrder: z.boolean().default(false),
-  firstAndLast: z.boolean().default(false),
-  contentLayout: QBittorrentContentLayout.default('default'),
+  host: z.string().trim().min(1).describe('Hostname or IP address of qBittorrent.'),
+  port: z.number().int().min(1).max(65535).default(8080).describe('qBittorrent WebUI port.'),
+  useSsl: z.boolean().default(false).describe('Connect to the WebUI over HTTPS.'),
+  urlBase: z
+    .string()
+    .trim()
+    .optional()
+    .describe('Prefix added to the WebUI URL when qBittorrent sits behind a reverse proxy, e.g. /qbittorrent.'),
+  username: z.string().default('').describe('WebUI username. Leave empty when authentication is bypassed.'),
+  password: z.string().default('').describe('WebUI password. Never shown after saving.'),
+  category: z
+    .string()
+    .trim()
+    .default('media-tron')
+    .describe(
+      'Category Media-Tron adds its torrents with. Only torrents in this category are tracked; using a dedicated category is strongly recommended.',
+    ),
+  postImportCategory: z
+    .string()
+    .trim()
+    .optional()
+    .describe('Category to move torrents to after they are imported. Leave empty to keep the original category.'),
+  recentPriority: QBittorrentPriority.default('last').describe('Queue position for content released within the last 14 days.'),
+  olderPriority: QBittorrentPriority.default('last').describe('Queue position for content released more than 14 days ago.'),
+  initialState: QBittorrentInitialState.default('start').describe(
+    'State of torrents when they are added. Force Started ignores qBittorrent queue limits.',
+  ),
+  sequentialOrder: z.boolean().default(false).describe('Download pieces in order (qBittorrent 4.1.0+).'),
+  firstAndLast: z.boolean().default(false).describe('Download the first and last pieces first (qBittorrent 4.1.0+).'),
+  contentLayout: QBittorrentContentLayout.default('default').describe(
+    "Whether to use qBittorrent's configured content layout, the torrent's original layout, or always create a subfolder (qBittorrent 4.3.2+).",
+  ),
 });
 export type QBittorrentClientSettings = z.infer<typeof QBittorrentClientSettings>;
+
+export const TransmissionPriority = z.enum(['last', 'first']);
+
+export const TransmissionClientSettings = z.object({
+  host: hostField,
+  port: portField(9091),
+  useSsl: useSslField,
+  urlBase: z
+    .string()
+    .trim()
+    .default('/transmission/')
+    .describe(
+      'RPC path prefix; "rpc" is appended. Transmission\'s default is "/transmission/". Change it only behind a reverse proxy or when rpc-url was customised.',
+    ),
+  username: usernameField,
+  password: passwordField,
+  category: categoryField('Label'),
+  postImportCategory: postImportCategoryField('Label'),
+  directory: z
+    .string()
+    .trim()
+    .optional()
+    .describe("Download directory as Transmission sees it. Leave empty to use Transmission's default download-dir."),
+  recentPriority: TransmissionPriority.default('last').describe(
+    'Queue position for recently released content: "first" moves it to the top of the download queue.',
+  ),
+  olderPriority: TransmissionPriority.default('last').describe(
+    'Queue position for older content: "first" moves it to the top of the download queue.',
+  ),
+  addPaused: addPausedField,
+});
+export type TransmissionClientSettings = z.infer<typeof TransmissionClientSettings>;
+
+const DELUGE_LABEL_PATTERN = /^[a-z0-9_.-]*$/;
+const isValidDelugeLabel = (value: string | undefined) =>
+  value === undefined || DELUGE_LABEL_PATTERN.test(value.trim().toLowerCase());
+const DELUGE_LABEL_RULE = 'Deluge labels may only contain letters, digits, "_", "-" and "." (they are stored lowercase).';
+
+export const DelugePriority = z.enum(['last', 'first']);
+
+export const DelugeClientSettings = z.object({
+  host: hostField,
+  port: portField(8112),
+  useSsl: useSslField,
+  urlBase: urlBaseField('/deluge'),
+  password: passwordField.describe(
+    'Deluge Web UI password (Deluge has no username). A fresh Deluge install uses "deluge" until it is changed. Write-only: never returned by the API.',
+  ),
+  category: categoryField('Label')
+    .describe(
+      "Label Media-Tron assigns to its downloads via Deluge's Label plugin (enabled automatically when needed), keeping them apart from everything else. Converted to lowercase. Leave empty to not use one.",
+    )
+    .refine(isValidDelugeLabel, DELUGE_LABEL_RULE),
+  postImportCategory: postImportCategoryField('Label').refine(isValidDelugeLabel, DELUGE_LABEL_RULE),
+  recentPriority: DelugePriority.default('last').describe(
+    'Queue position for recently released content: "first" moves it to the top of Deluge\'s queue.',
+  ),
+  olderPriority: DelugePriority.default('last').describe(
+    'Queue position for older content: "first" moves it to the top of Deluge\'s queue.',
+  ),
+  addPaused: addPausedField,
+});
+export type DelugeClientSettings = z.infer<typeof DelugeClientSettings>;
+
+export const RTorrentPriority = z.enum(['off', 'low', 'normal', 'high']);
+
+export const RTorrentClientSettings = z.object({
+  host: hostField,
+  port: portField(8080),
+  useSsl: useSslField,
+  urlBase: z
+    .string()
+    .trim()
+    .default('RPC2')
+    .describe(
+      'Path of the XML-RPC endpoint the web server (SCGI bridge) exposes, e.g. "RPC2", or "plugins/rpc/rpc.php" for ruTorrent\'s rpc plugin.',
+    ),
+  username: usernameField,
+  password: passwordField,
+  category: categoryField('Label (stored in d.custom1, the ruTorrent label)'),
+  postImportCategory: postImportCategoryField('Label'),
+  directory: z
+    .string()
+    .trim()
+    .optional()
+    .describe("Directory rTorrent saves Media-Tron downloads into. Leave empty to use rTorrent's default directory."),
+  addPaused: addPausedField,
+  recentPriority: RTorrentPriority.default('normal').describe('rTorrent priority for content released recently.'),
+  olderPriority: RTorrentPriority.default('normal').describe('rTorrent priority for older content.'),
+});
+export type RTorrentClientSettings = z.infer<typeof RTorrentClientSettings>;
+
+export const SabnzbdPriority = z.enum(['default', 'paused', 'low', 'normal', 'high', 'force']);
+
+export const SabnzbdClientSettings = z.object({
+  host: hostField,
+  port: portField(8080),
+  useSsl: useSslField,
+  urlBase: urlBaseField('/sabnzbd'),
+  apiKey: z
+    .string()
+    .trim()
+    .default('')
+    .describe('Full API key from SABnzbd Config > General (not the NZB key). Preferred over username and password. Write-only: never returned by the API.'),
+  username: usernameField.describe('Legacy: SABnzbd web login username, sent as ma_username. Only needed when no API key is set.'),
+  password: passwordField.describe('Legacy: SABnzbd web login password, sent as ma_password. Write-only: never returned by the API.'),
+  category: categoryField('SABnzbd category'),
+  postImportCategory: postImportCategoryField('SABnzbd category'),
+  recentPriority: SabnzbdPriority.default('default').describe(
+    'Queue priority for releases that aired or were released recently. "default" uses the category\'s priority.',
+  ),
+  olderPriority: SabnzbdPriority.default('default').describe(
+    'Queue priority for older releases. "default" uses the category\'s priority.',
+  ),
+});
+export type SabnzbdClientSettings = z.infer<typeof SabnzbdClientSettings>;
+
+export const NzbgetPriority = z.enum(['veryLow', 'low', 'normal', 'high', 'veryHigh', 'force']);
+const nzbgetPriorityField = (when: string) =>
+  NzbgetPriority.default('normal').describe(
+    `NZBGet queue priority for ${when}: veryLow (-100), low (-50), normal (0), high (50), veryHigh (100) or force (900, ignores pause).`,
+  );
+
+export const NzbgetClientSettings = z.object({
+  host: hostField,
+  port: portField(6789),
+  useSsl: useSslField,
+  urlBase: urlBaseField('/nzbget'),
+  username: z.string().default('nzbget').describe('NZBGet ControlUsername (Settings > Security).'),
+  password: passwordField,
+  category: categoryField('NZBGet category'),
+  postImportCategory: postImportCategoryField('NZBGet category'),
+  recentPriority: nzbgetPriorityField('releases that aired or were released recently'),
+  olderPriority: nzbgetPriorityField('older releases'),
+  addPaused: addPausedField,
+});
+export type NzbgetClientSettings = z.infer<typeof NzbgetClientSettings>;
+
+export const BuiltinInitialState = z.enum(['start', 'pause']);
+
+export const BuiltinCategoryPath = z.object({
+  name: z.string().trim().min(1).describe('Category name.'),
+  savePath: z.string().trim().min(1).describe('Folder downloads of this category are saved to.'),
+});
+export type BuiltinCategoryPath = z.infer<typeof BuiltinCategoryPath>;
+
+export const BuiltinClientSettings = z.object({
+  category: categoryField('Category'),
+  postImportCategory: postImportCategoryField('Category'),
+  savePath: z
+    .string()
+    .trim()
+    .default('')
+    .describe(
+      'Root download folder. Downloads go to <root>/<category> unless the category has its own folder below. Leave empty to use the engine downloads folder (Settings > Torrent Engine).',
+    ),
+  categories: z
+    .array(BuiltinCategoryPath)
+    .default([])
+    .describe('Per-category download folders. Categories without an entry use <root>/<category>.'),
+  initialState: BuiltinInitialState.default('start').describe('State of torrents when they are added.'),
+  seedRatioLimit: z
+    .number()
+    .min(0)
+    .optional()
+    .describe('Stop seeding once this share ratio is reached. Leave empty to use the engine default.'),
+  seedTimeLimitMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .optional()
+    .describe('Stop seeding after this many minutes. Leave empty to use the engine default.'),
+});
+export type BuiltinClientSettings = z.infer<typeof BuiltinClientSettings>;
+
+/** Settings schema per implementation (validation and settings-form rendering). */
+export const downloadClientSettingsSchemas = {
+  qbittorrent: QBittorrentClientSettings,
+  transmission: TransmissionClientSettings,
+  deluge: DelugeClientSettings,
+  rtorrent: RTorrentClientSettings,
+  sabnzbd: SabnzbdClientSettings,
+  nzbget: NzbgetClientSettings,
+  builtin: BuiltinClientSettings,
+} as const satisfies Record<DownloadClientImplementation, z.ZodObject>;
+
+export type DownloadClientSettingsFor<K extends DownloadClientImplementation> = z.infer<(typeof downloadClientSettingsSchemas)[K]>;
+/**
+ * Settings of any implementation. Every remote variant has host, port, useSsl, password, ...;
+ * `builtin` has no host (use `downloadClientHost()`). All variants have `category`.
+ */
+export type DownloadClientSettings = DownloadClientSettingsFor<DownloadClientImplementation>;
+
+/** The host remote path mappings key on: the configured host, or "localhost" for `builtin`. */
+export function downloadClientHost(settings: DownloadClientSettings): string {
+  return 'host' in settings ? settings.host : 'localhost';
+}
 
 const downloadClientCommon = {
   name: z.string().trim().min(1).max(100),
@@ -52,40 +324,32 @@ const downloadClientCommon = {
   tags: z.array(z.number().int()).default([]),
 };
 
+/** One object variant per implementation: `extra` plus the implementation literal and settings. */
+function variants<E extends z.ZodRawShape>(extra: E) {
+  const v = <K extends DownloadClientImplementation>(kind: K) =>
+    z.object({ ...extra, implementation: z.literal(kind), settings: downloadClientSettingsSchemas[kind] });
+  return [v('qbittorrent'), v('transmission'), v('deluge'), v('rtorrent'), v('sabnzbd'), v('nzbget'), v('builtin')] as const;
+}
+
 /** Create/update body. One variant per implementation, discriminated on `implementation`. */
-export const DownloadClientInput = z.discriminatedUnion('implementation', [
-  z.object({
-    ...downloadClientCommon,
-    implementation: z.literal('qbittorrent'),
-    settings: QBittorrentClientSettings,
-  }),
-]);
+export const DownloadClientInput = z.discriminatedUnion('implementation', variants(downloadClientCommon));
 export type DownloadClientInput = z.infer<typeof DownloadClientInput>;
 export const DownloadClientCreate = DownloadClientInput;
 export type DownloadClientCreate = DownloadClientInput;
 export const DownloadClientUpdate = DownloadClientInput;
 export type DownloadClientUpdate = DownloadClientInput;
 
-export const DownloadClientResource = z.discriminatedUnion('implementation', [
-  z.object({
-    id: z.number().int(),
-    ...downloadClientCommon,
-    protocol: ReleaseProtocol,
-    implementation: z.literal('qbittorrent'),
-    settings: QBittorrentClientSettings,
-  }),
-]);
+export const DownloadClientResource = z.discriminatedUnion(
+  'implementation',
+  variants({ id: z.number().int(), ...downloadClientCommon, protocol: ReleaseProtocol }),
+);
 export type DownloadClientResource = z.infer<typeof DownloadClientResource>;
 
 /** Body of POST /downloadclient/test: a candidate config, optionally of an existing row. */
-export const DownloadClientTestRequest = z.discriminatedUnion('implementation', [
-  z.object({
-    id: z.number().int().optional(),
-    ...downloadClientCommon,
-    implementation: z.literal('qbittorrent'),
-    settings: QBittorrentClientSettings,
-  }),
-]);
+export const DownloadClientTestRequest = z.discriminatedUnion(
+  'implementation',
+  variants({ id: z.number().int().optional(), ...downloadClientCommon }),
+);
 export type DownloadClientTestRequest = z.infer<typeof DownloadClientTestRequest>;
 
 export const DownloadClientTestResult = z.object({

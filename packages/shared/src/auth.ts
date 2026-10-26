@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { MediaType } from './library.js';
+import { Permission } from './requests.js';
 
 // Authentication, users and first-run setup. Behaviour: docs/API.md "Authentication".
 // Users carry a `permissions` bitfield and a free-form `settings` record now so that the
@@ -9,17 +10,7 @@ import { MediaType } from './library.js';
 export const UserRole = z.enum(['admin', 'user']);
 export type UserRole = z.infer<typeof UserRole>;
 
-/**
- * Permission bits. Only ADMIN is enforced today (admins pass every check); the requests
- * phase adds the rest of the table from docs/spec/requests.md section 3.
- */
-export const Permission = {
-  NONE: 0,
-  ADMIN: 2,
-  MANAGE_USERS: 8,
-  REQUEST: 32,
-} as const;
-export type PermissionName = keyof typeof Permission;
+// Permission bits live in requests.ts (the full table from docs/spec/requests.md section 3).
 
 /** True when `held` satisfies `wanted`: ADMIN implies everything and 0 always passes. */
 export function hasPermission(held: number, wanted: number): boolean {

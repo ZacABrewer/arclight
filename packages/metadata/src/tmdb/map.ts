@@ -40,13 +40,14 @@ type TmdbVideo = z.infer<typeof tmdbVideoSchema>;
 // ---------------------------------------------------------------------------
 // Images
 
-export type ImageKind = 'poster' | 'backdrop' | 'still' | 'logo';
+export type ImageKind = 'poster' | 'backdrop' | 'still' | 'logo' | 'profile';
 
 const PREFERRED_SIZE: Record<ImageKind, string> = {
   poster: 'w500',
   backdrop: 'w1280',
   still: 'w300',
   logo: 'w500',
+  profile: 'w185',
 };
 
 /** Builds absolute image URLs from /configuration; falls back to `original`. */
@@ -61,6 +62,7 @@ export function createImageUrlBuilder(config: TmdbConfiguration): ImageUrlBuilde
     backdrop: config.images.backdrop_sizes,
     still: config.images.still_sizes,
     logo: config.images.logo_sizes,
+    profile: config.images.profile_sizes,
   };
   return (kind, path) => {
     if (!path) return undefined;

@@ -60,6 +60,7 @@ export function toIndexerBody(values: FormValues): IndexerCreate {
     settings: { ...(v.settings ?? { baseUrl: '', apiPath: '/api', categories: [], animeCategories: [] }) },
   };
   if (v.downloadClientId !== undefined) body.downloadClientId = v.downloadClientId;
+  if (v.proxyId !== undefined) body.proxyId = v.proxyId;
   return body;
 }
 

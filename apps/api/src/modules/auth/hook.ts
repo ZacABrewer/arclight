@@ -73,7 +73,10 @@ function unauthorized(reply: FastifyReply, basic: boolean) {
  * callers on non-public routes (401) and non-admin users on state-changing routes that did
  * not opt in with `config.allowUser` (403).
  */
-export function requireAuth(service: AuthService) {
+/** Decides whether a matched route pattern answers without credentials. */
+export type PublicRoutePredicate = (routeUrl: string | undefined) => boolean;
+
+export function requireAuth(service: AuthService, isPublic: PublicRoutePredicate = isPublicRoute) {
   return async function authHook(req: FastifyRequest, reply: FastifyReply) {
     let resolved;
     try {
@@ -90,7 +93,7 @@ export function requireAuth(service: AuthService) {
       const token = readCookie(req.headers.cookie, SESSION_COOKIE);
       if (token) setSessionCookie(req, reply, token, resolved.renewed.maxAgeSeconds);
     }
-    if (isPublicRoute(req.routeOptions.url)) return;
+    if (isPublic(req.routeOptions.url)) return;
     if (!req.auth) return unauthorized(reply, service.security().method === 'basic');
     if (!req.auth.isAdmin && req.method !== 'GET' && req.method !== 'HEAD' && !req.routeOptions.config?.allowUser) {
       return reply.code(403).send({ error: 'admin only', code: 'FORBIDDEN' });
@@ -111,8 +114,18 @@ export async function requireAdmin(req: FastifyRequest, reply: FastifyReply): Pr
   if (!req.auth.isAdmin) await reply.code(403).send({ error: 'admin only', code: 'FORBIDDEN' });
 }
 
-/** Decorates requests with `auth` and adds the hook to `scope` (the /api/v1 plugin). */
-export function installAuthHook(scope: FastifyInstance, service: AuthService): void {
+/**
+ * Decorates requests with `auth` and adds the hook to `scope`. app.ts installs it (through
+ * `installAuth`) on the /api/v1 plugin with the default public-route rules. Encapsulated scopes
+ * outside /api/v1 (the compat module's /api/v3) install the same hook with their own predicate,
+ * so every API surface resolves credentials (cookie, Basic, X-Api-Key / ?apikey=, local bypass)
+ * identically.
+ */
+export function installAuthHook(
+  scope: FastifyInstance,
+  service: AuthService,
+  isPublic: PublicRoutePredicate = isPublicRoute,
+): void {
   scope.decorateRequest('auth', null);
-  scope.addHook('onRequest', requireAuth(service));
+  scope.addHook('onRequest', requireAuth(service, isPublic));
 }

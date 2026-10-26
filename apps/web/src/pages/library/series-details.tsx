@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { getRouteApi, useNavigate } from '@tanstack/react-router';
+import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@media-tron/shared';
 import { PENDING_FEATURES } from '../../api/library.js';
 import { Badge } from '../../components/badge.js';
@@ -13,6 +13,7 @@ import { episodeCode, formatBytes, formatDate, imageUrl, seasonLabel } from '../
 import { EpisodeStatusChip, Facts, MonitorToggle, PendingButton, Poster, ProgressBar, QualityBadge, TagList } from '../../components/media/media-ui.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { Modal } from '../../components/modal.js';
+import { FoundInLists } from '../../components/media/found-in-lists.js';
 import { Page } from '../../components/page.js';
 import { LoadingBlock } from '../../components/spinner.js';
 import { Table, type Column } from '../../components/table.js';
@@ -37,6 +38,8 @@ import { cx } from '../../lib/cx.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
 import { SERIES_TYPE_LABELS } from './add-form.js';
+import { SubtitlesTab } from '../subtitles/subtitles-tab.js';
+import { LanguageProfileSelect } from '../subtitles/language-profile-select.js';
 
 const route = getRouteApi('/library/series/$id');
 
@@ -98,6 +101,7 @@ export function SeriesDetailsPage() {
             ]}
           />
           {s.overview ? <p className="media-hero-overview">{s.overview}</p> : null}
+          <FoundInLists mediaType="series" tmdbId={s.tmdbId} />
           <div className="media-hero-actions">
             {/* TODO(contract): wire Refresh to a refresh command once packages/shared defines one. */}
             {PENDING_FEATURES.refresh ? null : (
@@ -109,6 +113,9 @@ export function SeriesDetailsPage() {
               Search monitored
             </Button>
             <Button onClick={() => setInteractive({ target: { seriesId: s.id }, title: s.title })}>Interactive search</Button>
+            <Link className="btn btn-secondary btn-md" to="/activity/manual-import" search={{ seriesId: s.id }}>
+              Manual import
+            </Link>
             <Button onClick={() => setEditing(true)}>Edit</Button>
             <Button variant="danger" onClick={() => setDeleting(true)}>
               Delete
@@ -128,6 +135,11 @@ export function SeriesDetailsPage() {
             id: 'files',
             label: `Files${files.data ? ` (${files.data.length})` : ''}`,
             content: <MediaFilesTable files={files.data} error={files.error} loading={files.isPending} mediaType="series" ownerId={s.id} />,
+          },
+          {
+            id: 'subtitles',
+            label: 'Subtitles',
+            content: <SubtitlesTab scope={{ seriesId: s.id }} episodes={episodes.data} />,
           },
         ]}
       />
@@ -368,6 +380,7 @@ function EditSeriesForm({ series, onClose }: { series: Series; onClose: () => vo
   const [seasonFolder, setSeasonFolder] = useState(series.seasonFolder);
   const [path, setPath] = useState(series.path);
   const [tags, setTags] = useState<number[]>([...series.tags]);
+  const [languageProfileId, setLanguageProfileId] = useState<number | null>(series.languageProfileId ?? null);
   const roots = (rootFolders.data ?? []).filter((r) => r.mediaType === 'series');
 
   return (
@@ -385,6 +398,7 @@ function EditSeriesForm({ series, onClose }: { series: Series; onClose: () => vo
               seriesType,
               seasonFolder,
               tags,
+              ...(languageProfileId !== (series.languageProfileId ?? null) ? { languageProfileId } : {}),
               ...(path.trim() && path !== series.path ? { path: path.trim() } : {}),
             },
           },
@@ -409,6 +423,7 @@ function EditSeriesForm({ series, onClose }: { series: Series; onClose: () => vo
             ))}
           </Select>
         </FormField>
+        <LanguageProfileSelect value={languageProfileId} onChange={setLanguageProfileId} />
         <FormField label="Series type">
           <Select value={seriesType} onChange={(e) => setSeriesType(e.target.value as SeriesType)}>
             {Object.entries(SERIES_TYPE_LABELS).map(([v, l]) => (

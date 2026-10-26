@@ -23,6 +23,8 @@ export interface AddFormState {
   minimumAvailability: MinimumAvailability;
   tags: number[];
   searchOnAdd: boolean;
+  /** Subtitle language profile; 'default' omits the field so the server default applies. */
+  languageProfileId: number | null | 'default';
 }
 
 export type AddFormErrors = Partial<Record<'rootFolderPath' | 'qualityProfileId', string>>;
@@ -75,6 +77,7 @@ export function initialAddForm(
     minimumAvailability: 'released',
     tags: [],
     searchOnAdd: false,
+    languageProfileId: 'default',
   };
 }
 
@@ -87,6 +90,11 @@ export function validateAddForm(state: AddFormState): AddFormErrors {
 
 export function isValid(errors: AddFormErrors): boolean {
   return Object.keys(errors).length === 0;
+}
+
+/** The add request's languageProfileId: omitted for 'default', else the id or null (none). */
+function languageProfileField(s: AddFormState): { languageProfileId?: number | null } {
+  return s.languageProfileId === 'default' ? {} : { languageProfileId: s.languageProfileId };
 }
 
 export function toAddSeriesRequest(tmdbId: number, s: AddFormState): AddSeriesRequest {
@@ -102,6 +110,7 @@ export function toAddSeriesRequest(tmdbId: number, s: AddFormState): AddSeriesRe
     seasonFolder: s.seasonFolder,
     tags: s.tags,
     searchOnAdd: s.searchOnAdd,
+    ...languageProfileField(s),
   };
 }
 
@@ -115,5 +124,6 @@ export function toAddMovieRequest(tmdbId: number, s: AddFormState): AddMovieRequ
     minimumAvailability: s.minimumAvailability,
     tags: s.tags,
     searchOnAdd: s.searchOnAdd,
+    ...languageProfileField(s),
   };
 }

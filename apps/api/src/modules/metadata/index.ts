@@ -14,6 +14,11 @@ export * from './map.js';
 // before any module is built, so the lookup resolves the service at call time.
 let active: MetadataService | null = null;
 
+/** The running app's metadata service (null before the metadata module registered). */
+export function activeMetadataService(): MetadataService | null {
+  return active;
+}
+
 /** Library-facing lookup: pass to `libraryModuleWith({ metadata })`. */
 export const metadata: MetadataLookup = createMetadataLookup(() => active);
 

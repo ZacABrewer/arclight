@@ -38,6 +38,7 @@ import type {
   WantedEpisodesQuery,
 } from '@media-tron/shared';
 import type { Db } from '../../db/index.js';
+import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
 import * as t from './schema.js';
 
@@ -481,7 +482,15 @@ function seasonNumbersFrom(meta: SeriesMetadataInput): number[] {
   return [...numbers].sort((a, b) => a - b);
 }
 
+/** Language profile for a new item: the request's choice, else the subtitles default for the media type. */
+function languageProfileFor(db: Db, mediaType: 'series' | 'movie', requested: number | null | undefined): number | null {
+  if (requested !== undefined) return requested;
+  const s = getSection(db, 'subtitles');
+  return (mediaType === 'series' ? s.defaultSeriesProfileId : s.defaultMovieProfileId) ?? null;
+}
+
 export function addSeries(db: Db, meta: SeriesMetadataInput, req: AddSeriesRequest, now: string = nowIso()): Series {
+  const languageProfileId = languageProfileFor(db, 'series', req.languageProfileId);
   return db.transaction((tx) => {
     if (tx.select({ id: t.series.id }).from(t.series).where(eq(t.series.tmdbId, meta.tmdbId)).get()) {
       throw new LibraryError('CONFLICT', `series with tmdbId ${meta.tmdbId} already exists`);
@@ -505,6 +514,7 @@ export function addSeries(db: Db, meta: SeriesMetadataInput, req: AddSeriesReque
         seriesType: req.seriesType,
         seasonFolder: req.seasonFolder,
         useSceneNumbering: false,
+        languageProfileId,
         tags,
         added: now,
         lastRefreshed: now,
@@ -603,6 +613,7 @@ export function updateSeries(db: Db, id: number, req: UpdateSeriesRequest, now: 
     if (req.seriesType !== undefined) patch.seriesType = req.seriesType;
     if (req.seasonFolder !== undefined) patch.seasonFolder = req.seasonFolder;
     if (req.useSceneNumbering !== undefined) patch.useSceneNumbering = req.useSceneNumbering;
+    if (req.languageProfileId !== undefined) patch.languageProfileId = req.languageProfileId;
     if (req.tags !== undefined) patch.tags = requireTags(tx, req.tags);
 
     if (req.rootFolderPath !== undefined) {
@@ -963,6 +974,7 @@ function movieMetadataColumns(meta: MovieMetadataInput) {
 }
 
 export function addMovie(db: Db, meta: MovieMetadataInput, req: AddMovieRequest, now: string = nowIso()): Movie {
+  const languageProfileId = languageProfileFor(db, 'movie', req.languageProfileId);
   return db.transaction((tx) => {
     if (tx.select({ id: t.movies.id }).from(t.movies).where(eq(t.movies.tmdbId, meta.tmdbId)).get()) {
       throw new LibraryError('CONFLICT', `movie with tmdbId ${meta.tmdbId} already exists`);
@@ -982,6 +994,7 @@ export function addMovie(db: Db, meta: MovieMetadataInput, req: AddMovieRequest,
         qualityProfileId: req.qualityProfileId,
         minimumAvailability: req.minimumAvailability,
         monitored: req.monitored,
+        languageProfileId,
         tags,
         added: now,
         lastRefreshed: now,
@@ -1057,6 +1070,7 @@ export function updateMovie(db: Db, id: number, req: UpdateMovieRequest, now: st
     if (req.monitored !== undefined) patch.monitored = req.monitored;
     if (req.qualityProfileId !== undefined) patch.qualityProfileId = req.qualityProfileId;
     if (req.minimumAvailability !== undefined) patch.minimumAvailability = req.minimumAvailability;
+    if (req.languageProfileId !== undefined) patch.languageProfileId = req.languageProfileId;
     if (req.tags !== undefined) patch.tags = requireTags(tx, req.tags);
     if (req.rootFolderPath !== undefined) {
       patch.rootFolderPath = requireRootFolder(tx, req.rootFolderPath, 'movie');

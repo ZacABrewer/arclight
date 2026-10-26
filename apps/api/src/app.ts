@@ -29,7 +29,14 @@ import { importsModuleWith } from './modules/imports/index.js';
 import { notificationsModuleWith } from './modules/notifications/index.js';
 import { calendarModule } from './modules/calendar/index.js';
 import { importListsModule } from './modules/import-lists/index.js';
+import { logsModule } from './modules/logs/index.js';
+import { backupModule } from './modules/backup/index.js';
+import { compatApi, compatModule, type CompatMetadata } from './modules/compat/index.js';
+import { migrateModule } from './modules/migrate/index.js';
 import { vpnModule } from './modules/vpn/index.js';
+import { torrentModule } from './modules/torrent/index.js';
+import { subtitlesModule } from './modules/subtitles/index.js';
+import { requestsModule } from './modules/requests/index.js';
 import { authModule, installAuth } from './modules/auth/index.js';
 import { wireModules } from './wiring.js';
 
@@ -57,6 +64,8 @@ export interface BuildAppOptions {
   onContext?: (ctx: AppContext) => void;
   /** Inject an ffprobe probe into imports when available. Default true. */
   probe?: boolean;
+  /** Replaces the compat API's TMDB lookups (tests). */
+  compatMetadata?: CompatMetadata;
 }
 
 export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: BuildAppOptions = {}) {
@@ -77,10 +86,12 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // Dependency-safe order: providers before the pipeline modules that consume them.
   const modules: AppModule[] = [
     systemModule,
+    logsModule,
     healthModule,
     jobsModule,
     eventsModule,
     settingsModule,
+    backupModule,
     metadataModule,
     libraryModuleWith({ metadata: opts.metadata ?? metadata }),
     profilesModule,
@@ -93,8 +104,13 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     importsModuleWith(wiring.imports),
     // Imports dispatch their own import/upgrade notifications through the wiring.
     notificationsModuleWith({ translateImported: false }),
+    subtitlesModule,
+    requestsModule,
     calendarModule,
+    compatModule,
+    migrateModule,
     vpnModule,
+    torrentModule,
     authModule,
   ];
   await app.register(
@@ -106,6 +122,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     },
     { prefix: '/api/v1' },
   );
+  // Sonarr/Radarr-shaped API for third-party tools; mounted at the root (/api/v3, probes).
+  await app.register(compatApi(ctx, opts.compatMetadata ? { metadata: opts.compatMetadata } : {}));
 
   if (config.webDist) {
     await app.register(fastifyStatic, { root: config.webDist, wildcard: false });

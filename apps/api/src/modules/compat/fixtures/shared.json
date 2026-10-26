@@ -1,0 +1,239 @@
+{
+  "$comment": "Hand-written minimal Sonarr/Radarr v3 shared resources (key presence + JSON type are checked).",
+  "rootFolder": { "id": 1, "path": "/tv/", "accessible": true, "freeSpace": 1000000, "unmappedFolders": [] },
+  "tag": { "id": 1, "label": "anime" },
+  "language": { "id": 1, "name": "English", "nameLower": "english" },
+  "languageProfile": {
+    "id": 1,
+    "name": "Any",
+    "upgradeAllowed": false,
+    "cutoff": { "id": 1, "name": "English" },
+    "languages": [{ "language": { "id": 1, "name": "English" }, "allowed": true }]
+  },
+  "qualityProfile": {
+    "id": 1,
+    "name": "HD-1080p",
+    "upgradeAllowed": true,
+    "cutoff": 3,
+    "items": [{ "quality": { "id": 1, "name": "SDTV", "source": "television", "resolution": 480 }, "items": [], "allowed": false }],
+    "minFormatScore": 0,
+    "cutoffFormatScore": 0,
+    "minUpgradeFormatScore": 1,
+    "formatItems": []
+  },
+  "qualityDefinition": {
+    "id": 3,
+    "quality": { "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080 },
+    "title": "WEBDL-1080p",
+    "weight": 31,
+    "minSize": 4
+  },
+  "customFormat": {
+    "id": 1,
+    "name": "x265",
+    "includeCustomFormatWhenRenaming": false,
+    "specifications": [
+      {
+        "name": "x265",
+        "implementation": "ReleaseTitleSpecification",
+        "implementationName": "Release Title",
+        "negate": false,
+        "required": false,
+        "fields": [{ "order": 0, "name": "value", "label": "Value", "value": "x265", "type": "textbox", "advanced": false }]
+      }
+    ]
+  },
+  "delayProfile": {
+    "id": 1,
+    "enableUsenet": true,
+    "enableTorrent": true,
+    "preferredProtocol": "usenet",
+    "usenetDelay": 0,
+    "torrentDelay": 0,
+    "bypassIfHighestQuality": false,
+    "bypassIfAboveCustomFormatScore": false,
+    "minimumCustomFormatScore": 0,
+    "order": 2147483647,
+    "tags": []
+  },
+  "indexer": {
+    "id": 1,
+    "name": "1337x (Prowlarr)",
+    "fields": [{ "order": 0, "name": "baseUrl", "label": "URL", "value": "http://prowlarr:9696/1/", "type": "textbox", "advanced": false }],
+    "implementationName": "Torznab",
+    "implementation": "Torznab",
+    "configContract": "TorznabSettings",
+    "infoLink": "https://wiki.servarr.com/sonarr/supported#torznab",
+    "tags": [],
+    "enableRss": true,
+    "enableAutomaticSearch": true,
+    "enableInteractiveSearch": true,
+    "supportsRss": true,
+    "supportsSearch": true,
+    "protocol": "torrent",
+    "priority": 25,
+    "seasonSearchMaximumSingleEpisodeAge": 0,
+    "downloadClientId": 0
+  },
+  "downloadClient": {
+    "id": 1,
+    "name": "qBittorrent",
+    "enable": true,
+    "protocol": "torrent",
+    "priority": 1,
+    "removeCompletedDownloads": true,
+    "removeFailedDownloads": true,
+    "fields": [{ "order": 0, "name": "host", "label": "Host", "value": "localhost", "type": "textbox", "advanced": false }],
+    "implementationName": "qBittorrent",
+    "implementation": "QBittorrent",
+    "configContract": "QBittorrentSettings",
+    "infoLink": "",
+    "tags": []
+  },
+  "queuePage": {
+    "page": 1,
+    "pageSize": 10,
+    "sortKey": "timeleft",
+    "sortDirection": "ascending",
+    "totalRecords": 1,
+    "records": [
+      {
+        "id": 1,
+        "seriesId": 1,
+        "episodeId": 1,
+        "seasonNumber": 1,
+        "languages": [{ "id": 1, "name": "English" }],
+        "quality": {
+          "quality": { "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080 },
+          "revision": { "version": 1, "real": 0, "isRepack": false }
+        },
+        "customFormats": [],
+        "customFormatScore": 0,
+        "size": 1500000000,
+        "title": "Breaking.Bad.S01E01.1080p.WEB-DL-GRP",
+        "sizeleft": 1500000000,
+        "added": "2024-01-02T00:00:00Z",
+        "status": "downloading",
+        "trackedDownloadStatus": "ok",
+        "trackedDownloadState": "downloading",
+        "statusMessages": [],
+        "downloadId": "0123456789ABCDEF0123456789ABCDEF01234567",
+        "protocol": "torrent",
+        "downloadClient": "qBittorrent",
+        "downloadClientHasPostImportCategory": false,
+        "indexer": "1337x (Prowlarr)",
+        "episodeHasFile": false
+      }
+    ]
+  },
+  "queueStatus": {
+    "id": 1,
+    "totalCount": 1,
+    "count": 1,
+    "unknownCount": 0,
+    "errors": false,
+    "warnings": false,
+    "unknownErrors": false,
+    "unknownWarnings": false
+  },
+  "historyPage": {
+    "page": 1,
+    "pageSize": 10,
+    "sortKey": "date",
+    "sortDirection": "descending",
+    "totalRecords": 1,
+    "records": [
+      {
+        "id": 1,
+        "episodeId": 1,
+        "seriesId": 1,
+        "sourceTitle": "Breaking.Bad.S01E01.1080p.WEB-DL-GRP",
+        "languages": [{ "id": 1, "name": "English" }],
+        "quality": {
+          "quality": { "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080 },
+          "revision": { "version": 1, "real": 0, "isRepack": false }
+        },
+        "customFormats": [],
+        "customFormatScore": 0,
+        "qualityCutoffNotMet": false,
+        "date": "2024-01-02T00:00:00Z",
+        "downloadId": "0123456789ABCDEF0123456789ABCDEF01234567",
+        "eventType": "grabbed",
+        "data": { "indexer": "1337x (Prowlarr)" }
+      }
+    ]
+  },
+  "blocklistPage": {
+    "page": 1,
+    "pageSize": 10,
+    "sortKey": "date",
+    "sortDirection": "descending",
+    "totalRecords": 1,
+    "records": [
+      {
+        "id": 1,
+        "seriesId": 1,
+        "episodeIds": [1],
+        "sourceTitle": "Breaking.Bad.S01E01.1080p.WEB-DL-GRP",
+        "languages": [{ "id": 1, "name": "English" }],
+        "quality": {
+          "quality": { "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080 },
+          "revision": { "version": 1, "real": 0, "isRepack": false }
+        },
+        "customFormats": [],
+        "date": "2024-01-03T00:00:00Z",
+        "protocol": "torrent"
+      }
+    ]
+  },
+  "command": {
+    "id": 1,
+    "name": "SeriesSearch",
+    "commandName": "Series Search",
+    "body": { "seriesId": 1, "sendUpdatesToClient": true, "name": "SeriesSearch", "trigger": "manual" },
+    "priority": "normal",
+    "status": "started",
+    "result": "unknown",
+    "queued": "2024-01-02T00:00:00Z",
+    "started": "2024-01-02T00:00:00Z",
+    "trigger": "manual",
+    "stateChangeTime": "2024-01-02T00:00:00Z",
+    "sendUpdatesToClient": true,
+    "updateScheduledTask": true
+  },
+  "release": {
+    "guid": "https://tracker/details/1",
+    "quality": {
+      "quality": { "id": 3, "name": "WEBDL-1080p", "source": "web", "resolution": 1080 },
+      "revision": { "version": 1, "real": 0, "isRepack": false }
+    },
+    "qualityWeight": 31,
+    "age": 0,
+    "ageHours": 1.0,
+    "ageMinutes": 60.0,
+    "size": 1500000000,
+    "indexerId": 1,
+    "indexer": "1337x (Prowlarr)",
+    "title": "Breaking.Bad.S01E01.1080p.WEB-DL-GRP",
+    "fullSeason": false,
+    "sceneSource": false,
+    "languages": [{ "id": 1, "name": "English" }],
+    "episodeNumbers": [1],
+    "absoluteEpisodeNumbers": [],
+    "approved": true,
+    "temporarilyRejected": false,
+    "rejected": false,
+    "tvdbId": 0,
+    "rejections": [],
+    "publishDate": "2024-01-02T00:00:00Z",
+    "downloadUrl": "magnet:?xt=urn:btih:0123",
+    "downloadAllowed": true,
+    "releaseWeight": 0,
+    "customFormats": [],
+    "customFormatScore": 0,
+    "protocol": "torrent",
+    "indexerFlags": 0,
+    "isDaily": false,
+    "special": false
+  }
+}

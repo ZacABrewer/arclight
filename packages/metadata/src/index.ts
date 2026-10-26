@@ -28,12 +28,21 @@ export {
 
 export { type TmdbConfiguration } from './tmdb/schemas.js';
 
+export { mapCredits, mapMovieExtras, mapPerson, mapTvExtras, mapVideos } from './tmdb/extras.js';
+
 export { cleanTitle, sortTitle } from './title.js';
 
 export {
   MetadataError,
   isMetadataError,
   type AlternateTitle,
+  type CompanyRef,
+  type CreditPerson,
+  type Keyword,
+  type PersonCredit,
+  type PersonMetadata,
+  type TitleExtras,
+  type VideoRef,
   type EpisodeMetadata,
   type Genre,
   type ImageSet,

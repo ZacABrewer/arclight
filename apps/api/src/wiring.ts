@@ -7,6 +7,7 @@ import type { AppContext } from './app.js';
 import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
 import { vpnServiceFor, GRAB_GUARD_REASON } from './modules/vpn/service.js';
+import { subtitlesServiceFor } from './modules/subtitles/index.js';
 import { getDownloadClientsService, type TrackedDownload } from './modules/download-clients/index.js';
 import {
   dataValue,
@@ -309,6 +310,8 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
       onImported: async (event) => {
         const built = buildImportNotification(ctx, event);
         if (built) await notificationsServiceFor(ctx).dispatch(built);
+        // Subtitles: schedule a wanted-search for the freshly imported file (returns at once).
+        subtitlesServiceFor(ctx).onImported(event);
       },
     },
     blocklist: {

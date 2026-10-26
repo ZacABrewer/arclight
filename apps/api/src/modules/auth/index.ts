@@ -6,7 +6,15 @@ import { authRoutes } from './routes.js';
 import { SetupService } from './setup.js';
 
 export { authServiceFor } from './context.js';
-export { requireAdmin, requireAuth, isPublicRoute, PUBLIC_ROUTES, PUBLIC_PREFIXES } from './hook.js';
+export {
+  requireAdmin,
+  requireAuth,
+  installAuthHook,
+  isPublicRoute,
+  PUBLIC_ROUTES,
+  PUBLIC_PREFIXES,
+  type PublicRoutePredicate,
+} from './hook.js';
 export { AuthService, AuthError, type RequestAuth } from './service.js';
 export { SetupService } from './setup.js';
 export { hashPassword, verifyPassword } from './password.js';

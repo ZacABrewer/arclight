@@ -1,4 +1,5 @@
 import { useReducer, useState } from 'react';
+import { Link } from '@tanstack/react-router';
 import type { QueueItem, QueueSortKey, TrackedDownloadState } from '@media-tron/shared';
 import { Badge, type BadgeTone } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
@@ -8,11 +9,15 @@ import { ErrorView } from '../../components/error-boundary.js';
 import { Toggle } from '../../components/form.js';
 import { Modal } from '../../components/modal.js';
 import { Page } from '../../components/page.js';
+import { ProtocolBadge } from '../../components/protocol-badge.js';
 import { Table, type Column, type SortState } from '../../components/table.js';
 import { useGrabQueueItem, useQueue, useQueueStatus, useRemoveQueueItems } from '../../hooks/activity.js';
+import { useDownloadClientList } from '../../hooks/download-clients.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { Pager, ProgressBar, formatBytes, formatEta } from './activity-shared.js';
+import { needsManualImport } from './manual-import/mapping.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
+import { TorrentDrawer } from './torrent-drawer.js';
 
 const STATE_TONES: Record<TrackedDownloadState, BadgeTone> = {
   pending: 'neutral',
@@ -113,11 +118,16 @@ export function QueuePage() {
   const [includeUnknown, setIncludeUnknown] = useState(false);
   const [selected, setSelected] = useState<number[]>([]);
   const [removing, setRemoving] = useState<QueueItem[] | null>(null);
+  const [inspecting, setInspecting] = useState<QueueItem | null>(null);
   const query = { page, pageSize, sortKey: sort.key as QueueSortKey, sortDirection: sort.direction, includeUnknownMediaItems: includeUnknown };
   const queue = useQueue(query);
   const status = useQueueStatus();
   const remove = useRemoveQueueItems();
   const grab = useGrabQueueItem();
+  const clients = useDownloadClientList();
+  const builtinIds = new Set((clients.data ?? []).filter((c) => c.implementation === 'builtin').map((c) => c.id));
+  /** Rows downloaded by the built-in engine get a detail drawer. */
+  const isBuiltin = (r: QueueItem) => r.downloadClientId !== null && builtinIds.has(r.downloadClientId) && !isPendingItem(r);
 
   const records = queue.data?.records ?? [];
   const allSelected = records.length > 0 && records.every((r) => selected.includes(r.id));
@@ -169,7 +179,7 @@ export function QueuePage() {
         </div>
       ),
     },
-    { key: 'protocol', header: 'Protocol', sortValue: (r) => r.protocol, cell: (r) => r.protocol },
+    { key: 'protocol', header: 'Protocol', sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} /> },
     { key: 'downloadClientName', header: 'Client', sortValue: (r) => r.downloadClientName, cell: (r) => r.downloadClientName ?? '—' },
     {
       key: 'progress',
@@ -195,10 +205,20 @@ export function QueuePage() {
       align: 'right',
       cell: (r) => (
         <span className="nowrap">
+          {isBuiltin(r) ? (
+            <Button size="sm" variant="ghost" onClick={() => setInspecting(r)} aria-label={`Details ${r.title}`}>
+              Details
+            </Button>
+          ) : null}
           {isPendingItem(r) ? (
             <Button size="sm" variant="ghost" loading={grab.isPending && grab.variables === r.id} onClick={() => grab.mutate(r.id)}>
               Send now
             </Button>
+          ) : null}
+          {needsManualImport(r) ? (
+            <Link className="btn btn-ghost btn-sm" to="/activity/manual-import" search={{ downloadId: r.downloadId }} aria-label={`Manual import ${r.title}`}>
+              Manual import
+            </Link>
           ) : null}
           <Button size="sm" variant="ghost" onClick={() => setRemoving([r])} aria-label={`Remove ${r.title}`}>
             Remove
@@ -223,6 +243,9 @@ export function QueuePage() {
       }
       actions={
         <>
+          <Link className="btn btn-secondary btn-md" to="/activity/manual-import">
+            Manual import
+          </Link>
           <Toggle label="Show unknown" checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.currentTarget.checked)} />
           <Button
             disabled={!selectedItems.some(isPendingItem)}
@@ -261,6 +284,7 @@ export function QueuePage() {
           </>
         )}
       </Card>
+      {inspecting ? <TorrentDrawer downloadId={inspecting.downloadId} title={inspecting.title} onClose={() => setInspecting(null)} /> : null}
       {removing ? (
         <RemoveQueueDialog
           items={removing}

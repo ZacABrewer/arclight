@@ -103,6 +103,18 @@ its public IP equals your **home public IP**; the dashboard card and the `VpnDis
 health check show the state. Newer Gluetun releases protect the control server: create an
 API key per the Gluetun wiki and enter it (or username/password) in Settings → VPN.
 
+### Built-in torrent engine (no qBittorrent)
+
+Media-Tron ships its own BitTorrent engine, so the stack can run without a qBittorrent
+container: `docker compose -f docker/docker-compose.builtin.yml up -d` starts only Gluetun and
+Media-Tron (7878 published on Gluetun; no 6881 publish, since Proton forwards a port dynamically
+and Media-Tron moves the engine's listener onto it). On first start a **Built-in** download
+client is registered when none exists; engine options (limits, queue, seed goals, download
+folder `/downloads`) are under Settings → Torrent Engine. With **Bind to VPN** on (default) and
+the VPN integration enabled, the engine binds to the tunnel and, while the VPN is down or
+leaking, pauses every torrent and binds to 127.0.0.1 until it reconnects; set
+`MEDIATRON_TORRENT_ENGINE=0` to keep the engine from starting at all.
+
 ### Without a VPN
 
 Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Media-Tron on
@@ -175,6 +187,7 @@ See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages
 | `MEDIATRON_VERSION` | `0.1.0-dev` | Version reported by `/system/status` (set at image build) |
 | `MEDIATRON_TMDB_API_KEY` | unset | TMDB key fallback when none is stored in Settings |
 | `MEDIATRON_VPN_CONTROL_URL` | `http://localhost:8000` | Gluetun control server default when none is stored in Settings → VPN |
+| `MEDIATRON_TORRENT_ENGINE` | `1` | `0` keeps the built-in torrent engine from starting (and from auto-registering its client) at boot |
 
 The image also takes `PUID` and `PGID` (handled in `docker/entrypoint.sh`); compose passes `TZ`.
 
