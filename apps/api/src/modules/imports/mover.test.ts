@@ -54,6 +54,23 @@ describe('transferFile', () => {
     await expect(transferFile(src, join(tmp, 'lib', 'b.mkv'), 'hardlink', { ops })).rejects.toMatchObject({ code: 'HARDLINK_FAILED' });
   });
 
+  it('copies under a temporary name, reports progress and leaves no partial file', async () => {
+    const src = await file('dl/a.mkv', 'abcdef');
+    const dst = join(tmp, 'lib', 'a.mkv');
+    const progress: Array<[number, number]> = [];
+    const ops = { link: async () => Promise.reject(Object.assign(new Error('cross-device'), { code: 'EXDEV' })) };
+    expect(await transferFile(src, dst, 'hardlinkOrCopy', { ops, onProgress: (c, t) => progress.push([c, t]) })).toBe('copy');
+    expect(progress.at(-1)).toEqual([6, 6]);
+    expect(await readdir(join(tmp, 'lib'))).toEqual(['a.mkv']);
+  });
+
+  it('hard links report no copy progress', async () => {
+    const src = await file('dl/a.mkv', 'abc');
+    const progress: number[] = [];
+    expect(await transferFile(src, join(tmp, 'lib', 'a.mkv'), 'hardlinkOrCopy', { onProgress: (c) => progress.push(c) })).toBe('hardlink');
+    expect(progress).toEqual([]);
+  });
+
   it('falls back to verified copy + delete on a cross-device move', async () => {
     const src = await file('dl/a.mkv', 'abcdef');
     const dst = join(tmp, 'lib', 'a.mkv');

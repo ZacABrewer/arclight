@@ -101,7 +101,8 @@ export class ImportsError extends Error {
 }
 
 /** The slice of the download-clients service the importer uses. */
-export type DownloadClientsPort = Pick<DownloadClientsService, 'setState' | 'markImported' | 'listTracked'>;
+export type DownloadClientsPort = Pick<DownloadClientsService, 'setState' | 'markImported' | 'listTracked'> &
+  Partial<Pick<DownloadClientsService, 'setImportProgress'>>;
 
 export interface ImportsServiceOptions {
   db: Db;
@@ -1004,7 +1005,16 @@ export class ImportsService {
           mode: opts.mode === 'move' ? 'move' : copyMode,
         });
       }
-      transfer = await transferFile(item.path, destination, mode, this.fsOps ? { ops: this.fsOps } : {});
+      const downloadId = opts.downloadId;
+      const onProgress =
+        downloadId && this.downloads.setImportProgress
+          ? (copied: number, total: number) => this.downloads.setImportProgress?.(downloadId, { copiedBytes: copied, totalBytes: total })
+          : undefined;
+      try {
+        transfer = await transferFile(item.path, destination, mode, { ...(this.fsOps ? { ops: this.fsOps } : {}), ...(onProgress ? { onProgress } : {}) });
+      } finally {
+        if (downloadId) this.downloads.setImportProgress?.(downloadId, null);
+      }
       if (settings.setPermissions) {
         await setPermissions(destination, settings.chmodFolder, false);
         if (!libraryExisted) await setPermissions(libraryPath, settings.chmodFolder, true);

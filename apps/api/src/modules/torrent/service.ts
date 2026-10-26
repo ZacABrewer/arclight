@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
@@ -153,7 +154,10 @@ export class TorrentService {
 
   effectiveDownloadsRoot(s: TorrentSettings = this.settings()): string {
     if (s.downloadsRoot) return s.downloadsRoot;
-    return this.isDocker ? '/downloads' : resolve(this.configDir, '..', 'downloads');
+    if (!this.isDocker) return resolve(this.configDir, '..', 'downloads');
+    // The shared-mount layout (/data/downloads next to /data/media) lets imports hard-link;
+    // installs from before it keep their /downloads mount.
+    return existsSync('/data') ? '/data/downloads' : '/downloads';
   }
 
   settingsResponse(s: TorrentSettings = this.settings()): TorrentSettingsResponse {

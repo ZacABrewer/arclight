@@ -54,6 +54,8 @@ const defaultOps: FsOps = { rename, link };
 export interface TransferOptions {
   overwrite?: boolean;
   ops?: Partial<FsOps>;
+  /** Called every couple of seconds while a copy runs (not for links and same-volume moves). */
+  onProgress?: (copiedBytes: number, totalBytes: number) => void;
 }
 
 async function sizeOrNull(path: string): Promise<number | null> {
@@ -68,10 +70,29 @@ function errCode(err: unknown): string | undefined {
   return err && typeof err === 'object' && 'code' in err ? String((err as { code: unknown }).code) : undefined;
 }
 
-async function verifiedCopy(src: string, dst: string, expected: number): Promise<void> {
-  // Reflink where the filesystem supports it, a normal copy otherwise.
-  await copyFile(src, dst, constants.COPYFILE_FICLONE);
-  await verifySize(dst, expected);
+/** Interval of copy progress reports. */
+const PROGRESS_INTERVAL_MS = 2_000;
+
+async function verifiedCopy(src: string, dst: string, expected: number, onProgress?: TransferOptions['onProgress']): Promise<void> {
+  // Copy under a temporary name and rename at the end, so a media server scanning the library
+  // never sees a half-written file.
+  const partial = `${dst}.arclight-partial`;
+  await rm(partial, { force: true });
+  const timer = onProgress
+    ? setInterval(() => void sizeOrNull(partial).then((n) => n !== null && onProgress(n, expected)), PROGRESS_INTERVAL_MS)
+    : null;
+  try {
+    // Reflink where the filesystem supports it, a normal copy otherwise.
+    await copyFile(src, partial, constants.COPYFILE_FICLONE);
+    await verifySize(partial, expected);
+    await rename(partial, dst);
+  } catch (err) {
+    await rm(partial, { force: true });
+    throw err;
+  } finally {
+    if (timer) clearInterval(timer);
+  }
+  onProgress?.(expected, expected);
 }
 
 async function verifySize(dst: string, expected: number): Promise<void> {
@@ -116,7 +137,7 @@ export async function transferFile(src: string, dst: string, mode: TransferMode,
       const code = errCode(err);
       if (code !== 'EXDEV' && code !== 'EPERM' && code !== 'ENOTSUP') throw err;
       // Cross-device (or a share that refuses rename): verified copy, then delete the source.
-      await verifiedCopy(src, dst, srcSize);
+      await verifiedCopy(src, dst, srcSize, options.onProgress);
       await unlink(src);
       return 'move';
     }
@@ -131,7 +152,7 @@ export async function transferFile(src: string, dst: string, mode: TransferMode,
     }
   }
 
-  await verifiedCopy(src, dst, srcSize);
+  await verifiedCopy(src, dst, srcSize, options.onProgress);
   return 'copy';
 }
 

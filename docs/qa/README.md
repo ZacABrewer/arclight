@@ -78,10 +78,10 @@ cd "C:\path\to\arclight"
 ### 2. Docker Desktop (or any Docker host)
 
 The compose files are in `docker\`. Copy `docker\.env.example` to `docker\.env` and edit it
-(`PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`, `DOWNLOADS_ROOT`, and for VPN
-stacks `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES`, `LAN_SUBNET`). On Docker Desktop for Windows,
-set the three root variables to Windows folders such as `C:/path/to/test-env/tv`, or leave
-them unset to use `docker\data\...`.
+(`PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `DATA_ROOT`, and for VPN stacks `PROTON_WIREGUARD_KEY`,
+`VPN_COUNTRIES`, `LAN_SUBNET`). On Docker Desktop for Windows, set `DATA_ROOT` to a Windows
+folder such as `C:/path/to/test-env/data`, or leave it unset to use `docker\data\share`. Root
+folders are `/data/media/tv` and `/data/media/movies`.
 
 | Stack | Command (run inside `docker\`) | What you get | Address |
 |---|---|---|---|
@@ -103,10 +103,9 @@ Notes:
 ### 3. NAS (Synology and similar)
 
 Same compose files, run from the NAS shell or Container Manager. Use the `.env` values from
-`docker\.env.example` (`CONFIG_ROOT=/volume1/docker`, `TV_ROOT=/volume1/media/tv`,
-`MOVIES_ROOT=/volume1/media/movies`, `DOWNLOADS_ROOT=/volume1/downloads`). Use the NAS address,
-for example http://nas.local:7878. Make sure the `PUID` and `PGID` user can write to all four
-folders; wrong ownership is the most common NAS failure ("Docker permissions" health message).
+`docker\.env.example` (`CONFIG_ROOT` and `DATA_ROOT` set to folders on the NAS). Use the NAS
+address, for example http://nas.local:7878. Make sure the `PUID` and `PGID` user can write to
+both folders; wrong ownership is the most common NAS failure ("Docker permissions" health message).
 The NAS is the only environment where media-server refresh (Jellyfin, Emby, Plex), real
 hardlinks across the downloads and media shares, and long-running soak checks are meaningful.
 

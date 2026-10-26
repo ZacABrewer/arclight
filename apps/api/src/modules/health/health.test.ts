@@ -13,6 +13,7 @@ import { Scheduler } from '../../scheduler.js';
 import * as notificationTables from '../notifications/schema.js';
 import {
   configDiskSpaceCheck,
+  hardLinkCheck,
   createStaleImportCheck,
   dockerPermissionsCheck,
   downloadClientCheck,
@@ -233,6 +234,34 @@ describe('download client checks', () => {
     const [r] = await run(check, deps);
     expect(r).toMatchObject({ source: 'ImportPendingCheck', status: 'warning', wikiUrl: expect.stringContaining('#downloads-awaiting-manual-import') });
     expect(r?.message).toContain('manual interaction required: Show.S01E01');
+  });
+});
+
+describe('hard link check', () => {
+  const withLinks = (ok: (from: string, to: string) => boolean | null) => (deps: HealthDeps) => {
+    deps.fs.canHardLink = async (from, to) => ok(from, to);
+    return deps;
+  };
+
+  it('passes when downloads hard-link into every root folder', async () => {
+    const deps = withLinks(() => true)(fakeDeps({}, { clients: [qbit] }));
+    expect(await run(hardLinkCheck, deps)).toEqual([]);
+  });
+
+  it('warns with each blocked pair and the shared-folder fix', async () => {
+    const deps = withLinks((_from, to) => to !== '/movies')(fakeDeps({}, { clients: [qbit] }));
+    const [r] = await run(hardLinkCheck, deps);
+    expect(r).toMatchObject({ status: 'warning', wikiUrl: expect.stringContaining('#hard-links-not-possible') });
+    expect(r?.message).toContain('/downloads -> /movies');
+    expect(r?.message).not.toContain('/downloads -> /tv');
+    expect(r?.message).toContain('one shared folder');
+  });
+
+  it('stays quiet when hard links are off, untestable, or there is no local download folder', async () => {
+    expect(await run(hardLinkCheck, withLinks(() => false)(fakeDeps({ useHardlinks: () => false }, { clients: [qbit] })))).toEqual([]);
+    expect(await run(hardLinkCheck, withLinks(() => null)(fakeDeps({}, { clients: [qbit] })))).toEqual([]);
+    const remote = fakeDeps({}, { clients: [qbit], statuses: new Map([[1, { outputRootDir: '/elsewhere', isLocalhost: false, removesCompletedDownloads: false }]]) });
+    expect(await run(hardLinkCheck, withLinks(() => false)(remote))).toEqual([]);
   });
 });
 

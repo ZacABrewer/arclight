@@ -101,8 +101,8 @@ browser traffic is tunnelled too; port 8191 stays internal), without a VPN Arcli
 at `http://flaresolverr:8191`. Arclight reads `ARCLIGHT_FLARESOLVERR_URL` and registers a
 **FlareSolverr (bundled)** indexer proxy tagged `cloudflare` on boot; indexers whose definition
 needs a solver use it automatically. Running natively on Windows, the built-in solver drives a
-local Edge/Chrome instead; see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`,
-`DOWNLOADS_ROOT`, `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET` from your
+local Edge/Chrome instead; see [docs/CLOUDFLARE.md](docs/CLOUDFLARE.md). It reads `PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `DATA_ROOT` (one share holding `downloads/`,
+`media/tv/` and `media/movies/`, so imports are instant hard links), `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES` and `LAN_SUBNET` from your
 environment or a `.env` file; copy `docker/.env.example` to start.
 
 **Whisper (opt-in).** Every compose file has a `whisper` service

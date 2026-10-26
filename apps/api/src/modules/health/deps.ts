@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { readdir, readFile, realpath, rm, stat, statfs, writeFile } from 'node:fs/promises';
+import { link, readdir, readFile, realpath, rm, stat, statfs, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { downloadClientHost } from '@arclight/shared';
@@ -44,6 +44,27 @@ export const nodeHealthFs: HealthFs = {
       return true;
     } catch {
       return false;
+    }
+  },
+  async canHardLink(fromDir, toDir) {
+    const name = `.arclight-link-test-${randomBytes(6).toString('hex')}`;
+    const source = join(fromDir, name);
+    const target = join(toDir, name);
+    try {
+      await writeFile(source, '');
+    } catch {
+      return null;
+    }
+    try {
+      await link(source, target);
+      return true;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      // Cross-device and file systems without links; anything else (permissions) is another check's job.
+      return code === 'EXDEV' || code === 'EPERM' || code === 'ENOTSUP' || code === 'EMLINK' ? false : null;
+    } finally {
+      await rm(source, { force: true });
+      await rm(target, { force: true });
     }
   },
   async isEmpty(path) {
@@ -216,6 +237,7 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
     },
 
     minimumFreeSpaceBytes: () => downloads.minimumFreeSpaceBytes(),
+    useHardlinks: () => getSection(db, 'mediaManagement').useHardlinks !== false,
 
     feeds: () => feedsRegistry(ctx).summary(),
 

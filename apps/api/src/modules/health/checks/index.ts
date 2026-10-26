@@ -10,6 +10,7 @@ import { indexerCheck, indexerLongTermStatusCheck, indexerRssCheck, indexerSearc
 import { notificationConfigCheck, notificationStatusCheck } from './notifications.js';
 import { mountReadOnlyCheck, recycleBinCheck, rootFolderCheck } from './root-folders.js';
 import { flareSolverrUnreachableCheck } from './flaresolverr.js';
+import { hardLinkCheck } from './hard-links.js';
 import { feedStaleCheck } from './feeds.js';
 import { torrentEngineCheck } from './torrent.js';
 import { downloadDiskSpaceCheck, killSwitchFlappingCheck, stalledDownloadsCheck, torrentLockdownCheck } from './downloads.js';
@@ -20,6 +21,7 @@ import { dockerPermissionsCheck, metadataSourceCheck, systemTimeCheck, updateChe
 
 export * from './disk-space.js';
 export * from './flaresolverr.js';
+export * from './hard-links.js';
 export * from './feeds.js';
 export * from './download-clients.js';
 export * from './downloads.js';
@@ -46,6 +48,7 @@ export function createChecks(): HealthCheckDef[] {
     downloadClientCheck,
     downloadClientRemovesCompletedCheck,
     remotePathMappingCheck,
+    hardLinkCheck,
     createStaleImportCheck(),
     downloadDiskSpaceCheck,
     stalledDownloadsCheck,
