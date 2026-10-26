@@ -1,9 +1,14 @@
-import { createRootRouteWithContext, createRoute, createRouter, redirect, type ErrorComponentProps } from '@tanstack/react-router';
+import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 import { ComingSoon } from './components/coming-soon.js';
 import { ErrorView } from './components/error-boundary.js';
 import { LoadingBlock } from './components/spinner.js';
 import { AppShell } from './layout/app-shell.js';
+import { AuthProvider } from './auth/auth-context.js';
+import { BARE_PATHS, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
+import { LoginPage } from './pages/login.js';
+import { SetupWizard } from './pages/setup/setup-wizard.js';
+import { SecurityPage } from './pages/settings/security/security-page.js';
 import { navEntry } from './nav.js';
 import { DashboardPage } from './pages/dashboard.js';
 import { NotFoundPage } from './pages/not-found.js';
@@ -29,6 +34,7 @@ import { MediaManagementPage } from './pages/settings/media-management/media-man
 import { NotificationsPage } from './pages/settings/notifications/notifications-page.js';
 import { ProfilesPage } from './pages/settings/profiles/profiles-page.js';
 import { QualityPage } from './pages/settings/quality/quality-page.js';
+import { VpnSettingsPage } from './pages/settings/vpn.js';
 
 // Code-based route tree. To build a real page: replace its `placeholder(...)` with a
 // createRoute whose component is the page. The sidebar lives in nav.ts.
@@ -41,9 +47,30 @@ function RouteError({ error, reset }: ErrorComponentProps) {
   return <ErrorView error={error} onRetry={reset} />;
 }
 
+/** /login and /setup render bare; everything else inside the app shell. */
+function RootLayout() {
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  return <AuthProvider>{BARE_PATHS.has(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
+}
+
 const rootRoute = createRootRouteWithContext<RouterContext>()({
-  component: AppShell,
+  component: RootLayout,
   notFoundComponent: NotFoundPage,
+  // Guard every navigation: setup first, then sign-in, then admin-only sections.
+  beforeLoad: async ({ context, location }) => {
+    const status = await loadAuthStatus(context.queryClient);
+    const search = location.search as Record<string, unknown>;
+    const target = resolveAuthRedirect(status, location.pathname, location.href, search['redirect']);
+    if (target && target !== location.href) throw redirect({ href: target, replace: true });
+  },
+});
+
+const loginRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/login',
+  validateSearch: (search: Record<string, unknown>): { redirect?: string } =>
+    typeof search.redirect === 'string' ? { redirect: search.redirect } : {},
+  component: LoginPage,
 });
 
 const page = <TPath extends string>(path: TPath, component: () => React.ReactNode) =>
@@ -86,6 +113,8 @@ const searchRoute = createRoute({
 });
 
 export const routeTree = rootRoute.addChildren([
+  loginRoute,
+  page('/setup', SetupWizard),
   page('/', DashboardPage),
   searchRoute,
 
@@ -126,6 +155,8 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/downloadclients', DownloadClientsPage),
   page('/settings/notifications', NotificationsPage),
   page('/settings/general', GeneralPage),
+  page('/settings/security', SecurityPage),
+  page('/settings/vpn', VpnSettingsPage),
   sectionRedirect('/settings/media-management', '/settings/mediamanagement'),
   sectionRedirect('/settings/custom-formats', '/settings/customformats'),
   sectionRedirect('/settings/download-clients', '/settings/downloadclients'),

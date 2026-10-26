@@ -1,4 +1,5 @@
-export { request, buildUrl, ApiError, ContractError, errorMessage, API_BASE } from './client.js';
+export { request, buildUrl, ApiError, ContractError, errorMessage, API_BASE, setUnauthorizedHandler } from './client.js';
+export { authApi, usersApi, securityApi, setupApi } from './auth.js';
 export { systemApi } from './system.js';
 export { healthApi } from './health.js';
 export { jobsApi } from './jobs.js';

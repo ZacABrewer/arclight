@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import { notSupported } from '../http.js';
 import { isLocalhostAddress, isRootedPath, joinRemotePath } from '../paths.js';
 import { hashFromMagnet, hashFromTorrentFile, TorrentParseError } from '../torrent-hash.js';
 import {
   DownloadClientError,
+  type AddNzbResult,
   type AddTorrentInput,
   type AddTorrentResult,
   type ClientRuntime,
@@ -80,6 +82,7 @@ function magnetHasTrackers(magnet: string): boolean {
 
 export class QBittorrentClient implements DownloadClient {
   readonly name = 'qBittorrent';
+  readonly protocol = 'torrent' as const;
   private readonly session: QBittorrentSession;
   private apiVersion: ApiVersion | undefined;
   private readonly knownCategories = new Set<string>();
@@ -228,6 +231,10 @@ export class QBittorrentClient implements DownloadClient {
     return { id, warnings };
   }
 
+  async addNzb(): Promise<AddNzbResult> {
+    throw notSupported(this.name, 'NZB downloads');
+  }
+
   async getItems(category: string): Promise<DownloadItem[]> {
     const [prefs, torrents] = await Promise.all([this.getPreferences(), this.listTorrents(category)]);
     const nowMs = this.runtime.now();
@@ -297,6 +304,20 @@ export class QBittorrentClient implements DownloadClient {
     await this.post(usesStopNaming(version) ? '/api/v2/torrents/start' : '/api/v2/torrents/resume', {
       hashes: id.toLowerCase(),
     });
+  }
+
+  async setListenPort(port: number): Promise<void> {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      throw new DownloadClientError('rejected', `Invalid listen port ${port}.`);
+    }
+    // random_port off, or qBittorrent would pick a new port on its next start.
+    await this.post('/api/v2/app/setPreferences', { json: JSON.stringify({ listen_port: port, random_port: false }) });
+  }
+
+  async getListenPort(): Promise<number> {
+    const prefs = await this.getPreferences();
+    if (prefs.listen_port === undefined) throw new DownloadClientError('bad-response', 'qBittorrent did not report listen_port.');
+    return prefs.listen_port;
   }
 
   // ---------------------------------------------------------------- qBittorrent helpers

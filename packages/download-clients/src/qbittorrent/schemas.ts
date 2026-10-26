@@ -70,6 +70,8 @@ export const QbtPreferences = z.object({
   max_ratio_act: z.number().optional(),
   queueing_enabled: z.boolean().optional(),
   dht: z.boolean().optional(),
+  /** Incoming connections port. */
+  listen_port: z.number().int().optional(),
 });
 export type QbtPreferences = z.infer<typeof QbtPreferences>;
 

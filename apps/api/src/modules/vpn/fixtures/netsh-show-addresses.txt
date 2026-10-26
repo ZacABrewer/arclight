@@ -1,0 +1,7 @@
+
+Configuration for interface "proton-nl"
+    DHCP enabled:                         No
+    IP Address:                           10.2.0.2
+    Subnet Prefix:                        10.2.0.2/32 (mask 255.255.255.255)
+    InterfaceMetric:                      5
+

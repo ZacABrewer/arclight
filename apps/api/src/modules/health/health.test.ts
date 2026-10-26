@@ -32,6 +32,7 @@ import {
   rootFolderFreeSpaceCheck,
   systemTimeCheck,
   updateCheck,
+  vpnDisconnectedCheck,
 } from './checks/index.js';
 import { findMount } from './deps.js';
 import { healthModule } from './index.js';
@@ -435,5 +436,25 @@ describe('health module', () => {
     } finally {
       await rm(configDir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('VpnDisconnected', () => {
+  const base = { enabled: true, provider: 'gluetun' as const, lastChecked: NOW.toISOString(), lastChanged: null };
+
+  it('passes when the VPN is disabled or not wired', async () => {
+    expect(await run(vpnDisconnectedCheck, fakeDeps())).toEqual([]);
+    expect(await run(vpnDisconnectedCheck, fakeDeps({ vpn: async () => ({ ...base, enabled: false, connected: false }) }))).toEqual([]);
+  });
+
+  it('errors when enabled and not connected', async () => {
+    const out = await run(vpnDisconnectedCheck, fakeDeps({ vpn: async () => ({ ...base, connected: false, error: 'Gluetun reports the VPN is stopped.' }) }));
+    expect(out).toEqual([expect.objectContaining({ source: 'VpnDisconnected', status: 'error' })]);
+    expect(out[0]!.message).toMatch(/not connected.*stopped/);
+  });
+
+  it('warns when the public IP equals the home IP', async () => {
+    const out = await run(vpnDisconnectedCheck, fakeDeps({ vpn: async () => ({ ...base, connected: true, publicIp: '1.2.3.4', leak: true }) }));
+    expect(out).toEqual([expect.objectContaining({ status: 'warning', wikiUrl: '/docs/system/health#vpn-leak' })]);
   });
 });

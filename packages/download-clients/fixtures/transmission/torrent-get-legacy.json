@@ -1,0 +1,49 @@
+{
+  "arguments": {
+    "torrents": [
+      {
+        "activityDate": 1761390000,
+        "downloadDir": "/downloads/complete/media-tron",
+        "error": 0,
+        "errorString": "",
+        "eta": 300,
+        "hashString": "1111111111111111111111111111111111111111",
+        "isFinished": false,
+        "isPrivate": false,
+        "leftUntilDone": 400000000,
+        "name": "Legacy.Show.S02E03.720p.HDTV.x264-GRP",
+        "percentDone": 0.6,
+        "secondsSeeding": 0,
+        "seedIdleLimit": 30,
+        "seedIdleMode": 0,
+        "seedRatioLimit": 2,
+        "seedRatioMode": 0,
+        "status": 4,
+        "totalSize": 1000000000,
+        "uploadRatio": 0
+      },
+      {
+        "activityDate": 1761390000,
+        "downloadDir": "/downloads/complete",
+        "error": 0,
+        "errorString": "",
+        "eta": -1,
+        "hashString": "2222222222222222222222222222222222222222",
+        "isFinished": false,
+        "isPrivate": false,
+        "leftUntilDone": 0,
+        "name": "Some.Linux.ISO",
+        "percentDone": 1,
+        "secondsSeeding": 7200,
+        "seedIdleLimit": 30,
+        "seedIdleMode": 0,
+        "seedRatioLimit": 2,
+        "seedRatioMode": 0,
+        "status": 6,
+        "totalSize": 3000000000,
+        "uploadRatio": 0.4
+      }
+    ]
+  },
+  "result": "success"
+}

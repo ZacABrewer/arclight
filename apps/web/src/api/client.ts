@@ -31,6 +31,22 @@ export class ContractError extends Error {
   }
 }
 
+type UnauthorizedHandler = (path: string) => void;
+let onUnauthorized: UnauthorizedHandler | null = null;
+
+/**
+ * Called when a request answers 401 (session expired or signed out elsewhere). main.tsx
+ * points it at the router so the user lands on /login. The auth and setup endpoints answer
+ * 401 as part of their normal flow and never trigger it.
+ */
+export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): void {
+  onUnauthorized = handler;
+}
+
+function triggersSignIn(path: string): boolean {
+  return !path.startsWith('/auth/') && !path.startsWith('/setup/');
+}
+
 export type QueryParams = Record<string, string | number | boolean | null | undefined>;
 
 export interface RequestOptions extends Omit<RequestInit, 'body'> {
@@ -59,8 +75,10 @@ export async function request(path: string, schema: z.ZodType | null, init: Requ
     body = JSON.stringify(json);
   }
 
+  // The session cookie rides along on every call (same origin; the dev server proxies /api).
   const res = await fetch(url, { credentials: 'same-origin', ...rest, headers: finalHeaders, body });
 
+  if (res.status === 401 && onUnauthorized && triggersSignIn(path)) onUnauthorized(path);
   if (!res.ok) throw await toApiError(res, path);
   if (schema === null || res.status === 204) return undefined;
 

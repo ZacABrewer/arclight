@@ -367,3 +367,22 @@ describe('status and test', () => {
     expect(qbt.calls('/api/v2/torrents/createCategory')[0]?.form).toEqual({ category: 'anime' });
   });
 });
+
+describe('listen port', () => {
+  it('sets the listen port through setPreferences with random_port off', async () => {
+    qbt.on('POST', '/api/v2/app/setPreferences', { body: '' });
+    await client().setListenPort!(51413);
+    const call = qbt.calls('/api/v2/app/setPreferences')[0];
+    expect(JSON.parse(call?.form['json'] ?? '{}')).toEqual({ listen_port: 51413, random_port: false });
+  });
+
+  it('rejects an invalid port without calling qBittorrent', async () => {
+    await expectError(client().setListenPort!(70000), 'rejected');
+    expect(qbt.calls('/api/v2/app/setPreferences')).toHaveLength(0);
+  });
+
+  it('reads the listen port from preferences', async () => {
+    qbt.on('GET', '/api/v2/app/preferences', { body: { ...prefsFixture, listen_port: 6881 } });
+    await expect(client().getListenPort!()).resolves.toBe(6881);
+  });
+});

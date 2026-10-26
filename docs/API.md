@@ -2,7 +2,8 @@
 
 Compiled from the `routes.ts` and `index.ts` files in `apps/api/src/modules/*` on
 2026-10-26. Request and response schemas live in `packages/shared/src/*.ts`. All paths are
-prefixed with `/api/v1`. There is no authentication yet.
+prefixed with `/api/v1`. Every route requires authentication unless listed as public in
+[Authentication](#authentication).
 
 Modules still being written (releases, imports, history, blocklist, notifications,
 calendar) have no routes and are not listed.
@@ -10,11 +11,81 @@ calendar) have no routes and are not listed.
 Errors: modules map typed service errors to JSON `{ "error": "..." }` bodies (400, 404,
 409, 5xx). Deletes answer `204` with a null body unless noted.
 
+## Authentication
+
+Implemented in `apps/api/src/modules/auth` (contract: `packages/shared/src/auth.ts`). An
+`onRequest` hook installed by `app.ts` on the `/api/v1` scope resolves who each request is,
+in this order:
+
+1. **Session cookie** `mt_session` (from `POST /auth/login` or `POST /setup/admin`):
+   httpOnly, `SameSite=Lax`, `Secure` when the request arrived over https (directly or via
+   `X-Forwarded-Proto`). Only a sha256 of the token is stored. Sessions last
+   `sessionDays` (default 30) and slide forward once past half their lifetime;
+   `rememberMe: false` gives a browser-session cookie and a one-day server lifetime.
+2. **HTTP Basic** credentials, only when the auth method is `basic`.
+3. **API key** in the `X-Api-Key` header or `?apikey=` query. One key per install, generated
+   on first boot and stored in the `security` settings section. It grants admin access.
+4. **Local bypass**: once setup is complete, requests where the socket peer *and* every
+   `X-Forwarded-For` hop are loopback, RFC 1918, IPv4 link-local, IPv6 ULA or link-local skip
+   sign-in when the method is `none` or `requireForLocal` is false. Public addresses always
+   need credentials, so `none` never opens the api to the internet.
+
+Anonymous requests to protected routes get `401 {"error","code":"UNAUTHORIZED"}` (plus
+`WWW-Authenticate: Basic` when the method is `basic`). Unknown routes answer 404.
+
+**Public routes** (no credentials): `POST /auth/login`, `POST /auth/logout`,
+`GET /auth/status`, `GET /system/ping`, `GET /calendar/feed.ics` (checks its own `token`),
+and `/setup/*` (which guard themselves: writes need the admin once one exists, and answer
+409 `SETUP_COMPLETE` after setup). The SPA's static files are outside `/api/v1`.
+
+**Roles.** `admin` can do everything. `user` may call `GET`/`HEAD` routes; any other method
+needs admin unless the route sets `config: { allowUser: true }`. Admin-only routes add the
+`requireAdmin` preHandler exported by the auth module:
+
+```ts
+import { requireAdmin } from '../auth/index.js';
+app.get('/thing', { preHandler: requireAdmin }, handler);   // one route
+app.addHook('preHandler', requireAdmin);                    // a whole plugin
+app.post('/request', { config: { allowUser: true } }, h);   // let users change state
+```
+
+`req.auth` (`{ user, via, isAdmin, sessionId?, expiresAt? }`) is available in every
+handler; `user` is null for API-key and bypass callers. `authServiceFor(ctx)` returns the
+shared `AuthService`. Users carry a `permissions` bitfield (`Permission` in shared; `ADMIN`
+= 2 implies all) and a free-form `settings` record, ready for the requests phase. Failed
+logins are limited to 10 per address per 15 minutes (429 `RATE_LIMITED`). Passwords are
+hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
+
+| Method | Path | Access | Purpose |
+|---|---|---|---|
+| POST | `/auth/login` | public | `{username, password, rememberMe?}` → `Session`; sets the cookie. 401 `INVALID_CREDENTIALS`, 429 |
+| POST | `/auth/logout` | public | Ends the session and clears the cookie (204) |
+| GET | `/auth/status` | public | `{needsSetup, authMethod, authenticated, session}` |
+| GET | `/auth/me` | any | Current `Session` (`user`, `via`, `isAdmin`, `expiresAt`) |
+| GET | `/auth/sessions` | any | The caller's active sessions (`current` marks this one) |
+| DELETE | `/auth/sessions/:id` | any | Revoke one of the caller's sessions |
+| GET | `/user/me` | any | The signed-in user |
+| PUT | `/user/me` | any | Update own display name, email, avatar, settings |
+| PUT | `/user/me/password` | any | `{currentPassword, newPassword}`; ends the caller's other sessions (204) |
+| GET | `/user` | admin | List users |
+| GET | `/user/:id` | admin | One user |
+| POST | `/user` | admin | Create (201); 409 `USER_EXISTS` (usernames are case-insensitive) |
+| PUT | `/user/:id` | admin | Update; `password` resets it and ends the user's sessions; 409 `LAST_ADMIN` on demoting the only admin |
+| DELETE | `/user/:id` | admin | Delete (204); not yourself, not the only admin |
+| GET | `/settings/security` | admin | `{method, requireForLocal, sessionDays, apiKey}` |
+| PUT | `/settings/security` | admin | Update `{method, requireForLocal, sessionDays}` |
+| POST | `/settings/security/apikey` | admin | Regenerate the API key → `{apiKey}` |
+| GET | `/setup/status` | public | `{needsSetup, steps[{id, complete, optional}]}` for admin, tmdb, rootFolders, downloadClient, indexer |
+| POST | `/setup/admin` | public | Create the first admin and sign it in (201); 409 once a user exists |
+| POST | `/setup/rootfolder` | setup admin | `{path, mediaType, createIfMissing}`: create the directory if asked, add the root folder (existing path returns it) |
+| POST | `/setup/complete` | setup admin | `{tmdbApiKey?, rootFolders?, authMethod}` (+ `username`/`password`/`email` when no user exists: headless setup); marks setup done; 409 on a second call |
+
 ## system
 
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/system/status` | App name, version, start time, uptime, runtime and config paths |
+| GET | `/system/ping` | Public liveness probe: `{"status":"ok"}` |
 
 ## health
 

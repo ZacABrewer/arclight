@@ -55,6 +55,9 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
     case 'settings':
       void qc.invalidateQueries({ queryKey: ['settings'] });
       return;
+    case 'vpn':
+      void qc.invalidateQueries({ queryKey: ['vpn'] });
+      return;
     default:
       assertNever(event);
   }
