@@ -1,0 +1,20 @@
+{
+  "name": "media-tron",
+  "version": "0.1.0",
+  "private": true,
+  "license": "GPL-3.0",
+  "packageManager": "pnpm@10.34.9",
+  "engines": {
+    "node": ">=24"
+  },
+  "scripts": {
+    "dev": "pnpm -r --parallel --filter ./apps/* dev",
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @media-tron/api db:generate"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  }
+}
