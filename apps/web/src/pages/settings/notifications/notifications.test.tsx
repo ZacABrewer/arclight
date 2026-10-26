@@ -23,9 +23,29 @@ const schemas = [
       { name: 'webhookUrl', label: 'Webhook URL', type: 'url', required: true, secret: true },
       { name: 'mentions', label: 'Mentions', type: 'textList', required: false, secret: false },
     ],
-    template: { name: '', implementation: 'discord', tags: [], settings: {}, onGrab: false, onDownload: false, onHealthIssue: false },
+    template: {
+      name: '',
+      implementation: 'discord',
+      tags: [],
+      settings: {},
+      onGrab: false,
+      onDownload: false,
+      onHealthIssue: false,
+      onDownloadStalled: false,
+      onKillSwitch: false,
+      onDailySummary: false,
+      supportsOnDailySummary: false,
+      respectQuietHours: true,
+    },
   },
 ];
+
+const alertSettings = {
+  quietHours: { enabled: true, start: '22:00', end: '07:00', days: [0, 1, 2, 3, 4, 5, 6] },
+  dailySummary: { enabled: true, time: '08:00' },
+  heldAlerts: 3,
+  quietNow: true,
+};
 
 beforeEach(() => {
   calls = [];
@@ -41,6 +61,8 @@ beforeEach(() => {
       else if (key === 'GET /api/v1/tag') body = [];
       else if (key === 'POST /api/v1/notification/test') body = { ok: true };
       else if (key === 'PUT /api/v1/notification/1') body = { id: 1, ...(call.body as object) };
+      else if (key === 'GET /api/v1/settings/alerts') body = alertSettings;
+      else if (key === 'PUT /api/v1/settings/alerts') body = { ...(call.body as object), heldAlerts: 3, quietNow: true };
       if (body === undefined) return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
       return new Response(JSON.stringify(body), { status: 200 });
     }),
@@ -114,6 +136,64 @@ describe('Settings -> Notifications', () => {
     const body = calls.find((c) => c.method === 'PUT')!.body as Record<string, unknown>;
     expect(body.settings).toEqual({ webhookUrl: 'https://discord.test/hook', mentions: ['@here', '@everyone'] });
     expect(body).not.toHaveProperty('webhookUrl');
+  });
+
+  it('groups the download-problem triggers with their own labels, hiding unsupported ones', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Discord' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Discord' });
+    const problems = within(dialog).getByRole('group', { name: 'Download problem events' });
+    expect(within(problems).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).toEqual(['Download stalled', 'Kill switch paused downloads']);
+    // Not repeated in the general events group.
+    expect(within(within(dialog).getByRole('group', { name: 'Events' })).queryByRole('checkbox', { name: /stalled/i })).toBeNull();
+    fireEvent.click(within(problems).getByRole('checkbox', { name: 'Download stalled' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    const body = calls.find((c) => c.method === 'PUT')!.body as Record<string, unknown>;
+    expect(body.onDownloadStalled).toBe(true);
+    expect(body.onKillSwitch).not.toBe(true);
+  });
+
+  it('defaults Respect quiet hours on for rows saved without it, and saves the choice', async () => {
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Edit Discord' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Discord' });
+    const quiet = within(dialog).getByRole('checkbox', { name: /Respect quiet hours/ }) as HTMLInputElement;
+    expect(quiet.checked).toBe(true);
+    expect(within(dialog).getByText(/held during quiet hours and sent as one batch/)).toBeTruthy();
+    fireEvent.click(quiet);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ respectQuietHours: false });
+  });
+
+  it('shows quiet-hours status and saves quiet hours and the daily summary', async () => {
+    renderPage();
+    const section = (await screen.findByText('Quiet hours are in effect now · 3 alerts held')).closest('section') as HTMLElement;
+    expect(section.getAttribute('aria-label')).toBe('Quiet hours and daily summary');
+    const start = within(section).getByLabelText('Start') as HTMLInputElement;
+    expect(start.value).toBe('22:00');
+    fireEvent.change(start, { target: { value: '23:30' } });
+    const days = within(section).getByRole('group', { name: 'Days' });
+    expect(within(days).getAllByRole('checkbox')).toHaveLength(7);
+    fireEvent.click(within(days).getByRole('checkbox', { name: 'Sat' }));
+    fireEvent.click(within(section).getByRole('switch', { name: 'Daily summary' }));
+    fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/v1/settings/alerts')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT' && c.url === '/api/v1/settings/alerts')!.body).toEqual({
+      quietHours: { enabled: true, start: '23:30', end: '07:00', days: [0, 1, 2, 3, 4, 5] },
+      dailySummary: { enabled: false, time: '08:00' },
+    });
+    expect(await screen.findByText('Quiet hours and daily summary saved')).toBeTruthy();
+  });
+
+  it('blocks saving an invalid time', async () => {
+    renderPage();
+    const time = (await screen.findByLabelText('Summary time')) as HTMLInputElement;
+    const section = time.closest('section') as HTMLElement;
+    fireEvent.change(time, { target: { value: '' } });
+    expect(within(section).getByText('Use HH:MM (24-hour)')).toBeTruthy();
+    expect((within(section).getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it('names the object in the delete confirm', async () => {

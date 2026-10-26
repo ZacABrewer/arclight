@@ -9,9 +9,9 @@
  * the chat agents pick the fields they render.
  */
 
-import type { HealthCheck } from '@arclight/shared';
+import type { DailySummary, HealthCheck } from '@arclight/shared';
 
-export type { HealthCheck };
+export type { DailySummary, HealthCheck };
 
 export type MediaType = 'series' | 'movie';
 
@@ -175,6 +175,14 @@ export const NOTIFICATION_EVENT_TYPES = [
   'requestsDigest',
   'retention',
   'fileTranscoded',
+  'downloadStalled',
+  'killSwitch',
+  'killSwitchResumed',
+  'importProblem',
+  'diskSpaceLow',
+  'downloadUpdate',
+  'dailySummary',
+  'heldAlerts',
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 
@@ -185,6 +193,8 @@ interface EventBase {
   applicationUrl?: string;
   /** ISO-8601 timestamp of when the event happened. */
   timestamp: string;
+  /** Delivered even during quiet hours (disk full, a long kill-switch lockdown). */
+  urgent?: boolean;
 }
 
 interface MediaEventBase extends EventBase {
@@ -379,8 +389,98 @@ export interface FileTranscodedEvent extends MediaEventBase {
   sizeAfter: number;
 }
 
+/** The tracked download an alert is about. */
+export interface DownloadAlertInfo {
+  /** Arclight's tracked-download id (GET /queue/:id/timeline). */
+  trackedDownloadId: number;
+  /** Client-side id (info-hash for torrents). */
+  downloadId: string;
+  title: string;
+}
+
+/** A download stopped receiving data for longer than the stall threshold. */
+export interface DownloadStalledEvent extends EventBase {
+  type: 'downloadStalled';
+  download: DownloadAlertInfo;
+  message?: string;
+}
+
+/**
+ * The VPN kill switch paused the built-in engine's downloads. One event per lockdown, not per
+ * torrent. `pausedMinutes` is set on the reminder sent when a lockdown outlasts the urgent limit.
+ */
+export interface KillSwitchEvent extends EventBase {
+  type: 'killSwitch';
+  reason?: string;
+  /** ISO-8601 start of the lockdown. */
+  since: string;
+  /** Downloads paused by this lockdown (titles at most a screenful). */
+  pausedCount: number;
+  titles: string[];
+  pausedMinutes?: number;
+}
+
+/** The lockdown ended and the kill switch resumed what it paused. */
+export interface KillSwitchResumedEvent extends EventBase {
+  type: 'killSwitchResumed';
+  reason?: string;
+  resumedCount: number;
+  /** How long the lockdown lasted. */
+  durationMs: number;
+}
+
+/** A finished download could not be imported (failed), or waits for a person (blocked). */
+export interface ImportProblemEvent extends EventBase {
+  type: 'importProblem';
+  problem: 'failed' | 'blocked';
+  download: DownloadAlertInfo;
+  message?: string;
+}
+
+/** A disk-space health check went into warning or error. */
+export interface DiskSpaceLowEvent extends EventBase {
+  type: 'diskSpaceLow';
+  health: HealthCheck;
+}
+
+/**
+ * Any other download timeline entry (recovered, a replaced release, a held grab, ...): the
+ * message comes from the timeline entry, so new entry types need no formatting of their own.
+ */
+export interface DownloadUpdateEvent extends EventBase {
+  type: 'downloadUpdate';
+  download: DownloadAlertInfo;
+  /** Timeline entry type, e.g. "recovered". */
+  timelineType: string;
+  severity: 'info' | 'ok' | 'warning' | 'error';
+  message?: string;
+}
+
+/** The daily summary (stored; GET /summary/latest). */
+export interface DailySummaryEvent extends EventBase {
+  type: 'dailySummary';
+  summary: DailySummary;
+}
+
+/** Alerts held during quiet hours, delivered as one message when they end. */
+export interface HeldAlertsEvent extends EventBase {
+  type: 'heldAlerts';
+  /** Oldest first. */
+  events: NotificationEvent[];
+  /** ISO-8601 of the first held alert. */
+  heldSince: string;
+}
+
 export type NotificationEvent =
   | TestEvent
+  | DownloadStalledEvent
+  | KillSwitchEvent
+  | KillSwitchResumedEvent
+  | ImportProblemEvent
+  | DiskSpaceLowEvent
+  | DownloadUpdateEvent
+  | DailySummaryEvent
+  | HeldAlertsEvent
   | GrabEvent
   | ImportEvent
   | UpgradeEvent

@@ -3,6 +3,7 @@ import type { AppContext, AppModule } from '../../app.js';
 import { notificationsRoutes } from './routes.js';
 import { NotificationsService } from './service.js';
 import { EventTranslator } from './translate.js';
+import { DownloadAlerts } from './download-alerts.js';
 
 export {
   NotificationsService,
@@ -14,6 +15,11 @@ export {
 } from './service.js';
 export { EventTranslator, toMediaInfo, toEpisodeInfo, toFileInfo, releaseFrom } from './translate.js';
 export * from './schema.js';
+export { DownloadAlerts, DISK_SPACE_CHECKS, KILL_SWITCH_URGENT_MS } from './download-alerts.js';
+export { isQuietAt, bypassesQuietHours } from './quiet-hours.js';
+
+/** Every minute: deliver alerts held for quiet hours once they end, remind of long lockdowns. */
+export const ALERTS_TICK_JOB = 'AlertsTick';
 
 /** Health notifications are held back this long after start (download clients still booting). */
 export const HEALTH_NOTIFICATION_GRACE_MS = 15 * 60_000;
@@ -38,7 +44,7 @@ export function notificationsServiceFor(ctx: AppContext): NotificationsService {
 export function attachNotificationBus(
   ctx: Pick<AppContext, 'bus' | 'log'>,
   service: Pick<NotificationsService, 'dispatch'>,
-  translator: EventTranslator,
+  translator: Pick<EventTranslator, 'translate'>,
 ): () => void {
   return ctx.bus.subscribe((event) => {
     let built: NotificationEvent[];
@@ -73,7 +79,21 @@ export const notificationsModuleWith =
       ...(opts.translateImported !== undefined ? { translateImported: opts.translateImported } : {}),
     });
     const unsubscribe = attachNotificationBus(ctx, service, translator);
-    app.addHook('onClose', async () => unsubscribe());
+    const downloadAlerts = new DownloadAlerts({ db: ctx.db, log: ctx.log.child({ module: 'notifications' }) });
+    const unsubscribeAlerts = attachNotificationBus(ctx, service, downloadAlerts);
+    app.addHook('onClose', async () => {
+      unsubscribe();
+      unsubscribeAlerts();
+    });
+    ctx.scheduler.register({
+      name: ALERTS_TICK_JOB,
+      cron: '* * * * *',
+      handler: async () => {
+        for (const event of downloadAlerts.tick()) await service.dispatch(event);
+        const delivered = await service.flushHeld();
+        return delivered > 0 ? `delivered ${delivered} held alert(s)` : undefined;
+      },
+    });
   };
 
 export const notificationsModule: AppModule = notificationsModuleWith({});

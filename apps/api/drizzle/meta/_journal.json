@@ -78,6 +78,13 @@
       "when": 1793035737973,
       "tag": "0010_glorious_synch",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1793037980310,
+      "tag": "0011_simple_ares",
+      "breakpoints": true
     }
   ]
 }

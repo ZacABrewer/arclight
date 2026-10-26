@@ -953,6 +953,34 @@ Contract: `packages/shared/src/stats.ts`.
 | GET | `/stats/activity` | Grabs, imports and failures per UTC day for `days` (default 30, max 365) from history; season packs count once (per download id / imported path) |
 | GET | `/stats/indexers` | Proxy of `GET /indexer/stats` (`days`, default 30) |
 
+## summary (daily summary, quiet hours)
+
+Contract: `packages/shared/src/alerts.ts`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/settings/alerts` | `AlertSettingsResponse`: `quietHours` `{enabled (false), start "22:00", end "07:00", days [0..6]}` (server local time; a window ending before it starts runs past midnight and belongs to its start day), `dailySummary` `{enabled (true), time "08:00"}`, plus `heldAlerts` and `quietNow` |
+| PUT | `/settings/alerts` | Body `AlertSettings`; reschedules the `DailySummary` job (no cron while off) |
+| GET | `/summary/latest` | The newest `DailySummary`, or `null` |
+| GET | `/summary?limit=30` | Stored summaries, newest first (kept 30 days) |
+| POST | `/summary` | Body `{notify?: false}`: build one now (`notify` also sends it) |
+
+A summary covers the 24 hours before it: timeline counts (grabbed, imported, failed = import
+failures + download errors, stalled, recovered, replaced = entry types containing "replac"),
+kill-switch lockdowns overlapping the period (count, total time), free space per root folder and
+download-client folder with the change since the previous summary, up to 10 problems, open
+health issues and what is still downloading. The bus event `summary generated` announces it.
+
+Notification connections have seven more trigger flags: `onDownloadStalled`, `onKillSwitch`
+(one alert per lockdown with the reason; a lockdown lasting 30 minutes sends an urgent reminder
+to connections that held the first alert), `onKillSwitchResumed`, `onImportProblem` (import
+failed/blocked with the message), `onDiskSpaceLow` (the disk-space health checks entering
+warning or error; errors are urgent), `onDownloadRecovered` (every other timeline entry that is
+not routine, e.g. recovered or a replaced release, with the entry's message) and
+`onDailySummary`. `respectQuietHours` (default true) holds non-urgent alerts during quiet hours
+in `notification_held`; the `AlertsTick` job sends them as one `heldAlerts` message (a single
+held alert as itself) once quiet hours end.
+
 ## config (config as code)
 
 Implemented in `apps/api/src/modules/config-export` (contract: `packages/shared/src/operations.ts`).

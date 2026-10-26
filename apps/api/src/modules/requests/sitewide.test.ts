@@ -52,6 +52,13 @@ const BASE_ROW = {
   onRequestAvailable: false,
   onIssueCreated: false,
   onIssueUpdated: false,
+  onDownloadStalled: false,
+  onKillSwitch: false,
+  onKillSwitchResumed: false,
+  onImportProblem: false,
+  onDiskSpaceLow: false,
+  onDownloadRecovered: false,
+  onDailySummary: false,
   includeHealthWarnings: false,
 };
 

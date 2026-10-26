@@ -116,4 +116,11 @@ describe('live cache layer', () => {
     expect(spy).toHaveBeenCalledWith({ queryKey: subtitleKeys.languageProfiles });
     expect(spy).toHaveBeenCalledTimes(2);
   });
+
+  it('refetches the daily summaries when one is generated', () => {
+    const qc = client();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    applyServerEvent(qc, { type: 'summary', action: 'generated', id: 4 });
+    expect(spy).toHaveBeenCalledExactlyOnceWith({ queryKey: ['summary'] });
+  });
 });

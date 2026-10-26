@@ -61,6 +61,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
     action: z.enum(['created', 'updated', 'approved', 'declined', 'failed', 'completed', 'deleted']),
     id: z.number().int(),
   }),
+  /** A daily summary was stored (GET /summary/latest). */
+  z.object({ type: z.literal('summary'), action: z.literal('generated'), id: z.number().int() }),
   z.object({ type: z.literal('issue'), action: z.enum(['created', 'updated', 'deleted']), id: z.number().int() }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

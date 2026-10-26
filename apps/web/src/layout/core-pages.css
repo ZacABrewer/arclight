@@ -63,6 +63,16 @@
 .dash-requests__title { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .dash-requests .dash-muted { font-size: 13px; }
 
+/* Right column: Requests over the daily summary card. */
+.dash-side { display: flex; flex-direction: column; gap: 28px; min-width: 0; }
+.dash-summary__body { display: flex; flex-direction: column; gap: 12px; }
+.dash-summary .dash-muted { font-size: 13px; }
+.dash-summary__counts { margin: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; }
+.dash-summary__counts > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.dash-summary__counts dt { font-size: 12px; color: var(--al-text-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-summary__counts dd { margin: 0; font-size: 18px; color: var(--al-text-1); }
+.dash-summary__counts [data-tone="warn"] dd { color: var(--al-warn-text); }
+
 /* Below 1280: the centre closes, heroes share the row and the traces go (nothing to point at). */
 @media (max-width: 1279.98px) {
   .dash-heroes { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; margin-bottom: 28px; }
@@ -78,7 +88,8 @@
   .dash-hero--next { --al-chamfer: 16px; }
   .dash-hero--status { clip-path: none; }
   .dash-hero--status > .al-edge { display: none; }
-  .dash-lower { gap: 16px; }
+  .dash-lower, .dash-side { gap: 16px; }
+  .dash-summary__counts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
   .dash-queue__rows { padding: 4px 18px; }
   .dash-queue__row { grid-template-columns: minmax(0, 1fr) auto; gap: 8px 12px; }
   .dash-queue__row .al-trail { grid-column: 1 / -1; grid-row: 2; }

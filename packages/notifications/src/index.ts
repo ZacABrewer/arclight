@@ -35,6 +35,8 @@ export {
   eventSubject,
   eventSeverity,
   qualityLabel,
+  formatDuration,
+  timelineTypeLabel,
   EVENT_LABELS,
   requestLinks,
   type FormattedAction,

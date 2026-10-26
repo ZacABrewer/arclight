@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, count, eq, inArray, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import {
@@ -20,11 +20,14 @@ import {
   type NotificationTestAllResult,
   type NotificationTestResult,
   type NotificationTrigger,
+  type QuietHoursSettings,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { tags as tagsTable } from '../../db/schema.js';
+import { getSection } from '../settings/service.js';
 import { allSchemas, capabilitiesFrom, maskSettings, supportedEventsFor, TRIGGER_EVENT, unmaskSettings } from './fields.js';
-import { notifications, type NotificationRow } from './schema.js';
+import { bypassesQuietHours, isQuietAt } from './quiet-hours.js';
+import { notificationHeld, notifications, type NotificationRow } from './schema.js';
 
 export type NotificationsErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'CONFLICT';
 
@@ -48,6 +51,8 @@ export interface NotificationsServiceOptions {
   agentFactory?: AgentFactory;
   now?: () => Date;
   instanceName?: string;
+  /** Quiet hours in effect; defaults to the `alerts` settings section. */
+  quietHours?: () => QuietHoursSettings;
 }
 
 export interface DispatchOutcome {
@@ -55,7 +60,12 @@ export interface DispatchOutcome {
   name: string;
   ok: boolean;
   error?: string;
+  /** Held for quiet hours rather than sent. */
+  held?: boolean;
 }
+
+/** Held alerts older than this are dropped instead of delivered (the connection kept failing). */
+export const HELD_ALERT_MAX_AGE_MS = 7 * 86_400_000;
 
 /** Per-connection delivery health, in memory (feeds the notification health check). */
 export interface ConnectionStatus {
@@ -72,6 +82,7 @@ export class NotificationsService {
   private readonly now: () => Date;
   private readonly instanceName: string;
   private readonly status = new Map<number, ConnectionStatus>();
+  private readonly quietHours: () => QuietHoursSettings;
 
   constructor(options: NotificationsServiceOptions) {
     this.db = options.db;
@@ -79,6 +90,7 @@ export class NotificationsService {
     this.factory = options.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
     this.now = options.now ?? (() => new Date());
     this.instanceName = options.instanceName ?? 'Arclight';
+    this.quietHours = options.quietHours ?? (() => readQuietHours(this.db));
   }
 
   // ---- CRUD ------------------------------------------------------------------------------
@@ -174,6 +186,9 @@ export class NotificationsService {
   async dispatch(event: NotificationEvent): Promise<DispatchOutcome[]> {
     const rows = this.rows().filter((r) => r.enabled && wantsEvent(r, event));
     if (rows.length === 0) return [];
+    const quiet = this.isQuietNow();
+    // A kill-switch reminder only goes to connections that held the original alert.
+    const reminder = event.type === 'killSwitch' && event.pausedMinutes !== undefined;
     const mediaTags = 'media' in event && event.media ? new Set(event.media.tags) : null;
     const labels = this.tagLabelMap(rows.flatMap((r) => r.tags));
 
@@ -197,6 +212,12 @@ export class NotificationsService {
           return { id: row.id, name: row.name, ok: false, error: message };
         }
         if (!agent.supportedEvents.has(event.type)) return null;
+        const holding = quiet && row.respectQuietHours;
+        if (reminder && !holding) return null;
+        if (holding && !bypassesQuietHours(event)) {
+          this.hold(row.id, event);
+          return { id: row.id, name: row.name, ok: true, held: true };
+        }
         try {
           await agent.send(event);
           this.record(row.id, undefined);
@@ -210,6 +231,67 @@ export class NotificationsService {
       }),
     );
     return outcomes.filter((o): o is DispatchOutcome => o !== null);
+  }
+
+  // ---- quiet hours ---------------------------------------------------------------------------
+
+  isQuietNow(): boolean {
+    return isQuietAt(this.quietHours(), this.now());
+  }
+
+  heldCount(): number {
+    return this.db.select({ n: count() }).from(notificationHeld).get()?.n ?? 0;
+  }
+
+  private hold(notificationId: number, event: NotificationEvent): void {
+    this.db.insert(notificationHeld).values({ notificationId, event, heldAt: this.now().toISOString() }).run();
+  }
+
+  /**
+   * Outside quiet hours, send each connection what was held for it: one alert as itself, more
+   * as a single `heldAlerts` batch. Delivered (and expired) rows are deleted; a failed send
+   * keeps them for the next try. Returns the number of alerts delivered.
+   */
+  async flushHeld(): Promise<number> {
+    if (this.isQuietNow()) return 0;
+    const cutoff = new Date(this.now().getTime() - HELD_ALERT_MAX_AGE_MS).toISOString();
+    this.db.delete(notificationHeld).where(lt(notificationHeld.heldAt, cutoff)).run();
+    const held = this.db.select().from(notificationHeld).orderBy(asc(notificationHeld.id)).all();
+    if (held.length === 0) return 0;
+    const byConnection = new Map<number, typeof held>();
+    for (const h of held) byConnection.set(h.notificationId, [...(byConnection.get(h.notificationId) ?? []), h]);
+    const rows = new Map(this.rows().map((r) => [r.id, r]));
+    let delivered = 0;
+    for (const [id, items] of byConnection) {
+      const ids = items.map((h) => h.id);
+      const row = rows.get(id);
+      if (!row || !row.enabled) {
+        this.db.delete(notificationHeld).where(inArray(notificationHeld.id, ids)).run();
+        continue;
+      }
+      const first = items[0]!;
+      const event: NotificationEvent =
+        items.length === 1
+          ? first.event
+          : {
+              type: 'heldAlerts',
+              instanceName: first.event.instanceName,
+              timestamp: this.now().toISOString(),
+              ...(first.event.applicationUrl ? { applicationUrl: first.event.applicationUrl } : {}),
+              events: items.map((h) => h.event),
+              heldSince: first.heldAt,
+            };
+      try {
+        await this.factory(row.implementation, row.settings).send(event);
+        this.record(id, undefined);
+        this.db.delete(notificationHeld).where(inArray(notificationHeld.id, ids)).run();
+        delivered += items.length;
+      } catch (err) {
+        this.log?.warn({ err, notification: row.name, held: items.length }, 'could not deliver held alerts');
+        this.record(id, errorMessage(err));
+      }
+    }
+    return delivered;
   }
 
   /** Delivery health per connection id since process start. */
@@ -284,6 +366,7 @@ export class NotificationsService {
       enabled: input.enabled,
       ...triggers,
       includeHealthWarnings: input.includeHealthWarnings,
+      respectQuietHours: input.respectQuietHours,
       tags: [...new Set(input.tags)],
       settings,
     };
@@ -352,6 +435,23 @@ export function wantsEvent(row: Pick<NotificationRow, NotificationTrigger | 'inc
     case 'requestsDigest':
       // The daily digest goes wherever admins hear about new requests or issues.
       return row.onRequestCreated || row.onIssueCreated;
+    case 'downloadStalled':
+      return row.onDownloadStalled;
+    case 'killSwitch':
+      return row.onKillSwitch;
+    case 'killSwitchResumed':
+      return row.onKillSwitchResumed;
+    case 'importProblem':
+      return row.onImportProblem;
+    case 'diskSpaceLow':
+      return row.onDiskSpaceLow;
+    case 'downloadUpdate':
+      return row.onDownloadRecovered;
+    case 'dailySummary':
+      return row.onDailySummary;
+    case 'heldAlerts':
+      // Built from alerts this connection already accepted.
+      return true;
     default:
       // Subtitle events have no connection flags yet.
       return false;
@@ -368,10 +468,20 @@ function toResource(row: NotificationRow): NotificationConnection {
     enabled: row.enabled,
     ...triggers,
     includeHealthWarnings: row.includeHealthWarnings,
+    respectQuietHours: row.respectQuietHours,
     tags: row.tags,
     settings: maskSettings(row.settings),
     ...caps,
   };
+}
+
+/** The stored quiet hours; off when they cannot be read (a database without the settings table). */
+function readQuietHours(db: Db): QuietHoursSettings {
+  try {
+    return getSection(db, 'alerts').quietHours;
+  } catch {
+    return { enabled: false, start: '22:00', end: '07:00', days: [] };
+  }
 }
 
 function notFound(id: number): NotificationsError {

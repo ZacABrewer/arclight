@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
+  AlertSettings,
   BackupSettings,
   CompatSettings,
   CrossSeedSettings,
@@ -82,6 +83,8 @@ const sections = {
   engineAgent: EngineAgentSettings,
   // Owned by the discord-bot module (routes under /settings/discordbot; botToken masked there).
   discordBot: DiscordBotSettings,
+  // Owned by the summary module: quiet hours and the daily summary (routes under /settings/alerts).
+  alerts: AlertSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
