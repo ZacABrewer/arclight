@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<meta name="design_doc_mode" content="canvas">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Chakra+Petch:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+html,body{margin:0;background:#000;color:#e6fbff;-webkit-font-smoothing:antialiased}
+a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-shadow:0 0 8px #6ef6ff}
+*{box-sizing:border-box}
+</style>
+</helmet>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..700&display=swap" rel="stylesheet">
+<section style="padding:96px 96px 80px;display:flex;flex-direction:column;gap:48px;background:#000;border-bottom:1px solid rgba(110,246,255,.15)">
+<div style="display:flex;flex-direction:column;gap:14px;max-width:1100px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.3em;color:#6ef6ff">ROUND 04 · DIALED BACK (LATEST)</div>
+<div style="font-family:Archivo,sans-serif;font-stretch:125%;font-weight:600;font-size:44px;letter-spacing:.06em;color:#e9fdff">ARCLIGHT</div>
+<div style="font-family:Archivo,sans-serif;font-size:20px;line-height:1.5;color:#9fc3cc;text-wrap:pretty">3a, pulled back. The grid floor and the center spire are background only now, and the middle of the screen is left open so you can see them. Downloads are back in a normal queue panel with light-trail progress bars. The copy is plain product language: Dashboard, Next 24 hours, Issues, Search.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:80px">
+<div id="4a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">4a</span>DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;font-family:Archivo,sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(70% 38% at 53% 52%,#06222b 0%,#02090c 50%,#000 85%)"></div>
+  <sc-for list="{{ floor3 }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <div style="position:absolute;left:0;right:0;top:499px;height:2px;background:linear-gradient(90deg,transparent 5%,rgba(110,246,255,.5) 35%,rgba(200,252,255,.9) 53%,rgba(110,246,255,.5) 70%,transparent 95%)"></div>
+  <div style="position:absolute;left:20%;right:14%;top:440px;height:120px;background:radial-gradient(50% 50% at 50% 50%,rgba(110,246,255,.16),transparent 70%)"></div>
+  <div style="position:absolute;left:761px;top:110px;width:2px;height:390px;background:linear-gradient(180deg,transparent,rgba(110,246,255,.35) 30%,rgba(220,253,255,.95))"></div>
+  <div style="position:absolute;left:740px;top:300px;width:44px;height:200px;background:linear-gradient(180deg,transparent,rgba(110,246,255,.08));clip-path:polygon(46% 0,54% 0,100% 100%,0 100%)"></div>
+  <div style="position:absolute;left:756px;top:500px;width:12px;height:220px;background:linear-gradient(180deg,rgba(150,250,255,.35),transparent);filter:blur(4px)"></div>
+  <div style="position:absolute;left:755px;top:493px;width:14px;height:14px;border-radius:50%;background:#f2feff;box-shadow:0 0 18px 6px rgba(110,246,255,.8),0 0 60px 20px rgba(110,246,255,.25)"></div>
+  <sc-for list="{{ traces3.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ traces3.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }}"></div></sc-for>
+
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.18);background:linear-gradient(180deg,rgba(6,22,28,.5),rgba(1,6,9,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff"></div></div>
+    <sc-for list="{{ railDash }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;letter-spacing:.06em">{{ r.code }}</div>
+        <div style="font-size:9px;font-stretch:110%;letter-spacing:.1em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:84px;right:0;top:0;height:60px;border-bottom:1px solid rgba(110,246,255,.14);background:linear-gradient(180deg,rgba(4,16,20,.55),rgba(1,6,9,.2));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;gap:28px;padding:0 28px 0 40px;font-size:14px;color:#9fc3cc">
+    <div style="font-stretch:125%;font-weight:600;font-size:15px;letter-spacing:.14em;color:#e9fdff">ARCLIGHT</div>
+    <div style="flex:1;max-width:420px;height:34px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid rgba(110,246,255,.25);color:#6f939b">Search<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff">/</span></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;color:#c9f9ff"><div style="width:7px;height:7px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>Connected</div>
+    <div>VPN Zürich</div>
+    <div><span style="font-family:'JetBrains Mono',monospace;color:#e9fdff">4</span> requests</div>
+    <div style="color:#ffc79e"><span style="font-family:'JetBrains Mono',monospace">2</span> issues</div>
+    <div style="width:34px;height:34px;border:1px solid rgba(110,246,255,.35);display:flex;align-items:center;justify-content:center;font-stretch:120%;font-size:12px;font-weight:600;color:#e9fdff">SK</div>
+  </div>
+
+  <div style="position:absolute;left:124px;top:96px;right:40px;display:flex;align-items:baseline;gap:20px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">00</div>
+    <div style="font-stretch:118%;font-weight:500;font-size:28px;color:#e9fdff">Dashboard</div>
+    <div style="flex:1"></div>
+    <div style="font-size:14px;color:#7fa6ae">Sun 25 Oct · <span style="font-family:'JetBrains Mono',monospace">19:42</span></div>
+  </div>
+
+  <div style="position:absolute;left:124px;top:156px;width:400px;height:316px;clip-path:polygon(22px 0,100% 0,100% 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
+    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:relative;display:flex;justify-content:space-between;align-items:baseline"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">NEXT 24 HOURS</div><a style="font-size:13px">Calendar</a></div>
+    <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
+      <div style="position:relative;display:grid;grid-template-columns:62px 1fr;gap:14px;align-items:baseline;padding-bottom:12px;border-bottom:1px solid rgba(110,246,255,.08)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#c9f9ff">{{ u.time }}</div>
+        <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:17px;font-weight:500;color:#e9fdff">{{ u.t }}</div><div style="font-size:14px;color:#7fa6ae">{{ u.ep }} · {{ u.net }}</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:1040px;top:156px;width:360px;height:316px;clip-path:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);display:flex;flex-direction:column">
+    <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
+    <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:relative;padding:18px 24px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid rgba(110,246,255,.1)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">VPN</div>
+      <div style="font-size:18px;font-weight:500;color:#e9fdff">Zürich · WireGuard</div>
+      <div style="font-size:14px;color:#7fa6ae">Port <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">51413</span> forwarded · up <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">3d 7h</span></div>
+    </div>
+    <div style="position:relative;padding:16px 24px;display:flex;flex-direction:column;gap:10px;border-bottom:1px solid rgba(110,246,255,.1)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">STORAGE</div>
+      <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:14px;color:#c9f9ff"><span>{{ d.path }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:{{ d.tc }}">{{ d.free }}</span></div><div style="height:2px;background:rgba(110,246,255,.1)"><div style="height:100%;width:{{ d.used }};background:{{ d.c }}"></div></div></div>
+      </sc-for>
+    </div>
+    <div style="position:relative;padding:16px 24px;display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#ffc79e">ISSUES · 2</div>
+      <div style="font-size:14px;line-height:1.4;color:#e9fdff">Nyaa is rate-limited. <span style="color:#7fa6ae">Retry at 20:55.</span></div>
+      <div style="font-size:14px;line-height:1.4;color:#e9fdff">/media/tv has 0.9 TB free. <a>Manage</a></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:124px;right:40px;top:560px;bottom:40px;display:grid;grid-template-columns:minmax(0,1.7fr) minmax(0,1fr);gap:28px">
+    <div style="position:relative;background:linear-gradient(180deg,rgba(10,30,38,.42),rgba(2,10,14,.62));backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:1px solid rgba(110,246,255,.2);display:flex;flex-direction:column">
+      <div style="position:absolute;inset:0;background:linear-gradient(172deg,rgba(255,255,255,.06),transparent 30%);pointer-events:none"></div>
+      <div style="position:relative;display:flex;align-items:center;gap:28px;padding:18px 24px;border-bottom:1px solid rgba(110,246,255,.12)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">QUEUE</div>
+        <div style="font-size:14px;color:#7fa6ae">Down <span style="font-family:'JetBrains Mono',monospace;color:#e9fdff">72.4 MB/s</span></div>
+        <div style="font-size:14px;color:#7fa6ae">Up <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">3.1 MB/s</span></div>
+        <div style="flex:1"></div>
+        <a style="font-size:13px">Activity</a>
+      </div>
+      <div style="position:relative;padding:6px 24px;display:flex;flex-direction:column">
+        <sc-for list="{{ queue4 }}" as="d" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) 110px;gap:24px;align-items:center;padding:14px 0;border-bottom:1px solid rgba(110,246,255,.07)">
+            <div style="min-width:0"><div style="font-size:16px;font-weight:500;color:{{ d.tc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.t }}</div><div style="font-size:13px;color:#7fa6ae">{{ d.q }}</div></div>
+            <div style="position:relative;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:{{ d.glow }}"></div><div style="position:absolute;left:{{ d.pct }};top:1px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:{{ d.head }};box-shadow:{{ d.glow }}"></div></div>
+            <div style="text-align:right"><span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:{{ d.pc }}">{{ d.pctLabel }}</span><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7fa6ae">{{ d.eta }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="position:relative;background:linear-gradient(180deg,rgba(10,30,38,.42),rgba(2,10,14,.62));backdrop-filter:blur(24px) saturate(150%);-webkit-backdrop-filter:blur(24px) saturate(150%);border:1px solid rgba(110,246,255,.2);padding:18px 24px;display:flex;flex-direction:column;gap:14px">
+      <div style="position:absolute;inset:0;background:linear-gradient(172deg,rgba(255,255,255,.06),transparent 30%);pointer-events:none"></div>
+      <div style="position:relative;display:flex;justify-content:space-between;align-items:baseline"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">REQUESTS · 4</div><a style="font-size:13px">Review all</a></div>
+      <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3">
+        <div style="position:relative;display:flex;align-items:center;gap:12px;padding-bottom:12px;border-bottom:1px solid rgba(110,246,255,.07)"><div style="flex:1"><div style="font-size:16px;font-weight:500;color:#e9fdff">{{ r.t }}</div><div style="font-size:13px;color:#7fa6ae">{{ r.kind }} · {{ r.who }}</div></div><div style="font-size:13px;font-weight:600;padding:6px 12px;border:1px solid rgba(110,246,255,.5);color:#c9f9ff">Approve</div></div>
+      </sc-for>
+    </div>
+  </div>
+
+  <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.015) 0 1px,transparent 1px 3px)"></div>
+  <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(130% 100% at 50% 50%,transparent 60%,rgba(0,0,0,.7))"></div>
+</div>
+</div>
+</div>
+</section>
+<section style="padding:96px 96px 80px;display:flex;flex-direction:column;gap:48px;background:#000;border-bottom:1px solid rgba(110,246,255,.15)">
+<div style="display:flex;flex-direction:column;gap:14px;max-width:1100px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.3em;color:#6ef6ff">ROUND 03 · INSIDE THE GRID (LATEST)</div>
+<div style="font-family:Archivo,sans-serif;font-stretch:125%;font-weight:600;font-size:44px;letter-spacing:.06em;color:#e9fdff">ARCLIGHT</div>
+<div style="font-family:Archivo,sans-serif;font-size:20px;line-height:1.5;color:#9fc3cc;text-wrap:pretty">2a, revised from a first-person view: you're standing on the grid floor and looking toward the Core on the horizon. Each active transfer is a light trail racing toward you, and a trail reaches its glass plate at your feet once it finishes. Only two traces remain, and both have a job: the schedule and the tunnel feed the Core. Glow is only on things that are live, chamfered corners are only on the two main panes, wide-spaced labels are only on section headings, and the copy reports real states. Type changes to a wide engineered grotesk (Archivo Expanded), with monospace used for numbers only.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:80px">
+<div id="3a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">3a</span>INSIDE THE GRID: DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;font-family:Archivo,sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(70% 38% at 53% 52%,#06222b 0%,#02090c 50%,#000 85%)"></div>
+  <div style="position:absolute;left:0;right:0;top:0;height:500px;background:radial-gradient(40% 30% at 30% 20%,rgba(40,80,90,.18),transparent 70%),radial-gradient(35% 25% at 80% 30%,rgba(40,80,90,.14),transparent 70%)"></div>
+  <sc-for list="{{ floor3 }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <div style="position:absolute;left:0;right:0;top:499px;height:2px;background:linear-gradient(90deg,transparent 5%,rgba(110,246,255,.5) 35%,rgba(200,252,255,.9) 53%,rgba(110,246,255,.5) 70%,transparent 95%)"></div>
+  <div style="position:absolute;left:20%;right:14%;top:440px;height:120px;background:radial-gradient(50% 50% at 50% 50%,rgba(110,246,255,.16),transparent 70%)"></div>
+  <div style="position:absolute;left:761px;top:110px;width:2px;height:390px;background:linear-gradient(180deg,transparent,rgba(110,246,255,.35) 30%,rgba(220,253,255,.95))"></div>
+  <div style="position:absolute;left:740px;top:300px;width:44px;height:200px;background:linear-gradient(180deg,transparent,rgba(110,246,255,.08));clip-path:polygon(46% 0,54% 0,100% 100%,0 100%)"></div>
+  <div style="position:absolute;left:756px;top:500px;width:12px;height:220px;background:linear-gradient(180deg,rgba(150,250,255,.35),transparent);filter:blur(4px)"></div>
+  <sc-for list="{{ traces3.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ traces3.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div></sc-for>
+  <div style="position:absolute;left:755px;top:493px;width:14px;height:14px;border-radius:50%;background:#f2feff;box-shadow:0 0 18px 6px rgba(110,246,255,.8),0 0 60px 20px rgba(110,246,255,.25)"></div>
+  <div style="position:absolute;left:782px;top:474px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">CORE</div>
+  <sc-for list="{{ lanes3.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%;border-radius:4px"></div></sc-for>
+  <sc-for list="{{ lanes3.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div></sc-for>
+
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.18);background:linear-gradient(180deg,rgba(6,22,28,.5),rgba(1,6,9,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff"></div></div>
+    <sc-for list="{{ railDash }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:14px;font-weight:500;letter-spacing:.06em">{{ r.code }}</div>
+        <div style="font-size:9px;font-stretch:110%;letter-spacing:.1em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:84px;right:0;top:0;height:60px;border-bottom:1px solid rgba(110,246,255,.14);background:linear-gradient(180deg,rgba(4,16,20,.55),rgba(1,6,9,.2));backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);display:flex;align-items:center;gap:28px;padding:0 28px 0 40px;font-size:14px;color:#9fc3cc">
+    <div style="font-stretch:125%;font-weight:600;font-size:15px;letter-spacing:.14em;color:#e9fdff">ARCLIGHT</div>
+    <div style="flex:1;max-width:420px;height:34px;display:flex;align-items:center;gap:10px;padding:0 12px;border-bottom:1px solid rgba(110,246,255,.25);color:#6f939b">Search the grid<span style="margin-left:auto;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff">/</span></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;color:#c9f9ff"><div style="width:7px;height:7px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>Connected</div>
+    <div>VPN Zürich</div>
+    <div><span style="font-family:'JetBrains Mono',monospace;color:#e9fdff">4</span> requests</div>
+    <div style="color:#ffc79e"><span style="font-family:'JetBrains Mono',monospace">2</span> issues</div>
+    <div style="width:34px;height:34px;border:1px solid rgba(110,246,255,.35);display:flex;align-items:center;justify-content:center;font-stretch:120%;font-size:12px;font-weight:600;color:#e9fdff">SK</div>
+  </div>
+
+  <div style="position:absolute;left:124px;top:100px;width:620px;display:flex;flex-direction:column;gap:10px">
+    <div style="display:flex;align-items:center;gap:12px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#6ef6ff"><span>00</span><span style="width:28px;height:1px;background:#6ef6ff"></span><span style="color:#8fb3bd">OVERVIEW · 19:42</span></div>
+    <div style="font-stretch:118%;font-weight:500;font-size:30px;line-height:1.25;color:#e9fdff;text-wrap:pretty">Three transfers inbound, Sam.<br><span style="color:#7fa6ae">Two things need you.</span></div>
+  </div>
+
+  <div style="position:absolute;left:124px;top:232px;width:400px;height:236px;clip-path:polygon(22px 0,100% 0,100% 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);padding:20px 24px;display:flex;flex-direction:column;gap:14px">
+    <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
+    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:relative;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">ARRIVING TONIGHT</div>
+    <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
+      <div style="position:relative;display:grid;grid-template-columns:62px 1fr;gap:14px;align-items:baseline;padding-bottom:10px;border-bottom:1px solid rgba(110,246,255,.08)">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:15px;color:#c9f9ff">{{ u.time }}</div>
+        <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:17px;font-weight:500;color:#e9fdff">{{ u.t }}</div><div style="font-size:14px;color:#7fa6ae">{{ u.ep }} on {{ u.net }}, auto-grab on air</div></div>
+      </div>
+    </sc-for>
+  </div>
+
+  <div style="position:absolute;left:1040px;top:100px;width:360px;height:368px;clip-path:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);display:flex;flex-direction:column">
+    <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
+    <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:relative;padding:20px 24px;display:flex;flex-direction:column;gap:6px;border-bottom:1px solid rgba(110,246,255,.1)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">TUNNEL</div>
+      <div style="font-size:19px;font-weight:500;color:#e9fdff">Zürich over WireGuard</div>
+      <div style="font-size:14px;color:#7fa6ae">Port <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">51413</span> forwarded · up <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">3d 7h</span></div>
+    </div>
+    <div style="position:relative;padding:18px 24px;display:flex;flex-direction:column;gap:12px;border-bottom:1px solid rgba(110,246,255,.1)">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">STORAGE</div>
+      <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2">
+        <div style="display:flex;flex-direction:column;gap:6px"><div style="display:flex;justify-content:space-between;font-size:14px;color:#c9f9ff"><span>{{ d.path }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:{{ d.tc }}">{{ d.free }}</span></div><div style="height:2px;background:rgba(110,246,255,.1)"><div style="height:100%;width:{{ d.used }};background:{{ d.c }}"></div></div></div>
+      </sc-for>
+    </div>
+    <div style="position:relative;padding:18px 24px;display:flex;flex-direction:column;gap:10px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#ffc79e">NEEDS YOU</div>
+      <div style="font-size:14px;line-height:1.4;color:#e9fdff">Nyaa is rate-limiting searches. <span style="color:#7fa6ae">Retrying at 20:55.</span></div>
+      <div style="font-size:14px;line-height:1.4;color:#e9fdff">TV drive will fill in ~9 days. <a>Move series</a></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:124px;top:526px;display:flex;flex-direction:column;gap:4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">INBOUND</div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:30px;color:#e9fdff">72.4<span style="font-size:15px;color:#7fa6ae"> MB/s</span></div>
+    <div style="font-size:13px;color:#7fa6ae">Seeding <span style="font-family:'JetBrains Mono',monospace;color:#c9f9ff">3.1 MB/s</span> · 14 torrents</div>
+  </div>
+  <div style="position:absolute;right:40px;top:526px;text-align:right;display:flex;flex-direction:column;gap:4px">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">LIBRARY</div>
+    <div style="font-size:15px;color:#c9f9ff"><span style="font-family:'JetBrains Mono',monospace;font-size:22px;color:#e9fdff">214</span> series · <span style="font-family:'JetBrains Mono',monospace;font-size:22px;color:#e9fdff">1,082</span> films</div>
+  </div>
+
+  <sc-for list="{{ plates3 }}" as="p" hint-placeholder-count="0">
+    <div style="position:absolute;left:{{ p.x }}px;top:846px;width:250px;padding:14px 16px;background:linear-gradient(180deg,rgba(12,36,44,.5),rgba(2,10,14,.7));backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);border:1px solid {{ p.b }};border-top:2px solid {{ p.top }};display:flex;flex-direction:column;gap:6px">
+      <div style="display:flex;justify-content:space-between;align-items:baseline;gap:10px"><div style="font-size:16px;font-weight:600;color:{{ p.tc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.t }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:16px;color:{{ p.pc }}">{{ p.pct }}</div></div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;color:#7fa6ae"><span>{{ p.q }}</span><span style="font-family:'JetBrains Mono',monospace">{{ p.eta }}</span></div>
+    </div>
+  </sc-for>
+
+  <div style="position:absolute;inset:0;pointer-events:none;background:repeating-linear-gradient(180deg,rgba(255,255,255,.018) 0 1px,transparent 1px 3px)"></div>
+  <div style="position:absolute;inset:0;pointer-events:none;background:radial-gradient(130% 100% at 50% 50%,transparent 60%,rgba(0,0,0,.7))"></div>
+</div>
+</div>
+</div>
+</section>
+<section style="padding:96px 96px 80px;display:flex;flex-direction:column;gap:56px;background:#000;border-bottom:1px solid rgba(110,246,255,.15)">
+<div style="display:flex;flex-direction:column;gap:14px;max-width:1100px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.3em;color:#6ef6ff">ROUND 02 · CIRCUIT FUSION (LATEST)</div>
+<div style="font-family:Michroma,sans-serif;font-size:44px;letter-spacing:.14em;color:#e9fdff;text-shadow:0 0 24px rgba(110,246,255,.45)">ARCLIGHT</div>
+<div style="font-family:Barlow,sans-serif;font-size:20px;line-height:1.5;color:#9fc3cc;text-wrap:pretty">Both versions combine A's grid floor (made darker and glassier, with a horizon sheen and vignette) with B's straight-line HUD, and add circuit traces with 45° bends that end in nodes. <b style="color:#e9fdff;font-weight:600">2a · Circuit Glass</b> keeps B's code rail and moves the panels to chamfered frosted glass. A live trace connects the active nav item to the page heading. <b style="color:#e9fdff;font-weight:600">2b · Trace Board</b> pushes the circuit idea further: the nav hangs off a vertical bus line, panels have pinned node corners, and progress bars are light trails with a glowing head.</div>
+</div>
+<div style="display:flex;flex-wrap:wrap;gap:80px">
+
+<div id="2a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">2a</span>CIRCUIT GLASS: DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000102;font-family:'Chakra Petch',sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(90% 45% at 50% 64%,#062029 0%,#020a0e 45%,#000102 80%)"></div>
+  <div style="position:absolute;left:-40%;right:-40%;top:62%;bottom:-40%;perspective:520px;overflow:hidden"><div style="position:absolute;inset:0;transform:rotateX(74deg);transform-origin:50% 0;background-image:linear-gradient(rgba(110,246,255,.22) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.22) 1px,transparent 1px);background-size:80px 80px;-webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 35%);mask-image:linear-gradient(180deg,transparent 0%,#000 35%)"></div></div>
+  <div style="position:absolute;left:0;right:0;top:62%;height:1px;background:linear-gradient(90deg,transparent,rgba(110,246,255,.7),transparent);box-shadow:0 0 40px 4px rgba(110,246,255,.2)"></div>
+  <sc-for list="{{ bgA.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ bgA.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div></sc-for>
+  <sc-for list="{{ sparkles }}" as="p" hint-placeholder-count="0"><div style="position:absolute;left:{{ p.x }}px;top:{{ p.y }}px;width:3px;height:3px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px rgba(180,250,255,.8)"></div></sc-for>
+  <div style="position:absolute;inset:0;background:linear-gradient(115deg,transparent 28%,rgba(255,255,255,.035) 36%,transparent 44%,transparent 62%,rgba(255,255,255,.025) 67%,transparent 72%)"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(0,0,0,.75))"></div>
+
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(6,22,28,.5),rgba(1,6,9,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);box-shadow:0 0 14px rgba(110,246,255,.6);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div></div>
+    <sc-for list="{{ railDash }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:500;letter-spacing:.08em">{{ r.code }}</div>
+        <div style="font-size:9px;letter-spacing:.14em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <sc-for list="{{ uiA.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ uiA.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div></sc-for>
+
+  <div style="position:absolute;left:84px;right:0;top:0;height:64px;border-bottom:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(6,22,28,.45),rgba(1,6,9,.35));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px">
+    <div style="padding:0 28px;height:100%;display:flex;align-items:center;border-right:1px solid rgba(110,246,255,.22)"><span style="font-family:Michroma,sans-serif;font-size:15px;letter-spacing:.22em;color:#e9fdff;text-shadow:0 0 12px rgba(110,246,255,.5)">ARCLIGHT</span></div>
+    <div style="flex:1;padding:0 24px;display:flex;align-items:center;gap:12px;color:#7fa6ae"><span style="color:#6ef6ff">&gt;</span>search series, movies, people_<span style="margin-left:auto;padding:2px 8px;border:1px solid rgba(110,246,255,.35);color:#6ef6ff">/</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff"><div style="width:8px;height:8px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LINK</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff">VPN ZRH-04</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff">ACT <span style="color:#010407;background:#6ef6ff;padding:0 6px">03</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#ffc79e;background:rgba(255,140,60,.06)">HLTH <span style="color:#1a0800;background:#ff9a4d;padding:0 6px">02</span></div>
+    <div style="height:100%;padding:0 22px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#e9fdff">SAM.K ▾</div>
+  </div>
+
+  <div style="position:absolute;left:84px;right:0;top:64px;bottom:0;padding:36px 44px;display:flex;flex-direction:column;gap:28px">
+    <div style="display:flex;align-items:flex-end;gap:24px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6ef6ff;letter-spacing:.2em;padding-bottom:8px">00</div>
+      <div style="font-size:40px;font-weight:500;letter-spacing:.12em;color:#e9fdff;line-height:1;text-shadow:0 0 20px rgba(110,246,255,.35)">OVERVIEW</div>
+      <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(110,246,255,.5),transparent);margin-bottom:8px"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7fa6ae;padding-bottom:4px">2026.10.25 · 19:42:08</div>
+    </div>
+    <div style="position:relative;display:grid;grid-template-columns:repeat(4,1fr);clip-path:polygon(18px 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%,0 18px);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.55));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.22)">
+      <div style="position:absolute;inset:0;background:linear-gradient(170deg,rgba(255,255,255,.07),transparent 35%);pointer-events:none"></div>
+      <div style="position:absolute;left:0;top:18px;width:26px;height:1.5px;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff;transform:rotate(-45deg);transform-origin:0 0"></div>
+      <div style="position:absolute;left:calc(100% - 18px);top:calc(100% - 1px);width:26px;height:1.5px;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff;transform:rotate(-45deg);transform-origin:0 0"></div>
+      <div style="position:relative;padding:22px 24px;border-right:1px solid rgba(110,246,255,.16);display:flex;gap:18px;align-items:center">
+        <div style="position:relative;width:76px;height:76px;flex:none"><div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#6ef6ff 0 88%,rgba(110,246,255,.1) 88%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));filter:drop-shadow(0 0 5px rgba(110,246,255,.8))"></div><div style="position:absolute;inset:10px;border-radius:50%;border:1px dashed rgba(110,246,255,.3)"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:20px;color:#e9fdff">88</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">01 / HEALTH</div><div style="font-size:18px;font-weight:500;color:#ffc79e">2 warnings</div></div>
+      </div>
+      <div style="position:relative;padding:22px 24px;border-right:1px solid rgba(110,246,255,.16);display:flex;flex-direction:column;gap:6px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">02 / VPN</div><div style="font-size:24px;font-weight:500;color:#e9fdff">ZRH-04</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6ef6ff">WG · PORT 51413 · 3d07h</div></div>
+      <div style="position:relative;padding:22px 24px;border-right:1px solid rgba(110,246,255,.16);display:flex;flex-direction:column;gap:6px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">03 / LIBRARY</div><div style="font-size:24px;font-weight:500;color:#e9fdff">214 <span style="color:#7fa6ae;font-size:15px">TV</span> · 1,082 <span style="color:#7fa6ae;font-size:15px">MOV</span></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">38.2 TB indexed</div></div>
+      <div style="position:relative;padding:22px 24px;display:flex;flex-direction:column;gap:8px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">04 / STORAGE</div>
+        <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9fc3cc"><span style="width:78px">{{ d.path }}</span><div style="flex:1;height:8px;border:1px solid rgba(110,246,255,.3);padding:1px"><div style="height:100%;width:{{ d.used }};background:repeating-linear-gradient(90deg,{{ d.c }} 0 3px,transparent 3px 5px)"></div></div><span style="color:{{ d.tc }}">{{ d.free }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:28px;flex:1;min-height:0">
+      <div style="position:relative;clip-path:polygon(18px 0,100% 0,100% 100%,0 100%,0 18px);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.22);display:flex;flex-direction:column">
+        <div style="position:absolute;inset:0;background:linear-gradient(170deg,rgba(255,255,255,.06),transparent 30%);pointer-events:none"></div>
+        <div style="position:absolute;left:0;top:18px;width:26px;height:1.5px;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff;transform:rotate(-45deg);transform-origin:0 0"></div>
+        <div style="position:relative;display:flex;border-bottom:1px solid rgba(110,246,255,.22);font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.12em;padding-left:18px">
+          <div style="padding:14px 22px;color:#010407;background:#6ef6ff;box-shadow:0 0 18px rgba(110,246,255,.4)">DOWNLOADING 03</div><div style="padding:14px 22px;color:#7fa6ae">IMPORTED 06</div><div style="padding:14px 22px;color:#7fa6ae">NEXT 24H 09</div>
+        </div>
+        <div style="position:relative;padding:10px 22px;display:flex;flex-direction:column">
+          <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:1fr 140px 90px;gap:18px;align-items:center;padding:16px 0;border-bottom:1px dashed rgba(110,246,255,.14)">
+              <div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:18px;font-weight:500;color:#e9fdff">{{ d.t }}</div>
+                <div style="height:2px;position:relative;background:rgba(110,246,255,.1)"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),#6ef6ff);box-shadow:0 0 10px rgba(110,246,255,.8)"></div><div style="position:absolute;top:-3px;left:{{ d.pct }};width:8px;height:8px;margin-left:-4px;border-radius:50%;border:1.5px solid #e9fdff;background:#010407;box-shadow:0 0 10px #6ef6ff"></div></div></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">{{ d.q }}<div style="color:#c9f9ff;margin-top:3px">{{ d.speed }}</div></div>
+              <div style="text-align:right;font-family:'IBM Plex Mono',monospace"><div style="font-size:20px;color:#6ef6ff">{{ d.pct }}</div><div style="font-size:12px;color:#7fa6ae">{{ d.eta }}</div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="position:relative;margin-top:auto;padding:16px 22px;border-top:1px solid rgba(110,246,255,.22);display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid {{ c.b }};font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c9f9ff"><div style="width:6px;height:6px;background:{{ c.c }};box-shadow:0 0 8px {{ c.c }}"></div>{{ c.n }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:28px;min-height:0">
+        <div style="position:relative;background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.22);padding:18px 22px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:#7fa6ae"><span>05 / REQUESTS</span><a>REVIEW →</a></div>
+          <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:500;color:#e9fdff">{{ r.t }}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">{{ r.kind }} · @{{ r.who }}</div></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border:1px solid #6ef6ff;color:#6ef6ff">APPROVE</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border:1px solid rgba(255,90,70,.5);color:#ffb3a6">DECLINE</div></div>
+          </sc-for>
+        </div>
+        <div style="position:relative;flex:1;clip-path:polygon(0 0,100% 0,100% calc(100% - 18px),calc(100% - 18px) 100%,0 100%);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.22);padding:18px 22px;display:flex;flex-direction:column;gap:10px">
+          <div style="position:absolute;left:calc(100% - 18px);top:calc(100% - 1px);width:26px;height:1.5px;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff;transform:rotate(-45deg);transform-origin:0 0"></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:#7fa6ae">06 / SCHEDULER</div>
+          <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1fr 90px 80px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#c9f9ff"><span>{{ j.n }}</span><span style="color:#7fa6ae">{{ j.last }}</span><span style="color:#6ef6ff;text-align:right">{{ j.next }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<div id="2b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">2b</span>TRACE BOARD: DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000103;font-family:'Chakra Petch',sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(90% 50% at 55% 66%,#05192a 0%,#020910 45%,#000103 80%)"></div>
+  <div style="position:absolute;left:-40%;right:-40%;top:64%;bottom:-40%;perspective:520px;overflow:hidden"><div style="position:absolute;inset:0;transform:rotateX(74deg);transform-origin:50% 0;background-image:linear-gradient(rgba(110,246,255,.2) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.2) 1px,transparent 1px);background-size:80px 80px;-webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 35%);mask-image:linear-gradient(180deg,transparent 0%,#000 35%)"></div></div>
+  <div style="position:absolute;left:0;right:0;top:64%;height:1px;background:linear-gradient(90deg,transparent,rgba(110,246,255,.6),transparent);box-shadow:0 0 40px 4px rgba(110,246,255,.2)"></div>
+  <sc-for list="{{ bgB.segs }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:{{ s.th }}px;background:{{ s.col }};box-shadow:{{ s.glow }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ bgB.nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:{{ n.s }}px;height:{{ n.s }}px;border-radius:50%;border:1.5px solid {{ n.col }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div></sc-for>
+  <sc-for list="{{ sparkles }}" as="p" hint-placeholder-count="0"><div style="position:absolute;left:{{ p.x }}px;top:{{ p.y }}px;width:3px;height:3px;border-radius:50%;background:#fff;box-shadow:0 0 8px 2px rgba(180,250,255,.8)"></div></sc-for>
+  <div style="position:absolute;inset:0;background:linear-gradient(115deg,transparent 30%,rgba(255,255,255,.035) 38%,transparent 46%)"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(120% 90% at 50% 45%,transparent 55%,rgba(0,0,0,.75))"></div>
+
+  <div style="position:absolute;left:0;top:0;bottom:0;width:248px;border-right:1px solid rgba(110,246,255,.2);background:linear-gradient(180deg,rgba(6,22,28,.5),rgba(1,6,9,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;padding:28px 0 22px">
+    <div style="display:flex;align-items:center;gap:12px;padding:0 22px;margin-bottom:38px">
+      <div style="width:30px;height:30px;border-radius:50%;border:2px solid #6ef6ff;box-shadow:0 0 12px rgba(110,246,255,.7),inset 0 0 8px rgba(110,246,255,.5);display:flex;align-items:center;justify-content:center"><div style="width:12px;height:12px;border-radius:50%;border:1.5px solid #6ef6ff"></div></div>
+      <div style="font-family:Michroma,sans-serif;font-size:15px;letter-spacing:.2em;color:#e9fdff;text-shadow:0 0 12px rgba(110,246,255,.5)">ARCLIGHT</div>
+    </div>
+    <div style="position:relative;display:flex;flex-direction:column">
+      <div style="position:absolute;left:36px;top:-16px;bottom:22px;width:1px;background:linear-gradient(180deg,rgba(110,246,255,.6),rgba(110,246,255,.15))"></div>
+      <sc-for list="{{ busNav }}" as="n" hint-placeholder-count="11">
+        <div style="position:relative;height:46px;display:flex;align-items:center;gap:10px;padding-left:72px;padding-right:20px;background:{{ n.bg }};color:{{ n.color }};font-size:16px;font-weight:500;letter-spacing:.06em">
+          <div style="position:absolute;left:36px;top:23px;width:{{ n.tw }};height:1px;background:{{ n.tick }};box-shadow:{{ n.glow }}"></div>
+          <div style="position:absolute;left:{{ n.nx }};top:19px;width:9px;height:9px;border-radius:50%;border:1.5px solid {{ n.tick }};background:{{ n.fill }};box-shadow:{{ n.glow }}"></div>
+          <div style="flex:1">{{ n.label }}</div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6ef6ff">{{ n.count }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin:auto 18px 0;padding:14px;border:1px solid rgba(110,246,255,.18);background:rgba(0,0,0,.25);display:flex;flex-direction:column;gap:8px;font-family:'IBM Plex Mono',monospace">
+      <div style="font-size:11px;letter-spacing:.18em;color:#7fa6ae">BUILT-IN CLIENT</div>
+      <div style="display:flex;justify-content:space-between;font-size:13px"><span style="color:#6ef6ff">↓ 72.4 MB/s</span><span style="color:#9fc3cc">↑ 3.1 MB/s</span></div>
+    </div>
+  </div>
+
+  <div style="position:absolute;left:248px;right:0;top:0;height:64px;border-bottom:1px solid rgba(110,246,255,.2);background:linear-gradient(180deg,rgba(6,22,28,.45),rgba(1,6,9,.35));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px">
+    <div style="flex:1;padding:0 28px;display:flex;align-items:center;gap:12px;color:#7fa6ae"><span style="color:#6ef6ff">&gt;</span>search series, movies, people_<span style="margin-left:auto;padding:2px 8px;border:1px solid rgba(110,246,255,.35);color:#6ef6ff">/</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.2);color:#c9f9ff"><div style="width:8px;height:8px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LINK</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.2);color:#c9f9ff">VPN ZRH-04</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.2);color:#ffc79e">HLTH <span style="color:#1a0800;background:#ff9a4d;padding:0 6px">02</span></div>
+    <div style="height:100%;padding:0 22px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.2);color:#e9fdff">SAM.K ▾</div>
+  </div>
+
+  <div style="position:absolute;left:248px;right:0;top:64px;bottom:0;padding:36px 44px;display:flex;flex-direction:column;gap:30px">
+    <div style="display:flex;align-items:center;gap:18px">
+      <div style="width:9px;height:9px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>
+      <div style="width:40px;height:1px;background:#6ef6ff;box-shadow:0 0 6px #6ef6ff"></div>
+      <div style="font-size:38px;font-weight:500;letter-spacing:.12em;color:#e9fdff;line-height:1;text-shadow:0 0 20px rgba(110,246,255,.35)">OVERVIEW</div>
+      <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(110,246,255,.5),transparent)"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7fa6ae">2026.10.25 · 19:42</div>
+    </div>
+    <div style="display:grid;grid-template-columns:340px 1fr;gap:30px">
+      <div style="position:relative;padding:26px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;align-items:center;gap:18px">
+        <div style="position:absolute;inset:0;background:linear-gradient(165deg,rgba(255,255,255,.07),transparent 35%);pointer-events:none"></div>
+        <div style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div><div style="position:absolute;right:-5px;bottom:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div>
+        <div style="align-self:stretch;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">SYSTEM HEALTH</div>
+        <div style="position:relative;width:180px;height:180px">
+          <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#6ef6ff 0 88%,rgba(110,246,255,.08) 88%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));mask:radial-gradient(farthest-side,transparent calc(100% - 6px),#000 calc(100% - 5px));filter:drop-shadow(0 0 8px rgba(110,246,255,.9))"></div>
+          <div style="position:absolute;inset:18px;border-radius:50%;border:1px solid rgba(110,246,255,.35)"></div>
+          <div style="position:absolute;inset:30px;border-radius:50%;border:1px dashed rgba(110,246,255,.2)"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center"><div style="font-family:Michroma,sans-serif;font-size:40px;color:#e9fdff;text-shadow:0 0 16px rgba(110,246,255,.6)">88</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#ffc79e">2 WARNINGS</div></div>
+        </div>
+        <div style="align-self:stretch;display:flex;flex-direction:column;gap:8px;font-size:15px;color:#ffc79e">
+          <div style="display:flex;gap:10px;align-items:center"><div style="width:6px;height:6px;background:#ff9a4d;box-shadow:0 0 8px #ff9a4d"></div>Indexer "Nyaa" rate-limited</div>
+          <div style="display:flex;gap:10px;align-items:center"><div style="width:6px;height:6px;background:#ff9a4d;box-shadow:0 0 8px #ff9a4d"></div>/media/tv under 10% free</div>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:30px;min-width:0">
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:30px">
+          <div style="position:relative;padding:20px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:6px"><div style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">VPN TUNNEL</div><div style="font-size:24px;font-weight:500;color:#e9fdff">Zürich · ZRH-04</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6ef6ff">WG · 51413 · 3d07h</div></div>
+          <div style="position:relative;padding:20px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:6px"><div style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">LIBRARY</div><div style="font-size:24px;font-weight:500;color:#e9fdff">214 <span style="font-size:15px;color:#7fa6ae">TV</span> · 1,082 <span style="font-size:15px;color:#7fa6ae">MOV</span></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">38.2 TB indexed</div></div>
+          <div style="position:relative;padding:20px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:10px"><div style="position:absolute;left:-5px;top:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">STORAGE</div>
+            <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2"><div style="display:flex;flex-direction:column;gap:5px"><div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9fc3cc"><span>{{ d.path }}</span><span style="color:{{ d.tc }}">{{ d.free }}</span></div><div style="height:2px;background:rgba(110,246,255,.1);position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ d.used }};background:linear-gradient(90deg,transparent,{{ d.c }});box-shadow:0 0 8px {{ d.c }}"></div></div></div></sc-for>
+          </div>
+        </div>
+        <div style="position:relative;padding:22px 24px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);display:flex;flex-direction:column;gap:18px">
+          <div style="position:absolute;inset:0;background:linear-gradient(170deg,rgba(255,255,255,.06),transparent 30%);pointer-events:none"></div>
+          <div style="position:absolute;right:-5px;top:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div>
+          <div style="display:flex;gap:28px;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.18em"><span style="color:#6ef6ff;text-shadow:0 0 8px #6ef6ff;border-bottom:1px solid #6ef6ff;padding-bottom:6px">DOWNLOADING 03</span><span style="color:#7fa6ae">IMPORTED 06</span><span style="color:#7fa6ae">NEXT 24H 09</span></div>
+          <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
+            <div style="position:relative;display:grid;grid-template-columns:240px 1fr 120px;gap:20px;align-items:center">
+              <div><div style="font-size:17px;font-weight:500;color:#e9fdff">{{ d.t }}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">{{ d.q }} · {{ d.speed }}</div></div>
+              <div style="position:relative;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:0 0 14px rgba(110,246,255,.8)"></div><div style="position:absolute;left:{{ d.pct }};top:0;width:10px;height:10px;margin-left:-5px;border-radius:50%;background:#e9fdff;box-shadow:0 0 12px 3px #6ef6ff"></div></div>
+              <div style="text-align:right;font-family:'IBM Plex Mono',monospace"><span style="font-size:18px;color:#6ef6ff">{{ d.pct }}</span><span style="font-size:12px;color:#7fa6ae"> · {{ d.eta }}</span></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:30px;flex:1;min-height:0">
+      <div style="position:relative;padding:18px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:12px"><div style="position:absolute;left:-5px;bottom:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div>
+        <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae"><span>AWAITING APPROVAL</span><a>REVIEW →</a></div>
+        <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3"><div style="display:flex;align-items:center;gap:10px"><div style="flex:1"><div style="font-size:16px;font-weight:500;color:#e9fdff">{{ r.t }}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7fa6ae">{{ r.kind }} · @{{ r.who }}</div></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:5px 10px;border:1px solid #6ef6ff;color:#6ef6ff">APPROVE</div></div></sc-for>
+      </div>
+      <div style="position:relative;padding:18px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">SCHEDULER</div>
+        <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="4"><div style="display:grid;grid-template-columns:1fr 80px 70px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#c9f9ff"><span>{{ j.n }}</span><span style="color:#7fa6ae">{{ j.last }}</span><span style="color:#6ef6ff;text-align:right">{{ j.next }}</span></div></sc-for>
+      </div>
+      <div style="position:relative;padding:18px 22px;border:1px solid rgba(110,246,255,.22);background:linear-gradient(180deg,rgba(10,32,40,.5),rgba(2,10,14,.6));backdrop-filter:blur(26px);-webkit-backdrop-filter:blur(26px);display:flex;flex-direction:column;gap:12px"><div style="position:absolute;right:-5px;bottom:-5px;width:9px;height:9px;border-radius:50%;border:1.5px solid #6ef6ff;background:#000;box-shadow:0 0 8px #6ef6ff"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">INDEXERS · CLIENTS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px"><sc-for list="{{ chips }}" as="c" hint-placeholder-count="6"><div style="display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid {{ c.b }};font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c9f9ff"><div style="width:6px;height:6px;border-radius:50%;background:{{ c.c }};box-shadow:0 0 8px {{ c.c }}"></div>{{ c.n }}</div></sc-for></div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+</section>
+
+<section style="padding:96px 96px 140px;display:flex;flex-direction:column;gap:56px;background:#000">
+<div style="display:flex;flex-direction:column;gap:14px;max-width:1100px">
+<div style="font-family:'JetBrains Mono',monospace;font-size:13px;letter-spacing:.3em;color:#6ef6ff">ROUND 01 · DIRECTION STUDY</div>
+<div style="font-family:Michroma,sans-serif;font-size:44px;letter-spacing:.12em;color:#e9fdff;text-shadow:0 0 24px rgba(110,246,255,.45)">MEDIA-TRON</div>
+<div style="font-family:Barlow,sans-serif;font-size:20px;line-height:1.5;color:#9fc3cc;text-wrap:pretty">Two directions, shown on Dashboard and Library. <b style="color:#e9fdff;font-weight:600">A · Legacy Glass</b>: cinematic frosted glass over a perspective grid floor with a glowing horizon. <b style="color:#e9fdff;font-weight:600">B · Blueprint HUD</b>: flat wireframe grid, hard edges, corner brackets, and indexed headings, like an instrument readout. Both use cyan as the only accent. Orange and red are reserved for warnings and destructive actions.</div>
+</div>
+
+<div style="display:flex;flex-wrap:wrap;gap:80px">
+
+<!-- 1a — A Dashboard -->
+<div id="1a" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">1a</span>A · LEGACY GLASS: DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:radial-gradient(120% 70% at 50% 62%, #0a2a33 0%, #041218 38%, #020609 70%);font-family:Barlow,sans-serif;color:#e6fbff">
+  <!-- sky beams -->
+  <div style="position:absolute;left:50%;top:-10%;width:2px;height:75%;background:linear-gradient(180deg,transparent,rgba(110,246,255,.5),transparent);transform:translateX(-50%) rotate(14deg);filter:blur(1px);opacity:.5"></div>
+  <div style="position:absolute;left:50%;top:-10%;width:2px;height:75%;background:linear-gradient(180deg,transparent,rgba(110,246,255,.5),transparent);transform:translateX(-50%) rotate(-11deg);filter:blur(1px);opacity:.4"></div>
+  <!-- horizon -->
+  <div style="position:absolute;left:0;right:0;top:56%;height:1px;background:linear-gradient(90deg,transparent,rgba(110,246,255,.9),transparent);box-shadow:0 0 30px 6px rgba(110,246,255,.35)"></div>
+  <!-- grid floor -->
+  <div style="position:absolute;left:-40%;right:-40%;top:56%;bottom:-40%;perspective:520px;overflow:hidden">
+    <div style="position:absolute;inset:0;transform:rotateX(72deg);transform-origin:50% 0;background-image:linear-gradient(rgba(110,246,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.35) 1px,transparent 1px);background-size:80px 80px;-webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 30%);mask-image:linear-gradient(180deg,transparent 0%,#000 30%)"></div>
+  </div>
+  <div style="position:absolute;inset:0;background:linear-gradient(180deg,rgba(2,6,9,.0) 50%,rgba(2,6,9,.55) 100%)"></div>
+
+  <!-- sidebar -->
+  <div style="position:absolute;left:20px;top:20px;bottom:20px;width:232px;border-radius:18px;background:linear-gradient(180deg,rgba(18,48,58,.45),rgba(6,20,26,.35));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 30px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;padding:24px 14px;gap:28px;overflow:hidden">
+    <div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,0) 28%);pointer-events:none"></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 10px">
+      <div style="width:30px;height:30px;border-radius:50%;border:2px solid #6ef6ff;box-shadow:0 0 12px rgba(110,246,255,.7),inset 0 0 8px rgba(110,246,255,.5);display:flex;align-items:center;justify-content:center"><div style="width:12px;height:12px;border-radius:50%;border:1.5px solid #6ef6ff"></div></div>
+      <div style="font-family:Michroma,sans-serif;font-size:14px;letter-spacing:.14em;color:#e9fdff">MEDIA·TRON</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ navDash }}" as="n" hint-placeholder-count="11">
+        <div style="position:relative;display:flex;align-items:center;gap:12px;height:42px;padding:0 12px;border-radius:10px;background:{{ n.bg }};color:{{ n.color }};font-size:16px;font-weight:500;letter-spacing:.02em">
+          <div style="position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:{{ n.bar }};box-shadow:{{ n.glow }}"></div>
+          <div style="width:7px;height:7px;transform:rotate(45deg);border:1.5px solid currentColor;opacity:.8"></div>
+          <div style="flex:1">{{ n.label }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff">{{ n.count }}</div>
+        </div>
+      </sc-for>
+    </div>
+    <div style="margin-top:auto;padding:14px;border-radius:12px;background:rgba(110,246,255,.06);border:1px solid rgba(110,246,255,.14);display:flex;flex-direction:column;gap:8px">
+      <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;color:#8fb3bd">BUILT-IN CLIENT</div>
+      <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:13px"><span style="color:#6ef6ff">↓ 72.4 MB/s</span><span style="color:#9fc3cc">↑ 3.1 MB/s</span></div>
+    </div>
+  </div>
+
+  <!-- top bar -->
+  <div style="position:absolute;left:276px;right:20px;top:20px;height:60px;border-radius:16px;background:rgba(10,32,40,.38);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(140,240,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);display:flex;align-items:center;padding:0 12px 0 18px;gap:14px">
+    <div style="flex:1;max-width:460px;height:38px;border-radius:10px;background:rgba(0,0,0,.25);border:1px solid rgba(110,246,255,.14);display:flex;align-items:center;gap:10px;padding:0 12px;color:#8fb3bd;font-size:15px">
+      <div style="width:12px;height:12px;border-radius:50%;border:1.5px solid #8fb3bd"></div>
+      <div style="flex:1">Search series, movies, people…</div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:2px 7px;border:1px solid rgba(110,246,255,.3);border-radius:5px;color:#6ef6ff">/</div>
+    </div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.1em;color:#9fc3cc"><div style="width:8px;height:8px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LIVE</div>
+    <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(110,246,255,.4);background:rgba(110,246,255,.08);font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff">VPN · ZRH-04</div>
+    <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(110,246,255,.2);font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff">ACTIVITY <span style="color:#03080c;background:#6ef6ff;border-radius:999px;padding:0 6px">3</span></div>
+    <div style="display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(255,150,70,.45);background:rgba(255,150,70,.08);font-family:'JetBrains Mono',monospace;font-size:12px;color:#ffc79e">HEALTH · 2</div>
+    <div style="width:36px;height:36px;border-radius:50%;border:1px solid rgba(110,246,255,.35);background:rgba(110,246,255,.1);display:flex;align-items:center;justify-content:center;font-family:Michroma,sans-serif;font-size:12px;color:#e9fdff">SK</div>
+  </div>
+
+  <!-- content -->
+  <div style="position:absolute;left:276px;right:20px;top:104px;bottom:20px;display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:4px 6px">
+      <div style="display:flex;flex-direction:column;gap:6px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.3em;color:#6ef6ff">SYS / OVERVIEW</div>
+        <div style="font-family:Michroma,sans-serif;font-size:28px;letter-spacing:.08em;color:#e9fdff">Good evening, Sam</div>
+      </div>
+      <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#8fb3bd">SUN 25 OCT · 19:42 UTC+1</div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.1fr 1fr 1.25fr;gap:20px">
+      <!-- health -->
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 50px rgba(0,0,0,.35);display:flex;gap:22px;align-items:center">
+        <div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,0) 35%);pointer-events:none"></div>
+        <div style="position:relative;width:108px;height:108px;flex:none">
+          <div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#6ef6ff 0 88%,rgba(110,246,255,.12) 88% 100%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px));mask:radial-gradient(farthest-side,transparent calc(100% - 7px),#000 calc(100% - 6px));filter:drop-shadow(0 0 6px rgba(110,246,255,.8))"></div>
+          <div style="position:absolute;inset:14px;border-radius:50%;border:1px solid rgba(110,246,255,.3)"></div>
+          <div style="position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px"><div style="font-family:Michroma,sans-serif;font-size:22px;color:#e9fdff">88</div><div style="font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.2em;color:#8fb3bd">HEALTH</div></div>
+        </div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:10px">
+          <div style="font-size:19px;font-weight:600;color:#e9fdff">2 warnings</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#ffc79e"><div style="width:6px;height:6px;background:#ff9a4d;box-shadow:0 0 8px #ff9a4d"></div>Indexer "Nyaa" rate-limited</div>
+          <div style="display:flex;align-items:center;gap:8px;font-size:15px;color:#ffc79e"><div style="width:6px;height:6px;background:#ff9a4d;box-shadow:0 0 8px #ff9a4d"></div>/media/tv under 10% free</div>
+        </div>
+      </div>
+      <!-- vpn -->
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:14px">
+        <div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,0) 35%);pointer-events:none"></div>
+        <div style="position:relative;display:flex;justify-content:space-between;align-items:center"><div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">VPN TUNNEL</div><div style="display:flex;align-items:center;gap:6px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff"><div style="width:7px;height:7px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff"></div>SECURED</div></div>
+        <div style="position:relative;font-family:Michroma,sans-serif;font-size:20px;letter-spacing:.06em;color:#e9fdff">Zürich · ZRH-04</div>
+        <div style="position:relative;display:grid;grid-template-columns:1fr 1fr;gap:10px 16px;font-family:'JetBrains Mono',monospace;font-size:13px">
+          <div style="color:#8fb3bd">Public IP<div style="color:#c9f9ff;margin-top:3px">185.212.●●.41</div></div>
+          <div style="color:#8fb3bd">Provider<div style="color:#c9f9ff;margin-top:3px">gluetun · WG</div></div>
+          <div style="color:#8fb3bd">Port fwd<div style="color:#c9f9ff;margin-top:3px">51413</div></div>
+          <div style="color:#8fb3bd">Uptime<div style="color:#c9f9ff;margin-top:3px">3d 07h</div></div>
+        </div>
+      </div>
+      <!-- library stats -->
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 50px rgba(0,0,0,.35);display:flex;flex-direction:column;gap:16px">
+        <div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.08),rgba(255,255,255,0) 35%);pointer-events:none"></div>
+        <div style="position:relative;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">LIBRARY</div>
+        <div style="position:relative;display:flex;gap:32px">
+          <div><div style="font-family:Michroma,sans-serif;font-size:30px;color:#e9fdff">214</div><div style="font-size:14px;color:#8fb3bd">Series · 9,812 ep</div></div>
+          <div><div style="font-family:Michroma,sans-serif;font-size:30px;color:#e9fdff">1,082</div><div style="font-size:14px;color:#8fb3bd">Movies</div></div>
+        </div>
+        <div style="position:relative;display:flex;flex-direction:column;gap:10px">
+          <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2">
+            <div style="display:flex;flex-direction:column;gap:5px">
+              <div style="display:flex;justify-content:space-between;font-family:'JetBrains Mono',monospace;font-size:12px;color:#9fc3cc"><span>{{ d.path }}</span><span style="color:{{ d.tc }}">{{ d.free }}</span></div>
+              <div style="height:4px;border-radius:2px;background:rgba(110,246,255,.1);position:relative"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ d.used }};border-radius:2px;background:linear-gradient(90deg,rgba(110,246,255,.15),{{ d.c }});box-shadow:0 0 8px {{ d.c }}"></div></div>
+            </div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+
+    <!-- activity strip -->
+    <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px 24px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 24px 50px rgba(0,0,0,.35);display:grid;grid-template-columns:1.3fr 1fr 1fr;gap:36px">
+      <div style="position:absolute;inset:0;background:linear-gradient(170deg,rgba(255,255,255,.07),rgba(255,255,255,0) 30%);pointer-events:none"></div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">DOWNLOADING · 3</div>
+        <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
+          <div style="display:flex;flex-direction:column;gap:7px">
+            <div style="display:flex;justify-content:space-between;gap:12px;font-size:16px"><span style="color:#e9fdff;font-weight:500">{{ d.t }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd">{{ d.eta }}</span></div>
+            <div style="height:3px;background:rgba(110,246,255,.1);position:relative">
+              <div style="position:absolute;left:0;top:0;bottom:0;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),#6ef6ff);box-shadow:0 0 10px rgba(110,246,255,.8)"></div>
+              <div style="position:absolute;top:-2px;left:{{ d.pct }};width:7px;height:7px;margin-left:-4px;border-radius:50%;background:#e9fdff;box-shadow:0 0 10px 2px #6ef6ff"></div>
+            </div>
+            <div style="display:flex;gap:14px;font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd"><span>{{ d.q }}</span><span style="color:#6ef6ff">{{ d.pct }}</span><span>{{ d.speed }}</span></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">JUST IMPORTED</div>
+        <sc-for list="{{ imported }}" as="i" hint-placeholder-count="3">
+          <div style="display:flex;gap:12px;align-items:center">
+            <div style="width:34px;height:50px;flex:none;border-radius:4px;border:1px solid rgba(110,246,255,.2);background:repeating-linear-gradient(135deg,rgba(110,246,255,.08) 0 2px,transparent 2px 7px)"></div>
+            <div style="display:flex;flex-direction:column;gap:3px;min-width:0"><div style="font-size:16px;font-weight:500;color:#e9fdff">{{ i.t }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd">{{ i.q }} · {{ i.when }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="position:relative;display:flex;flex-direction:column;gap:14px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">NEXT 24H</div>
+        <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
+          <div style="display:flex;gap:14px;align-items:center;padding-bottom:10px;border-bottom:1px solid rgba(110,246,255,.08)">
+            <div style="font-family:Michroma,sans-serif;font-size:14px;color:#6ef6ff;width:54px">{{ u.time }}</div>
+            <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:16px;font-weight:500;color:#e9fdff">{{ u.t }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd">{{ u.ep }} · {{ u.net }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1.2fr 1fr 1fr;gap:20px;flex:1;min-height:0">
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12);display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">SCHEDULED JOBS</div>
+        <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="4">
+          <div style="display:grid;grid-template-columns:1fr 90px 80px;align-items:center;font-size:15px;color:#e9fdff"><span>{{ j.n }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd">{{ j.last }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;text-align:right">{{ j.next }}</span></div>
+        </sc-for>
+      </div>
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12);display:flex;flex-direction:column;gap:12px">
+        <div style="display:flex;justify-content:space-between"><div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">AWAITING APPROVAL</div><a style="font-size:14px">Review all</a></div>
+        <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3">
+          <div style="display:flex;align-items:center;gap:10px">
+            <div style="flex:1;display:flex;flex-direction:column;gap:2px"><div style="font-size:16px;font-weight:500;color:#e9fdff">{{ r.t }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#8fb3bd">{{ r.kind }} · @{{ r.who }}</div></div>
+            <div style="height:30px;padding:0 12px;display:flex;align-items:center;border-radius:8px;border:1px solid #6ef6ff;color:#6ef6ff;font-size:14px;font-weight:600;box-shadow:0 0 10px rgba(110,246,255,.25)">Approve</div>
+          </div>
+        </sc-for>
+      </div>
+      <div style="position:relative;overflow:hidden;border-radius:18px;padding:22px;background:linear-gradient(180deg,rgba(18,52,62,.42),rgba(6,22,28,.32));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12);display:flex;flex-direction:column;gap:12px">
+        <div style="font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.24em;color:#8fb3bd">INDEXERS · CLIENTS</div>
+        <div style="display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:7px;height:30px;padding:0 11px;border-radius:999px;border:1px solid {{ c.b }};background:rgba(0,0,0,.2);font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff"><div style="width:6px;height:6px;border-radius:50%;background:{{ c.c }};box-shadow:0 0 8px {{ c.c }}"></div>{{ c.n }}</div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 1b — A Library -->
+<div id="1b" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">1b</span>A · LEGACY GLASS: LIBRARY</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background:radial-gradient(120% 70% at 50% 62%, #0a2a33 0%, #041218 38%, #020609 70%);font-family:Barlow,sans-serif;color:#e6fbff">
+  <div style="position:absolute;left:0;right:0;top:56%;height:1px;background:linear-gradient(90deg,transparent,rgba(110,246,255,.9),transparent);box-shadow:0 0 30px 6px rgba(110,246,255,.35)"></div>
+  <div style="position:absolute;left:-40%;right:-40%;top:56%;bottom:-40%;perspective:520px;overflow:hidden">
+    <div style="position:absolute;inset:0;transform:rotateX(72deg);transform-origin:50% 0;background-image:linear-gradient(rgba(110,246,255,.35) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.35) 1px,transparent 1px);background-size:80px 80px;-webkit-mask-image:linear-gradient(180deg,transparent 0%,#000 30%);mask-image:linear-gradient(180deg,transparent 0%,#000 30%)"></div>
+  </div>
+  <div style="position:absolute;left:20px;top:20px;bottom:20px;width:232px;border-radius:18px;background:linear-gradient(180deg,rgba(18,48,58,.45),rgba(6,20,26,.35));backdrop-filter:blur(22px) saturate(140%);-webkit-backdrop-filter:blur(22px) saturate(140%);border:1px solid rgba(140,240,255,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.12),0 30px 60px rgba(0,0,0,.45);display:flex;flex-direction:column;padding:24px 14px;gap:28px;overflow:hidden">
+    <div style="position:absolute;inset:0;background:linear-gradient(160deg,rgba(255,255,255,.09) 0%,rgba(255,255,255,0) 28%);pointer-events:none"></div>
+    <div style="display:flex;align-items:center;gap:12px;padding:0 10px">
+      <div style="width:30px;height:30px;border-radius:50%;border:2px solid #6ef6ff;box-shadow:0 0 12px rgba(110,246,255,.7),inset 0 0 8px rgba(110,246,255,.5);display:flex;align-items:center;justify-content:center"><div style="width:12px;height:12px;border-radius:50%;border:1.5px solid #6ef6ff"></div></div>
+      <div style="font-family:Michroma,sans-serif;font-size:14px;letter-spacing:.14em;color:#e9fdff">MEDIA·TRON</div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:2px">
+      <sc-for list="{{ navLib }}" as="n" hint-placeholder-count="11">
+        <div style="position:relative;display:flex;align-items:center;gap:12px;height:42px;padding:0 12px;border-radius:10px;background:{{ n.bg }};color:{{ n.color }};font-size:16px;font-weight:500">
+          <div style="position:absolute;left:0;top:10px;bottom:10px;width:2px;border-radius:2px;background:{{ n.bar }};box-shadow:{{ n.glow }}"></div>
+          <div style="width:7px;height:7px;transform:rotate(45deg);border:1.5px solid currentColor;opacity:.8"></div>
+          <div style="flex:1">{{ n.label }}</div>
+          <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff">{{ n.count }}</div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <div style="position:absolute;left:276px;right:20px;top:20px;height:60px;border-radius:16px;background:rgba(10,32,40,.38);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border:1px solid rgba(140,240,255,.16);box-shadow:inset 0 1px 0 rgba(255,255,255,.1);display:flex;align-items:center;padding:0 12px 0 18px;gap:14px">
+    <div style="flex:1;max-width:460px;height:38px;border-radius:10px;background:rgba(0,0,0,.25);border:1px solid rgba(110,246,255,.14);display:flex;align-items:center;gap:10px;padding:0 12px;color:#8fb3bd;font-size:15px"><div style="width:12px;height:12px;border-radius:50%;border:1.5px solid #8fb3bd"></div><div style="flex:1">Search series, movies, people…</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;padding:2px 7px;border:1px solid rgba(110,246,255,.3);border-radius:5px;color:#6ef6ff">/</div></div>
+    <div style="flex:1"></div>
+    <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;font-size:12px;letter-spacing:.1em;color:#9fc3cc"><div style="width:8px;height:8px;border-radius:50%;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LIVE</div>
+    <div style="display:flex;align-items:center;height:32px;padding:0 12px;border-radius:999px;border:1px solid rgba(110,246,255,.4);background:rgba(110,246,255,.08);font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff">VPN · ZRH-04</div>
+    <div style="width:36px;height:36px;border-radius:50%;border:1px solid rgba(110,246,255,.35);background:rgba(110,246,255,.1);display:flex;align-items:center;justify-content:center;font-family:Michroma,sans-serif;font-size:12px;color:#e9fdff">SK</div>
+  </div>
+  <div style="position:absolute;left:276px;right:20px;top:104px;bottom:20px;display:flex;flex-direction:column;gap:20px">
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;padding:4px 6px">
+      <div style="display:flex;align-items:flex-end;gap:28px">
+        <div style="font-family:Michroma,sans-serif;font-size:28px;letter-spacing:.08em;color:#e9fdff;text-shadow:0 0 18px rgba(110,246,255,.5)">SERIES</div>
+        <div style="font-family:Michroma,sans-serif;font-size:28px;letter-spacing:.08em;color:#5d7f88">MOVIES</div>
+        <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#8fb3bd;padding-bottom:6px">214 TITLES · 38.2 TB</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px">
+        <div style="display:flex;padding:3px;border-radius:10px;border:1px solid rgba(110,246,255,.18);background:rgba(0,0,0,.25);font-size:14px;font-weight:500">
+          <div style="padding:6px 12px;border-radius:7px;background:rgba(110,246,255,.16);color:#e9fdff;box-shadow:inset 0 0 0 1px rgba(110,246,255,.4)">Posters</div><div style="padding:6px 12px;color:#8fb3bd">Table</div><div style="padding:6px 12px;color:#8fb3bd">Overview</div>
+        </div>
+        <div style="height:38px;padding:0 14px;display:flex;align-items:center;border-radius:10px;border:1px solid rgba(110,246,255,.18);color:#c9f9ff;font-size:14px">Sort · Added ↓</div>
+        <div style="height:38px;padding:0 14px;display:flex;align-items:center;border-radius:10px;border:1px solid rgba(110,246,255,.18);color:#c9f9ff;font-size:14px">Filter · 2</div>
+        <div style="height:38px;padding:0 16px;display:flex;align-items:center;border-radius:10px;background:#6ef6ff;color:#021014;font-size:14px;font-weight:600;box-shadow:0 0 20px rgba(110,246,255,.5)">+ Add series</div>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:22px 18px">
+      <sc-for list="{{ posters }}" as="p" hint-placeholder-count="14">
+        <div style="display:flex;flex-direction:column;gap:9px">
+          <div style="position:relative;aspect-ratio:2/3;border-radius:12px;overflow:hidden;border:1px solid {{ p.border }};background:linear-gradient(180deg,rgba(14,40,48,.6),rgba(4,14,18,.8));box-shadow:{{ p.shadow }}">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(135deg,rgba(110,246,255,.06) 0 2px,transparent 2px 10px)"></div>
+            <div style="position:absolute;inset:0;background:linear-gradient(155deg,rgba(255,255,255,.14) 0%,rgba(255,255,255,0) 32%)"></div>
+            <div style="position:absolute;left:10px;top:10px;font-family:'JetBrains Mono',monospace;font-size:10px;letter-spacing:.14em;color:#5d7f88">POSTER</div>
+            <div style="position:absolute;right:8px;top:8px;width:18px;height:18px;border-radius:5px;border:1.5px solid {{ p.chkB }};background:{{ p.chkBg }}"></div>
+            <div style="position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(0,0,0,.5)"><div style="height:100%;width:{{ p.pct }};background:{{ p.bar }};box-shadow:0 0 10px {{ p.bar }}"></div></div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:1px"><div style="font-size:15px;font-weight:500;color:#e9fdff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.t }}</div><div style="font-family:'JetBrains Mono',monospace;font-size:11px;color:#8fb3bd">{{ p.meta }}</div></div>
+        </div>
+      </sc-for>
+    </div>
+  </div>
+  <!-- bulk bar -->
+  <div style="position:absolute;left:50%;bottom:36px;transform:translateX(-30%);height:60px;border-radius:16px;background:rgba(8,28,36,.6);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);border:1px solid rgba(110,246,255,.4);box-shadow:0 0 0 1px rgba(110,246,255,.1),0 0 40px rgba(110,246,255,.25),0 20px 40px rgba(0,0,0,.5);display:flex;align-items:center;gap:6px;padding:0 10px 0 20px;font-size:15px;font-weight:500">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#6ef6ff;margin-right:12px">3 SELECTED</div>
+    <div style="padding:8px 12px;color:#e9fdff">Monitor</div><div style="padding:8px 12px;color:#e9fdff">Profile</div><div style="padding:8px 12px;color:#e9fdff">Move</div><div style="padding:8px 12px;color:#e9fdff">Tags</div><div style="padding:8px 12px;color:#e9fdff">Search</div>
+    <div style="width:1px;height:26px;background:rgba(110,246,255,.2);margin:0 6px"></div>
+    <div style="padding:8px 14px;border-radius:9px;border:1px solid rgba(255,80,60,.6);color:#ffb3a6;background:rgba(255,60,40,.08)">Delete</div>
+  </div>
+</div>
+</div>
+
+<!-- 1c — B Dashboard -->
+<div id="1c" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">1c</span>B · BLUEPRINT HUD: DASHBOARD</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background-color:#010407;background-image:linear-gradient(rgba(110,246,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.09) 1px,transparent 1px),linear-gradient(rgba(110,246,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.035) 1px,transparent 1px);background-size:160px 160px,160px 160px,32px 32px,32px 32px;font-family:'Chakra Petch',sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(60% 50% at 70% 0%,rgba(110,246,255,.12),transparent 70%),radial-gradient(80% 60% at 50% 120%,rgba(110,246,255,.1),transparent 70%)"></div>
+  <!-- rail -->
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.22);background:rgba(1,8,12,.75);backdrop-filter:blur(10px);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);box-shadow:0 0 14px rgba(110,246,255,.6);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div></div>
+    <sc-for list="{{ railDash }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:500;letter-spacing:.08em">{{ r.code }}</div>
+        <div style="font-size:9px;letter-spacing:.14em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <!-- top strip -->
+  <div style="position:absolute;left:84px;right:0;top:0;height:64px;border-bottom:1px solid rgba(110,246,255,.22);background:rgba(1,8,12,.6);backdrop-filter:blur(10px);display:flex;align-items:center;gap:0;font-family:'IBM Plex Mono',monospace;font-size:13px">
+    <div style="padding:0 28px;height:100%;display:flex;align-items:center;gap:14px;border-right:1px solid rgba(110,246,255,.22)"><span style="font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:18px;letter-spacing:.24em;color:#e9fdff">MEDIA/TRON</span><span style="color:#5d8790">v0.9.4</span></div>
+    <div style="flex:1;padding:0 24px;display:flex;align-items:center;gap:12px;color:#7fa6ae"><span style="color:#6ef6ff">&gt;</span>search_ <span style="margin-left:auto;padding:2px 8px;border:1px solid rgba(110,246,255,.35);color:#6ef6ff">/</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff"><div style="width:8px;height:8px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LINK OK</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff">VPN ZRH-04</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff">ACT <span style="color:#010407;background:#6ef6ff;padding:0 6px">03</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#ffc79e;background:rgba(255,140,60,.06)">HLTH <span style="color:#1a0800;background:#ff9a4d;padding:0 6px">02</span></div>
+    <div style="height:100%;padding:0 22px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#e9fdff">SAM.K ▾</div>
+  </div>
+  <div style="position:absolute;left:84px;right:0;top:64px;bottom:0;padding:36px 44px;display:flex;flex-direction:column;gap:28px">
+    <div style="display:flex;align-items:flex-end;gap:24px">
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6ef6ff;letter-spacing:.2em;padding-bottom:8px">00</div>
+      <div style="font-size:40px;font-weight:500;letter-spacing:.12em;color:#e9fdff;line-height:1">OVERVIEW</div>
+      <div style="flex:1;height:1px;background:linear-gradient(90deg,rgba(110,246,255,.5),transparent);margin-bottom:8px"></div>
+      <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7fa6ae;padding-bottom:4px">2026.10.25 · 19:42:08</div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr;border:1px solid rgba(110,246,255,.22);background:rgba(1,10,14,.65)">
+      <div style="position:relative;padding:22px 24px;border-right:1px solid rgba(110,246,255,.22);display:flex;gap:18px;align-items:center">
+        <div style="position:absolute;left:-1px;top:-1px;width:14px;height:14px;border-left:2px solid #6ef6ff;border-top:2px solid #6ef6ff"></div>
+        <div style="position:relative;width:76px;height:76px;flex:none"><div style="position:absolute;inset:0;border-radius:50%;background:conic-gradient(#6ef6ff 0 88%,rgba(110,246,255,.1) 88%);-webkit-mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px));mask:radial-gradient(farthest-side,transparent calc(100% - 4px),#000 calc(100% - 3px))"></div><div style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-family:'IBM Plex Mono',monospace;font-size:20px;color:#e9fdff">88</div></div>
+        <div style="display:flex;flex-direction:column;gap:4px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">01 / HEALTH</div><div style="font-size:18px;font-weight:500;color:#ffc79e">2 warnings</div></div>
+      </div>
+      <div style="padding:22px 24px;border-right:1px solid rgba(110,246,255,.22);display:flex;flex-direction:column;gap:6px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">02 / VPN</div><div style="font-size:24px;font-weight:500;color:#e9fdff">ZRH-04</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#6ef6ff">WG · PORT 51413 · 3d07h</div></div>
+      <div style="padding:22px 24px;border-right:1px solid rgba(110,246,255,.22);display:flex;flex-direction:column;gap:6px"><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">03 / LIBRARY</div><div style="font-size:24px;font-weight:500;color:#e9fdff">214 <span style="color:#7fa6ae;font-size:15px">TV</span> · 1,082 <span style="color:#7fa6ae;font-size:15px">MOV</span></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">38.2 TB indexed</div></div>
+      <div style="position:relative;padding:22px 24px;display:flex;flex-direction:column;gap:8px">
+        <div style="position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-right:2px solid #6ef6ff;border-bottom:2px solid #6ef6ff"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.2em;color:#7fa6ae">04 / STORAGE</div>
+        <sc-for list="{{ disks }}" as="d" hint-placeholder-count="2">
+          <div style="display:flex;align-items:center;gap:10px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:#9fc3cc"><span style="width:78px">{{ d.path }}</span><div style="flex:1;height:8px;border:1px solid rgba(110,246,255,.3);padding:1px"><div style="height:100%;width:{{ d.used }};background:repeating-linear-gradient(90deg,{{ d.c }} 0 3px,transparent 3px 5px)"></div></div><span style="color:{{ d.tc }}">{{ d.free }}</span></div>
+        </sc-for>
+      </div>
+    </div>
+    <div style="display:grid;grid-template-columns:1.4fr 1fr;gap:28px;flex:1;min-height:0">
+      <div style="position:relative;border:1px solid rgba(110,246,255,.22);background:rgba(1,10,14,.65);display:flex;flex-direction:column">
+        <div style="position:absolute;left:-1px;top:-1px;width:14px;height:14px;border-left:2px solid #6ef6ff;border-top:2px solid #6ef6ff"></div>
+        <div style="display:flex;border-bottom:1px solid rgba(110,246,255,.22);font-family:'IBM Plex Mono',monospace;font-size:13px;letter-spacing:.12em">
+          <div style="padding:14px 22px;color:#010407;background:#6ef6ff">DOWNLOADING 03</div><div style="padding:14px 22px;color:#7fa6ae">IMPORTED 06</div><div style="padding:14px 22px;color:#7fa6ae">NEXT 24H 09</div>
+        </div>
+        <div style="padding:10px 22px;display:flex;flex-direction:column">
+          <sc-for list="{{ downloads }}" as="d" hint-placeholder-count="3">
+            <div style="display:grid;grid-template-columns:1fr 140px 90px;gap:18px;align-items:center;padding:16px 0;border-bottom:1px dashed rgba(110,246,255,.14)">
+              <div style="display:flex;flex-direction:column;gap:8px"><div style="font-size:18px;font-weight:500;color:#e9fdff">{{ d.t }}</div>
+                <div style="height:6px;position:relative;background:rgba(110,246,255,.08)"><div style="position:absolute;left:0;top:0;bottom:0;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,.1),#6ef6ff);box-shadow:0 0 12px rgba(110,246,255,.7)"></div></div></div>
+              <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">{{ d.q }}<div style="color:#c9f9ff;margin-top:3px">{{ d.speed }}</div></div>
+              <div style="text-align:right;font-family:'IBM Plex Mono',monospace"><div style="font-size:20px;color:#6ef6ff">{{ d.pct }}</div><div style="font-size:12px;color:#7fa6ae">{{ d.eta }}</div></div>
+            </div>
+          </sc-for>
+        </div>
+        <div style="margin-top:auto;padding:16px 22px;border-top:1px solid rgba(110,246,255,.22);display:flex;flex-wrap:wrap;gap:8px">
+          <sc-for list="{{ chips }}" as="c" hint-placeholder-count="6">
+            <div style="display:flex;align-items:center;gap:7px;height:28px;padding:0 10px;border:1px solid {{ c.b }};font-family:'IBM Plex Mono',monospace;font-size:12px;color:#c9f9ff"><div style="width:6px;height:6px;background:{{ c.c }};box-shadow:0 0 8px {{ c.c }}"></div>{{ c.n }}</div>
+          </sc-for>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:28px;min-height:0">
+        <div style="border:1px solid rgba(110,246,255,.22);background:rgba(1,10,14,.65);padding:18px 22px;display:flex;flex-direction:column;gap:12px">
+          <div style="display:flex;justify-content:space-between;font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:#7fa6ae"><span>05 / REQUESTS</span><a>REVIEW →</a></div>
+          <sc-for list="{{ requests }}" as="r" hint-placeholder-count="3">
+            <div style="display:flex;align-items:center;gap:12px"><div style="flex:1"><div style="font-size:17px;font-weight:500;color:#e9fdff">{{ r.t }}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;color:#7fa6ae">{{ r.kind }} · @{{ r.who }}</div></div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border:1px solid #6ef6ff;color:#6ef6ff">APPROVE</div><div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:6px 10px;border:1px solid rgba(255,90,70,.5);color:#ffb3a6">DECLINE</div></div>
+          </sc-for>
+        </div>
+        <div style="position:relative;flex:1;border:1px solid rgba(110,246,255,.22);background:rgba(1,10,14,.65);padding:18px 22px;display:flex;flex-direction:column;gap:10px">
+          <div style="position:absolute;right:-1px;bottom:-1px;width:14px;height:14px;border-right:2px solid #6ef6ff;border-bottom:2px solid #6ef6ff"></div>
+          <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;letter-spacing:.2em;color:#7fa6ae">06 / SCHEDULER</div>
+          <sc-for list="{{ jobs }}" as="j" hint-placeholder-count="4">
+            <div style="display:grid;grid-template-columns:1fr 90px 80px;font-family:'IBM Plex Mono',monospace;font-size:13px;color:#c9f9ff"><span>{{ j.n }}</span><span style="color:#7fa6ae">{{ j.last }}</span><span style="color:#6ef6ff;text-align:right">{{ j.next }}</span></div>
+          </sc-for>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- 1d — B Library -->
+<div id="1d" style="display:flex;flex-direction:column;gap:16px">
+<div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff;letter-spacing:.1em">1d</span>B · BLUEPRINT HUD: LIBRARY</div>
+<div style="width:1440px;height:960px;position:relative;overflow:hidden;background-color:#010407;background-image:linear-gradient(rgba(110,246,255,.09) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.09) 1px,transparent 1px),linear-gradient(rgba(110,246,255,.035) 1px,transparent 1px),linear-gradient(90deg,rgba(110,246,255,.035) 1px,transparent 1px);background-size:160px 160px,160px 160px,32px 32px,32px 32px;font-family:'Chakra Petch',sans-serif;color:#e6fbff">
+  <div style="position:absolute;inset:0;background:radial-gradient(60% 50% at 70% 0%,rgba(110,246,255,.12),transparent 70%)"></div>
+  <div style="position:absolute;left:0;top:0;bottom:0;width:84px;border-right:1px solid rgba(110,246,255,.22);background:rgba(1,8,12,.75);display:flex;flex-direction:column;align-items:center;padding:22px 0;gap:6px">
+    <div style="width:40px;height:40px;border:1.5px solid #6ef6ff;transform:rotate(45deg);box-shadow:0 0 14px rgba(110,246,255,.6);margin-bottom:22px;display:flex;align-items:center;justify-content:center"><div style="width:14px;height:14px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div></div>
+    <sc-for list="{{ railLib }}" as="r" hint-placeholder-count="11">
+      <div style="position:relative;width:60px;height:48px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;color:{{ r.color }};background:{{ r.bg }}">
+        <div style="position:absolute;left:-12px;top:8px;bottom:8px;width:2px;background:{{ r.bar }};box-shadow:{{ r.glow }}"></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:15px;font-weight:500;letter-spacing:.08em">{{ r.code }}</div>
+        <div style="font-size:9px;letter-spacing:.14em;opacity:.8">{{ r.label }}</div>
+      </div>
+    </sc-for>
+  </div>
+  <div style="position:absolute;left:84px;right:0;top:0;height:64px;border-bottom:1px solid rgba(110,246,255,.22);background:rgba(1,8,12,.6);display:flex;align-items:center;font-family:'IBM Plex Mono',monospace;font-size:13px">
+    <div style="padding:0 28px;height:100%;display:flex;align-items:center;gap:14px;border-right:1px solid rgba(110,246,255,.22)"><span style="font-family:'Chakra Petch',sans-serif;font-weight:600;font-size:18px;letter-spacing:.24em;color:#e9fdff">MEDIA/TRON</span></div>
+    <div style="flex:1;padding:0 24px;display:flex;align-items:center;gap:12px;color:#7fa6ae"><span style="color:#6ef6ff">&gt;</span>search_ <span style="margin-left:auto;padding:2px 8px;border:1px solid rgba(110,246,255,.35);color:#6ef6ff">/</span></div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;gap:8px;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff"><div style="width:8px;height:8px;background:#6ef6ff;box-shadow:0 0 10px #6ef6ff"></div>LINK OK</div>
+    <div style="height:100%;padding:0 20px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#c9f9ff">VPN ZRH-04</div>
+    <div style="height:100%;padding:0 22px;display:flex;align-items:center;border-left:1px solid rgba(110,246,255,.22);color:#e9fdff">SAM.K ▾</div>
+  </div>
+  <div style="position:absolute;left:84px;right:0;top:64px;bottom:0;display:grid;grid-template-columns:260px 1fr">
+    <div style="border-right:1px solid rgba(110,246,255,.22);background:rgba(1,8,12,.55);padding:28px 22px;display:flex;flex-direction:column;gap:26px;font-family:'IBM Plex Mono',monospace;font-size:13px">
+      <div style="display:flex;border:1px solid rgba(110,246,255,.3)"><div style="flex:1;padding:10px;text-align:center;background:#6ef6ff;color:#010407;font-weight:500">TV</div><div style="flex:1;padding:10px;text-align:center;color:#7fa6ae">MOVIES</div></div>
+      <div style="display:flex;flex-direction:column;gap:10px"><div style="letter-spacing:.2em;color:#7fa6ae;font-size:11px">STATUS</div>
+        <div style="display:flex;justify-content:space-between;color:#e9fdff"><span>■ Continuing</span><span style="color:#7fa6ae">128</span></div>
+        <div style="display:flex;justify-content:space-between;color:#e9fdff"><span>□ Ended</span><span style="color:#7fa6ae">86</span></div>
+        <div style="display:flex;justify-content:space-between;color:#ffc79e"><span>■ Missing eps</span><span>27</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:10px"><div style="letter-spacing:.2em;color:#7fa6ae;font-size:11px">PROFILE</div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px"><span style="padding:4px 8px;border:1px solid #6ef6ff;color:#6ef6ff">UHD-2160</span><span style="padding:4px 8px;border:1px solid rgba(110,246,255,.25);color:#9fc3cc">HD-1080</span><span style="padding:4px 8px;border:1px solid rgba(110,246,255,.25);color:#9fc3cc">Any</span></div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:12px"><div style="letter-spacing:.2em;color:#7fa6ae;font-size:11px">POSTER SIZE</div>
+        <div style="position:relative;height:14px"><div style="position:absolute;left:0;right:0;top:6px;height:2px;background:rgba(110,246,255,.2)"></div><div style="position:absolute;left:0;width:60%;top:6px;height:2px;background:#6ef6ff;box-shadow:0 0 8px #6ef6ff"></div><div style="position:absolute;left:60%;top:0;width:14px;height:14px;margin-left:-7px;transform:rotate(45deg);border:2px solid #6ef6ff;background:#010407"></div></div>
+      </div>
+    </div>
+    <div style="padding:32px 40px;display:flex;flex-direction:column;gap:24px;min-width:0">
+      <div style="display:flex;align-items:flex-end;gap:24px">
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#6ef6ff;letter-spacing:.2em;padding-bottom:6px">03</div>
+        <div style="font-size:40px;font-weight:500;letter-spacing:.12em;color:#e9fdff;line-height:1">SERIES</div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:13px;color:#7fa6ae;padding-bottom:6px">214 · 38.2 TB</div>
+        <div style="flex:1"></div>
+        <div style="display:flex;border:1px solid rgba(110,246,255,.3);font-family:'IBM Plex Mono',monospace;font-size:12px"><div style="padding:9px 12px;background:rgba(110,246,255,.15);color:#e9fdff">GRID</div><div style="padding:9px 12px;color:#7fa6ae">TABLE</div><div style="padding:9px 12px;color:#7fa6ae">LIST</div></div>
+        <div style="font-family:'IBM Plex Mono',monospace;font-size:12px;padding:10px 16px;background:#6ef6ff;color:#010407;font-weight:500;box-shadow:0 0 18px rgba(110,246,255,.5)">+ ADD SERIES</div>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:24px 20px">
+        <sc-for list="{{ postersB }}" as="p" hint-placeholder-count="12">
+          <div style="display:flex;flex-direction:column;gap:10px">
+            <div style="position:relative;aspect-ratio:2/3;border:1px solid {{ p.border }};background:#03121a;padding:6px">
+              <div style="position:absolute;left:-1px;top:-1px;width:10px;height:10px;border-left:2px solid {{ p.bar }};border-top:2px solid {{ p.bar }}"></div>
+              <div style="position:absolute;right:-1px;bottom:-1px;width:10px;height:10px;border-right:2px solid {{ p.bar }};border-bottom:2px solid {{ p.bar }}"></div>
+              <div style="width:100%;height:100%;background:repeating-linear-gradient(135deg,rgba(110,246,255,.07) 0 1px,transparent 1px 8px);display:flex;align-items:flex-end;padding:8px;font-family:'IBM Plex Mono',monospace;font-size:10px;color:#4f7880;letter-spacing:.14em">POSTER</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:8px"><div style="flex:1;height:2px;background:rgba(110,246,255,.12)"><div style="height:100%;width:{{ p.pct }};background:{{ p.bar }};box-shadow:0 0 8px {{ p.bar }}"></div></div><span style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:{{ p.bar }}">{{ p.eps }}</span></div>
+            <div style="display:flex;flex-direction:column;gap:2px"><div style="font-size:16px;font-weight:500;color:#e9fdff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ p.t }}</div><div style="font-family:'IBM Plex Mono',monospace;font-size:11px;color:#7fa6ae">{{ p.meta }}</div></div>
+          </div>
+        </sc-for>
+      </div>
+    </div>
+  </div>
+</div>
+</div>
+
+</div>
+<div style="font-family:Barlow,sans-serif;font-size:18px;color:#9fc3cc;max-width:1100px;line-height:1.5">Next round: once you pick a direction (or a blend, for example A's glass with B's indexed headings), I'll build it out on Series details, Login / setup wizard, and Mobile. After that comes the full kit.</div>
+</section>
+</x-dc>
+<script type="text/x-dc" data-dc-script>
+class Component extends DCLogic {
+  renderVals() {
+    const C = '#6ef6ff', W = '#ff9a4d';
+    const navItems = [['Dashboard',''],['Library',''],['Discover',''],['Requests','4'],['Calendar',''],['Wanted','27'],['Activity','3'],['Subtitles',''],['Indexers',''],['Settings',''],['System','']];
+    const nav = active => navItems.map(([label,count]) => {
+      const on = label === active;
+      return { label, count, bg: on ? 'linear-gradient(90deg,rgba(110,246,255,.18),rgba(110,246,255,0))' : 'transparent', color: on ? '#e9fdff' : '#8fb3bd', bar: on ? C : 'transparent', glow: on ? '0 0 10px #6ef6ff' : 'none' };
+    });
+    const codes = [['DB','DASH'],['LB','LIB'],['DS','DISC'],['RQ','REQ'],['CL','CAL'],['WN','WANT'],['AC','ACT'],['SB','SUBS'],['IX','INDX'],['ST','SET'],['SY','SYS']];
+    const rail = active => codes.map(([code,label]) => {
+      const on = code === active;
+      return { code, label, color: on ? '#e9fdff' : '#5d8790', bg: on ? 'rgba(110,246,255,.1)' : 'transparent', bar: on ? C : 'transparent', glow: on ? '0 0 10px #6ef6ff' : 'none' };
+    });
+    const titles = [['Severance','2022 · Apple TV+','ok',100,'19/19'],['Andor','2022 · Disney+','dl',72,'18/24'],['The Bear','2022 · FX','ok',100,'38/38'],['Shōgun','2024 · FX','miss',60,'6/10'],['Silo','2023 · Apple TV+','ok',100,'20/20'],['Arcane','2021 · Netflix','ok',100,'18/18'],['Fallout','2024 · Prime','dl',88,'7/8'],['The Expanse','2015 · Prime','ok',100,'62/62'],['Dark','2017 · Netflix','un',100,'26/26'],['Foundation','2021 · Apple TV+','miss',45,'9/20'],['Mr. Robot','2015 · USA','ok',100,'45/45'],['Pluribus','2025 · Apple TV+','dl',30,'3/9'],['Station Eleven','2021 · HBO','ok',100,'10/10'],['Blue Eye Samurai','2023 · Netflix','ok',100,'8/8']];
+    const sel = [1,4,9];
+    const barOf = s => s === 'miss' ? W : s === 'un' ? '#4f6c73' : C;
+    const posters = titles.map(([t,meta,s,pct],i) => {
+      const on = sel.includes(i);
+      return { t, meta, pct: pct + '%', bar: barOf(s), border: on ? C : 'rgba(110,246,255,.16)', shadow: on ? '0 0 0 1px #6ef6ff,0 0 24px rgba(110,246,255,.45)' : '0 12px 30px rgba(0,0,0,.4)', chkB: on ? C : 'rgba(230,251,255,.35)', chkBg: on ? C : 'rgba(0,0,0,.3)' };
+    });
+    const postersB = titles.slice(0,12).map(([t,meta,s,pct,eps]) => ({ t, meta, eps, pct: pct + '%', bar: barOf(s), border: s === 'miss' ? 'rgba(255,154,77,.45)' : 'rgba(110,246,255,.22)' }));
+    let seed = 7; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+    const trace = (pts, out, o) => {
+      for (let i = 0; i < pts.length - 1; i++) {
+        const [x1,y1] = pts[i], [x2,y2] = pts[i+1], dx = x2-x1, dy = y2-y1;
+        out.segs.push({ x: x1, y: y1 - o.th/2, w: Math.hypot(dx,dy), th: o.th, a: Math.atan2(dy,dx)*180/Math.PI, col: o.col, glow: o.glow });
+      }
+      const [ex,ey] = pts[pts.length-1], s = o.node || 8;
+      out.nodes.push({ x: ex - s/2, y: ey - s/2, s, col: o.col, fill: o.fill || '#000', glow: o.glow });
+    };
+    const bundle = (ox, oy, n, gap, dir, o) => {
+      const out = { segs: [], nodes: [] };
+      for (let i = 0; i < n; i++) {
+        let x = ox + i*gap, y = oy; const pts = [[x,y]];
+        y += 80 + rnd()*220 + i*10; pts.push([x,y]);
+        const d = 60 + rnd()*160; x += dir*d; y += d; pts.push([x,y]);
+        y += 40 + rnd()*200; pts.push([x,y]);
+        if (rnd() > .5) { const d2 = 30 + rnd()*60; x -= dir*d2; y += d2; pts.push([x,y]); }
+        trace(pts, out, o);
+      }
+      return out;
+    };
+    const tA = { th: 1.5, col: 'rgba(110,246,255,.55)', glow: '0 0 6px rgba(110,246,255,.7)' };
+    const tB = { th: 1.5, col: 'rgba(90,200,255,.6)', glow: '0 0 7px rgba(90,200,255,.8)' };
+    const bgA = bundle(900, -10, 14, 30, -1, tA);
+    const bgA2 = bundle(160, 480, 8, 28, 1, tA); bgA.segs.push(...bgA2.segs); bgA.nodes.push(...bgA2.nodes);
+    const bgB = bundle(760, -10, 18, 32, -1, tB);
+    const uiA = { segs: [], nodes: [] };
+    trace([[84,114],[104,114],[116,126]], uiA, { th: 1.5, col: C, glow: '0 0 8px #6ef6ff', node: 7, fill: C });
+    const sparkles = [[1210,120],[1330,260],[1050,70],[620,40],[1380,520],[300,90]].map(([x,y]) => ({ x, y }));
+    const busNav = navItems.map(([label,count]) => {
+      const on = label === 'Dashboard';
+      return { label, count, bg: on ? 'linear-gradient(90deg,rgba(110,246,255,.14),transparent)' : 'transparent', color: on ? '#e9fdff' : '#8fb3bd', tw: on ? '24px' : '12px', nx: on ? '56px' : '44px', tick: on ? C : 'rgba(110,246,255,.35)', fill: on ? C : '#000', glow: on ? '0 0 10px #6ef6ff' : 'none' };
+    });
+    const vx = 762, vy = 500, H = 960;
+    const seg = (x1,y1,x2,y2,th,col,glow) => ({ x: x1, y: y1 - th/2, w: Math.hypot(x2-x1,y2-y1), th, a: Math.atan2(y2-y1,x2-x1)*180/Math.PI, col, glow: glow || 'none' });
+    const floor3 = [];
+    for (let k = -16; k <= 16; k++) { const xb = vx + k*120; floor3.push(seg(vx, vy, vx + (xb-vx)*1.6, vy + (H-vy)*1.6, 1, 'rgba(110,246,255,' + (k === 0 ? .2 : .11) + ')')); }
+    for (let k = 1; k <= 34; k++) { const y = vy + 600/(k+0.6); if (y > H) continue; const al = (.03 + .16*(y-vy)/(H-vy)).toFixed(3); floor3.push({ x: 0, y, w: 1440, th: 1, a: 0, col: 'rgba(110,246,255,' + al + ')', glow: 'none' }); }
+    const traces3 = { segs: [], nodes: [] };
+    const tc = 'rgba(110,246,255,.5)';
+    [[[524,404],[662,404],[758,500]],[[1040,440],[882,440],[822,500],[766,500]]].forEach(p => { for (let i=0;i<p.length-1;i++) traces3.segs.push(seg(p[i][0],p[i][1],p[i+1][0],p[i+1][1],1,tc)); traces3.nodes.push({ x: p[0][0]-4, y: p[0][1]-4, s: 8, col: tc, fill: '#000', glow: 'none' }); });
+    const lanesData = [
+      { t: 'Dune: Part Two', q: 'Remux 2160p', p: .23, eta: '41 min', xc: 250 },
+      { t: 'Andor S02E09', q: 'WEB-DL 2160p', p: .68, eta: '4 min', xc: 560 },
+      { t: 'Fallout S01E08', q: 'WEB-DL 1080p', p: .91, eta: '38 s', xc: 970 },
+      { t: 'Pluribus S01E04', q: 'Waiting for air', p: 0, eta: 'queued', xc: 1280 }
+    ];
+    const lanes3 = { segs: [], nodes: [] }, plates3 = [];
+    const plateY = 846;
+    lanesData.forEach(l => {
+      const xAt = y => vx + (l.xc - vx) * (y - vy) / (plateY - vy);
+      lanes3.segs.push(seg(vx, vy, xAt(plateY), plateY, 1, 'rgba(110,246,255,.16)'));
+      if (l.p > 0) {
+        const hy = vy + (plateY - vy) * Math.pow(l.p, 1.5), hx = xAt(hy);
+        lanes3.segs.push(seg(vx, vy, hx, hy, 10, 'linear-gradient(90deg,transparent 20%,rgba(110,246,255,.18))'));
+        lanes3.segs.push(seg(vx, vy, hx, hy, 2.5, 'linear-gradient(90deg,transparent 10%,rgba(110,246,255,.7) 70%,#f0feff)', '0 0 10px rgba(110,246,255,.6)'));
+        lanes3.nodes.push({ x: hx - 6, y: hy - 6, s: 12, col: '#f0feff', fill: '#f0feff', glow: '0 0 16px 5px rgba(110,246,255,.85)' });
+      }
+      const live = l.p > 0;
+      plates3.push({ x: l.xc - 125, t: l.t, q: l.q, eta: l.eta, pct: live ? Math.round(l.p*100) + '%' : '·', b: 'rgba(110,246,255,.16)', top: live ? C : 'rgba(110,246,255,.25)', tc: live ? '#e9fdff' : '#9fc3cc', pc: live ? C : '#5d7f88' });
+    });
+    const queue4 = lanesData.map(l => {
+      const live = l.p > 0;
+      return { t: l.t, q: l.q, eta: l.eta, pct: Math.round(l.p*100) + '%', pctLabel: live ? Math.round(l.p*100) + '%' : 'Queued', tc: live ? '#e9fdff' : '#9fc3cc', pc: live ? C : '#7fa6ae', head: live ? '#e9fdff' : 'transparent', glow: live ? '0 0 10px rgba(110,246,255,.8)' : 'none' };
+    });
+    return {
+      queue4,
+      floor3, traces3, lanes3, plates3,
+      bgA, bgB, uiA, sparkles, busNav,
+      navDash: nav('Dashboard'), navLib: nav('Library'), railDash: rail('DB'), railLib: rail('LB'),
+      posters, postersB,
+      disks: [
+        { path: '/media/tv', free: '0.9 TB free', used: '92%', c: W, tc: '#ffc79e' },
+        { path: '/media/movies', free: '6.4 TB free', used: '58%', c: C, tc: '#9fc3cc' }
+      ],
+      downloads: [
+        { t: 'Andor · S02E09', q: 'WEBDL-2160p', pct: '68%', eta: '4m 12s', speed: '38.2 MB/s' },
+        { t: 'Dune: Part Two', q: 'Remux-2160p', pct: '23%', eta: '41m', speed: '24.9 MB/s' },
+        { t: 'Fallout · S01E08', q: 'WEBDL-1080p', pct: '91%', eta: '38s', speed: '9.3 MB/s' }
+      ],
+      imported: [
+        { t: 'Silo · S02E10', q: 'WEBDL-2160p', when: '12m' },
+        { t: 'Past Lives', q: 'Bluray-1080p', when: '1h' },
+        { t: 'The Bear · S03E01', q: 'WEBDL-1080p', when: '3h' }
+      ],
+      upcoming: [
+        { time: '21:00', t: 'The Last of Us', ep: 'S02E04', net: 'HBO' },
+        { time: '03:00', t: 'Severance', ep: 'S03E02', net: 'Apple TV+' },
+        { time: '09:00', t: 'Pluribus', ep: 'S01E04', net: 'Apple TV+' }
+      ],
+      jobs: [
+        { n: 'RSS sync', last: '2m ago', next: 'in 13m' },
+        { n: 'Refresh series', last: '4h ago', next: 'in 8h' },
+        { n: 'Subtitle search', last: '31m ago', next: 'in 29m' },
+        { n: 'Backup', last: '1d ago', next: '03:00' }
+      ],
+      requests: [
+        { t: 'Blade Runner 2049', kind: 'Movie · 4K', who: 'maya' },
+        { t: 'Severance', kind: 'TV · S3', who: 'jules' },
+        { t: 'Arrival', kind: 'Movie', who: 'kid.room' }
+      ],
+      chips: [
+        { n: 'Torznab · TL', c: C, b: 'rgba(110,246,255,.3)' },
+        { n: 'Newznab · NZBg', c: C, b: 'rgba(110,246,255,.3)' },
+        { n: 'Nyaa', c: W, b: 'rgba(255,154,77,.5)' },
+        { n: 'Built-in torrent', c: C, b: 'rgba(110,246,255,.3)' },
+        { n: 'SABnzbd', c: C, b: 'rgba(110,246,255,.3)' },
+        { n: 'FlareSolverr', c: C, b: 'rgba(110,246,255,.3)' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

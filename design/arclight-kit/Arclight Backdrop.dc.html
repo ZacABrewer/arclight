@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<div style="position:absolute;inset:0;overflow:hidden;background:#000;pointer-events:none">
+  <div style="position:absolute;inset:0;background:{{ sky }}"></div>
+  <sc-for list="{{ lines }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:1px;background:{{ s.col }};transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <sc-for list="{{ nodes }}" as="n" hint-placeholder-count="0"><div style="position:absolute;left:{{ n.x }}px;top:{{ n.y }}px;width:7px;height:7px;border-radius:50%;border:1px solid rgba(110,246,255,.35);background:#000"></div></sc-for>
+  <div style="position:absolute;left:0;right:0;top:{{ hy }}px;height:2px;background:linear-gradient(90deg,transparent 5%,rgba(110,246,255,.45) 35%,rgba(200,252,255,.85) 50%,rgba(110,246,255,.45) 65%,transparent 95%)"></div>
+  <div style="position:absolute;left:15%;right:15%;top:{{ bloomY }}px;height:120px;background:radial-gradient(50% 50% at 50% 50%,rgba(110,246,255,.14),transparent 70%)"></div>
+  <sc-if value="{{ spire }}" hint-placeholder-val="{{ true }}">
+    <div style="position:absolute;left:{{ sx }}px;top:{{ sTop }}px;width:2px;height:{{ sH }}px;background:linear-gradient(180deg,transparent,rgba(110,246,255,.35) 30%,rgba(220,253,255,.95))"></div>
+    <div style="position:absolute;left:{{ rx }}px;top:{{ hy }}px;width:12px;height:{{ rH }}px;background:linear-gradient(180deg,rgba(150,250,255,.3),transparent);filter:blur(4px)"></div>
+    <div style="position:absolute;left:{{ cx }}px;top:{{ cy }}px;width:14px;height:14px;border-radius:50%;background:#f2feff;box-shadow:0 0 18px 6px rgba(110,246,255,.75),0 0 60px 20px rgba(110,246,255,.22)"></div>
+  </sc-if>
+  <div style="position:absolute;inset:0;background:repeating-linear-gradient(180deg,rgba(255,255,255,.015) 0 1px,transparent 1px 3px)"></div>
+  <div style="position:absolute;inset:0;background:radial-gradient(130% 100% at 50% 50%,transparent 60%,rgba(0,0,0,.7))"></div>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props="{&quot;$preview&quot;:{&quot;width&quot;:1440,&quot;height&quot;:960},&quot;width&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:1440,&quot;tsType&quot;:&quot;number&quot;},&quot;height&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:960,&quot;tsType&quot;:&quot;number&quot;},&quot;vx&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:762,&quot;tsType&quot;:&quot;number&quot;},&quot;horizon&quot;:{&quot;editor&quot;:&quot;int&quot;,&quot;default&quot;:500,&quot;tsType&quot;:&quot;number&quot;},&quot;spire&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;},&quot;circuit&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;}}">
+class Component extends DCLogic {
+  renderVals() {
+    const W = this.props.width ?? 1440, H = this.props.height ?? 960;
+    const vx = this.props.vx ?? Math.round(W * 0.53), vy = this.props.horizon ?? Math.round(H * 0.52);
+    const spire = this.props.spire ?? true, circuit = this.props.circuit ?? true;
+    const seg = (x1, y1, x2, y2, col) => ({ x: x1, y: y1, w: Math.hypot(x2 - x1, y2 - y1), a: Math.atan2(y2 - y1, x2 - x1) * 180 / Math.PI, col });
+    const lines = [], nodes = [];
+    const step = W / 12;
+    for (let k = -16; k <= 16; k++) lines.push(seg(vx, vy, vx + k * step * 1.6, vy + (H - vy) * 1.6, 'rgba(110,246,255,' + (k === 0 ? .18 : .1) + ')'));
+    for (let k = 1; k <= 34; k++) { const y = vy + (H - vy) * 1.3 / (k + 0.6); if (y > H) continue; lines.push({ x: 0, y, w: W, a: 0, col: 'rgba(110,246,255,' + (.03 + .15 * (y - vy) / (H - vy)).toFixed(3) + ')' }); }
+    if (circuit) {
+      let s = 11; const r = () => (s = (s * 16807) % 2147483647) / 2147483647;
+      const n = Math.round(W / 110), ox = W * 0.58, col = 'rgba(110,246,255,.16)';
+      for (let i = 0; i < n; i++) {
+        let x = ox + i * 26, y = -4; const pts = [[x, y]];
+        y += 40 + r() * vy * 0.35; pts.push([x, y]);
+        const d = 30 + r() * 90; x -= d; y += d; pts.push([x, y]);
+        y += 20 + r() * vy * 0.2; pts.push([x, y]);
+        for (let j = 0; j < pts.length - 1; j++) lines.push(seg(pts[j][0], pts[j][1], pts[j + 1][0], pts[j + 1][1], col));
+        nodes.push({ x: x - 3.5, y: y - 3.5 });
+      }
+    }
+    const sTop = Math.round(vy * 0.22);
+    return {
+      lines, nodes, spire, hy: vy - 1, bloomY: vy - 60,
+      sky: 'radial-gradient(70% 38% at ' + Math.round(vx / W * 100) + '% ' + Math.round(vy / H * 100) + '%,#06222b 0%,#02090c 50%,#000 85%)',
+      sx: vx - 1, sTop, sH: vy - sTop, rx: vx - 6, rH: Math.round((H - vy) * 0.45), cx: vx - 7, cy: vy - 7
+    };
+  }
+}
+</script>
+</body>
+</html>
