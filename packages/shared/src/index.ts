@@ -48,3 +48,4 @@ export * from './transcode.js';
 export * from './tracker-stats.js';
 export * from './cross-seed.js';
 export * from './transfer-metrics.js';
+export * from './additional-languages.js';

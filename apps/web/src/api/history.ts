@@ -18,6 +18,7 @@ export const HISTORY_EVENT_TYPES = [
   'fileTranscoded',
   'profileChanged',
   'profileReplaced',
+  'additionalLanguage',
 ] as const;
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
 
@@ -48,6 +49,9 @@ export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
   },
   get profileReplaced() {
     return t('api.history.profileReplaced');
+  },
+  get additionalLanguage() {
+    return t('api.history.additionalLanguage');
   },
 };
 

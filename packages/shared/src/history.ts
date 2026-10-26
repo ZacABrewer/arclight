@@ -50,6 +50,8 @@ export const HistoryEventType = z.enum([
   'profileChanged',
   // A file was replaced because it did not meet its (new) quality profile (profile-migration module).
   'profileReplaced',
+  // "Add additional…" asked for an audio/subtitle language, and what came of it (data.outcome).
+  'additionalLanguage',
 ]);
 export type HistoryEventType = z.infer<typeof HistoryEventType>;
 

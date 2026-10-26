@@ -184,6 +184,19 @@ describe('series details (Page 03)', () => {
     expect(within(drawer).getByRole('button', { name: 'Search episode' })).toBeTruthy();
   });
 
+  it('opens "Add additional…" for the series, a season and an episode', async () => {
+    renderAt('/library/series/1');
+    const hero = await screen.findByRole('region', { name: 'Series overview' });
+    fireEvent.click(within(hero).getByRole('button', { name: 'Add additional…' }));
+    let dialog = await screen.findByRole('dialog', { name: 'Add additional language · Severance' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add an additional language to Season 1' }));
+    dialog = await screen.findByRole('dialog', { name: 'Add additional language · Severance Season 1' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Add an additional language to S01E01' }));
+    expect(await screen.findByRole('dialog', { name: 'Add additional language · Severance S01E01' })).toBeTruthy();
+  });
+
   it('delete confirm names the series', async () => {
     renderAt('/library/series/1');
     const hero = await screen.findByRole('region', { name: 'Series overview' });

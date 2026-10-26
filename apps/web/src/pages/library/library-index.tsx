@@ -30,6 +30,7 @@ import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js
 import { ProfileMigrationDialog } from '../../components/media/profile-migration-dialog.js';
 import { ProfileMismatchBadge } from '../../components/media/profile-fit.js';
 import { useProfileItemStatuses } from '../../hooks/profile-migration.js';
+import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError, TagChips } from '../../components/media/media-kit.js';
@@ -699,7 +700,9 @@ function BulkBar({
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Profile changes go through the migration dialog (preview of what the new profile means).
   const [migrateTo, setMigrateTo] = useState<number | null>(null);
+  const [addingLanguage, setAddingLanguage] = useState(false);
   const pending = bulkSeries.isPending || bulkMovies.isPending;
+  const languageTargets = useMemo(() => ids.map((id) => (kind === 'series' ? { seriesId: id } : { movieId: id })), [ids, kind]);
 
   const apply = (patch: { monitored?: boolean; qualityProfileId?: number; rootFolderPath?: string; tags?: { add?: number[]; remove?: number[] } }) => {
     if (kind === 'series') bulkSeries.mutate({ ids, ...patch });
@@ -750,6 +753,9 @@ function BulkBar({
           />
         )}
       </Popover>
+      <Button variant="ghost" disabled={pending} onClick={() => setAddingLanguage(true)}>
+        {t('features.additionalLanguages.addAdditional')}
+      </Button>
       <FloatBarDivider />
       <Button variant="danger" onClick={() => setConfirmDelete(true)}>
         {t('common.delete')}
@@ -764,6 +770,12 @@ function BulkBar({
         selection={kind === 'series' ? { seriesIds: ids } : { movieIds: ids }}
         profiles={profiles}
         subject={`${ids.length} ${noun(kind, ids.length)}`}
+      />
+      <AddAdditionalDialog
+        open={addingLanguage}
+        onClose={() => setAddingLanguage(false)}
+        targets={languageTargets}
+        title={`${ids.length} ${noun(kind, ids.length)}`}
       />
       <DeleteMediaDialog
         open={confirmDelete}

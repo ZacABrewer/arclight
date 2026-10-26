@@ -1,0 +1,20 @@
+/* "Add additional…" dialog and the item language chips. Kit tokens only. */
+.addl-stack { display: flex; flex-direction: column; gap: 16px; }
+.addl-note { margin: 0; font-size: 13px; }
+.addl-picked { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.addl-langs { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.addl-langs li { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 8px 0; border-bottom: 1px solid var(--al-line-2); }
+.addl-langs__name { flex: 1 1 140px; min-width: 0; }
+.addl-langs__flag { font-size: 12px; color: var(--al-text-3); }
+.addl-langs .al-select { width: 96px; }
+.addl-outcome { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
+.addl-outcome__hint { display: block; font-size: 12px; }
+.addl-sublist { margin: 4px 0 0; padding-left: 16px; font-size: 12px; color: var(--al-text-3); }
+
+.addl-chips { display: flex; flex-direction: column; gap: 8px; }
+.addl-chips__row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.addl-chips__label { min-width: 72px; font-size: 12px; color: var(--al-text-3); text-transform: uppercase; letter-spacing: 0.08em; }
+.addl-chips__item { display: inline-flex; align-items: center; gap: 2px; }
+.addl-chips__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--al-text-3); cursor: pointer; }
+.addl-chips__remove:hover,
+.addl-chips__remove:focus-visible { color: var(--al-cyan); }

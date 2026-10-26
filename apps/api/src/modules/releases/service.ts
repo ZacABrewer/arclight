@@ -35,6 +35,14 @@ import {
 import { selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
+import { additionalLanguages } from '../../db/schema.js';
+import {
+  fileAudioLanguages,
+  releaseAudioLanguages,
+  requiredAudioFor,
+  slotLanguageFit,
+  type AudioRequirementRow,
+} from '../additional-languages/audio.js';
 import { createCutoffChecker, isVersioned, libraryService, pickVersion, sameTag, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import { loadSceneRules } from '../scene-mapping/service.js';
@@ -224,6 +232,7 @@ class Batch implements LibrarySnapshot {
   readonly queue: Array<TrackedView & { parsedQuality: QualityModel }>;
   readonly pending: PendingRow[];
   private sceneRules?: SceneRule[];
+  private audioRows?: AudioRequirementRow[];
 
   constructor(
     private readonly db: Db,
@@ -267,6 +276,12 @@ class Batch implements LibrarySnapshot {
   private rules(): SceneRule[] {
     this.sceneRules ??= loadSceneRules(this.db, this.log);
     return this.sceneRules;
+  }
+
+  /** Saved "Add additional…" audio requirements. */
+  audioRequirements(): readonly AudioRequirementRow[] {
+    this.audioRows ??= this.db.select().from(additionalLanguages).where(eq(additionalLanguages.kind, 'audio')).all();
+    return this.audioRows;
   }
 
   sceneMappings(seriesId: number): readonly SceneRule[] {
@@ -420,11 +435,19 @@ export class ReleasesService {
       return { decision: unmatchedDecision(source, release, parsed, match) };
     }
 
-    // Multi-version: evaluate against the version slot whose profile the release fits best.
+    // Multi-version: evaluate against the version slot whose profile the release fits best (a
+    // slot that asks for audio languages the release carries wins: "Add additional…" versions).
     const versions = match.mediaType === 'series' ? match.series.versions : match.movie.versions;
+    const original = match.mediaType === 'series' ? match.series.originalLanguage : match.movie.originalLanguage;
+    const releaseAudio = releaseAudioLanguages(release.title, toLanguageCodes(parsed.languages), original);
     const version = isVersioned(versions)
-      ? pickVersion(versions, batch.profiles, qualityModelOf(parsed.quality), (p) =>
-          evaluateFormats(p, batch.formats, { title: release.title, quality: qualityModelOf(parsed.quality), mediaType: match.mediaType, sizeBytes: release.size }).score,
+      ? pickVersion(
+          versions,
+          batch.profiles,
+          qualityModelOf(parsed.quality),
+          (p) =>
+            evaluateFormats(p, batch.formats, { title: release.title, quality: qualityModelOf(parsed.quality), mediaType: match.mediaType, sizeBytes: release.size }).score,
+          (v) => slotLanguageFit(v, releaseAudio),
         )
       : null;
     const profileId = version?.qualityProfileId ?? (match.mediaType === 'series' ? match.series.qualityProfileId : match.movie.qualityProfileId);
@@ -469,7 +492,13 @@ export class ReleasesService {
     };
 
     const built = await this.buildContext(batch, candidate, profile, source, settings, propers, criteria, now);
-    const ctx = version ? narrowToVersion(built, versions, version.tag, batch.profiles) : built;
+    const narrowed = version ? narrowToVersion(built, versions, version.tag, batch.profiles) : built;
+    const covered =
+      match.mediaType === 'movie'
+        ? { movieId: match.movie.id }
+        : { seriesId: match.series.id, episodes: match.episodes.map((e) => ({ id: e.id, seasonNumber: e.seasonNumber })) };
+    const requiredAudio = requiredAudioFor(batch.audioRequirements(), covered, version);
+    const ctx: DecisionContext = requiredAudio ? { ...narrowed, requiredAudio } : narrowed;
     const ev = evaluate(ctx, candidate);
     const decision = buildDecision(source, candidate, ev);
     if (version) decision.versionTag = version.tag;
@@ -551,6 +580,7 @@ export class ReleasesService {
       episodeIds: f.episodeIds,
       sizeBytes: f.sizeBytes,
       versionTag: f.versionTag ?? null,
+      audioLanguages: fileAudioLanguages(f, { fallback: true }),
     });
     const files = batch
       .files(match)

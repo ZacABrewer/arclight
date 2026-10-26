@@ -287,3 +287,51 @@ After changing rules, **Apply to existing files** matches the series' existing f
 - [Discover and requests](discover-and-requests.md)
 - [Calendar](calendar.md)
 - [Glossary](../GLOSSARY.md)
+
+## Add another language (audio or subtitles)
+
+Use **Add additional…** to add a language to a title without losing what it already has. It is on
+a movie's and a series' details page, on each season and episode row, and in the Library bulk bar
+(select several titles first). The dialog has two tabs, **Audio language** and **Subtitle
+language**. Before you confirm, it shows a preview per title: which languages its files have now
+and what will happen. Nothing is saved until you press **Confirm**. The details page shows the
+title's audio and subtitle languages as chips; languages you added are marked, and you can remove
+one there with its **×**.
+
+**Subtitle language.** Pick one or more languages, each with its forced and hearing-impaired
+setting (the same choices as a language profile). The languages are added to that title only;
+the shared language profile is not changed, so other titles using it are not affected. Existing
+subtitles stay. With **Search now** on, Arclight searches the subtitle providers straight away;
+each title then reads *found*, *not found yet* (Arclight keeps looking on the normal subtitle
+schedule) or *already has it*. If you tick **Generate with Whisper if no provider has it** and a
+Whisper provider is set up under Settings -> Subtitles (it does not have to be enabled),
+languages no provider has are generated from the audio. That is
+slow, so it can still be running after the dialog closes. A language added this way is wanted even
+when the title's language profile already counts as complete, and titles without a language
+profile get subtitles for just the added languages.
+
+**Audio language.** Pick one language. If a title's files already have it (from media analysis),
+the preview says so and nothing is searched. Otherwise choose how to get it:
+
+- **Find a release that has both.** Arclight looks for a multi-audio release that carries the
+  new language plus every language the current file has, at the current quality or better (judged
+  by the title's quality profile). The current file is replaced only after the new one has
+  imported, and it goes to the recycle bin if you use one. The requirement is saved, so later
+  upgrades also have to keep that language. Releases without it are rejected with "Missing
+  required audio language", which you can see under the title's **Decisions** tab.
+- **Add it as a separate version.** Arclight adds a version slot named after the language (for
+  example "Spanish", or a name you type) that needs that audio, keeps the current file as the
+  "Standard" version, and searches for the new one. Versions belong to the whole series, so on a
+  season or episode this applies to every episode.
+
+Arclight never merges audio tracks from different releases into one file. Two releases rarely
+line up exactly (different cuts, intros, frame rates or lengths), so a borrowed track drifts out of
+sync. That is why it replaces the whole file or keeps a separate copy instead.
+
+Files whose audio has not been analysed yet (press **Analyze** in a title's Files tab, or run
+`AnalyzeMedia` under System -> Tasks) count as not having the language. Searches started from the
+dialog run as an `AdditionalLanguageSearch` task under System -> Tasks; anything grabbed goes
+through the normal queue and shows in Activity. Each request and its outcome appear in the
+title's **History** as "Additional language".
+
+---

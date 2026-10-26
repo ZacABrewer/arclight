@@ -142,6 +142,11 @@ export const MediaVersion = z.object({
   tag: VersionTag,
   qualityProfileId: z.number().int(),
   enabled: z.boolean().default(true),
+  /**
+   * Audio languages a release must carry to fill this slot (IETF tags, e.g. `["es"]`); a release
+   * that has them prefers this slot. Set by "Add additional…" → audio → separate version.
+   */
+  audioLanguages: z.array(z.string().min(2).max(16)).max(8).optional(),
 });
 export type MediaVersion = z.infer<typeof MediaVersion>;
 

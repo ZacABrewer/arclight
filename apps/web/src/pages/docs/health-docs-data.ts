@@ -645,4 +645,18 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     },
     link: { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
   },
+  {
+    anchor: 'hard-links-not-possible',
+    sources: ['HardLinkCheck'],
+    get title() {
+      return t('docs.healthDocs.hardLinksTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.hardLinksCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.hardLinksFix1'), t('docs.healthDocs.hardLinksFix2')];
+    },
+    link: { get label() { return t('common.mediaManagement'); }, to: '/settings/mediamanagement' },
+  },
 ];

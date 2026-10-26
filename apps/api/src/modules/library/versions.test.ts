@@ -123,6 +123,23 @@ describe('version helpers (pure)', () => {
     expect(pickVersion(TWO, PROFILES, quality('WEBDL-1080p'))?.tag).toBe('1080p');
   });
 
+  it('a language fit ranks first: a slot asking for audio the release has wins over an equal-profile slot', () => {
+    const versions: MediaVersion[] = [
+      { tag: 'Standard', qualityProfileId: 1, enabled: true },
+      { tag: 'Spanish', qualityProfileId: 1, enabled: true, audioLanguages: ['es'] },
+    ];
+    const fit = (have: string[]) => (v: MediaVersion) => ((v.audioLanguages ?? []).length === 0 ? 1 : v.audioLanguages!.every((l) => have.includes(l)) ? 2 : 0);
+    expect(pickVersion(versions, PROFILES, quality('WEBDL-1080p'))?.tag).toBe('Standard');
+    expect(pickVersion(versions, PROFILES, quality('WEBDL-1080p'), () => 0, fit(['es']))?.tag).toBe('Spanish');
+    expect(pickVersion(versions, PROFILES, quality('WEBDL-1080p'), () => 0, fit(['en']))?.tag).toBe('Standard');
+    expect(upsertVersion({ qualityProfileId: 1, versions }, { tag: 'spanish', qualityProfileId: 2, enabled: true, audioLanguages: ['es'] })[1]).toEqual({
+      tag: 'Spanish',
+      qualityProfileId: 2,
+      enabled: true,
+      audioLanguages: ['es'],
+    });
+  });
+
   it('prefers the profile whose cutoff is nearest when several allow the quality', () => {
     const wide = makeProfile([...HD_ALLOWED, ...UHD_ALLOWED], { id: 3 }, 'Remux-2160p');
     const versions: MediaVersion[] = [

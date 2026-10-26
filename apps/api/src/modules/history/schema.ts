@@ -24,6 +24,7 @@ export const history = sqliteTable(
         'fileTranscoded',
         'profileChanged',
         'profileReplaced',
+        'additionalLanguage',
       ],
     }).notNull(),
     mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),

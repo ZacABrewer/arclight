@@ -18,12 +18,20 @@ export interface VersionDraft {
   tag: string;
   qualityProfileId: number | null;
   enabled: boolean;
+  /** Audio languages the slot asks for ("Add additional…" → separate version); kept as-is on save. */
+  audioLanguages?: string[];
 }
 
 let nextKey = 1;
 
 export function toVersionDrafts(versions: readonly MediaVersion[] | null | undefined): VersionDraft[] {
-  return (versions ?? []).map((v) => ({ key: nextKey++, tag: v.tag, qualityProfileId: v.qualityProfileId, enabled: v.enabled }));
+  return (versions ?? []).map((v) => ({
+    key: nextKey++,
+    tag: v.tag,
+    qualityProfileId: v.qualityProfileId,
+    enabled: v.enabled,
+    ...(v.audioLanguages?.length ? { audioLanguages: [...v.audioLanguages] } : {}),
+  }));
 }
 
 /** Tag suggestions in order; the first one not yet used is offered for a new row. */
@@ -58,11 +66,16 @@ export function validateVersions(drafts: readonly VersionDraft[]): VersionErrors
 /** The contract value: trimmed tags; no rows = null (back to one unversioned file). */
 export function toMediaVersions(drafts: readonly VersionDraft[]): MediaVersions | null {
   if (drafts.length === 0) return null;
-  return drafts.map((d) => ({ tag: d.tag.trim(), qualityProfileId: d.qualityProfileId ?? 0, enabled: d.enabled }));
+  return drafts.map((d) => ({
+    tag: d.tag.trim(),
+    qualityProfileId: d.qualityProfileId ?? 0,
+    enabled: d.enabled,
+    ...(d.audioLanguages?.length ? { audioLanguages: [...d.audioLanguages] } : {}),
+  }));
 }
 
 function normalise(v: readonly MediaVersion[] | null | undefined): string {
-  return JSON.stringify((v ?? []).map((x) => [x.tag, x.qualityProfileId, x.enabled]));
+  return JSON.stringify((v ?? []).map((x) => [x.tag, x.qualityProfileId, x.enabled, x.audioLanguages ?? []]));
 }
 
 /**

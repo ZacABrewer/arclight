@@ -129,6 +129,7 @@ const SONARR_EVENT: Record<HistoryEventType, string> = {
   fileTranscoded: 'fileTranscoded',
   profileChanged: 'profileChanged',
   profileReplaced: 'profileReplaced',
+  additionalLanguage: 'additionalLanguage',
 };
 
 const RADARR_EVENT: Record<HistoryEventType, string> = {

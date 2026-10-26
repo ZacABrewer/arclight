@@ -62,3 +62,4 @@ export * from '../modules/cross-seed/schema.js';
 export * from '../modules/transcode/schema.js';
 export * from '../modules/transfer-metrics/schema.js';
 export * from '../modules/profile-migration/schema.js';
+export * from '../modules/additional-languages/schema.js';

@@ -965,6 +965,38 @@ rule cancels its queued jobs. Jobs left `running` by a restart go back to `queue
 | POST | `/transcode/jobs/:id/cancel` | Queued: cancelled; running: ffmpeg is killed and the temp file removed (409 when finished) |
 | GET | `/transcode/hwaccel` | `ffmpeg -hide_banner -hwaccels`: `{ffmpegPath, methods, backends}` |
 
+## additional-languages ("Add additional…")
+
+Contract: `packages/shared/src/additional-languages.ts`. Records (`additional_languages`) are
+scoped to a movie, a series, one season (`seasonNumber`) or one episode (`episodeId`); languages
+are normalised tags (`spa` -> `es`).
+
+- `kind: 'subtitle'`: item-level extras merged with the item's language profile when the
+  subtitles module computes wanted (profile cutoff does not apply to them; items without a
+  profile want just the extras). `useWhisper` runs a second pass with the `whisperai` provider
+  (enabled or not, as long as its settings are valid) for languages no provider had.
+- `kind: 'audio'`, `mode: 'replace'`: the decision engine requires the language plus every audio
+  language of the file being replaced (`missingRequiredAudioLanguage`). A release that carries
+  them may replace a file that already meets cutoff at the same or a better quality
+  (`languageReplacementLowerQuality` otherwise). Files lacking a required language fail the
+  cutoff check, so `CutoffUnmetSearch` keeps looking. Release audio is judged from the name
+  (named languages; MULTi adds the original language; untagged = original language); file audio
+  from media analysis, else the languages parsed at import.
+- `kind: 'audio'`, `mode: 'version'`: adds or reuses a version slot with
+  `audioLanguages: [lang]` (`MediaVersion.audioLanguages`); releases and imports that carry the
+  language prefer that slot.
+
+Searches run as one `AdditionalLanguageSearch` task (`scheduler.runTask`); POST waits up to 20 s
+and reports `searching` for whatever is still running. Each request and outcome writes an
+`additionalLanguage` history row (`data.kind`, `language`, `outcome`, `message`, `mode`).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/additional-language` | `?movieId=` or `?seriesId=[&seasonNumber=][&episodeId=]`: `ItemLanguages` (audio and subtitle chips with `present`/`added`, records) |
+| POST | `/additional-language/preview` | `AdditionalLanguageRequest`: per-item plan, nothing saved |
+| POST | `/additional-language` | Save and search: `AdditionalLanguageResult` (`jobId` of the task) |
+| DELETE | `/additional-language/:id` | Remove a record (204); a version slot it created stays |
+
 ## library-hygiene
 
 Contract: `packages/shared/src/library-hygiene.ts`. The `OrphanScan` job walks every root folder

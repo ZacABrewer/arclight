@@ -968,7 +968,14 @@ function toMovie(row: MovieRow, files: MediaFileRow[] | undefined, now: string):
 
 /** Stored form of a `versions` request field: an empty list means unversioned. */
 function versionsColumn(v: readonly MediaVersion[] | null | undefined): MediaVersion[] | null {
-  return v && v.length > 0 ? v.map((x) => ({ tag: x.tag.trim(), qualityProfileId: x.qualityProfileId, enabled: x.enabled })) : null;
+  return v && v.length > 0
+    ? v.map((x) => ({
+        tag: x.tag.trim(),
+        qualityProfileId: x.qualityProfileId,
+        enabled: x.enabled,
+        ...(x.audioLanguages?.length ? { audioLanguages: [...x.audioLanguages] } : {}),
+      }))
+    : null;
 }
 
 function movieMetadataColumns(meta: MovieMetadataInput) {

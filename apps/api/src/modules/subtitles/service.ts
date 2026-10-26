@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { mkdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, extname, isAbsolute, join } from 'node:path';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, or } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type { NotificationEvent } from '@arclight/notifications';
 import {
@@ -9,6 +9,7 @@ import {
   SubtitleSettings as SubtitleSettingsSchema,
   type LanguageProfile,
   type LanguageProfileInput,
+  type LanguageProfileItem,
   type MediaFileSubtitles,
   type SubtitleBlacklistPage,
   type SubtitleBlacklistRecord,
@@ -87,7 +88,8 @@ import {
   type WantedLanguage,
 } from '@arclight/subtitles';
 import type { Db } from '../../db/index.js';
-import { episodes, mediaFiles, movies, series } from '../../db/schema.js';
+import { additionalLanguages, episodes, mediaFiles, movies, series } from '../../db/schema.js';
+import { scopeApplies } from '../additional-languages/audio.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
 import {
@@ -162,8 +164,26 @@ export interface FileContext {
   movie: MovieRow | null;
   episodes: EpisodeRow[];
   profile: LanguageProfile | null;
+  /** Item-level languages added with "Add additional…", wanted on top of the profile (no cutoff). */
+  extras: LanguageProfileItem[];
   mediaTitle: string;
   episodeLabel: string | null;
+}
+
+type ExtraRow = typeof additionalLanguages.$inferSelect;
+
+/** Profile languages plus the item's extras (duplicates dropped): what manual search and upgrades consider. */
+export function wantedItems(c: Pick<FileContext, 'profile' | 'extras'>): LanguageProfileItem[] {
+  const out = [...(c.profile?.languages ?? [])];
+  for (const e of c.extras) {
+    if (!out.some((x) => normalizeTag(x.code) === normalizeTag(e.code) && x.forced === e.forced && x.hi === e.hi)) out.push(e);
+  }
+  return out;
+}
+
+/** The file wants subtitles at all (a language profile, or additional languages). */
+export function wantsSubtitles(c: Pick<FileContext, 'profile' | 'extras'>): boolean {
+  return c.profile !== null || c.extras.length > 0;
 }
 
 export interface SubtitlesServiceOptions {
@@ -198,6 +218,16 @@ export interface FileSearchResult {
   searched: number;
   downloaded: number;
   allThrottled: boolean;
+}
+
+export interface FileSearchOptions {
+  ignoreBackoff?: boolean;
+  /** Called per searched language key ("en", "en:forced", "en:hi") with whether one was downloaded. */
+  onLanguage?: (key: string, found: boolean) => void;
+  /** Only search missing entries this accepts (e.g. the languages just added). */
+  only?: (entry: DesiredEntry) => boolean;
+  /** Search exactly these providers (enabled or not, as long as their settings are valid). */
+  providerIds?: readonly SubtitleProviderId[];
 }
 
 interface Downloaded {
@@ -618,6 +648,28 @@ export class SubtitlesService {
     return out;
   }
 
+  /** Named providers whose settings are valid, enabled or not (an opt-in pass such as Whisper). */
+  providersById(mediaType: SubtitleMediaType, ids: readonly SubtitleProviderId[]): SubtitleProvider[] {
+    const s = this.settings();
+    const out: SubtitleProvider[] = [];
+    for (const id of ids) {
+      const cfg = s.providers.find((p) => p.id === id);
+      if (!cfg || !PROVIDER_DEFS[id].mediaTypes.includes(mediaType) || configError(id, cfg.settings)) continue;
+      try {
+        out.push(this.buildProvider(id, cfg.settings));
+      } catch (err) {
+        this.log.warn({ err, provider: id }, 'subtitle provider could not be created');
+      }
+    }
+    return out;
+  }
+
+  /** A whisperai provider is set up (enabled or not) with valid settings. */
+  whisperConfigured(): boolean {
+    const cfg = this.settings().providers.find((p) => p.id === 'whisperai');
+    return cfg !== undefined && !configError('whisperai', cfg.settings);
+  }
+
   async testProvider(id: SubtitleProviderId, incoming: Record<string, unknown>): Promise<SubtitleProviderTestResult> {
     const stored = this.settings().providers.find((p) => p.id === id);
     const settings = unmaskSettings(id, incoming, stored?.settings);
@@ -671,7 +723,10 @@ export class SubtitlesService {
     return this.contextFor(file);
   }
 
-  private contextFor(file: MediaFileRow, cache?: { series: Map<number, SeriesRow>; movies: Map<number, MovieRow>; episodes: Map<number, EpisodeRow[]>; profiles: Map<number, LanguageProfile> }): FileContext {
+  private contextFor(
+    file: MediaFileRow,
+    cache?: { series: Map<number, SeriesRow>; movies: Map<number, MovieRow>; episodes: Map<number, EpisodeRow[]>; profiles: Map<number, LanguageProfile>; extras: ExtraRow[] },
+  ): FileContext {
     let seriesRow: SeriesRow | null = null;
     let movieRow: MovieRow | null = null;
     let eps: EpisodeRow[] = [];
@@ -683,6 +738,13 @@ export class SubtitlesService {
     }
     const profileId = seriesRow?.languageProfileId ?? movieRow?.languageProfileId ?? null;
     const profile = profileId === null ? null : cache ? cache.profiles.get(profileId) ?? null : this.findProfile(profileId);
+    const extraRows = cache ? cache.extras : this.extraRowsFor(file);
+    const covered = { movieId: file.movieId, seriesId: file.seriesId, episodes: eps.map((e) => ({ id: e.id, seasonNumber: e.seasonNumber })) };
+    const extras: LanguageProfileItem[] = [];
+    for (const r of extraRows) {
+      if (r.kind !== 'subtitle' || !scopeApplies(r, covered)) continue;
+      if (!extras.some((x) => x.code === r.language && x.forced === r.forced && x.hi === r.hi)) extras.push({ code: r.language, forced: r.forced, hi: r.hi });
+    }
     return {
       file,
       mediaType: file.mediaType,
@@ -690,9 +752,21 @@ export class SubtitlesService {
       movie: movieRow,
       episodes: eps,
       profile,
+      extras,
       mediaTitle: seriesRow?.title ?? movieRow?.title ?? file.relativePath,
       episodeLabel: episodeLabelFor(eps),
     };
+  }
+
+  /** Saved additional subtitle languages of a file's series/movie. */
+  private extraRowsFor(file: MediaFileRow): ExtraRow[] {
+    const where =
+      file.movieId !== null
+        ? and(eq(additionalLanguages.kind, 'subtitle'), eq(additionalLanguages.movieId, file.movieId))
+        : file.seriesId !== null
+          ? and(eq(additionalLanguages.kind, 'subtitle'), eq(additionalLanguages.seriesId, file.seriesId))
+          : undefined;
+    return where ? this.db.select().from(additionalLanguages).where(where).all() : [];
   }
 
   private displayTitle(c: FileContext): string {
@@ -718,7 +792,15 @@ export class SubtitlesService {
   }
 
   missingFor(c: FileContext, rows: readonly SubtitleRow[] = this.rowsFor(c.file.id), s: SubtitleSettings = this.settings()): DesiredEntry[] {
-    return missingEntries(c.profile, this.present(rows, s), { countEmbedded: true });
+    const present = this.present(rows, s);
+    const fromProfile = missingEntries(c.profile, present, { countEmbedded: true });
+    if (c.extras.length === 0) return fromProfile;
+    // Additional languages are wanted on their own: the profile's cutoff does not cover them.
+    const out = [...fromProfile];
+    for (const e of missingEntries({ languages: c.extras, cutoff: null }, present, { countEmbedded: true })) {
+      if (!out.some((x) => x.tag === e.tag && x.forced === e.forced && x.hi === e.hi)) out.push(e);
+    }
+    return out;
   }
 
   private describe(c: FileContext, rows: readonly SubtitleRow[] = this.rowsFor(c.file.id), s: SubtitleSettings = this.settings()): MediaFileSubtitles {
@@ -829,7 +911,7 @@ export class SubtitlesService {
       }
     });
 
-    if (s.embedded.mode === 'extract' && c.profile) await this.extractMissing(c, s);
+    if (s.embedded.mode === 'extract' && wantsSubtitles(c)) await this.extractMissing(c, s);
   }
 
   /** Embedded mode `extract`: copy text tracks that would satisfy a missing entry out to files. */
@@ -865,11 +947,17 @@ export class SubtitlesService {
     const s = this.settings();
     const files = mediaType ? this.db.select().from(mediaFiles).where(eq(mediaFiles.mediaType, mediaType)).all() : this.db.select().from(mediaFiles).all();
     if (files.length === 0) return [];
+    const extras = this.db.select().from(additionalLanguages).where(eq(additionalLanguages.kind, 'subtitle')).all();
+    const extraSeries = [...new Set(extras.flatMap((r) => (r.seriesId === null ? [] : [r.seriesId])))];
+    const extraMovies = [...new Set(extras.flatMap((r) => (r.movieId === null ? [] : [r.movieId])))];
+    const seriesWhere = extraSeries.length ? or(isNotNull(series.languageProfileId), inArray(series.id, extraSeries)) : isNotNull(series.languageProfileId);
+    const moviesWhere = extraMovies.length ? or(isNotNull(movies.languageProfileId), inArray(movies.id, extraMovies)) : isNotNull(movies.languageProfileId);
     const cache = {
-      series: new Map(this.db.select().from(series).where(isNotNull(series.languageProfileId)).all().map((r) => [r.id, r])),
-      movies: new Map(this.db.select().from(movies).where(isNotNull(movies.languageProfileId)).all().map((r) => [r.id, r])),
+      series: new Map(this.db.select().from(series).where(seriesWhere).all().map((r) => [r.id, r])),
+      movies: new Map(this.db.select().from(movies).where(moviesWhere).all().map((r) => [r.id, r])),
       episodes: new Map<number, EpisodeRow[]>(),
       profiles: new Map(this.listProfiles().map((p) => [p.id, p])),
+      extras,
     };
     for (const e of this.db.select().from(episodes).where(isNotNull(episodes.episodeFileId)).orderBy(asc(episodes.seasonNumber), asc(episodes.episodeNumber)).all()) {
       const list = cache.episodes.get(e.episodeFileId!) ?? [];
@@ -885,7 +973,7 @@ export class SubtitlesService {
     const out: Array<{ c: FileContext; missing: DesiredEntry[] }> = [];
     for (const f of files) {
       const c = this.contextFor(f, cache);
-      if (!c.profile) continue;
+      if (!wantsSubtitles(c)) continue;
       const missing = this.missingFor(c, rows.get(f.id) ?? [], s);
       if (missing.length) out.push({ c, missing });
     }
@@ -917,7 +1005,7 @@ export class SubtitlesService {
         episodeLabel: c.episodeLabel,
         episodeTitle: c.episodes[0]?.title ?? null,
         path: c.file.path,
-        languageProfileId: c.profile!.id,
+        languageProfileId: c.profile?.id ?? null,
         missing: missing.map(toRef),
         lastSearch: a?.lastSearch ?? null,
         attempts: a?.attempts ?? 0,
@@ -1044,14 +1132,14 @@ export class SubtitlesService {
    * Search one media file for its missing languages, one language at a time (R5.6), re-checking
    * what is still missing before each (R5.4). Automatic runs honour the adaptive gate.
    */
-  async searchFile(mediaFileId: number, opts: { ignoreBackoff?: boolean } = {}): Promise<FileSearchResult> {
+  async searchFile(mediaFileId: number, opts: FileSearchOptions = {}): Promise<FileSearchResult> {
     const result: FileSearchResult = { searched: 0, downloaded: 0, allThrottled: false };
     const c = this.loadFile(mediaFileId);
-    if (!c.profile) return result;
+    if (!wantsSubtitles(c)) return result;
     await this.indexFile(c);
-    const missing = this.missingFor(c);
+    const missing = this.missingFor(c).filter((e) => !opts.only || opts.only(e));
     if (missing.length === 0) return result;
-    const providers = this.activeProviders(c.mediaType);
+    const providers = opts.providerIds ? this.providersById(c.mediaType, opts.providerIds) : this.activeProviders(c.mediaType);
     if (providers.length === 0) return result;
     const searcher = this.searcher(providers, c.profile, c);
     if (searcher.available().length === 0) return { ...result, allThrottled: true };
@@ -1089,8 +1177,10 @@ export class SubtitlesService {
       if (saved) {
         this.clearAttempts(c.file.id, key);
         result.downloaded++;
-      } else if (searcher.available().length > 0) {
-        this.recordAttempt(c.file.id, key);
+        opts.onLanguage?.(key, true);
+      } else {
+        opts.onLanguage?.(key, false);
+        if (searcher.available().length > 0) this.recordAttempt(c.file.id, key);
       }
     }
     return result;
@@ -1615,10 +1705,10 @@ export class SubtitlesService {
           return null;
         }
       })();
-      if (!c || !c.profile || c.file.path !== h.videoPath || !this.eligible(c, s)) continue;
+      if (!c || !wantsSubtitles(c) || c.file.path !== h.videoPath || !this.eligible(c, s)) continue;
       const state = this.rowsFor(c.file.id).find((r) => !r.embedded && r.path === h.subtitlePath);
       if (!state || !state.path || !(await exists(state.path))) continue;
-      const entry = desiredForUpgrade(c.profile, { language: h.language, forced: h.forced, hi: h.hi });
+      const entry = desiredForUpgrade({ languages: wantedItems(c) }, { language: h.language, forced: h.forced, hi: h.hi });
       if (!entry) continue;
       out.candidates++;
       const providers = this.activeProviders(c.mediaType);
@@ -1715,7 +1805,8 @@ export class SubtitlesService {
   // ---- manual search / download / upload ------------------------------------------------------------
 
   private manualLanguages(c: FileContext, language: string | undefined): WantedLanguage[] {
-    const profileEntries = c.profile ? missingEntries({ ...c.profile, cutoff: null }, [], { countEmbedded: true }) : [];
+    const items = wantedItems(c);
+    const profileEntries = items.length ? missingEntries({ languages: items, cutoff: null }, [], { countEmbedded: true }) : [];
     if (language) {
       const tag = parseLanguageTag(language);
       if (!tag) throw new SubtitlesError('VALIDATION', `unknown language: ${language}`);
