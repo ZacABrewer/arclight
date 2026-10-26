@@ -7,3 +7,6 @@ export * from './events.js';
 export * from './quality.js';
 export * from './profiles.js';
 export * from './library.js';
+export * from './indexers.js';
+export * from './download-clients.js';
+export * from './naming.js';

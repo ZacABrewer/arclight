@@ -1,5 +1,7 @@
 # Subtitles core: behaviour specification (Phase 3)
 
+> Companion file: the per-provider catalogue lives in `subtitle-providers.md` (split to keep each spec under 900 lines).
+
 Status: draft for implementation. Source of behaviour: Bazarr and its subliminal_patch fork. This is a clean-room description: it states what the system does, not how Bazarr is built. Per-provider details (endpoints, auth, quirks) are out of scope and live in a separate spec.
 
 Conventions used here: rule ids are R<section>.<n>. "Item" means an episode or a movie. "Language code" means a lowercase two-letter code (alpha2) unless stated. Durations in the Media-Tron API are integer milliseconds, timestamps are ISO strings, sizes are bytes (per docs/CONVENTIONS.md). Where Bazarr uses hours, days or minutes in settings, the table in section 15 gives the unit; the stored value in Media-Tron should follow the convention and be converted at the edges.
