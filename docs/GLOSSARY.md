@@ -55,7 +55,7 @@ A rule that makes Arclight wait for a set number of minutes (separately for torr
 Distributed hash table: a way to find peers without a tracker. Turned on by default in Settings > Torrent Engine. Not used for private torrents. See [Peer](#peer).
 
 **Download client**
-The program that actually downloads a file: Arclight's built-in torrent engine, or qBittorrent, Transmission, Deluge, rTorrent, SABnzbd or NZBGet. Settings > Download Clients. See [Download clients](using/download-clients.md).
+The program that actually downloads a file: Arclight's built-in torrent engine (the default), or optionally qBittorrent, Transmission, Deluge, rTorrent, SABnzbd or NZBGet. Settings > Download Clients. See [Download clients](using/download-clients.md).
 
 ## F
 

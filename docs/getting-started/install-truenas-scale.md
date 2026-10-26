@@ -89,16 +89,16 @@ What each part is for:
 | `TZ` | Time zone, for example `Europe/London`. |
 | `/config` | The database and settings. Back it up ([backup-restore.md](backup-restore.md)). |
 | `/data` | The one data mount. Never mount `/data/downloads` and `/data/media` as two separate volumes. |
-| `6881` tcp and udp | The built-in torrent engine's default port. Remove these two lines if you only use qBittorrent or usenet. |
+| `6881` tcp and udp | The built-in torrent engine's default port. Remove these two lines if you only use usenet or an external client. |
 | FlareSolverr | Lets indexers behind a Cloudflare challenge work. No settings needed; Arclight registers it automatically. |
 
 Port 7878 on the host must be free. TrueNAS uses 80 and 443 for its own UI, so 7878 is normally fine; if another app uses it, change the left side, for example `"7979:7878"`.
 
 If your TrueNAS version asks for host paths to be selected through a "host path" form instead of free text, add the same two paths there.
 
-### Using qBittorrent instead of the built-in engine
+### Optional: qBittorrent
 
-Add a second service and mount the same `/data`:
+The built-in engine is all you need. If you also want qBittorrent, add a second service and mount the same `/data`:
 
 ```yaml
   qbittorrent:

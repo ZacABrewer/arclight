@@ -2,7 +2,7 @@
 
 Arclight is one self-hosted app that finds, requests, downloads, imports and subtitles your TV
 shows and movies. It does the jobs of Sonarr, Radarr, Prowlarr, Bazarr and Seerr/Overseerr, and
-can replace qBittorrent with its own BitTorrent engine. It tells Jellyfin, Emby or Plex when new
+downloads with its own built-in BitTorrent engine, so no separate download client is needed. It tells Jellyfin, Emby or Plex when new
 files arrive. It is **not** a media server.
 
 These docs are written for people who run their own home server and are comfortable copying a
@@ -25,7 +25,7 @@ to set it up, what can go wrong.
 | Page | What it covers |
 |---|---|
 | [Requirements](getting-started/requirements.md) | Hardware, ports, what you need before you begin |
-| [Docker Compose on Linux](getting-started/install-docker.md) | The reference install: VPN or no VPN, built-in engine or qBittorrent, Proton key, `.env` |
+| [Docker Compose on Linux](getting-started/install-docker.md) | The reference install: VPN or no VPN, built-in engine by default (qBittorrent optional), Proton key, `.env` |
 | [Synology (Container Manager)](getting-started/install-synology.md) | DSM install |
 | [UGREEN NAS (UGOS Docker)](getting-started/install-ugreen-nas.md) | UGOS install |
 | [Unraid](getting-started/install-unraid.md) | Template or compose |

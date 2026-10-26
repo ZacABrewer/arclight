@@ -1,6 +1,6 @@
 # Download clients and the torrent engine
 
-Download clients are the programs that actually fetch a release once Arclight has picked it. Arclight has its own BitTorrent engine built in, and it can also drive qBittorrent, Transmission, Deluge, rTorrent, SABnzbd, NZBGet, or its own engine running on another machine. This page covers Settings > Download Clients (adding and configuring clients, categories, remote path mappings) and Settings > Torrent Engine (the built-in engine's settings). Everyone needs at least one client. If you use the built-in engine, you will not need to configure much: the defaults work.
+Download clients are the programs that actually fetch a release once Arclight has picked it. Arclight has its own BitTorrent engine built in, and that is the default and recommended client: it is already set up in every supplied Docker file. As alternatives it can also drive qBittorrent, Transmission, Deluge, rTorrent, SABnzbd, NZBGet, or its own engine running on another machine. This page covers Settings > Download Clients (adding and configuring clients, categories, remote path mappings) and Settings > Torrent Engine (the built-in engine's settings). Everyone needs at least one client. With the built-in engine you will not need to configure much: the defaults work. External clients are optional.
 
 ## Where things live
 
@@ -14,11 +14,13 @@ Download clients are the programs that actually fetch a release once Arclight ha
 
 ## Which client should I use?
 
+Start with **Built-in** (first in the list when you add a client). Pick another client only if you already run it, want a usenet client, or need a different setup.
+
 | Client | Protocol | Notes |
 |---|---|---|
-| Built-in | Torrent | Arclight's own engine, running inside Arclight. Nothing else to install. Works with the VPN kill switch and with private-tracker protection |
+| Built-in | Torrent | Arclight's own engine, running inside Arclight. The default and recommended choice: nothing else to install. Works with the VPN kill switch and with private-tracker protection |
 | Remote Engine | Torrent | The same engine on a seedbox or another machine. See [Remote engine](../REMOTE-ENGINE.md) |
-| qBittorrent | Torrent | WebUI API v2, qBittorrent 4.1 or newer |
+| qBittorrent | Torrent | Optional. WebUI API v2, qBittorrent 4.1 or newer. The Docker files ship it behind the compose profile `qbittorrent` (`docker compose --profile qbittorrent up -d`) |
 | Transmission | Torrent | Transmission 2.80 or newer, over its JSON RPC |
 | Deluge | Torrent | Deluge 1.3 or 2.x through the Web UI. Categories use the Label plugin |
 | rTorrent | Torrent | 0.9.6 or newer over XML-RPC (web server or ruTorrent) |
@@ -65,7 +67,7 @@ An indexer can also name a specific client (see [Indexers](indexers.md)); that c
 | Sequential Order, First and Last First (qBittorrent, advanced) | Off | Download pieces in order, or first and last pieces first |
 | Content Layout (qBittorrent, advanced) | Default | Use qBittorrent's layout, the original layout, create a subfolder, or do not create a subfolder |
 
-For qBittorrent in Docker with the standard one-share layout, open qBittorrent Options > Downloads and set the default save path to `/data/downloads`, with the same share mounted at `/data` in both containers. Both then see identical paths, hard links work, and no remote path mapping is needed.
+For qBittorrent in Docker (started with `docker compose --profile qbittorrent up -d`; host `localhost` in the VPN layouts, `qbittorrent` without a VPN, port 8080) with the standard one-share layout, open qBittorrent Options > Downloads and set the default save path to `/data/downloads`, with the same share mounted at `/data` in both containers. Both then see identical paths, hard links work, and no remote path mapping is needed.
 
 Deluge labels may only contain letters, digits, `_`, `-` and `.`, and are stored in lowercase.
 

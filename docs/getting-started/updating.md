@@ -91,7 +91,7 @@ The container entrypoint adds Arclight's user to the socket's group on start, so
 
 ### What the container labels do
 
-Arclight only updates containers that carry the label `arclight.autoupdate=true`. In the shipped release compose files that label is on Arclight itself, Gluetun, FlareSolverr, qBittorrent and Whisper. Remove the label from any container you want left alone, or add it to one that is missing.
+Arclight only updates containers that carry the label `arclight.autoupdate=true`. In the shipped release compose files that label is on Arclight itself, Gluetun, FlareSolverr and (when you enable them) qBittorrent and Whisper. Remove the label from any container you want left alone, or add it to one that is missing.
 
 On the System > Updates page the containers pane lists each labelled container with these columns: Container, Image, Network, Digest, State. States are "Up to date", "Update available", "Not updatable" and "Check failed". Buttons: "Check now", "Update all" and a per-container "Update now".
 

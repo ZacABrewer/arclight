@@ -2,7 +2,7 @@
 
 This file covers Settings -> Download Clients (add, test, edit, delete, test all, categories, priority, tags, remote path mappings, completed/failed handling), the queue behaviours that depend on a client, the Built-in torrent engine and Settings -> Torrent Engine.
 Supported client kinds in this build are exactly seven: qBittorrent, Transmission, Deluge, rTorrent (torrent), SABnzbd, NZBGet (usenet) and Built-in (torrent). There is no Blackhole client.
-Prerequisites: signed in as an admin. For the external client checks you need at least one real client reachable from Arclight (for example qBittorrent WebUI at `http://localhost:8080`, or a qBittorrent container in a Docker stack). Checks that need a usenet client or a specific client are marked; skip them if you do not run that client.
+Prerequisites: signed in as an admin. For the external client checks you need at least one real client reachable from Arclight (for example qBittorrent WebUI at `http://localhost:8080`, or the qBittorrent container started with `docker compose --profile qbittorrent up -d`). Checks that need a usenet client or a specific client are marked; skip them if you do not run that client.
 Test environment: Native (`scripts\local-test.ps1`, http://localhost:17878) covers the Built-in engine and any client you can reach from your PC. Docker and NAS runs are needed for remote path mapping and "Bind to VPN" checks (marked).
 For API-only checks, `<key>` is the API key shown at Settings -> Security and `<host>` is `localhost:17878` (Native) or `<host>:7878` (Docker/NAS).
 

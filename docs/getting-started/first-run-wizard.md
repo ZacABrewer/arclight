@@ -11,7 +11,7 @@ Have these ready:
 | A username and password for yourself | Yes | The password must be at least 8 characters. |
 | A TMDB API key | Yes | Free. Step 2 explains where to get it. |
 | The folder paths as the container sees them | Yes | In the Docker files: `/data/media/tv` for TV and `/data/media/movies` for movies. Natively: real paths such as `D:\Media\TV`. |
-| qBittorrent address and login | Only if you use qBittorrent | The built-in engine needs nothing. |
+| qBittorrent address and login | No | Only if you add qBittorrent yourself. The built-in engine is already registered and needs nothing. |
 | An indexer (site, Torznab URL or API key) | No | You can add these later. |
 | VPN details | No | You can set up the VPN later. |
 
@@ -89,9 +89,9 @@ In Docker always use the container paths (`/data/media/tv`, `/data/media/movies`
 
 Heading: "Add a download client". A download client downloads the releases Arclight picks. The step shows the same Download Clients list you will find at Settings > Download Clients.
 
-- **With the supplied Docker files, a client called Built-in is already there.** On first start, when no client exists, Arclight adds one that uses its own torrent engine. The step then has only **Continue**, and you may not need to change anything. Its download folder defaults to `/data/downloads` when `/data` exists (older installs keep `/downloads`). Engine options are under Settings > Torrent Engine.
-- **To use qBittorrent**, click **Add download client** and choose qBittorrent. Enter the host and port: `localhost` and `8080` in the VPN layout (qBittorrent shares the network with Arclight), or `qbittorrent` and `8080` in the no-VPN layout. Add the username and password you set in qBittorrent, and test it before saving. In qBittorrent set Tools > Options > Downloads > Default Save Path to `/data/downloads` so both programs see the same paths (no remote path mapping needed).
-- If you do not add one and none exists, click **Skip for now**. Arclight can still search and manage the library, but it has nothing to download with until you add a client.
+- **A client called Built-in is already set up.** On first start, when no client exists, Arclight registers one that uses its own torrent engine, so you can just click **Continue**. Its download folder defaults to `/data/downloads` when `/data` exists (older installs keep `/downloads`). Engine options are under Settings > Torrent Engine.
+- **External clients are optional.** To add another one (for example qBittorrent), click **Add download client**; the built-in engine is listed first. For qBittorrent (started with `docker compose --profile qbittorrent up -d`) enter `localhost` and `8080` in the VPN layout (it shares the network with Arclight), or `qbittorrent` and `8080` in the no-VPN layout, add the username and password you set in qBittorrent, and test it before saving. In qBittorrent set Tools > Options > Downloads > Default Save Path to `/data/downloads` so both programs see the same paths (no remote path mapping needed).
+- If you removed the built-in client and add nothing else, click **Skip for now**. Arclight can still search and manage the library, but it has nothing to download with until you add a client.
 
 Field-by-field help, categories and the other clients are in [download-clients.md](../using/download-clients.md).
 

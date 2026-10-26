@@ -54,7 +54,7 @@ Set `PUID` and `PGID` to the user that owns your data folder.
 Use the one that matches the machine that will run it. If your NAS is not listed but runs Docker Compose, use the generic Linux guide. If you already manage containers through Portainer, use the Portainer guide. Running it somewhere you can reach from outside your home is a separate step: see [Can I expose it to the internet?](#can-i-expose-it-to-the-internet).
 
 ### Which ports does it use?
-The web UI and API use 7878 (change it with `ARCLIGHT_PORT`). In the compose files qBittorrent's web UI is on 8080 and the peer port is 6881 (TCP, plus UDP for DHT); the built-in engine also defaults to 6881, though a port forwarded by the VPN takes precedence. FlareSolverr (8191) and the Gluetun control server (8000) are only used inside the stack, and Whisper (9000) only if you enable it. See [Install with Docker](getting-started/install-docker.md).
+The web UI and API use 7878 (change it with `ARCLIGHT_PORT`). The built-in engine's peer port defaults to 6881 (TCP, plus UDP for DHT), though a port forwarded by the VPN takes precedence. If you opt in to qBittorrent, its web UI is on 8080. FlareSolverr (8191) and the Gluetun control server (8000) are only used inside the stack, and Whisper (9000) only if you enable it. See [Install with Docker](getting-started/install-docker.md).
 
 ### Do I need a TMDB key, and can I use a free one?
 You need one, and the free key from themoviedb.org (Settings > API, the v3 key) is what Arclight expects. Titles, posters and episode data all come from TMDB. You enter it in the [first-run wizard](getting-started/first-run-wizard.md) or later in Settings > General, or you can set `ARCLIGHT_TMDB_API_KEY`.
@@ -90,11 +90,11 @@ Yes. Turn off update checks in Settings > Updates; nothing else about Arclight d
 
 ## Downloading
 
-### Do I have to use qBittorrent?
-No, and you can keep it if you like it. Arclight can use its built-in torrent engine, or drive qBittorrent, Transmission, Deluge, rTorrent, SABnzbd or NZBGet; you can have several clients at once. The built-in engine has some gaps compared with qBittorrent (see [known limitations](qa/99-known-limitations.md)), so keep qBittorrent if you depend on those. See [Download clients](using/download-clients.md).
+### Do I need qBittorrent?
+No. Arclight downloads torrents with its own built-in engine, which is already set up in every supplied Docker file (a client called Built-in is added on first start), so you can go straight from the setup wizard to downloading. The built-in engine has some gaps compared with qBittorrent (see [known limitations](qa/99-known-limitations.md)); keep or add qBittorrent if you depend on those. Transmission, Deluge, rTorrent, SABnzbd and NZBGet are also supported, and you can have several clients at once. See [Download clients](using/download-clients.md).
 
-### Can I keep my existing qBittorrent?
-Yes. Add it under Settings > Download Clients, give Arclight its own category (such as `tv`) so it can tell its downloads from yours, and press Test. If it runs behind Gluetun, Arclight can also push the VPN's forwarded port into it. See [Download clients](using/download-clients.md).
+### Can I keep qBittorrent?
+Yes, it is still supported. In the Docker files it sits behind the compose profile `qbittorrent`: run `docker compose --profile qbittorrent up -d` to start it, then add it under Settings > Download Clients with host `localhost` (VPN layouts) or `qbittorrent` (no VPN), port `8080`, and set its default save path to `/data/downloads`. If you already run your own qBittorrent, add that instead: give Arclight its own category (such as `tv`) so it can tell its downloads from yours, and press Test. If it runs behind Gluetun, Arclight can also push the VPN's forwarded port into it. If you run it next to the built-in engine without a VPN, give them different peer ports. See [Download clients](using/download-clients.md).
 
 ### Does it support usenet?
 Yes. Add Newznab indexers under Settings > Indexers and a SABnzbd or NZBGet download client. The usenet clients have only been tested with stubs, not end to end against a real server, so please report issues. See [Indexers](using/indexers.md) and [Download clients](using/download-clients.md).
@@ -122,8 +122,8 @@ Arclight is copying instead of hardlinking, almost always because downloads and 
 ### I installed with three mounts (/tv, /movies, /downloads). How do I migrate?
 Move your folders under one parent, switch the compose file to the single `${DATA_ROOT}:/data` mount (and remove `TV_ROOT`, `MOVIES_ROOT` and `DOWNLOADS_ROOT` from `.env`), then change your Arclight root folders to `/data/media/tv` and `/data/media/movies` and re-point your series and movies. The full steps are in [Folders and hardlinks](getting-started/folders-and-hardlinks.md#moving-an-existing-library).
 
-### What save path should qBittorrent use, and do I need a remote path mapping?
-In qBittorrent go to Options > Downloads and set the default save path to `/data/downloads`. Because Arclight and qBittorrent both see the same `/data` mount, the paths match and no remote path mapping is needed. The built-in torrent engine defaults to `/data/downloads` when `/data` exists; older installs that already use `/downloads` keep it. See [Download clients](using/download-clients.md) and [Folders and hardlinks](getting-started/folders-and-hardlinks.md#remote-path-mappings).
+### If I use qBittorrent, what save path should it use, and do I need a remote path mapping?
+In qBittorrent (optional) go to Options > Downloads and set the default save path to `/data/downloads`. Because Arclight and qBittorrent both see the same `/data` mount, the paths match and no remote path mapping is needed. The built-in torrent engine defaults to `/data/downloads` when `/data` exists; older installs that already use `/downloads` keep it. See [Download clients](using/download-clients.md) and [Folders and hardlinks](getting-started/folders-and-hardlinks.md#remote-path-mappings).
 
 ### Can I keep 4K and 1080p of the same title?
 Yes, two ways. On a series or movie page, add Versions (each with its own tag and quality profile; the editor allows up to 8) and Arclight searches and upgrades each version separately. For requests, turn on "Enable 4K requests" in Settings > Requests; 4K requests use their own root folder and profile so both copies live side by side. See [Library](using/library.md) and [Discover and requests](using/discover-and-requests.md).

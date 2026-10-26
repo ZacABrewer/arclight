@@ -4,7 +4,7 @@ This page installs Arclight on Unraid. Unraid's own Docker tab works with templa
 
 ## Why one data share
 
-Arclight and qBittorrent both mount one folder, `DATA_ROOT`, at `/data`: downloads in `/data/downloads`, library in `/data/media/tv` and `/data/media/movies`. A finished download is imported by hard link (instant, no extra space, seeding continues). Linux cannot hard-link between two different mounts, even on the same disk, so separate mounts force a full copy on every import. On Unraid there is a second catch: a share can span several array disks, and a hard link cannot cross disks. Use one share (for example `data`) for downloads and media, and set it so new files stay together (for example a split level that keeps a title's files on one disk, or a single-disk or pool-only share). See [folders-and-hardlinks.md](folders-and-hardlinks.md).
+Arclight (and qBittorrent, if you add it) mounts one folder, `DATA_ROOT`, at `/data`: downloads in `/data/downloads`, library in `/data/media/tv` and `/data/media/movies`. A finished download is imported by hard link (instant, no extra space, seeding continues). Linux cannot hard-link between two different mounts, even on the same disk, so separate mounts force a full copy on every import. On Unraid there is a second catch: a share can span several array disks, and a hard link cannot cross disks. Use one share (for example `data`) for downloads and media, and set it so new files stay together (for example a split level that keeps a title's files on one disk, or a single-disk or pool-only share). See [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 ## 1. Choose a layout
 
@@ -61,9 +61,9 @@ If you prefer not to use the plugin, put the same compose file and `.env` in a f
 
 1. Browse to `http://<unraid-ip>:7878`. In a VPN layout the ports are published by the `gluetun` container, but the address is your server.
 2. Complete the [setup wizard](first-run-wizard.md). Root folders are `/data/media/tv` and `/data/media/movies`.
-3. qBittorrent users: open `http://<unraid-ip>:8080`, set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`, and add the client in Arclight with host `localhost` (VPN) or `qbittorrent` (no VPN), port `8080`.
+3. Optional: qBittorrent. The built-in engine is already set up, so you only need this if you want qBittorrent too. Start the stack with the `qbittorrent` profile (or paste the `qbittorrent` service from the compose file), open `http://<unraid-ip>:8080`, set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`, and add the client in Arclight with host `localhost` (VPN) or `qbittorrent` (no VPN), port `8080`. In VPN layouts uncomment the `8080` port line on `gluetun` first.
 
-Unraid's web UI normally uses ports 80 and 443, so 7878 and 8080 are free unless another container took them. If a port is taken, change the left side of the mapping, for example `"7979:7878"`. A VPN layout needs the `tun` device (normally present on Unraid); no-VPN layouts do not.
+Unraid's web UI normally uses ports 80 and 443, so 7878 (and 8080, if you use qBittorrent) are free unless another container took them. If a port is taken, change the left side of the mapping, for example `"7979:7878"`. A VPN layout needs the `tun` device (normally present on Unraid); no-VPN layouts do not.
 
 ## Common problems
 

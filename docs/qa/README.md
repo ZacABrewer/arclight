@@ -85,18 +85,18 @@ folders are `/data/media/tv` and `/data/media/movies`.
 
 | Stack | Command (run inside `docker\`) | What you get | Address |
 |---|---|---|---|
-| With VPN and qBittorrent | `docker compose -f docker-compose.yml up -d --build` | gluetun + arclight + qbittorrent; both apps share gluetun's network | Arclight http://localhost:7878, qBittorrent http://localhost:8080 |
-| With VPN, built-in engine | `docker compose -f docker-compose.builtin.yml up -d --build` | gluetun + arclight only; torrents run inside Arclight | http://localhost:7878 |
-| No VPN | `docker compose -f docker-compose.novpn.yml up -d --build` | arclight + qbittorrent, peer port 6881 published | Arclight http://localhost:7878, qBittorrent http://localhost:8080 |
+| With VPN (built-in engine) | `docker compose -f docker-compose.yml up -d --build` | gluetun + flaresolverr + arclight; torrents run inside Arclight | http://localhost:7878 |
+| With VPN and qBittorrent | `docker compose -f docker-compose.yml --profile qbittorrent up -d --build` | the above plus qbittorrent; both apps share gluetun's network. Uncomment the `8080` port line on gluetun to reach the WebUI | Arclight http://localhost:7878, qBittorrent http://localhost:8080 |
+| No VPN | `docker compose -f docker-compose.novpn.yml up -d --build` (add `--profile qbittorrent` for qBittorrent) | arclight + flaresolverr; with the profile also qbittorrent, peer port 6881 published | Arclight http://localhost:7878, qBittorrent (profile only) http://localhost:8080 |
 | Published image | `docker-compose.release.yml` / `docker-compose.release.novpn.yml` | same as above, pulled from GHCR instead of built | same |
 
 Notes:
 
 - With a VPN stack, ports are published on the `gluetun` container because the others share its
-  network. When you add qBittorrent inside Arclight, the host is `localhost` and the port is
+  network. When you add qBittorrent (profile `qbittorrent`) inside Arclight, the host is `localhost` and the port is
   `8080` (same network namespace). In the no-VPN stack the host is `qbittorrent`.
 - First start can take a minute while gluetun connects; Arclight waits for gluetun to be healthy.
-- qBittorrent's first password is printed in its log (`docker logs qbittorrent`). Change it,
+- If you use qBittorrent, its first password is printed in its log (`docker logs qbittorrent`). Change it,
   then enter the same credentials in Arclight.
 - Stop: `docker compose -f <file> down`. Data stays in the folders you configured.
 
@@ -115,7 +115,7 @@ hardlinks across the downloads and media shares, and long-running soak checks ar
 |---|---|---|---|---|
 | TMDB v3 API key | Required | Required | Required | themoviedb.org, Settings -> API. Without it you cannot add titles. Can also be supplied as `ARCLIGHT_TMDB_API_KEY`. |
 | An indexer | Required | Required | Required | A Torznab URL plus API key (Jackett, a private tracker), **or** a built-in public definition from the catalogue (`1337x`, `eztv`, `limetorrents`, `nyaa`, `thepiratebay`, `torlock`, `torrentgalaxy`, `yts`; public sites change often, expect some to be down). |
-| A download client | Built-in engine (no extra install) or a local qBittorrent | Built-in engine or qBittorrent from the compose file | Same as Docker | qBittorrent WebUI enabled; a usenet client (SABnzbd, NZBGet) is optional |
+| A download client | Built-in engine (no extra install) or a local qBittorrent | Built-in engine (already registered); qBittorrent via `--profile qbittorrent` | Same as Docker | qBittorrent WebUI enabled; a usenet client (SABnzbd, NZBGet) is optional |
 | Usenet account + Newznab indexer | Optional | Optional | Optional | Only for the usenet rows in files 04, 05 and 06 |
 | Proton WireGuard key with port forwarding | Only for the Windows WireGuard rows (as a `.conf`) | Required for the gluetun stacks | Required for the gluetun stacks | account.proton.me -> VPN -> Downloads -> WireGuard configuration; enable NAT-PMP (port forwarding). Put the `PrivateKey` into `PROTON_WIREGUARD_KEY`. |
 | Media server (Jellyfin, Emby or Plex) | Optional | Optional | Recommended | For the refresh checks in files 06 and 10 |
@@ -151,7 +151,7 @@ When a row fails, attach the log lines from the minute it happened.
   with `ARCLIGHT_LOG_LEVEL=debug` (Native: `$env:ARCLIGHT_LOG_LEVEL='debug'` before running
   the script).
 - **Docker:** `docker logs arclight --since 10m`, add `-f` to follow. For the VPN stack also
-  `docker logs gluetun --since 10m`, and for qBittorrent `docker logs qbittorrent --since 10m`.
+  `docker logs gluetun --since 10m`, and, if you use it, for qBittorrent `docker logs qbittorrent --since 10m`.
 - **Native:** the same lines print in the PowerShell window; files are in
   `<test-env>\config\logs`.
 - **Browser:** press F12, open the Console tab for red errors and the Network tab for failed
@@ -172,7 +172,7 @@ row per failed or skipped check; passes can be counted in the summary.
 Run date:        2026-11-02
 Tester:          your name
 Build / commit:  version from System -> Status, plus git commit hash
-Environment:     Native | Docker + VPN + qBittorrent | Docker + VPN built-in | Docker no VPN | NAS
+Environment:     Native | Docker + VPN built-in | Docker + VPN + qBittorrent (profile) | Docker no VPN | NAS
 Browser / OS:    Chrome 130 on Windows 11
 Indexer used:    Torznab (Jackett) | 1337x | ...
 Download client: built-in | qBittorrent 5.0 | SABnzbd ...

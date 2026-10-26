@@ -7,11 +7,11 @@ This page walks through installing Arclight on a UGREEN NAS running UGOS, using 
 - One data folder on the NAS with `downloads`, `media/tv` and `media/movies` inside it.
 - One folder for container settings (Arclight's database, Gluetun, and so on).
 - A numeric user and group id (`PUID` and `PGID`) that owns all of it.
-- A Docker project running Arclight, plus Gluetun and FlareSolverr (and qBittorrent if you pick that layout).
+- A Docker project running Arclight, plus Gluetun and FlareSolverr (qBittorrent is optional).
 
 ## Why a single data folder
 
-Arclight and qBittorrent both mount one folder, `DATA_ROOT`, at `/data`. Downloads live in `/data/downloads` and the library in `/data/media/tv` and `/data/media/movies`. When a download finishes, Arclight imports it by hard link: instant, no extra space, and the torrent keeps seeding. Linux cannot hard-link between two different mounts, even on the same disk, so separate mounts for downloads and library force a full copy on every import (slow, and double the space). Keep all three folders inside one data folder on the same volume. See [folders-and-hardlinks.md](folders-and-hardlinks.md).
+Arclight (and qBittorrent, if you add it) mounts one folder, `DATA_ROOT`, at `/data`. Downloads live in `/data/downloads` and the library in `/data/media/tv` and `/data/media/movies`. When a download finishes, Arclight imports it by hard link: instant, no extra space, and the torrent keeps seeding. Linux cannot hard-link between two different mounts, even on the same disk, so separate mounts for downloads and library force a full copy on every import (slow, and double the space). Keep all three folders inside one data folder on the same volume. See [folders-and-hardlinks.md](folders-and-hardlinks.md).
 
 ## Before you start
 
@@ -106,7 +106,7 @@ Method A avoids pasting and is easier to repeat when you update.
 2. In the Docker app, check the containers are running (Gluetun healthy). Each container's log view is your first stop if one is not.
 3. Browse to `http://<nas-ip>:7878`. In a VPN layout the port is published by the `gluetun` container, but the address is still the NAS.
 4. You land in the setup wizard: [first-run-wizard.md](first-run-wizard.md). Use `/data/media/tv` and `/data/media/movies` as the root folders.
-5. qBittorrent users: in qBittorrent's web UI (`http://<nas-ip>:8080`) set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`, and add it in Arclight with host `localhost` (VPN layout) or `qbittorrent` (no-VPN layout), port `8080`.
+5. Optional: qBittorrent. The built-in engine is already set up; only if you also want qBittorrent, start the stack with the `qbittorrent` profile (or add its service block), open its web UI (`http://<nas-ip>:8080`; in VPN layouts uncomment the `8080` port line on `gluetun` first), set Tools > Options > Downloads > **Default Save Path** to `/data/downloads`, and add it in Arclight with host `localhost` (VPN layout) or `qbittorrent` (no-VPN layout), port `8080`.
 
 ## Common problems
 
