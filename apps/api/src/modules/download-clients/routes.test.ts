@@ -39,7 +39,7 @@ describe('download-clients routes', () => {
     const { app } = await build();
     const res = await app.inject({ method: 'GET', url: '/api/v1/downloadclient/schema' });
     expect(res.statusCode).toBe(200);
-    expect(res.json()[0]).toMatchObject({ implementation: 'qbittorrent', protocol: 'torrent' });
+    expect(res.json()[0]).toMatchObject({ implementation: 'builtin', protocol: 'torrent' });
   });
 
   it('serves the queue, its status and single/bulk delete', async () => {

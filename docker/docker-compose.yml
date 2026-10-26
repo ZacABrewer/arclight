@@ -1,5 +1,5 @@
-# Development/compose-from-source stack with a VPN. Arclight and qBittorrent share
-# Gluetun's network namespace (network_mode: "service:gluetun"), so all their traffic leaves
+# Development/compose-from-source stack with a VPN. Arclight (and optionally
+# qBittorrent) share Gluetun's network namespace (network_mode: "service:gluetun"), so all their traffic leaves
 # through the ProtonVPN WireGuard tunnel and Gluetun's firewall blocks everything else
 # (a kill switch by construction). Ports are therefore published on the gluetun service.
 # Without a VPN, use docker-compose.novpn.yml. For the published image, see README.md.
@@ -19,7 +19,7 @@ services:
       - VPN_TYPE=wireguard
       - WIREGUARD_PRIVATE_KEY=${PROTON_WIREGUARD_KEY}
       - SERVER_COUNTRIES=${VPN_COUNTRIES:-Netherlands}
-      # Proton assigns a forwarded port (NAT-PMP); Arclight pushes it to qBittorrent.
+      # Proton assigns a forwarded port (NAT-PMP); Arclight moves its torrent engine onto it.
       - VPN_PORT_FORWARDING=on
       # Let LAN clients reach the published UIs through Gluetun's firewall.
       # The compose subnet (see `networks` below) is allowed too, so Arclight reaches whisper.
@@ -38,7 +38,7 @@ services:
       - ${CONFIG_ROOT:-./data}/gluetun:/gluetun
     ports:
       - "7878:7878" # Arclight
-      - "8080:8080" # qBittorrent WebUI
+      # - "8080:8080" # qBittorrent WebUI (only with --profile qbittorrent)
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
@@ -111,10 +111,11 @@ services:
         condition: service_healthy
       flaresolverr:
         condition: service_started
-      qbittorrent:
-        condition: service_started
 
+  # Optional external client. Arclight's built-in torrent engine is the default and needs no
+  # extra container; start qBittorrent too only if you want it: docker compose --profile qbittorrent up -d
   qbittorrent:
+    profiles: ["qbittorrent"]
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     labels:

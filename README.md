@@ -3,9 +3,9 @@
 One content-acquisition service for a home media stack, written from scratch.
 Arclight does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
 (subtitles) and Seerr (requests) in a single application: one database, one API, one
-login, one UI, one background scheduler. It drives an external download client
-(qBittorrent by default) and notifies your media server (Jellyfin, Emby, Plex) when
-content lands. It is not a media server.
+login, one UI, one background scheduler. It downloads torrents with its own built-in
+engine (external clients such as qBittorrent or SABnzbd are optional) and notifies your media
+server (Jellyfin, Emby, Plex) when content lands. It is not a media server.
 
 ## Documentation
 
@@ -18,9 +18,10 @@ them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
 
 ## Deploy
 
-The recommended layout runs Arclight and qBittorrent behind [Gluetun](https://github.com/qdm12/gluetun)
-with ProtonVPN over WireGuard. Both containers use `network_mode: "service:gluetun"`, so all
-their traffic leaves through the tunnel and Gluetun's firewall drops anything else.
+The recommended layout runs Arclight (with its built-in torrent engine) behind
+[Gluetun](https://github.com/qdm12/gluetun) with ProtonVPN over WireGuard. Arclight uses
+`network_mode: "service:gluetun"`, so all its traffic leaves through the tunnel and Gluetun's
+firewall drops anything else. No separate download client container is needed.
 
 ```yaml
 # docker-compose.yml
@@ -42,7 +43,6 @@ services:
       - TZ=Etc/UTC
     ports:
       - 7878:7878   # Arclight
-      - 8080:8080   # qBittorrent
     healthcheck:
       test: ["CMD", "/gluetun-entrypoint", "healthcheck"]
       interval: 30s
@@ -61,21 +61,6 @@ services:
     volumes:
       - ./config:/config
       # One share holding downloads/, media/tv/ and media/movies/: imports are hard links.
-      - /path/to/data:/data
-    depends_on:
-      gluetun: { condition: service_healthy }
-    restart: unless-stopped
-
-  qbittorrent:
-    image: lscr.io/linuxserver/qbittorrent:latest
-    network_mode: "service:gluetun"
-    environment:
-      - PUID=1000
-      - PGID=1000
-      - TZ=Etc/UTC
-      - WEBUI_PORT=8080
-    volumes:
-      - ./qbittorrent:/config
       - /path/to/data:/data
     depends_on:
       gluetun: { condition: service_healthy }
@@ -130,13 +115,12 @@ the network with the fixed subnet. On a bare install, point it at any Whisper AS
 3. Create it and copy the `PrivateKey = ...` value from the `[Interface]` section into
    `PROTON_WIREGUARD_KEY` in your `.env`. Keep it secret: anyone with it can use your tunnel.
 
-### How qBittorrent gets the forwarded port
+### How the forwarded port is used
 
 Proton forwards one incoming port per session and Gluetun reports it on its control server.
 Arclight polls Gluetun every minute (Settings → VPN, provider *Gluetun*, enabled) and, when
-the port changes, sets it as qBittorrent's listening port (`/api/v2/app/setPreferences`,
-random port off) on every enabled qBittorrent client. Because the three containers share one
-network namespace, add qBittorrent in Arclight with host `localhost`, port `8080`. With
+the port changes, moves its built-in engine's listener onto it (and, if you also run
+qBittorrent, sets it as qBittorrent's listening port). With
 **Pause grabs when down** on (default), Arclight stops grabbing while the VPN is down or
 its public IP equals your **home public IP**; the dashboard card and the `VpnDisconnected`
 health check show the state. Current Gluetun releases protect the control server with an
@@ -147,22 +131,28 @@ generates a key, writes `${CONFIG_ROOT}/gluetun/auth/config.toml` for Gluetun an
 `docker compose down && docker compose up -d` (containers that share Gluetun's network
 must be recreated whenever Gluetun restarts).
 
-### Built-in torrent engine (no qBittorrent)
+### Built-in torrent engine (the default)
 
-Arclight ships its own BitTorrent engine, so the stack can run without a qBittorrent
-container: `docker compose -f docker/docker-compose.builtin.yml up -d` starts only Gluetun and
-Arclight (7878 published on Gluetun; no 6881 publish, since Proton forwards a port dynamically
-and Arclight moves the engine's listener onto it). On first start a **Built-in** download
+Arclight ships its own BitTorrent engine, so no download client container is needed. Every
+compose file starts only Gluetun (VPN layouts), FlareSolverr and Arclight; 7878 is published on
+Gluetun and no peer port is published, since Proton forwards a port dynamically and Arclight
+moves the engine's listener onto it. On first start a **Built-in** download
 client is registered when none exists; engine options (limits, queue, seed goals, download
 folder `/data/downloads`) are under Settings → Torrent Engine. With **Bind to VPN** on (default) and
 the VPN integration enabled, the engine binds to the tunnel and, while the VPN is down or
 leaking, pauses every torrent and binds to 127.0.0.1 until it reconnects; set
 `ARCLIGHT_TORRENT_ENGINE=0` to keep the engine from starting at all.
 
+**Prefer qBittorrent?** It is still supported, just not started by default. Add
+`--profile qbittorrent` (`docker compose --profile qbittorrent up -d`) to start the bundled
+qBittorrent container, then add it under Settings → Download Clients with host `localhost`
+(VPN layouts) or `qbittorrent` (no-VPN layout), port `8080`, and set its default save path to
+`/data/downloads`. Arclight keeps its forwarded port in sync too.
+
 ### Without a VPN
 
 Use the plain layout: `docker compose -f docker/docker-compose.novpn.yml up -d` (Arclight on
-7878, qBittorrent on 8080 and peer port 6881, no Gluetun). Leave Settings → VPN disabled.
+7878 with the built-in engine, no Gluetun; add `--profile qbittorrent` for qBittorrent on 8080). Leave Settings → VPN disabled.
 
 ### Self-update (Docker socket)
 

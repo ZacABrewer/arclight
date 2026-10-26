@@ -13,15 +13,17 @@ import { ReleaseProtocol } from './profiles.js';
  * settings schema map and the unions below together. `builtin` is Arclight's own in-process
  * torrent engine (engine-wide settings live in the `torrent` settings section).
  */
+// Order is the order clients are offered in: the built-in engine first (the default), then the
+// remote engine and the external clients.
 export const DownloadClientImplementation = z.enum([
+  'builtin',
+  'remoteEngine',
   'qbittorrent',
   'transmission',
   'deluge',
   'rtorrent',
   'sabnzbd',
   'nzbget',
-  'builtin',
-  'remoteEngine',
 ]);
 export type DownloadClientImplementation = z.infer<typeof DownloadClientImplementation>;
 

@@ -110,8 +110,10 @@ describe('download client CRUD', () => {
 
   it('exposes implementation schemas with described fields', async () => {
     const { service } = await setup();
-    const [qb] = service.schemas();
-    expect(qb!.implementation).toBe('qbittorrent');
+    const schemas = service.schemas();
+    // The built-in engine is offered first (the default); qBittorrent follows the remote engine.
+    expect(schemas.map((s) => s.implementation).slice(0, 3)).toEqual(['builtin', 'remoteEngine', 'qbittorrent']);
+    const qb = schemas.find((s) => s.implementation === 'qbittorrent');
     expect(qb!.fields.every((f) => f.helpText.length > 0)).toBe(true);
     expect(qb!.fields.map((f) => f.name)).toContain('settings.contentLayout');
   });

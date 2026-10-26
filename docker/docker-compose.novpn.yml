@@ -30,10 +30,12 @@ services:
       - "7878:7878"
     restart: unless-stopped
     depends_on:
-      - qbittorrent
       - flaresolverr
 
+  # Optional external client. Arclight's built-in torrent engine is the default and needs no
+  # extra container; start qBittorrent too only if you want it: docker compose --profile qbittorrent up -d
   qbittorrent:
+    profiles: ["qbittorrent"]
     image: lscr.io/linuxserver/qbittorrent:latest
     container_name: qbittorrent
     labels:
