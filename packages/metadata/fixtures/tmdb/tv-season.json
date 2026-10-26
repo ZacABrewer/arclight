@@ -1,0 +1,63 @@
+{
+  "_id": "6100aa00bb00cc00dd00ee01",
+  "air_date": "2021-09-14",
+  "episodes": [
+    {
+      "air_date": "2021-09-14",
+      "episode_number": 1,
+      "episode_type": "standard",
+      "id": 2100101,
+      "name": "Frequency",
+      "overview": "Mara hears the first voice.",
+      "production_code": "SL101",
+      "runtime": 55,
+      "season_number": 1,
+      "show_id": 90210,
+      "still_path": "/signal-s1e1.jpg",
+      "vote_average": 7.9,
+      "vote_count": 88,
+      "crew": [],
+      "guest_stars": []
+    },
+    {
+      "air_date": "2021-09-21",
+      "episode_number": 2,
+      "episode_type": "standard",
+      "id": 2100102,
+      "name": "Carrier Wave",
+      "overview": "",
+      "production_code": "SL102",
+      "runtime": null,
+      "season_number": 1,
+      "show_id": 90210,
+      "still_path": null,
+      "vote_average": 8.2,
+      "vote_count": 74,
+      "crew": [],
+      "guest_stars": []
+    },
+    {
+      "air_date": null,
+      "episode_number": 3,
+      "episode_type": "finale",
+      "id": 2100103,
+      "name": "",
+      "overview": null,
+      "production_code": "",
+      "runtime": null,
+      "season_number": 1,
+      "show_id": 90210,
+      "still_path": null,
+      "vote_average": 0,
+      "vote_count": 0,
+      "crew": [],
+      "guest_stars": []
+    }
+  ],
+  "name": "Season 1",
+  "overview": "The transmission begins.",
+  "id": 101,
+  "poster_path": "/signal-s1.jpg",
+  "season_number": 1,
+  "vote_average": 8.0
+}

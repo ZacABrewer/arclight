@@ -1,0 +1,15 @@
+{
+  "save_path": "/downloads/",
+  "auto_tmm_enabled": false,
+  "max_ratio_enabled": false,
+  "max_ratio": -1,
+  "max_seeding_time_enabled": false,
+  "max_seeding_time": -1,
+  "max_inactive_seeding_time_enabled": false,
+  "max_inactive_seeding_time": -1,
+  "max_ratio_act": 0,
+  "queueing_enabled": true,
+  "dht": true,
+  "locale": "en",
+  "web_ui_port": 8080
+}

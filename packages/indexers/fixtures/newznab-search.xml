@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom" xmlns:newznab="http://www.newznab.com/DTD/2010/feeds/attributes/">
+  <channel>
+    <atom:link href="https://nzb.example.invalid/api" rel="self" type="application/rss+xml"/>
+    <title>Example Usenet</title>
+    <description>Example Usenet API results</description>
+    <link>https://nzb.example.invalid/</link>
+    <newznab:response offset="0" total="3"/>
+    <item>
+      <title>Show.Name.S01E02.720p.HDTV.x264-GROUP</title>
+      <guid isPermaLink="true">https://nzb.example.invalid/details/aaaa1111</guid>
+      <link>https://nzb.example.invalid/getnzb/aaaa1111.nzb&amp;i=1&amp;r=REDACTED</link>
+      <comments>https://nzb.example.invalid/details/aaaa1111#comments</comments>
+      <pubDate>Sat, 25 Oct 2026 01:00:00 +0000</pubDate>
+      <category>TV &gt; HD</category>
+      <description>Show.Name.S01E02.720p.HDTV.x264-GROUP</description>
+      <enclosure url="https://nzb.example.invalid/getnzb/aaaa1111.nzb&amp;i=1&amp;r=REDACTED" length="734003200" type="application/x-nzb"/>
+      <newznab:attr name="category" value="5000"/>
+      <newznab:attr name="category" value="5040"/>
+      <newznab:attr name="size" value="734003200"/>
+      <newznab:attr name="files" value="34"/>
+      <newznab:attr name="grabs" value="1250"/>
+      <newznab:attr name="tvdbid" value="123456"/>
+      <newznab:attr name="rageid" value="0"/>
+      <newznab:attr name="usenetdate" value="Fri, 24 Oct 2026 22:45:10 +0000"/>
+    </item>
+    <item>
+      <title>Movie.Title.2024.1080p.BluRay.x264-GRP</title>
+      <guid isPermaLink="false">bbbb2222</guid>
+      <link>https://nzb.example.invalid/getnzb/bbbb2222.nzb</link>
+      <pubDate>Thu, 23 Oct 2026 10:00:00 +0200</pubDate>
+      <enclosure url="https://nzb.example.invalid/getnzb/bbbb2222.nzb" length="9663676416" type="application/x-nzb"/>
+      <newznab:attr name="category" value="2040"/>
+      <newznab:attr name="imdb" value="0137523"/>
+    </item>
+    <item>
+      <title>Wrong.Protocol.Release.1080p</title>
+      <guid>cccc3333</guid>
+      <link>https://nzb.example.invalid/details/cccc3333</link>
+      <pubDate>Thu, 23 Oct 2026 10:00:00 +0000</pubDate>
+      <enclosure url="https://nzb.example.invalid/cccc3333.torrent" length="1000000" type="application/x-bittorrent"/>
+      <newznab:attr name="size" value="1000000"/>
+    </item>
+  </channel>
+</rss>

@@ -4,3 +4,6 @@
 export * from './system.js';
 export * from './jobs.js';
 export * from './events.js';
+export * from './quality.js';
+export * from './profiles.js';
+export * from './library.js';

@@ -1,0 +1,43 @@
+{
+  "adult": false,
+  "backdrop_path": null,
+  "belongs_to_collection": null,
+  "budget": 0,
+  "genres": [{ "id": 16, "name": "Animation" }],
+  "homepage": "",
+  "id": 66600,
+  "imdb_id": null,
+  "origin_country": ["JP"],
+  "original_language": "ja",
+  "original_title": "紙の月",
+  "overview": "",
+  "popularity": 12.0,
+  "poster_path": "/paper-moon-poster.jpg",
+  "production_companies": [],
+  "production_countries": [],
+  "release_date": "2031-03-14",
+  "revenue": 0,
+  "runtime": 0,
+  "spoken_languages": [],
+  "status": "Post Production",
+  "tagline": "",
+  "title": "A Paper Moon",
+  "video": false,
+  "vote_average": 0,
+  "vote_count": 0,
+  "external_ids": { "imdb_id": null, "wikidata_id": null },
+  "alternative_titles": { "titles": [] },
+  "release_dates": {
+    "results": [
+      {
+        "iso_3166_1": "JP",
+        "release_dates": [
+          { "certification": "G", "descriptors": [], "iso_639_1": "", "note": "", "release_date": "2031-03-14T00:00:00.000Z", "type": 3 }
+        ]
+      }
+    ]
+  },
+  "images": { "backdrops": [], "logos": [], "posters": [] },
+  "videos": { "results": [] },
+  "keywords": { "keywords": [] }
+}
