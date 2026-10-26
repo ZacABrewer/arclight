@@ -131,6 +131,8 @@ export const VpnStatus = z.object({
   lastChecked: z.string().nullable(),
   lastChanged: z.string().nullable(),
   error: z.string().optional(),
+  /** Still treated as connected, but the last check had a problem (e.g. gluetun answered slowly). */
+  warning: z.string().optional(),
   downloadClientPortSynced: z.boolean().optional(),
 });
 export type VpnStatus = z.infer<typeof VpnStatus>;
