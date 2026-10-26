@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
-import { PENDING_FEATURES } from '../../api/library.js';
 import {
   Accordion,
   AccordionItem,
@@ -19,7 +18,6 @@ import {
   StatusChip,
   Tabs,
   Toggle,
-  Tooltip,
   buttonClass,
 } from '../../arclight/index.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
@@ -47,7 +45,17 @@ import {
 import { LanguageProfileSelect } from '../subtitles/language-profile-select.js';
 import { SubtitlesTab } from '../subtitles/subtitles-tab.js';
 import { SERIES_TYPE_LABELS } from './add-form.js';
-import { DetailsHero, HistoryEventChip, HistoryTable, LibraryCrumb, RequestsTable, historyEventLabel, useMediaHistory, useQueueProgress } from './details-kit.js';
+import {
+  DetailsHero,
+  HistoryEventChip,
+  HistoryTable,
+  LibraryCrumb,
+  RefreshButtons,
+  RequestsTable,
+  historyEventLabel,
+  useMediaHistory,
+  useQueueProgress,
+} from './details-kit.js';
 import { InteractiveSearchModal, ReleaseTable } from './interactive-search.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
@@ -57,20 +65,6 @@ const route = getRouteApi('/library/series/$id');
 export interface InteractiveState {
   target: ReleaseSearchTarget;
   title: string;
-}
-
-export const PENDING_REFRESH = 'Refresh is not available yet: the api has no refresh command.';
-
-/** Refresh stays visible but disabled until the api has a refresh command. */
-export function RefreshButton() {
-  if (PENDING_FEATURES.refresh) return <Button>Refresh</Button>;
-  return (
-    <Tooltip content={PENDING_REFRESH}>
-      <Button aria-disabled="true" aria-label="Refresh (not available yet)" className="lib-disabled" onClick={(e) => e.preventDefault()}>
-        Refresh
-      </Button>
-    </Tooltip>
-  );
 }
 
 /** Season header text: "Airing · 1 of 9 aired", "Complete", "Not started". */
@@ -155,7 +149,7 @@ export function SeriesDetailsPage() {
               Search monitored
             </Button>
             <Button onClick={() => setInteractive({ target: { seriesId: s.id }, title: s.title })}>Interactive search</Button>
-            <RefreshButton />
+            <RefreshButtons target={{ seriesId: s.id }} />
             <Link className={buttonClass({ variant: 'secondary' })} to="/activity/manual-import" search={{ seriesId: s.id }}>
               Manual import
             </Link>

@@ -28,6 +28,7 @@ import {
 } from '../../arclight/index.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
+import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError, TagChips } from '../../components/media/media-kit.js';
 import {
   useBulkUpdateMovies,
@@ -95,6 +96,28 @@ function usePersistent<T>(key: string, initial: T): [T, (v: T) => void] {
   return [value, set];
 }
 
+/** A number kept in sessionStorage; null until set. */
+function useSessionNumber(key: string): [number | null, (v: number) => void] {
+  const [value, setValue] = useState<number | null>(() => {
+    try {
+      const raw = sessionStorage.getItem(key);
+      const n = raw === null ? NaN : Number(raw);
+      return Number.isFinite(n) ? n : null;
+    } catch {
+      return null;
+    }
+  });
+  const set = (v: number) => {
+    setValue(v);
+    try {
+      sessionStorage.setItem(key, String(v));
+    } catch {
+      // Storage unavailable: keep the in-memory value only.
+    }
+  };
+  return [value, set];
+}
+
 export function SeriesLibraryPage() {
   return <LibraryIndexPage kind="series" />;
 }
@@ -119,7 +142,10 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
   const [storedView, setView] = usePersistent<LibraryView>(`library.${kind}.view`, 'posters');
   const view: LibraryView = kind === 'series' && storedView === 'collections' ? 'posters' : storedView;
   const [sort, setSort] = usePersistent<LibrarySort>(`library.${kind}.sort`, { key: 'title', direction: 'asc' });
-  const [columns, setColumns] = usePersistent<number>('library.columns', 7);
+  // The UI preference (Settings → General → UI) is the default; moving the slider wins for this browser session.
+  const prefs = useUiPreferences();
+  const [columnsOverride, setColumns] = useSessionNumber('library.columns');
+  const columns = columnsOverride ?? prefs.posterColumns;
   const [showFilters, setShowFilters] = usePersistent<boolean>('library.filters', true);
   const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
   const [selectMode, setSelectMode] = useState(false);

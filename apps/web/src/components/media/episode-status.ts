@@ -1,5 +1,5 @@
 import type { Episode } from '@arclight/shared';
-import type { BadgeTone } from '../badge.js';
+import type { ChipTone } from '../../arclight/index.js';
 
 /**
  * - downloaded: has a file
@@ -30,11 +30,11 @@ export function episodeStatus(ep: EpisodeLike, opts: { seriesMonitored?: boolean
   return ep.monitored && (opts.seriesMonitored ?? true) ? 'wanted' : 'missing';
 }
 
-export const EPISODE_STATUS_META: Record<EpisodeStatus, { label: string; tone: BadgeTone }> = {
-  downloaded: { label: 'Downloaded', tone: 'ok' },
-  wanted: { label: 'Wanted', tone: 'error' },
-  missing: { label: 'Missing', tone: 'warning' },
-  unaired: { label: 'Unaired', tone: 'info' },
+export const EPISODE_STATUS_META: Record<EpisodeStatus, { label: string; tone: ChipTone }> = {
+  downloaded: { label: 'Downloaded', tone: 'accent' },
+  wanted: { label: 'Wanted', tone: 'danger' },
+  missing: { label: 'Missing', tone: 'warn' },
+  unaired: { label: 'Unaired', tone: 'default' },
   tba: { label: 'TBA', tone: 'neutral' },
 };
 

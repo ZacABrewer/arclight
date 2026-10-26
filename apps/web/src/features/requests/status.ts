@@ -1,28 +1,29 @@
 import { hasAnyPermission, type DiscoverSliderType, type IssueType, type MediaStatus, type RequestStatus } from '@arclight/shared';
-import type { BadgeTone } from '../../components/badge.js';
+import type { ChipTone } from '../../arclight/index.js';
 import { useAuth } from '../../auth/auth-context.js';
+import { formatDateTime as formatPreferredDateTime } from '../../lib/ui-preferences.js';
 
 // Labels and tones for request/availability states, shared by every requests page.
 
 export interface StatusMeta {
   label: string;
-  tone: BadgeTone;
+  tone: ChipTone;
 }
 
 export const MEDIA_STATUS_META: Record<MediaStatus, StatusMeta> = {
   unknown: { label: 'Not requested', tone: 'neutral' },
-  pending: { label: 'Pending', tone: 'warning' },
-  processing: { label: 'Processing', tone: 'info' },
-  partiallyAvailable: { label: 'Partially available', tone: 'info' },
-  available: { label: 'Available', tone: 'ok' },
+  pending: { label: 'Pending', tone: 'warn' },
+  processing: { label: 'Processing', tone: 'default' },
+  partiallyAvailable: { label: 'Partially available', tone: 'default' },
+  available: { label: 'Available', tone: 'accent' },
 };
 
 export const REQUEST_STATUS_META: Record<RequestStatus, StatusMeta> = {
-  pending: { label: 'Pending approval', tone: 'warning' },
-  approved: { label: 'Approved', tone: 'info' },
-  declined: { label: 'Declined', tone: 'error' },
-  failed: { label: 'Failed', tone: 'error' },
-  completed: { label: 'Completed', tone: 'ok' },
+  pending: { label: 'Pending approval', tone: 'warn' },
+  approved: { label: 'Approved', tone: 'default' },
+  declined: { label: 'Declined', tone: 'danger' },
+  failed: { label: 'Failed', tone: 'danger' },
+  completed: { label: 'Completed', tone: 'accent' },
 };
 
 export const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
@@ -37,9 +38,9 @@ export const ISSUE_TYPE_LABELS: Record<IssueType, string> = {
  * shows as "Requested". null when there is nothing to say.
  */
 export function availabilityBadge(mediaStatus: MediaStatus, requestStatus?: RequestStatus | null): StatusMeta | null {
-  if (mediaStatus !== 'unknown') return mediaStatus === 'pending' ? { label: 'Requested', tone: 'warning' } : MEDIA_STATUS_META[mediaStatus];
-  if (requestStatus === 'pending') return { label: 'Requested', tone: 'warning' };
-  if (requestStatus === 'approved') return { label: 'Processing', tone: 'info' };
+  if (mediaStatus !== 'unknown') return mediaStatus === 'pending' ? { label: 'Requested', tone: 'warn' } : MEDIA_STATUS_META[mediaStatus];
+  if (requestStatus === 'pending') return { label: 'Requested', tone: 'warn' };
+  if (requestStatus === 'approved') return { label: 'Processing', tone: 'default' };
   return null;
 }
 
@@ -86,10 +87,11 @@ export function usePermissions(): { userId: number | null; can: (...wanted: numb
   };
 }
 
+/** Date and time in the signed-in user's preferred format (Settings → General → UI). */
 export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return '—';
   const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleString();
+  return Number.isNaN(d.getTime()) ? iso : formatPreferredDateTime(d);
 }
 
 export function seasonsLabel(seasons: ReadonlyArray<{ seasonNumber: number }>): string {

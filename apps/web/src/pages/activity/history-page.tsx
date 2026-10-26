@@ -4,28 +4,29 @@ import {
   DEFAULT_HISTORY_FILTER,
   HISTORY_EVENT_LABELS,
   HISTORY_EVENT_TYPES,
+  historyEventLabel,
   type HistoryEventType,
   type HistoryFilter,
   type HistoryRecord,
 } from '../../api/history.js';
 import { Button, Chip, Drawer, EmptyState, ErrorBlock, FilterBar, KeyValue, Pane, Select, Table, type ChipTone, type Column, type KeyValueItem } from '../../arclight/index.js';
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
-import { useHistory, useMarkHistoryFailed } from '../../hooks/activity.js';
-import { useAutomaticSearch } from '../../hooks/library.js';
+import { useToast } from '../../components/toast.js';
+import { useHistory, useMarkHistoryFailed, useRedownloadHistory } from '../../hooks/activity.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
 
 const EVENT_TONES: Record<string, ChipTone> = {
   grabbed: 'default',
-  imported: 'accent',
-  failed: 'danger',
+  downloadFolderImported: 'accent',
+  downloadFailed: 'danger',
   fileDeleted: 'warn',
   fileRenamed: 'neutral',
-  ignored: 'neutral',
+  downloadIgnored: 'neutral',
 };
 
-export const eventLabel = (t: string) => HISTORY_EVENT_LABELS[t as HistoryEventType] ?? t;
+export const eventLabel = historyEventLabel;
 
 /** Toggle one event type in the filter; any filter change goes back to page 1. */
 export function toggleEventType(filter: HistoryFilter, type: HistoryEventType): HistoryFilter {
@@ -76,7 +77,10 @@ export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; 
   );
 }
 
-/** What "Redownload" searches for, or null when the record names no episode or movie. */
+/**
+ * What "Redownload" (POST /history/:id/redownload) searches for, or null when the record names
+ * no episode or movie (the api answers 400 for those).
+ */
 export function redownloadTarget(record: HistoryRecord): { episodeIds: number[] } | { movieId: number } | null {
   if (record.episodeId != null) return { episodeIds: [record.episodeId] };
   if (record.movieId != null) return { movieId: record.movieId };
@@ -85,7 +89,8 @@ export function redownloadTarget(record: HistoryRecord): { episodeIds: number[] 
 
 export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onClose: () => void }) {
   const markFailed = useMarkHistoryFailed();
-  const search = useAutomaticSearch();
+  const redownload = useRedownloadHistory();
+  const toast = useToast();
   const [confirm, setConfirm] = useState(false);
   const target = redownloadTarget(record);
   const canMarkFailed = record.eventType === 'grabbed';
@@ -119,9 +124,9 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
             <Button
               variant="secondary"
               disabled={!target}
-              loading={search.isPending}
+              loading={redownload.isPending}
               title={target ? undefined : 'This event is not linked to an episode or movie'}
-              onClick={() => target && search.mutate(target)}
+              onClick={() => target && redownload.mutate(record.id)}
             >
               Redownload
             </Button>
@@ -141,6 +146,7 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
         onCancel={() => setConfirm(false)}
         onConfirm={async () => {
           await markFailed.mutateAsync(record.id);
+          toast.push({ tone: 'ok', title: 'Marked as failed', message: record.sourceTitle });
           setConfirm(false);
           onClose();
         }}

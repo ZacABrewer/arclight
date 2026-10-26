@@ -1,6 +1,7 @@
 import type { CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
+import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
 
 // Pure calendar math: month grids, request ranges, grouping items by local day.
 
@@ -115,13 +116,13 @@ export interface CalendarEntry {
 
 const RELEASE_LABELS = { cinema: 'In cinemas', digital: 'Digital release', physical: 'Physical release' } as const;
 
-export function toEntry(item: CalendarItem, now: Date = new Date()): CalendarEntry | null {
+export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: TimeFormat = '24h'): CalendarEntry | null {
   const parsed = parseDateish(item.date);
   if (!parsed) return null;
   const hasTime = !/^\d{4}-\d{2}-\d{2}$/.test(item.date);
   const day = localIsoDate(parsed);
-  // 24h mono times, as the kit draws them (21:00, 03:00).
-  const time = hasTime ? `${String(parsed.getHours()).padStart(2, '0')}:${String(parsed.getMinutes()).padStart(2, '0')}` : null;
+  // Mono times; 24h by default, as the kit draws them (21:00, 03:00).
+  const time = hasTime ? clockLabel(parsed.getHours(), parsed.getMinutes(), timeFormat) : null;
   const sortTime = hasTime ? parsed.getTime() : parsed.getTime() - 1;
   const hour = hasTime ? parsed.getHours() + parsed.getMinutes() / 60 : null;
   if (item.type === 'episode') {
@@ -172,10 +173,10 @@ export function toEntry(item: CalendarItem, now: Date = new Date()): CalendarEnt
 }
 
 /** Group entries by local day, each day sorted by time then title. */
-export function groupByDay(items: readonly CalendarItem[], now: Date = new Date()): Map<string, CalendarEntry[]> {
+export function groupByDay(items: readonly CalendarItem[], now: Date = new Date(), timeFormat: TimeFormat = '24h'): Map<string, CalendarEntry[]> {
   const out = new Map<string, CalendarEntry[]>();
   for (const item of items) {
-    const e = toEntry(item, now);
+    const e = toEntry(item, now, timeFormat);
     if (!e) continue;
     const list = out.get(e.day) ?? [];
     list.push(e);

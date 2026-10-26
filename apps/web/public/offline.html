@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="color-scheme" content="dark" />
+    <title>Arclight is offline</title>
+    <link rel="icon" href="/icons/icon.svg" type="image/svg+xml" />
+    <style>
+      html, body { margin: 0; height: 100%; background: #000; color: #c9f9ff; font-family: "Archivo", system-ui, sans-serif; }
+      main { min-height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; padding: 24px 20px; box-sizing: border-box; text-align: center;
+        background: radial-gradient(120% 60% at 50% 58%, #06222b, #000 70%); }
+      .mark { width: 40px; height: 40px; border: 1.5px solid #6ef6ff; transform: rotate(45deg); display: flex; align-items: center; justify-content: center; margin-bottom: 8px; }
+      .mark i { width: 14px; height: 14px; background: #6ef6ff; }
+      .code { font-family: "JetBrains Mono", ui-monospace, monospace; font-size: 11px; letter-spacing: .24em; color: #8fb3bd; }
+      h1 { margin: 0; font-size: 22px; font-weight: 600; color: #e9fdff; }
+      p { margin: 0; max-width: 40ch; font-size: 14px; color: #9fc3cc; }
+      button { min-height: 44px; padding: 0 20px; border: 1px solid #6ef6ff; background: #6ef6ff; color: #021014; font: 600 14px "Archivo", system-ui, sans-serif; cursor: pointer; }
+      button:focus-visible { outline: none; box-shadow: 0 0 0 2px #000, 0 0 0 4px rgba(110,246,255,.7); }
+    </style>
+  </head>
+  <body>
+    <main>
+      <span class="mark" aria-hidden="true"><i></i></span>
+      <span class="code">OFFLINE</span>
+      <h1>Arclight cannot be reached</h1>
+      <p>This device is offline or the Arclight server is down. Downloads keep running on the server.</p>
+      <button type="button" onclick="location.reload()">Try again</button>
+    </main>
+  </body>
+</html>

@@ -1,4 +1,4 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ApiError } from '../api/client.js';
 import { libraryApi } from '../api/library.js';
 import { libraryKeys } from './library-keys.js';
@@ -41,5 +41,15 @@ export function useCalendarFeed(enabled: boolean) {
     enabled,
     retry: false,
     staleTime: Infinity,
+  });
+}
+
+/** POST /calendar/feed/regenerate: a new token; the cached feed info is replaced with it. */
+export function useRegenerateCalendarFeed() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => libraryApi.calendar.regenerateFeed(),
+    meta: { errorTitle: 'Could not regenerate the feed URL' },
+    onSuccess: (info) => qc.setQueryData([...libraryKeys.calendar.all, 'feed'], info),
   });
 }

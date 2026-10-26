@@ -1,3 +1,5 @@
+import { formatDateTime as formatPreferredDateTime } from './ui-preferences.js';
+
 export function formatUptime(totalSeconds: number): string {
   const d = Math.floor(totalSeconds / 86_400);
   const h = Math.floor((totalSeconds % 86_400) / 3600);
@@ -18,8 +20,9 @@ export function relativeTime(iso: string, now: number = Date.now()): string {
   return diff < 0 ? `${text} ago` : `in ${text}`;
 }
 
+/** Date and time in the signed-in user's preferred formats (Settings → General → UI). */
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString();
+  return formatPreferredDateTime(iso);
 }
 
 export function formatDuration(ms: number | null | undefined): string {

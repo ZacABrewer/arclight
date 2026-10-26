@@ -41,7 +41,8 @@ beforeEach(() => {
       const routes: Record<string, unknown> = {
         '/api/v1/wanted/missing/episodes': paged([wantedEp(1, 'Severance', 8), wantedEp(2, 'Andor', 3)]),
         '/api/v1/wanted/missing/movies': paged([makeMovie({ id: 9, title: 'Arrival', digitalRelease: '2017-02-14' })]),
-        '/api/v1/wanted/cutoff/episodes': paged([wantedEp(3, 'Silo', 10)]),
+        '/api/v1/wanted/cutoff/episodes': paged([wantedEp(3, 'Silo', 10), wantedEp(4, 'Foundation', 2)]),
+        '/api/v1/wanted/cutoff/movies': paged([makeMovie({ id: 12, title: 'Heat', digitalRelease: '1999-06-01' })]),
         '/api/v1/qualityprofile': [{ id: 1, name: 'HD-1080p' }],
         '/api/v1/health': { status: 'ok', checks: [] },
         '/api/v1/system/status': {},
@@ -114,7 +115,31 @@ describe('wanted page', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Cutoff unmet' }));
     await waitFor(() => expect(router.state.location.pathname).toBe('/wanted/cutoff'));
     const silo = await screen.findByRole('link', { name: 'Silo' });
-    expect(within(silo.closest('table')!).getByText('Cutoff unmet')).toBeTruthy();
+    expect(within(silo.closest('table')!).getAllByText('Cutoff unmet').length).toBeGreaterThan(0);
+  });
+
+  it('cutoff unmet lists episodes from /wanted/cutoff/episodes; Search selected posts their ids', async () => {
+    renderAt('/wanted/cutoff');
+    const table = await screen.findByRole('table');
+    expect(await within(table).findByRole('link', { name: 'Silo' })).toBeTruthy();
+    expect(within(table).getAllByText('Cutoff unmet')).toHaveLength(2);
+    expect(screen.getByText('2 episodes')).toBeTruthy();
+    expect(screen.queryByText(/not available yet/)).toBeNull();
+    fireEvent.click(screen.getByLabelText('Select Silo S02E10'));
+    fireEvent.click(screen.getByLabelText('Select Foundation S02E02'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Search selected' }));
+    await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [3, 4] }]));
+    expect(calls.some((c) => c.url.startsWith('/api/v1/wanted/cutoff/episodes?'))).toBe(true);
+  });
+
+  it('cutoff unmet movies: row Search searches one movie', async () => {
+    renderAt('/wanted/cutoff');
+    await screen.findByLabelText('Select Silo S02E10');
+    fireEvent.click(screen.getByRole('button', { name: 'Movies' }));
+    const heat = await screen.findByRole('link', { name: 'Heat' });
+    expect(within(heat.closest('table')!).getByText('Cutoff unmet')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Search Heat' }));
+    await waitFor(() => expect(searchPosts()).toEqual([{ movieId: 12 }]));
   });
 
   it('formats dates short', () => {

@@ -24,11 +24,11 @@ import {
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useToast } from '../../components/toast.js';
-import { titleLink } from '../../features/requests/discover-ui.js';
-import { MEDIA_STATUS_META, REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
+import { titleLink } from '../../features/requests/title-link.js';
+import { MEDIA_STATUS_META, REQUEST_STATUS_META, seasonsLabel, usePermissions } from '../../features/requests/status.js';
+import { formatDateTime } from '../../lib/ui-preferences.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
 import {
-  useApproveRequest,
   useBulkRequestAction,
   useDeclineRequest,
   useDeleteRequest,
@@ -38,6 +38,7 @@ import {
   useUpdateRequest,
 } from '../../hooks/requests.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
+import { ApproveDialog } from './approve-dialog.js';
 import '../../components/media/media-kit.css';
 
 export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> = [
@@ -231,21 +232,21 @@ function RequestStatusCell({ r }: { r: MediaRequest }) {
 }
 
 function useRowDialogs() {
+  const [approving, setApproving] = useState(false);
   const [declining, setDeclining] = useState(false);
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
-  return { declining, setDeclining, editing, setEditing, deleting, setDeleting };
+  return { approving, setApproving, declining, setDeclining, editing, setEditing, deleting, setDeleting };
 }
 
 function RequestActions({ r, manage }: { r: MediaRequest; manage: boolean }) {
-  const approve = useApproveRequest();
   const retry = useRetryRequest();
   const d = useRowDialogs();
   return (
     <div className="mk-row mk-row--end">
       {manage && r.status === 'pending' ? (
         <>
-          <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate({ id: r.id })}>
+          <Button size="sm" onClick={() => d.setApproving(true)}>
             Approve
           </Button>
           <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>
@@ -273,9 +274,10 @@ function RequestActions({ r, manage }: { r: MediaRequest; manage: boolean }) {
   );
 }
 
-function RowDialogs({ r, declining, setDeclining, editing, setEditing, deleting, setDeleting }: { r: MediaRequest } & ReturnType<typeof useRowDialogs>) {
+function RowDialogs({ r, approving, setApproving, declining, setDeclining, editing, setEditing, deleting, setDeleting }: { r: MediaRequest } & ReturnType<typeof useRowDialogs>) {
   return (
     <>
+      {approving ? <ApproveDialog request={r} onClose={() => setApproving(false)} /> : null}
       {declining ? <DeclineDialog request={r} onClose={() => setDeclining(false)} /> : null}
       {editing ? <EditRequestDialog request={r} onClose={() => setEditing(false)} /> : null}
       {deleting ? <DeleteRequestDialog request={r} onClose={() => setDeleting(false)} /> : null}
@@ -285,7 +287,6 @@ function RowDialogs({ r, declining, setDeclining, editing, setEditing, deleting,
 
 /** Mobile row: swipe right reveals Delete; approve/decline stay visible for admins. */
 function MobileRequestRow({ r, manage }: { r: MediaRequest; manage: boolean }) {
-  const approve = useApproveRequest();
   const d = useRowDialogs();
   return (
     <SwipeRow onDelete={r.canRemove ? () => d.setDeleting(true) : undefined} deleteLabel="Delete">
@@ -298,7 +299,7 @@ function MobileRequestRow({ r, manage }: { r: MediaRequest; manage: boolean }) {
         </div>
         {manage && r.status === 'pending' ? (
           <div className="mk-stack-sm" style={{ gap: 6 }}>
-            <Button size="sm" loading={approve.isPending} onClick={() => approve.mutate({ id: r.id })}>
+            <Button size="sm" onClick={() => d.setApproving(true)}>
               Approve
             </Button>
             <Button size="sm" variant="danger" onClick={() => d.setDeclining(true)}>

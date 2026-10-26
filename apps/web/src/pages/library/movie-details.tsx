@@ -20,11 +20,11 @@ import {
 import { LanguageProfileSelect } from '../subtitles/language-profile-select.js';
 import { SubtitlesTab } from '../subtitles/subtitles-tab.js';
 import { MINIMUM_AVAILABILITY_LABELS } from './add-form.js';
-import { DetailsHero, HistoryTable, LibraryCrumb, RequestsTable, useQueueProgress } from './details-kit.js';
+import { DetailsHero, HistoryTable, LibraryCrumb, RefreshButtons, RequestsTable, useQueueProgress } from './details-kit.js';
 import { InteractiveSearchModal } from './interactive-search.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
-import { RefreshButton, SearchTab } from './series-details.js';
+import { SearchTab } from './series-details.js';
 
 const route = getRouteApi('/library/movie/$id');
 
@@ -145,7 +145,7 @@ export function MovieDetailsPage() {
               Search movie
             </Button>
             <Button onClick={() => setInteractive(true)}>Interactive search</Button>
-            <RefreshButton />
+            <RefreshButtons target={{ movieId: m.id }} />
             <Link className={buttonClass({ variant: 'secondary' })} to="/activity/manual-import" search={{ movieId: m.id }}>
               Manual import
             </Link>

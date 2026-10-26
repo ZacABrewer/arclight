@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import type { MediaRequest } from '@arclight/shared';
 import { Button, EmptyState, Modal, PageHeader, Pane, Timeline, type TimelineItem } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
-import { titleLink } from '../../features/requests/discover-ui.js';
+import { titleLink } from '../../features/requests/title-link.js';
 import { REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
 import { useDeleteRequest, useRequests } from '../../hooks/requests.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';

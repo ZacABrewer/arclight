@@ -845,6 +845,8 @@ describe('compat api', () => {
 
   // ---- shared resources ---------------------------------------------------------------------------
   it('tags support create (idempotent by label), rename and delete', async () => {
+    // Modules may seed tags at startup (the solver module tags its proxy), so count relatively.
+    const baseline = (await h.call('GET', '/api/v3/tag')).json<unknown[]>().length;
     const created = await h.call('POST', '/api/v3/tag', { label: 'anime' });
     expect(created.statusCode).toBe(201);
     expectShape(created.json(), GOLDEN.shared['tag']);
@@ -852,7 +854,7 @@ describe('compat api', () => {
     expect(again.json<{ id: number }>().id).toBe(created.json<{ id: number }>().id);
     const id = created.json<{ id: number }>().id;
     expect((await h.call('PUT', `/api/v3/tag/${id}`, { id, label: 'kids' })).json()).toEqual({ id, label: 'kids' });
-    expect((await h.call('GET', '/api/v3/tag')).json<unknown[]>()).toHaveLength(1);
+    expect((await h.call('GET', '/api/v3/tag')).json<unknown[]>()).toHaveLength(baseline + 1);
     expect((await h.call('DELETE', `/api/v3/tag/${id}`)).statusCode).toBe(200);
   });
 

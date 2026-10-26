@@ -1,8 +1,10 @@
-import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { BlocklistAddRequestInput, QueueBulkRemoveRequest, QueueQueryInput, QueueRemoveOptions } from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
 import { queueApi } from '../api/queue.js';
+import { useToast } from '../components/toast.js';
+import { upsertJob } from '../live.js';
 import { activityKeys, useInvalidatingMutation } from './settings-keys.js';
 
 /** Queue events invalidate ['queue']; the poll is a safety net for progress between events. */
@@ -51,6 +53,31 @@ export function useMarkHistoryFailed() {
   });
 }
 
+/** POST /history/:id/redownload: searches again for the record's episode(s) or movie. */
+export function useRedownloadHistory() {
+  const qc = useQueryClient();
+  const toast = useToast();
+  return useMutation({
+    mutationFn: (id: number) => historyApi.redownload(id),
+    meta: { errorTitle: 'Could not redownload' },
+    onSuccess: (job) => {
+      toast.push({ tone: 'ok', title: 'Search started', message: `Run #${job.id} is ${job.status}.`, durationMs: 4_000 });
+      upsertJob(qc, job);
+    },
+    onSettled: async () => {
+      await Promise.all([qc.invalidateQueries({ queryKey: ['history'] }), qc.invalidateQueries({ queryKey: ['queue'] })]);
+    },
+  });
+}
+
+/** History of one series (GET /history/series) or movie (GET /history/movie), newest first. */
+export function useItemHistory(scope: { seriesId: number } | { movieId: number }) {
+  return useQuery({
+    queryKey: 'seriesId' in scope ? (['history', 'series', scope.seriesId] as const) : (['history', 'movie', scope.movieId] as const),
+    queryFn: () => ('seriesId' in scope ? historyApi.forSeries(scope.seriesId) : historyApi.forMovie(scope.movieId)),
+  });
+}
+
 export function useBlocklist(page: number, pageSize: number) {
   return useQuery({
     queryKey: activityKeys.blocklist(page, pageSize),
@@ -66,4 +93,14 @@ export function useRemoveBlocklist() {
     [['history', 'blocklist']],
     { errorTitle: 'Could not remove from blocklist' },
   );
+}
+
+export function useAddBlocklist() {
+  return useInvalidatingMutation((body: BlocklistAddRequestInput) => blocklistApi.add(body), [['history', 'blocklist']], {
+    silent: true,
+  });
+}
+
+export function useClearBlocklist() {
+  return useInvalidatingMutation(() => blocklistApi.clear(), [['history', 'blocklist']], { silent: true });
 }

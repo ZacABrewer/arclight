@@ -5,6 +5,8 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import type { QueueItem } from '@arclight/shared';
 import { DEFAULT_HISTORY_FILTER, historyQuery, type HistoryFilter, type HistoryRecord } from '../../api/history.js';
 import { Trail } from '../../arclight/index.js';
+import { ToastProvider } from '../../components/toast.js';
+import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
 import { formatEta } from './activity-shared.js';
 import { HistoryDetails, HistoryFilterBar, redownloadTarget, toggleEventType } from './history-page.js';
@@ -152,14 +154,14 @@ describe('queue remove dialog', () => {
 describe('history filter', () => {
   it('builds the query string with comma-separated event types', () => {
     expect(historyQuery(DEFAULT_HISTORY_FILTER)).toEqual({ page: 1, pageSize: 25, sortKey: 'date', sortDirection: 'desc' });
-    expect(historyQuery({ ...DEFAULT_HISTORY_FILTER, eventTypes: ['grabbed', 'failed'] }).eventType).toBe('grabbed,failed');
+    expect(historyQuery({ ...DEFAULT_HISTORY_FILTER, eventTypes: ['grabbed', 'downloadFailed'] }).eventType).toBe('grabbed,downloadFailed');
   });
 
   it('toggles an event type and resets to page 1', () => {
     const f: HistoryFilter = { ...DEFAULT_HISTORY_FILTER, page: 4 };
-    const on = toggleEventType(f, 'imported');
-    expect(on).toMatchObject({ page: 1, eventTypes: ['imported'] });
-    expect(toggleEventType(on, 'imported').eventTypes).toEqual([]);
+    const on = toggleEventType(f, 'downloadFolderImported');
+    expect(on).toMatchObject({ page: 1, eventTypes: ['downloadFolderImported'] });
+    expect(toggleEventType(on, 'downloadFolderImported').eventTypes).toEqual([]);
   });
 
   it('drives the filter from the filter bar and clears it', () => {
@@ -178,10 +180,10 @@ describe('history filter', () => {
     }
     render(<Harness />);
     expect(screen.queryByRole('button', { name: 'Clear' })).toBeNull();
-    fireEvent.change(screen.getByRole('combobox', { name: 'Event type' }), { target: { value: 'failed' } });
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, eventTypes: ['failed'] }));
+    fireEvent.change(screen.getByRole('combobox', { name: 'Event type' }), { target: { value: 'downloadFailed' } });
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, eventTypes: ['downloadFailed'] }));
     fireEvent.change(screen.getByRole('combobox', { name: 'Order' }), { target: { value: 'asc' } });
-    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ sortDirection: 'asc', eventTypes: ['failed'] }));
+    expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ sortDirection: 'asc', eventTypes: ['downloadFailed'] }));
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect(onChange).toHaveBeenLastCalledWith(expect.objectContaining({ eventTypes: [], sortDirection: 'desc', page: 1 }));
   });
@@ -198,20 +200,37 @@ describe('history details drawer', () => {
     quality: { quality: { name: 'WEBDL-1080p' } },
   };
 
-  it('offers Mark failed (danger) and Redownload (secondary)', async () => {
+  const job = { id: 31, name: 'EpisodeSearch', status: 'queued', trigger: 'manual', message: null, queuedAt: '2026-10-25T10:00:00.000Z', startedAt: null, endedAt: null, durationMs: null };
+
+  function stubHistoryFetch() {
     const calls: Array<{ url: string; method: string; body: unknown }> = [];
     vi.stubGlobal(
       'fetch',
       vi.fn(async (input: string, init?: RequestInit) => {
-        calls.push({ url: String(input), method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined });
-        return new Response(JSON.stringify({ releases: 3, approved: 1, grabbed: ['x'], pending: 0 }), { status: 200 });
+        const method = init?.method ?? 'GET';
+        calls.push({ url: String(input), method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        if (method === 'POST' && String(input).endsWith('/redownload')) return new Response(JSON.stringify(job), { status: 202 });
+        if (method === 'POST' && String(input).includes('/history/failed/')) return new Response(JSON.stringify([]), { status: 200 });
+        return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
       }),
     );
+    return calls;
+  }
+
+  function renderDrawer(r: HistoryRecord, onClose: () => void = () => {}) {
+    const store = createToastStore();
     render(
-      <QueryClientProvider client={createQueryClient()}>
-        <HistoryDetails record={record} onClose={() => {}} />
+      <QueryClientProvider client={createQueryClient(store)}>
+        <ToastProvider store={store}>
+          <HistoryDetails record={r} onClose={onClose} />
+        </ToastProvider>
       </QueryClientProvider>,
     );
+  }
+
+  it('offers Mark failed (danger) and Redownload (secondary); Redownload posts to the history route', async () => {
+    const calls = stubHistoryFetch();
+    renderDrawer(record);
     const drawer = screen.getByRole('dialog', { name: 'Grabbed' });
     expect(within(drawer).getByText('HASH9')).toBeTruthy();
     const markFailed = within(drawer).getByRole('button', { name: 'Mark failed' });
@@ -219,10 +238,23 @@ describe('history details drawer', () => {
     expect(markFailed.className).toContain('al-btn--danger');
     expect(redownload.className).toContain('al-btn--secondary');
     fireEvent.click(redownload);
-    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url.endsWith('/command/search'))).toBe(true));
-    expect(calls.find((c) => c.url.endsWith('/command/search'))!.body).toEqual({ episodeIds: [42] });
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/history/9/redownload')).toBe(true));
+    expect(await screen.findByText('Search started')).toBeTruthy();
     fireEvent.click(markFailed);
     expect(screen.getByRole('dialog', { name: 'Mark Show.S01E02.1080p.WEB-DL-GRP as failed?' })).toBeTruthy();
+  });
+
+  it('Mark failed confirms, posts to /history/failed/:id and closes', async () => {
+    const calls = stubHistoryFetch();
+    const onClose = vi.fn();
+    renderDrawer(record, onClose);
+    fireEvent.click(within(screen.getByRole('dialog', { name: 'Grabbed' })).getByRole('button', { name: 'Mark failed' }));
+    const confirm = screen.getByRole('dialog', { name: 'Mark Show.S01E02.1080p.WEB-DL-GRP as failed?' });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Mark failed' }));
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
+    const post = calls.find((c) => c.method === 'POST' && c.url === '/api/v1/history/failed/9');
+    expect(post?.body).toEqual({ skipRedownload: false });
+    expect(await screen.findByText('Marked as failed')).toBeTruthy();
   });
 
   it('disables actions that do not apply', () => {
@@ -230,7 +262,7 @@ describe('history details drawer', () => {
     expect(redownloadTarget({ ...record, episodeId: null })).toBeNull();
     render(
       <QueryClientProvider client={createQueryClient()}>
-        <HistoryDetails record={{ ...record, eventType: 'imported', episodeId: null }} onClose={() => {}} />
+        <HistoryDetails record={{ ...record, eventType: 'downloadFolderImported', episodeId: null }} onClose={() => {}} />
       </QueryClientProvider>,
     );
     expect((screen.getByRole('button', { name: 'Mark failed' }) as HTMLButtonElement).disabled).toBe(true);

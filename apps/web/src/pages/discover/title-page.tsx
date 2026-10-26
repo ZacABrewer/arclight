@@ -18,7 +18,7 @@ import {
 } from '../../arclight/index.js';
 import { QueryError } from '../../components/media/media-kit.js';
 import { ReportIssueDialog } from '../../features/requests/issue-dialog.js';
-import { show4kToggle } from '../../features/requests/request-dialog.js';
+import { show4kToggle } from '../../features/requests/request-rules.js';
 import { MEDIA_STATUS_META, REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
 import { useAddToWatchlist, useRemoveFromWatchlist, useRequestsSettings, useTitle, useWatchlist } from '../../hooks/requests.js';
 import { DiscoverRow, StatusLabelChip } from './discover-kit.js';

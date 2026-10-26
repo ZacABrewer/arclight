@@ -442,3 +442,10 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
   .al-tabs { overflow-x: auto; scrollbar-width: none; }
   .al-tabs > [role="tab"] { flex: none; white-space: nowrap; }
 }
+
+/* Selects in a filter bar or page-header control row size to their content on desktop
+   (the kit's .al-select is width: 100% for form rows). Phones keep them full width. */
+@media (min-width: 768px) {
+  .al-filterbar > .al-select,
+  .al-page-header__controls > .al-select { width: auto; min-width: 180px; max-width: 100%; }
+}

@@ -4,7 +4,7 @@ import type { QueryKey } from '@tanstack/react-query';
 import type { DiscoverItem, DiscoverPage, MediaStatus, RequestStatus } from '@arclight/shared';
 import { Button, Chip, EmptyState, Poster, SectionHead, Skeleton, type ChipTone } from '../../arclight/index.js';
 import { PosterSkeletons, QueryError } from '../../components/media/media-kit.js';
-import { titleLink } from '../../features/requests/discover-ui.js';
+import { titleLink } from '../../features/requests/title-link.js';
 import { availabilityBadge } from '../../features/requests/status.js';
 import { useDiscoverInfinite } from '../../hooks/requests.js';
 import '../../components/media/media-kit.css';

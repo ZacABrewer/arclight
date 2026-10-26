@@ -1,0 +1,46 @@
+/* Phones (< 768px): every control is at least 44px on its short side (handoff README §13).
+   Desktop keeps the kit's dense 32/38/40px sizes. Inline links inside sentences are exempt. */
+@media (max-width: 767.98px) {
+  .al-btn,
+  .al-btn--sm,
+  .al-btn--md { height: auto; min-height: 44px; }
+  .al-btn { min-width: 44px; }
+  .al-btn--icon,
+  .al-btn--icon.al-btn--sm { width: 44px; min-width: 44px; }
+
+  .al-input:not(.al-input--underline):not(textarea),
+  .al-select,
+  .al-selectmenu__button { min-height: 44px; }
+
+  .al-seg > button { min-height: 44px; min-width: 44px; }
+  .al-tabs > [role="tab"] { min-height: 44px; min-width: 44px; display: inline-flex; align-items: flex-end; justify-content: center; }
+  .al-section-nav .al-tabs > a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 44px; padding: 0 2px; }
+
+  /* Checkboxes stay 16px visually; an invisible 44px square around them takes the tap. */
+  .al-check { position: relative; }
+  .al-check::before { content: ""; position: absolute; inset: -14px; }
+
+  .al-switch,
+  .al-choice { min-height: 44px; align-items: center; }
+  .al-range { height: 44px; }
+
+  .al-avatar { width: 44px; height: 44px; }
+  .al-topbar__issues,
+  button.al-link,
+  .al-item-card__title,
+  a.al-link,
+  .mk-action-link,
+  .al-table__sort,
+  .al-paginator button,
+  .mk-chip-link { min-height: 44px; display: inline-flex; align-items: center; gap: 0.3em; }
+  .al-topbar .al-topbar__requests { display: none; }
+  .al-table__sort,
+  .al-item-card__title,
+  button.al-link,
+  a.al-link,
+  .mk-action-link { min-width: 44px; justify-content: center; }
+  .mk-chip-link { height: auto; }
+
+  /* Tables keep their columns and scroll inside their pane instead of widening the page. */
+  .al-table-wrap { max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+}

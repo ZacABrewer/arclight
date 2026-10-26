@@ -77,14 +77,43 @@ const film = makeMovie({
   isAvailable: true,
 });
 
+const refreshJob = { id: 77, name: 'RefreshSeriesItem', status: 'queued', trigger: 'manual', message: null, queuedAt: '2026-10-26T10:00:00.000Z', startedAt: null, endedAt: null, durationMs: null };
+const historyRow = (over: Record<string, unknown>) => ({
+  id: 1,
+  eventType: 'grabbed',
+  mediaType: 'series',
+  seriesId: 1,
+  episodeId: 2,
+  movieId: null,
+  sourceTitle: 'Severance.S01E02.2160p.WEB-DL-NTb',
+  quality,
+  languages: ['en'],
+  customFormats: [],
+  customFormatScore: 0,
+  date: '2026-10-20T08:30:00.000Z',
+  downloadId: 'HASH',
+  data: { indexer: 'Nyaa' },
+  ...over,
+});
+let calls: Array<{ url: string; method: string; body: unknown }> = [];
+
 beforeEach(() => {
   localStorage.clear();
+  calls = [];
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
-    vi.fn(async (url: string) => {
+    vi.fn(async (url: string, init?: RequestInit) => {
+      const method = init?.method ?? 'GET';
+      calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       const path = url.split('?')[0];
+      if (method === 'POST' && path === '/api/v1/command/refresh') return new Response(JSON.stringify(refreshJob), { status: 202 });
       const routes: Record<string, unknown> = {
+        '/api/v1/history/series': [
+          historyRow({ id: 2, eventType: 'downloadFolderImported', date: '2026-10-20T09:00:00.000Z', episode: { id: 2, seriesId: 1, seasonNumber: 1, episodeNumber: 2, title: 'Half Loop', airDate: null } }),
+          historyRow({ id: 1, episode: { id: 2, seriesId: 1, seasonNumber: 1, episodeNumber: 2, title: 'Half Loop', airDate: null } }),
+        ],
+        '/api/v1/history/movie': [],
         '/api/v1/series/1': show,
         '/api/v1/episode': episodes,
         '/api/v1/mediafile': url.includes('seriesId') ? files : [],
@@ -167,6 +196,51 @@ describe('series details (Page 03)', () => {
     fireEvent.click(within(hero).getByRole('button', { name: 'Interactive search' }));
     const dialog = await screen.findByRole('dialog', { name: 'Interactive search · Severance' });
     expect(dialog.getAttribute('data-width')).toBe('1100');
+  });
+});
+
+describe('details refresh and history', () => {
+  const refreshPosts = () => calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/command/refresh').map((c) => c.body);
+
+  it('series Refresh and Refresh & scan post the refresh command and toast the job', async () => {
+    renderAt('/library/series/1');
+    const hero = await screen.findByRole('region', { name: 'Series overview' });
+    fireEvent.click(within(hero).getByRole('button', { name: 'Refresh' }));
+    await waitFor(() => expect(refreshPosts()).toEqual([{ seriesId: 1, rescan: false }]));
+    expect(await screen.findByText('Refresh started')).toBeTruthy();
+    await waitFor(() => expect((within(hero).getByRole('button', { name: 'Refresh & scan' }) as HTMLButtonElement).disabled).toBe(false));
+    fireEvent.click(within(hero).getByRole('button', { name: 'Refresh & scan' }));
+    await waitFor(() => expect(refreshPosts()).toEqual([{ seriesId: 1, rescan: false }, { seriesId: 1, rescan: true }]));
+    expect(await screen.findByText('Refresh and scan started')).toBeTruthy();
+  });
+
+  it('movie Refresh posts the movie id', async () => {
+    renderAt('/library/movie/7');
+    const hero = await screen.findByRole('region', { name: 'Movie overview' });
+    fireEvent.click(within(hero).getByRole('button', { name: 'Refresh & scan' }));
+    await waitFor(() => expect(refreshPosts()).toEqual([{ movieId: 7, rescan: true }]));
+  });
+
+  it('series History tab lists /history/series rows with event chips and mono dates', async () => {
+    renderAt('/library/series/1');
+    await screen.findByRole('region', { name: 'Series overview' });
+    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
+    const table = await screen.findByRole('table', { name: 'History' });
+    expect(await within(table).findByText('Imported')).toBeTruthy();
+    expect(within(table).getByText('Grabbed')).toBeTruthy();
+    expect(within(table).getAllByText('S01E02')).toHaveLength(2);
+    expect(within(table).getAllByText('Nyaa')).toHaveLength(2);
+    expect(within(table).getAllByText('WEBDL-2160p')[0]!.className).toContain('al-td--mono');
+    const req = calls.find((c) => c.url.startsWith('/api/v1/history/series?'));
+    expect(req?.url).toContain('seriesId=1');
+  });
+
+  it('movie History tab shows the empty state from /history/movie', async () => {
+    renderAt('/library/movie/7');
+    await screen.findByRole('region', { name: 'Movie overview' });
+    fireEvent.click(await screen.findByRole('tab', { name: 'History' }));
+    expect(await screen.findByText('No history yet')).toBeTruthy();
+    expect(calls.some((c) => c.url.startsWith('/api/v1/history/movie?') && c.url.includes('movieId=7'))).toBe(true);
   });
 });
 

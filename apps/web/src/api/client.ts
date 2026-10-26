@@ -44,7 +44,8 @@ export function setUnauthorizedHandler(handler: UnauthorizedHandler | null): voi
 }
 
 function triggersSignIn(path: string): boolean {
-  return !path.startsWith('/auth/') && !path.startsWith('/setup/');
+  // A wrong current password answers 401 too; that is a form error, not a lost session.
+  return !path.startsWith('/auth/') && !path.startsWith('/setup/') && path !== '/user/me/password';
 }
 
 export type QueryParams = Record<string, string | number | boolean | null | undefined>;
