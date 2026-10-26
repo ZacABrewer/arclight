@@ -1,0 +1,120 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "Full ordered list of movie titles (primary + AKA alternatives) extracted from a release name (should_parse_movie_alternative_titles); count must match exactly",
+  "cases": [
+    {
+      "input": "L'hypothèse.du.movie.volé.AKA.The.Hypothesis.of.the.Movie.Title.1978.1080p.CINET.WEB-DL.AAC2.0.x264-Cinefeel.mkv",
+      "expect": {
+        "titles": [
+          "L'hypothèse du movie volé AKA The Hypothesis of the Movie Title",
+          "L'hypothèse du movie volé",
+          "The Hypothesis of the Movie Title"
+        ]
+      }
+    },
+    {
+      "input": "Skjegg.AKA.Rox.Beard.1965.CD1.CRiTERiON.DVDRip.XviD-KG.avi",
+      "expect": {
+        "titles": [
+          "Skjegg AKA Rox Beard",
+          "Skjegg",
+          "Rox Beard"
+        ]
+      }
+    },
+    {
+      "input": "Kjeller.chitai.AKA.Basement.of.Shame.1956.1080p.BluRay.x264.FLAC.1.0.mkv",
+      "expect": {
+        "titles": [
+          "Kjeller chitai AKA Basement of Shame",
+          "Kjeller chitai",
+          "Basement of Shame"
+        ]
+      }
+    },
+    {
+      "input": "Radarr.Under.Water.(aka.Beneath.the.Code.Freeze).1997.DVDRip.x264.CG-Grzechsin.mkv",
+      "expect": {
+        "titles": [
+          "Radarr Under Water (aka Beneath the Code Freeze)",
+          "Radarr Under Water",
+          "Beneath the Code Freeze"
+        ]
+      }
+    },
+    {
+      "input": "Radarr.prodavet. AKA.Radarr.Shift.2005.DVDRip.x264-HANDJOB.mkv",
+      "expect": {
+        "titles": [
+          "Radarr prodavet  AKA Radarr Shift",
+          "Radarr prodavet",
+          "Radarr Shift"
+        ]
+      }
+    },
+    {
+      "input": "AKA.2002.DVDRip.x264-HANDJOB.mkv",
+      "expect": {
+        "titles": [
+          "AKA"
+        ]
+      }
+    },
+    {
+      "input": "KillRoyWasHere.2000.BluRay.1080p.DTS.x264.dxva-EuReKA.mkv",
+      "expect": {
+        "titles": [
+          "KillRoyWasHere"
+        ]
+      }
+    },
+    {
+      "input": "Aka Rox (2008).avi",
+      "expect": {
+        "titles": [
+          "Aka Rox"
+        ]
+      }
+    },
+    {
+      "input": "Return Earth to Normal 'em High aka World 2 (2022) 1080p.mp4",
+      "expect": {
+        "titles": [
+          "Return Earth to Normal 'em High aka World 2",
+          "Return Earth to Normal 'em High",
+          "World 2"
+        ]
+      }
+    },
+    {
+      "input": "Енола Голмс / Enola Holmes (2020) UHD WEB-DL 2160p 4K HDR H.265 Ukr/Eng | Sub Ukr/Eng",
+      "expect": {
+        "titles": [
+          "Енола Голмс / Enola Holmes",
+          "Енола Голмс",
+          "Enola Holmes"
+        ]
+      }
+    },
+    {
+      "input": "Mon cousin a.k.a. My Cousin 2020 1080p Blu-ray DD 5.1 x264.mkv",
+      "expect": {
+        "titles": [
+          "Mon cousin AKA My Cousin",
+          "Mon cousin",
+          "My Cousin"
+        ]
+      }
+    },
+    {
+      "input": "Sydney A.K.A. Hard Eight 1996 1080p AMZN WEB-DL DD+ 2.0 H.264.mkv",
+      "expect": {
+        "titles": [
+          "Sydney AKA Hard Eight",
+          "Sydney",
+          "Hard Eight"
+        ]
+      }
+    }
+  ]
+}

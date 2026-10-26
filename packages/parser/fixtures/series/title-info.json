@@ -1,0 +1,236 @@
+{
+  "source": "SeriesTitleInfoFixture.cs, SeasonTitleParserFixture.cs",
+  "description": "SeriesTitleInfo year splitting, and ParseSeasonTitle: season-less anime batch titles (parser: seasonTitle) that yield a title with fullSeason/isSeasonTitle, or are rejected when stripping leaves metadata or the release is an extra (OVA/NCOP/NCED/Special).",
+  "cases": [
+    {
+      "input": "Series.Title.S01E01.pilot.720p.hdtv",
+      "method": "should_have_year_zero_when_title_doesnt_have_a_year",
+      "source": "SeriesTitleInfoFixture.cs",
+      "expect": {
+        "year": 0
+      }
+    },
+    {
+      "input": "Series.Title.S01E01.pilot.720p.hdtv",
+      "method": "should_have_same_title_for_title_and_title_without_year_when_title_doesnt_have_a_year",
+      "source": "SeriesTitleInfoFixture.cs",
+      "expect": {
+        "titleEqualsTitleWithoutYear": true
+      }
+    },
+    {
+      "input": "Series.Title.2004.S01E01.pilot.720p.hdtv",
+      "method": "should_have_year_when_title_has_a_year",
+      "source": "SeriesTitleInfoFixture.cs",
+      "expect": {
+        "year": 2004
+      }
+    },
+    {
+      "input": "Series.Title.2004.S01E01.pilot.720p.hdtv",
+      "method": "should_have_year_in_title_when_title_has_a_year",
+      "source": "SeriesTitleInfoFixture.cs",
+      "expect": {
+        "title": "Series Title 2004"
+      }
+    },
+    {
+      "input": "Series.Title.2004.S01E01.pilot.720p.hdtv",
+      "method": "should_title_without_year_should_not_contain_year",
+      "source": "SeriesTitleInfoFixture.cs",
+      "expect": {
+        "titleWithoutYear": "Series Title"
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (BS11 1280x720 x264 AAC)",
+      "method": "should_return_the_title_when_there_is_no_season_or_episode",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "title": "Series Title Curse",
+        "fullSeason": true,
+        "isSeasonTitle": true,
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": []
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (BDRip 1920x1080 x264 FLAC) [ABCD1234]",
+      "method": "should_return_the_title_when_there_is_no_season_or_episode",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "title": "Series Title Curse",
+        "fullSeason": true,
+        "isSeasonTitle": true,
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": []
+      }
+    },
+    {
+      "input": "[Group] Series.Title - Curse (BD, 720p)",
+      "method": "should_return_the_title_when_there_is_no_season_or_episode",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "title": "Series.Title - Curse",
+        "fullSeason": true,
+        "isSeasonTitle": true,
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": []
+      }
+    },
+    {
+      "input": "Series Title Curse [Bluray.1080p.HEVC.AAC.ITA.FLAC.JAP.Sub.Ita]",
+      "method": "should_return_the_title_when_there_is_no_season_or_episode",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "title": "Series Title Curse",
+        "fullSeason": true,
+        "isSeasonTitle": true,
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": []
+      }
+    },
+    {
+      "input": "[Group] Series Title: Curse [Dual Audio 10bit 1080p][HEVC-x265]",
+      "method": "should_return_the_title_when_there_is_no_season_or_episode",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "title": "Series Title: Curse",
+        "fullSeason": true,
+        "isSeasonTitle": true,
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": []
+      }
+    },
+    {
+      "input": "[Group][Series Title: Curse][BDRip][1080P_x265(10bit)-FLAC][ALL]",
+      "method": "should_not_return_a_title_when_stripping_leaves_metadata",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group][Series Title Curse][1080p][x264]",
+      "method": "should_not_return_a_title_when_stripping_leaves_metadata",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse () (1080p)",
+      "method": "should_not_return_a_title_when_stripping_leaves_metadata",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (OVA)",
+      "method": "should_not_return_a_title_for_an_extra",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse [OVA]",
+      "method": "should_not_return_a_title_for_an_extra",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (Special)",
+      "method": "should_not_return_a_title_for_an_extra",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (NCOP)",
+      "method": "should_not_return_a_title_for_an_extra",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (NCED)",
+      "method": "should_not_return_a_title_for_an_extra",
+      "source": "SeasonTitleParserFixture.cs",
+      "parser": "seasonTitle",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "Series Title S02E05 1080p WEB-DL",
+      "method": "should_not_flag_a_release_the_regexes_can_parse",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "isSeasonTitle": false
+      }
+    },
+    {
+      "input": "[Group] Series Title - 05 (1080p)",
+      "method": "should_not_flag_a_release_the_regexes_can_parse",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "isSeasonTitle": false
+      }
+    },
+    {
+      "input": "Series Title S02 1080p WEB-DL",
+      "method": "should_not_flag_a_release_the_regexes_can_parse",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "isSeasonTitle": false
+      }
+    },
+    {
+      "input": "THIS SHOULD NEVER PARSE",
+      "method": "should_leave_parse_title_rejecting_what_it_rejects_today",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "Vrq6e1Aba3U amCjuEgV5R2QvdsLEGYF3YQAQkw8",
+      "method": "should_leave_parse_title_rejecting_what_it_rejects_today",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "rejected": true
+      }
+    },
+    {
+      "input": "[Group] Series Title Curse (BS11 1280x720 x264 AAC)",
+      "method": "should_leave_parse_title_rejecting_what_it_rejects_today",
+      "source": "SeasonTitleParserFixture.cs",
+      "expect": {
+        "rejected": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,42 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "Normalizing raw IMDb id strings to tt-prefixed, zero-padded form (should_normalize_imdbid); null means not a valid id",
+  "cases": [
+    {
+      "input": "asfd",
+      "expect": {
+        "imdbId": null
+      }
+    },
+    {
+      "input": "123",
+      "expect": {
+        "imdbId": "tt0000123"
+      }
+    },
+    {
+      "input": "1234567",
+      "expect": {
+        "imdbId": "tt1234567"
+      }
+    },
+    {
+      "input": "tt1234567",
+      "expect": {
+        "imdbId": "tt1234567"
+      }
+    },
+    {
+      "input": "tt12345678",
+      "expect": {
+        "imdbId": "tt12345678"
+      }
+    },
+    {
+      "input": "12345678",
+      "expect": {
+        "imdbId": "tt12345678"
+      }
+    }
+  ]
+}

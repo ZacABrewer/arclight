@@ -1,0 +1,42 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "TMDb and IMDb ids embedded in release names (should_parse_tmdb_id, should_parse_imdb_in_title)",
+  "cases": [
+    {
+      "input": "Movie Name (2016) {tmdbid-43074}",
+      "expect": {
+        "tmdbId": 43074
+      }
+    },
+    {
+      "input": "Movie Name (2016) [tmdb-43074]",
+      "expect": {
+        "tmdbId": 43074
+      }
+    },
+    {
+      "input": "Movie Name (2016) {tmdb-43074}",
+      "expect": {
+        "tmdbId": 43074
+      }
+    },
+    {
+      "input": "Movie Name (2016) {tmdb-2020}",
+      "expect": {
+        "tmdbId": 2020
+      }
+    },
+    {
+      "input": "That Italian Movie 2008 [tt1234567] 720p BluRay X264",
+      "expect": {
+        "imdbId": "tt1234567"
+      }
+    },
+    {
+      "input": "That Italian Movie 2008 [tt12345678] 720p BluRay X264",
+      "expect": {
+        "imdbId": "tt12345678"
+      }
+    }
+  ]
+}

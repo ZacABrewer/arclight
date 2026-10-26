@@ -1,0 +1,94 @@
+{
+  "source": "HashedReleaseFixture.cs",
+  "description": "Full file paths whose file name is a hash or junk: title, quality and release group must be parsed from the parent folder name (should_properly_parse_hashed_releases). Upstream converts backslashes to the OS separator before parsing. Quality names use Radarr's display names.",
+  "cases": [
+    {
+      "input": "C:\\Test\\Some.Hashed.Release.2018.720p.WEB-DL.AAC2.0.H.264-Mercury\\0e895c37245186812cb08aab1529cf8ee389dd05.mkv",
+      "expect": {
+        "title": "Some Hashed Release",
+        "quality": "WEBDL-720p",
+        "releaseGroup": "Mercury"
+      }
+    },
+    {
+      "input": "C:\\Test\\0e895c37245186812cb08aab1529cf8ee389dd05\\Some.Hashed.Release.2018.720p.WEB-DL.AAC2.0.H.264-Mercury.mkv",
+      "expect": {
+        "title": "Some Hashed Release",
+        "quality": "WEBDL-720p",
+        "releaseGroup": "Mercury"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.2018.DVDRip.XviD-RADARR\\AHFMZXGHEWD660.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "DVD",
+        "releaseGroup": "RADARR"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.2018.1080p.BluRay.x264-RADARR\\Backup_72023S02-12.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "Bluray-1080p",
+        "releaseGroup": "RADARR"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.2018.1080p.BluRay.x264\\Backup_72023S02-12.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "Bluray-1080p",
+        "releaseGroup": null
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie 2018 720p WEB-DL DD5 1 H 264-ECI\\123.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "WEBDL-720p",
+        "releaseGroup": "ECI"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie 2018 720p WEB-DL DD5 1 H 264-ECI\\abc.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "WEBDL-720p",
+        "releaseGroup": "ECI"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie 2018 720p WEB-DL DD5 1 H 264-ECI\\b00bs.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "WEBDL-720p",
+        "releaseGroup": "ECI"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.Title.2018.720p.HDTV.x264-NZBgeek/cgajsofuejsa501.mkv",
+      "expect": {
+        "title": "Movie Title",
+        "quality": "HDTV-720p",
+        "releaseGroup": "NZBgeek"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.2018.1080p.WEB-DL.DD5.1.H264-RARBG\\170424_26.mkv",
+      "expect": {
+        "title": "Movie",
+        "quality": "WEBDL-1080p",
+        "releaseGroup": "RARBG"
+      }
+    },
+    {
+      "input": "C:\\Test\\Movie.Title.2018.720p.HDTV.H.264\\abc.xyz.af6021c37f7852.mkv",
+      "expect": {
+        "title": "Movie Title",
+        "quality": "HDTV-720p",
+        "releaseGroup": null
+      }
+    }
+  ]
+}
