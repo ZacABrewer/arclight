@@ -1,5 +1,13 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { MigrateApp, MigrateStagingArea } from '@arclight/shared';
+import type {
+  MigrateApp,
+  MigrateBackupRef,
+  MigrateRunState,
+  MigrateStackApplyRequestParsed,
+  MigrateStackSourceStatus,
+  MigrateStagingArea,
+  MigrationLogEntry,
+} from '@arclight/shared';
 
 // Migrate module tables.
 //
@@ -40,5 +48,24 @@ export const migrateStaging = sqliteTable(
   (t) => [uniqueIndex('migrate_staging_key_idx').on(t.area, t.sourceApp, t.sourceId), index('migrate_staging_area_idx').on(t.area, t.consumedAt)],
 );
 
+/**
+ * Whole-stack import runs (`MigrateStack` job). `request` keeps the sources with their API keys
+ * and passwords so an interrupted run can be resumed after a restart; it is masked whenever it
+ * is served. `sources` is the per-source status, updated as each source finishes.
+ */
+export const migrateRuns = sqliteTable('migrate_runs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  state: text('state').$type<MigrateRunState>().notNull(),
+  dryRun: integer('dry_run', { mode: 'boolean' }).notNull(),
+  request: text('request', { mode: 'json' }).$type<MigrateStackApplyRequestParsed>().notNull(),
+  sources: text('sources', { mode: 'json' }).$type<MigrateStackSourceStatus[]>().notNull(),
+  backup: text('backup', { mode: 'json' }).$type<MigrateBackupRef | null>(),
+  log: text('log', { mode: 'json' }).$type<MigrationLogEntry[]>().notNull(),
+  error: text('error'),
+  startedAt: text('started_at').notNull(),
+  endedAt: text('ended_at'),
+});
+
 export type MigrateImportedRow = typeof migrateImported.$inferSelect;
+export type MigrateRunRow = typeof migrateRuns.$inferSelect;
 export type MigrateStagingDbRow = typeof migrateStaging.$inferSelect;

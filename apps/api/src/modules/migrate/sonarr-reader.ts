@@ -1,6 +1,6 @@
 import type { MigratePathMapping, SeriesStatus } from '@arclight/shared';
 import { arrSchemaVersion, readArrInfrastructure, remappedRootFolders, rootFolderFor, warn, type ReaderContext } from './arr-common.js';
-import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, jsonArray, str, type ForeignRow } from './foreign-db.js';
+import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, jsonArray, str, type ForeignRow, type TableSource } from './foreign-db.js';
 import { mapLanguageId, mapLanguageList } from './mappers/languages.js';
 import { mapGenres, mapImages, mapMediaInfo, mapRatings } from './mappers/media.js';
 import { mapQualityModel } from './mappers/quality.js';
@@ -150,28 +150,33 @@ export function readSonarrSeries(ctx: ReaderContext): SourceItem<SeriesPayload>[
   return items;
 }
 
+/** A Sonarr source as tables (its database, or rows built from its API). */
+export function readSonarrTables(db: TableSource, mappings: readonly MigratePathMapping[], where: string): SourceBundle {
+  if (!db.hasTable('Series') || !db.hasTable('Episodes')) {
+    throw new MigrateError('WRONG_APP', `${where} does not look like Sonarr (no series/episodes)`);
+  }
+  const ctx: ReaderContext = { db, app: 'sonarr', mappings, warnings: [] };
+  const series = readSonarrSeries(ctx);
+  const episodes = series.reduce((n, s) => n + s.payload.episodes.length, 0);
+  const files = series.reduce((n, s) => n + s.payload.files.length, 0);
+  if (db.hasTable('LanguageProfiles')) {
+    warn(ctx, 'qualityProfiles', 'Sonarr v3 language profiles are not imported; Arclight filters languages per quality profile');
+  }
+  return {
+    app: 'sonarr',
+    schemaVersion: arrSchemaVersion(db),
+    warnings: ctx.warnings,
+    areas: {
+      ...readArrInfrastructure(ctx, 'series'),
+      series: { mode: 'import', items: series, details: { episodes, files } },
+    },
+  };
+}
+
 export function readSonarr(dbPath: string, mappings: readonly MigratePathMapping[]): SourceBundle {
   const db = ForeignDb.open(dbPath);
   try {
-    if (!db.hasTable('Series') || !db.hasTable('Episodes')) {
-      throw new MigrateError('WRONG_APP', `${dbPath} does not look like a Sonarr database (no Series/Episodes tables)`);
-    }
-    const ctx: ReaderContext = { db, app: 'sonarr', mappings, warnings: [] };
-    const series = readSonarrSeries(ctx);
-    const episodes = series.reduce((n, s) => n + s.payload.episodes.length, 0);
-    const files = series.reduce((n, s) => n + s.payload.files.length, 0);
-    if (db.hasTable('LanguageProfiles')) {
-      warn(ctx, 'qualityProfiles', 'Sonarr v3 language profiles are not imported; Arclight filters languages per quality profile');
-    }
-    return {
-      app: 'sonarr',
-      schemaVersion: arrSchemaVersion(db),
-      warnings: ctx.warnings,
-      areas: {
-        ...readArrInfrastructure(ctx, 'series'),
-        series: { mode: 'import', items: series, details: { episodes, files } },
-      },
-    };
+    return readSonarrTables(db, mappings, `${dbPath} (database)`);
   } finally {
     db.close();
   }

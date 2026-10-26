@@ -8,6 +8,7 @@ import { RemoteEngineClient, type RemoteEngineDeps } from './remote-engine/clien
 import { RemoteEngineSettings, type RemoteEngineSettingsInput } from './remote-engine/settings.js';
 import { NzbgetSettings, type NzbgetSettingsInput } from './nzbget/settings.js';
 import { QBittorrentClient, QBittorrentSettings } from './qbittorrent/client.js';
+import { QBittorrentInventory, type QBittorrentInventoryOptions } from './qbittorrent/inventory.js';
 import { RTorrentClient } from './rtorrent/client.js';
 import { RTorrentSettings, type RTorrentSettingsInput } from './rtorrent/settings.js';
 import { SabnzbdClient } from './sabnzbd/client.js';
@@ -37,6 +38,13 @@ export {
   type UsenetPriority,
 } from './types.js';
 export { QBittorrentSettings } from './qbittorrent/client.js';
+export {
+  QBittorrentInventory,
+  QbtInventoryFile,
+  QbtInventoryTorrent,
+  type QBittorrentInventoryOptions,
+} from './qbittorrent/inventory.js';
+export type { QbtCategories, QbtPreferences } from './qbittorrent/schemas.js';
 export { TransmissionPriority, TransmissionSettings, type TransmissionSettingsInput } from './transmission/settings.js';
 export { DelugePriority, DelugeSettings, type DelugeSettingsInput } from './deluge/settings.js';
 export { RTorrentPriority, RTorrentSettings, type RTorrentSettingsInput } from './rtorrent/settings.js';
@@ -83,6 +91,11 @@ export function createQBittorrentClient(
 ): DownloadClient {
   const parsed = QBittorrentSettings.parse(settings);
   return new QBittorrentClient(parsed, runtimeWith(runtime));
+}
+
+/** Whole-instance read access to qBittorrent (importers); see QBittorrentInventory. */
+export function createQBittorrentInventory(opts: QBittorrentInventoryOptions, runtime: Partial<ClientRuntime> = {}): QBittorrentInventory {
+  return new QBittorrentInventory(opts, runtimeWith(runtime));
 }
 
 /** Transmission RPC (2.80+, rpc-version 14+). Labels are used from rpc-version 16. */

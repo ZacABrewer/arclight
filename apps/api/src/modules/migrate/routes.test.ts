@@ -118,6 +118,43 @@ describe('/migrate routes', () => {
     await app.close();
   });
 
+  it('previews and dry-runs a stack, serves the report and guards the qBittorrent clean-up', async () => {
+    const { app, admin, user, db } = await buildMigrateApp();
+    const dbPath = join(tmp, 'sonarr.db');
+    makeSonarrDb(dbPath);
+    const source = { app: 'sonarr', dbPath, pathMappings: [{ from: '/tv', to: join(tmp, 'tv') }] };
+    expect((await app.inject({ method: 'GET', url: '/api/v1/migrate/stack/status', headers: { cookie: user } })).statusCode).toBe(403);
+    expect((await app.inject({ method: 'GET', url: '/api/v1/migrate/stack/status', headers: { cookie: admin } })).json()).toMatchObject({ state: 'idle', runId: null });
+
+    const preview = await app.inject({ method: 'POST', url: '/api/v1/migrate/stack/preview', headers: { cookie: admin }, payload: { sources: [source] } });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json().sources[0]).toMatchObject({ key: '0', app: 'sonarr', label: 'Sonarr', error: null });
+
+    const started = await app.inject({ method: 'POST', url: '/api/v1/migrate/stack/apply', headers: { cookie: admin }, payload: { sources: [{ source }] } });
+    expect(started.statusCode).toBe(202);
+    expect(started.json()).toMatchObject({ state: 'running', dryRun: true });
+    let status = started.json();
+    for (let i = 0; i < 200 && status.state === 'running'; i++) {
+      await new Promise((r) => setTimeout(r, 20));
+      status = (await app.inject({ method: 'GET', url: '/api/v1/migrate/stack/status', headers: { cookie: admin } })).json();
+    }
+    expect(status).toMatchObject({ state: 'completed', dryRun: true, adoptedTorrents: 0 });
+    expect(db.select().from(t.series).all()).toHaveLength(0);
+    expect(db.select().from(t.jobs).all().some((j) => j.name === 'MigrateStack' && j.status === 'completed')).toBe(true);
+
+    const report = await app.inject({ method: 'GET', url: '/api/v1/migrate/stack/report?download=1', headers: { cookie: admin } });
+    expect(report.statusCode).toBe(200);
+    expect(report.headers['content-disposition']).toMatch(/arclight-import-report-\d+\.json/);
+    expect(report.json()).toMatchObject({ version: 1, dryRun: true });
+
+    const cleanup = await app.inject({ method: 'POST', url: '/api/v1/migrate/stack/source-cleanup', headers: { cookie: admin }, payload: { action: 'remove', confirm: true } });
+    expect(cleanup.statusCode).toBe(400);
+    const unconfirmed = await app.inject({ method: 'POST', url: '/api/v1/migrate/stack/source-cleanup', headers: { cookie: admin }, payload: { action: 'remove', confirm: false } });
+    expect(unconfirmed.statusCode).toBe(400);
+    expect((await app.inject({ method: 'POST', url: '/api/v1/migrate/stack/resume', headers: { cookie: admin } })).statusCode).toBe(400);
+    await app.close();
+  });
+
   it('lists detected sources', async () => {
     const { app, admin } = await buildMigrateApp();
     const res = await app.inject({ method: 'GET', url: '/api/v1/migrate/sources', headers: { cookie: admin } });

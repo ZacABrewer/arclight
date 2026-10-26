@@ -3,6 +3,7 @@ import type {
   DelayProfileInput,
   ImportListCreate,
   IndexerCreate,
+  IndexerProxyCreate,
   MediaInfo,
   MediaImage,
   MediaManagementSettings,
@@ -22,7 +23,12 @@ import type {
   SeriesStatus,
   SeriesType,
 } from '@arclight/shared';
+import type { MigrationPlan } from '@arclight/shared';
+import type { AreaEnv } from './areas.js';
+import type { TorrentPayload } from './qbittorrent-reader.js';
 import type { NativeDownloadClientInput, StagedDownloadClient } from './mappers/download-clients.js';
+import type { SeerrIssuePayload, SeerrRequestPayload, SeerrSettingsPayload, SeerrUserPayload } from './types-requests.js';
+import type { SubtitleAssignmentPayload, SubtitleEventPayload, SubtitleFilePayload, SubtitleProfilePayload, SubtitleProviderPayload } from './types-subtitles.js';
 
 // The normalised, already-mapped view of a source installation that readers produce and the
 // service plans/applies. Cross references (tags, profiles, formats, indexers, parents) stay
@@ -81,6 +87,12 @@ export interface IndexerPayload {
   create: Omit<IndexerCreate, 'tags' | 'downloadClientId'>;
   sourceTagIds: number[];
   sourceDownloadClientId: number | null;
+}
+
+/** A Prowlarr indexer proxy (FlareSolverr, HTTP, SOCKS5). */
+export interface IndexerProxyPayload {
+  create: Omit<IndexerProxyCreate, 'tags'>;
+  sourceTagIds: number[];
 }
 
 export interface DownloadClientPayload {
@@ -239,7 +251,7 @@ export interface AreaPayloads {
   delayProfiles: DelayProfilePayload;
   releaseProfiles: ReleaseProfilePayload;
   indexers: IndexerPayload;
-  indexerProxies: unknown;
+  indexerProxies: IndexerProxyPayload;
   applications: unknown;
   downloadClients: DownloadClientPayload;
   remotePathMappings: RemotePathMappingPayload;
@@ -252,13 +264,16 @@ export interface AreaPayloads {
   collections: unknown;
   history: HistoryPayload;
   blocklist: BlocklistPayload;
-  subtitleProfiles: unknown;
-  subtitleProviders: unknown;
-  subtitleHistory: unknown;
-  users: unknown;
-  requests: unknown;
-  issues: unknown;
-  requestSettings: unknown;
+  subtitleProfiles: SubtitleProfilePayload;
+  subtitleProviders: SubtitleProviderPayload;
+  subtitleHistory: SubtitleEventPayload;
+  users: SeerrUserPayload;
+  requests: SeerrRequestPayload;
+  issues: SeerrIssuePayload;
+  requestSettings: SeerrSettingsPayload;
+  subtitleFiles: SubtitleFilePayload;
+  subtitleAssignments: SubtitleAssignmentPayload;
+  torrents: TorrentPayload;
 }
 
 export type SourceAreas = { [A in MigrateArea]?: AreaBundle<AreaPayloads[A]> };
@@ -268,6 +283,8 @@ export interface SourceBundle {
   schemaVersion: string | null;
   warnings: MigrationWarning[];
   areas: SourceAreas;
+  /** Extra plan fields computed against the current database (qBittorrent categories). */
+  planExtras?: (env: AreaEnv) => Pick<MigrationPlan, 'torrentCategories'>;
 }
 
 /** A staged area: every item carries its `stageArea`. */

@@ -1,7 +1,7 @@
 import type { MigratePathMapping, MovieStatus } from '@arclight/shared';
 import { arrSchemaVersion, readArrInfrastructure, remappedRootFolders, rootFolderFor, warn, type ReaderContext } from './arr-common.js';
 import { MigrateError } from './errors.js';
-import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, str, type ForeignRow } from './foreign-db.js';
+import { bool, dayOnly, ForeignDb, idList, int, isoDate, json, str, type ForeignRow, type TableSource } from './foreign-db.js';
 import { mapMinimumAvailability } from './mappers/import-lists.js';
 import { mapLanguageId, mapLanguageList } from './mappers/languages.js';
 import { mapGenres, mapImages, mapMediaInfo, mapRatings } from './mappers/media.js';
@@ -140,23 +140,28 @@ export function readRadarrCollections(ctx: ReaderContext): SourceItem<unknown>[]
   });
 }
 
+/** A Radarr source as tables (its database, or rows built from its API). */
+export function readRadarrTables(db: TableSource, mappings: readonly MigratePathMapping[], where: string): SourceBundle {
+  if (!db.hasTable('Movies')) throw new MigrateError('WRONG_APP', `${where} does not look like Radarr (no movies)`);
+  const ctx: ReaderContext = { db, app: 'radarr', mappings, warnings: [] };
+  const movies = readRadarrMovies(ctx);
+  const collections = readRadarrCollections(ctx);
+  return {
+    app: 'radarr',
+    schemaVersion: arrSchemaVersion(db),
+    warnings: ctx.warnings,
+    areas: {
+      ...readArrInfrastructure(ctx, 'movie'),
+      movies: { mode: 'import', items: movies, details: { files: movies.filter((m) => m.payload.file).length } },
+      ...(collections.length > 0 ? { collections: { mode: 'stage' as const, items: collections } } : {}),
+    },
+  };
+}
+
 export function readRadarr(dbPath: string, mappings: readonly MigratePathMapping[]): SourceBundle {
   const db = ForeignDb.open(dbPath);
   try {
-    if (!db.hasTable('Movies')) throw new MigrateError('WRONG_APP', `${dbPath} does not look like a Radarr database (no Movies table)`);
-    const ctx: ReaderContext = { db, app: 'radarr', mappings, warnings: [] };
-    const movies = readRadarrMovies(ctx);
-    const collections = readRadarrCollections(ctx);
-    return {
-      app: 'radarr',
-      schemaVersion: arrSchemaVersion(db),
-      warnings: ctx.warnings,
-      areas: {
-        ...readArrInfrastructure(ctx, 'movie'),
-        movies: { mode: 'import', items: movies, details: { files: movies.filter((m) => m.payload.file).length } },
-        ...(collections.length > 0 ? { collections: { mode: 'stage' as const, items: collections } } : {}),
-      },
-    };
+    return readRadarrTables(db, mappings, `${dbPath} (database)`);
   } finally {
     db.close();
   }

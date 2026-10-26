@@ -1157,6 +1157,27 @@ Format, managed mode and env overrides: [OPERATIONS.md](OPERATIONS.md).
 | POST | `/config/validate` | Admin. Same body; `{valid, errors, warnings}` without writing |
 | GET | `/config/managed-keys` | Settings keys and resource keys owned by `ARCLIGHT_CONFIG_FILE` / `ARCLIGHT_SETTING__*` (the UI locks them): `{file, appliedAt, settings: {section: keys[]}, resources: {kind: keys[]}, env[], errors[]}` |
 
+## migrate (import your existing stack)
+
+Implemented in `apps/api/src/modules/migrate` (contract: `packages/shared/src/migrate.ts`). All routes are admin only. The web UI is System > Import; the walkthrough is in [migrating.md](getting-started/migrating.md). Source apps are only read.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/migrate/sources` | Candidate database files found in the container (`/config`, `/import`, `/migrate`, `/mnt/import`, `ARCLIGHT_MIGRATE_DIRS`) |
+| GET | `/migrate/discover` | Old apps found on the Docker network (names and ports probed with DNS and TCP only) |
+| POST | `/migrate/test` | Test one source (API or files): version, or which other app it is |
+| POST | `/migrate/plan` | Single-app plan from a database file (no writes) |
+| POST | `/migrate/apply` | Single-app import as a background job; 202 |
+| GET | `/migrate/status` | State of the single-app import |
+| POST | `/migrate/stack/preview` | Wizard preview for all chosen sources (per-area counts, warnings, conflicts, reasons); no writes |
+| POST | `/migrate/stack/apply` | Start the whole-stack import (`MigrateStack` job); 202. Dry run by default in the UI; a real run takes a backup first when asked |
+| POST | `/migrate/stack/resume` | Continue a failed or interrupted real run; 400 when there is none |
+| GET | `/migrate/stack/status` | Progress, per-source state and log of the current or last run |
+| GET | `/migrate/stack/report` | The report; `?runId=` picks a run, `?download=1` serves it as a JSON attachment (secrets masked) |
+| POST | `/migrate/stack/source-cleanup` | Pause, or remove (files kept), the adopted torrents in qBittorrent after a run (API mode only) |
+
+A source app that refuses Arclight (wrong key) or does not answer is reported as 502, never 401/403, so the web client does not mistake it for a lost Arclight session.
+
 ## audit
 
 Implemented in `apps/api/src/modules/audit`. Every mutating `/api/v1` request is recorded by an

@@ -143,6 +143,21 @@ describe('setup wizard (Page 08)', () => {
     await waitFor(() => expect(router.state.location.pathname).toBe('/'));
   });
 
+  it('offers importing an existing stack at the end of setup', async () => {
+    folders = [{ id: 1, path: '/media/tv', mediaType: 'series', freeSpaceBytes: null, accessible: true }];
+    steps = steps.map((s) => (s.id === 'rootFolders' ? { ...s, complete: true } : s));
+    const router = renderSetup();
+    await screen.findByRole('heading', { name: 'Add a download client' });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    await screen.findByRole('heading', { name: 'Add an indexer' });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip for now' }));
+    await screen.findByRole('heading', { name: 'Protect downloads with a VPN' });
+    expect(screen.getByText('Coming from Sonarr, Radarr or qBittorrent?')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Finish setup and import your existing stack' }));
+    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/setup/complete')?.body).toEqual({ authMethod: 'forms' }));
+    await waitFor(() => expect(router.state.location.pathname).toBe('/system/migrate'));
+  });
+
   it('offers the UI language on the first step and keeps it on the new admin account', async () => {
     steps = steps.map((s) => (s.id === 'admin' ? { ...s, complete: false } : s));
     renderSetup();
