@@ -117,6 +117,26 @@ describe('TopBar', () => {
   });
 });
 
+describe('ambient light (v1.1)', () => {
+  it('rail and top bar carry decorative border runners; the mobile tab bar and the dot keep theirs', () => {
+    const { container } = render(
+      <>
+        <Rail active="DB" />
+        <TopBar connected />
+        <MobileTabBar active="home" alwaysVisible />
+      </>,
+    );
+    const v = container.querySelector('.al-rail__runner > .al-runner.al-runner--v')!;
+    const h = container.querySelector('.al-topbar .al-topbar__runner > .al-runner.al-runner--h')!;
+    expect(v.parentElement!.getAttribute('aria-hidden')).toBe('true');
+    expect(h.parentElement!.getAttribute('aria-hidden')).toBe('true');
+    // The rail runner sits outside the scrolling <nav> so it can ride the border.
+    expect(container.querySelector('nav.al-rail .al-runner')).toBeNull();
+    expect(container.querySelector('.al-tabbar .al-runner')).toBeNull();
+    expect(container.querySelector('.al-topbar .al-live:not([data-state])')).toBeTruthy();
+  });
+});
+
 describe('MobileTabBar / PageHeader / ContentInset', () => {
   it('tab bar has the five kit tabs with one active', () => {
     render(<MobileTabBar active="library" />);

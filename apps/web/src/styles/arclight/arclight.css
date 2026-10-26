@@ -1,4 +1,4 @@
-/* ARCLIGHT design system v1.0 — tokens + component classes
+/* ARCLIGHT design system v1.1 — tokens + component classes
    Fonts: <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
    Visual reference: Arclight Design Kit.dc.html, Arclight Pages.dc.html */
 
@@ -222,5 +222,31 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 .al-derezz { animation: al-derezz var(--t-slow) ease-in forwards; background-image: repeating-linear-gradient(180deg, rgba(110,246,255,.15) 0 1px, transparent 1px 3px); }
 .al-enter { animation: al-rezz var(--t-enter) var(--ease-out) both; }
 .al-enter:nth-child(2) { animation-delay: 40ms; } .al-enter:nth-child(3) { animation-delay: 80ms; } .al-enter:nth-child(4) { animation-delay: 120ms; }
+
+/* ---------- ambient light (v1.1) ---------- */
+/* Backdrop motion: <canvas class="al-backdrop__motion" aria-hidden="true"> above the static floor/spire, below the scanline.
+   Drive it with mountBackdrop() from arclight-motion.js. */
+.al-backdrop__motion { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+/* Light runner on chrome borders. Parent must be position:relative/absolute.
+   <i class="al-runner al-runner--v"></i> on the rail's right edge, <i class="al-runner al-runner--h"></i> on the top bar's bottom edge. */
+.al-runner { position: absolute; pointer-events: none; }
+.al-runner--v { right: -1px; top: -140px; width: 1px; height: 140px; background: linear-gradient(180deg, rgba(110,246,255,0), rgba(200,252,255,.9), rgba(110,246,255,0)); animation: al-rail-run var(--t-runner-v) linear 1.5s infinite; }
+.al-runner--h { left: -220px; bottom: -1px; width: 220px; height: 1px; background: linear-gradient(90deg, rgba(110,246,255,0), rgba(200,252,255,.9), rgba(110,246,255,0)); animation: al-bar-run var(--t-runner-h) linear 4s infinite; }
+/* Active trail: a light packet flows through the filled segment toward the head */
+.al-trail[data-state="active"]::after { background: linear-gradient(90deg, rgba(233,253,255,0), rgba(233,253,255,.95), rgba(233,253,255,0)) no-repeat, var(--al-trail);
+  background-size: 48px 100%, 100% 100%; animation: al-trail-flow var(--t-flow) linear infinite; }
+/* Hero chamfer edge: slow glint, opacity only (no glow) */
+.al-edge { animation: al-edge-glint 7s ease-in-out infinite; }
+/* Packet travelling a decorative trace. Set the trace as an SVG path in the pane's coordinate space:
+   <i class="al-trace-pulse" style="--path: path('M524 404 L662 404 L758 500')"></i>  stagger the second with animation-delay. */
+.al-trace-pulse { position: absolute; left: 0; top: 0; width: 30px; height: 2px; pointer-events: none;
+  background: linear-gradient(90deg, rgba(110,246,255,0), var(--al-text-1)); offset-path: var(--path); offset-rotate: auto;
+  animation: al-trace-run 5s cubic-bezier(.45,0,.55,1) infinite; }
+:root { --t-flow: 1.8s; --t-runner-v: 9s; --t-runner-h: 12s; }
+@keyframes al-rail-run { 0% { top: -140px; } 45%, 100% { top: 100%; } }
+@keyframes al-bar-run { 0% { left: -220px; } 38%, 100% { left: 100%; } }
+@keyframes al-trail-flow { from { background-position: -48px 0, 0 0; } to { background-position: calc(100% + 48px) 0, 0 0; } }
+@keyframes al-edge-glint { 0%, 82%, 100% { opacity: .55; } 90% { opacity: 1; } }
+@keyframes al-trace-run { 0% { offset-distance: 0%; opacity: 0; } 8% { opacity: 1; } 70% { offset-distance: 100%; opacity: 1; } 78%, 100% { offset-distance: 100%; opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }

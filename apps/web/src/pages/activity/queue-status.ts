@@ -1,4 +1,4 @@
-import type { QueueItem } from '@arclight/shared';
+import type { QueueItem, QueueItemStateCode } from '@arclight/shared';
 import type { StatusKey, TrailState } from '../../arclight/index.js';
 import { t } from '../../i18n/index.js';
 
@@ -101,6 +101,36 @@ const TRAIL_STATES: Record<QueueChipStatus, TrailState> = {
 /** Trail state that matches a chip: only a live download glows. */
 export function trailState(chip: QueueChip | QueueChipStatus): TrailState {
   return TRAIL_STATES[typeof chip === 'string' ? chip : chip.status];
+}
+
+/**
+ * State codes that mean the transfer is not moving right now even when the client still says
+ * "downloading" (kill switch, disk space, no peers ...). An active trail glows and carries the
+ * flowing light packet, so these must never render as active.
+ */
+const HELD_TRAILS: Partial<Record<QueueItemStateCode, TrailState>> = {
+  paused: 'paused',
+  killSwitch: 'paused',
+  queued: 'queued',
+  pendingGrab: 'queued',
+  noPeers: 'stalled',
+  stalled: 'stalled',
+  diskSpace: 'stalled',
+  clientUnavailable: 'stalled',
+  missing: 'stalled',
+  warning: 'stalled',
+  error: 'failed',
+};
+
+/** Downgrades an `active` trail when the item's state code says it is held. */
+export function heldTrail(trail: TrailState, stateCode: QueueItemStateCode | undefined): TrailState {
+  if (trail !== 'active' || !stateCode) return trail;
+  return HELD_TRAILS[stateCode] ?? trail;
+}
+
+/** Trail state for a queue row: the chip's state, unless the state code says it is held. */
+export function queueTrailState(item: ChipInput & Pick<QueueItem, 'stateCode'>): TrailState {
+  return heldTrail(trailState(queueChip(item)), item.stateCode);
 }
 
 /** Resolution + source from a release title ("1080p WEB-DL"), or null when it names neither. */

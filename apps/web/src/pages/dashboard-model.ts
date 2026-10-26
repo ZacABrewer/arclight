@@ -1,5 +1,6 @@
 import type { CalendarItem, HealthCheck, QueueItem, RootFolder, VpnStatus } from '@arclight/shared';
 import type { TrailState } from '../arclight/index.js';
+import { heldTrail } from './activity/queue-status.js';
 import { formatBytes, formatClock, formatSpan } from './system/format.js';
 import { t } from '../i18n/index.js';
 
@@ -156,6 +157,8 @@ export function queueRow(item: QueueItem): QueueRowModel {
   } else if (item.status === 'completed' || item.status === 'seeding') {
     trail = 'complete';
   }
+  // Held by the kill switch, disk space, no peers ...: never an active (glowing, flowing) trail.
+  trail = heldTrail(trail, item.stateCode);
   return {
     key: item.id,
     title: item.title,

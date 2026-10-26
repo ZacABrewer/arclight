@@ -48,7 +48,8 @@ export interface RailProps {
 }
 
 /**
- * Nav rail: 84px, diamond mark, two-letter codes, active = 2px cyan bar with glow.
+ * Nav rail: 84px, diamond mark, two-letter codes, active = 2px cyan bar with glow, and a
+ * decorative light runner on the right border.
  * Keyboard: Tab enters on the active item; ↑/↓/Home/End move between items.
  */
 export function Rail({ active, items = RAIL_ITEMS, onSelect, compact, homeHref, className }: RailProps) {
@@ -74,54 +75,60 @@ export function Rail({ active, items = RAIL_ITEMS, onSelect, compact, homeHref, 
   };
 
   return (
-    <nav className={cx('al-rail', compact && 'al-rail--compact', className)} aria-label={t('arclight.chrome.rail.main')}>
-      {homeHref ? (
-        <a className="al-rail__mark" href={homeHref} aria-label={t('arclight.chrome.rail.arclightHome')} onClick={(e) => onSelect?.('DB', e)}>
-          <Mark size={40} />
-        </a>
-      ) : (
-        <span className="al-rail__mark">
-          <Mark size={40} label={t('arclight.chrome.rail.arclight')} />
-        </span>
-      )}
-      <ul ref={listRef} className="al-rail__list" onKeyDown={onKeyDown}>
-        {items.map((item, i) => {
-          const isActive = item.code === active;
-          const common = {
-            className: 'al-rail__item',
-            'data-rail-item': item.code,
-            'aria-current': isActive ? ('page' as const) : undefined,
-            'aria-label': item.title,
-            title: item.title,
-            tabIndex: i === activeIndex ? 0 : -1,
-            onClick: (e: MouseEvent<HTMLElement>) => onSelect?.(item.code, e),
-          };
-          const content = (
-            <>
-              <span className="al-rail__bar" aria-hidden="true" />
-              <span className="al-rail__code" aria-hidden="true">
-                {item.code}
-              </span>
-              <span className="al-rail__label" aria-hidden="true">
-                {item.label}
-              </span>
-            </>
-          );
-          return (
-            <li key={item.code}>
-              {item.href ? (
-                <a href={item.href} {...common}>
-                  {content}
-                </a>
-              ) : (
-                <button type="button" {...common}>
-                  {content}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <>
+      <nav className={cx('al-rail', compact && 'al-rail--compact', className)} aria-label={t('arclight.chrome.rail.main')}>
+        {homeHref ? (
+          <a className="al-rail__mark" href={homeHref} aria-label={t('arclight.chrome.rail.arclightHome')} onClick={(e) => onSelect?.('DB', e)}>
+            <Mark size={40} />
+          </a>
+        ) : (
+          <span className="al-rail__mark">
+            <Mark size={40} label={t('arclight.chrome.rail.arclight')} />
+          </span>
+        )}
+        <ul ref={listRef} className="al-rail__list" onKeyDown={onKeyDown}>
+          {items.map((item, i) => {
+            const isActive = item.code === active;
+            const common = {
+              className: 'al-rail__item',
+              'data-rail-item': item.code,
+              'aria-current': isActive ? ('page' as const) : undefined,
+              'aria-label': item.title,
+              title: item.title,
+              tabIndex: i === activeIndex ? 0 : -1,
+              onClick: (e: MouseEvent<HTMLElement>) => onSelect?.(item.code, e),
+            };
+            const content = (
+              <>
+                <span className="al-rail__bar" aria-hidden="true" />
+                <span className="al-rail__code" aria-hidden="true">
+                  {item.code}
+                </span>
+                <span className="al-rail__label" aria-hidden="true">
+                  {item.label}
+                </span>
+              </>
+            );
+            return (
+              <li key={item.code}>
+                {item.href ? (
+                  <a href={item.href} {...common}>
+                    {content}
+                  </a>
+                ) : (
+                  <button type="button" {...common}>
+                    {content}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      {/* v1.1 ambient light: a runner travels down the rail's right border (9 s loop). */}
+      <span className="al-rail__runner" aria-hidden="true">
+        <i className="al-runner al-runner--v" />
+      </span>
+    </>
   );
 }

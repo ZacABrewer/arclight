@@ -91,6 +91,10 @@ export function TopBar({
 
   return (
     <header className={cx('al-topbar', className)}>
+      {/* v1.1 ambient light: a runner travels along the bottom border (12 s loop). */}
+      <span className="al-topbar__runner" aria-hidden="true">
+        <i className="al-runner al-runner--h" />
+      </span>
       <div className="al-wordmark">{t('common.arclight')}</div>
       {onSearch ? (
         <button type="button" className="al-topbar__search" onClick={onSearch} aria-label={t('arclight.chrome.topBar.searchPress')} aria-keyshortcuts="/">

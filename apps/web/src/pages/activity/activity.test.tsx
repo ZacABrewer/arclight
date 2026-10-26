@@ -13,7 +13,7 @@ import { HistoryDetails, HistoryFilterBar, redownloadTarget, toggleEventType } f
 import { DelayCountdown, formatDelay } from './pending-page.js';
 import { QueueChipCell, RemoveQueueDialog } from './queue-page.js';
 import { initialRemoveState, removeReducer, toRemoveOptions } from './queue-remove.js';
-import { causeFromMessage, qualityFromTitle, queueChip, trailState } from './queue-status.js';
+import { causeFromMessage, qualityFromTitle, queueChip, queueTrailState, trailState } from './queue-status.js';
 
 const item = (over: Partial<QueueItem> = {}): QueueItem => ({
   id: 1,
@@ -93,6 +93,19 @@ describe('trail state', () => {
     expect(trailState('importing')).toBe('complete');
     expect(trailState('downloaded')).toBe('complete');
     expect(trailState(queueChip(item({ trackedStatus: 'warning' })))).toBe('stalled');
+  });
+
+  it('never shows an active (flowing) trail while the item is held', () => {
+    expect(queueTrailState(item())).toBe('active');
+    expect(queueTrailState(item({ stateCode: 'downloading' }))).toBe('active');
+    expect(queueTrailState(item({ stateCode: 'killSwitch' }))).toBe('paused');
+    expect(queueTrailState(item({ stateCode: 'diskSpace' }))).toBe('stalled');
+    expect(queueTrailState(item({ stateCode: 'noPeers' }))).toBe('stalled');
+    expect(queueTrailState(item({ stateCode: 'paused' }))).toBe('paused');
+    expect(queueTrailState(item({ stateCode: 'error' }))).toBe('failed');
+    // A held code never upgrades a trail that is already flat.
+    expect(queueTrailState(item({ status: 'paused', stateCode: 'downloading' }))).toBe('paused');
+    expect(queueTrailState(item({ trackedStatus: 'warning', stateCode: 'killSwitch' }))).toBe('stalled');
   });
 
   it('renders the trail with the mapped state and a mono percentage', () => {

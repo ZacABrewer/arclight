@@ -113,3 +113,18 @@
 .al-page-header__controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .al-page-header__actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 @media (max-width: 767.98px) { .al-page-header { gap: 12px; } .al-page-header .al-title-l { font-size: 24px; } }
+
+/* ---------- ambient light (v1.1) ---------- */
+/* Border runners sit in clipping tracks: the rail scrolls (overflow-y), which would clip a runner
+   on its border and grow its scroll height, and the top bar must not light the rail as the
+   runner enters. Decorative only: aria-hidden, no pointer events. */
+.al-rail__runner { position: fixed; left: calc(var(--al-rail) - 1px); top: 0; bottom: 0; z-index: 51; width: 1px; overflow: hidden; pointer-events: none; }
+.al-rail__runner > .al-runner--v { right: 0; }
+.al-topbar__runner { position: absolute; left: 0; right: 0; bottom: -1px; height: 1px; overflow: hidden; pointer-events: none; }
+.al-topbar__runner > .al-runner--h { bottom: 0; }
+/* Page 10 (mobile) draws no runners: no rail, and the top bar stays still. */
+@media (max-width: 767.98px) { .al-rail__runner, .al-topbar__runner { display: none; } }
+
+/* The global "Reduce motion" switch (user setting): <html data-motion="off">. The backdrop canvas
+   is destroyed separately; this stops every CSS animation, like prefers-reduced-motion. */
+[data-motion="off"] *, [data-motion="off"] *::before, [data-motion="off"] *::after { animation: none !important; transition: none !important; }
