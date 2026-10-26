@@ -1,8 +1,15 @@
 import {
+  SeedingRulesRunResult,
+  SeedingRulesSettings,
   TorrentActionResult,
   TorrentDetail,
   TorrentSessionStatus,
   TorrentSettingsResponse,
+  TorrentSpeedMode,
+  TorrentSpeedSettings,
+  type SeedingRulesSettingsInput,
+  type TorrentSlowModeRequest,
+  type TorrentSpeedSettingsUpdate,
   type TorrentLimitsRequest,
   type TorrentListQuery,
   type TorrentMoveRequest,
@@ -35,5 +42,19 @@ export const torrentApi = {
   settings: {
     get: () => request('/settings/torrent', TorrentSettingsResponse),
     update: (body: TorrentSettingsUpdate) => request('/settings/torrent', TorrentSettingsResponse, { method: 'PUT', json: body }),
+  },
+  /** Current speed mode (normal / alternative) and why. */
+  speed: () => request('/torrent/speed', TorrentSpeedMode),
+  /** Manual slow mode on (optionally until an ISO time) or off. */
+  slowMode: (body: TorrentSlowModeRequest) => request('/torrent/slowmode', TorrentSpeedMode, { method: 'POST', json: body }),
+  speedSettings: {
+    get: () => request('/settings/torrent/speed', TorrentSpeedSettings),
+    update: (body: TorrentSpeedSettingsUpdate) => request('/settings/torrent/speed', TorrentSpeedSettings, { method: 'PUT', json: body }),
+  },
+  seedingRules: {
+    get: () => request('/settings/torrent/seedingrules', SeedingRulesSettings),
+    update: (body: SeedingRulesSettingsInput) => request('/settings/torrent/seedingrules', SeedingRulesSettings, { method: 'PUT', json: body }),
+    /** One pass now (the server also runs it every five minutes). */
+    apply: () => request('/torrent/seedingrules/apply', SeedingRulesRunResult, { method: 'POST' }),
   },
 };

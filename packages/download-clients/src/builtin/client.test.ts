@@ -427,6 +427,30 @@ describe('BuiltinClient queue', () => {
     expect(s.getTorrent(id)?.isPaused).toBe(false);
     await waitItem(client, id, (st) => st === 'downloading');
   });
+
+  it('sets per-item limits, reorders the queue and force-starts', async () => {
+    const { s, client } = await leecher({}, { maxActiveDownloads: 1 });
+    const [a, b] = [pack(), pack()];
+    const { id: idA } = await client.addTorrent({ magnet: a.magnet, title: a.name, category: 'tv' });
+    const { id: idB } = await client.addTorrent({ magnet: b.magnet, title: b.name, category: 'tv' });
+    await client.setItemLimits!(idA, { downloadLimit: 100 * 1024 });
+    expect(s.getTorrent(idA)?.rateLimits).toMatchObject({ downloadLimit: 100 * 1024, uploadLimit: 0 });
+    let items = await client.getItems('tv');
+    expect(items.find((i) => i.id === idA)?.live).toMatchObject({ downloadLimit: 100 * 1024, uploadLimit: 0, queuePosition: 1, forceStart: false });
+    expect(items.find((i) => i.id === idB)?.live?.queuePosition).toBe(2);
+
+    await client.moveInQueue!(idB, 'top');
+    items = await client.getItems('tv');
+    expect(items.map((i) => [i.id, i.live?.queuePosition])).toEqual([
+      [idB, 1],
+      [idA, 2],
+    ]);
+    await waitFor(() => s.getTorrent(idB)?.isActive && !s.getTorrent(idA)?.isActive);
+
+    await client.setForceStart!(idA, true);
+    await waitFor(() => s.getTorrent(idA)?.isActive && s.getTorrent(idB)?.isActive);
+    expect((await client.getItems('tv')).find((i) => i.id === idA)?.live?.forceStart).toBe(true);
+  });
 });
 
 describe('BuiltinClient status and connection', () => {

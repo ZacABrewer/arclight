@@ -30,6 +30,7 @@ import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { ActivityHeader, formatBytes, formatEta } from './activity-shared.js';
 import { needsManualImport } from './manual-import/mapping.js';
+import { QueueRowControls, SlowModeControl } from './queue-controls.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
@@ -263,7 +264,7 @@ export function QueuePage() {
 
   return (
     <div className="al-activity">
-      <ActivityHeader active="queue" />
+      <ActivityHeader active="queue" actions={<SlowModeControl />} />
       <EngineBannerSlot engine={engine.data ?? undefined} vpn={vpn.data ?? undefined} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         {queue.isError ? (
@@ -291,7 +292,12 @@ export function QueuePage() {
             selected={selected}
             onSelectionChange={setSelected}
             expandedRows={expanded}
-            renderExpanded={(r) => <QueueItemDetail item={r} builtin={isBuiltin(r)} id={detailId(r.id)} />}
+            renderExpanded={(r) => (
+              <>
+                <QueueItemDetail item={r} builtin={isBuiltin(r)} id={detailId(r.id)} />
+                <QueueRowControls item={r} />
+              </>
+            )}
             bulkActions={(keys) => {
               const items = records.filter((r) => keys.has(r.id));
               const pendingItems = items.filter(isPendingItem);

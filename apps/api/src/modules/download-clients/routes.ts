@@ -9,7 +9,10 @@ import {
   DownloadClientTestResult,
   DownloadTimeline,
   QueueBulkRemoveRequest,
+  QueueForceStartRequest,
   QueueItem,
+  QueueItemLimitsRequest,
+  QueueMoveRequest,
   QueuePage,
   QueueQuery,
   QueueRemoveOptions,
@@ -173,6 +176,25 @@ export function downloadClientsRoutes(
         service.getQueueItem(req.params.id);
         return service.removeQueueItems([req.params.id], req.query);
       },
+    );
+
+    // Engine control: per-download limits, queue order and force start (clients that support them).
+    app.post(
+      '/queue/:id/limits',
+      { schema: { params: IdParams, body: QueueItemLimitsRequest, response: { 200: QueueItem, ...errors } } },
+      async (req) => service.setItemLimits(req.params.id, req.body),
+    );
+
+    app.post(
+      '/queue/:id/move',
+      { schema: { params: IdParams, body: QueueMoveRequest, response: { 200: QueueItem, ...errors } } },
+      async (req) => service.moveInQueue(req.params.id, req.body.move),
+    );
+
+    app.post(
+      '/queue/:id/forcestart',
+      { schema: { params: IdParams, body: QueueForceStartRequest, response: { 200: QueueItem, ...errors } } },
+      async (req) => service.setForceStart(req.params.id, req.body.enabled),
     );
 
     app.post(

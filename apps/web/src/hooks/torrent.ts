@@ -1,5 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TorrentLimitsRequest, TorrentPriorityRequest, TorrentSettingsUpdate } from '@arclight/shared';
+import type {
+  SeedingRulesSettingsInput,
+  TorrentLimitsRequest,
+  TorrentPriorityRequest,
+  TorrentSettingsUpdate,
+  TorrentSlowModeRequest,
+  TorrentSpeedSettingsUpdate,
+} from '@arclight/shared';
 import { torrentApi, type TorrentAction } from '../api/torrent.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
@@ -9,6 +16,8 @@ export const torrentKeys = {
   all: ['torrent'] as const,
   status: ['torrent', 'status'] as const,
   settings: ['torrent', 'settings'] as const,
+  speedSettings: ['torrent', 'speed-settings'] as const,
+  seedingRules: ['torrent', 'seeding-rules'] as const,
   detail: (id: string) => ['torrent', 'detail', id] as const,
 };
 
@@ -30,6 +39,39 @@ export function useTorrentSettings() {
 export function useSaveTorrentSettings() {
   return useInvalidatingMutation((body: TorrentSettingsUpdate) => torrentApi.settings.update(body), [torrentKeys.all], {
     errorTitle: t('hooks.torrent.couldNotSaveTorrentEngine'),
+  });
+}
+
+/** Slow mode on/off; the status (which carries the speed mode) refreshes right away. */
+export function useSetSlowMode() {
+  return useInvalidatingMutation((body: TorrentSlowModeRequest) => torrentApi.slowMode(body), [torrentKeys.status], {
+    errorTitle: t('hooks.torrent.couldNotChangeSlowMode'),
+  });
+}
+
+export function useTorrentSpeedSettings() {
+  return useQuery({ queryKey: torrentKeys.speedSettings, queryFn: torrentApi.speedSettings.get, retry: false });
+}
+
+export function useSaveTorrentSpeedSettings() {
+  return useInvalidatingMutation((body: TorrentSpeedSettingsUpdate) => torrentApi.speedSettings.update(body), [torrentKeys.all], {
+    errorTitle: t('hooks.torrent.couldNotSaveSpeedSchedule'),
+  });
+}
+
+export function useSeedingRules() {
+  return useQuery({ queryKey: torrentKeys.seedingRules, queryFn: torrentApi.seedingRules.get, retry: false });
+}
+
+export function useSaveSeedingRules() {
+  return useInvalidatingMutation((body: SeedingRulesSettingsInput) => torrentApi.seedingRules.update(body), [torrentKeys.seedingRules], {
+    errorTitle: t('hooks.torrent.couldNotSaveSeedingRules'),
+  });
+}
+
+export function useApplySeedingRules() {
+  return useInvalidatingMutation(() => torrentApi.seedingRules.apply(), [torrentKeys.all, ['queue']], {
+    errorTitle: t('hooks.torrent.couldNotApplySeedingRules'),
   });
 }
 

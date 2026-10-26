@@ -12,6 +12,8 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type ItemSpeedLimits,
+  type QueueMove,
 } from '../types.js';
 import {
   QBT_RATIO_ACTION_DELETE_FILES,
@@ -313,6 +315,32 @@ export class QBittorrentClient implements DownloadClient {
     }
     // random_port off, or qBittorrent would pick a new port on its next start.
     await this.post('/api/v2/app/setPreferences', { json: JSON.stringify({ listen_port: port, random_port: false }) });
+  }
+
+  async setItemLimits(id: string, limits: ItemSpeedLimits): Promise<void> {
+    const hashes = id.toLowerCase();
+    if (limits.downloadLimit !== undefined) {
+      await this.post('/api/v2/torrents/setDownloadLimit', { hashes, limit: String(Math.max(0, Math.round(limits.downloadLimit))) });
+    }
+    if (limits.uploadLimit !== undefined) {
+      await this.post('/api/v2/torrents/setUploadLimit', { hashes, limit: String(Math.max(0, Math.round(limits.uploadLimit))) });
+    }
+  }
+
+  /** Needs "Torrent queueing" on in qBittorrent; it answers 409 otherwise. */
+  async moveInQueue(id: string, move: QueueMove): Promise<void> {
+    const path = { top: 'topPrio', up: 'increasePrio', down: 'decreasePrio', bottom: 'bottomPrio' }[move];
+    await this.post(`/api/v2/torrents/${path}`, { hashes: id.toLowerCase() });
+  }
+
+  async setForceStart(id: string, enabled: boolean): Promise<void> {
+    await this.post('/api/v2/torrents/setForceStart', { hashes: id.toLowerCase(), value: enabled ? 'true' : 'false' });
+  }
+
+  /** qBittorrent only offers a toggle, so the current mode is read first. */
+  async setAlternativeSpeed(enabled: boolean): Promise<void> {
+    const current = (await this.session.requestText('/api/v2/transfer/speedLimitsMode')).trim() === '1';
+    if (current !== enabled) await this.post('/api/v2/transfer/toggleSpeedLimitsMode', {});
   }
 
   async getListenPort(): Promise<number> {

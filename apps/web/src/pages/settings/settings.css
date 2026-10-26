@@ -73,3 +73,23 @@
   .al-card-grid { grid-template-columns: minmax(0, 1fr); }
   .al-row-list__row { grid-template-columns: minmax(0, 1fr); gap: 6px; padding: 10px 14px; }
 }
+
+/* Torrent engine: speed schedule and seeding rules panes (torrent-control.tsx). */
+.al-torrent-control { display: flex; flex-direction: column; gap: 24px; }
+.al-torrent-control__intro { margin: 0 0 16px; }
+.al-torrent-control__actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.al-speed-window { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 12px; padding: 12px 14px; border: 1px solid var(--al-line-1); }
+.al-speed-window__days { display: inline-flex; flex-wrap: wrap; gap: 4px; }
+.al-speed-window__time { display: inline-flex; flex-direction: column; gap: 4px; }
+.al-speed-day { all: unset; box-sizing: border-box; min-width: 40px; min-height: 32px; padding: 0 8px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--al-line-1); color: var(--al-text-4); font-family: var(--al-font); font-size: 13px; cursor: pointer; }
+.al-speed-day[aria-pressed='true'] { color: var(--al-text-1); border-color: var(--al-cyan); background: var(--al-cyan-a06); }
+.al-speed-day:focus-visible { outline: none; box-shadow: var(--al-focus); }
+.al-seed-rule { display: flex; flex-direction: column; gap: 14px; padding: 16px 18px; border: 1px solid var(--al-line-1); }
+.al-seed-rule__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.al-seed-rule__indexers { display: flex; flex-wrap: wrap; gap: 8px 18px; max-height: 160px; overflow: auto; }
+.al-seed-rule__time { display: inline-flex; gap: 8px; align-items: center; }
+.al-seed-rule__time .al-select { width: auto; }
+@media (max-width: 767px) {
+  .al-speed-day { min-height: 44px; min-width: 44px; }
+  .al-seed-rule { padding: 12px; }
+}

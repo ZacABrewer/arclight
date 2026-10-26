@@ -1,4 +1,10 @@
 import {
+  SeedingRulesRunResult,
+  SeedingRulesSettings,
+  TorrentSlowModeRequest,
+  TorrentSpeedMode,
+  TorrentSpeedSettings,
+  TorrentSpeedSettingsUpdate,
   TorrentActionResult,
   TorrentDetail,
   TorrentErrorResponse,
@@ -92,6 +98,36 @@ export function torrentRoutes(service: TorrentService): FastifyPluginAsync<Recor
         return OK;
       },
     );
+
+    // ---- speed schedule and slow mode ----
+
+    app.get('/torrent/speed', { schema: { response: { 200: TorrentSpeedMode } } }, async () => service.speedMode());
+
+    app.post(
+      '/torrent/slowmode',
+      { schema: { body: TorrentSlowModeRequest, response: { 200: TorrentSpeedMode, ...errors } } },
+      async (req) => service.setSlowMode(req.body),
+    );
+
+    app.get('/settings/torrent/speed', { schema: { response: { 200: TorrentSpeedSettings } } }, async () => service.speedSettings());
+
+    app.put(
+      '/settings/torrent/speed',
+      { schema: { body: TorrentSpeedSettingsUpdate, response: { 200: TorrentSpeedSettings, 400: TorrentErrorResponse } } },
+      async (req) => service.updateSpeedSettings(req.body),
+    );
+
+    // ---- seeding rules ----
+
+    app.get('/settings/torrent/seedingrules', { schema: { response: { 200: SeedingRulesSettings } } }, async () => service.seedingRules());
+
+    app.put(
+      '/settings/torrent/seedingrules',
+      { schema: { body: SeedingRulesSettings, response: { 200: SeedingRulesSettings, 400: TorrentErrorResponse } } },
+      async (req) => service.updateSeedingRules(req.body),
+    );
+
+    app.post('/torrent/seedingrules/apply', { schema: { response: { 200: SeedingRulesRunResult } } }, async () => service.applySeedingRules());
 
     app.get('/settings/torrent', { schema: { response: { 200: TorrentSettingsResponse } } }, async () => service.settingsResponse());
 

@@ -601,8 +601,33 @@ export const QueueItemLive = z.object({
   transports: z.object({ tcp: z.number().int(), utp: z.number().int() }).optional(),
   /** Connected peers whose connection is encrypted. */
   encryptedPeers: z.number().int().optional(),
+  /** This download's own limits in bytes/s (0 = unlimited), when the client reports them. */
+  downloadLimit: z.number().int().optional(),
+  uploadLimit: z.number().int().optional(),
+  /** 1-based place in the client's download queue (absent once finished or when not queued). */
+  queuePosition: z.number().int().optional(),
+  /** Started past the client's active-download limit. */
+  forceStart: z.boolean().optional(),
 });
 export type QueueItemLive = z.infer<typeof QueueItemLive>;
+
+/** POST /queue/:id/limits: bytes/s, 0 = unlimited; omitted keys keep their value. */
+export const QueueItemLimitsRequest = z.object({
+  downloadLimit: z.number().int().min(0).optional(),
+  uploadLimit: z.number().int().min(0).optional(),
+});
+export type QueueItemLimitsRequest = z.infer<typeof QueueItemLimitsRequest>;
+
+export const QueueMove = z.enum(['top', 'up', 'down', 'bottom']);
+export type QueueMove = z.infer<typeof QueueMove>;
+
+/** POST /queue/:id/move */
+export const QueueMoveRequest = z.object({ move: QueueMove });
+export type QueueMoveRequest = z.infer<typeof QueueMoveRequest>;
+
+/** POST /queue/:id/forcestart */
+export const QueueForceStartRequest = z.object({ enabled: z.boolean() });
+export type QueueForceStartRequest = z.infer<typeof QueueForceStartRequest>;
 
 export const QueueItem = z.object({
   id: z.number().int(),

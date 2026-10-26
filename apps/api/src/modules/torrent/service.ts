@@ -1,12 +1,18 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
-import { attachSeedRules, builtinLive, builtinPhase, type SeedRuleProvider } from '@arclight/download-clients';
+import { attachSeedRules, builtinLive, builtinPhase, builtinQueuePositions, type SeedRuleProvider } from '@arclight/download-clients';
 import { Session, type SessionOptions, type SessionSettings, type Torrent, type TorrentRateLimits } from '@arclight/torrent-engine';
 import {
+  SeedingRulesSettings,
   TORRENT_TRANSPORT_DEFAULTS,
   TorrentSettings,
+  TorrentSpeedSettings,
   type DownloadClientResource,
+  type SeedingRulesSettingsInput,
+  type TorrentSlowModeRequest,
+  type TorrentSpeedMode,
+  type TorrentSpeedSettingsUpdate,
   type TorrentCounts,
   type TorrentDetail,
   type TorrentEncryptionMode,
@@ -23,6 +29,8 @@ import type { Db } from '../../db/index.js';
 import type { EngineInsights } from '../download-clients/service.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
+import { applySeedingRules, type SeedingRulesPorts, type SeedingRulesResult } from './seeding-rules.js';
+import { speedMode } from './speed.js';
 
 // The built-in torrent engine: owns the single `Session`, the `torrent` settings section and
 // the VPN binding policy.
@@ -52,6 +60,8 @@ export interface TorrentClientRegistry {
     enable: boolean;
     settings: Record<string, unknown>;
   }): DownloadClientResource;
+  /** Mirrors slow mode to external clients that have alternative limits (qBittorrent). */
+  setAlternativeSpeedOnAll?(enabled: boolean): Promise<Array<{ name: string; ok: boolean; message?: string }>>;
 }
 
 export interface TorrentServiceOptions {
@@ -70,6 +80,8 @@ export interface TorrentServiceOptions {
   sessionOverrides?: Partial<SessionSettings>;
   /** Bind address when not bound to the VPN. Default null = all interfaces (tests use loopback). */
   defaultAddress?: string | null;
+  /** How often the speed schedule and slow-mode end time are re-evaluated. Default 30 s. */
+  speedCheckIntervalMs?: number;
 }
 
 export type TorrentModuleErrorCode = 'NOT_FOUND' | 'NOT_RUNNING' | 'CONFLICT' | 'VALIDATION';
@@ -121,6 +133,12 @@ export class TorrentService {
   private chain: Promise<unknown> = Promise.resolve();
   private unsubscribe: (() => void) | null = null;
   private seedRules: SeedRuleProvider | null = null;
+  private readonly speedCheckIntervalMs: number;
+  private speedTimer: NodeJS.Timeout | undefined;
+  /** Mode last applied (null before the first evaluation); external clients follow its changes. */
+  private lastAlternative: boolean | null = null;
+  private indexerResolver: ((infoHash: string, hosts: readonly string[]) => number | undefined) | undefined;
+  private seedingPorts: SeedingRulesPorts | undefined;
 
   constructor(opts: TorrentServiceOptions) {
     this.db = opts.db;
@@ -134,6 +152,7 @@ export class TorrentService {
     this.sessionOverrides = opts.sessionOverrides ?? {};
     this.defaultAddress = opts.defaultAddress ?? null;
     this.now = opts.now ?? (() => new Date());
+    this.speedCheckIntervalMs = opts.speedCheckIntervalMs ?? 30_000;
   }
 
   /** The running Session, or null while disabled/stopped. */
@@ -182,6 +201,7 @@ export class TorrentService {
 
   private sessionSettings(s: TorrentSettings, binding: Binding): Partial<SessionSettings> {
     const t = withTransportDefaults(s);
+    const speed = this.speedMode(s);
     return {
       encryption: t.encryption,
       tcp: t.tcp,
@@ -192,8 +212,9 @@ export class TorrentService {
       listenAddress: binding.address,
       maxConnections: s.maxConnections,
       maxConnectionsPerTorrent: s.maxConnectionsPerTorrent,
-      downloadLimit: s.downloadLimitKbps * 1024,
-      uploadLimit: s.uploadLimitKbps * 1024,
+      // Normal or alternative limits, whichever apply right now.
+      downloadLimit: speed.downloadLimit,
+      uploadLimit: speed.uploadLimit,
       dht: s.dht,
       pex: s.pex,
       maxActiveDownloads: s.maxActiveDownloads,
@@ -232,17 +253,146 @@ export class TorrentService {
     await this.doApplyBinding();
   }
 
+  // ---- speed schedule and slow mode ---------------------------------------------------------
+
+  speedSettings(): TorrentSpeedSettings {
+    return getSection(this.db, 'torrentSpeed');
+  }
+
+  /** Saves a partial update of the alternative limits / schedule and applies it right away. */
+  async updateSpeedSettings(update: TorrentSpeedSettingsUpdate): Promise<TorrentSpeedSettings> {
+    const merged = TorrentSpeedSettings.safeParse({ ...this.speedSettings(), ...stripUndefined(update) });
+    if (!merged.success) throw new TorrentModuleError('VALIDATION', merged.error.message);
+    const next = setSection(this.db, 'torrentSpeed', merged.data);
+    this.bus?.publish({ type: 'settings', section: 'torrentSpeed' });
+    await this.applySpeedMode();
+    return next;
+  }
+
+  /** The limits that apply now (manual slow mode, then the schedule, else the normal limits). */
+  speedMode(s: TorrentSettings = this.settings()): TorrentSpeedMode {
+    return speedMode(this.speedSettings(), getSection(this.db, 'torrentSlowMode'), s, this.now());
+  }
+
+  /** Turns manual slow mode on (optionally until a time) or off; applies it right away. */
+  async setSlowMode(req: TorrentSlowModeRequest): Promise<TorrentSpeedMode> {
+    const until = req.enabled ? (req.until ?? null) : null;
+    if (until !== null && Date.parse(until) <= this.now().getTime()) {
+      throw new TorrentModuleError('VALIDATION', 'The slow-mode end time is in the past.');
+    }
+    setSection(this.db, 'torrentSlowMode', { enabled: req.enabled, until: until === null ? null : new Date(until).toISOString() });
+    this.bus?.publish({ type: 'settings', section: 'torrentSlowMode' });
+    await this.applySpeedMode();
+    return this.speedMode();
+  }
+
+  /**
+   * Re-evaluates the speed mode and applies the limits to the running engine without a restart
+   * (also run on a timer for schedule edges and the slow-mode end time). When the mode changes,
+   * qBittorrent's alternative limits follow if `mirrorToQbittorrent` is on.
+   */
+  async applySpeedMode(): Promise<TorrentSpeedMode> {
+    const slow = getSection(this.db, 'torrentSlowMode');
+    // An expired slow mode is cleared, so it does not come back if the clock is changed.
+    if (slow.enabled && slow.until !== null && Date.parse(slow.until) <= this.now().getTime()) {
+      setSection(this.db, 'torrentSlowMode', { enabled: false, until: null });
+      this.log?.info('slow mode ended');
+    }
+    const mode = this.speedMode();
+    const session = this.sessionValue;
+    if (session && (session.settings.downloadLimit !== mode.downloadLimit || session.settings.uploadLimit !== mode.uploadLimit)) {
+      session.updateSettings({ downloadLimit: mode.downloadLimit, uploadLimit: mode.uploadLimit });
+    }
+    const alternative = mode.mode === 'alternative';
+    const changed = this.lastAlternative !== alternative;
+    // Nothing to mirror on the first evaluation in normal mode: qBittorrent's own state is left alone.
+    const mirror = changed && (this.lastAlternative !== null || alternative);
+    if (changed) {
+      if (this.lastAlternative !== null) this.log?.info({ mode: mode.mode, reason: mode.reason }, 'torrent speed mode changed');
+      this.lastAlternative = alternative;
+    }
+    if (mirror && this.speedSettings().mirrorToQbittorrent && this.downloadClients?.setAlternativeSpeedOnAll) {
+      // Not awaited: an unreachable qBittorrent must not hold up the engine (or a boot).
+      void this.downloadClients
+        .setAlternativeSpeedOnAll(alternative)
+        .then((results) => {
+          for (const r of results) if (!r.ok) this.log?.warn({ client: r.name, message: r.message }, 'could not switch alternative speed limits');
+        })
+        .catch((err: unknown) => this.log?.warn({ err }, 'could not mirror slow mode to download clients'));
+    }
+    return mode;
+  }
+
+  private startSpeedTimer(): void {
+    if (this.speedTimer) return;
+    this.speedTimer = setInterval(() => {
+      void this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed schedule check failed'));
+    }, this.speedCheckIntervalMs);
+    this.speedTimer.unref();
+  }
+
+  // ---- seeding rules ------------------------------------------------------------------------
+
+  seedingRules(): SeedingRulesSettings {
+    return getSection(this.db, 'seedingRules');
+  }
+
+  updateSeedingRules(value: SeedingRulesSettingsInput): SeedingRulesSettings {
+    const parsed = SeedingRulesSettings.safeParse(value);
+    if (!parsed.success) throw new TorrentModuleError('VALIDATION', parsed.error.message);
+    const ids = new Set<string>();
+    for (const r of parsed.data.rules) {
+      if (ids.has(r.id)) throw new TorrentModuleError('VALIDATION', `Duplicate seeding rule id ${r.id}`);
+      ids.add(r.id);
+    }
+    const next = setSection(this.db, 'seedingRules', parsed.data);
+    this.bus?.publish({ type: 'settings', section: 'seedingRules' });
+    return next;
+  }
+
+  /** Which indexer a torrent belongs to (the tracker-stats module sets it), for indexer rules. */
+  setIndexerResolver(resolver: ((infoHash: string, hosts: readonly string[]) => number | undefined) | undefined): void {
+    this.indexerResolver = resolver;
+  }
+
+  /** Import state, library folders and the timeline (the module wires them from the database). */
+  setSeedingPorts(ports: SeedingRulesPorts | undefined): void {
+    this.seedingPorts = ports;
+  }
+
+  /** One pass of the seeding rules over the engine's finished torrents (the ApplySeedingRules job). */
+  applySeedingRules(): Promise<SeedingRulesResult | null> {
+    return this.enqueue(async () => {
+      const session = this.sessionValue;
+      // In lockdown every torrent is paused by the kill switch; rules wait for the VPN.
+      if (!session || this.state !== 'running' || !this.seedingPorts) return null;
+      const result = await applySeedingRules({
+        session,
+        rules: this.seedingRules().rules,
+        hitAndRun: this.seedRules,
+        indexerFor: this.indexerResolver,
+        ...this.seedingPorts,
+      });
+      if (result.paused.length > 0 || result.removed.length > 0) {
+        this.log?.info({ paused: result.paused.length, removed: result.removed.length }, 'seeding rules applied');
+      }
+      return result;
+    });
+  }
+
   // ---- lifecycle --------------------------------------------------------------------------
 
   /** Boot: subscribe to VPN events, auto-register the client, start the engine when enabled. */
   async boot(): Promise<void> {
     this.subscribe();
     this.autoRegisterClient();
+    await this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed mode check failed'));
     if (this.settings().enabled) await this.start();
   }
 
-  /** Listen for `vpn` events (idempotent). */
+  /** Listen for `vpn` events and start the speed-schedule timer (idempotent). */
   subscribe(): void {
+    this.startSpeedTimer();
     if (this.unsubscribe || !this.bus) return;
     this.unsubscribe = this.bus.subscribe((event) => {
       if (event.type === 'vpn') void this.applyBinding().catch((err: unknown) => this.log?.warn({ err }, 'torrent re-bind failed'));
@@ -265,6 +415,8 @@ export class TorrentService {
   async shutdown(): Promise<void> {
     this.unsubscribe?.();
     this.unsubscribe = null;
+    if (this.speedTimer) clearInterval(this.speedTimer);
+    this.speedTimer = undefined;
     await this.stop();
   }
 
@@ -442,7 +594,7 @@ export class TorrentService {
     const stats = t.getStats();
     const phase = builtinPhase(stats);
     return {
-      live: builtinLive(t, stats),
+      live: builtinLive(t, stats, builtinQueuePositions(this.sessionValue as Session).get(t.infoHashHex)),
       progress: stats.progress,
       sizeLeft: stats.bytesLeft,
       ...(phase !== undefined ? { phase } : {}),
@@ -532,6 +684,7 @@ export class TorrentService {
       downloadRate: down,
       uploadRate: up,
       torrents: counts,
+      speed: this.speedMode(s),
     };
     if (this.lastError) out.error = this.lastError;
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;

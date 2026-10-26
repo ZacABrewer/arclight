@@ -7,7 +7,7 @@ import { ToastProvider } from '../../components/toast.js';
 import { formatRate } from '../../lib/format.js';
 import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
-import { TorrentSessionStatus as TorrentSessionStatusSchema, TorrentSettingsResponse as TorrentSettingsResponseSchema } from '@arclight/shared';
+import { TorrentSessionStatus as TorrentSessionStatusSchema, TorrentSettingsResponse as TorrentSettingsResponseSchema, TorrentSpeedSettings } from '@arclight/shared';
 import { TORRENT_SECTIONS, TorrentSettingsPage, encryptedPeersText, toTorrentDraft, toTorrentUpdate } from './torrent.js';
 
 class FakeSocket {
@@ -65,6 +65,10 @@ beforeEach(() => {
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       if (url === '/api/v1/settings/torrent') return new Response(JSON.stringify(settings), { status: 200 });
       if (url === '/api/v1/torrent/status' && status) return new Response(JSON.stringify(status), { status: 200 });
+      // The speed schedule and seeding rules panes below the form.
+      if (url === '/api/v1/settings/torrent/speed') return new Response(JSON.stringify(TorrentSpeedSettings.parse({})), { status: 200 });
+      if (url === '/api/v1/settings/torrent/seedingrules') return new Response(JSON.stringify({ rules: [] }), { status: 200 });
+      if (url === '/api/v1/indexer') return new Response('[]', { status: 200 });
       return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
     }),
   );

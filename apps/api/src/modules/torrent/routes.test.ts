@@ -75,6 +75,29 @@ describe('torrent routes', () => {
     expect(move.statusCode).toBe(400);
   });
 
+  it('serves speed settings, slow mode and seeding rules', async () => {
+    const { app } = await build();
+    expect((await app.inject({ method: 'GET', url: '/api/v1/settings/torrent/speed' })).json()).toMatchObject({ altDownloadLimitKbps: 1024, scheduleEnabled: false });
+    const put = await app.inject({ method: 'PUT', url: '/api/v1/settings/torrent/speed', payload: { altUploadLimitKbps: 64 } });
+    expect(put.json()).toMatchObject({ altUploadLimitKbps: 64, altDownloadLimitKbps: 1024 });
+    const slow = await app.inject({ method: 'POST', url: '/api/v1/torrent/slowmode', payload: { enabled: true } });
+    expect(slow.statusCode).toBe(200);
+    expect(slow.json()).toMatchObject({ mode: 'alternative', reason: 'manual', uploadLimit: 64 * 1024 });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/torrent/speed' })).json()).toMatchObject({ mode: 'alternative' });
+    expect((await app.inject({ method: 'POST', url: '/api/v1/torrent/slowmode', payload: { enabled: true, until: 'soon' } })).statusCode).toBe(400);
+
+    const rules = { rules: [{ id: 'tv', name: 'TV', categories: ['tv'], seedTimeMinutes: 7 * 24 * 60, action: 'remove', deleteFiles: true }] };
+    const saved = await app.inject({ method: 'PUT', url: '/api/v1/settings/torrent/seedingrules', payload: rules });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().rules[0]).toMatchObject({ id: 'tv', enabled: true, ratio: null, action: 'remove' });
+    expect((await app.inject({ method: 'GET', url: '/api/v1/settings/torrent/seedingrules' })).json().rules).toHaveLength(1);
+    const noLimit = await app.inject({ method: 'PUT', url: '/api/v1/settings/torrent/seedingrules', payload: { rules: [{ id: 'x', name: 'X' }] } });
+    expect(noLimit.statusCode).toBe(400);
+    const apply = await app.inject({ method: 'POST', url: '/api/v1/torrent/seedingrules/apply' });
+    expect(apply.statusCode).toBe(200);
+    expect(apply.json()).toBeNull();
+  });
+
   it('maps errors: 400 bad id, 404 unknown torrent, 409 engine stopped', async () => {
     const { h, app } = await build();
     const id = 'b'.repeat(40);

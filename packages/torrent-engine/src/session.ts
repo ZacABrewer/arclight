@@ -51,7 +51,12 @@ export interface AddTorrentOptions {
   /** Per-peer limits for this torrent's connections in bytes/s (0 = unlimited). */
   peerUploadLimit?: number;
   peerDownloadLimit?: number;
+  /** Start regardless of the active-download/seed limits. */
+  forceStart?: boolean;
 }
+
+/** Where `Session.moveInQueue` moves a torrent. */
+export type QueueMove = 'top' | 'up' | 'down' | 'bottom';
 
 export interface SessionOptions {
   settings?: Partial<SessionSettings>;
@@ -381,6 +386,7 @@ export class Session extends EventEmitter<SessionEvents> {
     const t = new Torrent(this.context(), init);
     if (input.magnet) t.magnetUri = input.magnet;
     t.queuePosition = this.nextQueuePosition++;
+    t.forceStart = input.forceStart ?? resume?.forceStart ?? false;
     if (input.torrent) this.torrentFiles.set(id, Buffer.from(input.torrent));
     this.torrentsById.set(id, t);
     this.wire(t);
@@ -488,6 +494,46 @@ export class Session extends EventEmitter<SessionEvents> {
 
   // ---- queueing ---------------------------------------------------------------------------------
 
+  /**
+   * Moves a torrent in the queue. Unfinished torrents move among the unfinished ones (the
+   * download queue) and finished ones among the finished (the seed queue), so "up" always
+   * passes a torrent that competes for the same kind of slot. Returns false when it was
+   * already at that end.
+   */
+  async moveInQueue(id: string, move: QueueMove): Promise<boolean> {
+    const t = this.require(id);
+    const all = this.getTorrents();
+    const peers = all.filter((o) => o.isComplete === t.isComplete);
+    const at = peers.indexOf(t);
+    let target: Torrent | undefined;
+    let after = false;
+    if (move === 'top') target = at > 0 ? peers[0] : undefined;
+    else if (move === 'up') target = at > 0 ? peers[at - 1] : undefined;
+    else if (move === 'down') [target, after] = [at < peers.length - 1 ? peers[at + 1] : undefined, true];
+    else [target, after] = [at < peers.length - 1 ? peers[peers.length - 1] : undefined, true];
+    if (!target) return false;
+    const order = all.filter((o) => o !== t);
+    order.splice(order.indexOf(target) + (after ? 1 : 0), 0, t);
+    const changed: Torrent[] = [];
+    order.forEach((o, i) => {
+      if (o.queuePosition !== i) changed.push(o);
+      o.queuePosition = i;
+    });
+    this.nextQueuePosition = order.length;
+    this.scheduleQueue();
+    for (const o of changed) await this.saveResumeData(o);
+    return true;
+  }
+
+  /** Force start: the torrent runs regardless of the active limits and does not take a slot. */
+  async setForceStart(id: string, enabled: boolean): Promise<void> {
+    const t = this.require(id);
+    if (t.forceStart === enabled) return;
+    t.forceStart = enabled;
+    this.scheduleQueue();
+    await this.saveResumeData(t);
+  }
+
   private scheduleQueue(): void {
     if (this.queueScheduled || this.stopping) return;
     this.queueScheduled = true;
@@ -506,6 +552,10 @@ export class Session extends EventEmitter<SessionEvents> {
       const slot = t.wantsSlot;
       if (slot === 'none') {
         if (t.isActive) void t.setActive(false);
+        continue;
+      }
+      if (t.forceStart) {
+        if (!t.isActive) void t.setActive(true);
         continue;
       }
       const limit = slot === 'download' ? s.maxActiveDownloads : s.maxActiveSeeds;
@@ -560,10 +610,20 @@ export class Session extends EventEmitter<SessionEvents> {
 
   private async restore(): Promise<void> {
     const dir = this.settingsValue.resumeDataDir as string;
+    const records: ResumeData[] = [];
     for (const id of await listResumeData(dir)) {
       if (this.torrentsById.has(id)) continue;
       const r = await loadResumeData(dir, id);
-      if (!r) continue;
+      if (r) records.push(r);
+    }
+    // Re-add in saved queue order (files without one keep their add order, after the rest).
+    records.sort(
+      (a, b) =>
+        (a.queuePosition ?? Number.MAX_SAFE_INTEGER) - (b.queuePosition ?? Number.MAX_SAFE_INTEGER) ||
+        a.addedAt.localeCompare(b.addedAt),
+    );
+    for (const r of records) {
+      const id = r.infoHash;
       let torrent: Buffer | null = null;
       try {
         torrent = await readFile(torrentPath(dir, id));

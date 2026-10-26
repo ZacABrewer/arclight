@@ -35,6 +35,10 @@ export const ResumeDataSchema = z.object({
   downloadLimit: z.number().nonnegative().optional(),
   peerUploadLimit: z.number().nonnegative().optional(),
   peerDownloadLimit: z.number().nonnegative().optional(),
+  /** Queue order at save time (absent in older files; restore keeps the relative order). */
+  queuePosition: z.number().int().optional(),
+  /** Force-started: ignores the active limits (absent in older files). */
+  forceStart: z.boolean().optional(),
 });
 export type ResumeData = z.infer<typeof ResumeDataSchema>;
 

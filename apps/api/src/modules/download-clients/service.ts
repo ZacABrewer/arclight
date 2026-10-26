@@ -12,6 +12,8 @@ import {
   type DownloadClientDeps,
   type DownloadItem,
   type DownloadItemPhase,
+  type ItemSpeedLimits,
+  type QueueMove,
   type SessionSource,
 } from '@arclight/download-clients';
 import {
@@ -1447,6 +1449,99 @@ export class DownloadClientsService {
       result.removed.push(id);
     }
     return result;
+  }
+
+  // ---- engine control: per-download limits, queue order, force start, slow mode ------------
+
+  /** The client of a queue item that has been sent to one, with the item's client-side id. */
+  private controllable(id: number): { row: TrackedDownloadRow; config: DownloadClientResource; client: DownloadClient } {
+    const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!row) throw notFound('Queue item', id);
+    if (row.clientId === null || row.state === 'pending') throw new DownloadClientsError('CONFLICT', 'This download has not been sent to a download client yet.');
+    const config = rowToResource(this.requireRow(row.clientId));
+    return { row, config, client: this.clientFor(config) };
+  }
+
+  private async control(id: number, what: string, run: (client: DownloadClient, downloadId: string) => Promise<void> | undefined): Promise<QueueItem> {
+    const { row, config, client } = this.controllable(id);
+    let pending: Promise<void> | undefined;
+    try {
+      pending = run(client, row.downloadId);
+    } catch (err) {
+      throw new DownloadClientsError('CLIENT_ERROR', `${config.name}: ${errorMessage(err)}`, { cause: err });
+    }
+    if (!pending) throw new DownloadClientsError('CONFLICT', `${config.name} does not support ${what}.`);
+    try {
+      await pending;
+    } catch (err) {
+      throw new DownloadClientsError('CLIENT_ERROR', `${config.name}: ${errorMessage(err)}`, { cause: err });
+    }
+    // The built-in engine's numbers are overlaid live; other clients show the change on the next poll.
+    this.requestRefresh();
+    this.bus?.publish({ type: 'queue', action: 'changed' });
+    return this.getQueueItem(id);
+  }
+
+  /** Speed limits of one download in bytes/s (0 = unlimited); omitted keys keep their value. */
+  setItemLimits(id: number, limits: { downloadLimit?: number | undefined; uploadLimit?: number | undefined }): Promise<QueueItem> {
+    const patch: ItemSpeedLimits = {};
+    if (limits.downloadLimit !== undefined) patch.downloadLimit = limits.downloadLimit;
+    if (limits.uploadLimit !== undefined) patch.uploadLimit = limits.uploadLimit;
+    return this.control(id, 'per-download speed limits', (client, downloadId) => client.setItemLimits?.(downloadId, patch));
+  }
+
+  /** Moves a download in its client's queue (top / up / down / bottom). */
+  moveInQueue(id: number, move: QueueMove): Promise<QueueItem> {
+    return this.control(id, 'reordering its queue', (client, downloadId) => client.moveInQueue?.(downloadId, move));
+  }
+
+  /** Starts a download regardless of the client's active-download limit (or stops forcing it). */
+  setForceStart(id: number, enabled: boolean): Promise<QueueItem> {
+    return this.control(id, 'force start', (client, downloadId) => client.setForceStart?.(downloadId, enabled));
+  }
+
+  /**
+   * Switches the alternative speed limits of every enabled client that has them (qBittorrent),
+   * following Arclight's slow mode. Per-client failures are reported, never thrown.
+   */
+  async setAlternativeSpeedOnAll(enabled: boolean): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>> {
+    const results: Array<{ id: number; name: string; ok: boolean; message?: string }> = [];
+    for (const { config, client } of this.enabledClients()) {
+      if (config.implementation === 'builtin' || !client.setAlternativeSpeed) continue;
+      try {
+        await client.setAlternativeSpeed(enabled);
+        results.push({ id: config.id, name: config.name, ok: true });
+      } catch (err) {
+        results.push({ id: config.id, name: config.name, ok: false, message: errorMessage(err) });
+      }
+    }
+    return results;
+  }
+
+  /**
+   * Timeline entry for the built-in engine's torrent `infoHash`, whatever state its tracked
+   * download is in (the seeding rules act after import). No-op when Arclight does not track it.
+   */
+  recordEngineEvent(infoHash: string, type: DownloadEventType, options: RecordOptions = {}): void {
+    const builtinIds = this.db
+      .select({ id: downloadClients.id })
+      .from(downloadClients)
+      .where(eq(downloadClients.implementation, 'builtin'))
+      .all()
+      .map((r) => r.id);
+    if (builtinIds.length === 0) return;
+    const rows = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(and(inArray(trackedDownloads.clientId, builtinIds), eq(trackedDownloads.downloadId, infoHash.toLowerCase())))
+      .all();
+    for (const row of rows) {
+      try {
+        this.timeline.record({ id: row.id, downloadId: row.downloadId, title: row.title }, type, options);
+      } catch (err) {
+        this.log?.warn({ err, id: row.id }, 'could not record a timeline entry');
+      }
+    }
   }
 
   private visibleItems(): QueueItem[] {

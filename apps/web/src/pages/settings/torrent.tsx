@@ -5,7 +5,9 @@ import { errorMessage } from '../../api/client.js';
 import { Chip, ErrorBlock, FormRow, FormSection, Input, KeyValue, LiveDot, Pane, Segmented, Skeleton, Toggle, type ChipTone, type KeyValueItem } from '../../arclight/index.js';
 import { useSaveTorrentSettings, useTorrentSettings, useTorrentStatus } from '../../hooks/torrent.js';
 import { formatRate } from '../../lib/format.js';
+import { speedModeText } from '../activity/queue-controls.js';
 import { SettingsPage, useDraft } from './settings-layout.js';
+import { SeedingRulesPane, SpeedSchedulePane } from './torrent-control.js';
 import { t } from '../../i18n/index.js';
 
 // Settings -> Torrent engine: engine-wide settings of the built-in BitTorrent engine in
@@ -84,6 +86,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
       : []),
     { label: t('common.download'), value: formatRate(status.downloadRate) },
     { label: t('common.upload'), value: formatRate(status.uploadRate) },
+    ...(status.speed ? [{ label: t('settings.torrent.speedMode'), value: speedModeText(status.speed), mono: false }] : []),
     {
       label: t('settings.torrent.torrents'),
       value: `${item.total} total · ${item.downloading} downloading · ${item.seeding} seeding · ${item.paused} paused · ${item.queued} queued · ${item.checking} checking · ${item.error} error`,
@@ -375,7 +378,19 @@ export function TorrentSettingsPage() {
   return (
     <TorrentForm data={settings.data} dataUpdatedAt={settings.dataUpdatedAt}>
       {({ body, save }) => (
-        <SettingsPage title={t('common.torrentEngine')} description={t('settings.torrent.engineWideSettingsOfThe')} aside={aside} save={save}>
+        <SettingsPage
+          title={t('common.torrentEngine')}
+          description={t('settings.torrent.engineWideSettingsOfThe')}
+          aside={aside}
+          save={save}
+          // Separate settings sections with their own save buttons.
+          after={
+            <>
+              <SpeedSchedulePane />
+              <SeedingRulesPane />
+            </>
+          }
+        >
           {body}
         </SettingsPage>
       )}

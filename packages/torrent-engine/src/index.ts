@@ -19,7 +19,7 @@
 
 /** Manages many torrents: listener, DHT, rate limits, queueing, persistence, events. */
 export { Session, generatePeerId, ipv6Available, torrentFileFromInfo } from './session.js';
-export type { AddTorrentOptions, SessionEvents, SessionOptions, SessionStats } from './session.js';
+export type { AddTorrentOptions, QueueMove, SessionEvents, SessionOptions, SessionStats } from './session.js';
 /** One torrent's state machine; obtained from `Session.addTorrent` / `getTorrent`. */
 export { Torrent } from './torrent.js';
 export type { FileStats, PeerSource, PeerStats, TorrentEvents, TorrentRateLimits, TorrentState, TorrentStats } from './torrent.js';
