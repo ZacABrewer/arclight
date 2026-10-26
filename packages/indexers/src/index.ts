@@ -11,8 +11,15 @@ import {
 
 export * from './types.js';
 export * from './categories.js';
+export { createRateLimiter } from './rate-limit.js';
+import { createRateLimiter, defaultSleep } from './rate-limit.js';
 export { buildCapsUrl, buildSearchUrl, planSearch, redactUrl, type SearchPlan } from './newznab-common/index.js';
 export { torznab, newznab };
+export * from './proxy.js';
+export * from './definitions/index.js';
+export * as html from './html/index.js';
+import { CookieJar } from './definitions/cookies.js';
+import { createProxiedFetch } from './proxy.js';
 
 export interface IndexerOptions extends Omit<ClientOptions, 'beforeRequest'> {
   /** Sleep used by the rate limiter; defaults to a `setTimeout` promise. */
@@ -33,27 +40,6 @@ export interface Indexer {
   test(): Promise<IndexerTestResult>;
 }
 
-const defaultSleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-/**
- * Space calls at least `intervalMs` apart. Each caller reserves the next slot before
- * waiting, so concurrent callers queue in order instead of firing together.
- */
-export function createRateLimiter(
-  intervalMs: number,
-  now: () => number = Date.now,
-  sleep: (ms: number) => Promise<void> = defaultSleep,
-): () => Promise<void> {
-  let nextSlot = 0;
-  return async () => {
-    if (intervalMs <= 0) return;
-    const current = now();
-    const wait = Math.max(0, nextSlot - current);
-    nextSlot = Math.max(current, nextSlot) + intervalMs;
-    if (wait > 0) await sleep(wait);
-  };
-}
-
 function toIndexerError(err: unknown): IndexerError {
   if (err instanceof IndexerError) return err;
   const message = err instanceof Error ? err.message : String(err);
@@ -63,6 +49,7 @@ function toIndexerError(err: unknown): IndexerError {
 export function createIndexer(def: IndexerDefinition, options: IndexerOptions = {}): Indexer {
   const protocol = def.protocol === 'torrent' ? torznab : newznab;
   const { sleep, ...clientBase } = options;
+  if (def.proxy) clientBase.fetch = proxiedClientFetch(def.proxy, options.fetch);
   const limiter = createRateLimiter(def.rateLimitMs ?? 0, options.now ?? Date.now, sleep ?? defaultSleep);
   const clientOptions: ClientOptions = { ...clientBase, beforeRequest: limiter };
 
@@ -96,5 +83,20 @@ export function createIndexer(def: IndexerDefinition, options: IndexerOptions = 
         return { ok: false, error: toIndexerError(err) };
       }
     },
+  };
+}
+
+/**
+ * Fetch for the Newznab/Torznab clients when the definition names proxies: a private cookie
+ * jar keeps FlareSolverr clearance cookies across requests.
+ */
+function proxiedClientFetch(proxy: NonNullable<IndexerDefinition['proxy']>, base: typeof fetch | undefined): typeof fetch {
+  const jar = new CookieJar();
+  const inner = createProxiedFetch(proxy, { jar, ...(base ? { fetchImpl: base } : {}) });
+  return (input, init) => {
+    const headers = new Headers(init?.headers);
+    const cookie = jar.header();
+    if (cookie && !headers.has('cookie')) headers.set('cookie', cookie);
+    return inner(input, { ...init, headers });
   };
 }

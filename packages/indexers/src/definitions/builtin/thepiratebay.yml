@@ -1,0 +1,79 @@
+# Authored for Media-Tron. Uses the site's public JSON API (apibay). Not yet verified
+# against the live service (tested: false).
+schemaVersion: 1
+id: thepiratebay
+name: The Pirate Bay
+description: "Public general tracker via its JSON API; magnets built from info hashes"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+links:
+  - https://thepiratebay.org/
+
+settings: []
+
+caps:
+  categorymappings:
+    - {id: 100, cat: Audio, desc: "Audio"}
+    - {id: 101, cat: Audio/MP3, desc: "Music"}
+    - {id: 102, cat: Audio/Audiobook, desc: "Audio books"}
+    - {id: 104, cat: Audio/Lossless, desc: "FLAC"}
+    - {id: 199, cat: Audio/Other, desc: "Audio other"}
+    - {id: 200, cat: Movies, desc: "Video"}
+    - {id: 201, cat: Movies/SD, desc: "Movies"}
+    - {id: 202, cat: Movies/DVD, desc: "Movies DVDR"}
+    - {id: 203, cat: Audio/Video, desc: "Music videos"}
+    - {id: 205, cat: TV/SD, desc: "TV shows"}
+    - {id: 207, cat: Movies/HD, desc: "HD - Movies"}
+    - {id: 208, cat: TV/HD, desc: "HD - TV shows"}
+    - {id: 209, cat: Movies/3D, desc: "3D"}
+    - {id: 211, cat: Movies/UHD, desc: "UHD/4k - Movies"}
+    - {id: 212, cat: TV/UHD, desc: "UHD/4k - TV shows"}
+    - {id: 300, cat: PC, desc: "Applications"}
+    - {id: 400, cat: Console, desc: "Games"}
+    - {id: 401, cat: PC/Games, desc: "Games PC"}
+    - {id: 600, cat: Other, desc: "Other"}
+    - {id: 601, cat: Books/EBook, desc: "E-books"}
+    - {id: 602, cat: Books/Comics, desc: "Comics"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q, imdbid]
+
+search:
+  paths:
+    - path: "{{ if .Query.IMDBID }}https://apibay.org/q.php?q={{ .Query.IMDBID }}{{ else }}{{ if .Keywords }}https://apibay.org/q.php?q={{ .Keywords }}&cat={{ join .Categories \",\" }}{{ else }}https://apibay.org/precompiled/data_top100_recent.json{{ end }}{{ end }}"
+      response:
+        type: json
+        noResultsMessage: "No results returned"
+  rows:
+    selector: "$"
+  fields:
+    id:
+      selector: id
+    category:
+      selector: category
+    title:
+      selector: name
+    details:
+      text: "{{ .Config.sitelink }}description.php?id={{ .Result.id }}"
+    infohash:
+      selector: info_hash
+    size:
+      selector: size
+    date:
+      selector: added
+    seeders:
+      selector: seeders
+    leechers:
+      selector: leechers
+    files:
+      selector: num_files
+      optional: true
+    imdbid:
+      selector: imdb
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
