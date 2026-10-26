@@ -36,14 +36,29 @@ const file = await indexer.download(releases[0]!.downloadUrl); // { kind: 'torre
 | `id`, `name`, `description`, `language` | identity; `id` is `[a-z0-9._-]+` |
 | `type` | `public`, `semi-private` or `private`. Private sites never get magnets built from info hashes |
 | `encoding` | response decoding and query percent-encoding (`UTF-8`, `windows-1251`, ...) |
-| `links`, `legacylinks` | mirrors (the first is the default); legacy URLs fall back to `links[0]` |
+| `links`, `legacylinks` | mirrors (the first is the default); legacy URLs fall back to `links[0]`. See *Mirrors and redirects* |
 | `requestDelay` | minimum seconds between requests |
 | `followredirect` | follow redirects on the login landing page |
 | `testlinktorrent` | download selectors check that a candidate is really a torrent (default true) |
 | `timezone` | IANA zone for dates that have no zone (default UTC) |
 | `tested` | Arclight marker: `false` until someone confirms it against the live site |
+| `requiresFlareSolverr` | Arclight marker: the site is behind Cloudflare. Without a FlareSolverr proxy, `test()` fails at once (`unreachable`, naming FlareSolverr) and a 403/503 is reported the same way |
+| `test` | Arclight extension: one search path (same keys as a `search.paths` entry) that `test()` requests instead of the RSS-then-keyword probe; use it for a known-good listing |
 | `settings` | user settings (below). Leave it out to get `username` + `password`; use `[]` for none |
 | `caps`, `login`, `search`, `download` | see below |
+
+## Mirrors and redirects
+
+- **Link fallback.** When a request to the site link fails with a network error (DNS, refused,
+  reset; not a timeout) or an HTTP 5xx, the same path is retried on each other `links` entry in
+  order. The first mirror that answers becomes the site link for later requests, and the switch
+  is logged (`using link ... (... failed)`). If all fail, the error lists each link and its cause.
+  A custom base URL that is not in `links` gets no fallback.
+- **Cross-host redirects.** A redirect to another host is followed once per request, even when
+  `followredirect` is off, if that host is in `links` or `legacylinks`. Landing on a `links` host
+  makes it the site link. A redirect to any other host fails with
+  `Redirected to <url>: the site appears to have moved to <host>, ...`. Add the new host to
+  `links` if it is a real mirror. Same-host redirects behave as before.
 
 ## Settings and templates
 

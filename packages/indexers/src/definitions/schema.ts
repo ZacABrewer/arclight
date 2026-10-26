@@ -218,6 +218,8 @@ export const definitionSchema = obj({
   requestdelay: z.number().min(0).optional(),
   testlinktorrent: boolish.optional(),
   tested: boolish.optional(),
+  /** Arclight marker: the site sits behind Cloudflare and needs a FlareSolverr proxy. */
+  requiresflaresolverr: boolish.optional(),
   timezone: z.string().optional(),
   links: z.array(z.string().min(1)).min(1),
   legacylinks: z.array(z.string()).optional(),
@@ -228,6 +230,8 @@ export const definitionSchema = obj({
   ratio: z.unknown().optional(),
   search: searchSchema,
   download: downloadSchema.optional(),
+  /** Arclight extension: the search path `test()` requests instead of the RSS/keyword probe. */
+  test: pathSchema.optional(),
 });
 
 type RawDefinition = z.output<typeof definitionSchema>;
@@ -249,7 +253,7 @@ export type SearchModeName = 'search' | 'tv-search' | 'movie-search' | 'music-se
 
 /** A validated, normalised definition. */
 export interface Definition
-  extends Omit<RawDefinition, 'id' | 'type' | 'settings' | 'login' | 'search' | 'caps' | 'schema' | 'schemaversion'> {
+  extends Omit<RawDefinition, 'id' | 'type' | 'settings' | 'login' | 'search' | 'caps' | 'schema' | 'schemaversion' | 'test'> {
   id: string;
   schemaVersion: number;
   type: SiteType;
@@ -258,6 +262,8 @@ export interface Definition
   caps: CapsDefinition;
   login?: LoginDefinition;
   search: SearchDefinition;
+  /** Request used by `test()` (an explicit known-good listing), if any. */
+  test?: SearchPathDefinition;
   /** Non-fatal problems found while loading. */
   warnings: string[];
 }
@@ -400,7 +406,11 @@ export function parseDefinition(input: unknown, options: ParseDefinitionOptions 
 
   if (raw.certificates?.length) warnings.push('certificates are parsed and ignored');
 
-  const { schema: _schema, schemaversion: _sv, id: _id, type: _type, settings: _settings, caps, login: _login, search: _search, ...rest } = raw;
+  const testPath: SearchPathDefinition | undefined = raw.test
+    ? { ...raw.test, method: (raw.test.method ?? 'get').toLowerCase() === 'post' ? 'post' : 'get' }
+    : undefined;
+
+  const { schema: _schema, schemaversion: _sv, id: _id, type: _type, settings: _settings, caps, login: _login, search: _search, test: _test, ...rest } = raw;
   const definition: Definition = {
     ...rest,
     id,
@@ -413,8 +423,9 @@ export function parseDefinition(input: unknown, options: ParseDefinitionOptions 
     caps: { ...caps, modes },
     ...(login ? { login } : {}),
     search: { ...searchRest, paths },
+    ...(testPath ? { test: testPath } : {}),
     warnings,
   };
-  validateTemplates({ login: definition.login, search: definition.search, download: definition.download }, '');
+  validateTemplates({ login: definition.login, search: definition.search, download: definition.download, test: definition.test }, '');
   return definition;
 }
