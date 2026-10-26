@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import pino from 'pino';
 import { describe, expect, it } from 'vitest';
-import type { ServerEvent } from '@media-tron/shared';
+import type { ServerEvent } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
@@ -72,7 +72,7 @@ function fakeDeps(overrides: Partial<HealthDeps> = {}, state: Partial<FakeState>
     ...state,
   };
   const deps: HealthDeps = {
-    appName: 'Media-Tron',
+    appName: 'Arclight',
     isDocker: false,
     configDir: '/config',
     platform: 'posix',
@@ -266,7 +266,7 @@ describe('remote path mapping check', () => {
     const remote = await run(remotePathMappingCheck, fakeDeps({}, { clients: [qbit], statuses: status('/data/x', false) }));
     expect(remote[0]?.message).toContain('Likely missing or incorrect remote path mapping');
     const local = await run(remotePathMappingCheck, fakeDeps({}, { clients: [qbit], statuses: status('/data/x', true) }));
-    expect(local[0]?.message).toContain('Media-Tron cannot see this directory');
+    expect(local[0]?.message).toContain('Arclight cannot see this directory');
     expect(local[0]?.wikiUrl).toContain('#permissions-error');
   });
 
@@ -288,7 +288,7 @@ describe('indexer checks', () => {
   it('errors when no indexer is enabled and suppresses the RSS/search variants', async () => {
     const off = indexer(1, 'Off', { enableRss: false, enableAutomaticSearch: false, enableInteractiveSearch: false });
     const deps = fakeDeps({ indexers: () => [off] });
-    expect((await run(indexerCheck, deps))[0]).toMatchObject({ status: 'error', message: 'No indexers enabled, Media-Tron will not return search results' });
+    expect((await run(indexerCheck, deps))[0]).toMatchObject({ status: 'error', message: 'No indexers enabled, Arclight will not return search results' });
     expect(await run(indexerRssCheck, deps)).toEqual([]);
     expect(await run(indexerSearchCheck, deps)).toEqual([]);
     expect(await run(indexerCheck, fakeDeps())).toEqual([]);
@@ -402,7 +402,7 @@ describe('HealthService', () => {
 
 describe('health module', () => {
   it('serves cached health, rechecks on demand and publishes a health event', async () => {
-    const configDir = await mkdtemp(join(tmpdir(), 'media-tron-health-'));
+    const configDir = await mkdtemp(join(tmpdir(), 'arclight-health-'));
     try {
       const db = await createTestDb({ ...notificationTables });
       const bus = new EventBus();

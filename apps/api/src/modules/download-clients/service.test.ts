@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PASSWORD_MASK } from '@media-tron/shared';
+import { PASSWORD_MASK } from '@arclight/shared';
 import { mapRemoteToLocal, toDirectoryForm } from './remote-paths.js';
 import { DownloadClientsError, STATUS_TEXT, type TrackedDownload } from './service.js';
 import { DownloadClientError, item, qbit, setup } from './test-support.js';
@@ -18,7 +18,7 @@ describe('download client CRUD', () => {
       enable: true,
       priority: 1,
       tags: [],
-      settings: { host: 'seedbox', port: 8080, category: 'media-tron', initialState: 'start' },
+      settings: { host: 'seedbox', port: 8080, category: 'arclight', initialState: 'start' },
     });
     expect(service.list()).toHaveLength(1);
   });

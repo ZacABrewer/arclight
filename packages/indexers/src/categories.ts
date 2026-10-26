@@ -87,7 +87,7 @@ const ROWS: readonly Row[] = [
   [8020, 'Other/Hashed'],
 ];
 
-/** Named ids for the categories Media-Tron code refers to directly. */
+/** Named ids for the categories Arclight code refers to directly. */
 export const Category = {
   Movies: 2000,
   MoviesForeign: 2010,

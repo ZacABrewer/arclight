@@ -1,4 +1,4 @@
-import type { CalendarItem, CalendarReleaseKind } from '@media-tron/shared';
+import type { CalendarItem, CalendarReleaseKind } from '@arclight/shared';
 
 // RFC 5545 iCalendar rendering. Lines end in CRLF, are folded at 75 octets, and TEXT values
 // escape backslash, semicolon, comma and newlines.
@@ -67,7 +67,7 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
     const code = `S${pad2(ep.seasonNumber)}E${pad2(ep.episodeNumber)}`;
     const lines = [
       'BEGIN:VEVENT',
-      `UID:media-tron-episode-${ep.id}@media-tron`,
+      `UID:arclight-episode-${ep.id}@arclight`,
       `DTSTAMP:${stamp}`,
     ];
     if (ep.airDateUtc) {
@@ -86,7 +86,7 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
   const m = item.movie;
   const lines = [
     'BEGIN:VEVENT',
-    `UID:media-tron-movie-${m.id}-${item.releaseKind}@media-tron`,
+    `UID:arclight-movie-${m.id}-${item.releaseKind}@arclight`,
     `DTSTAMP:${stamp}`,
     `DTSTART;VALUE=DATE:${dateValue(item.date)}`,
     `DTEND;VALUE=DATE:${nextDay(item.date)}`,
@@ -103,10 +103,10 @@ export function renderIcs(items: CalendarItem[], options: IcsOptions = {}): stri
   const lines = [
     'BEGIN:VCALENDAR',
     'VERSION:2.0',
-    'PRODID:-//Media-Tron//Calendar//EN',
+    'PRODID:-//Arclight//Calendar//EN',
     'CALSCALE:GREGORIAN',
     'METHOD:PUBLISH',
-    `X-WR-CALNAME:${escapeText(options.calendarName ?? 'Media-Tron')}`,
+    `X-WR-CALNAME:${escapeText(options.calendarName ?? 'Arclight')}`,
     ...items.flatMap((item) => eventLines(item, stamp)),
     'END:VCALENDAR',
   ];

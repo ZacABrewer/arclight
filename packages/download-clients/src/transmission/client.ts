@@ -67,10 +67,10 @@ export class TransmissionClient implements DownloadClient {
     const warnings: string[] = [];
 
     if (this.settings.category === '') {
-      warnings.push('No label is set. A label keeps Media-Tron downloads apart from everything else.');
+      warnings.push('No label is set. A label keeps Arclight downloads apart from everything else.');
     } else if (rpcVersion < LABELS_RPC_VERSION) {
       warnings.push(
-        `Transmission ${displayVersion(session.version)} has no labels; Media-Tron will keep its downloads in a "${this.settings.category}" sub-directory instead. Transmission 3.00 or newer is recommended.`,
+        `Transmission ${displayVersion(session.version)} has no labels; Arclight will keep its downloads in a "${this.settings.category}" sub-directory instead. Transmission 3.00 or newer is recommended.`,
       );
     }
     const wantsTop = this.settings.recentPriority === 'first' || this.settings.olderPriority === 'first';

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import type { ReleaseResource } from '@media-tron/shared';
+import type { ReleaseResource } from '@arclight/shared';
 import { indexersApi } from '../api/indexers.js';
 import { ConfirmDialog } from '../components/forms/confirm-dialog.js';
 import { Badge } from '../components/badge.js';

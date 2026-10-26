@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { PASSWORD_MASK } from '@media-tron/shared';
+import { PASSWORD_MASK } from '@arclight/shared';
 import { SchemaForm } from './schema-form.js';
 import { TestButton } from './test-result.js';
 import type { FieldDefinition, FormValues } from './types.js';

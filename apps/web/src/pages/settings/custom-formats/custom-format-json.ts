@@ -7,7 +7,7 @@ import {
   type QualitySource,
   type ReleaseIndexerFlag,
   type ReleaseKind,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Import/export of custom formats as JSON. Accepts our own export and the community format
 // shared by TRaSH-guides and *arr exports: `{ name, includeCustomFormatWhenRenaming,

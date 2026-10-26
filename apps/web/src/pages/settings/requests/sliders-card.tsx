@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { DiscoverSlider, DiscoverSliderType } from '@media-tron/shared';
+import type { DiscoverSlider, DiscoverSliderType } from '@arclight/shared';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';

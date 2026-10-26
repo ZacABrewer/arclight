@@ -1,5 +1,5 @@
 import { and, gte, lt, sql } from 'drizzle-orm';
-import type { IndexerStatKind, IndexerStats, IndexerStatsDay } from '@media-tron/shared';
+import type { IndexerStatKind, IndexerStats, IndexerStatsDay } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { indexers, indexerStats } from './schema.js';
 

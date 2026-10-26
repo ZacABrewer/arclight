@@ -7,12 +7,12 @@ import {
   type WatchlistItem,
   type WatchlistSource,
   type WatchlistSyncResult,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { RequestsError } from './errors.js';
 import { type Actor, can, canAutoRequest, canManageUsers } from './permissions.js';
-import { Permission } from '@media-tron/shared';
+import { Permission } from '@arclight/shared';
 import { watchlistItems } from './schema.js';
 import type { RequestsService } from './service.js';
 import { allUserRows, requestSettingsOf, userPermissions, userRow, type UserRow } from './users.js';
@@ -77,7 +77,7 @@ export function plexWatchlistProvider(fetchImpl: FetchLike = (u, i) => globalThi
         url.searchParams.set('X-Plex-Container-Size', String(PLEX_PAGE_SIZE));
         // The token travels in a header, never the query string, so it stays out of logs.
         const res = await fetchImpl(url.toString(), {
-          headers: { Accept: 'application/json', 'X-Plex-Token': settings.plexToken, 'X-Plex-Client-Identifier': 'media-tron', 'X-Plex-Product': 'Media-Tron' },
+          headers: { Accept: 'application/json', 'X-Plex-Token': settings.plexToken, 'X-Plex-Client-Identifier': 'arclight', 'X-Plex-Product': 'Arclight' },
           ...(signal ? { signal } : {}),
         });
         if (res.status === 401) throw new Error('Plex rejected the token');

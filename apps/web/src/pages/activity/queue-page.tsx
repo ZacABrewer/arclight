@@ -1,6 +1,6 @@
 import { useReducer, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { QueueItem, QueueSortKey, TrackedDownloadState } from '@media-tron/shared';
+import type { QueueItem, QueueSortKey, TrackedDownloadState } from '@arclight/shared';
 import { Badge, type BadgeTone } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

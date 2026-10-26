@@ -1,4 +1,4 @@
-# Media-Tron Roadmap
+# Arclight Roadmap
 
 ## Phase 1 status (2026-10-26)
 
@@ -96,7 +96,7 @@ imported, renamed, and the media server is refreshed, with no other \*arr instal
 
 - YAML-defined site indexers (public and private trackers that lack Torznab), with
   login flows, search templates, result parsing. Definition format designed for
-  Media-Tron, informed by Cardigann/Prowlarr's catalogue.
+  Arclight, informed by Cardigann/Prowlarr's catalogue.
 - Indexer proxies (FlareSolverr, HTTP/SOCKS), per-indexer stats, rate limits,
   category mapping per media type, cross-indexer manual search page.
 - Additional download clients: Transmission, Deluge, SABnzbd, NZBGet, rTorrent.
@@ -141,3 +141,6 @@ imported, subtitled, and the user is notified it is available.
   and configs to adopt a running stack in place.
 - Optional Sonarr/Radarr-shaped compatibility API for third-party tools.
 - Backup/restore, update channel, docs, GHCR image, release process.
+- Remove the pre-rename compatibility shims: the deprecated `MEDIATRON_*` env fallback in
+  `apps/api/src/config.ts`, the one-time `media-tron.db` -> `arclight.db` file move in
+  `apps/api/src/db/index.ts`, and acceptance of `media-tron_*.zip` backups in the backup module.

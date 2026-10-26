@@ -1,5 +1,5 @@
 // Runs every fixture file through the parser and prints pass rates + first failures.
-// Usage: pnpm --filter @media-tron/parser report [-- <substring filter>] [--all]
+// Usage: pnpm --filter @arclight/parser report [-- <substring filter>] [--all]
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

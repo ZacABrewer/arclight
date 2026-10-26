@@ -7,7 +7,7 @@ import multipart from '@fastify/multipart';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { Backup, BackupErrorResponse, BackupRestoreResponse, BackupSettings } from '@media-tron/shared';
+import { Backup, BackupErrorResponse, BackupRestoreResponse, BackupSettings } from '@arclight/shared';
 import { BackupError, type BackupService } from './service.js';
 
 export interface BackupRoutesOptions {

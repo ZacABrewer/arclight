@@ -5,7 +5,7 @@ import type {
   IndexerProxyType,
   IndexerSettings,
   IndexerStatKind,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Indexers module tables. Settings and caps are JSON: always read and written whole.
 

@@ -33,11 +33,11 @@ export function RestartBanner({ reload = reloadPage, pollMs = 2000 }: { reload?:
   return (
     <div className="restart-banner" role="status">
       {waitingOn !== null ? (
-        <span>Restarting Media-Tron… this page reloads when it is back.</span>
+        <span>Restarting Arclight… this page reloads when it is back.</span>
       ) : (
         <>
           <span>
-            <strong>Restart required.</strong> A backup was restored; restart Media-Tron to load it.
+            <strong>Restart required.</strong> A backup was restored; restart Arclight to load it.
           </span>
           <Button
             size="sm"

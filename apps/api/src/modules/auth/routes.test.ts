@@ -116,7 +116,7 @@ describe('login and session lifecycle', () => {
     const login = await app.inject({ method: 'POST', url: '/api/v1/auth/login', payload: ADMIN });
     expect(login.statusCode).toBe(200);
     const cookie = cookieFrom(login);
-    expect(cookie).toMatch(/^mt_session=.+/);
+    expect(cookie).toMatch(/^al_session=.+/);
     const status = await app.inject({ method: 'GET', url: '/api/v1/auth/status', headers: { cookie } });
     expect(status.json()).toMatchObject({ needsSetup: false, authenticated: true, session: { via: 'session', isAdmin: true } });
     expect((await app.inject({ method: 'GET', url: '/api/v1/probe', headers: { cookie } })).json()).toEqual({ via: 'session', user: 'admin' });

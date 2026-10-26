@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { CalendarErrorResponse, CalendarFeedInfo, CalendarFeedQuery, CalendarItem, CalendarQuery } from '@media-tron/shared';
+import { CalendarErrorResponse, CalendarFeedInfo, CalendarFeedQuery, CalendarItem, CalendarQuery } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { renderIcs } from './ics.js';
@@ -47,7 +47,7 @@ export function calendarRoutes(
         });
         return reply
           .header('content-type', 'text/calendar; charset=utf-8')
-          .header('content-disposition', 'inline; filename="media-tron.ics"')
+          .header('content-disposition', 'inline; filename="arclight.ics"')
           .send(renderIcs(items, { now: now() }));
       },
     );

@@ -1,4 +1,4 @@
-import { ManualImportItem, ManualImportResult, type ManualImportQueryInput, type ManualImportRequestInput } from '@media-tron/shared';
+import { ManualImportItem, ManualImportResult, type ManualImportQueryInput, type ManualImportRequestInput } from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
 // Paths mirror the manual import block of apps/api/src/modules/imports/routes.ts.

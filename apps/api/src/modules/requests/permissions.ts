@@ -1,4 +1,4 @@
-import { hasAnyPermission, Permission, type MediaType } from '@media-tron/shared';
+import { hasAnyPermission, Permission, type MediaType } from '@arclight/shared';
 
 // Permission rules from docs/spec/requests.md section 3.3, as pure functions over a
 // permission bitfield. ADMIN passes everything (hasAnyPermission handles that).

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Backup, BackupSettings, BackupType } from '@media-tron/shared';
+import type { Backup, BackupSettings, BackupType } from '@arclight/shared';
 import { backupApi } from '../../api/backup.js';
 import { Badge, type BadgeTone } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
@@ -40,7 +40,7 @@ export function SystemBackupsPage() {
 
   const restored = () => {
     setPending(null);
-    toast.push({ tone: 'warning', title: 'Backup restored', message: 'Restart Media-Tron to finish loading the restored data.' });
+    toast.push({ tone: 'warning', title: 'Backup restored', message: 'Restart Arclight to finish loading the restored data.' });
   };
 
   const confirm = async () => {
@@ -149,9 +149,9 @@ export function SystemBackupsPage() {
             <p>
               Restore <strong>{pending.kind === 'restore' ? pending.backup.name : pending.file.name}</strong>? The current database
               and config files are replaced by the backup's contents (a copy of the current database is kept as
-              <code> media-tron.db.pre-restore</code>).
+              <code> arclight.db.pre-restore</code>).
             </p>
-            <p>Media-Tron must be restarted afterwards.</p>
+            <p>Arclight must be restarted afterwards.</p>
           </>
         ) : null}
       </ConfirmDialog>

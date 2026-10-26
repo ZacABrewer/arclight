@@ -1,7 +1,7 @@
 import { and, eq, inArray, lte } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { SearchRequest } from '@media-tron/indexers';
-import { parseRelease } from '@media-tron/parser';
+import type { SearchRequest } from '@arclight/indexers';
+import { parseRelease } from '@arclight/parser';
 import {
   MovieListQuery,
   SeriesListQuery,
@@ -25,8 +25,8 @@ import {
   type ReleaseSource,
   type Series,
   type TrackedDownloadState,
-} from '@media-tron/shared';
-import { selectDelayProfile } from '@media-tron/profiles-engine';
+} from '@arclight/shared';
+import { selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
 import { libraryService } from '../library/index.js';

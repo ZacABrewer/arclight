@@ -1,7 +1,7 @@
 import { useEffect, useState, type FormEvent, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Link, useRouter } from '@tanstack/react-router';
-import { PASSWORD_MIN_LENGTH, type AuthMethod, type SetupStatus, type SetupStepId } from '@media-tron/shared';
+import { PASSWORD_MIN_LENGTH, type AuthMethod, type SetupStatus, type SetupStepId } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { setupApi } from '../../api/auth.js';
 import { metadataApi } from '../../api/metadata.js';
@@ -180,7 +180,7 @@ function TmdbStep({ complete, onBack, onDone }: { complete: boolean; onBack: () 
   return (
     <div className="stack">
       <p className="muted">
-        Media-Tron reads series and movie information from TMDB. Create a free v3 API key at themoviedb.org (Settings → API).
+        Arclight reads series and movie information from TMDB. Create a free v3 API key at themoviedb.org (Settings → API).
         {complete ? ' A key is already configured; enter a new one to replace it.' : ''}
       </p>
       <FormField label="TMDB API key">
@@ -280,7 +280,7 @@ export function SetupWizard() {
   const [step, setStep] = useState<WizardStep | null>(null);
 
   useEffect(() => {
-    document.title = 'Setup · Media-Tron';
+    document.title = 'Setup · Arclight';
   }, []);
 
   useEffect(() => {
@@ -333,7 +333,7 @@ export function SetupWizard() {
     <div className="auth-screen">
       <div className="wizard card">
         <div className="card-body stack">
-          <div className="auth-brand">MEDIA-TRON</div>
+          <div className="auth-brand">ARCLIGHT</div>
           <h1 className="auth-title">Welcome · setup</h1>
           <ol className="wizard-steps" aria-label="Setup steps">
             {WIZARD_STEPS.map((s, i) => (

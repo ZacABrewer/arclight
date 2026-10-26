@@ -8,8 +8,8 @@ import type {
   MediaInfo,
   NotificationEvent,
   ReleaseInfo,
-} from '@media-tron/notifications';
-import type { MediaInfo as LibraryStreamInfo, ServerEvent } from '@media-tron/shared';
+} from '@arclight/notifications';
+import type { MediaInfo as LibraryStreamInfo, ServerEvent } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { downloadClients, episodes, mediaFiles, movies, series, tags, trackedDownloads } from '../../db/schema.js';
 
@@ -67,7 +67,7 @@ export class EventTranslator {
     this.db = options.db;
     this.log = options.log;
     this.now = options.now ?? (() => new Date());
-    this.instanceName = options.instanceName ?? 'Media-Tron';
+    this.instanceName = options.instanceName ?? 'Arclight';
     this.applicationUrl = options.applicationUrl;
     this.healthGraceUntil = options.healthGraceUntil;
     this.cacheSize = options.cacheSize ?? 500;

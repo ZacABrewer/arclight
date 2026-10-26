@@ -1,7 +1,7 @@
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import pino, { type DestinationStream, type Logger } from 'pino';
-import { LOG_LEVEL_VALUES, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@media-tron/shared';
+import { LOG_LEVEL_VALUES, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@arclight/shared';
 import type { AppConfig } from './config.js';
 
 // Logger construction. Every record goes to three places through a pino multistream:
@@ -9,7 +9,7 @@ import type { AppConfig } from './config.js';
 // file in the config's log folder. The buffer and file writer are kept on a module-level
 // registry so the logs module can read them without app.ts passing them around.
 
-export const LOG_FILE_NAME = 'media-tron.log';
+export const LOG_FILE_NAME = 'arclight.log';
 export const DEFAULT_BUFFER_SIZE = 5_000;
 export const DEFAULT_MAX_FILE_BYTES = 10 * 1024 * 1024;
 export const DEFAULT_KEEP_FILES = 5;
@@ -149,8 +149,8 @@ export interface RotatingFileOptions {
 }
 
 /**
- * Append-only log file with size-based rotation: `media-tron.log` is active; on rotation it
- * becomes `media-tron.log.1`, `.1` becomes `.2` and so on, and the file past `keep` is deleted.
+ * Append-only log file with size-based rotation: `arclight.log` is active; on rotation it
+ * becomes `arclight.log.1`, `.1` becomes `.2` and so on, and the file past `keep` is deleted.
  * Writes are synchronous so a crash never loses the line that explains it.
  */
 export class RotatingFileStream implements DestinationStream {
@@ -227,7 +227,7 @@ export class RotatingFileStream implements DestinationStream {
   }
 }
 
-/** True for `media-tron.log` and its numbered rotations; the only names /log/file serves. */
+/** True for `arclight.log` and its numbered rotations; the only names /log/file serves. */
 export function isLogFileName(name: string, fileName: string = LOG_FILE_NAME): boolean {
   if (name === fileName) return true;
   if (!name.startsWith(`${fileName}.`)) return false;

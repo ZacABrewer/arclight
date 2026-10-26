@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { describe, expect, it } from 'vitest';
-import { PASSWORD_MASK } from '@media-tron/shared';
+import { PASSWORD_MASK } from '@arclight/shared';
 import { downloadClientsRoutes } from './routes.js';
 import { item, qbit, setup } from './test-support.js';
 

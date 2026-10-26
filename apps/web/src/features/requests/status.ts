@@ -1,4 +1,4 @@
-import { hasAnyPermission, type DiscoverSliderType, type IssueType, type MediaStatus, type RequestStatus } from '@media-tron/shared';
+import { hasAnyPermission, type DiscoverSliderType, type IssueType, type MediaStatus, type RequestStatus } from '@arclight/shared';
 import type { BadgeTone } from '../../components/badge.js';
 import { useAuth } from '../../auth/auth-context.js';
 

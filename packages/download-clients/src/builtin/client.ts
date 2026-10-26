@@ -1,5 +1,5 @@
 import { join } from 'node:path';
-import { parseMagnet, parseTorrent, TorrentEngineError, type Session, type Torrent } from '@media-tron/torrent-engine';
+import { parseMagnet, parseTorrent, TorrentEngineError, type Session, type Torrent } from '@arclight/torrent-engine';
 import {
   DownloadClientError,
   type AddNzbResult,
@@ -25,7 +25,7 @@ export type SessionSource = Session | (() => Session | null);
 const NOT_RUNNING = 'The built-in torrent engine is not running. Enable it under Settings > Torrent Engine.';
 
 /**
- * Download client backed by the in-process `@media-tron/torrent-engine` Session. The api
+ * Download client backed by the in-process `@arclight/torrent-engine` Session. The api
  * owns the Session's lifetime; this client never starts or shuts it down.
  */
 export class BuiltinClient implements DownloadClient {
@@ -72,7 +72,7 @@ export class BuiltinClient implements DownloadClient {
     if (session.listenPort === 0) {
       warnings.push('The torrent engine is not listening for incoming connections; downloads may be slow.');
     }
-    return { version: `Media-Tron engine ${BUILTIN_ENGINE_VERSION}`, apiVersion: '1', warnings };
+    return { version: `Arclight engine ${BUILTIN_ENGINE_VERSION}`, apiVersion: '1', warnings };
   }
 
   async addTorrent(input: AddTorrentInput): Promise<AddTorrentResult> {

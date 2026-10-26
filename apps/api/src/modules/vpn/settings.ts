@@ -6,19 +6,19 @@ import {
   type VpnProviderSettings,
   type VpnSettingsResponse,
   type VpnSettingsUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection, setSection } from '../settings/service.js';
 
 // The `vpn` settings section: reads, secret masking and merging client updates.
 
-export const VPN_CONTROL_URL_ENV = 'MEDIATRON_VPN_CONTROL_URL';
+export const VPN_CONTROL_URL_ENV = 'ARCLIGHT_VPN_CONTROL_URL';
 
 export function getVpnSettings(db: Db): VpnSettings {
   return getSection(db, 'vpn');
 }
 
-/** Stored URL, else MEDIATRON_VPN_CONTROL_URL, else http://localhost:8000. */
+/** Stored URL, else ARCLIGHT_VPN_CONTROL_URL, else http://localhost:8000. */
 export function effectiveControlUrl(p: GluetunProviderSettings, env: NodeJS.ProcessEnv = process.env): string {
   return p.controlUrl ?? (env[VPN_CONTROL_URL_ENV]?.trim() || DEFAULT_GLUETUN_CONTROL_URL);
 }
@@ -64,7 +64,7 @@ function mergeProvider(current: VpnProviderSettings, update: VpnSettingsUpdate['
       return compact({
         type: 'gluetun' as const,
         // The form echoes the effective default back; storing it would pin it and ignore a
-        // later MEDIATRON_VPN_CONTROL_URL change, so only a different URL is stored.
+        // later ARCLIGHT_VPN_CONTROL_URL change, so only a different URL is stored.
         controlUrl: url === effectiveControlUrl({ type: 'gluetun' }, env) ? undefined : url,
         apiKey: secret(update.apiKey, prev?.apiKey),
         username: plain(update.username, prev?.username),

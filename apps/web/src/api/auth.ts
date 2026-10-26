@@ -16,7 +16,7 @@ import {
   type UserCreate,
   type UserSelfUpdate,
   type UserUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/auth/routes.ts.

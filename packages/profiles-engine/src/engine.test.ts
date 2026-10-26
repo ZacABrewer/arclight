@@ -10,7 +10,7 @@ import {
   type QualityProfile,
   type ReleaseEvaluation,
   type ReleaseProfile,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import {
   buildItems,
   compareQuality,

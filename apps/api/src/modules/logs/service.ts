@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { existsSync, statSync } from 'node:fs';
-import type { LogFile, LogPage, LogQuery, LogRecord } from '@media-tron/shared';
+import type { LogFile, LogPage, LogQuery, LogRecord } from '@arclight/shared';
 import { isLogFileName, listLogFiles, type LogBuffer } from '../../logging.js';
 
 export type LogsErrorCode = 'NOT_FOUND';

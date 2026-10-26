@@ -7,8 +7,8 @@ import {
   type SeriesMetadata,
   type TmdbClient,
   type TmdbClientOptions,
-} from '@media-tron/metadata';
-import type { MetadataSearchType } from '@media-tron/shared';
+} from '@arclight/metadata';
+import type { MetadataSearchType } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import type { MovieMetadataInput, SeriesMetadataInput } from '../library/index.js';
@@ -19,7 +19,7 @@ import { toMovieMetadataInput, toSeriesMetadataInput } from './map.js';
 export class MetadataNotConfiguredError extends Error {
   readonly code = 'NOT_CONFIGURED';
   constructor() {
-    super('TMDB API key is not configured; set it in Settings > Metadata or MEDIATRON_TMDB_API_KEY');
+    super('TMDB API key is not configured; set it in Settings > Metadata or ARCLIGHT_TMDB_API_KEY');
     this.name = 'MetadataNotConfiguredError';
   }
 }
@@ -27,7 +27,7 @@ export class MetadataNotConfiguredError extends Error {
 export interface MetadataServiceOptions {
   db: Db;
   log: Logger;
-  /** Environment to read MEDIATRON_TMDB_API_KEY from; injectable for tests. */
+  /** Environment to read ARCLIGHT_TMDB_API_KEY from; injectable for tests. */
   env?: NodeJS.ProcessEnv;
   /** Client factory; injectable so tests never talk to TMDB. */
   createClient?: (options: TmdbClientOptions) => TmdbClient;
@@ -58,7 +58,7 @@ export class MetadataService {
 
   private effectiveOptions(): EffectiveOptions | null {
     const stored = settingsService.getSection(this.db, 'metadata');
-    const apiKey = stored.tmdbApiKey ?? this.env['MEDIATRON_TMDB_API_KEY']?.trim();
+    const apiKey = stored.tmdbApiKey ?? this.env['ARCLIGHT_TMDB_API_KEY']?.trim();
     if (!apiKey) return null;
     return { apiKey, language: stored.language, region: stored.region };
   }

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ImportList, ImportListSchema } from '@media-tron/shared';
+import type { ImportList, ImportListSchema } from '@arclight/shared';
 import { IMPORT_LIST_DESCRIPTIONS } from '../../../api/import-lists.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';

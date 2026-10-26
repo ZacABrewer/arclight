@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import websocket from '@fastify/websocket';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { LogRecord } from '@media-tron/shared';
+import type { LogRecord } from '@arclight/shared';
 import {
   createLogger,
   getLogRegistry,
@@ -105,36 +105,36 @@ describe('RotatingFileStream', () => {
     files.write('0123456789\n'); // 11 bytes
     files.write('abcdefghi\n'); // 10 bytes -> would be 21, rotate first
     files.close();
-    expect(readFileSync(join(dir, 'media-tron.log'), 'utf8')).toBe('abcdefghi\n');
-    expect(readFileSync(join(dir, 'media-tron.log.1'), 'utf8')).toBe('0123456789\n');
+    expect(readFileSync(join(dir, 'arclight.log'), 'utf8')).toBe('abcdefghi\n');
+    expect(readFileSync(join(dir, 'arclight.log.1'), 'utf8')).toBe('0123456789\n');
   });
 
   it('keeps at most `keep` rotated files, newest as .1', () => {
     const files = new RotatingFileStream({ dir, maxBytes: 5, keep: 3 });
     for (let i = 1; i <= 6; i++) files.write(`line${i}\n`); // every write rotates
     files.close();
-    expect(listLogFiles(dir).map((f) => f.name)).toEqual(['media-tron.log', 'media-tron.log.1', 'media-tron.log.2', 'media-tron.log.3']);
-    expect(readFileSync(join(dir, 'media-tron.log'), 'utf8')).toBe('line6\n');
-    expect(readFileSync(join(dir, 'media-tron.log.1'), 'utf8')).toBe('line5\n');
-    expect(readFileSync(join(dir, 'media-tron.log.3'), 'utf8')).toBe('line3\n');
-    expect(existsSync(join(dir, 'media-tron.log.4'))).toBe(false);
+    expect(listLogFiles(dir).map((f) => f.name)).toEqual(['arclight.log', 'arclight.log.1', 'arclight.log.2', 'arclight.log.3']);
+    expect(readFileSync(join(dir, 'arclight.log'), 'utf8')).toBe('line6\n');
+    expect(readFileSync(join(dir, 'arclight.log.1'), 'utf8')).toBe('line5\n');
+    expect(readFileSync(join(dir, 'arclight.log.3'), 'utf8')).toBe('line3\n');
+    expect(existsSync(join(dir, 'arclight.log.4'))).toBe(false);
   });
 
   it('appends to an existing file and counts its size', () => {
-    writeFileSync(join(dir, 'media-tron.log'), 'x'.repeat(15));
+    writeFileSync(join(dir, 'arclight.log'), 'x'.repeat(15));
     const files = new RotatingFileStream({ dir, maxBytes: 20, keep: 2 });
     expect(files.size).toBe(15);
     files.write('yyyyyy');
     files.close();
-    expect(readFileSync(join(dir, 'media-tron.log.1'), 'utf8')).toBe('x'.repeat(15));
+    expect(readFileSync(join(dir, 'arclight.log.1'), 'utf8')).toBe('x'.repeat(15));
   });
 
   it('recognises only the log file and its numbered rotations', () => {
-    expect(isLogFileName('media-tron.log')).toBe(true);
-    expect(isLogFileName('media-tron.log.12')).toBe(true);
-    expect(isLogFileName('media-tron.log.bak')).toBe(false);
-    expect(isLogFileName('../media-tron.log')).toBe(false);
-    expect(isLogFileName('media-tron.db')).toBe(false);
+    expect(isLogFileName('arclight.log')).toBe(true);
+    expect(isLogFileName('arclight.log.12')).toBe(true);
+    expect(isLogFileName('arclight.log.bak')).toBe(false);
+    expect(isLogFileName('../arclight.log')).toBe(false);
+    expect(isLogFileName('arclight.db')).toBe(false);
   });
 });
 
@@ -145,7 +145,7 @@ describe('createLogger', () => {
     log.debug('hidden by level');
     files.close();
     expect(buffer.newestFirst()).toMatchObject([{ level: 'warn', message: 'hello', component: 'test', context: { answer: 42 } }]);
-    expect(readFileSync(join(dir, 'media-tron.log'), 'utf8')).toContain('"msg":"hello"');
+    expect(readFileSync(join(dir, 'arclight.log'), 'utf8')).toContain('"msg":"hello"');
     expect(getLogRegistry()?.buffer).toBe(buffer);
   });
 });
@@ -157,7 +157,7 @@ describe('log routes', () => {
     a.setValidatorCompiler(validatorCompiler);
     a.setSerializerCompiler(serializerCompiler);
     await a.register(websocket);
-    await a.register(logsRoutes(new LogsService({ buffer, logDir: dir, fileName: 'media-tron.log' })), { prefix: '/api/v1' });
+    await a.register(logsRoutes(new LogsService({ buffer, logDir: dir, fileName: 'arclight.log' })), { prefix: '/api/v1' });
     await a.ready();
     return { a, buffer };
   }
@@ -177,20 +177,20 @@ describe('log routes', () => {
   });
 
   it('lists and downloads log files, refusing other names', async () => {
-    writeFileSync(join(dir, 'media-tron.log'), 'current\n');
-    writeFileSync(join(dir, 'media-tron.log.1'), 'older\n');
+    writeFileSync(join(dir, 'arclight.log'), 'current\n');
+    writeFileSync(join(dir, 'arclight.log.1'), 'older\n');
     writeFileSync(join(dir, 'secrets.txt'), 'nope');
     const { a } = await app();
     const list = await a.inject({ method: 'GET', url: '/api/v1/log/file' });
-    expect(list.json().map((f: { name: string }) => f.name)).toEqual(['media-tron.log', 'media-tron.log.1']);
+    expect(list.json().map((f: { name: string }) => f.name)).toEqual(['arclight.log', 'arclight.log.1']);
     expect(list.json()[0].sizeBytes).toBe(8);
-    const dl = await a.inject({ method: 'GET', url: '/api/v1/log/file/media-tron.log.1' });
+    const dl = await a.inject({ method: 'GET', url: '/api/v1/log/file/arclight.log.1' });
     expect(dl.statusCode).toBe(200);
     expect(dl.body).toBe('older\n');
-    expect(dl.headers['content-disposition']).toContain('media-tron.log.1');
+    expect(dl.headers['content-disposition']).toContain('arclight.log.1');
     expect((await a.inject({ method: 'GET', url: '/api/v1/log/file/secrets.txt' })).statusCode).toBe(404);
-    expect((await a.inject({ method: 'GET', url: `/api/v1/log/file/${encodeURIComponent('../media-tron.log')}` })).statusCode).toBe(404);
-    expect((await a.inject({ method: 'GET', url: '/api/v1/log/file/media-tron.log.9' })).statusCode).toBe(404);
+    expect((await a.inject({ method: 'GET', url: `/api/v1/log/file/${encodeURIComponent('../arclight.log')}` })).statusCode).toBe(404);
+    expect((await a.inject({ method: 'GET', url: '/api/v1/log/file/arclight.log.9' })).statusCode).toBe(404);
     await a.close();
   });
 

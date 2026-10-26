@@ -1,6 +1,6 @@
 /**
  * Path helpers for paths that live on the download client's machine. Those may be POSIX
- * or Windows paths regardless of the OS Media-Tron runs on, so `node:path` is not usable.
+ * or Windows paths regardless of the OS Arclight runs on, so `node:path` is not usable.
  */
 
 const DRIVE_PREFIX = /^[A-Za-z]:/;

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { QUALITIES, type ManualImportItem } from '@media-tron/shared';
+import { QUALITIES, type ManualImportItem } from '@arclight/shared';
 import { initRows, needsManualImport, parseLanguages, rowProblems, rowsReducer, toImportRequest } from './mapping.js';
 import { parseManualImportSearch, toManualImportQuery } from './manual-import-page.js';
 

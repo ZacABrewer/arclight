@@ -8,7 +8,7 @@ import { z } from 'zod';
 export const NOTIFICATION_SECRET_MASK = '********';
 
 /**
- * Agent kinds. Mirrors `NOTIFICATION_AGENT_KINDS` in `@media-tron/notifications` (which
+ * Agent kinds. Mirrors `NOTIFICATION_AGENT_KINDS` in `@arclight/notifications` (which
  * depends on this package, so it cannot be imported here); the api asserts both stay equal.
  */
 export const NotificationImplementation = z.enum([

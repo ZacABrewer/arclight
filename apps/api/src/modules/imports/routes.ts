@@ -17,8 +17,8 @@ import {
   RenameResult,
   RescanCommand,
   RescanResult,
-} from '@media-tron/shared';
-import { NamingFormatError } from '@media-tron/organizer';
+} from '@arclight/shared';
+import { NamingFormatError } from '@arclight/organizer';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';

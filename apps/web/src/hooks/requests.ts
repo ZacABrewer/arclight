@@ -16,7 +16,7 @@ import type {
   UserQuota,
   UserRequestSettings,
   WatchlistCreate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import {
   discoverApi,
   issuesApi,

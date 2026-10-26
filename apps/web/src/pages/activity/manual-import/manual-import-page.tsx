@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useState } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ImportMode, ManualImportQueryInput, ManualImportResult, MediaType, Movie, Series } from '@media-tron/shared';
+import type { ImportMode, ManualImportQueryInput, ManualImportResult, MediaType, Movie, Series } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { manualImportApi } from '../../../api/manual-import.js';
 import { queueApi } from '../../../api/queue.js';

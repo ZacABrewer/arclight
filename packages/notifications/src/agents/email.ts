@@ -41,7 +41,7 @@ export class EmailAgent extends BaseAgent {
     const formatted = formatEvent(event);
     const subject = `${this.settings.subjectPrefix} ${formatted.subject}: ${formatted.title}`.trim();
     const text = `${formatted.title}\r\n\r\n${formatted.body.replace(/\r?\n/g, '\r\n')}\r\n`;
-    const domain = this.settings.from.split('@')[1] ?? 'media-tron';
+    const domain = this.settings.from.split('@')[1] ?? 'arclight';
     const headers = [
       `From: ${encodeHeaderValue(event.instanceName)} <${this.settings.from}>`,
       `To: ${this.settings.to.join(', ')}`,
@@ -52,7 +52,7 @@ export class EmailAgent extends BaseAgent {
       'MIME-Version: 1.0',
       'Content-Type: text/plain; charset=utf-8',
       'Content-Transfer-Encoding: base64',
-      'X-Mailer: Media-Tron',
+      'X-Mailer: Arclight',
     ];
     const raw = `${headers.join('\r\n')}\r\n\r\n${wrap76(Buffer.from(text, 'utf8').toString('base64'))}`;
     return {

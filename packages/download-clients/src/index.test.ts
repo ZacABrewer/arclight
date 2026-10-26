@@ -46,7 +46,7 @@ describe('createDownloadClient', () => {
         expect(field.description, key).toBeTruthy();
       }
     }
-    expect(TransmissionSettings.parse({ host: 'h' })).toMatchObject({ port: 9091, useSsl: false, category: 'media-tron' });
+    expect(TransmissionSettings.parse({ host: 'h' })).toMatchObject({ port: 9091, useSsl: false, category: 'arclight' });
     expect(NzbgetSettings.parse({ host: 'h' })).toMatchObject({ port: 6789, username: 'nzbget' });
   });
 

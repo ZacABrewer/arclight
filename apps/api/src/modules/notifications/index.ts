@@ -1,4 +1,4 @@
-import type { NotificationEvent } from '@media-tron/notifications';
+import type { NotificationEvent } from '@arclight/notifications';
 import type { AppContext, AppModule } from '../../app.js';
 import { notificationsRoutes } from './routes.js';
 import { NotificationsService } from './service.js';

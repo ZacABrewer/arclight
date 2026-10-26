@@ -36,7 +36,7 @@ import type {
   UpdateSeriesRequest,
   WantedEpisode,
   WantedEpisodesQuery,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
@@ -57,7 +57,7 @@ type MovieRow = typeof t.movies.$inferSelect;
 type MediaFileRow = typeof t.mediaFiles.$inferSelect;
 
 // ---------------------------------------------------------------------------------------
-// Metadata input shapes. The `@media-tron/metadata` package produces these; the library does
+// Metadata input shapes. The `@arclight/metadata` package produces these; the library does
 // not import it, it only agrees on the fields. Anything unknown may be null or absent.
 // ---------------------------------------------------------------------------------------
 

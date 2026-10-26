@@ -1,4 +1,4 @@
-import type { ReleaseProfile } from '@media-tron/shared';
+import type { ReleaseProfile } from '@arclight/shared';
 
 const termCache = new Map<string, (value: string) => boolean>();
 

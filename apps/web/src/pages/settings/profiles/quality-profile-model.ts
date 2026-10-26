@@ -6,7 +6,7 @@ import {
   type ProfileFormatItem,
   type QualityProfileInput,
   type QualityProfileItem,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Pure editing logic for the quality-profile dialog. The api stores items worst -> best; the
 // editor shows best first (like every *arr), so the dialog converts with toDisplay/fromDisplay

@@ -1,5 +1,5 @@
-import { buildItems, findItem, itemId } from '@media-tron/profiles-engine';
-import { parseRelease } from '@media-tron/parser';
+import { buildItems, findItem, itemId } from '@arclight/profiles-engine';
+import { parseRelease } from '@arclight/parser';
 import pino from 'pino';
 import {
   QualityProfileInput,
@@ -13,7 +13,7 @@ import {
   type ReleaseResource,
   type Series,
   type TrackedDownloadState,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import * as schema from '../../db/schema.js';
 import { EventBus } from '../../events.js';

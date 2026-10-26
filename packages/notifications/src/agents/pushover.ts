@@ -36,7 +36,7 @@ export class PushoverAgent extends BaseAgent {
     if (this.settings.sound) form.sound = this.settings.sound;
     if (formatted.link) {
       form.url = formatted.link;
-      form.url_title = 'Open in Media-Tron';
+      form.url_title = 'Open in Arclight';
     }
     return form;
   }

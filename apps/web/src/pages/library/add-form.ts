@@ -6,7 +6,7 @@ import type {
   QualityProfile,
   RootFolder,
   SeriesType,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Add-new dialog state, validation and request mapping. Kept pure so it is unit-tested
 // without rendering.

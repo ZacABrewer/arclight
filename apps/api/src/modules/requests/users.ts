@@ -1,5 +1,5 @@
 import { asc, eq, inArray } from 'drizzle-orm';
-import { UserRequestSettings, type RequestUser } from '@media-tron/shared';
+import { UserRequestSettings, type RequestUser } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { RequestsError } from './errors.js';

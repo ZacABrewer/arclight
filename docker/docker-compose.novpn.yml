@@ -1,19 +1,19 @@
 # Development/compose-from-source stack WITHOUT a VPN (plain layout). The default
-# docker-compose.yml routes Media-Tron and qBittorrent through Gluetun; use this file with
+# docker-compose.yml routes Arclight and qBittorrent through Gluetun; use this file with
 #   docker compose -f docker-compose.novpn.yml up -d
 # when you do not use a VPN. For the published image, see README.md.
 services:
-  media-tron:
+  arclight:
     build:
       context: ..
       dockerfile: docker/Dockerfile
-    container_name: media-tron
+    container_name: arclight
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
     volumes:
-      - ${CONFIG_ROOT:-./data}/media-tron:/config
+      - ${CONFIG_ROOT:-./data}/arclight:/config
       - ${TV_ROOT:-./data/tv}:/tv
       - ${MOVIES_ROOT:-./data/movies}:/movies
       - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads

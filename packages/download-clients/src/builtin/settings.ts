@@ -16,13 +16,13 @@ export const BuiltinSettings = z.object({
   category: z
     .string()
     .trim()
-    .default('media-tron')
-    .describe('Category Media-Tron assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.'),
+    .default('arclight')
+    .describe('Category Arclight assigns to its downloads, keeping them apart from everything else. Leave empty to not use one.'),
   postImportCategory: z
     .string()
     .trim()
     .optional()
-    .describe('Category to move a download to after Media-Tron has imported it. Leave empty to keep it unchanged.'),
+    .describe('Category to move a download to after Arclight has imported it. Leave empty to keep it unchanged.'),
   savePath: z
     .string()
     .trim()

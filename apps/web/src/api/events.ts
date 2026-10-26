@@ -1,4 +1,4 @@
-import { ServerEvent } from '@media-tron/shared';
+import { ServerEvent } from '@arclight/shared';
 import { API_BASE } from './client.js';
 
 export type ConnectionState = 'connecting' | 'open' | 'reconnecting';

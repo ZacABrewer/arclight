@@ -1,5 +1,5 @@
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { AddRootFolderRequest, MetadataSettingsUpdate, NamingConfigInput } from '@media-tron/shared';
+import type { AddRootFolderRequest, MetadataSettingsUpdate, NamingConfigInput } from '@arclight/shared';
 import { libraryApi } from '../api/library.js';
 import { namingApi } from '../api/naming.js';
 import { notificationsApi, type NotificationInput } from '../api/notifications.js';

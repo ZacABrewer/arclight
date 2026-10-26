@@ -1,5 +1,5 @@
 import pino from 'pino';
-import { QUALITIES, type QualityModel, type QualityName } from '@media-tron/shared';
+import { QUALITIES, type QualityModel, type QualityName } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, movies, series } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';

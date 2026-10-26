@@ -5,7 +5,7 @@ import { fakeFetch } from '../test-utils.js';
 import { NotificationError } from '../types.js';
 import { DISCORD_COLOURS, DiscordAgent, type DiscordPayload } from './discord.js';
 
-const SETTINGS = { webhookUrl: 'https://discord.com/api/webhooks/1/secret-token', username: 'Media-Tron', avatarUrl: 'https://mt.example.com/logo.png' };
+const SETTINGS = { webhookUrl: 'https://discord.com/api/webhooks/1/secret-token', username: 'Arclight', avatarUrl: 'https://mt.example.com/logo.png' };
 
 function agentWith(responder?: Parameters<typeof fakeFetch>[0]) {
   const http = fakeFetch(responder);
@@ -25,7 +25,7 @@ describe('DiscordAgent', () => {
     expect(call.headers['content-type']).toBe('application/json');
 
     const payload = call.json() as DiscordPayload;
-    expect(payload.username).toBe('Media-Tron');
+    expect(payload.username).toBe('Arclight');
     expect(payload.avatar_url).toBe(SETTINGS.avatarUrl);
     const embed = payload.embeds[0]!;
     expect(embed.title).toBe('Signal Lost (2023) - S02E03-E04 - Dead Air + Carrier Wave');
@@ -35,7 +35,7 @@ describe('DiscordAgent', () => {
     expect(embed.thumbnail).toEqual({ url: 'https://img.example/poster.jpg' });
     expect(embed.image).toBeUndefined(); // fanart not in default grab fields
     expect(embed.timestamp).toBe(GRAB.timestamp);
-    expect(embed.author).toEqual({ name: 'Media-Tron', icon_url: SETTINGS.avatarUrl });
+    expect(embed.author).toEqual({ name: 'Arclight', icon_url: SETTINGS.avatarUrl });
 
     const names = embed.fields.map((f) => f.name);
     expect(names).toEqual(['Overview', 'Quality', 'Group', 'Size', 'Links', 'Release', 'Indexer', 'Custom Formats', 'Custom Format Score']);

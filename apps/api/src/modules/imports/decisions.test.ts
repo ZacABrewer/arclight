@@ -1,6 +1,6 @@
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { parseRelease } from '@media-tron/parser';
+import { parseRelease } from '@arclight/parser';
 import {
   MediaManagementSettings,
   NAMING_DEFAULTS,
@@ -11,7 +11,7 @@ import {
   type QualityDefinition,
   type QualityModel,
   type Series,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { evaluate, orderForImport, readGrabbedRelease, type DecisionContext, type LocalItem } from './decisions.js';
 
 const NOW = new Date('2024-06-15T12:00:00.000Z');

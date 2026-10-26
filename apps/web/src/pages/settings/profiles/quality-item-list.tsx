@@ -1,5 +1,5 @@
 import { useState, type DragEvent } from 'react';
-import { qualityById, type QualityProfileItem } from '@media-tron/shared';
+import { qualityById, type QualityProfileItem } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Input } from '../../../components/form.js';
 import { cx } from '../../../lib/cx.js';

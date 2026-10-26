@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { IndexerDefinitionSummary, IndexerProxy } from '@media-tron/shared';
+import type { IndexerDefinitionSummary, IndexerProxy } from '@arclight/shared';
 import { definitionBase, definitionFields, definitionNotes, filterDefinitions, EMPTY_CATALOGUE_FILTER, toDefinitionBody } from './definition-fields.js';
 import { indexerSourceLine } from './indexers-page.js';
 

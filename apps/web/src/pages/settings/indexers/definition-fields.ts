@@ -7,8 +7,8 @@ import type {
   IndexerPrivacy,
   IndexerProxy,
   ReleaseProtocol,
-} from '@media-tron/shared';
-import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@media-tron/shared';
+} from '@arclight/shared';
+import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import type { BadgeTone } from '../../../components/badge.js';
 

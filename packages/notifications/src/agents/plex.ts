@@ -94,9 +94,9 @@ export class PlexAgent extends BaseAgent {
       headers: {
         Accept: 'application/json',
         'X-Plex-Token': this.settings.authToken,
-        'X-Plex-Client-Identifier': 'media-tron',
-        'X-Plex-Product': 'Media-Tron',
-        'X-Plex-Device-Name': 'Media-Tron',
+        'X-Plex-Client-Identifier': 'arclight',
+        'X-Plex-Product': 'Arclight',
+        'X-Plex-Device-Name': 'Arclight',
       },
     });
   }

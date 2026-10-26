@@ -1,4 +1,4 @@
-import { parseRelease } from '@media-tron/parser';
+import { parseRelease } from '@arclight/parser';
 import type { MatchKey, MediaType, SubtitleCandidate, SubtitleQuery, WantedLanguage } from './types.js';
 
 // Scoring (spec section 4) and winner selection (section 6).

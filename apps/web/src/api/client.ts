@@ -1,5 +1,5 @@
 import type { z } from 'zod';
-import { ErrorResponse } from '@media-tron/shared';
+import { ErrorResponse } from '@arclight/shared';
 
 export const API_BASE = '/api/v1';
 

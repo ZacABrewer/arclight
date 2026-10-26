@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { SUBTITLE_PROVIDER_IDS, type SubtitleSettings } from '@media-tron/shared';
+import { SUBTITLE_PROVIDER_IDS, type SubtitleSettings } from '@arclight/shared';
 import { ApiError } from '../../../api/client.js';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';

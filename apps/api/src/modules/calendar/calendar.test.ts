@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { describe, expect, it } from 'vitest';
-import { CalendarQuery, type CalendarItem, type CalendarQueryInput } from '@media-tron/shared';
+import { CalendarQuery, type CalendarItem, type CalendarQueryInput } from '@arclight/shared';
 import { eq } from 'drizzle-orm';
 import { createTestDb } from '../../db/test-utils.js';
 import { settings } from '../../db/schema.js';
@@ -130,7 +130,7 @@ describe('iCal output', () => {
     expect(ics).toContain('SUMMARY:Show\\, The - S02E03 - Big\\; Day');
     expect(ics).toContain('DTSTART;VALUE=DATE:20260512\r\nDTEND;VALUE=DATE:20260513');
     expect(ics).toContain('SUMMARY:Alpha (In Cinemas)');
-    expect(ics).toMatch(/UID:media-tron-movie-\d+-cinema@media-tron/);
+    expect(ics).toMatch(/UID:arclight-movie-\d+-cinema@arclight/);
   });
 });
 

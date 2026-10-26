@@ -21,7 +21,7 @@ import {
   type SearchParam,
   type SearchRequest,
   type SettingsValues,
-} from '@media-tron/indexers';
+} from '@arclight/indexers';
 import {
   IndexerCreate,
   IndexerSettings,
@@ -43,7 +43,7 @@ import {
   type ManualSearchRequest,
   type ReleaseResource,
   type SearchGrabResponse,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { DefinitionStore } from './definitions.js';
 import { IndexersError, parseOrThrow } from './errors.js';

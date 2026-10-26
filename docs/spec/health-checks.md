@@ -2,20 +2,20 @@
 
 Derived from reading the Sonarr, Radarr and Prowlarr health-check subsystems. This document
 describes behaviour only; it contains no upstream code. An engineer should be able to build
-the Media-Tron `health` module and its check catalogue from this file alone.
+the Arclight `health` module and its check catalogue from this file alone.
 
 Conventions:
 
 - Severity is one of **Notice** (informational), **Warning**, **Error**. A passing check has
   the implicit severity **Ok** and is never stored or shown.
 - `{name}` in a message is a substitution slot. `{appName}` is the product name (in
-  Media-Tron: "Media-Tron"). Message text is quoted as upstream ships it in English, with app
-  names replaced by the slot. Media-Tron may reword, but must keep the same facts.
+  Arclight: "Arclight"). Message text is quoted as upstream ships it in English, with app
+  names replaced by the slot. Arclight may reword, but must keep the same facts.
 - "Fragment" is the anchor appended to the documentation page for the check (section 1.6).
-  Media-Tron should keep a stable `docsAnchor` per check.
+  Arclight should keep a stable `docsAnchor` per check.
 - **S** = Sonarr only, **R** = Radarr only, **S+R** = both (identical unless a difference is
   stated), **P** = Prowlarr. Where Sonarr and Radarr have a series variant and a movie
-  variant of the same check, Media-Tron implements one check covering both media types
+  variant of the same check, Arclight implements one check covering both media types
   (section 6).
 
 ---
@@ -35,7 +35,7 @@ Conventions:
 3. Results are keyed by check identity (not reason). Replacing a Warning by an Error from the
    same check overwrites the stored result.
 4. Results are **held in memory only**. After a restart the list is empty until startup
-   checks run. Media-Tron may persist, but must be able to rebuild.
+   checks run. Arclight may persist, but must be able to rebuild.
 5. There is no per-item dismiss. A result disappears only when the check next returns Ok.
 
 ### 1.2 Triggers
@@ -138,7 +138,7 @@ Notification routing:
 3. The response is an ordered list of {severity, message, wiki url}. **Only the first item is
    used.** Its severity is whatever the server says; reason "server notification".
 4. Empty list, or any request failure (logged at error level) -> Ok.
-5. **Media-Tron**: no such service. Implement the extension point but ship it empty/disabled.
+5. **Arclight**: no such service. Implement the extension point but ship it empty/disabled.
 
 ### 1.8 API / UI
 
@@ -227,7 +227,7 @@ A provider kind may lower its maximum level (default 9).
 - **IndexerLongTermStatus**: blocked indexers whose initial failure is **more than 6 hours
   ago**.
 
-The two checks partition the same blocked set. Media-Tron may implement one check emitting
+The two checks partition the same blocked set. Arclight may implement one check emitting
 two results, but must keep the two distinct messages. Download client, import list,
 notification and application status checks do **not** split by time.
 
@@ -258,14 +258,14 @@ means the provider events added/updated/deleted/status-changed as listed.
 - Condition: API key shorter than 20 characters. Warning.
 - "Please update your API key to be at least {length} characters long. You can do this via
   settings or the config file" (length 20). Fragment "#invalid-api-key".
-- Media-Tron generates long keys; keep for adopted/imported config.
+- Arclight generates long keys; keep for adopted/imported config.
 
 **C-03 AppDataLocation** (S+R, P)
 - Triggers: startup, schedule.
 - Condition: the app-data folder equals, or is inside, the startup (install) folder.
 - Warning. "Updating will not be possible to prevent deleting AppData on Update". Fragment
   "#updating-will-not-be-possible-to-prevent-deleting-appdata-on-update".
-- Media-Tron: Docker keeps data in `/config`; meaningful only for non-container installs.
+- Arclight: Docker keeps data in `/config`; meaningful only for non-container installs.
 
 **C-04 SystemTime** (S+R, P)
 - Triggers: startup, schedule.
@@ -273,7 +273,7 @@ means the provider events added/updated/deleted/status-changed as listed.
   difference from local UTC is >= 1 day, fail. Any request failure -> Ok (logged at warning).
 - Error. "System time is off by more than 1 day. Scheduled tasks may not run correctly until
   the time is corrected". Fragment "#system-time-off". Logs both timestamps.
-- Media-Tron: optional; can read an HTTPS `Date` header. Off by default for privacy.
+- Arclight: optional; can read an HTTPS `Date` header. Off by default for privacy.
 
 **C-05 Proxy** (S+R, P)
 - Triggers: startup, schedule, config saved.
@@ -284,8 +284,8 @@ means the provider events added/updated/deleted/status-changed as listed.
      proxy. Status Code: {statusCode}". Other HTTP error codes are ignored.
   3. The ping throws -> Error "Failed to test proxy: {url}" (the ping URL).
   Fragment for 2 and 3: "#proxy-failed-test".
-- Upstream lets a DNS exception escape (logged only). Media-Tron should treat it as case 1.
-- Media-Tron: ping a configurable URL instead of the cloud service.
+- Upstream lets a DNS exception escape (logged only). Arclight should treat it as case 1.
+- Arclight: ping a configurable URL instead of the cloud service.
 
 **C-06 Update** (S+R, P)
 - Triggers: startup, schedule, config-file saved.
@@ -302,7 +302,7 @@ means the provider events added/updated/deleted/status-changed as listed.
 - Block 2 runs always: if the build is older than **14 days** and the update service reports a
   newer version -> Warning "New update is available: {version}" (version with a leading
   "v"). Fragment "#new-update-is-available".
-- Media-Tron: only the "update available" branch is meaningful, and only once an update
+- Arclight: only the "update available" branch is meaningful, and only once an update
   channel exists (Phase 6).
 
 **C-07 ReleaseBranch** (R, P; not in Sonarr)
@@ -317,14 +317,14 @@ means the provider events added/updated/deleted/status-changed as listed.
 - Condition: SQLite library < 3.9.0. Error. "Currently installed SQLite version {version} is
   no longer supported. Please upgrade SQLite to at least version {minimum}." Fragment
   "#currently-installed-sqlite-version-is-not-supported".
-- Media-Tron bundles SQLite via better-sqlite3: drop.
+- Arclight bundles SQLite via better-sqlite3: drop.
 
 **C-09 PackageGlobalMessage** (S+R, P)
 - Triggers: startup, schedule.
 - Condition: the deployment package supplies a non-empty global message. Severity by prefix:
   "Error:" -> Error (prefix stripped); "Warn:" -> Warning (stripped); otherwise **Notice**.
   Message is the remaining text. Reason "package". Fragment "#package-maintainer-message".
-- Media-Tron: support an env var or file with the same prefix convention.
+- Arclight: support an env var or file with the same prefix convention.
 
 **C-10 PasswordResetToken** (S only)
 - Triggers: startup (plus default schedule).
@@ -335,7 +335,7 @@ means the provider events added/updated/deleted/status-changed as listed.
   - Otherwise -> **Notice** "A password reset token is configured. Remove the
     SONARR__AUTH__RESETTOKEN environment variable once you no longer need it".
   Fragment "#password-reset-token".
-- Media-Tron: mirror only if an admin-recovery token is implemented.
+- Arclight: mirror only if an admin-recovery token is implemented.
 
 **C-11 OidcConfiguration** (S+R)
 - Triggers: startup, schedule, config-file saved.
@@ -348,7 +348,7 @@ means the provider events added/updated/deleted/status-changed as listed.
   3. Discovery document unreachable. "Unable to retrieve the OIDC configuration from
      {authority}, signing in with your identity provider will fail until it is reachable".
      "#oidc-configuration-unavailable".
-- Media-Tron: only if OIDC sign-in is added.
+- Arclight: only if OIDC sign-in is added.
 
 ### 4.2 Download clients
 
@@ -415,7 +415,7 @@ means the provider events added/updated/deleted/status-changed as listed.
     (Sabnzbd)"; all NZBGet -> "... (Nzbget)"; otherwise "Enable Completed Download Handling if
     possible". Fragment "#completedfailed-download-handling".
   If the setting is explicitly false -> Warning "Enable Completed Download Handling".
-- Media-Tron: completed download handling is always on. **Drop.**
+- Arclight: completed download handling is always on. **Drop.**
 
 **C-26 RemotePathMapping** (S+R) - the most intricate check.
 - Triggers: download client updated/deleted (R also added); remote-path-mapping model events;
@@ -475,15 +475,15 @@ means the provider events added/updated/deleted/status-changed as listed.
        {downloadPath}. Likely permissions error." (#permissions-error)
      - path valid, folder absent: Docker -> the same "can see but not access download
        directory" text, but with fragment #docker-bad-remote-path-mapping (an upstream quirk -
-       a clearer "does not exist inside the container" message would be better; Media-Tron may
+       a clearer "does not exist inside the container" message would be better; Arclight may
        improve it); else not localhost -> "Remote download client {downloadClientName} reported
        files in {path} but this directory does not appear to exist. Likely missing remote
        path mapping." (#bad-remote-path-mapping); else local -> "Download client
        {downloadClientName} reported files in {path} but {appName} cannot see this directory.
        You may need to adjust the folder's permissions." (#permissions-error)
   Communication errors are swallowed (debug); other exceptions logged and swallowed.
-- Media-Tron: one library means "episode/movie" becomes "item". Docker is the primary
-  deployment, so a qBittorrent container whose `/downloads` mount differs from Media-Tron's
+- Arclight: one library means "episode/movie" becomes "item". Docker is the primary
+  deployment, so a qBittorrent container whose `/downloads` mount differs from Arclight's
   is the main failure this check exists to catch.
 
 ### 4.3 Indexers
@@ -545,7 +545,7 @@ means the provider events added/updated/deleted/status-changed as listed.
 - Triggers: startup, schedule only.
 - Any PassThePopcorn indexer whose "API user" is blank -> Warning "The following
   PassThePopcorn indexers have deprecated settings and should be updated: {names}". Fragment
-  "#ptp-settings-old". Media-Tron: drop unless a PTP indexer ships.
+  "#ptp-settings-old". Arclight: drop unless a PTP indexer ships.
 
 ### 4.4 Import lists, root folders, disks
 
@@ -576,7 +576,7 @@ means the provider events added/updated/deleted/status-changed as listed.
 - **Empty** (**Sonarr only**): reached only if nothing is missing; any root in R that exists
   but has no entries -> **Warning**. Single "Empty root folder: {rootFolderPath}"; several
   "Multiple root folders are empty: {rootFolderPaths}". Fragment "#empty-root-folder".
-  Purpose: detect an unmounted NAS share leaving an empty mountpoint. Media-Tron should apply
+  Purpose: detect an unmounted NAS share leaving an empty mountpoint. Arclight should apply
   it to movies too.
 
 **C-43 MovieCollectionRootFolder** (R)
@@ -626,25 +626,25 @@ means the provider events added/updated/deleted/status-changed as listed.
 - An available Slack-type notification whose webhook URL contains "discord" -> Warning "You have
   a Discord notification setup as a Slack notification. Set this up as a Discord notification
   for better functionality. The effected notifications are: {names}". Fragment
-  "#discord-as-slack-notification". Media-Tron: drop.
+  "#discord-as-slack-notification". Arclight: drop.
 
 **C-62 Metadata / Kometa** (R)
 - Trigger: metadata consumer updated. The deprecated Kometa consumer is enabled -> Warning
   "Kometa files will no longer be created, support will be removed completely in v6". Derived
-  fragment. Media-Tron: drop.
+  fragment. Arclight: drop.
 
 **C-63 NamingConfig** (R)
 - Trigger: naming-config model event.
 - The movie folder format contains any deprecated file-level token (quality, media info,
   release group, etc., meaningless at folder level) -> Error "Movie Folder Format must not
   contain deprecated file related tokens: {tokens}" (matches joined ", "). Derived fragment.
-- Media-Tron: reject at settings validation; surface health only for adopted configs.
+- Arclight: reject at settings validation; surface health only for adopted configs.
 
 ---
 
 ## 5. Prowlarr-only checks (map to the indexer registry)
 
-"Applications" (the downstream apps Prowlarr syncs to) do not exist in Media-Tron; P-01 and
+"Applications" (the downstream apps Prowlarr syncs to) do not exist in Arclight; P-01 and
 P-02 are dropped.
 
 **P-01 ApplicationStatus** - "all vs some" over enabled applications, blocked with initial
@@ -658,7 +658,7 @@ than 6 hours: {names}". **Drop.**
 
 **P-03 Indexer (none enabled)** - indexer added/updated/deleted/bulk/status-changed. No enabled
 indexers (back-off ignored) -> Error "No indexers enabled, {appName} will not return search
-results". Derived fragment. Media-Tron recommendation (not upstream): when there are zero
+results". Derived fragment. Arclight recommendation (not upstream): when there are zero
 enabled indexers, emit this and suppress C-32/C-33's "none" variants to avoid three redundant
 messages.
 
@@ -685,18 +685,18 @@ benefits expiring soon: {indexerNames}". "#indexer-vip-expiring".
 **P-08 IndexerVIPExpired** - same triggers; expiration earlier than now -> Error "Indexer VIP
 benefits have expired: {indexerNames}". "#indexer-vip-expired".
 
-P-07/P-08 compare against local time while back-off windows use UTC; Media-Tron should use UTC
+P-07/P-08 compare against local time while back-off windows use UTC; Arclight should use UTC
 throughout. Unchanged shared checks in Prowlarr: AllowedHosts, ApiKeyValidation,
 AppDataLocation, DownloadClientStatus, IndexerDownloadClient, IndexerStatus,
 IndexerLongTermStatus, NotificationStatus, Proxy, ReleaseBranch, SystemTime, Update.
 
 ---
 
-## 6. Media-Tron implementation guidance
+## 6. Arclight implementation guidance
 
 ### 6.1 Check list
 
-| Media-Tron check | Source | Phase |
+| Arclight check | Source | Phase |
 |---|---|---|
 | `allowed-hosts`, `api-key-length` | C-01, C-02 | 0 |
 | `app-data-location` | C-03 | 0 (non-Docker) |
@@ -764,11 +764,11 @@ rejects imports and has no health check for it).
    simultaneous results.
 5. **Unmounted share.** `/tv` exists but empty: Warning "Empty root folder: /tv". Directory
    missing entirely: Error "Missing root folder: /tv".
-6. **Docker mapping mistake.** qBittorrent saves to `/data/torrents/tv`; Media-Tron sees only
+6. **Docker mapping mistake.** qBittorrent saves to `/data/torrents/tv`; Arclight sees only
    `/downloads`. Periodic C-26(A): Error "You are using docker; download client qBittorrent
    places downloads in /data/torrents/tv but this directory does not appear to exist inside the
    container. Review your remote path mappings and container volume settings."
-7. **Permissions.** A file is identified, import fails, the file exists -> Error "Media-Tron can
+7. **Permissions.** A file is identified, import fails, the file exists -> Error "Arclight can
    see but not access downloaded episode /downloads/x.mkv. Likely permissions error." The next
    successful import triggers the check with FailedOnly and clears it.
 8. **Short API key.** Imported config has a 12-char key -> Warning on startup and on every
@@ -813,9 +813,9 @@ rejects imports and has no health check for it).
    is-localhost) are produced by each client implementation; qBittorrent specifics belong in
    the download-clients spec.
 6. The cloud service endpoints (announcements, time, ping) are project-operated with no
-   Media-Tron equivalent; a decision is needed (recommended: none).
+   Arclight equivalent; a decision is needed (recommended: none).
 7. Whether the Radarr SlackUrl check's event hooks ever fire (they target a generic factory
    type); behaviourally it runs on startup, schedule and manual runs.
 8. Sonarr's DownloadClientRemovesCompletedDownloads etc. have no "added" trigger while Radarr's
    DownloadClientRootFolder and RemotePathMapping do; whether this is deliberate is unknown.
-   Media-Tron should trigger on added for all.
+   Arclight should trigger on added for all.

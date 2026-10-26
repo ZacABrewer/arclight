@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import type { QualityDefinitionItem, QualityDefinitionLimits } from '@media-tron/shared';
+import type { QualityDefinitionItem, QualityDefinitionLimits } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';
 import { ErrorView } from '../../../components/error-boundary.js';

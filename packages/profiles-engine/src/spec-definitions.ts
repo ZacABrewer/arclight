@@ -7,7 +7,7 @@ import {
   ReleaseIndexerFlag,
   ReleaseKind,
   type SpecImplementationDefinition,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 const resolutions = [...new Set(ALL_QUALITIES.map((q) => q.resolution))].sort((a, b) => a - b);
 

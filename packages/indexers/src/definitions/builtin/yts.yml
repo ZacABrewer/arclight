@@ -1,4 +1,4 @@
-# Authored for Media-Tron. YTS publishes a JSON API where each movie carries several
+# Authored for Arclight. YTS publishes a JSON API where each movie carries several
 # torrents (one per quality); each torrent becomes a release. Not yet verified (tested: false).
 schemaVersion: 1
 id: yts

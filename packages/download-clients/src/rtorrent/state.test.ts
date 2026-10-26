@@ -75,7 +75,7 @@ describe('outputPathOf', () => {
 describe('labels', () => {
   it('URI-encodes like ruTorrent and decodes tolerantly', () => {
     expect(encodeLabel('TV Shows')).toBe('TV%20Shows');
-    expect(encodeLabel('media-tron')).toBe('media-tron');
+    expect(encodeLabel('arclight')).toBe('arclight');
     expect(decodeLabel('TV%20Shows')).toBe('TV Shows');
     expect(decodeLabel('100%')).toBe('100%');
     expect(mapTorrent(torrent({ label: 'Movies%20UHD' })).category).toBe('Movies UHD');

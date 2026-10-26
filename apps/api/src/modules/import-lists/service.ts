@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { resolve as resolvePath } from 'node:path';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { createTmdbClient, type TmdbClient, type TmdbClientOptions } from '@media-tron/metadata';
+import { createTmdbClient, type TmdbClient, type TmdbClientOptions } from '@arclight/metadata';
 import {
   IMPORT_LIST_SECRET_FIELDS,
   importListSettingsSchemas,
@@ -23,7 +23,7 @@ import {
   type TraktDeviceResponse,
   type TraktPollRequest,
   type TraktPollResponse,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { importExclusions, movies, qualityProfiles, rootFolders, series } from '../../db/schema.js';
@@ -626,7 +626,7 @@ export class ImportListsService {
 
   private tmdb(): TmdbAccess {
     const stored = settingsService.getSection(this.db, 'metadata');
-    const apiKey = stored.tmdbApiKey ?? this.env['MEDIATRON_TMDB_API_KEY']?.trim();
+    const apiKey = stored.tmdbApiKey ?? this.env['ARCLIGHT_TMDB_API_KEY']?.trim();
     if (!apiKey) {
       this.tmdbCache = null;
       throw new ImportListFetchError('not-configured', 'TMDB API key is not configured; set it in Settings > Metadata');

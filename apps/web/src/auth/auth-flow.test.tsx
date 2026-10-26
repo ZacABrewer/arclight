@@ -110,7 +110,7 @@ describe('login form', () => {
         authed = true;
         return { status: 200, body: session };
       }
-      if (url === '/api/v1/system/status') return { status: 200, body: { appName: 'Media-Tron', version: '0.1.0', startTime: '2026-10-25T09:00:00.000Z', uptimeSeconds: 1, runtime: { node: 'v24', platform: 'linux', arch: 'x64' }, paths: { config: '/c', database: '/c/db', logs: '/c/l' }, isDocker: false } };
+      if (url === '/api/v1/system/status') return { status: 200, body: { appName: 'Arclight', version: '0.1.0', startTime: '2026-10-25T09:00:00.000Z', uptimeSeconds: 1, runtime: { node: 'v24', platform: 'linux', arch: 'x64' }, paths: { config: '/c', database: '/c/db', logs: '/c/l' }, isDocker: false } };
       return undefined;
     };
     const router = renderAt('/login?redirect=%2Fsystem%2Fstatus');

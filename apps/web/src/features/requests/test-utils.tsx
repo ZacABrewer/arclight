@@ -10,7 +10,7 @@ import {
   type TitleDetail,
   type TitleSeason,
   type User,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { createToastStore, type ToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';

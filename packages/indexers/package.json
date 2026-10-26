@@ -1,5 +1,5 @@
 {
-  "name": "@media-tron/indexers",
+  "name": "@arclight/indexers",
   "version": "0.1.0",
   "private": true,
   "type": "module",

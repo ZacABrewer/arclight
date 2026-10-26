@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { NAMING_DEFAULTS, NamingConfig, type Episode, type MediaFile, type Movie, type Series } from '@media-tron/shared';
+import { NAMING_DEFAULTS, NamingConfig, type Episode, type MediaFile, type Movie, type Series } from '@arclight/shared';
 import {
   NamingFormatError,
   buildEpisodeFileName,
@@ -266,7 +266,7 @@ describe('optional tokens and clean-up', () => {
   const noGroup: NamingFile = { ...file, releaseGroup: null };
   it.each([
     ['{Series Title}{ - Release Group}', noGroup, "The Series Title's!"],
-    ['{Series Title} - {Release Group}', noGroup, "The Series Title's! - Media-Tron"],
+    ['{Series Title} - {Release Group}', noGroup, "The Series Title's! - Arclight"],
     ['{Series Title} - {Release Hash}', file, "The Series Title's!"],
     // Runs of *different* separators are left alone (4.9.2); use a prefix block to make it optional.
     ['{Series Title} - S{season:00}E{episode:00} - {Bogus Token} - {Quality Title}', file, "The Series Title's! - S01E01 - - WEBDL-1080p"],

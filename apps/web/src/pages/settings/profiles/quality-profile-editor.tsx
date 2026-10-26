@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { PROFILE_LANGUAGES, type CustomFormat, type QualityProfile, type QualityProfileInput } from '@media-tron/shared';
+import { PROFILE_LANGUAGES, type CustomFormat, type QualityProfile, type QualityProfileInput } from '@arclight/shared';
 import { FormField, Input, Select, Toggle } from '../../../components/form.js';
 import { ConfirmDialog, inUseMessage } from '../../../components/forms/confirm-dialog.js';
 import { Modal } from '../../../components/modal.js';

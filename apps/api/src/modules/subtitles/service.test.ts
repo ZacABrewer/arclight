@@ -1,8 +1,8 @@
 import { readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
-import { SECRET_MASK } from '@media-tron/shared';
-import { ProviderError } from '@media-tron/subtitles';
+import { SECRET_MASK } from '@arclight/shared';
+import { ProviderError } from '@arclight/subtitles';
 import { mediaFiles, movies, series } from '../../db/schema.js';
 import { subtitleFiles, subtitleHistory, subtitleProviderState } from './schema.js';
 import {
@@ -230,7 +230,7 @@ describe('search -> download pipeline', () => {
     expect(await readFile(path, 'utf8')).toContain('Synced');
     const script = f.runner.calls.find((c) => c.command === '/bin/notify')!;
     expect(script.args).toEqual(['Test.Show.S01E01.1080p.WEB-DL', 'en', String(f.seriesId)]);
-    expect(script.opts.env?.['MEDIATRON_SUBTITLES']).toBe(path);
+    expect(script.opts.env?.['ARCLIGHT_SUBTITLES']).toBe(path);
     const synced = f.service.history({ page: 1, pageSize: 10, action: 'synced' }).records[0]!;
     expect(synced.description).toMatch(/offset of 1.250 seconds/);
   });

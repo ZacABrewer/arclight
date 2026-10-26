@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Episode, MediaFileSubtitles, SubtitleSearchResult, SubtitleState } from '@media-tron/shared';
+import type { Episode, MediaFileSubtitles, SubtitleSearchResult, SubtitleState } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import type { SubtitleScope } from '../../api/subtitles.js';
 import { Badge } from '../../components/badge.js';

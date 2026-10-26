@@ -3,9 +3,9 @@ import { z } from 'zod';
 // VPN contract (settings section `vpn`, GET /vpn/status, POST /vpn/refresh|test|connect|disconnect).
 //
 // The section is a provider union discriminated on `provider.type`:
-// - `gluetun`            Docker: Media-Tron and qBittorrent share Gluetun's network namespace;
+// - `gluetun`            Docker: Arclight and qBittorrent share Gluetun's network namespace;
 //                        we poll Gluetun's control server for status, public IP and forwarded port.
-// - `wireguard-windows`  Native Windows: Media-Tron installs/monitors a WireGuard for Windows
+// - `wireguard-windows`  Native Windows: Arclight installs/monitors a WireGuard for Windows
 //                        tunnel service from a .conf file (e.g. one downloaded from Proton).
 // - `interface-binding`  Any OS: an adapter the user manages (e.g. the ProtonVPN app); we watch
 //                        its IPv4 address and expose it as the bind address.
@@ -20,7 +20,7 @@ export type VpnProviderType = z.infer<typeof VpnProviderType>;
 
 export const GluetunProviderSettings = z.object({
   type: z.literal('gluetun'),
-  /** Absent: MEDIATRON_VPN_CONTROL_URL, then DEFAULT_GLUETUN_CONTROL_URL. */
+  /** Absent: ARCLIGHT_VPN_CONTROL_URL, then DEFAULT_GLUETUN_CONTROL_URL. */
   controlUrl: z.string().url().optional(),
   /** Sent as `X-API-Key`. */
   apiKey: z.string().min(1).optional(),

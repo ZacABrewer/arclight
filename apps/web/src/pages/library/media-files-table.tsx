@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { MediaFile } from '@media-tron/shared';
+import type { MediaFile } from '@arclight/shared';
 import { Button } from '../../components/button.js';
 import { EmptyState } from '../../components/empty-state.js';
 import { ErrorView } from '../../components/error-boundary.js';

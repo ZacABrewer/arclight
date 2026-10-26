@@ -1,4 +1,4 @@
-# Authored for Media-Tron. Uses the site's public JSON API (apibay). Not yet verified
+# Authored for Arclight. Uses the site's public JSON API (apibay). Not yet verified
 # against the live service (tested: false).
 schemaVersion: 1
 id: thepiratebay

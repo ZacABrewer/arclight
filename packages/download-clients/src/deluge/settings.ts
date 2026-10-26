@@ -13,7 +13,7 @@ import {
 /** Characters Deluge's Label plugin accepts in a label id (after lowercasing). */
 export const DELUGE_LABEL_PATTERN = /^[a-z0-9_.-]*$/;
 
-/** Deluge labels are always lowercase; Media-Tron lowercases categories before using them. */
+/** Deluge labels are always lowercase; Arclight lowercases categories before using them. */
 export function normalizeLabel(category: string): string {
   return category.trim().toLowerCase();
 }
@@ -34,9 +34,9 @@ export const DelugeSettings = z.object({
   password: passwordField.describe(
     'Deluge Web UI password (Deluge has no username). A fresh Deluge install uses "deluge" until it is changed. Write-only: never returned by the API.',
   ),
-  category: categoryField('media-tron', 'Label')
+  category: categoryField('arclight', 'Label')
     .describe(
-      'Label Media-Tron assigns to its downloads via Deluge\'s Label plugin (enabled automatically when needed), keeping them apart from everything else. Converted to lowercase. Leave empty to not use one.',
+      'Label Arclight assigns to its downloads via Deluge\'s Label plugin (enabled automatically when needed), keeping them apart from everything else. Converted to lowercase. Leave empty to not use one.',
     )
     .refine(isValidLabel, LABEL_RULE),
   postImportCategory: postImportCategoryField('Label').refine(isValidLabel, LABEL_RULE),

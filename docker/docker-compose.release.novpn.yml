@@ -1,19 +1,19 @@
 # Same as docker-compose.novpn.yml but pulls the published image instead of building.
-# Pin a version with MEDIATRON_IMAGE=ghcr.io/<owner>/media-tron:vX.Y.Z in .env.
+# Pin a version with ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:vX.Y.Z in .env.
 # Development/compose-from-source stack WITHOUT a VPN (plain layout). The default
-# docker-compose.yml routes Media-Tron and qBittorrent through Gluetun; use this file with
+# docker-compose.yml routes Arclight and qBittorrent through Gluetun; use this file with
 #   docker compose -f docker-compose.novpn.yml up -d
 # when you do not use a VPN. For the published image, see README.md.
 services:
-  media-tron:
-    image: ${MEDIATRON_IMAGE:-ghcr.io/media-tron/media-tron:latest}
-    container_name: media-tron
+  arclight:
+    image: ${ARCLIGHT_IMAGE:-ghcr.io/arclight/arclight:latest}
+    container_name: arclight
     environment:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
     volumes:
-      - ${CONFIG_ROOT:-./data}/media-tron:/config
+      - ${CONFIG_ROOT:-./data}/arclight:/config
       - ${TV_ROOT:-./data/tv}:/tv
       - ${MOVIES_ROOT:-./data/movies}:/movies
       - ${DOWNLOADS_ROOT:-./data/downloads}:/downloads

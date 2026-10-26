@@ -18,7 +18,7 @@ import {
   UserCreate,
   UserSelfUpdate,
   UserUpdate,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { clearSessionCookie, readCookie, SESSION_COOKIE, setSessionCookie } from './cookies.js';

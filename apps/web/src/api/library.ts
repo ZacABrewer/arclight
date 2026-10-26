@@ -28,7 +28,7 @@ import {
   type UpdateMovieRequest,
   type UpdateSeriesRequest,
   type WantedEpisodesQuery,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
 // Paths mirror apps/api/src/modules/library/routes.ts. Input types are the shared request

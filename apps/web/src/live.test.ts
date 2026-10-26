@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { QueryClient } from '@tanstack/react-query';
-import type { HealthResponse, Job, ScheduledJob } from '@media-tron/shared';
+import type { HealthResponse, Job, ScheduledJob } from '@arclight/shared';
 import { applyServerEvent, handleStreamOpen, upsertJob } from './live.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 

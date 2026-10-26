@@ -4,7 +4,7 @@ import {
   type CustomFormat,
   type CustomFormatInput,
   type SpecImplementationDefinition,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { FormField, Input, Select, Toggle } from '../../../components/form.js';
 import { ConfirmDialog, inUseMessage } from '../../../components/forms/confirm-dialog.js';

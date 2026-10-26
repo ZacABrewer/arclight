@@ -3,7 +3,7 @@ import { ReleaseProtocol } from './profiles.js';
 
 // Indexers: persistent Torznab/Newznab endpoint configuration, health (failure backoff),
 // capabilities, and the release shape every search returns. The protocol clients live in
-// @media-tron/indexers; these are the shapes the API serves and the release pipeline reads.
+// @arclight/indexers; these are the shapes the API serves and the release pipeline reads.
 
 /**
  * `torznab` / `newznab` talk to an API endpoint; `definition` runs a YAML site definition

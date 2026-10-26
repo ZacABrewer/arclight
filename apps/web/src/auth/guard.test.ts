@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import type { AuthStatus } from '@media-tron/shared';
+import type { AuthStatus } from '@arclight/shared';
 import { request, setUnauthorizedHandler } from '../api/client.js';
 import { isAbsolutePath, validateAdmin, validateRootFolders, firstIncompleteStep } from '../pages/setup/setup-wizard.js';
 import { visibleNav } from '../nav.js';

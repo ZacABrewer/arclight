@@ -1,4 +1,4 @@
-import { VpnSettingsResponse, VpnStatus, type VpnSettingsUpdate } from '@media-tron/shared';
+import { VpnSettingsResponse, VpnStatus, type VpnSettingsUpdate } from '@arclight/shared';
 import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/vpn/routes.ts.

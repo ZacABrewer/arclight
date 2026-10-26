@@ -10,7 +10,7 @@ import {
   type CalendarSeriesSummary,
   type Episode,
   type MediaFile,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
 

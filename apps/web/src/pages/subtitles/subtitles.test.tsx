@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import type { SubtitleHistoryRecord, WantedSubtitleItem } from '@media-tron/shared';
+import type { SubtitleHistoryRecord, WantedSubtitleItem } from '@arclight/shared';
 import { makeMovie } from '../library/test-fixtures.js';
 import { initialAddForm, toAddMovieRequest, toAddSeriesRequest } from '../library/add-form.js';
 import { profiles, rootFolders } from '../library/test-fixtures.js';

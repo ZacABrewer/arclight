@@ -1,8 +1,8 @@
-import { INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN, type IndexerImplementation, type IndexerSettingsInput } from '@media-tron/shared';
+import { INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN, type IndexerImplementation, type IndexerSettingsInput } from '@arclight/shared';
 import { field, int, num, str } from '../foreign-db.js';
 
 // Torznab/Newznab indexer settings (Sonarr, Radarr and Prowlarr store the same field names).
-// Seed times upstream are minutes; Media-Tron stores milliseconds.
+// Seed times upstream are minutes; Arclight stores milliseconds.
 
 const MINUTE = 60_000;
 

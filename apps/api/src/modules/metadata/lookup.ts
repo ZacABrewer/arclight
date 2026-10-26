@@ -1,4 +1,4 @@
-import { isMetadataError } from '@media-tron/metadata';
+import { isMetadataError } from '@arclight/metadata';
 import { LibraryError, type MetadataLookup } from '../library/index.js';
 import { MetadataNotConfiguredError, type MetadataService } from './service.js';
 

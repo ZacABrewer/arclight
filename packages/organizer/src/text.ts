@@ -1,6 +1,6 @@
 // Text transforms used by the token catalogue and the assembly clean-up passes.
 
-import type { ColonReplacement } from '@media-tron/shared';
+import type { ColonReplacement } from '@arclight/shared';
 
 /** Protected stand-in for a truncation ellipsis (spec 2.5.3); becomes `...` at the very end. */
 export const ELLIPSIS = '';
@@ -168,7 +168,7 @@ const RESERVED = /^(aux|com[1-9]|con|lpt[1-9]|nul|prn)(\.|$)/i;
 
 /**
  * Reserved device names: a component starting with one followed by a dot gets the dot replaced
- * by `_` (spec 2.7). Media-Tron extension: a component that *is* a reserved name gets `_` appended.
+ * by `_` (spec 2.7). Arclight extension: a component that *is* a reserved name gets `_` appended.
  */
 export function fixReservedName(component: string): string {
   const m = RESERVED.exec(component);

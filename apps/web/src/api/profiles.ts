@@ -15,7 +15,7 @@ import {
   type DelayProfileReorderRequest,
   type QualityDefinitionLimits,
   type ReleaseProfileInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Paths mirror apps/api/src/modules/profiles/routes.ts.

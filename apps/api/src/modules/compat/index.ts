@@ -1,5 +1,5 @@
 import type { FastifyPluginAsync } from 'fastify';
-import { CompatSettings, SettingsErrorResponse } from '@media-tron/shared';
+import { CompatSettings, SettingsErrorResponse } from '@arclight/shared';
 import type { AppContext, AppModule } from '../../app.js';
 import { authServiceFor, installAuthHook } from '../auth/index.js';
 import { getSection, setSection, SettingsError } from '../settings/service.js';
@@ -15,7 +15,7 @@ import { createServices } from './services.js';
 
 // Compatibility API: Sonarr-v3 and Radarr-v3 shaped endpoints so third-party tools (Overseerr,
 // Jellyseerr, Bazarr, Prowlarr, Notifiarr, Homarr, Recyclarr, LunaSea, nzb360 ...) can talk to
-// Media-Tron as if it were Sonarr or Radarr. Both shapes share /api/v3, split by resource:
+// Arclight as if it were Sonarr or Radarr. Both shapes share /api/v3, split by resource:
 // series/episode/episodefile/calendar/wanted are Sonarr-shaped, movie/moviefile/collection are
 // Radarr-shaped, everything else is Sonarr-shaped with harmless Radarr-only fields added.
 //

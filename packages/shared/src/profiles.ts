@@ -4,7 +4,7 @@ import { QualityModel, QualityModifier, QualitySource, Resolution } from './qual
 // Profiles: everything that decides "how good is this release and is it good enough".
 // Quality profiles rank qualities, custom formats score releases, delay profiles hold a
 // grab back, release profiles reject or demand terms in a title. The pure evaluation
-// logic lives in @media-tron/profiles-engine; these are the shapes it speaks and the API
+// logic lives in @arclight/profiles-engine; these are the shapes it speaks and the API
 // serves.
 
 export const EvaluationMediaType = z.enum(['series', 'movie']);

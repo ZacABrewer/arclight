@@ -83,7 +83,7 @@ Quality profile fields: `upgradeAllowed`, `cutoff` (quality or group id), ordere
 quality or a named group of qualities, each with `allowed`), `minFormatScore`, `cutoffFormatScore`,
 `minUpgradeFormatScore`, and `formatItems` (custom format to score). Size limits: **[TV]** live on
 each profile item (`minSize`, `maxSize`, `preferredSize`, MB per minute, nullable); **[MOVIE]** on
-the global quality definition for that quality. Media-Tron may use global per-quality definitions
+the global quality definition for that quality. Arclight may use global per-quality definitions
 (the **[MOVIE]** way) unless per-profile overrides are wanted; the algorithm is identical.
 
 Delay profile fields: `enableUsenet`, `enableTorrent`, `preferredProtocol`, `usenetDelay`,
@@ -206,7 +206,7 @@ score is 0: passes a min of 0, fails a min of 1.
 The profile has one `language`. `Any`: accept. `Original`: release languages must include the
 movie's original language, else `wantedLanguage` ("Original Language (X) is wanted, but found
 Y"). Otherwise release languages must include the wanted language. **[TV]** has no language spec
-in v4; language is enforced via custom-format scores plus `minFormatScore`. Media-Tron should
+in v4; language is enforced via custom-format scores plus `minFormatScore`. Arclight should
 offer language as custom-format conditions and optionally a profile-language shortcut.
 Example: wanted German, release tagged English: rejected. German+English multi: accepted.
 
@@ -652,7 +652,7 @@ fallbacks, not grabbed (delay means "wait for the better").
 13.2 Boundaries are strict as described; "equal passes".
 13.3 Protocol by enum, never file extension.
 13.4 Dates UTC; "recent" = 12 h; "old file" = added before midnight 7 days ago.
-13.5 CDH off changes 5.1 and 5.2. Media-Tron runs with CDH always on, so 5.2 step 2 reduces to
+13.5 CDH off changes 5.1 and 5.2. Arclight runs with CDH always on, so 5.2 step 2 reduces to
 "not recent => accept"; keep `historyCdhDisabledCutoffMet` reserved.
 13.6 Several rejections may accumulate; show all. A permanent one makes the decision `Rejected`, so
 a delayed-and-blocklisted release is not parked.
@@ -712,7 +712,7 @@ Movie only: `unknownMovie`, `movieNotMonitored`, `wrongMovie`, `availability`, `
 - Indexer failure-backoff schedule (feeds 4.13) and per-indexer seeder defaults belong to the
   indexer spec.
 - Year extraction and release-group parsing are parser territory.
-- Whether size limits are per profile or global is left to Media-Tron (section 2).
+- Whether size limits are per profile or global is left to Arclight (section 2).
 - The pending re-evaluation job interval was not derived in detail; use about one minute, bounded
   by each release's eligibility time.
 - Movie multi-title matching relies on the parser's list of alternative title forms; behaviour on

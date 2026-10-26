@@ -122,7 +122,7 @@ Counted strikes (important and easy to miss):
 ### 1.8 HTTP behaviours shared by providers
 
 1. Retrying session: up to 3 attempts with a 5 second pause between them, for connection-level failures only, not for HTTP error codes.
-2. Cloudflare-aware session: used by providers that sit behind a browser check (Titlovi, LegendasDivx, optionally others). It solves the JavaScript challenge, caches the clearance cookie keyed by host and user agent, and when a CAPTCHA is demanded it delegates to a pluggable "pitcher" (a manual or third-party solver). In Media-Tron treat this as an injectable component: providers ask for a "protected session" and the host decides how to satisfy the challenge. If the challenge cannot be satisfied, raise service unavailable.
+2. Cloudflare-aware session: used by providers that sit behind a browser check (Titlovi, LegendasDivx, optionally others). It solves the JavaScript challenge, caches the clearance cookie keyed by host and user agent, and when a CAPTCHA is demanded it delegates to a pluggable "pitcher" (a manual or third-party solver). In Arclight treat this as an injectable component: providers ask for a "protected session" and the host decides how to satisfy the challenge. If the challenge cannot be satisfied, raise service unavailable.
 3. Rate-limit header throttler: some providers return standard rate limit headers (remaining/reset/policy) or Retry-After on 429; the shared layer sleeps for short waits and raises "too many requests" for long ones.
 4. Proxy and DNS: an optional global proxy and DNS-over-override come from environment-style settings; providers do not read these themselves.
 5. Random user agents: several scrapers pick one of a large pool of browser user agents per session. Behaviour is not important; it only matters that the header is realistic and stable within a session.
@@ -177,7 +177,7 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 ### 2.1 OpenSubtitles.com (id: opensubtitlescom)
 
 **Settings and auth**
-1. Required: username, password, and an application API key. The API key identifies the client application and is sent in a header on every request; this spec does not carry the Bazarr key, so Media-Tron must register its own application with the service.
+1. Required: username, password, and an application API key. The API key identifies the client application and is sent in a header on every request; this spec does not carry the Bazarr key, so Arclight must register its own application with the service.
 2. Optional flags: use hash (default on), include AI-translated, include machine-translated.
 3. Login exchanges username and password for a bearer token plus a base host name. The token and the host name are cached for 12 hours (shared across workers); the provider's ping reports "stale" after 12 hours.
 4. VIP accounts are served from a host whose name starts with "vip"; for such hosts the bearer token is attached to every request. For non-VIP hosts the Authorization header is removed on API calls and used only for download.
@@ -203,7 +203,7 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 1. Account-level daily download quota. An HTTP 406 carries counts (requests, remaining, reset time) and becomes "download limit exceeded" (provider override: 6 hours).
 2. HTTP 429 becomes "too many requests" (override: 1 minute). HTTP 502 becomes "API throttled".
 3. When "API throttled" is seen on a call, the provider waits 15 seconds and retries that call once.
-4. HTTP 401: clear cached token and host, wait 1 second, log in again once, and retry. If already retried, raise authentication error. (Upstream quirk: after re-login the retried response is not returned to the caller, so the first search after a token expiry returns nothing. Media-Tron should return the retried response.)
+4. HTTP 401: clear cached token and host, wait 1 second, log in again once, and retry. If already retried, raise authentication error. (Upstream quirk: after re-login the retried response is not returned to the caller, so the first search after a token expiry returns nothing. Arclight should return the retried response.)
 5. HTTP 400 becomes configuration error with the server message. HTTP 403 becomes a generic provider error (key rejected). HTTP 410 becomes provider error "link expired". Other 5xx become provider error; any other non-200 becomes provider error.
 6. Non-JSON or missing "data"/"link" keys become provider error; an empty body on the download link yields no content (not an error).
 7. All network calls are wrapped in the generic retry helper: 3 attempts, 10 seconds between tries, except it never retries throttle, auth, configuration or quota errors.
@@ -310,7 +310,7 @@ Order follows ROADMAP Phase 3 priorities: the big API providers first, then scra
 3. Success normalises line endings.
 
 **Limits**
-1. Local quota counter: the number of downloads in the last 24 hours is tracked in cache; cap is 40 per day (80 for VIP). When the cap is already reached, raise download limit exceeded before downloading. After a successful download, if the new count reaches the cap, the provider also raises (upstream quirk: it raises even though the download worked; the content is already set, but the exception throttles the provider). Media-Tron should instead return the content and mark the provider as throttled for the remainder.
+1. Local quota counter: the number of downloads in the last 24 hours is tracked in cache; cap is 40 per day (80 for VIP). When the cap is already reached, raise download limit exceeded before downloading. After a successful download, if the new count reaches the cap, the provider also raises (upstream quirk: it raises even though the download worked; the content is already set, but the exception throttles the provider). Arclight should instead return the content and mark the provider as throttled for the remainder.
 2. Throttle overrides: download limit 3 hours; too many requests 5 minutes; IP blocked 1 hour.
 3. A single reinitialise-and-retry on any connection-level failure (wrapped on list and download).
 
@@ -407,7 +407,7 @@ Gestdown is a community-run mirror of Addic7ed content exposed through a plain A
 
 ### 2.7 Napisy24 (id: napisy24)
 
-**Settings and auth**: optional username and password. Upstream embeds a built-in fallback account when none is given; this spec does not reproduce it. Media-Tron requires the user to supply credentials or disable the provider (see Open questions Q4).
+**Settings and auth**: optional username and password. Upstream embeds a built-in fallback account when none is given; this spec does not reproduce it. Arclight requires the user to supply credentials or disable the provider (see Open questions Q4).
 **Flow (single call; no download step)**
 1. POST a form to the agent endpoint with action "CheckSub", user, password, file size, file hash (the OpenSubtitles-style hash), file name (basename only) and a preference flag.
 2. The response text before a double-pipe separator is a status block: it starts with "OK-N" or "login error". After the separator is binary: a zip containing the subtitle.
@@ -471,7 +471,7 @@ Japanese subtitles for anime, keyed by AniList.
 
 **Query capabilities**: AniList id, free text name, episode number. No hash, no imdb.
 **Limits and errors**
-1. HTTP 429: sleep 5 seconds and retry, up to 3 tries. (Upstream bug: the counter never increments so it can loop forever. Media-Tron must count attempts and then raise "API throttled".)
+1. HTTP 429: sleep 5 seconds and retry, up to 3 tries. (Upstream bug: the counter never increments so it can loop forever. Arclight must count attempts and then raise "API throttled".)
 2. HTTP 401: authentication error. An "error" field in the body: service unavailable with the code. Empty list: none.
 3. Entry search cached for the refiner expiry period; file listings cached for 1 minute.
 
@@ -484,7 +484,7 @@ Japanese subtitles for anime, keyed by AniList.
 2. Tokens with digits or five or more letters mean "not a language token".
 
 **Anti-bot**: none.
-**Other quirks**: the video object is mutated (the episode number is rewritten to the adjusted absolute episode on success); avoid that side effect in Media-Tron, pass the adjusted number in the record instead.
+**Other quirks**: the video object is mutated (the episode number is rewritten to the adjusted absolute episode on success); avoid that side effect in Arclight, pass the adjusted number in the record instead.
 ---
 
 ### 2.10 Titlovi (id: titlovi)
@@ -522,7 +522,7 @@ Portuguese (Portugal and Brazil) subtitles.
    - Movie: query text is the imdb id if known, else the title.
    - Episode with series imdb id: use the episode-search mode (parameters: season, episode, imdb number without "tt").
    - Episode otherwise: query is the quoted series name with "S01E02", lower-cased and URL-encoded.
-2. Language filter id appended per language: 28 for Portugal, 29 for Brazil. (Upstream quirk: the filter string accumulates across languages in a loop, so with two languages the second query has both filters. Media-Tron should build each query from scratch.)
+2. Language filter id appended per language: 28 for Portugal, 29 for Brazil. (Upstream quirk: the filter string accumulates across languages in a loop, so with two languages the second query has both filters. Arclight should build each query from scratch.)
 3. One request per language with 1 second pauses. Parse the HTML page-by-page; a pager bar says how many matches exist; fetch up to 6 pages total (10 per page).
 4. If the page says the subtitle was not found and the video is an episode, retry once with the episode part removed (season only).
 5. A 302 redirect to login means the session expired: clear cookies, log in, retry once.
@@ -539,7 +539,7 @@ Portuguese (Portugal and Brazil) subtitles.
 
 **Metadata and matching**
 1. Text style over the description (sanitised substring tests): the video's file name stem in the description gives title (and for episodes series, season, episode); year as four digits; movie title and alternatives; episode title; series names; season as "s01"; episode as "e02"; series imdb id gives series, series_imdb_id, season, episode; release group; plus release parsing of the description.
-2. Frame rate: parse the sub's frame rate; if the video's fps and the sub's fps are not "equal" (tolerance table for 23.976 vs 24 and 25 vs 25.0), mark wrong fps and, if skip-wrong-fps is on, return an empty match set (the record is effectively discarded). If the page has no frame rate the variable is undefined (upstream bug); Media-Tron should treat missing as unknown and keep the record.
+2. Frame rate: parse the sub's frame rate; if the video's fps and the sub's fps are not "equal" (tolerance table for 23.976 vs 24 and 25 vs 25.0), mark wrong fps and, if skip-wrong-fps is on, return an empty match set (the record is effectively discarded). If the page has no frame rate the variable is undefined (upstream bug); Arclight should treat missing as unknown and keep the record.
 3. "Exact match" flag (the whole file name appears in the description) is stored for ranking.
 
 **Language quirks**: Portuguese (Portugal) and Portuguese (Brazil) only. Language is read from the flag icon file name containing "brazil" or "portugal"; other flags are skipped.
@@ -572,7 +572,7 @@ Hungarian and English subtitles from feliratok.eu.
 **Language quirks**: Hungarian, English; forced variants. Converter maps "hu"/"en".
 **Anti-bot**: none (random user agent).
 **Other quirks**
-1. Upstream bug: the title loop returns after the first title regardless of success, so alternative titles are never tried. Media-Tron should continue to the next title when the first yields nothing.
+1. Upstream bug: the title loop returns after the first title regardless of success, so alternative titles are never tried. Arclight should continue to the next title when the first yields nothing.
 2. Naming-fix table: "Star Trek: The Next Generation" becomes "Star Trek TNG"; a "Marvel's" prefix is dropped; "Loki (aka. Marvel's Loki)" becomes "Loki".
 3. Result titles are filtered post-hoc: keep only those whose fixed title equals one of the requested titles.
 4. Listed in the upstream forced-off set.
@@ -587,7 +587,7 @@ Choice and reason: Subscene itself is not present in this snapshot (no provider,
 **Flow**
 1. Resolve a title id: GET movies/search with either search type imdb (imdb id plus optional season) or search type text (lower-cased title). If an imdb search yields nothing, retry with text. Accept the first result whose title or alternate title contains any of the wanted titles (series name and alternatives, or movie title), and whose release year equals the video's year when the video has one. Cached 6 hours. Without an imdb id on the video, no title id is looked up and the provider returns nothing (upstream quirk; it only searches by imdb).
 2. List subtitles: GET subtitles with language (lower-case English name), limit 100, title id, and for episodes season number and episode number. Results cached 1 hour.
-3. Only the first wanted language is searched per call (upstream quirk: the API takes one language; a request with two languages silently drops all but one). Media-Tron should issue one call per language.
+3. Only the first wanted language is searched per call (upstream quirk: the API takes one language; a request with two languages silently drops all but one). Arclight should issue one call per language.
 4. Per item: link (page), subtitle id, release info list, language, HI and forced flags (explicit flags or keywords in the commentary), contributors and uploader id.
 5. Episodes: parse season and episode out of the release strings; accept when season equals and (episode unknown, meaning pack, or equal).
 6. Download: GET subtitles/{id}/download (API key as query); body must be a zip; pick via the shared archive helper (episode number for packs). Archive responses are cached 15 minutes. A non-zip body yields empty content.
@@ -630,7 +630,7 @@ Choice and reason: Subscene itself is not present in this snapshot (no provider,
 **Anti-bot**: browser-like header set with random user agent and "do not track". No CAPTCHA solver.
 **Other quirks**
 1. The row release text begins with the word "subtitle" and a newline, which is stripped; multi-line releases are joined with commas.
-2. Row parsing failures are silent; add logging in Media-Tron.
+2. Row parsing failures are silent; add logging in Arclight.
 3. SSA/ASS entries inside the zip are not accepted (only srt and sub).
 
 ---
@@ -699,7 +699,7 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 **Limits**
 1. Time: transcription can run for many minutes; two timeouts: connect/response and transcription.
 2. Connection errors are throttled for 5 minutes (override).
-3. Audio extraction is memoised for the last two files (large buffers held in memory; Media-Tron should stream to the service instead of holding the whole WAV).
+3. Audio extraction is memoised for the last two files (large buffers held in memory; Arclight should stream to the service instead of holding the whole WAV).
 
 **Anti-bot**: n/a.
 **Other quirks**
@@ -767,7 +767,7 @@ Generates subtitles by transcribing the audio with a user-run Whisper-compatible
 **Limits**: undocumented; 10 second timeouts; HTTP errors propagate.
 **Anti-bot**: none.
 **Other quirks**
-1. Up to four sequential requests per search; cache show and season pages in Media-Tron.
+1. Up to four sequential requests per search; cache show and season pages in Arclight.
 2. The id of a record is its download link.
 3. The Latin-1 forcing is a workaround for the site's wrong header; preserve behaviour only if bytes verify as Latin-1 text, else try UTF-8 (a safer improvement).
 
@@ -863,7 +863,7 @@ Default throttles apply except where section 1.7 overrides.
 
 1. Q1 Podnapisi: no source in this snapshot, and upstream states the provider no longer exists. Is there a current replacement API, or should the roadmap item be dropped? Until answered, nothing about its endpoints, auth or quotas is specified.
 2. Q2 Subscene: the original site is absent. We chose SubSource as the stand-in. Confirm that is acceptable, or provide a reference for another successor.
-3. Q3 OpenSubtitles.com application key: Media-Tron needs its own registered application key. Who owns that registration, and where is it stored?
+3. Q3 OpenSubtitles.com application key: Arclight needs its own registered application key. Who owns that registration, and where is it stored?
 4. Q4 Napisy24 fallback credentials: upstream uses a built-in account when users supply none. Not reproduced here. Decide: require user credentials, or negotiate a shared account.
 5. Q5 BSPlayer: disabled upstream. Is the service alive? If yes, a protocol re-verification is needed; if no, ship as a stub.
 6. Q6 Whisper: which web service shape is the target (the common open-source one with asr and detect-language endpoints)? Are other backends (cloud APIs) in scope? Output formats other than SRT?

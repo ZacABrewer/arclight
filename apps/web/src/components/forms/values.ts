@@ -1,4 +1,4 @@
-import { PASSWORD_MASK } from '@media-tron/shared';
+import { PASSWORD_MASK } from '@arclight/shared';
 import type { FieldDefinition, FieldErrors, FieldOption, FieldType, FormValues } from './types.js';
 
 // Pure helpers behind the schema form: dotted-path access, defaults, validation and the

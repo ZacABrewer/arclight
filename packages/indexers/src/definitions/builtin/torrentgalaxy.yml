@@ -1,4 +1,4 @@
-# Authored for Media-Tron from general knowledge of the site layout (div-based result
+# Authored for Arclight from general knowledge of the site layout (div-based result
 # table). Not yet verified against the live site (tested: false). The site sometimes
 # shows a JavaScript/Cloudflare check; attach a FlareSolverr proxy if searches fail.
 schemaVersion: 1

@@ -1,12 +1,12 @@
 import { dirname, join } from 'node:path';
-import type { MigratePathMapping, MigrationWarning, StagedIssue, StagedMediaRequest, StagedRequestUser } from '@media-tron/shared';
+import type { MigratePathMapping, MigrationWarning, StagedIssue, StagedMediaRequest, StagedRequestUser } from '@arclight/shared';
 import { parseJsonConfig, readTextFile, section, type ConfigTree } from './config-files.js';
 import { MigrateError } from './errors.js';
 import { bool, ForeignDb, int, isoDate, json, jsonArray, str, type ForeignRow } from './foreign-db.js';
 import { remapPath } from './paths.js';
 import type { SourceBundle, SourceItem } from './types.js';
 
-// Seerr (Overseerr / Jellyseerr). The requests module is built in parallel, and Media-Tron
+// Seerr (Overseerr / Jellyseerr). The requests module is built in parallel, and Arclight
 // users have no "must reset password" flag (modules/auth/schema.ts), so users, requests,
 // issues and request settings are all staged in `migrate_staging` (areas `requests.*`).
 // Secrets in settings.json (Plex/Jellyfin tokens, API keys) are never staged.
@@ -205,7 +205,7 @@ export function readSeerr(dbPath: string, configPath: string | undefined, mappin
         },
       });
     }
-    warnings.push({ area: 'users', message: 'Seerr users are staged for the requests module (Media-Tron accounts have no forced password reset yet); passwords are never copied' });
+    warnings.push({ area: 'users', message: 'Seerr users are staged for the requests module (Arclight accounts have no forced password reset yet); passwords are never copied' });
     const version = db.scalar('SELECT name FROM migrations ORDER BY id DESC LIMIT 1');
     return {
       app: 'seerr',

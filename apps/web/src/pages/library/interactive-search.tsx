@@ -1,4 +1,4 @@
-import type { ReleaseDecision } from '@media-tron/shared';
+import type { ReleaseDecision } from '@arclight/shared';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { EmptyState } from '../../components/empty-state.js';

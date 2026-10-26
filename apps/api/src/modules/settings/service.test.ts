@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { SECRET_MASK } from '@media-tron/shared';
+import { SECRET_MASK } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { settingsRoutes } from './routes.js';

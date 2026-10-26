@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { Permission, type MediaRequest, type TitleDetail } from '@media-tron/shared';
+import { Permission, type MediaRequest, type TitleDetail } from '@arclight/shared';
 import type { DiscoverKind } from '../../api/requests.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

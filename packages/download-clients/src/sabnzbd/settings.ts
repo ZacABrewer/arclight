@@ -34,7 +34,7 @@ export const SabnzbdSettings = z.object({
   password: passwordField.describe(
     'Legacy: SABnzbd web login password, sent as ma_password. Write-only: never returned by the API.',
   ),
-  category: categoryField('media-tron', 'SABnzbd category'),
+  category: categoryField('arclight', 'SABnzbd category'),
   postImportCategory: postImportCategoryField('SABnzbd category'),
   recentPriority: SabnzbdPriority.default('default').describe(
     'Queue priority for releases that aired or were released recently. "default" uses the category\'s priority.',

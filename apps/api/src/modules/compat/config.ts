@@ -22,7 +22,7 @@ import {
   type ReleaseProfile,
   type RootFolder,
   type Tag,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { compact, CompatError, type Json } from './common.js';
 import { languageCodeForId, SONARR_SOURCE_INT, v3Language, v3Quality, v3QualityById } from './quality.js';
 
@@ -466,7 +466,7 @@ const CLIENT_IMPL: Record<DownloadClientResource['implementation'], string> = {
   rtorrent: 'RTorrent',
   sabnzbd: 'Sabnzbd',
   nzbget: 'Nzbget',
-  builtin: 'MediaTronBuiltin',
+  builtin: 'ArclightBuiltin',
 };
 
 export function toV3DownloadClient(c: DownloadClientResource): Json {

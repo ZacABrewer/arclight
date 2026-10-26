@@ -1,5 +1,5 @@
 {
-  "name": "@media-tron/notifications",
+  "name": "@arclight/notifications",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,7 +11,7 @@
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
-    "@media-tron/shared": "workspace:*",
+    "@arclight/shared": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

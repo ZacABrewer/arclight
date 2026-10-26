@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { HealthStatus, JobStatus } from '@media-tron/shared';
+import type { HealthStatus, JobStatus } from '@arclight/shared';
 
 export type BadgeTone = 'neutral' | 'info' | 'ok' | 'warning' | 'error';
 

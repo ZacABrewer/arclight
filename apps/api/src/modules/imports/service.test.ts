@@ -14,7 +14,7 @@ import {
   type ServerEvent,
   type TrackedDownloadState,
   type TrackedDownloadStatus,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
@@ -188,7 +188,7 @@ describe('completed download import (series)', () => {
   });
 
   it('renames with the organizer when rename is on and copies when the client keeps seeding', async () => {
-    setSection(db, 'naming', { ...(await import('@media-tron/shared')).NAMING_DEFAULTS, renameEpisodes: true });
+    setSection(db, 'naming', { ...(await import('@arclight/shared')).NAMING_DEFAULTS, renameEpisodes: true });
     const series = addSeries();
     const [e1] = episodesOf(series.id);
     const src = await put('Show.Name.S01E01.720p.HDTV.x264-GRP.mkv');
@@ -318,7 +318,7 @@ describe('completed download import (series)', () => {
 
 describe('completed download import (movie)', () => {
   it('imports a movie, renamed with the organizer', async () => {
-    setSection(db, 'naming', { ...(await import('@media-tron/shared')).NAMING_DEFAULTS, renameMovies: true });
+    setSection(db, 'naming', { ...(await import('@arclight/shared')).NAMING_DEFAULTS, renameMovies: true });
     const movie = addMovie();
     await put('Great.Movie.2021.1080p.BluRay.x264-GRP/Great.Movie.2021.1080p.BluRay.x264-GRP.mkv');
     await put('Great.Movie.2021.1080p.BluRay.x264-GRP/Sample/great.movie.sample.mkv', 4);

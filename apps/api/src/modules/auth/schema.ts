@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { UserRole, UserSettings } from '@media-tron/shared';
+import type { UserRole, UserSettings } from '@arclight/shared';
 
 // Auth module tables. The API key and auth method live in the `settings` table (section
 // `security`), not here. `permissions` and `settings` exist now so the requests phase can
@@ -17,7 +17,7 @@ export const users = sqliteTable(
     displayName: text('display_name'),
     email: text('email'),
     role: text('role').$type<UserRole>().notNull(),
-    /** Permission bitfield (Permission in @media-tron/shared). */
+    /** Permission bitfield (Permission in @arclight/shared). */
     permissions: integer('permissions').notNull().default(0),
     avatar: text('avatar'),
     settings: text('settings', { mode: 'json' }).$type<UserSettings>().notNull(),

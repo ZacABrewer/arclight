@@ -142,7 +142,7 @@ export class SubdlProvider extends BaseProvider {
   private async fetchPage(params: Record<string, string>, page: number, langs: string[]): Promise<SubdlResponse> {
     const qs = new URLSearchParams({
       api_key: this.config.apiKey,
-      client: 'media-tron',
+      client: 'arclight',
       comment: '1',
       releases: '1',
       unpack: '1',

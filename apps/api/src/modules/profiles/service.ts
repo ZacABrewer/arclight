@@ -16,7 +16,7 @@ import {
   type ReleaseEvaluation,
   type ReleaseProfile,
   type ReleaseProfileInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import {
   buildItems,
   calculateFormatScore,
@@ -28,7 +28,7 @@ import {
   reorderDelayProfiles,
   validateCustomFormat,
   validateQualityProfile,
-} from '@media-tron/profiles-engine';
+} from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import { customFormats, delayProfiles, qualityDefinitions, qualityProfiles, releaseProfiles } from './schema.js';
 

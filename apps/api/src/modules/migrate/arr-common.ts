@@ -1,4 +1,4 @@
-import type { MigrateArea, MigratePathMapping, MigrationWarning, ReleaseProtocol } from '@media-tron/shared';
+import type { MigrateArea, MigratePathMapping, MigrationWarning, ReleaseProtocol } from '@arclight/shared';
 import { normalizeData } from '../history/service.js';
 import { bool, field, ForeignDb, idList, int, isoDate, json, jsonArray, jsonObject, str, type ForeignRow } from './foreign-db.js';
 import { indexerFlagsFromBits, mapCustomFormat } from './mappers/custom-formats.js';
@@ -30,7 +30,7 @@ import type {
   SourceItem,
   TagPayload,
 } from './types.js';
-import type { MediaManagementSettings, NamingConfig } from '@media-tron/shared';
+import type { MediaManagementSettings, NamingConfig } from '@arclight/shared';
 
 // Tables Sonarr and Radarr share (same names, same columns modulo version drift): tags,
 // root folders, profiles, custom formats, indexers, download clients, notifications, import
@@ -160,7 +160,7 @@ export function readDelayProfiles(ctx: ReaderContext): AreaBundle<DelayProfilePa
     // Upstream protocol enum: 1 usenet, 2 torrent.
     const preferred: ReleaseProtocol = int(r['preferredprotocol']) === 2 ? 'torrent' : 'usenet';
     if (!enableUsenet || !enableTorrent) {
-      warn(ctx, 'delayProfiles', `delay profile ${id(r)} disables ${enableUsenet ? 'torrent' : 'usenet'}; Media-Tron delay profiles cannot disable a protocol (use indexer tags instead)`, id(r));
+      warn(ctx, 'delayProfiles', `delay profile ${id(r)} disables ${enableUsenet ? 'torrent' : 'usenet'}; Arclight delay profiles cannot disable a protocol (use indexer tags instead)`, id(r));
     }
     items.push({
       sourceId: id(r),

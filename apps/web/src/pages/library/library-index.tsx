@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { QualityProfile, RootFolder, Tag } from '@media-tron/shared';
+import type { QualityProfile, RootFolder, Tag } from '@arclight/shared';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';
 import { EmptyState } from '../../components/empty-state.js';

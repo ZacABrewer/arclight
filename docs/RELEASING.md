@@ -1,4 +1,4 @@
-# Releasing Media-Tron
+# Releasing Arclight
 
 Releases are cut by pushing a `vX.Y.Z` tag; `.github/workflows/release.yml` does the rest.
 
@@ -13,7 +13,7 @@ git push origin main v0.2.0
 ```
 
 CI on the tag builds a multi-arch (linux/amd64, linux/arm64) image, pushes it to
-`ghcr.io/<owner>/media-tron` with SBOM and provenance attestations, and creates a GitHub
+`ghcr.io/<owner>/arclight` with SBOM and provenance attestations, and creates a GitHub
 Release with generated notes plus the compose files and `.env.example`. A tag containing a
 hyphen (`v0.2.0-rc.1`) is marked as a pre-release.
 
@@ -21,7 +21,7 @@ hyphen (`v0.2.0-rc.1`) is marked as a pre-release.
 
 | Tag | Meaning |
 | --- | --- |
-| `vX.Y.Z` | Exact release (reported as `MEDIATRON_VERSION` = `X.Y.Z`) |
+| `vX.Y.Z` | Exact release (reported as `ARCLIGHT_VERSION` = `X.Y.Z`) |
 | `X.Y` | Latest patch of that minor |
 | `latest` | Most recent tagged release |
 | `develop` | Every push to `main` (unreleased, may break) |
@@ -38,7 +38,7 @@ docker compose -f docker-compose.release.novpn.yml up -d    # without VPN
 ```
 
 These are the source-build files with `build:` replaced by
-`image: ${MEDIATRON_IMAGE:-ghcr.io/media-tron/media-tron:latest}`. Set `MEDIATRON_IMAGE` in
+`image: ${ARCLIGHT_IMAGE:-ghcr.io/arclight/arclight:latest}`. Set `ARCLIGHT_IMAGE` in
 `.env` if your image lives under a different owner. Upgrade with
 `docker compose pull && docker compose up -d`.
 
@@ -47,7 +47,7 @@ These are the source-build files with `build:` replaced by
 Pin the previous tag in `.env` and recreate:
 
 ```sh
-MEDIATRON_IMAGE=ghcr.io/<owner>/media-tron:v0.1.0
+ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:v0.1.0
 docker compose -f docker-compose.release.yml up -d
 ```
 

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { IssueType, type MediaType, type TitleSeason } from '@media-tron/shared';
+import { IssueType, type MediaType, type TitleSeason } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { FormField, Input, Select } from '../../components/form.js';
 import { Modal } from '../../components/modal.js';

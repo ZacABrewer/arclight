@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { Permission as P, RequestsSettings } from '@media-tron/shared';
+import { Permission as P, RequestsSettings } from '@arclight/shared';
 import { episodes, movies, rootFolders, seasons, series } from '../../db/schema.js';
 import { setSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';

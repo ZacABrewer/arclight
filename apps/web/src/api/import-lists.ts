@@ -15,7 +15,7 @@ import {
   type ImportListImplementation,
   type ImportListItemsQuery,
   type TraktPollRequest,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { request } from './client.js';
 
 // Client for the import-lists module (/importlist*, /importlistexclusion*, /settings/importlists).

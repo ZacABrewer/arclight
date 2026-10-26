@@ -1,4 +1,4 @@
-import { HealthResponse } from '@media-tron/shared';
+import { HealthResponse } from '@arclight/shared';
 import type { AppContext, AppModule } from '../../app.js';
 import { createChecks } from './checks/index.js';
 import { createHealthDeps } from './deps.js';

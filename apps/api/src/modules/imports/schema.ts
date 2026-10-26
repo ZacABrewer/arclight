@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
-import type { MediaType } from '@media-tron/shared';
+import type { MediaType } from '@arclight/shared';
 
 // Imports module tables. `imported_downloads` is the "download history" of spec 2.4 reduced to
 // what the importer needs: which download id produced which library file, and when. It backs

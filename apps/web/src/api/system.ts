@@ -1,4 +1,4 @@
-import { SystemStatus } from '@media-tron/shared';
+import { SystemStatus } from '@arclight/shared';
 import { request } from './client.js';
 
 export const systemApi = {

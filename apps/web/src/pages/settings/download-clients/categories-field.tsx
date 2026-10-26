@@ -1,4 +1,4 @@
-import type { BuiltinCategoryPath } from '@media-tron/shared';
+import type { BuiltinCategoryPath } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Input } from '../../../components/form.js';
 import type { FieldRendererProps } from '../../../components/forms/types.js';

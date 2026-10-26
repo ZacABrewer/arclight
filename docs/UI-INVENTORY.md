@@ -1,4 +1,4 @@
-# Media-Tron UI Inventory
+# Arclight UI Inventory
 
 Every screen, tab, list, dialog and component the application needs. This is the design
 brief for the Tron Legacy pass (Phase 5) and the checklist for functional completeness.

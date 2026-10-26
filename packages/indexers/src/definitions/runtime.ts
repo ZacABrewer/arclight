@@ -680,7 +680,7 @@ export class DefinitionRuntime {
     let body: string;
     let contentType: string;
     if (multipart) {
-      const boundary = `----MediaTronBoundary${Math.random().toString(16).slice(2)}`;
+      const boundary = `----ArclightBoundary${Math.random().toString(16).slice(2)}`;
       body = [...pairs]
         .map(([k, v]) => `--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`)
         .join('') + `--${boundary}--\r\n`;

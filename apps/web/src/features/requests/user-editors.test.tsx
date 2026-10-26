@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { PERMISSION_INFO, Permission } from '@media-tron/shared';
+import { PERMISSION_INFO, Permission } from '@arclight/shared';
 import { stubApi, renderWithClient } from './test-utils.js';
 import { PermissionsMatrix, UserQuotaEditor, groupedPermissions, togglePermission } from './user-editors.js';
 

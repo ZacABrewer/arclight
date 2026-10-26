@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { ImportList, ImportListCreateInput, ImportListField, ImportListMediaType, ImportListSchema } from '@media-tron/shared';
+import type { ImportList, ImportListCreateInput, ImportListField, ImportListMediaType, ImportListSchema } from '@arclight/shared';
 import { Input } from '../../../components/form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import type { FieldDefinition, FieldRendererProps, FieldRenderers, FormValues } from '../../../components/forms/types.js';

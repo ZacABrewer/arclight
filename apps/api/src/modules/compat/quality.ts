@@ -1,4 +1,4 @@
-import { PROFILE_LANGUAGES, qualityById, type QualityModel, type QualitySource } from '@media-tron/shared';
+import { PROFILE_LANGUAGES, qualityById, type QualityModel, type QualitySource } from '@arclight/shared';
 import type { Json } from './common.js';
 
 // Quality and language vocabulary translated to the upstream wire format. Quality ids and

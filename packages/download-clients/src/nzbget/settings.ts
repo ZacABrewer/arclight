@@ -26,7 +26,7 @@ export const NzbgetSettings = z.object({
   urlBase: urlBaseField('/nzbget'),
   username: z.string().default('nzbget').describe('NZBGet ControlUsername (Settings > Security).'),
   password: passwordField,
-  category: categoryField('media-tron', 'NZBGet category'),
+  category: categoryField('arclight', 'NZBGet category'),
   postImportCategory: postImportCategoryField('NZBGet category'),
   recentPriority: priorityField('releases that aired or were released recently'),
   olderPriority: priorityField('older releases'),

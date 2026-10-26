@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { SECRET_MASK } from '@media-tron/shared';
+import { SECRET_MASK } from '@arclight/shared';
 import { configError, credentialsChanged, maskProviders, providerSchemas, unmaskSettings } from './providers.js';
 import { createFfprobe, embeddedFromMediaInfo, embeddedFromProbe, scanExternal } from './scan.js';
 import { fakeRunner } from './test-support.js';

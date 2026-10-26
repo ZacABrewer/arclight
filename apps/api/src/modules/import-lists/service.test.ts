@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
-import { SECRET_MASK } from '@media-tron/shared';
+import { SECRET_MASK } from '@arclight/shared';
 import { movies, series } from '../../db/schema.js';
 import { libraryService } from '../library/index.js';
 import { settingsService } from '../settings/index.js';

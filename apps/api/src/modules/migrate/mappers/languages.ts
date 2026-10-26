@@ -1,7 +1,7 @@
 import type { ArrApp } from './quality.js';
 import { field, int, str } from '../foreign-db.js';
 
-// Upstream language ids → ISO 639-1 codes (Media-Tron's LanguageCode). Ids are per app (the
+// Upstream language ids → ISO 639-1 codes (Arclight's LanguageCode). Ids are per app (the
 // two lists diverge after 25); both are mapped through the language name.
 
 const SONARR_LANGUAGE_NAMES = [
@@ -95,7 +95,7 @@ export function languageNameToIso(name: string): string | undefined {
 
 /**
  * ISO code for an upstream language id. `-2` is "Original"; `-1` ("Any") returns undefined
- * because Media-Tron expresses "any" as an empty language list.
+ * because Arclight expresses "any" as an empty language list.
  */
 export function mapLanguageId(app: ArrApp, id: number): string | undefined {
   if (id === -2) return 'original';

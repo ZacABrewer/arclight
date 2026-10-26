@@ -1,4 +1,4 @@
-import type { MediaFile, MediaType } from '@media-tron/shared';
+import type { MediaFile, MediaType } from '@arclight/shared';
 import type { TrackedDownload } from '../download-clients/index.js';
 
 // Hooks into modules that are written in parallel (history, notifications, blocklist,

@@ -5,7 +5,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import pino from 'pino';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { MetadataError, type EpisodeMetadata, type SeriesMetadata, type TmdbClient, type TmdbClientOptions } from '@media-tron/metadata';
+import { MetadataError, type EpisodeMetadata, type SeriesMetadata, type TmdbClient, type TmdbClientOptions } from '@arclight/metadata';
 import type { AppContext } from '../../app.js';
 import type { AppConfig } from '../../config.js';
 import type { Db } from '../../db/index.js';
@@ -24,7 +24,7 @@ let tmp: string;
 let db: Db;
 
 beforeAll(async () => {
-  tmp = await mkdtemp(join(tmpdir(), 'media-tron-metadata-'));
+  tmp = await mkdtemp(join(tmpdir(), 'arclight-metadata-'));
 });
 afterAll(async () => {
   await rm(tmp, { recursive: true, force: true });
@@ -143,7 +143,7 @@ describe('POST /series through the metadata lookup', () => {
     const service = new MetadataService({
       db,
       log,
-      env: { MEDIATRON_TMDB_API_KEY: 'env-key' },
+      env: { ARCLIGHT_TMDB_API_KEY: 'env-key' },
       createClient: () => fakeClient({ series: seriesMeta(), episodes: [ep(1), ep(2)] }),
     });
     const app = await libraryApp(createMetadataLookup(() => service));
@@ -163,7 +163,7 @@ describe('MetadataService client lifecycle', () => {
     const service = new MetadataService({
       db,
       log,
-      env: { MEDIATRON_TMDB_API_KEY: 'env-key' },
+      env: { ARCLIGHT_TMDB_API_KEY: 'env-key' },
       createClient: (opts) => {
         built.push(opts);
         return fakeClient({ series: seriesMeta(), episodes: [] });
@@ -200,7 +200,7 @@ describe('metadata routes', () => {
     const service = new MetadataService({
       db,
       log,
-      env: { MEDIATRON_TMDB_API_KEY: 'k' },
+      env: { ARCLIGHT_TMDB_API_KEY: 'k' },
       createClient: () => fakeClient({ series: seriesMeta(), episodes: [] }),
     });
     const a = await app(service);
@@ -220,7 +220,7 @@ describe('metadata routes', () => {
 describe('RefreshSeries job', () => {
   it('re-fetches every series through the library upsert', async () => {
     const state = { series: seriesMeta(), episodes: [ep(1)] };
-    const service = new MetadataService({ db, log, env: { MEDIATRON_TMDB_API_KEY: 'k' }, createClient: () => fakeClient(state) });
+    const service = new MetadataService({ db, log, env: { ARCLIGHT_TMDB_API_KEY: 'k' }, createClient: () => fakeClient(state) });
     const meta = await service.lookupSeries(42);
     const added = libraryService.addSeries(db, meta!, {
       tmdbId: 42,

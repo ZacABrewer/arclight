@@ -11,7 +11,7 @@ import type {
   MigratePathMapping,
   MigrateSourceCandidate,
   MigrateSourceInput,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { migrateApi } from '../../api/migrate.js';
 import { Badge, type BadgeTone } from '../../components/badge.js';
@@ -148,7 +148,7 @@ export function SystemMigratePage() {
 
         <div className="field">
           <span className="field-label">Path mappings</span>
-          <p className="field-hint">Rewrite path prefixes that differ between the old app and Media-Tron (e.g. /tv to /data/tv).</p>
+          <p className="field-hint">Rewrite path prefixes that differ between the old app and Arclight (e.g. /tv to /data/tv).</p>
           {mappings.map((m, i) => (
             <div key={m.key} className="migrate-mapping">
               <Input aria-label={`Mapping ${i + 1} from`} placeholder="/tv" value={m.from} onChange={(e) => updateMapping(m.key, 'from', e.target.value)} />

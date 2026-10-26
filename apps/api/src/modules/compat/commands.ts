@@ -1,6 +1,6 @@
 import { desc, eq } from 'drizzle-orm';
 import { z } from 'zod';
-import type { Job, JobTrigger } from '@media-tron/shared';
+import type { Job, JobTrigger } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { jobs } from '../../db/schema.js';
 import { CompatError, type Json } from './common.js';

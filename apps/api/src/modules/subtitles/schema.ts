@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { LanguageProfileItem, SubtitleHistoryAction } from '@media-tron/shared';
+import type { LanguageProfileItem, SubtitleHistoryAction } from '@arclight/shared';
 
 // Subtitles module tables (docs/spec/subtitles.md). No foreign keys to the library tables
 // (same rule as history): rows of deleted media files are pruned on `library` bus events and

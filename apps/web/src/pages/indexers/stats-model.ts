@@ -1,4 +1,4 @@
-import type { IndexerStatsDay } from '@media-tron/shared';
+import type { IndexerStatsDay } from '@arclight/shared';
 
 // Geometry for the indexer stats charts (plain SVG, no chart library). Pure so it is testable.
 

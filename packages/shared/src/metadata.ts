@@ -1,7 +1,7 @@
 import { z } from 'zod';
 
 // Metadata lookup contract: normalized results from the metadata source (TMDB), served by
-// /api/v1/metadata/*. These mirror the `@media-tron/metadata` domain objects; they are what
+// /api/v1/metadata/*. These mirror the `@arclight/metadata` domain objects; they are what
 // the add-series / add-movie screens show before anything is in the library. Prefixed
 // `Metadata*` so they never clash with the library's own Series/Movie shapes.
 

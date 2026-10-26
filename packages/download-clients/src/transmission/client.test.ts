@@ -55,7 +55,7 @@ describe('settings', () => {
       urlBase: '/transmission/',
       username: '',
       password: '',
-      category: 'media-tron',
+      category: 'arclight',
       recentPriority: 'last',
       olderPriority: 'last',
       addPaused: false,
@@ -67,8 +67,8 @@ describe('settings', () => {
 describe('transport', () => {
   it('performs the session-id handshake once and sends Basic auth to /transmission/rpc', async () => {
     const c = client();
-    await c.getItems('media-tron');
-    await c.getItems('media-tron');
+    await c.getItems('arclight');
+    await c.getItems('arclight');
     const conflicts = fake.requests.length - fake.rpcCalls.length;
     expect(conflicts).toBe(1);
     expect(fake.urls[0]).toBe(`http://192.168.1.20:9091${RPC_PATH}`);
@@ -139,11 +139,11 @@ describe('test()', () => {
 
 describe('addTorrent', () => {
   it('adds a .torrent file as base64 metainfo with a label and returns the hash', async () => {
-    const result = await client().addTorrent({ torrentFile: V1_TORRENT, title: 'Test', category: 'media-tron' });
+    const result = await client().addTorrent({ torrentFile: V1_TORRENT, title: 'Test', category: 'arclight' });
     expect(result).toEqual({ id: V1_TORRENT_HASH, warnings: [] });
     const add = fake.rpc('torrent-add')[0]?.arguments ?? {};
     expect(fromBase64(String(add['metainfo']))).toEqual(V1_TORRENT);
-    expect(add['labels']).toEqual(['media-tron']);
+    expect(add['labels']).toEqual(['arclight']);
     expect(add['paused']).toBe(false);
     expect(add['download-dir']).toBeUndefined();
   });
@@ -152,7 +152,7 @@ describe('addTorrent', () => {
     const result = await client({ recentPriority: 'first' }).addTorrent({
       magnet: MAGNET,
       title: 'Show',
-      category: 'media-tron',
+      category: 'arclight',
       savePath: '/data/tv',
       paused: true,
       isRecent: true,
@@ -179,25 +179,25 @@ describe('addTorrent', () => {
   });
 
   it('rejects duplicates and invalid input', async () => {
-    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'media-tron' });
-    await expectError(client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'media-tron' }), 'rejected');
+    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' });
+    await expectError(client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' }), 'rejected');
     await expectError(client().addTorrent({ magnet: 'magnet:?dn=nothing', title: 'x', category: '' }), 'rejected');
     await expectError(client().addTorrent({ title: 'x', category: '' }), 'rejected');
   });
 
   it('uses a category sub-directory instead of labels on old daemons', async () => {
     fake = newFake(legacySessionFixture.arguments, []);
-    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'media-tron' });
+    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' });
     const add = fake.rpc('torrent-add')[0]?.arguments ?? {};
-    expect(add['download-dir']).toBe('/downloads/complete/media-tron');
+    expect(add['download-dir']).toBe('/downloads/complete/arclight');
     expect(add['labels']).toBeUndefined();
   });
 
   it('sets the label with torrent-set on rpc-version 16', async () => {
     fake = newFake({ ...sessionFixture.arguments, 'rpc-version': 16, version: '3.00 (bb6b5a062e)' }, []);
-    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'media-tron' });
+    await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' });
     expect(fake.rpc('torrent-add')[0]?.arguments['labels']).toBeUndefined();
-    expect(fake.rpc('torrent-set')[0]?.arguments).toEqual({ ids: [MAGNET_HASH], labels: ['media-tron'] });
+    expect(fake.rpc('torrent-set')[0]?.arguments).toEqual({ ids: [MAGNET_HASH], labels: ['arclight'] });
   });
 
   it('refuses NZBs', async () => {
@@ -208,9 +208,9 @@ describe('addTorrent', () => {
 describe('listing and management', () => {
   it('filters by label and returns all with an empty category', async () => {
     const c = client();
-    const mine = await c.getItems('media-tron');
+    const mine = await c.getItems('arclight');
     expect(mine).toHaveLength(13);
-    expect(mine.every((i) => i.category === 'media-tron')).toBe(true);
+    expect(mine.every((i) => i.category === 'arclight')).toBe(true);
     expect(await c.getItems('')).toHaveLength(14);
     expect((await c.getItems('other')).map((i) => i.title)).toEqual(['Other.Thing.2020']);
     expect(fake.rpc('torrent-get')[0]?.arguments['fields']).toContain('hashString');
@@ -218,13 +218,13 @@ describe('listing and management', () => {
 
   it('filters by download directory on old daemons', async () => {
     fake = newFake(legacySessionFixture.arguments, legacyTorrentsFixture.arguments.torrents as RawTorrent[]);
-    const items = await client().getItems('media-tron');
+    const items = await client().getItems('arclight');
     expect(items).toHaveLength(1);
     expect(items[0]).toMatchObject({
       id: '1111111111111111111111111111111111111111',
-      category: 'media-tron',
+      category: 'arclight',
       status: 'downloading',
-      outputPath: '/downloads/complete/media-tron/Legacy.Show.S02E03.720p.HDTV.x264-GRP',
+      outputPath: '/downloads/complete/arclight/Legacy.Show.S02E03.720p.HDTV.x264-GRP',
     });
   });
 
@@ -265,12 +265,12 @@ describe('listing and management', () => {
       isLocalhost: false,
       removesCompletedDownloads: false,
     });
-    expect((await client({ directory: '/data/media-tron', host: 'localhost' }).getStatus())).toMatchObject({
-      outputRootDir: '/data/media-tron',
+    expect((await client({ directory: '/data/arclight', host: 'localhost' }).getStatus())).toMatchObject({
+      outputRootDir: '/data/arclight',
       isLocalhost: true,
     });
     fake = newFake(legacySessionFixture.arguments, []);
-    expect((await client().getStatus()).outputRootDir).toBe('/downloads/complete/media-tron');
+    expect((await client().getStatus()).outputRootDir).toBe('/downloads/complete/arclight');
   });
 
   it('reads and sets the peer port', async () => {

@@ -1,10 +1,10 @@
-import { downloadClientSettingsSchemas, type DownloadClientImplementation } from '@media-tron/shared';
+import { downloadClientSettingsSchemas, type DownloadClientImplementation } from '@arclight/shared';
 import type { DownloadClientInputRaw } from '../../download-clients/service.js';
 import { bool, field, int, str } from '../foreign-db.js';
 import type { ArrApp } from './quality.js';
 
 // Download client settings per upstream implementation. qBittorrent, Transmission, Deluge,
-// rTorrent, SABnzbd and NZBGet map onto Media-Tron's clients field by field; anything else
+// rTorrent, SABnzbd and NZBGet map onto Arclight's clients field by field; anything else
 // (blackholes, Flood, Aria2, Download Station...) is normalised into one shape and staged under
 // `downloadClients.unsupported` so a later module can pick it up.
 
@@ -159,7 +159,7 @@ export function mapDownloadClient(app: ArrApp, implementation: string, common: D
   return {
     kind: 'staged',
     staged: stagedShape(implementation, common, settings, category, imported, directory, addPaused),
-    reason: `${implementation || 'unknown'} is not supported by Media-Tron (staged for later)`,
+    reason: `${implementation || 'unknown'} is not supported by Arclight (staged for later)`,
   };
 }
 

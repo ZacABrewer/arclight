@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { DelayProfileInput, type DelayProfile } from '@media-tron/shared';
+import { DelayProfileInput, type DelayProfile } from '@arclight/shared';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';

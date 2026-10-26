@@ -6,7 +6,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import pino from 'pino';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import type { IndexerCreate, IndexerGlobalSettings, ReleaseResource } from '@media-tron/shared';
+import type { IndexerCreate, IndexerGlobalSettings, ReleaseResource } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';

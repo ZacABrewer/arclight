@@ -17,7 +17,7 @@ Implemented in `apps/api/src/modules/auth` (contract: `packages/shared/src/auth.
 `onRequest` hook installed by `app.ts` on the `/api/v1` scope resolves who each request is,
 in this order:
 
-1. **Session cookie** `mt_session` (from `POST /auth/login` or `POST /setup/admin`):
+1. **Session cookie** `al_session` (from `POST /auth/login` or `POST /setup/admin`):
    httpOnly, `SameSite=Lax`, `Secure` when the request arrived over https (directly or via
    `X-Forwarded-Proto`). Only a sha256 of the token is stored. Sessions last
    `sessionDays` (default 30) and slide forward once past half their lifetime;
@@ -298,7 +298,7 @@ create a request without `userId` it is owned by the oldest admin account. Error
 | POST | `/request/bulk/approve` | `BulkRequestAction` → `BulkRequestResult` |
 | POST | `/request/bulk/decline` | `BulkRequestAction` → `BulkRequestResult` |
 
-### Discover (TMDB proxy with Media-Tron status)
+### Discover (TMDB proxy with Arclight status)
 
 Each result is a `DiscoverItem` carrying `mediaStatus`/`mediaStatus4k`, the newest active
 request and the library id. `hideAvailable`/`hideRequested` settings filter list pages.
@@ -464,7 +464,7 @@ being edited), but their producing modules are in progress, so nothing emits the
 
 Implemented in `apps/api/src/modules/compat` (settings contract: `packages/shared/src/compat.ts`).
 Third-party tools that speak Sonarr or Radarr (Overseerr/Jellyseerr, Bazarr, Prowlarr, Notifiarr,
-Homarr, Recyclarr, LunaSea, nzb360, dashboards) can point at Media-Tron as if it were either app.
+Homarr, Recyclarr, LunaSea, nzb360, dashboards) can point at Arclight as if it were either app.
 The native `/api/v1` API is unaffected.
 
 **Mounting.** `compatApi(ctx)` is registered at the root (not inside `/api/v1`) and serves
@@ -511,8 +511,8 @@ the `jobs` table; `GET /command/:id` reads it back (`queued/started/completed/fa
 | `ManualImport` `{files, importMode}` | imports manual import |
 | anything else naming a registered job (`HealthCheck`, ...) | that job; unknown names answer 400 |
 
-**System status and versions.** `system/status` reports `appName: "Media-Tron"`,
-`instanceName` (setting), the real Media-Tron `version`, plus `isProduction`, `branch`,
+**System status and versions.** `system/status` reports `appName: "Arclight"`,
+`instanceName` (setting), the real Arclight `version`, plus `isProduction`, `branch`,
 `startupPath`, `urlBase`, `appData`, `osName`, `runtimeVersion`, `authentication`,
 `migrationVersion`. Overseerr/Jellyseerr check `version` loosely (presence; the major decides
 v3/v4 behaviour). Every compat response also carries `X-Application-Version`
@@ -520,7 +520,7 @@ v3/v4 behaviour). Every compat response also carries `X-Application-Version`
 Sonarr/Radarr minimum before it syncs.
 
 **Settings** (`compat` section, `GET/PUT /api/v1/settings/compat`): `enabled` (default true;
-false makes every compat route and probe answer 404), `instanceName` (default `Media-Tron`),
+false makes every compat route and probe answer 404), `instanceName` (default `Arclight`),
 `advertisedVersion`.
 
 **Errors.** 404 `{message}`; 400 is an array of `{propertyName, errorMessage, severity}` (e.g.

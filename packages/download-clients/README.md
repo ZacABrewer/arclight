@@ -1,4 +1,4 @@
-# @media-tron/download-clients
+# @arclight/download-clients
 
 Clients for external download clients. Each one implements `DownloadClient` from `src/types.ts`
 and reports its queue as normalized `DownloadItem`s. The api's downloads module never needs to
@@ -25,7 +25,7 @@ Torrent clients implement `addTorrent`. When they get an NZB through `addNzb`, t
 
 ## Settings fields
 
-Every client has these: `host`, `port`, `useSsl`, `urlBase`, `category` (default `media-tron`)
+Every client has these: `host`, `port`, `useSsl`, `urlBase`, `category` (default `arclight`)
 and `postImportCategory`. Each client adds its own fields:
 
 - **transmission**: port 9091, urlBase `/transmission/` (`rpc` is appended), username,
@@ -85,4 +85,4 @@ Usenet history items can be moved and removed. Queue items cannot.
 
 Every client has an in-memory fake server (`src/<kind>/fake-<kind>.ts`, built on
 `src/fake-http.ts`) and hand-written fixtures in `fixtures/<kind>/`. Tests never hit a live
-service. Run `pnpm --filter @media-tron/download-clients test`.
+service. Run `pnpm --filter @arclight/download-clients test`.

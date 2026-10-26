@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { EpisodeMetadata, MovieMetadata, SeriesMetadata } from '@media-tron/metadata';
+import type { EpisodeMetadata, MovieMetadata, SeriesMetadata } from '@arclight/metadata';
 import {
   toEpisodeMetadataInput,
   toMediaImages,

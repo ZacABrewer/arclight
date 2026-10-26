@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { VpnProviderSettings, VpnProviderType, VpnSettingsResponse, VpnSettingsUpdate, VpnStatus } from '@media-tron/shared';
+import type { VpnProviderSettings, VpnProviderType, VpnSettingsResponse, VpnSettingsUpdate, VpnStatus } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

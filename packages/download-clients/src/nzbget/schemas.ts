@@ -1,5 +1,5 @@
 /**
- * Zod shapes of the NZBGet JSON-RPC responses Media-Tron reads. Only the fields we use are
+ * Zod shapes of the NZBGet JSON-RPC responses Arclight reads. Only the fields we use are
  * declared; everything else is stripped. 64-bit sizes arrive as Lo/Hi uint32 pairs (with an
  * MB rounding as a fallback).
  */

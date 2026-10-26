@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { RestartResponse, SystemStatus } from '@media-tron/shared';
+import { RestartResponse, SystemStatus } from '@arclight/shared';
 import type { AppModule } from '../../app.js';
 import { VERSION } from '../../version.js';
 import { requireAdmin } from '../auth/hook.js';
@@ -27,7 +27,7 @@ export const systemModuleWith =
     }));
 
     app.get('/system/status', { schema: { response: { 200: SystemStatus } } }, async () => ({
-      appName: 'Media-Tron' as const,
+      appName: 'Arclight' as const,
       version: VERSION,
       startTime: ctx.startedAt.toISOString(),
       uptimeSeconds: Math.floor((Date.now() - ctx.startedAt.getTime()) / 1000),

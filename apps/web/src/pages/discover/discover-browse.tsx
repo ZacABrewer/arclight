@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react';
-import { DISCOVER_MOVIE_SORTS, DISCOVER_TV_SORTS, type DiscoverQuery } from '@media-tron/shared';
+import { DISCOVER_MOVIE_SORTS, DISCOVER_TV_SORTS, type DiscoverQuery } from '@arclight/shared';
 import { discoverApi, type DiscoverKind } from '../../api/requests.js';
 import { Button } from '../../components/button.js';
 import { FormField, Input, Select } from '../../components/form.js';

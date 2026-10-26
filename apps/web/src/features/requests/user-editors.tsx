@@ -9,7 +9,7 @@ import {
   type UserNotificationTypes,
   type UserQuota,
   type UserRequestSettings,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

@@ -46,7 +46,7 @@ export const MOVIE: MediaInfo = {
 };
 
 const BASE = {
-  instanceName: 'Media-Tron',
+  instanceName: 'Arclight',
   applicationUrl: 'https://mt.example.com',
   timestamp: '2026-10-25T12:00:00.000Z',
 };

@@ -39,7 +39,7 @@ export const LIBRARY_EVENTS: ReadonlySet<NotificationEventType> = new Set<Notifi
   'subtitleDownloaded',
 ]);
 
-export function testEvent(instanceName = 'Media-Tron', now: () => Date = () => new Date()): TestEvent {
+export function testEvent(instanceName = 'Arclight', now: () => Date = () => new Date()): TestEvent {
   return {
     type: 'test',
     instanceName,
@@ -67,7 +67,7 @@ export abstract class BaseAgent implements NotificationAgent {
   }
 
   async test(): Promise<void> {
-    await this.deliver(testEvent('Media-Tron', this.now));
+    await this.deliver(testEvent('Arclight', this.now));
   }
 
   protected abstract deliver(event: NotificationEvent): Promise<void>;

@@ -1,4 +1,4 @@
-import type { QualityDefinition, Revision } from '@media-tron/shared';
+import type { QualityDefinition, Revision } from '@arclight/shared';
 
 // What the parser extracts from a release name or file name. Series and movie parsing
 // share the quality/language/group layers; the title layer is per media type.

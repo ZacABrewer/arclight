@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Permission, type MediaRequest } from '@media-tron/shared';
+import { Permission, type MediaRequest } from '@arclight/shared';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

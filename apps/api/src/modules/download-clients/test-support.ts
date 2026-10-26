@@ -7,9 +7,9 @@ import type {
   DownloadClientStatus,
   DownloadClientTestResult,
   DownloadItem,
-} from '@media-tron/download-clients';
-import { DownloadClientError } from '@media-tron/download-clients';
-import type { DownloadClientImplementation, DownloadClientResource, ReleaseProtocol } from '@media-tron/shared';
+} from '@arclight/download-clients';
+import { DownloadClientError } from '@arclight/download-clients';
+import type { DownloadClientImplementation, DownloadClientResource, ReleaseProtocol } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import * as tables from './schema.js';
 import { DownloadClientsService, type DownloadClientInputRaw, type DownloadClientsServiceOptions } from './service.js';
@@ -78,7 +78,7 @@ export class FakeDownloadClient implements DownloadClient {
 export function item(overrides: Partial<DownloadItem> & { id: string }): DownloadItem {
   return {
     title: `Release.${overrides.id}`,
-    category: 'media-tron',
+    category: 'arclight',
     totalBytes: 1000,
     remainingBytes: 500,
     downloadedBytes: 500,

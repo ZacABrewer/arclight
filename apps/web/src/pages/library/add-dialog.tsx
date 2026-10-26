@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@tanstack/react-router';
-import type { MetadataSearchResult, MinimumAvailability, MonitorOption, QualityProfile, RootFolder, SeriesType } from '@media-tron/shared';
+import type { MetadataSearchResult, MinimumAvailability, MonitorOption, QualityProfile, RootFolder, SeriesType } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { Button } from '../../components/button.js';
 import { FormField, Select, Toggle } from '../../components/form.js';

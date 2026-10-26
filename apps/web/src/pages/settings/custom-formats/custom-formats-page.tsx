@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { CustomFormat, CustomFormatInput } from '@media-tron/shared';
+import type { CustomFormat, CustomFormatInput } from '@arclight/shared';
 import { profilesApi } from '../../../api/profiles.js';
 import { Badge } from '../../../components/badge.js';
 import { Button } from '../../../components/button.js';

@@ -1,7 +1,7 @@
 import { execFile } from 'node:child_process';
 import { readdir, stat } from 'node:fs/promises';
 import { basename, dirname, join, relative, sep } from 'node:path';
-import { QUALITIES, type QualityDefinition, type QualityName } from '@media-tron/shared';
+import { QUALITIES, type QualityDefinition, type QualityName } from '@arclight/shared';
 import type { Probe, ProbeResult } from './deps.js';
 
 // Enumerating candidate files in a completed download or a library folder (spec 4.4-4.8),
@@ -152,7 +152,7 @@ export async function scanPath(path: string, options: ScanOptions = {}): Promise
   if (!info) {
     throw new ScanError(
       'NOT_FOUND',
-      `${path} does not exist or is not accessible. Make sure the Media-Tron service user can read it` +
+      `${path} does not exist or is not accessible. Make sure the Arclight service user can read it` +
         (process.platform === 'win32' ? ' (mapped network drives are not visible to services; use a UNC path).' : '.'),
     );
   }

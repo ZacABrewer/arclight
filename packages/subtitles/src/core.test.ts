@@ -258,7 +258,7 @@ describe('post-processing descriptors', () => {
     });
     expect(cmd.command).toBe('/usr/local/bin/notify.sh');
     expect(cmd.args).toEqual(['Show.S01E01', 'en:forced', '97.5']);
-    expect(cmd.env?.MEDIATRON_SUBTITLES_LANGUAGE_CODE3_DOT).toBe('eng.forced');
+    expect(cmd.env?.ARCLIGHT_SUBTITLES_LANGUAGE_CODE3_DOT).toBe('eng.forced');
     expect(cmd.timeoutMs).toBe(60000);
   });
 });

@@ -1,6 +1,6 @@
 import { useEffect, useState, type KeyboardEvent } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { FileSystemEntry } from '@media-tron/shared';
+import type { FileSystemEntry } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { filesystemApi } from '../../api/filesystem.js';
 import { Button } from '../button.js';

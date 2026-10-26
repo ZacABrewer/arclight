@@ -95,7 +95,7 @@ export class RTorrentClient implements DownloadClient {
 
     await this.defaultDirectory();
     if (this.settings.category === '') {
-      warnings.push('No label is set. A label keeps Media-Tron downloads apart from everything else.');
+      warnings.push('No label is set. A label keeps Arclight downloads apart from everything else.');
     }
     await this.listTorrents();
     return { version, apiVersion, warnings };

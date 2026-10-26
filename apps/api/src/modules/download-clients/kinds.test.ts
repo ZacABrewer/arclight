@@ -6,7 +6,7 @@ import {
   downloadClientHost,
   PASSWORD_MASK,
   type DownloadClientField,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import * as tables from './schema.js';
 import { DownloadClientsService, type TrackedDownload } from './service.js';
@@ -174,7 +174,7 @@ describe('usenet grabs', () => {
     const { service, fake } = await setup();
     const c = service.create(clientOf('transmission', 'Tr'));
     await service.grab(null, { title: 'Show.S01E02', magnet: 'magnet:?xt=urn:btih:abc' });
-    expect(fake(c.id).added[0]).toMatchObject({ magnet: 'magnet:?xt=urn:btih:abc', category: 'media-tron' });
+    expect(fake(c.id).added[0]).toMatchObject({ magnet: 'magnet:?xt=urn:btih:abc', category: 'arclight' });
   });
 
   it('fails with NO_CLIENT when no usenet client exists or the chosen client is a torrent client', async () => {
@@ -244,7 +244,7 @@ describe('usenet queue mapping', () => {
     expect(service.listTracked()[0]).toMatchObject({ trackedState: 'failedPending', trackedStatus: 'error' });
   });
 
-  it('leaves a failed usenet download that Media-Tron did not grab in downloading', async () => {
+  it('leaves a failed usenet download that Arclight did not grab in downloading', async () => {
     const { service, fake } = await setup();
     const c = service.create(clientOf('sabnzbd', 'SAB'));
     fake(c.id).items = [item({ id: 'foreign', status: 'failed' })];
@@ -253,7 +253,7 @@ describe('usenet queue mapping', () => {
     expect(tracked.trackedState).toBe('downloading');
     expect(tracked.protocol).toBe('usenet');
     expect(tracked.statusMessages.flatMap((m) => m.messages)).toContain(
-      "Download failed and wasn't grabbed by Media-Tron, skipping automatic failed download handling.",
+      "Download failed and wasn't grabbed by Arclight, skipping automatic failed download handling.",
     );
   });
 });

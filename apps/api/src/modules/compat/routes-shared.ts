@@ -12,7 +12,7 @@ import {
   type HistorySortKey,
   type QueueItem,
   type QueueSortKey,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { blocklistServiceFor } from '../blocklist/index.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { historyServiceFor } from '../history/index.js';

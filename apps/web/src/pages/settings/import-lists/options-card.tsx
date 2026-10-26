@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { CleanLibraryLevel, ImportListSettings } from '@media-tron/shared';
+import type { CleanLibraryLevel, ImportListSettings } from '@arclight/shared';
 import { Button } from '../../../components/button.js';
 import { Card } from '../../../components/card.js';
 import { ErrorView } from '../../../components/error-boundary.js';

@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import type { AuthStatus, Session, User } from '@media-tron/shared';
+import type { AuthStatus, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
 

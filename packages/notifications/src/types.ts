@@ -9,7 +9,7 @@
  * the chat agents pick the fields they render.
  */
 
-import type { HealthCheck } from '@media-tron/shared';
+import type { HealthCheck } from '@arclight/shared';
 
 export type { HealthCheck };
 
@@ -17,7 +17,7 @@ export type MediaType = 'series' | 'movie';
 
 export interface MediaImage {
   coverType: 'poster' | 'fanart' | 'banner' | 'clearlogo';
-  /** Absolute URL a third party can load (remote CDN or Media-Tron's image cache). */
+  /** Absolute URL a third party can load (remote CDN or Arclight's image cache). */
   url: string;
 }
 
@@ -54,7 +54,7 @@ export interface EpisodeInfo {
 /** A release that was (or is being) grabbed. */
 export interface ReleaseInfo {
   title: string;
-  /** Quality name from `@media-tron/shared` `QUALITIES`, e.g. "WEBDL-1080p". */
+  /** Quality name from `@arclight/shared` `QUALITIES`, e.g. "WEBDL-1080p". */
   quality: string;
   /** 1 for the original release, 2+ for PROPER/REPACK revisions. */
   qualityVersion: number;
@@ -178,7 +178,7 @@ export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 interface EventBase {
   /** Configured instance name, shown as the sender in chat agents. */
   instanceName: string;
-  /** Public URL of this Media-Tron, used for links. */
+  /** Public URL of this Arclight, used for links. */
   applicationUrl?: string;
   /** ISO-8601 timestamp of when the event happened. */
   timestamp: string;

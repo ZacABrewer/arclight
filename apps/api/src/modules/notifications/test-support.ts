@@ -1,4 +1,4 @@
-import { QUALITIES } from '@media-tron/shared';
+import { QUALITIES } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, mediaFiles, movies, series, tags } from '../../db/schema.js';
 

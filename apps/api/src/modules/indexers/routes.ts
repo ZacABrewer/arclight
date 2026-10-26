@@ -27,8 +27,8 @@ import {
   ReleaseResource,
   SearchGrabRequest,
   SearchGrabResponse,
-} from '@media-tron/shared';
-import { IndexerError } from '@media-tron/indexers';
+} from '@arclight/shared';
+import { IndexerError } from '@arclight/indexers';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { DefinitionStoreError } from './definitions.js';

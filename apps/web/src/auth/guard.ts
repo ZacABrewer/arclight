@@ -1,5 +1,5 @@
 import type { QueryClient } from '@tanstack/react-query';
-import type { AuthStatus } from '@media-tron/shared';
+import type { AuthStatus } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 
 // Route guard logic, kept free of React so it can be tested on its own. The api is the real

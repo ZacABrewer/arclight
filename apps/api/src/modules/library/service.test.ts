@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
-import { AddMovieRequest, AddSeriesRequest, QUALITIES, QualityModel, type MonitorOption } from '@media-tron/shared';
+import { AddMovieRequest, AddSeriesRequest, QUALITIES, QualityModel, type MonitorOption } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { LibraryError } from './errors.js';
@@ -19,7 +19,7 @@ let movieRoot: string;
 let db: Db;
 
 beforeAll(async () => {
-  tmp = await mkdtemp(join(tmpdir(), 'media-tron-library-'));
+  tmp = await mkdtemp(join(tmpdir(), 'arclight-library-'));
   tvRoot = join(tmp, 'tv');
   movieRoot = join(tmp, 'movies');
   await mkdir(tvRoot);

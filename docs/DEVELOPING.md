@@ -1,4 +1,4 @@
-# Developing Media-Tron
+# Developing Arclight
 
 Read [CONVENTIONS.md](CONVENTIONS.md) first; this page is the how-to. Commands are in the
 README (`pnpm dev`, `build`, `test`, `typecheck`, `db:generate`).
@@ -20,7 +20,7 @@ README (`pnpm dev`, `build`, `test`, `typecheck`, `db:generate`).
    };
    ```
 
-   Use the Zod schemas from `@media-tron/shared` in the route `schema` (`body`, `params`,
+   Use the Zod schemas from `@arclight/shared` in the route `schema` (`body`, `params`,
    `querystring`, `response`); the Zod type provider validates and serializes. Keep routes
    thin and map service errors to HTTP in one place.
 3. Jobs: `scheduler.register({ name, cron, handler })`. The handler may return a message
@@ -60,14 +60,14 @@ web tests.
 
 ## Add a package
 
-1. `packages/<name>/package.json`: `"name": "@media-tron/<name>"`, `"private": true`,
+1. `packages/<name>/package.json`: `"name": "@arclight/<name>"`, `"private": true`,
    `"type": "module"`, `"exports": { ".": "./src/index.ts" }`, scripts `typecheck`
    (`tsc --noEmit`) and `test` (`vitest run`). Copy `packages/organizer` as a template,
    including its `tsconfig.json`.
-2. Depend on `@media-tron/shared` with `"workspace:*"` only if you use contract types.
+2. Depend on `@arclight/shared` with `"workspace:*"` only if you use contract types.
 3. `src/index.ts` is the public API; keep everything else internal. No database or HTTP
    server code in packages.
-4. In the consumer (`apps/api` or another package) add `"@media-tron/<name>": "workspace:*"`
+4. In the consumer (`apps/api` or another package) add `"@arclight/<name>": "workspace:*"`
    and run `pnpm install`.
 5. If it must ship in the image, check `docker/Dockerfile`: its install layer copies
    individual `package.json` files, so a new package has to be added there too.
@@ -81,9 +81,9 @@ grouped by area: `group`, `language`, `movies`, `path`, `quality`, `scene`, `ser
 expectations. Fixtures are test inputs and expected values only; never copy upstream code
 or regexes.
 
-- `pnpm --filter @media-tron/parser test` runs the Vitest suites (`group`, `language`,
+- `pnpm --filter @arclight/parser test` runs the Vitest suites (`group`, `language`,
   `quality`).
-- `pnpm --filter @media-tron/parser report` runs every fixture file and prints the pass
+- `pnpm --filter @arclight/parser report` runs every fixture file and prints the pass
   rate per file with the first six failures. `-- <substring>` filters by path, `-- --all`
   lists every failure, and the last line is the total. Use it as the loop when improving
   the parser: the total should rise without any file regressing.

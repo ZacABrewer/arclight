@@ -1,4 +1,4 @@
-# Authored for Media-Tron. EZTV's JSON API lists recent TV torrents and can filter by IMDb
+# Authored for Arclight. EZTV's JSON API lists recent TV torrents and can filter by IMDb
 # id; keyword searches fall back to the latest list filtered with `andmatch`.
 # Not yet verified against the live service (tested: false).
 schemaVersion: 1

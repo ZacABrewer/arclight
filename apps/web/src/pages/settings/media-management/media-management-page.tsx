@@ -7,7 +7,7 @@ import {
   type NamingConfig,
   type NamingSample,
   type NamingSamples,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ApiError } from '../../../api/client.js';
 import { MEDIA_MANAGEMENT_DEFAULTS, FILE_DATE_MODES, type MediaManagementSettings } from '../../../api/settings.js';
 import { Badge } from '../../../components/badge.js';

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { SubtitleMediaType, WantedSubtitleItem } from '@media-tron/shared';
+import type { SubtitleMediaType, WantedSubtitleItem } from '@arclight/shared';
 import { ApiError } from '../../api/client.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

@@ -3,7 +3,7 @@ import {
   MetadataSettingsUpdate,
   ReleasesSettings,
   SettingsErrorResponse,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Db } from '../../db/index.js';

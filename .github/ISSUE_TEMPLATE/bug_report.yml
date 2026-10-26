@@ -18,7 +18,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Media-Tron version / image tag
+      label: Arclight version / image tag
       placeholder: v0.1.0
     validations:
       required: true

@@ -1,4 +1,4 @@
-import type { ImportListMediaType } from '@media-tron/shared';
+import type { ImportListMediaType } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
 import { asArray, asRecord, getText, imdbIdOf, int, str } from './http.js';
 import { wants, type FetchedItem, type Provider } from './types.js';

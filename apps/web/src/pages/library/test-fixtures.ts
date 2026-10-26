@@ -1,4 +1,4 @@
-import type { Episode, Movie, QualityProfile, RootFolder, Series } from '@media-tron/shared';
+import type { Episode, Movie, QualityProfile, RootFolder, Series } from '@arclight/shared';
 
 // Test fixtures for the library pages (only imported by *.test.ts[x]).
 

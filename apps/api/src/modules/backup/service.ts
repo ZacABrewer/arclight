@@ -4,24 +4,27 @@ import { mkdir, readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import Database from 'better-sqlite3';
 import type { Logger } from 'pino';
-import type { Backup, BackupSettings, BackupType } from '@media-tron/shared';
-import type { AppConfig } from '../../config.js';
+import type { Backup, BackupSettings, BackupType } from '@arclight/shared';
+import { DB_FILE_NAME, type AppConfig } from '../../config.js';
 import type { Db } from '../../db/index.js';
 import { settings as settingsTable } from '../../db/schema.js';
 import { settingsService } from '../settings/index.js';
 import { isSafeEntryName, writeZip, ZipError, ZipReader, type ZipInput } from './zip.js';
 
-// Backup archives: `media-tron_<type>_<YYYY.MM.DD_HH.mm.ss>[_n].zip` in the backup folder,
-// containing manifest.json, media-tron.db (a VACUUM INTO snapshot), settings.json (export of
+// Backup archives: `arclight_<type>_<YYYY.MM.DD_HH.mm.ss>[_n].zip` in the backup folder,
+// containing manifest.json, arclight.db (a VACUUM INTO snapshot), settings.json (export of
 // the settings table) and config/** (the config directory's non-log files). The file name is
 // the id; nothing about backups is stored in the database, so a restore cannot lose the list.
 
-export const DB_ENTRY = 'media-tron.db';
+/** Default archive entry for the database; the actual name is the live file name, recorded in the manifest. */
+export const DB_ENTRY = DB_FILE_NAME;
 export const MANIFEST_ENTRY = 'manifest.json';
 export const SETTINGS_ENTRY = 'settings.json';
 export const CONFIG_PREFIX = 'config/';
 
-const NAME_RE = /^media-tron_(scheduled|manual|update)_(\d{4})\.(\d{2})\.(\d{2})_(\d{2})\.(\d{2})\.(\d{2})(?:_(\d+))?\.zip$/;
+// Pre-rename (Media-Tron) archives stay listable and restorable: file prefix, manifest appName.
+const LEGACY_APP_NAME = 'Media-Tron';
+const NAME_RE = /^(?:arclight|media-tron)_(scheduled|manual|update)_(\d{4})\.(\d{2})\.(\d{2})_(\d{2})\.(\d{2})\.(\d{2})(?:_(\d+))?\.zip$/;
 const SQLITE_HEADER = Buffer.from('SQLite format 3\0', 'latin1');
 /** Config files bigger than this are not archived (caches, stray media). */
 const MAX_CONFIG_FILE = 100 * 1024 * 1024;
@@ -40,7 +43,7 @@ export class BackupError extends Error {
 }
 
 export interface BackupManifest {
-  appName: 'Media-Tron';
+  appName: 'Arclight';
   version: string;
   type: BackupType;
   createdAt: string;
@@ -65,7 +68,7 @@ export interface RestoreResult {
 export function backupFileName(type: BackupType, at: Date, n = 0): string {
   const p = (v: number) => String(v).padStart(2, '0');
   const stamp = `${at.getUTCFullYear()}.${p(at.getUTCMonth() + 1)}.${p(at.getUTCDate())}_${p(at.getUTCHours())}.${p(at.getUTCMinutes())}.${p(at.getUTCSeconds())}`;
-  return `media-tron_${type}_${stamp}${n > 0 ? `_${n}` : ''}.zip`;
+  return `arclight_${type}_${stamp}${n > 0 ? `_${n}` : ''}.zip`;
 }
 
 /** Parses a backup file name; null for anything that is not one of ours. */
@@ -188,17 +191,18 @@ export class BackupService {
           version: this.opts.version,
           sections: Object.fromEntries(rows.map((r) => [r.key, r.value])),
         };
+        const dbEntry = basename(this.opts.config.dbPath);
         const manifest: BackupManifest = {
-          appName: 'Media-Tron',
+          appName: 'Arclight',
           version: this.opts.version,
           type,
           createdAt: at.toISOString(),
-          database: DB_ENTRY,
+          database: dbEntry,
           configFiles: configFiles.map((f) => f.rel),
         };
         const inputs: ZipInput[] = [
           { name: MANIFEST_ENTRY, source: Buffer.from(JSON.stringify(manifest, null, 2)), mtime: at },
-          { name: DB_ENTRY, source: { path: snapshot }, mtime: at },
+          { name: dbEntry, source: { path: snapshot }, mtime: at },
           { name: SETTINGS_ENTRY, source: Buffer.from(JSON.stringify(settingsExport, null, 2)), mtime: at },
           ...configFiles.map((f) => ({ name: CONFIG_PREFIX + f.rel, source: { path: f.abs }, mtime: f.mtime })),
         ];
@@ -301,9 +305,9 @@ export class BackupService {
           throw invalid(err);
         }
         const manifest = await readManifest(zip);
-        const stagedDb = join(staging, DB_ENTRY);
+        const stagedDb = join(staging, 'database.db');
         try {
-          await zip.extract(DB_ENTRY, stagedDb);
+          await zip.extract(manifest.database, stagedDb);
         } catch (err) {
           throw invalid(err);
         }
@@ -361,7 +365,7 @@ export class BackupService {
     } finally {
       closeSync(fd);
     }
-    if (!header.equals(SQLITE_HEADER)) throw new BackupError('INVALID_BACKUP', `${DB_ENTRY} is not a SQLite database`);
+    if (!header.equals(SQLITE_HEADER)) throw new BackupError('INVALID_BACKUP', 'backup database is not a SQLite database');
     let candidate: Database.Database;
     try {
       candidate = new Database(path, { readonly: true, fileMustExist: true });
@@ -373,13 +377,13 @@ export class BackupService {
       if (check !== 'ok') throw new BackupError('INVALID_BACKUP', `database integrity check failed: ${String(check)}`);
       const hasTable = (db: Database.Database, name: string) =>
         db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(name) !== undefined;
-      if (!hasTable(candidate, 'settings')) throw new BackupError('INVALID_BACKUP', 'backup database is not a Media-Tron database');
+      if (!hasTable(candidate, 'settings')) throw new BackupError('INVALID_BACKUP', 'backup database is not an Arclight database');
       const live = this.opts.db.$client;
       const migrations = '__drizzle_migrations';
       if (hasTable(candidate, migrations) && hasTable(live, migrations)) {
         const count = (db: Database.Database) => Number(db.prepare(`SELECT count(*) FROM ${migrations}`).pluck().get());
         if (count(candidate) > count(live)) {
-          throw new BackupError('INVALID_BACKUP', 'backup is from a newer Media-Tron version; update before restoring it');
+          throw new BackupError('INVALID_BACKUP', 'backup is from a newer Arclight version; update before restoring it');
         }
       }
     } catch (err) {
@@ -401,18 +405,21 @@ export class BackupService {
 }
 
 async function readManifest(zip: ZipReader): Promise<BackupManifest> {
-  if (!zip.get(MANIFEST_ENTRY)) throw new BackupError('INVALID_BACKUP', 'not a Media-Tron backup (no manifest.json)');
-  if (!zip.get(DB_ENTRY)) throw new BackupError('INVALID_BACKUP', `backup has no ${DB_ENTRY}`);
+  if (!zip.get(MANIFEST_ENTRY)) throw new BackupError('INVALID_BACKUP', 'not an Arclight backup (no manifest.json)');
   let manifest: unknown;
   try {
     manifest = JSON.parse((await zip.readBuffer(MANIFEST_ENTRY)).toString('utf8'));
   } catch (err) {
     throw invalid(err);
   }
-  if (typeof manifest !== 'object' || manifest === null || (manifest as { appName?: unknown }).appName !== 'Media-Tron') {
-    throw new BackupError('INVALID_BACKUP', 'not a Media-Tron backup (bad manifest)');
+  const appName = typeof manifest === 'object' && manifest !== null ? (manifest as { appName?: unknown }).appName : undefined;
+  if (appName !== 'Arclight' && appName !== LEGACY_APP_NAME) {
+    throw new BackupError('INVALID_BACKUP', 'not an Arclight backup (bad manifest)');
   }
-  return manifest as BackupManifest;
+  const recorded = (manifest as { database?: unknown }).database;
+  const database = typeof recorded === 'string' && /^[w.-]+.db$/.test(recorded) ? recorded : DB_ENTRY;
+  if (!zip.get(database)) throw new BackupError('INVALID_BACKUP', `backup has no ${database}`);
+  return { ...(manifest as BackupManifest), database };
 }
 
 function invalid(err: unknown): BackupError {

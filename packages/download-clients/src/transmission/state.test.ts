@@ -8,7 +8,7 @@ import { categoryOf, effectiveSeedLimits, mapTorrent, type CategoryContext } fro
 const session = TrSession.parse(sessionFixture.arguments);
 const torrents = TrTorrentGet.parse(torrentsFixture.arguments).torrents;
 const NOW = 1_761_400_000_000;
-const labelsContext: CategoryContext = { useLabels: true, baseDir: '/downloads/complete', requested: 'media-tron', knownCategories: [] };
+const labelsContext: CategoryContext = { useLabels: true, baseDir: '/downloads/complete', requested: 'arclight', knownCategories: [] };
 
 function torrent(n: number): TrTorrent {
   const hash = 'a' + '0'.repeat(39 - String(n).length) + n;
@@ -53,7 +53,7 @@ describe('mapTorrent', () => {
     expect(downloading).toMatchObject({
       id: torrent(1).hashString,
       title: 'Show.S01E01.1080p.WEB.h264-GRP.mkv',
-      category: 'media-tron',
+      category: 'arclight',
       totalBytes: 1_500_000_000,
       remainingBytes: 1_125_000_000,
       downloadedBytes: 375_000_000,
@@ -78,8 +78,8 @@ describe('mapTorrent', () => {
 
   it('derives the category from labels or, without labels, from the download directory', () => {
     expect(categoryOf(torrent(12), { ...labelsContext, requested: '' })).toBe('other');
-    const dirContext: CategoryContext = { useLabels: false, baseDir: '/downloads/complete', requested: '', knownCategories: ['media-tron'] };
-    expect(categoryOf({ ...torrent(1), downloadDir: '/downloads/complete/media-tron/' }, dirContext)).toBe('media-tron');
+    const dirContext: CategoryContext = { useLabels: false, baseDir: '/downloads/complete', requested: '', knownCategories: ['arclight'] };
+    expect(categoryOf({ ...torrent(1), downloadDir: '/downloads/complete/arclight/' }, dirContext)).toBe('arclight');
     expect(categoryOf(torrent(1), dirContext)).toBe('');
   });
 });

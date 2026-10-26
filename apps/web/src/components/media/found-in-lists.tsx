@@ -1,4 +1,4 @@
-import type { MediaType } from '@media-tron/shared';
+import type { MediaType } from '@arclight/shared';
 import { useFoundInLists } from '../../hooks/import-lists.js';
 
 /** "Found in list" chips for a library item's header (GET /importlist/items?tmdbId=). */

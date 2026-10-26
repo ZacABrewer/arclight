@@ -1,5 +1,5 @@
-import { parsePath, parseRelease } from '@media-tron/parser';
-import type { MediaFile } from '@media-tron/shared';
+import { parsePath, parseRelease } from '@arclight/parser';
+import type { MediaFile } from '@arclight/shared';
 import { parseLanguageTag } from './languages.js';
 import { detectAudioCodec, detectResolution, detectSource, detectStreamingService, detectVideoCodec } from './scoring.js';
 import type { FileHashes, LanguageTag, MediaType, SubtitleQuery, WantedLanguage } from './types.js';

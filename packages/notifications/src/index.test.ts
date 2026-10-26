@@ -38,7 +38,7 @@ describe('createAgent', () => {
 
   it('applies schema defaults when parsing stored settings', () => {
     expect(parseAgentSettings('ntfy', { topics: ['a'] })).toMatchObject({ serverUrl: 'https://ntfy.sh', priority: 3, tags: [] });
-    expect(parseAgentSettings('email', VALID.email)).toMatchObject({ port: 587, security: 'starttls', cc: [], subjectPrefix: '[Media-Tron]' });
+    expect(parseAgentSettings('email', VALID.email)).toMatchObject({ port: 587, security: 'starttls', cc: [], subjectPrefix: '[Arclight]' });
     expect(parseAgentSettings('discord', VALID.discord).grabFields).toContain('quality');
   });
 

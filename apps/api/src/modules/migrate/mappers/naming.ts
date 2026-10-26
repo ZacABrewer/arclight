@@ -1,10 +1,10 @@
-import type { ColonReplacement, MultiEpisodeStyle, NamingConfig } from '@media-tron/shared';
-import { normalizeTokenName } from '@media-tron/organizer';
+import type { ColonReplacement, MultiEpisodeStyle, NamingConfig } from '@arclight/shared';
+import { normalizeTokenName } from '@arclight/organizer';
 import { bool, int, str, type ForeignRow } from '../foreign-db.js';
 import type { ArrApp } from './quality.js';
 
 // Naming config. The token vocabulary is the one users know from the *arr apps, so formats
-// carry over unchanged; tokens Media-Tron's organizer does not know are removed from the
+// carry over unchanged; tokens Arclight's organizer does not know are removed from the
 // format (so renaming keeps working) and reported.
 
 /** Normalised names (lower-case, separators dropped) of every token the organizer renders. */

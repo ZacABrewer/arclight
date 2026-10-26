@@ -3,7 +3,7 @@ import {
   downloadClientSettingsSchemas as packageSchemas,
   type DownloadClientKind,
   type DownloadClientSettingsInput,
-} from '@media-tron/download-clients';
+} from '@arclight/download-clients';
 import {
   DOWNLOAD_CLIENT_PROTOCOLS,
   DOWNLOAD_CLIENT_SECRET_FIELDS,
@@ -13,7 +13,7 @@ import {
   type DownloadClientImplementationSchema,
   type DownloadClientInput,
   type DownloadClientSettingsFor,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { z } from 'zod';
 
 // Field definitions the UI renders for each implementation, derived from the shared settings
@@ -48,9 +48,9 @@ void settingsInSync;
 /** Runtime half of the check: same kinds, same protocols, shared settings keys cover the package's. */
 export function assertContractInSync(): void {
   for (const kind of DownloadClientImplementation.options) {
-    if (!(kind in packageSchemas)) throw new Error(`Download client kind "${kind}" is not known to @media-tron/download-clients`);
+    if (!(kind in packageSchemas)) throw new Error(`Download client kind "${kind}" is not known to @arclight/download-clients`);
     if (downloadClientProtocols[kind] !== DOWNLOAD_CLIENT_PROTOCOLS[kind]) {
-      throw new Error(`Download client "${kind}" protocol differs between shared and @media-tron/download-clients`);
+      throw new Error(`Download client "${kind}" protocol differs between shared and @arclight/download-clients`);
     }
     const sharedKeys = new Set(Object.keys(downloadClientSettingsSchemas[kind].shape));
     const missing = Object.keys(packageSchemas[kind].shape).filter((k) => !sharedKeys.has(k));
@@ -165,7 +165,7 @@ const KIND_META: Record<DownloadClientImplementation, KindMeta> = {
   builtin: {
     name: 'Built-in',
     description:
-      "Media-Tron's own BitTorrent engine, running inside Media-Tron. Engine-wide options (port, limits, VPN binding) are under Settings > Torrent Engine.",
+      "Arclight's own BitTorrent engine, running inside Arclight. Engine-wide options (port, limits, VPN binding) are under Settings > Torrent Engine.",
     infoLink: '/settings/torrent',
     advanced: ['postImportCategory', 'categories', 'seedRatioLimit', 'seedTimeLimitMinutes'],
     labels: { savePath: 'Download Folder', categories: 'Category Folders', seedTimeLimitMinutes: 'Seed Time Limit (minutes)' },

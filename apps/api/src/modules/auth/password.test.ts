@@ -3,7 +3,7 @@ import { hashPassword, needsRehash, verifyPassword } from './password.js';
 import { allLocal, isLocalAddress } from './network.js';
 import { readCookie, sessionCookie } from './cookies.js';
 import { isPublicRoute } from './hook.js';
-import { hasPermission, Permission } from '@media-tron/shared';
+import { hasPermission, Permission } from '@arclight/shared';
 
 describe('password hashing', () => {
   it('produces a self-describing scrypt hash with a random salt', async () => {
@@ -61,10 +61,10 @@ describe('local address rules', () => {
 
 describe('cookies, public routes and permissions', () => {
   it('builds an httpOnly lax cookie, secure only on https', () => {
-    expect(sessionCookie('abc', { maxAgeSeconds: 60, secure: false })).toBe('mt_session=abc; Path=/; HttpOnly; SameSite=Lax; Max-Age=60');
-    expect(sessionCookie('abc', { maxAgeSeconds: null, secure: true })).toBe('mt_session=abc; Path=/; HttpOnly; SameSite=Lax; Secure');
-    expect(readCookie('a=1; mt_session=tok%3D; b=2', 'mt_session')).toBe('tok=');
-    expect(readCookie('a=1', 'mt_session')).toBeUndefined();
+    expect(sessionCookie('abc', { maxAgeSeconds: 60, secure: false })).toBe('al_session=abc; Path=/; HttpOnly; SameSite=Lax; Max-Age=60');
+    expect(sessionCookie('abc', { maxAgeSeconds: null, secure: true })).toBe('al_session=abc; Path=/; HttpOnly; SameSite=Lax; Secure');
+    expect(readCookie('a=1; al_session=tok%3D; b=2', 'al_session')).toBe('tok=');
+    expect(readCookie('a=1', 'al_session')).toBeUndefined();
   });
 
   it('classifies public routes by matched pattern', () => {

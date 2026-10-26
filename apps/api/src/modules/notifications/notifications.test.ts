@@ -8,8 +8,8 @@ import {
   type MediaInfo,
   type NotificationAgentKind,
   type NotificationEvent,
-} from '@media-tron/notifications';
-import { NOTIFICATION_SECRET_MASK, type NotificationInputRaw } from '@media-tron/shared';
+} from '@arclight/notifications';
+import { NOTIFICATION_SECRET_MASK, type NotificationInputRaw } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import { downloadClients, movies, series, trackedDownloads } from '../../db/schema.js';
 import { EventBus } from '../../events.js';
@@ -63,7 +63,7 @@ const webhook = (name: string, extra: Partial<NotificationInputRaw> = {}, settin
   ...extra,
 });
 
-const base = { instanceName: 'Media-Tron', timestamp: '2026-03-01T12:00:00Z' };
+const base = { instanceName: 'Arclight', timestamp: '2026-03-01T12:00:00Z' };
 
 function media(overrides: Partial<MediaInfo> = {}): MediaInfo {
   return {
@@ -189,7 +189,7 @@ describe('notification schema', () => {
     expect(email.fields.find((f) => f.name === 'security')?.options?.map((o) => o.value)).toEqual(['none', 'starttls', 'tls']);
     expect(email.fields.find((f) => f.name === 'password')).toMatchObject({ type: 'password', secret: true });
     expect(email.fields.find((f) => f.name === 'to')?.type).toBe('emailList');
-    expect(email.template.settings['subjectPrefix']).toBe('[Media-Tron]');
+    expect(email.template.settings['subjectPrefix']).toBe('[Arclight]');
 
     const plex = schemas.find((s) => s.implementation === 'plex')!;
     expect(plex.supportsOnGrab).toBe(false);

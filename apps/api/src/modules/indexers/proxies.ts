@@ -5,7 +5,7 @@ import {
   openSocks5Tunnel,
   type NetworkProxy,
   type ProxyConfig,
-} from '@media-tron/indexers';
+} from '@arclight/indexers';
 import {
   INDEXER_PROXY_SECRET_MASK,
   IndexerProxyCreate,
@@ -13,7 +13,7 @@ import {
   IndexerProxyUpdate,
   type IndexerProxy,
   type IndexerProxyTestResult,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { indexerProxies, indexers } from './schema.js';
 import { IndexersError, parseOrThrow } from './errors.js';

@@ -1,4 +1,4 @@
-import type { Episode } from '@media-tron/shared';
+import type { Episode } from '@arclight/shared';
 import type { BadgeTone } from '../badge.js';
 
 /**

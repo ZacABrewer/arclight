@@ -1,4 +1,4 @@
-import { MetadataMovie, MetadataSearchResult, MetadataSeries, type MetadataSearchType } from '@media-tron/shared';
+import { MetadataMovie, MetadataSearchResult, MetadataSeries, type MetadataSearchType } from '@arclight/shared';
 import { ApiError, request } from './client.js';
 
 // Paths mirror apps/api/src/modules/metadata/routes.ts.

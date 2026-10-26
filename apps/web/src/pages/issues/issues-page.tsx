@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import { IssueType, Permission, type Issue, type IssueComment } from '@media-tron/shared';
+import { IssueType, Permission, type Issue, type IssueComment } from '@arclight/shared';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';
 import { Card } from '../../components/card.js';

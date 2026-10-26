@@ -1,5 +1,5 @@
 import { and, eq, gt, inArray, ne, sql } from 'drizzle-orm';
-import { UserQuota, type QuotaInfo, type QuotaStatus, type UserQuotaResponse } from '@media-tron/shared';
+import { UserQuota, type QuotaInfo, type QuotaStatus, type UserQuotaResponse } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { isQuotaExempt } from './permissions.js';
 import { mediaRequests, seasonRequests } from './schema.js';

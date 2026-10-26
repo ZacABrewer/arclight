@@ -54,7 +54,7 @@ describe('settings', () => {
       apiKey: '',
       username: '',
       password: '',
-      category: 'media-tron',
+      category: 'arclight',
       recentPriority: 'default',
       olderPriority: 'default',
     });
@@ -65,7 +65,7 @@ describe('settings', () => {
 describe('authentication and transport', () => {
   it('sends apikey and output=json on every call, honouring https and urlBase', async () => {
     sab.stripPrefix = '/sabnzbd';
-    await client({ useSsl: true, urlBase: '/sabnzbd/' }).getItems('media-tron');
+    await client({ useSsl: true, urlBase: '/sabnzbd/' }).getItems('arclight');
     expect(sab.urls.length).toBe(2);
     for (const href of sab.urls) {
       const url = new URL(href);
@@ -74,7 +74,7 @@ describe('authentication and transport', () => {
       expect(url.searchParams.get('output')).toBe('json');
     }
     const history = sab.modeCalls('history')[0];
-    expect(history?.query.get('category')).toBe('media-tron');
+    expect(history?.query.get('category')).toBe('arclight');
     expect(history?.query.get('limit')).toBe('60');
   });
 
@@ -92,7 +92,7 @@ describe('authentication and transport', () => {
   it('falls back to legacy ma_username/ma_password when no API key is set', async () => {
     sab.username = 'admin';
     sab.password = 'secret';
-    const items = await client({ apiKey: '', username: 'admin', password: 'secret' }).getItems('media-tron');
+    const items = await client({ apiKey: '', username: 'admin', password: 'secret' }).getItems('arclight');
     expect(items.length).toBeGreaterThan(0);
     const call = sab.modeCalls('queue')[0];
     expect(call?.query.get('ma_username')).toBe('admin');
@@ -139,22 +139,22 @@ describe('error mapping', () => {
 
 describe('addNzb', () => {
   it('uploads the NZB as multipart field "name" with cat, priority and nzbname', async () => {
-    const result = await client().addNzb({ nzb: NZB, title: 'Show: Name S01E01', category: 'media-tron' });
+    const result = await client().addNzb({ nzb: NZB, title: 'Show: Name S01E01', category: 'arclight' });
     expect(result).toEqual({ id: 'SABnzbd_nzo_fake1', warnings: [] });
     const call = sab.modeCalls('addfile')[0];
     expect(call?.method).toBe('POST');
     expect(call?.files[0]?.field).toBe('name');
     expect(call?.files[0]?.filename).toBe('Show_ Name S01E01.nzb');
-    expect(sab.uploads[0]).toMatchObject({ cat: 'media-tron', priority: '-100', nzbname: 'Show: Name S01E01' });
+    expect(sab.uploads[0]).toMatchObject({ cat: 'arclight', priority: '-100', nzbname: 'Show: Name S01E01' });
     expect(sab.uploads[0]?.text).toContain('<nzb');
-    const items = await client().getItems('media-tron');
+    const items = await client().getItems('arclight');
     expect(items.find((i) => i.id === 'SABnzbd_nzo_fake1')?.status).toBe('queued');
   });
 
   it('picks recent/older priority settings, and an explicit UsenetPriority overrides them', async () => {
     const c = client({ recentPriority: 'force', olderPriority: 'low' });
-    await c.addNzb({ nzb: NZB, title: 'a', category: 'media-tron', isRecent: true });
-    await c.addNzb({ nzb: NZB, title: 'b', category: 'media-tron' });
+    await c.addNzb({ nzb: NZB, title: 'a', category: 'arclight', isRecent: true });
+    await c.addNzb({ nzb: NZB, title: 'b', category: 'arclight' });
     await c.addNzb({ nzb: NZB, title: 'c', category: '', priority: 'veryHigh' });
     await c.addNzb({ nzb: NZB, title: 'd', category: '', priority: 'veryLow' });
     expect(sab.uploads.map((u) => u.priority)).toEqual(['2', '-1', '1', '-1']);
@@ -177,7 +177,7 @@ describe('addNzb', () => {
 
 describe('getItems', () => {
   it('merges queue and history for the category with the documented state mapping', async () => {
-    const items = await client().getItems('media-tron');
+    const items = await client().getItems('arclight');
     const byId = Object.fromEntries(items.map((i) => [i.id, i]));
     expect(Object.keys(byId)).not.toContain('SABnzbd_nzo_other1');
     expect(Object.keys(byId)).not.toContain('SABnzbd_nzo_other2');
@@ -205,7 +205,7 @@ describe('getItems', () => {
       canBeRemoved: false,
     });
     expect(byId['SABnzbd_nzo_done01']).toMatchObject({
-      outputPath: '/downloads/complete/media-tron/Show.Name.S00E01.1080p.WEB-DL-GRP',
+      outputPath: '/downloads/complete/arclight/Show.Name.S00E01.1080p.WEB-DL-GRP',
       totalBytes: 2254857830,
       canMoveFiles: true,
       canBeRemoved: true,
@@ -264,7 +264,7 @@ describe('remove, category, pause/resume', () => {
 describe('getStatus', () => {
   it('resolves the category folder against complete_dir and reports retention', async () => {
     expect(await client().getStatus()).toEqual({
-      outputRootDir: '/downloads/complete/media-tron',
+      outputRootDir: '/downloads/complete/arclight',
       isLocalhost: false,
       removesCompletedDownloads: false,
     });
@@ -287,13 +287,13 @@ describe('test()', () => {
 
   it('warns about an old version, a missing category, no complete_dir and history removal', async () => {
     sab.version = '2.3.9';
-    sab.config.categories = sab.config.categories.filter((c) => c.name !== 'media-tron');
+    sab.config.categories = sab.config.categories.filter((c) => c.name !== 'arclight');
     sab.config.misc['complete_dir'] = '';
     sab.config.misc['history_retention_option'] = 'number-delete';
     const result = await client().test();
     expect(result.warnings).toHaveLength(4);
     expect(result.warnings.join('\n')).toMatch(/2\.3\.9 is old/);
-    expect(result.warnings.join('\n')).toMatch(/no category "media-tron"/);
+    expect(result.warnings.join('\n')).toMatch(/no category "arclight"/);
     expect(result.warnings.join('\n')).toMatch(/completed download folder/);
     expect(result.warnings.join('\n')).toMatch(/History Retention/);
   });

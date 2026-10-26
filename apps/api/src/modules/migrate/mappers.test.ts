@@ -131,7 +131,7 @@ describe('download clients', () => {
     expect(nzb.kind === 'native' && nzb.input.settings).toMatchObject({ recentPriority: 'high', olderPriority: 'veryLow' });
   });
 
-  it('stages implementations Media-Tron does not drive', () => {
+  it('stages implementations Arclight does not drive', () => {
     const r = mapDownloadClient('sonarr', 'TorrentBlackhole', common, { torrentFolder: '/bh' });
     expect(r.kind).toBe('staged');
     if (r.kind === 'staged') expect(r.staged).toMatchObject({ upstreamImplementation: 'TorrentBlackhole', directory: '/bh' });

@@ -38,7 +38,7 @@ export function removesCompletedDownloads(config: DelugeConfigValues): boolean {
 /**
  * Deluge (1.3 / 2.x) through its Web UI JSON-RPC API.
  *
- * Categories are Deluge labels (Label plugin), always lowercase: Media-Tron lowercases the
+ * Categories are Deluge labels (Label plugin), always lowercase: Arclight lowercases the
  * category before using it, and enables the bundled Label plugin when a category is set.
  */
 export class DelugeClient implements DownloadClient {
@@ -85,13 +85,13 @@ export class DelugeClient implements DownloadClient {
 
     const warnings: string[] = [];
     if (this.label === '') {
-      warnings.push('No label is set. A label keeps Media-Tron downloads apart from everything else in Deluge.');
+      warnings.push('No label is set. A label keeps Arclight downloads apart from everything else in Deluge.');
     } else {
       if (this.label !== this.settings.category.trim()) {
-        warnings.push(`Deluge labels are lowercase; Media-Tron uses the label "${this.label}".`);
+        warnings.push(`Deluge labels are lowercase; Arclight uses the label "${this.label}".`);
       }
       if (await this.ensureLabelPlugin()) {
-        warnings.push('Enabled the Label plugin in Deluge so Media-Tron can label its downloads.');
+        warnings.push('Enabled the Label plugin in Deluge so Arclight can label its downloads.');
       }
       await this.ensureLabel(this.label);
     }
@@ -99,7 +99,7 @@ export class DelugeClient implements DownloadClient {
     const config = await this.getConfig();
     if (removesCompletedDownloads(config)) {
       warnings.push(
-        'Deluge removes torrents when they reach their seed ratio, which can happen before Media-Tron imports them. Turn off "Remove at ratio" in Deluge\'s Queue preferences.',
+        'Deluge removes torrents when they reach their seed ratio, which can happen before Arclight imports them. Turn off "Remove at ratio" in Deluge\'s Queue preferences.',
       );
     }
 

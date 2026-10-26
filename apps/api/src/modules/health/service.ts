@@ -1,5 +1,5 @@
 import type { Logger } from 'pino';
-import { HealthResponse, type HealthCheck, type HealthStatus } from '@media-tron/shared';
+import { HealthResponse, type HealthCheck, type HealthStatus } from '@arclight/shared';
 import type { HealthCheckDef, HealthDeps } from './types.js';
 
 // Runs the check catalogue and caches the latest results. Each check is isolated: one that

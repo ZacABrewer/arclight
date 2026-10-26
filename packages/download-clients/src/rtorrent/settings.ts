@@ -29,13 +29,13 @@ export const RTorrentSettings = z.object({
     ),
   username: usernameField,
   password: passwordField,
-  category: categoryField('media-tron', 'Label (stored in d.custom1, the ruTorrent label)'),
+  category: categoryField('arclight', 'Label (stored in d.custom1, the ruTorrent label)'),
   postImportCategory: postImportCategoryField('Label'),
   directory: z
     .string()
     .trim()
     .optional()
-    .describe('Directory rTorrent saves Media-Tron downloads into. Leave empty to use rTorrent\'s default directory.'),
+    .describe('Directory rTorrent saves Arclight downloads into. Leave empty to use rTorrent\'s default directory.'),
   addPaused: addPausedField,
   recentPriority: RTorrentPriority.default('normal').describe('rTorrent priority for content released recently.'),
   olderPriority: RTorrentPriority.default('normal').describe('rTorrent priority for older content.'),

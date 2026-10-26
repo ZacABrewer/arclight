@@ -1,5 +1,5 @@
 {
-  "name": "@media-tron/subtitles",
+  "name": "@arclight/subtitles",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@media-tron/parser": "workspace:*",
-    "@media-tron/shared": "workspace:*",
+    "@arclight/parser": "workspace:*",
+    "@arclight/shared": "workspace:*",
     "zod": "^4.1.12"
   },
   "devDependencies": {

@@ -5,9 +5,9 @@ import type { RTorrentTorrent } from './schemas.js';
 
 /**
  * Labels live in `d.custom1`. ruTorrent URI-encodes labels when it writes them and decodes
- * them when it reads, so Media-Tron writes `encodeURIComponent(label)` too: a label set by
+ * them when it reads, so Arclight writes `encodeURIComponent(label)` too: a label set by
  * either side then shows the same in ruTorrent. For plain ASCII labels such as "tv" or
- * "media-tron" the encoded and plain forms are identical.
+ * "arclight" the encoded and plain forms are identical.
  */
 export function encodeLabel(label: string): string {
   return encodeURIComponent(label);

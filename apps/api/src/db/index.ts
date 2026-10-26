@@ -2,10 +2,28 @@ import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { fileURLToPath } from 'node:url';
+import { existsSync, renameSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import * as schema from './schema.js';
 
 export type Db = ReturnType<typeof openDatabase>;
+
+/** Database file name used before the product was renamed to Arclight. */
+const LEGACY_DB_FILE_NAME = 'media-tron.db';
+
+/**
+ * One-time upgrade step: when `dbPath` does not exist yet but the pre-rename database sits next
+ * to it, move it (and its WAL/SHM side files) into place. Returns the legacy path it moved, or null.
+ */
+export function migrateLegacyDbFile(dbPath: string): string | null {
+  const legacy = join(dirname(dbPath), LEGACY_DB_FILE_NAME);
+  if (legacy === dbPath || existsSync(dbPath) || !existsSync(legacy)) return null;
+  for (const suffix of ['-wal', '-shm']) {
+    if (existsSync(legacy + suffix)) renameSync(legacy + suffix, dbPath + suffix);
+  }
+  renameSync(legacy, dbPath);
+  return legacy;
+}
 
 export function openDatabase(dbPath: string) {
   const sqlite = new Database(dbPath);

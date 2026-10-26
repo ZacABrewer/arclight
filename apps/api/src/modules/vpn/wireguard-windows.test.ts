@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_WIREGUARD_EXE } from '@media-tron/shared';
+import { DEFAULT_WIREGUARD_EXE } from '@arclight/shared';
 import { VpnError } from './errors.js';
 import { findInterfaceIPv4, parseGetNetIpAddress, parseNetshAddresses, type InterfaceProbeDeps } from './interfaces.js';
 import { fixture, iface, scriptedShell } from './test-support.js';

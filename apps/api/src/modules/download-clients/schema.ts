@@ -7,7 +7,7 @@ import type {
   ReleaseProtocol,
   TrackedDownloadState,
   TrackedDownloadStatus,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 // Download-clients module tables. Implementation settings are a JSON column: they are read
 // and written whole and their shape depends on `implementation`.

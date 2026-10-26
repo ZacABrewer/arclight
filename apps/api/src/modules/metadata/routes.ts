@@ -1,12 +1,12 @@
 import { z } from 'zod';
-import { isMetadataError, type MetadataErrorCode } from '@media-tron/metadata';
+import { isMetadataError, type MetadataErrorCode } from '@arclight/metadata';
 import {
   MetadataErrorResponse,
   MetadataMovie,
   MetadataSearchQuery,
   MetadataSearchResult,
   MetadataSeries,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { MetadataNotConfiguredError, type MetadataService } from './service.js';

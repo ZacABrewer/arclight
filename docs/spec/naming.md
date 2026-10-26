@@ -1,12 +1,12 @@
 # Spec: File and Folder Naming (Organizer)
 
-Behaviour specification for the Media-Tron `organizer` module's name builder. Derived from
+Behaviour specification for the Arclight `organizer` module's name builder. Derived from
 reading the upstream Sonarr and Radarr `Organizer/` code. It is written so that an engineer
 can implement it without reading upstream. Rules are numbered; examples are worked by hand
 from the rules. "Sonarr" means TV behaviour, "Radarr" means movie behaviour; where they
 differ it is marked **[TV]** or **[Movie]**. Unmarked rules apply to both.
 
-Media-Tron treats TV and movies as one pipeline, so the token engine (section 2) is one
+Arclight treats TV and movies as one pipeline, so the token engine (section 2) is one
 implementation with two token catalogues (sections 5 and 6).
 
 ---
@@ -49,7 +49,7 @@ Movies have no custom colon text and no multi-episode style.
 through unchanged (it is never run through illegal-character replacement; validation, 9.x,
 is what keeps it safe).
 
-1.1.5 Media-Tron may ship better defaults than upstream (for example rename on), but the
+1.1.5 Arclight may ship better defaults than upstream (for example rename on), but the
 semantics below must be identical for any given configuration. Keep the upstream default
 strings available as a "reset to default" preset.
 
@@ -771,7 +771,7 @@ that already have it may pass it in.
 7.9.1 Stored media-info carries a schema revision. The two dynamic-range tokens need a minimum
 revision (HDR: 5; HDR type: 11 for TV, 13 for movies upstream). If the pattern contains one of
 those tokens, the item has a path, and the file's media-info revision is below the minimum,
-media-info is re-read from the file before rendering. Media-Tron should implement the same
+media-info is re-read from the file before rendering. Arclight should implement the same
 idea in any form (re-probe when stored data predates a field the pattern needs); the revision
 numbers are internal to upstream.
 
@@ -886,7 +886,7 @@ Range, replace-illegal on.
 ## 12. Undetermined or unverified
 
  - Exact behaviour of series-folder formats that contain slashes on Linux (upstream does not
-   split them; nested folder results depend on later path joining). Media-Tron should split on
+   split them; nested folder results depend on later path joining). Arclight should split on
    both slash styles.
  - The platform path limit values quoted come from reading the limit detection (Linux 4096,
    Windows 259 or 4096 when long paths are enabled, name 255) and may need review in Docker.

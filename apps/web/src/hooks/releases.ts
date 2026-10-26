@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { PendingRelease } from '@media-tron/shared';
+import type { PendingRelease } from '@arclight/shared';
 import { releasesApi } from '../api/releases.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 

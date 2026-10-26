@@ -1,5 +1,5 @@
 import { and, gt, isNotNull, lte, max, min } from 'drizzle-orm';
-import { CompatSettings, type MediaFile, type Movie, type Series } from '@media-tron/shared';
+import { CompatSettings, type MediaFile, type Movie, type Series } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import type { Db } from '../../db/index.js';
 import { episodes as episodesTable } from '../../db/schema.js';

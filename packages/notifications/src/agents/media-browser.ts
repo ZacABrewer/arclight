@@ -77,7 +77,7 @@ export class MediaBrowserAgent extends BaseAgent {
     const headers: Record<string, string> = {
       Accept: 'application/json',
       'X-MediaBrowser-Token': this.settings.apiKey,
-      Authorization: `MediaBrowser Token="${this.settings.apiKey}", Client="Media-Tron", Device="Media-Tron", DeviceId="media-tron", Version="1"`,
+      Authorization: `MediaBrowser Token="${this.settings.apiKey}", Client="Arclight", Device="Arclight", DeviceId="arclight", Version="1"`,
     };
     const options: Parameters<typeof httpRequest>[3] = { method, headers };
     if (body !== undefined) {

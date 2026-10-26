@@ -1,4 +1,4 @@
-import type { IssueListQuery, RequestListQuery } from '@media-tron/shared';
+import type { IssueListQuery, RequestListQuery } from '@arclight/shared';
 import type { DiscoverKind } from '../api/requests.js';
 
 // Query keys for requests, discover, issues and watchlists. live.ts invalidates the

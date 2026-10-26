@@ -42,7 +42,7 @@ describe('EmailAgent', () => {
     expect(message.recipients).toEqual(['a@example.com', 'c@example.com', 'hidden@example.com']);
 
     const headers = message.raw.split('\r\n\r\n')[0]!.split('\r\n');
-    expect(headers).toContain('From: Media-Tron <mt@example.com>');
+    expect(headers).toContain('From: Arclight <mt@example.com>');
     expect(headers).toContain('To: a@example.com');
     expect(headers).toContain('Cc: c@example.com');
     expect(headers.some((h) => h.startsWith('Bcc:'))).toBe(false);
@@ -75,7 +75,7 @@ describe('EmailAgent', () => {
     const commands = server.connections[0]!.commands();
     expect(commands).toContain('STARTTLS');
     expect(commands.filter((c) => c.startsWith('RCPT TO'))).toEqual(['RCPT TO:<a@example.com>', 'RCPT TO:<c@example.com>', 'RCPT TO:<hidden@example.com>']);
-    expect(commands.find((c) => c.startsWith('From:'))).toContain('Subject: [Media-Tron] Episode Grabbed');
+    expect(commands.find((c) => c.startsWith('From:'))).toContain('Subject: [Arclight] Episode Grabbed');
   });
 
   it('surfaces SMTP failures from test()', async () => {

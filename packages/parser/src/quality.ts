@@ -1,4 +1,4 @@
-import { QUALITIES, type QualityDefinition, type Resolution } from '@media-tron/shared';
+import { QUALITIES, type QualityDefinition, type Resolution } from '@arclight/shared';
 import type { ParsedQuality } from './types.js';
 
 // Quality detection.

@@ -1,4 +1,4 @@
-// @media-tron/organizer: pure file/folder name building from naming templates.
+// @arclight/organizer: pure file/folder name building from naming templates.
 // Spec: docs/spec/naming.md.
 
 export {

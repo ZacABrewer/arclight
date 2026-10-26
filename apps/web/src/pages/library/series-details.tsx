@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@media-tron/shared';
+import type { Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
 import { PENDING_FEATURES } from '../../api/library.js';
 import { Badge } from '../../components/badge.js';
 import { Button } from '../../components/button.js';

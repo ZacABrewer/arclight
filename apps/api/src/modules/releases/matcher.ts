@@ -1,5 +1,5 @@
-import { parseRelease, type MediaTypeHint, type ParsedRelease } from '@media-tron/parser';
-import type { Episode, Movie, Series } from '@media-tron/shared';
+import { parseRelease, type MediaTypeHint, type ParsedRelease } from '@arclight/parser';
+import type { Episode, Movie, Series } from '@arclight/shared';
 
 // Maps a parsed release onto library items (decision-engine spec §3). Pure: the library is
 // read through the `LibrarySnapshot` interface so the matcher is testable without a DB.

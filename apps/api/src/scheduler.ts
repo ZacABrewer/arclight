@@ -1,7 +1,7 @@
 import { Cron } from 'croner';
 import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { Job, JobTrigger, ScheduledJob } from '@media-tron/shared';
+import type { Job, JobTrigger, ScheduledJob } from '@arclight/shared';
 import type { Db } from './db/index.js';
 import { schema } from './db/index.js';
 import type { EventBus } from './events.js';

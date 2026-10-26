@@ -106,7 +106,7 @@ describe('item mapping', () => {
     expect(item).toEqual({
       id: '11',
       title: 'Show.S01E05.1080p.WEB.h264-GRP',
-      category: 'media-tron',
+      category: 'arclight',
       totalBytes: 5 * GiB,
       remainingBytes: 2 * GiB,
       downloadedBytes: 3 * GiB,
@@ -143,7 +143,7 @@ describe('item mapping', () => {
     expect(done).toMatchObject({
       id: '21',
       status: 'completed',
-      outputPath: '/downloads/completed/media-tron/Show.S01E01.1080p.WEB.h264-GRP',
+      outputPath: '/downloads/completed/arclight/Show.S01E01.1080p.WEB.h264-GRP',
       totalBytes: GiB + 512 * MiB,
       remainingBytes: 0,
       progress: 1,
@@ -162,7 +162,7 @@ describe('config helpers', () => {
     { Name: 'DestDir', Value: '${MainDir}/completed' },
     { Name: 'Category1.Name', Value: 'Movies' },
     { Name: 'Category1.DestDir', Value: '${MainDir}/movies' },
-    { Name: 'Category2.Name', Value: 'media-tron' },
+    { Name: 'Category2.Name', Value: 'arclight' },
     { Name: 'Category2.DestDir', Value: '' },
     { Name: 'Category3.Name', Value: 'relative' },
     { Name: 'Category3.DestDir', Value: 'rel' },
@@ -172,7 +172,7 @@ describe('config helpers', () => {
   it('expands ${Option} variables and resolves category destinations', () => {
     expect(expandVariables('${maindir}/x/${Unknown}', options)).toBe('/downloads/x/${Unknown}');
     expect(categoryDestDir(options, 'movies')).toBe('/downloads/movies');
-    expect(categoryDestDir(options, 'media-tron')).toBe('/downloads/completed/media-tron');
+    expect(categoryDestDir(options, 'arclight')).toBe('/downloads/completed/arclight');
     expect(categoryDestDir(options, 'relative')).toBe('/downloads/completed/rel');
     expect(categoryDestDir(options, '')).toBe('/downloads/completed');
     expect(removesCompletedDownloads(options)).toBe(true);
@@ -183,7 +183,7 @@ describe('config helpers', () => {
       { Name: 'DestDir', Value: 'C:\\nzbget\\complete' },
       { Name: 'AppendCategoryDir', Value: 'no' },
     ]);
-    expect(categoryDestDir(noAppend, 'media-tron')).toBe('C:\\nzbget\\complete');
+    expect(categoryDestDir(noAppend, 'arclight')).toBe('C:\\nzbget\\complete');
     expect(removesCompletedDownloads(noAppend)).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import type { Job } from '@media-tron/shared';
+import type { Job } from '@arclight/shared';
 import { Badge, toneFor } from '../../components/badge.js';
 import { ErrorView } from '../../components/error-boundary.js';
 import { EmptyState } from '../../components/empty-state.js';

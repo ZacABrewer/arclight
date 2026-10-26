@@ -5,7 +5,7 @@ import {
   type ReleaseGrabRequest,
   type ReleasePushRequest,
   type ReleaseResource,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { ApiError, request } from './client.js';
 
 // Paths mirror apps/api/src/modules/releases/routes.ts.

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission as P, RequestsSettings } from '@media-tron/shared';
+import { Permission as P, RequestsSettings } from '@arclight/shared';
 import { notifications, users } from '../../db/schema.js';
 import { setSection } from '../settings/service.js';
 import { jellyfinAvailability, type MediaServerAvailability } from './media-server.js';

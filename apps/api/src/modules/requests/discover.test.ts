@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission as P, RequestsSettings } from '@media-tron/shared';
+import { Permission as P, RequestsSettings } from '@arclight/shared';
 import { setSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
 import { addUser, giveMovieFile, giveSeasonFiles, setup } from './test-support.js';

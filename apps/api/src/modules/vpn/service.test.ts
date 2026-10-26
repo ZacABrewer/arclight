@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { NetworkInterfaceInfo } from 'node:os';
 import { describe, expect, it, vi } from 'vitest';
-import { DEFAULT_WIREGUARD_EXE, SECRET_MASK, type ServerEvent, type VpnSettingsInput, VpnSettings } from '@media-tron/shared';
+import { DEFAULT_WIREGUARD_EXE, SECRET_MASK, type ServerEvent, type VpnSettingsInput, VpnSettings } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
 import type { ProbeResult, VpnProvider } from './providers.js';
@@ -234,9 +234,9 @@ describe('native providers', () => {
 });
 
 describe('vpn settings', () => {
-  it('masks secrets and fills the control URL from MEDIATRON_VPN_CONTROL_URL', () => {
+  it('masks secrets and fills the control URL from ARCLIGHT_VPN_CONTROL_URL', () => {
     const stored = VpnSettings.parse({ provider: { type: 'gluetun', apiKey: 'k', username: 'u', password: 'p' } });
-    expect(maskVpnSettings(stored, { MEDIATRON_VPN_CONTROL_URL: 'http://gluetun:8000' }).provider).toEqual({
+    expect(maskVpnSettings(stored, { ARCLIGHT_VPN_CONTROL_URL: 'http://gluetun:8000' }).provider).toEqual({
       type: 'gluetun',
       controlUrl: 'http://gluetun:8000',
       apiKey: SECRET_MASK,

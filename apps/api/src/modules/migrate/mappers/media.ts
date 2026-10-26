@@ -1,4 +1,4 @@
-import type { ImageCoverType, MediaImage, MediaInfo, Ratings } from '@media-tron/shared';
+import type { ImageCoverType, MediaImage, MediaInfo, Ratings } from '@arclight/shared';
 import { field, int, json, num, str } from '../foreign-db.js';
 
 // Small library sub-shapes: media info, images, ratings, genres.

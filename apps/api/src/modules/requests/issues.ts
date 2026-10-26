@@ -1,5 +1,5 @@
 import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
-import { CreateIssue, IssueListQuery, type Issue, type IssueCount, type IssuePage, type IssueStatus } from '@media-tron/shared';
+import { CreateIssue, IssueListQuery, type Issue, type IssueCount, type IssuePage, type IssueStatus } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
-import type { MetadataSearchType } from '@media-tron/shared';
+import type { MetadataSearchType } from '@arclight/shared';
 import { isMissingTmdbKey, metadataApi } from '../api/metadata.js';
 import { libraryKeys } from './library-keys.js';
 

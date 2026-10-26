@@ -10,7 +10,7 @@ import {
   ReleaseSearchResponse,
   SearchCommandRequest,
   SearchCommandResponse,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { LibraryError } from '../library/index.js';

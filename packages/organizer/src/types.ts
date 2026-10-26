@@ -112,7 +112,7 @@ export interface NamingExtras {
   maxFileNameBytes?: number;
   /** Default 4096 (bytes). */
   maxPathBytes?: number;
-  /** `{Release Group}` text when the file has none (and the token has no prefix/suffix). Default `Media-Tron`. */
+  /** `{Release Group}` text when the file has none (and the token has no prefix/suffix). Default `Arclight`. */
   releaseGroupFallback?: string;
   /** Joins path components. Default `/`. */
   pathSeparator?: string;

@@ -2,7 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { readdir, readFile, realpath, rm, stat, statfs, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
-import { downloadClientHost } from '@media-tron/shared';
+import { downloadClientHost } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import {
   indexers,
@@ -34,7 +34,7 @@ export const nodeHealthFs: HealthFs = {
     }
   },
   async canWrite(path) {
-    const probe = join(path, `.media-tron-write-test-${randomBytes(6).toString('hex')}`);
+    const probe = join(path, `.arclight-write-test-${randomBytes(6).toString('hex')}`);
     try {
       await writeFile(probe, '');
       await rm(probe, { force: true });
@@ -103,7 +103,7 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
   const notifications = notificationsServiceFor(ctx);
 
   return {
-    appName: 'Media-Tron',
+    appName: 'Arclight',
     isDocker: ctx.config.isDocker,
     configDir: ctx.config.configDir,
     platform: process.platform === 'win32' ? 'win32' : 'posix',
@@ -166,7 +166,7 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
 
     tmdbKeyConfigured() {
       const stored = getSection(db, 'metadata').tmdbApiKey;
-      return Boolean(stored || env['MEDIATRON_TMDB_API_KEY']?.trim());
+      return Boolean(stored || env['ARCLIGHT_TMDB_API_KEY']?.trim());
     },
 
     recycleBin() {

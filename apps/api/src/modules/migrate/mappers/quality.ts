@@ -4,10 +4,10 @@ import {
   type QualityDefinition,
   type QualityModel,
   type QualityProfileItem,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { bool, field, int } from '../foreign-db.js';
 
-// Upstream quality ids → Media-Tron qualities, by name. The upstream id tables are data about
+// Upstream quality ids → Arclight qualities, by name. The upstream id tables are data about
 // their storage format (what number a row holds), not code.
 
 export type ArrApp = 'sonarr' | 'radarr';
@@ -81,7 +81,7 @@ export function upstreamQualityName(app: ArrApp, id: number): string | undefined
   return (app === 'sonarr' ? SONARR_QUALITY_NAMES : RADARR_QUALITY_NAMES)[id];
 }
 
-/** Media-Tron quality for an upstream id, or undefined when there is no equivalent. */
+/** Arclight quality for an upstream id, or undefined when there is no equivalent. */
 export function mapQualityId(app: ArrApp, id: number): QualityDefinition | undefined {
   const name = upstreamQualityName(app, id);
   if (!name) return undefined;
@@ -114,7 +114,7 @@ export interface MappedProfileItems {
 
 /**
  * Upstream profile items (worst → best; `{quality, allowed}` or `{id, name, items, allowed}`
- * groups) → Media-Tron items. Unknown qualities are dropped and reported; a quality listed
+ * groups) → Arclight items. Unknown qualities are dropped and reported; a quality listed
  * twice after mapping keeps its first position.
  */
 export function mapProfileItems(app: ArrApp, rawItems: unknown[], rawCutoff: number | null): MappedProfileItems {

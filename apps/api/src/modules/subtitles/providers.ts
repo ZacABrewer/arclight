@@ -6,7 +6,7 @@ import {
   type SubtitleProviderField,
   type SubtitleProviderId,
   type SubtitleProviderSchema,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import {
   Addic7edProvider,
   AnimetoshoProvider,
@@ -24,7 +24,7 @@ import {
   type ProviderContext,
   type SubtitleProvider,
   type WhisperDeps,
-} from '@media-tron/subtitles';
+} from '@arclight/subtitles';
 
 // Provider registry: the settings form for each provider (field definitions derived from the
 // package's config types) and the factory that turns stored settings into a client.

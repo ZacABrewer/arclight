@@ -3,8 +3,8 @@ import {
   type LanguageProfile,
   type LanguageProfileItem,
   type SubtitleLanguageRef,
-} from '@media-tron/shared';
-import { parseLanguageTag, type HiPreference, type WantedLanguage } from '@media-tron/subtitles';
+} from '@arclight/shared';
+import { parseLanguageTag, type HiPreference, type WantedLanguage } from '@arclight/subtitles';
 
 // Pure wanted computation (spec section 3): which profile languages a media file still lacks.
 

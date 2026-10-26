@@ -4,7 +4,7 @@ import type {
   VpnProviderType,
   VpnSettings,
   WireguardWindowsProviderSettings,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 import { VpnError, errorMessage } from './errors.js';
 import { GluetunClient } from './gluetun-client.js';
 import { findInterfaceIPv4, ipv4FromNodeInterfaces, type InterfaceProbeDeps } from './interfaces.js';

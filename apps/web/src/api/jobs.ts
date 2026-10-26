@@ -1,4 +1,4 @@
-import { Job, ScheduledJob, type RunJobRequest } from '@media-tron/shared';
+import { Job, ScheduledJob, type RunJobRequest } from '@arclight/shared';
 import { request } from './client.js';
 
 export const jobsApi = {

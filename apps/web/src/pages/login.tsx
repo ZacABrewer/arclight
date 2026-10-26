@@ -26,7 +26,7 @@ export function LoginPage() {
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    document.title = 'Sign in · Media-Tron';
+    document.title = 'Sign in · Arclight';
   }, []);
 
   const onSubmit = async (e: FormEvent<HTMLFormElement>) => {
@@ -51,7 +51,7 @@ export function LoginPage() {
     <div className="auth-screen">
       <form className="auth-card card" onSubmit={(e) => void onSubmit(e)} noValidate aria-labelledby="login-title">
         <div className="card-body stack">
-          <div className="auth-brand">MEDIA-TRON</div>
+          <div className="auth-brand">ARCLIGHT</div>
           <h1 id="login-title" className="auth-title">
             Sign in
           </h1>

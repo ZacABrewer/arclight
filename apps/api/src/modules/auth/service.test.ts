@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission } from '@media-tron/shared';
+import { Permission } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import { sessions } from '../../db/schema.js';
 import { AuthService } from './service.js';

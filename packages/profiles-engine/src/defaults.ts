@@ -7,7 +7,7 @@ import {
   type QualityName,
   type QualityProfileInput,
   type QualityProfileItem,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 /** The vocabulary ordered worst → best by default weight. */
 export function qualitiesByWeight() {

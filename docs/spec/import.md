@@ -1,6 +1,6 @@
 # Import Specification
 
-Behaviour spec for the completed-download and import pipeline in Media-Tron. It is derived from Sonarr (series) and Radarr (movies). Where the two apps differ, the difference is marked **[Sonarr]** or **[Radarr]**. Unmarked rules apply to both. Durations are ms, sizes are bytes, timestamps are ISO strings.
+Behaviour spec for the completed-download and import pipeline in Arclight. It is derived from Sonarr (series) and Radarr (movies). Where the two apps differ, the difference is marked **[Sonarr]** or **[Radarr]**. Unmarked rules apply to both. Durations are ms, sizes are bytes, timestamps are ISO strings.
 
 Pipeline overview:
 
@@ -341,7 +341,7 @@ Radarr has no episode-title, absolute, full-season, split-episode, scene-numberi
 
 Worked example **[Sonarr]**: a double-episode file covers two 22-minute episodes. Expected 44 min → minimum 600 s. A 9-minute file (540 s) is a sample; a 41-minute file is not.
 
-8.4 Note: the upstream versions inspected contain **no** duplicate-size heuristic. Media-Tron must not invent one; if wanted later it is a new feature.
+8.4 Note: the upstream versions inspected contain **no** duplicate-size heuristic. Arclight must not invent one; if wanted later it is a new feature.
 
 ---
 

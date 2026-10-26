@@ -1,11 +1,11 @@
-import type { MediaImage, MovieStatus, Ratings, SeriesStatus } from '@media-tron/shared';
+import type { MediaImage, MovieStatus, Ratings, SeriesStatus } from '@arclight/shared';
 import type {
   EpisodeMetadata,
   ImageSet,
   MovieMetadata,
   Ratings as SourceRatings,
   SeriesMetadata,
-} from '@media-tron/metadata';
+} from '@arclight/metadata';
 import type { EpisodeMetadataInput, MovieMetadataInput, SeriesMetadataInput } from '../library/index.js';
 
 // Explicit translation from the metadata package's normalized objects to the library's input

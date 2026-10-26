@@ -200,9 +200,9 @@ describe('Session end-to-end', () => {
 
 describe('Session management', () => {
   it('generates Azureus-style peer ids', () => {
-    const id = generatePeerId('-MT0100-');
+    const id = generatePeerId('-AL0100-');
     expect(id.length).toBe(20);
-    expect(id.subarray(0, 8).toString()).toBe('-MT0100-');
+    expect(id.subarray(0, 8).toString()).toBe('-AL0100-');
   });
 
   it('rejects duplicates and bad input', async () => {

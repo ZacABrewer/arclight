@@ -4,7 +4,7 @@ import type {
   FormatScoreResult,
   QualityProfile,
   ReleaseEvaluation,
-} from '@media-tron/shared';
+} from '@arclight/shared';
 
 const GIGABYTE = 1024 ** 3;
 
