@@ -1,0 +1,87 @@
+# Authored for Media-Tron from general knowledge of the site layout. Not yet verified
+# against the live site (tested: false). Result rows link to a details page, which holds
+# the magnet / .torrent link.
+schemaVersion: 1
+id: torlock
+name: Torlock
+description: "Public general tracker (verified-torrents index, HTML)"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+requestDelay: 2
+links:
+  - https://www.torlock.com/
+  - https://www.torlock2.com/
+
+settings: []
+
+caps:
+  categorymappings:
+    - {id: movies, cat: Movies, desc: "Movies"}
+    - {id: television, cat: TV, desc: "Television"}
+    - {id: music, cat: Audio, desc: "Music"}
+    - {id: game, cat: PC/Games, desc: "Games"}
+    - {id: software, cat: PC, desc: "Software"}
+    - {id: anime, cat: TV/Anime, desc: "Anime"}
+    - {id: ebooks, cat: Books/EBook, desc: "Ebooks"}
+    - {id: other, cat: Other, desc: "Other"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+search:
+  paths:
+    - path: "{{ if .Keywords }}all/torrents/{{ .Keywords }}.html{{ else }}fresh.html{{ end }}"
+  inputs:
+    sort: added
+  keywordsfilters:
+    - {name: re_replace, args: ["[^\\w\\s]+", " "]}
+    - {name: re_replace, args: ["\\s+", "-"]}
+    - {name: tolower}
+  rows:
+    selector: "table tr:has(a[href^=\"/torrent/\"])"
+  fields:
+    category:
+      optional: true
+      default: other
+      case:
+        "span.mv": movies
+        "span.tv": television
+        "span.mu": music
+        "span.gm": game
+        "span.sw": software
+        "span.ag": anime
+        "span.bk": ebooks
+        "*": other
+    title:
+      selector: "td a[href^=\"/torrent/\"]"
+    details:
+      selector: "td a[href^=\"/torrent/\"]"
+      attribute: href
+    download:
+      selector: "td a[href^=\"/torrent/\"]"
+      attribute: href
+    date:
+      selector: "td.td"
+      optional: true
+      filters:
+        - {name: fuzzytime}
+    size:
+      selector: "td.ts"
+    seeders:
+      selector: "td.tul"
+    leechers:
+      selector: "td.tdl"
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+
+download:
+  selectors:
+    - selector: "a[href^=\"magnet:\"]"
+      attribute: href
+    - selector: "a[href*=\"/tor/\"][href$=\".torrent\"]"
+      attribute: href

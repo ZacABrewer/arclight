@@ -1,0 +1,99 @@
+# Authored for Media-Tron from general knowledge of the site layout (div-based result
+# table). Not yet verified against the live site (tested: false). The site sometimes
+# shows a JavaScript/Cloudflare check; attach a FlareSolverr proxy if searches fail.
+schemaVersion: 1
+id: torrentgalaxy
+name: TorrentGalaxy
+description: "Public general tracker (HTML, magnets in result rows)"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+requestDelay: 3
+links:
+  - https://torrentgalaxy.to/
+  - https://tgx.rs/
+
+settings:
+  - name: info_flaresolverr
+    type: info_flaresolverr
+    label: Cloudflare
+    default: "This site may require a FlareSolverr proxy."
+
+caps:
+  categorymappings:
+    - {id: 3, cat: Movies/UHD, desc: "Movies : 4K UHD"}
+    - {id: 46, cat: Movies/Foreign, desc: "Movies : Bollywood"}
+    - {id: 45, cat: Movies/Other, desc: "Movies : CAM/TS"}
+    - {id: 42, cat: Movies/HD, desc: "Movies : HD"}
+    - {id: 4, cat: Movies, desc: "Movies : Packs"}
+    - {id: 1, cat: Movies/SD, desc: "Movies : SD"}
+    - {id: 11, cat: TV/UHD, desc: "TV : 4K UHD"}
+    - {id: 41, cat: TV/HD, desc: "TV : Episodes HD"}
+    - {id: 5, cat: TV/SD, desc: "TV : Episodes SD"}
+    - {id: 6, cat: TV, desc: "TV : Packs"}
+    - {id: 7, cat: TV/Sport, desc: "TV : Sports"}
+    - {id: 28, cat: TV/Anime, desc: "Anime : All"}
+    - {id: 9, cat: TV/Documentary, desc: "Documentaries : All"}
+    - {id: 10, cat: PC/Games, desc: "Games : Windows"}
+    - {id: 18, cat: PC, desc: "Apps : Windows"}
+    - {id: 22, cat: Audio/MP3, desc: "Music : Albums"}
+    - {id: 23, cat: Audio/Lossless, desc: "Music : Discography"}
+    - {id: 25, cat: Audio/Video, desc: "Music : Musicvideo"}
+    - {id: 12, cat: Books/EBook, desc: "Books : Ebooks"}
+    - {id: 13, cat: Audio/Audiobook, desc: "Books : Audiobooks"}
+    - {id: 17, cat: Other, desc: "Other : Other"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep, imdbid]
+    movie-search: [q, imdbid]
+
+search:
+  paths:
+    - path: "torrents.php"
+  inputs:
+    $raw: "{{ range .Categories }}c{{.}}=1&{{end}}"
+    search: "{{ if .Query.IMDBID }}{{ .Query.IMDBID }}{{ else }}{{ .Keywords }}{{ end }}"
+    sort: id
+    order: desc
+    lang: 0
+    nox: 2
+  rows:
+    selector: "div.tgxtable > div.tgxtablerow:has(a[href^=\"magnet:\"])"
+  fields:
+    category:
+      selector: "div.tgxtablecell a[href*=\"cat=\"]"
+      attribute: href
+      filters:
+        - {name: querystring, args: cat}
+    title:
+      selector: "div.tgxtablecell a[href^=\"/torrent/\"]"
+      attribute: title
+    details:
+      selector: "div.tgxtablecell a[href^=\"/torrent/\"]"
+      attribute: href
+    download:
+      selector: "a[href^=\"magnet:\"]"
+      attribute: href
+    imdbid:
+      selector: "a[href*=\"search=tt\"]"
+      attribute: href
+    size:
+      selector: "span.badge-secondary"
+    grabs:
+      selector: "span[title=\"Views\"]"
+      optional: true
+      default: "0"
+    seeders:
+      selector: "span[title=\"Seeders/Leechers\"] font:nth-of-type(1)"
+    leechers:
+      selector: "span[title=\"Seeders/Leechers\"] font:nth-of-type(2)"
+    date:
+      selector: "div.tgxtablecell:last-child"
+      optional: true
+      filters:
+        - {name: fuzzytime, args: UK}
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

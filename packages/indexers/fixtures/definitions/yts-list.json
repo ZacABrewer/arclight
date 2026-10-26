@@ -1,0 +1,11 @@
+{"status":"ok","status_message":"Query was successful","data":{"movie_count":2,"limit":50,"page_number":1,"movies":[
+{"id":101,"url":"https://yts.mx/movies/the-matrix-1999","imdb_code":"tt0133093","title":"The Matrix","title_long":"The Matrix (1999)","year":1999,"genres":["Action","Sci-Fi"],"medium_cover_image":"https://yts.mx/assets/images/movies/the_matrix_1999/medium-cover.jpg",
+ "torrents":[
+  {"url":"https://yts.mx/torrent/download/AAAABBBBCCCCDDDDEEEEFFFF0000111122223333","hash":"AAAABBBBCCCCDDDDEEEEFFFF0000111122223333","quality":"720p","type":"bluray","video_codec":"x264","seeds":120,"peers":15,"size":"1.07 GB","size_bytes":1148903752,"date_uploaded":"2015-11-01 03:20:10","date_uploaded_unix":1446348010},
+  {"url":"https://yts.mx/torrent/download/4444555566667777888899990000AAAABBBBCCCC","hash":"4444555566667777888899990000AAAABBBBCCCC","quality":"2160p","type":"web","video_codec":"x265","seeds":300,"peers":40,"size":"5.2 GB","size_bytes":5583457484,"date_uploaded":"2021-01-01 00:00:00","date_uploaded_unix":1609459200}
+ ]},
+{"id":102,"url":"https://yts.mx/movies/the-matrix-reloaded-2003","imdb_code":"tt0234215","title":"The Matrix Reloaded","title_long":"The Matrix Reloaded (2003)","year":2003,"genres":["Action"],
+ "torrents":[
+  {"url":"https://yts.mx/torrent/download/1111222233334444555566667777888899990000","hash":"1111222233334444555566667777888899990000","quality":"1080p","type":"bluray","seeds":80,"peers":9,"size_bytes":2147483648,"date_uploaded_unix":1446348010}
+ ]}
+]}}

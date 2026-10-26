@@ -1,0 +1,81 @@
+# Authored for Media-Tron. EZTV's JSON API lists recent TV torrents and can filter by IMDb
+# id; keyword searches fall back to the latest list filtered with `andmatch`.
+# Not yet verified against the live service (tested: false).
+schemaVersion: 1
+id: eztv
+name: EZTV
+description: "Public TV tracker via its JSON API"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+links:
+  - https://eztvx.to/
+legacylinks:
+  - https://eztv.re/
+  - https://eztv.wf/
+
+settings: []
+
+caps:
+  categorymappings:
+    - {id: TV, cat: TV, desc: "TV"}
+    - {id: SD, cat: TV/SD, desc: "TV SD"}
+    - {id: HD, cat: TV/HD, desc: "TV HD"}
+    - {id: UHD, cat: TV/UHD, desc: "TV UHD"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep, imdbid]
+
+search:
+  paths:
+    - path: "api/get-torrents"
+      response:
+        type: json
+  inputs:
+    imdb_id: "{{ .Query.IMDBIDShort }}"
+    limit: 100
+    page: 1
+  rows:
+    selector: "torrents"
+    filters:
+      - name: andmatch
+    missingAttributeEqualsNoResults: true
+    count:
+      selector: torrents_count
+  fields:
+    title:
+      selector: title
+    category:
+      selector: title
+      filters:
+        - {name: re_replace, args: ["(?i).*\\b(2160p|4k)\\b.*", "UHD"]}
+        - {name: re_replace, args: ["(?i).*\\b(720p|1080p)\\b.*", "HD"]}
+        - {name: re_replace, args: ["^(?!UHD$|HD$).*$", "SD"]}
+    category_all:
+      text: TV
+    details:
+      selector: episode_url
+    download:
+      selector: torrent_url
+    magnet:
+      selector: magnet_url
+      optional: true
+    infohash:
+      selector: hash
+    size:
+      selector: size_bytes
+    date:
+      selector: date_released_unix
+    seeders:
+      selector: seeds
+    leechers:
+      selector: peers
+    imdbid:
+      selector: imdb_id
+    poster:
+      selector: small_screenshot
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

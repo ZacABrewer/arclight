@@ -1,0 +1,93 @@
+# Authored for Media-Tron. YTS publishes a JSON API where each movie carries several
+# torrents (one per quality); each torrent becomes a release. Not yet verified (tested: false).
+schemaVersion: 1
+id: yts
+name: YTS
+description: "Public movie tracker (small x264/x265 encodes) via its JSON API"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+links:
+  - https://yts.mx/
+legacylinks:
+  - https://yts.am/
+  - https://yts.lt/
+
+settings: []
+
+caps:
+  categorymappings:
+    - {id: Movies, cat: Movies, desc: "Movies"}
+    - {id: 720p, cat: Movies/HD, desc: "Movies 720p"}
+    - {id: 1080p, cat: Movies/HD, desc: "Movies 1080p"}
+    - {id: 2160p, cat: Movies/UHD, desc: "Movies 2160p"}
+    - {id: 3D, cat: Movies/3D, desc: "Movies 3D"}
+  modes:
+    search: [q]
+    movie-search: [q, imdbid]
+
+search:
+  paths:
+    - path: "api/v2/list_movies.json"
+      response:
+        type: json
+  inputs:
+    query_term: "{{ if .Query.IMDBID }}{{ .Query.IMDBID }}{{ else }}{{ .Keywords }}{{ end }}"
+    limit: 50
+    sort_by: date_added
+  keywordsfilters:
+    - {name: re_replace, args: ["\\s+\\d{4}$", ""]}
+  rows:
+    selector: "data.movies"
+    attribute: torrents
+    multiple: true
+    missingAttributeEqualsNoResults: true
+    count:
+      selector: "data.movie_count"
+  fields:
+    movie:
+      selector: "..title_long"
+    quality:
+      selector: quality
+    kind:
+      selector: type
+      optional: true
+      default: "web"
+    codec:
+      selector: video_codec
+      optional: true
+      default: "x264"
+    title:
+      text: "{{ .Result.movie }} [{{ .Result.quality }}] [{{ .Result.kind }}] [{{ .Result.codec }}] [YTS]"
+    category:
+      text: "{{ .Result.quality }}"
+    category_all:
+      text: Movies
+    details:
+      selector: "..url"
+    download:
+      selector: url
+    infohash:
+      selector: hash
+    size:
+      selector: size_bytes
+    date:
+      selector: date_uploaded_unix
+    seeders:
+      selector: seeds
+    leechers:
+      selector: peers
+    imdbid:
+      selector: "..imdb_code"
+    year:
+      selector: "..year"
+      optional: true
+    genre:
+      selector: "..genres"
+    poster:
+      selector: "..medium_cover_image"
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

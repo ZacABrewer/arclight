@@ -1,0 +1,78 @@
+# Authored for Media-Tron from general knowledge of the site layout. Not yet verified
+# against the live site (tested: false).
+schemaVersion: 1
+id: limetorrents
+name: LimeTorrents
+description: "Public general tracker (HTML search pages, info hash in the download link)"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+requestDelay: 2
+links:
+  - https://www.limetorrents.lol/
+  - https://www.limetorrents.fun/
+
+settings: []
+
+caps:
+  categorymappings:
+    - {id: Movies, cat: Movies, desc: "Movies"}
+    - {id: TV shows, cat: TV, desc: "TV shows"}
+    - {id: Music, cat: Audio, desc: "Music"}
+    - {id: Games, cat: PC/Games, desc: "Games"}
+    - {id: Applications, cat: PC, desc: "Applications"}
+    - {id: Anime, cat: TV/Anime, desc: "Anime"}
+    - {id: Other, cat: Other, desc: "Other"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+search:
+  paths:
+    - path: "{{ if .Keywords }}search/all/{{ .Keywords }}/date/1/{{ else }}latest100{{ end }}"
+  keywordsfilters:
+    - {name: re_replace, args: ["[^\\w\\s]+", " "]}
+    - {name: trim}
+  rows:
+    selector: "table.table2 tr:has(td.tdleft)"
+  fields:
+    title:
+      selector: "td.tdleft div.tt-name a:nth-of-type(2)"
+    details:
+      selector: "td.tdleft div.tt-name a:nth-of-type(2)"
+      attribute: href
+    download:
+      selector: "td.tdleft div.tt-name a:nth-of-type(1)"
+      attribute: href
+    infohash:
+      selector: "td.tdleft div.tt-name a:nth-of-type(1)"
+      attribute: href
+      filters:
+        - {name: regexp, args: "(?i)torrent/([a-f0-9]{40})"}
+    added:
+      selector: "td.tdnormal:nth-of-type(2)"
+    date:
+      text: "{{ .Result.added }}"
+      optional: true
+      filters:
+        - {name: split, args: ["-", 0]}
+        - {name: timeago}
+    category:
+      text: "{{ .Result.added }}"
+      optional: true
+      default: Other
+      filters:
+        - {name: regexp, args: "in\\s+(.+)$"}
+        - {name: trim}
+    size:
+      selector: "td.tdnormal:nth-of-type(3)"
+    seeders:
+      selector: "td.tdseed"
+    leechers:
+      selector: "td.tdleech"
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1

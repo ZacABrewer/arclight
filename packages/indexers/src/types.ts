@@ -1,3 +1,5 @@
+import type { ProxyConfig } from './proxy/types.js';
+
 /** Download protocol an indexer serves. Torrent indexers speak Torznab, usenet ones Newznab. */
 export type IndexerProtocol = 'torrent' | 'usenet';
 
@@ -24,6 +26,11 @@ export interface IndexerDefinition {
   additionalParameters?: string;
   /** Minimum interval between two HTTP requests to this indexer, in milliseconds. */
   rateLimitMs?: number;
+  /**
+   * Outgoing proxies: at most one HTTP/SOCKS5 tunnel and one FlareSolverr are applied
+   * (first of each kind wins).
+   */
+  proxy?: ProxyConfig | readonly ProxyConfig[];
 }
 
 /** Search parameters a Newznab-family endpoint may advertise. */
@@ -128,6 +135,13 @@ export interface ReleaseInfo {
   minimumRatio?: number;
   /** Milliseconds. */
   minimumSeedTime?: number;
+  /** Definition indexers only: extra metadata scraped from the site. */
+  description?: string;
+  commentUrl?: string;
+  posterUrl?: string;
+  files?: number;
+  genres?: string[];
+  year?: number;
 }
 
 export type IndexerErrorCode =

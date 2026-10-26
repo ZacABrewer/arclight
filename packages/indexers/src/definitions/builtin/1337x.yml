@@ -1,0 +1,104 @@
+# Authored for Media-Tron from general knowledge of the site layout. Not yet verified
+# against the live site (tested: false); selectors may need adjusting.
+schemaVersion: 1
+id: 1337x
+name: 1337x
+description: "Public general tracker (HTML pages, magnet on the details page)"
+language: en-US
+type: public
+encoding: UTF-8
+tested: false
+requestDelay: 2
+links:
+  - https://1337x.to/
+  - https://1337x.st/
+  - https://x1337x.ws/
+legacylinks:
+  - https://1337x.is/
+
+settings:
+  - name: sort
+    type: select
+    label: Sort requested from site
+    default: time
+    options:
+      time: created
+      seeders: seeders
+      size: size
+
+caps:
+  categorymappings:
+    - {id: 1, cat: Movies/DVD, desc: "Movies/DVD"}
+    - {id: 2, cat: Movies/SD, desc: "Movies/Divx-Xvid"}
+    - {id: 4, cat: Movies/Foreign, desc: "Movies/Dubs-Dual Audio"}
+    - {id: 42, cat: Movies/HD, desc: "Movies/HD"}
+    - {id: 54, cat: Movies/HD, desc: "Movies/h.264-x264"}
+    - {id: 70, cat: Movies/x265, desc: "Movies/HEVC-x265"}
+    - {id: 76, cat: Movies/UHD, desc: "Movies/UHD"}
+    - {id: 5, cat: TV/SD, desc: "TV/DVD"}
+    - {id: 6, cat: TV/SD, desc: "TV/Divx-Xvid"}
+    - {id: 41, cat: TV/HD, desc: "TV/HD"}
+    - {id: 71, cat: TV/x265, desc: "TV/HEVC-x265"}
+    - {id: 75, cat: TV/SD, desc: "TV/SD"}
+    - {id: 28, cat: TV/Anime, desc: "Anime/Anime"}
+    - {id: 22, cat: Audio/MP3, desc: "Music/MP3"}
+    - {id: 23, cat: Audio/Lossless, desc: "Music/Lossless"}
+    - {id: 10, cat: PC/Games, desc: "Games/PC Game"}
+    - {id: 18, cat: PC/0day, desc: "Apps/PC Software"}
+    - {id: 36, cat: Books/EBook, desc: "Other/E-books"}
+    - {id: 40, cat: Other, desc: "Other/Other"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+search:
+  paths:
+    - path: "{{ if .Keywords }}sort-search/{{ .Keywords }}/{{ .Config.sort }}/desc/1/{{ else }}trending{{ end }}"
+  keywordsfilters:
+    - {name: re_replace, args: ["[^\\w\\s.-]+", " "]}
+    - {name: re_replace, args: ["\\s+", " "]}
+    - {name: trim}
+  rows:
+    selector: "table.table-list > tbody > tr:has(td.name)"
+  fields:
+    category:
+      selector: "td.name a.icon"
+      attribute: href
+      optional: true
+      default: "40"
+      filters:
+        - {name: regexp, args: "/sub/(\\d+)/"}
+    title:
+      selector: "td.name a[href^=\"/torrent/\"]"
+    details:
+      selector: "td.name a[href^=\"/torrent/\"]"
+      attribute: href
+    download:
+      selector: "td.name a[href^=\"/torrent/\"]"
+      attribute: href
+    size:
+      selector: "td.size"
+      remove: "span"
+    seeders:
+      selector: "td.seeds"
+    leechers:
+      selector: "td.leeches"
+    date:
+      selector: "td.coll-date"
+      optional: true
+      filters:
+        - {name: re_replace, args: ["(\\d)(st|nd|rd|th)", "$1"]}
+        - {name: replace, args: ["'", "20"]}
+        - {name: fuzzytime}
+    downloadvolumefactor:
+      text: 0
+    uploadvolumefactor:
+      text: 1
+
+download:
+  selectors:
+    - selector: "a[href^=\"magnet:\"]"
+      attribute: href
+    - selector: "a[href$=\".torrent\"]"
+      attribute: href
