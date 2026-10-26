@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 env:
-  # Registry names must be lowercase; the owner (ZacABrewer) is not. Set in a step below.
+  # Registry names must be lowercase but GitHub owner names may not be; set in a step below.
   IMAGE_NAME: arclight
 
 jobs:
