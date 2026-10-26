@@ -10,3 +10,5 @@ export * from './library.js';
 export * from './indexers.js';
 export * from './download-clients.js';
 export * from './naming.js';
+export * from './settings.js';
+export * from './metadata.js';

@@ -1,0 +1,95 @@
+// Canned sample data for previews (spec section 10).
+
+import type { NamingCustomFormat, NamingEpisode, NamingExtras, NamingFile, NamingMovie, NamingSeries } from './types.js';
+
+const series: NamingSeries = {
+  title: "The Series Title's!",
+  year: 2010,
+  seriesType: 'standard',
+  imdbId: 'tt12345',
+  tvdbId: 12345,
+  tmdbId: 54321,
+  tvMazeId: 2345,
+};
+
+const episode = (n: number): NamingEpisode => ({
+  seasonNumber: 1,
+  episodeNumber: n,
+  absoluteEpisodeNumber: n,
+  title: `Episode Title (${n})`,
+  airDate: '2013-10-30',
+});
+
+const customFormats: NamingCustomFormat[] = [
+  { name: 'Surround Sound', includeInRenaming: true },
+  { name: 'x264', includeInRenaming: true },
+];
+
+const file: NamingFile = {
+  id: 1,
+  relativePath: "Season 01/The.Series.Title's!.S01E01.1080p.WEBDL.x264-EVOLVE.mkv",
+  sceneName: "The.Series.Title's!.S01E01.1080p.WEBDL.x264-EVOLVE",
+  releaseGroup: 'RlsGrp',
+  quality: { quality: { id: 3, name: 'WEBDL-1080p' }, revision: { version: 2, real: 0 } },
+  mediaInfo: {
+    videoFormat: 'h264',
+    videoBitDepth: 10,
+    videoDynamicRangeType: 'HLG',
+    audioFormat: 'dts',
+    audioChannelPositions: '5.1',
+    audioChannels: 6,
+    audioLanguages: ['ger'],
+    subtitles: ['eng', 'ger'],
+  },
+};
+
+const animeFile: NamingFile = {
+  ...file,
+  relativePath: "Season 01/[RlsGroup] The Series Title's! - 001 [1080p].mkv",
+  sceneName: "[RlsGroup] The Series Title's! - 001 [1080p]",
+  releaseGroup: 'RlsGrp',
+  releaseHash: 'ABCDEFGH',
+  mediaInfo: { ...file.mediaInfo, audioLanguages: ['jpn'], subtitles: ['eng'] },
+};
+
+const movie: NamingMovie = {
+  title: 'The Movie: Title',
+  year: 2010,
+  originalTitle: 'The Original Movie Title',
+  collection: { title: 'The Movie Collection' },
+  certification: 'R',
+  imdbId: 'tt0123456',
+  tmdbId: 345691,
+};
+
+const movieFile: NamingFile = {
+  id: 1,
+  relativePath: 'The.Movie.Title.2010.1080p.BluRay.DTS.x264-EVOLVE.mkv',
+  sceneName: 'The.Movie.Title.2010.1080p.BluRay.DTS.x264-EVOLVE',
+  releaseGroup: 'EVOLVE',
+  edition: 'Ultimate extended edition',
+  quality: { quality: { id: 7, name: 'Bluray-1080p' }, revision: { version: 2, real: 0 } },
+  mediaInfo: {
+    videoFormat: 'h264',
+    videoBitDepth: 8,
+    audioFormat: 'dts',
+    audioChannelPositions: '5.1',
+    audioLanguages: ['eng'],
+    subtitles: ['eng', 'ger'],
+  },
+};
+
+const extras: NamingExtras = { customFormats };
+
+export const SAMPLES = {
+  series,
+  dailySeries: { ...series, seriesType: 'daily' } satisfies NamingSeries,
+  animeSeries: { ...series, seriesType: 'anime' } satisfies NamingSeries,
+  episode1: episode(1),
+  episodes: [episode(1), episode(2), episode(3)],
+  file,
+  animeFile,
+  movie,
+  movieFile,
+  extras,
+} as const;

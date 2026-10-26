@@ -1,0 +1,29 @@
+{
+  "MediaContainer": {
+    "size": 3,
+    "title1": "Plex Library",
+    "Directory": [
+      {
+        "key": "1",
+        "type": "movie",
+        "title": "Movies",
+        "agent": "tv.plex.agents.movie",
+        "Location": [{ "id": 1, "path": "/movies" }, { "id": 4, "path": "/movies-4k" }]
+      },
+      {
+        "key": "2",
+        "type": "show",
+        "title": "TV Shows",
+        "agent": "tv.plex.agents.series",
+        "Location": [{ "id": 2, "path": "/tv" }]
+      },
+      {
+        "key": "3",
+        "type": "show",
+        "title": "Anime",
+        "agent": "tv.plex.agents.series",
+        "Location": [{ "id": 3, "path": "D:\\Media\\Anime\\" }]
+      }
+    ]
+  }
+}

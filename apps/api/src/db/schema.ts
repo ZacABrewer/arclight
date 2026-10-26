@@ -32,3 +32,9 @@ export const scheduledJobs = sqliteTable('scheduled_jobs', {
   lastRun: text('last_run'),
   enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
 });
+
+// Module tables. Each module owns its file; this aggregate is what cross-module code imports.
+export * from '../modules/profiles/schema.js';
+export * from '../modules/library/schema.js';
+export * from '../modules/indexers/schema.js';
+export * from '../modules/download-clients/schema.js';
