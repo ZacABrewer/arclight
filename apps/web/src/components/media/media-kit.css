@@ -38,8 +38,8 @@
 .mk-overview-row[aria-selected="true"] { border-color: var(--al-cyan); }
 .mk-overview-row .al-poster { height: 138px; width: 92px; border-width: 0 1px 0 0; }
 .mk-overview-row__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
-.mk-overview-row__title { font-size: 22px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mk-overview-row__text { font-size: 14px; line-height: 1.5; color: var(--al-text-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
+.mk-overview-row__title { font-size: 22px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); overflow-wrap: anywhere; }
+.mk-overview-row__text { font-size: 14px; line-height: 1.5; color: var(--al-text-3); display: -webkit-box; -webkit-line-clamp: 4; -webkit-box-orient: vertical; overflow: hidden; margin: 0; }
 .mk-overview-row__aside { display: flex; flex-direction: column; align-items: flex-end; gap: 8px; }
 @media (max-width: 767.98px) {
   .mk-overview-row { grid-template-columns: 72px minmax(0, 1fr); height: auto; min-height: 108px; }
@@ -54,7 +54,7 @@
 .mk-result + .mk-result { margin-top: 10px; }
 .mk-result__title { font-size: 16px; font-weight: 500; color: var(--al-text-1); margin: 0; display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
 .mk-result__meta { font-size: 13px; color: var(--al-text-4); }
-.mk-result__overview { font-size: 14px; line-height: 1.5; color: var(--al-text-3); margin: 6px 0 0; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.mk-result__overview { font-size: 14px; line-height: 1.5; color: var(--al-text-3); margin: 6px 0 0; display: -webkit-box; -webkit-line-clamp: 5; -webkit-box-orient: vertical; overflow: hidden; }
 @media (max-width: 767.98px) { .mk-result { grid-template-columns: 64px minmax(0, 1fr); } .mk-result > :last-child { grid-column: 1 / -1; } }
 
 /* ---------- details hero (Page 03) ---------- */
@@ -93,7 +93,7 @@
 .mk-ep { height: 44px; font-size: 14px; border-bottom: 1px solid rgba(110,246,255,.06); }
 .mk-ep[data-live] { background: var(--al-cyan-a06); }
 .mk-ep__num { font-family: var(--al-mono); color: var(--al-text-4); }
-.mk-ep__title { color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: left; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; }
+.mk-ep__title { color: var(--al-text-1); text-align: left; background: none; border: 0; padding: 0; font: inherit; cursor: pointer; overflow-wrap: anywhere; }
 .mk-ep__title:hover { color: var(--al-cyan); }
 .mk-ep__date { color: var(--al-text-3); font-size: 13px; }
 .mk-ep__size { font-family: var(--al-mono); font-size: 13px; color: var(--al-text-3); }
@@ -109,7 +109,7 @@
 }
 
 /* ---------- release table cells ---------- */
-.mk-release-title { max-width: 420px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; color: var(--al-text-1); }
+.mk-release-title { display: block; color: var(--al-text-1); overflow-wrap: anywhere; }
 .mk-scores { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------- drawer content ---------- */
@@ -136,8 +136,8 @@
 .mk-cast__card { display: flex; flex-direction: column; gap: 6px; color: inherit; min-width: 0; }
 .mk-cast__card:hover { text-decoration: none; }
 .mk-cast__card .al-poster { aspect-ratio: 1 / 1; }
-.mk-cast__name { font-size: 13px; font-weight: 500; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.mk-cast__role { font-size: 12px; color: var(--al-text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-cast__name { font-size: 13px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
+.mk-cast__role { font-size: 12px; color: var(--al-text-4); overflow-wrap: anywhere; }
 
 /* ---------- table title cell with a small poster ---------- */
 .mk-title-cell { display: flex; align-items: center; gap: 12px; min-width: 0; }
@@ -167,7 +167,7 @@
 /* Mobile list rows (wanted, requests). 44px+ hit targets. */
 .mk-mlist { display: flex; flex-direction: column; border: 1px solid var(--al-line-2); }
 .mk-mrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 62px; padding: 8px 14px; border-bottom: 1px solid var(--al-line-1); }
-.mk-mrow__title { font-size: 14px; font-weight: 500; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mk-mrow__title { font-size: 14px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .mk-mrow__sub { font-size: 12px; color: var(--al-text-4); }
 
 /* ---------- checkbox grid (permission matrix, season checklist) ---------- */

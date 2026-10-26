@@ -117,6 +117,20 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     link: { get label() { return t('common.downloadClients'); }, to: '/settings/downloadclients' },
   },
   {
+    anchor: 'hard-links-not-possible',
+    sources: ['HardLinkCheck'],
+    get title() {
+      return t('docs.healthDocs.hardLinksAreNotPossible');
+    },
+    get cause() {
+      return t('docs.healthDocs.theDownloadFolderAndThe');
+    },
+    get fix() {
+      return [t('docs.healthDocs.mountOneSharedFolderFor'), t('docs.healthDocs.pointRootFoldersAndThe')];
+    },
+    link: { get label() { return t('common.downloadClients'); }, to: '/settings/downloadclients' },
+  },
+  {
     anchor: 'docker-bad-remote-path-mapping',
     sources: ['RemotePathMappingCheck'],
     get title() {

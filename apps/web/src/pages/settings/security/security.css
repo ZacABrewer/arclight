@@ -7,7 +7,7 @@
 .al-you { margin-left: 6px; color: var(--al-text-4); font-size: 13px; }
 .al-sub { display: block; font-size: 12px; color: var(--al-text-4); }
 .al-editor-stack { display: flex; flex-direction: column; gap: 16px; }
-.al-ua { display: block; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.al-ua { display: block; overflow-wrap: anywhere; }
 
 @media (max-width: 767px) {
   .al-api-key__input { max-width: none; flex-basis: 100%; }

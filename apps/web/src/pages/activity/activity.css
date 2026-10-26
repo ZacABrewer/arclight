@@ -18,8 +18,8 @@
 
 /* Title + sub line (queue / pending rich rows). */
 .al-activity-title { display: flex; flex-direction: column; gap: 2px; min-width: 0; max-width: 520px; }
-.al-activity-title__main { font-weight: 500; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.al-activity-title__sub { font-size: 12px; color: var(--al-text-4); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-activity-title__main { font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
+.al-activity-title__sub { font-size: 12px; color: var(--al-text-4); overflow-wrap: anywhere; }
 
 /* Row-opening title button (history). */
 .al-activity-rowlink { all: unset; cursor: pointer; color: var(--al-text-1); overflow-wrap: anywhere; min-height: 24px; }

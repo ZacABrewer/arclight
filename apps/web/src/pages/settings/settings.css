@@ -39,7 +39,7 @@
 .al-item-card[data-muted='true'] { opacity: .62; }
 .al-item-card .al-pane__body { display: flex; flex-direction: column; gap: 12px; }
 .al-item-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
-.al-item-card__title { margin: 0; font-size: 18px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-family: var(--al-font); }
+.al-item-card__title { margin: 0; font-size: 18px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); min-width: 0; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-family: var(--al-font); overflow-wrap: anywhere; }
 .al-item-card__title:hover { color: var(--al-cyan); }
 .al-item-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--al-text-4); }
 .al-item-card__actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }

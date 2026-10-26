@@ -158,9 +158,9 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-modal-layer { position: fixed; inset: 0; z-index: 90; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .al-modal-layer > .al-scrim { z-index: 0; }
 .al-modal { display: flex; flex-direction: column; max-height: calc(100vh - 32px); }
-.al-modal--560 { width: min(560px, calc(100vw - 32px)); }
-.al-modal--640 { width: min(640px, calc(100vw - 32px)); }
-.al-modal--1100 { width: min(1100px, calc(100vw - 32px)); }
+.al-modal--560 { width: min(680px, calc(100vw - 32px)); }
+.al-modal--640 { width: min(780px, calc(100vw - 32px)); }
+.al-modal--1100 { width: min(1280px, calc(100vw - 32px)); }
 .al-modal__edge { position: absolute; left: 0; top: 18px; width: 25px; height: 1px; background: var(--al-edge); transform: rotate(-45deg); transform-origin: 0 0; pointer-events: none; }
 .al-modal__head { display: flex; align-items: flex-start; gap: 12px; }
 .al-modal__head > .al-modal__title { flex: 1; margin: 0; }
@@ -296,7 +296,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-backdrop-frame--bleed { border: 0; aspect-ratio: auto; }
 .al-poster-card { display: flex; flex-direction: column; gap: 9px; min-width: 0; }
 .al-poster-card__title-row { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
-.al-poster-card__title { font-size: 15px; font-weight: 500; color: var(--al-text-1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-poster-card__title { font-size: 15px; font-weight: 500; color: var(--al-text-1); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; overflow-wrap: anywhere; }
 .al-poster-card__meta { font-size: 12px; color: var(--al-text-4); margin-top: -6px; }
 
 /* ---------- timeline (one of the few allowed decorative traces) ---------- */
@@ -408,7 +408,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-cmd__group { padding: 10px 20px 6px; }
 .al-cmd__row { display: flex; align-items: center; gap: 12px; width: 100%; height: 44px; padding: 0 20px; border: 0; background: transparent; font: 14px var(--al-font); color: var(--al-text-2); text-align: left; cursor: pointer; }
 .al-cmd__row[aria-selected="true"] { background: rgba(110,246,255,.08); color: var(--al-text-1); }
-.al-cmd__row-label { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.al-cmd__row-label { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .al-cmd__row-meta { font-size: 13px; color: var(--al-text-4); white-space: nowrap; }
 .al-cmd__row-hint { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
 .al-cmd__empty { padding: 20px; font-size: 14px; color: var(--al-text-4); }

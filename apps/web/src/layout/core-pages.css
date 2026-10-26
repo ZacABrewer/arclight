@@ -30,7 +30,7 @@
 .dash-upcoming__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: inherit; }
 .dash-upcoming__body:hover { text-decoration: none; }
 .dash-upcoming__body:hover .dash-upcoming__title { color: var(--al-cyan); }
-.dash-upcoming__title { font-size: 17px; font-weight: 500; color: var(--al-text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-upcoming__title { font-size: 17px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .dash-upcoming__detail { font-size: 14px; color: var(--al-text-4); }
 
 .dash-status__block { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 16px 24px; border-bottom: 1px solid rgba(110,246,255,.1); }
@@ -38,7 +38,7 @@
 .dash-status__headline { font-size: 18px; font-weight: 500; color: var(--al-text-1); }
 .dash-storage, .dash-issues { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
 .dash-storage > li { display: flex; justify-content: space-between; gap: 12px; font-size: 14px; color: var(--al-text-2); }
-.dash-storage__path { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-storage__path { min-width: 0; overflow-wrap: anywhere; }
 .dash-storage > li > span:last-child { flex: none; white-space: nowrap; }
 .dash-storage [data-tone="warn"] { color: var(--al-warn-text); }
 .dash-issues > li { font-size: 14px; line-height: 1.4; color: var(--al-text-1); }
@@ -50,7 +50,7 @@
 .dash-queue__row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 110px; gap: 24px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(110,246,255,.07); }
 .dash-queue__row:last-child { border-bottom: 0; }
 .dash-queue__title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.dash-queue__name { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-queue__name { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .dash-queue__row[data-attention] .dash-queue__name { color: var(--al-warn-text); }
 .dash-queue__detail { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-size: 13px; color: var(--al-text-4); }
 .dash-queue__pct { display: flex; flex-direction: column; align-items: flex-end; font-size: 15px; color: var(--al-text-1); }
@@ -60,7 +60,7 @@
 .dash-requests__rows > li { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(110,246,255,.07); }
 .dash-requests__rows > li:last-child { border-bottom: 0; padding-bottom: 0; }
 .dash-requests__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.dash-requests__title { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dash-requests__title { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .dash-requests .dash-muted { font-size: 13px; }
 
 /* Below 1280: the centre closes, heroes share the row and the traces go (nothing to point at). */
