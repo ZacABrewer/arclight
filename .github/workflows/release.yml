@@ -46,7 +46,7 @@ jobs:
             type=raw,value=latest
       - name: Build and push
         id: push
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
@@ -101,7 +101,7 @@ jobs:
         with:
           images: ${{ env.IMAGE }}
           tags: type=raw,value=develop
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@v7
         with:
           context: .
           file: docker/Dockerfile
