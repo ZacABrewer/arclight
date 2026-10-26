@@ -430,6 +430,16 @@ describe('first launch', () => {
     expect((await h.app.inject({ method: 'GET', url: '/api/v1/auth/status' })).json()).toMatchObject({ needsSetup: true, adminExists: false, authenticated: false });
   });
 
+  it('creates exactly one admin when two first-launch requests race', async () => {
+    const h = await harness({ admin: false });
+    const create = (username: string) =>
+      h.app.inject({ method: 'POST', url: '/api/v1/setup/admin', payload: { username, password: 'a-long-password-1' } });
+    const codes = (await Promise.all([create('first'), create('second')])).map((r) => r.statusCode).sort();
+    expect(codes).toEqual([201, 409]);
+    const admins = authServiceFor(h.ctx).listUsers().filter((u) => u.role === 'admin');
+    expect(admins).toHaveLength(1);
+  });
+
   it('stays closed even if setup was marked complete without an admin (no default account, no skipping)', async () => {
     const h = await harness({ admin: false });
     setSection(h.db, 'security', SecuritySettings.parse({ setupComplete: true, method: 'none', requireForLocal: false }));

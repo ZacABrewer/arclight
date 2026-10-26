@@ -19,6 +19,8 @@ import { AuthError, type AuthService, type RequestAuth } from './service.js';
 // also accepts everything in one body for headless installs.
 
 export class SetupService {
+  private creatingAdmin = false;
+
   constructor(
     private readonly db: Db,
     private readonly auth: AuthService,
@@ -56,8 +58,15 @@ export class SetupService {
 
   /** The first admin: a local account (username + password), only while no admin exists. */
   async createAdmin(input: SetupAdminRequest): Promise<User> {
-    if (this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
-    return this.auth.createUser({ ...input, role: 'admin' });
+    // One at a time: hashing the password yields, so two first-launch requests could otherwise
+    // both pass the "no admin yet" check and create two admins.
+    if (this.creatingAdmin || this.auth.hasAdmin()) throw new AuthError('USER_EXISTS', 'an admin account already exists');
+    this.creatingAdmin = true;
+    try {
+      return await this.auth.createUser({ ...input, role: 'admin' });
+    } finally {
+      this.creatingAdmin = false;
+    }
   }
 
   async addRootFolder(input: SetupRootFolderRequest): Promise<RootFolder> {
