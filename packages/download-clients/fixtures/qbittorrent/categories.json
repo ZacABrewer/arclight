@@ -1,0 +1,14 @@
+{
+  "tv": {
+    "name": "tv",
+    "savePath": "/downloads/tv"
+  },
+  "movies": {
+    "name": "movies",
+    "savePath": ""
+  },
+  "rel": {
+    "name": "rel",
+    "savePath": "sub/rel"
+  }
+}

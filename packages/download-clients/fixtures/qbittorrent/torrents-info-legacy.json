@@ -1,0 +1,28 @@
+[
+  {
+    "hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "name": "Movie.Title.2020.1080p.BluRay.x264-GRP",
+    "size": 8000000000,
+    "progress": 1,
+    "eta": 8640000,
+    "state": "pausedUP",
+    "category": "movies",
+    "save_path": "/data/movies/",
+    "ratio": 2.1,
+    "ratio_limit": -2,
+    "seeding_time_limit": -2,
+    "last_activity": 1761000000
+  },
+  {
+    "hash": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "name": "Movie.Other.2021.720p.WEB-DL-GRP",
+    "size": 3000000000,
+    "progress": 0.5,
+    "eta": 600,
+    "state": "downloading",
+    "category": "movies",
+    "save_path": "/data/movies/",
+    "ratio": 0,
+    "last_activity": 1761000000
+  }
+]

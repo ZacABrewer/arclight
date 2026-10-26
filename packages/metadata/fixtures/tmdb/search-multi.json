@@ -1,0 +1,53 @@
+{
+  "page": 1,
+  "results": [
+    {
+      "adult": false,
+      "backdrop_path": "/harbor-backdrop.jpg",
+      "id": 55500,
+      "title": "The Last Harbor",
+      "original_language": "en",
+      "original_title": "The Last Harbor",
+      "overview": "A lighthouse keeper discovers the sea has started sending letters.",
+      "poster_path": "/harbor-poster.jpg",
+      "media_type": "movie",
+      "genre_ids": [878, 53],
+      "popularity": 88.4,
+      "release_date": "2023-07-21",
+      "video": false,
+      "vote_average": 7.4,
+      "vote_count": 2210
+    },
+    {
+      "adult": false,
+      "backdrop_path": "/signal-backdrop.jpg",
+      "id": 90210,
+      "name": "Signal Lost",
+      "original_language": "en",
+      "original_name": "Signal Lost",
+      "overview": "A radio operator picks up a transmission from a town that no longer exists.",
+      "poster_path": "/signal-poster.jpg",
+      "media_type": "tv",
+      "genre_ids": [18, 9648],
+      "popularity": 142.7,
+      "first_air_date": "2021-09-14",
+      "vote_average": 8.1,
+      "vote_count": 1304,
+      "origin_country": ["US"]
+    },
+    {
+      "adult": false,
+      "id": 777001,
+      "name": "Harbor Lastname",
+      "original_name": "Harbor Lastname",
+      "media_type": "person",
+      "popularity": 4.5,
+      "gender": 2,
+      "known_for_department": "Acting",
+      "profile_path": "/harbor-profile.jpg",
+      "known_for": []
+    }
+  ],
+  "total_pages": 1,
+  "total_results": 3
+}
