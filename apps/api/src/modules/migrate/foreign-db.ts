@@ -9,7 +9,50 @@ import { MigrateError } from './errors.js';
 
 export type ForeignRow = Record<string, unknown>;
 
-export class ForeignDb {
+/**
+ * What a reader needs from a source: rows of named tables (lower-cased keys) and a version
+ * scalar. Implemented by ForeignDb (an app's SQLite file) and MemoryTables (rows built from an
+ * app's API responses in the same shape), so one reader serves both modes.
+ */
+export interface TableSource {
+  rows(...candidates: string[]): ForeignRow[];
+  hasTable(...candidates: string[]): boolean;
+  /** A single scalar from a read-only query; null when not answerable. */
+  scalar(sql: string): unknown;
+  close(): void;
+}
+
+/** In-memory tables (API mode). `scalars` answers `scalar(sql)` by exact SQL text. */
+export class MemoryTables implements TableSource {
+  private readonly tables = new Map<string, ForeignRow[]>();
+
+  constructor(
+    tables: Record<string, ForeignRow[]>,
+    private readonly scalars: Record<string, unknown> = {},
+  ) {
+    for (const [name, rows] of Object.entries(tables)) this.tables.set(name.toLowerCase(), rows.map(lowerKeys));
+  }
+
+  rows(...candidates: string[]): ForeignRow[] {
+    for (const c of candidates) {
+      const hit = this.tables.get(c.toLowerCase());
+      if (hit) return hit;
+    }
+    return [];
+  }
+
+  hasTable(...candidates: string[]): boolean {
+    return candidates.some((c) => this.tables.has(c.toLowerCase()));
+  }
+
+  scalar(sql: string): unknown {
+    return this.scalars[sql] ?? null;
+  }
+
+  close(): void {}
+}
+
+export class ForeignDb implements TableSource {
   private readonly tables: Map<string, string>;
 
   private constructor(private readonly sqlite: Database.Database) {

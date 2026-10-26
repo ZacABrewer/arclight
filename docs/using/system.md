@@ -60,7 +60,7 @@ The most common ones are covered in [Troubleshooting](../TROUBLESHOOTING.md), fo
 
 ## Import
 
-System > Import brings settings and libraries over from Sonarr, Radarr, Prowlarr, Bazarr and Overseerr. See [migrating.md](../getting-started/migrating.md).
+System > Import ("Import your existing stack") is a wizard that brings settings, libraries, history, users and running torrents over from Sonarr, Radarr, Prowlarr, Bazarr, Overseerr / Jellyseerr and qBittorrent, through their live API or their files. It starts with a dry run, takes a backup before a real run, runs as the `MigrateStack` task (System > Tasks) and can be resumed if it fails. Administrators only. See [migrating.md](../getting-started/migrating.md).
 
 ## Updates
 

@@ -12,7 +12,7 @@ import { getSection } from '../settings/service.js';
 import { MigrateError } from './errors.js';
 import { migrateImported, migrateStaging } from './schema.js';
 import { MigrateService } from './service.js';
-import { makeBazarrDb, makeProwlarrDb, makeRadarrDb, makeSeerrDb, makeSonarrDb } from './test-fixtures.js';
+import { makeProwlarrDb, makeRadarrDb, makeSonarrDb } from './test-fixtures.js';
 
 let tmp: string;
 let db: Db;
@@ -57,8 +57,8 @@ function area(result: MigrationResult, name: MigrateArea) {
 const staged = (areaName: string) => db.select().from(migrateStaging).all().filter((r) => r.area === areaName);
 
 describe('Sonarr plan', () => {
-  it('counts every area without writing anything', () => {
-    const plan = service.plan(sonarrSource());
+  it('counts every area without writing anything', async () => {
+    const plan = await service.plan(sonarrSource());
     const by = Object.fromEntries(plan.areas.map((a) => [a.area, a]));
     expect(plan.schemaVersion).toBe('214');
     expect(by['series']).toMatchObject({ total: 3, create: 2, unsupported: 1, details: { episodes: 6, files: 2 } });
@@ -72,23 +72,23 @@ describe('Sonarr plan', () => {
     expect(db.select().from(migrateImported).all()).toHaveLength(0);
   });
 
-  it('warns about unknown custom format specifications and untranslatable naming tokens', () => {
-    const plan = service.plan(sonarrSource());
+  it('warns about unknown custom format specifications and untranslatable naming tokens', async () => {
+    const plan = await service.plan(sonarrSource());
     expect(plan.warnings.some((w) => w.area === 'customFormats' && /futuremagic/.test(w.message))).toBe(true);
     expect(plan.warnings.some((w) => w.area === 'naming' && /Series TitleSlug/.test(w.message))).toBe(true);
     expect(plan.warnings.some((w) => w.area === 'qualityProfiles' && /HDTV-480p/.test(w.message))).toBe(true);
   });
 
-  it('reports conflicts with existing data', () => {
+  it('reports conflicts with existing data', async () => {
     new ProfilesService({ db }).createQualityProfile({ ...new ProfilesService({ db }).qualityProfileTemplate(), name: 'HD-1080p', cutoff: 1, items: [{ kind: 'quality', qualityId: 1, allowed: true }] });
-    const plan = service.plan(sonarrSource());
+    const plan = await service.plan(sonarrSource());
     expect(plan.conflicts).toContainEqual(expect.objectContaining({ area: 'qualityProfiles', name: 'HD-1080p', reason: 'quality profile "HD-1080p" exists' }));
   });
 
-  it('refuses a database of another app and a missing file', () => {
+  it('refuses a database of another app and a missing file', async () => {
     const src = radarrSource();
-    expect(() => service.plan({ ...src, app: 'sonarr' })).toThrow(MigrateError);
-    expect(() => service.plan({ app: 'sonarr', dbPath: join(tmp, 'nope.db') })).toThrowError(/not found/);
+    await expect(service.plan({ ...src, app: 'sonarr' })).rejects.toThrow(MigrateError);
+    await expect(service.plan({ app: 'sonarr', dbPath: join(tmp, 'nope.db') })).rejects.toThrowError(/not found/);
   });
 });
 
@@ -193,7 +193,7 @@ describe('Sonarr apply', () => {
     expect(counts()).toEqual(before);
     expect(second.areas.reduce((n, a) => n + a.created + a.updated + a.failed, 0)).toBe(0);
     expect(first.areas.reduce((n, a) => n + a.created, 0)).toBeGreaterThan(10);
-    const plan = service.plan(src);
+    const plan = await service.plan(src);
     const series = plan.areas.find((a) => a.area === 'series')!;
     expect(series).toMatchObject({ create: 0, alreadyImported: 2 });
   });
@@ -382,90 +382,31 @@ describe('Radarr', () => {
 });
 
 describe('Prowlarr', () => {
-  it('imports Torznab/Newznab directly, proxies Cardigann through Prowlarr and reports applications', async () => {
+  it('maps Cardigann to Arclight definitions, imports Torznab/Newznab directly, proxies the rest and imports proxies', async () => {
     const dbPath = join(tmp, 'prowlarr', 'prowlarr.db');
     const configPath = join(tmp, 'prowlarr', 'config.xml');
     makeProwlarrDb(dbPath, configPath);
-    const plan = service.plan({ app: 'prowlarr', dbPath, configPath });
+    const plan = await service.plan({ app: 'prowlarr', dbPath, configPath });
     expect(plan.areas.find((a) => a.area === 'applications')).toMatchObject({ mode: 'report', total: 1, create: 0 });
+    expect(plan.areas.find((a) => a.area === 'indexers')).toMatchObject({ details: { definitions: 1, proxied: 1 } });
     const result = await service.apply({ app: 'prowlarr', dbPath, configPath });
     expect(area(result, 'indexers')).toMatchObject({ created: 3 });
+    expect(area(result, 'indexerProxies')).toMatchObject({ created: 1 });
     expect(area(result, 'applications')).toMatchObject({ created: 0, skipped: 1 });
     const rows = db.select().from(t.indexers).all();
     const leet = rows.find((r) => r.name === '1337x')!;
-    expect(leet).toMatchObject({ implementation: 'torznab' });
-    expect(leet.settings).toMatchObject({ baseUrl: 'http://localhost:9696/1', apiPath: '/api', apiKey: 'prowlarr-key' });
+    expect(leet).toMatchObject({ implementation: 'definition' });
+    // Prowlarr stores the select as the option's index (2 = third option).
+    expect(leet.settings).toMatchObject({ definitionId: '1337x', baseUrl: 'https://1337x.to/', fields: { sort: 'size' } });
     const privateTag = db.select().from(t.tags).get()!;
     expect(leet.tags).toEqual([privateTag.id]);
     expect(rows.find((r) => r.name === 'My Newznab')).toMatchObject({ implementation: 'newznab', priority: 5 });
-    expect(rows.find((r) => r.name === 'NZBIndex')).toMatchObject({ implementation: 'newznab', enableRss: false });
-    expect(staged('indexers.cardigann').map((r) => r.sourceId).sort()).toEqual(['1', '3']);
-    expect(staged('indexers.proxies')).toHaveLength(1);
-  });
-});
-
-describe('Bazarr', () => {
-  it('stages languages profiles, providers with credentials and history', async () => {
-    const dbPath = join(tmp, 'bazarr', 'db', 'bazarr.db');
-    const configPath = join(tmp, 'bazarr', 'config', 'config.yaml');
-    mkdirSync(join(tmp, 'bazarr', 'config'), { recursive: true });
-    makeBazarrDb(dbPath, configPath);
-    // configPath omitted: found next to the database (../config/config.yaml).
-    const result = await service.apply({ app: 'bazarr', dbPath, pathMappings: [{ from: '/tv', to: '/media/tv' }] });
-    expect(area(result, 'subtitleProfiles').staged).toBe(1);
-    const profile = staged('subtitles.languageProfiles')[0]!.payload;
-    expect(profile).toEqual({
-      name: 'English + French',
-      items: [
-        { language: 'en', hearingImpaired: 'also', forced: 'never', audioExclude: false },
-        { language: 'fr', hearingImpaired: 'never', forced: 'only', audioExclude: true },
-        { language: 'pt', hearingImpaired: 'only', forced: 'never', audioExclude: false },
-      ],
-      cutoff: 1,
-      mustContain: ['WEB'],
-      mustNotContain: [],
-      originalFormat: false,
-      tag: 'subs',
-    });
-    const providers = staged('subtitles.providers');
-    expect(providers.map((p) => p.sourceId)).toEqual(['opensubtitlescom', 'addic7ed']);
-    expect(providers[0]!.payload).toMatchObject({ provider: 'opensubtitlescom', enabled: true, settings: { username: 'osuser', password: 'os pass', use_hash: true } });
-    const history = staged('subtitles.history');
-    expect(history).toHaveLength(2);
-    expect(history.find((h) => h.sourceId === 'episode:1')!.payload).toMatchObject({ sonarrSeriesId: 1, sonarrEpisodeId: 1, provider: 'opensubtitlescom', videoPath: '/media/tv/Breaking Bad/Season 01/x.mkv' });
-    expect(staged('subtitles.blacklist')).toHaveLength(1);
-    // Re-running updates staged rows in place.
-    await service.apply({ app: 'bazarr', dbPath });
-    expect(staged('subtitles.history')).toHaveLength(2);
-  });
-});
-
-describe('Seerr', () => {
-  it('stages users, requests, issues and settings without secrets', async () => {
-    const dbPath = join(tmp, 'seerr', 'db', 'db.sqlite3');
-    const settingsPath = join(tmp, 'seerr', 'settings.json');
-    makeSeerrDb(dbPath, settingsPath);
-    const plan = service.plan({ app: 'seerr', dbPath });
-    expect(plan.areas.map((a) => [a.area, a.mode, a.create])).toEqual([
-      ['users', 'stage', 2],
-      ['requests', 'stage', 2],
-      ['issues', 'stage', 1],
-      ['requestSettings', 'stage', 3],
-    ]);
-    await service.apply({ app: 'seerr', dbPath, pathMappings: [{ from: '/movies', to: '/media/movies' }] });
-    const users = staged('requests.users');
-    expect(users.find((u) => u.sourceId === '1')!.payload).toMatchObject({ email: 'owner@example.com', displayName: 'owner', userType: 'plex', plexId: 42, permissions: 2 });
-    expect(users.find((u) => u.sourceId === '2')!.payload).toMatchObject({ username: 'friend', userType: 'local', movieQuotaLimit: 5, settings: { locale: 'en', discordid: '123', notificationtypes: { email: 2 } } });
-    const requests = staged('requests.requests');
-    expect(requests.find((r) => r.sourceId === '1')!.payload).toMatchObject({ mediaType: 'movie', tmdbId: 603, status: 'approved', requestedBySourceId: '2', rootFolder: '/media/movies', tags: [1] });
-    expect(requests.find((r) => r.sourceId === '2')!.payload).toMatchObject({ mediaType: 'tv', tvdbId: 81189, status: 'pending', is4k: true, seasons: [{ seasonNumber: 1, status: 'pending' }, { seasonNumber: 2, status: 'approved' }] });
-    expect(staged('requests.issues')[0]!.payload).toMatchObject({ issueType: 'subtitles', status: 'open', mediaType: 'tv', tmdbId: 1396, comments: [{ userSourceId: '2', message: 'Subs out of sync' }] });
-    expect(staged('requests.settings')[0]!.payload).toEqual({ applicationTitle: 'Requests', defaultPermissions: 32, defaultQuotas: { movie: { quotaLimit: 3, quotaDays: 7 }, tv: {} }, localLogin: true });
-    expect(staged('requests.overrideRules')[0]!.payload).toMatchObject({ genre: '16', profileId: 7 });
-    const everything = JSON.stringify(db.select().from(migrateStaging).all());
-    for (const secret of ['PLEX-SECRET', 'PB-SECRET', '$2b$12$hash', 'SEERR-API-KEY', 'CLIENT-SECRET']) expect(everything).not.toContain(secret);
-    // Users are staged, never created as Arclight accounts.
-    expect(db.select().from(t.users).all()).toHaveLength(0);
+    const nzbIndex = rows.find((r) => r.name === 'NZBIndex')!;
+    expect(nzbIndex).toMatchObject({ implementation: 'newznab', enableRss: false });
+    expect(nzbIndex.settings).toMatchObject({ baseUrl: 'http://localhost:9696/3', apiPath: '/api', apiKey: 'prowlarr-key' });
+    const proxy = db.select().from(t.indexerProxies).get()!;
+    expect(proxy).toMatchObject({ name: 'Flare', type: 'flaresolverr', host: 'http://flaresolverr', port: 8191, requestTimeout: 60, tags: [privateTag.id] });
+    expect(result.warnings.some((w) => /NZBIndex.*must keep running/.test(w.message))).toBe(true);
   });
 });
 

@@ -1,6 +1,6 @@
 import type { MigrateArea, MigratePathMapping, MigrationWarning, ReleaseProtocol } from '@arclight/shared';
 import { normalizeData } from '../history/service.js';
-import { bool, field, ForeignDb, idList, int, isoDate, json, jsonArray, jsonObject, str, type ForeignRow } from './foreign-db.js';
+import { bool, field, idList, int, isoDate, json, jsonArray, jsonObject, str, type ForeignRow, type TableSource } from './foreign-db.js';
 import { indexerFlagsFromBits, mapCustomFormat } from './mappers/custom-formats.js';
 import { mapDownloadClient } from './mappers/download-clients.js';
 import { importListCommon, mapImportListSettings } from './mappers/import-lists.js';
@@ -37,7 +37,7 @@ import type { MediaManagementSettings, NamingConfig } from '@arclight/shared';
 // lists, naming, config, history and blocklist. The per-app readers add the library.
 
 export interface ReaderContext {
-  db: ForeignDb;
+  db: TableSource;
   app: ArrApp;
   mappings: readonly MigratePathMapping[];
   warnings: MigrationWarning[];
@@ -49,8 +49,10 @@ export function warn(ctx: Pick<ReaderContext, 'warnings'>, area: MigrateArea, me
 
 const id = (row: ForeignRow) => String(int(row['id']) ?? '');
 
-export function arrSchemaVersion(db: ForeignDb): string | null {
-  const v = db.scalar('SELECT MAX("Version") FROM "VersionInfo"');
+export const ARR_VERSION_SQL = 'SELECT MAX("Version") FROM "VersionInfo"';
+
+export function arrSchemaVersion(db: TableSource): string | null {
+  const v = db.scalar(ARR_VERSION_SQL);
   return v === null ? null : String(v);
 }
 
@@ -359,7 +361,7 @@ export function readNaming(ctx: ReaderContext): AreaBundle<SettingsPayload<Namin
   return importArea([{ sourceId: 'naming', name: 'Naming', payload: { values } }]);
 }
 
-export function readConfigTable(db: ForeignDb): Record<string, string> {
+export function readConfigTable(db: TableSource): Record<string, string> {
   const out: Record<string, string> = {};
   for (const r of db.rows('Config')) {
     const key = str(r['key']);

@@ -5,7 +5,7 @@ Something is not working. This page is organised by what you see: find your symp
 Contents:
 
 - [First checks](#first-checks)
-- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start
+- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start
 - [Health checks](#health-checks): all 42, with a table of anchors
 - [Still stuck](#still-stuck)
 
@@ -162,6 +162,35 @@ The wording of these messages can differ slightly by version; the row is the aut
 **How to confirm:** Activity > Queue, open the row and read the Timeline ("Import blocked" with the message). Failed imports also appear in Activity > History. Blocked imports are retried automatically; **Retry import** forces it.
 
 **Fix:** apply the fix for the reason shown, then press **Retry import**, or import by hand under Activity > Manual import. If a download waits for more than six hours, the Health page adds [downloads-awaiting-manual-import](#downloads-awaiting-manual-import).
+
+---
+
+<a id="import-wizard-problems"></a>
+### Import wizard problems (System > Import)
+
+**What you see:** the "Import your existing stack" wizard fails to connect, refuses items, or stops half way. The walkthrough is in [migrating.md](getting-started/migrating.md).
+
+| Message or symptom | Cause | Fix |
+|---|---|---|
+| "Not connected" after Test, app unreachable | Arclight cannot reach the URL from inside its container. `localhost` there means Arclight itself | Put both containers on one Docker network and use the container name (`http://sonarr:8989`), or use the host's address and published port. Include any URL base (`/sonarr`). Check a reverse proxy is not sending a login page |
+| Test says the key was rejected | Wrong API key, or the app sits behind an auth proxy | Copy the key again from Settings > General (Overseerr / Jellyseerr: Settings > General > API Key). For qBittorrent re-enter username and password, or leave both empty if the WebUI skips authentication for Arclight's address |
+| "this is a Radarr database, not Sonarr" (or "this is Radarr, not Sonarr") | The URL or file belongs to a different app | Point each app at its own URL or database. The message names the app that was found |
+| "was not found inside the Arclight container" | The folder is not mounted | Add a read-only mount, recreate the container, and use the path as Arclight sees it. See [Mount the old config folders](getting-started/migrating.md#mount-the-old-config-folders-files-mode) |
+| Preview lists fields to re-enter, or imported items say to re-enter a password | Over the API, recent apps hide passwords and API keys (`********`) | Re-enter them in Arclight, or read that app again in Files mode, which carries secrets |
+| Bazarr history entries skipped | The API gave only relative dates such as "3 days ago" | Use Files mode for Bazarr |
+| Torrent refused: files missing, renamed or a different size at the mapped path | Arclight cannot see the data where qBittorrent kept it, or the files were renamed | Mount the same `/data` share into Arclight, or add a path mapping for that source. Nothing was added and nothing re-downloads. Run the import again afterwards |
+| Torrent refused: unfinished `*.!qB` files | qBittorrent's "append .!qB" option | Let it finish in qBittorrent, or turn that option off, then run the import again |
+| "cannot export .torrent files (4.5 or newer can)" | qBittorrent is older than 4.5 | Upgrade qBittorrent, or use Files mode with the `BT_backup` folder |
+| "the built-in torrent engine is not running" | Adoption needs the engine | Enable it under Settings > Torrent engine, or set the category to "Keep in qBittorrent" |
+| Adopted torrents are paused | Only one client may use a torrent's files, so they are added paused unless you confirmed the pause step | Stop qBittorrent (or its torrents), then resume them in Arclight. Next time tick "Pause each torrent in qBittorrent before adopting it" |
+| The import failed half way, or Arclight restarted | A real run was cut short | Open System > Import and press **Resume**. Completed sources are kept and nothing is duplicated. System > Tasks shows `MigrateStack` and the log shows the failing item |
+| An indexer still needs Prowlarr | Arclight has no definition for that indexer, so it is reached through Prowlarr's own endpoint | Keep Prowlarr running, or add the indexer natively in Settings > Indexers and disable the imported one |
+| Imported users cannot log in with a password | No password is copied from Overseerr / Jellyseerr | They sign in with their Jellyfin, Emby or Plex account. An admin can set a local password. Check the media server is configured with sign-in enabled |
+| "An import is already running" | One import runs at a time | Wait for it, or watch it under System > Tasks |
+
+**How to confirm:** the report and the log on the Import page give a reason per item. "Download report (JSON)" saves it (secrets masked). A dry run shows all of this without writing anything.
+
+**Undo:** a real run takes a backup first; restore it from System > Backups ([backup-restore.md](getting-started/backup-restore.md)).
 
 ---
 

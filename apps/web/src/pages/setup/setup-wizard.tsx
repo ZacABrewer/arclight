@@ -396,12 +396,12 @@ function VpnStep({ onBack }: { onBack: () => void }) {
   const [failure, setFailure] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  const finish = async () => {
+  const finish = async (to: '/' | '/system/migrate' = '/') => {
     setBusy(true);
     try {
       await setupApi.complete({ authMethod: method });
       await qc.invalidateQueries({ queryKey: authKeys.all });
-      await router.navigate({ to: '/', replace: true });
+      await router.navigate({ to, replace: true });
     } catch (err) {
       setFailure(errorMessage(err));
       setBusy(false);
@@ -426,6 +426,14 @@ function VpnStep({ onBack }: { onBack: () => void }) {
             ]}
           />
         </Field>
+      </FormSection>
+      <FormSection label={t('setup.wizard.importStackOptional')}>
+        <p className="wiz-muted">{t('setup.wizard.importStackLead')}</p>
+        <div>
+          <Button variant="secondary" loading={busy} onClick={() => void finish('/system/migrate')}>
+            {t('setup.wizard.finishAndImport')}
+          </Button>
+        </div>
       </FormSection>
       {failure ? <ErrorBlock title={t('setup.wizard.couldntFinishSetup')}>{failure}</ErrorBlock> : null}
       <StepFooter onBack={onBack} onSkip={() => void finish()} onContinue={() => void finish()} continueLabel={t('setup.wizard.finishSetup')} busy={busy} />

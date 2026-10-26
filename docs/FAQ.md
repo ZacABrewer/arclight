@@ -19,7 +19,25 @@ Yes, each of those jobs is built in: [Library](using/library.md) (Sonarr/Radarr)
 Yes, but let only one app download, or they will fight over the same titles. Radarr also uses port 7878, so give Arclight another host port (`ARCLIGHT_PORT`, or the left side of the `7878:7878` mapping in compose). See [Migrating](getting-started/migrating.md).
 
 ### Can I import my existing setup?
-Yes. System > Import reads the databases of Sonarr, Radarr, Prowlarr, Bazarr and Seerr and lets you choose what to copy, with path mappings for different mount points. See [Migrating](getting-started/migrating.md).
+Yes. System > Import ("Import your existing stack") reads Sonarr, Radarr, Prowlarr, Bazarr, Overseerr / Jellyseerr and qBittorrent, through their live API or their files, and lets you choose what to copy. See [Migrating](getting-started/migrating.md).
+
+### Will importing from qBittorrent make my torrents download again?
+No. Arclight checks that the files are at the mapped path first, refuses any torrent whose files are missing or the wrong size, and either hashes the existing data or trusts complete files, so a complete torrent comes up seeding. Upload totals, seeding time and limits carry over, so private-tracker rules keep counting. Files are never moved or deleted. See [Adopting qBittorrent torrents](getting-started/migrating.md#adopting-qbittorrent-torrents).
+
+### Does the import change or delete anything in Sonarr, Radarr and the others?
+No. The old apps are only read, and nothing in Arclight is ever deleted by the import. The one optional exception is the clean-up on the report, which can pause torrents in qBittorrent or remove them from its list (files kept) after you confirm it.
+
+### Can I undo an import?
+Yes. A real run takes an Arclight backup first; restore it from System > Backups. Restoring does not touch qBittorrent. See [Dry run, backup and rollback](getting-started/migrating.md#dry-run-backup-and-rollback).
+
+### Should I use the live API or the files?
+Use the API while the old app runs, and files when it is stopped or gone. Recent Sonarr, Radarr, Prowlarr and Bazarr hide passwords and API keys over the API, so those need re-entering; files carry them. See [API or files](getting-started/migrating.md#api-or-files).
+
+### Can I run the import twice?
+Yes. Everything already imported is skipped, so repeating it never duplicates anything. A run that failed or was interrupted can be continued with Resume.
+
+### Will my Overseerr users keep their passwords?
+No password is copied. Imported users sign in with their Jellyfin, Emby or Plex account, and an admin can set a local password. The import never creates an Arclight administrator. See [Overseerr and Jellyseerr](getting-started/migrating.md#overseerr-and-jellyseerr).
 
 ### What does it cost, and what is the licence?
 It is free software under the GPL-3.0 licence ([LICENSE](../LICENSE)). It is an independent implementation; [NOTICE.md](../NOTICE.md) lists the projects whose behaviour informed it.

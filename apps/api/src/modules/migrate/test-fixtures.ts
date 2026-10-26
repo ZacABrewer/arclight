@@ -370,6 +370,28 @@ export function makeBazarrDb(path: string, configPath?: string): void {
   });
   db.exec('CREATE TABLE table_history (id INTEGER PRIMARY KEY, action INTEGER NOT NULL, description TEXT NOT NULL, language TEXT, provider TEXT, score INTEGER, sonarrEpisodeId INTEGER, sonarrSeriesId INTEGER, subs_id TEXT, subtitles_path TEXT, timestamp DATETIME NOT NULL, video_path TEXT)');
   insert(db, 'table_history', { id: 1, action: 1, description: 'English subtitles downloaded', language: 'en', provider: 'opensubtitlescom', score: 95, sonarrEpisodeId: 1, sonarrSeriesId: 1, subs_id: 's1', subtitles_path: '/tv/Breaking Bad/Season 01/x.en.srt', timestamp: '2021-01-01 10:00:00', video_path: '/tv/Breaking Bad/Season 01/x.mkv' });
+  insert(db, 'table_history', { id: 2, action: 3, description: 'English HI subtitles upgraded', language: 'en:hi', provider: 'addic7ed', score: 300, sonarrEpisodeId: 1, sonarrSeriesId: 1, subs_id: 's2', subtitles_path: '/tv/Breaking Bad/Season 01/Breaking.Bad.S01E01E02.1080p.WEB-DL.en.hi.srt', timestamp: '2021-01-05 10:00:00', video_path: '/tv/Breaking Bad/Season 01/Breaking.Bad.S01E01E02.1080p.WEB-DL.mkv' });
+  db.exec('CREATE TABLE table_shows (sonarrSeriesId INTEGER PRIMARY KEY, title TEXT, path TEXT, tvdbId INTEGER, imdbId TEXT, profileId INTEGER)');
+  insert(db, 'table_shows', { sonarrSeriesId: 1, title: 'Breaking Bad', path: '/tv/Breaking Bad', tvdbId: 81189, imdbId: 'tt0903747', profileId: 1 });
+  insert(db, 'table_shows', { sonarrSeriesId: 9, title: 'Not In Library', path: '/tv/Nope', tvdbId: 1, profileId: 1 });
+  db.exec('CREATE TABLE table_episodes (sonarrEpisodeId INTEGER PRIMARY KEY, sonarrSeriesId INTEGER, path TEXT, subtitles TEXT)');
+  insert(db, 'table_episodes', {
+    sonarrEpisodeId: 1,
+    sonarrSeriesId: 1,
+    path: '/tv/Breaking Bad/Season 01/Breaking.Bad.S01E01E02.1080p.WEB-DL.mkv',
+    // Older Bazarr releases store a Python literal.
+    subtitles: "[['en', '/tv/Breaking Bad/Season 01/Breaking.Bad.S01E01E02.1080p.WEB-DL.en.srt', 1200], ['fr:forced', None, None], ['de', '/tv/Breaking Bad/Season 01/missing.de.srt', 5]]",
+  });
+  db.exec('CREATE TABLE table_movies (radarrId INTEGER PRIMARY KEY, title TEXT, path TEXT, tmdbId INTEGER, imdbId TEXT, profileId INTEGER, subtitles TEXT)');
+  insert(db, 'table_movies', {
+    radarrId: 1,
+    title: 'The Matrix',
+    path: '/movies/The Matrix (1999)/The.Matrix.1999.Remux.mkv',
+    tmdbId: 603,
+    imdbId: 'tt0133093',
+    profileId: 1,
+    subtitles: JSON.stringify([['en:hi', '/movies/The Matrix (1999)/The.Matrix.1999.Remux.en.hi.srt', 3000]]),
+  });
   db.exec('CREATE TABLE table_history_movie (id INTEGER PRIMARY KEY, action INTEGER NOT NULL, description TEXT NOT NULL, language TEXT, provider TEXT, radarrId INTEGER, score INTEGER, subs_id TEXT, subtitles_path TEXT, timestamp DATETIME NOT NULL, video_path TEXT)');
   insert(db, 'table_history_movie', { id: 1, action: 1, description: 'French subtitles', language: 'fr', provider: 'addic7ed', radarrId: 1, score: 80, timestamp: '2021-01-02 10:00:00', video_path: '/movies/M/m.mkv' });
   db.exec('CREATE TABLE table_blacklist (id INTEGER PRIMARY KEY, language TEXT, provider TEXT, sonarr_episode_id INTEGER, sonarr_series_id INTEGER, subs_id TEXT, timestamp DATETIME)');
@@ -384,8 +406,11 @@ export function makeBazarrDb(path: string, configPath?: string): void {
         '  enabled_providers:',
         '  - opensubtitlescom',
         '  - addic7ed',
+        '  - legendasdivx',
         '  use_sonarr: true',
         "  path_mappings: [['/tv', '/data/tv']]",
+        '  serie_default_enabled: true',
+        '  serie_default_profile: 1',
         'opensubtitlescom:',
         '  username: osuser',
         "  password: 'os pass'",

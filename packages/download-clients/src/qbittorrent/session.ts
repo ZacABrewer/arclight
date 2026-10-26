@@ -127,6 +127,16 @@ export class QBittorrentSession {
 
   /** Performs an authenticated request and returns the raw response body. */
   async requestText(path: string, options: RequestOptions = {}): Promise<string> {
+    return (await this.requestOk(path, options)).text();
+  }
+
+  /** Performs an authenticated request and returns the body as bytes (e.g. an exported .torrent). */
+  async requestBytes(path: string, options: RequestOptions = {}): Promise<Uint8Array> {
+    return new Uint8Array(await (await this.requestOk(path, options)).arrayBuffer());
+  }
+
+  /** An authenticated request whose response is 2xx; anything else is mapped to a DownloadClientError. */
+  private async requestOk(path: string, options: RequestOptions): Promise<Response> {
     if (!this.authenticated && this.hasCredentials) await this.login();
 
     const generationUsed = this.generation;
@@ -149,8 +159,8 @@ export class QBittorrentSession {
       }
     }
 
+    if (response.ok) return response;
     const text = await response.text();
-    if (response.ok) return text;
 
     const detail = text.trim() === '' ? '' : `: ${text.trim().slice(0, 200)}`;
     switch (response.status) {

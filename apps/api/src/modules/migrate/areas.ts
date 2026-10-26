@@ -1,7 +1,16 @@
 import { and, asc, eq } from 'drizzle-orm';
 import { existsSync } from 'node:fs';
 import type { Logger } from 'pino';
-import type { MediaManagementSettings, MigrateApp, MigrateArea, MigrateConflictPolicy, NamingConfig } from '@arclight/shared';
+import type {
+  MediaManagementSettings,
+  MigrateApp,
+  MigrateApplyOptions,
+  MigrateArea,
+  MigrateConflictPolicy,
+  MigrateSource,
+  NamingConfig,
+} from '@arclight/shared';
+import type { MigrateDeps } from './deps.js';
 import type { Db } from '../../db/index.js';
 import * as t from '../../db/schema.js';
 import { DownloadClientsService } from '../download-clients/service.js';
@@ -12,6 +21,7 @@ import { createTag, toCleanTitle, toSortTitle } from '../library/service.js';
 import { NotificationsService } from '../notifications/service.js';
 import { ProfilesService } from '../profiles/service.js';
 import { getSection, setSection } from '../settings/service.js';
+import { indexerServiceFor } from './api/prowlarr-definitions.js';
 import { isInside, samePath } from './paths.js';
 import { migrateImported } from './schema.js';
 import type {
@@ -45,6 +55,7 @@ export interface AreaEnv {
   app: MigrateApp;
   instance: string;
   bundle: SourceBundle;
+  /** Conflict policy of the area being applied (per-area override or the run's default). */
   policy: MigrateConflictPolicy;
   now: string;
   log: Logger;
@@ -52,6 +63,12 @@ export interface AreaEnv {
   idMap: Map<string, number>;
   warn(area: MigrateArea, message: string, sourceId?: string): void;
   services: Services;
+  /** True for dry runs: sync handlers run in a rolled-back transaction; async handlers must not change anything. */
+  dryRun: boolean;
+  /** The source being imported (secrets included; never log it). */
+  source: MigrateSource;
+  options: MigrateApplyOptions;
+  deps: MigrateDeps;
 }
 
 export interface Services {
@@ -84,7 +101,30 @@ export interface AreaHandler<A extends MigrateArea> {
   find(env: AreaEnv, item: SourceItem<AreaPayloads[A]>): Existing | null;
   create(env: AreaEnv, item: SourceItem<AreaPayloads[A]>): number | null;
   overwrite?(env: AreaEnv, item: SourceItem<AreaPayloads[A]>, existing: Existing): number | null;
+  /** Policy `merge`: keep the existing row's settings, add what it lacks. Absent: like skip. */
+  merge?(env: AreaEnv, item: SourceItem<AreaPayloads[A]>, existing: Existing): number | null;
 }
+
+export interface AsyncOutcome {
+  kind: 'created' | 'updated' | 'merged' | 'skipped';
+  /** Arclight id recorded in migrate_imported (null when nothing has an id). */
+  id: number | null;
+  message?: string;
+}
+
+/**
+ * Areas whose import needs I/O beyond the database (adopting torrents into the engine, calls to
+ * the source app). Run outside any transaction, after the source's sync areas. With
+ * `env.dryRun` the handler only checks what it would do and must not change anything (no
+ * engine, no source app, no database writes). Throw SkipItem to skip with a reason.
+ */
+export interface AsyncAreaHandler<A extends MigrateArea> {
+  find(env: AreaEnv, item: SourceItem<AreaPayloads[A]>): Existing | null;
+  apply(env: AreaEnv, item: SourceItem<AreaPayloads[A]>, existing: Existing | null): Promise<AsyncOutcome>;
+}
+
+export type Handlers = { [A in MigrateArea]?: AreaHandler<A> };
+export type AsyncHandlers = { [A in MigrateArea]?: AsyncAreaHandler<A> };
 
 // ---- reference resolution ---------------------------------------------------------------
 
@@ -275,8 +315,10 @@ function historyParents(env: AreaEnv, p: HistoryPayload | BlocklistPayload): { s
 
 // ---- handlers ---------------------------------------------------------------------------
 
-type Handlers = { [A in MigrateArea]?: AreaHandler<A> };
-
+/**
+ * Handlers for the Sonarr/Radarr/Prowlarr areas. Bazarr, Seerr, indexer proxies and torrents
+ * live in their own `areas-*.ts` files; `handlers.ts` combines them all.
+ */
 export const HANDLERS: Handlers = {
   tags: {
     find: (env, item) => {
@@ -366,12 +408,12 @@ export const HANDLERS: Handlers = {
     },
     create: (env, item) => {
       const downloadClientId = resolveRef(env, 'downloadClients', item.payload.sourceDownloadClientId);
-      return env.services.indexers.create({ ...item.payload.create, tags: resolveTags(env, 'indexers', item.payload.sourceTagIds, item.name), downloadClientId }).id;
+      return indexerServiceFor(env).create({ ...item.payload.create, tags: resolveTags(env, 'indexers', item.payload.sourceTagIds, item.name), downloadClientId }).id;
     },
     overwrite: (env, item, existing) => {
       const downloadClientId = resolveRef(env, 'downloadClients', item.payload.sourceDownloadClientId);
       const c = item.payload.create;
-      return env.services.indexers.update(existing.id!, {
+      return indexerServiceFor(env).update(existing.id!, {
         name: c.name,
         implementation: c.implementation,
         ...(c.enableRss !== undefined ? { enableRss: c.enableRss } : {}),
@@ -504,6 +546,11 @@ export const HANDLERS: Handlers = {
       writeEpisodes(env, id, item.payload, true);
       return id;
     },
+    // Keep Arclight's settings and monitoring; add missing seasons, episodes and files.
+    merge: (env, item, existing) => {
+      writeEpisodes(env, existing.id!, item.payload, false);
+      return existing.id;
+    },
   },
 
   movies: {
@@ -566,10 +613,29 @@ export const HANDLERS: Handlers = {
       if (!current?.movieFileId) attachMovieFile(env, id, item.payload);
       return id;
     },
+    // Keep Arclight's settings; adopt the file when Arclight has none.
+    merge: (env, item, existing) => {
+      const id = existing.id!;
+      const current = env.db.select({ movieFileId: t.movies.movieFileId }).from(t.movies).where(eq(t.movies.id, id)).get();
+      if (!current?.movieFileId) attachMovieFile(env, id, item.payload);
+      return id;
+    },
   },
 
   history: {
-    find: () => null,
+    // Same event, same title, same moment: the row came over already (another run reading the
+    // same app through the API instead of its files, or a second instance of the source).
+    find: (env, item) => {
+      const p = item.payload;
+      const row = env.db
+        .select({ id: t.history.id, date: t.history.date, eventType: t.history.eventType })
+        .from(t.history)
+        .where(eq(t.history.sourceTitle, p.sourceTitle))
+        .all()
+        .find((r) => r.date === p.date && r.eventType === p.eventType);
+      return row ? { id: row.id, reason: 'the same history event exists' } : null;
+    },
+    overwrite: (_env, _item, existing) => existing.id,
     create: (env, item) => {
       const p = item.payload;
       const { seriesId, movieId } = historyParents(env, p);

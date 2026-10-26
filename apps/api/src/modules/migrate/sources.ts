@@ -26,6 +26,10 @@ const LAYOUTS: Layout[] = [
   { app: 'prowlarr', db: 'prowlarr.db', config: 'config.xml' },
   { app: 'bazarr', db: 'db/bazarr.db', config: 'config/config.yaml' },
   { app: 'seerr', db: 'db/db.sqlite3', config: 'settings.json' },
+  // qBittorrent: the folder of `<hash>.torrent` + `<hash>.fastresume` files (linuxserver
+  // image layout first, then a desktop/nox data folder).
+  { app: 'qbittorrent', db: 'qBittorrent/BT_backup', config: null },
+  { app: 'qbittorrent', db: 'BT_backup', config: null },
 ];
 
 const APP_DIRS: Record<MigrateApp, string[]> = {
@@ -34,6 +38,7 @@ const APP_DIRS: Record<MigrateApp, string[]> = {
   prowlarr: ['prowlarr', 'Prowlarr'],
   bazarr: ['bazarr', 'Bazarr'],
   seerr: ['overseerr', 'jellyseerr', 'seerr'],
+  qbittorrent: ['qbittorrent', 'qBittorrent'],
 };
 
 function join(sep: '/' | '\\', ...parts: string[]): string {
@@ -83,7 +88,10 @@ export function detectSources(opts: DetectOptions = {}): MigrateSourceCandidate[
     consider('\\', `${programData}\\Bazarr\\data`, LAYOUTS[3]!, 'Windows ProgramData');
     consider('\\', 'C:\\Bazarr\\data', LAYOUTS[3]!, 'Windows install');
     consider('\\', `${programData}\\Jellyseerr`, LAYOUTS[4]!, 'Windows ProgramData');
+    const localAppData = env['LOCALAPPDATA'];
+    if (localAppData) consider('\\', `${localAppData}\\qBittorrent`, LAYOUTS[6]!, 'Windows user data');
   } else {
+    consider('/', `${home}/.local/share/qBittorrent`, LAYOUTS[6]!, 'user data');
     consider('/', '/var/lib/sonarr', LAYOUTS[0]!, 'Linux package');
     consider('/', '/var/lib/radarr', LAYOUTS[1]!, 'Linux package');
     consider('/', '/var/lib/prowlarr', LAYOUTS[2]!, 'Linux package');

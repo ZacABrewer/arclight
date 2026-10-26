@@ -32,7 +32,7 @@ export function mapMediaInfo(raw: unknown): MediaInfo | null {
     videoCodec: str(field(o, 'videoCodec', 'videoFormat')),
     audioCodec: str(field(o, 'audioCodec', 'audioFormat')),
     audioChannels: num(field(o, 'audioChannels', 'audioChannelsContainer')),
-    resolution: width && height ? `${width}x${height}` : null,
+    resolution: width && height ? `${width}x${height}` : (str(field(o, 'resolution'))?.match(/^\d+x\d+$/)?.[0] ?? null),
     runtimeSeconds: runtimeSeconds(field(o, 'runTime', 'runtime')),
     videoDynamicRange: str(field(o, 'videoDynamicRangeType', 'videoDynamicRange', 'videoHdrFormat')) || null,
     subtitles: langList(field(o, 'subtitles')),
