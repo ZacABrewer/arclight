@@ -1,13 +1,16 @@
 import { randomInt } from 'node:crypto';
+import dgram from 'node:dgram';
 import { EventEmitter } from 'node:events';
 import { readFile } from 'node:fs/promises';
+import { networkInterfaces } from 'node:os';
 import { encode } from './bencode.js';
-import type { PeerAddress } from './compact.js';
+import { hostFamily, type PeerAddress } from './compact.js';
 import { DHT, type DhtOptions } from './dht/dht.js';
 import { errorMessage, TorrentEngineError } from './errors.js';
 import { type MagnetLink, parseMagnet } from './magnet.js';
 import { type Metainfo, parseTorrent } from './metainfo.js';
 import { PeerListener } from './peer/listener.js';
+import { mseReq2 } from './peer/mse.js';
 import { TokenBucket } from './rate.js';
 import { DEFAULT_SETTINGS, type SessionSettings } from './settings.js';
 import {
@@ -21,6 +24,7 @@ import {
 import { Torrent, type TorrentContext, type TorrentInit, type TorrentState, type TorrentStats } from './torrent.js';
 import { createTrackerClient, type TrackerClientFactoryOptions } from './tracker/tracker-manager.js';
 import type { TrackerClient } from './tracker/types.js';
+import { UtpManager, type UtpManagerOptions } from './utp/manager.js';
 
 export interface AddTorrentOptions {
   /** .torrent file bytes. Exactly one of `torrent` / `magnet` is required. */
@@ -38,6 +42,15 @@ export interface AddTorrentOptions {
   seedTimeLimitMs?: number | null;
   /** Extra peers to try (e.g. for private swarms or tests). */
   peers?: PeerAddress[];
+  /** BEP 16 super-seeding while this torrent seeds. */
+  superSeeding?: boolean;
+  /** Per-torrent upload limit in bytes/s (0 = unlimited; the global limit still applies). */
+  uploadLimit?: number;
+  /** Per-torrent download limit in bytes/s (0 = unlimited). */
+  downloadLimit?: number;
+  /** Per-peer limits for this torrent's connections in bytes/s (0 = unlimited). */
+  peerUploadLimit?: number;
+  peerDownloadLimit?: number;
 }
 
 export interface SessionOptions {
@@ -48,6 +61,8 @@ export interface SessionOptions {
   trackerClientFactory?: (url: string, opts: TrackerClientFactoryOptions) => TrackerClient | null;
   /** Extra DHT options (timeouts, saved nodes, socket factory). */
   dht?: Partial<DhtOptions>;
+  /** Extra uTP options (tests inject packet loss and short timeouts here). */
+  utp?: UtpManagerOptions;
   now?: () => number;
 }
 
@@ -68,6 +83,10 @@ export interface SessionStats {
   downloadRate: number;
   uploadRate: number;
   dhtNodes: number;
+  /** IPv6 DHT routing table size (0 when IPv6 is off). */
+  dht6Nodes: number;
+  /** Open uTP connections (including ones still handshaking). */
+  utpConnections: number;
   listenPort: number;
   listenAddress: string | null;
 }
@@ -79,6 +98,12 @@ export function generatePeerId(prefix: string): Buffer {
   let rest = '';
   for (let i = p.length; i < 20; i++) rest += PEER_ID_CHARS[randomInt(0, PEER_ID_CHARS.length)];
   return Buffer.concat([p, Buffer.from(rest, 'latin1')]);
+}
+
+/** True when this host has at least one IPv6 address (loopback included). */
+export function ipv6Available(): boolean {
+  for (const list of Object.values(networkInterfaces())) for (const a of list ?? []) if (a.family === 'IPv6') return true;
+  return false;
 }
 
 /** Rebuilds a .torrent file around a raw info dict (for magnets after metadata exchange). */
@@ -103,6 +128,9 @@ export class Session extends EventEmitter<SessionEvents> {
   private readonly torrentFiles = new Map<string, Buffer>();
   private readonly listener: PeerListener;
   private dhtNode: DHT | null = null;
+  private dht6Node: DHT | null = null;
+  private readonly utp: UtpManager;
+  private ownUdp: dgram.Socket[] = [];
   private readonly uploadBucket: TokenBucket;
   private readonly downloadBucket: TokenBucket;
   private readonly now: () => number;
@@ -120,14 +148,21 @@ export class Session extends EventEmitter<SessionEvents> {
     this.peerId = generatePeerId(this.settingsValue.peerIdPrefix);
     this.uploadBucket = new TokenBucket(this.settingsValue.uploadLimit);
     this.downloadBucket = new TokenBucket(this.settingsValue.downloadLimit);
-    const lOpts: ConstructorParameters<typeof PeerListener>[0] = {};
+    const lOpts: ConstructorParameters<typeof PeerListener>[0] = {
+      encryption: () => this.settingsValue.encryption,
+      findInfoHash: (req2) => this.findInfoHashByReq2(req2),
+    };
     if (opts.isBlocked) lOpts.isBlocked = opts.isBlocked;
     this.listener = new PeerListener(lOpts);
-    this.listener.on('connection', (sock, hs, address) => {
+    this.listener.on('connection', (sock, hs, address, info) => {
       const t = this.torrentsById.get(hs.infoHash.toString('hex'));
-      if (!t || this.stopping || !this.canConnect() || !t.acceptIncoming(sock, address)) sock.destroy();
+      if (!t || this.stopping || !this.canConnect() || !t.acceptIncoming(sock, address, info)) sock.destroy();
     });
     this.listener.on('warning', (m) => this.emit('warning', m));
+    const userAccept = opts.utp?.accept;
+    this.utp = new UtpManager({ ...opts.utp, accept: () => this.settingsValue.utp && !this.stopping && (userAccept?.() ?? true) });
+    this.utp.on('connection', (sock, address) => this.listener.accept(sock, address, 'utp'));
+    this.utp.on('warning', (m) => this.emit('warning', m));
   }
 
   get settings(): Readonly<SessionSettings> {
@@ -143,6 +178,16 @@ export class Session extends EventEmitter<SessionEvents> {
     return this.dhtNode;
   }
 
+  /** The IPv6 DHT node (BEP 32), when running. */
+  get dht6(): DHT | null {
+    return this.dht6Node;
+  }
+
+  /** The uTP connection manager (sockets are attached while the session runs with `utp`). */
+  get utpManager(): UtpManager {
+    return this.utp;
+  }
+
   /** Binds the listener and DHT, then restores torrents from the resume directory. */
   async start(): Promise<void> {
     if (this.started) return;
@@ -153,29 +198,108 @@ export class Session extends EventEmitter<SessionEvents> {
     this.scheduleQueue();
   }
 
+  private findInfoHashByReq2(req2: Buffer): Buffer | null {
+    for (const t of this.torrentsById.values()) if (mseReq2(t.infoHash).equals(req2)) return t.infoHash;
+    return null;
+  }
+
+  /**
+   * Binds the TCP listener and the UDP sockets: one per address family, owned by the DHT
+   * when it runs (uTP shares it) or by the session for uTP alone.
+   */
   private async openSockets(port: number, address: string | null): Promise<void> {
-    await this.listener.listen(port, address ?? undefined);
-    this.boundPort = this.listener.port;
-    if (this.settingsValue.dht) {
-      if (!this.dhtNode) {
-        const dOpts: DhtOptions = { bootstrap: this.settingsValue.dhtBootstrapNodes, ...this.opts.dht };
-        this.dhtNode = new DHT(dOpts);
-        this.dhtNode.on('warning', (m) => this.emit('warning', m));
-        await this.bindDht(this.boundPort, address);
-        void this.dhtNode.bootstrap().catch((err: unknown) => this.emit('warning', `dht bootstrap failed: ${errorMessage(err)}`));
-      } else {
-        await this.dhtNode.rebind(this.boundPort, address ?? undefined).catch(() => this.dhtNode?.rebind(0, address ?? undefined));
+    const s = this.settingsValue;
+    const fam = address ? hostFamily(address) : 0;
+    const want4 = fam !== 6;
+    const want6 = s.ipv6 && (fam === 6 || (fam === 0 && ipv6Available()));
+    this.utp.close();
+    for (const u of this.ownUdp.splice(0)) u.close();
+    if (s.tcp) {
+      await this.listener.listen(port, address ?? undefined, { ipv6: want6 });
+      this.boundPort = this.listener.port;
+    } else {
+      await this.listener.close();
+      this.boundPort = port;
+    }
+    const udp: dgram.Socket[] = [];
+    if (want4) {
+      const u = await this.openUdp(4, this.boundPort, fam === 4 ? (address as string) : undefined);
+      if (u) {
+        udp.push(u);
+        if (this.boundPort === 0) this.boundPort = u.address().port;
       }
+    } else this.closeDht(4);
+    if (want6) {
+      const u = await this.openUdp(6, this.boundPort, fam === 6 ? (address as string) : undefined);
+      if (u) {
+        udp.push(u);
+        if (this.boundPort === 0) this.boundPort = u.address().port;
+      }
+    } else this.closeDht(6);
+    if (s.utp) for (const u of udp) this.utp.attach(u);
+  }
+
+  private closeDht(family: 4 | 6): void {
+    if (family === 4) {
+      this.dhtNode?.close();
+      this.dhtNode = null;
+    } else {
+      this.dht6Node?.close();
+      this.dht6Node = null;
     }
   }
 
-  private async bindDht(port: number, address: string | null): Promise<void> {
-    const dht = this.dhtNode as DHT;
-    try {
-      await dht.listen(port, address ?? undefined);
-    } catch {
-      await dht.listen(0, address ?? undefined);
+  private async openUdp(family: 4 | 6, port: number, address: string | undefined): Promise<dgram.Socket | null> {
+    const s = this.settingsValue;
+    if (s.dht) {
+      const sock = await this.startDht(family, port, address);
+      if (sock) return sock;
+    } else this.closeDht(family);
+    if (!s.utp) return null;
+    for (const p of port === 0 ? [0] : [port, 0]) {
+      const sock = dgram.createSocket(family === 6 ? { type: 'udp6', ipv6Only: true } : { type: 'udp4' });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          sock.once('error', reject);
+          sock.bind({ port: p, ...(address ? { address } : {}) }, () => {
+            sock.off('error', reject);
+            resolve();
+          });
+        });
+      } catch (err) {
+        sock.close();
+        this.emit('warning', `cannot bind udp${family} port ${p}: ${errorMessage(err)}`);
+        continue;
+      }
+      sock.on('error', (err) => this.emit('warning', `udp socket error: ${err.message}`));
+      this.ownUdp.push(sock);
+      return sock;
     }
+    return null;
+  }
+
+  private async startDht(family: 4 | 6, port: number, address: string | undefined): Promise<dgram.Socket | null> {
+    let node = family === 4 ? this.dhtNode : this.dht6Node;
+    const fresh = node === null;
+    if (!node) {
+      const dOpts: DhtOptions = { bootstrap: this.settingsValue.dhtBootstrapNodes, ...this.opts.dht, family };
+      if (family === 6) delete dOpts.socketFactory;
+      node = new DHT(dOpts);
+      node.on('warning', (m) => this.emit('warning', m));
+      if (family === 4) this.dhtNode = node;
+      else this.dht6Node = node;
+    }
+    const n = node;
+    const bind = (p: number): Promise<void> => (fresh ? n.listen(p, address) : n.rebind(p, address));
+    try {
+      await bind(port).catch(() => bind(0));
+    } catch (err) {
+      this.emit('warning', `dht${family === 6 ? ' (IPv6)' : ''} bind failed: ${errorMessage(err)}`);
+      this.closeDht(family);
+      return null;
+    }
+    if (fresh) void n.bootstrap().catch((e: unknown) => this.emit('warning', `dht bootstrap failed: ${errorMessage(e)}`));
+    return n.udpSocket;
   }
 
   private scheduleResumeSaves(): void {
@@ -204,7 +328,9 @@ export class Session extends EventEmitter<SessionEvents> {
       localAddress: () => this.settingsValue.listenAddress ?? undefined,
       uploadBuckets: [this.uploadBucket],
       downloadBuckets: [this.downloadBucket],
-      dht: () => this.dhtNode,
+      dht: () => this.dhtNode ?? this.dht6Node,
+      dhts: () => [this.dhtNode, this.dht6Node].filter((d): d is DHT => d !== null),
+      utp: () => (this.settingsValue.utp && this.utp.attached ? this.utp : null),
       canConnect: () => this.canConnect(),
       isBlocked: (ip) => this.opts.isBlocked?.(ip) ?? false,
       trackerFactory: (url) => {
@@ -244,6 +370,14 @@ export class Session extends EventEmitter<SessionEvents> {
     if (input.seedRatioLimit !== undefined) init.seedRatioLimit = input.seedRatioLimit;
     if (input.seedTimeLimitMs !== undefined) init.seedTimeLimitMs = input.seedTimeLimitMs;
     if (resume) init.resume = resume;
+    const superSeeding = input.superSeeding ?? resume?.superSeeding;
+    if (superSeeding !== undefined) init.superSeeding = superSeeding;
+    init.limits = {
+      uploadLimit: input.uploadLimit ?? resume?.uploadLimit ?? 0,
+      downloadLimit: input.downloadLimit ?? resume?.downloadLimit ?? 0,
+      peerUploadLimit: input.peerUploadLimit ?? resume?.peerUploadLimit ?? 0,
+      peerDownloadLimit: input.peerDownloadLimit ?? resume?.peerDownloadLimit ?? 0,
+    };
     const t = new Torrent(this.context(), init);
     if (input.magnet) t.magnetUri = input.magnet;
     t.queuePosition = this.nextQueuePosition++;
@@ -337,7 +471,11 @@ export class Session extends EventEmitter<SessionEvents> {
     await this.saveResumeData(t);
   }
 
-  /** Updates settings. Rate limits and queue limits apply immediately; use `bindTo`/`setListenPort` for sockets. */
+  /**
+   * Updates settings. Rate limits, queue limits and the encryption policy apply
+   * immediately; use `bindTo`/`setListenPort` for sockets (also needed for `tcp`, `utp`,
+   * `ipv6` and `dht` to take effect).
+   */
   updateSettings(patch: Partial<SessionSettings>): void {
     const { listenAddress: _a, listenPort: _p, ...rest } = patch;
     void _a;
@@ -484,6 +622,8 @@ export class Session extends EventEmitter<SessionEvents> {
       downloadRate: down,
       uploadRate: up,
       dhtNodes: this.dhtNode?.nodeCount ?? 0,
+      dht6Nodes: this.dht6Node?.nodeCount ?? 0,
+      utpConnections: this.utp.connectionCount,
       listenPort: this.listenPort,
       listenAddress: this.settingsValue.listenAddress,
     };
@@ -497,7 +637,9 @@ export class Session extends EventEmitter<SessionEvents> {
     if (this.resumeTimer) clearInterval(this.resumeTimer);
     await Promise.all([...this.torrentsById.values()].map((t) => t.close({ announce: true })));
     await this.listener.close();
-    this.dhtNode?.close();
-    this.dhtNode = null;
+    this.utp.close();
+    for (const u of this.ownUdp.splice(0)) u.close();
+    this.closeDht(4);
+    this.closeDht(6);
   }
 }

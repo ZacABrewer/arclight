@@ -2,13 +2,16 @@ import { createHash, randomBytes } from 'node:crypto';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type dgram from 'node:dgram';
 import { EventEmitter } from 'node:events';
-import { isIPv4 } from 'node:net';
+import { isIPv4, isIPv6 } from 'node:net';
 import { type BDict, type BEncodable, getBytes, getInt, getList } from '../bencode.js';
 import {
   addressKey,
   decodeCompactNodes,
+  decodeCompactNodes6,
   decodeCompactPeers,
+  decodeCompactPeers6,
   encodeCompactNodes,
+  encodeCompactNodes6,
   encodeCompactPeer,
   type CompactNode,
   type PeerAddress,
@@ -39,6 +42,8 @@ export interface DhtOptions {
   /** Token secret rotation period (default 5 minutes). */
   tokenRotationMs?: number;
   socketFactory?: () => dgram.Socket;
+  /** 4 (BEP 5) or 6 (BEP 32: `nodes6`, 18-byte peers). One routing table per family. */
+  family?: 4 | 6;
   now?: () => number;
 }
 
@@ -70,10 +75,11 @@ export interface LookupResult {
 
 const MAX_DIST = 1n << 161n;
 
-/** Kademlia DHT node (BEP 5, IPv4). */
+/** Kademlia DHT node (BEP 5 over IPv4, BEP 32 over IPv6). */
 export class DHT extends EventEmitter<DhtEvents> {
   readonly nodeId: Buffer;
   readonly table: RoutingTable;
+  readonly family: 4 | 6;
   private readonly rpc: KrpcSocket;
   private readonly k: number;
   private readonly alpha: number;
@@ -87,6 +93,7 @@ export class DHT extends EventEmitter<DhtEvents> {
   constructor(private readonly opts: DhtOptions = {}) {
     super();
     this.nodeId = opts.nodeId ?? randomNodeId();
+    this.family = opts.family ?? 4;
     this.k = opts.k ?? 8;
     this.alpha = opts.alpha ?? 3;
     this.now = opts.now ?? Date.now;
@@ -96,6 +103,7 @@ export class DHT extends EventEmitter<DhtEvents> {
       version: Buffer.from('MT01', 'latin1'),
     };
     if (opts.socketFactory) rpcOpts.socketFactory = opts.socketFactory;
+    rpcOpts.family = this.family;
     this.rpc = new KrpcSocket(rpcOpts);
     this.rpc.on('query', (q) => this.onQuery(q));
     this.rpc.on('response', (r, from) => this.learn(r, from));
@@ -112,6 +120,19 @@ export class DHT extends EventEmitter<DhtEvents> {
 
   get listening(): boolean {
     return this.rpc.bound;
+  }
+
+  /** The UDP socket, shared with uTP by the session. */
+  get udpSocket(): dgram.Socket | null {
+    return this.rpc.socket;
+  }
+
+  private ownFamily(host: string): boolean {
+    return this.family === 6 ? isIPv6(host) : isIPv4(host);
+  }
+
+  private nodesKey(): 'nodes' | 'nodes6' {
+    return this.family === 6 ? 'nodes6' : 'nodes';
   }
 
   /** Binds the UDP socket and starts maintenance timers. */
@@ -166,7 +187,9 @@ export class DHT extends EventEmitter<DhtEvents> {
       const port = Number(entry.slice(idx + 1));
       if (!port) continue;
       try {
-        const ip = isIPv4(host) ? host : (await dnsLookup(host, { family: 4 })).address;
+        const literal = host.replace(/^\[|\]$/g, '');
+        const ip = isIPv4(literal) || isIPv6(literal) ? literal : (await dnsLookup(host, { family: this.family })).address;
+        if (!this.ownFamily(ip)) continue;
         seeds.push({ host: ip, port });
       } catch (err) {
         this.emit('warning', `cannot resolve bootstrap node ${host}: ${errorMessage(err)}`);
@@ -227,7 +250,8 @@ export class DHT extends EventEmitter<DhtEvents> {
   }
 
   private compactClosest(target: Buffer): Buffer {
-    return encodeCompactNodes(this.table.closest(target, this.k));
+    const nodes = this.table.closest(target, this.k);
+    return this.family === 6 ? encodeCompactNodes6(nodes) : encodeCompactNodes(nodes);
   }
 
   private onQuery(q: KrpcQuery): void {
@@ -244,7 +268,7 @@ export class DHT extends EventEmitter<DhtEvents> {
       case 'find_node': {
         const target = getBytes(q.args, 'target');
         if (!target || target.length !== 20) return this.rpc.respondError(q, 203, 'bad target');
-        this.rpc.respond(q, { id: this.nodeId, nodes: this.compactClosest(target) });
+        this.rpc.respond(q, { id: this.nodeId, [this.nodesKey()]: this.compactClosest(target) });
         return;
       }
       case 'get_peers': {
@@ -253,7 +277,7 @@ export class DHT extends EventEmitter<DhtEvents> {
         const r: Record<string, BEncodable> = { id: this.nodeId, token: this.token(q.from.host, this.secrets[0]) };
         const stored = this.storedPeers(ih);
         if (stored.length > 0) r.values = stored.map(encodeCompactPeer);
-        else r.nodes = this.compactClosest(ih);
+        else r[this.nodesKey()] = this.compactClosest(ih);
         this.rpc.respond(q, r);
         return;
       }
@@ -317,7 +341,7 @@ export class DHT extends EventEmitter<DhtEvents> {
   }
 
   private considerNode(node: CompactNode): void {
-    if (this.destroyed || node.id.equals(this.nodeId) || !isIPv4(node.host)) return;
+    if (this.destroyed || node.id.equals(this.nodeId) || !this.ownFamily(node.host)) return;
     const res = this.table.insert(node);
     if (res.status === 'full') {
       const oldest = res.oldest;
@@ -347,7 +371,7 @@ export class DHT extends EventEmitter<DhtEvents> {
     const candidates = new Map<string, Candidate>();
     const peers = new Map<string, PeerAddress>();
     const add = (id: Buffer | null, addr: PeerAddress): void => {
-      if (!isIPv4(addr.host) || addr.port <= 0) return;
+      if (!this.ownFamily(addr.host) || addr.port <= 0) return;
       if (id && id.equals(this.nodeId)) return;
       const key = addressKey(addr);
       const existing = candidates.get(key);
@@ -414,9 +438,11 @@ export class DHT extends EventEmitter<DhtEvents> {
               if (tok) c.token = tok;
               const nodes = getBytes(r, 'nodes');
               if (nodes) for (const n of decodeCompactNodes(nodes)) add(n.id, { host: n.host, port: n.port });
-              for (const v of getList(r, 'values') ?? []) {
+              const nodes6 = getBytes(r, 'nodes6');
+              if (nodes6) for (const n of decodeCompactNodes6(nodes6)) add(n.id, { host: n.host, port: n.port });
+              for (const v of [...(getList(r, 'values') ?? []), ...(getList(r, 'values6') ?? [])]) {
                 if (!Buffer.isBuffer(v)) continue;
-                for (const p of decodeCompactPeers(v)) {
+                for (const p of v.length === 18 ? decodeCompactPeers6(v) : decodeCompactPeers(v)) {
                   const key = addressKey(p);
                   if (!peers.has(key)) {
                     peers.set(key, p);

@@ -1,7 +1,7 @@
 import http from 'node:http';
 import https from 'node:https';
 import { type BDict, decode, getBytes, getInt, getList, getString, isDict } from '../bencode.js';
-import { decodeCompactPeers, type PeerAddress } from '../compact.js';
+import { decodeCompactPeers, decodeCompactPeers6, normalizeHost, type PeerAddress } from '../compact.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
@@ -77,14 +77,16 @@ export function percentEncodeBytes(b: Buffer): string {
 
 function parsePeers(d: BDict): PeerAddress[] {
   const compact = getBytes(d, 'peers');
-  if (compact) return decodeCompactPeers(compact);
+  const compact6 = getBytes(d, 'peers6');
+  const v6 = compact6 ? decodeCompactPeers6(compact6) : [];
+  if (compact) return [...decodeCompactPeers(compact), ...v6];
   const list = getList(d, 'peers') ?? [];
-  const out: PeerAddress[] = [];
+  const out: PeerAddress[] = [...v6];
   for (const p of list) {
     if (!isDict(p)) continue;
     const ip = getString(p, 'ip');
     const port = getInt(p, 'port');
-    if (ip && port && port > 0 && port < 65536) out.push({ host: ip, port });
+    if (ip && port && port > 0 && port < 65536) out.push({ host: normalizeHost(ip), port });
   }
   return out;
 }

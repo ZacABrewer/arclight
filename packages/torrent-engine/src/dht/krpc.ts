@@ -1,7 +1,7 @@
 import dgram from 'node:dgram';
 import { EventEmitter } from 'node:events';
 import { type BDict, type BEncodable, decode, encode, getBytes, getList, getString, isDict } from '../bencode.js';
-import type { PeerAddress } from '../compact.js';
+import { normalizeHost, type PeerAddress } from '../compact.js';
 import { TorrentEngineError } from '../errors.js';
 
 export interface KrpcQuery {
@@ -31,6 +31,8 @@ export interface KrpcOptions {
   timeoutMs?: number;
   /** Two-byte client version sent as `v`. */
   version?: Buffer;
+  /** Address family of the default socket (6 binds an IPv6-only socket). */
+  family?: 4 | 6;
 }
 
 /** KRPC (BEP 5) transport: bencoded queries/responses over a UDP socket. */
@@ -57,9 +59,16 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
     return this.sock !== null;
   }
 
+  /** The bound UDP socket (shared with uTP), or null. */
+  get socket(): dgram.Socket | null {
+    return this.sock;
+  }
+
   async bind(port: number, address?: string): Promise<void> {
     if (this.sock) throw new TorrentEngineError('dht', 'socket already bound');
-    const sock = this.opts.socketFactory ? this.opts.socketFactory() : dgram.createSocket({ type: 'udp4', reuseAddr: false });
+    const sock = this.opts.socketFactory ? this.opts.socketFactory() : this.opts.family === 6
+        ? dgram.createSocket({ type: 'udp6', ipv6Only: true, reuseAddr: false })
+        : dgram.createSocket({ type: 'udp4', reuseAddr: false });
     await new Promise<void>((resolve, reject) => {
       sock.once('error', reject);
       sock.bind({ port, ...(address ? { address } : {}) }, () => {
@@ -67,7 +76,11 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
         resolve();
       });
     });
-    sock.on('message', (msg, rinfo) => this.onMessage(msg, { host: rinfo.address, port: rinfo.port }));
+    sock.on('message', (msg, rinfo) => {
+      // uTP shares this socket; KRPC messages are bencoded dictionaries
+      if (msg[0] !== 0x64) return;
+      this.onMessage(msg, { host: normalizeHost(rinfo.address), port: rinfo.port });
+    });
     sock.on('error', (err) => this.emit('warning', `dht socket error: ${err.message}`));
     this.sock = sock;
   }

@@ -1,4 +1,5 @@
 import { DEFAULT_BOOTSTRAP_NODES } from './dht/dht.js';
+import type { EncryptionMode } from './peer/mse.js';
 
 export interface CategoryConfig {
   /** Where torrents of this category download to. */
@@ -25,8 +26,22 @@ export interface SessionSettings {
   downloadLimit: number;
   dht: boolean;
   pex: boolean;
-  /** TODO(MSE): message stream encryption (BEP 8/MSE/PE) is not implemented yet. */
-  encryption: 'disabled';
+  /**
+   * Message Stream Encryption. `preferred`: outgoing connections try MSE first and fall back
+   * to plaintext; incoming accept both. `required`: only encrypted (RC4) connections.
+   * `disabled`: plaintext only.
+   */
+  encryption: EncryptionMode;
+  /** Accept and open TCP peer connections. */
+  tcp: boolean;
+  /** Accept and open uTP (BEP 29) peer connections on the UDP listen port (shared with the DHT). */
+  utp: boolean;
+  /** Listen on IPv6 too (`::`) when available and `listenAddress` is null; use IPv6 peers. */
+  ipv6: boolean;
+  /** Concurrent HTTP requests to web seeds (BEP 19) per torrent. 0 disables web seeds. */
+  webSeedConnectionsPerTorrent: number;
+  /** Base back-off after a web seed error, doubled per consecutive failure. */
+  webSeedRetryMs: number;
   /** Default share ratio after which seeding stops (null = unlimited). */
   seedRatioLimit: number | null;
   /** Default seeding time after which seeding stops, in ms (null = unlimited). */
@@ -82,7 +97,12 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   downloadLimit: 0,
   dht: true,
   pex: true,
-  encryption: 'disabled',
+  encryption: 'preferred',
+  tcp: true,
+  utp: true,
+  ipv6: true,
+  webSeedConnectionsPerTorrent: 4,
+  webSeedRetryMs: 30_000,
   seedRatioLimit: null,
   seedTimeLimitMs: null,
   seedLimitAction: 'pause',
