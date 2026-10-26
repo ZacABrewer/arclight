@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import type { Indexer, IndexerDefinitionSummary, IndexerTemplate, IndexerTestAllItem } from '@arclight/shared';
+import type { Indexer, IndexerCatalogueEntry, IndexerTemplate, IndexerTestAllItem } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { indexersApi } from '../../../api/indexers.js';
-import { Button, Chip, EmptyState, ErrorBlock, Input, Modal, ProtocolBadge, Skeleton, Tabs, type ChipTone } from '../../../arclight/index.js';
+import { Button, Chip, EmptyState, ErrorBlock, Modal, ProtocolBadge, Skeleton, type ChipTone } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { tagRenderer } from '../../../components/forms/tag-picker.js';
@@ -14,16 +14,16 @@ import {
   useIndexerCategories,
   useIndexerList,
   useIndexerProxies,
-  useIndexerTemplates,
   useTestAllIndexers,
   useUpdateIndexer,
 } from '../../../hooks/indexers.js';
 import { formatDateTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
 import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
-import { CatalogueList, TemplateList } from './catalogue.js';
-import { DefinitionEditor } from './definition-editor.js';
-import { definitionNeedsSolver, filterTemplates } from './definition-fields.js';
+import { CatalogueChooser, SourceBadge } from './catalogue.js';
+import { presetTemplate } from './catalogue-model.js';
+import { DefinitionEditor, type DefinitionEditing } from './definition-editor.js';
+import { definitionNeedsSolver } from './definition-fields.js';
 import { hasSolverProxy } from '../indexer-proxies/proxy-model.js';
 import { settingsKeys } from '../../../hooks/settings-keys.js';
 import { SolverHint } from './solver-hint.js';
@@ -59,7 +59,7 @@ export function indexerHealth(
   return { tone: 'accent', label: t('common.enabled') };
 }
 
-type Editing = { indexer: Indexer } | { template: IndexerTemplate };
+type Editing = { indexer: Indexer } | { template: IndexerTemplate; preset?: IndexerCatalogueEntry | undefined };
 
 function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => void }) {
   const implementation = 'indexer' in editing ? editing.indexer.implementation : editing.template.implementation;
@@ -102,6 +102,7 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
           />
         }
       >
+        {'preset' in editing && editing.preset ? <PresetNote entry={editing.preset} /> : null}
         <IndexerEditorTabs indexer={existing}>
           <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={renderers} />
           <SaveError error={create.error ?? update.error} />
@@ -125,45 +126,35 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
   );
 }
 
-/** Add chooser (640): one search field over Torznab/Newznab endpoints and the site catalogue. */
+/** "Preset · altHUB": base URL and categories are filled in, the user adds the API key. */
+function PresetNote({ entry }: { entry: IndexerCatalogueEntry }) {
+  return (
+    <div className="al-def-meta">
+      <SourceBadge source={entry.source} />
+      <ProtocolBadge protocol={entry.protocol} />
+      <span>{entry.kind === 'preset' ? t('settings.indexers.presetFilledIn') : t('settings.indexers.genericEndpointHint')}</span>
+      {entry.preset?.apiKeyHint ? <span>{t('settings.indexers.apiKeyWhere', { hint: entry.preset.apiKeyHint })}</span> : null}
+    </div>
+  );
+}
+
+/**
+ * Add chooser: the whole catalogue (site definitions, presets, generic endpoints) at the
+ * interactive-search width, as tall as the viewport.
+ */
 export function IndexerChooser({
   onPick,
-  onPickDefinition,
+  onEditExisting,
   onClose,
 }: {
-  onPick: (item: IndexerTemplate) => void;
-  onPickDefinition: (d: IndexerDefinitionSummary) => void;
+  onPick: (entry: IndexerCatalogueEntry) => void;
+  onEditExisting: (indexer: Indexer) => void;
   onClose: () => void;
 }) {
-  const templates = useIndexerTemplates();
-  const [text, setText] = useState('');
-  const endpoints = templates.isPending ? (
-    <Skeleton lines={3} />
-  ) : templates.isError ? (
-    <ErrorBlock title={t('settings.indexers.couldntLoadEndpointTypes')} onRetry={() => void templates.refetch()}>
-      {errorMessage(templates.error)}
-    </ErrorBlock>
-  ) : (
-    <TemplateList templates={filterTemplates(templates.data, text)} onPick={onPick} />
-  );
+  const searchRef = useRef<HTMLInputElement>(null);
   return (
-    <Modal open size={640} onClose={onClose} title={t('settings.indexers.addIndexer')}>
-      <div className="al-chooser">
-        <Input
-          type="search"
-          aria-label={t('settings.indexers.searchIndexers')}
-          placeholder={t('settings.indexers.searchByNameDescriptionOr')}
-          value={text}
-          onChange={(e) => setText(e.currentTarget.value)}
-        />
-        <Tabs
-          aria-label={t('settings.indexers.indexerSources')}
-          tabs={[
-            { id: 'endpoint', label: t('settings.indexers.torznabNewznab'), content: endpoints },
-            { id: 'catalogue', label: t('settings.indexers.catalogue'), content: <CatalogueList text={text} onPick={onPickDefinition} /> },
-          ]}
-        />
-      </div>
+    <Modal open size={1100} className="al-catalogue-modal" onClose={onClose} title={t('settings.indexers.addIndexer')} initialFocus={searchRef}>
+      <CatalogueChooser onPick={onPick} onEditExisting={onEditExisting} searchRef={searchRef} />
     </Modal>
   );
 }
@@ -263,7 +254,7 @@ export function IndexersPage() {
   const testAll = useTestAllIndexers();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
-  const [definitionEditing, setDefinitionEditing] = useState<{ definition: IndexerDefinitionSummary } | { indexer: Indexer } | null>(null);
+  const [definitionEditing, setDefinitionEditing] = useState<DefinitionEditing | null>(null);
   const openIndexer = (indexer: Indexer) => (indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer }));
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
   const needsSolverIds = useSolverHints(list.data);
@@ -306,25 +297,30 @@ export function IndexersPage() {
       {picking ? (
         <IndexerChooser
           onClose={() => setPicking(false)}
-          onPick={(template) => {
+          onEditExisting={(indexer) => {
             setPicking(false);
-            setEditing({ template });
+            openIndexer(indexer);
           }}
-          onPickDefinition={(definition) => {
+          onPick={(entry) => {
             setPicking(false);
-            setDefinitionEditing({ definition });
+            if (entry.kind === 'definition') {
+              setDefinitionEditing({ definitionId: entry.id });
+              return;
+            }
+            const template = presetTemplate(entry);
+            if (template) setEditing({ template, preset: entry });
           }}
         />
       ) : null}
       {definitionEditing ? (
         <DefinitionEditor
-          key={'indexer' in definitionEditing ? definitionEditing.indexer.id : definitionEditing.definition.id}
+          key={'indexer' in definitionEditing ? definitionEditing.indexer.id : 'definition' in definitionEditing ? definitionEditing.definition.id : definitionEditing.definitionId}
           editing={definitionEditing}
           onClose={() => setDefinitionEditing(null)}
         />
       ) : null}
       {editing ? (
-        <IndexerEditor key={'indexer' in editing ? editing.indexer.id : editing.template.implementation} editing={editing} onClose={() => setEditing(null)} />
+        <IndexerEditor key={'indexer' in editing ? editing.indexer.id : (editing.preset?.key ?? editing.template.implementation)} editing={editing} onClose={() => setEditing(null)} />
       ) : null}
     </SettingsPage>
   );

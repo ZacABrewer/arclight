@@ -11,6 +11,7 @@ Arclight does the job Prowlarr does, so you do not need Prowlarr (it works fine 
 | Add, edit, test indexers | Settings > Indexers (also reachable from the Indexers section in the left rail) |
 | Proxies (FlareSolverr, HTTP, SOCKS5) | Settings > Indexer Proxies |
 | Global limits, RSS interval, site definition feed | Settings > Indexer Options |
+| Community catalogue on/off, source URL, sync status | Settings > Indexer catalogue |
 | Built-in Cloudflare solver | Settings > Challenge Solver |
 | Cross-seed settings | Settings > Cross-seed |
 | Usage charts | Indexers > Stats |
@@ -19,12 +20,19 @@ Arclight does the job Prowlarr does, so you do not need Prowlarr (it works fine 
 
 ## Adding an indexer
 
-1. Go to Settings > Indexers and press **Add indexer**.
-2. Choose how to add it:
-   - **Definitions**: pick a site from the catalogue (public, semi-private or private). Filter by privacy, protocol and language, or search by name.
-   - **Endpoint types**: add a generic **Torznab** (torrents) or **Newznab** (usenet) endpoint. Use this for Jackett, Prowlarr, NZBHydra or any tracker that offers a Torznab/Newznab API: you supply a URL and an API key.
+1. Go to Settings > Indexers and press **Add indexer**. A full-width list opens with every entry Arclight knows:
+   - **Site definitions**: hundreds of torrent sites (public, semi-private and private), from Arclight's own definitions and the [community catalogue](#the-community-catalogue).
+   - **Presets** (marked *Preset*): well-known usenet indexers such as NZBgeek, DrunkenSlug or NZBFinder, plus Jackett's aggregate feed. The URL, API path and categories are filled in; you only add your API key.
+   - **Endpoints** (*Torznab*, *Newznab*, always at the top): any Torznab or Newznab API you enter by hand, such as Prowlarr, NZBHydra or a tracker's own API.
+2. Find the site. The search box matches name, description and URL. Filters narrow by protocol (torrent/usenet), privacy, language, category (Movies, TV, Anime, Music, Books, XXX, Other) and source (built-in, community, presets, custom); **Tested only** keeps definitions someone confirmed against the live site, **Hide unsupported** drops the entries that cannot be added yet. Click a column header to sort by it (again to reverse). The keyboard works too: Down arrow from the search box into the list, arrows, Page Up/Down, Home/End to move, Enter to open.
 3. Fill in the form (below) and press **Test**. Arclight reports how many releases came back, or what went wrong.
 4. Save.
+
+Every row shows the protocol, privacy, language, categories and where the entry comes from. Sites behind Cloudflare say so when you have no challenge solver yet.
+
+**Already added.** Entries you already have an indexer for are greyed out with an **Added** chip and the name of your indexer ("In use as My YTS"). Clicking one asks what you want: **Edit existing** opens the indexer you have, **Add another** adds a second one (a second account, or the same site with different settings). Presets are matched by the host of their URL, so an NZBgeek indexer you added by hand also counts.
+
+**Limited** entries load but use something Arclight does not support yet, usually a login captcha; they can be added, and the reason is shown on the row and in the editor (cookie login, when the site offers it, avoids the captcha). **Not supported yet** entries are community definitions that do not load in this version; they stay in the list so you know the site exists, and clicking one shows why.
 
 **Test all** on the main page tests every indexer at once.
 
@@ -64,7 +72,7 @@ Arclight ships a catalogue of site definitions (YAML files that describe how to 
 | Feed | Downloaded from the definition feed |
 | Custom | Your own YAML file, placed in the `definitions` folder of your config folder. A custom definition overrides the others with the same id |
 
-Press **Reload definitions** in the catalogue after you add a custom file. Settings > Indexer Options has a **Definition feed** panel, which lets definitions be updated without a new Arclight release:
+Custom files are picked up automatically when they change. Settings > Indexer Options has a **Definition feed** panel, which lets definitions be updated without a new Arclight release:
 
 | Setting | Default | What it does |
 |---|---|---|
@@ -73,6 +81,23 @@ Press **Reload definitions** in the catalogue after you add a custom file. Setti
 | Sync interval | 12 hours | 1 to 168 hours |
 
 Each installed feed definition keeps its previous version, and you can **Roll back** if an update breaks a site. Entries the feed offered but Arclight refused (for example a bad checksum) are listed as Rejected, and the installed version stays in use. Syncing needs internet access to the feed host.
+
+### The community catalogue
+
+Most sites in the list come from the community catalogue: the Cardigann site definitions the Prowlarr and Jackett community maintain (the `Prowlarr/Indexers` repository on GitHub). Arclight does not ship these files. Like Prowlarr, your server downloads them itself, so the list stays current without an Arclight update. It reads the schema **v11** folder, the newest complete schema version, which is what current Prowlarr uses; nearly every file in it loads.
+
+Settings > Indexer catalogue:
+
+| Setting | Default | What it does |
+|---|---|---|
+| Arclight built-in | Always on | Definitions shipped with Arclight and its definition feed. They win over a community definition with the same id, and so do your custom files |
+| Community catalogue | On | Off: community definitions are not listed or loaded and nothing is downloaded. The files stay on disk. Indexers you added from a community definition stop working until you turn it back on |
+| Source URL | `https://api.github.com/repos/Prowlarr/Indexers/contents/definitions/v11?ref=master` | A GitHub contents listing of a definitions folder, or an Arclight feed `index.json`. Use a mirror or a fork here; **Use default URL** puts the original back |
+| Sync interval | 24 hours | 1 to 168 hours |
+
+How a sync works: Arclight reads the listing (one request, revalidated with its ETag, so an unchanged catalogue costs nothing), downloads only files whose hash changed, verifies each against the listing, and swaps the new set into `<config>/definitions/community/` in one step. A failed sync keeps the catalogue you had. The set it replaced is kept, and **Roll back to previous sync** restores it (it then stays until the source publishes something new). The first sync runs about a minute and a half after the server starts; after that it follows the interval, and **Sync now** runs one at once. The page shows when it last synced, how many files load, how many are limited or not supported yet, how many are overridden by a built-in definition, and the most common reasons.
+
+The catalogue only talks to the source URL (GitHub by default). Trackers are contacted only when you test, search or grab with an indexer. Behind a firewall with no access to GitHub, turn the community catalogue off or point it at a mirror. If the catalogue stops syncing for three intervals, System > Health warns (feed stale); if it syncs but nothing loads, it warns that the catalogue is empty.
 
 ## Indexer Proxies
 

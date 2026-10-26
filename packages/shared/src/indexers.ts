@@ -372,8 +372,11 @@ export const IndexerDefinitionSummary = z.object({
   categories: z.array(z.object({ id: z.number().int(), name: z.string() })),
   /** False until someone confirmed the definition against the live site. */
   tested: z.boolean(),
-  /** builtin: shipped; feed: downloaded from the definition feed; custom: user YAML (wins). */
-  source: z.enum(['builtin', 'feed', 'custom']),
+  /**
+   * builtin: shipped; feed: downloaded from the definition feed; custom: user YAML (wins);
+   * community: the community catalogue (loses to every other source with the same id).
+   */
+  source: z.enum(['builtin', 'feed', 'custom', 'community']),
   /** The definition sets `requiresFlareSolverr`: the site sits behind a browser challenge. */
   requiresFlareSolverr: z.boolean().optional(),
 });
@@ -411,6 +414,9 @@ export const IndexerDefinitionReloadResult = z.object({
   /** Definitions loaded from the definition feed (`<config>/definitions/feed`). */
   feed: z.number().int().default(0),
   custom: z.number().int(),
+  /** Definitions loaded from the community catalogue (`<config>/definitions/community`). */
+  community: z.number().int().default(0),
+  /** Builtin, feed and custom files that failed to load (community failures are catalogue entries). */
   errors: z.array(DefinitionLoadError),
 });
 export type IndexerDefinitionReloadResult = z.infer<typeof IndexerDefinitionReloadResult>;
@@ -547,6 +553,35 @@ export const DefinitionFeedSettings = z.object({
 export type DefinitionFeedSettings = z.infer<typeof DefinitionFeedSettings>;
 export type DefinitionFeedSettingsInput = z.input<typeof DefinitionFeedSettings>;
 
+// ---- community catalogue settings (rest of the catalogue contract: indexer-catalogue.ts) ----
+
+/**
+ * Cardigann schema version of the community catalogue Arclight reads: the Prowlarr/Indexers
+ * repository keeps one folder per schema version (`definitions/v<N>/`). v11 is the folder
+ * that holds the active catalogue; v12 only carries a handful of files that need newer engine
+ * changes, so v11 is the newest complete version our engine loads.
+ */
+export const COMMUNITY_CATALOGUE_SCHEMA = 11;
+
+/**
+ * Default listing: the GitHub contents API for the v11 folder. It returns one JSON array of
+ * `{ name, sha, size, download_url, type }`; `sha` is the git blob hash, so unchanged files are
+ * never downloaded again. Any URL that serves the same array, or an Arclight feed `index.json`
+ * (`{ schemaVersion, definitions: [{ id, file, sha256 }] }`), works as a mirror.
+ */
+export const DEFAULT_COMMUNITY_CATALOGUE_URL = `https://api.github.com/repos/Prowlarr/Indexers/contents/definitions/v${COMMUNITY_CATALOGUE_SCHEMA}?ref=master`;
+
+/** `indexers.communityCatalogue` settings. */
+export const CommunityCatalogueSettings = z.object({
+  /** Off: the community definitions are not loaded (files stay on disk) and nothing is fetched. */
+  enabled: z.boolean().default(true),
+  url: z.string().url().default(DEFAULT_COMMUNITY_CATALOGUE_URL),
+  /** 1-168 hours between automatic syncs. */
+  intervalHours: z.number().int().min(1).max(168).default(24),
+});
+export type CommunityCatalogueSettings = z.infer<typeof CommunityCatalogueSettings>;
+export type CommunityCatalogueSettingsInput = z.input<typeof CommunityCatalogueSettings>;
+
 /**
  * Settings → Indexer options. Minimum age, retention and maximum size are the values the
  * decision engine reads from the `releases` settings section (one source of truth); the rest
@@ -583,6 +618,8 @@ export const IndexerOptionsSection = IndexerGlobalSettings.pick({
 }).extend({
   /** Definition feed (indexers module); edited through /indexer/definition/feed/settings. */
   definitionFeed: DefinitionFeedSettings.default(() => DefinitionFeedSettings.parse({})),
+  /** Community catalogue (indexers module); edited through /indexer/catalogue/community/settings. */
+  communityCatalogue: CommunityCatalogueSettings.default(() => CommunityCatalogueSettings.parse({})),
 });
 export type IndexerOptionsSection = z.infer<typeof IndexerOptionsSection>;
 

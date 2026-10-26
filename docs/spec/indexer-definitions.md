@@ -854,8 +854,8 @@ Design decisions:
 
 ## 20. Open questions
 
-1. **Remote catalogue.** Upstream downloads a versioned definition package from a hosted catalogue and checks "outdated definition" via hashes. Do we host/consume anything? Proposal for Phase 2: bundled + user dir only; evaluate a signed community bundle later.
-2. **Definition licensing/compatibility.** The Cardigann/Jackett/Prowlarr definition catalogue has its own licence; before bundling real site definitions, confirm terms (we may ship only our own authored definitions plus the loader).
+1. **Remote catalogue.** Upstream downloads a versioned definition package from a hosted catalogue and checks "outdated definition" via hashes. Do we host/consume anything? Proposal for Phase 2: bundled + user dir only; evaluate a signed community bundle later. **Resolved:** the community catalogue (Prowlarr/Indexers `definitions/v11`, read through the GitHub contents API) is fetched at runtime by each instance into `<config>/definitions/community/`, below builtin, feed and custom definitions; see docs/API.md "Community catalogue".
+2. **Definition licensing/compatibility.** The Cardigann/Jackett/Prowlarr definition catalogue has its own licence; before bundling real site definitions, confirm terms (we may ship only our own authored definitions plus the loader). **Resolved:** nothing from that catalogue is bundled or committed; the repository ships only its own definitions, the loader and hand-written test fixtures.
 3. **Duplicate YAML keys** (repeated `title`, `category`). Must we guarantee import of existing catalogue files unchanged? That forces a duplicate-preserving parser (S10.1).
 4. **Default timezone** for zone-less dates: UTC (proposed) vs. a per-instance setting. Many sites show local time of the server; a `timezone:` key `[MT]` is proposed but unproven.
 5. **FlareSolverr sessions.** Worth adopting named sessions to reduce solve latency/load? Upstream is stateless. Also unknown: whether to forward instance proxies to FlareSolverr (S14.8 proposes yes).

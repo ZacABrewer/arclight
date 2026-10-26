@@ -36,3 +36,53 @@
 
 /* Tracker account tab (tracker-account.tsx). */
 .al-tracker-account { display: flex; flex-direction: column; gap: 24px; padding-top: 8px; }
+
+/* Add-indexer catalogue (catalogue.tsx): full-width chooser laid out like a release table. */
+.al-modal.al-catalogue-modal { height: calc(100vh - 32px); }
+.al-catalogue-modal .al-modal__body { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: hidden; }
+.al-catalogue { display: flex; flex-direction: column; gap: 12px; flex: 1; min-height: 0; min-width: 0; }
+.al-catalogue__toolbar { display: flex; flex-direction: column; gap: 10px; }
+.al-catalogue__search { width: 100%; }
+.al-catalogue__filters { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; }
+.al-catalogue__filters .al-select { min-width: 0; max-width: 220px; }
+.al-catalogue__summary { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; font-size: 13px; color: var(--al-text-4); }
+.al-catalogue__grid { display: grid; grid-template-columns: minmax(0, 1fr) 64px 120px 76px 170px 112px; column-gap: 14px; align-items: start; }
+.al-catalogue__head { padding: 0 14px 6px; border-bottom: 1px solid var(--al-line-1); }
+.al-catalogue__sort { padding: 0; border: 0; background: none; font: 600 11px var(--al-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); text-align: left; cursor: pointer; min-height: 28px; }
+.al-catalogue__sort[data-active], .al-catalogue__sort:hover, .al-catalogue__sort:focus-visible { color: var(--al-cyan); }
+.al-catalogue__scroll { flex: 1; min-height: 240px; overflow-y: auto; overscroll-behavior: contain; }
+.al-catalogue__list { outline: none; }
+.al-catalogue__list:focus-visible { box-shadow: inset 0 0 0 1px var(--al-cyan); }
+.al-catalogue__row { padding: 12px 14px; border-bottom: 1px solid var(--al-line-1); cursor: pointer; color: var(--al-text-1); }
+.al-catalogue__row:hover, .al-catalogue__row[aria-selected="true"] { background: var(--al-cyan-a06); box-shadow: inset 2px 0 0 var(--al-cyan); }
+.al-catalogue__row[data-added] .al-catalogue__name, .al-catalogue__row[data-added] .al-catalogue__desc { color: var(--al-text-4); }
+.al-catalogue__row[data-support="unsupported"] { cursor: help; }
+.al-catalogue__row[data-support="unsupported"] .al-catalogue__name { color: var(--al-text-4); }
+.al-catalogue__cell { min-width: 0; font-size: 13px; }
+.al-catalogue__cell--name { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 8px; }
+.al-catalogue__name { font-size: 15px; font-weight: 600; overflow-wrap: anywhere; }
+.al-catalogue__chips { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+.al-catalogue__desc { flex-basis: 100%; font-size: 13px; color: var(--al-text-4); overflow-wrap: anywhere; }
+.al-catalogue__added { color: var(--al-cyan); }
+.al-catalogue__reason { display: block; margin-top: 2px; font-family: var(--al-mono); font-size: 12px; color: var(--al-warn-text); overflow-wrap: anywhere; }
+.al-catalogue__lang { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-3); }
+.al-catalogue__cats { color: var(--al-text-3); }
+.al-catalogue__existing { list-style: none; margin: 0 0 12px; padding: 0; display: flex; flex-wrap: wrap; gap: 6px; }
+.al-catalogue__hint { font-size: 13px; color: var(--al-text-4); }
+
+@media (max-width: 767.98px) {
+  .al-catalogue__filters > * { flex: 1 1 140px; }
+  .al-catalogue__filters .al-select { max-width: none; }
+  /* Phones: stacked rows, name and description first, facts on one wrapped line. */
+  .al-catalogue__grid { display: flex; flex-wrap: wrap; gap: 6px 10px; align-items: center; }
+  .al-catalogue__cell--name { flex-basis: 100%; }
+  .al-catalogue__cell[data-col="categories"] { flex-basis: 100%; }
+  .al-catalogue__row { padding: 12px 4px; }
+}
+
+/* Indexer catalogue settings page. */
+.al-catalogue-settings { display: flex; flex-direction: column; gap: 24px; }
+.al-catalogue-settings__reasons { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: var(--al-text-3); }
+.al-catalogue-settings__reasons .al-num { color: var(--al-text-1); margin-right: 8px; }
+.al-catalogue-settings__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.al-catalogue-settings__error { margin: 0; color: var(--al-danger); font-size: 13px; overflow-wrap: anywhere; }

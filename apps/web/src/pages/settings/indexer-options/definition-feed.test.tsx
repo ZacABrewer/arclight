@@ -2,12 +2,12 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router';
-import type { DefinitionFeedStatus, IndexerDefinitionSummary } from '@arclight/shared';
+import type { DefinitionFeedStatus } from '@arclight/shared';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';
 import { createQueryClient } from '../../../query-client.js';
 import { renderAt, stubApi } from '../../../test/route-harness.js';
-import { CatalogueList, DefinitionRow, SOURCE_BADGES } from '../indexers/catalogue.js';
+import { SourceBadge, SOURCE_BADGES } from '../indexers/catalogue.js';
 import { feedSyncSummary, validateFeedSettings } from './definition-feed-panel.js';
 
 afterEach(() => vi.unstubAllGlobals());
@@ -45,22 +45,6 @@ function stubOptions(extra: Record<string, unknown> = {}) {
     ...extra,
   });
 }
-
-const def = (over: Partial<IndexerDefinitionSummary>): IndexerDefinitionSummary => ({
-  id: 'yts',
-  name: 'YTS',
-  description: 'Movies',
-  language: 'en-US',
-  type: 'public',
-  protocol: 'torrent',
-  privacy: 'public',
-  links: ['https://yts.mx/'],
-  settingsFields: [],
-  categories: [],
-  tested: true,
-  source: 'builtin',
-  ...over,
-});
 
 function renderWithRouter(node: React.ReactNode) {
   const toasts = createToastStore();
@@ -131,39 +115,19 @@ describe('Settings → Indexer options: definition feed', () => {
 });
 
 describe('definition catalogue', () => {
-  it('badges each definition with its source', async () => {
+  it('badges each source with a label and an explanation', async () => {
     renderWithRouter(
-      <ul>
-        <DefinitionRow def={def({ id: 'a', name: 'A', source: 'builtin' })} onPick={() => undefined} />
-        <DefinitionRow def={def({ id: 'b', name: 'B', source: 'feed' })} onPick={() => undefined} />
-        <DefinitionRow def={def({ id: 'c', name: 'C', source: 'custom' })} onPick={() => undefined} />
-      </ul>,
+      <div>
+        {(['builtin', 'feed', 'custom', 'community', 'preset', 'generic'] as const).map((source) => (
+          <SourceBadge key={source} source={source} />
+        ))}
+      </div>,
     );
-    const a = await screen.findByRole('button', { name: 'Add A' });
-    expect(within(a).getByText('Built-in')).toBeTruthy();
-    expect(within(screen.getByRole('button', { name: 'Add B' })).getByText('Feed').getAttribute('title')).toBe(SOURCE_BADGES.feed.title);
-    expect(within(screen.getByRole('button', { name: 'Add C' })).getByText('Custom')).toBeTruthy();
-  });
-
-  it('hints at the solver for definitions behind a challenge when no solver proxy exists', async () => {
-    stubApi({
-      '/api/v1/indexer/definition': [def({ id: 'x', name: '1337x', requiresFlareSolverr: true }), def({ id: 'y', name: 'YTS' })],
-      '/api/v1/indexerproxy': [],
-    });
-    renderWithRouter(<CatalogueList onPick={() => undefined} />);
-    const notes = await screen.findAllByRole('note');
-    expect(notes).toHaveLength(1);
-    expect(within(notes[0]!).getByRole('link', { name: 'Set up' }).getAttribute('href')).toBe('/settings/solver');
-    expect(notes[0]!.closest('li')?.textContent).toContain('1337x');
-  });
-
-  it('drops the solver hint once a FlareSolverr proxy exists', async () => {
-    stubApi({
-      '/api/v1/indexer/definition': [def({ id: 'x', name: '1337x', requiresFlareSolverr: true })],
-      '/api/v1/indexerproxy': [{ id: 1, name: 'Built-in solver', type: 'flaresolverr', host: 'http://127.0.0.1', port: 7878, tags: [] }],
-    });
-    renderWithRouter(<CatalogueList onPick={() => undefined} />);
-    await screen.findByRole('button', { name: 'Add 1337x' });
-    await waitFor(() => expect(screen.queryByRole('note')).toBeNull());
+    expect(await screen.findByText('Built-in')).toBeTruthy();
+    expect(screen.getByText('Feed').getAttribute('title')).toBe(SOURCE_BADGES.feed.title);
+    expect(screen.getByText('Custom')).toBeTruthy();
+    expect(screen.getByText('Community').getAttribute('title')).toMatch(/community catalogue/);
+    expect(screen.getByText('Preset')).toBeTruthy();
+    expect(screen.getByText('Endpoint')).toBeTruthy();
   });
 });

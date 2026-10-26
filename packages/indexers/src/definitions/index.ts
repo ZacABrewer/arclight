@@ -55,8 +55,11 @@ export {
 export {
   BUILTIN_DEFINITIONS_DIR,
   DefinitionCatalogue,
+  limitingWarnings,
   loadDefinitionCatalogue,
   parseDefinitionYaml,
+  peekDefinitionYaml,
   type CatalogueError,
+  type DefinitionPeek,
 } from './catalogue.js';
 export { createDefinitionIndexer, type DefinitionIndexer, type DefinitionIndexerOptions } from './indexer.js';

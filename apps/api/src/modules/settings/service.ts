@@ -7,6 +7,7 @@ import {
   CrossSeedSettings,
   DiscordBotSettings,
   EngineAgentSettings,
+  CommunityCatalogueSettings,
   DefinitionFeedSettings,
   GuidesSettings,
   ImportListSettings,
@@ -209,7 +210,7 @@ export function updateReleasesSettings(db: Db, value: ReleasesSettings): Release
 export function getIndexerGlobalSettings(db: Db): IndexerGlobalSettings {
   const releases = getSection(db, 'releases');
   // The definition feed shares the section but has its own routes (/indexer/definition/feed).
-  const { definitionFeed: _feed, ...options } = getSection(db, 'indexers');
+  const { definitionFeed: _feed, communityCatalogue: _community, ...options } = getSection(db, 'indexers');
   return {
     minimumAgeMinutes: releases.minimumAgeMinutes,
     retentionDays: releases.retentionDays,
@@ -231,6 +232,7 @@ export function updateIndexerGlobalSettings(db: Db, value: IndexerGlobalSettings
   });
   setSection(db, 'indexers', {
     definitionFeed: getSection(db, 'indexers').definitionFeed,
+    communityCatalogue: getSection(db, 'indexers').communityCatalogue,
     rssSyncIntervalMinutes: v.rssSyncIntervalMinutes,
     allowHardcodedSubs: v.allowHardcodedSubs,
     whitelistedHardcodedSubs: v.whitelistedHardcodedSubs,
@@ -242,6 +244,20 @@ export function updateIndexerGlobalSettings(db: Db, value: IndexerGlobalSettings
 // ---------------------------------------------------------------------------------------
 // indexers.definitionFeed (owned by the indexers module's definition feed)
 // ---------------------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------------------
+// indexers.communityCatalogue (owned by the indexers module's community catalogue)
+// ---------------------------------------------------------------------------------------
+
+export function getCommunityCatalogueSettings(db: Db): CommunityCatalogueSettings {
+  return getSection(db, 'indexers').communityCatalogue;
+}
+
+export function updateCommunityCatalogueSettings(db: Db, value: CommunityCatalogueSettings): CommunityCatalogueSettings {
+  const parsed = CommunityCatalogueSettings.safeParse(value);
+  if (!parsed.success) throw new SettingsError('VALIDATION', parsed.error.message);
+  return setSection(db, 'indexers', { ...getSection(db, 'indexers'), communityCatalogue: parsed.data }).communityCatalogue;
+}
 
 export function getDefinitionFeedSettings(db: Db): DefinitionFeedSettings {
   return getSection(db, 'indexers').definitionFeed;

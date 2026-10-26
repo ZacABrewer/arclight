@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import type { DefinitionFeedSettings, IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@arclight/shared';
+import type { CommunityCatalogueSettings, DefinitionFeedSettings, IndexerCreate, IndexerDefinitionListQuery, IndexerGlobalSettings, IndexerProxyCreate, IndexerUpdate } from '@arclight/shared';
 import { indexersApi } from '../api/indexers.js';
 import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
@@ -129,4 +129,43 @@ export function useRollbackDefinition() {
   return useInvalidatingMutation((id: string) => indexersApi.definitions.feed.rollback(id), [definitionFeedKeys.status, ['indexers', 'definitions']], {
     errorTitle: t('hooks.indexers.couldNotRollBackThe'),
   });
+}
+
+// ---- add-indexer catalogue and the community catalogue -------------------------------
+
+export function useIndexerCatalogue(enabled = true) {
+  return useQuery({ queryKey: settingsKeys.indexerCatalogue, queryFn: indexersApi.catalogue.list, staleTime: 60_000, enabled });
+}
+
+export function useCatalogueEntry(key: string | undefined) {
+  return useQuery({
+    queryKey: settingsKeys.indexerCatalogueEntry(key ?? ''),
+    queryFn: () => indexersApi.catalogue.entry(key!),
+    enabled: !!key,
+    staleTime: 60_000,
+  });
+}
+
+export function useCommunityCatalogueStatus() {
+  return useQuery({ queryKey: settingsKeys.communityCatalogue, queryFn: indexersApi.catalogue.community.status, retry: false });
+}
+
+export function useSyncCommunityCatalogue() {
+  return useInvalidatingMutation(() => indexersApi.catalogue.community.sync(), [['indexers', 'definitions'], ['feeds']], {
+    errorTitle: t('hooks.indexers.communityCatalogueSyncFailed'),
+  });
+}
+
+export function useRollbackCommunityCatalogue() {
+  return useInvalidatingMutation(() => indexersApi.catalogue.community.rollback(), [['indexers', 'definitions'], ['feeds']], {
+    errorTitle: t('hooks.indexers.couldNotRollBackCommunityCatalogue'),
+  });
+}
+
+export function useSaveCommunityCatalogueSettings() {
+  return useInvalidatingMutation(
+    (body: CommunityCatalogueSettings) => indexersApi.catalogue.community.settings.save(body),
+    [['indexers', 'definitions'], ['feeds']],
+    { errorTitle: t('hooks.indexers.couldNotSaveCommunityCatalogue') },
+  );
 }

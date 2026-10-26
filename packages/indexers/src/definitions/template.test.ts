@@ -26,6 +26,13 @@ describe('renderTemplate', () => {
     expect(renderTemplate('{{ .Today.Year }}', vars)).toBe('2026');
   });
 
+  it('reads setting names that contain hyphens', () => {
+    const v: TemplateVars = { 'Config.cat-id': '7', 'Config.filter-id': '' };
+    expect(renderTemplate('search-{{ .Config.cat-id }}-x', v)).toBe('search-7-x');
+    expect(renderTemplate('{{ if and .Keywords .Config.filter-id }}on{{ else }}off{{ end }}', { ...v, Keywords: 'a' })).toBe('off');
+    expect(templateVariables('{{ .Config.cat-id }}')).toContain('Config.cat-id');
+  });
+
   it('handles if / else / end with truthiness rules', () => {
     expect(renderTemplate('{{ if .Config.freeleech }}1{{ else }}0{{ end }}', vars)).toBe('1');
     expect(renderTemplate('{{ if .Config.empty }}1{{ else }}0{{ end }}', vars)).toBe('0');

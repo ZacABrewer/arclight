@@ -1,6 +1,7 @@
-import type { DefinitionFeedSettings } from '@arclight/shared';
+import type { CommunityCatalogueSettings, DefinitionFeedSettings } from '@arclight/shared';
 import { hourlyCron } from '../../feeds.js';
 import type { Scheduler } from '../../scheduler.js';
+import type { CommunityCatalogue } from './community-catalogue.js';
 import type { DefinitionFeed } from './definition-feed.js';
 import type { IndexersService } from './service.js';
 
@@ -8,6 +9,7 @@ export const RSS_SYNC_JOB = 'RssSync';
 export const INDEXER_STATUS_CHECK_JOB = 'IndexerStatusCheck';
 export const INDEXER_STATS_CLEANUP_JOB = 'IndexerStatsCleanup';
 export const DEFINITION_FEED_SYNC_JOB = 'IndexerDefinitionFeedSync';
+export const COMMUNITY_CATALOGUE_SYNC_JOB = 'IndexerCommunityCatalogueSync';
 
 export const DEFAULT_RSS_SYNC_MINUTES = 15;
 
@@ -84,4 +86,27 @@ export function registerDefinitionFeedJob(scheduler: Scheduler, feed: Definition
 
 export function rescheduleDefinitionFeed(scheduler: Scheduler, settings: Pick<DefinitionFeedSettings, 'enabled' | 'mode' | 'intervalHours'>): void {
   if (scheduler.has(DEFINITION_FEED_SYNC_JOB)) scheduler.update(DEFINITION_FEED_SYNC_JOB, definitionFeedCronFor(settings));
+}
+
+/** Cron for the community catalogue: null when disabled. Minute 23 keeps it off the hour and off the feed. */
+export function communityCatalogueCronFor(settings: Pick<CommunityCatalogueSettings, 'enabled' | 'intervalHours'>): string | null {
+  return settings.enabled ? hourlyCron(settings.intervalHours, 23) : null;
+}
+
+export function registerCommunityCatalogueJob(scheduler: Scheduler, catalogue: CommunityCatalogue, settings: () => CommunityCatalogueSettings): void {
+  const cron = communityCatalogueCronFor(settings());
+  scheduler.register({
+    name: COMMUNITY_CATALOGUE_SYNC_JOB,
+    ...(cron ? { cron } : {}),
+    handler: async ({ signal }) => {
+      if (!settings().enabled) return 'community catalogue turned off';
+      const r = await catalogue.sync({ signal });
+      if (r.notModified) return `listing not modified (${r.total} definitions)`;
+      return `${r.added} added, ${r.updated} updated, ${r.removed} removed, ${r.unchanged} unchanged, ${r.failed.length} failed`;
+    },
+  });
+}
+
+export function rescheduleCommunityCatalogue(scheduler: Scheduler, settings: Pick<CommunityCatalogueSettings, 'enabled' | 'intervalHours'>): void {
+  if (scheduler.has(COMMUNITY_CATALOGUE_SYNC_JOB)) scheduler.update(COMMUNITY_CATALOGUE_SYNC_JOB, communityCatalogueCronFor(settings));
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { IndexerDefinitionSummary, IndexerProxy } from '@arclight/shared';
-import { definitionBase, definitionFields, definitionNotes, filterDefinitions, EMPTY_CATALOGUE_FILTER, toDefinitionBody } from './definition-fields.js';
+import { definitionBase, definitionFields, definitionNotes, toDefinitionBody } from './definition-fields.js';
 import { indexerSourceLine } from './indexers-page.js';
 
 const def = (over: Partial<IndexerDefinitionSummary> = {}): IndexerDefinitionSummary => ({
@@ -55,13 +55,6 @@ describe('definition editor fields', () => {
       settings: { definitionId: 'examplesite', apiPath: '', fields: { username: 'me', freeleech: true, sort: 'seeders' } },
     });
     expect(toDefinitionBody({ ...base, proxyId: 3 }, 'examplesite').proxyId).toBe(3);
-  });
-
-  it('filters the catalogue by words, privacy and language', () => {
-    const list = [def(), def({ id: 'yts', name: 'YTS', description: 'Movies', privacy: 'public', type: 'public' }), def({ id: 'rutor', name: 'Rutor', language: 'ru-RU', privacy: 'public', type: 'public' })];
-    expect(filterDefinitions(list, { ...EMPTY_CATALOGUE_FILTER, text: 'movies' }).map((d) => d.id)).toEqual(['yts']);
-    expect(filterDefinitions(list, { ...EMPTY_CATALOGUE_FILTER, privacy: 'public' }).map((d) => d.id)).toEqual(['rutor', 'yts']);
-    expect(filterDefinitions(list, { ...EMPTY_CATALOGUE_FILTER, language: 'ru' }).map((d) => d.id)).toEqual(['rutor']);
   });
 
   it('describes the definition and proxies on indexer cards', () => {

@@ -17,6 +17,7 @@ export { buildCapsUrl, buildSearchUrl, planSearch, redactUrl, type SearchPlan } 
 export { torznab, newznab };
 export * from './proxy.js';
 export * from './definitions/index.js';
+export { INDEXER_PRESETS, type IndexerPreset } from './presets.js';
 export * as html from './html/index.js';
 import { CookieJar } from './definitions/cookies.js';
 import { createProxiedFetch } from './proxy.js';

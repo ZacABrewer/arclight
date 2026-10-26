@@ -24,3 +24,18 @@ export const feedStaleCheck: HealthCheckDef = {
       });
   },
 };
+
+/**
+ * The community indexer catalogue is on and synced, but nothing in it loads (an empty listing,
+ * or a source URL that serves files this engine cannot read). Staleness is FeedStale's job.
+ */
+export const indexerCatalogueEmptyCheck: HealthCheckDef = {
+  id: 'IndexerCatalogueEmpty',
+  async run(deps) {
+    if (!deps.indexerCatalogue) return [];
+    const c = await deps.indexerCatalogue();
+    if (!c.enabled || c.lastSuccessAt === null || c.supported > 0) return [];
+    const what = c.files === 0 ? 'has no definitions' : `has ${c.files} definition files but none of them load`;
+    return [finding(this.id, 'warning', `The community indexer catalogue ${what}. Check the source URL in Settings > Indexer catalogue.`, 'indexer-catalogue-empty')];
+  },
+};

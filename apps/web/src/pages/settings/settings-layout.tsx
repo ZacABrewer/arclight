@@ -39,6 +39,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       { get label() { return t('common.indexers'); }, to: '/settings/indexers' },
       { get label() { return t('settings.layout.indexerProxies'); }, to: '/settings/indexerproxies' },
       { get label() { return t('settings.layout.indexerOptions'); }, to: '/settings/indexeroptions' },
+      { get label() { return t('nav.indexerCatalogue'); }, to: '/settings/indexercatalogue' },
       { get label() { return t('common.challengeSolver'); }, to: '/settings/solver' },
     ],
   },

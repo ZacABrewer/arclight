@@ -67,7 +67,7 @@ and the help-only `info`, `info_cookie`, `info_flaresolverr`, `info_useragent` a
 `info_category_8000`. Each value is available in templates as `.Config.<name>`. A checkbox
 gives `"True"` or null; a select gives the option key. `.Config.sitelink` is the base URL in use.
 
-Templates use the form `{{ ... }}`:
+Templates use the form `{{ ... }}` (setting names may contain hyphens: `{{ .Config.cat-id }}`):
 
 - `{{ .Var }}`
 - `{{ if X }}..{{ else if Y }}..{{ else }}..{{ end }}`

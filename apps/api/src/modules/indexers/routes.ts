@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import {
+  CommunityCatalogueSettings,
+  CommunityCatalogueStatus,
+  CommunityCatalogueSyncResult,
   Indexer,
+  IndexerCatalogue,
+  IndexerCatalogueEntryDetail,
   IndexerCapabilitiesResource,
   IndexerCategory,
   IndexerCreate,
@@ -34,6 +39,8 @@ import {
 import { IndexerError } from '@arclight/indexers';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
+import { buildCatalogue, CatalogueEntryNotFound, catalogueEntry, type CatalogueContext } from './catalogue.js';
+import { CommunityCatalogueError, type CommunityCatalogue } from './community-catalogue.js';
 import { DefinitionFeedError, type DefinitionFeed } from './definition-feed.js';
 import { DefinitionStoreError } from './definitions.js';
 import { IndexersError, type IndexersErrorCode } from './errors.js';
@@ -78,6 +85,14 @@ export interface IndexersRoutesOptions {
     get(): IndexerGlobalSettings;
     update(value: IndexerGlobalSettings): IndexerGlobalSettings;
   };
+  /** GET /indexer/catalogue header data; omitted = community shown as off. */
+  catalogue?: Omit<CatalogueContext, 'store'>;
+  /** Community catalogue routes (/indexer/catalogue/community/*); omitted = not registered. */
+  community?: {
+    catalogue: CommunityCatalogue;
+    getSettings(): CommunityCatalogueSettings;
+    updateSettings(value: CommunityCatalogueSettings): Promise<CommunityCatalogueSettings>;
+  };
   /** Definition feed routes (/indexer/definition/feed/*); omitted = not registered. */
   feed?: {
     feed: DefinitionFeed;
@@ -100,6 +115,13 @@ export function indexersRoutes(
       if (err instanceof DefinitionFeedError) {
         const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'VALIDATION' ? 400 : 502;
         return reply.code(status).send({ error: err.message, code: err.code });
+      }
+      if (err instanceof CommunityCatalogueError) {
+        const status = err.code === 'NOT_FOUND' ? 404 : err.code === 'VALIDATION' ? 400 : 502;
+        return reply.code(status).send({ error: err.message, code: err.code });
+      }
+      if (err instanceof CatalogueEntryNotFound) {
+        return reply.code(404).send({ error: err.message, code: err.code });
       }
       if (err instanceof DefinitionStoreError) {
         return reply.code(err.code === 'NOT_FOUND' ? 404 : 400).send({ error: err.message, code: err.code });
@@ -190,6 +212,55 @@ export function indexersRoutes(
         return reply.code(204).send(null);
       },
     );
+
+    // ---- add-indexer catalogue -------------------------------------------------------
+
+    const catalogueCtx: CatalogueContext = {
+      store: service.definitions,
+      community: opts.catalogue?.community ?? (async () => ({ enabled: false, lastSuccessAt: null, lastError: null })),
+      ...(opts.catalogue?.presets ? { presets: opts.catalogue.presets } : {}),
+    };
+
+    // Full listing with a weak ETag; If-None-Match answers 304 without a body.
+    app.get('/indexer/catalogue', { schema: { response: { 200: IndexerCatalogue, 304: Empty } } }, async (req, reply) => {
+      const catalogue = await buildCatalogue(catalogueCtx);
+      reply.header('etag', catalogue.etag).header('cache-control', 'no-cache');
+      const inm = req.headers['if-none-match'];
+      if (typeof inm === 'string' && inm.split(',').some((t) => t.trim() === catalogue.etag)) return reply.code(304).send(undefined as unknown as null); // no body on 304
+      return catalogue;
+    });
+
+    app.get(
+      '/indexer/catalogue/entry/:key',
+      { schema: { params: z.object({ key: z.string().min(1) }), response: { 200: IndexerCatalogueEntryDetail, ...errors } } },
+      async (req) => catalogueEntry(catalogueCtx, req.params.key),
+    );
+
+    const community = opts.community;
+    if (community) {
+      app.get('/indexer/catalogue/community/status', { schema: { response: { 200: CommunityCatalogueStatus } } }, async () => {
+        await service.definitions.ready();
+        return community.catalogue.status();
+      });
+
+      app.post('/indexer/catalogue/community/sync', { schema: { response: { 200: CommunityCatalogueSyncResult, ...errors } } }, async () =>
+        community.catalogue.sync(),
+      );
+
+      app.post('/indexer/catalogue/community/rollback', { schema: { response: { 200: CommunityCatalogueStatus, ...errors } } }, async () =>
+        community.catalogue.rollback(),
+      );
+
+      app.get('/indexer/catalogue/community/settings', { schema: { response: { 200: CommunityCatalogueSettings } } }, async () =>
+        community.getSettings(),
+      );
+
+      app.put(
+        '/indexer/catalogue/community/settings',
+        { schema: { body: CommunityCatalogueSettings, response: { 200: CommunityCatalogueSettings, ...errors } } },
+        async (req) => community.updateSettings(req.body),
+      );
+    }
 
     // ---- definition feed ------------------------------------------------------------
 

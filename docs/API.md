@@ -350,9 +350,11 @@ sharing one of the indexer's tags applies. Responses add `definitionName`, `priv
 
 ### Definition catalogue
 
-Three layers, later ones overriding earlier ones by id: bundled definitions, the definition
+Four layers, later ones overriding earlier ones by id: the community catalogue in
+`<config>/definitions/community/` (only while enabled), bundled definitions, the definition
 feed's downloads in `<config>/definitions/feed/`, user YAML files in `<config>/definitions/*.yml`
-(watched). `source` in summaries is `builtin`, `feed` or `custom`.
+(watched). `source` in summaries is `community`, `builtin`, `feed` or `custom`. Community files
+that do not load are not in this list (they are catalogue entries with `support: unsupported`).
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -360,7 +362,56 @@ feed's downloads in `<config>/definitions/feed/`, user YAML files in `<config>/d
 | GET | `/indexer/definition/:id` | `IndexerDefinitionDetail`: summary + search modes, `requiresLogin`, load warnings |
 | POST | `/indexer/definition` | `{yaml}`: validate and save a custom definition (201; 400 with the parse error) |
 | DELETE | `/indexer/definition/:id` | Delete a custom definition file (404 for bundled ones) |
-| POST | `/indexer/definition/reload` | Re-read the folders: `{total, builtin, feed, custom, errors[{file, code, message}]}` |
+| POST | `/indexer/definition/reload` | Re-read the folders: `{total, builtin, feed, custom, community, errors[{file, code, message}]}` (`errors` excludes community files) |
+
+### Indexer catalogue (add-indexer chooser)
+
+Everything the Add indexer list shows, in one shape (`packages/shared/src/indexer-catalogue.ts`):
+every definition above, community files that failed to load, the Newznab/Torznab presets
+(`packages/indexers/src/presets.ts`) and the two generic endpoints.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/indexer/catalogue` | `IndexerCatalogue` `{etag, counts{total, supported, limited, unsupported, bySource}, community{enabled, lastSuccessAt, lastError}, entries[]}`. Sent with a weak `ETag` and `cache-control: no-cache`; `If-None-Match` with the current tag answers 304 with no body |
+| GET | `/indexer/catalogue/entry/:key` | `IndexerCatalogueEntryDetail`: the entry plus `searchModes`, `requiresLogin`, `warnings`, and `file` for unsupported ones; 404 unknown key |
+
+An `IndexerCatalogueEntry` has `key` (`definition:<id>`, `preset:<id>`, `generic:torznab`/`generic:newznab`),
+`kind`, `id`, `name`, `description`, `language`, `protocol`, `privacy`, `links`, `categoryIds`,
+`categoryGroups` (`movies`, `tv`, `anime`, `music`, `books`, `xxx`, `other`; a parent category
+listed only because of a mapped subcategory does not count), `tested`, `source`
+(`builtin`/`feed`/`custom`/`community`/`preset`/`generic`), `support` (`supported`; `limited` =
+loads with a warning about an unsupported feature such as a login captcha; `unsupported` = does
+not load) with `supportReason`, `requiresFlareSolverr`, `overrides` (sources with the same id
+this entry hides) and, for presets and generic endpoints, `preset {implementation, baseUrl,
+apiPath, categories, animeCategories, apiKeyHint?}`. Whether the user already has an indexer for
+an entry is decided by the web (definition id, or preset base-URL host).
+
+### Community catalogue
+
+Settings `indexers.communityCatalogue` (`CommunityCatalogueSettings`): `enabled` (true), `url`
+(default `https://api.github.com/repos/Prowlarr/Indexers/contents/definitions/v11?ref=master`,
+`DEFAULT_COMMUNITY_CATALOGUE_URL`; schema `COMMUNITY_CATALOGUE_SCHEMA` = 11), `intervalHours`
+(24). The listing is either a GitHub contents array (`name`, `type`, `sha` = git blob SHA-1,
+`size`, `download_url`; non-YAML files and folders are skipped) or an Arclight feed `index.json`
+(`sha256` over LF text). A sync sends `If-None-Match` with the last ETag (304 = nothing to do),
+copies files whose hash is unchanged, downloads the rest (8 at a time, max 2 MiB each, at most
+5000 files), verifies the hash and swaps `<config>/definitions/.community-staging` into
+`<config>/definitions/community` with the old folder kept as `.community-previous`. A file that
+fails keeps its previous copy and clears the ETag so it is retried; if every download fails, or
+the listing is unreadable, the sync fails and the live folder is untouched. State lives in
+`<config>/definitions/.community-state.json`. Every file is loaded by the definition store (parse
+results are cached by size and mtime). A GitHub rate limit (403/429 with
+`x-ratelimit-remaining: 0`) is reported with its reset time. The catalogue registers as feed
+`communityDefinitions` (FeedStale health check); `IndexerCatalogueEmpty` warns when an enabled,
+synced catalogue loads nothing.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/indexer/catalogue/community/status` | `CommunityCatalogueStatus`: settings, last sync/success/error, `sourceUrl`, `files`, `supported`, `limited`, `unsupported`, `overridden`, `topReasons[{reason, count}]`, `previousAvailable`, `previousSyncedAt`, `stale` |
+| POST | `/indexer/catalogue/community/sync` | Sync now: `{notModified, added, updated, removed, unchanged, failed[{file, reason}], total}`; 400 `VALIDATION` when turned off, 502 `UPSTREAM` on a failed listing/sync |
+| POST | `/indexer/catalogue/community/rollback` | Swap back the folder the last sync replaced (kept until the listing changes); 404 when there is none |
+| GET | `/indexer/catalogue/community/settings` | `CommunityCatalogueSettings` |
+| PUT | `/indexer/catalogue/community/settings` | Replace them; reschedules `IndexerCommunityCatalogueSync` and reloads the definitions when `enabled` changes |
 
 ### Definition feed
 
@@ -1250,6 +1301,7 @@ of them with `POST /jobs/run`.
 | `IndexerStatusCheck` | `0 * * * *` | indexers | Hourly indexer status check |
 | `IndexerStatsCleanup` | `20 3 * * *` | indexers | Deletes `indexer_stats` rows older than 90 days |
 | `IndexerDefinitionFeedSync` | `41 */12 * * *` from `indexers.definitionFeed.intervalHours` (on demand only when disabled or `manual`) | indexers | Definition feed sync (see Definition feed) |
+| `IndexerCommunityCatalogueSync` | `23 4 * * *` from `indexers.communityCatalogue.intervalHours` (on demand only when disabled); also run 90 s after start when never synced or overdue | indexers | Community catalogue sync (see Community catalogue) |
 | `GuidesSync` | `17 4 * * *` from `guides.syncIntervalHours` (`17 */N * * *` below a day; on demand only when disabled) | guides | Guide fetch + diff; applies or stores the pending diff per `mode` |
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |

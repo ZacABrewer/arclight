@@ -149,6 +149,7 @@ export const NAV: readonly NavSection[] = [
       { get label() { return t('common.indexers'); }, to: '/settings/indexers' },
       { get label() { return t('nav.indexerProxies'); }, to: '/settings/indexerproxies' },
       { get label() { return t('nav.indexerOptions'); }, to: '/settings/indexeroptions' },
+      { get label() { return t('nav.indexerCatalogue'); }, to: '/settings/indexercatalogue' },
       { get label() { return t('nav.challengeSolver'); }, to: '/settings/solver' },
       { get label() { return t('nav.downloadClients'); }, to: '/settings/downloadclients' },
       { get label() { return t('nav.torrentEngine'); }, to: '/settings/torrent' },

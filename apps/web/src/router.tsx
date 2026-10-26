@@ -43,6 +43,7 @@ import { GeneralPage } from './pages/settings/general/general-page.js';
 import { IndexersPage } from './pages/settings/indexers/indexers-page.js';
 import { IndexerProxiesPage } from './pages/settings/indexer-proxies/indexer-proxies-page.js';
 import { IndexerOptionsPage } from './pages/settings/indexer-options/indexer-options-page.js';
+import { IndexerCataloguePage } from './pages/settings/indexer-catalogue/indexer-catalogue-page.js';
 import { IndexerStatsPage } from './pages/indexers/stats-page.js';
 import { MediaManagementPage } from './pages/settings/media-management/media-management-page.js';
 import { ImportListsPage } from './pages/settings/import-lists/import-lists-page.js';
@@ -298,6 +299,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/indexers', IndexersPage),
   page('/settings/indexerproxies', IndexerProxiesPage),
   page('/settings/indexeroptions', IndexerOptionsPage),
+  page('/settings/indexercatalogue', IndexerCataloguePage),
   page('/settings/downloadclients', DownloadClientsPage),
   page('/settings/importlists', ImportListsPage),
   page('/settings/notifications', NotificationsPage),

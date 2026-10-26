@@ -1,5 +1,10 @@
 import {
+  CommunityCatalogueSettings,
+  CommunityCatalogueStatus,
+  CommunityCatalogueSyncResult,
   Indexer,
+  IndexerCatalogue,
+  IndexerCatalogueEntryDetail,
   DefinitionFeedSettings,
   DefinitionFeedStatus,
   DefinitionFeedSyncResult,
@@ -73,6 +78,21 @@ export const indexersApi = {
       settings: {
         get: () => request('/indexer/definition/feed/settings', DefinitionFeedSettings),
         save: (body: DefinitionFeedSettings) => request('/indexer/definition/feed/settings', DefinitionFeedSettings, { method: 'PUT', json: body }),
+      },
+    },
+  },
+
+  /** Add-indexer catalogue (docs/API.md § Indexer catalogue). The browser revalidates with the ETag. */
+  catalogue: {
+    list: () => request('/indexer/catalogue', IndexerCatalogue),
+    entry: (key: string) => request(`/indexer/catalogue/entry/${encodeURIComponent(key)}`, IndexerCatalogueEntryDetail),
+    community: {
+      status: () => request('/indexer/catalogue/community/status', CommunityCatalogueStatus),
+      sync: () => request('/indexer/catalogue/community/sync', CommunityCatalogueSyncResult, { method: 'POST' }),
+      rollback: () => request('/indexer/catalogue/community/rollback', CommunityCatalogueStatus, { method: 'POST' }),
+      settings: {
+        get: () => request('/indexer/catalogue/community/settings', CommunityCatalogueSettings),
+        save: (body: CommunityCatalogueSettings) => request('/indexer/catalogue/community/settings', CommunityCatalogueSettings, { method: 'PUT', json: body }),
       },
     },
   },

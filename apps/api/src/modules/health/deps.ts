@@ -15,7 +15,7 @@ import {
   trackedDownloads,
 } from '../../db/schema.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
-import { indexersServiceFor } from '../indexers/index.js';
+import { communityCatalogueFor, indexersServiceFor } from '../indexers/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { getSection } from '../settings/service.js';
 import { subtitlesServiceFor } from '../subtitles/index.js';
@@ -244,6 +244,13 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
     },
 
     feeds: () => feedsRegistry(ctx).summary(),
+
+    async indexerCatalogue() {
+      const community = communityCatalogueFor(ctx);
+      if (!community) return { enabled: false, lastSuccessAt: null, files: 0, supported: 0 };
+      const s = await community.status();
+      return { enabled: s.settings.enabled, lastSuccessAt: s.lastSuccessAt, files: s.files, supported: s.supported };
+    },
 
     remoteEngines: () => downloads.remoteEngineHealth(),
 

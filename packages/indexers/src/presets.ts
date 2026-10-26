@@ -1,0 +1,237 @@
+/**
+ * Newznab / Torznab presets for the add-indexer catalogue: well-known indexers whose API
+ * endpoint is fixed, so the user only adds an API key. Presets are plain configuration (base
+ * URL, API path, default categories); nothing here is contacted until the user tests or saves
+ * an indexer made from one. Privacy describes how an account is obtained: `semi-private` =
+ * open registration (sometimes paid), `private` = invite only, `public` = no account.
+ */
+export interface IndexerPreset {
+  /** Stable id, `[a-z0-9-]+`. */
+  id: string;
+  name: string;
+  description: string;
+  implementation: 'newznab' | 'torznab';
+  privacy: 'public' | 'semi-private' | 'private';
+  /** Primary language of the indexer's content, `en-US` style; '' = mixed. */
+  language: string;
+  baseUrl: string;
+  apiPath: string;
+  categories: number[];
+  animeCategories: number[];
+  /** Where the API key lives on the indexer's site. */
+  apiKeyHint?: string;
+}
+
+const MOVIES_TV = [2000, 5000];
+const ANIME = [5070];
+const PROFILE_KEY = 'Your profile or API page on the site';
+
+export const INDEXER_PRESETS: readonly IndexerPreset[] = [
+  {
+    id: 'althub',
+    name: 'altHUB',
+    description: 'Usenet indexer with a focus on South African and international content.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://api.althub.co.za',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'animetosho-newznab',
+    name: 'Animetosho (Usenet)',
+    description: 'Anime releases mirrored to usenet. No account or API key needed.',
+    implementation: 'newznab',
+    privacy: 'public',
+    language: 'en-US',
+    baseUrl: 'https://feed.animetosho.org',
+    apiPath: '/api',
+    categories: [],
+    animeCategories: [5070],
+  },
+  {
+    id: 'dognzb',
+    name: 'DOGnzb',
+    description: 'Long-running usenet indexer for movies and TV.',
+    implementation: 'newznab',
+    privacy: 'private',
+    language: 'en-US',
+    baseUrl: 'https://api.dognzb.cr',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'drunkenslug',
+    name: 'DrunkenSlug',
+    description: 'Invite-only usenet indexer with a large movie and TV catalogue.',
+    implementation: 'newznab',
+    privacy: 'private',
+    language: 'en-US',
+    baseUrl: 'https://api.drunkenslug.com',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'miatrix',
+    name: 'Miatrix',
+    description: 'General usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://www.miatrix.com',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'ninjacentral',
+    name: 'NinjaCentral',
+    description: 'Usenet indexer with open registration windows.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://ninjacentral.co.za',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzbcat',
+    name: 'NZBCat',
+    description: 'General usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://nzb.cat',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzbfinder',
+    name: 'NZBFinder',
+    description: 'Usenet indexer with a free tier and paid VIP access.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://nzbfinder.ws',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzbgeek',
+    name: 'NZBgeek',
+    description: 'Popular paid usenet indexer for movies and TV.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://api.nzbgeek.info',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzbplanet',
+    name: 'NZBPlanet',
+    description: 'General usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://api.nzbplanet.net',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzbsu',
+    name: 'NZB.su',
+    description: 'Long-running general usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://api.nzb.su',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'nzblife',
+    name: 'NZB.life',
+    description: 'General usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://api.nzb.life',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'scenenzbs',
+    name: 'SceneNZBs',
+    description: 'Usenet indexer focused on scene releases.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://scenenzbs.com',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'tabularasa',
+    name: 'Tabula Rasa',
+    description: 'Usenet indexer with a newer v1 API path.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://www.tabula-rasa.pw',
+    apiPath: '/api/v1/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'usenet-crawler',
+    name: 'Usenet Crawler',
+    description: 'Free general usenet indexer.',
+    implementation: 'newznab',
+    privacy: 'semi-private',
+    language: 'en-US',
+    baseUrl: 'https://www.usenet-crawler.com',
+    apiPath: '/api',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: PROFILE_KEY,
+  },
+  {
+    id: 'jackett-all',
+    name: 'Jackett (all indexers)',
+    description: "Jackett's aggregate Torznab feed on your own server. Adjust the host if Jackett is not on this machine.",
+    implementation: 'torznab',
+    privacy: 'public',
+    language: '',
+    baseUrl: 'http://localhost:9117',
+    apiPath: '/api/v2.0/indexers/all/results/torznab',
+    categories: MOVIES_TV,
+    animeCategories: ANIME,
+    apiKeyHint: 'The API key at the top of the Jackett dashboard',
+  },
+];

@@ -39,6 +39,45 @@ export function parseDefinitionYaml(text: string, options: { fileKey?: string } 
   return parseDefinition(data, options);
 }
 
+/** Identity fields read leniently from a definition that failed to load (for listing it). */
+export interface DefinitionPeek {
+  id?: string;
+  name?: string;
+  description?: string;
+  language?: string;
+  type?: string;
+  links: string[];
+}
+
+/** Best-effort read of identity fields from YAML that `parseDefinitionYaml` rejected. Never throws. */
+export function peekDefinitionYaml(text: string): DefinitionPeek {
+  const out: DefinitionPeek = { links: [] };
+  try {
+    const doc = parseDocument(text, { uniqueKeys: false, prettyErrors: false });
+    const data = doc.toJS({ maxAliasCount: MAX_ALIAS_COUNT }) as unknown;
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return out;
+    const rec = data as Record<string, unknown>;
+    const str = (k: string) => (typeof rec[k] === 'string' ? (rec[k] as string).trim() : undefined);
+    for (const k of ['id', 'name', 'description', 'language', 'type'] as const) {
+      const v = str(k);
+      if (v) out[k] = v;
+    }
+    const links = rec['links'];
+    if (Array.isArray(links)) out.links = links.filter((l): l is string => typeof l === 'string');
+  } catch {
+    // unreadable YAML: nothing to show beyond the file name
+  }
+  return out;
+}
+
+/**
+ * Load warnings that mean part of the definition will not work in Arclight (as opposed to
+ * notes such as ignored certificates). A definition with one is listed as "limited".
+ */
+export function limitingWarnings(def: Pick<Definition, 'warnings'>): string[] {
+  return def.warnings.filter((w) => /not supported|unsupported/i.test(w));
+}
+
 export interface CatalogueError {
   file: string;
   error: DefinitionError;
