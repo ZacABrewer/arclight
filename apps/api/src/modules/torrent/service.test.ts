@@ -196,6 +196,17 @@ describe('VPN binding', () => {
     expect(findings[0]!.message).toContain('not the VPN tunnel address 127.0.0.2');
   });
 
+  it('listens on the forwarded port even when bindToVpn is off', async () => {
+    const h = await make({ vpn: true, settings: { enabled: true, bindToVpn: false } });
+    h.vpn.connect();
+    await h.service.start();
+    const forwarded = await otherPort(h);
+    h.vpn.connect({ forwardedPort: forwarded });
+    await h.service.applyBinding();
+    expect(running(h).listenPort).toBe(forwarded);
+    expect(h.service.status()).toMatchObject({ state: 'running', boundAddress: '127.0.0.1', listenPort: forwarded });
+  });
+
   it('health is clean when bound to the tunnel', async () => {
     const h = await make({ vpn: true, settings: { enabled: true } });
     h.vpn.connect();

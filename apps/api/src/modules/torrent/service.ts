@@ -307,8 +307,11 @@ export class TorrentService {
 
   private desiredBinding(s: TorrentSettings = this.settings()): Binding {
     const vpn = this.vpn;
-    if (!s.bindToVpn || !vpn || !vpn.enabled()) return { mode: 'open', address: this.defaultAddress, port: s.listenPort };
+    if (!vpn || !vpn.enabled()) return { mode: 'open', address: this.defaultAddress, port: s.listenPort };
     const st = vpn.getStatus();
+    // Without binding (e.g. inside gluetun's namespace, where every socket is the tunnel's) the
+    // engine still listens on the forwarded port so peers can reach it.
+    if (!s.bindToVpn) return { mode: 'open', address: this.defaultAddress, port: (st.connected ? st.forwardedPort : undefined) ?? s.listenPort };
     const lockdown = (reason: string): Binding => ({ mode: 'lockdown', address: LOCKDOWN_ADDRESS, port: s.listenPort, reason });
     if (!st.enabled || st.lastChecked === null) return lockdown('Waiting for the first VPN check.');
     if (st.killSwitchEngaged) return lockdown('VPN kill switch engaged.');
