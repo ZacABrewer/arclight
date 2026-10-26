@@ -1,72 +1,15 @@
-/* Discover, requests, issues. Uses the shared tokens only so the Phase 5 theme applies. */
-
-.discover-section { display: flex; flex-direction: column; gap: var(--space-2); margin-bottom: var(--space-5); }
-.discover-section-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-2); }
-.discover-section-title { margin: 0; font-size: var(--text-lg); }
-.discover-row {
-  display: flex;
-  gap: var(--space-3);
-  overflow-x: auto;
-  padding-bottom: var(--space-2);
-  scroll-snap-type: x proximity;
-}
-.discover-row > * { flex: 0 0 140px; scroll-snap-align: start; }
-.discover-card-badge { position: absolute; top: 6px; right: 6px; z-index: 1; }
-.discover-card-poster { position: relative; }
-.discover-sentinel { height: 1px; }
-.discover-more { display: flex; justify-content: center; padding: var(--space-4); }
-
-.filter-bar { display: flex; flex-wrap: wrap; gap: var(--space-2) var(--space-3); align-items: flex-end; margin-bottom: var(--space-4); }
-.filter-bar .field { margin: 0; min-width: 130px; }
-.filter-bar .input { width: auto; min-width: 110px; }
-
-.genre-chips { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.genre-chip {
-  display: inline-flex;
-  align-items: center;
-  padding: var(--space-2) var(--space-3);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius);
-  background: var(--surface);
-  color: var(--text);
-  text-decoration: none;
-  font-size: var(--text-sm);
-}
-.genre-chip:hover { border-color: var(--accent); color: var(--accent); }
-
-.cast-row > * { flex-basis: 110px; }
-.cast-card { display: flex; flex-direction: column; gap: 2px; font-size: var(--text-xs); color: inherit; text-decoration: none; }
-.cast-card strong { font-size: var(--text-sm); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-
-.season-picker { display: flex; flex-direction: column; gap: var(--space-1); max-height: 320px; overflow-y: auto; }
-.season-picker-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); padding: var(--space-1) var(--space-2); border-radius: var(--radius-sm); }
-.season-picker-row:hover { background: var(--surface-hover); }
-
-.request-row-title { display: flex; align-items: center; gap: var(--space-2); }
-.request-row-title a { color: inherit; font-weight: 600; }
-
-.timeline { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
-.timeline-item { display: flex; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--border); border-radius: var(--radius); background: var(--surface); }
-.timeline-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.timeline-steps { display: flex; flex-wrap: wrap; gap: var(--space-2); font-size: var(--text-xs); color: var(--muted); }
-.timeline-step-done { color: var(--ok); }
-
-.comment-thread { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-3); }
-.comment { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3); background: var(--surface-raised); }
-.comment-head { display: flex; justify-content: space-between; gap: var(--space-2); font-size: var(--text-sm); margin-bottom: var(--space-2); }
-.comment-body { white-space: pre-wrap; margin: 0; }
-
-.perm-group { border: 1px solid var(--border); border-radius: var(--radius); padding: var(--space-3); margin-bottom: var(--space-3); }
-.perm-group legend { padding: 0 var(--space-1); font-weight: 600; font-size: var(--text-sm); }
-.perm-item { display: flex; gap: var(--space-2); align-items: flex-start; padding: var(--space-1) 0; font-size: var(--text-sm); cursor: pointer; }
-.perm-item small { display: block; color: var(--muted); }
-
-.slider-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
-.slider-item { display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface); }
-.slider-item-title { flex: 1; min-width: 0; }
-
-.person-hero { display: flex; gap: var(--space-5); margin-bottom: var(--space-5); }
-.person-bio { white-space: pre-wrap; color: var(--muted); max-width: 80ch; }
-@media (max-width: 720px) {
-  .person-hero { flex-direction: column; }
+/* User request editors (permissions matrix, quotas, personal notifications). Arclight tokens only. */
+.req-stack { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.req-fields-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 20px; }
+.req-group { margin: 0 0 12px; padding: 12px 16px 16px; border: 1px solid var(--al-line-2); min-width: 0; }
+.req-group > legend { padding: 0 6px; }
+.req-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 24px; }
+.req-actions { display: flex; flex-wrap: wrap; gap: 12px; }
+.req-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--al-mono); font-size: 12px; }
+.req-results [data-ok="true"] { color: var(--al-cyan); }
+.req-results [data-ok="false"] { color: var(--al-danger-text); }
+.req-usage { margin: 4px 0 0; font-size: 13px; color: var(--al-text-4); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+@media (max-width: 640px) {
+  .req-fields-2 { grid-template-columns: minmax(0, 1fr); }
+  .req-check-grid { grid-template-columns: minmax(0, 1fr); }
 }

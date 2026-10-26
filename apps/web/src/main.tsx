@@ -9,6 +9,7 @@ import { createQueryClient } from './query-client.js';
 import { createAppRouter } from './router.js';
 import { setUnauthorizedHandler } from './api/client.js';
 import { authKeys, loginHref } from './auth/guard.js';
+import { registerServiceWorker } from './register-sw.js';
 import './arclight/fonts.js';
 import './styles/index.css';
 
@@ -23,6 +24,8 @@ setUnauthorizedHandler(() => {
   void queryClient.invalidateQueries({ queryKey: authKeys.all });
   void router.navigate({ href: loginHref(href, true), replace: true });
 });
+
+registerServiceWorker();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root element missing from index.html');

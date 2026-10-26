@@ -11,11 +11,8 @@ import {
   type UserRequestSettings,
 } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { Badge } from '../../components/badge.js';
-import { Button } from '../../components/button.js';
+import { Button, Checkbox, Chip, Field, Input, SectionLabel, Skeleton, Toggle } from '../../arclight/index.js';
 import { ErrorView } from '../../components/error-boundary.js';
-import { FormField, Input, Toggle } from '../../components/form.js';
-import { LoadingBlock } from '../../components/spinner.js';
 import { useToast } from '../../components/toast.js';
 import {
   useSetUserPermissions,
@@ -74,31 +71,27 @@ export function PermissionsMatrix({
   return (
     <div data-testid="permissions-matrix">
       {groupedPermissions().map(([group, items]) => (
-        <fieldset key={group} className="perm-group">
-          <legend>{PERMISSION_GROUP_LABELS[group]}</legend>
-          <div className="check-grid">
+        <fieldset key={group} className="req-group">
+          <legend className="al-label">{PERMISSION_GROUP_LABELS[group]}</legend>
+          <div className="req-check-grid">
             {items.map((p) => {
               const locked = disabled || (lockAdmin && p.value === Permission.ADMIN);
               return (
-                <label key={p.name} className="perm-item">
-                  <input
-                    type="checkbox"
-                    aria-label={p.label}
-                    checked={(value & p.value) === p.value}
-                    disabled={locked}
-                    onChange={(e) => onChange(togglePermission(value, p.value, e.currentTarget.checked))}
-                  />
-                  <span>
-                    {p.label}
-                    <small>{p.description}</small>
-                  </span>
-                </label>
+                <Checkbox
+                  key={p.name}
+                  label={p.label}
+                  hint={p.description}
+                  aria-label={p.label}
+                  checked={(value & p.value) === p.value}
+                  disabled={locked}
+                  onChange={(e) => onChange(togglePermission(value, p.value, e.currentTarget.checked))}
+                />
               );
             })}
           </div>
         </fieldset>
       ))}
-      {isAdmin ? <p className="muted small">Admin passes every check; the other boxes have no effect.</p> : null}
+      {isAdmin ? <p className="al-muted">Admin passes every check; the other boxes have no effect.</p> : null}
     </div>
   );
 }
@@ -113,12 +106,12 @@ export function UserPermissionsEditor({ userId, lockAdmin = true }: { userId: nu
   }, [query.data, draft]);
 
   if (query.isError) return <ErrorView error={query.error} onRetry={() => void query.refetch()} />;
-  if (draft === null) return <LoadingBlock />;
+  if (draft === null) return <Skeleton lines={4} />;
   return (
-    <div className="stack-sm">
+    <div className="req-stack">
       <PermissionsMatrix value={draft} onChange={setDraft} lockAdmin={lockAdmin} />
       <SaveError error={save.error} />
-      <div className="row">
+      <div className="req-actions">
         <Button
           variant="primary"
           loading={save.isPending}
@@ -151,7 +144,7 @@ const numOrNull = (raw: string): number | null => {
 /** Four number inputs; blank means null (global default on a user, "no quota" globally). */
 export function QuotaFields({ value, onChange, blankHint }: { value: UserQuota; onChange: (next: UserQuota) => void; blankHint: string }) {
   const field = (key: keyof UserQuota, label: string) => (
-    <FormField label={label} hint={blankHint}>
+    <Field label={label} hint={blankHint}>
       <Input
         type="number"
         min={0}
@@ -159,15 +152,15 @@ export function QuotaFields({ value, onChange, blankHint }: { value: UserQuota; 
         value={value[key] ?? ''}
         onChange={(e) => onChange({ ...value, [key]: numOrNull(e.currentTarget.value) })}
       />
-    </FormField>
+    </Field>
   );
   return (
-    <div className="stack-sm">
-      <div className="fields-row">
+    <div className="req-stack">
+      <div className="req-fields-2">
         {field('movieLimit', 'Movie request limit')}
         {field('movieDays', 'Movie window (days)')}
       </div>
-      <div className="fields-row">
+      <div className="req-fields-2">
         {field('tvLimit', 'Series request limit')}
         {field('tvDays', 'Series window (days)')}
       </div>
@@ -191,34 +184,34 @@ export function UserQuotaEditor({ userId }: { userId: number }) {
   }, [query.data, draft]);
 
   if (query.isError) return <ErrorView error={query.error} onRetry={() => void query.refetch()} />;
-  if (!query.data || draft === null) return <LoadingBlock />;
+  if (!query.data || draft === null) return <Skeleton lines={4} />;
   const { effective, status, exempt } = query.data;
   return (
-    <div className="stack-sm" data-testid="quota-editor">
+    <div className="req-stack" data-testid="quota-editor">
       {exempt ? (
-        <p className="notice" role="status">
+        <p className="al-notice" role="status">
           This user manages users (or is an admin) and is exempt from quotas.
         </p>
       ) : null}
       <QuotaFields value={draft} onChange={setDraft} blankHint="Blank: use the global default" />
-      <div className="fields-row">
+      <div className="req-fields-2">
         <div>
-          <strong>Movies</strong>
-          <p className="muted small" data-testid="quota-movie">
+          <SectionLabel>Movies</SectionLabel>
+          <p className="req-usage" data-testid="quota-movie">
             Effective: {effective.movieLimit ? `${effective.movieLimit} per ${effective.movieDays ?? '∞'} days` : 'unlimited'} — {quotaSummary(status.movie)}
-            {status.movie.restricted ? <Badge tone="error">limit reached</Badge> : null}
+            {status.movie.restricted ? <Chip tone="danger">limit reached</Chip> : null}
           </p>
         </div>
         <div>
-          <strong>Series</strong>
-          <p className="muted small" data-testid="quota-series">
+          <SectionLabel>Series</SectionLabel>
+          <p className="req-usage" data-testid="quota-series">
             Effective: {effective.tvLimit ? `${effective.tvLimit} per ${effective.tvDays ?? '∞'} days` : 'unlimited'} — {quotaSummary(status.series)}
-            {status.series.restricted ? <Badge tone="error">limit reached</Badge> : null}
+            {status.series.restricted ? <Chip tone="danger">limit reached</Chip> : null}
           </p>
         </div>
       </div>
       <SaveError error={save.error} />
-      <div className="row">
+      <div className="req-actions">
         <Button
           variant="primary"
           loading={save.isPending}
@@ -263,55 +256,52 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
   }, [query.data, draft]);
 
   if (query.isError) return <ErrorView error={query.error} onRetry={() => void query.refetch()} />;
-  if (draft === null) return <LoadingBlock />;
+  if (draft === null) return <Skeleton lines={4} />;
   const n = draft.notifications;
   const setN = (patch: Partial<UserRequestSettings['notifications']>) => setDraft({ ...draft, notifications: { ...n, ...patch } });
 
   return (
-    <div className="stack-sm" data-testid="request-settings-form">
-      <h3 className="section-title">Discord</h3>
-      <FormField label="Enabled" inline>
+    <div className="req-stack" data-testid="request-settings-form">
+      <SectionLabel>Discord</SectionLabel>
+      <Field label="Enabled" inline>
         <Toggle aria-label="Discord enabled" checked={n.discordEnabled} onChange={(e) => setN({ discordEnabled: e.currentTarget.checked })} />
-      </FormField>
-      <FormField label="Webhook URL" hint="A webhook into a private channel or DM server.">
+      </Field>
+      <Field label="Webhook URL" hint="A webhook into a private channel or DM server.">
         <Input
           value={n.discordWebhookUrl ?? ''}
           onChange={(e) => setN(optionalText('discordWebhookUrl', e.currentTarget.value))}
           placeholder="https://discord.com/api/webhooks/…"
         />
-      </FormField>
+      </Field>
 
-      <h3 className="section-title">Telegram</h3>
-      <FormField label="Enabled" inline>
+      <SectionLabel>Telegram</SectionLabel>
+      <Field label="Enabled" inline>
         <Toggle aria-label="Telegram enabled" checked={n.telegramEnabled} onChange={(e) => setN({ telegramEnabled: e.currentTarget.checked })} />
-      </FormField>
-      <FormField label="Chat id" hint="Uses the bot of the first enabled Telegram connection.">
+      </Field>
+      <Field label="Chat id" hint="Uses the bot of the first enabled Telegram connection.">
         <Input value={n.telegramChatId ?? ''} onChange={(e) => setN(optionalText('telegramChatId', e.currentTarget.value))} />
-      </FormField>
-      <FormField label="Send silently" inline>
+      </Field>
+      <Field label="Send silently" inline>
         <Toggle checked={n.telegramSendSilently} onChange={(e) => setN({ telegramSendSilently: e.currentTarget.checked })} />
-      </FormField>
+      </Field>
 
-      <h3 className="section-title">Email</h3>
-      <FormField label="Enabled" inline>
+      <SectionLabel>Email</SectionLabel>
+      <Field label="Enabled" inline>
         <Toggle aria-label="Email enabled" checked={n.emailEnabled} onChange={(e) => setN({ emailEnabled: e.currentTarget.checked })} />
-      </FormField>
-      <FormField label="Address" hint="Blank: the account email.">
+      </Field>
+      <Field label="Address" hint="Blank: the account email.">
         <Input type="email" value={n.email ?? ''} onChange={(e) => setN(optionalText('email', e.currentTarget.value))} />
-      </FormField>
+      </Field>
 
-      <h3 className="section-title">Notify me about</h3>
-      <div className="check-grid">
+      <SectionLabel>Notify me about</SectionLabel>
+      <div className="req-check-grid">
         {(Object.keys(TYPE_LABELS) as Array<keyof UserNotificationTypes>).map((k) => (
-          <label key={k} className="check">
-            <input type="checkbox" checked={n.types[k]} onChange={(e) => setN({ types: { ...n.types, [k]: e.currentTarget.checked } })} />
-            {TYPE_LABELS[k]}
-          </label>
+          <Checkbox key={k} label={TYPE_LABELS[k]} checked={n.types[k]} onChange={(e) => setN({ types: { ...n.types, [k]: e.currentTarget.checked } })} />
         ))}
       </div>
 
-      <h3 className="section-title">Plex watchlist</h3>
-      <FormField label="Plex token" hint="Stored masked; leave the mask to keep the saved token.">
+      <SectionLabel>Plex watchlist</SectionLabel>
+      <Field label="Plex token" hint="Stored masked; leave the mask to keep the saved token.">
         <Input
           type="password"
           autoComplete="off"
@@ -324,26 +314,26 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
           }}
           placeholder={REQUEST_SECRET_MASK}
         />
-      </FormField>
-      <FormField label="Sync movies" inline>
+      </Field>
+      <Field label="Sync movies" inline>
         <Toggle checked={draft.watchlistSyncMovies} onChange={(e) => setDraft({ ...draft, watchlistSyncMovies: e.currentTarget.checked })} />
-      </FormField>
-      <FormField label="Sync series" inline>
+      </Field>
+      <Field label="Sync series" inline>
         <Toggle checked={draft.watchlistSyncSeries} onChange={(e) => setDraft({ ...draft, watchlistSyncSeries: e.currentTarget.checked })} />
-      </FormField>
+      </Field>
 
       <SaveError error={save.error ?? test.error} />
       {testResult ? (
-        <ul className="test-result-list" aria-label="Test results">
-          {testResult.results.length === 0 ? <li className="muted">No personal agent is enabled.</li> : null}
+        <ul className="req-results" aria-label="Test results">
+          {testResult.results.length === 0 ? <li className="al-muted">No personal agent is enabled.</li> : null}
           {testResult.results.map((r) => (
-            <li key={r.agent} className={r.ok ? 'text-ok' : 'text-error'}>
+            <li key={r.agent} data-ok={r.ok}>
               {r.agent}: {r.ok ? 'sent' : (r.error ?? 'failed')}
             </li>
           ))}
         </ul>
       ) : null}
-      <div className="row">
+      <div className="req-actions">
         <Button
           variant="primary"
           loading={save.isPending}
@@ -359,6 +349,7 @@ export function UserRequestSettingsForm({ userId }: { userId: number }) {
           Save
         </Button>
         <Button
+          variant="secondary"
           loading={test.isPending}
           onClick={() =>
             test.mutate(undefined, {

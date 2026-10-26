@@ -4,7 +4,7 @@ import { errorMessage } from '../../api/client.js';
 import { Button, Checkbox, Field, FormRow, Modal, Select, Table, type Column } from '../../arclight/index.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useToast } from '../../components/toast.js';
-import { seasonBlocker } from '../../features/requests/request-dialog.js';
+import { seasonBlocker } from '../../features/requests/request-rules.js';
 import { useQualityProfiles, useRootFolders } from '../../hooks/library.js';
 import { useCreateRequest, useRequestsSettings } from '../../hooks/requests.js';
 import { StatusLabelChip } from './discover-kit.js';

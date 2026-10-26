@@ -129,7 +129,7 @@ export function EntityPicker({ options, value, onChange, placeholder = 'Chooseâ€
                 role="option"
                 aria-selected={o.id === value}
                 data-active={i === active}
-                className={cx('al-listbox__option', i === active && 'entity-picker-active')}
+                className="al-listbox__option"
                 onMouseEnter={() => setActive(i)}
                 onMouseDown={(e) => {
                   e.preventDefault();

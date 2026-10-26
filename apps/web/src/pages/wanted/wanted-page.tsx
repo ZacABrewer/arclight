@@ -216,7 +216,6 @@ function EpisodesList({ mode }: { mode: Mode }) {
   const toast = useToast();
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted episodes" />;
-  if (list.data === null) return <CutoffPending />;
   const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
 
   const searchAll = async () => {
@@ -294,7 +293,6 @@ function MoviesList({ mode }: { mode: Mode }) {
   const toast = useToast();
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title="Could not load wanted movies" />;
-  if (list.data === null) return <CutoffPending />;
   const records = list.data ? (list.data.records as Movie[]) : undefined;
 
   const searchAll = async () => {
@@ -360,14 +358,5 @@ function MoviesList({ mode }: { mode: Mode }) {
       onSearchRows={(ids) => void batch.run(ids.map((movieId) => ({ movieId })))}
       onSearchAll={() => void searchAll()}
     />
-  );
-}
-
-function CutoffPending() {
-  // TODO(contract): GET /wanted/cutoff/{episodes,movies} is not served by apps/api yet.
-  return (
-    <EmptyState title="Cutoff unmet is not available yet">
-      The api does not serve the cutoff unmet lists yet. They appear here once the route lands.
-    </EmptyState>
   );
 }

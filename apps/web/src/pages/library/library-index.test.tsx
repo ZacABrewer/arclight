@@ -33,6 +33,7 @@ beforeEach(() => {
   failPut = false;
   holdPut = null;
   localStorage.clear();
+  sessionStorage.clear();
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',

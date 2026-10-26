@@ -3,12 +3,13 @@ import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
 import type { MediaRequest } from '@arclight/shared';
 import { request } from '../../api/client.js';
-import { HISTORY_EVENT_LABELS, HistoryPage, type HistoryEventType, type HistoryRecord } from '../../api/history.js';
-import { BackdropFrame, Chip, EmptyState, Poster, Table, type ChipTone, type Column } from '../../arclight/index.js';
-import { formatDate } from '../../components/media/format.js';
+import { HistoryPage, historyEventLabel as eventLabel, type HistoryEventType, type HistoryRecord } from '../../api/history.js';
+import { BackdropFrame, Button, Chip, EmptyState, Poster, Table, type ChipTone, type Column } from '../../arclight/index.js';
+import { episodeCode, formatDate } from '../../components/media/format.js';
 import { QueryError } from '../../components/media/media-kit.js';
 import { REQUEST_STATUS_META, seasonsLabel } from '../../features/requests/status.js';
-import { useQueue } from '../../hooks/activity.js';
+import { useItemHistory, useQueue } from '../../hooks/activity.js';
+import { useRefreshMedia, type RefreshTarget } from '../../hooks/library.js';
 import { useTitle } from '../../hooks/requests.js';
 import './library.css';
 
@@ -67,6 +68,24 @@ export function LibraryCrumb({ kind }: { kind: 'series' | 'movie' }) {
   );
 }
 
+/* ------------------------------------------------------------------ refresh */
+
+/** Secondary "Refresh" (metadata) and "Refresh & scan" (metadata, then re-read the folder). */
+export function RefreshButtons({ target }: { target: RefreshTarget }) {
+  const refresh = useRefreshMedia();
+  const running = refresh.isPending ? (refresh.variables?.rescan ? 'scan' : 'refresh') : null;
+  return (
+    <>
+      <Button loading={running === 'refresh'} disabled={running === 'scan'} onClick={() => refresh.mutate({ target, rescan: false })}>
+        Refresh
+      </Button>
+      <Button loading={running === 'scan'} disabled={running === 'refresh'} onClick={() => refresh.mutate({ target, rescan: true })}>
+        Refresh &amp; scan
+      </Button>
+    </>
+  );
+}
+
 /* ------------------------------------------------------------------ queue progress */
 
 /** Live queue progress (0–1) keyed by episode id, plus the movie's own progress. */
@@ -87,16 +106,14 @@ export function useQueueProgress(scope: { seriesId: number } | { movieId: number
 
 const EVENT_TONE: Partial<Record<HistoryEventType, ChipTone>> = {
   grabbed: 'default',
-  imported: 'accent',
-  failed: 'danger',
+  downloadFolderImported: 'accent',
+  downloadFailed: 'danger',
   fileDeleted: 'muted',
   fileRenamed: 'neutral',
-  ignored: 'muted',
+  downloadIgnored: 'muted',
 };
 
-export function historyEventLabel(type: string): string {
-  return HISTORY_EVENT_LABELS[type as HistoryEventType] ?? type;
-}
+export const historyEventLabel = eventLabel;
 
 export function useMediaHistory(scope: { seriesId: number } | { movieId: number } | { episodeId: number }, enabled = true) {
   return useQuery({
@@ -111,19 +128,41 @@ export function HistoryEventChip({ type }: { type: string }) {
   return <Chip tone={EVENT_TONE[type as HistoryEventType] ?? 'neutral'}>{historyEventLabel(type)}</Chip>;
 }
 
+/** Indexer or download client named in the record's data, for the "Via" column. */
+export function historyVia(r: Pick<HistoryRecord, 'data'>): string {
+  const d = r.data ?? {};
+  const pick = (k: string) => (typeof d[k] === 'string' && d[k] ? (d[k] as string) : null);
+  return pick('indexer') ?? pick('downloadClientName') ?? pick('downloadClient') ?? '—';
+}
+
+/** History tab of the details pages: GET /history/series or /history/movie. */
 export function HistoryTable({ scope }: { scope: { seriesId: number } | { movieId: number } }) {
-  const history = useMediaHistory(scope);
+  const history = useItemHistory(scope);
+  const isSeries = 'seriesId' in scope;
   const columns: Column<HistoryRecord>[] = [
-    { key: 'event', header: 'Event', cell: (r) => <HistoryEventChip type={r.eventType} />, width: '140px' },
-    { key: 'source', header: 'Release', cell: (r) => <span className="mk-release-title">{r.sourceTitle}</span> },
-    { key: 'quality', header: 'Quality', cell: (r) => r.quality?.quality?.name ?? '—', mono: true },
-    { key: 'date', header: 'Date', sortValue: (r) => r.date, cell: (r) => formatDate(r.date, { dateStyle: 'medium', timeStyle: 'short' }), mono: true },
+    { key: 'date', header: 'Date', sortValue: (r) => r.date, cell: (r) => formatDate(r.date, { dateStyle: 'medium', timeStyle: 'short' }), mono: true, width: '190px' },
+    { key: 'event', header: 'Event', sortValue: (r) => historyEventLabel(r.eventType), cell: (r) => <HistoryEventChip type={r.eventType} />, width: '140px' },
+    ...(isSeries
+      ? [
+          {
+            key: 'episode',
+            header: 'Episode',
+            mono: true,
+            width: '96px',
+            sortValue: (r: HistoryRecord) => (r.episode ? r.episode.seasonNumber * 10_000 + r.episode.episodeNumber : -1),
+            cell: (r: HistoryRecord) => (r.episode ? episodeCode(r.episode.seasonNumber, r.episode.episodeNumber) : '—'),
+          } satisfies Column<HistoryRecord>,
+        ]
+      : []),
+    { key: 'source', header: 'Source title', sortValue: (r) => r.sourceTitle, cell: (r) => <span className="mk-release-title">{r.sourceTitle}</span> },
+    { key: 'quality', header: 'Quality', sortValue: (r) => r.quality?.quality?.name ?? '', cell: (r) => r.quality?.quality?.name ?? '—', mono: true },
+    { key: 'via', header: 'Via', muted: true, cell: (r) => historyVia(r) },
   ];
   if (history.isError) return <QueryError error={history.error} title="Could not load history" onRetry={() => void history.refetch()} />;
   return (
     <Table
       columns={columns}
-      rows={history.data?.records}
+      rows={history.data}
       loading={history.isPending}
       rowKey={(r) => r.id}
       empty={<EmptyState title="No history yet">Grabs, imports and failures show up here.</EmptyState>}

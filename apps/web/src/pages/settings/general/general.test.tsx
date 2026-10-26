@@ -105,9 +105,10 @@ describe('Settings -> General', () => {
     expect(calls.find((c) => c.method === 'PUT')!.body).toEqual({ language: 'en-US', region: 'US', tmdbApiKey: 'tmdb-new' });
   });
 
-  it('keeps the interface section honest and links to backups', async () => {
+  it('shows the UI section (account-only without a user) and links to backups', async () => {
     renderPage();
-    expect(await screen.findByText('Interface preferences arrive in a later release.')).toBeTruthy();
+    expect(await screen.findByText(/UI preferences belong to a user account/)).toBeTruthy();
+    expect((screen.getByLabelText('Theme') as HTMLSelectElement).disabled).toBe(true);
     const link = screen.getByRole('link', { name: 'Open backups' });
     expect(link.getAttribute('href')).toBe('/system/backup');
   });

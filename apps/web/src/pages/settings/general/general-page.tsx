@@ -12,6 +12,7 @@ import { SettingsPage, useDraft } from '../settings-layout.js';
 import { SettingsSection } from '../shared.js';
 import { ApiKeyControls } from '../security/api-key.js';
 import '../security/security.css';
+import { UiPreferencesSection } from './ui-preferences-section.js';
 
 export const METADATA_FIELDS: FieldDefinition[] = [
   {
@@ -117,9 +118,7 @@ export function GeneralPage() {
         </FormRow>
       </FormSection>
 
-      <SettingsSection label="Interface">
-        <p className="al-caption">Interface preferences arrive in a later release.</p>
-      </SettingsSection>
+      <UiPreferencesSection />
 
       <FormSection label="Backups">
         <FormRow label="Database backups" caption="Create, download and restore backups on the System pages.">

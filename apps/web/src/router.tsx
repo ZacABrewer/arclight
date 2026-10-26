@@ -1,7 +1,7 @@
 import { Suspense, lazy } from 'react';
 import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
-import { ComingSoon } from './components/coming-soon.js';
+
 import { ErrorView } from './components/error-boundary.js';
 import { Skeleton } from './arclight/index.js';
 import { AppShell } from './layout/app-shell.js';
@@ -10,7 +10,7 @@ import { SHELLLESS_PATHS, loadAuthStatus, resolveAuthRedirect } from './auth/gua
 import { LoginPage } from './pages/login.js';
 import { SetupWizard } from './pages/setup/setup-wizard.js';
 import { SecurityPage } from './pages/settings/security/security-page.js';
-import { navEntry } from './nav.js';
+
 import { DashboardPage } from './pages/dashboard.js';
 import { NotFoundPage } from './pages/not-found.js';
 import { SearchPage } from './pages/search.js';
@@ -72,8 +72,8 @@ import { RequestsSettingsPage } from './pages/settings/requests/requests-setting
 import { UsersPage } from './pages/settings/users/users-page.js';
 import { ProfilePage } from './pages/profile-page.js';
 
-// Code-based route tree. To build a real page: replace its `placeholder(...)` with a
-// createRoute whose component is the page. The sidebar lives in nav.ts.
+// Code-based route tree. Every page is a createRoute whose component is the page. The
+// rail and the section sub-navs live in nav.ts.
 
 export interface RouterContext {
   queryClient: QueryClient;
@@ -129,11 +129,6 @@ const loginRoute = createRoute({
 const page = <TPath extends string>(path: TPath, component: () => React.ReactNode) =>
   createRoute({ getParentRoute: () => rootRoute, path, component });
 
-const placeholder = <TPath extends string>(path: TPath) =>
-  page(path, function Placeholder() {
-    const entry = navEntry(path);
-    return <ComingSoon title={entry?.label ?? path} {...(entry?.phase ? { phase: entry.phase } : {})} />;
-  });
 
 /** Section roots (e.g. /settings) send you to their first child. */
 const sectionRedirect = <TPath extends string>(path: TPath, to: AppPathLiteral) =>

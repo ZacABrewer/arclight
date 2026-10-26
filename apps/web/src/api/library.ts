@@ -3,6 +3,7 @@ import {
   CalendarItem,
   Episode,
   ImportExclusion,
+  Job,
   LibraryStatistics,
   MediaFile,
   Movie,
@@ -22,6 +23,7 @@ import {
   type EpisodeListQuery,
   type MovieListQuery,
   type PageQuery,
+  type RefreshCommand,
   type ReleaseGrabRequest,
   type SearchCommandRequest,
   type SeriesListQuery,
@@ -46,8 +48,8 @@ export interface DeleteMediaOptions {
  * tooltip while a flag is false.
  */
 export const PENDING_FEATURES = {
-  /** TODO(contract): no refresh command in packages/shared yet (POST /command/refresh). */
-  refresh: false,
+  /** POST /command/refresh (metadata module) is served. */
+  refresh: true,
 } as const;
 
 export interface CalendarRange {
@@ -112,8 +114,7 @@ export const libraryApi = {
     missingEpisodes: (query?: Partial<WantedEpisodesQuery>) =>
       request('/wanted/missing/episodes', WantedEpisodesPage, { query: q(query) }),
     missingMovies: (query?: Partial<PageQuery>) => request('/wanted/missing/movies', WantedMoviesPage, { query: q(query) }),
-    // TODO(contract): cutoff routes are not in apps/api yet; callers treat a 404 as "not available".
-    cutoffEpisodes: (query?: Partial<PageQuery>) =>
+    cutoffEpisodes: (query?: Partial<WantedEpisodesQuery>) =>
       request('/wanted/cutoff/episodes', WantedEpisodesPage, { query: q(query) }),
     cutoffMovies: (query?: Partial<PageQuery>) => request('/wanted/cutoff/movies', WantedMoviesPage, { query: q(query) }),
   },
@@ -131,6 +132,8 @@ export const libraryApi = {
         },
       }),
     feed: () => request('/calendar/feed', CalendarFeedInfo),
+    /** Rotates the feed token (admin); the old feed URL stops working. */
+    regenerateFeed: () => request('/calendar/feed/regenerate', CalendarFeedInfo, { method: 'POST' }),
   },
   // Contract: packages/shared/src/releases.ts (routes built by the releases module).
   releases: {
@@ -141,6 +144,9 @@ export const libraryApi = {
   command: {
     search: (body: SearchCommandRequest) =>
       request('/command/search', SearchCommandResponse, { method: 'POST', json: body }),
+    /** Re-fetch metadata for one series or movie (`rescan` also re-reads its folder). 202 with the started Job. */
+    refresh: (body: { seriesId: number; rescan?: boolean } | { movieId: number; rescan?: boolean }) =>
+      request('/command/refresh', Job, { method: 'POST', json: body satisfies Partial<RefreshCommand> }),
   },
   exclusions: {
     list: () => request('/library/exclusions', ImportExclusion.array()),

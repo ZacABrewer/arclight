@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { BlocklistAddRequestInput } from '@arclight/shared';
 import { request } from './client.js';
 
 // TODO(contract): the /blocklist routes are being built in parallel with the history module
@@ -32,4 +33,8 @@ export const blocklistApi = {
     request('/blocklist', BlocklistPage, { query: { page, pageSize, sortKey: 'date', sortDirection: 'desc' } }),
   remove: (id: number) => request(`/blocklist/${id}`, null, { method: 'DELETE' }),
   removeBulk: (ids: number[]) => request('/blocklist/bulk', null, { method: 'DELETE', json: { ids } }),
+  /** Block a release by hand. 201 with the new record. */
+  add: (body: BlocklistAddRequestInput) => request('/blocklist', BlocklistItem, { method: 'POST', json: body }),
+  /** Remove every entry. */
+  clear: () => request('/blocklist/clear', z.object({ deleted: z.number().int() }), { method: 'POST' }),
 };

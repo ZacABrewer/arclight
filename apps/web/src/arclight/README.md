@@ -107,6 +107,12 @@ Hooks: `useFocusTrap`, `useHotkey`, `useReducedMotion`, `useMediaQuery`, `useVir
 
 ## Migrating from the old primitives
 
+The old primitives (`components/button|card|table|badge|modal|tabs|form|spinner|empty-state|page|coming-soon`)
+and the legacy stylesheets (`styles/tokens|layout|components|settings|auth|tools|base.css`) have been deleted;
+every page imports from here. Kept and re-skinned under `components/`: `toast`, `error-boundary`,
+`path-picker`, `forms/*`, `media/*`, `protocol-badge`, `entity-picker`, `multi-select`. The map below is for
+reading old branches.
+
 | Old (`components/`) | New |
 |---|---|
 | `Page title subtitle actions` | `<PageHeader index title subtitle actions>` inside `<ContentInset>`. Set `document.title` in the page as before |

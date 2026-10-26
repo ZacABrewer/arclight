@@ -18,6 +18,7 @@ import { ApiError } from '../api/client.js';
 import { libraryApi, type DeleteMediaOptions } from '../api/library.js';
 import { profilesApi } from '../api/profiles.js';
 import { useToast as useToastStore } from '../components/toast.js';
+import { upsertJob } from '../live.js';
 import { libraryKeys } from './library-keys.js';
 
 // ---------------------------------------------------------------------------------------
@@ -91,22 +92,15 @@ export function useMissing(kind: 'episodes' | 'movies', page: number, pageSize =
   });
 }
 
-/** Cutoff-unmet lists. Resolves to `null` while the api has no cutoff route (404). */
+/** Cutoff-unmet lists: items with a file below their profile's cutoff (GET /wanted/cutoff/*). */
 export function useCutoffUnmet(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true) {
   return useQuery({
     enabled,
     queryKey: libraryKeys.wanted.cutoff(kind, page, pageSize),
-    queryFn: async (): Promise<WantedPage | null> => {
-      try {
-        return kind === 'episodes'
-          ? await libraryApi.wanted.cutoffEpisodes({ page, pageSize })
-          : await libraryApi.wanted.cutoffMovies({ page, pageSize });
-      } catch (err) {
-        if (err instanceof ApiError && err.status === 404) return null;
-        throw err;
-      }
-    },
-    retry: false,
+    queryFn: (): Promise<WantedPage> =>
+      kind === 'episodes'
+        ? libraryApi.wanted.cutoffEpisodes({ page, pageSize })
+        : libraryApi.wanted.cutoffMovies({ page, pageSize }),
     placeholderData: keepPreviousData,
   });
 }
@@ -388,6 +382,31 @@ export function useAutomaticSearch() {
         title: r.grabbed.length > 0 ? `Grabbed ${r.grabbed.length} release${r.grabbed.length === 1 ? '' : 's'}` : 'Search finished',
         message: `${r.releases} found · ${r.approved} approved${r.pending ? ` · ${r.pending} pending` : ''}`,
       }),
+  });
+}
+
+export type RefreshTarget = { seriesId: number } | { movieId: number };
+
+/**
+ * Metadata refresh of one item: POST /command/refresh. Raises a "started" toast for the job
+ * (its outcome arrives as a `job` event) and refetches the item.
+ */
+export function useRefreshMedia() {
+  const qc = useQueryClient();
+  const toast = useToastStore();
+  return useMutation({
+    mutationFn: ({ target, rescan = false }: { target: RefreshTarget; rescan?: boolean }) => libraryApi.command.refresh({ ...target, rescan }),
+    meta: { errorTitle: 'Could not start refresh' },
+    onSuccess: (job, { target, rescan }) => {
+      toast.push({
+        tone: 'ok',
+        title: rescan ? 'Refresh and scan started' : 'Refresh started',
+        message: `Run #${job.id} is ${job.status}.`,
+        durationMs: 4_000,
+      });
+      upsertJob(qc, job);
+      void qc.invalidateQueries({ queryKey: 'seriesId' in target ? libraryKeys.series.detail(target.seriesId) : libraryKeys.movie.detail(target.movieId) });
+    },
   });
 }
 

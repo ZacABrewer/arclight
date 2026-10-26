@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthStatus, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
+import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -44,6 +45,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value = useMemo<AuthState>(() => {
     const session = (authenticated ? me.data : null) ?? status.data?.session ?? null;
+    // Plain formatters (tables, dates) read the signed-in user's UI preferences from here.
+    setActiveUiPreferences(readUiPreferences(session?.user?.settings));
     return {
       status: status.data ?? null,
       session,

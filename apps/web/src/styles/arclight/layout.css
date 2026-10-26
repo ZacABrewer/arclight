@@ -85,6 +85,8 @@
   border-top: 1px solid rgba(110,246,255,.2);
   background: linear-gradient(180deg, rgba(6,22,28,.6), rgba(1,6,9,.85));
   -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
+/* Landscape phones with a notch: keep the tabs clear of the side insets too. */
+.al-tabbar { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 .al-tabbar--always { display: flex; }
 @media (max-width: 767.98px) { .al-tabbar { display: flex; } }
 .al-tabbar__item { position: relative; flex: 1; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
@@ -99,7 +101,8 @@
   padding: calc(var(--al-topbar) + var(--al-inset-top)) var(--al-inset-x) 40px calc(var(--al-rail) + var(--al-inset-x)); }
 .al-content--flush-top { padding-top: var(--al-topbar); }
 @media (max-width: 767.98px) {
-  .al-content { padding: calc(var(--al-topbar) + 16px) 20px calc(86px + 20px) 20px; }
+  /* Bottom clears the tab bar (64px + its safe-area padding) plus 20px. */
+  .al-content { padding: calc(var(--al-topbar) + 16px) max(20px, env(safe-area-inset-right, 0px)) calc(64px + max(22px, env(safe-area-inset-bottom, 0px)) + 20px) max(20px, env(safe-area-inset-left, 0px)); }
 }
 
 /* ---------- page header ---------- */

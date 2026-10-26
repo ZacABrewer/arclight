@@ -1,22 +1,29 @@
 import { z } from 'zod';
+import { Job, type HistoryMarkFailedRequest } from '@arclight/shared';
 import { request } from './client.js';
 
-// TODO(contract): packages/shared/src/history.ts is still a stub and the /history routes are
-// being built in parallel. These loose schemas follow docs/spec/history-and-blocklist.md
-// (row shape 1.1, event types 1.2, paged list 1.5, mark-as-failed 3.5). Replace them with the
-// shared exports when the history module lands; the pages only rely on the fields named here.
+// Paths mirror apps/api/src/modules/history/routes.ts. The row schema is a loose reading of
+// packages/shared HistoryRecord: the pages only rely on the fields named here, so a new field
+// on the server never breaks the parse.
 
-export const HISTORY_EVENT_TYPES = ['grabbed', 'imported', 'failed', 'fileDeleted', 'fileRenamed', 'ignored'] as const;
+/** The filterable event types (packages/shared HistoryEventType, minus `unknown`). */
+export const HISTORY_EVENT_TYPES = ['grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored'] as const;
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
 
 export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
   grabbed: 'Grabbed',
-  imported: 'Imported',
-  failed: 'Failed',
+  downloadFolderImported: 'Imported',
+  downloadFailed: 'Failed',
   fileDeleted: 'File deleted',
   fileRenamed: 'File renamed',
-  ignored: 'Ignored',
+  downloadIgnored: 'Ignored',
 };
+
+/** Label for any event type string; unknown values are shown as they are. */
+export function historyEventLabel(type: string): string {
+  if (type === 'unknown') return 'Unknown';
+  return HISTORY_EVENT_LABELS[type as HistoryEventType] ?? type;
+}
 
 export const HistoryRecord = z.looseObject({
   id: z.number().int(),
@@ -31,6 +38,8 @@ export const HistoryRecord = z.looseObject({
   quality: z.looseObject({ quality: z.looseObject({ name: z.string() }).optional() }).nullish(),
   languages: z.array(z.string()).nullish(),
   data: z.record(z.string(), z.unknown()).nullish(),
+  /** Present when the request asked for includeEpisode. */
+  episode: z.looseObject({ seasonNumber: z.number().int(), episodeNumber: z.number().int(), title: z.string().nullish() }).nullish(),
 });
 export type HistoryRecord = z.infer<typeof HistoryRecord>;
 
@@ -66,6 +75,13 @@ export function historyQuery(filter: HistoryFilter): Record<string, string | num
 
 export const historyApi = {
   list: (filter: HistoryFilter) => request('/history', HistoryPage, { query: historyQuery(filter) }),
+  /** Every record of one series, newest first, with the episode attached. */
+  forSeries: (seriesId: number) => request('/history/series', HistoryRecord.array(), { query: { seriesId, includeEpisode: true } }),
+  /** Every record of one movie, newest first. */
+  forMovie: (movieId: number) => request('/history/movie', HistoryRecord.array(), { query: { movieId } }),
   /** Spec 3.5: mark a grabbed row's download as failed (blocklists and may redownload). */
-  markFailed: (id: number) => request(`/history/failed/${id}`, null, { method: 'POST' }),
+  markFailed: (id: number, body: Partial<HistoryMarkFailedRequest> = {}) =>
+    request(`/history/failed/${id}`, null, { method: 'POST', json: { skipRedownload: false, ...body } }),
+  /** Re-run the search for the record's episode(s) or movie. 202 with the started Job. */
+  redownload: (id: number) => request(`/history/${id}/redownload`, Job, { method: 'POST' }),
 };

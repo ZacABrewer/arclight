@@ -1,6 +1,8 @@
+import { useState } from 'react';
 import type { QuotaInfo } from '@arclight/shared';
 import { displayNameOf, useAuth } from '../auth/auth-context.js';
-import { Chip, EmptyState, KeyValue, Meter, PageHeader, Pane, Skeleton } from '../arclight/index.js';
+import { Button, Chip, EmptyState, KeyValue, Meter, PageHeader, Pane, Skeleton } from '../arclight/index.js';
+import { ChangePasswordDialog } from './change-password.js';
 import { quotaSummary, UserRequestSettingsForm } from '../features/requests/user-editors.js';
 import { useUserQuota } from '../hooks/requests.js';
 import '../components/media/media-kit.css';
@@ -37,6 +39,7 @@ function QuotaRow({ label, info }: { label: string; info: QuotaInfo }) {
 export function ProfilePage() {
   const { user, session } = useAuth();
   const quota = useUserQuota(user?.id ?? null);
+  const [changingPassword, setChangingPassword] = useState(false);
 
   if (!user) {
     return (
@@ -52,7 +55,14 @@ export function ProfilePage() {
       <PageHeader title="Profile" subtitle={displayNameOf(user, session)} />
       <div className="mk-stack">
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 360px), 1fr))', gap: 20 }}>
-          <Pane title="Account">
+          <Pane
+            title="Account"
+            actions={
+              <Button size="sm" variant="secondary" onClick={() => setChangingPassword(true)}>
+                Change password
+              </Button>
+            }
+          >
             <KeyValue
               items={[
                 { label: 'Username', value: user.username },
@@ -86,6 +96,7 @@ export function ProfilePage() {
           <UserRequestSettingsForm userId={user.id} />
         </Pane>
       </div>
+      <ChangePasswordDialog open={changingPassword} onClose={() => setChangingPassword(false)} />
     </>
   );
 }

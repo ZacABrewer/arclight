@@ -23,7 +23,10 @@ import { localIsoDate } from '../../components/media/episode-status.js';
 import { formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, copyText, episodeChip, useIsMobile } from '../../components/media/media-kit.js';
 import { useAutomaticSearch } from '../../hooks/library.js';
-import { useCalendar, useCalendarFeed } from '../../hooks/library-calendar.js';
+import { useCalendar, useCalendarFeed, useRegenerateCalendarFeed } from '../../hooks/library-calendar.js';
+import { useUiPreferences } from '../../hooks/ui-preferences.js';
+import { useAuth } from '../../auth/auth-context.js';
+import { formatDate as formatPreferredDate, hourLabel, type TimeFormat, type WeekStartDay } from '../../lib/ui-preferences.js';
 import {
   gridRange,
   groupByDay,
@@ -62,16 +65,21 @@ export function CalendarPage() {
   const [unmonitored, setUnmonitored] = useState(false);
   const [icalOpen, setIcalOpen] = useState(false);
   const [openKey, setOpenKey] = useState<string | null>(null);
+  const prefs = useUiPreferences();
+  const weekStart = prefs.firstDayOfWeek;
 
   useEffect(() => {
     document.title = 'Calendar · Arclight';
   }, []);
 
   // Agenda lists the anchor's month; the grid views their own range.
-  const days = useMemo(() => viewDays(view === 'agenda' ? 'month' : view, anchor), [view, anchor]);
+  // Phones have no room for the month grid: Month falls back to Agenda (same range).
+  const shownView: CalendarView = mobile && view === 'month' ? 'agenda' : view;
+  const viewOptions = mobile ? VIEWS.filter((v) => v.value !== 'month') : VIEWS;
+  const days = useMemo(() => viewDays(view === 'agenda' ? 'month' : view, anchor, weekStart), [view, anchor, weekStart]);
   const range = useMemo(() => gridRange(days), [days]);
   const calendar = useCalendar(range.start, range.end, unmonitored);
-  const byDay = useMemo(() => groupByDay(calendar.data ?? []), [calendar.data]);
+  const byDay = useMemo(() => groupByDay(calendar.data ?? [], new Date(), prefs.timeFormat), [calendar.data, prefs.timeFormat]);
   const today = new Date();
   const title = viewTitle(view, anchor, days);
   const popover = { openKey, setOpenKey };
@@ -85,7 +93,7 @@ export function CalendarPage() {
           <>
             <Legend />
             <Toggle size="sm" label="Show unmonitored" checked={unmonitored} onChange={(e) => setUnmonitored(e.target.checked)} />
-            <Segmented variant="soft" aria-label="Calendar view" options={VIEWS} value={view} onChange={setView} />
+            <Segmented variant="soft" aria-label="Calendar view" options={viewOptions} value={shownView} onChange={setView} />
             <Button onClick={() => setIcalOpen(true)}>iCal</Button>
           </>
         }
@@ -106,9 +114,9 @@ export function CalendarPage() {
       ) : calendar.isPending ? (
         <Loading />
       ) : view === 'month' && !mobile ? (
-        <MonthGrid days={days} anchor={anchor} today={today} byDay={byDay} popover={popover} />
+        <MonthGrid days={days} anchor={anchor} today={today} byDay={byDay} popover={popover} weekStart={weekStart} />
       ) : view === 'week' || view === 'day' ? (
-        <TimeGrid days={days} today={today} byDay={byDay} popover={popover} />
+        <TimeGrid days={days} today={today} byDay={byDay} popover={popover} timeFormat={prefs.timeFormat} />
       ) : (
         <Agenda days={days.filter((d) => d.getMonth() === startOfMonth(anchor).getMonth())} byDay={byDay} popover={popover} />
       )}
@@ -185,7 +193,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
           {entry.subtitle ? ` · ${entry.subtitle}` : ''}
         </div>
         <div className="cal-detail__when al-num">
-          {formatDate(entry.day, { day: 'numeric', month: 'short', year: 'numeric' })}
+          {formatPreferredDate(entry.day)}
           {entry.time ? ` · ${entry.time}` : ''}
         </div>
         <div>
@@ -206,12 +214,12 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
   );
 }
 
-function MonthGrid({ days, anchor, today, byDay, popover }: { days: Date[]; anchor: Date; today: Date; byDay: Map<string, CalendarEntry[]>; popover: PopoverState }) {
+function MonthGrid({ days, anchor, today, byDay, popover, weekStart }: { days: Date[]; anchor: Date; today: Date; byDay: Map<string, CalendarEntry[]>; popover: PopoverState; weekStart: WeekStartDay }) {
   const rows = days.length / 7;
   return (
     <Pane bare className="cal-month-pane">
       <div className="cal-month" role="grid" aria-label={anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })} style={{ gridTemplateRows: `32px repeat(${rows}, minmax(112px, 1fr))` }}>
-        {weekdayLabels(1).map((d) => (
+        {weekdayLabels(weekStart).map((d) => (
           <div key={d} className="cal-weekday" role="columnheader">
             {d}
           </div>
@@ -248,7 +256,7 @@ const HOUR_PX = 44;
 const HOURS = Array.from({ length: 24 }, (_, h) => h);
 
 /** Week (7 columns) and day (1 column) × hour rows; date-only items sit in an all-day strip. */
-function TimeGrid({ days, today, byDay, popover }: { days: Date[]; today: Date; byDay: Map<string, CalendarEntry[]>; popover: PopoverState }) {
+function TimeGrid({ days, today, byDay, popover, timeFormat }: { days: Date[]; today: Date; byDay: Map<string, CalendarEntry[]>; popover: PopoverState; timeFormat: TimeFormat }) {
   const cols = { gridTemplateColumns: `56px repeat(${days.length}, minmax(0, 1fr))` };
   return (
     <Pane bare className="cal-time-pane">
@@ -278,7 +286,7 @@ function TimeGrid({ days, today, byDay, popover }: { days: Date[]; today: Date; 
           <div className="cal-time__hours">
             {HOURS.map((h) => (
               <span key={h} className="cal-time__hour al-num" style={{ top: h * HOUR_PX }}>
-                {String(h).padStart(2, '0')}:00
+                {hourLabel(h, timeFormat)}
               </span>
             ))}
           </div>
@@ -357,11 +365,21 @@ function ICalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const feed = useCalendarFeed(open);
   const [opts, setOpts] = useState<FeedOptions>({ pastDays: 7, futureDays: 28, unmonitored: false });
   const [copied, setCopied] = useState(false);
+  const { isAdmin } = useAuth();
+  const regenerate = useRegenerateCalendarFeed();
+  const [confirming, setConfirming] = useState(false);
+  const [regenerated, setRegenerated] = useState(false);
   // TODO(contract): if GET /calendar/feed is not served yet, show the documented default path.
   const path = feed.data?.path ?? '/calendar/feed.ics';
   const url = buildFeedUrl(location.origin, path, opts);
 
   useEffect(() => setCopied(false), [url]);
+  useEffect(() => {
+    if (!open) {
+      setConfirming(false);
+      setRegenerated(false);
+    }
+  }, [open]);
 
   return (
     <Modal
@@ -389,11 +407,50 @@ function ICalDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
         <Field label="Feed URL" hint="Subscribe to this URL in your calendar app.">
           <Input mono readOnly value={url} onFocus={(e) => e.currentTarget.select()} />
         </Field>
-        <div>
+        {regenerated ? (
+          <p className="al-caption" role="status" style={{ margin: 0 }}>
+            New feed URL ready. Update your calendar apps with it.
+          </p>
+        ) : null}
+        <div className="mk-row">
           <Button variant="primary" icon={<Icon name="copy" />} onClick={() => void copyText(url).then(setCopied)}>
             {copied ? 'Copied' : 'Copy'}
           </Button>
+          {isAdmin && feed.data && !confirming ? (
+            <Button variant="danger" onClick={() => setConfirming(true)}>
+              Regenerate
+            </Button>
+          ) : null}
         </div>
+        {confirming ? (
+          <Banner
+            tone="danger"
+            action={
+              <div className="mk-row">
+                <Button size="sm" variant="ghost" onClick={() => setConfirming(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  variant="danger-solid"
+                  loading={regenerate.isPending}
+                  onClick={() =>
+                    regenerate.mutate(undefined, {
+                      onSuccess: () => {
+                        setConfirming(false);
+                        setRegenerated(true);
+                      },
+                    })
+                  }
+                >
+                  Regenerate URL
+                </Button>
+              </div>
+            }
+          >
+            Regenerating makes a new feed URL. The current URL stops working at once, so calendar apps subscribed to it stop updating until you give them the new one.
+          </Banner>
+        ) : null}
       </div>
     </Modal>
   );

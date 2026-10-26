@@ -18,7 +18,7 @@ import {
   type Column,
 } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
-import { titleLink } from '../../features/requests/discover-ui.js';
+import { titleLink } from '../../features/requests/title-link.js';
 import { ISSUE_TYPE_LABELS, formatDateTime, usePermissions } from '../../features/requests/status.js';
 import {
   useDeleteIssue,
