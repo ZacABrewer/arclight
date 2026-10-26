@@ -2,12 +2,12 @@
 FROM node:24-bookworm-slim AS build
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
-COPY package.json pnpm-workspace.yaml pnpm-lock.yaml tsconfig.base.json ./
-COPY apps/api/package.json apps/api/
-COPY apps/web/package.json apps/web/
-COPY packages/shared/package.json packages/shared/
-RUN pnpm install --frozen-lockfile
+# Lockfile-driven fetch keeps the dependency layer cached regardless of how many workspace
+# packages exist; the offline install below links them from the store.
+COPY pnpm-lock.yaml ./
+RUN pnpm fetch
 COPY . .
+RUN pnpm install --offline --frozen-lockfile
 RUN pnpm build
 # Production node_modules only, for the api workspace.
 RUN pnpm --filter @media-tron/api deploy --prod /out
