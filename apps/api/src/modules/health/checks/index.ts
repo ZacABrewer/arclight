@@ -12,6 +12,7 @@ import { mountReadOnlyCheck, recycleBinCheck, rootFolderCheck } from './root-fol
 import { flareSolverrUnreachableCheck } from './flaresolverr.js';
 import { feedStaleCheck } from './feeds.js';
 import { torrentEngineCheck } from './torrent.js';
+import { downloadDiskSpaceCheck, killSwitchFlappingCheck, stalledDownloadsCheck, torrentLockdownCheck } from './downloads.js';
 import { remoteEngineUnreachableCheck } from './remote-engine.js';
 import { vpnDisconnectedCheck } from './vpn.js';
 import { whisperUnreachableCheck } from '../../subtitles/whisper.js';
@@ -21,6 +22,7 @@ export * from './disk-space.js';
 export * from './flaresolverr.js';
 export * from './feeds.js';
 export * from './download-clients.js';
+export * from './downloads.js';
 export * from './indexers.js';
 export * from './notifications.js';
 export * from './root-folders.js';
@@ -45,6 +47,8 @@ export function createChecks(): HealthCheckDef[] {
     downloadClientRemovesCompletedCheck,
     remotePathMappingCheck,
     createStaleImportCheck(),
+    downloadDiskSpaceCheck,
+    stalledDownloadsCheck,
     indexerCheck,
     indexerStatusCheck,
     indexerLongTermStatusCheck,
@@ -55,6 +59,8 @@ export function createChecks(): HealthCheckDef[] {
     notificationStatusCheck,
     vpnDisconnectedCheck,
     torrentEngineCheck,
+    torrentLockdownCheck,
+    killSwitchFlappingCheck,
     remoteEngineUnreachableCheck,
     feedStaleCheck,
     whisperUnreachableCheck,

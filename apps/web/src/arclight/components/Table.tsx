@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
+import { Fragment, useMemo, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { useVirtualRows } from '../hooks/use-virtual-rows.js';
 import { SIZE } from '../tokens.js';
@@ -98,6 +98,13 @@ export interface TableProps<T> {
    * logs, history and release lists that run to thousands of rows.
    */
   virtualize?: boolean | undefined;
+  /**
+   * Rows whose detail panel is open (controlled; the page renders the toggle, e.g. a button
+   * with aria-expanded). Each open row is followed by a full-width row with `renderExpanded`.
+   * Not combined with `virtualize`.
+   */
+  expandedRows?: ReadonlySet<RowKey> | undefined;
+  renderExpanded?: ((row: T) => ReactNode) | undefined;
   className?: string | undefined;
 }
 
@@ -126,6 +133,8 @@ export function Table<T>({
   stickyHeader = true,
   maxHeight,
   virtualize = false,
+  expandedRows,
+  renderExpanded,
   className,
 }: TableProps<T>) {
   const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort);
@@ -228,28 +237,35 @@ export function Table<T>({
             {visible.map((row, i) => {
               const key = rowKey(row);
               const isSel = selectable && selected.has(key);
+              const expanded = !virtualize && renderExpanded !== undefined && expandedRows?.has(key) === true;
               return (
-                <tr
-                  key={key}
-                  aria-selected={selectable ? isSel : undefined}
-                  aria-rowindex={virtualize ? range.start + i + 2 : undefined}
-                  data-clickable={onRowClick ? true : undefined}
-                  onClick={onRowClick ? () => onRowClick(row) : undefined}
-                >
-                  {selectable ? (
-                    <td className="al-table__check" onClick={(e) => e.stopPropagation()}>
-                      <Checkbox aria-label={rowLabel ? rowLabel(row) : t('arclight.table.selectRow')} checked={isSel} onChange={() => toggleRow(key)} />
-                    </td>
+                <Fragment key={key}>
+                  <tr
+                    aria-selected={selectable ? isSel : undefined}
+                    aria-rowindex={virtualize ? range.start + i + 2 : undefined}
+                    data-clickable={onRowClick ? true : undefined}
+                    onClick={onRowClick ? () => onRowClick(row) : undefined}
+                  >
+                    {selectable ? (
+                      <td className="al-table__check" onClick={(e) => e.stopPropagation()}>
+                        <Checkbox aria-label={rowLabel ? rowLabel(row) : t('arclight.table.selectRow')} checked={isSel} onChange={() => toggleRow(key)} />
+                      </td>
+                    ) : null}
+                    {columns.map((col) => (
+                      <td
+                        key={col.key}
+                        className={cx(col.align && col.align !== 'left' && `al-td--${col.align}`, col.mono && 'al-td--mono', col.muted && 'al-td--muted', col.className)}
+                      >
+                        {col.cell(row)}
+                      </td>
+                    ))}
+                  </tr>
+                  {expanded ? (
+                    <tr className="al-table__detail" data-expanded-for={String(key)}>
+                      <td colSpan={colCount}>{renderExpanded(row)}</td>
+                    </tr>
                   ) : null}
-                  {columns.map((col) => (
-                    <td
-                      key={col.key}
-                      className={cx(col.align && col.align !== 'left' && `al-td--${col.align}`, col.mono && 'al-td--mono', col.muted && 'al-td--muted', col.className)}
-                    >
-                      {col.cell(row)}
-                    </td>
-                  ))}
-                </tr>
+                </Fragment>
               );
             })}
             {virtualize && range.padBottom > 0 ? (

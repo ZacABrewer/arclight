@@ -3,7 +3,7 @@ import { finding, type HealthCheckDef } from '../types.js';
 /**
  * Built-in torrent engine: failed to start (error), enabled but not listening for incoming
  * peers (warning), or bound to something other than the VPN tunnel while the VPN is enabled
- * (warning). Lockdown (VPN down) is reported by the VPN check, not here.
+ * (warning). Lockdown (VPN down) is reported by TorrentEngineLockdown (downloads.ts), not here.
  */
 export const torrentEngineCheck: HealthCheckDef = {
   id: 'TorrentEngine',

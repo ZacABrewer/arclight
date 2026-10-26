@@ -1,7 +1,12 @@
 import { sqliteTable, integer, text, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import type { DownloadItemPhase } from '@arclight/download-clients';
 import type {
   DownloadClientImplementation,
+  DownloadEventType,
   MediaType,
+  QueueItemLive,
+  QueueItemStateCode,
+  QueueSeverity,
   QueueItemClientStatus,
   QueueStatusMessage,
   ReleaseProtocol,
@@ -88,6 +93,20 @@ export const trackedDownloads = sqliteTable(
     grabbedRelease: text('grabbed_release', { mode: 'json' }).$type<unknown>(),
     /** Present while state is `pending`: everything needed to retry the grab. */
     pendingGrab: text('pending_grab', { mode: 'json' }).$type<PendingGrabPayload>(),
+    /** Client-reported phase (metadata, checking, ...) as of the last poll. */
+    phase: text('phase').$type<DownloadItemPhase>(),
+    /** Rates and peer counts as of the last poll. */
+    live: text('live', { mode: 'json' }).$type<QueueItemLive>(),
+    /** Downloaded bytes as of the last poll; stall detection compares against it. */
+    downloadedBytes: integer('downloaded_bytes'),
+    /** Last time `downloadedBytes` grew (or the stall clock was reset by a pause). */
+    progressAt: text('progress_at'),
+    /** Set while stalled: when data stopped arriving. */
+    stalledSince: text('stalled_since'),
+    /** State code derived at the last poll; transitions between codes become timeline events. */
+    stateCode: text('state_code').$type<QueueItemStateCode>(),
+    /** Bytes missing on the save volume for this and its neighbours to finish (0 / null: fits). */
+    diskShortfall: integer('disk_shortfall'),
   },
   (t) => [
     uniqueIndex('tracked_downloads_client_download_idx').on(t.clientId, t.downloadId),
@@ -95,6 +114,27 @@ export const trackedDownloads = sqliteTable(
   ],
 );
 
+/**
+ * Timeline of a tracked download. Rows outlive the tracked download (no foreign key): the
+ * timeline of a removed or imported download stays readable until the daily cleanup.
+ */
+export const downloadEvents = sqliteTable(
+  'download_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    trackedDownloadId: integer('tracked_download_id').notNull(),
+    downloadId: text('download_id').notNull(),
+    title: text('title').notNull(),
+    type: text('type').$type<DownloadEventType>().notNull(),
+    severity: text('severity').$type<QueueSeverity>().notNull(),
+    message: text('message'),
+    data: text('data', { mode: 'json' }).$type<Record<string, string | number | boolean>>(),
+    time: text('time').notNull(),
+  },
+  (t) => [index('download_events_tracked_idx').on(t.trackedDownloadId, t.time), index('download_events_time_idx').on(t.time)],
+);
+
 export type DownloadClientRow = typeof downloadClients.$inferSelect;
 export type RemotePathMappingRow = typeof remotePathMappings.$inferSelect;
 export type TrackedDownloadRow = typeof trackedDownloads.$inferSelect;
+export type DownloadEventRow = typeof downloadEvents.$inferSelect;

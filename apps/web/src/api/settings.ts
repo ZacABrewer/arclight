@@ -23,6 +23,7 @@ export const MediaManagementSettings = z.looseObject({
   useHardlinks: z.boolean().default(true),
   skipFreeSpaceCheck: z.boolean().default(false),
   minimumFreeSpaceMb: z.number().int().min(0).default(100),
+  stalledDownloadMinutes: z.number().int().min(0).max(1440).default(10),
   createEmptySeriesFolders: z.boolean().default(false),
   deleteEmptyFolders: z.boolean().default(false),
   setPermissions: z.boolean().default(false),

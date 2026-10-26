@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { stat } from 'node:fs/promises';
+import { stat, statfs } from 'node:fs/promises';
+import { dirname } from 'node:path';
 import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
@@ -10,12 +11,14 @@ import {
   type DownloadClient,
   type DownloadClientDeps,
   type DownloadItem,
+  type DownloadItemPhase,
   type SessionSource,
 } from '@arclight/download-clients';
 import {
   DOWNLOAD_CLIENT_PROTOCOLS,
   DOWNLOAD_CLIENT_SECRET_FIELDS,
   DownloadClientInput,
+  type DownloadClientImplementation,
   DownloadClientResource,
   DownloadClientTestRequest,
   downloadClientHost,
@@ -26,7 +29,11 @@ import {
   type DownloadClientTestAllResult,
   type DownloadClientTestResult,
   type MediaType,
+  type DownloadEventType,
+  type DownloadTimeline,
   type QueueItem,
+  type QueueItemLive,
+  type QueueItemStateCode,
   type QueuePage,
   type QueueQueryInput,
   type QueueRemoveResult,
@@ -38,6 +45,8 @@ import {
   type TrackedDownloadStatus,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import type { EventBus } from '../../events.js';
+import { getSection } from '../settings/service.js';
 import {
   isValidLocalPath,
   mapLocalToRemote,
@@ -53,7 +62,9 @@ import {
   type PendingGrabPayload,
   type TrackedDownloadRow,
 } from './schema.js';
+import { deriveState, NOT_TRANSFERRING, type StateReason } from './state-reason.js';
 import { implementationSchemas } from './templates.js';
+import { DownloadTimelineStore, type RecordOptions } from './timeline.js';
 
 // ---------------------------------------------------------------------------------------
 // Errors
@@ -139,9 +150,54 @@ export type DownloadClientTestRequestRaw = z.input<typeof DownloadClientTestRequ
 /** Builds a live client from an unmasked configuration. Injected in tests. */
 export type DownloadClientFactory = (config: DownloadClientResource) => DownloadClient;
 
+/**
+ * What the built-in torrent engine tells the queue beyond `getItems` (the torrent module sets
+ * it): kill-switch state and live numbers between queue polls.
+ */
+export interface EngineInsights {
+  /** The engine's current lockdown (VPN kill switch), or null when not locked down. */
+  lockdown(): { reason?: string | undefined; since?: string | undefined } | null;
+  /** Info-hashes paused by the kill switch (resumed on reconnect). */
+  killSwitchPaused(): readonly string[];
+  /** The engine's active-download limit, when one is set. */
+  maxActiveDownloads?(): number | null;
+  /** Up-to-the-second numbers of one torrent, or null when the engine does not have it. */
+  live?(infoHash: string): EngineLive | null;
+  /** True while the engine is starting (restoring torrents and checking their files). */
+  starting?(): boolean;
+}
+
+export interface EngineLive {
+  live: QueueItemLive;
+  phase?: DownloadItemPhase | undefined;
+  progress: number;
+  sizeLeft: number;
+  etaMs?: number | undefined;
+}
+
+/** A download still transferring, for the disk-space and stall health checks. */
+export interface ActiveDownloadInfo {
+  id: number;
+  title: string;
+  clientName: string | null;
+  /** Local content path (remote path mappings applied), when known. */
+  path?: string;
+  sizeLeft: number;
+  stalledSince?: string;
+  stateCode?: QueueItemStateCode;
+}
+
 export interface DownloadClientsServiceOptions {
   db: Db;
   log?: Logger;
+  /** Timeline entries and queue changes are published here. */
+  bus?: EventBus;
+  /** Milliseconds without new data before a download counts as stalled; 0 turns it off. Default: settings. */
+  stallAfterMs?: () => number;
+  /** Free space to keep on download volumes (bytes). Default: settings (mediaManagement.minimumFreeSpaceMb). */
+  minimumFreeSpaceBytes?: () => number;
+  /** Bytes free on the volume holding `path`, null when unknown. Default: statfs. */
+  freeSpace?: (path: string) => Promise<number | null>;
   clientFactory?: DownloadClientFactory;
   /** Runtime overrides (fetch, timeouts) for clients built by the default factory. */
   clientRuntime?: Partial<ClientRuntime>;
@@ -177,6 +233,7 @@ export const STATUS_TEXT = {
   noOutputPath: "Download doesn't contain an output path, skipping.",
   missing: (client: string) => `Download is no longer reported by ${client}.`,
   clientUnavailable: (client: string, message: string) => `${client} is unavailable: ${message}`,
+  stalled: (minutes: number) => `No new data received for ${minutes} minutes.`,
   invalidLocalPath: (path: string) => `"${path}" is not a valid local path. You may need a Remote Path Mapping.`,
   noFilesEligible: (path: string) => `No files found are eligible for import in ${path}`,
 } as const;
@@ -209,10 +266,16 @@ export class DownloadClientsService {
   private lastRefreshAt: number | null = null;
   private dirty = true;
   private torrentSession: SessionSource | undefined;
+  private engineInsights: EngineInsights | undefined;
+  private readonly stallAfterMs: () => number;
+  private readonly freeSpace: (path: string) => Promise<number | null>;
+  private readonly bus: EventBus | undefined;
+  readonly timeline: DownloadTimelineStore;
 
   constructor(options: DownloadClientsServiceOptions) {
     this.db = options.db;
     this.log = options.log;
+    this.bus = options.bus;
     const runtime = options.clientRuntime ?? {};
     this.torrentSession = options.torrentSession;
     // Resolved on every call, so `builtin` clients follow the engine being started/stopped.
@@ -229,7 +292,23 @@ export class DownloadClientsService {
     this.missingGraceMs = options.missingGraceMs ?? DEFAULT_MISSING_GRACE_MS;
     this.terminalRetentionMs = options.terminalRetentionMs ?? DEFAULT_TERMINAL_RETENTION_MS;
     this.idleIntervalMs = options.idleRefreshIntervalMs ?? DEFAULT_IDLE_INTERVAL_MS;
+    this.stallAfterMs = options.stallAfterMs ?? (() => getSection(this.db, 'mediaManagement').stalledDownloadMinutes * 60_000);
+    this.minimumFreeSpaceBytes =
+      options.minimumFreeSpaceBytes ?? (() => getSection(this.db, 'mediaManagement').minimumFreeSpaceMb * 1024 * 1024);
+    this.freeSpace = options.freeSpace ?? defaultFreeSpace;
+    this.timeline = new DownloadTimelineStore(this.db, this.now, this.bus);
+    // Kill-switch pauses can be shorter than a queue poll: record them as they happen.
+    this.bus?.subscribe((event) => {
+      if (event.type !== 'torrent') return;
+      try {
+        this.onEngineTransition(event.action, event.infoHashes, event.reason);
+      } catch (err) {
+        this.log?.warn({ err }, 'could not record a kill-switch transition');
+      }
+    });
   }
+
+  readonly minimumFreeSpaceBytes: () => number;
 
   // ---- download client CRUD ------------------------------------------------------------
 
@@ -351,6 +430,11 @@ export class DownloadClientsService {
   /** Called by the torrent module: the engine `builtin` clients drive (a getter; null while stopped). */
   setTorrentSession(source: SessionSource | undefined): void {
     this.torrentSession = source;
+  }
+
+  /** Called by the torrent module: kill-switch state and live numbers of the built-in engine. */
+  setEngineInsights(insights: EngineInsights | undefined): void {
+    this.engineInsights = insights;
   }
 
   /**
@@ -530,6 +614,7 @@ export class DownloadClientsService {
     const completedIds: number[] = [];
     const failedIds: number[] = [];
     const summary: RefreshSummary = { clients: clients.length, failedClients: 0, items: 0, completed: 0, failed: 0, removed: 0 };
+    const stallMs = Math.max(0, this.stallAfterMs());
 
     for (const { config, client } of clients) {
       let items: DownloadItem[];
@@ -549,7 +634,7 @@ export class DownloadClientsService {
       for (const item of items) {
         seen.add(item.id);
         summary.items++;
-        const { id, transition } = this.trackItem(config, item, mappings, nowIso);
+        const { id, transition } = this.trackItem(config, item, mappings, now, stallMs);
         if (transition === 'completed') completedIds.push(id);
         if (transition === 'failed') failedIds.push(id);
       }
@@ -557,6 +642,7 @@ export class DownloadClientsService {
     }
 
     summary.removed += this.purgeTerminal(now);
+    await this.updateDiskShortfall(mappings).catch((err: unknown) => this.log?.warn({ err }, 'download disk space check failed'));
     this.lastRefreshAt = now.getTime();
     this.dirty = false;
     summary.completed = completedIds.length;
@@ -564,6 +650,7 @@ export class DownloadClientsService {
 
     for (const id of completedIds) await this.fire(this.completedHooks, id);
     for (const id of failedIds) await this.fire(this.failedHooks, id);
+    this.bus?.publish({ type: 'queue', action: 'changed' });
     return summary;
   }
 
@@ -571,8 +658,10 @@ export class DownloadClientsService {
     config: DownloadClientResource,
     item: DownloadItem,
     mappings: RemotePathMapping[],
-    nowIso: string,
+    now: Date,
+    stallMs: number,
   ): { id: number; transition: 'completed' | 'failed' | null } {
+    const nowIso = now.toISOString();
     const existing = this.db
       .select()
       .from(trackedDownloads)
@@ -592,6 +681,9 @@ export class DownloadClientsService {
       isReadOnly: item.isReadOnly,
       lastSeenAt: nowIso,
       updatedAt: nowIso,
+      phase: item.phase ?? null,
+      live: item.live ?? null,
+      downloadedBytes: Math.max(0, Math.round(item.downloadedBytes)),
     };
 
     let state: TrackedDownloadState = existing?.state ?? 'downloading';
@@ -631,17 +723,48 @@ export class DownloadClientsService {
       }
     }
 
+    // Stall clock, kill switch and the derived state, then timeline entries for what changed.
+    const killSwitch = this.killSwitchFor(config, item.id);
+    const clock = this.progressClock(existing, item, snapshot.downloadedBytes, now, stallMs, killSwitch !== undefined);
+    if (messages && trackedStatus) {
+      const title = existing?.title ?? item.title;
+      if (killSwitch) {
+        if (trackedStatus === 'ok') trackedStatus = 'warning';
+        messages.push({ title, messages: [killSwitchText(killSwitch.reason)] });
+      } else if (clock.stalledSince) {
+        if (trackedStatus === 'ok') trackedStatus = 'warning';
+        messages.push({ title, messages: [STATUS_TEXT.stalled(Math.round(stallMs / 60_000))] });
+      }
+    }
+    const derived = deriveState({
+      state,
+      clientStatus: item.status,
+      trackedStatus: trackedStatus ?? existing?.trackedStatus ?? 'ok',
+      statusMessages: messages ?? existing?.statusMessages ?? [],
+      phase: item.phase,
+      live: item.live,
+      progress: item.progress,
+      stalledSince: clock.stalledSince,
+      diskShortfall: existing?.diskShortfall,
+      clientName: config.name,
+      killSwitch,
+    });
+
     if (existing) {
       this.db
         .update(trackedDownloads)
         .set({
           ...snapshot,
           state,
+          progressAt: clock.progressAt,
+          stalledSince: clock.stalledSince,
+          stateCode: derived.code,
           ...(messages ? { statusMessages: messages } : {}),
           ...(trackedStatus ? { trackedStatus } : {}),
         })
         .where(eq(trackedDownloads.id, existing.id))
         .run();
+      if (existing.state === 'downloading') this.recordTransitions(existing, item, derived, clock.events, config.name);
       return { id: existing.id, transition };
     }
 
@@ -657,11 +780,228 @@ export class DownloadClientsService {
         trackedStatus: trackedStatus ?? 'ok',
         protocol: config.protocol,
         addedAt: nowIso,
+        progressAt: clock.progressAt,
+        stalledSince: clock.stalledSince,
+        stateCode: derived.code,
       })
       .returning({ id: trackedDownloads.id })
       .get();
     return { id: row.id, transition };
   }
+
+  /**
+   * Advances the stall clock of a download: `progressAt` moves whenever downloaded bytes grow
+   * (and while the download is not expected to transfer: paused, queued, checking, ...); it
+   * counts as stalled once `stallMs` passed without growth.
+   */
+  private progressClock(
+    existing: TrackedDownloadRow | undefined,
+    item: DownloadItem,
+    downloaded: number,
+    now: Date,
+    stallMs: number,
+    killSwitch: boolean,
+  ): { progressAt: string; stalledSince: string | null; events: Array<[DownloadEventType, RecordOptions]> } {
+    const nowIso = now.toISOString();
+    const events: Array<[DownloadEventType, RecordOptions]> = [];
+    const prevStalled = existing?.stalledSince ?? null;
+    const transferring =
+      (existing?.state ?? 'downloading') === 'downloading' &&
+      (item.status === 'downloading' || item.status === 'warning') &&
+      item.phase !== 'metadata' &&
+      item.phase !== 'checking' &&
+      item.phase !== 'moving' &&
+      !killSwitch &&
+      item.progress < 1;
+    if (!transferring) return { progressAt: nowIso, stalledSince: null, events };
+    const prevBytes = existing?.downloadedBytes ?? null;
+    // Coming out of a pause, queue slot, check, ...: the clock starts now.
+    const resumed = !existing?.stateCode || NOT_TRANSFERRING.has(existing.stateCode);
+    if (prevBytes === null || downloaded > prevBytes || !existing?.progressAt || resumed) {
+      if (prevStalled) {
+        const minutes = Math.max(1, Math.round((now.getTime() - Date.parse(prevStalled)) / 60_000));
+        events.push(['recovered', { message: `Data is arriving again after ${minutes} minutes without progress.` }]);
+      }
+      return { progressAt: nowIso, stalledSince: null, events };
+    }
+    const progressAt = existing.progressAt;
+    if (prevStalled) return { progressAt, stalledSince: prevStalled, events };
+    if (stallMs > 0 && now.getTime() - Date.parse(progressAt) >= stallMs) {
+      const peers = item.live?.connectedPeers;
+      const seeds = item.live?.connectedSeeds;
+      const detail = peers === undefined ? '' : ` ${peers} peer(s) connected${seeds === undefined ? '' : `, ${seeds} seed(s)`}.`;
+      const message = `No new data for ${Math.round(stallMs / 60_000)} minutes at ${Math.round(item.progress * 100)}%.${detail}`;
+      events.push(['stalled', { message, data: { progress: item.progress } }]);
+      return { progressAt, stalledSince: progressAt, events };
+    }
+    return { progressAt, stalledSince: null, events };
+  }
+
+  /** Timeline entries for the difference between the last poll and this one. */
+  private recordTransitions(
+    prev: TrackedDownloadRow,
+    item: DownloadItem,
+    next: StateReason,
+    clockEvents: Array<[DownloadEventType, RecordOptions]>,
+    clientName: string,
+  ): void {
+    if (!isGrabbed(prev)) return;
+    const subject = { id: prev.id, downloadId: prev.downloadId, title: prev.title };
+    const prevCode = prev.stateCode;
+    const record = (type: DownloadEventType, options: RecordOptions = {}) => this.timeline.record(subject, type, options);
+    const paused = (code: QueueItemStateCode | null) => code === 'paused' || code === 'killSwitch';
+
+    if (prevCode === 'metadata' && item.phase !== 'metadata') record('metadataReceived');
+    if ((prev.downloadedBytes ?? 0) === 0 && item.downloadedBytes > 0) {
+      record('started', { message: `Receiving data in ${clientName}.` });
+    }
+    if (next.code === 'killSwitch' && prevCode !== 'killSwitch') {
+      record('paused', { message: next.reason, severity: 'warning', data: { reason: 'killSwitch' } });
+    } else if (next.code === 'paused' && prevCode !== 'paused') {
+      const message = prevCode === 'killSwitch' ? 'Still paused after the kill switch let go.' : next.reason;
+      record('paused', { message, data: { reason: 'client' } });
+    } else if (paused(prevCode) && !paused(next.code)) {
+      record('resumed', { data: { reason: prevCode === 'killSwitch' ? 'killSwitch' : 'client' } });
+    }
+    for (const [type, options] of clockEvents) record(type, options);
+    const done = (status: string) => status === 'completed' || status === 'seeding';
+    if (done(item.status) && !done(prev.clientStatus)) record('completed', { message: `${clientName} finished the download.` });
+    if (item.status === 'failed' && prev.clientStatus !== 'failed') {
+      record('error', { message: item.statusMessage ?? STATUS_TEXT.clientFailed });
+    }
+  }
+
+  /** Kill-switch info for a `builtin` client's torrent, when the engine paused it. */
+  private killSwitchFor(
+    config: Pick<DownloadClientResource, 'implementation'>,
+    downloadId: string,
+  ): { reason?: string } | undefined {
+    if (config.implementation !== 'builtin' || !this.engineInsights) return undefined;
+    if (!this.engineInsights.killSwitchPaused().includes(downloadId)) return undefined;
+    const reason = this.engineInsights.lockdown()?.reason;
+    return reason === undefined ? {} : { reason };
+  }
+
+  /**
+   * The engine entered (or left) lockdown: write `paused` (or `resumed`) to the timelines of
+   * the affected downloads right away, since a short lockdown can fall between two polls.
+   */
+  private onEngineTransition(action: 'lockdown' | 'unlocked', infoHashes: readonly string[], reason?: string): void {
+    if (infoHashes.length === 0) return;
+    const builtinIds = this.db
+      .select({ id: downloadClients.id })
+      .from(downloadClients)
+      .where(eq(downloadClients.implementation, 'builtin'))
+      .all()
+      .map((r) => r.id);
+    if (builtinIds.length === 0) return;
+    const rows = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(
+        and(
+          inArray(trackedDownloads.clientId, builtinIds),
+          inArray(trackedDownloads.downloadId, [...infoHashes]),
+          eq(trackedDownloads.state, 'downloading'),
+        ),
+      )
+      .all();
+    const nowIso = this.now().toISOString();
+    for (const row of rows) {
+      const subject = { id: row.id, downloadId: row.downloadId, title: row.title };
+      if (action === 'lockdown') {
+        if (row.stateCode === 'killSwitch') continue;
+        const text = killSwitchText(reason);
+        this.timeline.record(subject, 'paused', { message: text, severity: 'warning', data: { reason: 'killSwitch' } });
+        this.db
+          .update(trackedDownloads)
+          .set({
+            stateCode: 'killSwitch',
+            stalledSince: null,
+            progressAt: nowIso,
+            trackedStatus: 'warning',
+            statusMessages: [{ title: row.title, messages: [text] }],
+            updatedAt: nowIso,
+          })
+          .where(eq(trackedDownloads.id, row.id))
+          .run();
+      } else {
+        if (row.stateCode !== 'killSwitch') continue;
+        this.timeline.record(subject, 'resumed', { message: 'Resumed after the VPN reconnected.', data: { reason: 'killSwitch' } });
+        this.db
+          .update(trackedDownloads)
+          .set({ stateCode: 'downloading', progressAt: nowIso, trackedStatus: 'ok', statusMessages: [], updatedAt: nowIso })
+          .where(eq(trackedDownloads.id, row.id))
+          .run();
+      }
+    }
+    if (rows.length > 0) this.bus?.publish({ type: 'queue', action: 'changed' });
+  }
+
+  /**
+   * Free space of each download folder against the bytes its downloads still need. Sets
+   * `diskShortfall` on downloads that would not fit (0 when they do, null when unknown).
+   */
+  private async updateDiskShortfall(mappings: RemotePathMapping[]): Promise<void> {
+    const rows = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.state, 'downloading')).all();
+    const ctx = this.queueContext(mappings);
+    const groups = new Map<string, TrackedDownloadRow[]>();
+    for (const row of rows) {
+      const path = this.toTracked(row, ctx, { overlay: false }).outputPath;
+      if (!path || row.sizeLeft <= 0) {
+        if (row.diskShortfall !== null) {
+          this.db.update(trackedDownloads).set({ diskShortfall: null }).where(eq(trackedDownloads.id, row.id)).run();
+        }
+        continue;
+      }
+      const dir = dirname(path);
+      groups.set(dir, [...(groups.get(dir) ?? []), row]);
+    }
+    for (const [dir, group] of groups) {
+      const free = await this.freeSpace(dir);
+      const needed = group.reduce((sum, r) => sum + r.sizeLeft, 0);
+      const shortfall = free === null ? null : Math.max(0, needed - free);
+      for (const row of group) {
+        if (row.diskShortfall === shortfall) continue;
+        this.db.update(trackedDownloads).set({ diskShortfall: shortfall }).where(eq(trackedDownloads.id, row.id)).run();
+      }
+    }
+  }
+
+  /** Downloads still transferring, with local paths (disk-space and stall health checks). */
+  activeDownloads(): ActiveDownloadInfo[] {
+    const ctx = this.queueContext();
+    return this.db
+      .select()
+      .from(trackedDownloads)
+      .where(eq(trackedDownloads.state, 'downloading'))
+      .all()
+      .map((row) => {
+        const tracked = this.toTracked(row, ctx, { overlay: false });
+        return {
+          id: row.id,
+          title: row.title,
+          clientName: tracked.downloadClientName,
+          sizeLeft: row.sizeLeft,
+          ...(tracked.outputPath !== undefined ? { path: tracked.outputPath } : {}),
+          ...(row.stalledSince !== null ? { stalledSince: row.stalledSince } : {}),
+          ...(row.stateCode !== null ? { stateCode: row.stateCode } : {}),
+        };
+      });
+  }
+
+  /** Timeline of a tracked download, oldest first (also after it left the queue). */
+  getTimeline(id: number): DownloadTimeline {
+    const exists = this.db.select({ id: trackedDownloads.id }).from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!exists && !this.timeline.has(id)) throw notFound('Queue item', id);
+    return this.timeline.list(id);
+  }
+
+  /** Deletes timeline entries older than `days` (default 30). Returns the count. */
+  pruneTimeline(days?: number): number {
+    return this.timeline.prune(days);
+  }
+
 
   private outputPathProblem(remotePath: string, host: string, mappings: RemotePathMapping[]): string | undefined {
     if (remotePath.trim() === '') return STATUS_TEXT.noOutputPath;
@@ -678,6 +1018,12 @@ export class DownloadClientsService {
       if (seen.has(row.downloadId) || PROTECTED_STATES.includes(row.state)) continue;
       const lastSeen = row.lastSeenAt ? Date.parse(row.lastSeenAt) : Date.parse(row.addedAt);
       if (now.getTime() - lastSeen >= this.missingGraceMs) {
+        if (isGrabbed(row)) {
+          this.timeline.record({ id: row.id, downloadId: row.downloadId, title: row.title }, 'removed', {
+            message: `${config.name} stopped reporting this download; it is no longer tracked.`,
+            severity: 'warning',
+          });
+        }
         this.db.delete(trackedDownloads).where(eq(trackedDownloads.id, row.id)).run();
         removed++;
         continue;
@@ -753,7 +1099,8 @@ export class DownloadClientsService {
     state: TrackedDownloadState,
     options: { statusMessages?: QueueStatusMessage[]; trackedStatus?: TrackedDownloadStatus } = {},
   ): TrackedDownload {
-    this.getTracked(id);
+    const before = this.getTracked(id);
+    this.recordStateChange(before, state, options);
     this.db
       .update(trackedDownloads)
       .set({
@@ -765,6 +1112,32 @@ export class DownloadClientsService {
       .where(eq(trackedDownloads.id, id))
       .run();
     return this.getTracked(id);
+  }
+
+  /** Timeline entry for a pipeline-driven state change (import started/blocked/failed, ...). */
+  private recordStateChange(
+    before: TrackedDownload,
+    state: TrackedDownloadState,
+    options: { statusMessages?: QueueStatusMessage[]; trackedStatus?: TrackedDownloadStatus },
+  ): void {
+    const message = options.statusMessages?.flatMap((m) => m.messages).find((m) => m.trim());
+    const withMessage = message !== undefined ? { message } : {};
+    let type: DownloadEventType | null = null;
+    if (state === 'importing' && before.trackedState !== 'importing') type = 'importStarted';
+    else if (state === 'imported' && before.trackedState !== 'imported') type = 'imported';
+    else if (state === 'importPending' && options.trackedStatus !== undefined && options.trackedStatus !== 'ok') type = 'importBlocked';
+    else if (state === 'failed') type = before.trackedState === 'importing' || before.trackedState === 'importPending' ? 'importFailed' : 'error';
+    else if (state === 'failedPending' && before.trackedState !== 'failedPending') type = 'error';
+    if (!type) return;
+    const subject = { id: before.id, downloadId: before.downloadId, title: before.title };
+    // Retried imports report the same blocker every pass: keep one entry per distinct message.
+    const last = this.timeline.list(before.id).events.at(-1);
+    if (type === 'importBlocked' && last?.type === 'importBlocked' && last.message === message) return;
+    try {
+      this.timeline.record(subject, type, withMessage);
+    } catch (err) {
+      this.log?.warn({ err, id: before.id }, 'could not record a timeline entry');
+    }
   }
 
   /**
@@ -834,6 +1207,10 @@ export class DownloadClientsService {
       })
       .returning()
       .get();
+    this.timeline.record({ id: row.id, downloadId: row.downloadId, title: row.title }, 'pending', {
+      message: reason ?? 'Waiting to be sent to a download client.',
+      ...(reason ? { severity: 'warning' as const } : {}),
+    });
     return this.toTracked(row, this.queueContext());
   }
 
@@ -957,6 +1334,11 @@ export class DownloadClientsService {
       id = this.db.insert(trackedDownloads).values(values).returning({ id: trackedDownloads.id }).get().id;
     }
     this.dirty = true;
+    const warning = result.warnings.length > 0 ? ` (${result.warnings.join(' ')})` : '';
+    this.timeline.record({ id, downloadId: result.id, title: request.title }, 'grabbed', {
+      message: `Sent to ${target.config.name}${warning}.`,
+      data: { client: target.config.name },
+    });
     return this.getTracked(id);
   }
 
@@ -1046,6 +1428,13 @@ export class DownloadClientsService {
           }
         }
       }
+      const how = [
+        options.removeFromClient && sent ? 'deleted from the download client' : 'no longer tracked',
+        options.blocklist ? 'release blocklisted' : null,
+      ].filter(Boolean);
+      this.timeline.record({ id: row.id, downloadId: row.downloadId, title: row.title }, 'removed', {
+        message: `Removed from the queue: ${how.join(', ')}.`,
+      });
       if (options.removeFromClient || !sent) {
         this.db.delete(trackedDownloads).where(eq(trackedDownloads.id, id)).run();
       } else {
@@ -1070,19 +1459,58 @@ export class DownloadClientsService {
       .map((row) => stripTracked(this.toTracked(row, ctx)));
   }
 
-  private queueContext(): QueueContext {
-    const clients = new Map<number, { name: string; host: string }>();
+  private queueContext(mappings: RemotePathMapping[] = this.listMappings()): QueueContext {
+    const clients = new Map<number, QueueContextClient>();
     for (const row of this.db.select().from(downloadClients).all()) {
       const host = row.implementation === 'builtin' ? 'localhost' : downloadClientHost(row.settings);
-      clients.set(row.id, { name: row.name, host });
+      clients.set(row.id, { name: row.name, host, implementation: row.implementation });
     }
-    return { clients, mappings: this.listMappings() };
+    const insights = this.engineInsights;
+    const killSwitch = new Set(insights?.killSwitchPaused() ?? []);
+    const lockdownReason = insights?.lockdown()?.reason;
+    return {
+      clients,
+      mappings,
+      killSwitch,
+      ...(lockdownReason !== undefined ? { lockdownReason } : {}),
+      engineStarting: insights?.starting?.() ?? false,
+      maxActiveDownloads: insights?.maxActiveDownloads?.() ?? null,
+      stallMinutes: Math.round(Math.max(0, this.stallAfterMs()) / 60_000),
+    };
   }
 
-  private toTracked(row: TrackedDownloadRow, ctx: QueueContext): TrackedDownload {
+  /**
+   * Row -> pipeline shape, with the derived state reason. `overlay` (default) replaces the
+   * last poll's numbers of a built-in engine torrent with the engine's live ones.
+   */
+  private toTracked(row: TrackedDownloadRow, ctx: QueueContext, options: { overlay?: boolean } = {}): TrackedDownload {
     const client = row.clientId === null ? undefined : ctx.clients.get(row.clientId);
     const localPath =
       row.outputPath === null ? undefined : client ? mapRemoteToLocal(ctx.mappings, client.host, row.outputPath) : row.outputPath;
+    const builtin = client?.implementation === 'builtin' && row.state === 'downloading';
+    const engine = builtin && (options.overlay ?? true) ? (this.engineInsights?.live?.(row.downloadId) ?? null) : null;
+    const live = engine?.live ?? row.live ?? undefined;
+    const progress = engine?.progress ?? row.progress;
+    const health = row.clientId === null ? undefined : this.clientHealth.get(row.clientId);
+    const killSwitch =
+      builtin && ctx.killSwitch.has(row.downloadId) ? (ctx.lockdownReason !== undefined ? { reason: ctx.lockdownReason } : {}) : undefined;
+    const state = deriveState({
+      state: row.state,
+      clientStatus: row.clientStatus,
+      trackedStatus: row.trackedStatus,
+      statusMessages: row.statusMessages,
+      phase: engine ? engine.phase : row.phase,
+      live,
+      progress,
+      stalledSince: row.stalledSince,
+      stallMinutes: ctx.stallMinutes,
+      diskShortfall: row.diskShortfall,
+      clientName: client?.name ?? null,
+      ...(builtin && ctx.engineStarting ? { engineStarting: true } : health && !health.ok ? { clientError: health.message ?? 'unknown error' } : {}),
+      killSwitch,
+      maxActiveDownloads: builtin ? ctx.maxActiveDownloads : null,
+    });
+    const etaMs = engine ? engine.etaMs : row.etaMs ?? undefined;
     return {
       id: row.id,
       downloadId: row.downloadId,
@@ -1094,19 +1522,24 @@ export class DownloadClientsService {
       statusMessages: row.statusMessages,
       protocol: row.protocol,
       sizeBytes: row.size,
-      sizeLeftBytes: row.sizeLeft,
-      progress: row.progress,
+      sizeLeftBytes: engine ? engine.sizeLeft : row.sizeLeft,
+      progress,
       added: row.addedAt,
       trackedState: row.state,
       canMoveFiles: row.canMoveFiles,
       canBeRemoved: row.canBeRemoved,
       isReadOnly: row.isReadOnly,
       grabbedRelease: row.grabbedRelease ?? null,
-      ...(row.etaMs !== null ? { eta: row.etaMs } : {}),
+      ...(etaMs !== undefined ? { eta: etaMs } : {}),
       ...(localPath !== undefined ? { outputPath: localPath } : {}),
       ...(row.outputPath !== null ? { remoteOutputPath: row.outputPath } : {}),
       ...(row.category !== null ? { category: row.category } : {}),
       ...trackingFromRow(row),
+      stateCode: state.code,
+      stateReason: state.reason,
+      stateSeverity: state.severity,
+      ...(row.stalledSince !== null ? { stalledSince: row.stalledSince } : {}),
+      ...(live !== undefined ? { live } : {}),
     };
   }
 
@@ -1152,9 +1585,42 @@ export class DownloadClientsService {
 // Module-level helpers
 // ---------------------------------------------------------------------------------------
 
+interface QueueContextClient {
+  name: string;
+  host: string;
+  implementation: DownloadClientImplementation;
+}
+
 interface QueueContext {
-  clients: Map<number, { name: string; host: string }>;
+  clients: Map<number, QueueContextClient>;
   mappings: RemotePathMapping[];
+  /** Info-hashes the built-in engine's kill switch paused. */
+  killSwitch: ReadonlySet<string>;
+  lockdownReason?: string;
+  engineStarting?: boolean;
+  maxActiveDownloads: number | null;
+  stallMinutes: number;
+}
+
+function killSwitchText(reason: string | undefined): string {
+  const why = reason ? `: ${reason.replace(/[.\s]+$/, '')}` : '';
+  return `Paused by the VPN kill switch${why}. It resumes when the VPN reconnects.`;
+}
+
+/** Bytes free on the volume holding `path`; walks up to two parents when it does not exist yet. */
+async function defaultFreeSpace(path: string): Promise<number | null> {
+  let current = path;
+  for (let i = 0; i < 3; i++) {
+    try {
+      const fs = await statfs(current);
+      return Number(fs.bavail) * Number(fs.bsize);
+    } catch {
+      const parent = dirname(current);
+      if (parent === current) return null;
+      current = parent;
+    }
+  }
+  return null;
 }
 
 function rowToResource(row: DownloadClientRow): DownloadClientResource {

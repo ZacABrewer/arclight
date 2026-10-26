@@ -17,6 +17,7 @@ import {
   dockerPermissionsCheck,
   downloadClientCheck,
   downloadClientRemovesCompletedCheck,
+  downloadDiskSpaceCheck,
   indexerCheck,
   indexerLongTermStatusCheck,
   indexerRssCheck,
@@ -30,6 +31,7 @@ import {
   remotePathMappingCheck,
   rootFolderCheck,
   rootFolderFreeSpaceCheck,
+  stalledDownloadsCheck,
   systemTimeCheck,
   updateCheck,
   vpnDisconnectedCheck,
@@ -456,5 +458,44 @@ describe('VpnDisconnected', () => {
   it('warns when the public IP equals the home IP', async () => {
     const out = await run(vpnDisconnectedCheck, fakeDeps({ vpn: async () => ({ ...base, connected: true, publicIp: '1.2.3.4', leak: true }) }));
     expect(out).toEqual([expect.objectContaining({ status: 'warning', wikiUrl: '/docs/system/health#vpn-leak' })]);
+  });
+});
+
+describe('download checks', () => {
+  const MIB = 1024 ** 2;
+  const downloads = [
+    { id: 1, title: 'A', path: '/downloads/tv/A', sizeLeft: 600 * MIB },
+    { id: 2, title: 'B', path: '/downloads/tv/B', sizeLeft: 300 * MIB, stalledSince: hoursAgo(1) },
+    { id: 3, title: 'C', sizeLeft: 5 * GIB },
+  ];
+
+  it('skips without the download dependency', async () => {
+    expect(await run(downloadDiskSpaceCheck, fakeDeps())).toEqual([]);
+    expect(await run(stalledDownloadsCheck, fakeDeps())).toEqual([]);
+  });
+
+  it('errors when the downloads cannot fit and warns when they would eat the minimum free space', async () => {
+    const tight = fakeDeps({ activeDownloads: async () => downloads, minimumFreeSpaceBytes: () => 100 * MIB }, { free: new Map([['/downloads/tv', 500 * MIB]]) });
+    const full = await run(downloadDiskSpaceCheck, tight);
+    expect(full).toEqual([expect.objectContaining({ source: 'DownloadDiskSpace', status: 'error', wikiUrl: expect.stringContaining('download-disk-space-full') })]);
+    expect(full[0]!.message).toContain('2 download(s) in /downloads/tv still need 900 MiB but only 500 MiB is free');
+
+    const low = fakeDeps({ activeDownloads: async () => downloads, minimumFreeSpaceBytes: () => 200 * MIB }, { free: new Map([['/downloads/tv', 1000 * MIB]]) });
+    expect(await run(downloadDiskSpaceCheck, low)).toEqual([expect.objectContaining({ status: 'warning', message: expect.stringContaining('100 MiB free') })]);
+
+    const roomy = fakeDeps({ activeDownloads: async () => downloads, minimumFreeSpaceBytes: () => 100 * MIB });
+    expect(await run(downloadDiskSpaceCheck, roomy)).toEqual([]);
+  });
+
+  it('looks at the parent folder while the download folder does not exist yet', async () => {
+    const deps = fakeDeps({ activeDownloads: async () => [{ id: 1, title: 'A', path: '/downloads/new/A', sizeLeft: 2 * GIB }] });
+    deps.fs.freeSpace = async (p) => (p === '/downloads' ? GIB : null);
+    expect(await run(downloadDiskSpaceCheck, deps)).toEqual([expect.objectContaining({ status: 'error' })]);
+  });
+
+  it('lists stalled downloads', async () => {
+    const findings = await run(stalledDownloadsCheck, fakeDeps({ activeDownloads: async () => downloads }));
+    expect(findings).toEqual([expect.objectContaining({ source: 'DownloadStalled', status: 'warning' })]);
+    expect(findings[0]!.message).toBe(`1 download(s) stopped receiving data: B (since ${hoursAgo(1)})`);
   });
 });

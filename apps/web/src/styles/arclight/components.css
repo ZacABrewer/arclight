@@ -380,6 +380,9 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-table__spacer td { height: auto; padding: 0; border: 0; }
 .al-table__spacer:hover td { background: none; }
 .al-table__empty { padding: 20px; }
+/* Expanded detail row: no fixed row height, no hover tint; content stays in view while the table scrolls sideways. */
+.al-table__detail td { height: auto; padding: 0; background: rgba(110,246,255,.02); }
+.al-table__detail:hover td { background: rgba(110,246,255,.02); }
 
 /* ---------- keyboard sheet ---------- */
 .al-keys { display: grid; grid-template-columns: repeat(2, minmax(0,1fr)); gap: 24px 40px; }

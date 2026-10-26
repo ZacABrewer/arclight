@@ -11,7 +11,7 @@ import type { Db } from '../../db/index.js';
 import { EventBus } from '../../events.js';
 import * as dcTables from '../download-clients/schema.js';
 import { DownloadClientsService } from '../download-clients/service.js';
-import { TorrentService, type TorrentServiceOptions, type TorrentVpnPort } from './service.js';
+import { engineInsightsFor, TorrentService, type TorrentServiceOptions, type TorrentVpnPort } from './service.js';
 
 // Test-only helpers: a controllable VPN port, temp dirs, free ports and a service wired to a
 // real Session on loopback. Not used by production code.
@@ -84,7 +84,12 @@ export async function harness(
   const bus = new EventBus();
   const vpn = new FakeVpn();
   vpn.settingsEnabled = opts.vpn ?? false;
-  const downloads = new DownloadClientsService({ db, platform: process.platform === 'win32' ? 'win32' : 'posix', directoryExists: async () => true });
+  const downloads = new DownloadClientsService({
+    db,
+    bus,
+    platform: process.platform === 'win32' ? 'win32' : 'posix',
+    directoryExists: async () => true,
+  });
   const port = await freePort();
   const service = new TorrentService({
     db,
@@ -99,6 +104,7 @@ export async function harness(
     ...opts.service,
   });
   downloads.setTorrentSession(() => service.session);
+  downloads.setEngineInsights(engineInsightsFor(service));
   // Seed the section directly so the first start already uses the free port and no DHT.
   await service.updateSettings({ enabled: false, listenPort: port, dht: false, ...opts.settings });
   const cleanup = async () => {

@@ -34,6 +34,8 @@ export const settingsKeys = {
 export const activityKeys = {
   queue: (query: unknown) => ['queue', 'list', query] as const,
   queueStatus: ['queue', 'status'] as const,
+  /** Under ['queue'] so queue invalidations (download / queue events) refresh it too. */
+  queueTimeline: (id: number) => ['queue', 'timeline', id] as const,
   history: (filter: unknown) => ['history', 'list', filter] as const,
   blocklist: (page: number, pageSize: number) => ['history', 'blocklist', page, pageSize] as const,
 };

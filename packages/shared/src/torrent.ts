@@ -139,6 +139,12 @@ export const TorrentSessionStatus = z.object({
   state: TorrentEngineState,
   error: z.string().optional(),
   lockdownReason: z.string().optional(),
+  /** ISO-8601: when the current lockdown started. */
+  lockdownSince: z.string().optional(),
+  /** Times the engine entered lockdown during the last hour (kill-switch flapping). */
+  lockdownsLastHour: z.number().int().optional(),
+  /** Torrents currently paused by the kill switch (resumed on reconnect). */
+  killSwitchPaused: z.number().int().optional(),
   /** The port actually bound (null while stopped). */
   listenPort: z.number().int().nullable(),
   /** The port from settings; differs from `listenPort` when the VPN forwards another one. */

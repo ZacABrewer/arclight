@@ -2,9 +2,10 @@ import type { AppContext, AppModule } from '../../app.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { vpnServiceFor } from '../vpn/service.js';
 import { torrentRoutes } from './routes.js';
-import { TorrentService, type TorrentServiceOptions } from './service.js';
+import { engineInsightsFor, TorrentService, type TorrentServiceOptions } from './service.js';
 
 export {
+  engineInsightsFor,
   TorrentService,
   TorrentModuleError,
   LOCKDOWN_ADDRESS,
@@ -46,7 +47,10 @@ export function torrentServiceFor(
       },
       ...overrides,
     });
-    getDownloadClientsService(ctx).setTorrentSession(() => created.session);
+    const downloads = getDownloadClientsService(ctx);
+    downloads.setTorrentSession(() => created.session);
+    // Kill-switch state and live numbers for "why is this download not moving" in the queue.
+    downloads.setEngineInsights(engineInsightsFor(created));
     services.set(ctx, created);
     service = created;
   }
@@ -59,8 +63,9 @@ export const torrentModule: AppModule = (ctx) => async (app) => {
   app.addHook('onReady', async () => {
     service.subscribe();
     if (!ctx.config.torrentEngine) return;
-    // Starting is not awaited past failures: a busy port must not keep the api from booting.
-    await service.boot().catch((err: unknown) => ctx.log.error({ err }, 'torrent engine boot failed'));
+    // Not awaited: restoring large partial torrents can take longer than Fastify's ready
+    // timeout, and a busy port must not keep the api from booting either.
+    void service.boot().catch((err: unknown) => ctx.log.error({ err }, 'torrent engine boot failed'));
   });
   app.addHook('onClose', async () => service.shutdown());
 };

@@ -127,6 +127,7 @@ export const IMPORT_FIELDS: FieldDefinition[] = [
   { name: 'extraFileExtensions', get label() { return t('settings.mediaManagement.extraFileExtensions'); }, type: 'text', placeholder: 'srt,nfo', get helpText() { return t('settings.mediaManagement.commaSeparatedListOfExtensions'); } },
   { name: 'skipFreeSpaceCheck', get label() { return t('settings.mediaManagement.skipFreeSpaceCheck'); }, type: 'checkbox', advanced: true },
   { name: 'minimumFreeSpaceMb', get label() { return t('settings.mediaManagement.minimumFreeSpace'); }, type: 'number', unit: 'MB', min: 0, advanced: true, get helpText() { return t('settings.mediaManagement.refuseToImportWhenLess'); } },
+  { name: 'stalledDownloadMinutes', get label() { return t('settings.mediaManagement.stalledDownloadMinutes'); }, type: 'number', unit: 'min', min: 0, max: 1440, get helpText() { return t('settings.mediaManagement.stalledDownloadHelp'); } },
 ];
 
 export const PROPER_FIELDS: FieldDefinition[] = [

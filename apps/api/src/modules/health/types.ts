@@ -104,8 +104,22 @@ export interface HealthDeps {
   remoteEngines?(): Promise<Array<{ id: number; name: string; url: string; ok: boolean; message?: string }>>;
   /** Self-updating data feeds (feeds registry); optional so deps without it skip the check. */
   feeds?(): Promise<FeedSummary[]>;
+  /** Downloads still transferring (download-clients module); optional so deps without it skip the checks. */
+  activeDownloads?(): Promise<HealthActiveDownload[]>;
+  /** Free space to keep on volumes (Settings > Media Management), bytes. */
+  minimumFreeSpaceBytes?(): number;
   /** Whisper ASR provider status (subtitles module); optional so deps without it skip the check. */
   whisper?(): Promise<SubtitleWhisperStatus>;
+}
+
+export interface HealthActiveDownload {
+  id: number;
+  title: string;
+  /** Local content path, when known. */
+  path?: string;
+  sizeLeft: number;
+  /** ISO-8601, set while the download counts as stalled. */
+  stalledSince?: string;
 }
 
 export interface HealthFlareSolverr {

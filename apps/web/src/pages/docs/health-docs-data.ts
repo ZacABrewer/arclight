@@ -533,4 +533,74 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     },
     link: { get label() { return t('common.hygiene'); }, to: '/library/hygiene' },
   },
+  {
+    anchor: 'download-disk-space-full',
+    sources: ['DownloadDiskSpace'],
+    get title() {
+      return t('docs.healthDocs.downloadDiskFullTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.downloadDiskFullCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.downloadDiskFullFix1'), t('docs.healthDocs.downloadDiskFullFix2')];
+    },
+    link: { get label() { return t('common.queue'); }, to: '/activity/queue' },
+  },
+  {
+    anchor: 'download-disk-space-low',
+    sources: ['DownloadDiskSpace'],
+    get title() {
+      return t('docs.healthDocs.downloadDiskLowTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.downloadDiskLowCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.downloadDiskLowFix1')];
+    },
+    link: { get label() { return t('common.mediaManagement'); }, to: '/settings/mediamanagement' },
+  },
+  {
+    anchor: 'download-stalled',
+    sources: ['DownloadStalled'],
+    get title() {
+      return t('docs.healthDocs.downloadStalledTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.downloadStalledCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.downloadStalledFix1'), t('docs.healthDocs.downloadStalledFix2')];
+    },
+    link: { get label() { return t('common.queue'); }, to: '/activity/queue' },
+  },
+  {
+    anchor: 'torrent-engine-lockdown',
+    sources: ['TorrentEngineLockdown'],
+    get title() {
+      return t('docs.healthDocs.torrentLockdownTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.torrentLockdownCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.torrentLockdownFix1'), t('docs.healthDocs.torrentLockdownFix2')];
+    },
+    link: { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
+  },
+  {
+    anchor: 'vpn-kill-switch-flapping',
+    sources: ['VpnKillSwitchFlapping'],
+    get title() {
+      return t('docs.healthDocs.killSwitchFlappingTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.killSwitchFlappingCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.killSwitchFlappingFix1'), t('docs.healthDocs.killSwitchFlappingFix2')];
+    },
+    link: { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
+  },
 ];

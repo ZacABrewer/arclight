@@ -146,6 +146,34 @@ describe('Storage', () => {
     expect(await s3.tryResume(s.have.toBuffer(), stats)).toBe(false);
   });
 
+  it('resumes a file written to after the save (crash) and spot-checks it', async () => {
+    const dir = await tmp();
+    const { meta, payload, files } = fixture();
+    const s = new Storage(meta, { savePath: dir });
+    await writeAll(s, payload);
+    await s.close();
+    const stats = await s.fileStats();
+    // Saved before piece 3 arrived: sub/f3.bin (pieces 1..3) was still being written.
+    const partial = s.have.clone();
+    partial.set(3, false);
+    const f3 = join(dir, 'pack', 'sub', 'f3.bin');
+    const later = new Date(Date.now() + 3600_000);
+    await utimes(f3, later, later);
+    const s2 = new Storage(meta, { savePath: dir });
+    expect(await s2.tryResume(partial.toBuffer(), stats)).toBe(true);
+    expect([...s2.have.indices()]).toEqual([0, 1, 2]);
+    await s2.close();
+    // Same size, newer, but the claimed pieces no longer hash: fall back to a full re-check.
+    const corrupt = Buffer.from(files[3]!);
+    corrupt.fill(0, 0, 4096);
+    await writeFile(f3, corrupt);
+    await utimes(f3, later, later);
+    const s3 = new Storage(meta, { savePath: dir });
+    expect(await s3.tryResume(partial.toBuffer(), stats)).toBe(false);
+    expect(s3.have.count()).toBe(0);
+    await s3.close();
+  });
+
   it('keeps skipped files out of the payload via a parts file and migrates on re-enable', async () => {
     const dir = await tmp();
     const { meta, files, payload } = fixture();

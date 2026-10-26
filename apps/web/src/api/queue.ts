@@ -1,4 +1,5 @@
 import {
+  DownloadTimeline,
   QueueItem,
   QueuePage,
   QueueRemoveResult,
@@ -15,6 +16,8 @@ export const queueApi = {
   list: (query: Partial<QueueQueryInput> = {}) => request('/queue', QueuePage, { query: query as QueryParams }),
   status: () => request('/queue/status', QueueStatus),
   get: (id: number) => request(`/queue/${id}`, QueueItem),
+  /** What happened to a download, oldest first (also after it left the queue). */
+  timeline: (id: number) => request(`/queue/${id}/timeline`, DownloadTimeline),
   /** Options travel as the query string on the single-item route. */
   remove: (id: number, options: QueueRemoveOptions) =>
     request(`/queue/${id}`, QueueRemoveResult, { method: 'DELETE', query: { ...options } }),

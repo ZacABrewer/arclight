@@ -6,6 +6,9 @@ import { errorMessage, TorrentEngineError } from '../errors.js';
 import type { TorrentFileEntry } from '../metainfo.js';
 import { type FileSpan, PieceLayout } from './layout.js';
 
+/** Pieces re-hashed per file when resuming a file written to after the last resume save. */
+const RESUME_SPOT_CHECKS = 4;
+
 export interface StorageTorrent {
   infoHashHex: string;
   name: string;
@@ -433,18 +436,52 @@ export class Storage {
    */
   async tryResume(bitfield: Buffer, saved: ({ size: number; mtimeMs: number } | null)[]): Promise<boolean> {
     const current = await this.fileStats();
+    const bf = new Bitfield(this.layout.pieceCount, bitfield);
+    // Files written to after the save (the process stopped before saving again): the saved
+    // bitfield is still a subset of what is on disk, so it is kept, and a few of the file's
+    // pieces are re-hashed as a spot check. A file that was already complete must not change.
+    const touched: number[] = [];
     for (let i = 0; i < current.length; i++) {
       const a = saved[i] ?? null;
       const b = current[i] ?? null;
       if (a === null && b === null) continue;
-      if (a === null || b === null || a.size !== b.size || Math.abs(a.mtimeMs - b.mtimeMs) > 2000) return false;
+      if (a === null || b === null || a.size !== b.size) return false;
+      const drift = b.mtimeMs - a.mtimeMs;
+      if (Math.abs(drift) <= 2000) continue;
+      if (drift < 0 || this.fileComplete(i, bf)) return false;
+      touched.push(i);
     }
-    const bf = new Bitfield(this.layout.pieceCount, bitfield);
     for (let i = 0; i < bf.length; i++) this.have.set(i, bf.get(i));
+    for (const fileIndex of touched) {
+      for (const piece of this.spotCheckPieces(fileIndex, bf)) {
+        if (!(await this.verifyPiece(piece))) {
+          for (let i = 0; i < this.have.length; i++) this.have.set(i, false);
+          return false;
+        }
+      }
+    }
     for (const f of this.torrent.files) {
       if (this.opts.incompleteExtension && !f.padding) this.finalized[f.index] = await exists(this.filePath(f, true));
     }
     return true;
+  }
+
+  private fileComplete(fileIndex: number, bf: Bitfield): boolean {
+    const range = this.layout.pieceRange(fileIndex);
+    if (!range) return true;
+    for (let p = range[0]; p <= range[1]; p++) if (!bf.get(p)) return false;
+    return true;
+  }
+
+  /** Up to RESUME_SPOT_CHECKS pieces of a file the bitfield claims, spread across the file. */
+  private spotCheckPieces(fileIndex: number, bf: Bitfield): number[] {
+    const range = this.layout.pieceRange(fileIndex);
+    if (!range) return [];
+    const have: number[] = [];
+    for (let p = range[0]; p <= range[1]; p++) if (bf.get(p)) have.push(p);
+    if (have.length <= RESUME_SPOT_CHECKS) return have;
+    const step = have.length / RESUME_SPOT_CHECKS;
+    return Array.from({ length: RESUME_SPOT_CHECKS }, (_, k) => have[Math.floor(k * step)]!);
   }
 
   // ---- move and delete -----------------------------------------------------------------------

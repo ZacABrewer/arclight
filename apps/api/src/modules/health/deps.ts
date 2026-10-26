@@ -211,6 +211,12 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
       return torrentServiceFor(ctx).status();
     },
 
+    async activeDownloads() {
+      return downloads.activeDownloads();
+    },
+
+    minimumFreeSpaceBytes: () => downloads.minimumFreeSpaceBytes(),
+
     feeds: () => feedsRegistry(ctx).summary(),
 
     remoteEngines: () => downloads.remoteEngineHealth(),

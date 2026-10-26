@@ -7,8 +7,11 @@ export {
   DownloadClientsService,
   DownloadClientsError,
   STATUS_TEXT,
+  type ActiveDownloadInfo,
   type BlocklistHook,
   type DownloadClientsServiceOptions,
+  type EngineInsights,
+  type EngineLive,
   type GrabRequest,
   type PickedClient,
   type RefreshSummary,
@@ -16,7 +19,9 @@ export {
   type TrackedDownloadHook,
   type TrackingInfo,
 } from './service.js';
-export { REFRESH_QUEUE_JOB } from './jobs.js';
+export { DOWNLOAD_EVENTS_CLEANUP_JOB, REFRESH_QUEUE_JOB } from './jobs.js';
+export { deriveState, type StateInput, type StateReason } from './state-reason.js';
+export { DownloadTimelineStore, DEFAULT_EVENT_RETENTION_DAYS } from './timeline.js';
 export * from './schema.js';
 
 // One service per app context, so the pipeline module can reach the same instance (and its
@@ -33,7 +38,12 @@ export function getDownloadClientsService(
 ): DownloadClientsService {
   let service = services.get(ctx);
   if (!service) {
-    service = new DownloadClientsService({ db: ctx.db, log: ctx.log.child({ module: 'download-clients' }), ...overrides });
+    service = new DownloadClientsService({
+      db: ctx.db,
+      log: ctx.log.child({ module: 'download-clients' }),
+      bus: ctx.bus,
+      ...overrides,
+    });
     services.set(ctx, service);
   }
   return service;

@@ -155,3 +155,39 @@ describe('mapTorrent seeding limits and removability', () => {
     expect(mapTorrent(unknown, { prefs, nowMs: NOW, extras: { isPrivate: false } }).canBeRemoved).toBe(true);
   });
 });
+
+describe('mapTorrent live numbers and phase', () => {
+  it('reports rates, connected and swarm peers when torrents/info has them', () => {
+    const base = byState('downloading');
+    const item = mapTorrent(
+      { ...base, dlspeed: 2048, upspeed: 512, num_seeds: 3, num_leechs: 2, num_complete: 40, num_incomplete: 12, ratio: 0.25 },
+      { prefs, nowMs: NOW },
+    );
+    expect(item.live).toEqual({
+      downloadRate: 2048,
+      uploadRate: 512,
+      ratio: 0.25,
+      connectedSeeds: 3,
+      connectedPeers: 5,
+      swarmSeeds: 40,
+      swarmLeechers: 12,
+    });
+  });
+
+  it('omits the live block when no rates are reported', () => {
+    const { dlspeed: _d, upspeed: _u, ...bare } = byState('downloading');
+    void _d;
+    void _u;
+    expect(mapTorrent(bare, { prefs, nowMs: NOW }).live).toBeUndefined();
+  });
+
+  it.each([
+    ['metaDL', 'metadata'],
+    ['checkingDL', 'checking'],
+    ['moving', 'moving'],
+    ['stalledDL', 'stalled'],
+    ['downloading', undefined],
+  ])('%s → phase %s', (state, phase) => {
+    expect(mapTorrent(byState(state), { prefs, nowMs: NOW }).phase).toBe(phase);
+  });
+});

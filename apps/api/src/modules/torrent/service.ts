@@ -1,7 +1,7 @@
 import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
-import { attachSeedRules, type SeedRuleProvider } from '@arclight/download-clients';
+import { attachSeedRules, builtinLive, builtinPhase, type SeedRuleProvider } from '@arclight/download-clients';
 import { Session, type SessionOptions, type SessionSettings, type Torrent, type TorrentRateLimits } from '@arclight/torrent-engine';
 import {
   TORRENT_TRANSPORT_DEFAULTS,
@@ -20,6 +20,7 @@ import {
   type VpnStatus,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import type { EngineInsights } from '../download-clients/service.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
 
@@ -61,6 +62,8 @@ export interface TorrentServiceOptions {
   log?: Logger | undefined;
   vpn?: TorrentVpnPort | undefined;
   downloadClients?: TorrentClientRegistry | undefined;
+  /** Clock for lockdown timestamps (tests). */
+  now?: () => Date;
   /** Builds the Session (tests inject fast timers and loopback-only settings). */
   sessionFactory?: (opts: SessionOptions) => Session;
   /** Extra session settings applied on top of the mapped ones (tests). */
@@ -82,6 +85,8 @@ export class TorrentModuleError extends Error {
 }
 
 export const LOCKDOWN_ADDRESS = '127.0.0.1';
+/** How far back `status().lockdownsLastHour` looks. */
+const LOCKDOWN_WINDOW_MS = 60 * 60_000;
 const KILLSWITCH_FILE = 'killswitch-paused.json';
 
 interface Binding {
@@ -107,6 +112,10 @@ export class TorrentService {
   private state: TorrentEngineState = 'disabled';
   private lastError: string | undefined;
   private lockdownReason: string | undefined;
+  private lockdownSince: string | undefined;
+  /** Start times (ms) of recent lockdowns, for kill-switch flapping detection. */
+  private lockdownStarts: number[] = [];
+  private readonly now: () => Date;
   private killSwitchPaused = new Set<string>();
   /** Serializes start/stop/re-bind so VPN events and settings changes never interleave. */
   private chain: Promise<unknown> = Promise.resolve();
@@ -124,6 +133,7 @@ export class TorrentService {
     this.sessionFactory = opts.sessionFactory ?? ((o) => new Session(o));
     this.sessionOverrides = opts.sessionOverrides ?? {};
     this.defaultAddress = opts.defaultAddress ?? null;
+    this.now = opts.now ?? (() => new Date());
   }
 
   /** The running Session, or null while disabled/stopped. */
@@ -301,6 +311,7 @@ export class TorrentService {
     }
     this.state = 'disabled';
     this.lockdownReason = undefined;
+    this.lockdownSince = undefined;
   }
 
   // ---- VPN binding ------------------------------------------------------------------------
@@ -343,28 +354,40 @@ export class TorrentService {
     const wasLocked = this.state === 'lockdown';
     this.lockdownReason = reason;
     this.state = 'lockdown';
+    if (!wasLocked) {
+      const now = this.now();
+      this.lockdownSince = now.toISOString();
+      this.lockdownStarts = [...this.lockdownStarts.filter((t) => now.getTime() - t < LOCKDOWN_WINDOW_MS), now.getTime()];
+    }
+    const paused: string[] = [];
     for (const t of session.getTorrents()) {
       if (t.isPaused) continue;
       this.killSwitchPaused.add(t.infoHashHex);
+      paused.push(t.infoHashHex);
       await session.pauseTorrent(t.infoHashHex);
     }
     await this.saveKillSwitchSet();
     if (session.settings.listenAddress !== LOCKDOWN_ADDRESS) await session.bindTo(LOCKDOWN_ADDRESS);
     if (!wasLocked) this.log?.warn({ reason, paused: this.killSwitchPaused.size }, 'torrent engine locked down');
+    // The queue writes "paused by the kill switch" to each download's timeline from this event.
+    if (!wasLocked || paused.length > 0) this.bus?.publish({ type: 'torrent', action: 'lockdown', reason, infoHashes: paused });
   }
 
   private async leaveLockdown(session: Session): Promise<void> {
     const wasLocked = this.state === 'lockdown';
     this.state = 'running';
     this.lockdownReason = undefined;
-    if (this.killSwitchPaused.size === 0) return;
+    this.lockdownSince = undefined;
     const ids = [...this.killSwitchPaused];
     for (const id of ids) {
       if (session.getTorrent(id)) await session.resumeTorrent(id);
       this.killSwitchPaused.delete(id);
     }
-    await this.saveKillSwitchSet();
-    if (wasLocked || ids.length > 0) this.log?.info({ resumed: ids.length }, 'torrent engine resumed after VPN reconnect');
+    if (ids.length > 0) await this.saveKillSwitchSet();
+    if (wasLocked || ids.length > 0) {
+      this.log?.info({ resumed: ids.length }, 'torrent engine resumed after VPN reconnect');
+      this.bus?.publish({ type: 'torrent', action: 'unlocked', infoHashes: ids });
+    }
   }
 
   private async loadKillSwitchSet(): Promise<Set<string>> {
@@ -389,6 +412,42 @@ export class TorrentService {
   /** Torrents paused by the kill switch (resumed on reconnect). */
   killSwitchPausedIds(): string[] {
     return [...this.killSwitchPaused];
+  }
+
+  /** The current lockdown with its reason and start, or null while not locked down. */
+  lockdown(): { reason?: string; since?: string } | null {
+    if (this.state !== 'lockdown') return null;
+    return {
+      ...(this.lockdownReason !== undefined ? { reason: this.lockdownReason } : {}),
+      ...(this.lockdownSince !== undefined ? { since: this.lockdownSince } : {}),
+    };
+  }
+
+  /** Lockdowns that started within the last hour (kill-switch flapping). */
+  recentLockdowns(): number {
+    const now = this.now().getTime();
+    return this.lockdownStarts.filter((t) => now - t < LOCKDOWN_WINDOW_MS).length;
+  }
+
+  /** Live numbers of one torrent for the queue (between queue polls), or null. */
+  torrentLive(infoHash: string): {
+    live: ReturnType<typeof builtinLive>;
+    phase?: ReturnType<typeof builtinPhase>;
+    progress: number;
+    sizeLeft: number;
+    etaMs?: number;
+  } | null {
+    const t = this.sessionValue?.getTorrent(infoHash);
+    if (!t) return null;
+    const stats = t.getStats();
+    const phase = builtinPhase(stats);
+    return {
+      live: builtinLive(t, stats),
+      progress: stats.progress,
+      sizeLeft: stats.bytesLeft,
+      ...(phase !== undefined ? { phase } : {}),
+      ...(t.isComplete ? { etaMs: 0 } : stats.etaSeconds !== undefined ? { etaMs: Math.round(stats.etaSeconds * 1000) } : {}),
+    };
   }
 
   // ---- auto-registration -------------------------------------------------------------------
@@ -476,6 +535,9 @@ export class TorrentService {
     };
     if (this.lastError) out.error = this.lastError;
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
+    if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;
+    out.lockdownsLastHour = this.recentLockdowns();
+    out.killSwitchPaused = this.killSwitchPaused.size;
     return out;
   }
 
@@ -560,6 +622,23 @@ export class TorrentService {
     torrent.setSuperSeeding(enabled);
     await session.saveResumeData(torrent);
   }
+}
+
+/**
+ * What the queue needs to explain built-in engine downloads (kill switch, slot limit, live
+ * numbers). The torrent module hands this to the download-clients service.
+ */
+export function engineInsightsFor(service: TorrentService): EngineInsights {
+  return {
+    lockdown: () => service.lockdown(),
+    killSwitchPaused: () => service.killSwitchPausedIds(),
+    maxActiveDownloads: () => {
+      const limit = service.settings().maxActiveDownloads;
+      return limit > 0 ? limit : null;
+    },
+    live: (infoHash) => service.torrentLive(infoHash),
+    starting: () => service.status().state === 'starting',
+  };
 }
 
 /** The settings with the optional transport fields filled from the engine defaults. */

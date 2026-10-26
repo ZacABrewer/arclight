@@ -15,6 +15,33 @@ export type DownloadItemStatus =
   | 'failed'
   | 'warning';
 
+/**
+ * Live transfer numbers a client can report next to an item. Rates are required, the rest is
+ * whatever the client knows (the built-in engine fills everything, qBittorrent most of it).
+ */
+export interface DownloadItemLive {
+  /** Bytes per second. */
+  downloadRate: number;
+  uploadRate: number;
+  connectedPeers?: number;
+  connectedSeeds?: number;
+  /** Largest seeder/leecher counts reported by trackers. */
+  swarmSeeds?: number;
+  swarmLeechers?: number;
+  piecesHave?: number;
+  pieceCount?: number;
+  ratio?: number;
+  /** Connected peers per transport. */
+  transports?: { tcp: number; utp: number };
+  encryptedPeers?: number;
+}
+
+/**
+ * Finer phase than `status`, when the client tells: fetching the metadata of a magnet,
+ * checking existing data, relocating files, or (client-reported) stalled for lack of peers.
+ */
+export type DownloadItemPhase = 'metadata' | 'checking' | 'moving' | 'stalled';
+
 export interface DownloadItem {
   /** Client-side identifier. For torrent clients this is the lowercase v1 info-hash. */
   id: string;
@@ -43,6 +70,8 @@ export interface DownloadItem {
   canMoveFiles: boolean;
   /** The item may be removed from the client without breaking seeding obligations. */
   canBeRemoved: boolean;
+  live?: DownloadItemLive;
+  phase?: DownloadItemPhase;
 }
 
 export interface AddTorrentInput {
