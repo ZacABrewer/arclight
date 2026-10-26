@@ -1,0 +1,504 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "Movie title, year, edition and release-group extraction from release names (should_parse_movie_title, should_parse_anime_movie_title[_without_year], should_parse_german_movie, should_parse_movie_folder_name, should_parse_movie_year); year 0 means no year was found",
+  "cases": [
+    {
+      "input": "The.Movie.from.U.N.C.L.E.2015.1080p.BluRay.x264-SPARKS",
+      "expect": {
+        "title": "The Movie from U.N.C.L.E."
+      }
+    },
+    {
+      "input": "1776.1979.EXTENDED.720p.BluRay.X264-AMIABLE",
+      "expect": {
+        "title": "1776"
+      }
+    },
+    {
+      "input": "MY MOVIE (2016) [R][Action, Horror][720p.WEB-DL.AVC.8Bit.6ch.AC3].mkv",
+      "expect": {
+        "title": "MY MOVIE"
+      }
+    },
+    {
+      "input": "R.I.P.D.2013.720p.BluRay.x264-SPARKS",
+      "expect": {
+        "title": "R.I.P.D."
+      }
+    },
+    {
+      "input": "V.H.S.2.2013.LIMITED.720p.BluRay.x264-GECKOS",
+      "expect": {
+        "title": "V.H.S. 2"
+      }
+    },
+    {
+      "input": "This Is A Movie (1999) [IMDB #] <Genre, Genre, Genre> {ACTORS} !DIRECTOR +MORE_SILLY_STUFF_NO_ONE_NEEDS ?",
+      "expect": {
+        "title": "This Is A Movie"
+      }
+    },
+    {
+      "input": "We Are the Movie!.2013.720p.H264.mkv",
+      "expect": {
+        "title": "We Are the Movie!"
+      }
+    },
+    {
+      "input": "(500).Days.Of.Movie.(2009).DTS.1080p.BluRay.x264.NLsubs",
+      "expect": {
+        "title": "(500) Days Of Movie"
+      }
+    },
+    {
+      "input": "To.Live.and.Movie.in.L.A.1985.1080p.BluRay",
+      "expect": {
+        "title": "To Live and Movie in L.A."
+      }
+    },
+    {
+      "input": "A.I.Artificial.Movie.(2001)",
+      "expect": {
+        "title": "A.I. Artificial Movie"
+      }
+    },
+    {
+      "input": "A.Movie.Name.(1998)",
+      "expect": {
+        "title": "A Movie Name"
+      }
+    },
+    {
+      "input": "www.Torrenting.com - Movie.2008.720p.X264-DIMENSION",
+      "expect": {
+        "title": "Movie"
+      }
+    },
+    {
+      "input": "www.5MovieRulz.tc - Movie (2000) Malayalam HQ HDRip - x264 - AAC - 700MB.mkv",
+      "expect": {
+        "title": "Movie"
+      }
+    },
+    {
+      "input": "Movie: The Movie World 2013",
+      "expect": {
+        "title": "Movie: The Movie World"
+      }
+    },
+    {
+      "input": "Movie.The.Final.Chapter.2016",
+      "expect": {
+        "title": "Movie The Final Chapter"
+      }
+    },
+    {
+      "input": "Der.Movie.James.German.Bluray.FuckYou.Pso.Why.cant.you.follow.scene.rules.1998",
+      "expect": {
+        "title": "Der Movie James"
+      }
+    },
+    {
+      "input": "Movie.German.DL.AC3.Dubbed..BluRay.x264-PsO",
+      "expect": {
+        "title": "Movie"
+      }
+    },
+    {
+      "input": "Valana la Movie TRUEFRENCH BluRay 720p 2016 kjhlj",
+      "expect": {
+        "title": "Valana la Movie"
+      }
+    },
+    {
+      "input": "Mission Movie: Rogue Movie (2015)�[XviD - Ita Ac3 - SoftSub Ita]azione, spionaggio, thriller *Prima Visione* Team mulnic Tom Cruise",
+      "expect": {
+        "title": "Mission Movie: Rogue Movie"
+      }
+    },
+    {
+      "input": "Movie.Movie.2000.FRENCH..BluRay.-AiRLiNE",
+      "expect": {
+        "title": "Movie Movie"
+      }
+    },
+    {
+      "input": "My Movie 1999 German Bluray",
+      "expect": {
+        "title": "My Movie"
+      }
+    },
+    {
+      "input": "Leaving Movie by Movie (1897) [DVD].mp4",
+      "expect": {
+        "title": "Leaving Movie by Movie"
+      }
+    },
+    {
+      "input": "Movie.2018.1080p.AMZN.WEB-DL.DD5.1.H.264-NTG",
+      "expect": {
+        "title": "Movie"
+      }
+    },
+    {
+      "input": "Movie.Title.Imax.2018.1080p.AMZN.WEB-DL.DD5.1.H.264-NTG",
+      "expect": {
+        "title": "Movie Title"
+      }
+    },
+    {
+      "input": "World.Movie.Z.EXTENDED.2013.German.DL.1080p.BluRay.AVC-XANOR",
+      "expect": {
+        "title": "World Movie Z"
+      }
+    },
+    {
+      "input": "World.Movie.Z.2.EXTENDED.2013.German.DL.1080p.BluRay.AVC-XANOR",
+      "expect": {
+        "title": "World Movie Z 2"
+      }
+    },
+    {
+      "input": "G.I.Movie.Movie.2013.THEATRiCAL.COMPLETE.BLURAY-GLiMMER",
+      "expect": {
+        "title": "G.I. Movie Movie"
+      }
+    },
+    {
+      "input": "www.Torrenting.org - Movie.2008.720p.X264-DIMENSION",
+      "expect": {
+        "title": "Movie"
+      }
+    },
+    {
+      "input": "The.French.Movie.2013.720p.BluRay.x264 - ROUGH[PublicHD]",
+      "expect": {
+        "title": "The French Movie"
+      }
+    },
+    {
+      "input": "The.Good.German.2006.720p.BluRay.x264-RlsGrp",
+      "expect": {
+        "title": "The Good German"
+      }
+    },
+    {
+      "input": "[MTBB] Kimi no Na wa. (2016) v2 [97681524].mkv",
+      "expect": {
+        "title": "Kimi no Na wa",
+        "releaseGroup": "MTBB",
+        "year": 2016
+      }
+    },
+    {
+      "input": "[sam] Toward the Terra (1980) [BD 1080p TrueHD].mkv",
+      "expect": {
+        "title": "Toward the Terra",
+        "releaseGroup": "sam",
+        "year": 1980
+      }
+    },
+    {
+      "input": "[Inka-Subs] Rokudenashi Blues 1993 (1993) [VHS]",
+      "expect": {
+        "title": "Rokudenashi Blues 1993",
+        "releaseGroup": "Inka-Subs",
+        "year": 1993
+      }
+    },
+    {
+      "input": "[Arid] Cowboy Bebop - Knockin' on Heaven's Door v2 [00F4CDA0].mkv",
+      "expect": {
+        "title": "Cowboy Bebop - Knockin' on Heaven's Door",
+        "releaseGroup": "Arid"
+      }
+    },
+    {
+      "input": "[Baws] Evangelion 1.11 - You Are (Not) Alone v2 (1080p BD HEVC FLAC) [BF42B1C8].mkv",
+      "expect": {
+        "title": "Evangelion 1 11 - You Are (Not) Alone",
+        "releaseGroup": "Baws"
+      }
+    },
+    {
+      "input": "[Arid] 5 Centimeters per Second (BDRip 1920x1080 Hi10 FLAC) [FD8B6FF2].mkv",
+      "expect": {
+        "title": "5 Centimeters per Second",
+        "releaseGroup": "Arid"
+      }
+    },
+    {
+      "input": "[Baws] Evangelion 2.22 - You Can (Not) Advance (1080p BD HEVC FLAC) [56E7A5B8].mkv",
+      "expect": {
+        "title": "Evangelion 2 22 - You Can (Not) Advance",
+        "releaseGroup": "Baws"
+      }
+    },
+    {
+      "input": "[sam] Goblin Slayer - Goblin's Crown [BD 1080p FLAC] [CD298D48].mkv",
+      "expect": {
+        "title": "Goblin Slayer - Goblin's Crown",
+        "releaseGroup": "sam"
+      }
+    },
+    {
+      "input": "[Kulot] Violet Evergarden Gaiden Eien to Jidou Shuki Ningyou [Dual-Audio][BDRip 1920x804 HEVC FLACx2] [91FC62A8].mkv",
+      "expect": {
+        "title": "Violet Evergarden Gaiden Eien to Jidou Shuki Ningyou",
+        "releaseGroup": "Kulot"
+      }
+    },
+    {
+      "input": "Movie.Aufbruch.nach.Pandora.Extended.2009.German.DTS.720p.BluRay.x264-SoW",
+      "expect": {
+        "title": "Movie Aufbruch nach Pandora",
+        "edition": "Extended",
+        "year": 2009
+      }
+    },
+    {
+      "input": "Drop.Movie.1994.German.AC3D.DL.720p.BluRay.x264-KLASSiGERHD",
+      "expect": {
+        "title": "Drop Movie",
+        "edition": "",
+        "year": 1994
+      }
+    },
+    {
+      "input": "Kick.Movie.2.2013.German.DTS.DL.720p.BluRay.x264-Pate",
+      "expect": {
+        "title": "Kick Movie 2",
+        "edition": "",
+        "year": 2013
+      }
+    },
+    {
+      "input": "Movie.Hills.2019.German.DL.AC3.Dubbed.1080p.BluRay.x264-muhHD",
+      "expect": {
+        "title": "Movie Hills",
+        "edition": "",
+        "year": 2019
+      }
+    },
+    {
+      "input": "96.Hours.Movie.3.EXTENDED.2014.German.DL.1080p.BluRay.x264-ENCOUNTERS",
+      "expect": {
+        "title": "96 Hours Movie 3",
+        "edition": "EXTENDED",
+        "year": 2014
+      }
+    },
+    {
+      "input": "Movie.War.Q.EXTENDED.CUT.2013.German.DL.1080p.BluRay.x264-HQX",
+      "expect": {
+        "title": "Movie War Q",
+        "edition": "EXTENDED CUT",
+        "year": 2013
+      }
+    },
+    {
+      "input": "Sin.Movie.2005.RECUT.EXTENDED.German.DL.1080p.BluRay.x264-DETAiLS",
+      "expect": {
+        "title": "Sin Movie",
+        "edition": "RECUT EXTENDED",
+        "year": 2005
+      }
+    },
+    {
+      "input": "2.Movie.in.L.A.1996.GERMAN.DL.720p.WEB.H264-SOV",
+      "expect": {
+        "title": "2 Movie in L.A.",
+        "edition": "",
+        "year": 1996
+      }
+    },
+    {
+      "input": "8.2019.GERMAN.720p.BluRay.x264-UNiVERSUM",
+      "expect": {
+        "title": "8",
+        "edition": "",
+        "year": 2019
+      }
+    },
+    {
+      "input": "Life.Movie.2014.German.DL.PAL.DVDR-ETM",
+      "expect": {
+        "title": "Life Movie",
+        "edition": "",
+        "year": 2014
+      }
+    },
+    {
+      "input": "Joe.Movie.2.EXTENDED.EDITION.2015.German.DL.PAL.DVDR-ETM",
+      "expect": {
+        "title": "Joe Movie 2",
+        "edition": "EXTENDED EDITION",
+        "year": 2015
+      }
+    },
+    {
+      "input": "Movie.EXTENDED.2011.HDRip.AC3.German.XviD-POE",
+      "expect": {
+        "title": "Movie",
+        "edition": "EXTENDED",
+        "year": 2011
+      }
+    },
+    {
+      "input": "Movie.Klasse.von.1999.1990.German.720p.HDTV.x264-NORETAiL",
+      "expect": {
+        "title": "Movie Klasse von 1999",
+        "edition": "",
+        "year": 1990
+      }
+    },
+    {
+      "input": "Movie.Squad.2016.EXTENDED.German.DL.AC3.BDRip.x264-hqc",
+      "expect": {
+        "title": "Movie Squad",
+        "edition": "EXTENDED",
+        "year": 2016
+      }
+    },
+    {
+      "input": "Movie.and.Movie.2010.Extended.Cut.German.DTS.DL.720p.BluRay.x264-HDS",
+      "expect": {
+        "title": "Movie and Movie",
+        "edition": "Extended Cut",
+        "year": 2010
+      }
+    },
+    {
+      "input": "Der.Movie.James.German.Bluray.FuckYou.Pso.Why.cant.you.follow.scene.rules.1998",
+      "expect": {
+        "title": "Der Movie James",
+        "edition": "",
+        "year": 1998
+      }
+    },
+    {
+      "input": "Der.Movie.Eine.Unerwartete.Reise.Extended.German.720p.BluRay.x264-EXQUiSiTE",
+      "expect": {
+        "title": "Der Movie Eine Unerwartete Reise",
+        "edition": "Extended",
+        "year": 0
+      }
+    },
+    {
+      "input": "Movie.Weg.des.Kriegers.EXTENDED.German.720p.BluRay.x264-EXQUiSiTE",
+      "expect": {
+        "title": "Movie Weg des Kriegers",
+        "edition": "EXTENDED",
+        "year": 0
+      }
+    },
+    {
+      "input": "Die.Unfassbaren.Movie.Name.EXTENDED.German.DTS.720p.BluRay.x264-RHD",
+      "expect": {
+        "title": "Die Unfassbaren Movie Name",
+        "edition": "EXTENDED",
+        "year": 0
+      }
+    },
+    {
+      "input": "Die Unfassbaren Movie Name EXTENDED German DTS 720p BluRay x264-RHD",
+      "expect": {
+        "title": "Die Unfassbaren Movie Name",
+        "edition": "EXTENDED",
+        "year": 0
+      }
+    },
+    {
+      "input": "Passengers.German.DL.AC3.Dubbed..BluRay.x264-PsO",
+      "expect": {
+        "title": "Passengers",
+        "edition": "",
+        "year": 0
+      }
+    },
+    {
+      "input": "Das.A.Team.Der.Film.Extended.Cut.German.720p.BluRay.x264-ANCIENT",
+      "expect": {
+        "title": "Das A Team Der Film",
+        "edition": "Extended Cut",
+        "year": 0
+      }
+    },
+    {
+      "input": "Cars.2.German.DL.720p.BluRay.x264-EmpireHD",
+      "expect": {
+        "title": "Cars 2",
+        "edition": "",
+        "year": 0
+      }
+    },
+    {
+      "input": "Die.fantastische.Reise.des.Dr.Dolittle.2020.German.DL.LD.1080p.WEBRip.x264-PRD",
+      "expect": {
+        "title": "Die fantastische Reise des Dr. Dolittle",
+        "edition": "",
+        "year": 2020
+      }
+    },
+    {
+      "input": "Der.Film.deines.Lebens.German.2011.PAL.DVDR-ETM",
+      "expect": {
+        "title": "Der Film deines Lebens",
+        "edition": "",
+        "year": 2011
+      }
+    },
+    {
+      "input": "Kick.Ass.2.2013.German.DTS.DL.720p.BluRay.x264-Pate_",
+      "expect": {
+        "title": "Kick Ass 2",
+        "edition": "",
+        "year": 2013
+      }
+    },
+    {
+      "input": "The.Good.German.2006.GERMAN.720p.HDTV.x264-RLsGrp",
+      "expect": {
+        "title": "The Good German",
+        "edition": "",
+        "year": 2006
+      }
+    },
+    {
+      "input": "(1995) Movie Name",
+      "expect": {
+        "title": "Movie Name"
+      }
+    },
+    {
+      "input": "1776.1979.EXTENDED.720p.BluRay.X264-AMIABLE",
+      "expect": {
+        "year": 1979
+      }
+    },
+    {
+      "input": "Movie Name FRENCH BluRay 720p 2016 kjhlj",
+      "expect": {
+        "year": 2016
+      }
+    },
+    {
+      "input": "Der.Movie.German.Bluray.FuckYou.Pso.Why.cant.you.follow.scene.rules.1998",
+      "expect": {
+        "year": 1998
+      }
+    },
+    {
+      "input": "Movie Name (1897) [DVD].mp4",
+      "expect": {
+        "year": 1897
+      }
+    },
+    {
+      "input": "World Movie Z Movie [2023]",
+      "expect": {
+        "year": 2023
+      }
+    }
+  ]
+}

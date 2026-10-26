@@ -1,0 +1,582 @@
+{
+  "source": "Sonarr + Radarr src/NzbDrone.Core.Test/ParserTests/IsoLanguagesFixture.cs",
+  "description": "ISO 639 code lookup: input is the code, 'language' is the expected language name or null when upstream expects no match. 'upstream' marks origin.",
+  "cases": [
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "eng",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en-US",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en-GB",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "enus",
+      "expect": {
+        "language": null
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "enusa",
+      "expect": {
+        "language": null
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "wo",
+      "expect": {
+        "language": null
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "fr-CA",
+      "expect": {
+        "language": null
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "pt",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "por",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "pt-PT",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_not_return_portuguese",
+      "input": "de-AU",
+      "expect": {
+        "language": null
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_lookup_cze_via_alternate_iso_code_mapping",
+      "input": "cze",
+      "expect": {
+        "language": "Czech"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "ur",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "urd",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "ur-PK",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "rm",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "roh",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "rm-CH",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "ka",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "geo",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "kat",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "ka-GE",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "ga",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "gle",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "ga-IE",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "sonarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "eng",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en-US",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_iso_language_for_English",
+      "input": "en-GB",
+      "expect": {
+        "language": "English"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "enus",
+      "expect": {
+        "language": null
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "enusa",
+      "expect": {
+        "language": null
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "wo",
+      "expect": {
+        "language": null
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "unknown_or_invalid_code_should_return_null",
+      "input": "fr-CA",
+      "expect": {
+        "language": null
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "pt",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "por",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_portuguese",
+      "input": "pt-PT",
+      "expect": {
+        "language": "Portuguese"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_not_return_portuguese",
+      "input": "de-AU",
+      "expect": {
+        "language": null
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_telugu",
+      "input": "te",
+      "expect": {
+        "language": "Telugu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_telugu",
+      "input": "tel",
+      "expect": {
+        "language": "Telugu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_telugu",
+      "input": "te-IN",
+      "expect": {
+        "language": "Telugu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_afrikaans",
+      "input": "af",
+      "expect": {
+        "language": "Afrikaans"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_afrikaans",
+      "input": "afr",
+      "expect": {
+        "language": "Afrikaans"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_afrikaans",
+      "input": "af-ZA",
+      "expect": {
+        "language": "Afrikaans"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_marathi",
+      "input": "mr",
+      "expect": {
+        "language": "Marathi"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_marathi",
+      "input": "mar",
+      "expect": {
+        "language": "Marathi"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_marathi",
+      "input": "mr-IN",
+      "expect": {
+        "language": "Marathi"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_tagalog",
+      "input": "tl",
+      "expect": {
+        "language": "Tagalog"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_tagalog",
+      "input": "tgl",
+      "expect": {
+        "language": "Tagalog"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_tagalog",
+      "input": "tl-PH",
+      "expect": {
+        "language": "Tagalog"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "ur",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "urd",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_urdu",
+      "input": "ur-PK",
+      "expect": {
+        "language": "Urdu"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "rm",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "roh",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_romansh",
+      "input": "rm-CH",
+      "expect": {
+        "language": "Romansh"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_mongolian",
+      "input": "mn",
+      "expect": {
+        "language": "Mongolian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_mongolian",
+      "input": "mon",
+      "expect": {
+        "language": "Mongolian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_mongolian",
+      "input": "khk",
+      "expect": {
+        "language": "Mongolian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_mongolian",
+      "input": "mvf",
+      "expect": {
+        "language": "Mongolian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_mongolian",
+      "input": "mn-Cyrl",
+      "expect": {
+        "language": "Mongolian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_bengali",
+      "input": "bn",
+      "expect": {
+        "language": "Bengali"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_bengali",
+      "input": "ben",
+      "expect": {
+        "language": "Bengali"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_bengali",
+      "input": "bn-BD",
+      "expect": {
+        "language": "Bengali"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_bengali",
+      "input": "bn-IN",
+      "expect": {
+        "language": "Bengali"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "ka",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "geo",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "kat",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_georgian",
+      "input": "ka-GE",
+      "expect": {
+        "language": "Georgian"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "ga",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "gle",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "radarr"
+    },
+    {
+      "method": "should_return_irish",
+      "input": "ga-IE",
+      "expect": {
+        "language": "Irish"
+      },
+      "upstream": "radarr"
+    }
+  ]
+}

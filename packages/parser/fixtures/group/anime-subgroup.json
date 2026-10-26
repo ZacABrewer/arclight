@@ -1,0 +1,13 @@
+{
+  "source": "Sonarr/src/NzbDrone.Core.Test/ParserTests/SubGroupParserFixture.cs",
+  "description": "Anime sub group parsed from a leading bracket tag and reported as the release group.",
+  "cases": [
+    {
+      "method": "should_parse_sub_group_from_title_as_release_group",
+      "input": "[GHOST][1080p] Series - 25 [BD HEVC 10bit Dual Audio AC3][AE0ADDBA]",
+      "expect": {
+        "subGroup": "GHOST"
+      }
+    }
+  ]
+}

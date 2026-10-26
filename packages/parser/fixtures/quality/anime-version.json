@@ -1,0 +1,48 @@
+{
+  "source": "Sonarr/src/NzbDrone.Core.Test/ParserTests/AnimeVersionFixture.cs",
+  "description": "Anime episode version (v2 etc.) parsed into revision version.",
+  "cases": [
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Anime Title - S01E01 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "expect": {
+        "version": 1
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Anime Title - S01E01v2 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Anime Title - S01E01 v2 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "[SubsPlease] Anime Title - 01 (1080p) [B1F227CF]",
+      "expect": {
+        "version": 1
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "[SubsPlease] Anime Title - 01v2 (1080p) [B1F227CF]",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "[SubsPlease] Anime Title - 01 v2 (1080p) [B1F227CF]",
+      "expect": {
+        "version": 2
+      }
+    }
+  ]
+}

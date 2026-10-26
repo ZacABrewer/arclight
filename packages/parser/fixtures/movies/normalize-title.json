@@ -1,0 +1,678 @@
+{
+  "source": "NormalizeTitleFixture.cs, ParserFixture.cs (should_remove_accents_from_title)",
+  "description": "Title normalization for matching: lowercase, strip accents and punctuation, drop common words (the/and/or/a/an/of) only from the middle of the title",
+  "cases": [
+    {
+      "input": "Conan",
+      "expect": {
+        "normalized": "conan"
+      }
+    },
+    {
+      "input": "Castle (2009)",
+      "expect": {
+        "normalized": "castle2009"
+      }
+    },
+    {
+      "input": "Parenthood.2010",
+      "expect": {
+        "normalized": "parenthood2010"
+      }
+    },
+    {
+      "input": "Law_and_Order_SVU",
+      "expect": {
+        "normalized": "lawordersvu"
+      }
+    },
+    {
+      "input": "CaPitAl",
+      "expect": {
+        "normalized": "capital"
+      }
+    },
+    {
+      "input": "peri.od",
+      "expect": {
+        "normalized": "period"
+      }
+    },
+    {
+      "input": "this.^&%^**$%@#$!That",
+      "expect": {
+        "normalized": "thisthat"
+      }
+    },
+    {
+      "input": "test/test",
+      "expect": {
+        "normalized": "testtest"
+      }
+    },
+    {
+      "input": "90210",
+      "expect": {
+        "normalized": "90210"
+      }
+    },
+    {
+      "input": "24",
+      "expect": {
+        "normalized": "24"
+      }
+    },
+    {
+      "input": "I'm a cyborg, but that's OK",
+      "expect": {
+        "normalized": "imcyborgbutthatsok"
+      }
+    },
+    {
+      "input": "Im a cyborg, but thats ok",
+      "expect": {
+        "normalized": "imcyborgbutthatsok"
+      }
+    },
+    {
+      "input": "Test: Something à Deux",
+      "expect": {
+        "normalized": "testsomethingdeux"
+      }
+    },
+    {
+      "input": "Parler à",
+      "expect": {
+        "normalized": "parlera"
+      }
+    },
+    {
+      "input": "word.the.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word the word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-the-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.and.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word and word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-and-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.or.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word or word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-or-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.an.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word an word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-an-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.of.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word of word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-of-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.word.the",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word-word-the",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word-word the",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word.word.and",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word-word-and",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word-word and",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word.word.or",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word-word-or",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word-word or",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word.word.an",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word-word-an",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word-word an",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word.word.of",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word-word-of",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word-word of",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word.a.word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word a word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-a-word",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.a.N.K.L.E.word",
+      "expect": {
+        "normalized": "wordankleword"
+      }
+    },
+    {
+      "input": "word a N K L E word",
+      "expect": {
+        "normalized": "wordankleword"
+      }
+    },
+    {
+      "input": "word-a-N-K-L-E-word",
+      "expect": {
+        "normalized": "wordankleword"
+      }
+    },
+    {
+      "input": "word.N.K.L.E.a.word",
+      "expect": {
+        "normalized": "wordnkleaword"
+      }
+    },
+    {
+      "input": "word N K L E a word",
+      "expect": {
+        "normalized": "wordnkleaword"
+      }
+    },
+    {
+      "input": "word-N-K-L-E-a-word",
+      "expect": {
+        "normalized": "wordnkleaword"
+      }
+    },
+    {
+      "input": "word.theword",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word theword",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word-theword",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe.word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe-word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe-word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word.andword",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word andword",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word-andword",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand.word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand-word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand-word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word.orword",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word orword",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word-orword",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor.word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor-word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor-word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word.aword",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word aword",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word-aword",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda.word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda-word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda-word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word.anword",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word anword",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word-anword",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan.word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan-word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan-word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word.ofword",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "word ofword",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "word-ofword",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof.word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof-word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof-word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "The Office",
+      "expect": {
+        "normalized": "theoffice"
+      }
+    },
+    {
+      "input": "The Tonight Show With Jay Leno",
+      "expect": {
+        "normalized": "thetonightshowwithjayleno"
+      }
+    },
+    {
+      "input": "The.Daily.Show",
+      "expect": {
+        "normalized": "thedailyshow"
+      }
+    },
+    {
+      "input": "the.word.word",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "the-word-word",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "the word word",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "and.word.word",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "and-word-word",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "and word word",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "or.word.word",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "or-word-word",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "or word word",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "a.word.word",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "a-word-word",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "a word word",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "an.word.word",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "an-word-word",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "an word word",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "of.word.word",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "of-word-word",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "of word word",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "Tokyo Ghoul A",
+      "expect": {
+        "normalized": "tokyoghoula"
+      }
+    },
+    {
+      "input": "Carnivàle",
+      "expect": {
+        "normalized": "carnivale"
+      }
+    }
+  ]
+}

@@ -1,0 +1,585 @@
+{
+  "source": "SlugParserFixture.cs",
+  "description": "URL-slug generation: strip accents, lowercase, spaces to dashes, special chars removed (or dashed when replaceSpecialCharsWithDash), trailing trimChars trimmed, runs of deduplicateChars collapsed. Options omitted = upstream defaults (replaceSpecialCharsWithDash=false, trimChars='-_', deduplicateChars='-_').",
+  "cases": [
+    {
+      "input": "tèst",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "têst",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "tëst",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "tËst",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "áccent",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "àccent",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "âccent",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "Äccent",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "åccent",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "acceñt",
+      "expect": {
+        "slug": "accent"
+      }
+    },
+    {
+      "input": "ßtest",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "œtest",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "Œtest",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "Øtest",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "Test'Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test$Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test(Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test)Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test*Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test?Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test/Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test=Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "Test\\Result",
+      "expect": {
+        "slug": "testresult"
+      }
+    },
+    {
+      "input": "ThIS IS A MiXeD CaSe SensItIvE ValUe",
+      "expect": {
+        "slug": "this-is-a-mixed-case-sensitive-value"
+      }
+    },
+    {
+      "input": "test----",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "test____",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "test-_--_",
+      "expect": {
+        "slug": "test"
+      }
+    },
+    {
+      "input": "test result",
+      "expect": {
+        "slug": "test-result"
+      }
+    },
+    {
+      "input": "test     result",
+      "expect": {
+        "slug": "test-result"
+      }
+    },
+    {
+      "input": "test     result",
+      "expect": {
+        "slug": "test-result"
+      }
+    },
+    {
+      "input": "test-----result",
+      "expect": {
+        "slug": "test-result"
+      }
+    },
+    {
+      "input": "test_____result",
+      "expect": {
+        "slug": "test_result"
+      }
+    },
+    {
+      "input": "Test'Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test$Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test(Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test)Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test*Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test?Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test/Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test=Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test\\Result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": true
+      }
+    },
+    {
+      "input": "Test'Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test$Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test(Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test)Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test*Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test?Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test/Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test=Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "Test\\Result",
+      "expect": {
+        "slug": "testresult",
+        "replaceSpecialCharsWithDash": false
+      }
+    },
+    {
+      "input": "test----",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test____",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test-_-_",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test----",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test____",
+      "expect": {
+        "slug": "test____",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test-_-_",
+      "expect": {
+        "slug": "test-_-_",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test----",
+      "expect": {
+        "slug": "test----",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test____",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test-_-_",
+      "expect": {
+        "slug": "test-_-",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "_",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test----",
+      "expect": {
+        "slug": "test----",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test____",
+      "expect": {
+        "slug": "test____",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test-_-_",
+      "expect": {
+        "slug": "test-_-_",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test----result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test____result",
+      "expect": {
+        "slug": "test_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test_-_-result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test-_-_result",
+      "expect": {
+        "slug": "test_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test----result",
+      "expect": {
+        "slug": "test-result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-"
+      }
+    },
+    {
+      "input": "test____result",
+      "expect": {
+        "slug": "test____result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-"
+      }
+    },
+    {
+      "input": "test-_-_result",
+      "expect": {
+        "slug": "test-_-_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-"
+      }
+    },
+    {
+      "input": "test----result",
+      "expect": {
+        "slug": "test----result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "_"
+      }
+    },
+    {
+      "input": "test____result",
+      "expect": {
+        "slug": "test_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "_"
+      }
+    },
+    {
+      "input": "test-_-_result",
+      "expect": {
+        "slug": "test-_-_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "_"
+      }
+    },
+    {
+      "input": "test----result",
+      "expect": {
+        "slug": "test----result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test____result",
+      "expect": {
+        "slug": "test____result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test-_-_result",
+      "expect": {
+        "slug": "test-_-_result",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": ""
+      }
+    },
+    {
+      "input": "test",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": null,
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-_",
+        "deduplicateChars": null
+      }
+    },
+    {
+      "input": "test",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "",
+        "deduplicateChars": "-_"
+      }
+    },
+    {
+      "input": "test",
+      "expect": {
+        "slug": "test",
+        "replaceSpecialCharsWithDash": false,
+        "trimChars": "-_",
+        "deduplicateChars": ""
+      }
+    }
+  ]
+}

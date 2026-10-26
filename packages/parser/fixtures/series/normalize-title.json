@@ -1,0 +1,763 @@
+{
+  "source": "NormalizeSeriesTitleFixture.cs, ParserFixture.cs (should_remove_accents_from_title)",
+  "description": "CleanSeriesTitle normalization: lowercase, strip punctuation/accents, drop common words (the/and/or/a/an/of) from the middle only, 3% -> 3percent. Template-driven upstream tests are expanded to concrete strings.",
+  "cases": [
+    {
+      "input": "Series",
+      "method": "should_normalize_series_title",
+      "expect": {
+        "normalized": "series"
+      }
+    },
+    {
+      "input": "Series (2009)",
+      "method": "should_normalize_series_title",
+      "expect": {
+        "normalized": "series2009"
+      }
+    },
+    {
+      "input": "Series.2010",
+      "method": "should_normalize_series_title",
+      "expect": {
+        "normalized": "series2010"
+      }
+    },
+    {
+      "input": "Series_and_Title_Sonarr",
+      "method": "should_normalize_series_title",
+      "expect": {
+        "normalized": "seriestitlesonarr"
+      }
+    },
+    {
+      "input": "CaPitAl",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "capital"
+      }
+    },
+    {
+      "input": "peri.od",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "period"
+      }
+    },
+    {
+      "input": "this.^&%^**$%@#$!That",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "thisthat"
+      }
+    },
+    {
+      "input": "test/test",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "testtest"
+      }
+    },
+    {
+      "input": "90210",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "90210"
+      }
+    },
+    {
+      "input": "24",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "24"
+      }
+    },
+    {
+      "input": "Test: Something à Deux",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "testsomethingdeux"
+      }
+    },
+    {
+      "input": "Parler à",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "parlera"
+      }
+    },
+    {
+      "input": "Ríkið",
+      "method": "should_remove_special_characters_and_casing",
+      "expect": {
+        "normalized": "rikid"
+      }
+    },
+    {
+      "input": "The Series",
+      "method": "should_not_remove_from_the_beginning_of_the_title",
+      "expect": {
+        "normalized": "theseries"
+      }
+    },
+    {
+      "input": "The Series Show With Sonarr Dev",
+      "method": "should_not_remove_from_the_beginning_of_the_title",
+      "expect": {
+        "normalized": "theseriesshowwithsonarrdev"
+      }
+    },
+    {
+      "input": "The.Series.Show",
+      "method": "should_not_remove_from_the_beginning_of_the_title",
+      "expect": {
+        "normalized": "theseriesshow"
+      }
+    },
+    {
+      "input": "3%",
+      "method": "should_replace_percent_sign_with_percent_following_numbers",
+      "expect": {
+        "normalized": "3percent"
+      }
+    },
+    {
+      "input": "Series Top & 100% Coding Developers",
+      "method": "should_replace_percent_sign_with_percent_following_numbers",
+      "expect": {
+        "normalized": "seriestop100percentcodingdevelopers"
+      }
+    },
+    {
+      "input": "Series Title What's Your F@%king Deal?!",
+      "method": "should_replace_percent_sign_with_percent_following_numbers",
+      "expect": {
+        "normalized": "seriestitlewhatsyourfkingdeal"
+      }
+    },
+    {
+      "input": "word.the.word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word the word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-the-word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.and.word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word and word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-and-word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.or.word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word or word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-or-word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.an.word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word an word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-an-word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.of.word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word of word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-of-word",
+      "method": "should_remove_common_words_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.word.the",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word-word-the",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word-word the",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordthe"
+      }
+    },
+    {
+      "input": "word.word.and",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word-word-and",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word-word and",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordand"
+      }
+    },
+    {
+      "input": "word.word.or",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word-word-or",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word-word or",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordor"
+      }
+    },
+    {
+      "input": "word.word.an",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word-word-an",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word-word an",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordan"
+      }
+    },
+    {
+      "input": "word.word.of",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word-word-of",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word-word of",
+      "method": "should_not_remove_common_words_from_end_of_title",
+      "expect": {
+        "normalized": "wordwordof"
+      }
+    },
+    {
+      "input": "word.a.word",
+      "method": "should_remove_a_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word a word",
+      "method": "should_remove_a_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word-a-word",
+      "method": "should_remove_a_from_middle_of_title",
+      "expect": {
+        "normalized": "wordword"
+      }
+    },
+    {
+      "input": "word.theword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word theword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word-theword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "wordthe-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordtheword"
+      }
+    },
+    {
+      "input": "word.andword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word andword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word-andword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "wordand-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordandword"
+      }
+    },
+    {
+      "input": "word.orword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word orword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word-orword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "wordor-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordorword"
+      }
+    },
+    {
+      "input": "word.aword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word aword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word-aword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "worda-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordaword"
+      }
+    },
+    {
+      "input": "word.anword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word anword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word-anword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "wordan-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordanword"
+      }
+    },
+    {
+      "input": "word.ofword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "word ofword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "word-ofword",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof.word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "wordof-word",
+      "method": "should_not_remove_common_words_in_the_middle_of_word",
+      "expect": {
+        "normalized": "wordofword"
+      }
+    },
+    {
+      "input": "the.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "the-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "the word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "thewordword"
+      }
+    },
+    {
+      "input": "and.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "and-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "and word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "andwordword"
+      }
+    },
+    {
+      "input": "or.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "or-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "or word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "orwordword"
+      }
+    },
+    {
+      "input": "a.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "a-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "a word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "awordword"
+      }
+    },
+    {
+      "input": "an.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "an-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "an word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "anwordword"
+      }
+    },
+    {
+      "input": "of.word.word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "of-word-word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "of word word",
+      "method": "should_not_clean_word_from_beginning_of_string",
+      "expect": {
+        "normalized": "ofwordword"
+      }
+    },
+    {
+      "input": "Series Title A",
+      "method": "should_not_clean_trailing_a",
+      "expect": {
+        "normalized": "seriestitlea"
+      }
+    },
+    {
+      "input": "Seriàes",
+      "method": "should_remove_accents_from_title",
+      "source": "ParserFixture.cs",
+      "expect": {
+        "normalized": "seriaes"
+      }
+    }
+  ]
+}

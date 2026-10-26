@@ -1,0 +1,62 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "Language words that are part of the movie title must not be parsed as a release language; exactly one language, Unknown (should_not_parse_wrong_language_in_title)",
+  "cases": [
+    {
+      "input": "The.Italian.Movie.2025.720p.BluRay.X264-AMIABLE",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "The.French.Movie.2013.720p.BluRay.x264 - ROUGH[PublicHD]",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "The.German.Doctor.2013.LIMITED.DVDRip.x264-RedBlade",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "The.Good.German.2006.720p.HDTV.x264-TVP",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "German.Lancers.2019.720p.BluRay.x264-UNiVERSUM",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "The.German.2019.720p.BluRay.x264-UNiVERSUM",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    },
+    {
+      "input": "Movie Name (2016) BluRay 1080p DTS-ES AC3 x264-3Li",
+      "expect": {
+        "languages": [
+          "Unknown"
+        ]
+      }
+    }
+  ]
+}

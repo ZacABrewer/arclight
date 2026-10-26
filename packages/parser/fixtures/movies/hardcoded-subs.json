@@ -1,0 +1,54 @@
+{
+  "source": "ParserFixture.cs",
+  "description": "Hardcoded-subtitle marker detection (should_parse_hardcoded_subs); null means no hardcoded subs detected",
+  "cases": [
+    {
+      "input": "Movie.Title.2016.1080p.KORSUB.WEBRip.x264.AAC2.0-RADARR",
+      "expect": {
+        "hardcodedSubs": "KORSUB"
+      }
+    },
+    {
+      "input": "Movie.Title.2016.1080p.KORSUBS.WEBRip.x264.AAC2.0-RADARR",
+      "expect": {
+        "hardcodedSubs": "KORSUBS"
+      }
+    },
+    {
+      "input": "Movie Title 2017 HC 720p HDRiP DD5 1 x264-LEGi0N",
+      "expect": {
+        "hardcodedSubs": "Generic Hardcoded Subs"
+      }
+    },
+    {
+      "input": "Movie.Title.2017.720p.SUBBED.HDRip.V2.XViD-26k.avi",
+      "expect": {
+        "hardcodedSubs": "Generic Hardcoded Subs"
+      }
+    },
+    {
+      "input": "Movie.Title.2000.1080p.BlueRay.x264.DTS.RoSubbed-playHD",
+      "expect": {
+        "hardcodedSubs": null
+      }
+    },
+    {
+      "input": "Movie Title! 2018 [Web][MKV][h264][480p][AAC 2.0][Softsubs]",
+      "expect": {
+        "hardcodedSubs": null
+      }
+    },
+    {
+      "input": "Movie Title! 2019 [HorribleSubs][Web][MKV][h264][848x480][AAC 2.0][Softsubs(HorribleSubs)]",
+      "expect": {
+        "hardcodedSubs": null
+      }
+    },
+    {
+      "input": "Movie Title! 2024 [Web][x265][1080p][EAC3][MultiSubs]",
+      "expect": {
+        "hardcodedSubs": null
+      }
+    }
+  ]
+}

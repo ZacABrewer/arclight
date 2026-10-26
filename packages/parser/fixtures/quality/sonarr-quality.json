@@ -1,0 +1,3226 @@
+{
+  "source": "Sonarr/src/NzbDrone.Core.Test/ParserTests/QualityParserFixture.cs",
+  "description": "Sonarr quality parsing: expected quality definition, proper flag (revision version 2 when proper, else 1), detection source (name/extension/unknown), repack/version. TestCaseSource-driven methods are expanded exactly as the upstream test builds its titles.",
+  "qualityNames": {
+    "Quality.Unknown": "Unknown",
+    "Quality.SDTV": "SDTV",
+    "Quality.DVD": "DVD",
+    "Quality.WEBDL480p": "WEBDL-480p",
+    "Quality.WEBRip480p": "WEBRip-480p",
+    "Quality.Bluray480p": "Bluray-480p",
+    "Quality.Bluray576p": "Bluray-576p",
+    "Quality.HDTV720p": "HDTV-720p",
+    "Quality.WEBDL720p": "WEBDL-720p",
+    "Quality.WEBRip720p": "WEBRip-720p",
+    "Quality.Bluray720p": "Bluray-720p",
+    "Quality.HDTV1080p": "HDTV-1080p",
+    "Quality.WEBDL1080p": "WEBDL-1080p",
+    "Quality.WEBRip1080p": "WEBRip-1080p",
+    "Quality.Bluray1080p": "Bluray-1080p",
+    "Quality.Bluray1080pRemux": "Remux-1080p",
+    "Quality.HDTV2160p": "HDTV-2160p",
+    "Quality.WEBDL2160p": "WEBDL-2160p",
+    "Quality.WEBRip2160p": "WEBRip-2160p",
+    "Quality.Bluray2160p": "Bluray-2160p",
+    "Quality.Bluray2160pRemux": "Remux-2160p",
+    "Quality.RAWHD": "Raw-HD"
+  },
+  "qualityNamesNote": "Keys are upstream Quality.X members; values are the names used in this file. Upstream Quality.Name for Bluray1080pRemux/Bluray2160pRemux is 'Bluray-1080p Remux'/'Bluray-2160p Remux' (used verbatim in the parsing_our_own_quality_enum_name inputs); they are written here as 'Remux-1080p'/'Remux-2160p'.",
+  "cases": [
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "S07E23 .avi ",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S01E13.x264-CtrlSD",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series S02E01 HDTV XviD 2HD",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series S05E11 PROPER HDTV XviD 2HD",
+      "expect": {
+        "quality": "SDTV",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series Show S02E08 HDTV x264 FTP",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.2011.S02E01.WS.PDTV.x264-TLA",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.2011.S02E01.WS.PDTV.x264-REPACK-TLA",
+      "expect": {
+        "quality": "SDTV",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series S01E04 DSR x264 2HD",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series S01E04 Series Death Train DSR x264 MiNDTHEGAP",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The Series S11E03 has no periods or extension HDTV",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S04E05.HDTV.XviD-LOL",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S02E15.avi",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S02E15.xvid",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S02E15.divx",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S03E06.HDTV-WiDE",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Series.S10E27.WS.DSR.XviD-2HD",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[HorribleSubs] The Series - 32 [480p]",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[CR] The Series - 004 [480p][48CE2D0F]",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[Hatsuyuki] The Series - 363 [848x480][ADE35E38]",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "The.Series.S03.TVRip.XviD-NOGRP",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[HorribleSubs] The Series - 03 [360p].mkv",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[SubsPlease] Series Title (540p) [AB649D32].mkv",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "[Erai-raws] Series Title [540p][Multiple Subtitle].mkv",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "The.Series.S01E13.NTSC.x264-CtrlSD",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "The.Series.S03E06.DVDRip.XviD-WiDE",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "The.Series.S03E06.DVD.Rip.XviD-WiDE",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "the.Series.1x13.circles.ws.xvidvd-tns",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "the_Series.9x18.sunshine_days.ac3.ws_dvdrip_xvid-fov.avi",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "[FroZen] Series - 23 [DVD][7F6170E6]",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "[AniDL] Series - 26 -[360p][DVD][D - A][Exiled - Destiny]",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.Series.S01E10.The.Leviathan.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.Series.S04E10.Glee.Actually.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.SeriesS06E11.The.Santa.Simulation.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.Series.S02E04.480p.WEB.DL.nSD.x264-NhaNc3",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.Series.S01E08.Das.geloeschte.Ich.German.Dubbed.DL.AmazonHD.x264-TVS",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "The.Series.S01E04.Rod.Trip.mit.meinem.Onkel.German.DL.NetflixUHD.x264",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "[HorribleSubs] Series Title! S01 [Web][MKV][h264][480p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "Series.Title.S13E11.Ausgebacken.German.AmazonSD.h264-4SF",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.XviD.Bluray.AC3-REPACK.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.BDRip.XviD.AC3.-HELLYWOOD",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.BDRip.X-viD.AC3.-HELLYWOOD",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.BDRip.AC3.-HELLYWOOD",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.BDRip.XviD.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "SERIES.S03E01-06.DUAL.XviD.Bluray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "The.Series.S01E05.480p.BluRay.DD5.1.x264-HiSD",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "The Series (BD)(640x480(RAW) (BATCH 1) (1-13)",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "[Doki] Series - 02 (848x480 XviD BD MP3) [95360783]",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Adventures.of.Sonic.the.Hedgehog.S01.BluRay.480i.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Adventures.of.Sonic.the.Hedgehog.S01E01.Best.Hedgehog.480i.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Bluray-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip480p_quality",
+      "input": "The.Series.S02E10.480p.HULU.WEBRip.x264-Puffin",
+      "expect": {
+        "quality": "WEBRip-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip480p_quality",
+      "input": "The.Series.S10E14.Techs.And.Balances.480p.AE.WEBRip.AAC2.0.x264-SEA",
+      "expect": {
+        "quality": "WEBRip-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip480p_quality",
+      "input": "Series.Title.1x04.ITA.WEBMux.x264-NovaRip",
+      "expect": {
+        "quality": "WEBRip-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray576p_quality",
+      "input": "The.Series.S01E05.576p.BluRay.DD5.1.x264-HiSD",
+      "expect": {
+        "quality": "Bluray-576p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Series - S01E01 - Title [HDTV]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Series - S01E01 - Title [HDTV-720p]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The Series S04E87 REPACK 720p HDTV x264 aAF",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.S02E15.720p",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "S07E23 - [HDTV-720p].mkv ",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Series - S22E03 - MoneyBART - HD TV.mkv",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "S07E23.mkv ",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.S08E05.720p.HDTV.X264-DIMENSION",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.S02E15.mkv",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "E:\\Downloads\\tv\\The.Series.S01E01.720p.HDTV\\ajifajjjeaeaeqwer_eppj.avi",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.S01E08.Tourmaline.Nepal.720p.HDTV.x264-DHD",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[Underwater-FFF] The Series - 01 (720p) [27AAA0A0]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[Doki] The Series - 07 (1280x720 Hi10P AAC) [80AF7DDE]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[Doremi].The.Series.5.Go.Go!.31.[1280x720].[C65D4B1F].mkv",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[HorribleSubs]_Series_Title_-_145_[720p]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[Eveyuu] Series Title - 10 [Hi10P 1280x720 H264][10B23BD8]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.US.S12E17.HR.WS.PDTV.X264-DIMENSION",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.The.Lost.Sonarr.Summer.HR.WS.PDTV.x264-DHD",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The Series S01E07 - Motor zmen (CZ)[TvRip][HEVC][720p]",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "The.Series.S05E06.720p.HDTV.x264-FHD",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Series.Title.1x01.ITA.720p.x264-RlsGrp [01/54] - \"series.title.1x01.ita.720p.x264-rlsgrp.nfo\"",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "[TMS-Remux].Series.Title.X.21.720p.[76EA1C53].mkv",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Under the Series S01E10 Let the Sonarr Begin 1080p",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series.S07E01.ARE.YOU.1080P.HDTV.X264-QCF",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series.S07E01.ARE.YOU.1080P.HDTV.x264-QCF",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series.S07E01.ARE.YOU.1080P.HDTV.proper.X264-QCF",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series - S01E01 - Title [HDTV-1080p]",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "[HorribleSubs] Series Title - 32 [1080p]",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series S01E07 - Sonarr zmen (CZ)[TvRip][HEVC][1080p]",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "The Online Series Alicization 04 vostfr FHD",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series Slayer 04 vostfr FHD.mkv",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "[Onii-ChanSub] The.Series - 02 vostfr (FHD 1080p 10bits).mkv",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "[Miaou] Series Title 02 VOSTFR FHD 10 bits",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "[mhastream.com]_Episode_05_FHD.mp4",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "[Kousei]_One_Series_ - _609_[FHD][648A87C7].mp4",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series culpable 1x02 Culpabilidad [HDTV 1080i AVC MP2 2.0 Sub][GrupoHDS]",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Series cómo pasó - 19x15 [344] Cuarenta años de baile [HDTV 1080i AVC MP2 2.0 Sub][GrupoHDS]",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Super.Seires.Go.S01E02.Depths.of.Sonarr.1080i.HDTV.DD5.1.H.264-NOGRP",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv2160p_quality",
+      "input": "My Title - S01E01 - EpTitle [HEVC 4k DTSHD-MA-6ch]",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv2160p_quality",
+      "input": "My Title - S01E01 - EpTitle [HEVC-4k DTSHD-MA-6ch]",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv2160p_quality",
+      "input": "My Title - S01E01 - EpTitle [4k HEVC DTSHD-MA-6ch]",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv2160p_quality",
+      "input": "[GM-Team][国漫][诛仙][Series Title][2022][19][HEVC][GB][4K]",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series S01E04 Mexicos Death Train 720p WEB DL",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series Five 0 S02E21 720p WEB DL DD5 1 H 264",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series S04E22 720p WEB DL DD5 1 H 264 NFHD",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series - S11E06 - D-Yikes! - 720p WEB-DL.mkv",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "The.Series.S02E15.720p.WEB-DL.DD5.1.H.264-SURFER",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "S07E23 - [WEBDL].mkv ",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series S04E22 720p WEB-DL DD5.1 H264-EbP.mkv",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.S04.720p.Web-Dl.Dd5.1.h264-P2PACK",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Da.Series.Shows.S02E04.720p.WEB.DL.nSD.x264-NhaNc3",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Miami.S04E25.720p.iTunesHD.AVC-TVS",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.S06E23.720p.WebHD.h264-euHD",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.2016.03.14.720p.WEB.x264-spamTV",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.2016.03.14.720p.WEB.h264-spamTV",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.S01E08.Das.geloeschte.Ich.German.DD51.Dubbed.DL.720p.AmazonHD.x264-TVS",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Polo.S01E11.One.Hundred.Sonarrs.2015.German.DD51.DL.720p.NetflixUHD.x264.NewUp.by.Wunschtante",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series 2016 German DD51 DL 720p NetflixHD x264-TVS",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.6x10.Basic.Sonarr.Repair.and.Replace.ITA.ENG.720p.WEB-DLMux.H.264-GiuseppeTnT",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.6x11.Modern.Spy.ITA.ENG.720p.WEB.DLMux.H.264-GiuseppeTnT",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "The Series Was Dead 2010 S09E13 [MKV / H.264 / AC3/AAC / WEB / Dual Áudio / Inglês / 720p]",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "into.the.Series.s03e16.h264.720p-web-handbrake.mkv",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.S01E01.The.Sonarr.Principle.720p.WEB-DL.DD5.1.H.264-BD",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.S03E05.Griebnitzsee.German.720p.MaxdomeHD.AVC-TVS",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "[HorribleSubs] Series Title! S01 [Web][MKV][h264][720p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "[HorribleSubs] Series Title! S01 [Web][MKV][h264][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.S04E13.960p.WEB-DL.AAC2.0.H.264-squalor",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.S16.DP.WEB.720p.DDP.5.1.H.264.PLEX",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.S01E01.Erste.Begegnungen.German.DD51.Synced.DL.720p.HBOMaxHD.AVC-TVS",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Series.Title.S01E05.Tavora.greift.an.German.DL.720p.DisneyHD.h264-4SF",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Series.Title.S04E01.720p.WEBRip.AAC2.0.x264-NFRiP",
+      "expect": {
+        "quality": "WEBRip-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Series.Title.S01E07.A.Prayer.For.Mad.Sweeney.720p.AMZN.WEBRip.DD5.1.x264-NTb",
+      "expect": {
+        "quality": "WEBRip-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Series.Title.S07E01.A.New.Home.720p.DSNY.WEBRip.AAC2.0.x264-TVSmash",
+      "expect": {
+        "quality": "WEBRip-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Series.Title.1x04.ITA.720p.WEBMux.x264-NovaRip",
+      "expect": {
+        "quality": "WEBRip-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series S09E03 1080p WEB DL DD5 1 H264 NFHD",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Two and a Half Developers of the Series S10E03 1080p WEB DL DD5 1 H 264 NFHD",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S08E01.1080p.WEB-DL.DD5.1.H264-NFHD",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Its.Always.Sonarrs.Fault.S08E01.1080p.WEB-DL.proper.AAC2.0.H.264",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "This is an Easter Egg S10E03 1080p WEB DL DD5 1 H 264 REPACK NFHD",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S04E09.Swan.Song.1080p.WEB-DL.DD5.1.H.264-ECI",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Big.Easter.Theory.S06E11.The.Sonarr.Simulation.1080p.WEB-DL.DD5.1.H.264",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Sonarr's.Baby.S01E02.Night.2.[WEBDL-1080p].mkv",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.2016.03.14.1080p.WEB.x264-spamTV",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.2016.03.14.1080p.WEB.h264-spamTV",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S01.1080p.WEB-DL.AAC2.0.AVC-TrollHD",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 1080p WEB h264-EXCLUSIVE",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 No One PROPER 1080p WEB DD5 1 H 264-EXCLUSIVE",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 No One PROPER 1080p WEB H 264-EXCLUSIVE",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Series.S25E21.Pay.No1.1080p.WEB-DL.DD5.1.H.264-NTb",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S01E08.Das.geloeschte.Ich.German.DD51.Dubbed.DL.1080p.AmazonHD.x264-TVS",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Death.Series.2017.German.DD51.DL.1080p.NetflixHD.x264-TVS",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S01E08.Pro.Gamer.1440p.BKPL.WEB-DL.H.264-LiGHT",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S04E11.Teddy's.Choice.FHD.1080p.Web-DL",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.S04E03.The.False.Bride.1080p.NF.WEB.DDP5.1.x264-NTb[rartv]",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S02E02.This.Year.Will.Be.Different.1080p.AMZN.WEB...",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S02E02.This.Year.Will.Be.Different.1080p.AMZN.WEB.",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title - S01E11 2020 1080p Viva MKV WEB",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "[HorribleSubs] Series Title! S01 [Web][MKV][h264][1080p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "[LostYears] Series Title - 01-17 (WEB 1080p x264 10-bit AAC) [Dual-Audio]",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.and.Titles.S01.1080p.NF.WEB.DD2.0.x264-SNEAkY",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S02E02.This.Year.Will.Be.Different.1080p.WEB.H 265",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title Season 2 [WEB 1080p HEVC Opus] [Netaro]",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title Season 2 (WEB 1080p HEVC Opus) [Netaro]",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S01E01.Erste.Begegnungen.German.DD51.Synced.DL.1080p.HBOMaxHD.AVC-TVS",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S01E05.Tavora.greift.an.German.DL.1080p.DisneyHD.h264-4SF",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S02E04.German.Dubbed.DL.AAC.1080p.WEB.AVC-GROUP",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Tiny.Series.2020.DOC.S01.MULTi.1080p.ATVP.WEB.Atmos.H.265-TFA",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Series.S25E21.Pay.No1.1080p.WEB-DL.DD5.1.H.266-GROUP",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series.Title.S04E01.1080p.WEB.H266-GROUP",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.S04E01.iNTERNAL.1080p.WEBRip.x264-QRUS",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.S07E20.1080p.AMZN.WEBRip.DDP5.1.x264-ViSUM ac3.(NLsub)",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.S03E09.1080p.NF.WEBRip.DD5.1.x264-ViSUM",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "The Series 42 S09E13 1.54 GB WEB-RIP 1080p Dual-Audio 2019 MKV",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.1x04.ITA.1080p.WEBMux.x264-NovaRip",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.2019.S02E07.Chapter.15.The.Believer.4Kto1080p.DSNYP.Webrip.x265.10bit.EAC3.5.1.Atmos.GokiTAoE",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series.Title.S01.1080p.AMZN.WEB-Rip.DDP5.1.H.264-Telly",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series Title S01 WEBRip 1080p x266-GROUP",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Series Title S01 Complete German 1080p HDR UHD WEBRip h266-GROUP",
+      "expect": {
+        "quality": "WEBRip-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.2016.03.14.2160p.WEB.x264-spamTV",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.2016.03.14.2160p.WEB.h264-spamTV",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.2016.03.14.2160p.WEB.PROPER.h264-spamTV",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "House.of.Sonarr.AK.s05e13.4K.UHD.WEB.DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "House.of.Sonarr.AK.s05e13.UHD.4K.WEB.DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "[HorribleSubs] Series Title! S01 [Web][MKV][h264][2160p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series Title S02 2013 WEB-DL 4k H265 AAC 2Audio-HDSWEB",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.S02E02.This.Year.Will.Be.Different.2160p.WEB.H.265",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.S02E04.German.Dubbed.DL.AAC.2160p.DV.HDR.WEB.HEVC-GROUP",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.S01.MULTi.2160p.NF.SDR.WEB.DDP.5.1.Atmos.h265-FRESH",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.2016.03.14.2160p.WEB.h266-GROUP",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.Title.2016.03.14.2160p.WEB-DL.H.266-GROUP",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series Title S02 2013 WEB-DL 4k H266 AAC 2Audio-GROUP",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Series.S01.AD.MULTi.VFF.2160p.HDR.DV.WEB.EAC3.5.1.H265-FW",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Series S01E01.2160P AMZN WEBRIP DD2.0 HI10P X264-TROLLUHD",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "JUST ADD SONARR S01E01.2160P AMZN WEBRIP DD2.0 X264-TROLLUHD",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "The.Man.In.The.Series.S01E01.2160p.AMZN.WEBRip.DD2.0.Hi10p.X264-TrollUHD",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "The Man In the Series S01E01 2160p AMZN WEBRip DD2.0 Hi10P x264-TrollUHD",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "House.of.Sonarr.AK.S05E08.Chapter.60.2160p.NF.WEBRip.DD5.1.x264-NTb.NLsubs",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Sonarr Saves the World S01 2160p Netflix WEBRip DD5.1 x264-TrollUHD",
+      "expect": {
+        "quality": "WEBRip-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "SERIES.S03E01-06.DUAL.Bluray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Series - S01E03 - Come Fly With Me - 720p BluRay.mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "The Big Series.S03E01.The Sonarr Can Opener.m2ts",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Series.S01E02.Chained.Sonarr.[Bluray720p].mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[FFF] DATE A Sonarr Dev - 01 [BD][720p-AAC][0601BED4]",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[coldhell] Series v3 [BD720p][03192D4C]",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[RandomRemux] Series - 01 [720p BD][043EA407].mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[Kaylith] Series Friends Specials - 01 [BD 720p AAC][B7EEE164].mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "SERIES.S03E01-06.DUAL.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "SERIES.S03E01-06.DUAL.720p.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[Elysium]Lucky.Series.01(BD.720p.AAC.DA)[0BB96AD8].mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Series.Galaxy.S01E01.33.720p.HDDVD.x264-SiNNERS.mkv",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "The.Series.S01E07.RERIP.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Sans.Series.De.Traces.FRENCH.720p.BluRay.x264-FHD",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Series.Black.1x01.Selezione.Naturale.ITA.720p.BDMux.x264-NovaRip",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Series.Hunter.S02.720p.Blu-ray.Remux.AVC.FLAC.2.0-SiCFoI",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Adventures.of.Sonic.the.Hedgehog.S01E01.Best.Hedgehog.720p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Series - S01E03 - Come Fly With Me - 1080p BluRay.mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Sonarr.Of.Series.S02E13.1080p.BluRay.x264-AVCDVD",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Series.S01E02.Chained.Heat.[Bluray1080p].mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[FFF] Series no Muromi-san - 10 [BD][1080p-FLAC][0C4091AF]",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[coldhell] Series v2 [BD1080p][5A45EABE].mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Kaylith] Series Friends Specials - 01 [BD 1080p FLAC][429FD8C7].mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Zurako] Log Series - 01 - The Sonarr (BD 1080p AAC) [7AE12174].mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "SERIES.S03E01-06.DUAL.1080p.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Coalgirls]_Series!!_01_(1920x1080_Blu-ray_FLAC)_[8370CB8F].mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Planet.Series.S01E11.Code.Deep.1080p.HD-DVD.DD.VC1-TRB",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Series Away(2001) Bluray FHD Hi10P.mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "S for Series 2005 1080p UHD BluRay DD+7.1 x264-LoRD.mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Series.Title.2011.1080p.UHD.BluRay.DD5.1.HDR.x265-CtrlHD.mkv",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Fall.Of.The.Release.Groups.S02E13.1080p.BDLight.x265-AVCDVD",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Series Title S01E01 1080p BluRay DD 5 1 Atmos x266-GROUP",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series!!! on ICE - S01E12[JP BD Remux][ENG subs]",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series.Title.S01E08.The.Well.BluRay.1080p.AVC.DTS-HD.MA.5.1.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series.Title.2x11.Nato.Per.La.Truffa.Bluray.Remux.AVC.1080p.AC3.ITA",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series.Title.2x11.Nato.Per.La.Truffa.Bluray.Remux.AVC.AC3.ITA",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series.Title.S03E01.The.Calm.1080p.DTS-HD.MA.5.1.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series Title Season 2 (BDRemux 1080p HEVC FLAC) [Netaro]",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "[Vodes] Series Title - Other Title (2020) [BDRemux 1080p HEVC Dual-Audio]",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Adventures.of.Sonic.the.Hedgehog.S01E01.Best.Hedgehog.1080p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series Title S01 2018 1080p BluRay Hybrid-REMUX AVC TRUEHD 5.1 Dual Audio-ZR-",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_remux_quality",
+      "input": "Series.Title.S01.2018.1080p.BluRay.Hybrid-REMUX.AVC.TRUEHD.5.1.Dual.Audio-ZR-",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series.Title.US.s05e13.4K.UHD.Bluray",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series.Title.US.s05e13.UHD.4K.Bluray",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[DameDesuYo] Series Bundle - Part 1 (BD 4K 8bit FLAC)",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series.Title.2014.2160p.UHD.BluRay.X265-IAMABLE.mkv",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series.Title.2014.2160p.UHD.BluRay.X265-IAMABLE.mkv",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series.Title.S05EO1.Episode.Title.2160p.BDRip.AAC.7.1.HDR10.x265.10bit-Markll",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Series Title S01E01 2160p UHD BluRay H266-GROUP",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Series!!! on ICE - S01E12[JP BD 2160p Remux][ENG subs]",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Series.Title.S01E08.The.Sonarr.BluRay.2160p.AVC.DTS-HD.MA.5.1.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Series.Title.2x11.Nato.Per.The.Sonarr.Bluray.Remux.AVC.2160p.AC3.ITA",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "[Dolby Vision] Sonarr.of.Series.S07.MULTi.UHD.BLURAY.REMUX.DV-NoTag",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Adventures.of.Sonic.the.Hedgehog.S01E01.Best.Hedgehog.2160p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Series Title S01 2018 2160p BluRay Hybrid-REMUX AVC TRUEHD 5.1 Dual Audio-ZR-",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_remux_quality",
+      "input": "Series.Title.S01.2018.2160p.BluRay.Hybrid-REMUX.AVC.TRUEHD.5.1.Dual.Audio-ZR-",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "POI S02E11 1080i HDTV DD5.1 MPEG2-TrollHD",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "How I Met Your Developer S01E18 Nothing Good Happens After Sonarr 720p HDTV DD5.1 MPEG2-TrollHD",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "The Series S01E11 The Finals 1080i HDTV DD5.1 MPEG2-TrollHD",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Series.Title.S07E11.1080i.HDTV.DD5.1.MPEG2-NTb.ts",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Game of Series S04E10 1080i HDTV MPEG2 DD5.1-CtrlHD.ts",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Series.Title.S02E05.1080i.HDTV.DD2.0.MPEG2-NTb.ts",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Show - S03E01 - Episode Title Raw-HD.ts",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Series.Title.S10E09.Title.1080i.UPSCALE.HDTV.DD5.1.MPEG2-zebra",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Series.Title.2011-08-04.1080i.HDTV.MPEG-2-CtrlHD",
+      "expect": {
+        "quality": "Raw-HD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "The.Series.S02E15",
+      "expect": {
+        "quality": "Unknown",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Series.Title - 11x11 - Title",
+      "expect": {
+        "quality": "Unknown",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Series.Title.S01E01.webm",
+      "expect": {
+        "quality": "Unknown",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Series.Title.S01E01.The.Web.MT-dd",
+      "expect": {
+        "quality": "Unknown",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [SDTV]",
+      "expect": {
+        "quality": "SDTV"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [DVD]",
+      "expect": {
+        "quality": "DVD"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [WEBDL-480p]",
+      "expect": {
+        "quality": "WEBDL-480p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-480p]",
+      "expect": {
+        "quality": "Bluray-480p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-576p]",
+      "expect": {
+        "quality": "Bluray-576p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [HDTV-720p]",
+      "expect": {
+        "quality": "HDTV-720p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [HDTV-1080p]",
+      "expect": {
+        "quality": "HDTV-1080p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [HDTV-2160p]",
+      "expect": {
+        "quality": "HDTV-2160p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [WEBDL-720p]",
+      "expect": {
+        "quality": "WEBDL-720p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [WEBDL-1080p]",
+      "expect": {
+        "quality": "WEBDL-1080p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [WEBDL-2160p]",
+      "expect": {
+        "quality": "WEBDL-2160p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-720p]",
+      "expect": {
+        "quality": "Bluray-720p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-1080p]",
+      "expect": {
+        "quality": "Bluray-1080p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-2160p]",
+      "expect": {
+        "quality": "Bluray-2160p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-1080p Remux]",
+      "expect": {
+        "quality": "Remux-1080p"
+      }
+    },
+    {
+      "method": "parsing_our_own_quality_enum_name",
+      "input": "My series S01E01 [Bluray-2160p Remux]",
+      "expect": {
+        "quality": "Remux-2160p"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD-TV",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD.TV",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD TV",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD_TV",
+      "expect": {
+        "quality": "SDTV",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD-DVD",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD.DVD",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD DVD",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD_DVD",
+      "expect": {
+        "quality": "DVD",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p-WEB-DL",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p.WEB-DL",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p WEB-DL",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p_WEB-DL",
+      "expect": {
+        "quality": "WEBDL-480p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD-TV",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD.TV",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD TV",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD_TV",
+      "expect": {
+        "quality": "HDTV-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-HD-TV",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.HD.TV",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p HD TV",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_HD_TV",
+      "expect": {
+        "quality": "HDTV-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-HD-TV",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.HD.TV",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p HD TV",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_HD_TV",
+      "expect": {
+        "quality": "HDTV-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p-WEB-DL",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p.WEB-DL",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p WEB-DL",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p_WEB-DL",
+      "expect": {
+        "quality": "WEBDL-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-WEB-DL",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.WEB-DL",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p WEB-DL",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_WEB-DL",
+      "expect": {
+        "quality": "WEBDL-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-WEB-DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.WEB-DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p WEB-DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_WEB-DL",
+      "expect": {
+        "quality": "WEBDL-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p-BluRay",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p.BluRay",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p BluRay",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p_BluRay",
+      "expect": {
+        "quality": "Bluray-720p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-BluRay",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.BluRay",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p BluRay",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_BluRay",
+      "expect": {
+        "quality": "Bluray-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-BluRay",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.BluRay",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p BluRay",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_BluRay",
+      "expect": {
+        "quality": "Bluray-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-Remux",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.Remux",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p Remux",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_Remux",
+      "expect": {
+        "quality": "Remux-1080p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-Remux",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.Remux",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p Remux",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_Remux",
+      "expect": {
+        "quality": "Remux-2160p",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series - S01E01 - Title [HDTV-1080p]",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S10E09.Episode.Title.1080i.UPSCALE.HDTV.DD5.1.MPEG2-zebra",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.Bluray720p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.Bluray1080p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.Bluray2160p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.848x480.dvd",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.848x480.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.1280x720.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Series.Title.S01E01.1920x1080.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "[CR] Series Title - 004 [480p][48CE2D0F]",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Series.Title.S01E01.848x480",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Series.Title.S01E01.1280x720",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Series.Title.S01E01.1920x1080",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Series.Title.2011.S02E01.WS.PDTV.x264-REPACK-TLA",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Series.Title.S01E01.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Series.Title.S01E01.HD.TV",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Series.Title.S01E01.SD.TV",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Series.Title.S01E02.Chained.Heat.mkv",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Series - S01E01 - Title.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Series.Title.9x18.sunshine_days.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "[CR] Series Title - 004 [48CE2D0F].avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name_and_source_from_extension",
+      "input": "Series.Title.S01E02.Chained.Heat.1080p.mkv",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name_and_source_from_extension",
+      "input": "Series - S01E01 - Title.720p.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series Title S04E87 REPACK 720p HDTV x264 aAF",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series.Title.S04E87.REPACK.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series.Title.S04E87.REPACK2.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": true,
+        "version": 3
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series.Title.S04E87.PROPER.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": false,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series.Title.S01E07.RERIP.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Series.Title.S01E07.RERIP2.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "repack": true,
+        "version": 3
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_anime_version",
+      "input": "[MTBB] Series Title - S02E02 - 027 - Episode Title [WEBDL-1080p v2][x264][AAC]",
+      "expect": {
+        "version": 2
+      }
+    }
+  ]
+}

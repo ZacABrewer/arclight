@@ -1,0 +1,3563 @@
+{
+  "source": "Radarr/src/NzbDrone.Core.Test/ParserTests/QualityParserFixture.cs",
+  "description": "Radarr quality parsing: source (lowercase QualitySource), resolution (null = upstream does not assert it), modifier (null = upstream does not assert it), proper flag (revision version 2 when proper, else 1), detection source, repack/version. TestCaseSource-driven method expanded over the 4 separators upstream loops.",
+  "qualityNames": {
+    "sources": [
+      "unknown",
+      "cam",
+      "telesync",
+      "telecine",
+      "workprint",
+      "dvd",
+      "tv",
+      "webdl",
+      "webrip",
+      "bluray"
+    ],
+    "modifiers": [
+      "regional",
+      "screener",
+      "rawhd",
+      "brdisk",
+      "remux"
+    ],
+    "note": "Lowercased upstream QualitySource / Modifier enum member names."
+  },
+  "cases": [
+    {
+      "method": "should_parse_ts",
+      "input": "Movie.Title.3.2017.720p.TSRip.x264.AAC-Ozlem",
+      "expect": {
+        "source": "telesync",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_ts",
+      "input": "Movie: Title (2024) TeleSynch 720p | HEVC-FILVOVAN",
+      "expect": {
+        "source": "telesync",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_cam",
+      "input": "Movie Name 2018 NEW PROPER 720p HD-CAM X264 HQ-CPG",
+      "expect": {
+        "source": "cam",
+        "resolution": null,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_cam",
+      "input": "Movie Name (2022) 1080p HQCAM ENG x264 AAC - QRips",
+      "expect": {
+        "source": "cam",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_cam",
+      "input": "Movie Name (2018) 720p Hindi HQ CAMrip x264 AAC 1.4GB",
+      "expect": {
+        "source": "cam",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_cam",
+      "input": "Movie Name (2022) New HDCAMRip 1080p [Love Rulz]",
+      "expect": {
+        "source": "cam",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_cam",
+      "input": "Movie.Name.2024.NEWCAM.1080p.HEVC.AC3.English-RypS",
+      "expect": {
+        "source": "cam",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "S07E23 .avi ",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S02E01 HDTV XviD 2HD",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S05E11 PROPER HDTV XviD 2HD",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S02E08 HDTV x264 FTP",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie.Name.2011.S02E01.WS.PDTV.x264-TLA",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name.2011.S02E01.WS.PDTV.x264-REPACK-TLA",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S01E04 DSR x264 2HD",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S01E04 Mexicos Death Train DSR x264 MiNDTHEGAP",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name S11E03 has no periods or extension HDTV",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name.S04E05.HDTV.XviD-LOL",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Some.Movie.S02E15.avi",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Some.Movie.S02E15.xvid",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Some.Movie.S02E15.divx",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Some.Movie.S03E06.HDTV-WiDE",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name.S10E27.WS.DSR.XviD-2HD",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_sdtv_quality",
+      "input": "Movie Name.S03.TVRip.XviD-NOGRP",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "Some.Movie.S03E06.DVDRip.XviD-WiDE",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "Some.Movie.S03E06.DVD.Rip.XviD-WiDE",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "the.Movie Name.1x13.circles.ws.xvidvd-tns",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "the_movie.9x18.sunshine_days.ac3.ws_dvdrip_xvid-fov.avi",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "The.Third.Movie Name.2008.DVDRip.360p.H264 iPod -20-40",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvd_quality",
+      "input": "SomeMovie.2018.DVDRip.ts",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.Magic.Rainbow.2007.DVD5.NTSC",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.Magic.Rainbow.2007.DVD9.NTSC",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.Magic.Rainbow.2007.DVDR.NTSC",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.Magic.Rainbow.2007.DVD-R.NTSC",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.2020.PAL.2xDVD9",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.2000.2DVD5",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_dvdr_quality",
+      "input": "Some.Movie.2005.PAL.MDVDR-SOMegRoUP",
+      "expect": {
+        "source": "dvd",
+        "resolution": 480,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "Movie.Name.S01E10.The.Leviathan.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "Movie.Name.S04E10.Glee.Actually.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "Movie.Name.S06E11.The.Santa.Simulation.480p.WEB-DL.x264-mSD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "Movie.Name.S02E04.480p.WEB.DL.nSD.x264-NhaNc3",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "[HorribleSubs] Movie Title! 2018 [Web][MKV][h264][480p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "[SubsPlease] Movie Title (540p) [AB649D32].mkv",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl480p_quality",
+      "input": "[Erai-raws] Movie Title [540p][Multiple Subtitle].mkv",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip480p_quality",
+      "input": "Movie.Name.1x04.ITA.WEBMux.x264-NovaRip",
+      "expect": {
+        "source": "webrip",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name (BD)(640x480(RAW) (BATCH 1) (1-13)",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name.S01E05.480p.BluRay.DD5.1.x264-HiSD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name.S03E01-06.DUAL.BDRip.AC3.-HELLYWOOD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name.2011.LIMITED.BluRay.360p.H264-20-40",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name.2011.BluRay.480i.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray480p_quality",
+      "input": "Movie.Name.2011.480i.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "source": "bluray",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie Name - S01E01 - Title [HDTV]",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie Name - S01E01 - Title [HDTV-720p]",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name S04E87 REPACK 720p HDTV x264 aAF",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "S07E23 - [HDTV-720p].mkv ",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name - S22E03 - MoneyBART - HD TV.mkv",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name.S08E05.720p.HDTV.X264-DIMENSION",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "E:\\Downloads\\tv\\Movie.Name.S01E01.720p.HDTV\\ajifajjjeaeaeqwer_eppj.avi",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name.S01E08.Tourmaline.Nepal.720p.HDTV.x264-DHD",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name.US.S12E17.HR.WS.PDTV.X264-DIMENSION",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name.The.Lost.Pilots.Movie.HR.WS.PDTV.x264-DHD",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv720p_quality",
+      "input": "Movie.Name.The.Lost.Pilots.Movie.HR.WS.PDTV.x264-DHD-Remux.mkv",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Movie Name.S07E01.ARE.YOU.1080P.HDTV.X264-QCF",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Movie Name.S07E01.ARE.YOU.1080P.HDTV.x264-QCF",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Movie Name.S07E01.ARE.YOU.1080P.HDTV.proper.X264-QCF",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Movie Name - S01E01 - Title [HDTV-1080p]",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv1080p_quality",
+      "input": "Movie.Name.2020.1080i.HDTV.DD5.1.H.264-NOGRP",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_hdtv2160p_quality",
+      "input": "[NOGRP][国漫][诛仙][Movie Title 2022][19][HEVC][GB][4K]",
+      "expect": {
+        "source": "tv",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name S01E04 Mexicos Death Train 720p WEB DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name S02E21 720p WEB DL DD5 1 H 264",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name S04E22 720p WEB DL DD5 1 H 264 NFHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name - S11E06 - D-Yikes! - 720p WEB-DL.mkv",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Some.Movie.S02E15.720p.WEB-DL.DD5.1.H.264-SURFER",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "S07E23 - [WEBDL].mkv ",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name S04E22 720p WEB-DL DD5.1 H264-EbP.mkv",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.S04.720p.Web-Dl.Dd5.1.h264-P2PACK",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.S02E04.720p.WEB.DL.nSD.x264-NhaNc3",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.S04E25.720p.iTunesHD.AVC-TVS",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.S06E23.720p.WebHD.h264-euHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.2016.03.14.720p.WEB.x264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.2016.03.14.720p.WEB.h264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie Name.S01E01.The.Insanity.Principle.720p.WEB-DL.DD5.1.H.264-BD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "[HorribleSubs] Movie Title! 2018 [Web][MKV][h264][720p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "[HorribleSubs] Movie Title! 2018 [Web][MKV][h264][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie.Title.2013.960p.WEB-DL.AAC2.0.H.264-squalor",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl720p_quality",
+      "input": "Movie.Title.2021.DP.WEB.720p.DDP.5.1.H.264.PLEX",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Movie.Title.ITA.720p.WEBMux.x264-NovaRip",
+      "expect": {
+        "source": "webrip",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip720p_quality",
+      "input": "Movie Name.S04E01.720p.WEBRip.AAC2.0.x264-NFRiP",
+      "expect": {
+        "source": "webrip",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Name S09E03 1080p WEB DL DD5 1 H264 NFHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Name S10E03 1080p WEB DL DD5 1 H 264 NFHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.S08E01.1080p.WEB-DL.DD5.1.H264-NFHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.S08E01.1080p.WEB-DL.proper.AAC2.0.H.264",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Name S10E03 1080p WEB DL DD5 1 H 264 REPACK NFHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.S04E09.Swan.Song.1080p.WEB-DL.DD5.1.H.264-ECI",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.S06E11.The.Santa.Simulation.1080p.WEB-DL.DD5.1.H.264",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.Baby.S01E02.Night.2.[WEBDL-1080p].mkv",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.2016.03.14.1080p.WEB.x264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.2016.03.14.1080p.WEB.h264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.S01.1080p.WEB-DL.AAC2.0.AVC-TrollHD",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 1080p WEB h264-EXCLUSIVE",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 No One PROPER 1080p WEB DD5 1 H 264-EXCLUSIVE",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Series Title S06E08 No One PROPER 1080p WEB H 264-EXCLUSIVE",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Movie.Name.S25E21.Pay.Pal.1080p.WEB-DL.DD5.1.H.264-NTb",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Movie.Name.2017.1080p.WEB-DL.DD5.1.H.264.Remux.-NTb",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.2019.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTG",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.2020.1080p.AMZN.WEB...",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Name.2020.1080p.AMZN.WEB.",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Title - 2020 1080p Viva MKV WEB",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "[HorribleSubs] Movie Title! 2018 [Web][MKV][h264][1080p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Title.2020.MULTi.1080p.WEB.H264-ALLDAYiN (S:285/L:11)",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Title (2020) MULTi WEB 1080p x264-JiHEFF (S:317/L:28)",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Titles.2020.1080p.NF.WEB.DD2.0.x264-SNEAkY",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "The.Movie.2022.NORDiC.1080p.DV.HDR.WEB.H 265-NiDHUG",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Title 2018 [WEB 1080p HEVC Opus] [Netaro]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie Title 2018 (WEB 1080p HEVC Opus) [Netaro]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl1080p_quality",
+      "input": "Movie.Title.2024.German.Dubbed.DL.AAC.1080p.WEB.AVC-GROUP",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Movie.Name.S04E01.iNTERNAL.1080p.WEBRip.x264-QRUS",
+      "expect": {
+        "source": "webrip",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Movie.Name.1x04.ITA.1080p.WEBMux.x264-NovaRip",
+      "expect": {
+        "source": "webrip",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Movie.Name.2019.S02E07.Chapter.15.The.Believer.4Kto1080p.DSNYP.Webrip.x265.10bit.EAC3.5.1.Atmos.GokiTAoE",
+      "expect": {
+        "source": "webrip",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip1080p_quality",
+      "input": "Movie.Title.2019.1080p.AMZN.WEB-Rip.DDP.5.1.HEVC",
+      "expect": {
+        "source": "webrip",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2016.03.14.2160p.WEB.x264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2016.03.14.2160p.WEB.h264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2016.03.14.2160p.WEB.PROPER.h264-spamTV",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "[HorribleSubs] Movie Title! 2018 [Web][MKV][h264][2160p][AAC 2.0][Softsubs (HorribleSubs)]",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie Name 2020 WEB-DL 4K H265 10bit HDR DDP5.1 Atmos-PTerWEB",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "The.Movie.2022.NORDiC.2160p.DV.HDR.WEB.H.265-NiDHUG",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2024.German.Dubbed.DL.AAC.2160p.DV.HDR.WEB.HEVC-GROUP",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2024.German.AC3D.DL.2160p.Hybrid.WEB.DV.HDR10Plus.HEVC-GROUP",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2024.German.Atmos.Dubbed.DL.2160p.Hybrid.WEB.DV.HDR10Plus.HEVC-GROUP",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webdl2160p_quality",
+      "input": "Movie.Name.2024.German.EAC3D.DL.2160p.Hybrid.WEB.DV.HDR10Plus.HEVC-GROUP",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Movie Name S01E01.2160P AMZN WEBRIP DD2.0 HI10P X264-TROLLUHD",
+      "expect": {
+        "source": "webrip",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Movie ADD Name S01E01.2160P AMZN WEBRIP DD2.0 X264-TROLLUHD",
+      "expect": {
+        "source": "webrip",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Movie.Name.S01E01.2160p.AMZN.WEBRip.DD2.0.Hi10p.X264-TrollUHD",
+      "expect": {
+        "source": "webrip",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_webrip2160p_quality",
+      "input": "Movie Name S01E01 2160p AMZN WEBRip DD2.0 Hi10P x264-TrollUHD",
+      "expect": {
+        "source": "webrip",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S03E01-06.DUAL.Bluray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie Name - S01E03 - Come Fly With Me - 720p BluRay.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie Name.S03E01.The Electric Can Opener Fluctuation.m2ts",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S01E02.Chained.Heat.[Bluray720p].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[FFF] Movie Name - 01 [BD][720p-AAC][0601BED4]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[coldhell] Movie v3 [BD720p][03192D4C]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[RandomRemux] Movie - 01 [720p BD][043EA407].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[Kaylith] Movie Friends Movies - 01 [BD 720p AAC][B7EEE164].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S03E01-06.DUAL.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S03E01-06.DUAL.720p.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "[Elysium]Movie.Name.01(BD.720p.AAC.DA)[0BB96AD8].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S01E01.33.720p.HDDVD.x264-SiNNERS.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.S01E07.RERIP.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.2016.2018.720p.MBluRay.x264-CRUELTY.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.2019.720p.MBLURAY.x264-MBLURAYFANS.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name2017.720p.MBluRay.x264-TREBLE.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.2.Parte.2.ITA-ENG.720p.BDMux.DD5.1.x264-DarkSideMux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Hunter.2018.720p.Blu-ray.Remux.AVC.FLAC.2.0-SiCFoI",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray720p_quality",
+      "input": "Movie.Name.2011.720p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie Title - S01E03 - Come Fly With Me - 1080p BluRay.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.S02E13.1080p.BluRay.x264-AVCDVD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.S01E02.Chained.Heat.[Bluray1080p].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[FFF] Movie no Muromi-san - 10 [BD][1080p-FLAC][0C4091AF]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[coldhell] Movie v2 [BD1080p][5A45EABE].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Kaylith] Movie Friends Specials - 01 [BD 1080p FLAC][429FD8C7].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Zurako] Log Movie - 01 - The Movie (BD 1080p AAC) [7AE12174].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.S03E01-06.DUAL.1080p.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "[Coalgirls]_Movie!!_01_(1920x1080_Blu-ray_FLAC)_[8370CB8F].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2016.2018.1080p.MBluRay.x264-CRUELTY.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2019.1080p.MBLURAY.x264-MBLURAYFANS.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name2017.1080p.MBluRay.x264-TREBLE.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2011.UHD.BluRay.DD5.1.HDR.x265-CtrlHD/ctrlhd-rotpota-1080p.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie Name 2005 1080p UHD BluRay DD+7.1 x264-LoRD.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2011.1080p.UHD.BluRay.DD5.1.HDR.x265-CtrlHD.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2016.German.DTS.DL.1080p.UHDBD.x265-TDO.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Name.2021.1080p.BDLight.x265-AVCDVD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.2012.German.DL.1080p.UHD2BD.x264-QfG",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.2005.1080p.HDDVDRip.x264",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.2019.German.DL.1080p.HDR.UHDBDRip.AV1-GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.2014.German.OPUS.DL.1080p.UHDBDRiP.HDR.AV1-GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.1999.German.DL.1080p.HDR.UHDBDRip.AV1-GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray1080p_quality",
+      "input": "Movie.Title.1993.Uncut.German.DL.1080p.HDR.UHDBDRip.h265-GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.S01E02.Chained.Heat.[Bluray2160p].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[FFF] Movie no Movie-san - 10 [BD][2160p-FLAC][0C4091AF]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[coldhell] Movie v2 [BD2160p][5A45EABE].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[Kaylith] Movie Friends Specials - 01 [BD 2160p FLAC][429FD8C7].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[Zurako] Log Movie - 01 - The Movie (BD 2160p AAC) [7AE12174].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.S03E01-06.DUAL.2160p.Blu-ray.AC3.-HELLYWOOD.avi",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "[Coalgirls]_Movie!!_01_(3840x2160_Blu-ray_FLAC)_[8370CB8F].mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2016.2018.2160p.MBluRay.x264-CRUELTY.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2019.2160p.MBLURAY.x264-MBLURAYFANS.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2017.2160p.MBluRay.x264-TREBLE.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Name.2020.German.UHDBD.2160p.HDR10.HEVC.EAC3.DL-pmHD.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2014.2160p.UHD.BluRay.X265-IAMABLE.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2014.2160p.BDRip.AAC.7.1.HDR10.x265.10bit-Markll",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.1956.German.DL.2160p.HDR.UHDBDRip.h266-GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray2160p_quality",
+      "input": "Movie.Title.2021.4K.HDR.2160P.UHDBDRip.HEVC-10bit.GROUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray576p_quality",
+      "input": "Movie.Name.2004.576p.BDRip.x264-HANDJOB",
+      "expect": {
+        "source": "bluray",
+        "resolution": 576,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_bluray576p_quality",
+      "input": "Movie.Title.S01E05.576p.BluRay.DD5.1.x264-HiSD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 576,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux720p_as_bluray720p_quality",
+      "input": "Movie.1993.720p.BluRay.REMUX.AVC.FLAC.2.0-BLURANiUM",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Title.2016.REMUX.1080p.BluRay.AVC.DTS-HD.MA.5.1-iFT",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Name.2008.REMUX.1080p.Bluray.AVC.DTS-HR.MA.5.1-LEGi0N",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Name.2008.BDREMUX.1080p.Bluray.AVC.DTS-HR.MA.5.1-LEGi0N",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Title.M.2008.USA.BluRay.Remux.1080p.MPEG-2.DD.5.1-TDD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Title.2018.1080p.BluRay.REMUX.MPEG-2.DTS-HD.MA.5.1-EPSiLON",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Title.II.2003.4K.BluRay.Remux.1080p.AVC.DTS-HD.MA.5.1-BMF",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie Title 2022 (BDRemux 1080p HEVC FLAC) [Netaro]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "[Vodes] Movie Title - Other Title (2020) [BDRemux 1080p HEVC Dual-Audio]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "This.Wonderful.Movie.1991.German.ML.1080p.BluRay.AVC-GeRMaNSCeNEGRoUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Name.2011.1080p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie Name 2018 1080p BluRay Hybrid-REMUX AVC TRUEHD 5.1 Dual Audio-ZR-",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux1080p_quality",
+      "input": "Movie.Name.2018.1080p.BluRay.Hybrid-REMUX.AVC.TRUEHD.5.1.Dual.Audio-ZR-",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Title.2016.REMUX.2160p.BluRay.AVC.DTS-HD.MA.5.1-iFT",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Name.2008.REMUX.2160p.Bluray.AVC.DTS-HR.MA.5.1-LEGi0N",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Title.1980.2160p.UHD.BluRay.Remux.HDR.HEVC.DTS-HD.MA.5.1-PmP.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Title.2016.T1.UHDRemux.2160p.HEVC.Dual.AC3.5.1-TrueHD.5.1.Sub",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "[Dolby Vision] Movie.Title.S07.MULTi.UHD.BLURAY.REMUX.DV-NoTag",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Name.2020.German.UHDBD.2160p.HDR10.HEVC.EAC3.DL.Remux-pmHD.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie Name (2021) [Remux-2160p x265 HDR 10-BIT DTS-HD MA 7.1]-FraMeSToR.mkv",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "This.Wonderful.Movie.1991.German.ML.2160p.BluRay.HEVC-GeRMaNSCeNEGRoUP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Name.2011.2160p.DD.2.0.AVC.REMUX-FraMeSToR",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie Name 2018 2160p BluRay Hybrid-REMUX AVC TRUEHD 5.1 Dual Audio-ZR-",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_remux2160p_quality",
+      "input": "Movie.Name.2018.2160p.BluRay.Hybrid-REMUX.AVC.TRUEHD.5.1.Dual.Audio-ZR-",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2013.BDISO",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2005.MULTi.COMPLETE.BLURAY-VLS",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Name (2012) Bluray ISO [USENET-TURK]",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Name.1993..BD25.ISO",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2012.Bluray.1080p.3D.AVC.DTS-HD.MA.5.1.iso",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.1996.Bluray.ISO",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Random.Title.2010.1080p.HD.DVD.AVC.DDP.5.1-GRouP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Title 2005 1080p USA Blu-ray AVC DTS-HD MA 5.1-PTP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Title 2014 1080p Blu-ray AVC DTS-HD MA 5.1-PTP",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Title 1976 2160p UHD Blu-ray DTS-HD MA 5.1 DV HDR HEVC-UNTOUCHED",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Title 2004 1080p FRA Blu-ray VC-1 TrueHD 5.1-HDBEE",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "BD25.Movie.Title.1994.1080p.DTS-HD",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.1997.1080p.NL.BD-50",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie Title 2009 3D BD 2009 UNTOUCHED",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.1982.1080p.HD.DVD.VC-1.DD+.5.1",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2007.1080p.HD.DVD.DD+.AVC",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2008.1080i.XXX.Blu-ray.MPEG-2.LPCM2.0.ISO",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2008.BONUS.GERMAN.SUBBED.COMPLETE.BLURAY",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "The German 2021 Bluray AVC",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "German.Only.Movie.2021.French.1080p.BluRay.AVC-UNTAVC",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.Title.2008.US.Directors.Cut.UHD.BD66.Blu-ray",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "Movie.2009.Blu.ray.AVC.DTS.HD.MA.5.1",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_brdisk_1080p_quality",
+      "input": "[BD]Movie.Title.2008.2023.1080p.COMPLETE.BLURAY-RlsGrp",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "brdisk",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Movie.Title.2015.Open.Matte.1080i.HDTV.DD5.1.MPEG2",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": "rawhd",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_raw_quality",
+      "input": "Movie.Title.2009.1080i.HDTV.AAC2.0.MPEG2-PepelefuF",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": "rawhd",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Some.Movie.S02E15",
+      "expect": {
+        "source": "unknown",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Movie Name - 11x11 - Quickie",
+      "expect": {
+        "source": "unknown",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Movie.Name.S01E01.webm",
+      "expect": {
+        "source": "unknown",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "quality_parse",
+      "input": "Movie.Title.S01E01.The.Web.MT-dd",
+      "expect": {
+        "source": "unknown",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD-TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD.TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD_TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD-DVD",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD.DVD",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD DVD",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 SD_DVD",
+      "expect": {
+        "source": "dvd",
+        "resolution": null,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p-WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p.WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 480p_WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 480,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD-TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD.TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 HD_TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-HD-TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.HD.TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p HD TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_HD_TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-HD-TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.HD.TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p HD TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_HD_TV",
+      "expect": {
+        "source": "tv",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p-WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p.WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p_WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_WEB-DL",
+      "expect": {
+        "source": "webdl",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p-BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p.BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 720p_BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 720,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_BluRay",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": null,
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p-Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p.Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 1080p_Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 1080,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p-Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p.Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_quality_from_other_source",
+      "input": "My series S01E01 2160p_Remux",
+      "expect": {
+        "source": "bluray",
+        "resolution": 2160,
+        "modifier": "remux",
+        "proper": false,
+        "version": 1
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie - 2018 [HDTV-1080p]",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.S10E09.Eddie.Murphy.The.Honeydrippers.1080i.UPSCALE.HDTV.DD5.1.MPEG2-zebra",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.Bluray720p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.Bluray1080p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.Bluray2160p",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.848x480.dvd",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.848x480.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.1280x720.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_full_quality_from_name",
+      "input": "Movie.Title.2018.1920x1080.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Movie.Title.2018.848x480",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Movie.Title.2018.1280x720",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name",
+      "input": "Movie.Title.2018.1920x1080",
+      "expect": {
+        "sourceDetectionSource": "unknown",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Movie.Title.2011.S02E01.WS.PDTV.x264-REPACK-TLA",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Movie.Title.S01E01.Bluray",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Movie.Title.S01E01.HD.TV",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_source_from_name",
+      "input": "Movie.Title.S01E01.SD.TV",
+      "expect": {
+        "sourceDetectionSource": "name",
+        "resolutionDetectionSource": "unknown"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Movie.Title.S01E02.Chained.Heat.mkv",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Movie Name - S01E01 - Title.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "Movie.Title..9x18.sunshine_days.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_quality_from_extension",
+      "input": "[CR] Movie Title - 004 [48CE2D0F].avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "extension"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name_and_source_from_extension",
+      "input": "Movie.Name.S01E02.Chained.Heat.1080p.mkv",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_parse_resolution_from_name_and_source_from_extension",
+      "input": "Movie Name - S01E01 - Title.720p.avi",
+      "expect": {
+        "sourceDetectionSource": "extension",
+        "resolutionDetectionSource": "name"
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie Title 2018 REPACK 720p HDTV x264 aAF",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie.Title.2018.REPACK.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie.Title.2018.REPACK2.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": true,
+        "version": 3
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie.Title.2018.PROPER.720p.HDTV.x264-aAF",
+      "expect": {
+        "repack": false,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie.Title.2018.RERIP.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "repack": true,
+        "version": 2
+      }
+    },
+    {
+      "method": "should_be_able_to_parse_repack",
+      "input": "Movie.Title.2018.RERIP2.720p.BluRay.x264-DEMAND",
+      "expect": {
+        "repack": true,
+        "version": 3
+      }
+    }
+  ]
+}

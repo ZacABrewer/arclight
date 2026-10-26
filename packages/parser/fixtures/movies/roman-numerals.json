@@ -1,0 +1,246 @@
+{
+  "source": "RomanNumeralTests/RomanNumeralConversionFixture.cs, Files/ArabicRomanNumeralDictionary.JSON",
+  "description": "Arabic <-> Roman numeral conversion for the tested range 1-20 (should_convert_arabic_numeral_to_roman_numeral, should_convert_roman_numeral_to_arabic_numeral); numeric input expects roman, string input expects arabic",
+  "cases": [
+    {
+      "input": 1,
+      "expect": {
+        "roman": "I"
+      }
+    },
+    {
+      "input": 2,
+      "expect": {
+        "roman": "II"
+      }
+    },
+    {
+      "input": 3,
+      "expect": {
+        "roman": "III"
+      }
+    },
+    {
+      "input": 4,
+      "expect": {
+        "roman": "IV"
+      }
+    },
+    {
+      "input": 5,
+      "expect": {
+        "roman": "V"
+      }
+    },
+    {
+      "input": 6,
+      "expect": {
+        "roman": "VI"
+      }
+    },
+    {
+      "input": 7,
+      "expect": {
+        "roman": "VII"
+      }
+    },
+    {
+      "input": 8,
+      "expect": {
+        "roman": "VIII"
+      }
+    },
+    {
+      "input": 9,
+      "expect": {
+        "roman": "IX"
+      }
+    },
+    {
+      "input": 10,
+      "expect": {
+        "roman": "X"
+      }
+    },
+    {
+      "input": 11,
+      "expect": {
+        "roman": "XI"
+      }
+    },
+    {
+      "input": 12,
+      "expect": {
+        "roman": "XII"
+      }
+    },
+    {
+      "input": 13,
+      "expect": {
+        "roman": "XIII"
+      }
+    },
+    {
+      "input": 14,
+      "expect": {
+        "roman": "XIV"
+      }
+    },
+    {
+      "input": 15,
+      "expect": {
+        "roman": "XV"
+      }
+    },
+    {
+      "input": 16,
+      "expect": {
+        "roman": "XVI"
+      }
+    },
+    {
+      "input": 17,
+      "expect": {
+        "roman": "XVII"
+      }
+    },
+    {
+      "input": 18,
+      "expect": {
+        "roman": "XVIII"
+      }
+    },
+    {
+      "input": 19,
+      "expect": {
+        "roman": "XIX"
+      }
+    },
+    {
+      "input": 20,
+      "expect": {
+        "roman": "XX"
+      }
+    },
+    {
+      "input": "I",
+      "expect": {
+        "arabic": 1
+      }
+    },
+    {
+      "input": "II",
+      "expect": {
+        "arabic": 2
+      }
+    },
+    {
+      "input": "III",
+      "expect": {
+        "arabic": 3
+      }
+    },
+    {
+      "input": "IV",
+      "expect": {
+        "arabic": 4
+      }
+    },
+    {
+      "input": "V",
+      "expect": {
+        "arabic": 5
+      }
+    },
+    {
+      "input": "VI",
+      "expect": {
+        "arabic": 6
+      }
+    },
+    {
+      "input": "VII",
+      "expect": {
+        "arabic": 7
+      }
+    },
+    {
+      "input": "VIII",
+      "expect": {
+        "arabic": 8
+      }
+    },
+    {
+      "input": "IX",
+      "expect": {
+        "arabic": 9
+      }
+    },
+    {
+      "input": "X",
+      "expect": {
+        "arabic": 10
+      }
+    },
+    {
+      "input": "XI",
+      "expect": {
+        "arabic": 11
+      }
+    },
+    {
+      "input": "XII",
+      "expect": {
+        "arabic": 12
+      }
+    },
+    {
+      "input": "XIII",
+      "expect": {
+        "arabic": 13
+      }
+    },
+    {
+      "input": "XIV",
+      "expect": {
+        "arabic": 14
+      }
+    },
+    {
+      "input": "XV",
+      "expect": {
+        "arabic": 15
+      }
+    },
+    {
+      "input": "XVI",
+      "expect": {
+        "arabic": 16
+      }
+    },
+    {
+      "input": "XVII",
+      "expect": {
+        "arabic": 17
+      }
+    },
+    {
+      "input": "XVIII",
+      "expect": {
+        "arabic": 18
+      }
+    },
+    {
+      "input": "XIX",
+      "expect": {
+        "arabic": 19
+      }
+    },
+    {
+      "input": "XX",
+      "expect": {
+        "arabic": 20
+      }
+    }
+  ]
+}

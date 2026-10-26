@@ -1,0 +1,3213 @@
+{
+  "source": "AbsoluteEpisodeNumberParserFixture.cs, AnimeMetadataParserFixture.cs, AnimeVersionFixture.cs, SubGroupParserFixture.cs",
+  "description": "Anime releases: absolute episode numbers (single, ranges, recap x.5), anime season packs, specials/OVA/NCOP, sub-group + CRC hash extraction, and v2 release versions. Absolute-only releases report seasons [0] and no episodes.",
+  "cases": [
+    {
+      "input": "[SubDESU]_Show_One_07_(1280x720_x264-AAC)_[6B7FD717]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Show One",
+        "absoluteEpisodes": [
+          7
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Chihiro]_Show!!_-_06_[848x480_H.264_AAC][859EEAFA]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Show!!",
+        "absoluteEpisodes": [
+          6
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Commie]_Some_Anime_Show_-_11_[65F220B4]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          11
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Underwater]_Some_Anime_Show_-_12_(720p)_[5C7BC4F9]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          12
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Commie]_Some_Anime_Show_-_15_[E76552EA]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          15
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs]_Some_Anime_Show_-_33_[720p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          33
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs]_Some_Anime_Show_-_145_[720p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          145
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Some Anime Show - 13 [1080p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          13
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Doremi].Some.Anime.Show.8.Go!.31.[1280x720].[C65D4B1F].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show 8 Go!",
+        "absoluteEpisodes": [
+          31
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[K-F] Some Anime Show 214",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          214
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[K-F] Some Anime Show S10E14 214",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          214
+        ],
+        "seasons": [
+          10
+        ],
+        "episodes": [
+          14
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[K-F] Some Anime Show 10x14 214",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          214
+        ],
+        "seasons": [
+          10
+        ],
+        "episodes": [
+          14
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[K-F] Some Anime Show 214 10x14",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          214
+        ],
+        "seasons": [
+          10
+        ],
+        "episodes": [
+          14
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some Anime Show - 031 - The Resolution to Kill [Lunar].avi",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          31
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some Anime Show - 031 - The Resolution to Kill [Lunar]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          31
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[ACX]Some Anime Show 01 Role Play [Kosaka] [9C57891E].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SFW-sage] Some Anime Show S3 - 12 [720p][D07C91FC]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show S3",
+        "absoluteEpisodes": [
+          12
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some_Anime_Show_e66_time_is_money_part_one_marking_time",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          66
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Underwater-FFF] No Series Title No Life - 01 (720p) [27AAA0A0].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "No Series Title No Life",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[FroZen] Series Title - 23 [DVD][7F6170E6]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          23
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Commie] Series Title - 32 [0BA19D5B]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          32
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Doki]Series Title - 07 (1280x720 Hi10P AAC) [80AF7DDE]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          7
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title - 32 [480p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          32
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[CR] Series Title - 004 [480p][48CE2D0F]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          4
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Chibiki] Series Title!! - 42 [360p][7A4FC77B]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title!!",
+        "absoluteEpisodes": [
+          42
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title - 32 [1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          32
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title! S2 - 07 [720p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title! S2",
+        "absoluteEpisodes": [
+          7
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[DeadFish] Series Title - 09v2 [720p][AAC]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          9
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Underwater-FFF] Series Title - 01 (720p) [27AAA0A0]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[S-T-D] Series Title! - 06 (1280x720 10bit AAC) [59B3F2EA].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title!",
+        "absoluteEpisodes": [
+          6
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 010 (720p) [27AAA0A0].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          10
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title - 01 DVD - Central Anime",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title_-_01(DVD)_-_(Central_Anime)[5AF6F1E4].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title_-_02(DVD)_-_(Central_Anime)[0CA65F00].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          2
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title - 03 DVD - Central Anime",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title_-_03(DVD)_-_(Central_Anime)[629BD592].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title - 14 DVD - Central Anime",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          14
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Initial_Series_Title_-_14(DVD)_-_(Central_Anime)[0183D922].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Initial Series Title",
+        "absoluteEpisodes": [
+          14
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[ChihiroDesuYo].Series.Title.-.09.1280x720.10bit.AAC.[24CCE81D]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          9
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 001 - Fairy Tail",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 049 - The Day of Fated Meeting",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          49
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 050 - Special Request Watch Out for the Guy You Like!",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          50
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 099 - Natsu vs. Gildarts",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          99
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 100 - Mest",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          100
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Exiled-Destiny] Series Title Ep01 (D2201EC5).mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Commie] Series Title - 23 [5396CA24].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          23
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[FFF] Series Title - 01 [1FB538B5].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Hatsuyuki]Series_Title-01[1280x720][122E6EF8]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[CBM]_Series_Title_-_11_-_511_Kinderheim_[6C70C4E4].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          11
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title 2 - 05 [720p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Commie] Series Title 2 - 05 [FCE4D070].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[DRONE]Series.Title.100",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          100
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[RlsGrp]Series.Title.2010.S01E01.001.HDTV-720p.x264-DTS",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2010",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 130 - Found You, Gohan! Harsh Training in the Kaioshin Realm! [Baaro][720p][5A1AD35B].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          130
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title - 131 - A Merged Super-Warrior Is Born, His Name Is Gotenks!! [Baaro][720p][32E03F96].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          131
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title - 01 [1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Jumonji-Giri]_[F-B]_Series_Title_Ep04_(0b0e2c10).mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          4
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Jumonji-Giri]_[F-B]_Series_Title_Ep08_(8246e542).mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          8
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Knights Series Title - 01 [1080p 10b DTSHD-MA eng sub].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Knights Series Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title (2010) {01} Episode Title (1).hdtv-720p",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2010)",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title - 20 [720p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          20
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Hatsuyuki] Series Title (2014) - 017 (115) [1280x720][B2CFBC0F]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2014)",
+        "absoluteEpisodes": [
+          17
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Hatsuyuki] Series Title (2014) - 018 (116) [1280x720][C4A3B16E]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2014)",
+        "absoluteEpisodes": [
+          18
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title (2014) - 39 (137) [v2][720p.HDTV][Unison Fansub]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2014)",
+        "absoluteEpisodes": [
+          39
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series Title 21 - 101 [480p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 21",
+        "absoluteEpisodes": [
+          101
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Cthuyuu].Series.Title.-.03.[720p.H264.AAC][8AD82C3A]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Cthuyuu] Series Title - 03 [720p H264 AAC][8AD82C3A]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title Episode 56 [VOSTFR V2][720p][AAC]-Mystic Z-Team",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          56
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Mystic Z-Team] Series Title Episode 69 [VOSTFR_Finale][1080p][AAC].mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          69
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Shark-Raws] Series Title #957 (NBN 1280x720 x264 AAC).mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          957
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title EP06 720p x265 AOZ.mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          6
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title 2018 EP06 720p x265 AOZ.mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2018",
+        "absoluteEpisodes": [
+          6
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title 2018 06 720p x265 AOZ.mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2018",
+        "absoluteEpisodes": [
+          6
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title S03 - EP14 VOSTFR [1080p] [HardSub] Yass'Kun",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title S03",
+        "absoluteEpisodes": [
+          14
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title S3 -  15 VOSTFR [720p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title S3",
+        "absoluteEpisodes": [
+          15
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "A Series: RE S2 - Episode 4 VOSTFR (1080p)",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "A Series: RE S2",
+        "absoluteEpisodes": [
+          4
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "To Another Series III - Episode 5 VOSTFR (1080p)",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "To Another Series III",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Prout] Show;Title 0 - Episode 5 VOSTFR (BDRip 1920x1080 x264 FLAC)",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Show;Title 0",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[BakedFish] Some Show [Anime] - 01 [720p][AAC].mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some Show [Anime]",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Abc x Abc (2011) - 141 - Magician [KaiDubs] [1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Abc x Abc (2011)",
+        "absoluteEpisodes": [
+          141
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Abc Abc 484 VOSTFR par Abc-Abc (1280*720) - version MQ",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Abc Abc",
+        "absoluteEpisodes": [
+          484
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Abc - Abc Abc Abc - 107 VOSTFR par Fansub-Miracle Sharingan (1920x1080) - HQ_Draft",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Abc - Abc Abc Abc",
+        "absoluteEpisodes": [
+          107
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Abc Abc Abc Abc Episode 10 VOSTFR (1920x1080) Miracle Sharingan Fansub.MKV - Team - (� suivre)",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Abc Abc Abc Abc",
+        "absoluteEpisodes": [
+          10
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Glenn] Series! 3 - 11 (1080p AAC)[C34B2B3B].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series! 3",
+        "absoluteEpisodes": [
+          11
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "SeriesTitle.E1135.Lasst.den.Mond.am.Himmel.stehen.GERMAN.1080p.WEBRip.x264-Group",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "SeriesTitle",
+        "absoluteEpisodes": [
+          1135
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "SeriesTitle E1135 Lasst den Mond am Himmel stehen GERMAN 1080p WEBRip x264-Group",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "SeriesTitle",
+        "absoluteEpisodes": [
+          1135
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "SeriesTitle.E1206.In.seinen.Augen.2022.GERMAN.1080p.WEB.h264-Group",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "SeriesTitle",
+        "absoluteEpisodes": [
+          1206
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "SeriesTitle E1206 In seinen Augen 2022 GERMAN 1080p WEB h264-Group",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "SeriesTitle",
+        "absoluteEpisodes": [
+          1206
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series.Title.E195.Zurueck.auf.die.Grand.Line.UNCUT.German.Dubbed.1999.ANiME.DVDRiP.XviD-Group",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          195
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series 100 - 07 [1080p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series 100",
+        "absoluteEpisodes": [
+          7
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Series 100 S2 - 07 [1080p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series 100 S2",
+        "absoluteEpisodes": [
+          7
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[abc] Adventure Series: 30 [Web][MKV][h264][720p][AAC 2.0][abc]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Adventure Series:",
+        "absoluteEpisodes": [
+          30
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[XKsub] Series Title S2 [05][HEVC-10bit 1080p AAC][CHS&CHT&JPN]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title S2",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Cheetah-Raws] Super Long Anime - 1000 (YTV 1280x720 x264 AAC)",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Super Long Anime",
+        "absoluteEpisodes": [
+          1000
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[DameDesuYo] Another Anime With Special Naming (Season 2) - 33 (1280x720 10bit EAC3) [42A12A76].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Another Anime With Special Naming",
+        "absoluteEpisodes": [
+          33
+        ],
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Anime Title 300-nen, With Even More Title - 01 (1080p) [8DE44442]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title 300-nen, With Even More Title",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Chihiro] Anime Title 300-nen, With Even More Title 02 [720p Hi10P AAC][031FA533]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title 300-nen, With Even More Title",
+        "absoluteEpisodes": [
+          2
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[BakeSubs] 86 - 01 [1080p][D40A9E55].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "86",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Anime Title the Final - 09 (2021) [SubsPlease] [WEBRip] [HD 1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title the Final",
+        "absoluteEpisodes": [
+          9
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Anime Title S21 999",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title S21",
+        "absoluteEpisodes": [
+          999
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Anime Title S21 1000",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title S21",
+        "absoluteEpisodes": [
+          1000
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HatSubs] Anime Title 1004 [E63F2984].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title",
+        "absoluteEpisodes": [
+          1004
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Anime Title 100 S3 - 01 (1080p) [5A493522]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title 100 S3",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Anime Title 100 S3 - 01 (1080p) [5A493522]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Title 100 S3",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[CameEsp] Another Anime 100 - Another 100 Anime - 01 [720p][ESP-ENG][mkv]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Another Anime 100 - Another 100 Anime",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Another Anime 100 - Another 100 Anime - 01 (1080p) [4E6B4518].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Another Anime 100 - Another 100 Anime",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some show 69. Blm (29.10.2023) 1080p WebDL #turkseed",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Some show",
+        "absoluteEpisodes": [
+          69
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Soap opera 01 BLM(01.11.2023) 1080p HDTV AC3 x264 TURG",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Soap opera",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Turkish show 60.Bolum (31.01.2023) 720p WebDL AAC H.264 - TURG",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Turkish show",
+        "absoluteEpisodes": [
+          60
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Different show 1. Bölüm (23.10.2023) 720p WebDL AAC H.264 - TURG",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Different show",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Dubbed show 79.BLM Sezon Finali(25.06.2023) 720p WEB-DL AAC2.0 H.264-TURG",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Dubbed show",
+        "absoluteEpisodes": [
+          79
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Exclusive BLM Documentary with no false positives EP03.1080p.AAC.x264",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Exclusive BLM Documentary with no false positives",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Title de Series S2 - 03 (540p) [63501322]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Title de Series S2",
+        "absoluteEpisodes": [
+          3
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Naruto-Kun.Hu] Dr Series S3 - 21 [1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Dr Series S3",
+        "absoluteEpisodes": [
+          21
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Naruto-Kun.Hu] Series Title - 12 [1080p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          12
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Naruto-Kun.Hu] Anime Triangle - 08 [1080p].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Triangle",
+        "absoluteEpisodes": [
+          8
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Mystic Z-Team] Series Title Super - Episode 013 VF - Non-censuré [720p].mp4",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title Super",
+        "absoluteEpisodes": [
+          13
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title Kai Episodio 13 Audio Latino",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title Kai",
+        "absoluteEpisodes": [
+          13
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series_Title_2_[01]_[AniLibria_TV]_[WEBRip_1080p]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Series Title - 100 Years Quest - 01 (1080p) [1107F3A9].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title - 100 Years Quest",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Series Title 100 Years Quest - 01 (1080p) [1107F3A9].mkv",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Series Title 100 Years Quest",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Dae-P9] Anime Series - 05 - S01E05 - Marrying by Contesting (BD 1080p HEVC FLAC AAC) [Dual Audio] [5BCD56B8]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Anime Series",
+        "absoluteEpisodes": [
+          5
+        ],
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          5
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Kaleido-subs] Animation - 12 (S01E12) - (WEB 1080p HEVC x265 10-bit E-AC3 2.0) [1ADD8F6D]",
+      "method": "should_parse_absolute_numbers",
+      "expect": {
+        "title": "Animation",
+        "absoluteEpisodes": [
+          12
+        ],
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          12
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[DeadFish] Another Anime Show - 01 - Special [BD][720p][AAC]",
+      "method": "should_parse_absolute_specials",
+      "expect": {
+        "title": "Another Anime Show",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[DeadFish] Another Anime Show - 01 - OVA [BD][720p][AAC]",
+      "method": "should_parse_absolute_specials",
+      "expect": {
+        "title": "Another Anime Show",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[DeadFish] Another Anime Show - 01 - OVD [BD][720p][AAC]",
+      "method": "should_parse_absolute_specials",
+      "expect": {
+        "title": "Another Anime Show",
+        "absoluteEpisodes": [
+          1
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[Underwater] Another OVA - The Other -Karma- (BD 1080p) [3A561D0E].mkv",
+      "method": "should_parse_absolute_specials_without_absolute_number",
+      "expect": {
+        "title": "Another",
+        "absoluteEpisodes": [],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[sam] Long Series - NCOP [BD 1080p FLAC] [BBC3BC68].mkv",
+      "method": "should_parse_absolute_specials_without_absolute_number",
+      "expect": {
+        "title": "Long Series",
+        "absoluteEpisodes": [],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[sam] Long Series - NCED [BD 1080p FLAC] [BBC3BC68].mkv",
+      "method": "should_parse_absolute_specials_without_absolute_number",
+      "expect": {
+        "title": "Long Series",
+        "absoluteEpisodes": [],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false,
+        "special": true
+      }
+    },
+    {
+      "input": "[ANBU-AonE]_SeriesTitle_26-27_[F224EF26].avi",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "SeriesTitle",
+        "absoluteEpisodes": [
+          26,
+          27
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Doutei] Some Good, Anime Show - 01-12 [BD][720p-AAC]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Good, Anime Show",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title (2010) - 01-02-03 - Episode Title (1) HDTV-720p",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2010)",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[RlsGrp] Series Title (2010) - S01E01-02-03 - 001-002-003 - Episode Title HDTV-720p v2",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2010)",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[RlsGrp] Series Title (2010) - S01E01-02 - 001-002 - Episode Title HDTV-720p v2",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2010)",
+        "absoluteEpisodes": [
+          1,
+          2
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title (2010) - S01E01-02 (001-002) - Episode Title (1) HDTV-720p v2 [RlsGrp]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title (2010)",
+        "absoluteEpisodes": [
+          1,
+          2
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Some Anime Show!! (01-25) [1080p] (Batch)",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show!!",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some Anime Show (2011) Episode 99-100 [1080p] [Dual.Audio] [x265]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show (2011)",
+        "absoluteEpisodes": [
+          99,
+          100
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Some Anime Show 1-13 (English Dub) [720p]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series.Title.Ep01-12.Complete.English.AC3.DL.1080p.BluRay.x264",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Judas] Some Anime Show 091-123 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Judas] Some Anime Show - 091-123 [1080p][HEVC x265 10bit][Dual-Audio][Multi-Subs]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119,
+          120,
+          121,
+          122,
+          123
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Some Anime Show 01 - 119 [1080p] [Batch]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100,
+          101,
+          102,
+          103,
+          104,
+          105,
+          106,
+          107,
+          108,
+          109,
+          110,
+          111,
+          112,
+          113,
+          114,
+          115,
+          116,
+          117,
+          118,
+          119
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Erai-raws] Series Title! - 01~10 [1080p][Multiple Subtitle]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title!",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Erai-raws] Series-Title! 2 - 01~10 [1080p][Multiple Subtitle]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series-Title! 2",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Erai-raws] Series Title! - 01 ~ 10 [1080p][Multiple Subtitle]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title!",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Erai-raws] Series-Title! 2 - 01 ~ 10 [1080p][Multiple Subtitle]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series-Title! 2",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series_Title_2_[01-05]_[AniLibria_TV]_[WEBRip_1080p]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Series Title 2",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Moxie] One Series - The Country (892-916) (BD Remux 1080p AAC FLAC) [Dual Audio]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "One Series - The Country",
+        "absoluteEpisodes": [
+          892,
+          893,
+          894,
+          895,
+          896,
+          897,
+          898,
+          899,
+          900,
+          901,
+          902,
+          903,
+          904,
+          905,
+          906,
+          907,
+          908,
+          909,
+          910,
+          911,
+          912,
+          913,
+          914,
+          915,
+          916
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HatSubs] One Series (1017-1088) (WEB 1080p)",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "One Series",
+        "absoluteEpisodes": [
+          1017,
+          1018,
+          1019,
+          1020,
+          1021,
+          1022,
+          1023,
+          1024,
+          1025,
+          1026,
+          1027,
+          1028,
+          1029,
+          1030,
+          1031,
+          1032,
+          1033,
+          1034,
+          1035,
+          1036,
+          1037,
+          1038,
+          1039,
+          1040,
+          1041,
+          1042,
+          1043,
+          1044,
+          1045,
+          1046,
+          1047,
+          1048,
+          1049,
+          1050,
+          1051,
+          1052,
+          1053,
+          1054,
+          1055,
+          1056,
+          1057,
+          1058,
+          1059,
+          1060,
+          1061,
+          1062,
+          1063,
+          1064,
+          1065,
+          1066,
+          1067,
+          1068,
+          1069,
+          1070,
+          1071,
+          1072,
+          1073,
+          1074,
+          1075,
+          1076,
+          1077,
+          1078,
+          1079,
+          1080,
+          1081,
+          1082,
+          1083,
+          1084,
+          1085,
+          1086,
+          1087,
+          1088
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HatSubs] One Series 1017-1088 (WEB 1080p)",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "One Series",
+        "absoluteEpisodes": [
+          1017,
+          1018,
+          1019,
+          1020,
+          1021,
+          1022,
+          1023,
+          1024,
+          1025,
+          1026,
+          1027,
+          1028,
+          1029,
+          1030,
+          1031,
+          1032,
+          1033,
+          1034,
+          1035,
+          1036,
+          1037,
+          1038,
+          1039,
+          1040,
+          1041,
+          1042,
+          1043,
+          1044,
+          1045,
+          1046,
+          1047,
+          1048,
+          1049,
+          1050,
+          1051,
+          1052,
+          1053,
+          1054,
+          1055,
+          1056,
+          1057,
+          1058,
+          1059,
+          1060,
+          1061,
+          1062,
+          1063,
+          1064,
+          1065,
+          1066,
+          1067,
+          1068,
+          1069,
+          1070,
+          1071,
+          1072,
+          1073,
+          1074,
+          1075,
+          1076,
+          1077,
+          1078,
+          1079,
+          1080,
+          1081,
+          1082,
+          1083,
+          1084,
+          1085,
+          1086,
+          1087,
+          1088
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Group] Title S01 - 01-12 [1080p]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Title S01",
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Group] Title S01 - 01-02 [1080p]",
+      "method": "should_parse_multi_episode_absolute_numbers",
+      "expect": {
+        "title": "Title S01",
+        "absoluteEpisodes": [
+          1,
+          2
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Vivid] Some Anime Show S01 [Web][MKV][h264 10-bit][1080p][AAC 2.0]",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Some Anime Show",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Group] Title S01 12 13 [1080p]",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Title",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Group] Title S03 10 11 [1080p]",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Title",
+        "absoluteEpisodes": [],
+        "seasons": [
+          3
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Group] Title S1 05 [1080p]",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Title",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "Anime, Title? | Japanse Anime, Title? [Season 1 + EXTRA] [BD 1080p x265 HEVC OPUS] [Dual-Audio]",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Anime, Title | Japanse Anime, Title",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Judas] Japanse Anime, Title (Anime, Title?) (Season 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Japanse Anime, Title (Anime, Title)",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Judas] Japanse Anime, Title (Anime, Title?) (Season 1) [1080p][HEVC x265 10bit][Multi-Subs] (Batch)",
+      "method": "should_parse_anime_season_packs",
+      "expect": {
+        "title": "Japanse Anime, Title (Anime, Title)",
+        "absoluteEpisodes": [],
+        "seasons": [
+          1
+        ],
+        "fullSeason": true
+      }
+    },
+    {
+      "input": "[Anime Time] Series no Mayo - 12.5.mkv",
+      "method": "should_handle_anime_recap_numbering",
+      "expect": {
+        "title": "Series no Mayo",
+        "absoluteEpisodes": [],
+        "specialAbsoluteEpisodes": [
+          12.5
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubsPlease] Series Title - 26.5.1 (1080p) [29AF1C23].mkv",
+      "method": "should_handle_anime_recap_numbering",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [],
+        "specialAbsoluteEpisodes": [
+          26.5
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[HorribleSubs] Show Slayer - 10.5 [1080p].mkv",
+      "method": "should_handle_anime_recap_numbering",
+      "expect": {
+        "title": "Show Slayer",
+        "absoluteEpisodes": [],
+        "specialAbsoluteEpisodes": [
+          10.5
+        ],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "Series Title 921-928 [English Dub][1080p][onepiecedubb]/921.mkv",
+      "method": "should_handle_ambiguously_named_anime_files_in_batch_release",
+      "parser": "path",
+      "releaseName": "Series Title 921-928 [English Dub][1080p][onepiecedubb]",
+      "filename": "921.mkv",
+      "expect": {
+        "title": "Series Title",
+        "absoluteEpisodes": [
+          921
+        ],
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Dae-P9] Anime Series - 05.5 - S00E01 - Marrying by Contesting (BD 1080p HEVC FLAC AAC) [Dual Audio] [5BCD56B8]",
+      "method": "should_parse_absolute_followed_by_standard_as_standard",
+      "expect": {
+        "title": "Anime Series",
+        "seasons": [
+          0
+        ],
+        "episodes": [
+          1
+        ],
+        "specialAbsoluteEpisodes": [
+          5.5
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Thighs] Anime Reincarnation - 17.5 (S00E01) (BD 1080p FLAC AAC) [Dual-Audio] [A6E2110E]",
+      "method": "should_parse_absolute_followed_by_standard_as_standard",
+      "expect": {
+        "title": "Anime Reincarnation",
+        "seasons": [
+          0
+        ],
+        "episodes": [
+          1
+        ],
+        "specialAbsoluteEpisodes": [
+          17.5
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[sam] Anime - 15.5 (S00E01) [BD 1080p FLAC] [3E8D676D]",
+      "method": "should_parse_absolute_followed_by_standard_as_standard",
+      "expect": {
+        "title": "Anime",
+        "seasons": [
+          0
+        ],
+        "episodes": [
+          1
+        ],
+        "specialAbsoluteEpisodes": [
+          15.5
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[Kaleido-subs] Sky Series - 07.5 (S00E01) - (BD 1080p HEVC x265 10-bit Opus 2.0) [A548C980].mkv",
+      "method": "should_parse_absolute_followed_by_standard_as_standard",
+      "expect": {
+        "title": "Sky Series",
+        "seasons": [
+          0
+        ],
+        "episodes": [
+          1
+        ],
+        "specialAbsoluteEpisodes": [
+          7.5
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false
+      }
+    },
+    {
+      "input": "[SubDESU]_Show_Title_DxD_07_(1280x720_x264-AAC)_[6B7FD717]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "SubDESU",
+        "releaseHash": "6B7FD717"
+      }
+    },
+    {
+      "input": "[Chihiro]_Show_Title!!_-_06_[848x480_H.264_AAC][859EEAFA]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Chihiro",
+        "releaseHash": "859EEAFA"
+      }
+    },
+    {
+      "input": "[Underwater]_Show_Title_-_12_(720p)_[5C7BC4F9]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Underwater",
+        "releaseHash": "5C7BC4F9"
+      }
+    },
+    {
+      "input": "[HorribleSubs]_Show_Title_-_33_[720p]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "HorribleSubs",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[HorribleSubs] Show-Title - 13 [1080p].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "HorribleSubs",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31.[1280x720].[C65D4B1F].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": "C65D4B1F"
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31[1280x720].[C65D4B1F]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": "C65D4B1F"
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31.[1280x720].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title S10E14 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 10x14 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 214 10x14",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "Series Title - 031 - The Resolution to Kill [Lunar].avi",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Lunar",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[ACX]Series Title 01 Episode Name [Kosaka] [9C57891E].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "ACX",
+        "releaseHash": "9C57891E"
+      }
+    },
+    {
+      "input": "[S-T-D] Series Title! - 06 (1280x720 10bit AAC) [59B3F2EA].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "S-T-D",
+        "releaseHash": "59B3F2EA"
+      }
+    },
+    {
+      "input": "[SubDESU]_Show_Title_DxD_07_(1280x720_x264-AAC)_(6B7FD717)",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "SubDESU",
+        "releaseHash": "6B7FD717"
+      }
+    },
+    {
+      "input": "[Chihiro]_Show_Title!!_-_06_[848x480_H.264_AAC](859EEAFA)",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Chihiro",
+        "releaseHash": "859EEAFA"
+      }
+    },
+    {
+      "input": "[Underwater]_Show_Title_-_12_(720p)_(5C7BC4F9)",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Underwater",
+        "releaseHash": "5C7BC4F9"
+      }
+    },
+    {
+      "input": "[HorribleSubs]_Show_Title_-_33_[720p]",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "HorribleSubs",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[HorribleSubs] Show-Title - 13 [1080p].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "HorribleSubs",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31.[1280x720].(C65D4B1F).mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": "C65D4B1F"
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31[1280x720].(C65D4B1F)",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": "C65D4B1F"
+      }
+    },
+    {
+      "input": "[Doremi].Show.Title.5.Go.Go!.31.[1280x720].mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Doremi",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title S10E14 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 10x14 214",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[K-F] Series Title 214 10x14",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "K-F",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "Series Title - 031 - The Resolution to Kill [Lunar].avi",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "Lunar",
+        "releaseHash": ""
+      }
+    },
+    {
+      "input": "[ACX]Series Title 01 Episode Name [Kosaka] (9C57891E).mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "ACX",
+        "releaseHash": "9C57891E"
+      }
+    },
+    {
+      "input": "[S-T-D] Series Title! - 06 (1280x720 10bit AAC) (59B3F2EA).mkv",
+      "method": "should_parse_releasegroup_and_hash",
+      "expect": {
+        "releaseGroup": "S-T-D",
+        "releaseHash": "59B3F2EA"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 08 (1280x720 10bit AAC) [8B00F2EA].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "8B00F2EA"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 10 (1280x720 10bit AAC) [10BBF2EA].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "10BBF2EA"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 08 (1280x720 10bit AAC) [008BF28B].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "008BF28B"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 10 (1280x720 10bit AAC) [000BF10B].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "000BF10B"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 08 (1280x720 8bit AAC) [8B8BF2EA].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "8B8BF2EA"
+      }
+    },
+    {
+      "input": "[DHD] Series Title! - 10 (1280x720 8bit AAC) [10B10BEA].mkv",
+      "method": "should_parse_release_hashes_with_10b_or_8b",
+      "expect": {
+        "releaseHash": "10B10BEA"
+      }
+    },
+    {
+      "input": "Anime Title - S01E01 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 1
+      }
+    },
+    {
+      "input": "Anime Title - S01E01v2 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "input": "Anime Title - S01E01 v2 - (BD 1080p HEVC FLAC) [Dual Audio] [Group]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "input": "[SubsPlease] Anime Title - 01 (1080p) [B1F227CF]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 1
+      }
+    },
+    {
+      "input": "[SubsPlease] Anime Title - 01v2 (1080p) [B1F227CF]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "input": "[SubsPlease] Anime Title - 01 v2 (1080p) [B1F227CF]",
+      "method": "should_be_able_to_parse_repack",
+      "expect": {
+        "version": 2
+      }
+    },
+    {
+      "input": "[GHOST][1080p] Series - 25 [BD HEVC 10bit Dual Audio AC3][AE0ADDBA]",
+      "method": "should_parse_sub_group_from_title_as_release_group",
+      "expect": {
+        "releaseGroup": "GHOST"
+      }
+    }
+  ]
+}

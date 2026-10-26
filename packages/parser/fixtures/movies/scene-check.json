@@ -1,0 +1,78 @@
+{
+  "source": "SceneCheckerFixture.cs",
+  "description": "Scene-name detection (isSceneTitle: needs title, year, quality and group) and scene-title cleanup (sceneTitle: strip trailing underscore/extension, normalize fullwidth brackets)",
+  "cases": [
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate",
+      "expect": {
+        "isSceneTitle": true
+      }
+    },
+    {
+      "input": "S08E05 - Virtual In-Stanity [WEBDL-720p]",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "S08E05 - Virtual In-Stanity.With.Dots [WEBDL-720p]",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "Something",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "86de66b7ef385e2fa56a3e41b98481ea1658bfab",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL-Pate",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "2013.German.DTS.DL.BluRay.x264-Pate",
+      "expect": {
+        "isSceneTitle": false
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate_",
+      "expect": {
+        "sceneTitle": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate"
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate.mkv",
+      "expect": {
+        "sceneTitle": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate"
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate.nzb",
+      "expect": {
+        "sceneTitle": "Some.Movie.2..2013.German.DTS.DL.720p.BluRay.x264-Pate"
+      }
+    },
+    {
+      "input": "Some.Movie.2..2013.German.DTS.DL.【720p】.BluRay.x264-Pate.nzb",
+      "expect": {
+        "sceneTitle": "Some.Movie.2..2013.German.DTS.DL.[720p].BluRay.x264-Pate"
+      }
+    }
+  ]
+}
