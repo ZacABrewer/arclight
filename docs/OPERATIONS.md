@@ -1,5 +1,8 @@
 # Operations
 
+> Part of the [documentation](README.md). Day-to-day System pages (Status, Tasks, Logs, Health) are in
+> [System](using/system.md); backups are in [Backup and restore](getting-started/backup-restore.md).
+
 Running Arclight as infrastructure: configuration as code, environment overrides, Prometheus
 metrics and the audit log. Route details are in [API.md](API.md); contracts in
 `packages/shared/src/operations.ts`.
