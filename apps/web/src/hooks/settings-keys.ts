@@ -17,6 +17,10 @@ export const settingsKeys = {
   indexerCategories: ['indexers', 'categories'] as const,
   indexerDefinitions: (query: unknown) => ['indexers', 'definitions', query] as const,
   indexerDefinition: (id: string) => ['indexers', 'definition', id] as const,
+  /** Under ['indexers', 'definitions'] so definition reloads and syncs refresh it. */
+  indexerCatalogue: ['indexers', 'definitions', 'catalogue'] as const,
+  indexerCatalogueEntry: (key: string) => ['indexers', 'definitions', 'entry', key] as const,
+  communityCatalogue: ['indexers', 'definitions', 'community'] as const,
   indexerProxies: ['indexers', 'proxies'] as const,
   indexerStats: (days: number) => ['indexers', 'stats', days] as const,
   indexerOptions: ['settings', 'indexers'] as const,

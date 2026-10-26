@@ -1,6 +1,6 @@
 import { watch, type FSWatcher } from 'node:fs';
-import { mkdir, unlink, writeFile } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readdir, readFile, stat, unlink, writeFile } from 'node:fs/promises';
+import { basename, extname, join } from 'node:path';
 import type { Logger } from 'pino';
 import {
   BUILTIN_DEFINITIONS_DIR,
@@ -8,7 +8,9 @@ import {
   DefinitionCatalogue,
   DefinitionError,
   parseDefinitionYaml,
+  peekDefinitionYaml,
   synthesizeCaps,
+  type DefinitionPeek,
   type Definition,
   type SettingDefinition,
 } from '@arclight/indexers';
@@ -22,12 +24,27 @@ import type {
   IndexerDefinitionSummary,
 } from '@arclight/shared';
 
-// The definition catalogue as the api serves it, in three layers that override by id:
-// definitions bundled with @arclight/indexers, then the definition feed's downloads in
-// `<config>/definitions/feed` (see definition-feed.ts), then user YAML files in
-// `<config>/definitions`. The user directory is watched (debounced) and can be reloaded on demand.
+// The definition catalogue as the api serves it, in four layers that override by id: the
+// community catalogue in `<config>/definitions/community` (see community-catalogue.ts; lowest,
+// and only while enabled), definitions bundled with @arclight/indexers, then the definition
+// feed's downloads in `<config>/definitions/feed` (see definition-feed.ts), then user YAML
+// files in `<config>/definitions`. The user directory is watched (debounced) and can be
+// reloaded on demand. Community files that do not load are kept as `communityFailures` so the
+// catalogue can list them as "not supported yet".
 
-export type DefinitionSource = 'builtin' | 'feed' | 'custom';
+export type DefinitionSource = 'builtin' | 'feed' | 'custom' | 'community';
+
+/** A community file that did not load. */
+export interface CommunityFailure {
+  /** File name without extension (the id the file should declare). */
+  id: string;
+  file: string;
+  code: string;
+  message: string;
+  peek: DefinitionPeek;
+}
+
+type CommunityParse = { ok: true; def: Definition } | { ok: false; failure: CommunityFailure };
 
 export class DefinitionStoreError extends Error {
   constructor(
@@ -46,6 +63,10 @@ export interface DefinitionStoreOptions {
   builtinDir?: string;
   /** Definition feed directory (`<config>/definitions/feed`); loaded between builtin and custom. */
   feedDir?: string;
+  /** Community catalogue directory (`<config>/definitions/community`); loaded below builtin. */
+  communityDir?: string;
+  /** Whether to load `communityDir` (Settings → Catalogue). Default true. */
+  communityEnabled?: () => boolean;
   log?: Logger;
   /** Watch `customDir` and reload on change. Default false. */
   watch?: boolean;
@@ -57,7 +78,14 @@ export class DefinitionStore {
   private catalogue = new DefinitionCatalogue();
   private sources = new Map<string, DefinitionSource>();
   private errors: DefinitionLoadError[] = [];
-  private counts = { builtin: 0, feed: 0, custom: 0 };
+  private counts = { builtin: 0, feed: 0, custom: 0, community: 0 };
+  /** Sources hidden by the winning definition of an id, e.g. yts → ['community']. */
+  private shadowed = new Map<string, DefinitionSource[]>();
+  private communityFailed: CommunityFailure[] = [];
+  private communityLoaded: Definition[] = [];
+  /** Community parses keyed by file path, reused while size and mtime are unchanged. */
+  private readonly communityCache = new Map<string, { size: number; mtimeMs: number; result: CommunityParse }>();
+  private generationCounter = 0;
   private loading: Promise<IndexerDefinitionReloadResult> | undefined;
   private loaded = false;
   private watcher: FSWatcher | undefined;
@@ -77,6 +105,40 @@ export class DefinitionStore {
     return this.opts.feedDir;
   }
 
+  get communityDir(): string | undefined {
+    return this.opts.communityDir;
+  }
+
+  /** Increments on every (re)load; part of the catalogue ETag. */
+  get generation(): number {
+    return this.generationCounter;
+  }
+
+  /** Community files that did not load and are not hidden by another source's definition. */
+  communityFailures(): CommunityFailure[] {
+    return this.communityFailed.filter((f) => !this.catalogue.has(f.id));
+  }
+
+  /** Every community definition that loaded (hidden by another source or not). */
+  communityDefinitions(): Definition[] {
+    return [...this.communityLoaded];
+  }
+
+  /** Every community file that did not load (hidden or not). */
+  allCommunityFailures(): CommunityFailure[] {
+    return [...this.communityFailed];
+  }
+
+  /** Sources an id's winning definition overrides. */
+  overrides(id: string): DefinitionSource[] {
+    return this.shadowed.get(id) ?? [];
+  }
+
+  /** Loaded counts per layer (community counts files that loaded, hidden or not). */
+  layerCounts(): { builtin: number; feed: number; custom: number; community: number } {
+    return { ...this.counts };
+  }
+
   /** Resolves once the first load finished (starting it if needed). */
   async ready(): Promise<void> {
     if (this.loaded) return;
@@ -94,6 +156,15 @@ export class DefinitionStore {
   }
 
   private async load(): Promise<IndexerDefinitionReloadResult> {
+    const community = new DefinitionCatalogue();
+    const communityFailed: CommunityFailure[] = [];
+    const communityOn = this.opts.communityEnabled?.() ?? true;
+    if (this.opts.communityDir && communityOn) {
+      for (const r of await this.loadCommunity(this.opts.communityDir)) {
+        if (r.ok) community.add(r.def);
+        else communityFailed.push(r.failure);
+      }
+    }
     const builtin = await DefinitionCatalogue.fromDirectories([this.builtinDir]);
     const feed = new DefinitionCatalogue();
     if (this.opts.feedDir) await feed.loadDirectory(this.opts.feedDir);
@@ -102,31 +173,91 @@ export class DefinitionStore {
 
     const merged = new DefinitionCatalogue();
     const sources = new Map<string, DefinitionSource>();
-    for (const def of builtin.list()) {
-      merged.add(def);
-      sources.set(def.id, 'builtin');
+    const shadowed = new Map<string, DefinitionSource[]>();
+    const layers: Array<[DefinitionSource, DefinitionCatalogue]> = [
+      ['community', community],
+      ['builtin', builtin],
+      ['feed', feed],
+      ['custom', custom],
+    ];
+    for (const [source, layer] of layers) {
+      for (const def of layer.list()) {
+        const previous = sources.get(def.id);
+        if (previous) shadowed.set(def.id, [...(shadowed.get(def.id) ?? []), previous]);
+        merged.add(def);
+        sources.set(def.id, source);
+      }
     }
-    for (const def of feed.list()) {
-      merged.add(def);
-      sources.set(def.id, 'feed');
-    }
-    for (const def of custom.list()) {
-      merged.add(def);
-      sources.set(def.id, 'custom');
+    // A community file that failed under an id another source provides is hidden by it.
+    for (const f of communityFailed) {
+      const hidden = shadowed.get(f.id) ?? [];
+      if (sources.has(f.id) && !hidden.includes('community')) shadowed.set(f.id, [...hidden, 'community']);
     }
     this.catalogue = merged;
     this.sources = sources;
-    this.counts = { builtin: builtin.size, feed: feed.size, custom: custom.size };
+    this.shadowed = shadowed;
+    this.communityFailed = communityFailed;
+    this.communityLoaded = community.list();
+    this.counts = { builtin: builtin.size, feed: feed.size, custom: custom.size, community: community.size };
     this.errors = [...builtin.errors, ...feed.errors, ...custom.errors].map((e) => ({
       file: e.file,
       code: e.error.code,
       message: e.error.message,
     }));
     this.loaded = true;
+    this.generationCounter++;
     for (const e of this.errors) this.opts.log?.warn({ file: e.file, code: e.code }, `definition not loaded: ${e.message}`);
-    this.opts.log?.info({ builtin: builtin.size, feed: feed.size, custom: custom.size }, 'indexer definitions loaded');
+    this.opts.log?.info(
+      { builtin: builtin.size, feed: feed.size, custom: custom.size, community: community.size, communityUnsupported: communityFailed.length },
+      'indexer definitions loaded',
+    );
     for (const listener of this.reloadListeners) listener();
     return this.status();
+  }
+
+  /** Parse every community file, reusing results for files whose size and mtime did not change. */
+  private async loadCommunity(dir: string): Promise<CommunityParse[]> {
+    let names: string[];
+    try {
+      names = await readdir(dir);
+    } catch {
+      return [];
+    }
+    const results: CommunityParse[] = [];
+    const seen = new Set<string>();
+    for (const name of names.sort()) {
+      const ext = extname(name).toLowerCase();
+      if (ext !== '.yml' && ext !== '.yaml') continue;
+      const file = join(dir, name);
+      seen.add(file);
+      let info: { size: number; mtimeMs: number };
+      try {
+        const st = await stat(file);
+        info = { size: st.size, mtimeMs: st.mtimeMs };
+      } catch {
+        continue;
+      }
+      const cached = this.communityCache.get(file);
+      if (cached && cached.size === info.size && cached.mtimeMs === info.mtimeMs) {
+        results.push(cached.result);
+        continue;
+      }
+      const id = basename(name, extname(name));
+      let result: CommunityParse;
+      let text = '';
+      try {
+        text = await readFile(file, 'utf8');
+        result = { ok: true, def: parseDefinitionYaml(text, { fileKey: id }) };
+      } catch (err) {
+        const code = err instanceof DefinitionError ? err.code : 'invalid_value';
+        const message = err instanceof Error ? err.message : String(err);
+        result = { ok: false, failure: { id, file: name, code, message, peek: peekDefinitionYaml(text) } };
+      }
+      this.communityCache.set(file, { ...info, result });
+      results.push(result);
+    }
+    for (const key of [...this.communityCache.keys()]) if (!seen.has(key)) this.communityCache.delete(key);
+    return results;
   }
 
   /** Called after every (re)load, e.g. to drop cached indexer clients. Returns unsubscribe. */
@@ -224,7 +355,9 @@ export class DefinitionStore {
     if (!this.opts.watch || !dir || this.watcher) return;
     try {
       await mkdir(dir, { recursive: true });
-      this.watcher = watch(dir, () => {
+      this.watcher = watch(dir, (_event, filename) => {
+        // State files and the feed/community subfolders change during syncs, which reload on their own.
+        if (filename && !/\.ya?ml$/i.test(String(filename))) return;
         clearTimeout(this.debounce);
         this.debounce = setTimeout(() => {
           this.reload().catch((err: unknown) => this.opts.log?.error({ err }, 'definition reload failed'));

@@ -3,11 +3,10 @@ import { fireEvent, render, screen, waitFor, within } from '@testing-library/rea
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import { useState } from 'react';
-import type { Indexer, IndexerCategory, IndexerDefinitionSummary, IndexerTemplate } from '@arclight/shared';
+import type { Indexer, IndexerCatalogue, IndexerCatalogueEntry, IndexerCategory, IndexerDefinitionSummary, IndexerTemplate } from '@arclight/shared';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';
 import { createQueryClient } from '../../../query-client.js';
-import { EMPTY_CATALOGUE_FILTER, filterDefinitions, filterTemplates } from './definition-fields.js';
 import { CATEGORY_INDENT, CategoryTree } from './indexer-fields.js';
 import { indexerHealth, IndexersPage } from './indexers-page.js';
 
@@ -70,6 +69,68 @@ const indexer = (over: Partial<Indexer>): Indexer => ({
   ...over,
 });
 
+const entry = (over: Partial<IndexerCatalogueEntry> & Pick<IndexerCatalogueEntry, 'id' | 'name'>): IndexerCatalogueEntry => ({
+  key: `${over.kind ?? 'definition'}:${over.id}`,
+  kind: 'definition',
+  description: '',
+  language: 'en-US',
+  protocol: 'torrent',
+  privacy: 'public',
+  links: [],
+  categoryIds: [2000],
+  categoryGroups: ['movies'],
+  tested: true,
+  source: 'builtin',
+  support: 'supported',
+  ...over,
+});
+
+const catalogueEntries: IndexerCatalogueEntry[] = [
+  entry({
+    id: 'torznab',
+    kind: 'generic',
+    name: 'Torznab',
+    description: 'Any Torznab endpoint',
+    source: 'generic',
+    privacy: 'private',
+    language: '',
+    preset: { implementation: 'torznab', baseUrl: '', apiPath: '/api', categories: [2000, 5000], animeCategories: [5070] },
+  }),
+  entry({ id: 'yts', name: 'YTS', description: 'Movie torrents', links: ['https://yts.example/'] }),
+  entry({ id: 'privtracker', name: 'PrivTracker', description: 'Members only', privacy: 'private', tested: false, source: 'community', categoryGroups: ['tv'] }),
+  entry({ id: 'cloudy', name: 'Cloudy', description: 'Behind a challenge', requiresFlareSolverr: true, source: 'community' }),
+  entry({ id: 'capped', name: 'Capped', description: 'Login captcha', support: 'limited', supportReason: 'login.captcha (image) is not supported', source: 'community', language: 'de-DE' }),
+  entry({ id: 'oddball', name: 'Oddball', description: 'Broken', support: 'unsupported', supportReason: 'id "oddball-api" does not match file name "oddball"', source: 'community', categoryGroups: [] }),
+  entry({
+    id: 'nzbplanet',
+    kind: 'preset',
+    name: 'NZBPlanet',
+    description: 'General usenet indexer',
+    protocol: 'usenet',
+    privacy: 'semi-private',
+    source: 'preset',
+    links: ['https://api.nzbplanet.net'],
+    preset: { implementation: 'newznab', baseUrl: 'https://api.nzbplanet.net', apiPath: '/api', categories: [2000, 5000], animeCategories: [5070], apiKeyHint: 'Your profile page' },
+  }),
+  entry({
+    id: 'nzbgeek',
+    kind: 'preset',
+    name: 'NZBgeek',
+    protocol: 'usenet',
+    privacy: 'semi-private',
+    source: 'preset',
+    links: ['https://api.nzbgeek.info'],
+    preset: { implementation: 'newznab', baseUrl: 'https://api.nzbgeek.info', apiPath: '/api', categories: [2000, 5000], animeCategories: [5070] },
+  }),
+];
+
+const catalogue = (entries: IndexerCatalogueEntry[]): IndexerCatalogue => ({
+  etag: 'W/"x"',
+  counts: { total: entries.length, supported: entries.filter((e) => e.support !== 'unsupported').length, limited: 1, unsupported: 1, bySource: {} },
+  community: { enabled: true, lastSuccessAt: '2026-10-26T00:00:00Z', lastError: null },
+  entries,
+});
+
 let responses: Record<string, unknown>;
 let calls: Array<{ url: string; method: string; body: unknown }>;
 
@@ -80,7 +141,11 @@ beforeEach(() => {
       indexer({}),
       indexer({ id: 2, name: 'Geek', implementation: 'newznab', protocol: 'usenet', priority: 3, status: { failureCount: 2 } }),
       indexer({ id: 3, name: 'Old', enableRss: false, enableAutomaticSearch: false, enableInteractiveSearch: false }),
+      indexer({ id: 4, name: 'My YTS', implementation: 'definition', settings: { baseUrl: 'https://yts.example/', apiPath: '', categories: [], animeCategories: [], definitionId: 'yts', fields: {} } }),
+      indexer({ id: 5, name: 'Geek main', implementation: 'newznab', protocol: 'usenet', settings: { baseUrl: 'https://api.nzbgeek.info/', apiPath: '/api', categories: [], animeCategories: [] } }),
     ],
+    '/api/v1/indexer/catalogue': catalogue(catalogueEntries),
+    '/api/v1/indexer/definition/yts': { ...definitions[0], searchModes: ['search'], requiresLogin: false, warnings: [] },
     '/api/v1/indexer/schema': [template('torznab'), template('newznab')],
     '/api/v1/indexer/definition': definitions,
     '/api/v1/indexer/categories': [],
@@ -125,43 +190,148 @@ async function openChooser() {
   return screen.findByRole('dialog', { name: 'Add indexer' });
 }
 
-describe('indexer chooser filters', () => {
-  it('filters definitions and endpoint templates by search text', () => {
-    expect(filterDefinitions(definitions, { ...EMPTY_CATALOGUE_FILTER, text: 'members' }).map((d) => d.id)).toEqual(['privtracker']);
-    expect(filterDefinitions(definitions, { ...EMPTY_CATALOGUE_FILTER, text: 'de-de usenet' }).map((d) => d.id)).toEqual(['nzbsite']);
-    expect(filterDefinitions(definitions, { ...EMPTY_CATALOGUE_FILTER, text: '' }).map((d) => d.name)).toEqual(['NzbSite', 'PrivTracker', 'YTS']);
-    const templates = [template('torznab'), template('newznab'), { ...template('torznab'), implementation: 'definition' as const }];
-    expect(filterTemplates(templates, 'newz').map((t) => t.implementation)).toEqual(['newznab']);
-    expect(filterTemplates(templates, 'usenet').map((t) => t.implementation)).toEqual(['newznab']);
-    expect(filterTemplates(templates, '')).toHaveLength(2);
-  });
+const listbox = (dialog: HTMLElement) => within(dialog).findByRole('listbox', { name: 'Catalogue entries' });
+const optionNames = (list: HTMLElement) => within(list).getAllByRole('option').map((o) => o.getAttribute('aria-label'));
 
-  it('narrows both chooser tabs as the user types in the search field', async () => {
+describe('indexer chooser', () => {
+  it('opens wide with the search field focused and lists every entry with its facts', async () => {
     const dialog = await openChooser();
-    const endpoints = await within(dialog).findByRole('list', { name: 'Endpoint types' });
-    expect(within(endpoints).getAllByRole('button')).toHaveLength(2);
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search indexers' }), { target: { value: 'torz' } });
-    expect(within(endpoints).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Add Torznab']);
-
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Catalogue' }));
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search indexers' }), { target: { value: 'members' } });
-    const list = await within(dialog).findByRole('list', { name: 'Definitions' });
-    expect(within(list).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Add PrivTracker']);
-    fireEvent.change(within(dialog).getByRole('searchbox', { name: 'Search indexers' }), { target: { value: 'nothing-like-this' } });
-    expect(await within(dialog).findByText('No definitions match')).toBeTruthy();
-  });
-
-  it('shows a privacy chip and protocol badge on every catalogue row', async () => {
-    const dialog = await openChooser();
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Catalogue' }));
-    const list = await within(dialog).findByRole('list', { name: 'Definitions' });
-    const row = (name: string) => within(list).getByRole('button', { name: `Add ${name}` });
+    expect(dialog.getAttribute('data-width')).toBe('1100');
+    const list = await listbox(dialog);
+    expect(document.activeElement).toBe(within(dialog).getByRole('searchbox', { name: 'Search indexers' }));
+    expect(optionNames(list)).toEqual(['Torznab', 'Capped', 'Cloudy', 'NZBgeek', 'NZBPlanet', 'Oddball', 'PrivTracker', 'YTS']);
+    const row = (name: string) => within(list).getByRole('option', { name });
     expect(within(row('YTS')).getByText('Public').className).toContain('al-chip');
     expect(within(row('YTS')).getByText('TOR').className).toContain('al-proto');
     expect(within(row('PrivTracker')).getByText('Private')).toBeTruthy();
     expect(within(row('PrivTracker')).getByText('Untested')).toBeTruthy();
-    expect(within(row('NzbSite')).getByText('Semi-private')).toBeTruthy();
-    expect(within(row('NzbSite')).getByText('NZB')).toBeTruthy();
+    expect(within(row('PrivTracker')).getByText('Community')).toBeTruthy();
+    expect(within(row('NZBPlanet')).getByText('NZB')).toBeTruthy();
+    expect(within(row('NZBPlanet')).getByText('Preset')).toBeTruthy();
+    expect(within(row('Capped')).getByText('Limited')).toBeTruthy();
+    expect(within(row('Oddball')).getByText('Not supported yet')).toBeTruthy();
+    expect(within(row('Oddball')).getByText(/does not match file name/)).toBeTruthy();
+    expect(within(dialog).getByText(/8 shown · 8 total · 7 can be added · 1 not supported yet/)).toBeTruthy();
+  });
+
+  it('filters by text (name, description or URL), protocol, privacy, language, category and support', async () => {
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    const search = within(dialog).getByRole('searchbox', { name: 'Search indexers' });
+    fireEvent.change(search, { target: { value: 'members' } });
+    expect(optionNames(list)).toEqual(['PrivTracker']);
+    fireEvent.change(search, { target: { value: 'nzbplanet.net' } });
+    expect(optionNames(list)).toEqual(['NZBPlanet']);
+    fireEvent.change(search, { target: { value: '' } });
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Protocol' }), { target: { value: 'usenet' } });
+    expect(optionNames(list)).toEqual(['NZBgeek', 'NZBPlanet']);
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Protocol' }), { target: { value: 'all' } });
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Privacy' }), { target: { value: 'private' } });
+    // generic endpoints ignore privacy, language and category
+    expect(optionNames(list)).toEqual(['Torznab', 'PrivTracker']);
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Privacy' }), { target: { value: 'all' } });
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Language' }), { target: { value: 'de' } });
+    expect(optionNames(list)).toEqual(['Torznab', 'Capped']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Category' }), { target: { value: 'tv' } });
+    expect(optionNames(list)).toEqual(['Torznab', 'PrivTracker']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Clear' }));
+    fireEvent.change(within(dialog).getByRole('combobox', { name: 'Source' }), { target: { value: 'community' } });
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Hide unsupported' }));
+    expect(optionNames(list)).toEqual(['Capped', 'Cloudy', 'PrivTracker']);
+    fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Tested only' }));
+    expect(optionNames(list)).toEqual(['Capped', 'Cloudy']);
+    fireEvent.change(search, { target: { value: 'nothing-like-this' } });
+    expect(await within(dialog).findByText('No definitions match')).toBeTruthy();
+  });
+
+  it('sorts by a column and toggles the direction', async () => {
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sort by Privacy' }));
+    expect(optionNames(list).slice(0, 2)).toEqual(['Torznab', 'Capped']);
+    expect(optionNames(list).slice(-1)).toEqual(['PrivTracker']);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Sort by Privacy' }));
+    expect(optionNames(list).slice(0, 2)).toEqual(['Torznab', 'PrivTracker']);
+  });
+
+  it('greys added entries and offers Edit existing or Add another', async () => {
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    const yts = within(list).getByRole('option', { name: 'YTS' });
+    expect(yts.getAttribute('data-added')).toBe('true');
+    expect(within(yts).getByText('Added')).toBeTruthy();
+    expect(within(yts).getByText(/In use as My YTS/)).toBeTruthy();
+    // presets match by base URL host
+    expect(within(list).getByRole('option', { name: 'NZBgeek' }).getAttribute('data-added')).toBe('true');
+    expect(within(list).getByRole('option', { name: 'NZBPlanet' }).getAttribute('data-added')).toBeNull();
+
+    fireEvent.click(yts);
+    const choice = await screen.findByRole('dialog', { name: 'YTS is already added' });
+    expect(within(choice).getByText('You already use it as My YTS.')).toBeTruthy();
+    fireEvent.click(within(choice).getByRole('button', { name: 'Edit existing' }));
+    expect(await screen.findByRole('dialog', { name: 'Edit My YTS' })).toBeTruthy();
+    expect(screen.queryByRole('dialog', { name: 'Add indexer' })).toBeNull();
+  });
+
+  it('Add another opens a fresh editor for the same definition', async () => {
+    const dialog = await openChooser();
+    fireEvent.click(within(await listbox(dialog)).getByRole('option', { name: 'YTS' }));
+    const choice = await screen.findByRole('dialog', { name: 'YTS is already added' });
+    fireEvent.click(within(choice).getByRole('button', { name: 'Add another' }));
+    expect(await screen.findByRole('dialog', { name: 'Add YTS' })).toBeTruthy();
+  });
+
+  it('explains why an unsupported entry cannot be added', async () => {
+    const dialog = await openChooser();
+    fireEvent.click(within(await listbox(dialog)).getByRole('option', { name: 'Oddball' }));
+    const info = await screen.findByRole('dialog', { name: 'Oddball is not supported yet' });
+    expect(within(info).getAllByText(/does not match file name/).length).toBeGreaterThan(0);
+    expect(within(info).getByText(/oddball\.yml/)).toBeTruthy();
+  });
+
+  it('moves through rows with the keyboard and opens the active one with Enter', async () => {
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    const search = within(dialog).getByRole('searchbox', { name: 'Search indexers' });
+    fireEvent.change(search, { target: { value: 'nzb' } });
+    fireEvent.keyDown(search, { key: 'ArrowDown' });
+    expect(document.activeElement).toBe(list);
+    const activeName = () => document.getElementById(list.getAttribute('aria-activedescendant') ?? '')?.getAttribute('aria-label');
+    expect(activeName()).toBe('NZBgeek');
+    fireEvent.keyDown(list, { key: 'ArrowDown' });
+    expect(activeName()).toBe('NZBPlanet');
+    fireEvent.keyDown(list, { key: 'Home' });
+    expect(activeName()).toBe('NZBgeek');
+    fireEvent.keyDown(list, { key: 'End' });
+    fireEvent.keyDown(list, { key: 'Enter' });
+    const editor = await screen.findByRole('dialog', { name: 'Add NZBPlanet indexer' });
+    expect((within(editor).getByLabelText(/^URL/) as HTMLInputElement).value).toBe('https://api.nzbplanet.net');
+    expect(within(editor).getByText(/Add your API key, then Test/)).toBeTruthy();
+    expect(within(editor).getByText('API key: Your profile page.')).toBeTruthy();
+  });
+
+  it('hints at the solver on rows behind a challenge when no solver proxy exists', async () => {
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    const notes = await within(list).findAllByRole('note');
+    expect(notes).toHaveLength(1);
+    expect(within(notes[0]!).getByRole('link', { name: 'Set up' }).getAttribute('href')).toBe('/settings/solver');
+    expect(notes[0]!.closest('[role="option"]')?.getAttribute('aria-label')).toBe('Cloudy');
+  });
+
+  it('renders only a window of a large catalogue', async () => {
+    const many = Array.from({ length: 600 }, (_, i) => entry({ id: `site${String(i).padStart(3, '0')}`, name: `Site ${String(i).padStart(3, '0')}` }));
+    responses['/api/v1/indexer/catalogue'] = catalogue(many);
+    const dialog = await openChooser();
+    const list = await listbox(dialog);
+    const rendered = within(list).getAllByRole('option');
+    expect(rendered.length).toBeGreaterThan(5);
+    expect(rendered.length).toBeLessThan(40);
+    expect(within(dialog).getByText(/600 shown · 600 total/)).toBeTruthy();
+    // jump to the end: the last row is rendered and active
+    fireEvent.keyDown(list, { key: 'End' });
+    expect(within(list).getByRole('option', { name: 'Site 599' }).getAttribute('aria-selected')).toBe('true');
   });
 });
 
@@ -196,9 +366,9 @@ describe('indexer cards', () => {
     expect(indexerHealth({ status: undefined, enableRss: false, enableAutomaticSearch: false, enableInteractiveSearch: false }, now)).toEqual({ tone: 'muted', label: 'Disabled' });
   });
 
-  it('opens the 640 editor with stacked fields from a template', async () => {
+  it('opens the endpoint editor with stacked fields from a generic entry', async () => {
     const dialog = await openChooser();
-    fireEvent.click(await within(dialog).findByRole('button', { name: 'Add Torznab' }));
+    fireEvent.click(within(await listbox(dialog)).getByRole('option', { name: 'Torznab' }));
     const editor = await screen.findByRole('dialog', { name: 'Add Torznab indexer' });
     expect(within(editor).getByLabelText(/^URL/)).toBeTruthy();
     expect(within(editor).getByRole('button', { name: 'Test' })).toBeTruthy();

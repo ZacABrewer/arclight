@@ -104,6 +104,8 @@ export interface HealthDeps {
   flareSolverrs?(): Promise<HealthFlareSolverr[]>;
   /** Reachability of Remote Engine download clients; optional so deps without it skip the check. */
   remoteEngines?(): Promise<Array<{ id: number; name: string; url: string; ok: boolean; message?: string }>>;
+  /** Community indexer catalogue (indexers module); optional so deps without it skip the check. */
+  indexerCatalogue?(): Promise<HealthIndexerCatalogue>;
   /** Self-updating data feeds (feeds registry); optional so deps without it skip the check. */
   feeds?(): Promise<FeedSummary[]>;
   /** Downloads still transferring (download-clients module); optional so deps without it skip the checks. */
@@ -165,4 +167,13 @@ export function formatMiB(bytes: number): string {
 
 export function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+export interface HealthIndexerCatalogue {
+  enabled: boolean;
+  lastSuccessAt: string | null;
+  /** Definition files on disk. */
+  files: number;
+  /** Files that load. */
+  supported: number;
 }

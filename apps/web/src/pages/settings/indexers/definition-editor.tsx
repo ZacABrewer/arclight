@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import type { Indexer, IndexerDefinitionSummary } from '@arclight/shared';
+import { categoryGroupsOf, type Indexer, type IndexerDefinitionDetail, type IndexerDefinitionSummary } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { indexersApi } from '../../../api/indexers.js';
 import { Chip, ErrorBlock, Modal, ProtocolBadge, Skeleton } from '../../../arclight/index.js';
@@ -11,19 +11,22 @@ import { useCreateIndexer, useDeleteIndexer, useIndexerDefinition, useIndexerPro
 import { EditorFooter, SaveError } from '../shared.js';
 import { hasSolverProxy } from '../indexer-proxies/proxy-model.js';
 import { SolverHint } from './solver-hint.js';
+import { CATEGORY_GROUP_LABELS, SourceBadge } from './catalogue.js';
+import { languageName, primaryLanguage } from './catalogue-model.js';
 import { definitionBase, definitionFields, definitionNeedsSolver, definitionNotes, definitionValuesOf, PRIVACY_LABELS, PRIVACY_TONES, toDefinitionBody } from './definition-fields.js';
 import { indexerTestOutcome } from './indexer-fields.js';
 import { IndexerEditorTabs } from './tracker-account.js';
 import './indexers.css';
 import { t } from '../../../i18n/index.js';
 
-export type DefinitionEditing = { definition: IndexerDefinitionSummary } | { indexer: Indexer };
+/** A definition summary in hand, a saved indexer, or a catalogue pick by id (details are fetched). */
+export type DefinitionEditing = { definition: IndexerDefinitionSummary } | { indexer: Indexer } | { definitionId: string };
 
 /** Editor for a catalogue (definition) indexer: fields come from the definition's settings. */
 export function DefinitionEditor({ editing, onClose }: { editing: DefinitionEditing; onClose: () => void }) {
-  const definitionId = 'definition' in editing ? editing.definition.id : (editing.indexer.settings.definitionId ?? '');
-  // A saved indexer needs its definition's field list; a fresh pick already has it.
-  const detail = useIndexerDefinition('indexer' in editing ? definitionId : undefined);
+  const definitionId = 'definition' in editing ? editing.definition.id : 'definitionId' in editing ? editing.definitionId : (editing.indexer.settings.definitionId ?? '');
+  // A saved indexer or a catalogue pick needs the definition's field list; a summary already has it.
+  const detail = useIndexerDefinition('definition' in editing ? undefined : definitionId);
   const def = 'definition' in editing ? editing.definition : detail.data;
   const proxies = useIndexerProxies();
 
@@ -61,6 +64,8 @@ function DefinitionForm({
   const remove = useDeleteIndexer();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const notes = definitionNotes(def);
+  const groups = categoryGroupsOf(def.categories.map((c) => c.id));
+  const limits = 'warnings' in def ? (def as IndexerDefinitionDetail).warnings.filter((w) => /not supported|unsupported/i.test(w)) : [];
   const body = () => toDefinitionBody(form.values, def.id);
 
   const submit = () => {
@@ -91,13 +96,25 @@ function DefinitionForm({
             {PRIVACY_LABELS[def.privacy]}
           </Chip>
           <ProtocolBadge protocol={def.protocol} />
+          <SourceBadge source={def.source} />
           {def.tested ? null : (
             <Chip tone="warn" dot="none">
               {t('settings.indexers.definitionEditor.untestedDefinition')}
             </Chip>
           )}
-          {def.description ? <span>{def.description}</span> : null}
+          {def.language ? (
+            <span className="al-catalogue__lang" title={languageName(primaryLanguage(def.language))}>
+              {def.language}
+            </span>
+          ) : null}
+          {groups.length ? <span>{groups.map((g) => CATEGORY_GROUP_LABELS[g]).join(' · ')}</span> : null}
+          {def.description ? <span className="al-def-meta__desc">{def.description}</span> : null}
         </div>
+        {limits.map((w) => (
+          <p key={w} className="al-def-note" role="note" data-tone="warn">
+            <strong>{t('settings.indexers.definitionEditor.limitedSupport')}</strong> {w}
+          </p>
+        ))}
         {definitionNeedsSolver(def) && !hasSolverProxy(proxies) ? <SolverHint /> : null}
         {notes.map((n) => (
           <p key={n.name} className="al-def-note" role="note">

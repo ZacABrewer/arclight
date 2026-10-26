@@ -1,0 +1,47 @@
+# Test fixture written for Arclight: a minimal public HTML tracker in the Cardigann dialect.
+id: alphatracker
+name: AlphaTracker
+description: "Public test tracker for movies and TV"
+language: en-US
+type: public
+encoding: UTF-8
+links:
+  - https://alpha.example/
+
+caps:
+  categorymappings:
+    - {id: 1, cat: Movies/HD, desc: "Movies"}
+    - {id: 2, cat: TV/HD, desc: "TV"}
+  modes:
+    search: [q]
+    tv-search: [q, season, ep]
+    movie-search: [q]
+
+settings: []
+
+search:
+  paths:
+    - path: "search/{{ .Keywords }}/"
+  rows:
+    selector: "table.list tr:has(a.dl)"
+  fields:
+    category:
+      selector: "td.cat a"
+      attribute: href
+      filters: [{name: querystring, args: cat}]
+    title:
+      selector: "td.name a"
+    details:
+      selector: "td.name a"
+      attribute: href
+    download:
+      selector: "a.dl"
+      attribute: href
+    size:
+      selector: "td.size"
+    seeders:
+      selector: "td.seeds"
+    leechers:
+      selector: "td.peers"
+    date:
+      text: now

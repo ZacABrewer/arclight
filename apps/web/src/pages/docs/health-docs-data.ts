@@ -117,20 +117,6 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     link: { get label() { return t('common.downloadClients'); }, to: '/settings/downloadclients' },
   },
   {
-    anchor: 'hard-links-not-possible',
-    sources: ['HardLinkCheck'],
-    get title() {
-      return t('docs.healthDocs.hardLinksAreNotPossible');
-    },
-    get cause() {
-      return t('docs.healthDocs.theDownloadFolderAndThe');
-    },
-    get fix() {
-      return [t('docs.healthDocs.mountOneSharedFolderFor'), t('docs.healthDocs.pointRootFoldersAndThe')];
-    },
-    link: { get label() { return t('common.downloadClients'); }, to: '/settings/downloadclients' },
-  },
-  {
     anchor: 'docker-bad-remote-path-mapping',
     sources: ['RemotePathMappingCheck'],
     get title() {
@@ -490,6 +476,20 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
       return [t('docs.healthDocs.checkTheLastErrorIn'), t('docs.healthDocs.openSystemFeedsToSee')];
     },
     link: { get label() { return t('common.feeds'); }, to: '/system/feeds' },
+  },
+  {
+    anchor: 'indexer-catalogue-empty',
+    sources: ['IndexerCatalogueEmpty'],
+    get title() {
+      return t('docs.healthDocs.indexerCatalogueEmptyTitle');
+    },
+    get cause() {
+      return t('docs.healthDocs.indexerCatalogueEmptyCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.indexerCatalogueEmptyFix1'), t('docs.healthDocs.indexerCatalogueEmptyFix2')];
+    },
+    link: { get label() { return t('nav.indexerCatalogue'); }, to: '/settings/indexercatalogue' },
   },
   {
     anchor: 'update-available',

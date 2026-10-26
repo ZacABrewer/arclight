@@ -1,0 +1,43 @@
+# Test fixture written for Arclight: a setting name with a hyphen used in a template.
+id: deltahyphen
+name: DeltaHyphen
+description: "Public XXX test site using a hyphenated setting"
+language: en-US
+type: public
+links:
+  - https://delta.example/
+
+caps:
+  categorymappings:
+    - {id: 7, cat: XXX, desc: "Adult"}
+  modes:
+    search: [q]
+
+settings:
+  - name: cat-id
+    type: select
+    label: Category
+    default: "0"
+    options:
+      "0": All
+      "7": Adult
+
+search:
+  paths:
+    - path: "search-{{ .Keywords }}-{{ .Config.cat-id }}.html"
+  rows:
+    selector: "tr"
+  fields:
+    title:
+      selector: "a"
+    download:
+      selector: "a.dl"
+      attribute: href
+    size:
+      text: "1 GB"
+    seeders:
+      text: 1
+    leechers:
+      text: 0
+    date:
+      text: now

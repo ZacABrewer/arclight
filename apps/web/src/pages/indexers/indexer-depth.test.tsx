@@ -116,6 +116,28 @@ const responses: Record<string, unknown> = {
   '/api/v1/indexer/schema': [],
   '/api/v1/indexer/categories': [],
   '/api/v1/indexer/definition': [yts, tracker],
+  '/api/v1/indexer/definition/yts': { ...yts, searchModes: ['search'], requiresLogin: false, warnings: [] },
+  '/api/v1/indexer/catalogue': {
+    etag: 'W/"t"',
+    counts: { total: 2, supported: 2, limited: 0, unsupported: 0, bySource: { builtin: 1, community: 1 } },
+    community: { enabled: true, lastSuccessAt: null, lastError: null },
+    entries: [yts, tracker].map((d) => ({
+      key: `definition:${d.id}`,
+      kind: 'definition',
+      id: d.id,
+      name: d.name,
+      description: d.description,
+      language: d.language,
+      protocol: d.protocol,
+      privacy: d.privacy,
+      links: d.links,
+      categoryIds: [2000],
+      categoryGroups: ['movies'],
+      tested: d.tested,
+      source: d.id === 'yts' ? 'builtin' : 'community',
+      support: 'supported',
+    })),
+  },
   '/api/v1/indexerproxy': [{ id: 7, name: 'Flare', type: 'flaresolverr', host: 'http://flare', port: 8191, tags: [] }],
   '/api/v1/indexer/stats?days=30': stats,
   '/api/v1/settings/indexers': options,
@@ -162,15 +184,15 @@ describe('indexer catalogue', () => {
     renderAt('/settings/indexers');
     fireEvent.click(await screen.findByRole('button', { name: /Add indexer/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Add indexer' });
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Catalogue' }));
-    const list = await within(dialog).findByRole('list', { name: 'Definitions' });
-    expect(within(list).getAllByRole('button').map((b) => b.getAttribute('aria-label'))).toEqual(['Add PrivTracker', 'Add YTS']);
+    const list = await within(dialog).findByRole('listbox', { name: 'Catalogue entries' });
+    expect(within(list).getAllByRole('option').map((b) => b.getAttribute('aria-label'))).toEqual(['PrivTracker', 'YTS']);
     expect(within(list).getByText('Untested')).toBeTruthy();
+    expect(within(dialog).getByText(/not been downloaded yet/)).toBeTruthy();
 
     fireEvent.change(within(dialog).getByLabelText('Privacy'), { target: { value: 'public' } });
-    expect(within(list).getAllByRole('button')).toHaveLength(1);
+    expect(within(list).getAllByRole('option')).toHaveLength(1);
 
-    fireEvent.click(within(list).getByRole('button', { name: 'Add YTS' }));
+    fireEvent.click(within(list).getByRole('option', { name: 'YTS' }));
     const editor = await screen.findByRole('dialog', { name: 'Add YTS' });
     expect(within(editor).getByLabelText('Sort results by')).toBeTruthy();
     expect(within(editor).getByText('Heads up')).toBeTruthy();
@@ -182,8 +204,7 @@ describe('indexer catalogue', () => {
     renderAt('/settings/indexers');
     fireEvent.click(await screen.findByRole('button', { name: /Add indexer/ }));
     const dialog = await screen.findByRole('dialog', { name: 'Add indexer' });
-    fireEvent.click(within(dialog).getByRole('tab', { name: 'Catalogue' }));
-    fireEvent.click(await within(dialog).findByRole('button', { name: 'Add YTS' }));
+    fireEvent.click(await within(dialog).findByRole('option', { name: 'YTS' }));
     const editor = await screen.findByRole('dialog', { name: 'Add YTS' });
     fireEvent.change(within(editor).getByLabelText('Sort results by'), { target: { value: 'seeds' } });
     await within(editor).findByRole('option', { name: 'Flare (flaresolverr)' });

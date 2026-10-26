@@ -1,0 +1,3 @@
+# Test fixture written for Arclight: not valid YAML at all.
+id: broken
+name: [unclosed

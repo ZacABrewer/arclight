@@ -6,8 +6,6 @@ import type {
   IndexerDefinitionSummary,
   IndexerPrivacy,
   IndexerProxy,
-  IndexerTemplate,
-  ReleaseProtocol,
 } from '@arclight/shared';
 import { INDEXER_PRIORITY_DEFAULT, INDEXER_PRIORITY_MAX, INDEXER_PRIORITY_MIN } from '@arclight/shared';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
@@ -162,47 +160,6 @@ export function toDefinitionBody(values: FormValues, definitionId: string): Inde
     proxyId: typeof proxy === 'number' ? proxy : typeof proxy === 'string' && /^\d+$/.test(proxy) ? Number(proxy) : null,
     settings,
   };
-}
-
-export interface CatalogueFilter {
-  text: string;
-  privacy: IndexerPrivacy | 'all';
-  protocol: ReleaseProtocol | 'all';
-  /** Language prefix, '' = any. */
-  language: string;
-}
-
-export const EMPTY_CATALOGUE_FILTER: CatalogueFilter = { text: '', privacy: 'all', protocol: 'all', language: '' };
-
-/** Client-side catalogue filter: every word must appear in id, name, description or language. */
-export function filterDefinitions(list: readonly IndexerDefinitionSummary[], f: CatalogueFilter): IndexerDefinitionSummary[] {
-  const words = f.text.toLowerCase().split(/\s+/).filter(Boolean);
-  const lang = f.language.toLowerCase();
-  return list
-    .filter((d) => {
-      if (f.privacy !== 'all' && d.privacy !== f.privacy) return false;
-      if (f.protocol !== 'all' && d.protocol !== f.protocol) return false;
-      if (lang && !d.language.toLowerCase().startsWith(lang)) return false;
-      const hay = `${d.id} ${d.name} ${d.description} ${d.language}`.toLowerCase();
-      return words.every((w) => hay.includes(w));
-    })
-    .sort((a, b) => a.name.localeCompare(b.name));
-}
-
-/** Distinct languages in the catalogue, for the language filter. */
-export function catalogueLanguages(list: readonly IndexerDefinitionSummary[]): string[] {
-  return [...new Set(list.map((d) => d.language).filter(Boolean))].sort();
-}
-
-/** Generic endpoint templates (Torznab / Newznab) matching the chooser's search text. */
-export function filterTemplates(list: readonly IndexerTemplate[], text: string): IndexerTemplate[] {
-  const words = text.toLowerCase().split(/\s+/).filter(Boolean);
-  return list
-    .filter((item) => item.implementation !== 'definition')
-    .filter((entry) => {
-      const hay = `${entry.implementation} ${entry.implementationName} ${entry.protocol}`.toLowerCase();
-      return words.every((w) => hay.includes(w));
-    });
 }
 
 /** The definition sits behind a browser challenge (`requiresFlareSolverr`, or an `info_flaresolverr` note). */

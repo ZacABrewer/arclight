@@ -1,0 +1,21 @@
+# Test fixture written for Arclight: the id does not match the file name, so it does not load.
+id: gamma-api
+name: GammaMismatch
+description: "Semi-private test tracker with a wrong id"
+language: fr-FR
+type: semi-private
+links:
+  - https://gamma.example/
+caps:
+  categorymappings:
+    - {id: 1, cat: Books, desc: "Books"}
+  modes:
+    search: [q]
+search:
+  paths:
+    - path: "/"
+  rows:
+    selector: "tr"
+  fields:
+    title:
+      selector: "a"

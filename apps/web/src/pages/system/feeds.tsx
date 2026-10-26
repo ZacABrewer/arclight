@@ -24,6 +24,7 @@ export const FEED_STATE: Record<FeedState, { label: string; tone: ChipTone }> = 
 export const FEED_SETTINGS: Partial<Record<string, AppPath>> = {
   guides: '/settings/guides',
   definitions: '/settings/indexeroptions',
+  communityDefinitions: '/settings/indexercatalogue',
   updates: '/settings/updates',
 };
 

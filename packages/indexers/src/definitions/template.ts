@@ -157,7 +157,9 @@ function tokenize(body: string, src: string): Token[] {
       continue;
     }
     if (c === '.') {
-      const m = /^\.[A-Za-z0-9_.]*/.exec(body.slice(i));
+      // Setting names may contain hyphens (`.Config.cat-id`); a hyphen only joins two name
+      // characters, so `.Var -1` and trim markers are unaffected.
+      const m = /^\.(?:[A-Za-z0-9_.]|-(?=[A-Za-z0-9_]))*/.exec(body.slice(i));
       const name = (m?.[0] ?? '.').slice(1).replace(/\.$/, '');
       tokens.push({ t: 'var', v: name });
       i += m?.[0].length ?? 1;
