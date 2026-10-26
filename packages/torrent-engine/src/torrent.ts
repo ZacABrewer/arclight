@@ -1,29 +1,35 @@
 import { EventEmitter } from 'node:events';
-import type net from 'node:net';
 import { join } from 'node:path';
+import type { Duplex } from 'node:stream';
 import { Bitfield } from './bitfield.js';
-import { addressKey, type PeerAddress } from './compact.js';
+import { addressKey, hostFamily, normalizeHost, type PeerAddress } from './compact.js';
 import type { DHT } from './dht/dht.js';
 import { errorMessage, TorrentEngineError } from './errors.js';
 import type { MagnetLink } from './magnet.js';
 import { type Metainfo, metainfoFromInfo } from './metainfo.js';
 import { Choker } from './peer/choker.js';
-import { type BlockRequest, connectTcp, PeerConnection } from './peer/connection.js';
+import { openPeerStream } from './peer/connect.js';
+import { type BlockRequest, PeerConnection, type PeerTransport } from './peer/connection.js';
 import {
   LOCAL_EXT,
   type MetadataMessage,
   MetadataAssembler,
   metadataPiece,
+  PEX_FLAG,
+  type PexPeer,
   PexTracker,
 } from './peer/extensions.js';
+import type { IncomingInfo } from './peer/listener.js';
 import type { Handshake } from './peer/messages.js';
 import { ALL_PIECES, bitfieldPieces, type PeerPieces, PiecePicker } from './picker.js';
-import { RateMeter, type TokenBucket } from './rate.js';
+import { consumeAll, RateMeter, TokenBucket } from './rate.js';
 import type { SessionSettings } from './settings.js';
 import type { ResumeData } from './storage/resume.js';
 import { Storage } from './storage/storage.js';
 import { TrackerManager, type TrackerStatus } from './tracker/tracker-manager.js';
 import type { TrackerClient } from './tracker/types.js';
+import type { UtpManager } from './utp/manager.js';
+import { WebSeedManager, type WebSeedStats } from './webseed.js';
 
 export type TorrentState =
   | 'checking'
@@ -90,6 +96,17 @@ export interface PeerStats {
   peerInterested: boolean;
   snubbed: boolean;
   outstandingRequests: number;
+  /** The connection is RC4-encrypted (MSE). */
+  encrypted: boolean;
+  transport: PeerTransport;
+}
+
+/** Per-torrent and per-peer rate limits in bytes/s (0 = unlimited). */
+export interface TorrentRateLimits {
+  uploadLimit: number;
+  downloadLimit: number;
+  peerUploadLimit: number;
+  peerDownloadLimit: number;
 }
 
 export interface FileStats {
@@ -110,6 +127,10 @@ export interface TorrentContext {
   uploadBuckets: TokenBucket[];
   downloadBuckets: TokenBucket[];
   dht: () => DHT | null;
+  /** Every running DHT node (IPv4 and IPv6). */
+  dhts: () => DHT[];
+  /** The uTP manager when uTP is enabled and bound. */
+  utp: () => UtpManager | null;
   /** Global connection budget check. */
   canConnect: () => boolean;
   isBlocked: (ip: string) => boolean;
@@ -131,6 +152,8 @@ export interface TorrentInit {
   seedRatioLimit?: number | null;
   seedTimeLimitMs?: number | null;
   resume?: ResumeData;
+  superSeeding?: boolean;
+  limits?: TorrentRateLimits;
 }
 
 export interface TorrentEvents {
@@ -155,6 +178,8 @@ interface PeerInfo {
   metadataInflight: number;
   /** Candidate key of the peer's listen address (to avoid connecting twice). */
   listenKey: string | null;
+  /** Super-seeding: the piece currently offered to this peer. */
+  offered: number | null;
 }
 
 interface Candidate {
@@ -164,6 +189,10 @@ interface Candidate {
   nextAttemptAt: number;
   connected: boolean;
   banned: boolean;
+  /** Advertised uTP support (PEX flag). */
+  utp: boolean;
+  /** MSE failed against this peer once: with `preferred`, connect in plaintext. */
+  plainOnly: boolean;
 }
 
 const MAX_CANDIDATES = 2000;
@@ -217,6 +246,14 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   private completedAt: string | null = null;
   private hashFailures = 0;
   private closed = false;
+  private superSeedingValue: boolean;
+  /** How many peers each piece was offered to while super-seeding. */
+  private superOffers = new Map<number, number>();
+  private limits: TorrentRateLimits;
+  private readonly uploadBucket: TokenBucket;
+  private readonly downloadBucket: TokenBucket;
+  private webSeeds: WebSeedManager | null = null;
+  private webSeedPickerSeeds = 0;
 
   constructor(
     private readonly ctx: TorrentContext,
@@ -235,6 +272,10 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.filePriorities = init.filePriorities;
     this.seedRatioLimit = init.seedRatioLimit;
     this.seedTimeLimitMs = init.seedTimeLimitMs;
+    this.superSeedingValue = init.superSeeding ?? false;
+    this.limits = init.limits ?? { uploadLimit: 0, downloadLimit: 0, peerUploadLimit: 0, peerDownloadLimit: 0 };
+    this.uploadBucket = new TokenBucket(this.limits.uploadLimit);
+    this.downloadBucket = new TokenBucket(this.limits.downloadLimit);
     this.assembler = new MetadataAssembler(init.infoHash, ctx.now);
     this.downMeter = new RateMeter(5000, ctx.now);
     this.upMeter = new RateMeter(5000, ctx.now);
@@ -452,17 +493,34 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     }
   }
 
-  /** Adds peers from outside (tracker, DHT, PEX, manual). */
-  addPeers(addrs: readonly PeerAddress[], source: PeerSource = 'manual'): void {
+  /** Adds peers from outside (tracker, DHT, PEX, manual). PEX flags may advertise uTP. */
+  addPeers(addrs: readonly PexPeer[], source: PeerSource = 'manual'): void {
     for (const a of addrs) this.addCandidate(a, source);
     if (this.networking) this.connectMore();
   }
 
-  private addCandidate(addr: PeerAddress, source: PeerSource): void {
-    if (addr.port <= 0 || addr.port > 65535 || this.ctx.isBlocked(addr.host)) return;
+  /** False for addresses we cannot reach from the configured bind address / IPv6 setting. */
+  private reachable(host: string): boolean {
+    const fam = hostFamily(host);
+    if (fam === 0) return false;
+    const settings = this.ctx.settings();
+    if (fam === 6 && !settings.ipv6) return false;
+    const local = this.ctx.localAddress();
+    return !local || hostFamily(local) === fam;
+  }
+
+  private addCandidate(peer: PexPeer, source: PeerSource): void {
+    const addr: PeerAddress = { host: normalizeHost(peer.host), port: peer.port };
+    if (addr.port <= 0 || addr.port > 65535 || this.ctx.isBlocked(addr.host) || !this.reachable(addr.host)) return;
     const key = addressKey(addr);
-    if (this.candidates.has(key) || this.candidates.size >= MAX_CANDIDATES) return;
-    this.candidates.set(key, { addr, source, failures: 0, nextAttemptAt: 0, connected: false, banned: false });
+    const utp = ((peer.flags ?? 0) & PEX_FLAG.utp) !== 0;
+    const existing = this.candidates.get(key);
+    if (existing) {
+      if (utp) existing.utp = true;
+      return;
+    }
+    if (this.candidates.size >= MAX_CANDIDATES) return;
+    this.candidates.set(key, { addr, source, failures: 0, nextAttemptAt: 0, connected: false, banned: false, utp, plainOnly: false });
   }
 
   // ---- networking -----------------------------------------------------------------------------
@@ -507,6 +565,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       void this.dhtAnnounce();
     }
     this.lastTick = this.ctx.now();
+    this.startWebSeeds();
     this.connectMore();
   }
 
@@ -515,6 +574,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.networking = false;
     for (const t of this.timers) clearInterval(t);
     this.timers = [];
+    this.stopWebSeeds();
     const trackers = this.trackers;
     this.trackers = null;
     for (const p of [...this.peers.values()]) p.conn.destroy();
@@ -527,14 +587,22 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   }
 
   private async dhtAnnounce(): Promise<void> {
-    const dht = this.ctx.dht();
-    if (!dht || !dht.listening || !this.networking) return;
-    try {
-      const res = await dht.announce(this.infoHash, this.ctx.listenPort());
-      if (this.networking) this.addPeers(res.peers, 'dht');
-    } catch (err) {
-      this.emit('warning', `dht announce failed: ${errorMessage(err)}`);
-    }
+    await Promise.all(
+      this.ctx.dhts().map(async (dht) => {
+        if (!dht.listening || !this.networking) return;
+        try {
+          const res = await dht.announce(this.infoHash, this.ctx.listenPort());
+          if (this.networking) this.addPeers(res.peers, 'dht');
+        } catch (err) {
+          this.emit('warning', `dht announce failed: ${errorMessage(err)}`);
+        }
+      }),
+    );
+  }
+
+  private dhtFor(host: string): DHT | null {
+    const fam = hostFamily(host);
+    return this.ctx.dhts().find((d) => d.family === fam) ?? null;
   }
 
   private connectMore(): void {
@@ -550,16 +618,34 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     }
   }
 
+  /** Transport order for a candidate: uTP first when it advertised uTP, else TCP first. */
+  private transportsFor(c: Candidate): PeerTransport[] {
+    const settings = this.ctx.settings();
+    const utp = settings.utp && this.ctx.utp() !== null;
+    const out: PeerTransport[] = [];
+    if (utp && c.utp) out.push('utp');
+    if (settings.tcp) out.push('tcp');
+    if (utp && !c.utp) out.push('utp');
+    return out;
+  }
+
   private async connectTo(key: string, c: Candidate): Promise<void> {
     this.connecting.add(key);
     c.connected = true;
     const settings = this.ctx.settings();
-    let sock: net.Socket;
+    let opened: Awaited<ReturnType<typeof openPeerStream>>;
     try {
-      const opts: Parameters<typeof connectTcp>[1] = { timeoutMs: settings.connectTimeoutMs };
+      const opts: Parameters<typeof openPeerStream>[1] = {
+        infoHash: this.infoHash,
+        encryption: settings.encryption,
+        transports: this.transportsFor(c),
+        timeoutMs: settings.connectTimeoutMs,
+        utp: this.ctx.utp(),
+        plainOnly: c.plainOnly,
+      };
       const local = this.ctx.localAddress();
       if (local) opts.localAddress = local;
-      sock = await connectTcp(c.addr, opts);
+      opened = await openPeerStream(c.addr, opts);
     } catch {
       this.connecting.delete(key);
       c.connected = false;
@@ -569,36 +655,42 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       return;
     }
     this.connecting.delete(key);
+    if (opened.fellBack) c.plainOnly = true;
+    if (opened.transport === 'utp') c.utp = true;
     if (!this.networking || this.closed) {
-      sock.destroy();
+      opened.stream.destroy();
       c.connected = false;
       return;
     }
-    const conn = this.makeConnection(sock, false, c.addr);
+    const conn = this.makeConnection(opened.stream, false, c.addr, { transport: opened.transport, encrypted: opened.encrypted });
     this.attach(conn, key, c.source, key);
   }
 
-  /** Takes over a socket from the session listener (handshake bytes still unread). */
-  acceptIncoming(socket: net.Socket, address: PeerAddress): boolean {
+  /** Takes over a stream from the session listener (handshake bytes still unread). */
+  acceptIncoming(socket: Duplex, address: PeerAddress, info: IncomingInfo = { transport: 'tcp', encrypted: false }): boolean {
     if (!this.networking || this.peerCount >= this.ctx.settings().maxConnectionsPerTorrent) return false;
     const key = addressKey(address);
     if (this.peers.has(key)) return false;
-    const conn = this.makeConnection(socket, true, address);
+    const conn = this.makeConnection(socket, true, address, info);
     this.attach(conn, key, 'incoming', null);
     return true;
   }
 
-  private makeConnection(socket: net.Socket, incoming: boolean, address: PeerAddress): PeerConnection {
+  private makeConnection(socket: Duplex, incoming: boolean, address: PeerAddress, info: IncomingInfo): PeerConnection {
     const settings = this.ctx.settings();
     return new PeerConnection({
       socket,
       incoming,
+      encrypted: info.encrypted,
+      transport: info.transport,
       infoHash: this.infoHash,
       peerId: this.ctx.peerId,
       address,
       reserved: { extensions: true, fast: true, dht: settings.dht },
-      uploadBuckets: this.ctx.uploadBuckets,
-      downloadBuckets: this.ctx.downloadBuckets,
+      uploadBuckets: [this.uploadBucket, ...this.ctx.uploadBuckets],
+      downloadBuckets: [this.downloadBucket, ...this.ctx.downloadBuckets],
+      uploadLimit: this.limits.peerUploadLimit,
+      downloadLimit: this.limits.peerDownloadLimit,
       handshakeTimeoutMs: settings.connectTimeoutMs,
       now: this.ctx.now,
     });
@@ -616,6 +708,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       pex: new PexTracker(),
       metadataInflight: 0,
       listenKey,
+      offered: null,
     };
     this.peers.set(key, p);
     conn.on('handshake', (hs) => this.onHandshake(p, hs));
@@ -626,7 +719,16 @@ export class Torrent extends EventEmitter<TorrentEvents> {
         const existing = this.candidates.get(lk);
         if (existing) existing.connected = true;
         else if (this.candidates.size < MAX_CANDIDATES)
-          this.candidates.set(lk, { addr: { host: conn.address.host, port: hs.port }, source: 'incoming', failures: 0, nextAttemptAt: 0, connected: true, banned: false });
+          this.candidates.set(lk, {
+            addr: { host: conn.address.host, port: hs.port },
+            source: 'incoming',
+            failures: 0,
+            nextAttemptAt: 0,
+            connected: true,
+            banned: false,
+            utp: conn.transport === 'utp',
+            plainOnly: false,
+          });
       }
       if (!this.metainfo && hs.metadataSize && conn.remoteExtensionId('ut_metadata')) {
         if (this.assembler.setSize(hs.metadataSize)) this.requestMetadata(p);
@@ -641,7 +743,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       p.haveAll = true;
       this.applyPendingAvailability(p);
     });
-    conn.on('haveNone', () => {});
+    conn.on('haveNone', () => this.applyPendingAvailability(p));
     conn.on('interested', () => this.rechoke(false));
     conn.on('notInterested', () => this.rechoke(false));
     conn.on('unchoke', () => this.requestBlocks(p));
@@ -649,7 +751,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     conn.on('piece', (i, begin, data) => void this.onBlock(p, i, begin, data));
     conn.on('request', (i, begin, len) => void this.onPeerRequest(p, i, begin, len));
     conn.on('port', (port) => {
-      if (!this.metainfo?.private) this.ctx.dht()?.addNode({ host: conn.address.host, port });
+      if (!this.metainfo?.private) this.dhtFor(conn.address.host)?.addNode({ host: conn.address.host, port });
     });
     conn.on('metadata', (msg) => this.onMetadataMessage(p, msg));
     conn.on('pex', (msg) => {
@@ -692,7 +794,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     if (this.metainfo) hsOpts.metadataSize = this.metainfo.info.length;
     conn.sendExtendedHandshake(hsOpts);
     this.sendAvailability(p);
-    const dht = this.ctx.dht();
+    const dht = this.dhtFor(conn.address.host);
     if (settings.dht && conn.remoteFlags.dht && dht?.listening) conn.port(dht.port);
   }
 
@@ -700,6 +802,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const have = this.storage?.have;
     if (!have || this.checking) {
       if (p.conn.supportsFast) p.conn.haveNone();
+      return;
+    }
+    if (this.superSeedingActive) {
+      // BEP 16: pretend to have nothing and reveal one piece at a time.
+      if (p.conn.supportsFast) p.conn.haveNone();
+      this.superOffer(p);
       return;
     }
     if (p.conn.supportsFast && have.hasAll()) p.conn.haveAll();
@@ -730,11 +838,14 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     if (!p.bitfield) p.bitfield = new Bitfield(meta.pieceCount);
     for (const i of p.pendingHaves.splice(0)) this.onHave(p, i);
     this.updateInterest(p);
+    if (this.superSeedingActive && p.offered !== null && p.bitfield.get(p.offered)) this.superAdvance(p);
   }
 
   private onHave(p: PeerInfo, i: number): void {
-    if (!this.metainfo || !p.bitfield || !this.picker) {
+    if (!this.metainfo || !p.bitfield || !this.picker || this.checking) {
       if (p.pendingHaves.length < 100_000) p.pendingHaves.push(i);
+      // a peer that started without a bitfield (it had nothing): start an empty one
+      if (!p.bitfield && this.metainfo && this.picker && !this.checking) this.applyPendingAvailability(p);
       return;
     }
     if (i < 0 || i >= this.metainfo.pieceCount) {
@@ -744,6 +855,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     if (p.haveAll || p.bitfield.get(i)) return;
     p.bitfield.set(i);
     this.picker.addHave(i);
+    if (this.superSeedingActive) this.superOnHave(p, i);
     if (!p.conn.amInterested && this.picker.isWanted(i)) {
       p.conn.interested();
     }
@@ -782,15 +894,20 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     for (const other of this.peers.values()) if (other !== p) this.requestBlocks(other);
   }
 
-  private async onBlock(p: PeerInfo, index: number, begin: number, data: Buffer): Promise<void> {
+  private onBlock(p: PeerInfo, index: number, begin: number, data: Buffer): Promise<void> {
+    return this.receiveBlock(p.key, index, begin, data, () => this.requestBlocks(p));
+  }
+
+  /** Stores a block from a peer or web seed (`key`), verifying the piece once complete. */
+  private async receiveBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
     const picker = this.picker;
     const storage = this.storage;
     if (!picker || !storage || storage.have.get(index)) return;
-    const res = picker.markReceived(index, begin, p.key);
+    const res = picker.markReceived(index, begin, key);
     this.downloadedSession += data.length;
     this.downMeter.add(data.length);
     for (const other of res.cancelFrom) this.peers.get(other)?.conn.cancel(index, begin, data.length);
-    this.requestBlocks(p);
+    refill();
     try {
       await storage.writeBlock(index, begin, data);
     } catch (err) {
@@ -813,11 +930,135 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     if (this.wantedLeft === 0) await this.onComplete();
   }
 
+  // ---- web seeds (BEP 19) ---------------------------------------------------------------------
+
+  private startWebSeeds(): void {
+    const meta = this.metainfo;
+    const settings = this.ctx.settings();
+    if (this.webSeeds || !meta || !this.storage || !this.picker || this.isComplete || settings.webSeedConnectionsPerTorrent <= 0) return;
+    const urls = [...meta.urlList, ...(this.magnet?.webSeeds ?? [])];
+    if (urls.length === 0) return;
+    const storage = this.storage;
+    const mgr = new WebSeedManager(
+      {
+        metainfo: meta,
+        layout: storage.layout,
+        pick: (key, count) => {
+          if (!this.picker || this.checking || this.moving || this.isComplete) return [];
+          return this.picker.pick(ALL_PIECES, key, count);
+        },
+        release: (index, begin, key) => this.picker?.release(index, begin, key),
+        deliver: (key, index, begin, data) => void this.receiveBlock(key, index, begin, data, () => {}),
+        wantsData: () => this.networking && !this.isComplete && !this.checking && !this.moving,
+        consumeDownload: (bytes) => consumeAll([this.downloadBucket, ...this.ctx.downloadBuckets], bytes),
+        localAddress: () => this.ctx.localAddress(),
+        now: this.ctx.now,
+      },
+      urls,
+      { maxConnections: settings.webSeedConnectionsPerTorrent, retryMs: settings.webSeedRetryMs, userAgent: settings.userAgent, timeoutMs: settings.requestTimeoutMs },
+    );
+    if (mgr.count === 0) return;
+    this.webSeeds = mgr;
+    // web seeds have every piece: count them in availability like seeds
+    for (let i = 0; i < mgr.count; i++) this.picker.addSeed();
+    this.webSeedPickerSeeds = mgr.count;
+    mgr.tick();
+  }
+
+  private stopWebSeeds(): void {
+    this.webSeeds?.close();
+    this.webSeeds = null;
+    for (; this.webSeedPickerSeeds > 0; this.webSeedPickerSeeds--) this.picker?.removeSeed();
+  }
+
+  /** Web seed status (empty when the torrent has none or is not running). */
+  getWebSeeds(): WebSeedStats[] {
+    return this.webSeeds?.stats() ?? [];
+  }
+
+  // ---- super-seeding (BEP 16) -----------------------------------------------------------------
+
+  get superSeeding(): boolean {
+    return this.superSeedingValue;
+  }
+
+  private get superSeedingActive(): boolean {
+    return this.superSeedingValue && this.isComplete;
+  }
+
+  /** Turns super-seeding on or off. Turning it off reveals full availability to every peer. */
+  setSuperSeeding(on: boolean): void {
+    if (this.superSeedingValue === on) return;
+    const wasActive = this.superSeedingActive;
+    this.superSeedingValue = on;
+    if (wasActive && !on) {
+      this.superOffers.clear();
+      for (const p of this.peers.values()) {
+        p.offered = null;
+        if (p.conn.handshaken && !p.conn.isClosed && this.storage) p.conn.bitfield(this.storage.have.toBuffer());
+      }
+    } else if (on && this.superSeedingActive) for (const p of this.peers.values()) if (p.conn.handshaken) this.superOffer(p);
+  }
+
+  /** Offers the peer the rarest piece it lacks that was offered least often. */
+  private superOffer(p: PeerInfo): void {
+    const meta = this.metainfo;
+    const picker = this.picker;
+    if (!meta || !picker || p.offered !== null || p.haveAll || p.conn.isClosed) return;
+    let best = -1;
+    let bestScore = Number.POSITIVE_INFINITY;
+    for (let i = 0; i < meta.pieceCount; i++) {
+      if (p.bitfield?.get(i)) continue;
+      const score = (this.superOffers.get(i) ?? 0) * 1_000_000 + picker.availabilityOf(i) * 1000 + Math.random() * 999;
+      if (score < bestScore) {
+        bestScore = score;
+        best = i;
+      }
+    }
+    if (best < 0) return;
+    p.offered = best;
+    this.superOffers.set(best, (this.superOffers.get(best) ?? 0) + 1);
+    p.conn.have(best);
+  }
+
+  /** The offered piece has spread: give the peer its next one. */
+  private superAdvance(p: PeerInfo): void {
+    p.offered = null;
+    this.superOffer(p);
+  }
+
+  private superOnHave(from: PeerInfo, i: number): void {
+    for (const q of this.peers.values()) {
+      // another peer now has q's piece: q passed it on
+      if (q !== from && q.offered === i) this.superAdvance(q);
+    }
+    if (from.offered === i) {
+      const others = [...this.peers.values()].filter((q) => q !== from && q.conn.handshaken && !(q.haveAll || q.bitfield?.hasAll()));
+      // with nobody to pass it to, move on right away
+      if (others.length === 0) this.superAdvance(from);
+    }
+  }
+
+  // ---- rate limits ----------------------------------------------------------------------------
+
+  get rateLimits(): TorrentRateLimits {
+    return { ...this.limits };
+  }
+
+  /** Changes this torrent's limits; applies to existing connections immediately. */
+  setRateLimits(patch: Partial<TorrentRateLimits>): void {
+    this.limits = { ...this.limits, ...patch };
+    this.uploadBucket.setRate(this.limits.uploadLimit);
+    this.downloadBucket.setRate(this.limits.downloadLimit);
+    for (const p of this.peers.values()) p.conn.setLimits(this.limits.peerUploadLimit, this.limits.peerDownloadLimit);
+  }
+
   private async onComplete(): Promise<void> {
     if (this.completedAt === null || this.downloadedSession > 0) this.completedAt = new Date(this.ctx.now()).toISOString();
     const settings = this.ctx.settings();
     const target = settings.categories[this.category]?.completedSavePath ?? settings.completedSavePath;
     for (const p of this.peers.values()) this.updateInterest(p);
+    this.stopWebSeeds();
     if (target && target !== this.savePathValue && this.storage) {
       try {
         await this.moveStorage(target);
@@ -849,6 +1090,11 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   private onPeerClose(p: PeerInfo): void {
     if (this.peers.get(p.key) === p) this.peers.delete(p.key);
+    if (p.offered !== null) {
+      const n = (this.superOffers.get(p.offered) ?? 1) - 1;
+      if (n > 0) this.superOffers.set(p.offered, n);
+      else this.superOffers.delete(p.offered);
+    }
     if (this.picker) {
       if (p.haveAll && p.bitfield) this.picker.removeSeed();
       else if (p.bitfield) this.picker.removePeer(p.bitfield);
@@ -915,6 +1161,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.emit('metadata');
     await this.setupStorage();
     if (this.failure) return;
+    if (this.networking) this.startWebSeeds();
     for (const p of this.peers.values()) {
       if (p.conn.handshaken && !p.conn.isClosed && !p.conn.supportsFast) this.sendAvailability(p);
       else if (p.conn.handshaken && this.storage && !this.storage.have.hasNone()) p.conn.bitfield(this.storage.have.toBuffer());
@@ -981,6 +1228,9 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       this.sendPex();
     }
     if (seeding) this.checkSeedLimits();
+    if (this.webSeeds) this.webSeeds.tick();
+    else if (!seeding && this.metainfo && (this.metainfo.urlList.length > 0 || (this.magnet?.webSeeds.length ?? 0) > 0)) this.startWebSeeds();
+    if (this.superSeedingActive) for (const p of this.peers.values()) if (p.conn.handshaken && p.offered === null) this.superOffer(p);
     this.connectMore();
     if (this.peers.size < 5) this.trackers?.announceNow();
   }
@@ -989,7 +1239,16 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const all = [...this.peers.values()].filter((p) => p.conn.handshaken && !p.conn.isClosed);
     for (const p of all) {
       if (!p.conn.remoteExtensionId('ut_pex')) continue;
-      const others = all.filter((o) => o !== p && (!o.conn.incoming || o.conn.remoteExtensions?.port)).map((o) => o.conn.listenAddress);
+      const others: PexPeer[] = all
+        .filter((o) => o !== p && (!o.conn.incoming || o.conn.remoteExtensions?.port))
+        .map((o) => {
+          let flags = 0;
+          if (o.conn.encrypted) flags |= PEX_FLAG.prefersEncryption;
+          if (o.haveAll || o.bitfield?.hasAll()) flags |= PEX_FLAG.seed;
+          if (o.conn.transport === 'utp') flags |= PEX_FLAG.utp;
+          if (!o.conn.incoming) flags |= PEX_FLAG.reachable;
+          return flags ? { ...o.conn.listenAddress, flags } : o.conn.listenAddress;
+        });
       const msg = p.pex.diff(others);
       if (msg) p.conn.sendPex(msg);
     }
@@ -1099,6 +1358,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
         peerInterested: p.conn.peerInterested,
         snubbed: p.conn.isSnubbed(),
         outstandingRequests: p.conn.requests.size,
+        encrypted: p.conn.encrypted,
+        transport: p.conn.transport,
       }));
   }
 
@@ -1153,6 +1414,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       magnet: this.metainfo ? null : (this.magnetUri ?? null),
       seedRatioLimit: this.seedRatioLimit ?? null,
       seedTimeLimitMs: this.seedTimeLimitMs ?? null,
+      superSeeding: this.superSeedingValue,
+      ...this.limits,
     };
   }
 

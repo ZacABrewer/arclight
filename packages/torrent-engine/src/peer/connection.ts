@@ -1,5 +1,6 @@
 import { EventEmitter } from 'node:events';
 import net from 'node:net';
+import type { Duplex } from 'node:stream';
 import type { PeerAddress } from '../compact.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
 import { consumeAll, RateMeter, TokenBucket } from '../rate.js';
@@ -69,8 +70,15 @@ export interface PeerConnectionEvents {
   close: [error: Error | undefined];
 }
 
+/** How a peer connection is carried. */
+export type PeerTransport = 'tcp' | 'utp';
+
 export interface PeerConnectionOptions {
-  socket: net.Socket;
+  /** A TCP socket, a uTP socket or an MSE-wrapped stream around either. */
+  socket: Duplex;
+  /** The stream is RC4-encrypted (MSE). */
+  encrypted?: boolean;
+  transport?: PeerTransport;
   /** True for connections accepted by the listener: we answer the remote handshake. */
   incoming: boolean;
   infoHash: Buffer;
@@ -97,7 +105,9 @@ export interface PeerConnectionOptions {
 
 /** One BitTorrent peer wire connection over TCP. */
 export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
-  readonly socket: net.Socket;
+  readonly socket: Duplex;
+  readonly encrypted: boolean;
+  readonly transport: PeerTransport;
   readonly address: PeerAddress;
   readonly incoming: boolean;
   readonly infoHash: Buffer;
@@ -139,6 +149,8 @@ export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
   constructor(private readonly opts: PeerConnectionOptions) {
     super();
     this.socket = opts.socket;
+    this.encrypted = opts.encrypted ?? false;
+    this.transport = opts.transport ?? 'tcp';
     this.address = opts.address;
     this.incoming = opts.incoming;
     this.infoHash = opts.infoHash;
@@ -156,7 +168,7 @@ export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
     this.downloadBuckets = [this.perConnDownload, ...(opts.downloadBuckets ?? [])];
     this.reader = new MessageReader(opts.maxMessageLength ?? 1024 * 1024 + 13);
 
-    this.socket.setNoDelay(true);
+    (this.socket as { setNoDelay?: (v: boolean) => unknown }).setNoDelay?.(true);
     this.socket.on('data', (c: Buffer) => this.onData(c));
     this.socket.on('error', (err) => this.destroy(err));
     this.socket.on('close', () => this.destroy());
@@ -463,8 +475,27 @@ export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
     if (this.closed || this.amChoking || !this.peerRequests.delete(key)) return false;
     const ok = this.write(encode.piece(index, begin, data));
     this.uploadMeter.add(data.length);
-    if (!ok && !this.closed) await new Promise<void>((r) => this.socket.once('drain', () => r()).once('close', () => r()));
+    if (!ok && !this.closed) await this.waitDrain();
     return true;
+  }
+
+  private drainWait: Promise<void> | null = null;
+
+  /** One shared wait for 'drain' (or close), however many senders are blocked. */
+  private waitDrain(): Promise<void> {
+    if (!this.drainWait) {
+      this.drainWait = new Promise<void>((r) => {
+        const done = (): void => {
+          this.socket.off('drain', done);
+          this.socket.off('close', done);
+          this.drainWait = null;
+          r();
+        };
+        this.socket.on('drain', done);
+        this.socket.on('close', done);
+      });
+    }
+    return this.drainWait;
   }
 
   rejectRequest(index: number, begin: number, length: number): void {

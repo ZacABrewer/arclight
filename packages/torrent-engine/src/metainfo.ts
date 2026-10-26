@@ -50,7 +50,7 @@ export interface Metainfo {
   announce?: string;
   /** BEP 12 tiers; contains `[announce]` when no announce-list was present. */
   announceList: string[][];
-  /** BEP 19 web seeds (parsed, not used for downloading yet). */
+  /** BEP 19 (GetRight-style) web seeds, used by `WebSeedManager`. */
   urlList: string[];
   comment?: string;
   createdBy?: string;

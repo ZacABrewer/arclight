@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import dgram from 'node:dgram';
-import { decodeCompactPeers } from '../compact.js';
+import { isIPv6 } from 'node:net';
+import { decodeCompactPeers, decodeCompactPeers6 } from '../compact.js';
 import { TorrentEngineError } from '../errors.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
@@ -24,7 +25,7 @@ export interface UdpTrackerOptions {
   now?: () => number;
 }
 
-/** BEP 15 UDP tracker client (IPv4). */
+/** BEP 15 UDP tracker client (IPv4, and IPv6 for IPv6 literal hosts with 18-byte peers). */
 export class UdpTracker implements TrackerClient {
   private connectionId: Buffer | null = null;
   private connectionAt = 0;
@@ -44,7 +45,7 @@ export class UdpTracker implements TrackerClient {
   }
 
   private openSocket(): Promise<dgram.Socket> {
-    const sock = this.opts.socketFactory ? this.opts.socketFactory() : dgram.createSocket('udp4');
+    const sock = this.opts.socketFactory ? this.opts.socketFactory() : dgram.createSocket(isIPv6(this.host) ? 'udp6' : 'udp4');
     return new Promise((resolve, reject) => {
       sock.once('error', reject);
       sock.bind({ port: 0, ...(this.opts.localAddress ? { address: this.opts.localAddress } : {}) }, () => {
@@ -161,7 +162,7 @@ export class UdpTracker implements TrackerClient {
         intervalSec: res.readUInt32BE(8),
         incomplete: res.readUInt32BE(12),
         complete: res.readUInt32BE(16),
-        peers: decodeCompactPeers(res.subarray(20)),
+        peers: isIPv6(this.host) ? decodeCompactPeers6(res.subarray(20)) : decodeCompactPeers(res.subarray(20)),
       };
     });
   }

@@ -28,6 +28,13 @@ export const ResumeDataSchema = z.object({
   magnet: z.string().nullable(),
   seedRatioLimit: z.number().nullable(),
   seedTimeLimitMs: z.number().nullable(),
+  /** BEP 16 super-seeding flag (absent in older files). */
+  superSeeding: z.boolean().optional(),
+  /** Per-torrent and per-peer rate limits in bytes/s (absent in older files). */
+  uploadLimit: z.number().nonnegative().optional(),
+  downloadLimit: z.number().nonnegative().optional(),
+  peerUploadLimit: z.number().nonnegative().optional(),
+  peerDownloadLimit: z.number().nonnegative().optional(),
 });
 export type ResumeData = z.infer<typeof ResumeDataSchema>;
 

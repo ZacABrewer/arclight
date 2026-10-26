@@ -7,7 +7,7 @@ import dgram from 'node:dgram';
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { encode } from '../bencode.js';
-import { encodeCompactPeers, type PeerAddress } from '../compact.js';
+import { encodeCompactPeers, encodeCompactPeers6, normalizeHost, type PeerAddress } from '../compact.js';
 import { ACTION_ANNOUNCE, ACTION_CONNECT, ACTION_ERROR, ACTION_SCRAPE, PROTOCOL_ID } from './udp-tracker.js';
 
 export interface SwarmPeer extends PeerAddress {
@@ -88,7 +88,7 @@ export interface TestHttpTracker {
 }
 
 /** Starts an HTTP tracker on 127.0.0.1 (random port unless given). */
-export async function startHttpTracker(opts: { port?: number; interval?: number; trackerId?: string } = {}): Promise<TestHttpTracker> {
+export async function startHttpTracker(opts: { port?: number; interval?: number; trackerId?: string; host?: string } = {}): Promise<TestHttpTracker> {
   const swarms = new Swarms();
   const announces: AnnounceRecord[] = [];
   const state = { failureReason: null as string | null, interval: opts.interval ?? 60 };
@@ -119,7 +119,7 @@ export async function startHttpTracker(opts: { port?: number; interval?: number;
     }
     const event = one('event')?.toString() ?? '';
     const left = Number(one('left')?.toString() ?? '0');
-    const host = (req.socket.remoteAddress ?? '127.0.0.1').replace(/^::ffff:/, '');
+    const host = normalizeHost(req.socket.remoteAddress ?? '127.0.0.1');
     const record: AnnounceRecord = {
       infoHash: infoHash.toString('hex'),
       peerId: peerId.toString('hex'),
@@ -141,13 +141,16 @@ export async function startHttpTracker(opts: { port?: number; interval?: number;
       incomplete: counts.incomplete,
       peers: encodeCompactPeers(others.slice(0, record.numwant)),
     };
+    const v6 = encodeCompactPeers6(others.slice(0, record.numwant));
+    if (v6.length > 0) body.peers6 = v6;
     if (opts.trackerId) body['tracker id'] = opts.trackerId;
     send(encode(body));
   });
-  await new Promise<void>((resolve) => server.listen(opts.port ?? 0, '127.0.0.1', resolve));
+  const bindHost = opts.host ?? '127.0.0.1';
+  await new Promise<void>((resolve) => server.listen(opts.port ?? 0, bindHost, resolve));
   const port = (server.address() as AddressInfo).port;
   const tracker: TestHttpTracker = {
-    url: `http://127.0.0.1:${port}/announce`,
+    url: `http://${bindHost.includes(':') ? `[${bindHost}]` : bindHost}:${port}/announce`,
     port,
     announces,
     swarms,

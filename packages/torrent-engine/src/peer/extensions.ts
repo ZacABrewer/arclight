@@ -11,7 +11,18 @@ import {
   getString,
   isDict,
 } from '../bencode.js';
-import { addressKey, decodeCompactPeers, encodeCompactPeer, encodeCompactPeers, type PeerAddress } from '../compact.js';
+import { isIPv6 } from 'node:net';
+import {
+  addressKey,
+  bytesToIpv6,
+  decodeCompactPeers,
+  decodeCompactPeers6,
+  encodeCompactPeer,
+  encodeCompactPeers,
+  encodeCompactPeers6,
+  ipv6ToBytes,
+  type PeerAddress,
+} from '../compact.js';
 import { TorrentEngineError } from '../errors.js';
 
 /** Our local extension message ids (what peers must use when sending to us). */
@@ -48,6 +59,7 @@ export function encodeExtendedHandshake(opts: {
   if (opts.client) d.v = opts.client;
   if (opts.reqq) d.reqq = opts.reqq;
   if (opts.yourIp && /^\d+\.\d+\.\d+\.\d+$/.test(opts.yourIp)) d.yourip = encodeCompactPeer({ host: opts.yourIp, port: 0 }).subarray(0, 4);
+  else if (opts.yourIp && isIPv6(opts.yourIp)) d.yourip = ipv6ToBytes(opts.yourIp);
   return encode(d);
 }
 
@@ -68,6 +80,7 @@ export function decodeExtendedHandshake(payload: Buffer): ExtendedHandshake {
   if (reqq !== undefined && reqq > 0) hs.reqq = reqq;
   const ip = getBytes(v, 'yourip');
   if (ip?.length === 4) hs.yourIp = `${ip[0]}.${ip[1]}.${ip[2]}.${ip[3]}`;
+  else if (ip?.length === 16) hs.yourIp = bytesToIpv6(ip);
   return hs;
 }
 
@@ -177,18 +190,42 @@ export class MetadataAssembler {
 
 // ---- BEP 11 ut_pex -----------------------------------------------------------------------
 
+/** BEP 11 `added.f` flags. */
+export const PEX_FLAG = { prefersEncryption: 0x01, seed: 0x02, utp: 0x04, holepunch: 0x08, reachable: 0x10 } as const;
+
+/** A PEX peer; `flags` is only present when non-zero. */
+export interface PexPeer extends PeerAddress {
+  flags?: number;
+}
+
 export interface PexMessage {
-  added: PeerAddress[];
+  added: PexPeer[];
   dropped: PeerAddress[];
 }
 
 export const PEX_MAX_ADDED = 50;
 
 export function encodePex(m: PexMessage): Buffer {
-  return encode({
-    added: encodeCompactPeers(m.added),
-    'added.f': Buffer.alloc(m.added.length, 0),
+  const v4 = m.added.filter((p) => !isIPv6(p.host));
+  const v6 = m.added.filter((p) => isIPv6(p.host));
+  const d: Record<string, BEncodable> = {
+    added: encodeCompactPeers(v4),
+    'added.f': Buffer.from(v4.map((p) => p.flags ?? 0)),
     dropped: encodeCompactPeers(m.dropped),
+  };
+  if (v6.length > 0) {
+    d.added6 = encodeCompactPeers6(v6);
+    d['added6.f'] = Buffer.from(v6.map((p) => p.flags ?? 0));
+  }
+  const dropped6 = encodeCompactPeers6(m.dropped);
+  if (dropped6.length > 0) d.dropped6 = dropped6;
+  return encode(d);
+}
+
+function withFlags(peers: PeerAddress[], flags: Buffer | undefined): PexPeer[] {
+  return peers.map((p, i) => {
+    const f = flags?.[i] ?? 0;
+    return f ? { ...p, flags: f } : p;
   });
 }
 
@@ -197,19 +234,25 @@ export function decodePex(payload: Buffer): PexMessage {
   if (!isDict(v)) throw new TorrentEngineError('peer', 'ut_pex message is not a dictionary');
   const d: BDict = v;
   return {
-    added: decodeCompactPeers(getBytes(d, 'added') ?? Buffer.alloc(0)),
-    dropped: decodeCompactPeers(getBytes(d, 'dropped') ?? Buffer.alloc(0)),
+    added: [
+      ...withFlags(decodeCompactPeers(getBytes(d, 'added') ?? Buffer.alloc(0)), getBytes(d, 'added.f')),
+      ...withFlags(decodeCompactPeers6(getBytes(d, 'added6') ?? Buffer.alloc(0)), getBytes(d, 'added6.f')),
+    ],
+    dropped: [
+      ...decodeCompactPeers(getBytes(d, 'dropped') ?? Buffer.alloc(0)),
+      ...decodeCompactPeers6(getBytes(d, 'dropped6') ?? Buffer.alloc(0)),
+    ],
   };
 }
 
 /** Per-connection PEX state: computes the diff to send against what the peer was told. */
 export class PexTracker {
-  private sent = new Map<string, PeerAddress>();
+  private sent = new Map<string, PexPeer>();
 
   /** Returns the next message for `current` peers (excluding the receiver), or null if nothing changed. */
-  diff(current: readonly PeerAddress[]): PexMessage | null {
+  diff(current: readonly PexPeer[]): PexMessage | null {
     const now = new Map(current.map((p) => [addressKey(p), p]));
-    const added: PeerAddress[] = [];
+    const added: PexPeer[] = [];
     const dropped: PeerAddress[] = [];
     for (const [k, p] of now) {
       if (added.length >= PEX_MAX_ADDED) break;

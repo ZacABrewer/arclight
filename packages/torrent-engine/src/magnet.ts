@@ -12,7 +12,7 @@ export interface MagnetLink {
   trackers: string[];
   /** `x.pe` peer hints. */
   peers: PeerAddress[];
-  /** `ws` web seeds (parsed only). */
+  /** `ws` web seeds (used once metadata is known). */
   webSeeds: string[];
 }
 
