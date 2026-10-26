@@ -1,9 +1,8 @@
 import { useState } from 'react';
-import { Link } from '@tanstack/react-router';
 import type { MediaRequest } from '@arclight/shared';
 import { Button, EmptyState, Modal, PageHeader, Pane, Timeline, type TimelineItem } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
-import { titleLink } from '../../features/requests/title-link.js';
+import { DLink, titleTarget } from '../../features/discover/base.js';
 import { HeldChip } from '../../features/requests/policy-drawer.js';
 import { REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
 import { useDeleteRequest, useRequests } from '../../hooks/requests.js';
@@ -45,11 +44,11 @@ export function requestTimelineItem(r: MediaRequest, aside?: React.ReactNode): T
     date: shortDate(r.createdAt),
     tone: r.status === 'declined' ? 'warn' : r.status === 'failed' ? 'danger' : 'default',
     title: (
-      <Link className="mk-link" {...titleLink(r.type, r.mediaTmdbId)}>
+      <DLink className="mk-link" {...titleTarget(r.type, r.mediaTmdbId)}>
         {r.mediaTitle}
         {r.mediaYear ? <span className="al-num mk-muted"> {r.mediaYear}</span> : null}
         {r.is4k ? t('requests.myRequests.n4k') : ''}
-      </Link>
+      </DLink>
     ),
     aside: (
       <>
@@ -79,9 +78,9 @@ export function MyRequestsPage() {
         index="03"
         title={t('common.myRequests')}
         actions={
-          <Link className="al-btn al-btn--primary" to="/discover">
+          <DLink className="al-btn al-btn--primary" to="">
             {t('requests.myRequests.discoverTitles')}
-          </Link>
+          </DLink>
         }
       />
       {userId === null ? (
@@ -94,9 +93,9 @@ export function MyRequestsPage() {
         <EmptyState
           title={t('requests.myRequests.noRequestsYet')}
           action={
-            <Link className="al-btn al-btn--primary" to="/discover">
+            <DLink className="al-btn al-btn--primary" to="">
               {t('requests.myRequests.discoverTitles')}
-            </Link>
+            </DLink>
           }
         >
           {t('requests.myRequests.requestAMovieOrSeries')}

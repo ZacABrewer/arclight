@@ -11,7 +11,7 @@ describe('requests navigation', () => {
     expect(labels).toEqual(expect.arrayContaining(['Discover', 'Requests', 'Issues', 'Watchlist']));
     expect(labels).not.toContain('Settings');
     expect(nav.find((s) => s.label === 'Requests')?.children?.map((c) => c.to)).toEqual(['/requests', '/requests/mine']);
-    expect(nav.find((s) => s.label === 'Discover')?.children?.map((c) => c.to)).toEqual(['/discover', '/discover/movies', '/discover/tv']);
+    expect(nav.find((s) => s.label === 'Discover')?.children?.map((c) => c.to)).toEqual(['/discover', '/discover/movies', '/discover/tv', '/discover/trending']);
   });
 
   it('gives admins Settings → Requests and Users, with no Phase 4 placeholders left', () => {

@@ -24,6 +24,8 @@ export { RequestsService, ANIME_KEYWORD, type TitleSource, type CreateOutcome, t
 export { CertificationGuard, restrictionReason, movieRating, tvRating, restrictionsOfSettings } from './certification.js';
 export { evaluatePolicy, windowActive, nextOpening, GB, type PolicyResult, type PolicyDecision } from './policy.js';
 export { TokenBuckets, publicPortal, type RateLimitOptions } from './portal.js';
+export { spaDecision, injectPortalDocument, normalizeHostname, isPortalHostPath, portalBaseOf, type SpaDecision } from './portal-routing.js';
+export { DiscoverCache, LIST_TTL_MS, DETAIL_TTL_MS, STATIC_TTL_MS } from './discover-cache.js';
 export { userRow, findUserRow, userPermissions, patchUserSettings, approvalPolicyOf, type UserRow } from './users.js';
 export { actorOf, discoverActorOf } from './routes.js';
 export { IssuesService } from './issues.js';

@@ -1,6 +1,5 @@
 import Fastify, { type FastifyInstance, type FastifyPluginAsync, type RawServerDefault } from 'fastify';
 import cors from '@fastify/cors';
-import fastifyStatic from '@fastify/static';
 import websocket from '@fastify/websocket';
 import {
   serializerCompiler,
@@ -12,6 +11,7 @@ import type { AppConfig } from './config.js';
 import type { Db } from './db/index.js';
 import { EventBus } from './events.js';
 import { Scheduler } from './scheduler.js';
+import { registerSpa } from './spa.js';
 import { systemModule } from './modules/system/index.js';
 import { jobsModule } from './modules/jobs/index.js';
 import { eventsModule } from './modules/events/index.js';
@@ -186,12 +186,10 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   await app.register(compatApi(ctx, opts.compatMetadata ? { metadata: opts.compatMetadata } : {}));
 
   if (config.webDist) {
-    await app.register(fastifyStatic, { root: config.webDist, wildcard: false });
-    // SPA fallback: anything that is not /api goes to the web app's index.
-    app.setNotFoundHandler((req, reply) => {
-      if (req.url.startsWith('/api/')) return reply.code(404).send({ error: 'not found' });
-      return reply.sendFile('index.html');
-    });
+    // Static files + SPA fallback (anything that is not /api gets the web app's index, with
+    // the request portal's paths and hostnames applied).
+    // (Cast: as for installMetrics above.)
+    await registerSpa(app as unknown as FastifyInstance, ctx, config.webDist);
   }
 
   app.addHook('onReady', async () => scheduler.start());

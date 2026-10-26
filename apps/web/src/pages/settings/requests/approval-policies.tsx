@@ -1,7 +1,7 @@
 import { useId, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
-import { ApprovalBudget, type ApprovalWindow, type PublicPortalSettings, type RequestsSettings, type User } from '@arclight/shared';
+import { ApprovalBudget, DEFAULT_PORTAL_PATH, PortalHost, PortalPath, type ApprovalWindow, type PublicPortalSettings, type RequestsSettings, type User } from '@arclight/shared';
 import { usersApi } from '../../../api/auth.js';
 import { authKeys } from '../../../auth/guard.js';
 import { Button, EmptyState, Field, FormRow, Input, Modal, Select, Table, Textarea, Toggle, buttonClass, type Column } from '../../../arclight/index.js';
@@ -353,7 +353,75 @@ function WindowsSection({ windows, onChange }: { windows: ApprovalWindow[]; onCh
   );
 }
 
-// ---- public portal -----------------------------------------------------------------------
+/// ---- public portal -----------------------------------------------------------------------
+
+/** A portal path typed by the admin → the stored form, or the reason it is refused. */
+export function checkPortalPath(raw: string, existing: readonly string[]): { ok: true; path: string } | { ok: false; error: string } {
+  const parsed = PortalPath.safeParse(raw);
+  if (!parsed.success) {
+    const reserved = parsed.error.issues.some((i) => i.message.includes('used by Arclight'));
+    return { ok: false, error: reserved ? t('settings.requests.portal.pathReserved') : t('settings.requests.portal.pathInvalid') };
+  }
+  if (parsed.data === DEFAULT_PORTAL_PATH || existing.includes(parsed.data)) return { ok: false, error: t('settings.requests.portal.pathDuplicate') };
+  return { ok: true, path: parsed.data };
+}
+
+/** A hostname typed by the admin (a pasted URL is reduced to its hostname). */
+export function checkPortalHost(raw: string, existing: readonly string[]): { ok: true; hostname: string } | { ok: false; error: string } {
+  let value = raw.trim().toLowerCase();
+  if (/^[a-z]+:\/\//.test(value)) {
+    try {
+      value = new URL(value).hostname;
+    } catch {
+      // keep the raw value; the check below explains what is wrong
+    }
+  }
+  const parsed = PortalHost.safeParse({ hostname: value });
+  if (!parsed.success) return { ok: false, error: t('settings.requests.portal.hostInvalid') };
+  if (existing.includes(parsed.data.hostname)) return { ok: false, error: t('settings.requests.portal.hostDuplicate') };
+  return { ok: true, hostname: parsed.data.hostname };
+}
+
+function AddRow({ label, placeholder, onAdd }: { label: string; placeholder: string; onAdd: (raw: string) => string | null }) {
+  const [draft, setDraft] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const add = () => {
+    const problem = onAdd(draft);
+    setError(problem);
+    if (!problem) setDraft('');
+  };
+  return (
+    <div className="al-portal-add">
+      <div className="al-portal-add__row">
+        <Input
+          mono
+          aria-label={label}
+          placeholder={placeholder}
+          value={draft}
+          invalid={error !== null}
+          onChange={(e) => {
+            setDraft(e.currentTarget.value);
+            setError(null);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault();
+              add();
+            }
+          }}
+        />
+        <Button onClick={add} disabled={draft.trim() === ''}>
+          {t('common.add')}
+        </Button>
+      </div>
+      {error ? (
+        <p className="al-field__error" role="alert" style={{ margin: 0 }}>
+          {error}
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 export function PublicPortalSection({ value, onChange }: { value: PublicPortalSettings; onChange: (v: PublicPortalSettings) => void }) {
   const messageId = useId();
@@ -379,6 +447,81 @@ export function PublicPortalSection({ value, onChange }: { value: PublicPortalSe
       </FormRow>
       <FormRow label={t('settings.requests.portal.message')} htmlFor={messageId} caption={t('settings.requests.portal.messageCaption', { count: value.message.length })}>
         <Textarea id={messageId} rows={4} maxLength={2000} value={value.message} onChange={(e) => onChange({ ...value, message: e.currentTarget.value })} />
+      </FormRow>
+      <FormRow label={t('settings.requests.portal.paths')} caption={t('settings.requests.portal.pathsCaption')}>
+        <div className="al-editor-stack" style={{ gap: 8 }}>
+          <ul className="al-order-list" aria-label={t('settings.requests.portal.paths')}>
+            <li className="al-portal-row">
+              <span className="al-num">{DEFAULT_PORTAL_PATH}</span>
+              <span className="al-caption">{t('settings.requests.portal.builtIn')}</span>
+            </li>
+            {value.paths.map((path) => (
+              <li key={path} className="al-portal-row">
+                <span className="al-num">{path}</span>
+                <a className="mk-action-link" href={path} target="_blank" rel="noreferrer noopener">
+                  {t('settings.requests.portal.openPath')}
+                </a>
+                <Button size="sm" variant="danger" aria-label={t('settings.requests.portal.removePath', { path })} onClick={() => onChange({ ...value, paths: value.paths.filter((p) => p !== path) })}>
+                  {t('common.remove')}
+                </Button>
+              </li>
+            ))}
+          </ul>
+          {value.paths.length < 20 ? (
+            <AddRow
+              label={t('settings.requests.portal.addPath')}
+              placeholder="/requests"
+              onAdd={(raw) => {
+                const r = checkPortalPath(raw, value.paths);
+                if (!r.ok) return r.error;
+                onChange({ ...value, paths: [...value.paths, r.path] });
+                return null;
+              }}
+            />
+          ) : null}
+        </div>
+      </FormRow>
+      <FormRow label={t('settings.requests.portal.hosts')} caption={t('settings.requests.portal.hostsCaption')}>
+        <div className="al-editor-stack" style={{ gap: 8 }}>
+          {value.hosts.length > 0 ? (
+            <ul className="al-order-list" aria-label={t('settings.requests.portal.hosts')}>
+              {value.hosts.map((h) => (
+                <li key={h.hostname} className="al-portal-row">
+                  <span className="al-num">{h.hostname}</span>
+                  <span className="al-portal-row__toggle">
+                    <Toggle
+                      aria-label={t('settings.requests.portal.portalOnlyFor', { hostname: h.hostname })}
+                      checked={h.portalOnly}
+                      onChange={(e) => {
+                        const portalOnly = e.currentTarget.checked;
+                        onChange({ ...value, hosts: value.hosts.map((x) => (x.hostname === h.hostname ? { ...x, portalOnly } : x)) });
+                      }}
+                    />
+                    <span className="al-caption">{t('settings.requests.portal.portalOnly')}</span>
+                  </span>
+                  <Button size="sm" variant="danger" aria-label={t('settings.requests.portal.removeHost', { hostname: h.hostname })} onClick={() => onChange({ ...value, hosts: value.hosts.filter((x) => x.hostname !== h.hostname) })}>
+                    {t('common.remove')}
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          {value.hosts.length < 20 ? (
+            <AddRow
+              label={t('settings.requests.portal.addHost')}
+              placeholder="requests.example.com"
+              onAdd={(raw) => {
+                const r = checkPortalHost(raw, value.hosts.map((h) => h.hostname));
+                if (!r.ok) return r.error;
+                onChange({ ...value, hosts: [...value.hosts, { hostname: r.hostname, portalOnly: true }] });
+                return null;
+              }}
+            />
+          ) : null}
+          <p className="al-caption" style={{ margin: 0 }}>
+            {t('settings.requests.portal.hostsHelp')}
+          </p>
+        </div>
       </FormRow>
     </SettingsSection>
   );

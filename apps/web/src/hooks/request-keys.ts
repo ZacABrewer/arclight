@@ -19,7 +19,12 @@ export const requestKeys = {
     list: (source: string, params: unknown) => ['discover', 'list', source, params] as const,
     genres: (kind: DiscoverKind) => ['discover', 'genres', kind] as const,
     person: (id: number) => ['discover', 'person', id] as const,
-    slider: (id: number) => ['discover', 'slider', id] as const,
+    slider: (id: number, timeWindow?: string) => ['discover', 'slider', id, timeWindow ?? 'day'] as const,
+    tiles: (source: string, params: unknown) => ['discover', 'tiles', source, params] as const,
+    options: ['discover', 'options'] as const,
+    entity: (kind: string, id: number) => ['discover', 'entity', kind, id] as const,
+    collection: (id: number) => ['discover', 'collection', id] as const,
+    suggest: (q: string) => ['discover', 'suggest', q] as const,
   },
   sliders: ['discoverslider'] as const,
   issues: {

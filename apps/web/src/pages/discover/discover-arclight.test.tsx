@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { defaultSettings, makeItem, makeTitle, renderAt, season, stubApi } from '../../features/requests/test-utils.js';
-import { activeDiscoverFilters, EMPTY_FILTERS } from './discover-browse.js';
+import { activeFilterCount } from '../../features/discover/filters.js';
 import { statusChipStyle } from './discover-kit.js';
 import { sortCredits } from './person-page.js';
 import { requestable, titleStatusLabel } from './title-page.js';
@@ -29,8 +29,9 @@ describe('discover on Arclight', () => {
   });
 
   it('counts active filters for the FilterBar Clear button', () => {
-    expect(activeDiscoverFilters(EMPTY_FILTERS)).toBe(0);
-    expect(activeDiscoverFilters({ ...EMPTY_FILTERS, genre: '18', yearFrom: '1990' })).toBe(2);
+    expect(activeFilterCount({})).toBe(0);
+    expect(activeFilterCount({ sort: 'popularity.desc', region: 'GB' })).toBe(0);
+    expect(activeFilterCount({ genres: '18', from: '1990', sort: 'vote_average.desc' })).toBe(3);
   });
 
   it('merges crew jobs per title and sorts credits newest first', () => {

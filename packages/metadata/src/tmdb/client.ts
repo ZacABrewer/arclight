@@ -3,14 +3,22 @@
 
 import type { z } from 'zod';
 import type {
+  CertificationRef,
+  CollectionMetadata,
   CompanyRef,
   EpisodeMetadata,
   Genre,
+  Keyword,
+  LanguageRef,
   MovieMetadata,
   PersonMetadata,
+  PersonSearchResult,
   SearchResult,
   SeriesMetadata,
   TitleExtras,
+  TmdbListName,
+  WatchProviderRef,
+  WatchRegion,
 } from '../types.js';
 import { mapMovieExtras, mapPerson, mapTvExtras } from './extras.js';
 import { MetadataError } from '../types.js';
@@ -27,6 +35,14 @@ import {
   type ImageUrlBuilder,
 } from './map.js';
 import {
+  tmdbCertificationsSchema,
+  tmdbCollectionSchema,
+  tmdbKeywordDetailsSchema,
+  tmdbKeywordSearchResponseSchema,
+  tmdbLanguagesSchema,
+  tmdbPersonSearchResponseSchema,
+  tmdbWatchProvidersSchema,
+  tmdbWatchRegionsSchema,
   tmdbCompanyDetailsSchema,
   tmdbConfigurationSchema,
   tmdbFindResponseSchema,
@@ -105,6 +121,12 @@ export interface DiscoverOptions {
   withNetworks?: string;
   withWatchProviders?: string;
   watchRegion?: string;
+  /** Exact certification (movies: release certification; series: content rating). */
+  certification?: string;
+  /** Certifications up to and including this one (by the country's order). */
+  certificationLte?: string;
+  /** Country the certification filters refer to; defaults to the client region. */
+  certificationCountry?: string;
 }
 
 export interface TmdbClient {
@@ -131,6 +153,18 @@ export interface TmdbClient {
   getPerson(personId: number): Promise<PersonMetadata>;
   getCompany(companyId: number): Promise<CompanyRef>;
   getNetwork(networkId: number): Promise<CompanyRef>;
+  /** A ready-made list (popular, top rated, now playing, airing today, ...). */
+  getList(kind: MediaKind, list: TmdbListName, page?: number): Promise<PagedResults<SearchResult>>;
+  searchPeople(query: string, options?: SearchOptions): Promise<PagedResults<PersonSearchResult>>;
+  getCollection(collectionId: number): Promise<CollectionMetadata>;
+  /** Watch providers available in `region` (defaults to the client region), by display priority. */
+  getWatchProviders(kind: MediaKind, region?: string): Promise<WatchProviderRef[]>;
+  getWatchRegions(): Promise<WatchRegion[]>;
+  /** Certifications of one country (defaults to the client region), in TMDB order. */
+  getCertifications(kind: MediaKind, country?: string): Promise<CertificationRef[]>;
+  getLanguages(): Promise<LanguageRef[]>;
+  searchKeywords(query: string, page?: number): Promise<PagedResults<Keyword>>;
+  getKeyword(keywordId: number): Promise<Keyword>;
   /** Clears the response cache (including /configuration). */
   clearCache(): void;
 }
@@ -141,12 +175,24 @@ const DEFAULT_CACHE_TTL_MS = 10 * 60 * 1000;
 const CONFIGURATION_TTL_MS = 24 * 60 * 60 * 1000;
 const DEFAULT_MAX_RETRIES = 3;
 const DEFAULT_RETRY_DELAY_MS = 1_000;
+/** The response cache never holds more than this many URLs (oldest first out). */
+const MAX_CACHE_ENTRIES = 2_000;
+
+const LIST_PATHS: Record<MediaKind, Partial<Record<TmdbListName, string>>> = {
+  movie: { popular: 'popular', topRated: 'top_rated', nowPlaying: 'now_playing', upcoming: 'upcoming' },
+  tv: { popular: 'popular', topRated: 'top_rated', airingToday: 'airing_today', onTheAir: 'on_the_air' },
+};
 
 type Params = Record<string, string | number | boolean | undefined>;
 
 interface CacheEntry {
   expiresAt: number;
   value: unknown;
+}
+
+/** Sort key for collection parts: release date, undated parts last. */
+function releaseKey(r: SearchResult): string {
+  return (r.mediaType === 'movie' ? r.releaseDate : r.firstAired) ?? '9999';
 }
 
 function defaultSleep(ms: number): Promise<void> {
@@ -218,6 +264,17 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
     }
   }
 
+  function cacheSet(key: string, value: unknown, ttlMs: number): void {
+    if (cache.size >= MAX_CACHE_ENTRIES && !cache.has(key)) {
+      const oldest = cache.keys().next().value;
+      if (oldest !== undefined) cache.delete(oldest);
+    }
+    cache.set(key, { expiresAt: now().getTime() + ttlMs, value });
+  }
+
+  /** Identical requests already on the wire share one response (no duplicate TMDB calls). */
+  const inflight = new Map<string, Promise<unknown>>();
+
   async function request<S extends z.ZodType>(
     path: string,
     params: Params,
@@ -227,7 +284,19 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
     const url = buildUrl(path, params);
     const cached = cacheGet(url);
     if (cached !== undefined) return cached as z.infer<S>;
+    const pending = inflight.get(url);
+    if (pending) return pending as Promise<z.infer<S>>;
+    const promise = fetchValidated(url, path, schema, ttlMs).finally(() => inflight.delete(url));
+    inflight.set(url, promise);
+    return promise;
+  }
 
+  async function fetchValidated<S extends z.ZodType>(
+    url: string,
+    path: string,
+    schema: S,
+    ttlMs: number,
+  ): Promise<z.infer<S>> {
     let attempt = 0;
     for (;;) {
       const response = await fetchOnce(url);
@@ -280,7 +349,7 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
         });
       }
 
-      if (ttlMs > 0) cache.set(url, { expiresAt: now().getTime() + ttlMs, value: parsed.data });
+      if (ttlMs > 0) cacheSet(url, parsed.data, ttlMs);
       return parsed.data;
     }
   }
@@ -324,6 +393,10 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
       with_keywords: opts.withKeywords,
       with_watch_providers: opts.withWatchProviders,
       watch_region: opts.watchRegion ?? (opts.withWatchProviders ? region : undefined),
+      certification: opts.certification,
+      'certification.lte': opts.certificationLte,
+      certification_country:
+        opts.certification || opts.certificationLte ? (opts.certificationCountry ?? region) : undefined,
       ...(kind === 'movie'
         ? {
             primary_release_year: opts.year,
@@ -518,6 +591,103 @@ export function createTmdbClient(options: TmdbClientOptions = {}): TmdbClient {
       ]);
       const logo = images('logo', raw.logo_path);
       return { tmdbId: raw.id, name: raw.name, ...(logo ? { logo } : {}) };
+    },
+
+    async getList(kind, list, page) {
+      const segment = LIST_PATHS[kind][list];
+      if (!segment) throw new MetadataError('not-found', `TMDB has no ${kind} list named ${list}`);
+      const images = await imageBuilder();
+      if (kind === 'movie') {
+        const raw = await request(`/movie/${segment}`, { page, region }, tmdbMovieSearchResponseSchema);
+        return paged(raw, raw.results.map((item) => mapMovieSearchItem(item, images)));
+      }
+      const raw = await request(`/tv/${segment}`, { page }, tmdbTvSearchResponseSchema);
+      return paged(raw, raw.results.map((item) => mapTvSearchItem(item, images)));
+    },
+
+    async searchPeople(query, opts = {}) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request('/search/person', { query, page: opts.page, include_adult: opts.includeAdult }, tmdbPersonSearchResponseSchema),
+      ]);
+      return paged(
+        raw,
+        raw.results.map((row): PersonSearchResult => {
+          const profile = images('profile', row.profile_path);
+          return {
+            tmdbId: row.id,
+            name: row.name,
+            ...(profile ? { profile } : {}),
+            ...(row.known_for_department ? { knownForDepartment: row.known_for_department } : {}),
+            ...(typeof row.popularity === 'number' ? { popularity: row.popularity } : {}),
+            knownFor: mapMultiSearchResults({ results: row.known_for }, images),
+          };
+        }),
+      );
+    },
+
+    async getCollection(collectionId) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/collection/${collectionId}`, {}, tmdbCollectionSchema),
+      ]);
+      const poster = images('poster', raw.poster_path);
+      const backdrop = images('backdrop', raw.backdrop_path);
+      const parts = raw.parts
+        .map((item) => mapMovieSearchItem(item, images))
+        .sort((a, b) => releaseKey(a).localeCompare(releaseKey(b)));
+      return {
+        tmdbId: raw.id,
+        name: raw.name,
+        overview: raw.overview ?? '',
+        images: { ...(poster ? { poster } : {}), ...(backdrop ? { backdrop } : {}) },
+        parts,
+      };
+    },
+
+    async getWatchProviders(kind, watchRegion) {
+      const [images, raw] = await Promise.all([
+        imageBuilder(),
+        request(`/watch/providers/${kind}`, { watch_region: watchRegion ?? region }, tmdbWatchProvidersSchema, CONFIGURATION_TTL_MS),
+      ]);
+      return raw.results
+        .map((p): WatchProviderRef => {
+          const logo = images('logo', p.logo_path);
+          return { tmdbId: p.provider_id, name: p.provider_name, ...(logo ? { logo } : {}), displayPriority: p.display_priority ?? 999 };
+        })
+        .sort((a, b) => a.displayPriority - b.displayPriority || a.name.localeCompare(b.name));
+    },
+
+    async getWatchRegions() {
+      const raw = await request('/watch/providers/regions', {}, tmdbWatchRegionsSchema, CONFIGURATION_TTL_MS);
+      return raw.results
+        .map((r) => ({ code: r.iso_3166_1, name: r.english_name || r.native_name || r.iso_3166_1 }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    async getCertifications(kind, country) {
+      const raw = await request(`/certification/${kind}/list`, {}, tmdbCertificationsSchema, CONFIGURATION_TTL_MS);
+      const list = raw.certifications[(country ?? region).toUpperCase()] ?? [];
+      return list
+        .map((c) => ({ certification: c.certification, meaning: c.meaning ?? '', order: c.order ?? 0 }))
+        .sort((a, b) => a.order - b.order);
+    },
+
+    async getLanguages() {
+      const raw = await request('/configuration/languages', {}, tmdbLanguagesSchema, CONFIGURATION_TTL_MS);
+      return raw
+        .map((l) => ({ code: l.iso_639_1, name: l.english_name || l.name || l.iso_639_1 }))
+        .sort((a, b) => a.name.localeCompare(b.name));
+    },
+
+    async searchKeywords(query, page) {
+      const raw = await request('/search/keyword', { query, page }, tmdbKeywordSearchResponseSchema);
+      return paged(raw, raw.results.map((k) => ({ tmdbId: k.id, name: k.name })));
+    },
+
+    async getKeyword(keywordId) {
+      const raw = await request(`/keyword/${keywordId}`, {}, tmdbKeywordDetailsSchema, CONFIGURATION_TTL_MS);
+      return { tmdbId: raw.id, name: raw.name };
     },
 
     clearCache() {

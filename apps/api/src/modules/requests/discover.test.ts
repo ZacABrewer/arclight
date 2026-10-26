@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { Permission as P, RequestsSettings } from '@arclight/shared';
+import { BUILT_IN_SLIDERS, Permission as P, RequestsSettings } from '@arclight/shared';
 import { setSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
 import { addUser, giveMovieFile, giveSeasonFiles, setup } from './test-support.js';
@@ -89,16 +89,17 @@ describe('discover status enrichment', () => {
 });
 
 describe('discover sliders', () => {
-  it('seeds the twelve built-ins, reorders, toggles, and resets', async () => {
+  it('seeds the built-ins, reorders, toggles, and resets', async () => {
     const h = await harness();
     const sliders = h.services.discover.sliders(h.admin.actor);
     expect(sliders.map((s) => s.type).slice(0, 3)).toEqual(['recentlyAdded', 'recentRequests', 'watchlist']);
-    expect(sliders).toHaveLength(12);
+    expect(sliders).toHaveLength(BUILT_IN_SLIDERS.length);
     const reversed = [...sliders].reverse().map((s, i) => ({ id: s.id, enabled: i !== 0 }));
     const ordered = h.services.discover.orderSliders(h.admin.actor, reversed);
-    expect(ordered[0]!.type).toBe('networks');
+    expect(ordered[0]!.type).toBe('providers');
     expect(ordered[0]!.enabled).toBe(false);
-    expect(h.services.discover.sliders(h.user.actor)).toHaveLength(11);
+    // Users see the enabled ones they can use: not the disabled one, not Recently added (no View recently added).
+    expect(h.services.discover.sliders(h.user.actor)).toHaveLength(BUILT_IN_SLIDERS.length - 2);
     expect(() => h.services.discover.orderSliders(h.user.actor, reversed)).toThrow(RequestsError);
     const reset = h.services.discover.resetSliders(h.admin.actor);
     expect(reset[0]!.type).toBe('recentlyAdded');

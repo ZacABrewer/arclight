@@ -60,6 +60,8 @@ export class FakeTmdb {
   movies = new Map<number, FakeMovie>();
   series = new Map<number, FakeSeries>();
   calls: string[] = [];
+  /** Collection id → movie ids (parts). */
+  collections = new Map<number, number[]>();
 
   addMovie(m: FakeMovie): this {
     this.movies.set(m.tmdbId, m);
@@ -190,6 +192,48 @@ export class FakeTmdb {
       },
       async findByImdbId() {
         return [];
+      },
+      async getList(kind, list, page = 1) {
+        self.calls.push(`list:${kind}:${list}:${page}`);
+        return kind === 'movie' ? self.page([...self.movies.values()].map((m) => result('movie', m))) : self.page([...self.series.values()].map((s) => result('series', s)));
+      },
+      async searchMovies(query) {
+        self.calls.push(`searchMovies:${query}`);
+        return self.page([...self.movies.values()].filter((m) => m.title.toLowerCase().includes(query.toLowerCase())).map((m) => result('movie', m)));
+      },
+      async searchSeries(query) {
+        self.calls.push(`searchSeries:${query}`);
+        return self.page([...self.series.values()].filter((m) => m.title.toLowerCase().includes(query.toLowerCase())).map((m) => result('series', m)));
+      },
+      async searchPeople(query, opts = {}) {
+        self.calls.push(`people:${query}`);
+        const first = [...self.movies.values()][0];
+        return { page: opts.page ?? 1, totalPages: 2, totalResults: 21, results: [{ tmdbId: 1, name: 'Lead Actor', knownForDepartment: 'Acting', knownFor: first ? [result('movie', first)] : [] }] };
+      },
+      async getCollection(id) {
+        self.calls.push(`collection:${id}`);
+        const parts = self.collections.get(id);
+        if (!parts) throw Object.assign(new Error('not found'), { code: 'not-found' });
+        return { tmdbId: id, name: `Collection ${id}`, overview: '', images: {}, parts: parts.map((p) => result('movie', self.movie(p))) };
+      },
+      async getWatchProviders(kind, region) {
+        self.calls.push(`providers:${kind}:${region ?? ''}`);
+        return [{ tmdbId: 8, name: 'Streamer', logo: 'https://img/streamer.png', displayPriority: 1 }];
+      },
+      async getWatchRegions() {
+        return [{ code: 'GB', name: 'United Kingdom' }, { code: 'US', name: 'United States' }];
+      },
+      async getCertifications(kind) {
+        return kind === 'movie' ? [{ certification: 'PG', meaning: '', order: 1 }] : [{ certification: 'TV-14', meaning: '', order: 1 }];
+      },
+      async getLanguages() {
+        return [{ code: 'en', name: 'English' }];
+      },
+      async searchKeywords(query) {
+        return { page: 1, totalPages: 1, totalResults: 1, results: [{ tmdbId: 9715, name: query }] };
+      },
+      async getKeyword(id) {
+        return { tmdbId: id, name: `keyword ${id}` };
       },
       async findByTvdbId(tvdbId) {
         return [...self.series.values()].filter((s) => s.tvdbId === tvdbId).map((s) => result('series', s));

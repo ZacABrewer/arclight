@@ -1,0 +1,115 @@
+/* Discover catalogue (app + portal). Kit tokens only, square corners, mono for data,
+   no glow on artwork. Prefix: dk- (discover kit). */
+
+.dk-year { font-size: 11px; color: var(--al-text-4); }
+.dk-card__link { display: flex; flex-direction: column; gap: 9px; }
+/* Long grids: let the browser skip layout/paint for cards far off screen. */
+.dk-grid > .dk-card { content-visibility: auto; contain-intrinsic-size: auto 300px; }
+
+/* ---------- row header: title + inline controls left, See all right ---------- */
+.dk-row-head { align-items: center; }
+.dk-row-head__label { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; min-width: 0; }
+.dk-see-all { display: inline-flex; align-items: center; min-height: 44px; padding: 0 4px; white-space: nowrap; }
+
+/* ---------- horizontal track with scroll buttons ---------- */
+.dk-track { position: relative; }
+.dk-track__nav { position: absolute; top: 0; bottom: 8px; z-index: 4; width: 36px; display: none; align-items: center; justify-content: center;
+  border: 1px solid var(--al-line-2); background: rgba(1, 6, 9, .78); color: var(--al-text-2); font: 400 22px var(--al-font); cursor: pointer; }
+.dk-track__nav:hover { color: var(--al-text-1); border-color: var(--al-line-4); }
+.dk-track__nav:focus-visible { outline: var(--al-focus); outline-offset: 2px; }
+.dk-track__nav--prev { left: -18px; }
+.dk-track__nav--next { right: -18px; }
+@media (hover: hover) and (min-width: 768px) { .dk-track:hover .dk-track__nav, .dk-track__nav:focus-visible { display: flex; } }
+
+/* ---------- tiles: genres (backdrop) and studios / networks / providers (logo) ---------- */
+.dk-tiles { display: grid; grid-auto-flow: column; gap: 16px; overflow-x: auto; padding-bottom: 8px; scroll-snap-type: x proximity; scrollbar-width: thin; scrollbar-color: var(--al-line-2) transparent; }
+.dk-tiles > * { scroll-snap-align: start; }
+.dk-tiles--backdrop { grid-auto-columns: 240px; }
+.dk-tiles--logo { grid-auto-columns: 168px; }
+.dk-tile { position: relative; display: flex; align-items: flex-end; overflow: hidden; border: 1px solid var(--al-line-2); background: var(--al-glass-2); color: var(--al-text-1); text-decoration: none; }
+.dk-tile:hover { border-color: var(--al-line-4); text-decoration: none; }
+.dk-tile:focus-visible { outline: var(--al-focus); outline-offset: 2px; }
+.dk-tile--backdrop { height: 112px; }
+.dk-tile--backdrop img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; opacity: .55; }
+.dk-tile--backdrop::after { content: ''; position: absolute; inset: 0; background: linear-gradient(180deg, rgba(1, 6, 9, 0) 30%, rgba(1, 6, 9, .9)); }
+.dk-tile--backdrop .dk-tile__name { position: relative; z-index: 1; padding: 10px 12px; font-size: 16px; font-weight: 600; }
+.dk-tile--logo { height: 88px; align-items: center; justify-content: center; padding: 14px; }
+.dk-tile--logo img { max-width: 100%; max-height: 100%; object-fit: contain; filter: grayscale(1) brightness(1.6); opacity: .85; }
+.dk-tile--logo:hover img { opacity: 1; }
+.dk-tile--logo .dk-tile__name { font-size: 14px; color: var(--al-text-2); text-align: center; }
+@media (max-width: 767.98px) {
+  .dk-tiles--backdrop { grid-auto-columns: 180px; }
+  .dk-tile--backdrop { height: 96px; }
+  .dk-tiles--logo { grid-auto-columns: 128px; }
+  .dk-tile--logo { height: 72px; }
+}
+
+/* ---------- grid footer ---------- */
+.dk-more { flex-direction: column; align-items: center; gap: 12px; }
+
+/* ---------- people results ---------- */
+.dk-people { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 24px 20px; }
+.dk-person { min-width: 0; }
+.dk-person .mk-cast__card .al-poster { aspect-ratio: 1 / 1; }
+@media (max-width: 767.98px) { .dk-people { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px 12px; } }
+
+/* ---------- page header search with suggestions ---------- */
+.dk-search { position: relative; width: min(420px, 100%); }
+.dk-search .al-input { width: 100%; }
+.dk-suggest { position: absolute; left: 0; right: 0; top: calc(100% + 4px); z-index: 30; max-height: 420px; overflow-y: auto;
+  border: 1px solid var(--al-line-3); background: rgba(1, 8, 12, .96); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.dk-suggest__group { padding: 8px 12px 4px; font-family: var(--al-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); }
+.dk-suggest__item { display: grid; grid-template-columns: 32px minmax(0, 1fr) auto; gap: 12px; align-items: center; min-height: 44px; padding: 4px 12px; color: var(--al-text-2); text-decoration: none; cursor: pointer; }
+.dk-suggest__item .al-poster { width: 32px; }
+.dk-suggest__item[aria-selected="true"], .dk-suggest__item:hover { background: var(--al-cyan-a12); color: var(--al-text-1); text-decoration: none; }
+.dk-suggest__title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dk-suggest__meta { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+.dk-suggest__all { display: flex; align-items: center; min-height: 44px; padding: 0 12px; border-top: 1px solid var(--al-line-2); color: var(--al-cyan); font-size: 13px; cursor: pointer; }
+.dk-suggest__all[aria-selected="true"] { background: var(--al-cyan-a12); }
+
+/* ---------- browse filter bar ---------- */
+.dk-filters { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+.dk-filters__more { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px 16px; padding: 16px; border: 1px solid var(--al-line-2); background: var(--al-glass-2); }
+.dk-filters__field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.dk-filters__field > .al-label { margin: 0; }
+.dk-filters__pair { display: flex; gap: 8px; align-items: center; }
+.dk-filters__pair .al-input { flex: 1; min-width: 0; }
+.dk-filters__wide { grid-column: 1 / -1; }
+.dk-toggles { display: flex; flex-wrap: wrap; gap: 8px; }
+.dk-toggle { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 0 12px; border: 1px solid var(--al-line-2); background: none; color: var(--al-text-3); font: 400 13px var(--al-font); cursor: pointer; }
+.dk-toggle:hover { border-color: var(--al-line-4); color: var(--al-text-1); }
+.dk-toggle[aria-pressed="true"] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
+.dk-toggle img { width: 24px; height: 24px; object-fit: contain; }
+.dk-toggle:focus-visible { outline: var(--al-focus); outline-offset: 2px; }
+.dk-keyword-results { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+@media (max-width: 767.98px) { .dk-toggle { min-height: 44px; } }
+
+/* ---------- title page extras ---------- */
+.dk-facts { display: flex; flex-wrap: wrap; gap: 8px 20px; font-size: 13px; color: var(--al-text-3); }
+.dk-facts dt { font-family: var(--al-mono); font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); }
+.dk-facts dd { margin: 2px 0 0; font-family: var(--al-mono); color: var(--al-text-2); }
+.dk-seasons { display: flex; flex-direction: column; border: 1px solid var(--al-line-2); }
+.dk-season { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto auto; gap: 16px; align-items: center; min-height: 72px; padding: 8px 16px; border-bottom: 1px solid var(--al-line-1); }
+.dk-season:last-child { border-bottom: 0; }
+.dk-season .al-poster { width: 48px; }
+.dk-season__name { color: var(--al-text-1); font-weight: 500; }
+.dk-season__meta { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+.dk-season__chips { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+@media (max-width: 767.98px) {
+  .dk-season { grid-template-columns: 40px minmax(0, 1fr); }
+  .dk-season .al-poster { width: 40px; }
+  .dk-season__chips, .dk-season > .al-btn { grid-column: 2; justify-content: flex-start; }
+}
+.dk-collection { display: grid; grid-template-columns: 96px minmax(0, 1fr) auto; gap: 20px; align-items: center; padding: 16px; border: 1px solid var(--al-line-2); background: var(--al-glass-2); }
+@media (max-width: 767.98px) { .dk-collection { grid-template-columns: 72px minmax(0, 1fr); } .dk-collection > :last-child { grid-column: 1 / -1; } }
+.dk-links { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* ---------- quota line in the request modal ---------- */
+.dk-quota { display: flex; flex-wrap: wrap; gap: 6px 16px; margin: 0; font-size: 13px; color: var(--al-text-3); }
+.dk-quota .al-num { color: var(--al-text-1); }
+.dk-quota[data-tone="warn"] .al-num { color: var(--al-warn-text); }
+
+/* Touch targets on phones. */
+@media (max-width: 767.98px) {
+  .mk-hero__actions .al-btn, .dk-filters .al-btn, .dk-filters .al-select, .dk-filters .al-input { min-height: 44px; }
+}

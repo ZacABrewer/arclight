@@ -30,3 +30,12 @@
   .al-window-row__controls .al-select { flex: 1 1 100%; }
   .al-window-row__controls .al-btn { min-height: 44px; }
 }
+
+/* Public portal: paths and hostnames lists. */
+.al-portal-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 46px; padding: 6px 10px 6px 14px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); font-size: 14px; }
+.al-portal-row > .al-num { flex: 1; min-width: 0; color: var(--al-text-1); overflow-wrap: anywhere; }
+.al-portal-row__toggle { display: inline-flex; align-items: center; gap: 8px; }
+.al-portal-add { display: flex; flex-direction: column; gap: 6px; }
+.al-portal-add__row { display: flex; gap: 8px; }
+.al-portal-add__row .al-input { flex: 1; min-width: 0; }
+@media (max-width: 767.98px) { .al-portal-row .al-btn, .al-portal-add .al-btn { min-height: 44px; } }

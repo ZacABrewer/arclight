@@ -121,7 +121,8 @@ describe('requests routes', () => {
     const detail = await h.app.inject({ method: 'GET', url: '/api/v1/discover/tv/1399', headers: { cookie: h.userCookie } });
     expect(detail.json()).toMatchObject({ title: 'Thrones', canRequest: true });
     const sliders = await h.app.inject({ method: 'GET', url: '/api/v1/discoverslider', headers: { cookie: h.userCookie } });
-    expect(sliders.json()).toHaveLength(12);
+    // Every built-in but Recently added (the user lacks View recently added).
+    expect(sliders.json()).toHaveLength(16);
     const issue = await h.app.inject({ method: 'POST', url: '/api/v1/issue', headers: { cookie: h.userCookie }, payload: { type: 'video', mediaType: 'movie', tmdbId: 603, message: 'pixelated' } });
     expect(issue.statusCode).toBe(201);
     const comment = await h.app.inject({ method: 'POST', url: `/api/v1/issue/${issue.json().id}/comment`, headers: { cookie: h.adminCookie }, payload: { message: 'on it' } });

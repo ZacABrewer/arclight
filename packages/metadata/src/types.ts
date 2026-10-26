@@ -219,3 +219,59 @@ export interface PersonMetadata {
   cast: PersonCredit[];
   crew: PersonCredit[];
 }
+
+/** A row of people search results. */
+export interface PersonSearchResult {
+  tmdbId: number;
+  name: string;
+  profile?: string;
+  knownForDepartment?: string;
+  popularity?: number;
+  /** Titles TMDB lists as what the person is known for. */
+  knownFor: SearchResult[];
+}
+
+/** A TMDB movie collection with its parts (release order). */
+export interface CollectionMetadata {
+  tmdbId: number;
+  name: string;
+  overview: string;
+  images: ImageSet;
+  parts: SearchResult[];
+}
+
+/** A streaming/rental service (TMDB watch provider). */
+export interface WatchProviderRef {
+  tmdbId: number;
+  name: string;
+  logo?: string;
+  /** Lower is more prominent in the region. */
+  displayPriority: number;
+}
+
+export interface WatchRegion {
+  /** ISO-3166-1 code. */
+  code: string;
+  name: string;
+}
+
+export interface CertificationRef {
+  certification: string;
+  meaning: string;
+  order: number;
+}
+
+export interface LanguageRef {
+  /** ISO-639-1 code. */
+  code: string;
+  name: string;
+}
+
+/** Ready-made TMDB lists (movie/now_playing, tv/on_the_air, ...). */
+export type TmdbListName =
+  | 'popular'
+  | 'topRated'
+  | 'nowPlaying'
+  | 'upcoming'
+  | 'airingToday'
+  | 'onTheAir';

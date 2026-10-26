@@ -50,6 +50,7 @@ export function availabilityBadge(mediaStatus: MediaStatus, requestStatus?: Requ
   if (mediaStatus !== 'unknown') return mediaStatus === 'pending' ? { label: t('common.requested'), tone: 'warn' } : MEDIA_STATUS_META[mediaStatus];
   if (requestStatus === 'pending') return { label: t('common.requested'), tone: 'warn' };
   if (requestStatus === 'approved') return { label: t('features.requests.status.processing'), tone: 'default' };
+  if (requestStatus === 'declined') return { label: t('common.declined'), tone: 'danger' };
   return null;
 }
 
@@ -111,6 +112,21 @@ export const SLIDER_LABELS: Record<DiscoverSliderType, string> = {
   },
   get tmdbNetwork() {
     return t('common.network');
+  },
+  get nowPlaying() {
+    return t('features.requests.status.nowPlaying');
+  },
+  get topRatedMovies() {
+    return t('features.requests.status.topRatedMovies');
+  },
+  get airingTv() {
+    return t('features.requests.status.airingSeries');
+  },
+  get topRatedTv() {
+    return t('features.requests.status.topRatedSeries');
+  },
+  get providers() {
+    return t('features.requests.status.streamingServices');
   },
 };
 

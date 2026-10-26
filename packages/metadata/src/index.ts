@@ -58,4 +58,11 @@ export {
   type SeriesMetadata,
   type SeriesSearchResult,
   type SeriesStatus,
+  type CertificationRef,
+  type CollectionMetadata,
+  type LanguageRef,
+  type PersonSearchResult,
+  type TmdbListName,
+  type WatchProviderRef,
+  type WatchRegion,
 } from './types.js';

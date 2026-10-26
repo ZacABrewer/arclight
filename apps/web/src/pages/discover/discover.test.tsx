@@ -2,21 +2,24 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { availabilityBadge } from '../../features/requests/status.js';
 import { makeItem, makeTitle, renderAt, season, stubApi } from '../../features/requests/test-utils.js';
-import { buildDiscoverQuery, EMPTY_FILTERS } from './discover-browse.js';
+import { browseQuery, parseBrowseSearch } from '../../features/discover/filters.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
 const discoverPage = (results: unknown[], page = 1, totalPages = 1) => ({ page, totalPages, totalResults: results.length, results });
 
 describe('discover', () => {
-  it('turns the filter bar into api params, dropping invalid input', () => {
-    expect(buildDiscoverQuery({ ...EMPTY_FILTERS, genre: '18', yearFrom: '1990', yearTo: '19x', minRating: '7.5', language: 'EN', runtimeMax: '120' })).toEqual({
+  it('turns the filters in the URL into api params, dropping invalid input', () => {
+    const search = parseBrowseSearch({ genres: '18,35,x', from: '1990', to: '19x', ratingMin: '7.5', lang: 'EN', runtimeMax: '120', hideRequested: 'true', bogus: 1 });
+    expect(search).toEqual({ genres: '18,35', from: '1990', ratingMin: '7.5', lang: 'en', runtimeMax: '120', hideRequested: true });
+    expect(browseQuery('movie', search)).toEqual({
       sortBy: 'popularity.desc',
-      genre: '18',
+      genre: '18|35',
       releaseDateGte: '1990-01-01',
       voteAverageGte: 7.5,
       language: 'en',
       runtimeLte: 120,
+      hideRequested: true,
     });
     expect(availabilityBadge('unknown', 'pending')?.label).toBe('Requested');
     expect(availabilityBadge('unknown', null)).toBeNull();
@@ -56,17 +59,24 @@ describe('discover', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
-    stubApi({
+    const calls = stubApi({
       '/api/v1/discoverslider': [slider(1, 'studios', 3), slider(2, 'trending', 1), slider(3, 'movieGenres', 2), slider(4, 'popularTv', 4, false)],
       '/api/v1/discover/slider/2': discoverPage([makeItem({ title: 'Hot Thing' })]),
-      '/api/v1/discover/genres': [{ id: 28, name: 'Action' }],
+      '/api/v1/discover/genres/tiles': [{ id: 28, name: 'Action', imageUrl: 'https://image.tmdb.org/t/p/w1280/action.jpg' }],
+      '/api/v1/discover/companies': [{ id: 41077, name: 'A24', imageUrl: null }],
     });
     renderAt('/discover');
     expect(await screen.findByRole('article', { name: 'Hot Thing' })).toBeTruthy();
     const headings = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
     expect(headings).toEqual(['Trending', 'Movie genres', 'Studios']);
-    expect((await screen.findByRole('link', { name: 'Action' })).getAttribute('href')).toBe('/discover/genre/28?mediaType=movie');
-    expect(screen.getByRole('link', { name: 'A24' }).getAttribute('href')).toBe('/discover/studio/41077');
+    const action = await screen.findByRole('link', { name: 'Action' });
+    expect(action.getAttribute('href')).toBe('/discover/genre/28?mediaType=movie');
+    // Genre tiles load backdrops at the tile size, not the api's size.
+    expect(action.querySelector('img')?.getAttribute('src')).toBe('https://image.tmdb.org/t/p/w780/action.jpg');
+    expect((await screen.findByRole('link', { name: 'A24' })).getAttribute('href')).toBe('/discover/studio/41077');
+    // The trending row switches its time window in place.
+    fireEvent.click(screen.getByRole('button', { name: 'This week' }));
+    await waitFor(() => expect(calls.some((c) => c.url.startsWith('/api/v1/discover/slider/2') && c.url.includes('timeWindow=week'))).toBe(true));
   });
 
   it('title page offers Request and shows season status in the dialog', async () => {

@@ -54,6 +54,7 @@ export const NAV: readonly NavSection[] = [
       { get label() { return t('nav.home'); }, to: '/discover' },
       { get label() { return t('common.movies'); }, to: '/discover/movies' },
       { get label() { return t('common.tv'); }, to: '/discover/tv' },
+      { get label() { return t('common.trending'); }, to: '/discover/trending' },
     ],
   },
   {

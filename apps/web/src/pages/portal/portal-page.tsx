@@ -1,28 +1,32 @@
-import { useEffect, useId, useState, type FormEvent } from 'react';
+import { useEffect, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Link } from '@tanstack/react-router';
-import type { DiscoverItem, PublicPortal } from '@arclight/shared';
+import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
+import type { DiscoverItem, PortalDocument, PublicPortal } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
-import { discoverApi, kindOf, publicPortalApi } from '../../api/requests.js';
-import { Backdrop, Button, EmptyState, ErrorBlock, Input, Mark, Pane, Poster, Skeleton, buttonClass } from '../../arclight/index.js';
+import { kindOf, publicPortalApi } from '../../api/requests.js';
+import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Pane, Skeleton, buttonClass, type IconName } from '../../arclight/index.js';
 import { useAuth } from '../../auth/auth-context.js';
-import { cardBadge, StatusLabelChip } from '../discover/discover-kit.js';
-import { t } from '../../i18n/index.js';
-import { titleLink } from '../../features/requests/title-link.js';
+import { DLink, DiscoverBaseProvider, type DiscoverPath } from '../../features/discover/base.js';
+import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
+import { DiscoverSliders, BrowseLinks } from '../discover/discover-home.js';
+import { DiscoverSearchBox } from '../discover/discover-search.js';
+import { MyRequestsPage } from '../requests/my-requests-page.js';
 import '../../components/media/media-kit.css';
+import '../discover/discover.css';
 import './portal.css';
+import { t } from '../../i18n/index.js';
 
-// Public request portal (/portal): reachable without signing in and drawn without the app
-// shell. Shows the portal's branding and message, the ways to sign in, and (when the admin
-// allows anonymous discover) trending titles and a search. Requesting always needs sign-in.
+// Public request portal: the full Discover catalogue (home sliders, browse, search, title,
+// person and collection pages) and "My requests" in the portal's own chrome, without the app
+// shell. It answers at /portal, at every extra portal path and at the root of portal
+// hostnames (Settings > Requests > Public request portal; features/discover/portal-location.ts).
+// Anonymous visitors browse when the admin allows it; requesting always needs sign-in.
 
 export const portalKeys = {
   portal: ['public', 'portal'] as const,
-  trending: ['public', 'trending'] as const,
-  search: (q: string) => ['public', 'search', q] as const,
 };
 
-/** The app path of a title page. */
+/** The app path of a title page (outside the portal). */
 export function titlePath(item: Pick<DiscoverItem, 'mediaType' | 'tmdbId'>): string {
   return `/discover/${kindOf(item.mediaType)}/${item.tmdbId}`;
 }
@@ -50,93 +54,139 @@ export function portalUnavailable(err: unknown): 'off' | 'error' {
   return err instanceof ApiError && (err.status === 401 || err.status === 403 || err.status === 404) ? 'off' : 'error';
 }
 
-function discoverError(err: unknown): string {
-  if (err instanceof ApiError && err.status === 429) return t('portal.rateLimited');
-  return errorMessage(err);
+/**
+ * Where "Open Arclight" goes from a portal page (a full page load, which leaves portal mode), or
+ * null on a portal-only hostname.
+ */
+export function openAppHref(doc: PortalDocument | null | undefined): string | null {
+  if (!doc || doc.mode === 'path') return '/';
+  return doc.portalOnly ? null : '/discover';
 }
 
-function PortalCard({ item, signedIn }: { item: DiscoverItem; signedIn: boolean }) {
-  const badge = cardBadge(item.mediaStatus, item.requestStatus);
-  const path = titlePath(item);
-  const body = (
-    <>
-      <Poster src={item.posterUrl} title={item.title}>
-        {badge ? (
-          <span className="mk-card-chip">
-            <StatusLabelChip label={badge} />
-          </span>
-        ) : null}
-      </Poster>
-      <span className="al-poster-card__title-row">
-        <span className="al-poster-card__title">{item.title}</span>
-        {item.year ? <span className="al-num portal-year">{item.year}</span> : null}
-      </span>
-    </>
-  );
+function usePortal() {
+  return useQuery({ queryKey: portalKeys.portal, queryFn: publicPortalApi.get, retry: false, staleTime: 60_000 });
+}
+
+function useSignedIn(): boolean {
+  return useAuth().status?.authenticated ?? false;
+}
+
+/** /login, coming back to the current portal page afterwards. */
+function SignInLink({ variant = 'primary', block, children }: { variant?: 'primary' | 'secondary'; block?: boolean; children: ReactNode }) {
+  const href = useRouterState({ select: (s) => s.location.href });
   return (
-    <article className="al-poster-card" aria-label={item.title}>
-      {signedIn ? (
-        <Link {...titleLink(item.mediaType, item.tmdbId)} className="portal-card-link">
-          {body}
-        </Link>
-      ) : (
-        <Link to="/login" search={{ redirect: path }} className="portal-card-link" aria-label={t('portal.signInToRequest', { title: item.title })}>
-          {body}
-        </Link>
-      )}
-      <div className="al-poster-card__meta">{item.mediaType === 'movie' ? t('common.movie') : t('common.series')}</div>
-    </article>
+    <Link to="/login" search={{ redirect: href }} className={buttonClass({ variant, ...(block ? { block } : {}) })}>
+      {children}
+    </Link>
   );
 }
 
-function PortalDiscover({ signedIn }: { signedIn: boolean }) {
-  const searchId = useId();
-  const [draft, setDraft] = useState('');
-  const [query, setQuery] = useState('');
-  const trending = useQuery({ queryKey: portalKeys.trending, queryFn: () => discoverApi.trending({ mediaType: 'all', timeWindow: 'week' }), enabled: query === '', retry: false, staleTime: 300_000 });
-  const search = useQuery({ queryKey: portalKeys.search(query), queryFn: () => discoverApi.search(query), enabled: query !== '', retry: false, staleTime: 60_000 });
-  const active = query ? search : trending;
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    setQuery(draft.trim());
-  };
+const NAV: ReadonlyArray<{ to: DiscoverPath; label: () => string; icon: IconName; signedIn?: boolean }> = [
+  { to: '', label: () => t('portal.navHome'), icon: 'home' },
+  { to: '/movies', label: () => t('common.movies'), icon: 'film' },
+  { to: '/tv', label: () => t('common.series'), icon: 'tv' },
+  { to: '/search', label: () => t('common.search'), icon: 'search' },
+  { to: '/requests', label: () => t('common.myRequests'), icon: 'inbox', signedIn: true },
+];
+
+/** The nav entry a portal route path belongs to. */
+export function portalSection(pathname: string): DiscoverPath {
+  const rest = pathname.slice(PORTAL_ROOT.length);
+  if (rest === '' || rest === '/') return '';
+  if (rest.startsWith('/movies')) return '/movies';
+  if (rest === '/tv' || rest.startsWith('/tv?')) return '/tv';
+  if (rest.startsWith('/search')) return '/search';
+  if (rest.startsWith('/requests')) return '/requests';
+  return '/movies';
+}
+
+/** Layout of every /portal page: header, gate, page, mobile tab bar. */
+export function PortalLayout() {
+  const signedIn = useSignedIn();
+  const { logout } = useAuth();
+  const portal = usePortal();
+  const pathname = useRouterState({ select: (s) => s.location.pathname });
+  const title = portal.data?.title || t('common.arclight');
+  const appHref = openAppHref((useRouter().options.context as { portal?: PortalDocument | null } | undefined)?.portal);
+
+  useEffect(() => {
+    document.title = t('portal.documentTitle', { title });
+  }, [title]);
+
+  const off = portal.isError || (portal.data && !portal.data.enabled);
+  const isHome = pathname === PORTAL_ROOT || pathname === `${PORTAL_ROOT}/`;
+  const gated = portal.data && !signedIn && !portal.data.allowAnonymousDiscover && !isHome;
+  const section = portalSection(pathname);
+  const nav = NAV.filter((n) => !n.signedIn || signedIn);
+
   return (
-    <Pane title={query ? t('portal.resultsFor', { query }) : t('portal.trending')} aria-label={t('portal.browse')}>
-      <form className="portal-search" role="search" onSubmit={submit}>
-        <label className="al-sr-only" htmlFor={searchId}>
-          {t('portal.searchLabel')}
-        </label>
-        <Input id={searchId} type="search" value={draft} placeholder={t('portal.searchPlaceholder')} onChange={(e) => setDraft(e.currentTarget.value)} />
-        <Button type="submit" variant="secondary">
-          {t('common.search')}
-        </Button>
-        {query ? (
-          <Button
-            variant="ghost"
-            onClick={() => {
-              setDraft('');
-              setQuery('');
-            }}
-          >
-            {t('portal.clear')}
-          </Button>
+    <DiscoverBaseProvider base="/portal">
+      <div className="al-app portal">
+        <Backdrop vx={0.5} horizon={0.62} />
+        <header className="portal-head">
+          <DLink to="" className="portal-brand" aria-label={t('portal.homeLink', { title })}>
+            <Mark size={32} />
+            <span className="al-title-m portal-title">{title}</span>
+          </DLink>
+          {!off ? (
+            <nav className="portal-nav" aria-label={t('portal.navigation')}>
+              {nav.map((n) => (
+                <DLink key={n.to} to={n.to} className="portal-nav__link" aria-current={section === n.to ? 'page' : undefined}>
+                  {n.label()}
+                </DLink>
+              ))}
+            </nav>
+          ) : null}
+          <div className="portal-head__end">
+            {!off && (signedIn || portal.data?.allowAnonymousDiscover) ? (
+              <div className="portal-head__search">
+                <DiscoverSearchBox />
+              </div>
+            ) : null}
+            {signedIn ? (
+              <>
+                {appHref ? (
+                  <a href={appHref} className={buttonClass({ variant: 'ghost' })}>
+                    {t('portal.openApp')}
+                  </a>
+                ) : null}
+                <Button variant="ghost" onClick={() => void logout()}>
+                  {t('portal.signOut')}
+                </Button>
+              </>
+            ) : (
+              <SignInLink>{t('portal.signIn')}</SignInLink>
+            )}
+          </div>
+        </header>
+        <main className="portal-main">
+          {portal.isPending ? (
+            <Skeleton lines={6} />
+          ) : off ? (
+            <PortalOff reason={portal.isError ? portalUnavailable(portal.error) : 'off'} error={portal.error} />
+          ) : gated ? (
+            <Pane chamfer="tl" strong className="portal-card" aria-label={t('portal.signInTitle')}>
+              <EmptyState title={t('portal.discoverNeedsSignIn')} action={<SignInLink>{t('portal.signIn')}</SignInLink>}>
+                {t('portal.gatedHelp')}
+              </EmptyState>
+            </Pane>
+          ) : (
+            <Outlet />
+          )}
+        </main>
+        {!off ? (
+          <nav className="al-tabbar portal-tabbar" aria-label={t('portal.tabs')}>
+            {nav.map((n) => (
+              <DLink key={n.to} to={n.to} className="al-tabbar__item" aria-current={section === n.to ? 'page' : undefined}>
+                <span className="al-tabbar__bar" aria-hidden="true" />
+                <Icon name={n.icon} size={20} />
+                <span>{n.label()}</span>
+              </DLink>
+            ))}
+          </nav>
         ) : null}
-      </form>
-      {active.isPending ? (
-        <Skeleton lines={3} />
-      ) : active.isError ? (
-        <ErrorBlock title={t('portal.couldNotLoadTitles')}>{discoverError(active.error)}</ErrorBlock>
-      ) : active.data.results.length === 0 ? (
-        <EmptyState title={t('portal.noTitles')}>{t('portal.noTitlesHelp')}</EmptyState>
-      ) : (
-        <div className="portal-grid">
-          {active.data.results.map((item) => (
-            <PortalCard key={`${item.mediaType}-${item.tmdbId}`} item={item} signedIn={signedIn} />
-          ))}
-        </div>
-      )}
-      {!signedIn ? <p className="al-caption portal-note">{t('portal.requestNeedsSignIn')}</p> : null}
-    </Pane>
+      </div>
+    </DiscoverBaseProvider>
   );
 }
 
@@ -161,81 +211,57 @@ function PortalOff({ reason, error }: { reason: 'off' | 'error'; error: unknown 
   );
 }
 
-export function PortalPage() {
-  const { status } = useAuth();
-  const signedIn = status?.authenticated ?? false;
-  const portal = useQuery({ queryKey: portalKeys.portal, queryFn: publicPortalApi.get, retry: false, staleTime: 60_000 });
-  const title = portal.data?.title || t('common.arclight');
-
-  useEffect(() => {
-    document.title = t('portal.documentTitle', { title });
-  }, [title]);
-
-  const off = portal.isError || (portal.data && !portal.data.enabled);
+/** Portal home: welcome and sign-in, then the Discover sliders. */
+export function PortalHomePage() {
+  const portal = usePortal();
+  const signedIn = useSignedIn();
+  if (!portal.data) return null;
+  const logins = portalLoginOptions(portal.data.loginMethods);
+  const browse = signedIn || portal.data.allowAnonymousDiscover;
   return (
-    <div className="al-app portal">
-      <Backdrop vx={0.5} horizon={0.62} />
-      <main className="portal-main">
-        <header className="portal-head">
-          <div className="portal-brand">
-            <Mark size={36} />
-            <h1 className="al-title-l portal-title">{title}</h1>
-          </div>
-          {signedIn ? (
-            <Link to="/discover" className={buttonClass({ variant: 'secondary' })}>
-              {t('portal.openApp')}
-            </Link>
-          ) : (
-            <Link to="/login" className={buttonClass({ variant: 'primary' })}>
-              {t('portal.signIn')}
-            </Link>
-          )}
-        </header>
-        {portal.isPending ? (
-          <Skeleton lines={6} />
-        ) : off ? (
-          <PortalOff reason={portal.isError ? portalUnavailable(portal.error) : 'off'} error={portal.error} />
-        ) : (
-          <PortalBody portal={portal.data} signedIn={signedIn} />
-        )}
-      </main>
+    <div className="portal-stack">
+      <div className={signedIn ? 'portal-top portal-top--single' : 'portal-top'}>
+        <Pane chamfer="tl" strong className="portal-card" aria-label={t('portal.welcome')}>
+          <p className="al-label portal-kicker">{t('portal.kicker')}</p>
+          <h1 className="al-title-l portal-heading">{portal.data.title || t('common.arclight')}</h1>
+          <p className="portal-message">{portal.data.message || (signedIn ? t('portal.signedInHelp') : t('portal.defaultMessage'))}</p>
+          {browse ? (
+            <div className="portal-links">
+              <BrowseLinks />
+            </div>
+          ) : null}
+        </Pane>
+        {!signedIn ? (
+          <Pane title={t('portal.signInTitle')} aria-label={t('portal.signInTitle')}>
+            <ul className="portal-logins" aria-label={t('portal.loginMethods')}>
+              {logins.map((o, i) => (
+                <li key={o.id}>
+                  <SignInLink variant={i === 0 ? 'primary' : 'secondary'} block>
+                    {o.label}
+                  </SignInLink>
+                </li>
+              ))}
+            </ul>
+            {browse ? <p className="al-caption portal-note">{t('portal.requestNeedsSignIn')}</p> : null}
+          </Pane>
+        ) : null}
+      </div>
+      {browse ? <DiscoverSliders /> : <p className="al-caption portal-note">{t('portal.discoverNeedsSignIn')}</p>}
     </div>
   );
 }
 
-function PortalBody({ portal, signedIn }: { portal: PublicPortal; signedIn: boolean }) {
-  const logins = portalLoginOptions(portal.loginMethods);
-  return (
-    <div className="portal-stack">
-      <div className="portal-top">
-        <Pane chamfer="tl" strong className="portal-card" aria-label={t('portal.welcome')}>
-          <p className="al-label portal-kicker">{t('portal.kicker')}</p>
-          {portal.message ? <p className="portal-message">{portal.message}</p> : <p className="portal-message">{t('portal.defaultMessage')}</p>}
-          {portal.applicationUrl ? <p className="al-caption al-num portal-url">{portal.applicationUrl}</p> : null}
-        </Pane>
-        <Pane title={signedIn ? t('portal.signedIn') : t('portal.signInTitle')} aria-label={t('portal.signInTitle')}>
-          {signedIn ? (
-            <p className="al-caption" style={{ margin: 0 }}>
-              {t('portal.signedInHelp')}
-            </p>
-          ) : (
-            <ul className="portal-logins" aria-label={t('portal.loginMethods')}>
-              {logins.map((o, i) => (
-                <li key={o.id}>
-                  <Link to="/login" className={buttonClass({ variant: i === 0 ? 'primary' : 'secondary', block: true })}>
-                    {o.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Pane>
-      </div>
-      {portal.allowAnonymousDiscover || signedIn ? (
-        <PortalDiscover signedIn={signedIn} />
-      ) : (
-        <p className="al-caption portal-note">{t('portal.discoverNeedsSignIn')}</p>
-      )}
-    </div>
-  );
+/** Portal "My requests": the signed-in user's requests (sign-in prompt otherwise). */
+export function PortalRequestsPage() {
+  const signedIn = useSignedIn();
+  if (!signedIn) {
+    return (
+      <Pane chamfer="tl" strong className="portal-card" aria-label={t('common.myRequests')}>
+        <EmptyState title={t('portal.requestsNeedSignIn')} action={<SignInLink>{t('portal.signIn')}</SignInLink>}>
+          {t('portal.requestsNeedSignInHelp')}
+        </EmptyState>
+      </Pane>
+    );
+  }
+  return <MyRequestsPage />;
 }
