@@ -29,10 +29,23 @@ const errors = { 400: ProfilesErrorResponse, 404: ProfilesErrorResponse, 409: Pr
 
 const statusFor: Record<ProfileError['code'], number> = { NOT_FOUND: 404, VALIDATION: 400, IN_USE: 409, CONFLICT: 409 };
 
+/** A quality profile or custom format changed (published on the bus by the module). */
+export interface ProfileChange {
+  action: 'created' | 'updated' | 'deleted';
+  kind: 'quality' | 'customFormat';
+  id: number;
+}
+
 export function profilesRoutes(
   service: ProfilesService,
+  onChange: (change: ProfileChange) => void = () => undefined,
 ): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
+    // Announced after the service call succeeded, so listeners (profile migration) see the new state.
+    const changed = <T extends { id: number }>(action: ProfileChange['action'], kind: ProfileChange['kind'], row: T): T => {
+      onChange({ action, kind, id: row.id });
+      return row;
+    };
     // Typed errors from the service map to HTTP here and nowhere else.
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof ProfileError) {
@@ -63,17 +76,18 @@ export function profilesRoutes(
     app.post(
       '/qualityprofile',
       { schema: { body: QualityProfileInput, response: { 201: QualityProfile, ...errors } } },
-      async (req, reply) => reply.code(201).send(service.createQualityProfile(req.body)),
+      async (req, reply) => reply.code(201).send(changed('created', 'quality', service.createQualityProfile(req.body))),
     );
 
     app.put(
       '/qualityprofile/:id',
       { schema: { params: IdParams, body: QualityProfileInput, response: { 200: QualityProfile, ...errors } } },
-      async (req) => service.updateQualityProfile(req.params.id, req.body),
+      async (req) => changed('updated', 'quality', service.updateQualityProfile(req.params.id, req.body)),
     );
 
     app.delete('/qualityprofile/:id', { schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       await service.deleteQualityProfile(req.params.id);
+      changed('deleted', 'quality', { id: req.params.id });
       return reply.code(204).send(null);
     });
 
@@ -98,17 +112,18 @@ export function profilesRoutes(
     app.post(
       '/customformat',
       { schema: { body: CustomFormatInput, response: { 201: CustomFormat, ...errors } } },
-      async (req, reply) => reply.code(201).send(service.createCustomFormat(req.body)),
+      async (req, reply) => reply.code(201).send(changed('created', 'customFormat', service.createCustomFormat(req.body))),
     );
 
     app.put(
       '/customformat/:id',
       { schema: { params: IdParams, body: CustomFormatInput, response: { 200: CustomFormat, ...errors } } },
-      async (req) => service.updateCustomFormat(req.params.id, req.body),
+      async (req) => changed('updated', 'customFormat', service.updateCustomFormat(req.params.id, req.body)),
     );
 
     app.delete('/customformat/:id', { schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       await service.deleteCustomFormat(req.params.id);
+      changed('deleted', 'customFormat', { id: req.params.id });
       return reply.code(204).send(null);
     });
 

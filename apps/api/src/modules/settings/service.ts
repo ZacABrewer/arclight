@@ -19,6 +19,7 @@ import {
   MetricsSettings,
   AuditSettings,
   NamingConfig,
+  ProfileMigrationSettings,
   ReleasesSettings,
   RequestsSettings,
   SECRET_MASK,
@@ -94,6 +95,8 @@ const sections = {
   discordBot: DiscordBotSettings,
   // Owned by the summary module: quiet hours and the daily summary (routes under /settings/alerts).
   alerts: AlertSettings,
+  // Owned by the profile-migration module (automatic mode; routes under /profilemigration/settings).
+  profileMigration: ProfileMigrationSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

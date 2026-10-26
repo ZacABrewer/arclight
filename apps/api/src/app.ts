@@ -58,6 +58,7 @@ import { engineAgentModule } from './modules/engine-agent/index.js';
 import { discordBotModule } from './modules/discord-bot/index.js';
 import { transcodeModule } from './modules/transcode/index.js';
 import { transferMetricsModule } from './modules/transfer-metrics/index.js';
+import { profileMigrationModule } from './modules/profile-migration/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -129,6 +130,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     releasesModuleWith(wiring.releases),
     importListsModule,
     importsModuleWith(wiring.imports),
+    // Profile fit, profile-change history and the replacement work list (searches via releases).
+    profileMigrationModule,
     // Scene / absolute numbering rules (rescans go through the imports service).
     sceneMappingModule,
     // Imports dispatch their own import/upgrade notifications through the wiring.

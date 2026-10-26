@@ -64,5 +64,14 @@ export const ServerEvent = z.discriminatedUnion('type', [
   /** A daily summary was stored (GET /summary/latest). */
   z.object({ type: z.literal('summary'), action: z.literal('generated'), id: z.number().int() }),
   z.object({ type: z.literal('issue'), action: z.enum(['created', 'updated', 'deleted']), id: z.number().int() }),
+  /** A quality profile or custom format was created, edited or deleted. */
+  z.object({
+    type: z.literal('profile'),
+    action: z.enum(['created', 'updated', 'deleted']),
+    kind: z.enum(['quality', 'customFormat']),
+    id: z.number().int(),
+  }),
+  /** File-fit statuses or the profile-migration work list changed (GET /profilemigration/*). */
+  z.object({ type: z.literal('profileMigration'), action: z.literal('changed') }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

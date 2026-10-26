@@ -127,6 +127,8 @@ const SONARR_EVENT: Record<HistoryEventType, string> = {
   downloadIgnored: 'downloadIgnored',
   // No Sonarr/Radarr equivalent; passed through under our own name.
   fileTranscoded: 'fileTranscoded',
+  profileChanged: 'profileChanged',
+  profileReplaced: 'profileReplaced',
 };
 
 const RADARR_EVENT: Record<HistoryEventType, string> = {

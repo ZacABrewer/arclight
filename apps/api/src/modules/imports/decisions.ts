@@ -1,7 +1,7 @@
 import { basename, isAbsolute } from 'node:path';
 import type { ParsedRelease } from '@arclight/parser';
 import { requiresAbsoluteNumber, requiresEpisodeTitle } from '@arclight/organizer';
-import { compareQuality, compareRevision } from '@arclight/profiles-engine';
+import { compareQuality, compareRevision, violatesProfile } from '@arclight/profiles-engine';
 import {
   qualityById,
   type Episode,
@@ -12,6 +12,7 @@ import {
   type MediaType,
   type Movie,
   type NamingConfig,
+  type ProfileMismatchAction,
   type QualityModel,
   type QualityProfile,
   type Series,
@@ -83,6 +84,12 @@ export interface DecisionContext {
   libraryPaths: ReadonlySet<string>;
   platform: NodeJS.Platform;
   now: Date;
+  /**
+   * The profile's rule for existing files it does not allow (profile migration). Under `replace`
+   * such a file is replaced by any file the profile accepts, even a lower-ranked one; the release
+   * engine only grabs such releases under that rule. Absent/`none`: classic upgrade rules.
+   */
+  mismatchAction?: ProfileMismatchAction;
 }
 
 export interface ImportDecision {
@@ -300,7 +307,17 @@ function compareQ(profile: QualityProfile | null, a: QualityModel, b: QualityMod
 export const upgradeSpec: ImportSpec = (item, ctx) => {
   if (item.existingFile) return null;
   const rejections: ImportRejection[] = [];
+  const profile = ctx.profile;
   for (const existing of item.existingFiles) {
+    // Profile migration (`replace`): a file the profile no longer allows gives way to any file it does.
+    if (
+      profile &&
+      ctx.mismatchAction === 'replace' &&
+      violatesProfile(profile, existing.quality, item.existingFormatScores[existing.id] ?? 0) &&
+      !violatesProfile(profile, item.quality, item.formatScore)
+    ) {
+      continue;
+    }
     const cmp = compareQ(ctx.profile, item.quality, existing.quality);
     if (cmp < 0) {
       rejections.push(permanent('notQualityUpgrade', `Not an upgrade for existing file. Existing quality: ${existing.quality.quality.name}`));

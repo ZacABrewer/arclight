@@ -46,6 +46,10 @@ export const HistoryEventType = z.enum([
   'downloadIgnored',
   // A library file was remuxed or transcoded in place (transcode module).
   'fileTranscoded',
+  // The quality profile of an item (or a version slot) changed (profile-migration module).
+  'profileChanged',
+  // A file was replaced because it did not meet its (new) quality profile (profile-migration module).
+  'profileReplaced',
 ]);
 export type HistoryEventType = z.infer<typeof HistoryEventType>;
 

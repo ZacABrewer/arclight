@@ -53,6 +53,7 @@ beforeEach(() => {
         '/api/v1/tag': [],
         '/api/v1/rootfolder': [],
         '/api/v1/qualityprofile': [],
+        '/api/v1/profilemigration/items': [{ mediaType: 'series', id: 1, status: 'notAllowed', notAllowed: 2, upgradeAllowed: 0 }],
         '/api/v1/health': { status: 'ok', checks: [] },
         '/api/v1/system/status': {},
       };
@@ -89,6 +90,15 @@ describe('library index', () => {
     fireEvent.change(screen.getByLabelText('Filter library'), { target: { value: 'expan' } });
     expect(within(grid).queryByRole('link', { name: 'Andor' })).toBeNull();
     expect(screen.getByText((_, el) => el?.classList.contains('mk-count') === true && /^1 of 2 series/.test(el.textContent ?? ''))).toBeTruthy();
+  });
+
+  it('badges items whose files their profile does not allow', async () => {
+    renderAt('/library/tv');
+    const grid = await screen.findByTestId('library-grid');
+    const badge = await within(grid).findByTestId('profile-mismatch-badge');
+    expect(badge.textContent).toBe('Profile mismatch');
+    expect(badge.getAttribute('title')).toBe('2 files are not allowed by the quality profile');
+    expect(within(grid).getAllByTestId('profile-mismatch-badge')).toHaveLength(1);
   });
 
   it('filters by monitored state and switches to the table view', async () => {

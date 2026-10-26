@@ -22,6 +22,24 @@ const wantedEp = (id: number, seriesTitle: string, episodeNumber: number) => ({
   seriesTmdbId: 100 + id,
   qualityProfileId: 1,
 });
+const mismatch = {
+  mediaFileId: 77,
+  mediaType: 'series',
+  seriesId: 5,
+  movieId: null,
+  episodeIds: [51],
+  title: 'Severance',
+  year: 2022,
+  episodeLabel: 'S01E03',
+  versionTag: null,
+  qualityProfileId: 1,
+  qualityProfileName: 'HD-1080p',
+  quality: 'Bluray-2160p',
+  formatScore: 0,
+  status: 'notAllowed',
+  reasons: ['qualityNotAllowed'],
+  migration: { state: 'queued', attempts: 1, lastSearchedAt: null, message: null },
+};
 const paged = (records: unknown[]) => ({ page: 1, pageSize: 50, totalRecords: records.length, records });
 
 let calls: Array<{ url: string; method: string; body?: unknown }> = [];
@@ -44,6 +62,7 @@ beforeEach(() => {
         '/api/v1/wanted/cutoff/episodes': paged([wantedEp(3, 'Silo', 10), wantedEp(4, 'Foundation', 2)]),
         '/api/v1/wanted/cutoff/movies': paged([makeMovie({ id: 12, title: 'Heat', digitalRelease: '1999-06-01' })]),
         '/api/v1/qualityprofile': [{ id: 1, name: 'HD-1080p' }],
+        '/api/v1/profilemigration/mismatch': paged([mismatch]),
         '/api/v1/health': { status: 'ok', checks: [] },
         '/api/v1/system/status': {},
       };
@@ -140,6 +159,20 @@ describe('wanted page', () => {
     expect(within(heat.closest('table')!).getByText('Cutoff unmet')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Search Heat' }));
     await waitFor(() => expect(searchPosts()).toEqual([{ movieId: 12 }]));
+  });
+
+  it('lists profile mismatches with status and replacement state, and searches a row', async () => {
+    renderAt('/wanted/mismatch');
+    const link = await screen.findByRole('link', { name: 'Severance' });
+    const table = link.closest('table')!;
+    expect(within(table).getByText('Not allowed by profile')).toBeTruthy();
+    expect(within(table).getByText('Waiting')).toBeTruthy();
+    expect(within(table).getByText('Bluray-2160p')).toBeTruthy();
+    const req = calls.find((c) => c.url.startsWith('/api/v1/profilemigration/mismatch?'));
+    expect(req?.url).toContain('mediaType=series');
+    expect(req?.url).toContain('status=notAllowed');
+    fireEvent.click(screen.getByRole('button', { name: 'Search Severance S01E03' }));
+    await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [51] }]));
   });
 
   it('formats dates short', () => {

@@ -178,3 +178,75 @@ Your own tweaks to a synced profile can be overwritten on the next apply, so kee
 - [Library](library.md)
 - [Decision engine spec](../spec/decision-engine.md)
 - [Glossary](../GLOSSARY.md)
+
+## Change quality for existing titles (profile migration)
+
+You can move titles from one quality profile to another, and decide what should happen to the
+files you already have when they don't fit the new profile.
+
+**Moving titles.** Either select titles in the library (Select, then **Profile** in the bar at the
+bottom), or open Settings -> Profiles -> **Profile migration** and use **Move items** on a profile
+to move everything on it, optionally only one media type, one root folder or one tag. Before
+anything changes, a preview shows:
+
+- how many series and movies would move, and how many already use the new profile,
+- how many of their files already **meet** the new profile (allowed quality, at or above its
+  cutoff and its custom format "upgrade until" score),
+- how many are **below its cutoff** (allowed, so normal upgrades will improve them),
+- how many it does **not allow at all** (quality not ticked in the profile, or custom format score
+  below its minimum),
+- a rough download size for the replacements, when sizes are set under Settings -> Quality.
+
+For titles with several versions (for example a Standard and a 4K copy), type the version in the
+**Version** box to change only that slot. Without it, only the slots that use the profile you are
+moving away from change.
+
+**What Arclight checks.** Every file is compared with the profile that governs it whenever a
+title's profile changes (here, in the title editor, the bulk editor or through the API), and
+whenever you edit a profile or a custom format. The check uses what is stored about each file, so
+it is quick and does not read your disks. Each file ends up as **Meets profile**, **Upgrade
+allowed** (below the cutoff) or **Not allowed by profile**. You see the result in three places:
+
+- **Wanted -> Profile mismatch** lists the files, with the reason and what is being done about them,
+- library posters and rows carry a **Profile mismatch** badge,
+- each profile card says how many items don't meet it ("27 items don't meet this profile").
+
+Profile changes and replacements are recorded in **History** (`Profile changed`, with the old and
+new profile names, and `Replaced for profile`).
+
+**The rule: "When files don't meet this profile".** Set it per profile under Settings -> Profiles
+-> Profile migration:
+
+| Rule | What happens |
+|---|---|
+| Do nothing (default) | Files stay as they are. Files below the cutoff are still upgraded by the normal searches. |
+| Search for a replacement | Arclight searches and grabs a release the profile accepts. A file the profile does not allow is replaced even if it ranks higher (for example a 2160p file on a 1080p-only profile gets a 1080p copy). |
+| Search, replace only if strictly better | Arclight searches, but only grabs a release that ranks higher, or has a better revision or custom format score, by the profile's own order. |
+
+Replacements go through the normal decision engine, so every other rule still applies (allowed
+qualities, minimum score, size limits, blocklist, delay profiles) and **Why this release** works
+for them. Once a file meets the cutoff, upgrades stop as usual. The old file is never removed
+before the new one has been imported; it then goes to the recycle bin (when one is set under
+Settings -> Media Management).
+
+**Automatic mode.** Turn on **Replace automatically, a few at a time** on a profile (it needs a
+rule other than Do nothing). The **ProfileMigration** job then works through that profile's
+mismatched files gradually so your indexers are not hammered. The global limits sit above the
+profile cards:
+
+| Setting | Default | Meaning |
+|---|---|---|
+| Automatic replacement on | on | Global switch; the per-profile switches only count while it is on |
+| Every (minutes) | 30 | How often the job runs |
+| Searches per run | 10 | At most this many searches per run (a season of a series counts as one search) |
+| Searches per day | 100 | At most this many automatic searches in any 24 hours |
+| Attempts per item | 3 | Searches that find nothing before an item is marked failed |
+| Retry after (hours) | 24 | Wait before searching an item again |
+
+Items with a download already in the queue are skipped, and nothing is searched for a root folder
+below the minimum free space set under Settings -> Media Management. Titles with requests go
+first, then the oldest in the library. Each profile card shows the progress (remaining, in
+progress, done, failed), with **Pause** / **Resume**, **Retry failed**, and **Search all now**,
+which asks first and tells you how many searches it is about to start, then runs them all without
+the automatic limits.
+

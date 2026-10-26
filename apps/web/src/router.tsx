@@ -23,7 +23,7 @@ import { CollectionDetailPage, CollectionsPage } from './pages/library/collectio
 import { HealthDocsPage } from './pages/docs/health-docs-page.js';
 import { SolverSettingsPage } from './pages/settings/solver/solver-page.js';
 import { UpdatesSettingsPage } from './pages/settings/updates/updates-settings-page.js';
-import { WantedCutoffPage, WantedMissingPage } from './pages/wanted/wanted-page.js';
+import { WantedCutoffPage, WantedMismatchPage, WantedMissingPage } from './pages/wanted/wanted-page.js';
 import { SystemHealthPage } from './pages/system/health.js';
 import { SystemStatusPage } from './pages/system/status.js';
 import { SystemTasksPage } from './pages/system/tasks.js';
@@ -166,6 +166,7 @@ type AppPathLiteral =
   | '/activity/queue'
   | '/wanted/missing'
   | '/wanted/cutoff'
+  | '/wanted/mismatch'
   | '/settings/mediamanagement'
   | '/settings/customformats'
   | '/settings/downloadclients'
@@ -273,6 +274,7 @@ export const routeTree = rootRoute.addChildren([
   sectionRedirect('/wanted', '/wanted/missing'),
   page('/wanted/missing', WantedMissingPage),
   page('/wanted/cutoff', WantedCutoffPage),
+  page('/wanted/mismatch', WantedMismatchPage),
   sectionRedirect('/wanted/cutoff-unmet', '/wanted/cutoff'),
 
   sectionRedirect('/subtitles', '/subtitles/wanted'),

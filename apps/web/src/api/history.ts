@@ -8,7 +8,17 @@ import { t } from '../i18n/index.js';
 // on the server never breaks the parse.
 
 /** The filterable event types (packages/shared HistoryEventType, minus `unknown`). */
-export const HISTORY_EVENT_TYPES = ['grabbed', 'downloadFolderImported', 'downloadFailed', 'fileDeleted', 'fileRenamed', 'downloadIgnored', 'fileTranscoded'] as const;
+export const HISTORY_EVENT_TYPES = [
+  'grabbed',
+  'downloadFolderImported',
+  'downloadFailed',
+  'fileDeleted',
+  'fileRenamed',
+  'downloadIgnored',
+  'fileTranscoded',
+  'profileChanged',
+  'profileReplaced',
+] as const;
 export type HistoryEventType = (typeof HISTORY_EVENT_TYPES)[number];
 
 export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
@@ -32,6 +42,12 @@ export const HISTORY_EVENT_LABELS: Record<HistoryEventType, string> = {
   },
   get fileTranscoded() {
     return t('api.history.fileTranscoded');
+  },
+  get profileChanged() {
+    return t('api.history.profileChanged');
+  },
+  get profileReplaced() {
+    return t('api.history.profileReplaced');
   },
 };
 

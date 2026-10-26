@@ -1,4 +1,4 @@
-import type { QualityModel, ReleaseProtocol, ReleaseResource } from '@arclight/shared';
+import type { ProfileMismatchAction, QualityModel, ReleaseProtocol, ReleaseResource } from '@arclight/shared';
 
 // Hooks the releases module needs from modules written in parallel (history, blocklist,
 // settings). Each has a no-op default so the module works stand-alone; the app wires the
@@ -131,6 +131,15 @@ export interface ReleasesDeps {
    * non-null answer rejects the release (tier 0, permanent). Omitted = everything passes.
    */
   releaseFilter?: ReleaseFilter;
+  /**
+   * Optional profile-migration rule per quality profile ("when files don't meet this profile").
+   * Omitted = `none` everywhere (classic upgrade rules).
+   */
+  profileMigration?: ProfileMigrationRules;
+}
+
+export interface ProfileMigrationRules {
+  mismatchActionFor(qualityProfileId: number): ProfileMismatchAction;
 }
 
 /** Rejection (`reason` e.g. `notFreeleech`) or null when the release may be grabbed. */

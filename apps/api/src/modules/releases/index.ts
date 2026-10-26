@@ -26,7 +26,7 @@ export {
 } from './jobs.js';
 export { cleanTitle, mapSeriesEpisodes, matchRelease, type LibrarySnapshot, type MatchResult } from './matcher.js';
 export { DecisionLog, BATCHES_PER_ITEM } from './decision-log.js';
-export { cutoffNotMet, isUpgradable, isUpgradeAllowed, prioritize, specifications } from './engine.js';
+export { cutoffNotMet, isUpgradable, isUpgradeAllowed, prioritize, replacesDisallowedFile, specifications } from './engine.js';
 
 // One service per app context so other modules (e.g. library "search on add") can reach it.
 const services = new WeakMap<AppContext, ReleasesService>();

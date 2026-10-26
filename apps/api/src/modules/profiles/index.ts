@@ -3,6 +3,7 @@ import { profilesRoutes } from './routes.js';
 import { ProfilesService } from './service.js';
 
 export { ProfilesService, ProfileError } from './service.js';
+export type { ProfileChange } from './routes.js';
 export * from './schema.js';
 
 export const profilesModule: AppModule = (ctx) => async (app) => {
@@ -13,5 +14,5 @@ export const profilesModule: AppModule = (ctx) => async (app) => {
     // through the context, nothing is considered in use.
   });
   service.seedDefaults();
-  await app.register(profilesRoutes(service));
+  await app.register(profilesRoutes(service, (change) => ctx.bus.publish({ type: 'profile', ...change })));
 };

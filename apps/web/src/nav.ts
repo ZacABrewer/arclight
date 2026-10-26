@@ -99,6 +99,7 @@ export const NAV: readonly NavSection[] = [
     children: [
       { get label() { return t('status.missing'); }, to: '/wanted/missing' },
       { get label() { return t('status.cutoffUnmet'); }, to: '/wanted/cutoff' },
+      { get label() { return t('profileMigration.wanted.tab'); }, to: '/wanted/mismatch' },
     ],
   },
   {

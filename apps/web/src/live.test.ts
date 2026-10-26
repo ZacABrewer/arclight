@@ -123,4 +123,15 @@ describe('live cache layer', () => {
     applyServerEvent(qc, { type: 'summary', action: 'generated', id: 4 });
     expect(spy).toHaveBeenCalledExactlyOnceWith({ queryKey: ['summary'] });
   });
+
+  it('refreshes profile migration views on profile and profileMigration events', () => {
+    const qc = client();
+    const spy = vi.spyOn(qc, 'invalidateQueries');
+    applyServerEvent(qc, { type: 'profile', action: 'updated', kind: 'customFormat', id: 3 });
+    const keys = spy.mock.calls.map((c) => c[0]?.queryKey);
+    expect(keys).toEqual(expect.arrayContaining([['settings', 'qualityprofiles'], ['settings', 'customformats'], ['profileMigration']]));
+    spy.mockClear();
+    applyServerEvent(qc, { type: 'profileMigration', action: 'changed' });
+    expect(spy.mock.calls.map((c) => c[0]?.queryKey)).toEqual([['profileMigration']]);
+  });
 });
