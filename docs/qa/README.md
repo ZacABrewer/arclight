@@ -58,7 +58,7 @@ Runs the API and the built web app on your PC against an isolated folder, so not
 the NAS or any other *arr install.
 
 ```powershell
-cd "C:\NAS Setup\media-tron"
+cd "<repo>"
 .\scripts\local-test.ps1            # builds the web app, then starts Arclight
 .\scripts\local-test.ps1 -NoBuild   # skip the web build (reuse the last build)
 .\scripts\local-test.ps1 -Reset     # wipe the test config first (fresh database)
@@ -66,10 +66,10 @@ cd "C:\NAS Setup\media-tron"
 ```
 
 - Address: **http://localhost:17878** (bound to 127.0.0.1, so only this PC can open it).
-- All data lives in `C:\NAS Setup\test-env` (a sibling of the repo): `config\` (database
+- All data lives in `<test-env>` (a sibling of the repo): `config\` (database
   `arclight.db`, `logs\`, `backups\`), `tv\`, `movies\`, `downloads\` (with `complete\` and
   `incomplete\`). Use these as your root folders and download folder.
-- Secrets can live in `C:\NAS Setup\test-env\.env` as `KEY=value` lines (for example
+- Secrets can live in `<test-env>\.env` as `KEY=value` lines (for example
   `ARCLIGHT_TMDB_API_KEY=...`). The script loads them before starting.
 - Press Ctrl+C in the PowerShell window to stop. Close the window and the app is gone.
 - Needs Node 24 and pnpm 10 installed, and `pnpm install` run once.
@@ -80,7 +80,7 @@ cd "C:\NAS Setup\media-tron"
 The compose files are in `docker\`. Copy `docker\.env.example` to `docker\.env` and edit it
 (`PUID`, `PGID`, `TZ`, `CONFIG_ROOT`, `TV_ROOT`, `MOVIES_ROOT`, `DOWNLOADS_ROOT`, and for VPN
 stacks `PROTON_WIREGUARD_KEY`, `VPN_COUNTRIES`, `LAN_SUBNET`). On Docker Desktop for Windows,
-set the three root variables to Windows folders such as `C:/NAS Setup/test-env/tv`, or leave
+set the three root variables to Windows folders such as `<test-env>/tv`, or leave
 them unset to use `docker\data\...`.
 
 | Stack | Command (run inside `docker\`) | What you get | Address |
@@ -154,7 +154,7 @@ When a row fails, attach the log lines from the minute it happened.
 - **Docker:** `docker logs arclight --since 10m`, add `-f` to follow. For the VPN stack also
   `docker logs gluetun --since 10m`, and for qBittorrent `docker logs qbittorrent --since 10m`.
 - **Native:** the same lines print in the PowerShell window; files are in
-  `C:\NAS Setup\test-env\config\logs`.
+  `<test-env>\config\logs`.
 - **Browser:** press F12, open the Console tab for red errors and the Network tab for failed
   (red) requests. Save a screenshot of the failed state.
 - **Health:** System -> Health lists current problems with a "Recheck" action; copy the message
