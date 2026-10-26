@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.7
 FROM node:24-bookworm-slim AS build
+ENV CI=true
 RUN corepack enable && corepack prepare pnpm@10.34.9 --activate
 WORKDIR /src
 # Lockfile-driven fetch keeps the dependency layer cached regardless of how many workspace
@@ -10,7 +11,7 @@ COPY . .
 RUN pnpm install --offline --frozen-lockfile
 RUN pnpm build
 # Production node_modules only, for the api workspace.
-RUN pnpm --filter @media-tron/api deploy --prod /out
+RUN pnpm --filter @media-tron/api deploy --prod --legacy /out
 
 FROM node:24-bookworm-slim
 ARG VERSION=0.1.0-dev
@@ -34,4 +35,5 @@ EXPOSE 7878
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
   CMD node -e "fetch('http://127.0.0.1:7878/api/v1/system/status').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
-CMD ["node", "dist/index.js"]
+# Workspace packages are consumed as TypeScript sources; tsx loads them at runtime.
+CMD ["node", "--import", "tsx", "dist/index.js"]
