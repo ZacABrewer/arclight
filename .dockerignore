@@ -1,0 +1,14 @@
+.git
+**/node_modules
+**/dist
+**/coverage
+**/*.tsbuildinfo
+config
+data
+docs
+reference
+test-env
+.env
+.env.*
+!.env.example
+*.log
