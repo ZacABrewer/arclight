@@ -43,6 +43,27 @@ services:
       retries: 3
     restart: unless-stopped
 
+  # Cloudflare challenge solver (docs/CLOUDFLARE.md). Shares Gluetun's network namespace so
+  # its headless browser egresses through the VPN with the same IP as Arclight; port 8191 is
+  # reachable from Arclight as localhost:8191 and is not published.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    network_mode: "service:gluetun"
+    environment:
+      - LOG_LEVEL=info
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8191/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    restart: unless-stopped
+    depends_on:
+      gluetun:
+        condition: service_healthy
+
   arclight:
     build:
       context: ..
@@ -55,6 +76,10 @@ services:
       - TZ=${TZ:-UTC}
       # Default for Settings -> VPN -> Gluetun control URL (same network namespace).
       - ARCLIGHT_VPN_CONTROL_URL=http://localhost:8000
+      # Gluetun control-server API key; scripts/gluetun-auth.sh writes the matching auth file.
+      - ARCLIGHT_VPN_API_KEY=${GLUETUN_API_KEY:-}
+      # Bundled FlareSolverr (same network namespace); registered as an indexer proxy on boot.
+      - ARCLIGHT_FLARESOLVERR_URL=http://localhost:8191
     volumes:
       # /config/torrents holds the engine's fast-resume data.
       - ${CONFIG_ROOT:-./data}/arclight:/config
@@ -72,3 +97,5 @@ services:
     depends_on:
       gluetun:
         condition: service_healthy
+      flaresolverr:
+        condition: service_started

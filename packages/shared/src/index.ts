@@ -27,3 +27,4 @@ export * from './migrate.js';
 export * from './subtitles.js';
 export * from './backup.js';
 export * from './torrent.js';
+export * from './solver.js';

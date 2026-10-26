@@ -9,7 +9,7 @@ import { VpnError, errorMessage } from './errors.js';
 import { GluetunClient } from './gluetun-client.js';
 import { findInterfaceIPv4, ipv4FromNodeInterfaces, type InterfaceProbeDeps } from './interfaces.js';
 import { fetchPublicIp } from './public-ip.js';
-import { effectiveControlUrl } from './settings.js';
+import { effectiveControlUrl, effectiveApiKey } from './settings.js';
 import type { ShellRunner } from './shell.js';
 import { tunnelNameFromConfig, WireguardWindows } from './wireguard-windows.js';
 
@@ -68,7 +68,7 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
       const p = settings.provider as GluetunProviderSettings;
       const client = new GluetunClient({
         controlUrl: effectiveControlUrl(p, deps.env),
-        apiKey: p.apiKey,
+        apiKey: effectiveApiKey(p, deps.env),
         username: p.username,
         password: p.password,
         fetch: deps.fetch,

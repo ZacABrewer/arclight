@@ -13,6 +13,7 @@ import {
   RequestsSettings,
   SECRET_MASK,
   SecuritySettings,
+  SolverSettings,
   SubtitleSettings,
   TorrentSettings,
   VpnSettings,
@@ -52,6 +53,8 @@ const sections = {
   indexers: IndexerOptionsSection,
   // Owned by the requests module (routes under /settings/requests).
   requests: RequestsSettings,
+  // Owned by the solver module (built-in Cloudflare challenge solver; routes under /settings/solver).
+  solver: SolverSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

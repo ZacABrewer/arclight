@@ -9,11 +9,13 @@ import {
 import { indexerCheck, indexerLongTermStatusCheck, indexerRssCheck, indexerSearchCheck, indexerStatusCheck } from './indexers.js';
 import { notificationConfigCheck, notificationStatusCheck } from './notifications.js';
 import { mountReadOnlyCheck, recycleBinCheck, rootFolderCheck } from './root-folders.js';
+import { flareSolverrUnreachableCheck } from './flaresolverr.js';
 import { torrentEngineCheck } from './torrent.js';
 import { vpnDisconnectedCheck } from './vpn.js';
 import { dockerPermissionsCheck, metadataSourceCheck, systemTimeCheck, updateCheck } from './system.js';
 
 export * from './disk-space.js';
+export * from './flaresolverr.js';
 export * from './download-clients.js';
 export * from './indexers.js';
 export * from './notifications.js';
@@ -43,6 +45,7 @@ export function createChecks(): HealthCheckDef[] {
     indexerLongTermStatusCheck,
     indexerRssCheck,
     indexerSearchCheck,
+    flareSolverrUnreachableCheck,
     notificationConfigCheck,
     notificationStatusCheck,
     vpnDisconnectedCheck,

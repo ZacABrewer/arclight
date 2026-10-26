@@ -12,6 +12,8 @@ services:
       - PUID=${PUID:-1000}
       - PGID=${PGID:-1000}
       - TZ=${TZ:-UTC}
+      # Bundled FlareSolverr; registered as an indexer proxy on boot.
+      - ARCLIGHT_FLARESOLVERR_URL=http://flaresolverr:8191
     volumes:
       - ${CONFIG_ROOT:-./data}/arclight:/config
       - ${TV_ROOT:-./data/tv}:/tv
@@ -22,6 +24,7 @@ services:
     restart: unless-stopped
     depends_on:
       - qbittorrent
+      - flaresolverr
 
   qbittorrent:
     image: lscr.io/linuxserver/qbittorrent:latest
@@ -38,4 +41,20 @@ services:
       - "8080:8080"
       - "6881:6881"
       - "6881:6881/udp"
+    restart: unless-stopped
+
+  # Cloudflare challenge solver (docs/CLOUDFLARE.md). Internal only: Arclight reaches it as
+  # http://flaresolverr:8191 on the compose network; no port is published.
+  flaresolverr:
+    image: ghcr.io/flaresolverr/flaresolverr:latest
+    container_name: flaresolverr
+    environment:
+      - LOG_LEVEL=info
+      - TZ=${TZ:-UTC}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8191/health', timeout=5).status == 200 else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
     restart: unless-stopped

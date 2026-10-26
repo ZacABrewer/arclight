@@ -13,6 +13,12 @@ import { getSection, setSection } from '../settings/service.js';
 // The `vpn` settings section: reads, secret masking and merging client updates.
 
 export const VPN_CONTROL_URL_ENV = 'ARCLIGHT_VPN_CONTROL_URL';
+/** Gluetun control-server API key when none is stored (compose passes GLUETUN_API_KEY through). */
+export const VPN_API_KEY_ENV = 'ARCLIGHT_VPN_API_KEY';
+
+export function effectiveApiKey(p: GluetunProviderSettings, env: NodeJS.ProcessEnv = process.env): string | undefined {
+  return p.apiKey ?? (env[VPN_API_KEY_ENV]?.trim() || undefined);
+}
 
 export function getVpnSettings(db: Db): VpnSettings {
   return getSection(db, 'vpn');

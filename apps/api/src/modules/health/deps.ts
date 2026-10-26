@@ -14,6 +14,7 @@ import {
   trackedDownloads,
 } from '../../db/schema.js';
 import { getDownloadClientsService } from '../download-clients/index.js';
+import { indexersServiceFor } from '../indexers/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { getSection } from '../settings/service.js';
 import { torrentServiceFor } from '../torrent/index.js';
@@ -206,6 +207,17 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
 
     async torrent() {
       return torrentServiceFor(ctx).status();
+    },
+
+    async flareSolverrs() {
+      const proxies = indexersServiceFor(ctx).proxies;
+      const rows = proxies.allRows().filter((r) => r.type === 'flaresolverr');
+      return Promise.all(
+        rows.map(async (r) => {
+          const result = await proxies.ping(r.id);
+          return { id: r.id, name: r.name, ok: result.ok, ...(result.message ? { message: result.message } : {}) };
+        }),
+      );
     },
   };
 }

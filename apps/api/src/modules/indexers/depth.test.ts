@@ -485,14 +485,16 @@ describe('indexer proxies', () => {
     expect(res.statusCode).toBe(400);
   });
 
-  it('pings FlareSolverr when testing', async () => {
+  it('solves a real request.get through FlareSolverr when testing', async () => {
     net.routes.set('flare.example', (url, call) => {
       expect(url.pathname).toBe('/v1');
-      expect(JSON.parse(call.body ?? '{}')).toEqual({ cmd: 'sessions.list' });
-      return new Response(JSON.stringify({ status: 'ok', sessions: [] }), { headers: { 'content-type': 'application/json' } });
+      expect(JSON.parse(call.body ?? '{}')).toEqual({ cmd: 'request.get', url: 'https://tracker.example/', maxTimeout: 30_000 });
+      return new Response(JSON.stringify({ status: 'ok', version: '3.3.21', solution: { url: 'https://tracker.example/', status: 200 } }), {
+        headers: { 'content-type': 'application/json' },
+      });
     });
-    const res = await app.inject({ method: 'POST', url: '/indexerproxy/test', payload: flare });
-    expect(json<{ ok: boolean; message: string }>(res)).toMatchObject({ ok: true, message: 'FlareSolverr is reachable' });
+    const res = await app.inject({ method: 'POST', url: '/indexerproxy/test', payload: { ...flare, url: 'https://tracker.example/' } });
+    expect(json<{ ok: boolean; message: string }>(res)).toMatchObject({ ok: true, message: 'FlareSolverr fetched https://tracker.example/ (v3.3.21)' });
     expect(net.to('flare.example')[0]!.url.port).toBe('8191');
   });
 
@@ -500,7 +502,7 @@ describe('indexer proxies', () => {
     net.routes.set('flare.example', () => new Response('bad', { status: 500 }));
     const saved = service.proxies.create(flare);
     const res = await app.inject({ method: 'POST', url: `/indexerproxy/${saved.id}/test`, payload: {} });
-    expect(json<{ ok: boolean; message: string }>(res)).toMatchObject({ ok: false, message: 'FlareSolverr answered HTTP 500' });
+    expect(json<{ ok: boolean; message: string }>(res)).toMatchObject({ ok: false, message: 'FlareSolverr returned HTTP 500' });
   });
 
   it('opens a tunnel to the target URL when testing HTTP/SOCKS proxies', async () => {
