@@ -37,7 +37,7 @@ The gallery `gallery.tsx` (`ArclightGallery`) renders every component in every s
 
 | Kit | Component | Key props |
 |---|---|---|
-| Backdrop (grid floor, horizon, spire, circuit, scanline, vignette) | `Backdrop` | `spire` (turn off on dense pages such as Details), `circuit`, `vx`/`horizon` (fractions; Login uses `vx={.5} horizon={.58}`), `animate` (opt-in floor drift, never runs under reduced motion), `contained` |
+| Backdrop (grid floor, horizon, spire, circuit, scanline, vignette) | `Backdrop` | `spire` (turn off on dense pages such as Details), `circuit`, `vx`/`horizon` (fractions; Login uses `vx={.5} horizon={.58}`), `motion` (v1.1 ambient canvas from `arclight-motion.ts`, on by default; drops the static floor lines while it runs), `contained` |
 | Rail 84px, 11 codes | `Rail` | `active` ('DB'…'SY' or null), `items` (`RAIL_ITEMS` + `href`), `onSelect(code, e)` (call `e.preventDefault()` and route), `compact`, `homeHref` |
 | Top bar 60px | `TopBar` | `onSearch` (also bound to `/`), `connected`, `vpnLocation` (string \| null \| undefined), `requestCount`, `issueCount` (orange when > 0), `initials`, `userLabel`, `userMenu={(close) => <Menu …/>}` |
 | Mobile tab bar | `MobileTabBar` | `active` ('home' \| 'library' \| 'discover' \| 'activity' \| 'more'), `items`, `onSelect` (shown only below 768px) |
@@ -104,6 +104,7 @@ The gallery `gallery.tsx` (`ArclightGallery`) renders every component in every s
 
 Tokens in TS: `STATUS_LABELS`, `STATUS_STYLES` (each status mapped to its tokens.json entry), `resolveStatus`, `SIZE`, `BREAKPOINTS`, `MOTION`, `TOAST_LIMIT`.
 Hooks: `useFocusTrap`, `useHotkey`, `useReducedMotion`, `useMediaQuery`, `useVirtualRows`.
+Motion (v1.1): `mountBackdrop` / `backdropGeometry` (typed port of the kit's `arclight-motion.js`; keep in sync), and the global "Reduce motion" switch `setReduceMotion('system' | 'on' | 'off')` / `useReduceMotionSetting()`. `on` destroys the backdrop canvas and sets `<html data-motion="off">`, which stops every CSS animation; the app sets it from the user's UI preference. Rail and TopBar carry the border runners (`.al-runner--v` / `--h`, hidden on phones); an active `Trail` gets the flowing light packet from CSS; `.al-edge` glints; Dashboard traces carry `.al-trace-pulse`.
 
 ## Migrating from the old primitives
 

@@ -117,6 +117,13 @@ export const MOTION = {
   chamferSweep: 600,
   pulse: 1600,
   breathe: 2400,
+  // Ambient light (v1.1): loops, decorative only.
+  trailFlow: 1800,
+  runnerRail: 9000,
+  runnerTopbar: 12000,
+  edgeGlint: 7000,
+  tracePulse: 5000,
+  tracePulseDelay: 2500,
 } as const;
 
 /** Toasts: bottom-right, max 3 visible, 5 s (Design Kit §08). */

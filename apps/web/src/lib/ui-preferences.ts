@@ -3,6 +3,7 @@
 // The hook lives in hooks/ui-preferences.ts; AuthProvider keeps the active copy in sync.
 import { t, getLocale } from '../i18n/store.js';
 import { isLocaleCode, type LocaleSetting } from '../i18n/locales-meta.js';
+import type { ReduceMotionSetting } from '../arclight/motion-preference.js';
 
 export type WeekStartDay = 0 | 1;
 export type TimeFormat = '24h' | '12h';
@@ -18,6 +19,8 @@ export interface UiPreferences {
   posterColumns: number;
   /** UI language: a shipped locale, or 'auto' (this device's choice → browser → English). */
   locale: LocaleSetting;
+  /** "Reduce motion": 'system' follows prefers-reduced-motion; 'on' / 'off' override it. */
+  reduceMotion: ReduceMotionSetting;
 }
 
 export const POSTER_COLUMNS_MIN = 5;
@@ -29,6 +32,7 @@ export const DEFAULT_UI_PREFERENCES: Readonly<UiPreferences> = Object.freeze({
   dateFormat: 'locale',
   posterColumns: 7,
   locale: 'auto',
+  reduceMotion: 'system',
 });
 
 export const DATE_FORMATS: ReadonlyArray<{ value: DateFormat; label: string }> = [
@@ -51,6 +55,7 @@ export function readUiPreferences(settings: Readonly<Record<string, unknown>> | 
     dateFormat: typeof s.dateFormat === 'string' && DATE_FORMAT_VALUES.has(s.dateFormat) ? (s.dateFormat as DateFormat) : DEFAULT_UI_PREFERENCES.dateFormat,
     posterColumns: cols >= POSTER_COLUMNS_MIN && cols <= POSTER_COLUMNS_MAX ? cols : DEFAULT_UI_PREFERENCES.posterColumns,
     locale: s.locale === 'auto' || isLocaleCode(s.locale) ? s.locale : DEFAULT_UI_PREFERENCES.locale,
+    reduceMotion: s.reduceMotion === 'on' || s.reduceMotion === 'off' || s.reduceMotion === 'system' ? s.reduceMotion : DEFAULT_UI_PREFERENCES.reduceMotion,
   };
 }
 

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, FormRow, Segmented, Select } from '../../../arclight/index.js';
+import { Button, FormRow, Segmented, Select, type ReduceMotionSetting } from '../../../arclight/index.js';
 import { useAuth } from '../../../auth/auth-context.js';
 import { useToast } from '../../../components/toast.js';
 import { useSaveUiPreferences, useUiPreferences } from '../../../hooks/ui-preferences.js';
@@ -27,6 +27,12 @@ const TIME_FORMATS: ReadonlyArray<{ value: TimeFormat; label: string }> = [
   { value: '12h', get label() { return t('settings.general.uiPreferencesSection.hour12'); } },
 ];
 
+const REDUCE_MOTION: ReadonlyArray<{ value: ReduceMotionSetting; label: string }> = [
+  { value: 'system', get label() { return t('settings.general.uiPreferencesSection.reduceMotionSystem'); } },
+  { value: 'on', get label() { return t('settings.general.uiPreferencesSection.reduceMotionOn'); } },
+  { value: 'off', get label() { return t('settings.general.uiPreferencesSection.reduceMotionOff'); } },
+];
+
 const columnOptions = () =>
   Array.from({ length: POSTER_COLUMNS_MAX - POSTER_COLUMNS_MIN + 1 }, (_, i) => {
     const n = POSTER_COLUMNS_MIN + i;
@@ -42,7 +48,8 @@ const samePrefs = (a: UiPreferences, b: UiPreferences) =>
   a.timeFormat === b.timeFormat &&
   a.dateFormat === b.dateFormat &&
   a.posterColumns === b.posterColumns &&
-  a.locale === b.locale;
+  a.locale === b.locale &&
+  a.reduceMotion === b.reduceMotion;
 
 /**
  * Per-user UI preferences (stored in the signed-in user's settings, not the server-wide
@@ -125,6 +132,15 @@ export function UiPreferencesSection() {
               value={String(draft.posterColumns)}
               options={columnOptions()}
               onChange={(e) => set({ posterColumns: Number(e.currentTarget.value) })}
+            />
+          </FormRow>
+          <FormRow label={t('settings.general.uiPreferencesSection.reduceMotion')} caption={t('settings.general.uiPreferencesSection.reduceMotionCaption')}>
+            <Segmented
+              variant="soft"
+              aria-label={t('settings.general.uiPreferencesSection.reduceMotion')}
+              options={REDUCE_MOTION}
+              value={draft.reduceMotion}
+              onChange={(v) => set({ reduceMotion: v })}
             />
           </FormRow>
         </>

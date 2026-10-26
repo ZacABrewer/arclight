@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type CSSProperties } from 'react';
 import { Link } from '@tanstack/react-router';
 import { Permission } from '@arclight/shared';
 import { Button, EmptyState, ErrorBlock, PageHeader, Pane, SectionLabel, Skeleton, StatusChip, Trail } from '../arclight/index.js';
@@ -421,16 +421,28 @@ function SummaryPane() {
   );
 }
 
-/** Two decorative traces from the hero panes toward the spire (kit Page 01 geometry). */
+/** Kit Page 01 traces, in each trace box's own coordinates (the pulse rides the same polyline). */
+const TRACES = [
+  { side: 'left', width: 236, height: 98, points: '0,0.5 138,0.5 234,96.5', path: 'M0 0.5 L138 0.5 L234 96.5', delay: undefined },
+  { side: 'right', width: 276, height: 62, points: '275,0.5 117,0.5 57,60.5 1,60.5', path: 'M275 0.5 L117 0.5 L57 60.5 L1 60.5', delay: '2.5s' },
+] as const;
+
+/**
+ * Two decorative traces from the hero panes toward the spire (kit Page 01 geometry). v1.1: one
+ * light packet travels each trace (`.al-trace-pulse` with `--path` set to the polyline), the
+ * second 2.5 s behind the first.
+ */
 function Traces() {
   return (
     <>
-      <svg className="dash-trace dash-trace--left" width="236" height="98" viewBox="0 0 236 98" aria-hidden="true" focusable="false">
-        <polyline points="0,0.5 138,0.5 234,96.5" />
-      </svg>
-      <svg className="dash-trace dash-trace--right" width="276" height="62" viewBox="0 0 276 62" aria-hidden="true" focusable="false">
-        <polyline points="275,0.5 117,0.5 57,60.5 1,60.5" />
-      </svg>
+      {TRACES.map((tr) => (
+        <div key={tr.side} className={`dash-trace dash-trace--${tr.side}`} aria-hidden="true" data-testid="dash-trace">
+          <svg width={tr.width} height={tr.height} viewBox={`0 0 ${tr.width} ${tr.height}`} focusable="false">
+            <polyline points={tr.points} />
+          </svg>
+          <i className="al-trace-pulse" style={{ '--path': `path('${tr.path}')`, animationDelay: tr.delay } as CSSProperties} />
+        </div>
+      ))}
     </>
   );
 }

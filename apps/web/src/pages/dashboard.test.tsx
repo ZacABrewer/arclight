@@ -146,6 +146,9 @@ describe('dashboard view models', () => {
     });
     expect(queueRow(queueItem({ trackedStatus: 'warning' }))).toMatchObject({ trail: 'stalled', chip: { status: 'stalled', cause: 'no progress' } });
     expect(queueRow(queueItem({ status: 'paused' }))).toMatchObject({ trail: 'paused', eta: '—' });
+    // Held while the client still says "downloading": no active (glowing, flowing) trail.
+    expect(queueRow(queueItem({ stateCode: 'killSwitch' }))).toMatchObject({ trail: 'paused', eta: '—' });
+    expect(queueRow(queueItem({ stateCode: 'diskSpace' }))).toMatchObject({ trail: 'stalled' });
     expect(attentionChecks([{ source: 'a', status: 'ok', message: '' }, { source: 'b', status: 'warning', message: 'w' }, { source: 'c', status: 'error', message: 'e' }]).map((c) => c.source)).toEqual(['c', 'b']);
   });
 
@@ -240,6 +243,11 @@ describe('dashboard page', () => {
     const traces = document.querySelectorAll('.dash-trace');
     expect(traces).toHaveLength(2);
     traces.forEach((t) => expect(t.getAttribute('aria-hidden')).toBe('true'));
+    // v1.1: one light packet per trace riding its polyline, the second 2.5 s behind.
+    const pulses = Array.from(document.querySelectorAll<HTMLElement>('.dash-trace > .al-trace-pulse'));
+    expect(pulses).toHaveLength(2);
+    expect(pulses.map((p) => p.style.getPropertyValue('--path'))).toEqual(["path('M0 0.5 L138 0.5 L234 96.5')", "path('M275 0.5 L117 0.5 L57 60.5 L1 60.5')"]);
+    expect(pulses.map((p) => p.style.animationDelay)).toEqual(['', '2.5s']);
     expect(document.querySelectorAll('[data-chamfer]').length).toBeLessThanOrEqual(2);
   });
 

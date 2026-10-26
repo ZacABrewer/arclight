@@ -10,11 +10,13 @@ export { cx } from './cx.js';
 // Scene + shell
 export { Backdrop, generateBackdrop, type BackdropProps, type BackdropGeometry, type BackdropOptions, type Segment } from './Backdrop.js';
 export * from './Chrome/index.js';
+export { mountBackdrop, backdropGeometry, type BackdropMotion, type BackdropMotionOptions, type MotionGeometry } from './arclight-motion.js';
+export { setReduceMotion, getReduceMotion, useReduceMotionSetting, REDUCE_MOTION_SETTINGS, type ReduceMotionSetting } from './motion-preference.js';
 
 // Hooks
 export { useFocusTrap, focusableIn, type FocusTrapOptions } from './hooks/use-focus-trap.js';
 export { useHotkey, isTypingTarget } from './hooks/use-hotkey.js';
-export { useMediaQuery, useReducedMotion, prefersReducedMotion, REDUCED_MOTION_QUERY } from './hooks/use-media-query.js';
+export { useMediaQuery, useReducedMotion, useOsReducedMotion, prefersReducedMotion, REDUCED_MOTION_QUERY } from './hooks/use-media-query.js';
 export { useVirtualRows, computeVirtualRange, type VirtualRange, type VirtualRowsOptions } from './hooks/use-virtual-rows.js';
 
 // Surfaces

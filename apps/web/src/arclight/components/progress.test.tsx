@@ -57,6 +57,19 @@ describe('Trail', () => {
     expect(q.getAttribute('aria-valuenow')).toBe('0');
   });
 
+  it('only the active trail carries the flowing light packet (v1.1 .al-trail[data-state="active"])', () => {
+    const states = ['active', 'paused', 'stalled', 'failed', 'complete', 'queued'] as const;
+    render(
+      <>
+        {states.map((s) => (
+          <Trail key={s} value={50} state={s} label={s} />
+        ))}
+      </>,
+    );
+    const flowing = states.filter((s) => screen.getByRole('progressbar', { name: s }).matches('.al-trail[data-state="active"]'));
+    expect(flowing).toEqual(['active']);
+  });
+
   it('shows the mono percentage when asked', () => {
     render(<Trail value={68.4} showValue label="Andor" />);
     expect(screen.getByText('68%')).toBeTruthy();

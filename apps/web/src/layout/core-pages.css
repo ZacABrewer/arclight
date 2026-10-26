@@ -17,7 +17,8 @@
 .dash-hero--status { grid-column: 3; min-height: 316px; display: flex; flex-direction: column; }
 .dash-heroes > .dash-hero:only-child { grid-column: 1; }
 
-.dash-trace { position: absolute; z-index: 1; pointer-events: none; overflow: visible; }
+.dash-trace { position: absolute; z-index: 1; pointer-events: none; }
+.dash-trace > svg { display: block; overflow: visible; }
 .dash-trace polyline { fill: none; stroke: var(--al-trace); stroke-width: 1; }
 .dash-trace--left { left: 400px; top: 248px; }
 .dash-trace--right { right: 360px; top: 284px; }

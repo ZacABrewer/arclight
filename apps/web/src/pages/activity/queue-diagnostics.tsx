@@ -22,7 +22,7 @@ import { useQueueTimeline } from '../../hooks/activity.js';
 import { useTorrentDetail } from '../../hooks/torrent.js';
 import { formatDateTime, formatRate, formatSize, relativeTime } from '../../lib/format.js';
 import { formatEta } from './activity-shared.js';
-import { trailState, queueChip } from './queue-status.js';
+import { queueTrailState } from './queue-status.js';
 import { PeerConnectionBadges } from './torrent-extras.js';
 import { DownloadTransferHistory } from './transfer-history.js';
 import { t } from '../../i18n/index.js';
@@ -235,7 +235,7 @@ export function QueueItemDetail({ item, builtin, id, actions }: { item: QueueIte
           <SectionLabel>{t('activity.queueDetail.liveStats')}</SectionLabel>
           <Trail
             value={value}
-            state={trailState(queueChip(item))}
+            state={queueTrailState(item)}
             showValue
             label={pieces !== undefined ? t('activity.queueDetail.piecesOf', { have: pieces, total: live?.pieceCount ?? 0 }) : t('activity.queue.progressOfTitle', { title: item.title })}
           />

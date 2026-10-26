@@ -1,12 +1,16 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { mountBackdrop } from './arclight-motion.js';
 import { cx } from './cx.js';
-import { useReducedMotion } from './hooks/use-media-query.js';
+import { useOsReducedMotion } from './hooks/use-media-query.js';
+import { useReduceMotionSetting } from './motion-preference.js';
 
 // Port of the generator in "Arclight Backdrop.dc.html" (≈40 lines) to an SVG layer:
 // perspective grid floor (radial lines from the vanishing point + horizontals spaced
 // (H - vy) * 1.3 / (k + .6)), horizon radial sky, 2px horizon line + bloom, a single spire of
 // light at the vanishing point with a core dot and floor reflection, a faint circuit bundle
 // top-right at 16%, and the scanline + vignette (from .al-backdrop::after in arclight.css).
+// v1.1: the moving layer (arclight-motion.ts) draws on a canvas above the spire; while it runs
+// it owns the horizontal floor lines, so the static ones are dropped.
 
 export interface Segment {
   x1: number;
@@ -35,15 +39,12 @@ export interface BackdropOptions {
   /** Horizon y as a fraction of height (default .52). */
   horizon?: number | undefined;
   circuit?: boolean | undefined;
-  /** Floor drift phase 0–1 (only used by the animated mode). */
-  phase?: number | undefined;
 }
 
 /** Pure generator — same maths as the kit's `renderVals()`. */
 export function generateBackdrop(W: number, H: number, opts: BackdropOptions = {}): BackdropGeometry {
   const vx = Math.round(W * (opts.vx ?? 0.53));
   const vy = Math.round(H * (opts.horizon ?? 0.52));
-  const phase = opts.phase ?? 0;
   const radials: Segment[] = [];
   const horizontals: Segment[] = [];
   const circuit: Segment[] = [];
@@ -53,8 +54,7 @@ export function generateBackdrop(W: number, H: number, opts: BackdropOptions = {
     radials.push({ x1: vx, y1: vy, x2: vx + k * step * 1.6, y2: vy + (H - vy) * 1.6, a: k === 0 ? 0.18 : 0.1 });
   }
   for (let k = 1; k <= 34; k++) {
-    const kk = k - phase;
-    const y = vy + ((H - vy) * 1.3) / (kk + 0.6);
+    const y = vy + ((H - vy) * 1.3) / (k + 0.6);
     if (y > H || y <= vy) continue;
     horizontals.push({ x1: 0, y1: y, x2: W, y2: y, a: Number((0.03 + (0.15 * (y - vy)) / (H - vy)).toFixed(3)) });
   }
@@ -129,10 +129,10 @@ export interface BackdropProps {
   /** Horizon y (fraction of height, default .52). */
   horizon?: number | undefined;
   /**
-   * Opt-in slow floor drift (horizontals flow toward the viewer). Off by default — the kit's
-   * backdrop is static. Never runs under prefers-reduced-motion (no requestAnimationFrame loop).
+   * The ambient motion canvas (v1.1: floor drift, light cycles, circuit pulses, horizon sweep,
+   * spire rise). On by default; the global "Reduce motion" switch turns it off everywhere.
    */
-  animate?: boolean | undefined;
+  motion?: boolean | undefined;
   /** Render inside the parent (absolute) instead of fixed to the viewport (gallery previews). */
   contained?: boolean | undefined;
   /** Fixed size for contained previews; defaults to the viewport. */
@@ -141,71 +141,76 @@ export interface BackdropProps {
   className?: string | undefined;
 }
 
-const DRIFT_SECONDS = 14;
+/** The motion layer needs a 2D canvas plus the observers it pauses/resizes with (jsdom has neither). */
+function canvasMotionSupported(canvas: HTMLCanvasElement): boolean {
+  if (typeof ResizeObserver === 'undefined' || typeof IntersectionObserver === 'undefined' || typeof requestAnimationFrame === 'undefined') return false;
+  try {
+    return !!canvas.getContext('2d');
+  } catch {
+    return false;
+  }
+}
 
 /** `<Backdrop>` — fixed, z 0, pointer-events none, aria-hidden. */
-export function Backdrop({ spire = true, circuit = true, vx, horizon, animate = false, contained, width, height, className }: BackdropProps) {
+export function Backdrop({ spire = true, circuit = true, vx, horizon, motion = true, contained, width, height, className }: BackdropProps) {
   const viewport = useViewportSize();
   const W = width ?? viewport.w;
   const H = height ?? viewport.h;
-  const reduced = useReducedMotion();
+  const reduceSetting = useReduceMotionSetting();
+  const osReduced = useOsReducedMotion();
   const geo = useMemo(() => generateBackdrop(W, H, { vx, horizon, circuit }), [W, H, vx, horizon, circuit]);
-  const floorRef = useRef<SVGGElement>(null);
-  const running = animate && !reduced;
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  // "Reduce motion" on = no canvas at all; off = run it even when the OS asks to reduce;
+  // system = mount it and let the module paint one static frame under prefers-reduced-motion.
+  const withCanvas = motion && reduceSetting !== 'on';
+  const reducedMotion = reduceSetting === 'off' ? false : osReduced;
+  // True once the canvas draws the floor, so the static horizontals step aside.
+  const [live, setLive] = useState(false);
 
   useEffect(() => {
-    if (!running) return;
-    let frame = 0;
-    const startedAt = performance.now();
-    const tick = (now: number) => {
-      const phase = (((now - startedAt) / 1000) % DRIFT_SECONDS) / DRIFT_SECONDS;
-      const g = floorRef.current;
-      if (g) {
-        const lines = generateBackdrop(W, H, { vx, horizon, circuit: false, phase }).horizontals;
-        const els = g.children;
-        for (let i = 0; i < els.length; i++) {
-          const el = els[i] as SVGLineElement;
-          const l = lines[i];
-          if (l) {
-            el.setAttribute('y1', String(l.y1));
-            el.setAttribute('y2', String(l.y2));
-            el.setAttribute('stroke-opacity', String(l.a));
-            el.removeAttribute('visibility');
-          } else el.setAttribute('visibility', 'hidden');
-        }
-      }
-      frame = requestAnimationFrame(tick);
+    const canvas = canvasRef.current;
+    if (!withCanvas || !canvas || !canvasMotionSupported(canvas)) return;
+    // Same size and fractions as the SVG layer, so the drawn floor and circuit pulses line up
+    // with the static radials and traces (the SVG is stretched the same way).
+    const ctl = mountBackdrop(canvas, {
+      width: W,
+      height: H,
+      vx: vx ?? 0.53,
+      vy: horizon ?? 0.52,
+      spire,
+      circuit,
+      speed: 1,
+      reducedMotion,
+    });
+    setLive(true);
+    return () => {
+      ctl.destroy();
+      setLive(false);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
-  }, [running, W, H, vx, horizon]);
+  }, [withCanvas, W, H, vx, horizon, spire, circuit, reducedMotion]);
 
   const skyPos = `${Math.round((geo.vx / W) * 100)}% ${Math.round((geo.vy / H) * 100)}%`;
   const rootStyle: CSSProperties = {
     background: `radial-gradient(70% 38% at ${skyPos}, var(--al-horizon) 0%, var(--al-deep) 50%, var(--al-void) 85%)`,
     ...(contained ? { position: 'absolute' } : null),
   };
-  // Keep a fixed number of floor <line>s so the animated mode can recycle them.
-  const floorSlots = running ? Math.max(geo.horizontals.length + 2, 36) : geo.horizontals.length;
+  const floorLive = withCanvas && live;
 
   return (
-    <div className={cx('al-backdrop', className)} style={rootStyle} aria-hidden="true" data-testid="al-backdrop" data-animated={running || undefined}>
+    <div className={cx('al-backdrop', className)} style={rootStyle} aria-hidden="true" data-testid="al-backdrop" data-motion-live={floorLive || undefined}>
       <svg className="al-backdrop__svg" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="none" focusable="false">
         <g stroke="rgb(110,246,255)" strokeWidth={1}>
           {geo.radials.map((s, i) => (
             <line key={`r${i}`} x1={s.x1} y1={s.y1} x2={s.x2} y2={s.y2} strokeOpacity={s.a} />
           ))}
         </g>
-        <g ref={floorRef} stroke="rgb(110,246,255)" strokeWidth={1} shapeRendering="crispEdges">
-          {Array.from({ length: floorSlots }, (_, i) => {
-            const s = geo.horizontals[i];
-            return s ? (
+        {floorLive ? null : (
+          <g stroke="rgb(110,246,255)" strokeWidth={1} shapeRendering="crispEdges" data-testid="al-backdrop-floor">
+            {geo.horizontals.map((s, i) => (
               <line key={`h${i}`} x1={0} y1={s.y1} x2={W} y2={s.y2} strokeOpacity={s.a} />
-            ) : (
-              <line key={`h${i}`} x1={0} y1={0} x2={W} y2={0} strokeOpacity={0} visibility="hidden" />
-            );
-          })}
-        </g>
+            ))}
+          </g>
+        )}
         {circuit ? (
           <g data-testid="al-backdrop-circuit">
             <g stroke="rgb(110,246,255)" strokeWidth={1} strokeOpacity={0.16} fill="none">
@@ -228,6 +233,8 @@ export function Backdrop({ spire = true, circuit = true, vx, horizon, animate = 
           <div className="al-backdrop__core" style={{ left: geo.spire.x - 7, top: geo.vy - 7 }} />
         </div>
       ) : null}
+      {/* v1.1 motion layer: after the spire, below the scanline + vignette (.al-backdrop::after). */}
+      {withCanvas ? <canvas ref={canvasRef} className="al-backdrop__motion" aria-hidden="true" data-testid="al-backdrop-motion" /> : null}
     </div>
   );
 }

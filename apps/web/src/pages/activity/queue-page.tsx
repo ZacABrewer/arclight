@@ -34,7 +34,7 @@ import { QueueRowControls, SlowModeControl } from './queue-controls.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
 import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
-import { qualityFromTitle, queueChip, trailState } from './queue-status.js';
+import { qualityFromTitle, queueChip, queueTrailState } from './queue-status.js';
 import { TorrentDrawer } from './torrent-drawer.js';
 import { EngineTransferSection } from './transfer-history.js';
 import { t } from '../../i18n/index.js';
@@ -200,7 +200,7 @@ export function QueuePage() {
       header: t('common.progress'),
       width: '180px',
       sortValue: (r) => r.progress,
-      cell: (r) => <Trail value={r.progress * 100} state={trailState(queueChip(r))} showValue label={t('activity.queue.progressOfTitle', { title: r.title })} />,
+      cell: (r) => <Trail value={r.progress * 100} state={queueTrailState(r)} showValue label={t('activity.queue.progressOfTitle', { title: r.title })} />,
     },
     { key: 'sizeBytes', header: t('common.size'), mono: true, align: 'right', sortValue: (r) => r.sizeBytes, cell: (r) => formatBytes(r.sizeBytes) },
     { key: 'speed', header: t('activity.queue.speed'), mono: true, align: 'right', cell: (r) => <SpeedCell item={r} /> },

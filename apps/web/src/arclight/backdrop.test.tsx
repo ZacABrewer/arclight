@@ -1,6 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { Backdrop, generateBackdrop } from './Backdrop.js';
+import { mountBackdrop } from './arclight-motion.js';
+import { setReduceMotion } from './motion-preference.js';
+
+const { destroy } = vi.hoisted(() => ({ destroy: vi.fn() }));
+vi.mock('./arclight-motion.js', () => ({ mountBackdrop: vi.fn(() => ({ destroy })) }));
 
 function mockReducedMotion(reduce: boolean) {
   const mql = (query: string) => ({
@@ -17,7 +22,10 @@ function mockReducedMotion(reduce: boolean) {
 }
 
 afterEach(() => {
+  vi.clearAllMocks();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  setReduceMotion('system');
   // @ts-expect-error — remove the mock so other tests see jsdom's default (no matchMedia)
   delete window.matchMedia;
 });
@@ -68,31 +76,97 @@ describe('<Backdrop>', () => {
     expect(screen.queryByTestId('al-backdrop-circuit')).toBeNull();
   });
 
-  it('static by default: no requestAnimationFrame loop', () => {
-    const raf = vi.spyOn(window, 'requestAnimationFrame');
+  it('without canvas support (jsdom) keeps the static floor and mounts nothing', () => {
     render(<Backdrop />);
-    expect(raf).not.toHaveBeenCalled();
+    expect(mountBackdrop).not.toHaveBeenCalled();
+    expect(screen.getByTestId('al-backdrop-floor')).toBeTruthy();
+    expect(screen.getByTestId('al-backdrop').hasAttribute('data-motion-live')).toBe(false);
+  });
+});
+
+describe('<Backdrop> motion layer (v1.1)', () => {
+  beforeEach(() => {
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} });
+    vi.stubGlobal('IntersectionObserver', class { observe() {} disconnect() {} });
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue({} as unknown as CanvasRenderingContext2D);
   });
 
-  it('animate + prefers-reduced-motion: no requestAnimationFrame loop', () => {
-    mockReducedMotion(true);
-    const raf = vi.spyOn(window, 'requestAnimationFrame');
-    render(<Backdrop animate />);
-    expect(raf).not.toHaveBeenCalled();
-    expect(screen.getByTestId('al-backdrop').hasAttribute('data-animated')).toBe(false);
-  });
-
-  it('animate without reduced motion starts the loop and cancels it on unmount', () => {
+  it('mounts the canvas after the spire, drops the static floor and destroys on unmount', () => {
     mockReducedMotion(false);
-    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 7);
-    const caf = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {});
-    const { unmount } = render(<Backdrop animate />);
-    expect(raf).toHaveBeenCalled();
-    expect(screen.getByTestId('al-backdrop').getAttribute('data-animated')).toBe('true');
+    const { unmount } = render(<Backdrop width={1440} height={960} />);
+    const canvas = screen.getByTestId('al-backdrop-motion');
+    expect(canvas.tagName).toBe('CANVAS');
+    expect(canvas.className).toBe('al-backdrop__motion');
+    expect(canvas.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByTestId('al-backdrop-spire').compareDocumentPosition(canvas) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(mountBackdrop).toHaveBeenCalledTimes(1);
+    expect(mountBackdrop).toHaveBeenCalledWith(canvas, {
+      width: 1440,
+      height: 960,
+      vx: 0.53,
+      vy: 0.52,
+      spire: true,
+      circuit: true,
+      speed: 1,
+      reducedMotion: false,
+    });
+    // The canvas draws the floor; radials, circuit and spire stay static.
+    expect(screen.queryByTestId('al-backdrop-floor')).toBeNull();
+    expect(screen.getByTestId('al-backdrop-circuit')).toBeTruthy();
+    expect(screen.getByTestId('al-backdrop').getAttribute('data-motion-live')).toBe('true');
     unmount();
-    expect(caf).toHaveBeenCalledWith(7);
+    expect(destroy).toHaveBeenCalledTimes(1);
   });
 
+  it('passes the spire/circuit props and the vanishing point, remounting when they change', () => {
+    const { rerender } = render(<Backdrop width={800} height={600} vx={0.5} horizon={0.6} spire={false} circuit={false} />);
+    expect(mountBackdrop).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ vx: 0.5, vy: 0.6, spire: false, circuit: false }));
+    rerender(<Backdrop width={800} height={600} vx={0.5} horizon={0.6} spire circuit={false} />);
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(mountBackdrop).toHaveBeenCalledTimes(2);
+    expect(mountBackdrop).toHaveBeenLastCalledWith(expect.anything(), expect.objectContaining({ spire: true }));
+  });
+
+  it('under prefers-reduced-motion still mounts, asking the module for one static frame', () => {
+    mockReducedMotion(true);
+    render(<Backdrop />);
+    expect(mountBackdrop).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ reducedMotion: true }));
+  });
+
+  it('motion={false} renders no canvas and keeps the static floor', () => {
+    render(<Backdrop motion={false} />);
+    expect(screen.queryByTestId('al-backdrop-motion')).toBeNull();
+    expect(mountBackdrop).not.toHaveBeenCalled();
+    expect(screen.getByTestId('al-backdrop-floor')).toBeTruthy();
+  });
+
+  it('the "Reduce motion" switch destroys the canvas and sets data-motion="off" on the root', () => {
+    mockReducedMotion(false);
+    render(<Backdrop />);
+    expect(mountBackdrop).toHaveBeenCalledTimes(1);
+    expect(document.documentElement.hasAttribute('data-motion')).toBe(false);
+
+    act(() => setReduceMotion('on'));
+    expect(destroy).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId('al-backdrop-motion')).toBeNull();
+    expect(screen.getByTestId('al-backdrop-floor')).toBeTruthy();
+    expect(document.documentElement.getAttribute('data-motion')).toBe('off');
+
+    act(() => setReduceMotion('system'));
+    expect(document.documentElement.hasAttribute('data-motion')).toBe(false);
+    expect(mountBackdrop).toHaveBeenCalledTimes(2);
+  });
+
+  it('"Reduce motion" off keeps the canvas running even when the OS asks to reduce', () => {
+    mockReducedMotion(true);
+    act(() => setReduceMotion('off'));
+    render(<Backdrop />);
+    expect(mountBackdrop).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ reducedMotion: false }));
+    expect(document.documentElement.hasAttribute('data-motion')).toBe(false);
+  });
+});
+
+describe('<Backdrop> layout', () => {
   it('re-lays out on resize', () => {
     vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
       cb(0);

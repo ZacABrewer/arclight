@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, type ReactNode } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import type { AuthStatus, Session, User } from '@arclight/shared';
 import { authApi } from '../api/auth.js';
 import { authKeys, authStatusQuery } from './guard.js';
 import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences.js';
 import { t, applyLocaleSetting } from '../i18n/index.js';
+import { setReduceMotion } from '../arclight/motion-preference.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -60,6 +61,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       logout,
     };
   }, [authenticated, me.data, status.data, refresh, logout]);
+
+  // The global "Reduce motion" switch follows the signed-in user (signed out: the OS setting).
+  const reduceMotion = readUiPreferences(value.user?.settings).reduceMotion;
+  useEffect(() => setReduceMotion(reduceMotion), [reduceMotion]);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
