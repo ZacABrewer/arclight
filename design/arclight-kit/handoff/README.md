@@ -11,6 +11,7 @@ Arclight (formerly Media-Tron) is an all-in-one media downloader, indexer and re
 | `Arclight Backdrop.dc.html` | Generator for the grid floor, horizon, spire, background circuit bundle. Port its JS (≈40 lines) to a `<Backdrop>` component or an SVG/canvas layer |
 | `Arclight Chrome.dc.html` | Nav rail + top bar |
 | `handoff/arclight.css` | Drop-in CSS: variables + `.al-*` component classes + keyframes |
+| `handoff/arclight-motion.js` | **v1.1** Backdrop motion layer (ESM, no deps). `mountBackdrop(canvas, opts)` + `backdropGeometry()` |
 | `handoff/tokens.json` | Same tokens as JSON (Tailwind/Style Dictionary friendly) |
 | `Media-Tron Mockups.dc.html` | Exploration history (rounds 1–4). **Not** a spec — 4a became Dashboard |
 | `uploads/` | Original film reference images (mood only) |
@@ -81,6 +82,28 @@ Downloaded · Downloading · Importing · Monitored · Unmonitored · Unaired ·
 ## Imagery
 
 Posters 2:3 and backdrops 16:9 from TMDB inside square 1px line-2 frames with the sheen gradient on top. Details backdrop fades to black left (92%→20%) and bottom. Never put glow on artwork. Fallback = diagonal stripe pattern (`repeating-linear-gradient(135deg, rgba(110,246,255,.06) 0 1px, transparent 1px 9px)`) with title in text-4.
+
+## Motion layer (v1.1 — ambient light)
+
+Animation is added to **existing** components only; no new UI. Everything below is live in `Arclight Pages.dc.html` (Tweaks: *Motion* on/off, *Speed*).
+
+**Backdrop** — a `<canvas class="al-backdrop__motion">` inside the Backdrop, after the spire and before the scanline/vignette. Port as:
+
+```tsx
+import { mountBackdrop } from './arclight-motion';
+useEffect(() => {
+  const ctl = mountBackdrop(ref.current!, { vx: 0.53, vy: 0.52, spire, circuit, speed: 1 }); // vx/vy: px, or 0–1 fraction of size
+  return () => ctl.destroy();
+}, [spire, circuit]);
+```
+
+When the canvas is mounted, **drop the static horizontal floor lines** — the canvas draws them (drifting toward the viewer). Radial lines, circuit traces, nodes, horizon and spire stay static DOM/SVG. The canvas draws: floor drift · light cycles (comet trails running out from the vanishing point along radial lines, max 2) · circuit pulses (packets down the top-right bundle; end node flashes) · horizon sweep · spire rise · core breathing. All cyan/white, additive. It sizes itself with ResizeObserver, caps DPR at 1.5, and pauses when offscreen or the tab is hidden. Under `prefers-reduced-motion` it paints one static frame. Spire off → no rise/breathe; circuit off → no pulses. The circuit generator uses the same seed as the static Backdrop so paths line up — keep them in sync if you change one.
+
+**Chrome** — `.al-runner--v` on the rail's right border (9s loop), `.al-runner--h` on the top bar's bottom border (12s loop). Connected dot = `.al-live` (breathes).
+
+**Components** — active `.al-trail`: light packet flows through the fill (1.8s). Head dot pulses (existing). Hero `.al-edge`: 7s opacity glint. Dashboard traces: one `.al-trace-pulse` per trace with `--path` set to the trace polyline, second delayed 2.5s.
+
+**Rules** — ambient motion never carries meaning and never uses orange/red. Nothing moves inside text or data. No motion on paused/stalled/failed trails. Keep everything `aria-hidden` and `pointer-events: none`. One global switch (user setting "Reduce motion") should both stop the canvas (`destroy()`) and add `[data-motion="off"] * { animation: none }`.
 
 ## Accessibility
 

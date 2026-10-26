@@ -15,6 +15,14 @@
 html,body{margin:0;background:#000;color:#e6fbff;-webkit-font-smoothing:antialiased}
 *{box-sizing:border-box}
 a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:underline}
+@keyframes al-rail-run{0%{top:-140px}45%,100%{top:100%}}
+@keyframes al-bar-run{0%{left:-220px}38%,100%{left:100%}}
+@keyframes al-breathe{0%,100%{box-shadow:0 0 6px #6ef6ff}50%{box-shadow:0 0 14px #6ef6ff}}
+@keyframes al-flow{from{left:-48px}to{left:100%}}
+@keyframes al-pulse{0%,100%{opacity:.7}50%{opacity:1}}
+@keyframes al-edge-glint{0%,82%,100%{opacity:.55}90%{opacity:1}}
+@keyframes al-trace-run{0%{offset-distance:0%;opacity:0}8%{opacity:1}70%{offset-distance:100%;opacity:1}78%,100%{offset-distance:100%;opacity:0}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important}}
 </style>
 </helmet>
 <section style="padding:96px;display:flex;flex-direction:column;gap:56px;background:#000;font-family:Archivo,sans-serif">
@@ -29,8 +37,10 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p01" data-screen-label="01 Dashboard" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">01</span>DASHBOARD</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <sc-for list="{{ dashTraces }}" as="s" hint-placeholder-count="0"><div style="position:absolute;left:{{ s.x }}px;top:{{ s.y }}px;width:{{ s.w }}px;height:1px;background:rgba(110,246,255,.5);transform:rotate({{ s.a }}deg);transform-origin:0 50%"></div></sc-for>
+  <div aria-hidden="true" style="position:absolute;left:0;top:0;width:30px;height:2px;background:linear-gradient(90deg,rgba(110,246,255,0),#e9fdff);offset-path:path('M524 404 L662 404 L758 500');offset-rotate:auto;animation:al-trace-run 5s cubic-bezier(.45,0,.55,1) 0s infinite;pointer-events:none"></div>
+  <div aria-hidden="true" style="position:absolute;left:0;top:0;width:30px;height:2px;background:linear-gradient(90deg,rgba(110,246,255,0),#e9fdff);offset-path:path('M1040 440 L882 440 L822 500 L766 500');offset-rotate:auto;animation:al-trace-run 5s cubic-bezier(.45,0,.55,1) 2.5s infinite;pointer-events:none"></div>
   <div style="position:absolute;left:124px;top:96px;right:40px;display:flex;align-items:baseline;gap:20px">
     <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">00</div>
     <div style="font-stretch:118%;font-weight:500;font-size:28px;color:#e9fdff">Dashboard</div>
@@ -39,7 +49,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
   </div>
   <div style="position:absolute;left:124px;top:156px;width:400px;height:316px;clip-path:polygon(22px 0,100% 0,100% 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);padding:20px 24px;display:flex;flex-direction:column;gap:14px">
     <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
-    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
     <div style="position:relative;display:flex;justify-content:space-between;align-items:baseline"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">NEXT 24 HOURS</div><a style="font-size:13px">Calendar</a></div>
     <sc-for list="{{ upcoming }}" as="u" hint-placeholder-count="3">
       <div style="position:relative;display:grid;grid-template-columns:62px 1fr;gap:14px;align-items:baseline;padding-bottom:12px;border-bottom:1px solid rgba(110,246,255,.08)">
@@ -50,7 +60,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
   </div>
   <div style="position:absolute;left:1040px;top:156px;width:360px;height:316px;clip-path:polygon(0 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.62));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);display:flex;flex-direction:column">
     <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.07),transparent 32%);pointer-events:none"></div>
-    <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
     <div style="position:relative;padding:18px 24px;display:flex;flex-direction:column;gap:5px;border-bottom:1px solid rgba(110,246,255,.1)">
       <div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">VPN</div>
       <div style="font-size:18px;font-weight:500;color:#e9fdff">Amsterdam · WireGuard</div>
@@ -81,7 +91,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
         <sc-for list="{{ queue4 }}" as="d" hint-placeholder-count="4">
           <div style="display:grid;grid-template-columns:minmax(0,1.1fr) minmax(0,1.6fr) 110px;gap:24px;align-items:center;padding:14px 0;border-bottom:1px solid rgba(110,246,255,.07)">
             <div style="min-width:0"><div style="font-size:16px;font-weight:500;color:{{ d.tc }};white-space:nowrap;overflow:hidden;text-overflow:ellipsis">{{ d.t }}</div><div style="font-size:13px;color:#7fa6ae">{{ d.q }}</div></div>
-            <div style="position:relative;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:{{ d.glow }}"></div><div style="position:absolute;left:{{ d.pct }};top:1px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:{{ d.head }};box-shadow:{{ d.glow }}"></div></div>
+            <div style="position:relative;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ d.pct }};overflow:hidden;background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:{{ d.glow }}"><div style="position:absolute;top:0;bottom:0;left:-48px;width:48px;background:linear-gradient(90deg,rgba(233,253,255,0),rgba(233,253,255,.95),rgba(233,253,255,0));animation:{{ d.flow }}"></div></div><div style="position:absolute;left:{{ d.pct }};top:1px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:{{ d.head }};box-shadow:{{ d.glow }}"></div></div>
             <div style="text-align:right"><span style="font-family:'JetBrains Mono',monospace;font-size:15px;color:{{ d.pc }}">{{ d.pctLabel }}</span><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#7fa6ae">{{ d.eta }}</div></div>
           </div>
         </sc-for>
@@ -103,7 +113,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p02" data-screen-label="02 Library" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">02</span>LIBRARY · POSTER GRID · SELECT MODE</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:124px;right:40px;top:96px;bottom:40px;display:flex;flex-direction:column;gap:24px">
     <div style="display:flex;align-items:center;gap:20px">
       <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">01</div>
@@ -148,7 +158,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p03" data-screen-label="03 Series details" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">03</span>SERIES DETAILS · SEASONS &amp; EPISODES</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ false }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ false }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:84px;right:0;top:0;height:460px;overflow:hidden">
     <div style="position:absolute;inset:0;background:#04141b repeating-linear-gradient(135deg,rgba(110,246,255,.05) 0 1px,transparent 1px 12px)"></div>
     <div style="position:absolute;right:40px;top:80px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.16em;color:#4f7880">BACKDROP · TMDB 1920×1080 · TINT FROM IMAGE</div>
@@ -221,7 +231,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p04" data-screen-label="04 Activity queue" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">04</span>ACTIVITY · QUEUE</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:124px;right:40px;top:96px;bottom:40px;display:flex;flex-direction:column;gap:22px">
     <div style="display:flex;align-items:center;gap:20px">
       <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">06</div>
@@ -234,7 +244,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
     </div>
     <div style="position:relative;flex:1;clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.48),rgba(2,10,14,.66));backdrop-filter:blur(26px) saturate(150%);-webkit-backdrop-filter:blur(26px) saturate(150%);border:1px solid rgba(110,246,255,.2);display:flex;flex-direction:column">
       <div style="position:absolute;inset:0;background:linear-gradient(172deg,rgba(255,255,255,.06),transparent 28%);pointer-events:none"></div>
-      <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+      <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
       <div style="position:relative;display:grid;grid-template-columns:28px minmax(0,1.5fr) 130px 54px 100px minmax(0,1.3fr) 80px 70px minmax(0,1.2fr);gap:18px;padding:16px 26px 12px 34px;font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.12em;color:#7fa6ae;border-bottom:1px solid rgba(110,246,255,.12)"><div></div><div>TITLE</div><div>QUALITY</div><div>PROT</div><div>CLIENT</div><div>PROGRESS</div><div>SIZE</div><div>ETA</div><div>STATUS</div></div>
       <sc-for list="{{ qRows }}" as="r" hint-placeholder-count="8">
         <div style="position:relative;display:grid;grid-template-columns:28px minmax(0,1.5fr) 130px 54px 100px minmax(0,1.3fr) 80px 70px minmax(0,1.2fr);gap:18px;align-items:center;height:62px;padding:0 26px 0 34px;border-bottom:1px solid rgba(110,246,255,.06);background:{{ r.rowBg }};font-size:14px">
@@ -243,7 +253,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff">{{ r.q }}</div>
           <div><div style="display:inline-block;padding:2px 6px;border:1px solid rgba(110,246,255,.3);font-family:'JetBrains Mono',monospace;font-size:10px;color:#9fc3cc">{{ r.p }}</div></div>
           <div style="color:#9fc3cc">{{ r.c }}</div>
-          <div style="display:flex;align-items:center;gap:10px"><div style="position:relative;flex:1;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ r.pct }};background:{{ r.trail }};box-shadow:{{ r.glow }}"></div><div style="position:absolute;left:{{ r.pct }};top:1px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:{{ r.head }};box-shadow:{{ r.glow }}"></div></div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff;width:36px;text-align:right">{{ r.pct }}</div></div>
+          <div style="display:flex;align-items:center;gap:10px"><div style="position:relative;flex:1;height:10px"><div style="position:absolute;left:0;right:0;top:4px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:3px;height:3px;width:{{ r.pct }};overflow:hidden;background:{{ r.trail }};box-shadow:{{ r.glow }}"><div style="position:absolute;top:0;bottom:0;left:-48px;width:48px;background:linear-gradient(90deg,rgba(233,253,255,0),rgba(233,253,255,.95),rgba(233,253,255,0));animation:{{ r.flow }}"></div></div><div style="position:absolute;left:{{ r.pct }};top:1px;width:8px;height:8px;margin-left:-4px;border-radius:50%;background:{{ r.head }};box-shadow:{{ r.glow }}"></div></div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff;width:36px;text-align:right">{{ r.pct }}</div></div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9fc3cc">{{ r.size }}</div>
           <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#9fc3cc">{{ r.eta }}</div>
           <div style="display:flex;align-items:center;gap:8px;min-width:0"><div style="display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;font-size:12px;font-weight:500;border:1px solid {{ r.sb }};color:{{ r.sc }};background:{{ r.sbg }};white-space:nowrap"><div style="width:6px;height:6px;background:{{ r.sd }}"></div>{{ r.s }}</div></div>
@@ -265,7 +275,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p05" data-screen-label="05 Calendar" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">05</span>CALENDAR · MONTH</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:124px;right:40px;top:96px;bottom:40px;display:flex;flex-direction:column;gap:20px">
     <div style="display:flex;align-items:center;gap:20px">
       <div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">04</div>
@@ -296,7 +306,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p06" data-screen-label="06 Settings" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">06</span>SETTINGS · MEDIA MANAGEMENT · UNSAVED</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" spire="{{ spire }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:124px;right:40px;top:96px;bottom:40px;display:grid;grid-template-columns:240px minmax(0,1fr);gap:28px">
     <div style="display:flex;flex-direction:column;gap:2px">
       <div style="display:flex;align-items:baseline;gap:16px;margin-bottom:18px"><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#6ef6ff;letter-spacing:.2em">09</div><div style="font-stretch:118%;font-weight:500;font-size:28px;color:#e9fdff">Settings</div></div>
@@ -347,13 +357,13 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p07" data-screen-label="07 Login" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">07</span>LOGIN · SESSION EXPIRED STATE</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" vx="{{ 720 }}" horizon="{{ 560 }}" spire="{{ true }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" vx="{{ 720 }}" horizon="{{ 560 }}" spire="{{ true }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:50%;top:150px;width:420px;margin-left:-210px;display:flex;flex-direction:column;gap:16px">
     <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid rgba(255,154,77,.45);background:rgba(40,16,4,.55);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px);font-size:14px;color:#ffc79e"><div style="width:6px;height:6px;background:#ff9a4d"></div>Your session expired. Sign in to continue.</div>
     <div style="position:relative;clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.55),rgba(2,10,14,.72));backdrop-filter:blur(28px) saturate(150%);-webkit-backdrop-filter:blur(28px) saturate(150%);border:1px solid rgba(110,246,255,.24);padding:40px 40px 32px;display:flex;flex-direction:column;gap:20px">
       <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.08),transparent 32%);pointer-events:none"></div>
-      <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
-      <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+      <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
+      <div style="position:absolute;left:calc(100% - 22px);top:calc(100% - 1px);width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
       <div style="position:relative;display:flex;flex-direction:column;align-items:center;gap:16px;margin-bottom:8px">
         <div style="width:44px;height:44px;border:1.5px solid #6ef6ff;transform:rotate(45deg);display:flex;align-items:center;justify-content:center"><div style="width:16px;height:16px;background:#6ef6ff"></div></div>
         <div style="font-stretch:125%;font-weight:600;font-size:22px;letter-spacing:.16em;color:#e9fdff;margin-top:6px">ARCLIGHT</div>
@@ -372,7 +382,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p08" data-screen-label="08 Setup wizard" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">08</span>FIRST-RUN SETUP · STEP 3 ROOT FOLDERS</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" vx="{{ 720 }}" horizon="{{ 600 }}" spire="{{ false }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" vx="{{ 720 }}" horizon="{{ 600 }}" spire="{{ false }}" circuit="{{ circuit }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:0;right:0;top:0;height:72px;display:flex;align-items:center;gap:16px;padding:0 48px;border-bottom:1px solid rgba(110,246,255,.14);background:rgba(1,6,9,.4);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)">
     <div style="width:26px;height:26px;border:1.5px solid #6ef6ff;transform:rotate(45deg);display:flex;align-items:center;justify-content:center"><div style="width:9px;height:9px;background:#6ef6ff"></div></div>
     <div style="font-stretch:125%;font-weight:600;font-size:15px;letter-spacing:.14em;color:#e9fdff;margin-left:6px">ARCLIGHT</div>
@@ -390,7 +400,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
   </div>
   <div style="position:absolute;left:50%;top:220px;width:820px;margin-left:-410px;clip-path:polygon(22px 0,100% 0,100% calc(100% - 22px),calc(100% - 22px) 100%,0 100%,0 22px);background:linear-gradient(180deg,rgba(12,36,44,.55),rgba(2,10,14,.74));backdrop-filter:blur(28px) saturate(150%);-webkit-backdrop-filter:blur(28px) saturate(150%);border:1px solid rgba(110,246,255,.24);padding:36px 40px;display:flex;flex-direction:column;gap:22px">
     <div style="position:absolute;inset:0;background:linear-gradient(168deg,rgba(255,255,255,.08),transparent 30%);pointer-events:none"></div>
-    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0"></div>
+    <div style="position:absolute;left:0;top:22px;width:31px;height:1px;background:rgba(200,252,255,.8);transform:rotate(-45deg);transform-origin:0 0;animation:al-edge-glint 7s ease-in-out infinite"></div>
     <div style="position:relative;display:flex;flex-direction:column;gap:6px"><div style="font-stretch:112%;font-weight:600;font-size:26px;color:#e9fdff">Where is your media stored?</div><div style="font-size:15px;color:#9fc3cc">Add a root folder for TV and one for movies. Arclight imports finished downloads into these.</div></div>
     <div style="position:relative;display:flex;gap:10px"><div style="flex:1;height:44px;display:flex;align-items:center;padding:0 14px;border:1px solid #6ef6ff;background:rgba(0,0,0,.35);box-shadow:0 0 0 3px rgba(110,246,255,.12);font-family:'JetBrains Mono',monospace;font-size:14px;color:#e9fdff">/media/movies</div><div style="height:44px;padding:0 16px;display:flex;align-items:center;border:1px solid rgba(110,246,255,.35);color:#c9f9ff;font-size:14px">Add</div></div>
     <div style="position:relative;border:1px solid rgba(110,246,255,.14);background:rgba(0,0,0,.25)">
@@ -410,7 +420,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div id="p09" data-screen-label="09 Not found" style="display:flex;flex-direction:column;gap:16px">
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">09</span>404 / ERROR</div>
 <div style="width:1440px;height:960px;position:relative;overflow:hidden;background:#000;color:#e6fbff">
-  <dc-import name="Arclight Backdrop" vx="{{ 1120 }}" horizon="{{ 620 }}" spire="{{ true }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
+  <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" vx="{{ 1120 }}" horizon="{{ 620 }}" spire="{{ true }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:1440px;height:960px" hint-size="1440px,960px"></dc-import>
   <div style="position:absolute;left:164px;top:220px;width:560px;display:flex;flex-direction:column;align-items:flex-start;gap:16px">
     <div style="font-family:'JetBrains Mono',monospace;font-size:120px;line-height:1;color:#e9fdff;letter-spacing:.06em">404</div>
     <div style="font-stretch:118%;font-weight:600;font-size:26px;color:#e9fdff">Page not found</div>
@@ -426,7 +436,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 <div style="display:flex;align-items:center;gap:14px;font-family:'JetBrains Mono',monospace;font-size:14px;color:#9fc3cc"><span style="padding:4px 10px;border:1px solid #6ef6ff;color:#6ef6ff">10</span>MOBILE · DASHBOARD + LIBRARY</div>
 <div style="display:flex;gap:56px">
   <div style="width:390px;height:844px;position:relative;overflow:hidden;background:#000;border-radius:46px;border:1px solid rgba(110,246,255,.25);box-shadow:0 0 0 8px #05090b,0 0 0 9px rgba(110,246,255,.15)">
-    <dc-import name="Arclight Backdrop" width="{{ 390 }}" height="{{ 844 }}" vx="{{ 195 }}" horizon="{{ 470 }}" spire="{{ spire }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:390px;height:844px" hint-size="390px,844px"></dc-import>
+    <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" width="{{ 390 }}" height="{{ 844 }}" vx="{{ 195 }}" horizon="{{ 470 }}" spire="{{ spire }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:390px;height:844px" hint-size="390px,844px"></dc-import>
     <div style="position:absolute;left:0;right:0;top:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0;font-family:'JetBrains Mono',monospace;font-size:14px;color:#e9fdff"><span>19:42</span><span style="width:110px;height:30px;border-radius:20px;background:#000"></span><span>5G ▮</span></div>
     <div style="position:absolute;left:20px;right:20px;top:60px;display:flex;flex-direction:column;gap:16px">
       <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-stretch:125%;font-weight:600;font-size:15px;letter-spacing:.14em;color:#e9fdff">ARCLIGHT</div><div style="width:34px;height:34px;border:1px solid rgba(110,246,255,.35);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:600;color:#e9fdff">SK</div></div>
@@ -436,7 +446,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
         <div style="display:flex;justify-content:space-between"><div style="font-family:'JetBrains Mono',monospace;font-size:11px;letter-spacing:.24em;color:#8fb3bd">QUEUE</div><div style="font-family:'JetBrains Mono',monospace;font-size:12px;color:#c9f9ff">72.4 MB/s</div></div>
         <sc-for list="{{ mQueue }}" as="d" hint-placeholder-count="3">
           <div style="display:flex;flex-direction:column;gap:7px"><div style="display:flex;justify-content:space-between;gap:8px"><span style="font-size:15px;font-weight:500;color:#e9fdff">{{ d.t }}</span><span style="font-family:'JetBrains Mono',monospace;font-size:13px;color:#6ef6ff">{{ d.pctLabel }}</span></div>
-          <div style="position:relative;height:8px"><div style="position:absolute;left:0;right:0;top:3px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:2px;height:3px;width:{{ d.pct }};background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:0 0 10px rgba(110,246,255,.8)"></div><div style="position:absolute;left:{{ d.pct }};top:0;width:7px;height:7px;margin-left:-3px;border-radius:50%;background:#e9fdff;box-shadow:0 0 10px #6ef6ff"></div></div>
+          <div style="position:relative;height:8px"><div style="position:absolute;left:0;right:0;top:3px;height:1px;background:rgba(110,246,255,.15)"></div><div style="position:absolute;left:0;top:2px;height:3px;width:{{ d.pct }};overflow:hidden;background:linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff);box-shadow:0 0 10px rgba(110,246,255,.8)"><div style="position:absolute;top:0;bottom:0;left:-48px;width:48px;background:linear-gradient(90deg,rgba(233,253,255,0),rgba(233,253,255,.95),rgba(233,253,255,0));animation:{{ d.flow }}"></div></div><div style="position:absolute;left:{{ d.pct }};top:0;width:7px;height:7px;margin-left:-3px;border-radius:50%;background:#e9fdff;box-shadow:0 0 10px #6ef6ff;animation:al-pulse 1.6s ease-in-out infinite"></div></div>
           <div style="font-size:12px;color:#7fa6ae">{{ d.q }} · <span style="font-family:'JetBrains Mono',monospace">{{ d.eta }}</span></div></div>
         </sc-for>
       </div>
@@ -450,7 +460,7 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
     </div>
   </div>
   <div style="width:390px;height:844px;position:relative;overflow:hidden;background:#000;border-radius:46px;border:1px solid rgba(110,246,255,.25);box-shadow:0 0 0 8px #05090b,0 0 0 9px rgba(110,246,255,.15)">
-    <dc-import name="Arclight Backdrop" width="{{ 390 }}" height="{{ 844 }}" vx="{{ 195 }}" horizon="{{ 470 }}" spire="{{ false }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:390px;height:844px" hint-size="390px,844px"></dc-import>
+    <dc-import name="Arclight Backdrop" motion="{{ motion }}" speed="{{ speed }}" width="{{ 390 }}" height="{{ 844 }}" vx="{{ 195 }}" horizon="{{ 470 }}" spire="{{ false }}" circuit="{{ false }}" style="position:absolute;left:0;top:0;width:390px;height:844px" hint-size="390px,844px"></dc-import>
     <div style="position:absolute;left:0;right:0;top:0;height:50px;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0;font-family:'JetBrains Mono',monospace;font-size:14px;color:#e9fdff"><span>19:42</span><span style="width:110px;height:30px;border-radius:20px;background:#000"></span><span>5G ▮</span></div>
     <div style="position:absolute;left:20px;right:20px;top:60px;display:flex;flex-direction:column;gap:14px">
       <div style="display:flex;align-items:center;justify-content:space-between"><div style="font-stretch:118%;font-weight:600;font-size:24px;color:#e9fdff">Library</div><div style="height:34px;padding:0 12px;display:flex;align-items:center;background:#6ef6ff;color:#021014;font-size:13px;font-weight:600">Add</div></div>
@@ -472,11 +482,11 @@ a{color:#6ef6ff;text-decoration:none}a:hover{color:#e9fdff;text-decoration:under
 </div>
 </section>
 </x-dc>
-<script type="text/x-dc" data-dc-script data-props="{&quot;spire&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Backdrop&quot;},&quot;circuit&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Backdrop&quot;}}">
+<script type="text/x-dc" data-dc-script data-props="{&quot;spire&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Backdrop&quot;},&quot;circuit&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Backdrop&quot;},&quot;motion&quot;:{&quot;editor&quot;:&quot;boolean&quot;,&quot;default&quot;:true,&quot;tsType&quot;:&quot;boolean&quot;,&quot;section&quot;:&quot;Motion&quot;},&quot;speed&quot;:{&quot;editor&quot;:&quot;range&quot;,&quot;default&quot;:1,&quot;min&quot;:0.25,&quot;max&quot;:2,&quot;step&quot;:0.05,&quot;tsType&quot;:&quot;number&quot;,&quot;section&quot;:&quot;Motion&quot;}}">
 class Component extends DCLogic {
   renderVals() {
     const C = '#6ef6ff', W = '#ff9a4d';
-    const spire = this.props.spire ?? true, circuit = this.props.circuit ?? true;
+    const spire = this.props.spire ?? true, circuit = this.props.circuit ?? true, motion = this.props.motion ?? true, speed = this.props.speed ?? 1;
     const ST = {
       downloaded: { sb: 'rgba(110,246,255,.35)', sc: '#c9f9ff', sd: C, sbg: 'transparent' },
       downloading: { sb: C, sc: '#e9fdff', sd: C, sbg: 'rgba(110,246,255,.12)' },
@@ -496,7 +506,7 @@ class Component extends DCLogic {
       { t: 'Dune: Part Two', q: 'Remux 2160p', p: .23, eta: '41 min' },
       { t: 'Pluribus S01E04', q: 'Waiting for air date', p: 0, eta: 'queued' }
     ];
-    const queue4 = lanes.map(l => { const live = l.p > 0; return { ...l, pct: Math.round(l.p * 100) + '%', pctLabel: live ? Math.round(l.p * 100) + '%' : 'Queued', tc: live ? '#e9fdff' : '#9fc3cc', pc: live ? C : '#7fa6ae', head: live ? '#e9fdff' : 'transparent', glow: live ? '0 0 10px rgba(110,246,255,.8)' : 'none' }; });
+    const queue4 = lanes.map(l => { const live = l.p > 0; return { ...l, pct: Math.round(l.p * 100) + '%', pctLabel: live ? Math.round(l.p * 100) + '%' : 'Queued', tc: live ? '#e9fdff' : '#9fc3cc', pc: live ? C : '#7fa6ae', head: live ? '#e9fdff' : 'transparent', glow: live ? '0 0 10px rgba(110,246,255,.8)' : 'none', flow: live ? 'al-flow 1.8s linear infinite' : 'none' }; });
     const titles = [['Severance','2022 · Apple TV+','ok',100,'22/22'],['Andor','2022 · Disney+','dl',72,'18/24'],['The Bear','2022 · FX','ok',100,'38/38'],['Shōgun','2024 · FX','miss',60,'6/10'],['Silo','2023 · Apple TV+','ok',100,'20/20'],['Arcane','2021 · Netflix','ok',100,'18/18'],['Fallout','2024 · Prime Video','dl',88,'7/8'],['The Expanse','2015 · Prime Video','ok',100,'62/62'],['Dark','2017 · Netflix','un',100,'26/26'],['Foundation','2021 · Apple TV+','miss',45,'9/20'],['Mr. Robot','2015 · USA','ok',100,'45/45'],['Pluribus','2025 · Apple TV+','dl',30,'3/9'],['Station Eleven','2021 · HBO','ok',100,'10/10'],['Blue Eye Samurai','2023 · Netflix','ok',100,'8/8']];
     const sel = [1, 4, 9];
     const barOf = s => s === 'miss' ? W : s === 'un' ? '#4f6c73' : C;
@@ -511,7 +521,7 @@ class Component extends DCLogic {
     ];
     const detailTabs = ['Seasons & episodes', 'Files', 'History', 'Search', 'Subtitles', 'Requests'].map((n, i) => ({ n, c: i === 0 ? '#e9fdff' : '#7fa6ae', b: i === 0 ? C : 'transparent' }));
     const trail = 'linear-gradient(90deg,rgba(110,246,255,0),rgba(110,246,255,.6) 60%,#e9fdff)';
-    const q = (t, sub, qq, p, c, pct, size, eta, k, s, selected) => { const live = k === 'downloading' || k === 'importing'; const warm = k === 'warning' ? W : k === 'failed' ? '#ff5a46' : null; return { t, sub, q: qq, p, c, pct: pct + '%', size, eta, s, ...ST[k], trail: warm ? warm : (pct ? trail : 'transparent'), head: live ? '#e9fdff' : warm ? warm : 'transparent', glow: live ? '0 0 10px rgba(110,246,255,.8)' : 'none', rowBg: selected ? 'rgba(110,246,255,.07)' : 'transparent', chkB: selected ? C : 'rgba(230,251,255,.3)', chkBg: selected ? C : 'transparent' }; };
+    const q = (t, sub, qq, p, c, pct, size, eta, k, s, selected) => { const live = k === 'downloading' || k === 'importing'; const warm = k === 'warning' ? W : k === 'failed' ? '#ff5a46' : null; return { t, sub, q: qq, p, c, pct: pct + '%', size, eta, s, ...ST[k], trail: warm ? warm : (pct ? trail : 'transparent'), head: live ? '#e9fdff' : warm ? warm : 'transparent', glow: live ? '0 0 10px rgba(110,246,255,.8)' : 'none', flow: live ? 'al-flow 1.8s linear infinite' : 'none', rowBg: selected ? 'rgba(110,246,255,.07)' : 'transparent', chkB: selected ? C : 'rgba(230,251,255,.3)', chkBg: selected ? C : 'transparent' }; };
     const qRows = [
       q('Andor S02E09', 'Andor · Season 2', 'WEB-DL 2160p', 'TOR', 'Built-in', 68, '18.2 GB', '4m', 'downloading', 'Downloading'),
       q('Fallout S01E08', 'Fallout · Season 1', 'WEB-DL 1080p', 'TOR', 'Built-in', 91, '4.1 GB', '38s', 'downloading', 'Downloading'),
@@ -541,7 +551,7 @@ class Component extends DCLogic {
     const steps = stepNames.map((n, i) => { const done = i < 2, act = i === 2; return { n, c: act ? '#e9fdff' : done ? '#c9f9ff' : '#5d7f88', b: done || act ? C : 'rgba(110,246,255,.3)', fill: done ? C : '#000', glow: act ? '0 0 12px rgba(110,246,255,.8)' : 'none', line: i < 2 ? C : 'rgba(110,246,255,.2)', lineD: i === 5 ? 'none' : 'block' }; });
     const dirs = [['downloads','2.1 TB free',false],['movies','6.4 TB free',true],['music','6.4 TB free',false],['tv','0.9 TB free',false]].map(([n, free, on]) => ({ n, free, bg: on ? 'rgba(110,246,255,.1)' : 'transparent', c: on ? '#e9fdff' : '#9fc3cc' }));
     const tabs = active => ['Home','Library','Discover','Activity','More'].map(n => { const on = n === active; return { n, c: on ? '#e9fdff' : '#5d8790', bar: on ? C : 'transparent', glow: on ? '0 0 10px #6ef6ff' : 'none' }; });
-    return {
+    return { motion, speed,
       spire, circuit, dashTraces, queue4, posters, episodes, detailTabs, qRows, weekdays, cal, setNav, roots, toggles, steps, dirs,
       mQueue: queue4.slice(0, 3),
       mPosters: posters.slice(0, 9),
