@@ -2,7 +2,9 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-const apiTarget = 'http://localhost:7878';
+// Where the dev server proxies /api. Override when 7878 is taken locally, e.g.
+// `VITE_API_TARGET=http://localhost:17895 pnpm --filter @media-tron/web dev`.
+const apiTarget = process.env.VITE_API_TARGET || 'http://localhost:7878';
 
 export default defineConfig({
   plugins: [react()],
