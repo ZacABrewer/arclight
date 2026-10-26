@@ -56,6 +56,7 @@ import { crossSeedModule } from './modules/cross-seed/index.js';
 import { engineAgentModule } from './modules/engine-agent/index.js';
 import { discordBotModule } from './modules/discord-bot/index.js';
 import { transcodeModule } from './modules/transcode/index.js';
+import { transferMetricsModule } from './modules/transfer-metrics/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -150,6 +151,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     migrateModule,
     vpnModule,
     torrentModule,
+    // Transfer history: samples the queue, the engine and the VPN status.
+    transferMetricsModule,
     // Private-tracker helpers and cross-seeding over torrent, indexers and download clients.
     trackerStatsModule,
     crossSeedModule,

@@ -7,3 +7,8 @@
 .al-vpn-status__line[data-tone='warn'] { color: var(--al-warn-text); }
 .al-vpn-status__line[data-tone='danger'] { color: var(--al-danger-text); }
 .al-vpn-status__line[data-tone='off'] { color: var(--al-text-4); }
+
+/* Connection history (vpn-history.tsx) under the live status; the aside stops being sticky so
+   the taller column can scroll. */
+.al-vpn-history__body { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-settings-main__aside:has(.al-vpn-history) { position: static; }

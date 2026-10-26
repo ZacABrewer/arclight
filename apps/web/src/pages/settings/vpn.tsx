@@ -6,6 +6,7 @@ import { useSaveVpnSettings, useTestVpn, useVpnAction, useVpnSettings, useVpnSta
 import { formatSize, formatUptime, relativeTime } from '../../lib/format.js';
 import { SettingsPage, useDraft } from './settings-layout.js';
 import { SettingsSection } from './shared.js';
+import { VpnHistoryPane } from './vpn-history.js';
 import './vpn.css';
 import { t } from '../../i18n/index.js';
 
@@ -242,6 +243,16 @@ function LiveStatusPane() {
   );
 }
 
+/** Live status with the connection history below it. */
+function VpnAside() {
+  return (
+    <>
+      <LiveStatusPane />
+      <VpnHistoryPane />
+    </>
+  );
+}
+
 function VpnForm({ data, advanced, onAdvanced }: { data: VpnSettingsResponse; advanced: boolean; onAdvanced: (v: boolean) => void }) {
   const draft = useDraft(data);
   // Per-provider drafts so flipping the selector back and forth keeps what was typed.
@@ -271,7 +282,7 @@ function VpnForm({ data, advanced, onAdvanced }: { data: VpnSettingsResponse; ad
         </Button>
       }
       save={{ count: draft.changes, onSave: () => save.mutate(toVpnUpdate(value)), onDiscard: draft.discard, saving: save.isPending }}
-      aside={<LiveStatusPane />}
+      aside={<VpnAside />}
       after={
         test.isError || test.data ? (
           <Pane title={t('common.testResult')} aria-label={t('common.testResult')}>
@@ -354,7 +365,7 @@ export function VpnSettingsPage() {
   const [advanced, setAdvanced] = useState(false);
   if (settings.isSuccess) return <VpnForm data={settings.data} advanced={advanced} onAdvanced={setAdvanced} />;
   return (
-    <SettingsPage title={t('common.vpn')} aside={<LiveStatusPane />}>
+    <SettingsPage title={t('common.vpn')} aside={<VpnAside />}>
       {settings.isError ? (
         <ErrorBlock title={t('settings.vpn.couldntLoadVpnSettings')} onRetry={() => void settings.refetch()}>
           {errorMessage(settings.error)}
