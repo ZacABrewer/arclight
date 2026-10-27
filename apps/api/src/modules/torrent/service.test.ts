@@ -207,6 +207,45 @@ describe('VPN binding', () => {
     expect(h.service.status()).toMatchObject({ state: 'running', boundAddress: '127.0.0.1', listenPort: forwarded });
   });
 
+  it('falls back to the configured port when another program holds the forwarded port', async () => {
+    const h = await make({ vpn: true, settings: { enabled: true, bindToVpn: false } });
+    const forwarded = await otherPort(h);
+    const squatter = await holdPort(forwarded);
+    try {
+      h.vpn.connect({ forwardedPort: forwarded });
+      await h.service.stop();
+      await h.service.start();
+      expect(h.service.status()).toMatchObject({ state: 'running', listenPort: h.port });
+      expect(h.service.status().warning).toContain(`Port ${forwarded} is already in use`);
+      // Further VPN checks with the same forwarded port leave the engine where it is.
+      await h.service.applyBinding();
+      expect(running(h).listenPort).toBe(h.port);
+    } finally {
+      await new Promise<void>((done) => squatter.close(() => done()));
+    }
+  });
+
+  it('moves off a newly forwarded port that is taken, and clears the warning on the next one', async () => {
+    const h = await make({ vpn: true, settings: { enabled: true, bindToVpn: false } });
+    h.vpn.connect();
+    await h.service.start();
+    const taken = await otherPort(h);
+    const squatter = await holdPort(taken);
+    try {
+      h.vpn.connect({ forwardedPort: taken });
+      await h.service.applyBinding();
+      expect(h.service.status()).toMatchObject({ state: 'running', listenPort: h.port });
+      expect(h.service.status().warning).toBeDefined();
+    } finally {
+      await new Promise<void>((done) => squatter.close(() => done()));
+    }
+    const fresh = await otherPort(h);
+    h.vpn.connect({ forwardedPort: fresh });
+    await h.service.applyBinding();
+    expect(running(h).listenPort).toBe(fresh);
+    expect(h.service.status().warning).toBeUndefined();
+  });
+
   it('health is clean when bound to the tunnel', async () => {
     const h = await make({ vpn: true, settings: { enabled: true } });
     h.vpn.connect();
@@ -294,3 +333,12 @@ describe('torrent actions', () => {
     await expect(h.service.pause('a'.repeat(40))).rejects.toMatchObject({ code: 'NOT_FOUND' });
   });
 });
+
+/** Listens on 127.0.0.1:port the way another torrent client in the same namespace would. */
+function holdPort(port: number): Promise<Server> {
+  return new Promise((done, fail) => {
+    const server = createServer();
+    server.once('error', fail);
+    server.listen({ port, host: '127.0.0.1', exclusive: true }, () => done(server));
+  });
+}

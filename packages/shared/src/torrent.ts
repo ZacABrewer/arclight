@@ -264,6 +264,8 @@ export const TorrentSessionStatus = z.object({
   enabled: z.boolean(),
   state: TorrentEngineState,
   error: z.string().optional(),
+  /** Running, but with a caveat (e.g. listening on a fallback port). */
+  warning: z.string().optional(),
   lockdownReason: z.string().optional(),
   /** ISO-8601: when the current lockdown started. */
   lockdownSince: z.string().optional(),

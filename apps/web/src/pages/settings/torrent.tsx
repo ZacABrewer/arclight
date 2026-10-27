@@ -105,6 +105,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
           {status.error}
         </p>
       ) : null}
+      {status.warning ? <p className="al-inline-warning">{status.warning}</p> : null}
       <KeyValue items={items} />
     </div>
   );

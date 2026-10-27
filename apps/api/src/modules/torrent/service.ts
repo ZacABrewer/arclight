@@ -124,6 +124,8 @@ export class TorrentService {
   private sessionValue: Session | null = null;
   private state: TorrentEngineState = 'disabled';
   private lastError: string | undefined;
+  /** Set while the engine listens somewhere other than the port it wanted (that port was taken). */
+  private portWarning: string | undefined;
   private lockdownReason: string | undefined;
   private lockdownSince: string | undefined;
   /** Start times (ms) of recent lockdowns, for kill-switch flapping detection. */
@@ -440,10 +442,24 @@ export class TorrentService {
     try {
       await mkdir(this.resumeDir, { recursive: true });
       this.killSwitchPaused = await this.loadKillSwitchSet();
-      session = this.sessionFactory({ settings: this.sessionSettings(s, binding) });
+      this.portWarning = undefined;
+      let port = binding.port;
+      for (const fallback of this.fallbackPorts(binding.port, s)) {
+        session = this.sessionFactory({ settings: this.sessionSettings(s, { ...binding, port }) });
+        try {
+          await session.start();
+          break;
+        } catch (err) {
+          await session.shutdown().catch(() => undefined);
+          session = null;
+          if (!isAddressInUse(err) || fallback === undefined) throw err;
+          this.notePortTaken(binding.port, port, fallback);
+          port = fallback;
+        }
+      }
+      if (!session) throw new Error('torrent engine could not open a listen port');
       session.on('warning', (m) => this.log?.debug({ warning: m }, 'torrent engine warning'));
       if (this.seedRules) attachSeedRules(session, this.seedRules);
-      await session.start();
       this.sessionValue = session;
       this.state = 'running';
       this.log?.info({ port: session.listenPort, address: binding.address, mode: binding.mode }, 'torrent engine started');
@@ -466,11 +482,39 @@ export class TorrentService {
       this.log?.info('torrent engine stopped');
     }
     this.state = 'disabled';
+    this.portWarning = undefined;
     this.lockdownReason = undefined;
     this.lockdownSince = undefined;
   }
 
   // ---- VPN binding ------------------------------------------------------------------------
+
+  /** The port the engine last asked for when it had to fall back (see `portWarning`). */
+  private portWanted: number | undefined;
+
+  /**
+   * Ports to try after `wanted`, ending in `undefined` (give up). Another client in the same
+   * network namespace (qBittorrent next to Arclight inside gluetun) often already holds the VPN's
+   * forwarded port, so fall back to the configured port, then to any free port. A port the user
+   * set themselves is not second-guessed: that start fails and shows the error.
+   */
+  private fallbackPorts(wanted: number, s: TorrentSettings): (number | undefined)[] {
+    const out: (number | undefined)[] = [];
+    if (wanted === s.listenPort) return [undefined];
+    if (s.listenPort !== wanted && s.listenPort !== 0) out.push(s.listenPort);
+    if (wanted !== 0) out.push(0);
+    out.push(undefined);
+    return out;
+  }
+
+  private notePortTaken(wanted: number, tried: number, next: number): void {
+    this.portWanted = wanted;
+    this.portWarning =
+      `Port ${wanted} is already in use by another program (often another torrent client sharing the VPN), ` +
+      'so the engine listens on a different port. Downloads work, but peers cannot connect in through the ' +
+      'forwarded port until that program releases it.';
+    this.log?.warn({ port: tried, next }, 'torrent listen port in use; trying another');
+  }
 
   private desiredBinding(s: TorrentSettings = this.settings()): Binding {
     const vpn = this.vpn;
@@ -499,9 +543,22 @@ export class TorrentService {
       await session.bindTo(binding.address);
       this.log?.info({ address: binding.address }, 'torrent engine re-bound');
     }
-    if (session.listenPort !== binding.port) {
-      await session.setListenPort(binding.port);
-      this.log?.info({ port: binding.port }, 'torrent engine listen port changed');
+    const wanted = binding.port;
+    const settled = this.portWarning === undefined ? session.listenPort === wanted : this.portWanted === wanted;
+    if (!settled) {
+      this.portWarning = undefined;
+      let port = wanted;
+      for (const fallback of this.fallbackPorts(wanted, this.settings())) {
+        try {
+          await session.setListenPort(port);
+          break;
+        } catch (err) {
+          if (!isAddressInUse(err) || fallback === undefined) throw err;
+          this.notePortTaken(wanted, port, fallback);
+          port = fallback;
+        }
+      }
+      this.log?.info({ port: session.listenPort }, 'torrent engine listen port changed');
     }
     await this.leaveLockdown(session);
   }
@@ -691,6 +748,7 @@ export class TorrentService {
       speed: this.speedMode(s),
     };
     if (this.lastError) out.error = this.lastError;
+    if (session && this.portWarning) out.warning = this.portWarning;
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
     if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;
     out.lockdownsLastHour = this.recentLockdowns();
@@ -894,4 +952,8 @@ function toDetail(t: Torrent): TorrentDetail {
   if (s.etaSeconds !== undefined) detail.etaSeconds = s.etaSeconds;
   if (s.error !== undefined) detail.error = s.error;
   return detail;
+}
+
+function isAddressInUse(err: unknown): boolean {
+  return typeof err === 'object' && err !== null && (err as { code?: unknown }).code === 'EADDRINUSE';
 }
