@@ -133,6 +133,11 @@ export interface TorrentContext {
   utp: () => UtpManager | null;
   /** Global connection budget check. */
   canConnect: () => boolean;
+  /**
+   * Blocks this session may still request while a global download limit is set (Infinity
+   * without one). See Session.requestBudget.
+   */
+  requestBudget: () => number;
   /** Takes a slot for one more outgoing attempt (half-open limit and per-second rate). */
   canOpen: () => boolean;
   isBlocked: (ip: string) => boolean;
@@ -339,6 +344,18 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   get error(): Error | null {
     return this.failure;
+  }
+
+  /** Blocks requested from peers and not received yet. */
+  get outstandingRequests(): number {
+    let n = 0;
+    for (const p of this.peers.values()) n += p.conn.requests.size;
+    return n;
+  }
+
+  private torrentRequestBudget(): number {
+    const limit = this.limits.downloadLimit;
+    return limit > 0 ? Math.max(0, requestBudgetBlocks(limit) - this.outstandingRequests) : Infinity;
   }
 
   /** Outgoing attempts still connecting (half-open). */
@@ -932,7 +949,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const conn = p.conn;
     if (conn.isClosed || conn.peerChoking || !conn.amInterested || this.isComplete) return;
     const depth = conn.isSnubbed() ? 1 : conn.desiredQueueDepth;
-    const want = depth - conn.requests.size;
+    let want = depth - conn.requests.size;
+    if (want <= 0) return;
+    // Under a download limit, only ~2 s worth of blocks may be outstanding (session-wide and per
+    // torrent): pausing reads alone let every peer keep sending what it had been asked for,
+    // tens of megabytes with a few hundred peers, which flooded a slow link anyway.
+    want = Math.min(want, this.ctx.requestBudget(), this.torrentRequestBudget());
     if (want <= 0) return;
     for (const b of picker.pick(this.peerPieces(p), p.key, want)) conn.request(b.index, b.begin, b.length);
   }
@@ -1306,6 +1328,10 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     if (this.webSeeds) this.webSeeds.tick();
     else if (!seeding && this.metainfo && (this.metainfo.urlList.length > 0 || (this.magnet?.webSeeds.length ?? 0) > 0)) this.startWebSeeds();
     if (this.superSeedingActive) for (const p of this.peers.values()) if (p.conn.handshaken && p.offered === null) this.superOffer(p);
+    // Under a request budget, peers with nothing outstanding get a chance once a tick.
+    if (this.limits.downloadLimit > 0 || this.ctx.requestBudget() !== Infinity) {
+      for (const p of this.peers.values()) if (p.conn.requests.size === 0 && !p.conn.peerChoking) this.requestBlocks(p);
+    }
     this.connectMore();
     if (this.peers.size < 5) this.trackers?.announceNow();
   }
@@ -1498,4 +1524,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   /** Original magnet URI, kept so magnets without metadata survive restarts. */
   magnetUri: string | undefined;
+}
+
+/** Seconds of data that may be requested ahead while a download limit applies. */
+const REQUEST_BUDGET_SECONDS = 2;
+
+/** Blocks that cover REQUEST_BUDGET_SECONDS at `limit` bytes/s (at least 8). */
+export function requestBudgetBlocks(limit: number): number {
+  return Math.max(8, Math.ceil((limit * REQUEST_BUDGET_SECONDS) / 16384));
 }

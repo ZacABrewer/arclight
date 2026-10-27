@@ -11,7 +11,7 @@ import type { Metainfo } from './metainfo.js';
 import { PeerConnection } from './peer/connection.js';
 import { generatePeerId, Session, type SessionOptions } from './session.js';
 import type { SessionSettings } from './settings.js';
-import type { Torrent } from './torrent.js';
+import { requestBudgetBlocks, type Torrent } from './torrent.js';
 import { startHttpTracker, type TestHttpTracker } from './tracker/test-trackers.js';
 
 const cleanups: (() => Promise<unknown> | unknown)[] = [];
@@ -227,6 +227,25 @@ describe('Session connection limits', () => {
     }
     expect(peak).toBeGreaterThan(0);
     expect(peak).toBeLessThanOrEqual(6);
+  });
+});
+
+describe('Session request budget', () => {
+  it('keeps at most ~2 s of the download limit requested ahead, and still completes', async () => {
+    const tr = await tracker();
+    const { p, torrent } = await seedSetup(tr.url);
+    const leechDir = await tmp();
+    const limit = 200_000;
+    const leecher = await session({ savePath: leechDir, downloadLimit: limit });
+    const lt = await leecher.addTorrent({ torrent });
+    let peak = 0;
+    const timer = setInterval(() => (peak = Math.max(peak, lt.outstandingRequests)), 10);
+    cleanups.push(() => clearInterval(timer));
+    await waitFor(() => lt.isComplete, 20_000);
+    clearInterval(timer);
+    await verifyPayload(leechDir, 'pack', p);
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(requestBudgetBlocks(limit));
   });
 });
 

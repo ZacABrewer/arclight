@@ -21,7 +21,7 @@ import {
   saveResumeData,
   torrentPath,
 } from './storage/resume.js';
-import { Torrent, type TorrentContext, type TorrentInit, type TorrentState, type TorrentStats } from './torrent.js';
+import { requestBudgetBlocks, Torrent, type TorrentContext, type TorrentInit, type TorrentState, type TorrentStats } from './torrent.js';
 import { createTrackerClient, type TrackerClientFactoryOptions } from './tracker/tracker-manager.js';
 import type { TrackerClient } from './tracker/types.js';
 import { UtpManager, type UtpManagerOptions } from './utp/manager.js';
@@ -338,6 +338,15 @@ export class Session extends EventEmitter<SessionEvents> {
     return n;
   }
 
+  /** Blocks that may still be requested under the global download limit (Infinity without one). */
+  private requestBudget(): number {
+    const limit = this.settingsValue.downloadLimit;
+    if (limit <= 0) return Infinity;
+    let n = 0;
+    for (const t of this.torrentsById.values()) n += t.outstandingRequests;
+    return Math.max(0, requestBudgetBlocks(limit) - n);
+  }
+
   private connectTokens = 0;
   private connectRefilledAt = 0;
 
@@ -376,6 +385,7 @@ export class Session extends EventEmitter<SessionEvents> {
       utp: () => (this.settingsValue.utp && this.utp.attached ? this.utp : null),
       canConnect: () => this.canConnect(),
       canOpen: () => this.canOpen(),
+      requestBudget: () => this.requestBudget(),
       isBlocked: (ip) => this.opts.isBlocked?.(ip) ?? false,
       trackerFactory: (url) => {
         const fOpts: TrackerClientFactoryOptions = { userAgent: this.settingsValue.userAgent };
