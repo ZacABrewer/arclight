@@ -3,7 +3,7 @@ import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import type { HygieneFinding } from '@arclight/shared';
 import { renderAt, stubApi } from '../../../test/route-harness.js';
 import { makeEpisode, makeMovie, makeSeries } from '../test-fixtures.js';
-import { bestSuggestion, buildMapRequest, defaultKeep, deletableExcept, episodesBySeason, fileName, folderOf, groupDuplicates, guessLabel, initialMapDraft, suggestionLabel } from './hygiene-model.js';
+import { bestSuggestion, buildMapRequest, bulkDuplicateDeletion, defaultKeep, deletableExcept, episodesBySeason, fileName, folderOf, groupDuplicates, guessLabel, initialMapDraft, suggestionLabel } from './hygiene-model.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -68,6 +68,19 @@ describe('hygiene model', () => {
     const groups = groupDuplicates([dup(4, '/m/b.mkv', ['/m/a.mkv'])]);
     expect(defaultKeep(groups[0]!)).toBe('/m/a.mkv');
     expect(deletableExcept(groups[0]!, '/m/a.mkv').map((f) => f.id)).toEqual([4]);
+  });
+
+  it('bulk-deletes every spare copy but never a path any set keeps', () => {
+    const records = [
+      dup(1, '/m/Heat/Heat.mkv', ['/m/Heat/Heat.copy.mkv'], 5),
+      dup(2, '/m/Heat/Heat.copy.mkv', ['/m/Heat/Heat.mkv']),
+      dup(4, '/m/b.mkv', ['/m/a.mkv']),
+      // /m/a.mkv is kept by the set above, so this set must not delete it
+      dup(6, '/m/c.mkv', ['/m/a.mkv', '/m/b.mkv']),
+    ];
+    const { findings, sets } = bulkDuplicateDeletion(groupDuplicates(records));
+    expect(findings.map((f) => f.id).sort()).toEqual([2, 4, 6]);
+    expect(sets).toBe(3);
   });
 
   it('groups episodes by season', () => {

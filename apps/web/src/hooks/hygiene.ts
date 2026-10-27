@@ -34,6 +34,33 @@ export function useHygieneMap() {
   });
 }
 
+/**
+ * Deletes many findings in one go (a few at a time) and refreshes the list once at the end,
+ * instead of once per file. Keeps going past individual failures and reports how many failed.
+ */
+export function useHygieneBulkDelete() {
+  return useInvalidatingMutation(
+    async (ids: readonly number[]) => {
+      let failed = 0;
+      let next = 0;
+      const worker = async (): Promise<void> => {
+        while (next < ids.length) {
+          const id = ids[next++] as number;
+          try {
+            await hygieneApi.remove(id);
+          } catch {
+            failed++;
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: Math.min(4, ids.length) }, worker));
+      return { deleted: ids.length - failed, failed };
+    },
+    [hygieneKeys.list],
+    { errorTitle: t('hooks.hygiene.couldNotDelete') },
+  );
+}
+
 export function useHygieneDelete() {
   return useInvalidatingMutation((id: number) => hygieneApi.remove(id), [hygieneKeys.list], { errorTitle: t('hooks.hygiene.couldNotDelete') });
 }

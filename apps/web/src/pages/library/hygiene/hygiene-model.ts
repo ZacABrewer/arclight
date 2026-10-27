@@ -134,6 +134,22 @@ export function defaultKeep(group: DuplicateGroup): string {
   return (library ?? group.entries[0])?.path ?? '';
 }
 
+/**
+ * "Delete all duplicates": every set keeps its default copy (the library's), and no path that
+ * any set keeps is deleted, even when it also appears as a spare copy in another set.
+ */
+export function bulkDuplicateDeletion(groups: readonly DuplicateGroup[]): { findings: HygieneFinding[]; sets: number } {
+  const keep = new Set(groups.map((g) => defaultKeep(g)));
+  const out = new Map<number, HygieneFinding>();
+  let sets = 0;
+  for (const g of groups) {
+    const spare = g.entries.filter((e) => e.finding && !keep.has(e.path)).map((e) => e.finding as HygieneFinding);
+    if (spare.length > 0) sets++;
+    for (const f of spare) out.set(f.id, f);
+  }
+  return { findings: [...out.values()], sets };
+}
+
 /** Findings deleted by "Delete others" when `keep` is kept. */
 export function deletableExcept(group: DuplicateGroup, keep: string): HygieneFinding[] {
   return group.entries.filter((e) => e.path !== keep && e.finding).map((e) => e.finding as HygieneFinding);

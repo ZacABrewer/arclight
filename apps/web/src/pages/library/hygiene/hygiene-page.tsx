@@ -3,10 +3,10 @@ import type { HygieneFinding } from '@arclight/shared';
 import { Button, Chip, EmptyState, ErrorBlock, PageHeader, Pane, Radio, Skeleton, Table, Tabs, type Column } from '../../../arclight/index.js';
 import { formatBytes } from '../../../components/media/format.js';
 import { useToast } from '../../../components/toast.js';
-import { useHygieneDelete, useHygieneFindings, useHygieneScan } from '../../../hooks/hygiene.js';
+import { useHygieneBulkDelete, useHygieneDelete, useHygieneFindings, useHygieneScan } from '../../../hooks/hygiene.js';
 import { relativeTime } from '../../../lib/format.js';
 import { ConfirmModal } from '../../system/confirm-modal.js';
-import { DUPLICATE_REASON_LABEL, bestSuggestion, defaultKeep, deletableExcept, fileName, folderOf, groupDuplicates, guessLabel, suggestionLabel, type DuplicateGroup } from './hygiene-model.js';
+import { DUPLICATE_REASON_LABEL, bestSuggestion, bulkDuplicateDeletion, defaultKeep, deletableExcept, fileName, folderOf, groupDuplicates, guessLabel, suggestionLabel, type DuplicateGroup } from './hygiene-model.js';
 import { MapDialog } from './map-dialog.js';
 import './hygiene.css';
 import { t } from '../../../i18n/index.js';
@@ -14,6 +14,8 @@ import { t } from '../../../i18n/index.js';
 type TabId = 'orphan' | 'duplicate' | 'empty';
 
 interface DeleteTarget {
+  /** Bulk: delete through the batch hook (one refresh at the end). */
+  bulk?: boolean;
   findings: HygieneFinding[];
   title: string;
   label: string;
@@ -158,6 +160,7 @@ export function HygienePage() {
   const findings = useHygieneFindings();
   const scan = useHygieneScan();
   const del = useHygieneDelete();
+  const bulkDel = useHygieneBulkDelete();
   const toast = useToast();
   const [tab, setTab] = useState<TabId>('orphan');
   const [mapping, setMapping] = useState<HygieneFinding | null>(null);
@@ -169,6 +172,7 @@ export function HygienePage() {
   const records = findings.data?.records ?? [];
   const orphans = useMemo(() => records.filter((r) => r.type === 'orphan'), [records]);
   const groups = useMemo(() => groupDuplicates(records), [records]);
+  const bulk = useMemo(() => bulkDuplicateDeletion(groups), [groups]);
   const empties = useMemo(() => records.filter((r) => r.type === 'empty'), [records]);
   const counts = findings.data?.counts;
   const lastScan = findings.data?.lastScan ?? null;
@@ -184,6 +188,23 @@ export function HygienePage() {
   ) : tab === 'duplicate' ? (
     groups.length ? (
       <div className="hyg-groups">
+        <div className="hyg-bulk">
+          <p>{t('library.hygiene.bulkDuplicatesHint', { files: bulk.findings.length, sets: bulk.sets })}</p>
+          <Button
+            variant="danger"
+            disabled={bulk.findings.length === 0}
+            onClick={() =>
+              setDeleting({
+                bulk: true,
+                findings: bulk.findings,
+                title: t('library.hygiene.deleteAllDuplicatesTitle', { files: bulk.findings.length, sets: bulk.sets }),
+                label: t('library.hygiene.deleteAllDuplicates'),
+              })
+            }
+          >
+            {t('library.hygiene.deleteAllDuplicates')}
+          </Button>
+        </div>
         {groups.map((g) => (
           <DuplicateGroupPane key={g.key} group={g} onDelete={setDeleting} />
         ))}
@@ -242,6 +263,16 @@ export function HygienePage() {
         onCancel={() => setDeleting(null)}
         onConfirm={async () => {
           if (!deleting) return;
+          if (deleting.bulk) {
+            const res = await bulkDel.mutateAsync(deleting.findings.map((f) => f.id));
+            setDeleting(null);
+            toast.push(
+              res.failed === 0
+                ? { tone: 'ok', title: t('library.hygiene.deletedNItems', { n: res.deleted }) }
+                : { tone: 'warning', title: t('library.hygiene.deletedNItems', { n: res.deleted }), message: t('library.hygiene.bulkFailed', { n: res.failed }) },
+            );
+            return;
+          }
           for (const f of deleting.findings) await del.mutateAsync(f.id);
           const n = deleting.findings.length;
           setDeleting(null);
