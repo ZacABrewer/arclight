@@ -114,6 +114,12 @@ export class DockerClient {
     return this.call('GET', `/containers/${encodeURIComponent(id)}/json`);
   }
 
+  /** True when `path` exists inside the container (HEAD /containers/{id}/archive). */
+  async pathExists(id: string, path: string): Promise<boolean> {
+    const res = await this.raw('HEAD', `/containers/${encodeURIComponent(id)}/archive?path=${encodeURIComponent(path)}`, undefined, 10_000);
+    return res.status === 200;
+  }
+
   inspectImage(ref: string): Promise<ImageInspect> {
     return this.call('GET', `/images/${encodeURIComponent(ref)}/json`);
   }

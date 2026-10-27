@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
-import { existsSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
+import { existsSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { eq } from 'drizzle-orm';
 import { z } from 'zod';
@@ -244,13 +245,44 @@ export class ContainerUpdater {
     return this.docker;
   }
 
+  private selfFound: string | null | undefined;
+
+  /**
+   * Our own container. Not by hostname alone: with `network_mode: service:gluetun` the hostname is
+   * gluetun's, so the container sharing its network was taken for a stranger and the update ran
+   * the swap inside Arclight, which stopped itself halfway (old container stopped, new one never
+   * started). Instead a marker file is written into our own filesystem and Docker is asked which
+   * running container has it. Explicit ARCLIGHT_CONTAINER_ID (or `selfRef`) wins; the hostname is
+   * the last resort, and only when it does not point at another container's network parent.
+   */
   private async selfId(docker: DockerClient): Promise<string | null> {
-    const ref = this.opts.selfRef ?? process.env['ARCLIGHT_CONTAINER_ID'] ?? hostname();
+    const explicit = this.opts.selfRef ?? process.env['ARCLIGHT_CONTAINER_ID'];
+    if (explicit) return docker.inspectContainer(explicit).then((c) => c.Id, () => null);
+    if (this.selfFound !== undefined) return this.selfFound;
+    const byMarker = await this.selfByMarker(docker).catch(() => null);
+    if (byMarker) return (this.selfFound = byMarker);
     try {
-      return (await docker.inspectContainer(ref)).Id;
+      const byHost = await docker.inspectContainer(hostname());
+      const all = await docker.listContainers();
+      // the hostname belongs to a container whose network we share: we are one of its dependents
+      const sharesNetworkOf = (c: ContainerInspect): boolean => {
+        const p = networkParentRef(c);
+        return p !== null && (byHost.Id.startsWith(p) || p === nameOf(byHost));
+      };
+      const dependents = (await Promise.all(all.map((s) => docker.inspectContainer(s.Id)))).filter(sharesNetworkOf);
+      const arclight = dependents.filter((c) => /arclight/i.test(c.Config.Image));
+      return arclight.length === 1 ? arclight[0]!.Id : dependents.length === 0 ? byHost.Id : null;
     } catch {
       return null;
     }
+  }
+
+  private async selfByMarker(docker: DockerClient): Promise<string | null> {
+    const marker = `/tmp/.arclight-self-${randomUUID()}`;
+    writeFileSync(marker, '');
+    const running = (await docker.listContainers()).filter((s) => s.State === undefined || s.State === 'running');
+    for (const s of running) if (await docker.pathExists(s.Id, marker)) return s.Id;
+    return null;
   }
 
   /** Compare every labelled container's image digest with its registry. */
