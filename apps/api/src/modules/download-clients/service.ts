@@ -43,6 +43,7 @@ import {
   type QueueReplaceResult,
   type QueueStatus,
   type QueueStatusMessage,
+  type QueueSummaryItem,
   type ReleaseProtocol,
   type RemotePathMapping,
   type TrackedDownloadState,
@@ -1858,6 +1859,26 @@ export class DownloadClientsService {
       totalRecords: items.length,
       records: items.slice(start, start + q.pageSize),
     };
+  }
+
+  /** GET /queue/summary: the state of every queue item linked to a series or movie, nothing else. */
+  queueSummary(): QueueSummaryItem[] {
+    return this.visibleItems()
+      .filter((i) => !isUnknownMedia(i))
+      .map((i) => ({
+        id: i.id,
+        ...(i.mediaType !== undefined ? { mediaType: i.mediaType } : {}),
+        ...(i.seriesId !== undefined ? { seriesId: i.seriesId } : {}),
+        ...(i.episodeIds !== undefined ? { episodeIds: i.episodeIds } : {}),
+        ...(i.movieId !== undefined ? { movieId: i.movieId } : {}),
+        trackedState: i.trackedState,
+        trackedStatus: i.trackedStatus,
+        status: i.status,
+        progress: i.progress,
+        ...(i.eta !== undefined ? { eta: i.eta } : {}),
+        ...(i.stateCode !== undefined ? { stateCode: i.stateCode } : {}),
+        ...(i.stateSeverity !== undefined ? { stateSeverity: i.stateSeverity } : {}),
+      }));
   }
 
   getQueueItem(id: number): QueueItem {

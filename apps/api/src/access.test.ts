@@ -148,6 +148,8 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/qualityprofile/:id': 'areas:library+wanted',
   'GET /api/v1/history/series': 'areas:library+activity',
   'GET /api/v1/history/movie': 'areas:library+activity',
+  'GET /api/v1/queue/summary': 'areas:library+activity',
+  'GET /api/v1/release/searchstatus': 'areas:library+wanted',
 
   // ---- app access: Calendar, Wanted, Activity (read-only)
   'GET /api/v1/calendar': 'areas:calendar',

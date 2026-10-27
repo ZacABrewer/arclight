@@ -225,6 +225,31 @@ export const ProfileMismatchQuery = z.object({
 });
 export type ProfileMismatchQuery = z.infer<typeof ProfileMismatchQuery>;
 
+/**
+ * Will a mismatched file be replaced? `scheduled` on the work list, the ProfileMigration job
+ * will search it (`nextSearchAt`); `downloading` a replacement was grabbed; `failed` searched
+ * `maxAttempts` times without a fitting release (retry from Settings → Profiles); `manualOnly`
+ * the profile has a rule but automatic replacement is off ("Search all now" still works);
+ * `paused` automatic replacement is paused for the profile; `globalOff` automatic profile
+ * migration is off, or its job is disabled; `noRule` the profile's rule is "do nothing", the
+ * file stays; `cutoffSearch` no rule, but the file is below the cutoff, so the Cutoff unmet
+ * search upgrades it like any other (a profile without upgrades has no such files: its cutoff
+ * is its lowest quality); `unmonitored` the item, episode or version slot is not monitored,
+ * nothing replaces it.
+ */
+export const ProfileReplacementState = z.enum([
+  'scheduled',
+  'downloading',
+  'failed',
+  'manualOnly',
+  'paused',
+  'globalOff',
+  'noRule',
+  'cutoffSearch',
+  'unmonitored',
+]);
+export type ProfileReplacementState = z.infer<typeof ProfileReplacementState>;
+
 export const ProfileMismatchRecord = z.object({
   mediaFileId: z.number().int(),
   mediaType: MediaType,
@@ -248,9 +273,21 @@ export const ProfileMismatchRecord = z.object({
       state: ProfileMigrationQueueState,
       attempts: z.number().int(),
       lastSearchedAt: z.string().nullable(),
+      /** ISO-8601: earliest retry after a search that found nothing; null = as soon as a run reaches it. */
+      nextSearchAt: z.string().nullable().optional(),
       message: z.string().nullable(),
     })
     .nullable(),
+  /** Whether (and when) the file will be searched for and replaced. Optional: older servers omit it. */
+  replacement: z
+    .object({
+      state: ProfileReplacementState,
+      /** ISO-8601 estimate of the ProfileMigration run that will search it (`scheduled` only). */
+      nextSearchAt: z.string().nullable(),
+      /** Searches before the item is given up on (`profileMigration.maxAttempts`). */
+      maxAttempts: z.number().int(),
+    })
+    .optional(),
 });
 export type ProfileMismatchRecord = z.infer<typeof ProfileMismatchRecord>;
 

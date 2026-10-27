@@ -21,6 +21,7 @@ import {
   QueueReplaceRequest,
   QueueReplaceResult,
   QueueStatus,
+  QueueSummaryItem,
   RemotePathMapping,
   RemotePathMappingInput,
 } from '@arclight/shared';
@@ -152,6 +153,11 @@ export function downloadClientsRoutes(
     );
 
     app.get('/queue/status', { config: { access: { areas: ['activity'] } }, schema: { response: { 200: QueueStatus } } }, async () => service.queueStatus());
+
+    // Compact per-item queue state for the library pages (no titles or paths).
+    app.get('/queue/summary', { config: { access: { areas: ['library', 'activity'] } }, schema: { response: { 200: z.array(QueueSummaryItem) } } }, async () =>
+      service.queueSummary(),
+    );
 
     app.get(
       '/queue/:id/timeline',

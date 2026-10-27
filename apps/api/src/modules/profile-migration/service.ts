@@ -25,6 +25,7 @@ import {
   type ProfileMismatchPage,
   type ProfileMismatchQuery,
   type ProfileMismatchRecord,
+  type ProfileReplacementState,
   type QualityDefinitionItem,
   type QualityModel,
   type QualityProfile,
@@ -36,6 +37,7 @@ import type { EventBus } from '../../events.js';
 import type { Scheduler } from '../../scheduler.js';
 import { fileFormatScore, libraryService } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
+import { upcomingRuns } from '../releases/search-status.js';
 import { getSection, setSection } from '../settings/service.js';
 import { itemKey, loadLibrary, profileForSlot, profileMap, type EpisodeInfo, type FileInfo, type ItemInfo, type LibraryScope } from './library-view.js';
 import {
@@ -727,9 +729,20 @@ export class ProfileMigrationService {
       }
     }
 
+    const settings = this.getSettings();
+    const schedule = queueByFile.size > 0 ? this.replacementSchedule(settings) : { jobOn: true, runs: new Map<number, Date | null>() };
     const records: ProfileMismatchRecord[] = pageRows.map(({ fit, info }) => {
       const eps = info.file.episodeIds.map((id) => view.episodes.get(id)).filter((e): e is EpisodeInfo => e !== undefined);
       const q = queueByFile.get(fit.mediaFileId);
+      const monitored = info.item.monitored && info.slotEnabled && (fit.mediaType === 'movie' || eps.some((e) => e.monitored));
+      const state = replacementState({
+        queue: q ?? null,
+        status: fit.status,
+        monitored,
+        rule: this.profileSettings(fit.qualityProfileId),
+        enabled: settings.enabled && schedule.jobOn,
+      });
+      const nextSearchAt = state === 'scheduled' && q ? (schedule.runs.get(q.id) ?? null) : null;
       return {
         mediaFileId: fit.mediaFileId,
         mediaType: fit.mediaType,
@@ -746,7 +759,8 @@ export class ProfileMigrationService {
         formatScore: fit.formatScore,
         status: fit.status,
         reasons: fit.reasons,
-        migration: q ? { state: q.state, attempts: q.attempts, lastSearchedAt: q.lastSearchedAt, message: q.message } : null,
+        migration: q ? { state: q.state, attempts: q.attempts, lastSearchedAt: q.lastSearchedAt, nextSearchAt: q.nextSearchAt, message: q.message } : null,
+        replacement: { state, nextSearchAt: nextSearchAt ? nextSearchAt.toISOString() : null, maxAttempts: settings.maxAttempts },
       };
     });
     return { page: query.page, pageSize: query.pageSize, totalRecords: rows.length, records };
@@ -898,6 +912,57 @@ export class ProfileMigrationService {
       .all();
     const result = await this.searchGroups(groupRows(due), { budget, automatic: true, userInvoked: false, ...(signal ? { signal } : {}) });
     return `searched ${result.searched}, grabbed ${result.grabbed}${result.skipped ? `, skipped ${result.skipped}` : ''}`;
+  }
+
+  /**
+   * Which upcoming ProfileMigration run searches each queued row (by row id; null when none in
+   * the next two weeks). Replays runAutomatic: rows of profiles with automatic mode on, in
+   * queue order, grouped per movie / season, `searchesPerRun` groups a run within the rolling
+   * `maxSearchesPerDay`, rows waiting out `retryAfterHours` skipped until then. An estimate: it
+   * assumes no search grabs anything and nothing new is queued. `jobOn` is false when the job
+   * does not run on a schedule (on demand only, or switched off).
+   */
+  replacementSchedule(settings: ProfileMigrationSettings = this.getSettings()): { jobOn: boolean; runs: Map<number, Date | null> } {
+    const runs = new Map<number, Date | null>();
+    const job = this.scheduler?.jobSchedule(PROFILE_MIGRATION_JOB) ?? { cron: cronForInterval(settings.intervalMinutes), enabled: true };
+    const jobOn = job.enabled && job.cron !== null;
+    const eligible = [...this.rules().values()].filter((r) => r.autoEnabled && !r.paused && r.mismatchAction !== 'none').map((r) => r.qualityProfileId);
+    if (!settings.enabled || !jobOn || job.cron === null || eligible.length === 0) return { jobOn, runs };
+
+    const now = this.now();
+    let remaining = this.db
+      .select()
+      .from(profileMigrationQueue)
+      .where(and(eq(profileMigrationQueue.state, 'queued'), inArray(profileMigrationQueue.qualityProfileId, eligible)))
+      .orderBy(...QUEUE_ORDER)
+      .all();
+    const used = this.db
+      .select({ at: profileMigrationSearches.at })
+      .from(profileMigrationSearches)
+      .where(and(gte(profileMigrationSearches.at, iso(new Date(now.getTime() - DAY_MS))), eq(profileMigrationSearches.automatic, true)))
+      .all()
+      .map((r) => Date.parse(r.at));
+    for (const run of upcomingRuns(job.cron, now)) {
+      if (remaining.length === 0) break;
+      const at = run.getTime();
+      const inWindow = used.filter((t) => t > at - DAY_MS).length;
+      const budget = Math.min(settings.searchesPerRun, settings.maxSearchesPerDay - inWindow);
+      if (budget <= 0) continue;
+      const due = remaining.filter((r) => r.nextSearchAt === null || Date.parse(r.nextSearchAt) < at);
+      const taken = groupRows(due).slice(0, budget);
+      if (taken.length === 0) continue;
+      const done = new Set<number>();
+      for (const group of taken) {
+        used.push(at);
+        for (const row of group.rows) {
+          runs.set(row.id, run);
+          done.add(row.id);
+        }
+      }
+      remaining = remaining.filter((r) => !done.has(r.id));
+    }
+    for (const row of remaining) runs.set(row.id, null);
+    return { jobOn, runs };
   }
 
   /** Searches "search all now" would start for a profile. */
@@ -1134,6 +1199,36 @@ function groupRows(rows: readonly ProfileMigrationQueueRow[]): SearchGroup[] {
     groups.set(key, g);
   }
   return [...groups.values()];
+}
+
+/**
+ * Will a mismatched file be replaced (see ProfileReplacementState)? `queue` is its open
+ * work-list row, `rule` its profile's migration settings, `enabled` whether automatic
+ * migration runs at all (global switch and job schedule).
+ */
+export function replacementState(input: {
+  queue: Pick<ProfileMigrationQueueRow, 'state'> | null;
+  status: ProfileFileStatus;
+  monitored: boolean;
+  rule: Pick<ProfileMigrationProfileSettings, 'mismatchAction' | 'autoEnabled' | 'paused'>;
+  enabled: boolean;
+}): ProfileReplacementState {
+  const { queue, rule } = input;
+  if (queue) {
+    if (queue.state === 'grabbed') return 'downloading';
+    if (queue.state === 'failed') return 'failed';
+    if (!input.enabled) return 'globalOff';
+    if (!rule.autoEnabled) return 'manualOnly';
+    if (rule.paused) return 'paused';
+    return 'scheduled';
+  }
+  if (!input.monitored) return 'unmonitored';
+  if (rule.mismatchAction === 'none') return input.status === 'upgradeAllowed' ? 'cutoffSearch' : 'noRule';
+  // A rule but no work-list row yet: the next re-evaluation (moments away) queues it.
+  if (!input.enabled) return 'globalOff';
+  if (!rule.autoEnabled) return 'manualOnly';
+  if (rule.paused) return 'paused';
+  return 'scheduled';
 }
 
 function isActive(group: SearchGroup, active: { movieIds: Set<number>; episodeIds: Set<number> }): boolean {

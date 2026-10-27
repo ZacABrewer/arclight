@@ -487,4 +487,20 @@ describe('queue listing', () => {
     expect(paged.records.map((r) => r.downloadId)).toEqual(['u1']);
     expect(service.queueStatus()).toMatchObject({ totalCount: 1, unknownCount: 2 });
   });
+
+  it('summarises library-linked items for the library pages, without titles', async () => {
+    const { service, fake } = await setup();
+    const c = service.create(qbit('Main'));
+    fake(c.id).nextId = 'ep';
+    await service.grab(c.id, { title: 'Show.S01E02', magnet: 'magnet:?' }, { mediaType: 'series', seriesId: 3, episodeIds: [12] });
+    fake(c.id).nextId = 'mv';
+    await service.grab(c.id, { title: 'Film.2024', magnet: 'magnet:?' }, { mediaType: 'movie', movieId: 8 });
+    fake(c.id).items = [item({ id: 'ep', title: 'Show.S01E02', progress: 0.42 }), item({ id: 'mv', title: 'Film.2024', progress: 1 }), item({ id: 'u1', title: 'Other' })];
+    await service.refreshQueue();
+    const summary = service.queueSummary();
+    expect(summary).toHaveLength(2);
+    expect(summary.find((s) => s.movieId === 8)).toMatchObject({ mediaType: 'movie' });
+    expect(summary.find((s) => s.seriesId === 3)).toMatchObject({ mediaType: 'series', episodeIds: [12], progress: 0.42, trackedState: 'downloading' });
+    expect(JSON.stringify(summary)).not.toContain('Show.S01E02');
+  });
 });
