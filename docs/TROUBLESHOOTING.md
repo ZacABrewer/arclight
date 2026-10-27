@@ -309,6 +309,7 @@ More detail: [VPN](using/vpn.md).
 - Find the owner of the share: `ls -ln /path/to/data` (the first two numbers after the permissions are the uid and gid).
 - Compare with `PUID`/`PGID` in `.env`. Find your own with `id -u` and `id -g`.
 - Health shows which folder is affected. For the config folder the message names the uid and gid it runs as and the folder's owner.
+- If the container exits at start with `EACCES: permission denied, mkdir '/config/...'` or "Arclight cannot write to /config", the host config folder is the problem. Since 0.3.1 the start script fixes the owner and the owner's permission bits itself (NAS shared folders are often created as `d---------` with ACLs); if it still fails, the share is probably mounted from a filesystem that ignores chown (NFS with root squash, SMB).
 
 **Fix:**
 

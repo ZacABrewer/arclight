@@ -18,6 +18,16 @@ USER_NAME="$(getent passwd "$PUID" | cut -d: -f1)"
 
 mkdir -p /config
 chown -R "$PUID:$PGID" /config /app
+# Owning a folder is not enough when its mode bits deny the owner (NAS shared folders are often
+# created as d--------- with ACLs on top), so give the owner read/write/enter as well.
+chmod -R u+rwX /config
+
+if ! gosu "$PUID:$PGID" sh -c 'touch /config/.arclight-write-test && rm -f /config/.arclight-write-test'; then
+  echo "Arclight cannot write to /config as $PUID:$PGID. Fix the host folder's permissions, e.g." >&2
+  echo "  sudo chown -R $PUID:$PGID <host config folder> && sudo chmod -R u+rwX <host config folder>" >&2
+  echo "or set PUID/PGID to a user that can write it." >&2
+  exit 1
+fi
 
 # Self-update (Settings > Updates) talks to the Docker API through the socket when it is mounted
 # (-v /var/run/docker.sock:/var/run/docker.sock). Give the app user the socket's group so it can
