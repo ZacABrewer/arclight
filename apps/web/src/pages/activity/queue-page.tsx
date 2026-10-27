@@ -21,6 +21,7 @@ import {
   type SortState,
 } from '../../arclight/index.js';
 import { errorMessage } from '../../api/client.js';
+import { useToast } from '../../components/toast.js';
 import { useGrabQueueItem, useQueue, useQueueStatus, useRemoveQueueItems } from '../../hooks/activity.js';
 import { useDownloadClientList } from '../../hooks/download-clients.js';
 import { useTorrentStatus } from '../../hooks/torrent.js';
@@ -153,6 +154,7 @@ export function QueuePage() {
   const queue = useQueue(query);
   const status = useQueueStatus();
   const remove = useRemoveQueueItems();
+  const toast = useToast();
   const grab = useGrabQueueItem();
   const runJob = useRunJob();
   const clients = useDownloadClientList();
@@ -342,9 +344,24 @@ export function QueuePage() {
             remove.mutate(
               { ids: removing.map((r) => r.id), options },
               {
-                onSuccess: () => {
-                  setSelected((cur) => new Set([...cur].filter((id) => !removing.some((r) => r.id === id))));
-                  setRemoving(null);
+                onSuccess: (res) => {
+                  const done = new Set<string | number>(res.removed);
+                  setSelected((cur) => new Set([...cur].filter((id) => !done.has(id))));
+                  if (res.failed.length === 0) {
+                    setRemoving(null);
+                    toast.push({ tone: 'ok', title: t('activity.queue.removedN', { n: res.removed.length }), durationMs: 4_000 });
+                    return;
+                  }
+                  // The server answers 200 with per-item failures (e.g. the client is off): say why
+                  // and keep the dialog open on what failed, so it can be retried without the client.
+                  const failedIds = new Set(res.failed.map((f) => f.id));
+                  setRemoving(removing.filter((r) => failedIds.has(r.id)));
+                  toast.push({
+                    tone: 'error',
+                    title: t('activity.queue.removeFailedN', { n: res.failed.length }),
+                    message: `${res.failed[0]!.error} ${t('activity.queue.removeFailedHint')}`,
+                    durationMs: 12_000,
+                  });
                 },
               },
             )

@@ -96,6 +96,9 @@ beforeEach(() => {
         return json({ id: 1, blocklisted: true, searchStarted: true, message: 'Replaced on request: searching for another release.' });
       }
       if (path === '/api/v1/queue/1/reannounce') return json({ id: 1, message: 'Asked qBit for fresh peers.' });
+      if (path === '/api/v1/queue/1' && method === 'DELETE') {
+        return json({ removed: [], failed: [{ id: 1, error: 'The built-in torrent engine is not running.' }] });
+      }
       if (path === '/api/v1/downloadclient') return json([]);
       if (path === '/api/v1/vpn/status') return json({ enabled: false, connected: false, lastChecked: null, lastChanged: null });
       return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
@@ -127,6 +130,16 @@ describe('queue page recovery actions', () => {
   it('shows the disk-guard banner', async () => {
     renderQueue();
     expect(await screen.findByText(/1 grab is held until the download volume has room/, {}, { timeout: 5000 })).toBeTruthy();
+  });
+
+  it('says why a remove failed and keeps the dialog open to retry without the client', async () => {
+    renderQueue();
+    fireEvent.click(await screen.findByRole('button', { name: 'Remove Stuck.Release' }, { timeout: 5000 }));
+    const dialog = await screen.findByRole('dialog');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Remove 1 item' }));
+    expect(await screen.findByText(/The built-in torrent engine is not running/)).toBeTruthy();
+    expect(screen.getByText(/Could not remove 1 from the queue/)).toBeTruthy();
+    expect(screen.getByRole('dialog')).toBeTruthy();
   });
 
   it('re-announces and replaces from the expanded row, after confirming', async () => {
