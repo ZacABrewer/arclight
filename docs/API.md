@@ -315,7 +315,7 @@ replacement work list. Contract: `packages/shared/src/profile-migration.ts`.
 | POST | `/profilemigration/profiles/:id/retry` | Failed items back to queued |
 | POST | `/profilemigration/preview` | `{ selection, toProfileId }` -> `ProfileMigrationPreview` (no changes) |
 | POST | `/profilemigration/apply` | Same body; changes the profiles, records `profileChanged` history, returns the preview and the changed ids |
-| GET | `/profilemigration/mismatch` | Paged files that do not meet their profile; `status` (`notAllowed` by default, `upgradeAllowed`; comma list), `mediaType`, `qualityProfileId`, `page`, `pageSize` |
+| GET | `/profilemigration/mismatch` | Paged files that do not meet their profile; `status` (`notAllowed` by default, `upgradeAllowed`; comma list), `mediaType`, `qualityProfileId`, `page`, `pageSize`. Each record carries its work-list row (`migration`: state, attempts, `lastSearchedAt`, `nextSearchAt` retry time, message) and `replacement` `{state, nextSearchAt, maxAttempts}`: whether the file will be replaced (`scheduled`, `downloading`, `failed`, `manualOnly`, `paused`, `globalOff`, `noRule`, `cutoffSearch`, `unmonitored`) and an estimate of the `ProfileMigration` run that searches it (queue order, `searchesPerRun`, the rolling `maxSearchesPerDay`, `retryAfterHours`) |
 | GET | `/profilemigration/items` | Items with at least one file that does not meet its profile (library badges) |
 | POST | `/profilemigration/reevaluate` | Full re-evaluation as a `ProfileFitRefresh` job (202) |
 
@@ -501,6 +501,7 @@ its own feed.
 | DELETE | `/remotepathmapping/:id` | Delete |
 | GET | `/queue` | Paged queue of tracked downloads |
 | GET | `/queue/status` | Queue totals; `diskGuard` `{paused, held, volumes, minimumFreeBytes}`: downloads the disk-space guard paused and grabs it holds |
+| GET | `/queue/summary` | `QueueSummaryItem[]`: one compact row per queue item linked to a series or movie (`id`, `mediaType`, `seriesId`, `episodeIds`, `movieId`, `trackedState`, `trackedStatus`, `status`, `progress`, `eta`, `stateCode`, `stateSeverity`; no titles or paths), for the library's Queued / Downloading / Importing / Failed chips. Read-only for the Library and Activity app areas |
 | GET | `/queue/:id` | One queue item (with `stateCode` / `stateReason` / `stateSeverity`, `stalledSince`, `live` rates and peers) |
 | GET | `/queue/:id/timeline` | What happened to the download (grabbed, paused by the kill switch, stalled, imported, ...), oldest first; kept 30 days, also after it left the queue |
 | DELETE | `/queue/bulk` | Remove several items (body has `ids` and options) |
@@ -941,6 +942,28 @@ release".
 |---|---|---|
 | GET | `/release/decisions` | `DecisionLogQuery`: exactly one of `seriesId`, `episodeId`, `movieId`, plus `page`, `pageSize` (default 10, max 100). `DecisionLogPage` of `DecisionLogBatch` (newest first; rows of the item in rank order; `winnerId` = the grabbed row, else the best approved; `grabbed`). Per episode: rows covering the episode. 400 without (or with several) ids |
 | GET | `/release/decisions/:batchId` | One whole batch (all items); 404 unknown |
+| GET | `/release/searchstatus` | `SearchStatusQuery`: `mediaType` (`episode` or `movie`) and `ids` (comma list, 1–500). `ItemSearchStatus[]` (unknown ids left out): `monitored`, `lastSearch` and `automatic`, below. Read-only for the Library and Wanted app areas; 400 without ids |
+
+**Search status.** Every automatic search (MissingEpisodeSearch, MissingMovieSearch,
+CutoffUnmetSearch, profile migration), user "Search" and interactive search writes one row per
+episode / movie it covered to `release_search_results` (overwritten by the next search; a grab
+does not clear it). `lastSearch` is `{ time, source, outcome, releases, approved, detail }`:
+`source` `automatic` / `manual` / `interactive`; `outcome` `grabbed` (`detail` = release title),
+`pending` (an approved release is held by a delay profile or an unavailable client), `found`
+(approved releases, none grabbed: interactive searches), `rejected` (every release for the item
+was rejected; `detail` = the most common first rejection), `noResults` or `error` (`detail` = the
+message). Releases that matched no library item count for every searched item.
+
+`automatic` is `{ state, job, nextSearchAt, searchCount, runsAhead }`: `scheduled` when the item is
+on the Missing or Cutoff unmet list (`job` names the job); `unmonitored`, `notAvailable` (not aired,
+or not released under its minimum availability), `special` (season 0 is not searched
+automatically), `satisfied` (a file that meets the cutoff) or `jobDisabled` (the job is on demand
+only or switched off). `nextSearchAt` is an estimate that replays the job: its upcoming cron runs
+(two weeks ahead), the per-item back-off (`searchCount` automatic searches without a grab, one
+day each, at most 7; a grab resets it) and the per-run limit (200 missing episodes, 100 missing
+movies, 100 cutoff-unmet episodes and movies per run, in list order); `runsAhead` counts the
+due runs the limit makes the item sit out. Null when no run within two weeks reaches it. RSS sync
+can grab the item at any time in between.
 
 ## scene-mapping
 
@@ -1395,7 +1418,9 @@ of them with `POST /jobs/run`.
 | `GuidesSync` | `17 4 * * *` from `guides.syncIntervalHours` (`17 */N * * *` below a day; on demand only when disabled) | guides | Guide fetch + diff; applies or stores the pending diff per `mode` |
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |
-| `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), least recently searched first |
+| `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |
+| `MissingMovieSearch` | `20 3 * * *` | releases | The same for `GET /wanted/missing/movies`, up to 100 a run |
+| `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), in list order, items past their back-off only, up to 100 episodes and 100 movies a run; `GET /release/searchstatus` estimates the next run per item |
 | `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library, or from the media server when `useMediaServerAvailability` is on (Jellyfin/Emby provider ids, Plex guids, per-season episode counts), completes requests, sends available notifications |
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists (users with a token) and Jellyfin/Emby favourites (linked users); auto-requests when `autoRequestFromWatchlist`, `AUTO_REQUEST*` and the per-type sync flag allow |
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |

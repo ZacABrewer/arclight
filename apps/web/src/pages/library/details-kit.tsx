@@ -1,14 +1,14 @@
 import { useMemo, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
 import { useQuery } from '@tanstack/react-query';
-import type { MediaRequest } from '@arclight/shared';
+import type { MediaRequest, QueueSummaryItem } from '@arclight/shared';
 import { request } from '../../api/client.js';
 import { HistoryPage, historyEventLabel as eventLabel, type HistoryEventType, type HistoryRecord } from '../../api/history.js';
 import { BackdropFrame, Button, Chip, EmptyState, Poster, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { episodeCode, formatDate } from '../../components/media/format.js';
 import { QueryError } from '../../components/media/media-kit.js';
 import { REQUEST_STATUS_META, seasonsLabel } from '../../features/requests/status.js';
-import { useItemHistory, useQueue } from '../../hooks/activity.js';
+import { useItemHistory, useQueueSummary } from '../../hooks/activity.js';
 import { useRefreshMedia, type RefreshTarget } from '../../hooks/library.js';
 import { useTitle } from '../../hooks/requests.js';
 import './library.css';
@@ -89,15 +89,19 @@ export function RefreshButtons({ target }: { target: RefreshTarget }) {
 
 /* ------------------------------------------------------------------ queue progress */
 
-/** Live queue progress (0–1) keyed by episode id, plus the movie's own progress. */
+/**
+ * Queue state of the item from the library-wide queue summary: the download behind each
+ * episode (series) or the movie, for "Queued" / "Downloading 42%" / "Importing" / "Failed"
+ * chips. One shared request (GET /queue/summary) instead of a filtered queue page.
+ */
 export function useQueueProgress(scope: { seriesId: number } | { movieId: number }) {
-  const queue = useQueue('seriesId' in scope ? { seriesId: scope.seriesId, pageSize: 200 } : { mediaType: 'movie', pageSize: 200 });
+  const queue = useQueueSummary();
   return useMemo(() => {
-    const episodes = new Map<number, number>();
-    let movie: number | null = null;
-    for (const item of queue.data?.records ?? []) {
-      if ('seriesId' in scope && item.seriesId === scope.seriesId) for (const id of item.episodeIds ?? []) episodes.set(id, item.progress);
-      if ('movieId' in scope && item.movieId === scope.movieId) movie = item.progress;
+    const episodes = new Map<number, QueueSummaryItem>();
+    let movie: QueueSummaryItem | null = null;
+    for (const item of [...(queue.data ?? [])].sort((a, b) => a.id - b.id)) {
+      if ('seriesId' in scope && item.seriesId === scope.seriesId) for (const id of item.episodeIds ?? []) episodes.set(id, item);
+      if ('movieId' in scope && item.movieId === scope.movieId) movie = item;
     }
     return { episodes, movie };
   }, [queue.data, scope]);

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import type { QualityProfile, RootFolder, Tag } from '@arclight/shared';
+import type { QualityProfile, QueueSummaryItem, RootFolder, Tag } from '@arclight/shared';
 import {
   Button,
   Checkbox,
@@ -28,7 +28,9 @@ import {
 } from '../../arclight/index.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
 import { ProfileMigrationDialog } from '../../components/media/profile-migration-dialog.js';
+import { buildQueueIndex, QueueStateChip } from '../../components/media/pipeline-status.js';
 import { ProfileMismatchBadge } from '../../components/media/profile-fit.js';
+import { useQueueSummary } from '../../hooks/activity.js';
 import { useProfileItemStatuses } from '../../hooks/profile-migration.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
@@ -191,6 +193,14 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
   // Items with files their profile no longer allows (profile migration) get a badge.
   const fit = useProfileItemStatuses();
   const mismatchOf = (row: Pick<LibraryRow, 'kind' | 'id'>) => fit.data?.get(`${row.kind}:${row.id}`)?.notAllowed ?? 0;
+  // Items in the download queue get a Queued / Downloading 42% / Importing / Failed chip.
+  const queue = useQueueSummary();
+  const queueIndex = useMemo(() => buildQueueIndex(queue.data), [queue.data]);
+  const queuedOf = (row: Pick<LibraryRow, 'kind' | 'id'>): QueueSummaryItem[] => {
+    if (row.kind === 'series') return queueIndex.series.get(row.id) ?? [];
+    const item = queueIndex.movies.get(row.id);
+    return item ? [item] : [];
+  };
   const filterCount = activeFilterCount(filters) + (filters.search ? 1 : 0);
   const addLabel = kind === 'series' ? t('library.addSeries') : t('library.addMovie');
   const viewOptions = [
@@ -311,6 +321,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
           profileName={profileName}
           tags={tags.data}
           mismatchOf={mismatchOf}
+          queuedOf={queuedOf}
         />
       ) : view === 'overview' ? (
         <div className="mk-overview">
@@ -324,6 +335,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
               onMonitor={(m) => toggleMonitored(row, m)}
               profileName={profileName}
               mismatch={mismatchOf(row)}
+              queued={queuedOf(row)}
             />
           ))}
         </div>
@@ -334,6 +346,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
           selected={selected}
           onSelect={toggleSelected}
           onMonitor={toggleMonitored}
+          queuedOf={queuedOf}
         />
       ) : (
         <div className="mk-poster-grid" data-testid="library-grid">
@@ -346,6 +359,7 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
               onSelect={() => toggleSelected(row.id)}
               onMonitor={(m) => toggleMonitored(row, m)}
               mismatch={mismatchOf(row)}
+              queued={queuedOf(row)}
             />
           ))}
         </div>
@@ -382,6 +396,7 @@ function LibraryPoster({
   onSelect,
   onMonitor,
   mismatch = 0,
+  queued = [],
 }: {
   row: LibraryRow;
   selectMode: boolean;
@@ -390,6 +405,8 @@ function LibraryPoster({
   onMonitor: (monitored: boolean) => void;
   /** Files the item's profile does not allow. */
   mismatch?: number;
+  /** The item's downloads in the queue. */
+  queued?: readonly QueueSummaryItem[];
 }) {
   const progress = row.total > 0 ? (row.have / row.total) * 100 : 0;
   const card = (
@@ -402,9 +419,10 @@ function LibraryPoster({
       count={countText(row)}
       countTone={progressTone(row) === 'warn' ? 'warn' : 'default'}
       meta={
-        mismatch > 0 ? (
+        mismatch > 0 || queued.length > 0 ? (
           <span className="mk-row" style={{ gap: 6 }}>
-            {rowMeta(row)} <ProfileMismatchBadge count={mismatch} />
+            {rowMeta(row)} {mismatch > 0 ? <ProfileMismatchBadge count={mismatch} /> : null}
+            <QueueStateChip items={queued} />
           </span>
         ) : (
           rowMeta(row)
@@ -444,6 +462,7 @@ function OverviewRow({
   onMonitor,
   profileName,
   mismatch = 0,
+  queued = [],
 }: {
   row: LibraryRow;
   selectMode: boolean;
@@ -452,6 +471,7 @@ function OverviewRow({
   onMonitor: (m: boolean) => void;
   profileName: (id: number) => string;
   mismatch?: number;
+  queued?: readonly QueueSummaryItem[];
 }) {
   const progress = row.total > 0 ? (row.have / row.total) * 100 : 0;
   return (
@@ -469,6 +489,7 @@ function OverviewRow({
           <StatusChip status={row.monitored ? 'monitored' : 'unmonitored'} />
           <span className="al-quality">{profileName(row.qualityProfileId)}</span>
           {mismatch > 0 ? <ProfileMismatchBadge count={mismatch} /> : null}
+          <QueueStateChip items={queued} />
           <span className="mk-muted" style={{ fontSize: 13 }}>
             {rowMeta(row)}
             {STATUS_LABELS[row.status] ? ` · ${STATUS_LABELS[row.status]}` : ''}
@@ -490,12 +511,14 @@ function CollectionsView({
   selected,
   onSelect,
   onMonitor,
+  queuedOf,
 }: {
   rows: LibraryRow[];
   selectMode: boolean;
   selected: ReadonlySet<number>;
   onSelect: (id: number) => void;
   onMonitor: (row: LibraryRow, m: boolean) => void;
+  queuedOf: (row: LibraryRow) => QueueSummaryItem[];
 }) {
   const groups = useMemo(() => groupCollections(rows), [rows]);
   if (groups.length === 0) {
@@ -526,6 +549,7 @@ function CollectionsView({
                 selected={selected.has(row.id)}
                 onSelect={() => onSelect(row.id)}
                 onMonitor={(m) => onMonitor(row, m)}
+                queued={queuedOf(row)}
               />
             ))}
           </div>
@@ -546,6 +570,7 @@ function LibraryTable({
   profileName,
   tags,
   mismatchOf,
+  queuedOf,
 }: {
   rows: LibraryRow[];
   sort: LibrarySort;
@@ -557,6 +582,7 @@ function LibraryTable({
   profileName: (id: number) => string;
   tags: Tag[] | undefined;
   mismatchOf: (row: LibraryRow) => number;
+  queuedOf: (row: LibraryRow) => QueueSummaryItem[];
 }) {
   const isMovie = rows[0]?.kind === 'movie';
   const columns: Column<LibraryRow>[] = [
@@ -577,6 +603,7 @@ function LibraryTable({
           </Link>
           <TagChips ids={r.tags} tags={tags} />
           {mismatchOf(r) > 0 ? <ProfileMismatchBadge count={mismatchOf(r)} /> : null}
+          <QueueStateChip items={queuedOf(r)} />
         </span>
       ),
     },

@@ -5,6 +5,7 @@ import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
+import { searchStatusKeys } from './hooks/search-status.js';
 import { settingsKeys } from './hooks/settings-keys.js';
 import { connectionStore } from './lib/connection.js';
 
@@ -28,6 +29,8 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       // A finished run moves lastRun/nextRun on the schedule board.
       if (event.job.status !== 'running' && event.job.status !== 'queued') {
         void qc.invalidateQueries({ queryKey: queryKeys.jobs.scheduled });
+        // A finished search job moves "last searched" / "next search" lines.
+        void qc.invalidateQueries({ queryKey: searchStatusKeys.all });
       }
       return;
     case 'health':

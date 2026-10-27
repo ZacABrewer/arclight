@@ -8,6 +8,7 @@ import type {
   QueueQueryInput,
   QueueRemoveOptions,
   QueueReplaceRequestInput,
+  QueueSummaryItem,
 } from '@arclight/shared';
 import { blocklistApi } from '../api/blocklist.js';
 import { historyApi, type HistoryFilter } from '../api/history.js';
@@ -42,6 +43,26 @@ export function useQueue(query: Partial<QueueQueryInput>) {
 /** A download's timeline; `download` events refresh it live (see live.ts). */
 export function useQueueTimeline(id: number, enabled = true) {
   return useQuery({ queryKey: activityKeys.queueTimeline(id), queryFn: () => queueApi.timeline(id), enabled, retry: false });
+}
+
+/** True when a summarised download is transferring, so library badges poll faster. */
+export function summaryHasActiveDownloads(items: readonly QueueSummaryItem[] | undefined): boolean {
+  return (items ?? []).some((i) => i.trackedState === 'downloading' && i.status === 'downloading');
+}
+
+/**
+ * Queue state of every library-linked download, one small request for a whole library page.
+ * Queue events invalidate ['queue'] (live.ts); the poll is a safety net: 5 s while something
+ * downloads (the percentage moves), 30 s otherwise, paused while the tab is hidden.
+ */
+export function useQueueSummary(enabled = true) {
+  return useQuery({
+    queryKey: activityKeys.queueSummary,
+    queryFn: queueApi.summary,
+    enabled,
+    retry: false,
+    refetchInterval: (q) => (summaryHasActiveDownloads(q.state.data) ? 5_000 : 30_000),
+  });
 }
 
 export function useQueueStatus() {

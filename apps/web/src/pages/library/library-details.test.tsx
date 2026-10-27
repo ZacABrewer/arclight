@@ -96,10 +96,27 @@ const historyRow = (over: Record<string, unknown>) => ({
   ...over,
 });
 let calls: Array<{ url: string; method: string; body: unknown }> = [];
+let queueSummary: unknown[] = [];
+const HOUR = 3_600_000;
+/** Searched 2 h ago (nothing found); the scheduled search comes back in about 5 h. */
+const searchStatusOf = (mediaType: string, id: number) => ({
+  mediaType,
+  id,
+  monitored: true,
+  lastSearch: { time: new Date(Date.now() - 2 * HOUR).toISOString(), source: 'automatic', outcome: 'noResults', releases: 0, approved: 0, detail: null },
+  automatic: {
+    state: 'scheduled',
+    job: mediaType === 'movie' ? 'MissingMovieSearch' : 'MissingEpisodeSearch',
+    nextSearchAt: new Date(Date.now() + 5 * HOUR + 60_000).toISOString(),
+    searchCount: 1,
+    runsAhead: 0,
+  },
+});
 
 beforeEach(() => {
   localStorage.clear();
   calls = [];
+  queueSummary = [];
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
@@ -108,6 +125,11 @@ beforeEach(() => {
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       const path = url.split('?')[0];
       if (method === 'POST' && path === '/api/v1/command/refresh') return new Response(JSON.stringify(refreshJob), { status: 202 });
+      if (path === '/api/v1/release/searchstatus') {
+        const params = new URL(url, 'http://localhost').searchParams;
+        const ids = (params.get('ids') ?? '').split(',').map(Number);
+        return new Response(JSON.stringify(ids.map((id) => searchStatusOf(params.get('mediaType') ?? 'episode', id))), { status: 200 });
+      }
       const routes: Record<string, unknown> = {
         '/api/v1/history/series': [
           historyRow({ id: 2, eventType: 'downloadFolderImported', date: '2026-10-20T09:00:00.000Z', episode: { id: 2, seriesId: 1, seasonNumber: 1, episodeNumber: 2, title: 'Half Loop', airDate: null } }),
@@ -121,6 +143,7 @@ beforeEach(() => {
         '/api/v1/tag': [],
         '/api/v1/qualityprofile': [{ id: 1, name: 'UHD-2160' }],
         '/api/v1/rootfolder': [],
+        '/api/v1/queue/summary': queueSummary,
       };
       const body = path ? routes[path] : undefined;
       return body === undefined
@@ -172,6 +195,23 @@ describe('series details (Page 03)', () => {
     const chips = within(table).getAllByText(/^(Downloaded|Missing|Unaired)$/).map((c) => c.textContent);
     expect(chips.sort()).toEqual(['Downloaded', 'Missing', 'Unaired']);
     expect(within(table).getByText('Missing').getAttribute('data-status')).toBe('missing');
+  });
+
+  it('says when missing episodes are searched next, and shows queued ones as such', async () => {
+    queueSummary = [{ id: 8, mediaType: 'series', seriesId: 1, episodeIds: [1], trackedState: 'importing', trackedStatus: 'ok', status: 'completed', progress: 1 }];
+    renderAt('/library/series/1');
+    const table = await screen.findByRole('table', { name: 'Season 1 episodes' });
+    expect((await screen.findByTestId('season-search')).textContent).toBe('1 missing episode · Next automatic search ~in 5h');
+    // Only the missing (wanted) episode is asked about.
+    expect(calls.find((c) => c.url.startsWith('/api/v1/release/searchstatus?'))?.url).toMatch(/[?&]ids=2$/);
+    expect(await within(table).findByText('Importing')).toBeTruthy();
+    const hero = screen.getByRole('region', { name: 'Series overview' });
+    expect(within(hero).getByTestId('queue-state').textContent).toBe('Importing');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Half Loop' }));
+    const drawer = await screen.findByRole('dialog', { name: 'S01E02 · Half Loop' });
+    expect(await within(drawer).findByText('Last searched 2h ago · nothing found')).toBeTruthy();
+    expect(within(drawer).getByText('Next automatic search ~in 5h')).toBeTruthy();
   });
 
   it('opens the episode drawer with file info', async () => {
@@ -270,6 +310,16 @@ describe('movie details', () => {
     expect(within(hero).getByRole('link', { name: 'Dune Collection' })).toBeTruthy();
     expect(within(hero).getByText('Missing').getAttribute('data-status')).toBe('missing');
     await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Files0', 'History', 'Decisions', 'Search', 'Subtitles', 'Requests']));
+  });
+
+  it('shows the last and next automatic search, and the download once it is queued', async () => {
+    queueSummary = [{ id: 9, mediaType: 'movie', movieId: 7, trackedState: 'downloading', trackedStatus: 'ok', status: 'downloading', progress: 0.42 }];
+    renderAt('/library/movie/7');
+    const hero = await screen.findByRole('region', { name: 'Movie overview' });
+    expect(await within(hero).findByText('Downloading 42%')).toBeTruthy();
+    expect(within(hero).queryByText('Missing')).toBeNull();
+    expect(await within(hero).findByText('Last searched 2h ago · nothing found')).toBeTruthy();
+    expect(within(hero).getByText('Next automatic search ~in 5h')).toBeTruthy();
   });
 });
 

@@ -20,6 +20,7 @@ import { profilesApi } from '../api/profiles.js';
 import { useToast as useToastStore } from '../components/toast.js';
 import { upsertJob } from '../live.js';
 import { libraryKeys } from './library-keys.js';
+import { searchStatusKeys } from './search-status.js';
 import { t } from '../i18n/index.js';
 
 // ---------------------------------------------------------------------------------------
@@ -374,9 +375,12 @@ export type ReleaseSearchTarget = { episodeId: number } | { seriesId: number; se
 /** Automatic search: POST /command/search. Reports the outcome as a toast. */
 export function useAutomaticSearch() {
   const toast = useToastStore();
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: SearchCommandRequest) => libraryApi.command.search(body).catch(notYet(t('hooks.library.automaticSearch'))),
     meta: { errorTitle: t('common.searchFailed') },
+    // "Last searched" lines change even when nothing was grabbed (no release event then).
+    onSettled: () => void qc.invalidateQueries({ queryKey: searchStatusKeys.all }),
     onSuccess: (r) =>
       toast.push({
         tone: r.grabbed.length > 0 ? 'ok' : 'info',
