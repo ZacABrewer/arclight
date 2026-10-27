@@ -1,5 +1,6 @@
 import { randomInt } from 'node:crypto';
 import { Duplex } from 'node:stream';
+import { copyExact } from '../buffers.js';
 import type { PeerAddress } from '../compact.js';
 import { TorrentEngineError } from '../errors.js';
 import {
@@ -426,7 +427,7 @@ export class UtpSocket extends Duplex {
         this.deliver(next, q.type, q.payload);
       }
     } else if (d < MAX_OUT_OF_ORDER && !this.ooo.has(p.seq)) {
-      this.ooo.set(p.seq, { type: p.type, payload: Buffer.from(p.payload) });
+      this.ooo.set(p.seq, { type: p.type, payload: copyExact(p.payload) });
       this.oooBytes += p.payload.length;
     }
     // ack every second packet at once, out-of-order arrivals immediately (for fast retransmit)
@@ -444,7 +445,7 @@ export class UtpSocket extends Duplex {
       this.push(null);
       return;
     }
-    if (payload.length > 0) this.push(Buffer.from(payload));
+    if (payload.length > 0) this.push(copyExact(payload));
   }
 
   private onAck(p: UtpPacket): void {

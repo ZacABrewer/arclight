@@ -2,12 +2,21 @@ import { createHash } from 'node:crypto';
 import { copyFile, type FileHandle, mkdir, open, readdir, rename, rm, rmdir, stat, unlink } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 import { Bitfield } from '../bitfield.js';
+import { copyExact, ownsBacking } from '../buffers.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
 import type { TorrentFileEntry } from '../metainfo.js';
 import { type FileSpan, PieceLayout } from './layout.js';
 
 /** Pieces re-hashed per file when resuming a file written to after the last resume save. */
 const RESUME_SPOT_CHECKS = 4;
+/** Disk reads per step when hashing a piece that is not (fully) in the cache. */
+const VERIFY_CHUNK = 256 * 1024;
+/**
+ * Bytes of received blocks waiting for disk before the torrent stops requesting more. Without a
+ * bound a download faster than the disk (spinning NAS disks, a parallel recheck) queued writes
+ * without limit and the process ran out of memory.
+ */
+export const WRITE_BACKLOG_MAX = 32 * 1024 * 1024;
 
 export interface StorageTorrent {
   infoHashHex: string;
@@ -30,6 +39,8 @@ export interface StorageOptions {
   maxOpenFiles?: number;
   /** `sparse` sets the final file size on creation (sparse on most filesystems). */
   preallocate?: 'sparse' | 'none';
+  /** Called when queued writes fall back under half of WRITE_BACKLOG_MAX after being over it. */
+  onWriteDrain?: () => void;
 }
 
 interface CachedPiece {
@@ -206,6 +217,18 @@ export class Storage {
   }
 
   private readonly pendingWrites = new Map<number, Promise<void>>();
+  private queuedWriteBytes = 0;
+  private writeBlocked = false;
+
+  /** Bytes received but not yet on disk. */
+  get writeBacklog(): number {
+    return this.queuedWriteBytes;
+  }
+
+  /** True while the write backlog is over WRITE_BACKLOG_MAX (until it drains to half). */
+  get writeBackpressure(): boolean {
+    return this.writeBlocked;
+  }
 
   /**
    * Writes a block to disk (write-through) and keeps it in the cache for hashing. Writes to
@@ -216,13 +239,20 @@ export class Storage {
     if (!this.layout.isValidBlock(piece, begin, data.length))
       return Promise.reject(new TorrentEngineError('storage', `invalid block ${piece}:${begin}:${data.length}`));
     this.cacheBlock(piece, begin, data);
+    this.queuedWriteBytes += data.length;
+    if (this.queuedWriteBytes > WRITE_BACKLOG_MAX) this.writeBlocked = true;
     const prev = this.pendingWrites.get(piece) ?? Promise.resolve();
     const p = prev.catch(() => {}).then(() => this.doWrite(piece, begin, data));
     this.pendingWrites.set(piece, p);
-    void p.then(
-      () => this.pendingWrites.get(piece) === p && this.pendingWrites.delete(piece),
-      () => this.pendingWrites.get(piece) === p && this.pendingWrites.delete(piece),
-    );
+    const settled = (): void => {
+      if (this.pendingWrites.get(piece) === p) this.pendingWrites.delete(piece);
+      this.queuedWriteBytes -= data.length;
+      if (this.writeBlocked && this.queuedWriteBytes <= WRITE_BACKLOG_MAX / 2) {
+        this.writeBlocked = false;
+        this.opts.onWriteDrain?.();
+      }
+    };
+    void p.then(settled, settled);
     return p;
   }
 
@@ -242,9 +272,9 @@ export class Storage {
   }
 
   private cacheBlock(piece: number, begin: number, data: Buffer): void {
-    // A received block is a slice of the socket's 64 KiB read chunk; caching the slice would pin
-    // the whole chunk (4x the block) for as long as the piece stays unfinished. Keep a copy.
-    if (data.byteOffset !== 0 || data.buffer.byteLength !== data.length) data = Buffer.from(data);
+    // A block that shares its backing store (a socket read chunk, a pool slab) would pin all of
+    // it for as long as the piece stays unfinished. Keep an exactly-sized copy.
+    if (!ownsBacking(data)) data = copyExact(data);
     let entry = this.cache.get(piece);
     if (entry) this.cache.delete(piece);
     else entry = { blocks: new Map(), bytes: 0 };
@@ -290,19 +320,27 @@ export class Storage {
     const cached = this.cache.get(piece)?.blocks.get(begin);
     if (cached && cached.length === length) return cached;
     const out = Buffer.alloc(length);
+    await this.readInto(out, 0, piece, begin, length);
+    return out;
+  }
+
+  /** Reads `length` bytes of a piece from disk into `out` at `at`. Missing data throws. */
+  private async readInto(out: Buffer, at: number, piece: number, begin: number, length: number): Promise<void> {
     for (const s of this.layout.pieceSpans(piece, begin, length)) {
-      if (s.file.padding) continue;
+      if (s.file.padding) {
+        out.fill(0, at + s.rangeOffset, at + s.rangeOffset + s.length);
+        continue;
+      }
       const t = this.spanTarget(s);
       const h = await this.acquire(t.path, null, false);
       if (!h) throw new TorrentEngineError('storage', `file missing: ${t.path}`);
       try {
-        const { bytesRead } = await h.fh.read(out, s.rangeOffset, s.length, t.position);
+        const { bytesRead } = await h.fh.read(out, at + s.rangeOffset, s.length, t.position);
         if (bytesRead < s.length) throw new TorrentEngineError('storage', `short read from ${t.path}`);
       } finally {
         this.release(h);
       }
     }
-    return out;
   }
 
   /** Hashes a piece (from cache when complete there, otherwise from disk). */
@@ -316,22 +354,34 @@ export class Storage {
       return false;
     }
     const size = this.layout.pieceSize(piece);
-    let data: Buffer | null = null;
+    // Hashed block by block (cache) or in reused 256 KiB reads (disk): never a piece-sized
+    // allocation, which at large piece sizes was most of the engine's garbage.
+    let digest: Buffer | null = null;
     const e = this.cache.get(piece);
     if (e && e.bytes === size) {
       const parts = [...e.blocks.entries()].sort((a, b) => a[0] - b[0]);
       let pos = 0;
-      if (parts.every(([b, d]) => (b === pos ? ((pos += d.length), true) : false)) && pos === size)
-        data = Buffer.concat(parts.map(([, d]) => d));
+      if (parts.every(([b, d]) => (b === pos ? ((pos += d.length), true) : false)) && pos === size) {
+        const h = createHash('sha1');
+        for (const [, d] of parts) h.update(d);
+        digest = h.digest();
+      }
     }
-    if (!data) {
+    if (!digest) {
       try {
-        data = await this.read(piece, 0, size);
+        const h = createHash('sha1');
+        const chunk = Buffer.allocUnsafeSlow(Math.min(size, VERIFY_CHUNK));
+        for (let off = 0; off < size; off += chunk.length) {
+          const n = Math.min(chunk.length, size - off);
+          await this.readInto(chunk, 0, piece, off, n);
+          h.update(n === chunk.length ? chunk : chunk.subarray(0, n));
+        }
+        digest = h.digest();
       } catch {
         return false;
       }
     }
-    const ok = createHash('sha1').update(data).digest().equals(expected);
+    const ok = digest.equals(expected);
     // The cache only holds a piece until it is hashed: kept afterwards, every torrent pinned up
     // to cacheBytes of finished data for good. Uploads read from disk (the OS caches hot data).
     this.dropCache(piece);

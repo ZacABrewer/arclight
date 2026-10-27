@@ -386,6 +386,9 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const opts: ConstructorParameters<typeof Storage>[1] = {
       savePath: this.savePathValue,
       cacheBytes: settings.cacheBytesPerTorrent,
+      onWriteDrain: () => {
+        for (const p of this.peers.values()) this.requestBlocks(p);
+      },
     };
     if (this.filePriorities) opts.filePriorities = this.filePriorities;
     if (settings.incompleteExtension) opts.incompleteExtension = settings.incompleteExtension;
@@ -913,6 +916,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   private requestBlocks(p: PeerInfo): void {
     const picker = this.picker;
     if (!picker || this.checking || this.moving || !this.networking) return;
+    // the disk is behind: blocks already requested still arrive, new ones wait for the drain
+    if (this.storage?.writeBackpressure) return;
     const conn = p.conn;
     if (conn.isClosed || conn.peerChoking || !conn.amInterested || this.isComplete) return;
     const depth = conn.isSnubbed() ? 1 : conn.desiredQueueDepth;

@@ -9,7 +9,7 @@ import { parseTorrent, type Metainfo } from '../metainfo.js';
 import { BLOCK_SIZE } from '../peer/messages.js';
 import { PieceLayout } from './layout.js';
 import { deleteResumeData, listResumeData, loadResumeData, saveResumeData, type ResumeData } from './resume.js';
-import { Storage } from './storage.js';
+import { Storage, WRITE_BACKLOG_MAX } from './storage.js';
 
 const dirs: string[] = [];
 afterEach(async () => {
@@ -95,6 +95,37 @@ describe('Storage', () => {
     expect(cached.buffer.byteLength).toBe(BLOCK_SIZE);
     s.releaseCache();
     expect(s.cachedBytes).toBe(0);
+    await s.close();
+  });
+
+  it('caches an exact copy of a block that lives in a shared pool slab', async () => {
+    const dir = await tmp();
+    const { meta } = fixture();
+    const s = new Storage(meta, { savePath: dir });
+    const block = Buffer.from(randomBytes(BLOCK_SIZE)); // Buffer.from copies may share a 64 KiB slab
+    await s.writeBlock(0, 0, block);
+    const cached = (s as unknown as { cache: Map<number, { blocks: Map<number, Buffer> }> }).cache.get(0)!.blocks.get(0)!;
+    expect(cached.equals(block)).toBe(true);
+    expect(cached.buffer.byteLength).toBe(BLOCK_SIZE);
+    await s.close();
+  });
+
+  it('signals backpressure while writes queue up and calls back once they drain', async () => {
+    const dir = await tmp();
+    const { meta } = fixture();
+    let drained = 0;
+    const s = new Storage(meta, { savePath: dir, onWriteDrain: () => drained++ });
+    const block = randomBytes(BLOCK_SIZE);
+    const writes: Promise<void>[] = [];
+    const n = Math.ceil(WRITE_BACKLOG_MAX / BLOCK_SIZE) + 1;
+    for (let i = 0; i < n; i++) writes.push(s.writeBlock(0, 0, block));
+    expect(s.writeBacklog).toBe(n * BLOCK_SIZE);
+    expect(s.writeBackpressure).toBe(true);
+    await Promise.all(writes);
+    await new Promise((r) => setImmediate(r));
+    expect(s.writeBacklog).toBe(0);
+    expect(s.writeBackpressure).toBe(false);
+    expect(drained).toBe(1);
     await s.close();
   });
 

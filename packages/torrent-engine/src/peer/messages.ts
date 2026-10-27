@@ -1,3 +1,4 @@
+import { copyExact } from '../buffers.js';
 import { TorrentEngineError } from '../errors.js';
 
 export const PROTOCOL = Buffer.from('BitTorrent protocol', 'latin1');
@@ -177,34 +178,66 @@ export function decodeMessage(id: number, payload: Buffer): WireMessage {
   }
 }
 
-/** Incremental length-prefixed message parser. */
+const EMPTY = Buffer.alloc(0);
+const IDLE_KEEP = 64 * 1024;
+
+/**
+ * Incremental length-prefixed message parser. Received bytes are copied into one reusable
+ * buffer per connection (no Buffer.concat per socket chunk), and each message gets its own
+ * exactly-sized copy, so a block never pins the receive buffer and the only garbage is what the
+ * caller drops. At download speed this keeps allocation close to the data rate.
+ */
 export class MessageReader {
-  private buf: Buffer = Buffer.alloc(0);
+  private buf: Buffer = EMPTY;
+  private len = 0;
 
   constructor(private readonly maxLength = BLOCK_SIZE * 8 + 13) {}
 
   push(chunk: Buffer): WireMessage[] {
-    this.buf = this.buf.length === 0 ? chunk : Buffer.concat([this.buf, chunk]);
+    this.append(chunk);
     const out: WireMessage[] = [];
     let off = 0;
-    while (this.buf.length - off >= 4) {
+    while (this.len - off >= 4) {
       const len = this.buf.readUInt32BE(off);
       if (len > this.maxLength) throw new TorrentEngineError('peer', `message length ${len} exceeds limit`);
-      if (this.buf.length - off < 4 + len) break;
+      if (this.len - off < 4 + len) break;
       if (len === 0) out.push({ type: 'keepAlive' });
       else {
         const id = this.buf[off + 4] as number;
-        // copy so the payload does not pin the whole receive buffer
-        const payload = Buffer.from(this.buf.subarray(off + 5, off + 4 + len));
-        out.push(decodeMessage(id, payload));
+        if (id === MSG.piece && len >= 9) {
+          // the block alone, in its own allocation: storage caches it as is
+          const data = Buffer.allocUnsafeSlow(len - 9);
+          this.buf.copy(data, 0, off + 13, off + 4 + len);
+          out.push({ type: 'piece', index: this.buf.readUInt32BE(off + 5), begin: this.buf.readUInt32BE(off + 9), data });
+        } else {
+          // small control messages are short-lived (pool copy); larger ones (bitfields, metadata) are kept
+          const body = this.buf.subarray(off + 5, off + 4 + len);
+          out.push(decodeMessage(id, len > 1024 ? copyExact(body) : Buffer.from(body)));
+        }
       }
       off += 4 + len;
     }
-    this.buf = off === this.buf.length ? Buffer.alloc(0) : this.buf.subarray(off);
+    if (off > 0) {
+      this.buf.copyWithin(0, off, this.len);
+      this.len -= off;
+    }
+    // drop a grown buffer once drained so idle peers hold nothing
+    if (this.len === 0 && this.buf.length > IDLE_KEEP) this.buf = EMPTY;
     return out;
   }
 
+  private append(chunk: Buffer): void {
+    const need = this.len + chunk.length;
+    if (need > this.buf.length) {
+      const next = Buffer.allocUnsafeSlow(Math.max(need, Math.min(this.buf.length * 2, this.maxLength + 4 + 65536), 4096));
+      this.buf.copy(next, 0, 0, this.len);
+      this.buf = next;
+    }
+    chunk.copy(this.buf, this.len);
+    this.len = need;
+  }
+
   get buffered(): number {
-    return this.buf.length;
+    return this.len;
   }
 }

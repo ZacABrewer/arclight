@@ -93,6 +93,24 @@ describe('wire messages', () => {
     expect(r.buffered).toBe(0);
   });
 
+  it('hands out each block in its own exactly-sized buffer, whatever the chunking', () => {
+    const blocks = [0, 1, 2, 3].map(() => Buffer.alloc(16384, 7));
+    const stream = Buffer.concat(blocks.map((b, i) => encode.piece(2, i * 16384, b)));
+    const r = new MessageReader();
+    const out = [];
+    for (let i = 0; i < stream.length; i += 65536) out.push(...r.push(Buffer.from(stream.subarray(i, i + 65536))));
+    expect(out).toHaveLength(4);
+    for (const [i, m] of out.entries()) {
+      expect(m).toMatchObject({ type: 'piece', index: 2, begin: i * 16384 });
+      const data = (m as { data: Buffer }).data;
+      expect(data.equals(blocks[i] as Buffer)).toBe(true);
+      // never a view into the receive buffer or a shared pool slab
+      expect(data.byteOffset).toBe(0);
+      expect(data.buffer.byteLength).toBe(16384);
+    }
+    expect(r.buffered).toBe(0);
+  });
+
   it('rejects oversized and malformed messages', () => {
     const big = Buffer.alloc(4);
     big.writeUInt32BE(10_000_000);
