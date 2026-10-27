@@ -71,6 +71,8 @@ describe('Diffie-Hellman', () => {
     expect(s1.length).toBe(96);
     expect(s1.equals(s2)).toBe(true);
     expect(MSE_PRIME.toString(16).length).toBe(192);
+    // the MSE spec's prime, not the first Oakley group's (which ends ...A63A3620FFFFFFFFFFFFFFFF)
+    expect(MSE_PRIME.toString(16).toUpperCase().endsWith('A63A36210000000000090563')).toBe(true);
   });
 
   it('rejects degenerate public keys', () => {

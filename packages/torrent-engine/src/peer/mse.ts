@@ -19,9 +19,13 @@ import { Duplex } from 'node:stream';
 import { TorrentEngineError } from '../errors.js';
 import { RC4 } from './rc4.js';
 
-/** The 768-bit safe prime MSE uses (the first Oakley group). */
+/**
+ * The 768-bit prime the MSE specification defines. It shares its leading digits with the first
+ * Oakley group but is a different number (it ends ...A36210000000000090563); using the Oakley
+ * prime gave every real client a different shared secret, so every encrypted handshake failed.
+ */
 export const MSE_PRIME = BigInt(
-  '0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A63A3620FFFFFFFFFFFFFFFF',
+  '0xFFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A63A36210000000000090563',
 );
 export const MSE_GENERATOR = 2n;
 export const MSE_KEY_BYTES = 96;
