@@ -357,6 +357,13 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   // ---- lifecycle ------------------------------------------------------------------------------
 
+  /** Shows the torrent as checking while it waits its turn for `init` (restored at startup). */
+  markCheckPending(): void {
+    if (!this.metainfo || this.storage) return;
+    this.checking = true;
+    this.updateState();
+  }
+
   /** Prepares storage and checks existing data (fast-resume when the saved state still matches). */
   async init(resume?: ResumeData): Promise<void> {
     if (!this.metainfo) {

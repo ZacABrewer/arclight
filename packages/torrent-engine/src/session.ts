@@ -96,6 +96,8 @@ export interface SessionStats {
   listenAddress: string | null;
 }
 
+/** Restored torrents whose data is checked at the same time (see `restore`). */
+const RESTORE_CHECKS = 2;
 const PEER_ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 export function generatePeerId(prefix: string): Buffer {
@@ -143,6 +145,8 @@ export class Session extends EventEmitter<SessionEvents> {
   private queueScheduled = false;
   private resumeTimer: NodeJS.Timeout | undefined;
   private started = false;
+  /** Restored torrents still being checked in the background (see `whenRestored`). */
+  private restoring: Promise<void> = Promise.resolve();
   private stopping = false;
   private boundPort = 0;
 
@@ -198,9 +202,17 @@ export class Session extends EventEmitter<SessionEvents> {
     if (this.started) return;
     this.started = true;
     await this.openSockets(this.settingsValue.listenPort, this.settingsValue.listenAddress);
-    if (this.settingsValue.resumeDataDir) await this.restore();
+    // Restored torrents are registered right away; checking their data (a full hash when the
+    // fast-resume state no longer matches, hours for a large library) runs in the background so
+    // the session is up, and the other torrents run, in the meantime.
+    if (this.settingsValue.resumeDataDir) this.restoring = (await this.restore()).checked;
     this.scheduleResumeSaves();
     this.scheduleQueue();
+  }
+
+  /** Resolves once every torrent restored by `start` has finished checking its data. */
+  whenRestored(): Promise<void> {
+    return this.restoring;
   }
 
   private findInfoHashByReq2(req2: Buffer): Buffer | null {
@@ -349,8 +361,7 @@ export class Session extends EventEmitter<SessionEvents> {
 
   // ---- adding and removing ---------------------------------------------------------------------
 
-  /** Adds a torrent from .torrent bytes or a magnet URI. Throws `TorrentEngineError('session')` on duplicates. */
-  async addTorrent(input: AddTorrentOptions, resume?: ResumeData): Promise<Torrent> {
+  private torrentInit(input: AddTorrentOptions, resume?: ResumeData): TorrentInit {
     if (!input.torrent === !input.magnet) throw new TorrentEngineError('session', 'pass exactly one of torrent or magnet');
     let meta: Metainfo | null = null;
     let magnet: MagnetLink | null = null;
@@ -383,6 +394,20 @@ export class Session extends EventEmitter<SessionEvents> {
       peerUploadLimit: input.peerUploadLimit ?? resume?.peerUploadLimit ?? 0,
       peerDownloadLimit: input.peerDownloadLimit ?? resume?.peerDownloadLimit ?? 0,
     };
+    return init;
+  }
+
+  /** Adds a torrent from .torrent bytes or a magnet URI. Throws `TorrentEngineError('session')` on duplicates. */
+  async addTorrent(input: AddTorrentOptions, resume?: ResumeData): Promise<Torrent> {
+    const t = this.register(input, resume);
+    await this.activate(t, resume);
+    return t;
+  }
+
+  /** Creates the torrent and makes it visible; `activate` then checks its data. */
+  private register(input: AddTorrentOptions, resume?: ResumeData): Torrent {
+    const init = this.torrentInit(input, resume);
+    const id = init.infoHash.toString('hex');
     const t = new Torrent(this.context(), init);
     if (input.magnet) t.magnetUri = input.magnet;
     t.queuePosition = this.nextQueuePosition++;
@@ -392,10 +417,13 @@ export class Session extends EventEmitter<SessionEvents> {
     this.wire(t);
     if (input.peers) t.addPeers(input.peers, 'manual');
     this.emit('torrentAdded', t);
+    return t;
+  }
+
+  private async activate(t: Torrent, resume?: ResumeData): Promise<void> {
     await t.init(resume);
     this.scheduleQueue();
     await this.saveResumeData(t);
-    return t;
   }
 
   private wire(t: Torrent): void {
@@ -602,6 +630,8 @@ export class Session extends EventEmitter<SessionEvents> {
   async saveResumeData(t: Torrent): Promise<void> {
     const dir = this.settingsValue.resumeDataDir;
     if (!dir || !this.torrentsById.has(t.infoHashHex)) return;
+    // Mid-check the bitfield is partial (or empty while waiting); keep the last good file.
+    if (t.state === 'checking') return;
     try {
       await saveResumeData(dir, await t.resumeData(), this.torrentFiles.get(t.infoHashHex));
     } catch (err) {
@@ -613,7 +643,9 @@ export class Session extends EventEmitter<SessionEvents> {
     for (const t of this.torrentsById.values()) await this.saveResumeData(t);
   }
 
-  private async restore(): Promise<void> {
+  /** Registers every saved torrent; returns the background checks (see `start`). */
+  private async restore(): Promise<{ checked: Promise<void> }> {
+    const pending: { t: Torrent; r: ResumeData }[] = [];
     const dir = this.settingsValue.resumeDataDir as string;
     const records: ResumeData[] = [];
     for (const id of await listResumeData(dir)) {
@@ -649,11 +681,24 @@ export class Session extends EventEmitter<SessionEvents> {
       else if (r.magnet) input.magnet = r.magnet;
       else continue;
       try {
-        await this.addTorrent(input, r);
+        const t = this.register(input, r);
+        t.markCheckPending();
+        pending.push({ t, r });
       } catch (err) {
         this.emit('warning', `restoring ${id} failed: ${errorMessage(err)}`);
       }
     }
+    // Check RESTORE_CHECKS at a time: fast-resume takes milliseconds, a full recheck reads every
+    // byte, and several at once only make the disk seek.
+    const next = async (): Promise<void> => {
+      for (let job = pending.shift(); job && !this.stopping; job = pending.shift()) {
+        const { t, r } = job;
+        if (!this.torrentsById.has(t.infoHashHex)) continue;
+        await this.activate(t, r).catch((err: unknown) => this.emit('warning', `restoring ${t.infoHashHex} failed: ${errorMessage(err)}`));
+      }
+    };
+    // Wrapped so `start` can return without awaiting it (awaiting a promise of a promise waits for both).
+    return { checked: Promise.all(Array.from({ length: RESTORE_CHECKS }, next)).then(() => undefined) };
   }
 
   // ---- events helpers ---------------------------------------------------------------------------

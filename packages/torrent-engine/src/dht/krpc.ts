@@ -69,13 +69,18 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
     const sock = this.opts.socketFactory ? this.opts.socketFactory() : this.opts.family === 6
         ? dgram.createSocket({ type: 'udp6', ipv6Only: true, reuseAddr: false })
         : dgram.createSocket({ type: 'udp4', reuseAddr: false });
-    await new Promise<void>((resolve, reject) => {
-      sock.once('error', reject);
-      sock.bind({ port, ...(address ? { address } : {}) }, () => {
-        sock.off('error', reject);
-        resolve();
+    try {
+      await new Promise<void>((resolve, reject) => {
+        sock.once('error', reject);
+        sock.bind({ port, ...(address ? { address } : {}) }, () => {
+          sock.off('error', reject);
+          resolve();
+        });
       });
-    });
+    } catch (err) {
+      sock.close();
+      throw err;
+    }
     sock.on('message', (msg, rinfo) => {
       // uTP shares this socket; KRPC messages are bencoded dictionaries
       if (msg[0] !== 0x64) return;

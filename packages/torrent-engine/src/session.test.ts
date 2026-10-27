@@ -258,6 +258,26 @@ describe('Session management', () => {
     expect(restored[0]!.getStats().piecesHave).toBe(meta.pieceCount - 1);
   });
 
+  it('starts without waiting for restored torrents to finish checking', async () => {
+    const resumeDir = await tmp();
+    const { seedDir, meta, seeder } = await seedSetup(undefined, { resumeDataDir: resumeDir });
+    await seeder.shutdown();
+    // A resume file that no longer matches forces a full re-check on the next start.
+    const file = join(resumeDir, `${meta.infoHashHex}.resume.json`);
+    const saved = JSON.parse(await readFile(file, 'utf8')) as { pieceCount: number };
+    await writeFile(file, JSON.stringify({ ...saved, pieceCount: saved.pieceCount + 1 }));
+    const before = await readFile(file, 'utf8');
+    const s2 = await session({ savePath: seedDir, resumeDataDir: resumeDir });
+    const [t] = s2.getTorrents();
+    expect(t?.state).toBe('checking');
+    // Saving mid-check keeps the last file instead of writing a partial bitfield.
+    await s2.saveAllResumeData();
+    expect(await readFile(file, 'utf8')).toBe(before);
+    await s2.whenRestored();
+    expect(t?.state).toBe('seeding');
+    expect(t?.getStats().piecesHave).toBe(meta.pieceCount);
+  });
+
   it('rebinds the listener at runtime and changes the listen port', async () => {
     const s = await session({ savePath: await tmp() });
     const before = s.listenPort;
