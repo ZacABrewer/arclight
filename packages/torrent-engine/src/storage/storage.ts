@@ -242,6 +242,9 @@ export class Storage {
   }
 
   private cacheBlock(piece: number, begin: number, data: Buffer): void {
+    // A received block is a slice of the socket's 64 KiB read chunk; caching the slice would pin
+    // the whole chunk (4x the block) for as long as the piece stays unfinished. Keep a copy.
+    if (data.byteOffset !== 0 || data.buffer.byteLength !== data.length) data = Buffer.from(data);
     let entry = this.cache.get(piece);
     if (entry) this.cache.delete(piece);
     else entry = { blocks: new Map(), bytes: 0 };
@@ -267,6 +270,15 @@ export class Storage {
     if (!e) return;
     this.cache.delete(piece);
     this.cacheSize -= e.bytes;
+  }
+
+  /**
+   * Drops every cached block (the torrent stopped). Safe at any time: blocks are written
+   * through to disk, and a piece not complete in the cache is verified from disk.
+   */
+  releaseCache(): void {
+    this.cache.clear();
+    this.cacheSize = 0;
   }
 
   get cachedBytes(): number {

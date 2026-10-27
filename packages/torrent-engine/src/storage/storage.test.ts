@@ -83,6 +83,21 @@ describe('Storage', () => {
     expect((await readFile(join(dir, 'pack', 'sub', 'f3.bin'))).equals(files[3]!)).toBe(true);
   });
 
+  it('caches a copy of a block, not the larger read buffer it arrived in', async () => {
+    const dir = await tmp();
+    const { meta } = fixture();
+    const s = new Storage(meta, { savePath: dir });
+    const chunk = randomBytes(BLOCK_SIZE * 4); // what a socket read hands over
+    const block = chunk.subarray(5, 5 + BLOCK_SIZE);
+    await s.writeBlock(0, 0, block);
+    const cached = (s as unknown as { cache: Map<number, { blocks: Map<number, Buffer> }> }).cache.get(0)!.blocks.get(0)!;
+    expect(cached.equals(block)).toBe(true);
+    expect(cached.buffer.byteLength).toBe(BLOCK_SIZE);
+    s.releaseCache();
+    expect(s.cachedBytes).toBe(0);
+    await s.close();
+  });
+
   it('rejects corrupt pieces and drops them from the cache', async () => {
     const dir = await tmp();
     const { meta } = fixture();

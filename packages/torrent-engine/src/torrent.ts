@@ -610,6 +610,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     for (const p of [...this.peers.values()]) p.conn.destroy();
     this.peers.clear();
     for (const c of this.candidates.values()) c.connected = false;
+    // Half-finished pieces would otherwise sit in the cache until the torrent runs again.
+    this.storage?.releaseCache();
     if (trackers) {
       if (announce) await trackers.stop(3000).catch(() => {});
       trackers.close();
