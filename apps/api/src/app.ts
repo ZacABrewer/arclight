@@ -94,7 +94,10 @@ export interface BuildAppOptions {
 }
 
 export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: BuildAppOptions = {}) {
-  const app = Fastify({ loggerInstance: log, trustProxy: true }).withTypeProvider<ZodTypeProvider>();
+  // Plugins get 5 minutes to start, not Fastify's 10 s: on a NAS with busy spinning disks, loading
+  // the indexer definitions (hundreds of small files) took longer, so the boot failed with
+  // AVV_ERR_PLUGIN_EXEC_TIMEOUT and the container restarted in a loop, adding to the disk load.
+  const app = Fastify({ loggerInstance: log, trustProxy: true, pluginTimeout: 300_000 }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   if (opts.onRoute) app.addHook('onRoute', opts.onRoute);
