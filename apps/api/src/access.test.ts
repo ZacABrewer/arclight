@@ -272,6 +272,7 @@ describe('portal user over HTTP', () => {
     '/api/v1/settings/signin',
     '/api/v1/settings/compat',
     '/api/v1/system/status',
+    '/api/v1/system/debug/snapshot',
     '/api/v1/system/backup',
     '/api/v1/system/update',
     '/api/v1/log',
@@ -321,6 +322,7 @@ describe('portal user over HTTP', () => {
       ['POST', '/api/v1/watchlist/sync'],
       ['POST', '/api/v1/request/digest'],
       ['POST', '/api/v1/settings/security/apikey'],
+      ['POST', '/api/v1/system/debug/run', { input: 'help' }],
     ];
     for (const [method, url, payload] of tries) {
       const res = await h.app.inject({ method, url, headers: { cookie }, ...(payload ? { payload } : {}) });
@@ -331,6 +333,25 @@ describe('portal user over HTTP', () => {
       expect((await h.app.inject({ method: 'GET', url, headers: { cookie } })).statusCode).toBe(403);
     }
     expect((await h.app.inject({ method: 'GET', url: `/api/v1/user/${id}/quota`, headers: { cookie } })).statusCode).toBe(200);
+  });
+
+  it('cannot open System → Debugging; admins (API key) can', async () => {
+    const h = await harness();
+    const { cookie } = await signedIn(h);
+    const key = authServiceFor(h.ctx).apiKey();
+    expect((await h.app.inject({ method: 'GET', url: '/api/v1/system/debug/snapshot', headers: { cookie } })).statusCode).toBe(403);
+    const denied = await h.app.inject({ method: 'POST', url: '/api/v1/system/debug/run', headers: { cookie }, payload: { input: 'logs' } });
+    expect(denied.statusCode).toBe(403);
+    expect(denied.body).not.toContain('log line');
+    const snap = await h.app.inject({ method: 'GET', url: '/api/v1/system/debug/snapshot', headers: { 'x-api-key': key } });
+    expect(snap.statusCode).toBe(200);
+    expect(snap.json()).toMatchObject({ memory: { rss: expect.any(Number) }, handles: { available: true } });
+    const run = await h.app.inject({ method: 'POST', url: '/api/v1/system/debug/run', headers: { 'x-api-key': key }, payload: { input: 'version\nengine' } });
+    expect(run.statusCode).toBe(200);
+    expect(run.json().results.map((r: { command: string; ok: boolean }) => [r.command, r.ok])).toEqual([
+      ['version', true],
+      ['engine', true],
+    ]);
   });
 
   it('reaches its own account, requests, issues and the portal descriptor', async () => {

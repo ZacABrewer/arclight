@@ -186,6 +186,7 @@ export const NAV: readonly NavSection[] = [
       { get label() { return t('common.status'); }, to: '/system/status' },
       { get label() { return t('common.tasks'); }, to: '/system/tasks' },
       { get label() { return t('common.logs'); }, to: '/system/logs' },
+      { get label() { return t('nav.debugging'); }, to: '/system/debugging' },
       { get label() { return t('common.backups'); }, to: '/system/backup' },
       { get label() { return t('nav.health'); }, to: '/system/health' },
       { get label() { return t('common.import'); }, to: '/system/migrate' },

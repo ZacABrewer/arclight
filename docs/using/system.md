@@ -2,7 +2,7 @@
 
 The System section is where you look after Arclight itself: is it healthy, what is it doing in the background, what do the logs say, can I back it up, and is there an update. This page walks through each System page, then covers the metrics endpoint, config-as-code and where the log files live. Use it when something looks wrong or when you want to keep an eye on things.
 
-The System menu has these items: Status, Tasks, Logs, Backups, Health, Import, Updates, Stats, Feeds and Audit.
+The System menu has these items: Status, Tasks, Logs, Debugging, Backups, Health, Import, Updates, Stats, Feeds and Audit.
 
 ## Status
 
@@ -47,6 +47,36 @@ System > Logs has two parts.
 | Container output | Also written to the container's standard output: `docker logs <container-name>` |
 
 Levels, from most to least detailed: `trace`, `debug`, `info`, `warn`, `error`, `fatal`. The default is `info`. To change it, set the environment variable `ARCLIGHT_LOG_LEVEL` (for example `debug`) and restart. Use `debug` only while hunting a problem; it is noisy.
+
+## Debugging
+
+System > Debugging collects the numbers you need when Arclight misbehaves, as text you can copy and paste. Admins only.
+
+- **Copy debug report** (top right): runs the `report` command and copies the result. This is the thing to paste into a bug report or support thread. It contains the version, memory, active handles, torrent engine and VPN status and the last 100 log lines, with API keys, passwords, tokens and VPN keys masked and the VPN public IP left out.
+- **Live snapshot**: refreshes every 5 seconds (switch it off to freeze the numbers). Process memory, memory against the container limit when Arclight runs in a container with one, JavaScript heap, event-loop lag, active handles, and one line each for the torrent engine and the VPN. **Copy** puts the snapshot on the clipboard as plain text.
+- **Console**: paste or type commands, one per line, and press **Run** (or Ctrl+Enter / Cmd+Enter). Each command gets its own result block with its own **Copy** button; **Copy all** copies the whole run. Lines starting with `#` are ignored, so a pasted block can carry comments. Up arrow at the start of an empty box brings back earlier runs.
+- **Logs**: the last 200 log lines with a level and text filter, **Copy** for the visible lines and **Download .txt**.
+
+Copy also works when you open Arclight over plain `http://` on your network, where browsers normally block clipboard access.
+
+The console is not a shell. It only knows these built-in, read-only commands; anything else answers "Unknown command".
+
+| Command | What it shows |
+|---|---|
+| `help` | The command list |
+| `report` | `version`, `memory`, `handles`, `engine`, `vpn` and `logs 100` in one block |
+| `memory` | Process memory (rss, heap, external, ArrayBuffers), V8 heap limits, container limit and usage (cgroup v1 or v2), event-loop lag |
+| `buffers` | After a garbage collection: how many ArrayBuffers are still alive, their total size, size buckets and the 15 biggest groups (size and first bytes). Useful when memory keeps growing |
+| `gc` | Forces a garbage collection and shows memory before and after |
+| `handles` | Open sockets, servers and timers by type, with the bytes waiting to be written |
+| `engine` | Built-in torrent engine: state, listen port, torrents by state, peers, speeds, warnings, VPN binding |
+| `vpn` | VPN provider, connected or not, public IP, forwarded port, last check, last error, kill switch |
+| `logs [n] [text]` | The last `n` log lines (default 50, at most 500), only those containing `text` if given |
+| `ping <url>` | An HTTP GET from the Arclight server (10 second timeout): status code and time, never the page body. For "can Arclight reach my Sonarr, Gluetun or Jellyfin?" |
+| `dns <host>` | Resolves a host name from the Arclight server, for example a container name |
+| `version` | Version, Node.js, platform, uptime |
+
+At most 20 commands and 1 MB of output per run. Commands are not case sensitive.
 
 ## Backups
 

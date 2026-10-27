@@ -28,6 +28,7 @@ import { SystemHealthPage } from './pages/system/health.js';
 import { SystemStatusPage } from './pages/system/status.js';
 import { SystemTasksPage } from './pages/system/tasks.js';
 import { SystemLogsPage } from './pages/system/logs.js';
+import { SystemDebuggingPage } from './pages/system/debugging.js';
 import { SystemBackupsPage } from './pages/system/backups.js';
 import { SystemMigratePage } from './pages/system/migrate.js';
 import { SystemUpdatesPage } from './pages/system/updates.js';
@@ -303,6 +304,7 @@ export const routeTree = rootRoute.addChildren([
   page('/system/status', SystemStatusPage),
   page('/system/tasks', SystemTasksPage),
   page('/system/logs', SystemLogsPage),
+  page('/system/debugging', SystemDebuggingPage),
   page('/system/backup', SystemBackupsPage),
   page('/system/health', SystemHealthPage),
   page('/system/migrate', SystemMigratePage),

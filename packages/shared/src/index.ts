@@ -24,6 +24,8 @@ export * from './vpn.js';
 export * from './auth.js';
 export * from './import-lists.js';
 export * from './logs.js';
+export * from './debug.js';
+export * from './redact.js';
 export * from './requests.js';
 export * from './compat.js';
 export * from './migrate.js';

@@ -23,6 +23,11 @@ function sourceFor(ctx: AppContext): LogsSource {
   return fallback;
 }
 
+/** The log reader for this context (the debug console reads recent lines through it). */
+export function logsServiceFor(ctx: AppContext): LogsService {
+  return new LogsService(sourceFor(ctx));
+}
+
 export const logsModule: AppModule = (ctx) => async (app) => {
-  await app.register(logsRoutes(new LogsService(sourceFor(ctx)), { guard: requireAdmin }));
+  await app.register(logsRoutes(logsServiceFor(ctx), { guard: requireAdmin }));
 };

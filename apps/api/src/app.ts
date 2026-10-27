@@ -32,6 +32,7 @@ import { summaryModule } from './modules/summary/index.js';
 import { calendarModule } from './modules/calendar/index.js';
 import { importListsModule } from './modules/import-lists/index.js';
 import { logsModule } from './modules/logs/index.js';
+import { debugModule } from './modules/debug/index.js';
 import { backupModule } from './modules/backup/index.js';
 import { compatApi, compatModule, type CompatMetadata } from './modules/compat/index.js';
 import { migrateModule } from './modules/migrate/index.js';
@@ -165,6 +166,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     torrentModule,
     // Transfer history: samples the queue, the engine and the VPN status.
     transferMetricsModule,
+    // System → Debugging: process snapshot and read-only diagnostic console over the above.
+    debugModule,
     // Private-tracker helpers and cross-seeding over torrent, indexers and download clients.
     trackerStatsModule,
     crossSeedModule,

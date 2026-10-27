@@ -1,0 +1,45 @@
+/* System → Debugging. Every text block scrolls inside itself; nothing widens the page. */
+.dbg-page { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
+.dbg-page > * { min-width: 0; }
+.dbg-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dbg-spacer { flex: 1 1 auto; }
+.dbg-hint { margin: 0; font-size: 13px; color: var(--al-text-4); }
+
+.dbg-console { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.dbg-input { width: 100%; min-height: 120px; resize: vertical; font: 13px/1.5 var(--al-mono); }
+.dbg-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.dbg-chip {
+  padding: 3px 10px;
+  border: 1px solid var(--al-line-2);
+  background: var(--al-field);
+  color: var(--al-text-2);
+  font: 12px var(--al-mono);
+  cursor: pointer;
+}
+.dbg-chip:hover { color: var(--al-text-1); border-color: var(--al-accent-line); }
+.dbg-chip:focus-visible { outline: 1px solid var(--al-cyan); outline-offset: 2px; }
+
+.dbg-results { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.dbg-result { border: 1px solid var(--al-line-1); min-width: 0; }
+.dbg-result:not([data-ok]) { border-color: var(--al-danger-text); }
+.dbg-result__head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 6px 10px; border-bottom: 1px solid var(--al-line-1); }
+.dbg-result__cmd { font: 13px var(--al-mono); color: var(--al-text-1); overflow-wrap: anywhere; min-width: 0; }
+.dbg-result__ms { font: 12px var(--al-mono); color: var(--al-text-4); }
+
+.dbg-pre {
+  margin: 0;
+  padding: 10px 12px;
+  max-width: 100%;
+  max-height: 480px;
+  overflow: auto;
+  background: var(--al-field);
+  font: 12px/1.5 var(--al-mono);
+  color: var(--al-text-2);
+  white-space: pre;
+  tab-size: 4;
+}
+.dbg-pre--logs { max-height: 560px; border: 1px solid var(--al-line-1); }
+
+@media (max-width: 599.98px) {
+  .dbg-pre { font-size: 11px; max-height: 360px; }
+}

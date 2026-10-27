@@ -162,6 +162,16 @@ export class MetricsService {
     this.loop = undefined;
   }
 
+  /**
+   * Event-loop delay p99 in milliseconds since the last scrape (the scrape resets the
+   * histogram), without resetting it. Null while the monitor is not running or has no samples.
+   */
+  eventLoopLagP99Ms(): number | null {
+    if (!this.loop) return null;
+    const p99 = this.loop.percentile(99);
+    return Number.isFinite(p99) && p99 > 0 ? p99 / 1e6 : null;
+  }
+
   render(): Promise<string> {
     return this.registry.render((name, err) => this.log?.warn({ err, collector: name }, 'metrics collector failed'));
   }

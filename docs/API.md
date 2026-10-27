@@ -139,6 +139,8 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 |---|---|---|
 | GET | `/system/status` | App name, version, start time, uptime, runtime and config paths |
 | GET | `/system/ping` | Public liveness probe: `{"status":"ok"}` |
+| GET | `/system/debug/snapshot` | Admin. `DebugSnapshot`: version, uptime, `process.memoryUsage()`, container memory from cgroup v2/v1 (nulls when not readable), event-loop lag p99, active handles by type with queued bytes, torrent engine and VPN summaries |
+| POST | `/system/debug/run` | Admin. `{input}`: one built-in, read-only diagnostic command per line (`help`, `report`, `memory`, `buffers`, `gc`, `handles`, `engine`, `vpn`, `logs [n] [filter]`, `ping <url>`, `dns <host>`, `version`); `#` lines ignored; at most 20 commands and 1 MB of output. Returns `{results: [{command, ok, output, durationMs}], truncated}`, output redacted. Never runs a shell or evaluates code |
 | GET | `/system/feeds` | `{feeds: FeedSummary[]}`: self-updating data feeds (`guides`, `definitions`, placeholder `updates`, plus anything registered through `feedsRegistry(ctx)` in `apps/api/src/feeds.ts`) with `state` `ok`/`stale`/`error`/`never`/`disabled`/`unregistered`, interval, last sync/success/error, pending count |
 
 Feeds are stale after 3 intervals without a success (a feed that never succeeded counts from

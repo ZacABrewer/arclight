@@ -207,12 +207,5 @@ export function SwipeRow({ children, onSearch, searchLabel = t('common.search'),
   );
 }
 
-/** Copy to clipboard; resolves true when it worked. */
-export async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    return false;
-  }
-}
+/** Copy to clipboard (with the plain-http fallback); resolves true when it worked. */
+export { copyText } from '../../lib/clipboard.js';

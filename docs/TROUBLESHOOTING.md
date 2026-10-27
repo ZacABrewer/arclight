@@ -2,6 +2,8 @@
 
 Something is not working. This page is organised by what you see: find your symptom, confirm the cause, apply the fix. The second half explains every message on the Health page (System > Health), one section per check. If you are new to a word used here, see the [Glossary](GLOSSARY.md).
 
+> **Start with System > Debugging > Copy debug report.** One click copies the version, memory, active connections, torrent engine and VPN status and the last 100 log lines as plain text, with API keys, passwords, tokens and VPN keys masked (the VPN public IP is left out too). Paste it into your bug report or support thread. See [System > Debugging](using/system.md#debugging).
+
 Contents:
 
 - [First checks](#first-checks)
@@ -33,7 +35,7 @@ To get more detail, set `ARCLIGHT_LOG_LEVEL` to `debug` (allowed values: `trace`
 
 ### Debug bundle
 
-Arclight does not have a one-click debug bundle. Instead collect these by hand (see [Still stuck](#still-stuck)): the Health page, the queue item's details, the last 200 log lines, and your version from System > Status. Remove API keys, tokens, passkeys and public IPs before sharing anything.
+System > Debugging > **Copy debug report** is the one-click bundle: version, memory (process and container), active handles, torrent engine, VPN and the last 100 log lines, secrets masked. Add by hand what it cannot know (see [Still stuck](#still-stuck)): the Health page and the queue item's details. The masking is broad but automatic; read the text once before you post it publicly.
 
 ---
 
@@ -998,13 +1000,14 @@ Source: `DownloadStalled` (warning).
 
 Before opening a bug report or asking for help, collect:
 
-1. **Version and install type.** System > Status: version, platform, Docker yes/no. How you run it (compose file name, NAS model, native Windows).
-2. **What you expected and what happened,** in two sentences, plus exact steps to repeat it.
-3. **The Health page.** Copy the findings (or a screenshot of System > Health).
-4. **The queue item** (if it is about a download): its state label, the sentence under it and the Timeline from the details panel.
-5. **The last 200 log lines** around the problem, with the level at Debug if you can reproduce it (`ARCLIGHT_LOG_LEVEL=debug`, restart, repeat). From Docker: `docker logs --tail 200 arclight`. For VPN problems add `docker logs --tail 100 gluetun`.
-6. **Relevant settings,** described in words or screenshots: which indexer, which client, the VPN provider type, your folder layout (what is mounted where).
-7. **What you already tried.**
+1. **The debug report.** System > Debugging > Copy debug report (version, memory, engine, VPN, recent logs, secrets masked).
+2. **Version and install type.** System > Status: version, platform, Docker yes/no. How you run it (compose file name, NAS model, native Windows).
+3. **What you expected and what happened,** in two sentences, plus exact steps to repeat it.
+4. **The Health page.** Copy the findings (or a screenshot of System > Health).
+5. **The queue item** (if it is about a download): its state label, the sentence under it and the Timeline from the details panel.
+6. **The last 200 log lines** around the problem, with the level at Debug if you can reproduce it (`ARCLIGHT_LOG_LEVEL=debug`, restart, repeat). From Docker: `docker logs --tail 200 arclight`. For VPN problems add `docker logs --tail 100 gluetun`.
+7. **Relevant settings,** described in words or screenshots: which indexer, which client, the VPN provider type, your folder layout (what is mounted where).
+8. **What you already tried.**
 
 Remove before sharing: API keys, passkeys, WireGuard private keys, webhook URLs, passwords, your public IP, and anything from `.env` except the folder paths and PUID/PGID.
 
@@ -1014,7 +1017,7 @@ Known gaps in the product are listed in [Known limitations](qa/99-known-limitati
 
 - [Glossary](GLOSSARY.md)
 - [FAQ](FAQ.md)
-- [System pages (Status, Tasks, Logs, Backups, Health)](using/system.md)
+- [System pages (Status, Tasks, Logs, Debugging, Backups, Health)](using/system.md)
 - [VPN](using/vpn.md)
 - [Download clients and the torrent engine](using/download-clients.md)
 - [Indexers](using/indexers.md)
