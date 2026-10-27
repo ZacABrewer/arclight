@@ -230,6 +230,32 @@ describe('Session connection limits', () => {
   });
 });
 
+describe('Session connection rate', () => {
+  it('starts at most connectionsPerSecond new attempts per second', async () => {
+    const servers: Server[] = [];
+    const held: Socket[] = [];
+    const ports: number[] = [];
+    for (let i = 0; i < 30; i++) {
+      const srv = createServer((sock) => held.push(sock));
+      await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+      servers.push(srv);
+      ports.push((srv.address() as { port: number }).port);
+    }
+    cleanups.push(async () => {
+      for (const sock of held) sock.destroy();
+      await Promise.all(servers.map((srv) => new Promise((r) => srv.close(r))));
+    });
+    const s = await session({ encryption: 'required', utp: false, maxHalfOpenConnections: 100, connectionsPerSecond: 5, maxConnectionsPerTorrent: 100 });
+    const { torrent } = createTorrent({ name: 'y', files: [{ path: ['y.bin'], data: randomBytes(40_000) }], pieceLength: 16384 });
+    const t = await s.addTorrent({ torrent, savePath: await tmp() });
+    t.addPeers(ports.map((port) => ({ host: '127.0.0.1', port })));
+    await new Promise((r) => setTimeout(r, 1000));
+    // one second of budget at start plus one second of refill
+    expect(held.length).toBeGreaterThan(0);
+    expect(held.length).toBeLessThanOrEqual(11);
+  });
+});
+
 describe('Session management', () => {
   it('generates Azureus-style peer ids', () => {
     const id = generatePeerId('-AL0100-');

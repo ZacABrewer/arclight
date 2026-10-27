@@ -107,6 +107,14 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
       ) : null}
       {status.warning ? <p className="al-inline-warning">{status.warning}</p> : null}
       {status.bootBlocked ? <p className="al-inline-warning">{t('settings.torrent.bootBlocked')}</p> : null}
+      {status.tunnelGuard ? (
+        <p className="al-inline-warning">
+          {t('settings.torrent.tunnelGuardActive', {
+            down: status.tunnelGuard.downloadLimit === null ? '—' : formatRate(status.tunnelGuard.downloadLimit),
+            up: status.tunnelGuard.uploadLimit === null ? '—' : formatRate(status.tunnelGuard.uploadLimit),
+          })}
+        </p>
+      ) : null}
       <KeyValue items={items} />
     </div>
   );
@@ -114,7 +122,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
 
 // ---- form draft ----------------------------------------------------------------------
 
-const BOOL_KEYS = ['enabled', 'autoRegisterClient', 'dht', 'pex', 'bindToVpn'] as const;
+const BOOL_KEYS = ['enabled', 'autoRegisterClient', 'dht', 'pex', 'bindToVpn', 'tunnelGuard'] as const;
 const INT_KEYS = [
   'listenPort',
   'maxConnections',
@@ -294,6 +302,11 @@ function TorrentForm({
           f={{ key: 'bindToVpn', label: t('settings.torrent.bindToVpn'), caption: t('settings.torrent.bindEverySocketToThe') }}
           checked={d.bindToVpn}
           onChange={(v) => set('bindToVpn', v)}
+        />
+        <BoolRow
+          f={{ key: 'tunnelGuard', label: t('settings.torrent.tunnelGuard'), caption: t('settings.torrent.tunnelGuardCaption') }}
+          checked={d.tunnelGuard}
+          onChange={(v) => set('tunnelGuard', v)}
         />
       </FormSection>
       <FormSection label={t('settings.torrent.dhtPex')}>

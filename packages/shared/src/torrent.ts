@@ -47,6 +47,10 @@ export const TorrentSettings = z.object({
   pex: z.boolean().default(true).describe('Exchange peers with connected peers (ignored by private torrents).'),
   maxActiveDownloads: z.number().int().min(-1).default(3).describe('Torrents downloading at once (-1 = unlimited).'),
   maxActiveSeeds: z.number().int().min(-1).default(5).describe('Torrents seeding at once (-1 = unlimited).'),
+  tunnelGuard: z
+    .boolean()
+    .default(true)
+    .describe('With the VPN on: slow the engine down automatically when the VPN tunnel starts to choke, so the tunnel stays up.'),
   defaultSeedRatio: z.number().min(0).nullable().default(null).describe('Stop seeding at this ratio (empty = unlimited).'),
   defaultSeedTimeMinutes: z
     .number()
@@ -268,6 +272,8 @@ export const TorrentSessionStatus = z.object({
   warning: z.string().optional(),
   /** ARCLIGHT_TORRENT_ENGINE=0: the engine is not started at boot (only by enabling it). */
   bootBlocked: z.boolean().optional(),
+  /** Present while the tunnel guard limits the engine (bytes/s; null = that direction not limited). */
+  tunnelGuard: z.object({ downloadLimit: z.number().nullable(), uploadLimit: z.number().nullable() }).optional(),
   lockdownReason: z.string().optional(),
   /** ISO-8601: when the current lockdown started. */
   lockdownSince: z.string().optional(),

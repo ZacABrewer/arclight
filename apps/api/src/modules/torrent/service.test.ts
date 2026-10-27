@@ -121,6 +121,25 @@ describe('engine lifecycle', () => {
 });
 
 describe('VPN binding', () => {
+  it('tunnel guard: slows the engine when the tunnel chokes and releases it when healthy', async () => {
+    let rtt = 100;
+    const h = await make({ vpn: true, settings: { enabled: true }, service: { tunnelProbe: async () => rtt } });
+    h.vpn.connect();
+    await h.service.start();
+    await h.service.applyBinding();
+    const s = running(h);
+    for (let i = 0; i < 3; i++) await h.service.guardTick();
+    expect(s.settings.downloadLimit).toBe(0);
+    rtt = -1;
+    await h.service.guardTick();
+    expect(s.settings.downloadLimit).toBeGreaterThan(0);
+    expect(h.service.status().tunnelGuard?.downloadLimit).toBe(s.settings.downloadLimit);
+    rtt = 100;
+    for (let i = 0; i < 60 && h.service.status().tunnelGuard; i++) await h.service.guardTick();
+    expect(h.service.status().tunnelGuard).toBeUndefined();
+    expect(s.settings.downloadLimit).toBe(0);
+  });
+
   it('self-heals: unlocks a lockdown whose VPN event was missed, and starts an engine that failed at boot', async () => {
     let clock = Date.parse('2026-01-01T00:00:00Z');
     const h = await make({ vpn: true, settings: { enabled: true }, service: { now: () => new Date(clock) } });

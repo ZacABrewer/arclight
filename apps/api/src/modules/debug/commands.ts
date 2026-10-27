@@ -170,6 +170,7 @@ function engine(svc: DebugService): string {
       ['enabled', s.enabled],
       ['state', s.state],
       ['start at boot', s.bootBlocked ? 'blocked by ARCLIGHT_TORRENT_ENGINE=0' : undefined],
+      ['tunnel guard', s.tunnelGuard ? `limiting to ${s.tunnelGuard.downloadLimit === null ? 'unlimited' : `${(s.tunnelGuard.downloadLimit / 1048576).toFixed(1)} MiB/s`} down, ${s.tunnelGuard.uploadLimit === null ? 'unlimited' : `${(s.tunnelGuard.uploadLimit / 1024).toFixed(0)} KiB/s`} up` : undefined],
       ['listen port', s.listenPort === null ? 'not listening' : s.listenPort],
       ['configured port', s.configuredListenPort],
       ['bound address', s.boundAddress ?? 'all interfaces'],

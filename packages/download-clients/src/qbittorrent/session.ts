@@ -193,7 +193,9 @@ export class QBittorrentSession {
     }
     const result = schema.safeParse(parsed);
     if (!result.success) {
-      throw new DownloadClientError('bad-response', `qBittorrent returned an unexpected shape for ${path}.`, {
+      const issue = result.error.issues[0];
+      const where = issue ? ` (${issue.path.join('.') || 'body'}: ${issue.message})` : '';
+      throw new DownloadClientError('bad-response', `qBittorrent returned an unexpected shape for ${path}${where}.`, {
         cause: result.error,
       });
     }

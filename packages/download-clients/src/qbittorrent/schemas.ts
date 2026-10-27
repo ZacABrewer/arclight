@@ -53,15 +53,35 @@ export const QbtTorrent = z.object({
 });
 export type QbtTorrent = z.infer<typeof QbtTorrent>;
 
-export const QbtTorrentList = z.array(QbtTorrent);
+/** Drops null fields: some qBittorrent versions report `null` for values they do not know yet. */
+export function withoutNulls(value: unknown): unknown {
+  if (value === null || typeof value !== 'object' || Array.isArray(value)) return value;
+  return Object.fromEntries(Object.entries(value).filter(([, v]) => v !== null));
+}
 
-export const QbtProperties = z.object({
+/**
+ * The torrent list, tolerant per entry: nulls read as "not reported", and an entry that still
+ * does not parse is skipped instead of failing the whole list (one odd torrent, e.g. one still
+ * fetching metadata, used to break the queue for every download).
+ */
+export function tolerantList<T extends z.ZodType>(item: T) {
+  return z.array(z.unknown()).transform((items) =>
+    items.flatMap((raw): Array<z.infer<T>> => {
+      const r = item.safeParse(withoutNulls(raw));
+      return r.success ? [r.data] : [];
+    }),
+  );
+}
+
+export const QbtTorrentList = tolerantList(QbtTorrent);
+
+export const QbtProperties = z.preprocess(withoutNulls, z.object({
   save_path: z.string(),
   /** Seconds. */
   seeding_time: z.number().optional(),
   /** qBittorrent 4.6+. */
   is_private: z.boolean().optional(),
-});
+}));
 export type QbtProperties = z.infer<typeof QbtProperties>;
 
 export const QbtFileList = z.array(z.object({ name: z.string() }));
@@ -70,7 +90,7 @@ export const QbtFileList = z.array(z.object({ name: z.string() }));
 export const QBT_RATIO_ACTION_REMOVE = 1;
 export const QBT_RATIO_ACTION_DELETE_FILES = 3;
 
-export const QbtPreferences = z.object({
+export const QbtPreferences = z.preprocess(withoutNulls, z.object({
   save_path: z.string(),
   /** Default torrent management mode is automatic: category paths apply. */
   auto_tmm_enabled: z.boolean().optional(),
@@ -87,7 +107,7 @@ export const QbtPreferences = z.object({
   dht: z.boolean().optional(),
   /** Incoming connections port. */
   listen_port: z.number().int().optional(),
-});
+}));
 export type QbtPreferences = z.infer<typeof QbtPreferences>;
 
 export const QbtCategories = z.record(

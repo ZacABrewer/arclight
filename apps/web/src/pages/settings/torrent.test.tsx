@@ -29,6 +29,7 @@ const settings: TorrentSettingsResponse = {
   pex: true,
   maxActiveDownloads: 3,
   maxActiveSeeds: 5,
+  tunnelGuard: true,
   defaultSeedRatio: 2,
   defaultSeedTimeMinutes: null,
   bindToVpn: true,
@@ -199,6 +200,13 @@ describe('Settings -> Torrent engine', () => {
     renderPage();
     const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
     expect(within(panel).getByText(/ARCLIGHT_TORRENT_ENGINE=0 keeps the engine from starting/)).toBeTruthy();
+  });
+
+  it('says when the tunnel guard is slowing the engine', async () => {
+    status = { ...running, tunnelGuard: { downloadLimit: 2 * 1024 * 1024, uploadLimit: 128 * 1024 } };
+    renderPage();
+    const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
+    expect(within(panel).getByText(/VPN tunnel is struggling/)).toBeTruthy();
   });
 
   it('maps drafts to update bodies (empty nullable -> null, empty required -> omitted)', () => {

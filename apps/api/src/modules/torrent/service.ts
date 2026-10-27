@@ -32,6 +32,7 @@ import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
 import { applySeedingRules, type SeedingRulesPorts, type SeedingRulesResult } from './seeding-rules.js';
 import { speedMode } from './speed.js';
+import { combineLimit, tcpConnectProbe, TunnelGuard } from './tunnel-guard.js';
 
 // The built-in torrent engine: owns the single `Session`, the `torrent` settings section and
 // the VPN binding policy.
@@ -83,6 +84,10 @@ export interface TorrentServiceOptions {
   defaultAddress?: string | null;
   /** How often the speed schedule and slow-mode end time are re-evaluated. Default 30 s. */
   speedCheckIntervalMs?: number;
+  /** Tunnel guard probe: RTT in ms through the VPN, -1 on failure (tests inject one). */
+  tunnelProbe?: () => Promise<number>;
+  /** How often the tunnel guard probes. Default 10 s. */
+  tunnelGuardIntervalMs?: number;
 }
 
 export type TorrentModuleErrorCode = 'NOT_FOUND' | 'NOT_RUNNING' | 'CONFLICT' | 'VALIDATION';
@@ -140,6 +145,11 @@ export class TorrentService {
   private seedRules: SeedRuleProvider | null = null;
   private readonly speedCheckIntervalMs: number;
   private speedTimer: NodeJS.Timeout | undefined;
+  private readonly guard = new TunnelGuard();
+  private guardTimer: NodeJS.Timeout | undefined;
+  private guardBusy = false;
+  private readonly tunnelProbe: () => Promise<number>;
+  private readonly tunnelGuardIntervalMs: number;
   /** boot() ran with the engine wanted: reconcile() may (re)start it. */
   private booted = false;
   /** ARCLIGHT_TORRENT_ENGINE=0 kept boot() from running. */
@@ -163,6 +173,8 @@ export class TorrentService {
     this.defaultAddress = opts.defaultAddress ?? null;
     this.now = opts.now ?? (() => new Date());
     this.speedCheckIntervalMs = opts.speedCheckIntervalMs ?? 30_000;
+    this.tunnelProbe = opts.tunnelProbe ?? (() => tcpConnectProbe());
+    this.tunnelGuardIntervalMs = opts.tunnelGuardIntervalMs ?? 10_000;
   }
 
   /** The running Session, or null while disabled/stopped. */
@@ -225,9 +237,9 @@ export class TorrentService {
       listenAddress: binding.address,
       maxConnections: s.maxConnections,
       maxConnectionsPerTorrent: s.maxConnectionsPerTorrent,
-      // Normal or alternative limits, whichever apply right now.
-      downloadLimit: speed.downloadLimit,
-      uploadLimit: speed.uploadLimit,
+      // Normal or alternative limits, whichever apply right now, tightened by the tunnel guard.
+      downloadLimit: combineLimit(speed.downloadLimit, this.guard.downloadLimit),
+      uploadLimit: combineLimit(speed.uploadLimit, this.guard.uploadLimit),
       dht: s.dht,
       pex: s.pex,
       maxActiveDownloads: s.maxActiveDownloads,
@@ -312,10 +324,7 @@ export class TorrentService {
       this.log?.info('slow mode ended');
     }
     const mode = this.speedMode();
-    const session = this.sessionValue;
-    if (session && (session.settings.downloadLimit !== mode.downloadLimit || session.settings.uploadLimit !== mode.uploadLimit)) {
-      session.updateSettings({ downloadLimit: mode.downloadLimit, uploadLimit: mode.uploadLimit });
-    }
+    this.applyRateLimits(mode);
     const alternative = mode.mode === 'alternative';
     const changed = this.lastAlternative !== alternative;
     // Nothing to mirror on the first evaluation in normal mode: qBittorrent's own state is left alone.
@@ -334,6 +343,59 @@ export class TorrentService {
         .catch((err: unknown) => this.log?.warn({ err }, 'could not mirror slow mode to download clients'));
     }
     return mode;
+  }
+
+  /** Pushes the speed-mode limits, tightened by the tunnel guard, to the running engine. */
+  private applyRateLimits(mode: TorrentSpeedMode = this.speedMode()): void {
+    const session = this.sessionValue;
+    if (!session) return;
+    const downloadLimit = combineLimit(mode.downloadLimit, this.guard.downloadLimit);
+    const uploadLimit = combineLimit(mode.uploadLimit, this.guard.uploadLimit);
+    if (session.settings.downloadLimit !== downloadLimit || session.settings.uploadLimit !== uploadLimit) {
+      session.updateSettings({ downloadLimit, uploadLimit });
+    }
+  }
+
+  private startGuardTimer(): void {
+    if (this.guardTimer) return;
+    this.guardTimer = setInterval(() => {
+      void this.guardTick().catch((err: unknown) => this.log?.warn({ err }, 'tunnel guard check failed'));
+    }, this.tunnelGuardIntervalMs);
+    this.guardTimer.unref();
+  }
+
+  /**
+   * One tunnel-guard step (see tunnel-guard.ts): only while the engine runs behind the VPN with
+   * the guard on. Probes the tunnel and tightens or eases the engine's rates.
+   */
+  async guardTick(): Promise<void> {
+    if (this.guardBusy) return;
+    const session = this.sessionValue;
+    const s = this.settings();
+    const applies = session !== null && this.state === 'running' && s.tunnelGuard !== false && (this.vpn?.enabled() ?? false);
+    if (!applies) {
+      if (this.guard.active) {
+        this.guard.reset();
+        this.applyRateLimits();
+      }
+      return;
+    }
+    this.guardBusy = true;
+    try {
+      const rtt = await this.tunnelProbe();
+      if (this.sessionValue !== session) return;
+      const st = session.getSessionStats();
+      const wasActive = this.guard.active;
+      if (!this.guard.observe(rtt, { down: st.downloadRate, up: st.uploadRate })) return;
+      this.applyRateLimits();
+      if (this.guard.active && !wasActive) {
+        this.log?.warn({ rttMs: rtt, downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit }, 'VPN tunnel is choking; tunnel guard slowed the torrent engine');
+      } else if (!this.guard.active && wasActive) {
+        this.log?.info('VPN tunnel healthy again; tunnel guard lifted its limits');
+      }
+    } finally {
+      this.guardBusy = false;
+    }
   }
 
   private startSpeedTimer(): void {
@@ -444,6 +506,7 @@ export class TorrentService {
   /** Listen for `vpn` events and start the speed-schedule timer (idempotent). */
   subscribe(): void {
     this.startSpeedTimer();
+    this.startGuardTimer();
     if (this.unsubscribe || !this.bus) return;
     this.unsubscribe = this.bus.subscribe((event) => {
       if (event.type === 'vpn') void this.applyBinding().catch((err: unknown) => this.log?.warn({ err }, 'torrent re-bind failed'));
@@ -468,6 +531,8 @@ export class TorrentService {
     this.unsubscribe = null;
     if (this.speedTimer) clearInterval(this.speedTimer);
     this.speedTimer = undefined;
+    if (this.guardTimer) clearInterval(this.guardTimer);
+    this.guardTimer = undefined;
     await this.stop();
   }
 
@@ -796,6 +861,7 @@ export class TorrentService {
     if (this.lastError) out.error = this.lastError;
     if (session && this.portWarning) out.warning = this.portWarning;
     if (this.bootBlocked) out.bootBlocked = true;
+    if (session && this.guard.active) out.tunnelGuard = { downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit };
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
     if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;
     out.lockdownsLastHour = this.recentLockdowns();

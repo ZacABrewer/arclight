@@ -33,7 +33,17 @@ export interface KrpcOptions {
   version?: Buffer;
   /** Address family of the default socket (6 binds an IPv6-only socket). */
   family?: 4 | 6;
+  /**
+   * Outgoing bytes per second (0 = unlimited). Over the budget, queries wait in a short queue
+   * (they time out from when they are sent) and replies to other nodes are dropped, as
+   * libtorrent does with its DHT upload limit: an unpaced DHT is a steady stream of tiny UDP
+   * packets to thousands of addresses, which a VPN tunnel handles badly.
+   */
+  uploadRateLimit?: number;
 }
+
+/** Queries waiting for upload budget beyond this many are refused right away. */
+const MAX_SEND_QUEUE = 256;
 
 /** KRPC (BEP 5) transport: bencoded queries/responses over a UDP socket. */
 export class KrpcSocket extends EventEmitter<KrpcEvents> {
@@ -41,10 +51,43 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
   private readonly pending = new Map<string, Pending>();
   private nextTx = Math.floor(Math.random() * 0xffff);
   private readonly timeoutMs: number;
+  private tokens: number;
+  private refilledAt = Date.now();
+  private readonly sendQueue: Array<{ size: number; go: () => void }> = [];
+  private drainTimer: NodeJS.Timeout | undefined;
+  /** Replies dropped for lack of upload budget (diagnostics). */
+  droppedReplies = 0;
 
   constructor(private readonly opts: KrpcOptions = {}) {
     super();
     this.timeoutMs = opts.timeoutMs ?? 2000;
+    this.tokens = opts.uploadRateLimit ?? 0;
+  }
+
+  /** Takes `size` bytes of upload budget; false when over the limit right now. */
+  private take(size: number): boolean {
+    const rate = this.opts.uploadRateLimit ?? 0;
+    if (rate <= 0) return true;
+    const now = Date.now();
+    this.tokens = Math.min(rate, this.tokens + ((now - this.refilledAt) / 1000) * rate);
+    this.refilledAt = now;
+    if (this.tokens < size) return false;
+    this.tokens -= size;
+    return true;
+  }
+
+  private scheduleDrain(): void {
+    if (this.drainTimer || this.sendQueue.length === 0) return;
+    this.drainTimer = setTimeout(() => {
+      this.drainTimer = undefined;
+      while (this.sendQueue.length > 0 && this.take((this.sendQueue[0] as { size: number }).size)) this.sendQueue.shift()?.go();
+      this.scheduleDrain();
+    }, 50);
+    this.drainTimer.unref?.();
+  }
+
+  get queuedQueries(): number {
+    return this.sendQueue.length;
   }
 
   get port(): number {
@@ -98,16 +141,34 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
     this.pending.clear();
     this.sock?.close();
     this.sock = null;
+    if (this.drainTimer) clearTimeout(this.drainTimer);
+    this.drainTimer = undefined;
+    // queued queries reject (no socket) instead of hanging
+    for (const q of this.sendQueue.splice(0)) q.go();
   }
 
-  private send(msg: Record<string, BEncodable>, to: PeerAddress): void {
-    if (!this.sock) return;
+  private encodeMsg(msg: Record<string, BEncodable>): Buffer {
     if (this.opts.version) msg.v = this.opts.version;
+    return encode(msg);
+  }
+
+  private sendRaw(buf: Buffer, to: PeerAddress): void {
+    if (!this.sock) return;
     try {
-      this.sock.send(encode(msg), to.port, to.host);
+      this.sock.send(buf, to.port, to.host);
     } catch (err) {
       this.emit('warning', `dht send failed: ${(err as Error).message}`);
     }
+  }
+
+  /** Replies: sent within the budget, dropped over it (the asking node simply retries). */
+  private send(msg: Record<string, BEncodable>, to: PeerAddress): void {
+    const buf = this.encodeMsg(msg);
+    if (!this.take(buf.length)) {
+      this.droppedReplies++;
+      return;
+    }
+    this.sendRaw(buf, to);
   }
 
   query(to: PeerAddress, method: string, args: Record<string, BEncodable>): Promise<BDict> {
@@ -116,14 +177,31 @@ export class KrpcSocket extends EventEmitter<KrpcEvents> {
     const t = Buffer.alloc(2);
     t.writeUInt16BE(this.nextTx);
     const key = t.toString('hex');
+    const buf = this.encodeMsg({ t, y: 'q', q: method, a: args });
     return new Promise((resolve, reject) => {
-      const timer = setTimeout(() => {
-        this.pending.delete(key);
-        reject(new TorrentEngineError('timeout', `dht ${method} to ${to.host}:${to.port} timed out`));
-      }, this.timeoutMs);
-      this.pending.get(key)?.reject(new TorrentEngineError('dht', 'transaction id reused'));
-      this.pending.set(key, { host: to.host, port: to.port, resolve, reject, timer });
-      this.send({ t, y: 'q', q: method, a: args }, to);
+      const go = (): void => {
+        if (!this.sock) {
+          reject(new TorrentEngineError('aborted', 'dht socket closed'));
+          return;
+        }
+        const timer = setTimeout(() => {
+          this.pending.delete(key);
+          reject(new TorrentEngineError('timeout', `dht ${method} to ${to.host}:${to.port} timed out`));
+        }, this.timeoutMs);
+        this.pending.get(key)?.reject(new TorrentEngineError('dht', 'transaction id reused'));
+        this.pending.set(key, { host: to.host, port: to.port, resolve, reject, timer });
+        this.sendRaw(buf, to);
+      };
+      if (this.sendQueue.length === 0 && this.take(buf.length)) {
+        go();
+        return;
+      }
+      if (this.sendQueue.length >= MAX_SEND_QUEUE) {
+        reject(new TorrentEngineError('timeout', `dht ${method} to ${to.host}:${to.port} dropped (upload limit)`));
+        return;
+      }
+      this.sendQueue.push({ size: buf.length, go });
+      this.scheduleDrain();
     });
   }
 

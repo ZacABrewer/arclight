@@ -299,7 +299,12 @@ export class Session extends EventEmitter<SessionEvents> {
     let node = family === 4 ? this.dhtNode : this.dht6Node;
     const fresh = node === null;
     if (!node) {
-      const dOpts: DhtOptions = { bootstrap: this.settingsValue.dhtBootstrapNodes, ...this.opts.dht, family };
+      const dOpts: DhtOptions = {
+        bootstrap: this.settingsValue.dhtBootstrapNodes,
+        uploadRateLimit: this.settingsValue.dhtUploadRateLimit,
+        ...this.opts.dht,
+        family,
+      };
       if (family === 6) delete dOpts.socketFactory;
       node = new DHT(dOpts);
       node.on('warning', (m) => this.emit('warning', m));
@@ -333,10 +338,25 @@ export class Session extends EventEmitter<SessionEvents> {
     return n;
   }
 
+  private connectTokens = 0;
+  private connectRefilledAt = 0;
+
+  /**
+   * Allows one more outgoing peer attempt: under the half-open limit and within the per-second
+   * connection rate (a token bucket holding one second of attempts). Spends a token when true.
+   */
   private canOpen(): boolean {
     let n = 0;
     for (const t of this.torrentsById.values()) n += t.connectingCount;
-    return n < this.settingsValue.maxHalfOpenConnections;
+    if (n >= this.settingsValue.maxHalfOpenConnections) return false;
+    const rate = this.settingsValue.connectionsPerSecond;
+    if (rate <= 0) return true;
+    const now = this.now();
+    this.connectTokens = Math.min(rate, this.connectTokens + ((now - this.connectRefilledAt) / 1000) * rate);
+    this.connectRefilledAt = now;
+    if (this.connectTokens < 1) return false;
+    this.connectTokens -= 1;
+    return true;
   }
 
   private canConnect(): boolean {

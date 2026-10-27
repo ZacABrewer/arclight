@@ -42,6 +42,8 @@ export interface DhtOptions {
   /** Token secret rotation period (default 5 minutes). */
   tokenRotationMs?: number;
   socketFactory?: () => dgram.Socket;
+  /** Outgoing DHT bytes per second (0 = unlimited); see KrpcOptions.uploadRateLimit. */
+  uploadRateLimit?: number;
   /** 4 (BEP 5) or 6 (BEP 32: `nodes6`, 18-byte peers). One routing table per family. */
   family?: 4 | 6;
   now?: () => number;
@@ -105,6 +107,7 @@ export class DHT extends EventEmitter<DhtEvents> {
       version: Buffer.from('MT01', 'latin1'),
     };
     if (opts.socketFactory) rpcOpts.socketFactory = opts.socketFactory;
+    if (opts.uploadRateLimit !== undefined) rpcOpts.uploadRateLimit = opts.uploadRateLimit;
     rpcOpts.family = this.family;
     this.rpc = new KrpcSocket(rpcOpts);
     this.rpc.on('query', (q) => this.onQuery(q));

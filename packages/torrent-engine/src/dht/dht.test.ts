@@ -105,6 +105,29 @@ describe('KRPC', () => {
     b.close();
   });
 
+  it('paces queries under the upload limit and never exceeds it', async () => {
+    const a = new KrpcSocket({ timeoutMs: 2000, uploadRateLimit: 2000 });
+    const b = new KrpcSocket({ timeoutMs: 2000 });
+    await a.bind(0, '127.0.0.1');
+    await b.bind(0, '127.0.0.1');
+    let received = 0;
+    b.on('query', (q) => {
+      received++;
+      b.respond(q, { ok: 1 });
+    });
+    const started = Date.now();
+    // ~60-byte queries: 2000 B/s allows ~33 at once, the rest wait for budget
+    const all = Array.from({ length: 60 }, () => a.query({ host: '127.0.0.1', port: b.port }, 'ping', { id: Buffer.alloc(20) }));
+    await new Promise((r) => setTimeout(r, 100));
+    expect(received).toBeLessThan(60);
+    expect(a.queuedQueries).toBeGreaterThan(0);
+    await Promise.all(all);
+    expect(received).toBe(60);
+    expect(Date.now() - started).toBeGreaterThan(500);
+    a.close();
+    b.close();
+  });
+
   it('ignores garbage datagrams', async () => {
     const a = new KrpcSocket();
     await a.bind(0, '127.0.0.1');

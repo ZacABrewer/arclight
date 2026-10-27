@@ -15,8 +15,12 @@ import {
   type UtpPacket,
 } from './packet.js';
 
-/** Largest datagram we send (header included). */
-export const UTP_MTU = 1400;
+/**
+ * Largest datagram we send (uTP header included). 1200 bytes, as QUIC uses, fits through VPN
+ * tunnels: at 1400, a full packet plus UDP/IP headers (1428 bytes) exceeded a WireGuard
+ * tunnel's usual 1400-byte MTU, so every data packet went out as two IP fragments.
+ */
+export const UTP_MTU = 1200;
 export const MAX_PAYLOAD = UTP_MTU - HEADER_SIZE;
 /** LEDBAT target queuing delay. */
 export const TARGET_DELAY_US = 100_000;

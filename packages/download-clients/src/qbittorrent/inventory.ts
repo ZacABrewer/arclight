@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { DownloadClientError, type ClientRuntime } from '../types.js';
-import { QbtCategories, QbtPreferences } from './schemas.js';
+import { QbtCategories, QbtPreferences, tolerantList } from './schemas.js';
 import { QBittorrentSession } from './session.js';
 
 /**
@@ -103,7 +103,7 @@ export class QBittorrentInventory {
   }
 
   torrents(): Promise<QbtInventoryTorrent[]> {
-    return this.session.requestJson('/api/v2/torrents/info', z.array(QbtInventoryTorrent));
+    return this.session.requestJson('/api/v2/torrents/info', tolerantList(QbtInventoryTorrent));
   }
 
   categories(): Promise<QbtCategories> {

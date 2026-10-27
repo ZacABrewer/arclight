@@ -133,7 +133,7 @@ export interface TorrentContext {
   utp: () => UtpManager | null;
   /** Global connection budget check. */
   canConnect: () => boolean;
-  /** A slot for one more outgoing attempt (session-wide half-open limit). */
+  /** Takes a slot for one more outgoing attempt (half-open limit and per-second rate). */
   canOpen: () => boolean;
   isBlocked: (ip: string) => boolean;
   trackerFactory: (url: string) => TrackerClient | null;
@@ -658,7 +658,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       .filter(([k, c]) => !c.connected && !c.banned && c.nextAttemptAt <= now && !this.connecting.has(k))
       .sort((a, b) => a[1].failures - b[1].failures);
     for (const [key, c] of list) {
-      if (this.peerCount >= max || !this.ctx.canConnect() || !this.ctx.canOpen() || this.connecting.size >= halfOpenShare) break;
+      // canOpen last: it spends one of the session's per-second connection tokens
+      if (this.peerCount >= max || !this.ctx.canConnect() || this.connecting.size >= halfOpenShare || !this.ctx.canOpen()) break;
       void this.connectTo(key, c);
     }
   }

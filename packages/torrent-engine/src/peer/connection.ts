@@ -31,6 +31,9 @@ import {
   type WireMessage,
 } from './messages.js';
 
+/** Writes below this size are batched per event-loop turn (see PeerConnection.write). */
+const SMALL_WRITE = 1024;
+
 export interface BlockRequest {
   index: number;
   begin: number;
@@ -212,10 +215,37 @@ export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
     this.write(encodeHandshake({ reserved: buildReserved(this.ourFlags), infoHash: this.infoHash, peerId: this.opts.peerId }));
   }
 
+  private outQueue: Buffer[] = [];
+  private flushScheduled = false;
+
+  /**
+   * Small messages (requests, haves, cancels...) are gathered and sent as one write per event
+   * loop turn, like libtorrent's send buffer: with Nagle off, each 17-byte request went out as
+   * its own packet, hundreds per second through the VPN tunnel. Large writes (blocks) flush the
+   * queue first so order is kept.
+   */
   private write(b: Buffer): boolean {
     if (this.closed) return false;
     this.lastSent = this.now();
-    return this.socket.write(b);
+    if (b.length >= SMALL_WRITE) {
+      this.flushOut();
+      return this.socket.write(b);
+    }
+    this.outQueue.push(b);
+    if (!this.flushScheduled) {
+      this.flushScheduled = true;
+      setImmediate(() => this.flushOut());
+    }
+    return true;
+  }
+
+  private flushOut(): void {
+    this.flushScheduled = false;
+    const out = this.outQueue;
+    if (out.length === 0) return;
+    this.outQueue = [];
+    if (this.closed) return;
+    this.socket.write(out.length === 1 ? (out[0] as Buffer) : Buffer.concat(out));
   }
 
   // ---- receive path -----------------------------------------------------------------------
@@ -550,6 +580,7 @@ export class PeerConnection extends EventEmitter<PeerConnectionEvents> {
     const dropped = [...this.requests.values()].map((r) => ({ index: r.index, begin: r.begin, length: r.length }));
     this.requests.clear();
     this.peerRequests.clear();
+    this.outQueue = [];
     this.socket.destroy();
     if (dropped.length > 0) this.emit('requestsDropped', dropped);
     this.emit('close', err);

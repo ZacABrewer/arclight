@@ -144,12 +144,21 @@ describe('error mapping', () => {
     qbt.on('GET', '/api/v2/torrents/info', { body: '<html>not json</html>' });
     await expectError(client().getItems('tv'), 'bad-response');
 
-    qbt.on('GET', '/api/v2/torrents/info', { body: [{ hash: 'x' }] });
+    qbt.on('GET', '/api/v2/torrents/info', { body: { hash: 'x' } });
     await expectError(client().getItems('tv'), 'bad-response');
 
     qbt.on('GET', '/api/v2/torrents/info', { status: 500, body: 'boom' });
     const e = await expectError(client().getItems('tv'), 'bad-response');
     expect(e.httpStatus).toBe(500);
+  });
+
+  it('reads null fields as unreported and skips an entry it cannot parse instead of failing the list', async () => {
+    const good = torrentsFixture[0] as Record<string, unknown>;
+    qbt.on('GET', '/api/v2/torrents/info', {
+      body: [{ ...good, private: null, content_path: null, seeding_time: null }, { hash: 'x' }],
+    });
+    const items = await client().getItems('tv');
+    expect(items).toHaveLength(1);
   });
 
   it('maps 404 to not-found and a missing v2 API to bad-response on test()', async () => {

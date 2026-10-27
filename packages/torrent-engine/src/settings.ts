@@ -26,6 +26,10 @@ export interface SessionSettings {
    * until its control API and DNS stopped answering.
    */
   maxHalfOpenConnections: number;
+  /** New outgoing peer connection attempts per second, session-wide (libtorrent's connection_speed). */
+  connectionsPerSecond: number;
+  /** DHT upload budget in bytes/s (0 = unlimited; libtorrent's dht_upload_rate_limit). */
+  dhtUploadRateLimit: number;
   /** Global upload limit in bytes/s (0 = unlimited). */
   uploadLimit: number;
   /** Global download limit in bytes/s (0 = unlimited). */
@@ -100,6 +104,8 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   maxConnections: 200,
   maxConnectionsPerTorrent: 50,
   maxHalfOpenConnections: 20,
+  connectionsPerSecond: 10,
+  dhtUploadRateLimit: 8000,
   uploadLimit: 0,
   downloadLimit: 0,
   dht: true,
