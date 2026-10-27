@@ -349,6 +349,9 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-form-grid { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 16px 28px; align-items: center; }
 .al-form-row { display: grid; grid-template-columns: 220px minmax(0,1fr); gap: 16px 28px; align-items: center; }
 .al-form-grid > .al-form-row { display: contents; }
+/* Anything else in the grid (a lead paragraph, a checkbox, a radio group) spans both columns, so it
+   does not take a label slot and push every later row out of line. */
+.al-form-grid > :not(.al-form-row) { grid-column: 1 / -1; }
 .al-form-row__label { font-size: 14px; color: var(--al-text-2); }
 .al-form-row__control { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .al-form-row__control--inline { flex-direction: row; align-items: center; gap: 12px; }

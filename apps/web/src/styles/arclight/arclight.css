@@ -137,9 +137,9 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 .al-tabs > [aria-selected="true"] { color: var(--al-text-1); border-bottom-color: var(--al-cyan); }
 
 /* ---------- chips & tags ---------- */
-.al-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; font: 500 12px var(--al-font); line-height: 1.35; white-space: normal; overflow-wrap: anywhere;
+.al-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; font: 500 12px var(--al-font); line-height: 1.35; white-space: normal; overflow-wrap: break-word;
   border: 1px solid var(--al-line-3); color: var(--al-text-2); }
-.al-chip::before { content: ""; width: 6px; height: 6px; background: var(--al-cyan); }
+.al-chip::before { content: ""; flex: none; width: 6px; height: 6px; background: var(--al-cyan); }
 .al-chip[data-status="downloading"], .al-chip[data-status="importing"], .al-chip[data-status="monitored"] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
 .al-chip[data-status="unaired"] { border-color: var(--al-neutral-line); color: #8fb3bd; } .al-chip[data-status="unaired"]::before { background: none; border: 1px solid #8fb3bd; }
 .al-chip[data-status="queued"], .al-chip[data-status="paused"] { border-color: var(--al-neutral-line); color: var(--al-text-3); } .al-chip[data-status="queued"]::before, .al-chip[data-status="paused"]::before { background: var(--al-text-5); }
