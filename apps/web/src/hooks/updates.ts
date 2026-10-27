@@ -42,7 +42,13 @@ export function useSaveUpdateSettings() {
 }
 
 export function useContainerUpdates() {
-  return useQuery({ queryKey: updateKeys.containers, queryFn: updatesApi.containers.info, retry: false });
+  return useQuery({
+    queryKey: updateKeys.containers,
+    queryFn: updatesApi.containers.info,
+    retry: false,
+    // While an update runs in the background, poll until its result lands in `lastRun`.
+    refetchInterval: (q) => (q.state.data?.updating ? 3_000 : false),
+  });
 }
 
 export function useCheckContainers() {

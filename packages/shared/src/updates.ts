@@ -120,6 +120,8 @@ export const ContainerUpdateRun = z.object({
   message: z.string(),
   /** Arclight itself was involved: a helper container finishes the swap after this process stops. */
   handedOff: z.boolean(),
+  /** Still running in the background (answered early so a reverse proxy does not time out). */
+  pending: z.boolean().optional(),
 });
 export type ContainerUpdateRun = z.infer<typeof ContainerUpdateRun>;
 
@@ -134,5 +136,7 @@ export const ContainerUpdatesInfo = z.object({
   checkedAt: z.string().nullable(),
   containers: z.array(ContainerUpdateItem),
   lastRun: ContainerUpdateRun.optional(),
+  /** An update is running right now (pull and recreate can take minutes). */
+  updating: z.boolean().optional(),
 });
 export type ContainerUpdatesInfo = z.infer<typeof ContainerUpdatesInfo>;

@@ -226,6 +226,7 @@ export class ContainerUpdater {
       checkedAt: cache.checkedAt,
       containers: cache.containers,
       ...(cache.lastRun ? { lastRun: cache.lastRun } : {}),
+      ...(this.running ? { updating: true } : {}),
     };
   }
 

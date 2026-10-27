@@ -198,7 +198,11 @@ export function ContainerUpdatesPane() {
                 {t('settings.updates.panels.lastUpdateRelativetimeMessage', { relativeTime: relativeTime(data!.lastRun.at), message: data!.lastRun.message })}
               </span>
             ) : null}
-            {update.data ? <span role="status"> {update.data.message}</span> : null}
+            {data!.updating ? (
+              <span role="status"> {t('settings.updates.panels.updatingInBackground')}</span>
+            ) : update.data && !update.data.pending ? (
+              <span role="status"> {update.data.message}</span>
+            ) : null}
           </p>
           <ContainerLabelHint />
         </>

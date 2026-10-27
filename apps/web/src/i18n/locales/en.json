@@ -4203,6 +4203,7 @@
   "settings.updates.panels.updateChannel": "Update channel",
   "settings.updates.panels.updateMode": "Update mode",
   "settings.updates.panels.updateNow": "Update now",
+  "settings.updates.panels.updatingInBackground": "Updating… pulling the new image and recreating the container can take a few minutes; this updates by itself when done.",
   "settings.updates.panels.updateWindow": "Update window",
   "settings.updates.panels.windowEnd": "Window end",
   "settings.updates.panels.windowStart": "Window start",

@@ -34,12 +34,12 @@ export function updatesRoutes(service: UpdatesService, containers: ContainerUpda
     });
 
     /** Update every container that has an update (and their network dependents). */
-    app.post('/system/update/containers/update', { schema: { response: { 200: ContainerUpdateRun, ...errors } } }, async () => containers.update());
+    app.post('/system/update/containers/update', { schema: { response: { 200: ContainerUpdateRun, ...errors } } }, async () => answerSoon(containers.update()));
 
     app.post(
       '/system/update/containers/:name/update',
       { schema: { params: z.object({ name: z.string().min(1) }), response: { 200: ContainerUpdateRun, ...errors } } },
-      async (req) => containers.update([req.params.name]),
+      async (req) => answerSoon(containers.update([req.params.name])),
     );
 
     app.get('/settings/updates', { schema: { response: { 200: UpdateSettings } } }, async () => service.settings());
@@ -47,5 +47,35 @@ export function updatesRoutes(service: UpdatesService, containers: ContainerUpda
     app.put('/settings/updates', { schema: { body: UpdateSettingsUpdate, response: { 200: UpdateSettings, 400: ErrorBody } } }, async (req) =>
       service.updateSettings(req.body),
     );
+  };
+}
+
+/** How long an update request waits for the run before answering that it continues in the background. */
+export const UPDATE_ANSWER_MS = 20_000;
+
+/**
+ * Answers with the run's result when it finishes quickly, otherwise early with `pending`: pulling an
+ * image on a NAS takes minutes, longer than a reverse proxy waits (Cloudflare: ~100 s), which showed
+ * a 504 while the update carried on. The page polls `updating` until the run is done.
+ */
+export async function answerSoon(run: Promise<ContainerUpdateRun>, waitMs = UPDATE_ANSWER_MS): Promise<ContainerUpdateRun> {
+  let timer: NodeJS.Timeout | undefined;
+  const early = new Promise<null>((resolve) => {
+    timer = setTimeout(() => resolve(null), waitMs);
+  });
+  try {
+    const done = await Promise.race([run, early]);
+    if (done) return done;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  run.catch(() => undefined);
+  return {
+    at: new Date().toISOString(),
+    ok: true,
+    updated: [],
+    handedOff: false,
+    pending: true,
+    message: 'Still updating in the background; this page shows the result when it finishes.',
   };
 }

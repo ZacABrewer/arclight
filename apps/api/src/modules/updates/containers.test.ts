@@ -395,3 +395,27 @@ describe('ContainerUpdater against a fake Docker API', () => {
     expect(await check.run({} as never)).toEqual([]);
   });
 });
+
+describe('answerSoon (update requests behind a reverse proxy)', () => {
+  const run = (ok: boolean) => ({ at: '2026-01-01T00:00:00.000Z', ok, updated: ['x'], handedOff: false, message: 'done' });
+
+  it('returns the result when the run finishes in time', async () => {
+    const { answerSoon } = await import('./routes.js');
+    await expect(answerSoon(Promise.resolve(run(true)), 50)).resolves.toMatchObject({ ok: true, message: 'done' });
+  });
+
+  it('answers early with pending when the run takes longer, and the run still completes', async () => {
+    const { answerSoon } = await import('./routes.js');
+    let finish!: (v: ReturnType<typeof run>) => void;
+    const slow = new Promise<ReturnType<typeof run>>((r) => (finish = r));
+    const res = await answerSoon(slow, 20);
+    expect(res).toMatchObject({ pending: true, ok: true });
+    finish(run(true));
+    await expect(slow).resolves.toMatchObject({ message: 'done' });
+  });
+
+  it('passes an early failure through', async () => {
+    const { answerSoon } = await import('./routes.js');
+    await expect(answerSoon(Promise.reject(new Error('no socket')), 50)).rejects.toThrow('no socket');
+  });
+});
