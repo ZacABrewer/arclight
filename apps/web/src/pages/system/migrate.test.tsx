@@ -7,7 +7,7 @@ import { createToastStore } from '../../lib/toast.js';
 import { visibleNav } from '../../nav.js';
 import { createQueryClient } from '../../query-client.js';
 import { SystemMigratePage, defaultAreas } from './migrate.js';
-import { buildApplyRequest, DEFAULT_OPTIONS, newDraft, toSource } from './migrate-model.js';
+import { buildApplyRequest, DEFAULT_OPTIONS, defaultSelections, newDraft, toSource } from './migrate-model.js';
 
 const now = new Date().toISOString();
 
@@ -330,6 +330,12 @@ describe('System -> Import your existing stack', () => {
       areas: [...sonarrPlan.areas, { area: 'collections', label: 'Collections', mode: 'stage', total: 2, create: 0, conflicts: 0, alreadyImported: 0, unsupported: 0, details: {} }],
     };
     expect(defaultAreas(staged)).toEqual(['tags', 'series', 'collections']);
+  });
+
+  it('keeps torrents in qBittorrent by default when the built-in engine is off', () => {
+    expect(defaultSelections(preview).categories).toEqual({ 'tv-sonarr': 'adopt', '': 'adopt' });
+    const off: MigrateStackPreview = { ...preview, sources: preview.sources.map((s) => (s.app === 'qbittorrent' ? { ...s, plan: { ...qbitPlan, torrentEngineRunning: false } } : s)) };
+    expect(defaultSelections(off).categories).toEqual({ 'tv-sonarr': 'external', '': 'external' });
   });
 
   it('builds sources from drafts with only the fields their mode uses', () => {

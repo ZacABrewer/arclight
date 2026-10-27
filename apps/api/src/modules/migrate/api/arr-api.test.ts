@@ -110,7 +110,7 @@ describe('Sonarr through the API', () => {
     expect(file).toMatchObject({ sizeBytes: 3_000_000_000, releaseGroup: 'NTb' });
     expect(file.mediaInfo).toMatchObject({ resolution: '1920x1080', videoCodec: 'x264' });
     expect(db.select().from(t.episodes).all().filter((e) => e.seriesId === bb.id && e.hasFile)).toHaveLength(2);
-    expect(area(first, 'history')).toMatchObject({ created: 2 });
+    expect(area(first, 'history')).toMatchObject({ created: 3 });
     expect(area(first, 'blocklist')).toMatchObject({ created: 1 });
     expect(db.select().from(t.blocklist).get()).toMatchObject({ protocol: 'torrent', torrentInfoHash: 'abcdef' });
     expect(area(first, 'delayProfiles').created + area(first, 'delayProfiles').skipped).toBe(2);

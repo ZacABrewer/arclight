@@ -66,7 +66,7 @@ describe('Sonarr plan', () => {
     expect(by['indexers']).toMatchObject({ total: 3, create: 2, unsupported: 1 });
     expect(by['notifications']).toMatchObject({ total: 3, create: 1, unsupported: 2 });
     expect(by['downloadClients']).toMatchObject({ total: 3, create: 2, unsupported: 1 });
-    expect(by['history']).toMatchObject({ total: 3, details: { otherEventsIgnored: 1 } });
+    expect(by['history']).toMatchObject({ total: 4, details: { otherEventsIgnored: 1 } });
     expect(plan.unsupported.map((u) => u.name)).toEqual(expect.arrayContaining(['Old Show (1999)', 'IPT', 'Slack', 'Trakt Watchlist']));
     expect(db.select().from(t.series).all()).toHaveLength(0);
     expect(db.select().from(migrateImported).all()).toHaveLength(0);
@@ -246,12 +246,15 @@ describe('Sonarr apply', () => {
 
   it('links grab/import history and the blocklist to the imported episodes', async () => {
     const result = await service.apply(sonarrSource());
-    expect(area(result, 'history')).toMatchObject({ created: 2, skipped: 1 });
+    expect(area(result, 'history')).toMatchObject({ created: 3, skipped: 1 });
     const bb = db.select().from(t.series).where(eq(t.series.tmdbId, 1396)).get()!;
     const pilot = db.select().from(t.episodes).where(eq(t.episodes.seriesId, bb.id)).all().find((e) => e.seasonNumber === 1 && e.episodeNumber === 1)!;
     const history = db.select().from(t.history).all();
-    expect(history.map((h) => h.eventType).sort()).toEqual(['downloadFolderImported', 'grabbed']);
-    expect(history.find((h) => h.eventType === 'grabbed')).toMatchObject({ seriesId: bb.id, episodeId: pilot.id, downloadId: 'HASH1', date: '2021-02-03T03:00:00.000Z', data: { indexer: 'NZBgeek', downloadClient: 'qBit' } });
+    expect(history.map((h) => h.eventType).sort()).toEqual(['downloadFolderImported', 'grabbed', 'grabbed']);
+    // One grab row per episode of the two-episode release, not one for the whole release.
+    const ep2 = db.select().from(t.episodes).where(eq(t.episodes.seriesId, bb.id)).all().find((e) => e.seasonNumber === 1 && e.episodeNumber === 2)!;
+    expect(history.filter((h) => h.eventType === 'grabbed').map((h) => h.episodeId).sort()).toEqual([pilot.id, ep2.id].sort());
+    expect(history.find((h) => h.eventType === 'grabbed' && h.episodeId === pilot.id)).toMatchObject({ seriesId: bb.id, episodeId: pilot.id, downloadId: 'HASH1', date: '2021-02-03T03:00:00.000Z', data: { indexer: 'NZBgeek', downloadClient: 'qBit' } });
     const ep3 = db.select().from(t.episodes).where(eq(t.episodes.seriesId, bb.id)).all().find((e) => e.episodeNumber === 3)!;
     const block = db.select().from(t.blocklist).get()!;
     expect(block).toMatchObject({ seriesId: bb.id, episodeIds: [ep3.id], protocol: 'torrent', torrentInfoHash: 'abcdef', indexerFlags: ['freeleech', 'scene'], releaseType: 'single' });
@@ -261,7 +264,7 @@ describe('Sonarr apply', () => {
     const result = await service.apply(sonarrSource(), { dryRun: true });
     expect(result.dryRun).toBe(true);
     expect(area(result, 'series').created).toBe(2);
-    expect(area(result, 'history').created).toBe(2);
+    expect(area(result, 'history').created).toBe(3);
     expect(db.select().from(t.series).all()).toHaveLength(0);
     expect(db.select().from(t.tags).all()).toHaveLength(0);
     expect(db.select().from(migrateImported).all()).toHaveLength(0);

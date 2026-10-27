@@ -78,7 +78,9 @@ export function defaultSelections(preview: MigrateStackPreview): Selections {
   const categories: Record<string, MigrateTorrentAction> = {};
   for (const s of preview.sources) {
     areas[s.key] = s.plan ? defaultAreas(s.plan) : [];
-    for (const c of s.plan?.torrentCategories ?? []) categories[c.category] = 'adopt';
+    // Adopting needs the built-in engine; with it off, keep the torrents in qBittorrent.
+    const action: MigrateTorrentAction = s.plan?.torrentEngineRunning === false ? 'external' : 'adopt';
+    for (const c of s.plan?.torrentCategories ?? []) categories[c.category] = action;
   }
   return { areas, conflictPolicy: 'skip', areaPolicies: {}, categories };
 }

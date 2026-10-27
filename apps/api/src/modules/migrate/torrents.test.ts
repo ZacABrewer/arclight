@@ -135,6 +135,7 @@ describe('files mode (BT_backup)', () => {
     const tv = plan.torrentCategories!.find((c) => c.category === 'tv-sonarr')!;
     expect(tv).toMatchObject({ count: 1, complete: 1, linked: 1, savePath: join(tmp, 'downloads') });
     expect(tv.sizeBytes).toBe(120_000);
+    expect(plan.torrentEngineRunning).toBe(true);
     expect(await testQbittorrent({ ...filesSource(), mode: 'files', pathMappings: [], app: 'qbittorrent' } as never, {})).toMatchObject({ ok: true });
   });
 
@@ -229,6 +230,7 @@ describe('files mode (BT_backup)', () => {
     writeData(join(tmp, 'downloads'), a);
     await session!.shutdown();
     session = null;
+    expect((await service().plan(filesSource())).torrentEngineRunning).toBe(false);
     const off = await service().apply(filesSource());
     expect(area(off)).toMatchObject({ failed: 1 });
     expect(off.items[0]!.message).toMatch(/engine is not running/);

@@ -263,7 +263,7 @@ export class MigrateService {
       }
       areas.push(row);
     }
-    let extras: Pick<MigrationPlan, 'torrentCategories'> = {};
+    let extras: Pick<MigrationPlan, 'torrentCategories' | 'torrentEngineRunning'> = {};
     try {
       extras = bundle.planExtras?.(env) ?? {};
     } catch (err) {

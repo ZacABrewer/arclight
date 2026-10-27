@@ -4775,6 +4775,7 @@
   "system.migrate.title": "[fr] Import your existing stack",
   "system.migrate.torrentCategories": "[fr] qBittorrent categories",
   "system.migrate.torrentCategoriesHint": "[fr] Adopt: the built-in engine takes over the torrent with the files where they are, keeps its upload totals and limits, and checks the data so nothing downloads again. Keep in qBittorrent: Arclight adds qBittorrent as a download client and leaves the torrent there.",
+  "system.migrate.torrentEngineOff": "[fr] The built-in torrent engine is off, so torrents can only be kept in qBittorrent for now. To move them to Arclight later, turn the engine on (and stop qBittorrent if it shares the VPN), then run the import again.",
   "system.migrate.torrents": "[fr] Torrents",
   "system.migrate.totals": "[fr] Totals",
   "system.migrate.updated": "[fr] Updated",

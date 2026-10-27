@@ -316,7 +316,7 @@ function bundle(items: SourceItem<TorrentPayload>[], warnings: MigrationWarning[
     schemaVersion: version,
     warnings,
     areas: { torrents: { mode: 'import', items, details: { complete, incomplete: items.length - complete } } },
-    planExtras: (env) => ({ torrentCategories: torrentPlanExtras(env, items) }),
+    planExtras: (env) => ({ torrentCategories: torrentPlanExtras(env, items), torrentEngineRunning: (env.deps.torrentSession?.() ?? null) !== null }),
   };
 }
 

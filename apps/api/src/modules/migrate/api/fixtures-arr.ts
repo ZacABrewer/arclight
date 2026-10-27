@@ -304,6 +304,7 @@ export function sonarrApiRoutes(): Record<string, Route> {
       { id: 2, episodeId: 1, seriesId: 1, sourceTitle: 'Breaking.Bad.S01E01E02.1080p.WEB-DL-NTb', date: '2021-02-03T04:05:06Z', quality: { quality: { id: 3 } }, data: {}, eventType: 'downloadFolderImported', downloadId: 'HASH1', languages: [{ id: 1, name: 'English' }] },
       { id: 3, episodeId: 1, seriesId: 1, sourceTitle: 'deleted', date: '2021-02-04T00:00:00Z', quality: { quality: { id: 3 } }, data: {}, eventType: 'episodeFileDeleted' },
       { id: 4, episodeId: 6, seriesId: 2, sourceTitle: 'Old.Show.S01E01', date: '2021-02-05T00:00:00Z', quality: { quality: { id: 1 } }, data: {}, eventType: 'grabbed' },
+      { id: 5, episodeId: 2, seriesId: 1, sourceTitle: 'Breaking.Bad.S01E01E02.1080p.WEB-DL-NTb', date: '2021-02-03T03:00:00Z', quality: { quality: { id: 3 } }, data: { indexer: 'NZBgeek', downloadClient: 'qBit' }, eventType: 'grabbed', downloadId: 'HASH1', languages: [{ id: 1, name: 'English' }] },
     ]),
     [`${p}/blocklist`]: paged([
       {

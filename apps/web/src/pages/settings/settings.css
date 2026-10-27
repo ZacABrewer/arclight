@@ -56,7 +56,6 @@
 
 .al-notice { padding: 12px 16px; border: 1px solid var(--al-warn-line); color: var(--al-warn-text); background: rgba(40,16,4,.4); font-size: 14px; }
 .al-inline-error { margin: 0; font-size: 13px; color: var(--al-danger-text); }
-.al-inline-warning { margin: 0; font-size: 13px; color: var(--al-warn-text); }
 .al-muted { color: var(--al-text-4); }
 
 @media (max-width: 1100px) {

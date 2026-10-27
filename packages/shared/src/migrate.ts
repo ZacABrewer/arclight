@@ -182,6 +182,8 @@ export const MigrationPlan = z.object({
   unsupported: z.array(MigrationUnsupported),
   /** qBittorrent sources only. */
   torrentCategories: z.array(MigrateTorrentCategory).optional(),
+  /** qBittorrent sources only: whether the built-in engine is running, so torrents can be adopted. */
+  torrentEngineRunning: z.boolean().optional(),
   createdAt: z.string(),
 });
 export type MigrationPlan = z.infer<typeof MigrationPlan>;

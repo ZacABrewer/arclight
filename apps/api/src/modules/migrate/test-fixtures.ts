@@ -264,6 +264,8 @@ export function makeSonarrDb(path: string): void {
   insert(db, 'History', { Id: 2, EpisodeId: 1, SeriesId: 1, SourceTitle: 'Breaking.Bad.S01E01E02.1080p.WEB-DL-NTb', Date: '2021-02-03 04:05:06Z', Quality: { quality: 3 }, Data: {}, EventType: 3, DownloadId: 'HASH1', Languages: [1] });
   insert(db, 'History', { Id: 3, EpisodeId: 1, SeriesId: 1, SourceTitle: 'deleted', Date: '2021-02-04 00:00:00Z', Quality: { quality: 3 }, Data: {}, EventType: 5 });
   insert(db, 'History', { Id: 4, EpisodeId: 6, SeriesId: 2, SourceTitle: 'Old.Show.S01E01', Date: '2021-02-05 00:00:00Z', Quality: { quality: 1 }, Data: {}, EventType: 1 });
+  // Sonarr writes one row per episode for a multi-episode or season release: same title, same moment.
+  insert(db, 'History', { Id: 5, EpisodeId: 2, SeriesId: 1, SourceTitle: 'Breaking.Bad.S01E01E02.1080p.WEB-DL-NTb', Date: '2021-02-03 03:00:00Z', Quality: { quality: 3 }, Data: { Indexer: 'NZBgeek', DownloadClient: 'qBit' }, EventType: 1, DownloadId: 'HASH1', Languages: [1] });
   table(db, 'Blocklist', ['Id', 'SeriesId', 'EpisodeIds', 'SourceTitle', 'Quality', 'Date', 'PublishedDate', 'Size', 'Protocol', 'Indexer', 'Message', 'TorrentInfoHash', 'Languages', 'IndexerFlags', 'ReleaseType']);
   insert(db, 'Blocklist', {
     Id: 1,

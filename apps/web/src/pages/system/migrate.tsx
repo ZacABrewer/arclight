@@ -676,7 +676,7 @@ function SourcePlan({ source, sel, onSel }: { source: MigrateStackSourcePlan; se
       <div className="mig-table">
         <Table columns={columns} rows={plan.areas} rowKey={(a) => a.area} sortable={false} caption={t('system.migrate.planOf', { app: title })} empty={<EmptyState title={t('system.migrate.nothingToImport')} />} />
       </div>
-      {plan.torrentCategories && plan.torrentCategories.length > 0 ? <TorrentCategories categories={plan.torrentCategories} sel={sel} onSel={onSel} /> : null}
+      {plan.torrentCategories && plan.torrentCategories.length > 0 ? <TorrentCategories categories={plan.torrentCategories} engineOff={plan.torrentEngineRunning === false} sel={sel} onSel={onSel} /> : null}
       <NoteList label={t('system.migrate.warnings')} tone="warn" items={plan.warnings.map((w) => ({ area: w.area, text: w.message }))} />
       <NoteList label={t('system.migrate.conflictsList')} tone="neutral" items={plan.conflicts.map((c) => ({ area: c.area, text: `${c.name}: ${c.reason}` }))} />
       <NoteList label={t('system.migrate.cantImportList')} tone="muted" items={plan.unsupported.map((u) => ({ area: u.area, text: `${u.name}: ${u.reason}` }))} />
@@ -684,7 +684,7 @@ function SourcePlan({ source, sel, onSel }: { source: MigrateStackSourcePlan; se
   );
 }
 
-function TorrentCategories({ categories, sel, onSel }: { categories: MigrateTorrentCategory[]; sel: Selections; onSel: (s: Selections) => void }) {
+function TorrentCategories({ categories, engineOff, sel, onSel }: { categories: MigrateTorrentCategory[]; engineOff: boolean; sel: Selections; onSel: (s: Selections) => void }) {
   const name = (c: string) => c || t('system.migrate.noCategory');
   const columns: Column<MigrateTorrentCategory>[] = [
     { key: 'category', header: t('system.migrate.category'), cell: (c) => name(c.category), className: 'mig-wrap' },
@@ -698,10 +698,10 @@ function TorrentCategories({ categories, sel, onSel }: { categories: MigrateTorr
       cell: (c) => (
         <Select
           aria-label={t('system.migrate.actionFor', { category: name(c.category) })}
-          value={sel.categories[c.category] ?? 'adopt'}
+          value={sel.categories[c.category] ?? (engineOff ? 'external' : 'adopt')}
           onChange={(e) => onSel({ ...sel, categories: { ...sel.categories, [c.category]: e.currentTarget.value as MigrateTorrentAction } })}
           options={[
-            { value: 'adopt', label: t('system.migrate.actionAdopt') },
+            { value: 'adopt', label: t('system.migrate.actionAdopt'), disabled: engineOff },
             { value: 'external', label: t('system.migrate.actionExternal') },
             { value: 'skip', label: t('system.migrate.actionSkip') },
           ]}
@@ -713,6 +713,7 @@ function TorrentCategories({ categories, sel, onSel }: { categories: MigrateTorr
     <div className="mig-block">
       <SectionLabel>{t('system.migrate.torrentCategories')}</SectionLabel>
       <p className="sys-muted mig-wrap">{t('system.migrate.torrentCategoriesHint')}</p>
+      {engineOff ? <p className="mig-wrap al-inline-warning">{t('system.migrate.torrentEngineOff')}</p> : null}
       <div className="mig-table">
         <Table columns={columns} rows={categories} rowKey={(c) => c.category || '(none)'} sortable={false} caption={t('system.migrate.torrentCategories')} />
       </div>

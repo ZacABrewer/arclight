@@ -623,16 +623,18 @@ export const HANDLERS: Handlers = {
   },
 
   history: {
-    // Same event, same title, same moment: the row came over already (another run reading the
-    // same app through the API instead of its files, or a second instance of the source).
+    // Same event, same title, same moment, same episode: the row came over already (another run
+    // reading the same app through the API instead of its files, or a second instance of the
+    // source). The episode matters: Sonarr writes one row per episode of a season pack.
     find: (env, item) => {
       const p = item.payload;
+      const episodeId = p.mediaType === 'series' ? resolveRef(env, 'episodes', p.sourceEpisodeId) : null;
       const row = env.db
-        .select({ id: t.history.id, date: t.history.date, eventType: t.history.eventType })
+        .select({ id: t.history.id, date: t.history.date, eventType: t.history.eventType, episodeId: t.history.episodeId })
         .from(t.history)
         .where(eq(t.history.sourceTitle, p.sourceTitle))
         .all()
-        .find((r) => r.date === p.date && r.eventType === p.eventType);
+        .find((r) => r.date === p.date && r.eventType === p.eventType && (p.mediaType !== 'series' || r.episodeId === episodeId));
       return row ? { id: row.id, reason: 'the same history event exists' } : null;
     },
     overwrite: (_env, _item, existing) => existing.id,

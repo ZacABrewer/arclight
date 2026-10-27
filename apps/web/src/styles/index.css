@@ -3,3 +3,6 @@
 @import './arclight/index.css';
 @import '../layout/shell.css';
 @import '../layout/core-pages.css';
+
+/* Running, but with a caveat: shown next to a status, not instead of it. */
+.al-inline-warning { margin: 0; font-size: 13px; color: var(--al-warn-text); }

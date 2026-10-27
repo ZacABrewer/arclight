@@ -284,7 +284,7 @@ export interface SourceBundle {
   warnings: MigrationWarning[];
   areas: SourceAreas;
   /** Extra plan fields computed against the current database (qBittorrent categories). */
-  planExtras?: (env: AreaEnv) => Pick<MigrationPlan, 'torrentCategories'>;
+  planExtras?: (env: AreaEnv) => Pick<MigrationPlan, 'torrentCategories' | 'torrentEngineRunning'>;
 }
 
 /** A staged area: every item carries its `stageArea`. */
