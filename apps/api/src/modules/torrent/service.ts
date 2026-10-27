@@ -396,11 +396,18 @@ export class TorrentService {
 
   /** Boot: subscribe to VPN events, auto-register the client, start the engine when enabled. */
   async boot(): Promise<void> {
-    this.subscribe();
-    this.autoRegisterClient();
-    await this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed mode check failed'));
+    // First, so the self-check can still start the engine if anything below fails.
     this.booted = true;
-    if (this.settings().enabled) await this.start();
+    this.subscribe();
+    try {
+      this.autoRegisterClient();
+    } catch (err) {
+      this.log?.warn({ err }, 'could not register the built-in download client');
+    }
+    await this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed mode check failed'));
+    const enabled = this.settings().enabled;
+    this.log?.info({ enabled }, enabled ? 'torrent engine boot: starting' : 'torrent engine boot: disabled in settings');
+    if (enabled) await this.start();
   }
 
   /**

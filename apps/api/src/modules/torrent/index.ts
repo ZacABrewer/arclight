@@ -72,7 +72,10 @@ export const torrentModule: AppModule = (ctx) => async (app) => {
   registerTorrentJobs(ctx.scheduler, service);
   app.addHook('onReady', async () => {
     service.subscribe();
-    if (!ctx.config.torrentEngine) return;
+    if (!ctx.config.torrentEngine) {
+      ctx.log.info('torrent engine not started at boot: ARCLIGHT_TORRENT_ENGINE=0');
+      return;
+    }
     // Not awaited: restoring large partial torrents can take longer than Fastify's ready
     // timeout, and a busy port must not keep the api from booting either.
     void service.boot().catch((err: unknown) => ctx.log.error({ err }, 'torrent engine boot failed'));
