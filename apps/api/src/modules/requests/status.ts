@@ -1,5 +1,5 @@
 import { inArray } from 'drizzle-orm';
-import type { MediaStatus, MediaType, RequestStatus } from '@arclight/shared';
+import { episodeAiredMs, type MediaStatus, type MediaType, type RequestStatus } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, episodeVersionFiles, mediaFiles, movies, seasons, series } from '../../db/schema.js';
 import { UHD_VERSION_TAG, sameTag } from '../library/index.js';
@@ -90,6 +90,7 @@ export function seriesAvailability(db: Db, tmdbIds: readonly number[], opts: Ava
       seriesId: episodes.seriesId,
       seasonNumber: episodes.seasonNumber,
       airDateUtc: episodes.airDateUtc,
+      airDate: episodes.airDate,
       hasFile: episodes.hasFile,
       episodeFileId: episodes.episodeFileId,
     })
@@ -120,7 +121,7 @@ export function seriesAvailability(db: Db, tmdbIds: readonly number[], opts: Ava
     const entries: SeasonStatusEntry[] = [];
     for (const season of seasonRows.filter((s) => s.seriesId === row.id).sort((a, b) => a.seasonNumber - b.seasonNumber)) {
       const eps = episodeRows.filter((e) => e.seriesId === row.id && e.seasonNumber === season.seasonNumber);
-      const aired = eps.filter((e) => e.airDateUtc !== null && e.airDateUtc <= nowIso);
+      const aired = eps.filter((e) => (episodeAiredMs(e) ?? Infinity) <= Date.parse(nowIso));
       // Nothing aired yet: judge by whatever episodes exist (all of them may have files early).
       const judged = aired.length > 0 ? aired : eps;
       const withFile = eps.filter((e) => e.hasFile);
@@ -182,14 +183,14 @@ export function seasonEpisodeCounts(db: Db, tmdbId: number, now: Date): Map<numb
   if (!row) return out;
   const nowIso = now.toISOString();
   const eps = db
-    .select({ seasonNumber: episodes.seasonNumber, airDateUtc: episodes.airDateUtc })
+    .select({ seasonNumber: episodes.seasonNumber, airDateUtc: episodes.airDateUtc, airDate: episodes.airDate })
     .from(episodes)
     .where(inArray(episodes.seriesId, [row.id]))
     .all();
   const all = new Map<number, number>();
   for (const e of eps) {
     all.set(e.seasonNumber, (all.get(e.seasonNumber) ?? 0) + 1);
-    if (e.airDateUtc !== null && e.airDateUtc <= nowIso) out.set(e.seasonNumber, (out.get(e.seasonNumber) ?? 0) + 1);
+    if ((episodeAiredMs(e) ?? Infinity) <= Date.parse(nowIso)) out.set(e.seasonNumber, (out.get(e.seasonNumber) ?? 0) + 1);
   }
   for (const [season, count] of all) if (!out.has(season)) out.set(season, count);
   return out;

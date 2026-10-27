@@ -14,6 +14,7 @@ import type {
   StatsTopItem,
   StorageStats,
 } from '@arclight/shared';
+import { episodeAiredMs } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, history, mediaFiles, movies, rootFolders, series } from '../../db/schema.js';
 import { libraryService, type IsCutoffMet } from '../library/index.js';
@@ -263,14 +264,14 @@ export class StatsService {
     const seriesRows = this.db.select({ id: series.id, monitored: series.monitored, status: series.status }).from(series).all();
     const seriesMonitored = new Map(seriesRows.map((s) => [s.id, s.monitored]));
     const eps = this.db
-      .select({ seriesId: episodes.seriesId, monitored: episodes.monitored, hasFile: episodes.hasFile, airDateUtc: episodes.airDateUtc, fileId: episodes.episodeFileId })
+      .select({ seriesId: episodes.seriesId, monitored: episodes.monitored, hasFile: episodes.hasFile, airDateUtc: episodes.airDateUtc, airDate: episodes.airDate, fileId: episodes.episodeFileId })
       .from(episodes)
       .all();
     const ep = { total: eps.length, downloaded: 0, missing: 0, unaired: 0, unmonitored: 0, cutoffUnmet: 0 };
     for (const e of eps) {
       if (e.hasFile) ep.downloaded++;
       else if (!e.monitored || !seriesMonitored.get(e.seriesId)) ep.unmonitored++;
-      else if (e.airDateUtc && Date.parse(e.airDateUtc) <= nowMs) ep.missing++;
+      else if ((episodeAiredMs(e) ?? Infinity) <= nowMs) ep.missing++;
       else ep.unaired++;
     }
     const movieRows = this.db.select({ id: movies.id, monitored: movies.monitored, hasFile: movies.hasFile, fileId: movies.movieFileId }).from(movies).all();

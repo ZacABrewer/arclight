@@ -663,3 +663,21 @@ export const ErrorResponse = z.object({
   code: z.string().optional(),
 });
 export type ErrorResponse = z.infer<typeof ErrorResponse>;
+
+/**
+ * When an episode aired, in ms: the UTC instant, or else the start of its air date (UTC). Null
+ * when neither is known. Rows imported without `airDateUtc` but with an `airDate` used to count
+ * as never aired on the server (missing from totals and from the Missing search) while the web
+ * already showed them as wanted.
+ */
+export function episodeAiredMs(ep: { airDate?: string | null | undefined; airDateUtc?: string | null | undefined }): number | null {
+  if (ep.airDateUtc) {
+    const ms = Date.parse(ep.airDateUtc);
+    if (!Number.isNaN(ms)) return ms;
+  }
+  if (ep.airDate && /^\d{4}-\d{2}-\d{2}$/.test(ep.airDate)) {
+    const ms = Date.parse(`${ep.airDate}T00:00:00Z`);
+    if (!Number.isNaN(ms)) return ms;
+  }
+  return null;
+}

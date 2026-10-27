@@ -28,6 +28,12 @@ describe('TunnelGuard', () => {
     expect(steps).toBeLessThan(30);
   });
 
+  it('treats a slow tunnel as choking even when it was slow from the first probe', () => {
+    const g = new TunnelGuard();
+    expect(g.observe(1500, { down: 5 * MiB, up: MiB })).toBe(true);
+    expect(g.active).toBe(true);
+  });
+
   it('never limits below the floor', () => {
     const g = new TunnelGuard();
     for (let i = 0; i < 30; i++) g.observe(-1, { down: 0, up: 0 });

@@ -9,6 +9,12 @@ import net from 'node:net';
 /** Floor for guard limits: downloads keep moving even while the tunnel struggles. */
 export const GUARD_MIN_DOWN = 256 * 1024;
 export const GUARD_MIN_UP = 64 * 1024;
+/**
+ * An RTT above this counts as choking whatever the baseline says: the baseline is learned from
+ * the probes, so one learned while the tunnel was already saturated (1.5 s in a stress run) hid
+ * the problem. A healthy tunnel answers well below this even to a distant exit.
+ */
+export const GUARD_MAX_RTT_MS = 800;
 /** Healthy probes in a row before the limits are raised one step. */
 const HEALTHY_STEPS = 3;
 const RAISE = 1.5;
@@ -37,7 +43,7 @@ export class TunnelGuard {
   /** The probe's RTT in ms (-1 = failed or timed out) and the current engine rates. True when the limits changed. */
   observe(rttMs: number, rates: GuardRates): boolean {
     const base = this.baseline;
-    const bad = rttMs < 0 || (base !== null && rttMs > Math.max(base * 4, base + 400));
+    const bad = rttMs < 0 || rttMs > GUARD_MAX_RTT_MS || (base !== null && rttMs > Math.max(base * 4, base + 400));
     if (!bad) {
       // Lowest RTT seen, drifting up slowly so a route change does not leave it too low forever.
       this.baseline = base === null || rttMs < base ? rttMs : base + (rttMs - base) * 0.02;

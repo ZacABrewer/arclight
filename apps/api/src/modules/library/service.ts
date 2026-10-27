@@ -39,6 +39,7 @@ import type {
   WantedEpisode,
   WantedEpisodesQuery,
 } from '@arclight/shared';
+import { episodeAiredMs } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
@@ -357,6 +358,7 @@ interface StatEpisode {
   monitored: boolean;
   hasFile: boolean;
   airDateUtc: string | null;
+  airDate?: string | null;
 }
 
 interface StatFile {
@@ -377,7 +379,7 @@ export function computeSeasonStatistics(
   let previousAiring: string | null = null;
 
   for (const e of episodes) {
-    const airMs = e.airDateUtc ? Date.parse(e.airDateUtc) : Number.NaN;
+    const airMs = episodeAiredMs(e) ?? Number.NaN;
     const aired = !Number.isNaN(airMs) && airMs <= nowMs;
     if (e.hasFile) episodeFileCount++;
     if (e.monitored) monitoredEpisodeCount++;
@@ -712,8 +714,8 @@ export function applyMonitorOption(db: LibraryDb, seriesId: number, option: Moni
       case 'none':
         return false;
       case 'future': {
-        if (!e.airDateUtc) return true;
-        return Date.parse(e.airDateUtc) >= nowMs;
+        const aired = episodeAiredMs(e);
+        return aired === null || aired >= nowMs;
       }
       case 'missing':
         return !e.hasFile;
@@ -1524,8 +1526,8 @@ export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: 
   const nowMs = Date.parse(now);
   const versioned = anyVersioned(db, t.series);
   const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials).filter((r) => {
-    if (!r.episode.airDateUtc) return false;
-    return Date.parse(r.episode.airDateUtc) <= nowMs;
+    const aired = episodeAiredMs(r.episode);
+    return aired !== null && aired <= nowMs;
   });
   if (!versioned) return paginate(rows.map((r) => toWanted(r)), q);
   const files = fileRowsForEpisodes(
@@ -1667,7 +1669,7 @@ export function listCutoffUnmetMovies(db: LibraryDb, q: PageQuery, isCutoffMet: 
 export async function getLibraryStatistics(db: LibraryDb, now: string = nowIso()): Promise<LibraryStatistics> {
   const seriesRows = db.select({ monitored: t.series.monitored, status: t.series.status }).from(t.series).all();
   const episodeRows = db
-    .select({ seasonNumber: t.episodes.seasonNumber, monitored: t.episodes.monitored, hasFile: t.episodes.hasFile, airDateUtc: t.episodes.airDateUtc })
+    .select({ seasonNumber: t.episodes.seasonNumber, monitored: t.episodes.monitored, hasFile: t.episodes.hasFile, airDateUtc: t.episodes.airDateUtc, airDate: t.episodes.airDate })
     .from(t.episodes)
     .all();
   const movieRows = db.select({ monitored: t.movies.monitored, hasFile: t.movies.hasFile }).from(t.movies).all();
