@@ -9,7 +9,7 @@ import { VpnError, errorMessage } from './errors.js';
 import { GluetunClient } from './gluetun-client.js';
 import { findInterfaceIPv4, ipv4FromNodeInterfaces, type InterfaceProbeDeps } from './interfaces.js';
 import { fetchPublicIp } from './public-ip.js';
-import { effectiveControlUrl, effectiveApiKey } from './settings.js';
+import { effectiveControlUrl, effectiveApiKey, isLoopbackControlUrl } from './settings.js';
 import type { ShellRunner } from './shell.js';
 import { tunnelNameFromConfig, WireguardWindows } from './wireguard-windows.js';
 
@@ -115,13 +115,7 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
  * (and not from the home IP) proves the tunnel works. Null when that cannot be confirmed.
  */
 async function confirmTunnelDirectly(deps: ProviderDeps, settings: VpnSettings, controlUrl: string, why: string): Promise<ProbeResult | null> {
-  let host: string;
-  try {
-    host = new URL(controlUrl).hostname;
-  } catch {
-    return null;
-  }
-  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') return null;
+  if (!isLoopbackControlUrl(controlUrl)) return null;
   let publicIp: string;
   try {
     publicIp = await fetchPublicIp(deps.fetch, settings.publicIpCheckUrl);

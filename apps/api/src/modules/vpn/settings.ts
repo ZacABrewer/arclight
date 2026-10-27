@@ -29,6 +29,19 @@ export function effectiveControlUrl(p: GluetunProviderSettings, env: NodeJS.Proc
   return p.controlUrl ?? (env[VPN_CONTROL_URL_ENV]?.trim() || DEFAULT_GLUETUN_CONTROL_URL);
 }
 
+/**
+ * True when the Gluetun control URL is on loopback: Arclight then runs in gluetun's network
+ * namespace, where gluetun's firewall drops all traffic that does not go through the tunnel.
+ */
+export function isLoopbackControlUrl(url: string): boolean {
+  try {
+    const host = new URL(url).hostname;
+    return host === 'localhost' || host === '127.0.0.1' || host === '[::1]';
+  } catch {
+    return false;
+  }
+}
+
 export function maskVpnSettings(value: VpnSettings, env: NodeJS.ProcessEnv = process.env): VpnSettingsResponse {
   const p = value.provider;
   if (p.type !== 'gluetun') return value;

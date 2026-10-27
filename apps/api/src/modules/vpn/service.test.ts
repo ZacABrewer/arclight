@@ -90,9 +90,9 @@ describe('VpnService status and events', () => {
 });
 
 describe('slow gluetun control server', () => {
-  it('keeps the VPN up through a few unanswered checks, then reports it down', async () => {
+  it('keeps a remote gluetun up through a few unanswered checks, then reports it down', async () => {
     let result: ProbeResult = { connected: true, publicIp: '212.0.0.1', forwardedPort: 41000 };
-    const h = await setup({ settings: { enabled: true }, probe: () => result });
+    const h = await setup({ settings: { enabled: true, provider: { type: 'gluetun', controlUrl: 'http://gluetun:8000' } }, probe: () => result });
     await expect(h.service.refresh()).resolves.toMatchObject({ connected: true, killSwitchEngaged: false });
     result = { connected: false, unreachable: true, error: 'Gluetun did not answer within 10000 ms.' };
     for (let i = 1; i <= 3; i++) {
@@ -100,6 +100,21 @@ describe('slow gluetun control server', () => {
       expect(st).toMatchObject({ connected: true, killSwitchEngaged: false, publicIp: '212.0.0.1', forwardedPort: 41000 });
       expect(st.warning).toContain(`(${i}/3)`);
     }
+    await expect(h.service.refresh()).resolves.toMatchObject({ connected: false, killSwitchEngaged: true });
+    h.service.stopWatch();
+  });
+
+  it("never trips on silence when Arclight shares gluetun's namespace, only on an explicit stop", async () => {
+    let result: ProbeResult = { connected: true, publicIp: '212.0.0.1', forwardedPort: 41000 };
+    const h = await setup({ settings: { enabled: true, provider: { type: 'gluetun', controlUrl: 'http://localhost:8000' } }, probe: () => result });
+    await h.service.refresh();
+    result = { connected: false, unreachable: true, error: 'Gluetun did not answer within 10000 ms.' };
+    for (let i = 1; i <= 8; i++) {
+      const st = await h.service.refresh();
+      expect(st).toMatchObject({ connected: true, killSwitchEngaged: false, forwardedPort: 41000 });
+      expect(st.warning).toContain("gluetun's firewall");
+    }
+    result = { connected: false, error: 'Gluetun reports the VPN is stopped.' };
     await expect(h.service.refresh()).resolves.toMatchObject({ connected: false, killSwitchEngaged: true });
     h.service.stopWatch();
   });

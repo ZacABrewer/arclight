@@ -7,7 +7,7 @@ import { getDownloadClientsService } from '../download-clients/index.js';
 import { VpnError, errorMessage } from './errors.js';
 import { defaultInterfaceDeps } from './interfaces.js';
 import { createProviders, type ProbeResult, type ProviderDeps, type VpnProvider } from './providers.js';
-import { applyVpnUpdate, getVpnSettings, maskVpnSettings, saveVpnSettings } from './settings.js';
+import { applyVpnUpdate, effectiveControlUrl, getVpnSettings, isLoopbackControlUrl, maskVpnSettings, saveVpnSettings } from './settings.js';
 import { nodeShellRunner } from './shell.js';
 
 // VPN status, transitions and the grab guard.
@@ -274,12 +274,25 @@ export class VpnService {
     } catch (err) {
       result = { connected: false, error: errorMessage(err) };
     }
-    if (result.unreachable && s.provider.type === 'gluetun' && prev.connected && this.unreachableStreak < GLUETUN_UNREACHABLE_GRACE) {
+    // In gluetun's own namespace a silent control server cannot mean a leak (gluetun's firewall
+    // drops everything outside the tunnel, and gluetun restarts a dead tunnel itself): keep the
+    // VPN up until gluetun answers. Its control server stalls behind a busy port-forward refresh.
+    const sameNamespace = s.provider.type === 'gluetun' && isLoopbackControlUrl(effectiveControlUrl(s.provider, this.env));
+    if (
+      result.unreachable &&
+      s.provider.type === 'gluetun' &&
+      prev.connected &&
+      (sameNamespace || this.unreachableStreak < GLUETUN_UNREACHABLE_GRACE)
+    ) {
       this.unreachableStreak++;
       if (live) this.scheduleRecheck();
       const { error: _e, warning: _w, ...kept } = prev;
-      const warning = `${result.error ?? 'Gluetun did not answer.'} Still treating the VPN as up; re-checking (${this.unreachableStreak}/${GLUETUN_UNREACHABLE_GRACE}).`;
-      this.log?.warn({ streak: this.unreachableStreak, error: result.error }, 'gluetun slow to answer; keeping the VPN up');
+      const warning = sameNamespace
+        ? `${result.error ?? 'Gluetun did not answer.'} Arclight shares gluetun's network, where gluetun's firewall blocks traffic outside the tunnel, so the VPN stays up until gluetun answers again (${this.unreachableStreak} checks without an answer).`
+        : `${result.error ?? 'Gluetun did not answer.'} Still treating the VPN as up; re-checking (${this.unreachableStreak}/${GLUETUN_UNREACHABLE_GRACE}).`;
+      if (this.unreachableStreak === 1 || this.unreachableStreak % 20 === 0) {
+        this.log?.warn({ streak: this.unreachableStreak, error: result.error }, 'gluetun slow to answer; keeping the VPN up');
+      }
       return { status: { ...kept, lastChecked: checked, warning }, probed: false };
     }
     if (!result.unreachable) this.unreachableStreak = 0;
