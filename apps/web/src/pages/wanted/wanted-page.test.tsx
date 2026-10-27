@@ -39,8 +39,27 @@ const mismatch = {
   status: 'notAllowed',
   reasons: ['qualityNotAllowed'],
   migration: { state: 'queued', attempts: 1, lastSearchedAt: null, message: null },
+  replacement: { state: 'manualOnly', nextSearchAt: null, maxAttempts: 3 },
 };
 const paged = (records: unknown[]) => ({ page: 1, pageSize: 50, totalRecords: records.length, records });
+const HOUR = 3_600_000;
+/** Episode 1 / movie 9 were searched 3 h ago and come back in 5 h; the rest were never searched. */
+const searchStatus = (mediaType: string, id: number) => ({
+  mediaType,
+  id,
+  monitored: true,
+  lastSearch:
+    id === 1 || id === 9
+      ? { time: new Date(Date.now() - 3 * HOUR).toISOString(), source: 'automatic', outcome: 'rejected', releases: 4, approved: 0, detail: 'Quality not wanted' }
+      : null,
+  automatic: {
+    state: 'scheduled',
+    job: mediaType === 'movie' ? 'MissingMovieSearch' : 'MissingEpisodeSearch',
+    nextSearchAt: new Date(Date.now() + 5 * HOUR + 60_000).toISOString(),
+    searchCount: 1,
+    runsAhead: 0,
+  },
+});
 
 let calls: Array<{ url: string; method: string; body?: unknown }> = [];
 
@@ -56,6 +75,11 @@ beforeEach(() => {
       if (method === 'POST' && path === '/api/v1/command/search') {
         return new Response(JSON.stringify({ releases: 3, approved: 1, pending: 0, grabbed: [] }), { status: 200 });
       }
+      if (path === '/api/v1/release/searchstatus') {
+        const params = new URL(url, 'http://localhost').searchParams;
+        const ids = (params.get('ids') ?? '').split(',').map(Number);
+        return new Response(JSON.stringify(ids.map((id) => searchStatus(params.get('mediaType') ?? 'episode', id))), { status: 200 });
+      }
       const routes: Record<string, unknown> = {
         '/api/v1/wanted/missing/episodes': paged([wantedEp(1, 'Severance', 8), wantedEp(2, 'Andor', 3)]),
         '/api/v1/wanted/missing/movies': paged([makeMovie({ id: 9, title: 'Arrival', digitalRelease: '2017-02-14' })]),
@@ -63,6 +87,8 @@ beforeEach(() => {
         '/api/v1/wanted/cutoff/movies': paged([makeMovie({ id: 12, title: 'Heat', digitalRelease: '1999-06-01' })]),
         '/api/v1/qualityprofile': [{ id: 1, name: 'HD-1080p' }],
         '/api/v1/profilemigration/mismatch': paged([mismatch]),
+        // Andor S02E03 (episode 2) is downloading.
+        '/api/v1/queue/summary': [{ id: 4, mediaType: 'series', seriesId: 12, episodeIds: [2], trackedState: 'downloading', trackedStatus: 'ok', status: 'downloading', progress: 0.42 }],
         '/api/v1/health': { status: 'ok', checks: [] },
         '/api/v1/system/status': {},
       };
@@ -95,10 +121,26 @@ describe('wanted page', () => {
     renderAt('/wanted/missing');
     const table = await screen.findByRole('table');
     expect(await within(table).findByRole('link', { name: 'Severance' })).toBeTruthy();
-    expect(within(table).getAllByText('Missing')).toHaveLength(2);
+    // Andor S02E03 is in the download queue: its chip says so instead of Missing.
+    expect(await within(table).findByText('Downloading 42%')).toBeTruthy();
+    expect(within(table).getAllByText('Missing')).toHaveLength(1);
     expect(within(table).getByText('S02E08').className).toContain('al-td--mono');
     expect(screen.getByText('2 episodes')).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Missing' }).getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('shows per row the last search, the next automatic search and the queue state', async () => {
+    renderAt('/wanted/missing');
+    const table = await screen.findByRole('table');
+    const severance = (await within(table).findByRole('link', { name: 'Severance' })).closest('tr')!;
+    await waitFor(() => expect(within(severance).getByText('Last searched 3h ago · all results rejected: Quality not wanted')).toBeTruthy());
+    expect(within(severance).getByText('Next automatic search ~in 5h')).toBeTruthy();
+    const andor = within(table).getByRole('link', { name: 'Andor' }).closest('tr')!;
+    expect(within(andor).getByText('Not searched yet')).toBeTruthy();
+    expect(await within(andor).findByText('Downloading 42%')).toBeTruthy();
+    // One status request for the page, not one per row.
+    expect(calls.filter((c) => c.url.startsWith('/api/v1/release/searchstatus?'))).toHaveLength(1);
+    expect(calls.find((c) => c.url.startsWith('/api/v1/release/searchstatus?'))?.url).toContain('ids=1%2C2');
   });
 
   it('selecting rows shows the bulk bar; Search selected posts the episode ids', async () => {
@@ -166,7 +208,8 @@ describe('wanted page', () => {
     const link = await screen.findByRole('link', { name: 'Severance' });
     const table = link.closest('table')!;
     expect(within(table).getByText('Not allowed by profile')).toBeTruthy();
-    expect(within(table).getByText('Waiting')).toBeTruthy();
+    expect(within(table).getByText('Not automatic: replacement is manual for this profile')).toBeTruthy();
+    expect(within(table).getByText('Waiting · search 1 of 3')).toBeTruthy();
     expect(within(table).getByText('Bluray-2160p')).toBeTruthy();
     const req = calls.find((c) => c.url.startsWith('/api/v1/profilemigration/mismatch?'));
     expect(req?.url).toContain('mediaType=series');

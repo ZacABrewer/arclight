@@ -170,6 +170,11 @@
 .mk-mrow__title { font-size: 14px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .mk-mrow__sub { font-size: 12px; color: var(--al-text-4); }
 
+/* ---------- search pipeline: "last searched · outcome" / "next automatic search" ---------- */
+.mk-search-status { display: flex; flex-direction: column; gap: 2px; min-width: 0; font-size: 12px; line-height: 1.35; color: var(--al-text-4); overflow-wrap: anywhere; }
+.mk-search-status > span:last-child { color: var(--al-text-5); }
+.mk-search-status[data-compact] { font-size: 11px; }
+
 /* ---------- checkbox grid (permission matrix, season checklist) ---------- */
 .mk-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 20px; }
 

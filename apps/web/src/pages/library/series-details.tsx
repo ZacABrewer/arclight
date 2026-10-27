@@ -1,7 +1,7 @@
 import { languageNames } from '../../lib/format.js';
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
-import type { AdditionalLanguageTarget, Episode, MediaFile, NewItemMonitor, Season, Series, SeriesType } from '@arclight/shared';
+import type { AdditionalLanguageTarget, Episode, ItemSearchStatus, MediaFile, NewItemMonitor, QueueSummaryItem, Season, Series, SeriesType } from '@arclight/shared';
 import {
   Accordion,
   AccordionItem,
@@ -26,7 +26,10 @@ import { countStatuses, episodeStatus } from '../../components/media/episode-sta
 import { episodeCode, formatBytes, formatDate, imageUrl, seasonLabel } from '../../components/media/format.js';
 import { FoundInLists } from '../../components/media/found-in-lists.js';
 import { EpisodeChip, Loading, MonitorSwitch, Num, QueryError, SwipeRow, TagChips, qualityName, useIsMobile } from '../../components/media/media-kit.js';
+import { groupSearchText, QueueStateChip, SearchStatusLines, searchStatusTitle } from '../../components/media/pipeline-status.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
+import { useQueueSummary } from '../../hooks/activity.js';
+import { useSearchStatus } from '../../hooks/search-status.js';
 import {
   useAutomaticSearch,
   useDeleteMediaFile,
@@ -109,6 +112,7 @@ export function SeriesDetailsPage() {
   const [interactive, setInteractive] = useState<InteractiveState | null>(null);
   const [addLanguage, setAddLanguage] = useState<AddLanguageState | null>(null);
   const navigate = useNavigate();
+  const queue = useQueueSummary();
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.seriesDetails.invalidSeriesIdRawid', { rawId }))} title={t('library.seriesDetails.seriesNotFound')} />;
   if (series.isPending) return <Loading />;
@@ -140,6 +144,7 @@ export function SeriesDetailsPage() {
           <>
             <MonitorSwitch monitored={s.monitored} onChange={(m) => setMonitored.mutate({ id: s.id, monitored: m })} label={t('common.monitorTitle', { monitored: s.monitored, title: s.title })} />
             <StatusChip status={s.monitored ? 'monitored' : 'unmonitored'} large />
+            <QueueStateChip items={(queue.data ?? []).filter((i) => i.seriesId === s.id)} large />
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
             <span className="al-chip al-chip--nodot al-chip--lg">{SERIES_TYPE_LABELS[s.seriesType]}</span>
             <TagChips ids={s.tags} tags={tags.data} />
@@ -290,6 +295,13 @@ function SeasonList({
   }, [episodes]);
   const fileById = useMemo(() => new Map((files ?? []).map((f) => [f.id, f])), [files]);
   const progress = useQueueProgress(useMemo(() => ({ seriesId: series.id }), [series.id]));
+  // Missing (wanted) episodes: when they were searched and when the scheduled search comes back.
+  const wantedIds = useMemo(
+    () => (episodes ?? []).filter((e) => episodeStatus(e, { seriesMonitored: series.monitored }) === 'wanted').map((e) => e.id),
+    [episodes, series.monitored],
+  );
+  const searchStatus = useSearchStatus('episode', wantedIds);
+  const searchById = useMemo(() => new Map((searchStatus.data ?? []).map((s) => [s.id, s])), [searchStatus.data]);
   const seasons = orderSeasons(series.seasons);
   const [drawer, setDrawer] = useState<Episode | null>(null);
   const latest = seasons.find((x) => x.seasonNumber > 0)?.seasonNumber;
@@ -309,6 +321,7 @@ function SeasonList({
             loadingEpisodes={episodes === undefined}
             fileById={fileById}
             progress={progress.episodes}
+            searchStatus={searchById}
             defaultOpen={season.seasonNumber === latest}
             onInteractive={onInteractive}
             onAddLanguage={onAddLanguage}
@@ -320,7 +333,7 @@ function SeasonList({
         series={series}
         episode={drawer}
         file={drawer?.episodeFileId != null ? fileById.get(drawer.episodeFileId) : undefined}
-        downloading={drawer ? progress.episodes.get(drawer.id) : undefined}
+        queued={drawer ? progress.episodes.get(drawer.id) : undefined}
         onClose={() => setDrawer(null)}
         onInteractive={onInteractive}
         onAddLanguage={onAddLanguage}
@@ -336,6 +349,7 @@ function SeasonPanel({
   loadingEpisodes,
   fileById,
   progress,
+  searchStatus,
   defaultOpen,
   onInteractive,
   onAddLanguage,
@@ -346,7 +360,9 @@ function SeasonPanel({
   episodes: Episode[] | undefined;
   loadingEpisodes: boolean;
   fileById: Map<number, MediaFile>;
-  progress: Map<number, number>;
+  progress: Map<number, QueueSummaryItem>;
+  /** Search status of the series's missing episodes. */
+  searchStatus: Map<number, ItemSearchStatus>;
   defaultOpen: boolean;
   onInteractive: (s: InteractiveState) => void;
   onAddLanguage: (s: AddLanguageState) => void;
@@ -359,6 +375,12 @@ function SeasonPanel({
   const counts = countStatuses(episodes ?? [], { seriesMonitored: series.monitored });
   const have = stats?.episodeFileCount ?? 0;
   const want = stats?.episodeCount ?? 0;
+  // Missing episodes not already in the queue: when will the scheduled search look for them?
+  const waiting = (episodes ?? [])
+    .filter((ep) => !progress.has(ep.id))
+    .map((ep) => searchStatus.get(ep.id))
+    .filter((s): s is ItemSearchStatus => s !== undefined);
+  const waitingText = groupSearchText(waiting);
 
   return (
     <AccordionItem
@@ -414,6 +436,12 @@ function SeasonPanel({
       ) : !episodes || episodes.length === 0 ? (
         <EmptyState title={t('library.seriesDetails.noEpisodesYet')} />
       ) : (
+        <>
+        {waitingText ? (
+          <p className="mk-muted" style={{ fontSize: 13, margin: '0 0 8px' }} data-testid="season-search">
+            {waitingText}
+          </p>
+        ) : null}
         <div className="mk-eps" role="table" aria-label={t('library.seriesDetails.labelEpisodes', { label })}>
           <div className="mk-eps__head" role="row">
             <span role="columnheader">
@@ -434,13 +462,15 @@ function SeasonPanel({
               series={series}
               episode={ep}
               file={ep.episodeFileId != null ? fileById.get(ep.episodeFileId) : undefined}
-              downloading={progress.get(ep.id)}
+              queued={progress.get(ep.id)}
+              search={searchStatus.get(ep.id)}
               onOpen={() => onOpenEpisode(ep)}
               onInteractive={onInteractive}
               onAddLanguage={onAddLanguage}
             />
           ))}
         </div>
+        </>
       )}
     </AccordionItem>
   );
@@ -450,7 +480,8 @@ function EpisodeRow({
   series,
   episode: ep,
   file,
-  downloading,
+  queued,
+  search: searchStatus,
   onOpen,
   onInteractive,
   onAddLanguage,
@@ -458,7 +489,10 @@ function EpisodeRow({
   series: Series;
   episode: Episode;
   file: MediaFile | undefined;
-  downloading: number | undefined;
+  /** The episode's download in the queue, if any. */
+  queued: QueueSummaryItem | undefined;
+  /** Last / next search (missing episodes only): the status chip's tooltip. */
+  search: ItemSearchStatus | undefined;
   onOpen: () => void;
   onInteractive: (s: InteractiveState) => void;
   onAddLanguage: (s: AddLanguageState) => void;
@@ -470,7 +504,7 @@ function EpisodeRow({
   const code = episodeCode(ep.seasonNumber, ep.episodeNumber);
   const runSearch = () => search.mutate({ episodeIds: [ep.id] });
   const row = (
-    <div className="mk-ep" role="row" data-live={downloading != null || undefined}>
+    <div className="mk-ep" role="row" data-live={queued?.trackedState === 'downloading' || undefined}>
       <span className="mk-ep__monitor" role="cell">
         <MonitorSwitch
           monitored={ep.monitored}
@@ -489,8 +523,8 @@ function EpisodeRow({
       <span className="mk-ep__date al-num" role="cell">
         {formatDate(ep.airDateUtc ?? ep.airDate)}
       </span>
-      <span role="cell">
-        <EpisodeChip episode={ep} seriesMonitored={series.monitored} downloading={downloading} />
+      <span role="cell" title={queued ? undefined : searchStatusTitle(searchStatus)}>
+        <EpisodeChip episode={ep} seriesMonitored={series.monitored} queued={queued} />
       </span>
       <span className="mk-ep__size" role="cell">
         {file ? formatBytes(file.sizeBytes) : '—'}
@@ -535,7 +569,7 @@ function EpisodeDrawer({
   series,
   episode,
   file,
-  downloading,
+  queued,
   onClose,
   onInteractive,
   onAddLanguage,
@@ -543,13 +577,14 @@ function EpisodeDrawer({
   series: Series;
   episode: Episode | null;
   file: MediaFile | undefined;
-  downloading: number | undefined;
+  queued: QueueSummaryItem | undefined;
   onClose: () => void;
   onInteractive: (s: InteractiveState) => void;
   onAddLanguage: (s: AddLanguageState) => void;
 }) {
   const search = useAutomaticSearch();
   const history = useMediaHistory({ episodeId: episode?.id ?? 0 }, episode !== null);
+  const searchStatus = useSearchStatus('episode', episode ? [episode.id] : []);
   if (!episode) return null;
   const code = episodeCode(episode.seasonNumber, episode.episodeNumber);
   return (
@@ -569,9 +604,13 @@ function EpisodeDrawer({
     >
       <BackdropFrame className="mk-drawer-still" src={imageUrl(series.images, 'fanart')} title={`${series.title} ${code}`} />
       <div className="mk-row" style={{ marginBottom: 12 }}>
-        <EpisodeChip episode={episode} seriesMonitored={series.monitored} downloading={downloading} />
+        <EpisodeChip episode={episode} seriesMonitored={series.monitored} queued={queued} />
         <StatusChip status={episode.monitored ? 'monitored' : 'unmonitored'} />
       </div>
+      <section className="mk-drawer-section" aria-label={t('components.media.pipeline.automaticSearch')}>
+        <div className="al-label">{t('components.media.pipeline.automaticSearch')}</div>
+        {searchStatus.data?.[0] ? <SearchStatusLines status={searchStatus.data[0]} /> : <span className="mk-muted">—</span>}
+      </section>
       <p className="mk-hero__overview" style={{ fontSize: 14 }}>
         {episode.overview || t('common.noOverviewAvailable')}
       </p>

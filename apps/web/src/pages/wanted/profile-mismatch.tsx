@@ -3,12 +3,39 @@ import { Link } from '@tanstack/react-router';
 import type { ProfileFileStatus, ProfileMismatchRecord } from '@arclight/shared';
 import { Button, EmptyState, Pane, Paginator, Segmented, Table, type Column } from '../../arclight/index.js';
 import { Loading, QueryError, useIsMobile } from '../../components/media/media-kit.js';
+import { replacementText } from '../../components/media/pipeline-status.js';
 import { fitReasonLabel, ProfileFitChip, queueStateLabel } from '../../components/media/profile-fit.js';
 import { useAutomaticSearch } from '../../hooks/library.js';
 import { useProfileMismatch } from '../../hooks/profile-migration.js';
+import { relativeTime } from '../../lib/format.js';
 import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 50;
+
+/**
+ * Whether the file will be replaced and when (first line), then what the work list did so far:
+ * its state, searches out of the maximum and the last message.
+ */
+function ReplacementLines({ record, compact }: { record: ProfileMismatchRecord; compact?: boolean }) {
+  const m = record.migration;
+  const max = record.replacement?.maxAttempts;
+  const progress = m
+    ? [
+        queueStateLabel(m.state),
+        m.attempts > 0 && max ? t('profileMigration.wanted.attempts', { attempts: m.attempts, max }) : null,
+        m.lastSearchedAt ? t('profileMigration.wanted.lastSearched', { when: relativeTime(m.lastSearchedAt) }) : null,
+        m.message,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+    : null;
+  return (
+    <span className="mk-search-status" data-compact={compact || undefined} data-testid="replacement">
+      <span data-state={record.replacement?.state}>{replacementText(record)}</span>
+      {progress ? <span>{progress}</span> : null}
+    </span>
+  );
+}
 
 type StatusFilter = 'notAllowed' | 'upgradeAllowed' | 'both';
 
@@ -69,8 +96,7 @@ export function ProfileMismatchList({ kind }: { kind: 'episodes' | 'movies' }) {
     {
       key: 'migration',
       header: t('profileMigration.wanted.replacement'),
-      muted: true,
-      cell: (r) => (r.migration ? `${queueStateLabel(r.migration.state)}${r.migration.message ? ` · ${r.migration.message}` : ''}` : '—'),
+      cell: (r) => <ReplacementLines record={r} />,
     },
     {
       key: 'search',
@@ -122,6 +148,7 @@ export function ProfileMismatchList({ kind }: { kind: 'episodes' | 'movies' }) {
                 <div style={{ minWidth: 0 }}>
                   <div className="mk-mrow__title">{label(r)}</div>
                   <div className="mk-mrow__sub al-num">{`${r.quality} · ${r.qualityProfileName}`}</div>
+                  <ReplacementLines record={r} compact />
                 </div>
                 <ProfileFitChip status={r.status} />
               </div>

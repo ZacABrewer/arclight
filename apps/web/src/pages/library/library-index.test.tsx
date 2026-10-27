@@ -54,6 +54,11 @@ beforeEach(() => {
         '/api/v1/rootfolder': [],
         '/api/v1/qualityprofile': [],
         '/api/v1/profilemigration/items': [{ mediaType: 'series', id: 1, status: 'notAllowed', notAllowed: 2, upgradeAllowed: 0 }],
+        // Two Andor episodes in the queue: one downloading, one waiting for the client.
+        '/api/v1/queue/summary': [
+          { id: 5, mediaType: 'series', seriesId: 2, episodeIds: [21], trackedState: 'downloading', trackedStatus: 'ok', status: 'downloading', progress: 0.6 },
+          { id: 6, mediaType: 'series', seriesId: 2, episodeIds: [22], trackedState: 'pending', trackedStatus: 'ok', status: 'queued', progress: 0 },
+        ],
         '/api/v1/health': { status: 'ok', checks: [] },
         '/api/v1/system/status': {},
       };
@@ -99,6 +104,15 @@ describe('library index', () => {
     expect(badge.textContent).toBe('Profile mismatch');
     expect(badge.getAttribute('title')).toBe('2 files are not allowed by the quality profile');
     expect(within(grid).getAllByTestId('profile-mismatch-badge')).toHaveLength(1);
+  });
+
+  it('shows which items are in the download queue', async () => {
+    renderAt('/library/tv');
+    const grid = await screen.findByTestId('library-grid');
+    const chip = await within(grid).findByTestId('queue-state');
+    expect(chip.textContent).toBe('Downloading 60% · 2 in queue');
+    expect(chip.closest('a')?.getAttribute('aria-label')).toBe('Andor');
+    expect(within(grid).getAllByTestId('queue-state')).toHaveLength(1);
   });
 
   it('filters by monitored state and switches to the table view', async () => {

@@ -10,7 +10,8 @@ import { getSection, setSection } from '../settings/service.js';
 import { GB, harness, makeProfile, makeRelease, quality } from '../releases/test-support.js';
 import { profileMigrationRoutes } from './routes.js';
 import * as tables from './schema.js';
-import { cronForInterval, ProfileMigrationService } from './service.js';
+import { upcomingRuns } from '../releases/search-status.js';
+import { cronForInterval, ProfileMigrationService, replacementState } from './service.js';
 
 const UHD_ALLOWED: QualityName[] = ['WEBDL-1080p', 'Bluray-1080p', 'WEBDL-2160p', 'Bluray-2160p'];
 
@@ -383,5 +384,70 @@ describe('routes', () => {
     const row = t.db.select().from(schema.movies).where(eq(schema.movies.title, 'Alpha')).get();
     expect(row?.qualityProfileId).toBe(t.uhd.id);
     await app.close();
+  });
+});
+
+describe('replacement plan on the Wanted list', () => {
+  const HOUR = 60 * 60 * 1000;
+  const planOf = (t: Awaited<ReturnType<typeof setup>>) =>
+    new Map(t.migration.mismatchPage({ page: 1, pageSize: 50, status: ['upgradeAllowed', 'notAllowed'] }).records.map((r) => [r.title, r.replacement]));
+
+  it('explains files nothing will replace', async () => {
+    const t = await setup();
+    t.movieWithFile('Alpha', 'Bluray-2160p'); // not allowed, no rule
+    t.movieWithFile('Bravo', 'HDTV-720p'); // below cutoff, no rule
+    t.migration.reevaluate('all');
+    expect(planOf(t).get('Alpha')).toEqual({ state: 'noRule', nextSearchAt: null, maxAttempts: 3 });
+    expect(planOf(t).get('Bravo')?.state).toBe('cutoffSearch');
+  });
+
+  it('says when an unmonitored item will not be replaced', async () => {
+    const t = await setup();
+    t.movieWithFile('Alpha', 'HDTV-720p', { monitored: false });
+    t.migration.updateProfileSettings(t.hd.id, { mismatchAction: 'replace', autoEnabled: true });
+    expect(planOf(t).get('Alpha')?.state).toBe('unmonitored');
+  });
+
+  it('estimates the run that searches each queued file within the per-run and daily limits', async () => {
+    const t = await setup();
+    for (let i = 0; i < 5; i++) t.movieWithFile(`Film ${i}`, 'HDTV-720p');
+    t.migration.updateProfileSettings(t.hd.id, { mismatchAction: 'replace', autoEnabled: true });
+    t.migration.updateSettings({ searchesPerRun: 2, maxSearchesPerDay: 3 });
+    const runs = upcomingRuns(cronForInterval(30), t.now());
+    const nextDay = runs.find((r) => r.getTime() >= runs[0]!.getTime() + 24 * HOUR)!;
+    const plan = planOf(t);
+    expect(plan.get('Film 0')).toMatchObject({ state: 'scheduled', nextSearchAt: runs[0]!.toISOString() });
+    expect(plan.get('Film 1')?.nextSearchAt).toBe(runs[0]!.toISOString());
+    expect(plan.get('Film 2')?.nextSearchAt).toBe(runs[1]!.toISOString());
+    // The daily limit (3) is used up: the rest wait until the first searches leave the 24 h window.
+    expect(plan.get('Film 3')?.nextSearchAt).toBe(nextDay.toISOString());
+
+    // A search that found nothing: the file waits out retryAfterHours (24 h by default).
+    await t.migration.runAutomatic();
+    const row = t.migration.mismatchPage({ page: 1, pageSize: 50, status: ['upgradeAllowed'] }).records.find((r) => r.title === 'Film 0')!;
+    expect(row.migration).toMatchObject({ state: 'queued', attempts: 1 });
+    expect(Date.parse(row.migration!.nextSearchAt!)).toBe(t.now().getTime() + 24 * HOUR);
+    expect(Date.parse(row.replacement!.nextSearchAt!)).toBeGreaterThan(t.now().getTime() + 24 * HOUR);
+  });
+
+  it('follows the global switch, the profile switch and pause', async () => {
+    const t = await setup();
+    t.movieWithFile('Alpha', 'HDTV-720p');
+    t.migration.updateProfileSettings(t.hd.id, { mismatchAction: 'replace' });
+    expect(planOf(t).get('Alpha')?.state).toBe('manualOnly');
+    t.migration.updateProfileSettings(t.hd.id, { autoEnabled: true, paused: true });
+    expect(planOf(t).get('Alpha')?.state).toBe('paused');
+    t.migration.updateProfileSettings(t.hd.id, { paused: false });
+    t.migration.updateSettings({ enabled: false });
+    expect(planOf(t).get('Alpha')).toEqual({ state: 'globalOff', nextSearchAt: null, maxAttempts: 3 });
+  });
+
+  it('maps work-list states', () => {
+    const rule = { mismatchAction: 'replace' as const, autoEnabled: true, paused: false };
+    const base = { status: 'notAllowed' as const, monitored: true, rule, enabled: true };
+    expect(replacementState({ ...base, queue: { state: 'grabbed' } })).toBe('downloading');
+    expect(replacementState({ ...base, queue: { state: 'failed' } })).toBe('failed');
+    expect(replacementState({ ...base, queue: { state: 'queued' } })).toBe('scheduled');
+    expect(replacementState({ ...base, queue: null, monitored: false })).toBe('unmonitored');
   });
 });

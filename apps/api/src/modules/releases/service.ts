@@ -14,6 +14,8 @@ import {
   type DelayProfile,
   type Episode,
   type Indexer,
+  type ItemSearchStatus,
+  type LastSearch,
   type ManualSearchRequest,
   type MediaFile,
   type MediaVersion,
@@ -29,13 +31,16 @@ import {
   type ReleasePushRequest,
   type ReleaseResource,
   type ReleaseSource,
+  type SearchItemType,
+  type SearchRunSource,
+  type SearchStatusQuery,
   type Series,
   type TrackedDownloadState,
 } from '@arclight/shared';
 import { selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
-import { additionalLanguages } from '../../db/schema.js';
+import { additionalLanguages, episodes as episodeTable, movies as movieTable, series as seriesTable } from '../../db/schema.js';
 import {
   fileAudioLanguages,
   releaseAudioLanguages,
@@ -79,8 +84,10 @@ import {
   type Ranked,
   type SearchCriteria,
 } from './engine.js';
+import { CUTOFF_UNMET_SEARCH_JOB, MISSING_EPISODE_SEARCH_JOB, MISSING_MOVIE_SEARCH_JOB, SEARCH_JOB_CRONS } from './jobs.js';
 import { matchRelease, type LibrarySnapshot, type MovieMatch, type SeriesMatch } from './matcher.js';
-import { pendingReleases, releaseSearchState } from './schema.js';
+import { pendingReleases, releaseSearchResults, releaseSearchState } from './schema.js';
+import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, type ItemOutcome } from './search-status.js';
 
 // The release pipeline: decide on releases (RSS, searches, pushes), act on the decisions
 // (grab / park as pending), and run the scheduled searches.
@@ -208,7 +215,17 @@ export interface SearchSummary {
 interface ProcessResult {
   grabbed: Evaluated[];
   pending: number;
+  /** The decisions parked as pending (delay profile, client unavailable). */
+  pendingDecisions: Evaluated[];
 }
+
+/** Items the scheduled jobs search per run (their default `limit`). */
+export const MISSING_EPISODE_SEARCH_LIMIT = 200;
+export const MISSING_MOVIE_SEARCH_LIMIT = 100;
+export const CUTOFF_UNMET_SEARCH_LIMIT = 100;
+
+/** The live schedule of a job (Scheduler.jobSchedule); null when it is not registered. */
+export type JobScheduleLookup = (name: string) => { cron: string | null; enabled: boolean } | null;
 
 const ACTIVE_QUEUE_STATES: TrackedDownloadState[] = ['pending', 'downloading', 'importPending', 'importing', 'failedPending'];
 const PARKABLE = new Set(['minimumAgeDelay', 'minimumAge']);
@@ -323,6 +340,7 @@ export class ReleasesService {
   /** Releases seen by recent searches/pushes, so POST /release can grab by guid. */
   private readonly releaseCache = new Map<string, { release: ReleaseResource; at: number }>();
   private unsubscribeRss: (() => void) | undefined;
+  private jobSchedules: JobScheduleLookup | undefined;
 
   constructor(opts: ReleasesServiceOptions) {
     this.db = opts.db;
@@ -353,6 +371,11 @@ export class ReleasesService {
     this.unsubscribeRss?.();
     this.indexers.setManualSearchResolver(undefined);
     this.indexers.setSearchGrabber?.(undefined);
+  }
+
+  /** Where search status estimates read the jobs' live schedules; without it the default crons apply. */
+  setJobSchedules(lookup: JobScheduleLookup | undefined): void {
+    this.jobSchedules = lookup;
   }
 
   private settings(): ReleaseSettings {
@@ -705,7 +728,7 @@ export class ReleasesService {
     const grabbedItems = new Set<string>();
     const pendingItems = new Set<string>();
     const failedProtocols = new Set<string>();
-    const result: ProcessResult = { grabbed: [], pending: 0 };
+    const result: ProcessResult = { grabbed: [], pending: 0, pendingDecisions: [] };
 
     for (const e of sorted) {
       const keys = coverageKeys(e.decision);
@@ -716,11 +739,13 @@ export class ReleasesService {
         this.addPending(e.decision, reason, e.decision.delayMinutes ?? 1);
         for (const k of keys) pendingItems.add(k);
         result.pending++;
+        result.pendingDecisions.push(e);
         continue;
       }
       if (failedProtocols.has(e.decision.protocol)) {
         this.addPending(e.decision, 'downloadClientUnavailable', CLIENT_RETRY_MINUTES);
         result.pending++;
+        result.pendingDecisions.push(e);
         continue;
       }
       try {
@@ -732,6 +757,7 @@ export class ReleasesService {
           failedProtocols.add(e.decision.protocol);
           this.addPending(e.decision, 'downloadClientUnavailable', CLIENT_RETRY_MINUTES);
           result.pending++;
+          result.pendingDecisions.push(e);
         } else {
           this.log?.warn({ err, title: e.decision.title }, 'grab failed');
           this.bus?.publish({ type: 'release', action: 'rejected', title: e.decision.title, ...mediaRef(e.decision) });
@@ -1127,8 +1153,11 @@ export class ReleasesService {
 
   // ---- searching --------------------------------------------------------------------
 
-  /** Indexer requests + match criteria for a library item. */
-  buildSearch(target: SearchTarget, userInvoked: boolean): { requests: SearchRequest[]; criteria: SearchCriteria } {
+  /** Indexer requests + match criteria for a library item, and the episodes / movie it covers. */
+  buildSearch(
+    target: SearchTarget,
+    userInvoked: boolean,
+  ): { requests: SearchRequest[]; criteria: SearchCriteria; items: { kind: SearchItemType; ids: number[] } } {
     if ('movieId' in target) {
       const movie = libraryService.getMovie(this.db, target.movieId);
       const request: SearchRequest = {
@@ -1138,7 +1167,7 @@ export class ReleasesService {
         ...(movie.imdbId ? { imdbId: movie.imdbId } : {}),
         ...(movie.year ? { year: movie.year } : {}),
       };
-      return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked } };
+      return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [movie.id] } };
     }
     const series = libraryService.getSeries(this.db, target.seriesId, { includeStatistics: false });
     const episodes = libraryService.listEpisodes(this.db, { seriesId: series.id });
@@ -1185,7 +1214,7 @@ export class ReleasesService {
           ? { seasonNumber: targeted[0].seasonNumber }
           : {}),
     };
-    return { requests, criteria };
+    return { requests, criteria, items: { kind: 'episode', ids: targeted.map((e) => e.id) } };
   }
 
   private async runSearch(requests: SearchRequest[], mode: 'automatic' | 'interactive', signal?: AbortSignal): Promise<ReleaseResource[]> {
@@ -1207,12 +1236,22 @@ export class ReleasesService {
   /** Automatic search + grab for a library item. `userInvoked` relaxes delay/monitored specs. */
   async searchFor(target: SearchTarget, opts: { userInvoked?: boolean; signal?: AbortSignal } = {}): Promise<SearchSummary> {
     const userInvoked = opts.userInvoked ?? false;
-    const { requests, criteria } = this.buildSearch(target, userInvoked);
+    const { requests, criteria, items } = this.buildSearch(target, userInvoked);
     if (requests.length === 0) return { releases: 0, approved: 0, grabbed: [], pending: 0 };
-    const releases = await this.runSearch(requests, 'automatic', opts.signal);
-    const evaluated = await this.decide(releases, userInvoked ? 'userInvokedSearch' : 'search', { criteria });
-    const result = await this.processDecisions(evaluated);
+    const source: SearchRunSource = userInvoked ? 'manual' : 'automatic';
+    let releases: ReleaseResource[];
+    let evaluated: Evaluated[];
+    let result: ProcessResult;
+    try {
+      releases = await this.runSearch(requests, 'automatic', opts.signal);
+      evaluated = await this.decide(releases, userInvoked ? 'userInvokedSearch' : 'search', { criteria });
+      result = await this.processDecisions(evaluated);
+    } catch (err) {
+      if (!opts.signal?.aborted) this.recordSearchError(items, source, err);
+      throw err;
+    }
     this.logDecisions(evaluated, 'search', result.grabbed, criteria);
+    this.recordSearchResults(items, source, evaluated, result);
     return {
       releases: releases.length,
       approved: evaluated.filter((e) => e.decision.approved).length,
@@ -1224,10 +1263,17 @@ export class ReleasesService {
   /** Interactive search: every decision, approved first then by rank, nothing grabbed. */
   async interactiveSearch(query: { seriesId?: number | undefined; seasonNumber?: number | undefined; episodeId?: number | undefined; movieId?: number | undefined }, signal?: AbortSignal): Promise<ReleaseDecision[]> {
     const target = this.targetFromQuery(query);
-    const { requests, criteria } = this.buildSearch(target, true);
-    const releases = await this.runSearch(requests, 'interactive', signal);
-    const evaluated = await this.decide(releases, 'interactiveSearch', { criteria });
+    const { requests, criteria, items } = this.buildSearch(target, true);
+    let evaluated: Evaluated[];
+    try {
+      const releases = await this.runSearch(requests, 'interactive', signal);
+      evaluated = await this.decide(releases, 'interactiveSearch', { criteria });
+    } catch (err) {
+      if (!signal?.aborted) this.recordSearchError(items, 'interactive', err);
+      throw err;
+    }
     this.logDecisions(evaluated, 'interactive', [], criteria);
+    this.recordSearchResults(items, 'interactive', evaluated, { grabbed: [], pending: 0, pendingDecisions: [] });
     const sorted = prioritize(evaluated, this.propers()).map((e) => e.decision);
     return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
   }
@@ -1383,9 +1429,7 @@ export class ReleasesService {
       .from(releaseSearchState)
       .where(and(eq(releaseSearchState.mediaType, kind), eq(releaseSearchState.itemId, itemId)))
       .get();
-    if (!row) return true;
-    const backoff = Math.min(Math.max(row.searchCount, 1), 7) * DAY;
-    return this.now().getTime() - Date.parse(row.lastSearchedAt) >= backoff - MINUTE;
+    return isSearchDue(row, this.now().getTime());
   }
 
   private markSearched(kind: 'episode' | 'movie', itemIds: readonly number[]): void {
@@ -1473,19 +1517,33 @@ export class ReleasesService {
     return { searched: due.length, grabbed };
   }
 
-  async missingEpisodeSearch(signal?: AbortSignal, limit = 200): Promise<string> {
+  // The lists the jobs work through, in the order they take them (also read by searchStatus).
+
+  private missingEpisodes(): WantedEpisodeRef[] {
     const now = this.now().toISOString();
-    const missing = this.allPages((page) =>
-      libraryService.listMissingEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, now),
-    );
-    const r = await this.searchEpisodeSet(missing, signal, limit);
+    return this.allPages((page) => libraryService.listMissingEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, now));
+  }
+
+  private missingMovies(): Movie[] {
+    const now = this.now().toISOString();
+    return this.allPages((page) => libraryService.listMissingMovies(this.db, { page, pageSize: 500 }, now));
+  }
+
+  private cutoffUnmetEpisodes(isMet = this.isFileCutoffMet()): WantedEpisodeRef[] {
+    return this.allPages((page) => libraryService.listCutoffUnmetEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, isMet));
+  }
+
+  private cutoffUnmetMovies(isMet = this.isFileCutoffMet()): Movie[] {
+    return this.allPages((page) => libraryService.listCutoffUnmetMovies(this.db, { page, pageSize: 500 }, isMet));
+  }
+
+  async missingEpisodeSearch(signal?: AbortSignal, limit = MISSING_EPISODE_SEARCH_LIMIT): Promise<string> {
+    const r = await this.searchEpisodeSet(this.missingEpisodes(), signal, limit);
     return `missing episodes: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
-  async missingMovieSearch(signal?: AbortSignal, limit = 100): Promise<string> {
-    const now = this.now().toISOString();
-    const missing = this.allPages((page) => libraryService.listMissingMovies(this.db, { page, pageSize: 500 }, now));
-    const r = await this.searchMovies(missing, signal, limit);
+  async missingMovieSearch(signal?: AbortSignal, limit = MISSING_MOVIE_SEARCH_LIMIT): Promise<string> {
+    const r = await this.searchMovies(this.missingMovies(), signal, limit);
     return `missing movies: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
@@ -1497,17 +1555,178 @@ export class ReleasesService {
     return createCutoffChecker(this.db, this.profilesService);
   }
 
-  async cutoffUnmetSearch(signal?: AbortSignal, limit = 100): Promise<string> {
+  async cutoffUnmetSearch(signal?: AbortSignal, limit = CUTOFF_UNMET_SEARCH_LIMIT): Promise<string> {
     const isMet = this.isFileCutoffMet();
-    const episodes = this.allPages((page) =>
-      libraryService.listCutoffUnmetEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, isMet),
-    );
-    const movies = this.allPages((page) => libraryService.listCutoffUnmetMovies(this.db, { page, pageSize: 500 }, isMet));
+    const episodes = this.cutoffUnmetEpisodes(isMet);
+    const movies = this.cutoffUnmetMovies(isMet);
     const e = await this.searchEpisodeSet(episodes, signal, limit);
     const m = await this.searchMovies(movies, signal, limit);
     return `cutoff unmet: searched ${e.searched} episodes / ${m.searched} movies, grabbed ${e.grabbed + m.grabbed}`;
   }
+
+  // ---- search status ----------------------------------------------------------------
+
+  /** Keep what one search did for each item it covered. Never throws. */
+  private recordSearchResults(
+    items: { kind: SearchItemType; ids: readonly number[] },
+    source: SearchRunSource,
+    evaluated: readonly Evaluated[],
+    result: ProcessResult,
+  ): void {
+    try {
+      const grabbed = new Set(result.grabbed.map((e) => e.decision));
+      const pending = new Set(result.pendingDecisions.map((e) => e.decision));
+      const outcomes = itemOutcomes(items.kind, items.ids, evaluated.map((e) => e.decision), grabbed, pending);
+      this.writeSearchResults(items.kind, source, outcomes);
+    } catch (err) {
+      this.log?.warn({ err }, 'recording search results failed');
+    }
+  }
+
+  private recordSearchError(items: { kind: SearchItemType; ids: readonly number[] }, source: SearchRunSource, error: unknown): void {
+    const detail = error instanceof Error ? error.message : String(error);
+    try {
+      this.writeSearchResults(items.kind, source, new Map(items.ids.map((id) => [id, { outcome: 'error', releases: 0, approved: 0, detail }])));
+    } catch (err) {
+      this.log?.warn({ err }, 'recording search results failed');
+    }
+  }
+
+  private writeSearchResults(kind: SearchItemType, source: SearchRunSource, outcomes: ReadonlyMap<number, ItemOutcome>): void {
+    if (outcomes.size === 0) return;
+    const searchedAt = this.now().toISOString();
+    this.db.transaction((tx) => {
+      for (const [itemId, o] of outcomes) {
+        const values = {
+          mediaType: kind,
+          itemId,
+          searchedAt,
+          source,
+          outcome: o.outcome,
+          releases: o.releases,
+          approved: o.approved,
+          detail: o.detail === null ? null : o.detail.slice(0, 500),
+        };
+        tx.insert(releaseSearchResults)
+          .values(values)
+          .onConflictDoUpdate({ target: [releaseSearchResults.mediaType, releaseSearchResults.itemId], set: values })
+          .run();
+      }
+    });
+  }
+
+  /**
+   * GET /release/searchstatus: for each episode / movie, its last search and whether (and
+   * roughly when) a scheduled search will look for it. The estimate replays the job's rules:
+   * the same list in the same order, the per-item back-off and the per-run limit, over the
+   * job's upcoming runs. Unknown ids are left out.
+   */
+  searchStatus(query: SearchStatusQuery): ItemSearchStatus[] {
+    const kind = query.mediaType;
+    const ids = [...new Set(query.ids)];
+    const facts = kind === 'episode' ? this.episodeFacts(ids) : this.movieFacts(ids);
+    const last = new Map<number, LastSearch>();
+    for (const r of this.db
+      .select()
+      .from(releaseSearchResults)
+      .where(and(eq(releaseSearchResults.mediaType, kind), inArray(releaseSearchResults.itemId, ids)))
+      .all()) {
+      last.set(r.itemId, { time: r.searchedAt, source: r.source, outcome: r.outcome, releases: r.releases, approved: r.approved, detail: r.detail });
+    }
+    const states = new Map(
+      this.db
+        .select()
+        .from(releaseSearchState)
+        .where(eq(releaseSearchState.mediaType, kind))
+        .all()
+        .map((s) => [s.itemId, s]),
+    );
+
+    const missingJob = kind === 'episode' ? MISSING_EPISODE_SEARCH_JOB : MISSING_MOVIE_SEARCH_JOB;
+    const missing = kind === 'episode' ? this.missingEpisodes() : this.missingMovies();
+    const missingIds = new Set(missing.map((m) => m.id));
+    // The cutoff list costs a pass over every file; only build it when an asked item may be on it.
+    const needCutoff = ids.some((id) => !missingIds.has(id) && facts.get(id)?.monitored && facts.get(id)?.hasFile);
+    const cutoff = needCutoff ? (kind === 'episode' ? this.cutoffUnmetEpisodes() : this.cutoffUnmetMovies()) : [];
+    const cutoffIds = new Set(cutoff.map((c) => c.id));
+    const plans = new Map<string, Map<number, { at: Date | null; runsAhead: number }> | null>([
+      [missingJob, this.planJob(missingJob, missing, states, kind === 'episode' ? MISSING_EPISODE_SEARCH_LIMIT : MISSING_MOVIE_SEARCH_LIMIT)],
+    ]);
+    if (needCutoff) plans.set(CUTOFF_UNMET_SEARCH_JOB, this.planJob(CUTOFF_UNMET_SEARCH_JOB, cutoff, states, CUTOFF_UNMET_SEARCH_LIMIT));
+
+    const out: ItemSearchStatus[] = [];
+    for (const id of ids) {
+      const f = facts.get(id);
+      if (!f) continue;
+      const base = { job: null, nextSearchAt: null, searchCount: states.get(id)?.searchCount ?? 0, runsAhead: 0 };
+      const job = missingIds.has(id) ? missingJob : cutoffIds.has(id) ? CUTOFF_UNMET_SEARCH_JOB : null;
+      let automatic: ItemSearchStatus['automatic'];
+      if (job !== null) {
+        const plan = plans.get(job) ?? null;
+        const p = plan?.get(id);
+        automatic =
+          plan === null
+            ? { ...base, state: 'jobDisabled', job }
+            : { ...base, state: 'scheduled', job, nextSearchAt: p?.at ? p.at.toISOString() : null, runsAhead: p?.runsAhead ?? 0 };
+      } else if (!f.monitored) {
+        automatic = { ...base, state: 'unmonitored' };
+      } else if (f.hasFile) {
+        automatic = { ...base, state: 'satisfied' };
+      } else {
+        automatic = { ...base, state: f.special ? 'special' : 'notAvailable' };
+      }
+      out.push({ mediaType: kind, id, monitored: f.monitored, lastSearch: last.get(id) ?? null, automatic });
+    }
+    return out;
+  }
+
+  /** Which upcoming run of `job` reaches each listed item; null when the job does not run on a schedule. */
+  private planJob(
+    job: string,
+    list: ReadonlyArray<{ id: number }>,
+    states: ReadonlyMap<number, { lastSearchedAt: string; searchCount: number }>,
+    limit: number,
+  ): Map<number, { at: Date | null; runsAhead: number }> | null {
+    const fallback = SEARCH_JOB_CRONS[job as keyof typeof SEARCH_JOB_CRONS];
+    const schedule = this.jobSchedules?.(job) ?? { cron: fallback ?? null, enabled: true };
+    if (!schedule.enabled || schedule.cron === null) return null;
+    const runs = upcomingRuns(schedule.cron, this.now());
+    return planSearchRuns(
+      list.map((item) => ({ id: item.id, dueAt: searchDueAt(states.get(item.id)) })),
+      runs,
+      limit,
+    );
+  }
+
+  /** Monitored (episode and series), has-file and special (season 0) flags of the asked episodes. */
+  private episodeFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
+    const rows = this.db
+      .select({
+        id: episodeTable.id,
+        monitored: episodeTable.monitored,
+        hasFile: episodeTable.hasFile,
+        seasonNumber: episodeTable.seasonNumber,
+        seriesMonitored: seriesTable.monitored,
+      })
+      .from(episodeTable)
+      .innerJoin(seriesTable, eq(episodeTable.seriesId, seriesTable.id))
+      .where(inArray(episodeTable.id, [...ids]))
+      .all();
+    return new Map(rows.map((r) => [r.id, { monitored: r.monitored && r.seriesMonitored, hasFile: r.hasFile, special: r.seasonNumber === 0 }]));
+  }
+
+  private movieFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
+    const rows = this.db
+      .select({ id: movieTable.id, monitored: movieTable.monitored, hasFile: movieTable.hasFile })
+      .from(movieTable)
+      .where(inArray(movieTable.id, [...ids]))
+      .all();
+    return new Map(rows.map((r) => [r.id, { monitored: r.monitored, hasFile: r.hasFile }]));
+  }
 }
+
+/** The fields of a wanted episode the scheduled searches use. */
+type WantedEpisodeRef = { id: number; seriesId: number; seasonNumber: number };
 
 // ---- helpers ------------------------------------------------------------------------
 

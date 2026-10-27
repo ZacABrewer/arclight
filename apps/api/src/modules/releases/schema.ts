@@ -43,6 +43,28 @@ export const releaseSearchState = sqliteTable(
 );
 
 /**
+ * The last search of every episode / movie (automatic, manual or interactive) and what came of
+ * it, one row per item, overwritten by each search. Unlike `release_search_state` it is not
+ * cleared by a grab, so the Wanted and details pages can show "last searched 3 h ago · grabbed".
+ */
+export const releaseSearchResults = sqliteTable(
+  'release_search_results',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    mediaType: text('media_type', { enum: ['episode', 'movie'] }).notNull(),
+    itemId: integer('item_id').notNull(),
+    searchedAt: text('searched_at').notNull(),
+    source: text('source', { enum: ['automatic', 'manual', 'interactive'] }).notNull(),
+    outcome: text('outcome', { enum: ['grabbed', 'pending', 'found', 'rejected', 'noResults', 'error'] }).notNull(),
+    releases: integer('releases').notNull().default(0),
+    approved: integer('approved').notNull().default(0),
+    /** Release title (grabbed / pending), top rejection reason (rejected) or error message. */
+    detail: text('detail'),
+  },
+  (t) => [uniqueIndex('release_search_results_item_idx').on(t.mediaType, t.itemId)],
+);
+
+/**
  * Decision log: one row per release per evaluation batch (RSS sync, search, interactive search,
  * push, pending re-check), so the UI can answer "why was this (not) grabbed". Rows without a
  * library item are not kept. Pruned to the last 20 batches per item (`item_key`: `s<seriesId>`

@@ -23,7 +23,9 @@ export {
   MISSING_EPISODE_SEARCH_JOB,
   MISSING_MOVIE_SEARCH_JOB,
   PROCESS_PENDING_RELEASES_JOB,
+  SEARCH_JOB_CRONS,
 } from './jobs.js';
+export { isSearchDue, itemOutcomes, planSearchRuns, searchBackoffMs, searchDueAt, upcomingRuns } from './search-status.js';
 export { cleanTitle, mapSeriesEpisodes, matchRelease, type LibrarySnapshot, type MatchResult } from './matcher.js';
 export { DecisionLog, BATCHES_PER_ITEM } from './decision-log.js';
 export { cutoffNotMet, isUpgradable, isUpgradeAllowed, prioritize, replacesDisallowedFile, specifications } from './engine.js';

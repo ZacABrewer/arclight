@@ -6,7 +6,9 @@ import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js
 import { formatBytes, imageUrl } from '../../components/media/format.js';
 import { FoundInLists } from '../../components/media/found-in-lists.js';
 import { Loading, MonitorSwitch, QueryError, TagChips, movieChip, qualityName } from '../../components/media/media-kit.js';
+import { QueueStateChip, SearchStatusLines } from '../../components/media/pipeline-status.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
+import { useSearchStatus } from '../../hooks/search-status.js';
 import {
   useAutomaticSearch,
   useDeleteMovies,
@@ -72,13 +74,14 @@ export function MovieDetailsPage() {
   const [addingLanguage, setAddingLanguage] = useState(false);
   const navigate = useNavigate();
   const progress = useQueueProgress(useMemo(() => ({ movieId: id }), [id]));
+  const searchStatus = useSearchStatus('movie', Number.isInteger(id) && id > 0 ? [id] : []);
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.movieDetails.invalidMovieIdRawid', { rawId }))} title={t('library.movieDetails.movieNotFound')} />;
   if (movie.isPending) return <Loading />;
   if (movie.isError) return <QueryError error={movie.error} onRetry={() => void movie.refetch()} title={t('library.movieDetails.couldNotLoadThisMovie')} />;
   const m = movie.data;
   const file = files.data?.find((f) => f.id === m.movieFileId) ?? files.data?.[0];
-  const chip = movieChip(m, progress.movie);
+  const chip = movieChip(m);
   const avail = availabilityChip(m);
   const profile = profiles.data?.find((p) => p.id === m.qualityProfileId);
 
@@ -98,7 +101,7 @@ export function MovieDetailsPage() {
           <>
             <MonitorSwitch monitored={m.monitored} onChange={(v) => setMonitored.mutate({ id: m.id, monitored: v })} label={t('common.monitorTitle', { monitored: m.monitored, title: m.title })} />
             <StatusChip status={m.monitored ? 'monitored' : 'unmonitored'} large />
-            <StatusChip status={chip.status} label={chip.label} large />
+            {progress.movie ? <QueueStateChip item={progress.movie} large /> : <StatusChip status={chip.status} label={chip.label} large />}
             <Chip tone={avail.tone} large data-testid="availability">
               {avail.label}
             </Chip>
@@ -135,6 +138,11 @@ export function MovieDetailsPage() {
               ) : null}
             </div>
             <ItemLanguageChips query={{ movieId: m.id }} />
+            {searchStatus.data?.[0] ? (
+              <div className="mk-dates" aria-label={t('components.media.pipeline.automaticSearch')}>
+                <SearchStatusLines status={searchStatus.data[0]} />
+              </div>
+            ) : null}
           </>
         }
         overview={m.overview}

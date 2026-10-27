@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode, type PointerEvent as ReactPointerEvent } from 'react';
-import type { Episode, Movie, QualityModel, Tag as TagModel } from '@arclight/shared';
+import type { Episode, Movie, QualityModel, QueueSummaryItem, Tag as TagModel } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import {
   ErrorBlock,
@@ -12,6 +12,7 @@ import {
   type StatusKey,
 } from '../../arclight/index.js';
 import { episodeStatus, type EpisodeStatus } from './episode-status.js';
+import { QueueStateChip } from './pipeline-status.js';
 import './media-kit.css';
 import { t } from '../../i18n/index.js';
 
@@ -81,18 +82,20 @@ export function episodeChip(status: EpisodeStatus, extra: { downloading?: number
   }
 }
 
+/** Episode state chip; a download in the queue (Queued, Downloading 42%, Importing, Failed) wins. */
 export function EpisodeChip({
   episode,
   seriesMonitored = true,
-  downloading,
+  queued,
   cutoffUnmet,
 }: {
   episode: Pick<Episode, 'hasFile' | 'monitored' | 'airDate' | 'airDateUtc'>;
   seriesMonitored?: boolean;
-  downloading?: number | null | undefined;
+  queued?: QueueSummaryItem | null | undefined;
   cutoffUnmet?: boolean | undefined;
 }) {
-  const c = episodeChip(episodeStatus(episode, { seriesMonitored }), { downloading, cutoffUnmet });
+  if (queued) return <QueueStateChip item={queued} />;
+  const c = episodeChip(episodeStatus(episode, { seriesMonitored }), { cutoffUnmet });
   return <StatusChip status={c.status} label={c.label} />;
 }
 

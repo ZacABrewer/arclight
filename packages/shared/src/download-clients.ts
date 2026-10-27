@@ -716,6 +716,27 @@ export const QueuePage = z.object({
 });
 export type QueuePage = z.infer<typeof QueuePage>;
 
+/**
+ * GET /queue/summary: one compact row per queue item linked to a library item, so library
+ * pages can show "Queued", "Downloading 42%", "Importing" or "Failed" without the full queue.
+ */
+export const QueueSummaryItem = z.object({
+  id: z.number().int(),
+  mediaType: MediaType.optional(),
+  seriesId: z.number().int().optional(),
+  episodeIds: z.array(z.number().int()).optional(),
+  movieId: z.number().int().optional(),
+  trackedState: TrackedDownloadState,
+  trackedStatus: TrackedDownloadStatus,
+  status: QueueItemClientStatus,
+  /** 0..1 */
+  progress: z.number(),
+  eta: z.number().int().optional(),
+  stateCode: QueueItemStateCode.optional(),
+  stateSeverity: QueueSeverity.optional(),
+});
+export type QueueSummaryItem = z.infer<typeof QueueSummaryItem>;
+
 export const QueueStatus = z.object({
   /** Queue items linked to a series or movie. */
   totalCount: z.number().int(),

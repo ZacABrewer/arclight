@@ -6,6 +6,7 @@ import {
   QueueRemoveResult,
   QueueReplaceResult,
   QueueStatus,
+  QueueSummaryItem,
   type QueueBulkRemoveRequest,
   type QueueItemLimitsRequest,
   type QueueMove,
@@ -17,9 +18,13 @@ import { request, type QueryParams } from './client.js';
 
 // Paths mirror the queue block of apps/api/src/modules/download-clients/routes.ts.
 
+const QueueSummaryList = QueueSummaryItem.array();
+
 export const queueApi = {
   list: (query: Partial<QueueQueryInput> = {}) => request('/queue', QueuePage, { query: query as QueryParams }),
   status: () => request('/queue/status', QueueStatus),
+  /** Compact state of every library-linked download (library badges). */
+  summary: () => request('/queue/summary', QueueSummaryList),
   get: (id: number) => request(`/queue/${id}`, QueueItem),
   /** What happened to a download, oldest first (also after it left the queue). */
   timeline: (id: number) => request(`/queue/${id}/timeline`, DownloadTimeline),

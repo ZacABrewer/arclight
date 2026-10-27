@@ -107,6 +107,17 @@ export class Scheduler {
       });
   }
 
+  /**
+   * A registered job's current schedule: `cron` null when it only runs on demand, `enabled`
+   * false when its `scheduled_jobs` row is switched off. Null for an unknown job.
+   */
+  jobSchedule(name: string): { cron: string | null; enabled: boolean } | null {
+    const def = this.definitions.get(name);
+    if (!def) return null;
+    const row = this.db.select().from(schema.scheduledJobs).where(eq(schema.scheduledJobs.name, name)).get();
+    return { cron: def.cron ?? null, enabled: row?.enabled ?? true };
+  }
+
   listRecent(limit = 50): Job[] {
     return this.db
       .select()

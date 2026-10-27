@@ -3,6 +3,7 @@ import {
   DecisionLogBatch,
   DecisionLogPage,
   DecisionLogQuery,
+  ItemSearchStatus,
   PendingRelease,
   ReleaseGrabRequest,
   ReleaseGrabResponse,
@@ -13,6 +14,7 @@ import {
   ReleaseSearchResponse,
   SearchCommandRequest,
   SearchCommandResponse,
+  SearchStatusQuery,
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -82,7 +84,16 @@ export function releasesRoutes(service: ReleasesService): FastifyPluginAsync<Rec
       async (req) => service.getDecisionBatch(req.params.batchId),
     );
 
-    app.get('/release/pending', { schema: { response: { 200: z.array(PendingRelease) } } }, async () => service.listPending());
+    app.get(
+      '/release/searchstatus',
+      {
+        config: { access: { areas: ['library', 'wanted'] } },
+        schema: { querystring: SearchStatusQuery, response: { 200: z.array(ItemSearchStatus), ...errors } },
+      },
+      async (req) => service.searchStatus(req.query),
+    );
+
+    app.get('/release/pending',{ schema: { response: { 200: z.array(PendingRelease) } } }, async () => service.listPending());
 
     app.delete(
       '/release/pending/:id',

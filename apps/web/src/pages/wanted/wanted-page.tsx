@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link, useNavigate } from '@tanstack/react-router';
-import type { Movie, SearchCommandRequest, WantedEpisode } from '@arclight/shared';
+import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedEpisode } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
 import {
@@ -18,8 +18,11 @@ import {
 } from '../../arclight/index.js';
 import { episodeCode, formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
+import { buildQueueIndex, QueueStateChip, SearchStatusLines } from '../../components/media/pipeline-status.js';
 import { useToast } from '../../components/toast.js';
+import { useQueueSummary } from '../../hooks/activity.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
+import { useSearchStatus } from '../../hooks/search-status.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
 import { ProfileMismatchList } from './profile-mismatch.js';
@@ -121,8 +124,32 @@ function useBatchSearch() {
   return { run, running, search };
 }
 
-function statusChip(mode: ListMode) {
+function statusChip(mode: ListMode, queued?: QueueSummaryItem) {
+  if (queued) return <QueueStateChip item={queued} />;
   return mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
+}
+
+/**
+ * What the pipeline is doing about the rows on the page: their last / next automatic search
+ * (one request per page) and whether they are in the download queue (one shared request).
+ */
+function usePipeline(kind: SearchItemType, ids: readonly number[]) {
+  const status = useSearchStatus(kind, ids);
+  const queue = useQueueSummary();
+  return useMemo(() => {
+    const byId = new Map<number, ItemSearchStatus>((status.data ?? []).map((s) => [s.id, s]));
+    const index = buildQueueIndex(queue.data);
+    const queued = (id: number) => (kind === 'movie' ? index.movies.get(id) : index.episodes.get(id));
+    return { status: (id: number) => byId.get(id), queued };
+  }, [status.data, queue.data, kind]);
+}
+
+function searchColumn<T extends { id: number }>(pipeline: ReturnType<typeof usePipeline>): Column<T> {
+  return {
+    key: 'automatic',
+    header: t('components.media.pipeline.automaticSearch'),
+    cell: (r) => <SearchStatusLines status={pipeline.status(r.id)} />,
+  };
 }
 
 interface ListShellProps<T> {
@@ -136,7 +163,7 @@ interface ListShellProps<T> {
   columns: Column<T>[];
   rowKey: (r: T) => number;
   rowLabel: (r: T) => string;
-  mobileRow: (r: T) => { title: string; sub: string };
+  mobileRow: (r: T) => { title: string; sub: string; extra?: ReactNode; chip?: ReactNode };
   selected: Set<RowKey>;
   onSelect: (s: Set<RowKey>) => void;
   running: boolean;
@@ -178,8 +205,9 @@ function ListShell<T>(p: ListShellProps<T>) {
                     <div style={{ minWidth: 0 }}>
                       <div className="mk-mrow__title">{m.title}</div>
                       <div className="mk-mrow__sub al-num">{m.sub}</div>
+                      {m.extra}
                     </div>
-                    {statusChip(p.mode)}
+                    {m.chip ?? statusChip(p.mode)}
                   </div>
                 </SwipeRow>
               );
@@ -234,9 +262,10 @@ function EpisodesList({ mode }: { mode: ListMode }) {
   const list = useWantedList(mode, 'episodes', page);
   const batch = useBatchSearch();
   const toast = useToast();
+  const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
+  const pipeline = usePipeline('episode', records?.map((r) => r.id) ?? []);
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedEpisodes')} />;
-  const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
 
   const searchAll = async () => {
     try {
@@ -265,7 +294,8 @@ function EpisodesList({ mode }: { mode: ListMode }) {
     { key: 'episode', header: t('common.episode'), mono: true, cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber), width: '96px' },
     { key: 'title', header: t('common.title'), muted: true, cell: (r) => r.title || '—' },
     { key: 'airDate', header: t('wanted.airDate'), mono: true, cell: (r) => shortDate(r.airDateUtc ?? r.airDate), width: '130px' },
-    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id)), width: '150px' },
+    searchColumn<WantedEpisode>(pipeline),
     ...wantedVersionsColumn(records, t('wanted.versions')),
     {
       key: 'search',
@@ -295,7 +325,12 @@ function EpisodesList({ mode }: { mode: ListMode }) {
       columns={columns}
       rowKey={(r) => r.id}
       rowLabel={label}
-      mobileRow={(r) => ({ title: r.seriesTitle, sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}${wantedVersionsSuffix(r.wantedVersions)}` })}
+      mobileRow={(r) => ({
+        title: r.seriesTitle,
+        sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}${wantedVersionsSuffix(r.wantedVersions)}`,
+        extra: <SearchStatusLines status={pipeline.status(r.id)} compact />,
+        chip: statusChip(mode, pipeline.queued(r.id)),
+      })}
       selected={selected}
       onSelect={setSelected}
       running={batch.running}
@@ -312,9 +347,10 @@ function MoviesList({ mode }: { mode: ListMode }) {
   const profiles = useQualityProfiles();
   const batch = useBatchSearch();
   const toast = useToast();
+  const records = list.data ? (list.data.records as Movie[]) : undefined;
+  const pipeline = usePipeline('movie', records?.map((r) => r.id) ?? []);
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedMovies')} />;
-  const records = list.data ? (list.data.records as Movie[]) : undefined;
 
   const searchAll = async () => {
     try {
@@ -343,7 +379,8 @@ function MoviesList({ mode }: { mode: ListMode }) {
     { key: 'cinemas', header: t('common.inCinemas'), mono: true, cell: (r) => shortDate(r.inCinemas) },
     { key: 'digital', header: t('wanted.digital'), mono: true, cell: (r) => shortDate(r.digitalRelease) },
     { key: 'physical', header: t('wanted.physical'), mono: true, cell: (r) => shortDate(r.physicalRelease) },
-    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id)), width: '150px' },
+    searchColumn<Movie>(pipeline),
     ...wantedVersionsColumn(records, t('wanted.versions')),
     {
       key: 'search',
@@ -373,7 +410,12 @@ function MoviesList({ mode }: { mode: ListMode }) {
       columns={columns}
       rowKey={(r) => r.id}
       rowLabel={(r) => r.title}
-      mobileRow={(r) => ({ title: r.title, sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}${wantedVersionsSuffix(r.wantedVersions)}` })}
+      mobileRow={(r) => ({
+        title: r.title,
+        sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}${wantedVersionsSuffix(r.wantedVersions)}`,
+        extra: <SearchStatusLines status={pipeline.status(r.id)} compact />,
+        chip: statusChip(mode, pipeline.queued(r.id)),
+      })}
       selected={selected}
       onSelect={setSelected}
       running={batch.running}

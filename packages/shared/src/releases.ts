@@ -245,3 +245,84 @@ export const DecisionLogPage = z.object({
   records: z.array(DecisionLogBatch),
 });
 export type DecisionLogPage = z.infer<typeof DecisionLogPage>;
+
+// ---------------------------------------------------------------------------------------
+// Search status (GET /release/searchstatus): when an episode / movie was last searched, what
+// came of it, and when the scheduled searches will look for it next.
+// ---------------------------------------------------------------------------------------
+
+/** Episode or movie: the units the scheduled searches track. */
+export const SearchItemType = z.enum(['episode', 'movie']);
+export type SearchItemType = z.infer<typeof SearchItemType>;
+
+/** `automatic`: a scheduled job (Missing, Cutoff unmet, profile migration); `manual`: a user's "Search". */
+export const SearchRunSource = z.enum(['automatic', 'manual', 'interactive']);
+export type SearchRunSource = z.infer<typeof SearchRunSource>;
+
+/**
+ * What one search did for one item: `grabbed` a release went to the download client;
+ * `pending` an approved release is held (delay profile, client unavailable); `found` approved
+ * releases but nothing grabbed (interactive search: the user picks); `rejected` releases came
+ * back for the item but every one was rejected (`detail` = the most common reason);
+ * `noResults` nothing came back for the item; `error` the search failed (`detail` = message).
+ */
+export const SearchOutcome = z.enum(['grabbed', 'pending', 'found', 'rejected', 'noResults', 'error']);
+export type SearchOutcome = z.infer<typeof SearchOutcome>;
+
+export const LastSearch = z.object({
+  /** ISO-8601. */
+  time: z.string(),
+  source: SearchRunSource,
+  outcome: SearchOutcome,
+  /** Releases evaluated for the item, and how many of them were approved. */
+  releases: z.number().int(),
+  approved: z.number().int(),
+  /** grabbed / pending: the release title; rejected: the top rejection reason; error: the message. */
+  detail: z.string().nullable(),
+});
+export type LastSearch = z.infer<typeof LastSearch>;
+
+/**
+ * Whether the scheduled searches will look for the item: `scheduled` (missing or below the
+ * cutoff; `nextSearchAt` is an estimate), `unmonitored` (never searched automatically),
+ * `notAvailable` (not aired, or not released under its minimum availability, yet), `special`
+ * (season 0: the scheduled searches skip specials), `satisfied` (has a file that meets the
+ * cutoff), `jobDisabled` (the job that would search it is switched off).
+ */
+export const AutomaticSearchState = z.enum(['scheduled', 'unmonitored', 'notAvailable', 'special', 'satisfied', 'jobDisabled']);
+export type AutomaticSearchState = z.infer<typeof AutomaticSearchState>;
+
+export const AutomaticSearchPlan = z.object({
+  state: AutomaticSearchState,
+  /** The job that searches the item: MissingEpisodeSearch, MissingMovieSearch or CutoffUnmetSearch. */
+  job: z.string().nullable(),
+  /**
+   * ISO-8601 estimate of the run that will search the item, from the job's schedule, the
+   * per-item back-off and the per-run limit; null when not scheduled or more than two weeks out.
+   */
+  nextSearchAt: z.string().nullable(),
+  /** Automatic searches since the last grab; each adds a day of back-off (at most 7). */
+  searchCount: z.number().int(),
+  /** Due runs of the job that pass before this item's turn because of the per-run limit (0 = the first due run). */
+  runsAhead: z.number().int(),
+});
+export type AutomaticSearchPlan = z.infer<typeof AutomaticSearchPlan>;
+
+export const ItemSearchStatus = z.object({
+  mediaType: SearchItemType,
+  id: z.number().int(),
+  monitored: z.boolean(),
+  lastSearch: LastSearch.nullable(),
+  automatic: AutomaticSearchPlan,
+});
+export type ItemSearchStatus = z.infer<typeof ItemSearchStatus>;
+
+/** GET /release/searchstatus?mediaType=episode&ids=1,2,3 (1–500 ids; unknown ids are left out). */
+export const SearchStatusQuery = z.object({
+  mediaType: SearchItemType,
+  ids: z.preprocess(
+    (v) => (typeof v === 'string' ? v.split(',').filter((s) => s.trim() !== '') : v),
+    z.array(z.coerce.number().int().min(1)).min(1).max(500),
+  ),
+});
+export type SearchStatusQuery = z.infer<typeof SearchStatusQuery>;
