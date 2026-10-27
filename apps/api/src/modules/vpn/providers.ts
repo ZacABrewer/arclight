@@ -33,6 +33,10 @@ export interface ProbeResult {
   error?: string;
   /** The provider could not be asked (timeout, refused), as opposed to reporting the VPN down. */
   unreachable?: boolean;
+  /** Shown on the status (e.g. the tunnel was confirmed another way). */
+  warning?: string;
+  /** The probe could not read the forwarded port: keep the last known one. */
+  keepForwardedPort?: boolean;
 }
 
 export interface ProbeOptions {
@@ -71,8 +75,9 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
   return {
     async probe(settings) {
       const p = settings.provider as GluetunProviderSettings;
+      const controlUrl = effectiveControlUrl(p, deps.env);
       const client = new GluetunClient({
-        controlUrl: effectiveControlUrl(p, deps.env),
+        controlUrl,
         apiKey: effectiveApiKey(p, deps.env),
         username: p.username,
         password: p.password,
@@ -87,7 +92,7 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
         ip = await client.publicIp();
       } catch (err) {
         if (err instanceof VpnError && (err.code === 'timeout' || err.code === 'unreachable')) {
-          return { connected: false, error: err.message, unreachable: true };
+          return (await confirmTunnelDirectly(deps, settings, controlUrl, err.message)) ?? { connected: false, error: err.message, unreachable: true };
         }
         throw err;
       }
@@ -99,6 +104,36 @@ export function gluetunProvider(deps: ProviderDeps): VpnProvider {
       }
       return { connected: true, ...ip, ...(forwardedPort === undefined ? {} : { forwardedPort }) };
     },
+  };
+}
+
+/**
+ * Gluetun's control server can stall for minutes while it runs a port-forward "up command"
+ * (a leftover qBittorrent hook retrying a client that is gone), although the tunnel is fine.
+ * When the control URL is on loopback, Arclight shares gluetun's network namespace, where
+ * gluetun's firewall drops everything outside the tunnel: reaching the public-IP service at all
+ * (and not from the home IP) proves the tunnel works. Null when that cannot be confirmed.
+ */
+async function confirmTunnelDirectly(deps: ProviderDeps, settings: VpnSettings, controlUrl: string, why: string): Promise<ProbeResult | null> {
+  let host: string;
+  try {
+    host = new URL(controlUrl).hostname;
+  } catch {
+    return null;
+  }
+  if (host !== 'localhost' && host !== '127.0.0.1' && host !== '[::1]') return null;
+  let publicIp: string;
+  try {
+    publicIp = await fetchPublicIp(deps.fetch, settings.publicIpCheckUrl);
+  } catch {
+    return null;
+  }
+  if (settings.homePublicIp && publicIp === settings.homePublicIp) return null;
+  return {
+    connected: true,
+    publicIp,
+    keepForwardedPort: true,
+    warning: `${why} Gluetun's control server is not answering (check for a VPN_PORT_FORWARDING_UP_COMMAND that keeps failing); the tunnel was confirmed with a public IP check.`,
   };
 }
 

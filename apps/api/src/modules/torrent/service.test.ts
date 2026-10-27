@@ -121,6 +121,26 @@ describe('engine lifecycle', () => {
 });
 
 describe('VPN binding', () => {
+  it('self-heals: unlocks a lockdown whose VPN event was missed, and starts an engine that failed at boot', async () => {
+    let clock = Date.parse('2026-01-01T00:00:00Z');
+    const h = await make({ vpn: true, settings: { enabled: true }, service: { now: () => new Date(clock) } });
+    await h.service.stop(); // the harness may already have started it
+    const blocker: Server = createServer();
+    await new Promise<void>((r) => blocker.listen(h.port, '127.0.0.1', () => r()));
+    await h.service.boot();
+    expect(h.service.status().state).toBe('error');
+    await new Promise<void>((r) => blocker.close(() => r()));
+    await h.service.reconcile(); // too soon after the failed attempt
+    expect(h.service.session).toBeNull();
+    clock += 61_000;
+    await h.service.reconcile();
+    expect(h.service.status().state).toBe('lockdown');
+    // the VPN comes up but its event never reaches the engine
+    h.vpn.connect();
+    await h.service.reconcile();
+    expect(h.service.status()).toMatchObject({ state: 'running', boundAddress: '127.0.0.2' });
+  });
+
   it('locks down when the VPN is enabled but not checked yet, then binds to the tunnel on connect', async () => {
     const h = await make({ vpn: true, settings: { enabled: true } });
     await h.service.start();

@@ -283,16 +283,18 @@ export class VpnService {
       return { status: { ...kept, lastChecked: checked, warning }, probed: false };
     }
     if (!result.unreachable) this.unreachableStreak = 0;
+    const { keepForwardedPort, ...probed } = result;
+    if (keepForwardedPort && probed.forwardedPort === undefined && prev.forwardedPort !== undefined) probed.forwardedPort = prev.forwardedPort;
     const leak = Boolean(s.homePublicIp && result.publicIp && result.publicIp === s.homePublicIp);
     const status: VpnStatus = {
-      ...result,
+      ...probed,
       enabled: true,
       provider: s.provider.type,
       leak,
       killSwitchEngaged: enforces(s) && (!result.connected || leak),
       lastChecked: checked,
       lastChanged: prev.lastChanged,
-      ...(prev.downloadClientPortSynced !== undefined && result.forwardedPort === prev.forwardedPort
+      ...(prev.downloadClientPortSynced !== undefined && probed.forwardedPort === prev.forwardedPort
         ? { downloadClientPortSynced: prev.downloadClientPortSynced }
         : {}),
     };

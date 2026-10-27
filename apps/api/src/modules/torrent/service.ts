@@ -100,6 +100,8 @@ export class TorrentModuleError extends Error {
 export const LOCKDOWN_ADDRESS = '127.0.0.1';
 /** How far back `status().lockdownsLastHour` looks. */
 const LOCKDOWN_WINDOW_MS = 60 * 60_000;
+/** Least time between automatic start attempts of an enabled engine that is not running. */
+const RESTART_RETRY_MS = 60_000;
 const KILLSWITCH_FILE = 'killswitch-paused.json';
 
 interface Binding {
@@ -138,6 +140,9 @@ export class TorrentService {
   private seedRules: SeedRuleProvider | null = null;
   private readonly speedCheckIntervalMs: number;
   private speedTimer: NodeJS.Timeout | undefined;
+  /** boot() ran with the engine wanted: reconcile() may (re)start it. */
+  private booted = false;
+  private lastStartAttempt = 0;
   /** Mode last applied (null before the first evaluation); external clients follow its changes. */
   private lastAlternative: boolean | null = null;
   private indexerResolver: ((infoHash: string, hosts: readonly string[]) => number | undefined) | undefined;
@@ -333,6 +338,7 @@ export class TorrentService {
     if (this.speedTimer) return;
     this.speedTimer = setInterval(() => {
       void this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed schedule check failed'));
+      void this.reconcile().catch((err: unknown) => this.log?.warn({ err }, 'torrent engine self-check failed'));
     }, this.speedCheckIntervalMs);
     this.speedTimer.unref();
   }
@@ -393,7 +399,32 @@ export class TorrentService {
     this.subscribe();
     this.autoRegisterClient();
     await this.applySpeedMode().catch((err: unknown) => this.log?.warn({ err }, 'speed mode check failed'));
+    this.booted = true;
     if (this.settings().enabled) await this.start();
+  }
+
+  /**
+   * Self-healing pass (on the speed timer): unlock an engine that stayed locked down although
+   * the VPN is fine, and start an enabled engine that is not running. The unlock normally comes
+   * from one `vpn` event; when that single re-bind failed (a socket still closing on a slow
+   * NAS), nothing retried and the engine sat in lockdown until it was toggled off and on.
+   */
+  async reconcile(): Promise<void> {
+    const s = this.settings();
+    if (!s.enabled) return;
+    if (this.sessionValue) {
+      if (this.state === 'lockdown' && this.desiredBinding(s).mode !== 'lockdown') {
+        this.log?.info('torrent engine still locked down with the VPN up; re-applying the binding');
+        await this.applyBinding();
+      }
+      return;
+    }
+    if (!this.booted || this.state === 'starting') return;
+    const now = this.now().getTime();
+    if (now - this.lastStartAttempt < RESTART_RETRY_MS) return;
+    this.lastStartAttempt = now;
+    this.log?.info({ state: this.state }, 'torrent engine enabled but not running; starting it');
+    await this.start();
   }
 
   /** Listen for `vpn` events and start the speed-schedule timer (idempotent). */
@@ -434,6 +465,7 @@ export class TorrentService {
 
   private async doStart(): Promise<void> {
     if (this.sessionValue) return;
+    this.lastStartAttempt = this.now().getTime();
     const s = this.settings();
     const binding = this.desiredBinding(s);
     this.state = 'starting';

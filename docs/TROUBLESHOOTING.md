@@ -274,6 +274,19 @@ More detail: [VPN](using/vpn.md).
 
 ---
 
+<a id="gluetun-did-not-answer"></a>
+### "Gluetun did not answer" every few minutes
+
+**What you see:** the VPN shows Disconnected with "Gluetun did not answer within 10000 ms", the torrent engine locks down, and indexers time out, usually a couple of minutes after gluetun (re)connects.
+
+**Cause:** gluetun's control server stalls while its port-forward "up command" runs. Setups migrated from qBittorrent often keep `VPN_PORT_FORWARDING_UP_COMMAND` (and `..._DOWN_COMMAND`) pointing at qBittorrent's Web UI. With qBittorrent stopped, the command retries "Connection refused" for minutes and gluetun answers nothing meanwhile.
+
+**How to confirm:** `docker logs gluetun` shows `[port forwarding] up command: failed: Connection refused.` repeating, followed by `/v1/portforward` requests that took minutes.
+
+**Fix:** remove `VPN_PORT_FORWARDING_UP_COMMAND` and `VPN_PORT_FORWARDING_DOWN_COMMAND` from the gluetun service and recreate it. Arclight reads the forwarded port from gluetun itself. When Arclight runs in gluetun's network namespace, it now also confirms the tunnel with a public IP check while the control server is stalled, and shows a warning instead of disconnecting.
+
+---
+
 <a id="port-forward-not-synced"></a>
 ### Port forward not synced
 
