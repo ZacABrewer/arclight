@@ -20,6 +20,12 @@ export interface SessionSettings {
   listenAddress: string | null;
   maxConnections: number;
   maxConnectionsPerTorrent: number;
+  /**
+   * Outgoing connection attempts in flight at once, across all torrents. Every attempt is a
+   * socket (and a NAT/conntrack entry in a VPN container); hundreds at once flooded gluetun
+   * until its control API and DNS stopped answering.
+   */
+  maxHalfOpenConnections: number;
   /** Global upload limit in bytes/s (0 = unlimited). */
   uploadLimit: number;
   /** Global download limit in bytes/s (0 = unlimited). */
@@ -93,6 +99,7 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   listenAddress: null,
   maxConnections: 200,
   maxConnectionsPerTorrent: 50,
+  maxHalfOpenConnections: 20,
   uploadLimit: 0,
   downloadLimit: 0,
   dht: true,

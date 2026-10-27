@@ -133,6 +133,8 @@ export interface TorrentContext {
   utp: () => UtpManager | null;
   /** Global connection budget check. */
   canConnect: () => boolean;
+  /** A slot for one more outgoing attempt (session-wide half-open limit). */
+  canOpen: () => boolean;
   isBlocked: (ip: string) => boolean;
   trackerFactory: (url: string) => TrackerClient | null;
   now: () => number;
@@ -337,6 +339,11 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   get error(): Error | null {
     return this.failure;
+  }
+
+  /** Outgoing attempts still connecting (half-open). */
+  get connectingCount(): number {
+    return this.connecting.size;
   }
 
   get peerCount(): number {
@@ -642,13 +649,16 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   private connectMore(): void {
     if (!this.networking || this.failure) return;
-    const max = this.ctx.settings().maxConnectionsPerTorrent;
+    const settings = this.ctx.settings();
+    const max = settings.maxConnectionsPerTorrent;
+    // one torrent may use half the session's half-open slots, so the others still get some
+    const halfOpenShare = Math.max(4, Math.ceil(settings.maxHalfOpenConnections / 2));
     const now = this.ctx.now();
     const list = [...this.candidates.entries()]
       .filter(([k, c]) => !c.connected && !c.banned && c.nextAttemptAt <= now && !this.connecting.has(k))
       .sort((a, b) => a[1].failures - b[1].failures);
     for (const [key, c] of list) {
-      if (this.peerCount >= max || !this.ctx.canConnect()) break;
+      if (this.peerCount >= max || !this.ctx.canConnect() || !this.ctx.canOpen() || this.connecting.size >= halfOpenShare) break;
       void this.connectTo(key, c);
     }
   }

@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, readFile, rm, stat, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
+import { createServer, type Server, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createTorrent } from './create.js';
@@ -197,6 +198,36 @@ describe('Session end-to-end', () => {
     await limit;
     await waitFor(() => lt.state === 'paused');
   }, 30_000);
+});
+
+describe('Session connection limits', () => {
+  it('keeps outgoing attempts under the half-open limit', async () => {
+    // Silent peers: TCP connects, then the MSE handshake waits, so each attempt stays half-open.
+    const servers: Server[] = [];
+    const held: Socket[] = [];
+    const ports: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const srv = createServer((sock) => held.push(sock));
+      await new Promise<void>((r) => srv.listen(0, '127.0.0.1', r));
+      servers.push(srv);
+      ports.push((srv.address() as { port: number }).port);
+    }
+    cleanups.push(async () => {
+      for (const sock of held) sock.destroy();
+      await Promise.all(servers.map((srv) => new Promise((r) => srv.close(r))));
+    });
+    const s = await session({ encryption: 'required', utp: false, maxHalfOpenConnections: 6, maxConnectionsPerTorrent: 100, maxConnections: 100 });
+    const { torrent } = await createTorrent({ name: 'x', files: [{ path: ['x.bin'], data: randomBytes(40_000) }], pieceLength: 16384 });
+    const t = await s.addTorrent({ torrent, savePath: await tmp() });
+    t.addPeers(ports.map((port) => ({ host: '127.0.0.1', port })));
+    let peak = 0;
+    for (let i = 0; i < 20; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+      peak = Math.max(peak, t.connectingCount);
+    }
+    expect(peak).toBeGreaterThan(0);
+    expect(peak).toBeLessThanOrEqual(6);
+  });
 });
 
 describe('Session management', () => {

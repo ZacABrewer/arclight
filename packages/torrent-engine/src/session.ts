@@ -333,6 +333,12 @@ export class Session extends EventEmitter<SessionEvents> {
     return n;
   }
 
+  private canOpen(): boolean {
+    let n = 0;
+    for (const t of this.torrentsById.values()) n += t.connectingCount;
+    return n < this.settingsValue.maxHalfOpenConnections;
+  }
+
   private canConnect(): boolean {
     return this.connectionCount() < this.settingsValue.maxConnections;
   }
@@ -349,6 +355,7 @@ export class Session extends EventEmitter<SessionEvents> {
       dhts: () => [this.dhtNode, this.dht6Node].filter((d): d is DHT => d !== null),
       utp: () => (this.settingsValue.utp && this.utp.attached ? this.utp : null),
       canConnect: () => this.canConnect(),
+      canOpen: () => this.canOpen(),
       isBlocked: (ip) => this.opts.isBlocked?.(ip) ?? false,
       trackerFactory: (url) => {
         const fOpts: TrackerClientFactoryOptions = { userAgent: this.settingsValue.userAgent };
