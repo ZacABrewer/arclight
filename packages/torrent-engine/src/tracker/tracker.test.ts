@@ -318,3 +318,36 @@ describe('TrackerManager', () => {
     expect(encodeCompactPeers([]).length).toBe(0);
   });
 });
+
+describe('tracker request limiter', () => {
+  it('runs at most `max` requests at once and drops aborted waiters', async () => {
+    const { RequestLimiter } = await import('./limiter.js');
+    const lim = new RequestLimiter(2);
+    let running = 0;
+    let peak = 0;
+    const gates: Array<() => void> = [];
+    const job = () =>
+      lim.run(async () => {
+        running++;
+        peak = Math.max(peak, running);
+        await new Promise<void>((r) => gates.push(r));
+        running--;
+      });
+    const jobs = [job(), job(), job(), job()];
+    const ac = new AbortController();
+    const aborted = lim.run(async () => undefined, ac.signal);
+    await new Promise((r) => setImmediate(r));
+    expect(lim.inFlight).toBe(2);
+    expect(lim.queued).toBe(3);
+    ac.abort();
+    await expect(aborted).rejects.toThrow('aborted');
+    expect(lim.queued).toBe(2);
+    while (gates.length > 0 || running > 0) {
+      gates.shift()?.();
+      await new Promise((r) => setImmediate(r));
+    }
+    await Promise.all(jobs);
+    expect(peak).toBe(2);
+    expect(lim.inFlight).toBe(0);
+  });
+});

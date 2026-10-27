@@ -3,6 +3,7 @@ import dgram from 'node:dgram';
 import { isIPv6 } from 'node:net';
 import { decodeCompactPeers, decodeCompactPeers6 } from '../compact.js';
 import { TorrentEngineError } from '../errors.js';
+import { trackerRequests } from './limiter.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
 /** Creates a UDP socket. Injected in tests; the default is a plain `udp4` socket. */
@@ -18,9 +19,12 @@ const EVENT_CODES = { completed: 1, started: 2, stopped: 3 } as const;
 export interface UdpTrackerOptions {
   socketFactory?: UdpSocketFactory;
   localAddress?: string;
-  /** First retransmission timeout; BEP 15 uses 15 s doubling each retry. */
+  /**
+   * First retransmission timeout, doubling each retry (default 5 s). BEP 15 suggests 15 s, but a
+   * dead tracker then held a shared request slot for 105 s; 5 + 10 + 20 s gives up in 35 s.
+   */
   baseTimeoutMs?: number;
-  /** Retransmissions after the first attempt (BEP 15 allows 8; default 3). */
+  /** Retransmissions after the first attempt (BEP 15 allows 8; default 2). */
   maxRetries?: number;
   now?: () => number;
 }
@@ -57,8 +61,8 @@ export class UdpTracker implements TrackerClient {
 
   /** Sends `packet` and waits for a reply with the same transaction id, retrying with backoff. */
   private exchange(sock: dgram.Socket, build: (tx: Buffer) => Buffer, signal?: AbortSignal): Promise<Buffer> {
-    const base = this.opts.baseTimeoutMs ?? 15_000;
-    const retries = this.opts.maxRetries ?? 3;
+    const base = this.opts.baseTimeoutMs ?? 5_000;
+    const retries = this.opts.maxRetries ?? 2;
     const tx = randomBytes(4);
     return new Promise((resolve, reject) => {
       let attempt = 0;
@@ -123,13 +127,15 @@ export class UdpTracker implements TrackerClient {
     return this.connectionId;
   }
 
-  private async withSocket<T>(fn: (sock: dgram.Socket) => Promise<T>): Promise<T> {
-    const sock = await this.openSocket();
-    try {
-      return await fn(sock);
-    } finally {
-      sock.close();
-    }
+  private withSocket<T>(fn: (sock: dgram.Socket) => Promise<T>, signal?: AbortSignal): Promise<T> {
+    return trackerRequests.run(async () => {
+      const sock = await this.openSocket();
+      try {
+        return await fn(sock);
+      } finally {
+        sock.close();
+      }
+    }, signal);
   }
 
   announce(p: AnnounceParams, signal?: AbortSignal): Promise<AnnounceResponse> {
@@ -164,7 +170,7 @@ export class UdpTracker implements TrackerClient {
         complete: res.readUInt32BE(16),
         peers: isIPv6(this.host) ? decodeCompactPeers6(res.subarray(20)) : decodeCompactPeers(res.subarray(20)),
       };
-    });
+    }, signal);
   }
 
   scrape(infoHash: Buffer, signal?: AbortSignal): Promise<ScrapeResponse> {
@@ -185,7 +191,7 @@ export class UdpTracker implements TrackerClient {
       if (res.length < 20 || res.readUInt32BE(0) !== ACTION_SCRAPE)
         throw new TorrentEngineError('tracker', 'invalid udp scrape response');
       return { complete: res.readUInt32BE(8), downloaded: res.readUInt32BE(12), incomplete: res.readUInt32BE(16) };
-    });
+    }, signal);
   }
 
   close(): void {

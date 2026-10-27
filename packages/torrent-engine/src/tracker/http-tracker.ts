@@ -3,6 +3,7 @@ import https from 'node:https';
 import { type BDict, decode, getBytes, getInt, getList, getString, isDict } from '../bencode.js';
 import { decodeCompactPeers, decodeCompactPeers6, normalizeHost, type PeerAddress } from '../compact.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
+import { trackerRequests } from './limiter.js';
 import type { AnnounceParams, AnnounceResponse, ScrapeResponse, TrackerClient } from './types.js';
 
 export interface HttpRequestOptions {
@@ -119,7 +120,7 @@ export class HttpTracker implements TrackerClient {
     if (signal) reqOpts.signal = signal;
     let res: HttpResponse;
     try {
-      res = await this.requester(url, reqOpts);
+      res = await trackerRequests.run(() => this.requester(url, reqOpts), signal);
     } catch (err) {
       if (err instanceof TorrentEngineError) throw err;
       throw new TorrentEngineError('tracker', `tracker unreachable: ${errorMessage(err)}`, { cause: err });
