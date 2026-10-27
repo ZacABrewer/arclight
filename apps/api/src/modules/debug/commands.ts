@@ -169,6 +169,7 @@ function engine(svc: DebugService): string {
     kv([
       ['enabled', s.enabled],
       ['state', s.state],
+      ['start at boot', s.bootBlocked ? 'blocked by ARCLIGHT_TORRENT_ENGINE=0' : undefined],
       ['listen port', s.listenPort === null ? 'not listening' : s.listenPort],
       ['configured port', s.configuredListenPort],
       ['bound address', s.boundAddress ?? 'all interfaces'],

@@ -106,6 +106,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
         </p>
       ) : null}
       {status.warning ? <p className="al-inline-warning">{status.warning}</p> : null}
+      {status.bootBlocked ? <p className="al-inline-warning">{t('settings.torrent.bootBlocked')}</p> : null}
       <KeyValue items={items} />
     </div>
   );

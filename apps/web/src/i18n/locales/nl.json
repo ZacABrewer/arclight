@@ -3969,6 +3969,7 @@
   "settings.torrent.n0Unlimited": "[nl] 0 = unlimited.",
   "settings.torrent.n1Unlimited": "[nl] -1 = unlimited.",
   "settings.torrent.noTransportWarning": "[nl] TCP and uTP are both off, so no peer can connect. Turn one on.",
+  "settings.torrent.bootBlocked": "[nl] The environment variable ARCLIGHT_TORRENT_ENGINE=0 keeps the engine from starting when Arclight starts, even with \"Enable engine\" on. Remove it from your compose file or .env and recreate the container.",
   "settings.torrent.notBoundToTheVpn": "[nl] Not bound to the VPN",
   "settings.torrent.notListeningConfiguredConfiguredlistenport": "[nl] not listening (configured {configuredListenPort})",
   "settings.torrent.peerConnectionsAcrossAllTorrents": "[nl] Peer connections across all torrents.",

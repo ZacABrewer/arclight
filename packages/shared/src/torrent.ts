@@ -266,6 +266,8 @@ export const TorrentSessionStatus = z.object({
   error: z.string().optional(),
   /** Running, but with a caveat (e.g. listening on a fallback port). */
   warning: z.string().optional(),
+  /** ARCLIGHT_TORRENT_ENGINE=0: the engine is not started at boot (only by enabling it). */
+  bootBlocked: z.boolean().optional(),
   lockdownReason: z.string().optional(),
   /** ISO-8601: when the current lockdown started. */
   lockdownSince: z.string().optional(),

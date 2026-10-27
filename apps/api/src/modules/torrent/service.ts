@@ -142,6 +142,8 @@ export class TorrentService {
   private speedTimer: NodeJS.Timeout | undefined;
   /** boot() ran with the engine wanted: reconcile() may (re)start it. */
   private booted = false;
+  /** ARCLIGHT_TORRENT_ENGINE=0 kept boot() from running. */
+  private bootBlocked = false;
   private lastStartAttempt = 0;
   /** Mode last applied (null before the first evaluation); external clients follow its changes. */
   private lastAlternative: boolean | null = null;
@@ -395,6 +397,11 @@ export class TorrentService {
   // ---- lifecycle --------------------------------------------------------------------------
 
   /** Boot: subscribe to VPN events, auto-register the client, start the engine when enabled. */
+  /** Records that ARCLIGHT_TORRENT_ENGINE=0 skipped the boot start (shown in the status). */
+  markBootBlocked(): void {
+    this.bootBlocked = true;
+  }
+
   async boot(): Promise<void> {
     // First, so the self-check can still start the engine if anything below fails.
     this.booted = true;
@@ -788,6 +795,7 @@ export class TorrentService {
     };
     if (this.lastError) out.error = this.lastError;
     if (session && this.portWarning) out.warning = this.portWarning;
+    if (this.bootBlocked) out.bootBlocked = true;
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
     if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;
     out.lockdownsLastHour = this.recentLockdowns();

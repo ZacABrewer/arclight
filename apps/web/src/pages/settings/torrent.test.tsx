@@ -194,6 +194,13 @@ describe('Settings -> Torrent engine', () => {
     expect(screen.queryByRole('img', { name: 'Engine running' })).toBeNull();
   });
 
+  it('says when ARCLIGHT_TORRENT_ENGINE=0 keeps the engine from starting at boot', async () => {
+    status = { ...running, state: 'disabled', listenPort: null, bootBlocked: true };
+    renderPage();
+    const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
+    expect(within(panel).getByText(/ARCLIGHT_TORRENT_ENGINE=0 keeps the engine from starting/)).toBeTruthy();
+  });
+
   it('maps drafts to update bodies (empty nullable -> null, empty required -> omitted)', () => {
     const draft = { ...toTorrentDraft(settings), maxConnections: '', defaultSeedTimeMinutes: '90' };
     const body = toTorrentUpdate(draft);

@@ -74,6 +74,7 @@ export const torrentModule: AppModule = (ctx) => async (app) => {
     service.subscribe();
     if (!ctx.config.torrentEngine) {
       ctx.log.info('torrent engine not started at boot: ARCLIGHT_TORRENT_ENGINE=0');
+      service.markBootBlocked();
       return;
     }
     // Not awaited: restoring large partial torrents can take longer than Fastify's ready
