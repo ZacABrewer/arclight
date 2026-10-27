@@ -17,10 +17,15 @@ fi
 USER_NAME="$(getent passwd "$PUID" | cut -d: -f1)"
 
 mkdir -p /config
-chown -R "$PUID:$PGID" /config /app
+echo "Arclight: checking ownership and permissions of /config (PUID $PUID, PGID $PGID)"
+# Only touch what is wrong: a blanket chown -R / chmod -R rewrote every file on every start,
+# minutes on a large config folder (image cache, backups) on spinning disks, with no output.
 # Owning a folder is not enough when its mode bits deny the owner (NAS shared folders are often
-# created as d--------- with ACLs on top), so give the owner read/write/enter as well.
-chmod -R u+rwX /config
+# created as d--------- with ACLs on top), so give the owner read/write (and enter on folders) too.
+find /config -xdev \( ! -user "$PUID" -o ! -group "$PGID" \) -exec chown "$PUID:$PGID" {} +
+find /config -xdev \( \( -type d ! -perm -u=rwx \) -o \( ! -type d ! -perm -u=rw \) \) -exec chmod u+rwX {} +
+# /app is not chowned: it is read-only to the app, and changing owners there forced overlayfs to
+# copy every image file into the container layer on each fresh start (minutes stuck in disk sleep).
 
 if ! gosu "$PUID:$PGID" sh -c 'touch /config/.arclight-write-test && rm -f /config/.arclight-write-test'; then
   echo "Arclight cannot write to /config as $PUID:$PGID. Fix the host folder's permissions, e.g." >&2
