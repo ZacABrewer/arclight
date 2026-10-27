@@ -74,6 +74,8 @@ describe('Storage', () => {
     await s.createEmptyFiles();
     await writeAll(s, payload);
     expect(s.have.hasAll()).toBe(true);
+    // Finished pieces leave the cache: a completed torrent holds no block memory.
+    expect(s.cachedBytes).toBe(0);
     await s.close();
     expect((await readFile(join(dir, 'pack', 'f0.bin'))).equals(files[0]!)).toBe(true);
     expect((await readFile(join(dir, 'pack', 'f1.bin'))).equals(files[1]!)).toBe(true);

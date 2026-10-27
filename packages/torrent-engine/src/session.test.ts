@@ -7,6 +7,7 @@ import { createTorrent } from './create.js';
 import { DHT } from './dht/dht.js';
 import { toMagnetUri } from './magnet.js';
 import type { Metainfo } from './metainfo.js';
+import { PeerConnection } from './peer/connection.js';
 import { generatePeerId, Session, type SessionOptions } from './session.js';
 import type { SessionSettings } from './settings.js';
 import type { Torrent } from './torrent.js';
@@ -304,6 +305,47 @@ describe('Session management', () => {
     expect(lt.getStats().connectedPeers).toBe(0);
     expect(lt.getStats().progress).toBe(0);
   });
+
+  it('reads blocks for a peer one at a time while the upload limit holds them back', async () => {
+    const tr = await tracker();
+    const { torrent, p, st } = await seedSetup(tr.url, { uploadLimit: 150_000 });
+    const storage = (st as unknown as { storage: { read: (...a: unknown[]) => Promise<Buffer> } }).storage;
+    const read = storage.read.bind(storage);
+    let inFlight = 0;
+    let peak = 0;
+    storage.read = async (...a: unknown[]) => {
+      inFlight++;
+      peak = Math.max(peak, inFlight);
+      try {
+        return await read(...a);
+      } finally {
+        inFlight--;
+      }
+    };
+    let held = 0;
+    let peakHeld = 0;
+    const send = PeerConnection.prototype.sendPiece;
+    PeerConnection.prototype.sendPiece = async function (this: PeerConnection, ...a: Parameters<PeerConnection['sendPiece']>) {
+      held++;
+      peakHeld = Math.max(peakHeld, held);
+      try {
+        return await send.apply(this, a);
+      } finally {
+        held--;
+      }
+    };
+    try {
+      const leechDir = await tmp();
+      const leecher = await session({ savePath: leechDir });
+      await completed(await leecher.addTorrent({ torrent }));
+      await verifyPayload(leechDir, 'pack', p);
+    } finally {
+      PeerConnection.prototype.sendPiece = send;
+    }
+    // One leecher, possibly over two transports: never more than one block per connection.
+    expect(peak).toBeLessThanOrEqual(2);
+    expect(peakHeld).toBeLessThanOrEqual(2);
+  }, 30_000);
 
   it('applies global rate limits', async () => {
     const tr = await tracker();

@@ -180,6 +180,9 @@ interface PeerInfo {
   listenKey: string | null;
   /** Super-seeding: the piece currently offered to this peer. */
   offered: number | null;
+  /** Blocks the peer asked for, served one at a time (see `serveUploads`). */
+  uploads: { index: number; begin: number; length: number }[];
+  uploading: boolean;
 }
 
 interface Candidate {
@@ -736,6 +739,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       metadataInflight: 0,
       listenKey,
       offered: null,
+      uploads: [],
+      uploading: false,
     };
     this.peers.set(key, p);
     conn.on('handshake', (hs) => this.onHandshake(p, hs));
@@ -1104,14 +1109,39 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       p.conn.rejectRequest(index, begin, length);
       return;
     }
+    p.uploads.push({ index, begin, length });
+    await this.serveUploads(p);
+  }
+
+  /**
+   * Serves a peer's requests one block at a time, reading each from disk only when it can be
+   * sent. Reading them all up front held every requested block (up to 500 per peer) in memory
+   * while the upload limit or a slow VPN uplink let them out, gigabytes across a few seeds.
+   */
+  private async serveUploads(p: PeerInfo): Promise<void> {
+    if (p.uploading) return;
+    p.uploading = true;
     try {
-      const data = await storage.read(index, begin, length);
-      if (await p.conn.sendPiece(index, begin, data)) {
-        this.uploadedSession += length;
-        this.upMeter.add(length);
+      for (let r = p.uploads.shift(); r; r = p.uploads.shift()) {
+        // Cancelled, choked away or disconnected while it waited.
+        if (!p.conn.hasPeerRequest(r.index, r.begin, r.length)) continue;
+        const storage = this.storage;
+        if (!storage || this.moving) {
+          p.conn.rejectRequest(r.index, r.begin, r.length);
+          continue;
+        }
+        try {
+          const data = await storage.read(r.index, r.begin, r.length);
+          if (await p.conn.sendPiece(r.index, r.begin, data)) {
+            this.uploadedSession += r.length;
+            this.upMeter.add(r.length);
+          }
+        } catch {
+          p.conn.rejectRequest(r.index, r.begin, r.length);
+        }
       }
-    } catch {
-      p.conn.rejectRequest(index, begin, length);
+    } finally {
+      p.uploading = false;
     }
   }
 

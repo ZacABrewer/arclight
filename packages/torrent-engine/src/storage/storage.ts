@@ -320,11 +320,11 @@ export class Storage {
       }
     }
     const ok = createHash('sha1').update(data).digest().equals(expected);
+    // The cache only holds a piece until it is hashed: kept afterwards, every torrent pinned up
+    // to cacheBytes of finished data for good. Uploads read from disk (the OS caches hot data).
+    this.dropCache(piece);
     if (ok) await this.markVerified(piece);
-    else {
-      this.dropCache(piece);
-      this.have.set(piece, false);
-    }
+    else this.have.set(piece, false);
     return ok;
   }
 

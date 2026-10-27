@@ -74,6 +74,8 @@ export interface LookupResult {
 }
 
 const MAX_DIST = 1n << 161n;
+/** Info-hashes whose announced peers are kept (each up to 1000 peers). */
+const MAX_STORED_INFOHASHES = 5000;
 
 /** Kademlia DHT node (BEP 5 over IPv4, BEP 32 over IPv6). */
 export class DHT extends EventEmitter<DhtEvents> {
@@ -301,6 +303,11 @@ export class DHT extends EventEmitter<DhtEvents> {
     const key = infoHash.toString('hex');
     let m = this.peerStore.get(key);
     if (!m) {
+      // Bounded overall too: other nodes announce to us for any info-hash near our id.
+      if (this.peerStore.size >= MAX_STORED_INFOHASHES) {
+        const oldest = this.peerStore.keys().next().value;
+        if (oldest !== undefined) this.peerStore.delete(oldest);
+      }
       m = new Map();
       this.peerStore.set(key, m);
     }
