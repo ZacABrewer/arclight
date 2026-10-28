@@ -28,3 +28,7 @@
   .al-cf-spec__head, .al-cf-test__bar { grid-template-columns: minmax(0, 1fr); }
   .al-cf-test__bar .al-btn, .al-cf-spec__head .al-btn { min-height: 44px; }
 }
+/* Audio conditions: min/max bands side by side, the hint across. */
+.al-cf-audio-band { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.al-cf-audio-band > .al-caption, .al-cf-audio-band > .al-switch { grid-column: 1 / -1; }
+@media (max-width: 767px) { .al-cf-audio-band { grid-template-columns: minmax(0, 1fr); } }

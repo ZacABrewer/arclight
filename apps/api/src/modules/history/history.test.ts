@@ -523,3 +523,37 @@ describe('routes', () => {
     expect(invalid.json().error).toMatch(/not grabbed/);
   });
 });
+
+describe('music targets', () => {
+  const music: HistoryTarget = { mediaType: 'music', artistId: 42, albumIds: [420, 421] };
+  const release: GrabbedRelease = { title: 'Artist - Album (2020) [FLAC]', protocol: 'torrent', guid: 'g-music', indexerName: 'Tracker', size: 300 };
+
+  it('records one row per music event with the artist and albums; lookups and filters find it', () => {
+    f.history.recordGrab(release, { target: music, quality: quality('FLAC'), languages: [] }, 'musichash', 'qBit');
+    f.history.recordImport({
+      target: { mediaType: 'music', artistId: 42, albumIds: [420] },
+      quality: quality('FLAC'),
+      languages: [],
+      droppedPath: '/dl/Album',
+      importedPath: '/music/Artist/Album',
+      downloadId: 'musichash',
+    });
+    expect(f.history.mostRecentForAlbum(421, 'grabbed')).toMatchObject({ mediaType: 'music', artistId: 42, albumIds: [420, 421], downloadId: 'musichash' });
+    expect(f.history.mostRecentForAlbum(420)?.eventType).toBe('downloadFolderImported');
+    expect(f.history.list(HistoryListQuery.parse({ albumId: 421 })).records.map((r) => r.eventType)).toEqual(['grabbed']);
+    expect(f.history.list(HistoryListQuery.parse({ artistId: '42', mediaType: 'music' })).totalRecords).toBe(2);
+  });
+
+  it('a failed music download blocklists under the artist', async () => {
+    f.history.recordGrab(release, { target: music, quality: quality('FLAC'), languages: [] }, 'musichash', 'qBit');
+    const events: HistoryTarget[] = [];
+    f.history.onDownloadFailed((e) => {
+      events.push(e.target);
+    }, 100);
+    await f.history.failTracked({ downloadId: 'musichash', protocol: 'torrent' }, { message: 'boom' });
+    expect(events).toEqual([music]);
+    expect(f.blocklist.forArtist(42)).toMatchObject([{ mediaType: 'music', artistId: 42, albumIds: [420, 421], sourceTitle: release.title }]);
+    expect(f.blocklist.isBlocklisted({ artistId: 42 }, { title: release.title, protocol: 'torrent', indexer: 'Tracker' })).toBe(true);
+    expect(f.blocklist.isBlocklisted({ artistId: 43 }, { title: release.title, protocol: 'torrent', indexer: 'Tracker' })).toBe(false);
+  });
+});

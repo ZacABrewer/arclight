@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ReleaseResource } from './indexers.js';
-import { MediaType } from './library.js';
+import { AnyMediaType } from './library.js';
 import { ReleaseProtocol } from './profiles.js';
 import { QualityModel } from './quality.js';
 
@@ -22,6 +22,45 @@ export const ReleaseRejection = z.object({
 });
 export type ReleaseRejection = z.infer<typeof ReleaseRejection>;
 
+/**
+ * What the music parser read from a release name (music decisions only). The interactive album
+ * search shows it next to the matched album, so the user sees why a release mapped where it did.
+ */
+export const ReleaseMusicInfo = z.object({
+  /** Album artist as written; "Various Artists" for VA releases. */
+  artist: z.string().nullable(),
+  /** Album title without edition, year and tag brackets; null for packs. */
+  album: z.string().nullable(),
+  year: z.number().int().nullable(),
+  edition: z.string().nullable(),
+  isVariousArtists: z.boolean(),
+  /** `discography`: an artist's catalogue (or a span of it); `multiAlbum`: a set of albums; null: one album. */
+  packType: z.enum(['discography', 'multiAlbum']).nullable(),
+  discographyYears: z.object({ start: z.number().int(), end: z.number().int() }).nullable(),
+  /** EP, Single, Live, Compilation, Soundtrack or Bootleg; null when the name does not say. */
+  releaseTypeHint: z.string().nullable(),
+  /** CD, WEB, Vinyl, SACD, Cassette, DVD, BD or Unknown. */
+  media: z.string(),
+  catalogNumber: z.string().nullable(),
+  discCount: z.number().int().nullable(),
+  codec: z.string(),
+  bitrateKbps: z.number().int().nullable(),
+  bitDepth: z.number().int().nullable(),
+  sampleRateHz: z.number().int().nullable(),
+  hasLog: z.boolean(),
+  logScore: z.number().int().nullable(),
+  hasCue: z.boolean(),
+});
+export type ReleaseMusicInfo = z.infer<typeof ReleaseMusicInfo>;
+
+/** An album a music decision maps to. */
+export const ReleaseAlbumRef = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  year: z.number().int().nullable(),
+});
+export type ReleaseAlbumRef = z.infer<typeof ReleaseAlbumRef>;
+
 /** The verdict on one release. Extends the indexer's resource so the UI can show both at once. */
 export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved: true }).extend({
   rejections: z.array(ReleaseRejection),
@@ -30,12 +69,21 @@ export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved
   /** True when the release may be grabbed (approved, or the user overrides a rejection interactively). */
   downloadAllowed: z.boolean(),
   source: ReleaseSource,
-  mediaType: MediaType.optional(),
+  mediaType: AnyMediaType.optional(),
   seriesId: z.number().int().optional(),
   seriesTitle: z.string().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
   movieTitle: z.string().optional(),
+  /** Music: the matched artist. */
+  artistId: z.number().int().optional(),
+  artistName: z.string().optional(),
+  /** Music: the albums the release would fill or upgrade (for a pack, only the wanted ones). */
+  albumIds: z.array(z.number().int()).optional(),
+  /** Music: `albumIds` with titles and years, same order. */
+  albums: z.array(ReleaseAlbumRef).optional(),
+  /** Music: what the parser read from the release name. */
+  music: ReleaseMusicInfo.optional(),
   /** Multi-version items: the version slot the release was evaluated for (best-fitting profile). */
   versionTag: z.string().optional(),
   quality: QualityModel,
@@ -62,6 +110,9 @@ export const ReleaseGrabRequest = z.object({
   seriesId: z.number().int().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
+  /** Music: pin the artist (and optionally the albums) of an ambiguous release. */
+  artistId: z.number().int().optional(),
+  albumIds: z.array(z.number().int()).optional(),
   downloadClientId: z.number().int().optional(),
 });
 export type ReleaseGrabRequest = z.infer<typeof ReleaseGrabRequest>;
@@ -90,10 +141,12 @@ export const PendingRelease = z.object({
   protocol: ReleaseProtocol,
   size: z.number().int(),
   publishDate: z.string(),
-  mediaType: MediaType,
+  mediaType: AnyMediaType,
   seriesId: z.number().int().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
+  artistId: z.number().int().optional(),
+  albumIds: z.array(z.number().int()).optional(),
   quality: QualityModel,
   customFormatScore: z.number().int(),
   reason: PendingReason,
@@ -114,10 +167,15 @@ export const ReleaseSearchQuery = z
     seasonNumber: OptionalInt,
     episodeId: OptionalInt,
     movieId: OptionalInt,
+    /** Music: interactive search for one album (its artist is implied). */
+    albumId: OptionalInt,
+    /** Music: interactive search for an artist (discographies plus every wanted album). */
+    artistId: OptionalInt,
   })
-  .refine((q) => q.seriesId !== undefined || q.episodeId !== undefined || q.movieId !== undefined, {
-    message: 'seriesId, episodeId or movieId is required',
-  });
+  .refine(
+    (q) => q.seriesId !== undefined || q.episodeId !== undefined || q.movieId !== undefined || q.albumId !== undefined || q.artistId !== undefined,
+    { message: 'seriesId, episodeId, movieId, albumId or artistId is required' },
+  );
 export type ReleaseSearchQuery = z.infer<typeof ReleaseSearchQuery>;
 
 export const ReleaseSearchResponse = z.array(ReleaseDecision);
@@ -159,10 +217,14 @@ export const SearchCommandRequest = z
     seasonNumber: z.number().int().min(0).optional(),
     episodeIds: z.array(z.number().int()).optional(),
     movieId: z.number().int().optional(),
+    /** Music: search the artist's wanted albums (or only `albumIds`). */
+    artistId: z.number().int().optional(),
+    albumIds: z.array(z.number().int()).optional(),
   })
-  .refine((q) => q.seriesId !== undefined || q.movieId !== undefined || (q.episodeIds?.length ?? 0) > 0, {
-    message: 'seriesId, episodeIds or movieId is required',
-  });
+  .refine(
+    (q) => q.seriesId !== undefined || q.movieId !== undefined || (q.episodeIds?.length ?? 0) > 0 || q.artistId !== undefined || (q.albumIds?.length ?? 0) > 0,
+    { message: 'seriesId, episodeIds, movieId, artistId or albumIds is required' },
+  );
 export type SearchCommandRequest = z.infer<typeof SearchCommandRequest>;
 
 export const SearchCommandResponse = z.object({
@@ -189,10 +251,13 @@ export const DecisionLogEntry = z.object({
   /** ISO-8601 time of the batch. */
   time: z.string(),
   source: DecisionLogSource,
-  mediaType: MediaType.nullable(),
+  mediaType: AnyMediaType.nullable(),
   seriesId: z.number().int().nullable(),
   episodeIds: z.array(z.number().int()),
   movieId: z.number().int().nullable(),
+  /** Music rows: the artist and the albums the release mapped to (absent on video rows). */
+  artistId: z.number().int().nullable().optional(),
+  albumIds: z.array(z.number().int()).optional(),
   guid: z.string(),
   indexerId: z.number().int(),
   title: z.string(),
@@ -224,17 +289,19 @@ export const DecisionLogBatch = z.object({
 });
 export type DecisionLogBatch = z.infer<typeof DecisionLogBatch>;
 
-/** GET /release/decisions: exactly one of seriesId, episodeId, movieId. */
+/** GET /release/decisions: exactly one of seriesId, episodeId, movieId, artistId, albumId. */
 export const DecisionLogQuery = z
   .object({
     seriesId: z.coerce.number().int().min(1).optional(),
     episodeId: z.coerce.number().int().min(1).optional(),
     movieId: z.coerce.number().int().min(1).optional(),
+    artistId: z.coerce.number().int().min(1).optional(),
+    albumId: z.coerce.number().int().min(1).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
-  .refine((q) => [q.seriesId, q.episodeId, q.movieId].filter((v) => v !== undefined).length === 1, {
-    message: 'exactly one of seriesId, episodeId or movieId is required',
+  .refine((q) => [q.seriesId, q.episodeId, q.movieId, q.artistId, q.albumId].filter((v) => v !== undefined).length === 1, {
+    message: 'exactly one of seriesId, episodeId, movieId, artistId or albumId is required',
   });
 export type DecisionLogQuery = z.infer<typeof DecisionLogQuery>;
 
@@ -251,8 +318,8 @@ export type DecisionLogPage = z.infer<typeof DecisionLogPage>;
 // came of it, and when the scheduled searches will look for it next.
 // ---------------------------------------------------------------------------------------
 
-/** Episode or movie: the units the scheduled searches track. */
-export const SearchItemType = z.enum(['episode', 'movie']);
+/** Episode, movie or album: the units the scheduled searches track. */
+export const SearchItemType = z.enum(['episode', 'movie', 'album']);
 export type SearchItemType = z.infer<typeof SearchItemType>;
 
 /** `automatic`: a scheduled job (Missing, Cutoff unmet, profile migration); `manual`: a user's "Search". */
@@ -294,7 +361,7 @@ export type AutomaticSearchState = z.infer<typeof AutomaticSearchState>;
 
 export const AutomaticSearchPlan = z.object({
   state: AutomaticSearchState,
-  /** The job that searches the item: MissingEpisodeSearch, MissingMovieSearch or CutoffUnmetSearch. */
+  /** The job that searches the item: MissingEpisodeSearch, MissingMovieSearch, MissingAlbumSearch, CutoffUnmetSearch or CutoffUnmetAudioSearch. */
   job: z.string().nullable(),
   /**
    * ISO-8601 estimate of the run that will search the item, from the job's schedule, the

@@ -19,6 +19,7 @@ import { PendingApiNotice } from '../settings/shared.js';
 import { DecisionBatchModal } from '../library/decisions/decisions-panel.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
 import { historyFilterFromSearch } from './history-search.js';
+import { isMusicRecord, MusicMediaLabel } from './music-media.js';
 
 const historyRoute = getRouteApi('/activity/history');
 import { t } from '../../i18n/index.js';
@@ -120,6 +121,7 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
     { label: t('common.sourceTitle'), value: <span className="al-activity-break">{record.sourceTitle}</span> },
     { label: t('common.date'), value: formatDateTime(record.date) },
   ];
+  if (isMusicRecord(record)) items.splice(2, 0, { label: t('common.music'), value: <MusicMediaLabel record={record} />, mono: false });
   if (record.quality?.quality?.name) items.push({ label: t('common.quality'), value: record.quality.quality.name });
   if (record.languages?.length) {
     const assumed = record.data?.languageAssumed === 'true';
@@ -196,18 +198,29 @@ const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecor
   {
     key: 'sourceTitle',
     header: t('common.sourceTitle'),
-    cell: (r) => (
-      <button
-        type="button"
-        className="al-activity-rowlink"
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpen(r);
-        }}
-      >
-        {r.sourceTitle}
-      </button>
-    ),
+    cell: (r) => {
+      const open = (
+        <button
+          type="button"
+          className="al-activity-rowlink"
+          onClick={(e) => {
+            e.stopPropagation();
+            onOpen(r);
+          }}
+        >
+          {r.sourceTitle}
+        </button>
+      );
+      if (!isMusicRecord(r)) return open;
+      return (
+        <div className="al-activity-title">
+          {open}
+          <span className="al-activity-title__sub" onClick={(e) => e.stopPropagation()}>
+            <MusicMediaLabel record={r} />
+          </span>
+        </div>
+      );
+    },
   },
   { key: 'quality', header: t('common.quality'), mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
   {

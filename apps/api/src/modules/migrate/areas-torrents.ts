@@ -173,7 +173,8 @@ function grabLink(db: Db, hash: string): GrabLink | null {
   const episodeIds = [...new Set(grabs.map((g) => g.episodeId).filter((e): e is number => e !== null))];
   return {
     title: first.sourceTitle,
-    mediaType: first.mediaType,
+    // Sonarr/Radarr grabs are always video.
+    mediaType: first.mediaType === 'movie' ? 'movie' : 'series',
     seriesId: first.seriesId,
     movieId: first.movieId,
     episodeIds,

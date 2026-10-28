@@ -23,7 +23,8 @@ import { useQueueSummary } from '../../hooks/activity.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
 import { useFeatures, useMusicQualityProfiles, useWantedAlbums } from '../../hooks/music.js';
-import { NotYetButton } from '../library/music/music-kit.js';
+import { useMusicSearch } from '../../hooks/music-acquisition.js';
+import { musicApi } from '../../api/music.js';
 import { albumTypeLabel, progressText, trackProgress } from '../library/music/music-model.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
@@ -422,25 +423,29 @@ function MoviesList({ mode }: { mode: ListMode }) {
   );
 }
 
-/** Albums missing tracks / below cutoff (read-only in Wave 1: music searches come later). */
+/** Albums missing tracks / below cutoff: AlbumSearch for the selected rows, one row, or all of them. */
 function AlbumsList({ mode }: { mode: ListMode }) {
   const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedAlbums(mode, page, PAGE_SIZE);
   const profiles = useMusicQualityProfiles();
-  const mobile = useIsMobile();
+  const search = useMusicSearch();
+  const toast = useToast();
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('music.wanted.couldNotLoad')} />;
   const rows = list.data?.records;
   const total = list.data?.totalRecords;
-  const pages = Math.max(1, Math.ceil((total ?? 0) / PAGE_SIZE));
-  const noun = t('music.albumNoun', { count: total ?? 0 });
-  const plural = t('music.albumNoun', { count: 2 });
   const label = (r: WantedAlbum) => `${r.artistName} - ${r.title}`;
-  const chip = mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
-  const empty = (
-    <EmptyState title={mode === 'missing' ? t('wanted.noMissingNoun', { noun: plural }) : t('wanted.noNounBelowCutoff', { noun: plural })}>
-      {mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
-    </EmptyState>
-  );
+  const searchAlbums = (albumIds: number[]) => {
+    if (albumIds.length) search.mutate({ name: 'AlbumSearch', albumIds });
+  };
+  const searchAll = async () => {
+    try {
+      const all = mode === 'missing' ? await musicApi.wanted.missing({ page: 1, pageSize: MAX_PAGE }) : await musicApi.wanted.cutoff({ page: 1, pageSize: MAX_PAGE });
+      searchAlbums(all.records.map((r) => r.id));
+    } catch (err) {
+      toast.error(t('common.searchFailed'), errorMessage(err));
+    }
+  };
   const columns: Column<WantedAlbum>[] = [
     {
       key: 'artist',
@@ -464,68 +469,43 @@ function AlbumsList({ mode }: { mode: ListMode }) {
     { key: 'released', header: t('common.released'), mono: true, cell: (r) => shortDate(r.releaseDate), width: '130px' },
     { key: 'tracks', header: t('music.tracks'), mono: true, cell: (r) => progressText(trackProgress(r.statistics)), width: '96px' },
     { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
-    { key: 'status', header: t('common.status'), cell: () => chip, width: '150px' },
+    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
     {
       key: 'search',
       header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <NotYetButton size="sm" label={t('wanted.searchLabel', { label: label(r) })}>
+        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => searchAlbums([r.id])}>
           {t('common.search')}
-        </NotYetButton>
+        </Button>
       ),
     },
   ];
   return (
-    <Pane
-      flush
-      title={total === undefined ? t('music.albums').toUpperCase() : `${total} ${noun}`}
-      actions={
-        <NotYetButton variant="primary" size="sm">
-          {t('wanted.searchAll')}
-        </NotYetButton>
-      }
-    >
-      {mobile ? (
-        list.isPending ? (
-          <Loading />
-        ) : (rows ?? []).length === 0 ? (
-          empty
-        ) : (
-          <div className="mk-mlist" role="list" aria-label={t('wanted.wantedNoun', { noun: plural })}>
-            {(rows ?? []).map((r) => (
-              <div key={r.id} className="mk-mrow" role="listitem">
-                <div style={{ minWidth: 0 }}>
-                  <Link className="mk-mrow__title mk-link" to="/library/music/album/$id" params={{ id: String(r.id) }}>
-                    {r.title}
-                  </Link>
-                  <div className="mk-mrow__sub al-num">
-                    {r.artistName} · {shortDate(r.releaseDate)} · {progressText(trackProgress(r.statistics))}
-                  </div>
-                </div>
-                {chip}
-              </div>
-            ))}
-          </div>
-        )
-      ) : (
-        <Table
-          columns={columns}
-          rows={rows}
-          loading={list.isPending}
-          rowKey={(r) => r.id}
-          density="rich"
-          sortable={false}
-          empty={empty}
-          caption={t('wanted.wantedNoun', { noun: plural })}
-        />
-      )}
-      {pages > 1 ? (
-        <div className="wanted-foot">
-          <Paginator page={page} pageCount={pages} onPageChange={setPage} />
-        </div>
-      ) : null}
-    </Pane>
+    <ListShell
+      mode={mode}
+      noun={t('music.albumNoun', { count: 2 })}
+      total={total}
+      page={page}
+      onPage={(p) => {
+        setPage(p);
+        setSelected(new Set());
+      }}
+      rows={rows}
+      loading={list.isPending}
+      columns={columns}
+      rowKey={(r) => r.id}
+      rowLabel={label}
+      mobileRow={(r) => ({
+        title: r.title,
+        sub: `${r.artistName} · ${shortDate(r.releaseDate)} · ${progressText(trackProgress(r.statistics))}`,
+      })}
+      selected={selected}
+      onSelect={setSelected}
+      running={search.isPending}
+      onSearchRows={searchAlbums}
+      onSearchAll={() => void searchAll()}
+    />
   );
 }

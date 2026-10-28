@@ -1,12 +1,17 @@
 import {
   QUALITY_GROUP_ID_BASE,
+  qualitiesForDomain,
   qualityById,
+  qualityInDomain,
+  type CustomFormat,
+  type MediaDomain,
   type DelayProfile,
   type DelayProfileReorderRequest,
   type ProfileFormatItem,
   type QualityProfileInput,
   type QualityProfileItem,
 } from '@arclight/shared';
+import { customFormatFitsDomain } from '../../../lib/custom-format-domain.js';
 import { t } from '../../../i18n/index.js';
 
 // Pure editing logic for the quality-profile dialog. The api stores items worst -> best; the
@@ -153,4 +158,70 @@ export function delayDropRequest(sorted: readonly DelayProfile[], from: number, 
   if (to > from) return { id: item.id, afterId: target.id };
   const before = sorted[to - 1];
   return before ? { id: item.id, afterId: before.id } : { id: item.id };
+}
+
+// ---- media domains ----------------------------------------------------------------------
+
+/** A profile's domain; profiles from before audio have none and are video. */
+export function profileDomain(p: { mediaDomain?: MediaDomain | undefined }): MediaDomain {
+  return p.mediaDomain ?? 'video';
+}
+
+export const DOMAIN_ORDER: readonly MediaDomain[] = ['video', 'music', 'audiobook'];
+
+export function domainLabel(d: MediaDomain | 'any'): string {
+  switch (d) {
+    case 'video':
+      return t('settings.profiles.domain.video');
+    case 'music':
+      return t('common.music');
+    case 'audiobook':
+      return t('settings.profiles.domain.audiobook');
+    default:
+      return t('settings.profiles.domain.any');
+  }
+}
+
+/** Every quality of the domain (Unknown left out), stored order worst -> best, none allowed. */
+export function domainItems(domain: MediaDomain): QualityProfileItem[] {
+  return [...qualitiesForDomain(domain)]
+    .filter((q) => q.id !== 0)
+    .sort((a, b) => a.weight - b.weight)
+    .map((q) => ({ kind: 'quality' as const, qualityId: q.id, allowed: false }));
+}
+
+/** Only the entries of `domain` (a group stays when every member belongs to it). */
+export function itemsInDomain(items: readonly QualityProfileItem[], domain: MediaDomain): QualityProfileItem[] {
+  return items.filter((i) => (i.kind === 'quality' ? qualityInDomain(i.qualityId, domain) : i.qualityIds.every((q) => qualityInDomain(q, domain))));
+}
+
+/** The formats a profile of `domain` may score. */
+export function formatsForDomain<T extends Pick<CustomFormat, 'specifications'>>(formats: readonly T[], domain: MediaDomain): T[] {
+  return formats.filter((f) => customFormatFitsDomain(f, domain));
+}
+
+/**
+ * A draft moved to another domain: that domain's qualities (best first, none allowed), no
+ * cutoff, and only the format scores whose formats fit the new domain.
+ */
+export function switchDomain(
+  draft: QualityProfileInput,
+  domain: MediaDomain,
+  formats: readonly Pick<CustomFormat, 'id' | 'specifications'>[],
+): QualityProfileInput {
+  const fits = new Set(formatsForDomain(formats, domain).map((f) => f.id));
+  return {
+    ...draft,
+    mediaDomain: domain,
+    items: toDisplay(domainItems(domain)),
+    cutoff: 0,
+    formatItems: draft.formatItems.filter((i) => fits.has(i.formatId)),
+    // Languages describe video audio tracks; audio profiles do not use them.
+    languages: domain === 'video' ? draft.languages : [],
+  };
+}
+
+/** Profiles grouped by domain in DOMAIN_ORDER (empty domains left out). */
+export function groupByDomain<T extends { mediaDomain?: MediaDomain | undefined }>(profiles: readonly T[]): Array<{ domain: MediaDomain; profiles: T[] }> {
+  return DOMAIN_ORDER.map((domain) => ({ domain, profiles: profiles.filter((p) => profileDomain(p) === domain) })).filter((g) => g.profiles.length > 0);
 }

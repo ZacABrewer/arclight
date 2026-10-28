@@ -5,7 +5,7 @@ import {
   type CustomFormatInput,
   type SpecImplementationDefinition,
 } from '@arclight/shared';
-import { Button, Field, Icon, Input, Modal, Select, Textarea, Toggle } from '../../../arclight/index.js';
+import { Button, Chip, Field, Icon, Input, Modal, Select, Textarea, Toggle } from '../../../arclight/index.js';
 import { ConfirmDialog, inUseMessage } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm } from '../../../components/forms/schema-form.js';
 import type { FieldDefinition, FieldErrors } from '../../../components/forms/types.js';
@@ -13,6 +13,10 @@ import { initialValues, validateFields } from '../../../components/forms/values.
 import { useDeleteCustomFormat, useSaveCustomFormat } from '../../../hooks/profiles.js';
 import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { exportCustomFormat } from './custom-format-json.js';
+import { AudioSpecEditor, audioSpecErrors, editorSchema, isAudioSpec } from './audio-spec-editors.js';
+import { useFeatures } from '../../../hooks/music.js';
+import { customFormatDomain } from '../../../lib/custom-format-domain.js';
+import { domainLabel } from '../profiles/quality-profile-model.js';
 import { CustomFormatTestBox } from './custom-format-test-box.js';
 import './custom-formats.css';
 import { t } from '../../../i18n/index.js';
@@ -33,7 +37,9 @@ export function validateSpecs(
   specs: readonly SpecDraft[],
   schema: readonly SpecImplementationDefinition[],
 ): { fieldErrors: FieldErrors[]; parsed: CustomFormatSpec[] | null } {
-  const fieldErrors = specs.map((s) => validateFields(specFields(schema.find((d) => d.implementation === s.implementation)), s.fields));
+  const fieldErrors = specs.map((s) =>
+    isAudioSpec(s.implementation) ? audioSpecErrors(s.implementation, s.fields) : validateFields(specFields(schema.find((d) => d.implementation === s.implementation)), s.fields),
+  );
   const results = specs.map((s) => CustomFormatSpec.safeParse(s));
   if (fieldErrors.some((e) => Object.keys(e).length) || results.some((r) => !r.success)) {
     results.forEach((r, i) => {
@@ -56,8 +62,9 @@ export interface CustomFormatEditorProps {
   onClose: () => void;
 }
 
-export function CustomFormatEditor({ format, initial, schema, onClose }: CustomFormatEditorProps) {
+export function CustomFormatEditor({ format, initial, schema: serverSchema, onClose }: CustomFormatEditorProps) {
   const start = format ?? initial ?? { name: '', includeWhenRenaming: false, specifications: [] };
+  const features = useFeatures();
   const [name, setName] = useState(start.name);
   const [includeWhenRenaming, setIncludeWhenRenaming] = useState(start.includeWhenRenaming);
   const [specs, setSpecs] = useState<SpecDraft[]>(() => structuredClone(start.specifications) as SpecDraft[]);
@@ -68,6 +75,9 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
   const save = useSaveCustomFormat();
   const remove = useDeleteCustomFormat();
 
+  // The server's kinds plus the audio editors, gated by the music / audiobooks flags.
+  const schema = editorSchema(serverSchema, features, start.specifications.map((x) => x.implementation));
+  const domain = customFormatDomain({ specifications: specs as CustomFormatSpec[] });
   const updateSpec = (index: number, patch: Partial<SpecDraft>) => setSpecs((list) => list.map((s, i) => (i === index ? { ...s, ...patch } : s)));
 
   const submit = () => {
@@ -118,7 +128,17 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
             </Field>
           ) : null}
 
-          <SettingsSection label={t('common.conditions')} count={specs.length}>
+          <SettingsSection
+            label={t('common.conditions')}
+            count={specs.length}
+            action={
+              features.music || features.audiobooks || domain !== 'any' ? (
+                <Chip tone="neutral" dot="none" data-testid="format-domain">
+                  {domainLabel(domain)}
+                </Chip>
+              ) : undefined
+            }
+          >
             <p className="al-caption">
               {t('settings.customFormats.customFormatEditor.theFormatMatchesWhenEvery')}
             </p>
@@ -153,7 +173,11 @@ export function CustomFormatEditor({ format, initial, schema, onClose }: CustomF
                         <Toggle size="sm" label={t('settings.customFormats.customFormatEditor.negate')} checked={spec.negate} onChange={(e) => updateSpec(index, { negate: e.currentTarget.checked })} />
                         <Toggle size="sm" label={t('settings.customFormats.customFormatEditor.required')} checked={spec.required} onChange={(e) => updateSpec(index, { required: e.currentTarget.checked })} />
                       </div>
-                      <SchemaForm fields={specFields(def)} values={spec.fields} errors={errors} onChange={(fields) => updateSpec(index, { fields })} />
+                      {isAudioSpec(spec.implementation) ? (
+                        <AudioSpecEditor implementation={spec.implementation} fields={spec.fields} errors={errors} onChange={(fields) => updateSpec(index, { fields })} />
+                      ) : (
+                        <SchemaForm fields={specFields(def)} values={spec.fields} errors={errors} onChange={(fields) => updateSpec(index, { fields })} />
+                      )}
                       {errors._spec ? <p className="al-inline-error">{errors._spec}</p> : null}
                     </fieldset>
                   </li>

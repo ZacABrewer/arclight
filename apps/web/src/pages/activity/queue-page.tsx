@@ -36,6 +36,7 @@ import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStat
 import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, queueTrailState } from './queue-status.js';
+import { isMusicRecord, MusicMediaLabel } from './music-media.js';
 import { TorrentDrawer } from './torrent-drawer.js';
 import { EngineTransferSection } from './transfer-history.js';
 import { t } from '../../i18n/index.js';
@@ -185,7 +186,16 @@ export function QueuePage() {
               {r.title}
             </span>
             <span className="al-activity-title__sub">
-              {media ? `${media} · ` : ''}
+              {isMusicRecord(r) ? (
+                <>
+                  <MusicMediaLabel record={r} />
+                  {' · '}
+                </>
+              ) : media ? (
+                `${media} · `
+              ) : (
+                ''
+              )}
               <time dateTime={r.added} title={formatDateTime(r.added)}>
                 {t('activity.queue.addedRelativetime', { relativeTime: relativeTime(r.added) })}
               </time>
@@ -248,7 +258,7 @@ export function QueuePage() {
             <Link
               className={buttonClass({ variant: 'ghost', size: 'sm' })}
               to="/activity/manual-import"
-              search={{ downloadId: r.downloadId }}
+              search={isMusicRecord(r) ? { downloadId: r.downloadId, mediaType: 'music' } : { downloadId: r.downloadId }}
               aria-label={t('activity.queue.manualImportTitle', { title: r.title })}
             >
               {t('common.import')}

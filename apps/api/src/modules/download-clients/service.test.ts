@@ -302,6 +302,22 @@ describe('refreshQueue', () => {
     expect(stranger.statusMessages.flatMap((m) => m.messages)).toContain(STATUS_TEXT.failedNotGrabbed);
   });
 
+  it('tracks music grabs by artist and albums through the queue and the failed hook', async () => {
+    const { service, fake } = await setup();
+    const c = service.create(qbit('Main'));
+    const failed: TrackedDownload[] = [];
+    service.onItemFailed((i) => {
+      failed.push(i);
+    });
+    fake(c.id).nextId = 'album';
+    await service.grab(c.id, { title: 'Artist - Album (2020) [FLAC]', magnet: 'magnet:?xt=urn:btih:y' }, { mediaType: 'music', artistId: 7, albumIds: [70, 71] });
+    expect(service.listTracked().find((t) => t.downloadId === 'album')).toMatchObject({ mediaType: 'music', artistId: 7, albumIds: [70, 71] });
+    expect(service.queueSummary().map((q) => q.mediaType)).toContain('music');
+    fake(c.id).items = [item({ id: 'album', status: 'failed' })];
+    await service.refreshQueue();
+    expect(failed[0]).toMatchObject({ trackedState: 'failedPending', artistId: 7, albumIds: [70, 71] });
+  });
+
   it('flags vanished items and removes them after the grace period', async () => {
     const { service, fake, advance } = await setup({ missingGraceMs: 5 * 60_000 });
     const c = service.create(qbit('Main'));

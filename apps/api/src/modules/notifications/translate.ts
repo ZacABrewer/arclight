@@ -80,10 +80,14 @@ export class EventTranslator {
         return this.health(event.health.checks);
       case 'release':
         return event.action === 'grabbed' ? this.grab(event.title, event.mediaType, event.mediaId) : [];
-      case 'import':
-        if (event.action === 'imported') return this.translateImported ? this.imported(event.mediaType, event.mediaId) : [];
-        if (event.action === 'manualRequired') return this.manual(event.title, event.mediaType, event.mediaId, event.message);
+      case 'import': {
+        // Audio imports notify through the import wiring (wiring.ts); only video media is loaded here.
+        const video = event.mediaType === 'series' || event.mediaType === 'movie' ? event.mediaType : undefined;
+        const videoId = video ? event.mediaId : undefined;
+        if (event.action === 'imported') return this.translateImported && (video || !event.mediaType) ? this.imported(video, videoId) : [];
+        if (event.action === 'manualRequired') return this.manual(event.title, video, videoId, event.message);
         return [];
+      }
       case 'library':
         return this.library(event.action, event.mediaType, event.id);
       default:
@@ -120,7 +124,9 @@ export class EventTranslator {
       .where(eq(trackedDownloads.title, title))
       .orderBy(desc(trackedDownloads.id))
       .get();
-    const type = mediaType ?? tracked?.row.mediaType ?? undefined;
+    const stored = tracked?.row.mediaType;
+    // Music / audiobook grabs have their own notification formats (not built here yet).
+    const type = mediaType ?? (stored === 'series' || stored === 'movie' ? stored : undefined);
     const id = mediaId ?? (type === 'movie' ? tracked?.row.movieId : tracked?.row.seriesId) ?? undefined;
     if (!type || id === undefined) {
       this.log?.debug({ title }, 'grab event without media; not notifying');

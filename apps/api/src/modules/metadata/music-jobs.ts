@@ -42,7 +42,17 @@ export const METADATA_CACHE_CLEANUP_JOB = 'MetadataCacheCleanup';
 export const REFRESH_ARTISTS_BUDGET_MS = 20 * 60 * 1000;
 const RECENT_MS = 90 * 24 * 60 * 60 * 1000;
 const DISABLED = 'skipped: music is not enabled';
-export const SEARCH_NOT_AVAILABLE = 'not available yet: searching for albums arrives with music acquisition (Wave 2)';
+/** ArtistSearch / AlbumSearch message when the release pipeline is not wired (stand-alone metadata module). */
+export const SEARCH_NOT_AVAILABLE = 'not available: the release pipeline is not running';
+
+/**
+ * Searches for artists' wanted albums / for albums, through the release pipeline (wired by
+ * wiring.ts, so this module does not depend on the releases module). Resolves to a summary.
+ */
+export interface MusicSearchPort {
+  artists(ids: readonly number[], signal: AbortSignal): Promise<string>;
+  albums(ids: readonly number[], signal: AbortSignal): Promise<string>;
+}
 
 export interface Started {
   job: Job;
@@ -56,6 +66,8 @@ export interface MusicRefresherDeps {
   log: Logger;
   /** Built on first use (the combined music-metadata + ffprobe reader in production). */
   tagReader: () => TagReader;
+  /** Album / artist search (ArtistSearch, AlbumSearch, search on add); null = not available. */
+  search?: () => MusicSearchPort | null;
   now?: () => Date;
   budgetMs?: number;
 }
@@ -116,9 +128,11 @@ export class MusicRefresher {
       if (!this.enabled()) return DISABLED;
       const message = await this.refreshArtist(artist.id, { kind: 'add', option: req.monitorOption }, { priority: 'background', fresh: false, signal, log });
       const folder = await this.folderExists(artist.path);
-      if (!folder || signal.aborted) return message;
-      const scan = await this.rescanOne(artist.id);
-      return `${message}; ${scan}`;
+      let result = message;
+      if (folder && !signal.aborted) result = `${message}; ${await this.rescanOne(artist.id)}`;
+      // Search on add: once the albums (and what is already on disk) are known.
+      if (req.searchOnAdd && !signal.aborted && this.exists(artist.id)) this.search(ARTIST_SEARCH_JOB, [artist.id], 'system');
+      return result;
     });
     return { artist, ...started };
   }
@@ -378,19 +392,29 @@ export class MusicRefresher {
         return this.rescan(cmd.artistIds);
       case 'ArtistSearch':
         this.requireArtists(cmd.artistIds);
-        return this.searchStub(ARTIST_SEARCH_JOB, cmd.artistIds);
+        return this.search(ARTIST_SEARCH_JOB, cmd.artistIds);
       case 'AlbumSearch': {
         const found = this.db.select({ id: albums.id }).from(albums).where(inArray(albums.id, cmd.albumIds)).all();
         const missing = cmd.albumIds.filter((id) => !found.some((r) => r.id === id));
         if (missing.length > 0) throw LibraryError.notFound('album', missing.join(', '));
-        return this.searchStub(ALBUM_SEARCH_JOB, cmd.albumIds);
+        return this.search(ALBUM_SEARCH_JOB, cmd.albumIds);
       }
     }
   }
 
-  /** Artist/album search until Wave 2: a job that only reports it is not available. */
-  searchStub(name: typeof ARTIST_SEARCH_JOB | typeof ALBUM_SEARCH_JOB, ids: readonly number[]): Started {
-    return this.start(name, `${name}:${ids.join(',')}`, async () => SEARCH_NOT_AVAILABLE);
+  /** ArtistSearch / AlbumSearch as a job: the artists' wanted albums, or the albums, through the search port. */
+  search(name: typeof ARTIST_SEARCH_JOB | typeof ALBUM_SEARCH_JOB, ids: readonly number[], trigger: Job['trigger'] = 'manual'): Started {
+    return this.start(
+      name,
+      `${name}:${ids.join(',')}`,
+      async ({ signal }) => {
+        if (!this.enabled()) return DISABLED;
+        const port = this.deps.search?.() ?? null;
+        if (!port) return SEARCH_NOT_AVAILABLE;
+        return name === ARTIST_SEARCH_JOB ? port.artists(ids, signal) : port.albums(ids, signal);
+      },
+      trigger,
+    );
   }
 
   // ---- cache ---------------------------------------------------------------------------------

@@ -114,6 +114,10 @@ export interface ReleaseSettings {
   whitelistedHardcodedSubs: string[];
   /** Settings → Indexers: rank freeleech / double-upload releases above otherwise equal ones. */
   preferIndexerFlags: boolean;
+  /** Music: automatic grabs of discography / multi-album packs (interactive grabs always may). */
+  allowDiscographyPacks: boolean;
+  /** Music: a pack must fill or upgrade at least this many wanted albums to be grabbed automatically. */
+  minPackWanted: number;
 }
 
 export interface ReleaseSettingsReader {
@@ -179,6 +183,8 @@ export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {
   allowHardcodedSubs: false,
   whitelistedHardcodedSubs: [],
   preferIndexerFlags: false,
+  allowDiscographyPacks: false,
+  minPackWanted: 2,
 };
 
 export const noopHistory: HistoryWriter = { recordGrab: () => undefined };

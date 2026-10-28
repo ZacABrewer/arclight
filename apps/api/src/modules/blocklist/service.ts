@@ -14,7 +14,7 @@ import {
   type ReleaseProtocol,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { movies, series } from '../../db/schema.js';
+import { artists, movies, series } from '../../db/schema.js';
 import { dataValue, parseProtocol, type DownloadFailedEvent, type HistoryTarget } from '../history/service.js';
 import { blocklist, type BlocklistRow, type NewBlocklistRow } from './schema.js';
 
@@ -171,29 +171,55 @@ export class BlocklistService {
     if (!parsed.success) throw new BlocklistError('VALIDATION', parsed.error.issues.map((i) => i.message).join('; '));
     const r = parsed.data;
     const isSeries = r.mediaType === 'series';
-    const row = this.db
-      .insert(blocklist)
-      .values({
-        mediaType: r.mediaType,
-        seriesId: isSeries ? (r.seriesId ?? null) : null,
-        episodeIds: isSeries ? [...new Set(r.episodeIds)] : [],
-        movieId: isSeries ? null : (r.movieId ?? null),
-        sourceTitle: r.sourceTitle,
-        quality: r.quality,
-        languages: r.languages,
-        date: this.now().toISOString(),
-        publishedDate: r.publishedDate ? new Date(r.publishedDate).toISOString() : null,
-        size: r.size ?? null,
-        protocol: r.protocol,
-        indexer: blank(r.indexer) ? null : r.indexer!,
-        indexerFlags: r.indexerFlags,
-        message: r.message ?? null,
-        torrentInfoHash: r.protocol === 'torrent' && !blank(r.torrentInfoHash) ? r.torrentInfoHash!.trim().toLowerCase() : null,
-        source: blank(r.source) ? null : r.source!,
-        releaseType: isSeries && !blank(r.releaseType) ? r.releaseType! : null,
-      } satisfies NewBlocklistRow)
-      .returning()
-      .get();
+    return this.insertRow({
+      mediaType: r.mediaType,
+      seriesId: isSeries ? (r.seriesId ?? null) : null,
+      episodeIds: isSeries ? [...new Set(r.episodeIds)] : [],
+      movieId: isSeries ? null : (r.movieId ?? null),
+      ...this.fieldColumns(r),
+      releaseType: isSeries && !blank(r.releaseType) ? r.releaseType! : null,
+    });
+  }
+
+  /** Music entries: scoped to the artist, remembering the albums of the blocked grab. */
+  private addMusic(scope: { artistId: number; albumIds: readonly number[] }, fields: BlocklistFields): BlocklistRecord {
+    return this.insertRow({
+      mediaType: 'music',
+      seriesId: null,
+      episodeIds: [],
+      movieId: null,
+      artistId: scope.artistId,
+      albumIds: [...new Set(scope.albumIds)],
+      ...this.fieldColumns({ ...fields, languages: fields.languages ?? [], indexerFlags: fields.indexerFlags ?? [] }),
+      releaseType: null,
+    });
+  }
+
+  /** Video goes through the validated request; music has its own columns. */
+  private addFor(target: HistoryTarget, fields: BlocklistFields): BlocklistRecord {
+    if (target.mediaType === 'music') return this.addMusic(target, fields);
+    return this.add({ ...scopeOf(target), ...fields });
+  }
+
+  private fieldColumns(r: BlocklistFields & { languages: readonly string[]; indexerFlags: readonly string[] }) {
+    return {
+      sourceTitle: r.sourceTitle,
+      quality: r.quality,
+      languages: [...r.languages],
+      date: this.now().toISOString(),
+      publishedDate: r.publishedDate ? new Date(r.publishedDate).toISOString() : null,
+      size: r.size ?? null,
+      protocol: r.protocol,
+      indexer: blank(r.indexer) ? null : r.indexer!,
+      indexerFlags: [...r.indexerFlags],
+      message: r.message ?? null,
+      torrentInfoHash: r.protocol === 'torrent' && !blank(r.torrentInfoHash) ? r.torrentInfoHash!.trim().toLowerCase() : null,
+      source: blank(r.source) ? null : r.source!,
+    };
+  }
+
+  private insertRow(values: NewBlocklistRow): BlocklistRecord {
+    const row = this.db.insert(blocklist).values(values).returning().get();
     this.log.debug({ id: row.id, title: row.sourceTitle }, 'release blocklisted');
     return this.toRecord(row);
   }
@@ -212,8 +238,7 @@ export class BlocklistService {
       .split(',')
       .map((f) => f.trim())
       .filter((f) => f !== '');
-    return this.add({
-      ...scopeOf(event.target),
+    return this.addFor(event.target, {
       sourceTitle: event.sourceTitle,
       quality: event.quality,
       languages: [...event.languages],
@@ -235,10 +260,9 @@ export class BlocklistService {
    */
   addFromTracked(item: TrackedBlocklistItem, message: string, grabbedData: Record<string, string> = {}): BlocklistRecord {
     const target = trackedTarget(item);
-    if (!target) throw new BlocklistError('VALIDATION', `download ${item.downloadId} is not linked to a series or movie`);
+    if (!target) throw new BlocklistError('VALIDATION', `download ${item.downloadId} is not linked to a series, movie or artist`);
     const published = timeOf(dataValue(grabbedData, 'publishedDate'));
-    return this.add({
-      ...scopeOf(target),
+    return this.addFor(target, {
       sourceTitle: item.title,
       quality: item.quality ?? UNKNOWN_QUALITY,
       languages: [...(item.languages ?? [])],
@@ -259,8 +283,7 @@ export class BlocklistService {
     parsed: { quality: QualityModel; languages: readonly string[] },
     source?: string,
   ): BlocklistRecord {
-    return this.add({
-      ...scopeOf(target),
+    return this.addFor(target, {
       sourceTitle: release.title,
       quality: parsed.quality,
       languages: [...parsed.languages],
@@ -326,12 +349,17 @@ export class BlocklistService {
     return this.byScope({ movieId });
   }
 
+  forArtist(artistId: number): BlocklistRecord[] {
+    return this.byScope({ artistId });
+  }
+
   list(query: BlocklistListQuery): BlocklistPage {
     const conds: SQL[] = [];
     if (query.mediaType) conds.push(eq(blocklist.mediaType, query.mediaType));
     const parentConds: SQL[] = [];
     if (query.seriesId && query.seriesId.length > 0) parentConds.push(inArray(blocklist.seriesId, query.seriesId));
     if (query.movieId && query.movieId.length > 0) parentConds.push(inArray(blocklist.movieId, query.movieId));
+    if (query.artistId && query.artistId.length > 0) parentConds.push(inArray(blocklist.artistId, query.artistId));
     if (parentConds.length > 0) conds.push(or(...parentConds)!);
     if (query.protocol && query.protocol.length > 0) conds.push(inArray(blocklist.protocol, query.protocol));
     const where = conds.length > 0 ? and(...conds) : undefined;
@@ -350,7 +378,7 @@ export class BlocklistService {
         case 'sourceTitle':
           return sql`lower(${blocklist.sourceTitle})`;
         case 'title':
-          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle})`;
+          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName})`;
         case 'quality':
           return sql`json_extract(${blocklist.quality}, '$.quality.weight')`;
         case 'date':
@@ -363,6 +391,7 @@ export class BlocklistService {
       .from(blocklist)
       .leftJoin(series, eq(blocklist.seriesId, series.id))
       .leftJoin(movies, eq(blocklist.movieId, movies.id))
+      .leftJoin(artists, eq(blocklist.artistId, artists.id))
       .where(where)
       .orderBy(dir(sortExpr), dir(blocklist.id))
       .limit(query.pageSize)
@@ -429,6 +458,15 @@ export class BlocklistService {
         ),
       )
       .run().changes;
+    removed += this.db
+      .delete(blocklist)
+      .where(
+        and(
+          eq(blocklist.mediaType, 'music'),
+          or(sql`${blocklist.artistId} is null`, notInArray(blocklist.artistId, this.db.select({ id: artists.id }).from(artists))),
+        ),
+      )
+      .run().changes;
     return removed;
   }
 
@@ -464,6 +502,7 @@ export class BlocklistService {
       torrentInfoHash: row.torrentInfoHash,
       source: row.source,
       releaseType: row.releaseType,
+      ...(row.artistId !== null ? { artistId: row.artistId, albumIds: row.albumIds ?? [] } : {}),
     };
     return { ...base, customFormats: this.resolveFormats ? this.resolveFormats(base) : [] };
   }
@@ -475,12 +514,15 @@ function scopeCond(scope: BlocklistScope): SQL {
   return 'artistId' in scope ? eq(blocklist.artistId, scope.artistId) : eq(blocklist.authorId, scope.authorId);
 }
 
+/** The release fields of an entry (everything but the parent). */
+type BlocklistFields = Omit<BlocklistAddRequestInput, 'mediaType' | 'seriesId' | 'episodeIds' | 'movieId' | 'quality'> & { quality: QualityModel };
+
 function scopeOf(
-  target: HistoryTarget,
+  target: Exclude<HistoryTarget, { mediaType: 'music' }>,
 ): { mediaType: 'series'; seriesId: number; episodeIds: number[] } | { mediaType: 'movie'; movieId: number } {
-  // Audio blocklisting arrives with audio acquisition (Wave 2); nothing produces audio targets yet.
-  if (target.mediaType === 'music' || target.mediaType === 'audiobook') {
-    throw new BlocklistError('VALIDATION', `blocklisting ${target.mediaType} releases is not supported yet`);
+  // Audiobook blocklisting arrives with Wave 3.
+  if (target.mediaType === 'audiobook') {
+    throw new BlocklistError('VALIDATION', 'blocklisting audiobook releases is not supported yet');
   }
   return target.mediaType === 'series'
     ? { mediaType: 'series', seriesId: target.seriesId, episodeIds: [...target.episodeIds] }
@@ -488,6 +530,9 @@ function scopeOf(
 }
 
 function trackedTarget(item: TrackedBlocklistItem): HistoryTarget | null {
+  if (item.artistId !== undefined && (item.mediaType === undefined || item.mediaType === 'music')) {
+    return { mediaType: 'music', artistId: item.artistId, albumIds: [...(item.albumIds ?? [])] };
+  }
   if (item.movieId !== undefined && item.mediaType !== 'series') return { mediaType: 'movie', movieId: item.movieId };
   if (item.seriesId !== undefined) {
     return { mediaType: 'series', seriesId: item.seriesId, episodeIds: [...(item.episodeIds ?? [])] };

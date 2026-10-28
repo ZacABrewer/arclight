@@ -1,4 +1,8 @@
 import {
+  AudioManualImportItem,
+  AudioManualImportQuery,
+  AudioManualImportRequest,
+  AudioManualImportResult,
   FileSystemEntry,
   FileSystemListing,
   FileSystemMkdirRequest,
@@ -22,7 +26,8 @@ import { NamingFormatError } from '@arclight/organizer';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
-import { ImportsError, type ImportsErrorCode, type ImportsService } from './service.js';
+import { ImportsError, type ImportsErrorCode } from './errors.js';
+import type { ImportsService } from './service.js';
 
 const statusFor: Record<ImportsErrorCode, number> = { NOT_FOUND: 404, VALIDATION: 400, CONFLICT: 409 };
 const errors = { 400: ImportsErrorResponse, 404: ImportsErrorResponse, 409: ImportsErrorResponse };
@@ -49,6 +54,18 @@ export function importsRoutes(service: ImportsService): FastifyPluginAsync<Recor
       '/manualimport',
       { schema: { body: ManualImportRequest, response: { 200: ManualImportResult, ...errors } } },
       async (req) => service.executeManualImport(req.body),
+    );
+
+    // Audio mode (music): same flow, per-file items carry artist/album/edition/track ids.
+    app.get(
+      '/manualimport/audio',
+      { schema: { querystring: AudioManualImportQuery, response: { 200: z.array(AudioManualImportItem), ...errors } } },
+      async (req) => service.listAudioManualImport(req.query),
+    );
+    app.post(
+      '/manualimport/audio',
+      { schema: { body: AudioManualImportRequest, response: { 200: AudioManualImportResult, ...errors } } },
+      async (req) => service.executeAudioManualImport(req.body),
     );
 
     // ---- rename -----------------------------------------------------------------------

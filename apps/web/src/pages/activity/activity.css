@@ -75,3 +75,16 @@
   .al-queue-detail { padding: 12px 16px 16px; }
   .al-queue-detail__grid { grid-template-columns: minmax(0, 1fr); }
 }
+
+/* Music rows: the music chip and "Artist – Album" link. */
+.al-activity-music { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+.al-activity-music .al-link { overflow-wrap: anywhere; }
+
+/* Manual import, audio mode: album groups with pickers and a track table. */
+.al-mi-audio-summary { display: flex; flex-direction: column; gap: 6px; padding: 10px 14px; min-width: 0; }
+.al-mi-audio-summary .al-chip-row, .al-mi-audio-group__head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.al-mi-audio-stray { padding: 8px 14px; font-size: 13px; color: var(--al-text-3); }
+.al-mi-audio-group { display: flex; flex-direction: column; gap: 14px; padding-bottom: 20px; border-bottom: 1px solid var(--al-line-1); min-width: 0; }
+.al-mi-audio-group:last-child { border-bottom: 0; padding-bottom: 0; }
+.al-mi-audio-pickers { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 12px 16px; min-width: 0; }
+.al-mi-audio-pickers .al-select { width: 100%; max-width: 100%; }

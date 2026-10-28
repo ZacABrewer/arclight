@@ -14,9 +14,12 @@ import {
   qualityIndex,
   scoreRelease,
 } from '@arclight/profiles-engine';
-import type { ParsedRelease } from '@arclight/parser';
+import type { ParsedMusicInfo, ParsedRelease } from '@arclight/parser';
 import {
   indexerFlagsFromVolumeFactors,
+  type AnyMediaType,
+  type EvaluationMediaType,
+  type ReleaseAudioEvaluation,
   PROFILE_LANGUAGES,
   type CustomFormat,
   type DelayProfile,
@@ -29,6 +32,7 @@ import {
   type ReleaseDecision,
   type ReleaseIndexerFlag,
   type ReleaseKind,
+  type ReleaseMusicInfo,
   type ReleaseProfile,
   type ReleaseRejection,
   type ReleaseResource,
@@ -38,6 +42,7 @@ import {
 import { displayLanguage, missingLanguages, releaseAudioLanguages, type RequiredAudio } from '../additional-languages/audio.js';
 import type { DownloadPropersAndRepacks, HistoryEventSummary, ReleaseSettings } from './deps.js';
 import { detectHardcodedSubs, isWhitelistedHardcodedSubs } from './hardcoded-subs.js';
+import type { AlbumMatch } from './audio-matcher.js';
 import type { MatchCriteria, MatchResult, MovieMatch, SeriesMatch, Unmatched } from './matcher.js';
 
 // The decision engine (decision-engine spec §4–§11). Every specification is a pure
@@ -59,6 +64,8 @@ export interface ExistingFile {
   /** ISO-8601. */
   dateAdded: string;
   episodeIds: number[];
+  /** Music: the album this (per-album) file stands for; its quality is the album's lowest track quality. */
+  albumIds?: number[];
   sizeBytes: number;
   /** Multi-version library: the version slot the file fills (null = unversioned). */
   versionTag?: string | null;
@@ -74,6 +81,7 @@ export interface QueuedItem {
   downloadId: string;
   episodeIds?: number[];
   movieId?: number;
+  albumIds?: number[];
 }
 
 export interface PendingItem {
@@ -82,6 +90,7 @@ export interface PendingItem {
   indexerId: number;
   episodeIds?: number[];
   movieId?: number;
+  albumIds?: number[];
   /** ISO-8601. */
   addedAt: string;
 }
@@ -132,10 +141,15 @@ export interface DecisionContext {
   requiredAudio?: RequiredAudio | null;
 }
 
+export type MappedMatch = SeriesMatch | MovieMatch | AlbumMatch;
+
 export interface Candidate {
   release: ReleaseResource;
+  /** Music candidates carry an empty video parse (no series, no movie); `music` has what was read. */
   parsed: ParsedRelease;
-  match: SeriesMatch | MovieMatch;
+  match: MappedMatch;
+  /** Music only: the parsed release name. */
+  music?: ParsedMusicInfo;
   quality: QualityModel;
   languages: string[];
   customFormats: CustomFormat[];
@@ -152,12 +166,23 @@ export interface SpecResult {
   remainingMinutes?: number;
 }
 
+/** Which candidates a spec runs for: one media type, a domain (`video`, `audio`) or `all`. */
+export type SpecDomain = 'video' | 'series' | 'movie' | 'audio' | 'music' | 'audiobook' | 'all';
+
 export interface Specification {
   id: string;
   tier: 0 | 1;
   type: 'permanent' | 'temporary';
-  appliesTo: 'series' | 'movie' | 'both';
+  appliesTo: SpecDomain;
   evaluate(ctx: DecisionContext, c: Candidate): SpecResult | SpecResult[] | null;
+}
+
+/** Does a spec of `domain` run for a candidate of `mediaType`? */
+export function specApplies(domain: SpecDomain, mediaType: AnyMediaType): boolean {
+  if (domain === 'all' || domain === mediaType) return true;
+  if (domain === 'video') return mediaType === 'series' || mediaType === 'movie';
+  if (domain === 'audio') return mediaType === 'music' || mediaType === 'audiobook';
+  return false;
 }
 
 // ---- helpers ------------------------------------------------------------------------
@@ -194,7 +219,8 @@ export function indexerFlagScore(flags: readonly ReleaseIndexerFlag[]): number {
   return flags.reduce((sum, f) => sum + (FLAG_WEIGHT[f] ?? 0), 0);
 }
 
-export function releaseKindOf(match: SeriesMatch | MovieMatch): ReleaseKind {
+export function releaseKindOf(match: MappedMatch): ReleaseKind {
+  if (match.mediaType === 'music') return match.pack ?? 'single';
   if (match.mediaType === 'movie') return 'single';
   if (match.fullSeason) return 'seasonPack';
   return match.episodes.length > 1 ? 'multi' : 'single';
@@ -207,19 +233,22 @@ export function evaluateFormats(
   input: {
     title: string;
     quality: QualityModel;
-    mediaType: 'series' | 'movie';
+    mediaType: EvaluationMediaType;
     sizeBytes?: number;
     languages?: string[];
     releaseGroup?: string | null;
     year?: number;
     releaseKind?: ReleaseKind;
     indexerFlags?: ReleaseIndexerFlag[];
+    /** Music and audiobook releases: codec, bitrate, source, log/cue. */
+    audio?: ReleaseAudioEvaluation;
   },
 ): { formats: CustomFormat[]; score: number } {
   const result = scoreRelease(profile, formats, {
     title: input.title,
     quality: input.quality,
     mediaType: input.mediaType,
+    ...(input.audio ? { audio: input.audio } : {}),
     languages: input.languages ?? [],
     ...(input.releaseGroup ? { releaseGroup: input.releaseGroup } : {}),
     ...(input.sizeBytes ? { sizeBytes: input.sizeBytes } : {}),
@@ -322,15 +351,22 @@ function isUserInvoked(ctx: DecisionContext): boolean {
   return ctx.criteria?.userInvoked === true || ctx.source === 'userInvokedSearch' || ctx.source === 'interactiveSearch';
 }
 
-function episodesOf(c: Candidate) {
-  return c.match.mediaType === 'series' ? c.match.episodes : [];
+export function filesFor(ctx: Pick<DecisionContext, 'existingFiles'>, c: Candidate): ExistingFile[] {
+  if (c.match.mediaType === 'movie') return [...ctx.existingFiles];
+  const seen = new Set<number>();
+  if (c.match.mediaType === 'music') {
+    const albums = new Set(c.match.albums.map((a) => a.id));
+    return ctx.existingFiles.filter((f) => (f.albumIds ?? []).some((id) => albums.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
+  }
+  const ids = new Set(c.match.episodes.map((e) => e.id));
+  return ctx.existingFiles.filter((f) => f.episodeIds.some((id) => ids.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
 }
 
-function filesFor(ctx: DecisionContext, c: Candidate): ExistingFile[] {
-  if (c.match.mediaType === 'movie') return [...ctx.existingFiles];
-  const ids = new Set(c.match.episodes.map((e) => e.id));
-  const seen = new Set<number>();
-  return ctx.existingFiles.filter((f) => f.episodeIds.some((id) => ids.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
+/** The original language of the matched series / movie; undefined for audio. */
+function originalLanguageOf(c: Candidate): string | undefined {
+  if (c.match.mediaType === 'movie') return c.match.movie.originalLanguage;
+  if (c.match.mediaType === 'series') return c.match.series.originalLanguage;
+  return undefined;
 }
 
 /**
@@ -350,12 +386,24 @@ export function replacesDisallowedFile(
   return action === 'replace' || isStrictlyBetter(ctx.profile, file, next);
 }
 
-function itemTags(c: Candidate): number[] {
+export function itemTags(c: Candidate): number[] {
+  if (c.match.mediaType === 'music') return c.match.artist.tags;
   return c.match.mediaType === 'series' ? c.match.series.tags : c.match.movie.tags;
+}
+
+/** Running time of the matched albums in minutes; 0 when any album's tracks are not loaded. */
+export function albumMinutes(match: AlbumMatch): number {
+  let ms = 0;
+  for (const a of match.albums) {
+    if (!a.durationMs || a.durationMs <= 0) return 0;
+    ms += a.durationMs;
+  }
+  return ms / MINUTE;
 }
 
 /** Runtime in minutes used for size checks; 0 = unknown. */
 export function runtimeMinutes(c: Candidate, now: Date): number {
+  if (c.match.mediaType === 'music') return albumMinutes(c.match);
   if (c.match.mediaType === 'movie') return c.match.movie.runtimeMinutes || 110;
   const series = c.match.series;
   const seriesRuntime = series.runtimeMinutes ?? 0;
@@ -371,8 +419,12 @@ export function runtimeMinutes(c: Candidate, now: Date): number {
   return 0;
 }
 
-function sameItem(c: Candidate, item: { episodeIds?: number[] | undefined; movieId?: number | undefined }): boolean {
+function sameItem(c: Candidate, item: { episodeIds?: number[] | undefined; movieId?: number | undefined; albumIds?: number[] | undefined }): boolean {
   if (c.match.mediaType === 'movie') return item.movieId === c.match.movie.id;
+  if (c.match.mediaType === 'music') {
+    const albums = new Set(c.match.albums.map((a) => a.id));
+    return (item.albumIds ?? []).some((id) => albums.has(id));
+  }
   const ids = new Set(c.match.episodes.map((e) => e.id));
   return (item.episodeIds ?? []).some((id) => ids.has(id));
 }
@@ -385,8 +437,7 @@ export function audioRequirement(ctx: DecisionContext, c: Candidate): { required
   if (r.keepExisting) {
     for (const f of filesFor(ctx, c)) for (const l of f.audioLanguages ?? []) if (!required.includes(l)) required.push(l);
   }
-  const original = c.match.mediaType === 'movie' ? c.match.movie.originalLanguage : c.match.series.originalLanguage;
-  return { required, have: releaseAudioLanguages(c.release.title, c.languages, original) };
+  return { required, have: releaseAudioLanguages(c.release.title, c.languages, originalLanguageOf(c)) };
 }
 
 /**
@@ -417,7 +468,7 @@ export const specifications: readonly Specification[] = [
     id: 'qualityAllowed',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) =>
       isQualityAllowed(ctx.profile, c.quality)
         ? null
@@ -427,7 +478,7 @@ export const specifications: readonly Specification[] = [
     id: 'customFormatMinimumScore',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) =>
       c.formatScore >= ctx.profile.minFormatScore
         ? null
@@ -442,13 +493,13 @@ export const specifications: readonly Specification[] = [
     id: 'language',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'video',
     evaluate: (ctx, c) => {
       const wanted = ctx.profile.languages;
       if (wanted.length === 0) return null;
       const langs = c.languages.filter((l) => l !== 'unknown');
       if (langs.length === 0) return null;
-      const original = c.match.mediaType === 'movie' ? c.match.movie.originalLanguage : c.match.series.originalLanguage;
+      const original = originalLanguageOf(c) ?? 'unknown';
       const resolved = wanted.map((w) => (w === 'original' ? original : w));
       if (langs.some((l) => resolved.includes(l) || (l === 'original' && wanted.includes('original')))) return null;
       return { reason: 'wantedLanguage', message: `${resolved.join(', ')} is wanted, but found ${langs.join(', ')}` };
@@ -460,7 +511,7 @@ export const specifications: readonly Specification[] = [
     id: 'requiredAudioLanguages',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'video',
     evaluate: (ctx, c) => {
       const a = audioRequirement(ctx, c);
       if (!a) return null;
@@ -477,7 +528,7 @@ export const specifications: readonly Specification[] = [
     id: 'maximumSize',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const max = ctx.settings.maximumSizeMb;
       if (max <= 0 || c.release.size <= 0) return null;
@@ -490,11 +541,13 @@ export const specifications: readonly Specification[] = [
     id: 'sizeLimits',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (c.release.size <= 0) return null;
       if (c.match.mediaType === 'series' && c.match.special) return null;
       const runtime = runtimeMinutes(c, ctx.now);
+      // Albums whose tracks are not loaded yet have no duration: audioSizePlausible still checks them.
+      if (runtime <= 0 && c.match.mediaType === 'music') return null;
       if (runtime <= 0) {
         return { reason: 'unknownRuntime', message: 'Runtime of all episodes is 0, unable to validate size until it is available' };
       }
@@ -506,7 +559,9 @@ export const specifications: readonly Specification[] = [
           return { reason: 'belowMinimumSize', message: `${mb(c.release.size)} is smaller than minimum allowed ${mb(min)}` };
         }
       }
-      if (limits.maxSize && limits.maxSize > 0) {
+      // Packs often hold more than the library knows of (other albums, bonus discs): no upper bound.
+      const pack = c.match.mediaType === 'music' && c.match.pack !== null;
+      if (limits.maxSize && limits.maxSize > 0 && !pack) {
         const max = limits.maxSize * runtime * MB;
         if (c.release.size > max) {
           return { reason: 'aboveMaximumSize', message: `${mb(c.release.size)} is larger than maximum allowed ${mb(max)}` };
@@ -519,7 +574,7 @@ export const specifications: readonly Specification[] = [
     id: 'sample',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'video',
     evaluate: (_ctx, c) =>
       /sample/i.test(c.release.title) && c.release.size > 0 && c.release.size < 70 * MB
         ? { reason: 'sample', message: 'Sample' }
@@ -530,7 +585,7 @@ export const specifications: readonly Specification[] = [
     id: 'raw',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'video',
     evaluate: (ctx, c) => {
       const looksRaw = RAW_DISC.some((re) => re.test(c.release.title));
       const rawQuality = c.quality.quality.modifier === 'brdisk' || c.quality.quality.modifier === 'rawhd';
@@ -544,7 +599,7 @@ export const specifications: readonly Specification[] = [
     id: 'hardcodedSubs',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'video',
     evaluate: (ctx, c) => {
       if (ctx.settings.allowHardcodedSubs) return null;
       const found = detectHardcodedSubs(c.release.title, c.releaseGroup);
@@ -559,7 +614,7 @@ export const specifications: readonly Specification[] = [
     id: 'minimumAge',
     tier: 0,
     type: 'temporary',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const min = ctx.settings.minimumAgeMinutes;
       if (c.release.protocol !== 'usenet' || min <= 0) return null;
@@ -576,7 +631,7 @@ export const specifications: readonly Specification[] = [
     id: 'retention',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const days = ctx.settings.retentionDays;
       if (c.release.protocol !== 'usenet' || days <= 0) return null;
@@ -587,7 +642,7 @@ export const specifications: readonly Specification[] = [
     id: 'minimumSeeders',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (c.release.protocol !== 'torrent' || !ctx.indexer || c.release.seeders === undefined) return null;
       const min = ctx.indexer.settings.minimumSeeders ?? 0;
@@ -600,7 +655,7 @@ export const specifications: readonly Specification[] = [
     id: 'indexerTags',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const tags = ctx.indexer?.tags ?? [];
       if (tags.length === 0) return null;
@@ -614,7 +669,7 @@ export const specifications: readonly Specification[] = [
     id: 'indexerBlocked',
     tier: 0,
     type: 'temporary',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const till = ctx.indexerDisabledTill;
       if (!till || Date.parse(till) <= ctx.now.getTime()) return null;
@@ -628,7 +683,7 @@ export const specifications: readonly Specification[] = [
     id: 'releaseProfiles',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const out: SpecResult[] = [];
       const profiles = applicableReleaseProfiles(ctx.releaseProfiles, { tags: itemTags(c), indexerId: c.release.indexerId });
@@ -738,11 +793,20 @@ export const specifications: readonly Specification[] = [
     id: 'monitored',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (isUserInvoked(ctx)) return null;
       if (c.match.mediaType === 'movie') {
         return c.match.movie.monitored ? null : { reason: 'movieNotMonitored', message: 'Movie is not monitored' };
+      }
+      if (c.match.mediaType === 'music') {
+        if (!c.match.artist.monitored) return { reason: 'artistNotMonitored', message: 'Artist is not monitored' };
+        const albums = c.match.albums;
+        // A pack is wanted for its monitored albums; a single album must be monitored itself.
+        const ok = c.match.pack ? albums.some((a) => a.monitored) : albums.every((a) => a.monitored);
+        return ok
+          ? null
+          : { reason: 'albumNotMonitored', message: albums.length === 1 ? 'Album is not monitored' : 'None of the albums is monitored' };
       }
       if (!c.match.series.monitored) return { reason: 'seriesNotMonitored', message: 'Series is not monitored' };
       const unmonitored = c.match.episodes.filter((e) => !e.monitored);
@@ -757,7 +821,7 @@ export const specifications: readonly Specification[] = [
     id: 'alreadyImported',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       for (const { grab } of ctx.importedGrabs) {
         if (compareQualityModels(grab.quality, c.quality)) continue;
@@ -775,7 +839,7 @@ export const specifications: readonly Specification[] = [
     id: 'recentGrabHistory',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (isSearch(ctx)) return null;
       for (const { event, formatScore } of ctx.latestHistory) {
@@ -796,7 +860,7 @@ export const specifications: readonly Specification[] = [
     id: 'queue',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const next = { quality: c.quality, formatScore: c.formatScore };
       for (const q of ctx.queue) {
@@ -822,7 +886,7 @@ export const specifications: readonly Specification[] = [
     id: 'upgradeAllowed',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const next = { quality: c.quality, formatScore: c.formatScore };
       for (const f of filesFor(ctx, c)) {
@@ -839,11 +903,17 @@ export const specifications: readonly Specification[] = [
     id: 'upgradeDisk',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const files = filesFor(ctx, c);
       if (files.length === 0) return null;
       const next = { quality: c.quality, formatScore: c.formatScore };
+      if (c.match.mediaType === 'music' && c.match.pack) {
+        const gained = albumsGainedBy(ctx, c);
+        return gained.length > 0
+          ? null
+          : { reason: 'diskNotUpgrade', message: `Pack upgrades none of its ${c.match.albums.length} albums` };
+      }
       if (c.match.mediaType === 'series' && c.match.fullSeason) {
         const total = c.match.episodes.length;
         let upgraded = 0;
@@ -888,7 +958,7 @@ export const specifications: readonly Specification[] = [
     id: 'properInRss',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (isSearch(ctx) || ctx.propers === 'doNotPrefer') return null;
       const midnight = new Date(ctx.now);
@@ -906,7 +976,7 @@ export const specifications: readonly Specification[] = [
     id: 'repackSameGroup',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (!c.quality.revision.isRepack || ctx.propers === 'doNotPrefer') return null;
       for (const f of filesFor(ctx, c)) {
@@ -926,21 +996,21 @@ export const specifications: readonly Specification[] = [
     id: 'blocklist',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx) => (ctx.blocklisted ? { reason: 'blocklisted', message: 'Release is blocklisted' } : null),
   },
   {
     id: 'indexerReleaseFilter',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx) => ctx.releaseFilter ?? null,
   },
   {
     id: 'delay',
     tier: 0,
     type: 'temporary',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (isUserInvoked(ctx) || !ctx.delayProfile) return null;
       const dp = ctx.delayProfile;
@@ -974,7 +1044,7 @@ export const specifications: readonly Specification[] = [
     id: 'pendingPushed',
     tier: 0,
     type: 'temporary',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (ctx.source === 'rss' || isUserInvoked(ctx)) return null;
       const blocking = ctx.pending.some((p) => sameItem(c, p) && !(p.guid === c.release.guid && p.indexerId === c.release.indexerId));
@@ -985,12 +1055,20 @@ export const specifications: readonly Specification[] = [
     id: 'searchItem',
     tier: 0,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       const cr = ctx.criteria;
       if (!cr) return null;
       if (c.match.mediaType === 'movie') {
         return cr.movieId !== undefined && cr.movieId !== c.match.movie.id ? { reason: 'wrongMovie', message: 'Wrong movie' } : null;
+      }
+      if (c.match.mediaType === 'music') {
+        if (cr.artistId !== undefined && cr.artistId !== c.match.artist.id) return { reason: 'wrongArtist', message: 'Wrong artist' };
+        const wanted = cr.albumIds ?? [];
+        if (wanted.length > 0 && !c.match.albums.some((a) => wanted.includes(a.id))) {
+          return { reason: 'wrongAlbum', message: "Album wasn't requested" };
+        }
+        return null;
       }
       if (cr.seriesId !== undefined && cr.seriesId !== c.match.series.id) return { reason: 'wrongSeries', message: 'Wrong series' };
       const parsedSeasons = c.parsed.series?.seasons.length ? c.parsed.series.seasons : [c.match.seasonNumber ?? -1];
@@ -1020,7 +1098,7 @@ export const specifications: readonly Specification[] = [
     id: 'freeSpace',
     tier: 1,
     type: 'permanent',
-    appliesTo: 'both',
+    appliesTo: 'all',
     evaluate: (ctx, c) => {
       if (ctx.freeSpaceBytes === null) return null;
       const remaining = ctx.freeSpaceBytes - c.release.size;
@@ -1031,6 +1109,29 @@ export const specifications: readonly Specification[] = [
     },
   },
 ];
+
+/**
+ * Music: the matched albums the release would fill (no files yet) or upgrade (strictly better
+ * than the album's lowest track quality and the album still below cutoff). A pack is only worth
+ * these albums; the others keep their files.
+ */
+export function albumsGainedBy(ctx: Pick<DecisionContext, 'existingFiles' | 'profile' | 'propers' | 'mismatchAction'>, c: Candidate): number[] {
+  if (c.match.mediaType !== 'music') return [];
+  const next = { quality: c.quality, formatScore: c.formatScore };
+  const out: number[] = [];
+  for (const album of c.match.albums) {
+    const file = ctx.existingFiles.find((f) => (f.albumIds ?? []).includes(album.id));
+    // Missing, or incomplete (fewer track files than tracks): the release fills it.
+    const incomplete = album.trackCount > 0 && album.trackFileCount < album.trackCount;
+    if (!file || incomplete || replacesDisallowedFile(ctx, file, next)) {
+      out.push(album.id);
+      continue;
+    }
+    if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
+    if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') out.push(album.id);
+  }
+  return out;
+}
 
 function compareQualityModels(a: QualityModel, b: QualityModel): boolean {
   return a.quality.id === b.quality.id && compareRevision(a.revision, b.revision) === 0;
@@ -1072,7 +1173,7 @@ export function evaluate(ctx: DecisionContext, c: Candidate, specs: readonly Spe
     if (tier === 1 && rejections.length > 0) break;
     for (const spec of specs) {
       if (spec.tier !== tier) continue;
-      if (spec.appliesTo !== 'both' && spec.appliesTo !== c.match.mediaType) continue;
+      if (!specApplies(spec.appliesTo, c.match.mediaType)) continue;
       let results: SpecResult[];
       try {
         const out = spec.evaluate(ctx, c);
@@ -1115,6 +1216,17 @@ export function buildDecision(
     ...(c.releaseGroup ? { releaseGroup: c.releaseGroup } : {}),
     ...(ev.remainingMinutes !== undefined && temporarilyRejected ? { delayMinutes: ev.remainingMinutes } : {}),
   };
+  if (c.match.mediaType === 'music') {
+    const albums = c.match.albums;
+    return {
+      ...base,
+      artistId: c.match.artist.id,
+      artistName: c.match.artist.name,
+      albumIds: albums.map((a) => a.id),
+      albums: albums.map((a) => ({ id: a.id, title: a.title, year: a.year })),
+      ...(c.music ? { music: musicInfoOf(c.music) } : {}),
+    };
+  }
   if (c.match.mediaType === 'series') {
     return {
       ...base,
@@ -1127,6 +1239,31 @@ export function buildDecision(
     };
   }
   return { ...base, movieId: c.match.movie.id, movieTitle: c.match.movie.title };
+}
+
+/** The contract view of a parsed music release name. */
+export function musicInfoOf(info: ParsedMusicInfo): ReleaseMusicInfo {
+  const a = info.audio;
+  return {
+    artist: info.artist,
+    album: info.album,
+    year: info.year,
+    edition: info.edition,
+    isVariousArtists: info.isVariousArtists,
+    packType: info.packType,
+    discographyYears: info.discographyYears ? { ...info.discographyYears } : null,
+    releaseTypeHint: info.releaseTypeHint,
+    media: info.media,
+    catalogNumber: info.catalogNumber,
+    discCount: info.discCount,
+    codec: a.codec,
+    bitrateKbps: a.bitrateKbps,
+    bitDepth: a.bitDepth,
+    sampleRateHz: a.sampleRateHz,
+    hasLog: info.hasLog,
+    logScore: info.logScore,
+    hasCue: info.hasCue,
+  };
 }
 
 /** Decision for a release that never reached the specs (unparseable / unknown item). */
@@ -1189,6 +1326,7 @@ export function itemKey(d: ReleaseDecision): string | undefined {
   // Multi-version items: each version slot is its own item (a 1080p and a 4K grab may both win).
   const v = d.versionTag ? `:${d.versionTag}` : '';
   if (d.mediaType === 'movie' && d.movieId !== undefined) return `movie:${d.movieId}${v}`;
+  if (d.mediaType === 'music' && d.artistId !== undefined && d.albumIds?.length) return `artist:${d.artistId}`;
   if (d.mediaType === 'series' && d.seriesId !== undefined && d.episodeIds?.length) return `series:${d.seriesId}${v}`;
   return undefined;
 }

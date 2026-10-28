@@ -1,11 +1,25 @@
 import { useId, useState } from 'react';
-import { PROFILE_LANGUAGES, type CustomFormat, type QualityProfile, type QualityProfileInput } from '@arclight/shared';
-import { Field, Input, Modal, ScoreTag, Select, Table, Toggle, type Column } from '../../../arclight/index.js';
+import { PROFILE_LANGUAGES, type CustomFormat, type MediaDomain, type QualityProfile, type QualityProfileInput } from '@arclight/shared';
+import { Field, Input, Modal, ScoreTag, Segmented, Select, Table, Toggle, type Column } from '../../../arclight/index.js';
+import { useFeatures } from '../../../hooks/music.js';
 import { ConfirmDialog, inUseMessage } from '../../../components/forms/confirm-dialog.js';
 import { useDeleteQualityProfile, useSaveQualityProfile } from '../../../hooks/profiles.js';
 import { EditorFooter, SaveError, SettingsSection } from '../shared.js';
 import { QualityItemList } from './quality-item-list.js';
-import { cutoffOptions, formatScore, fromDisplay, setFormatScore, toDisplay, validateProfile, type ProfileErrors } from './quality-profile-model.js';
+import {
+  cutoffOptions,
+  domainLabel,
+  formatScore,
+  formatsForDomain,
+  fromDisplay,
+  itemsInDomain,
+  profileDomain,
+  setFormatScore,
+  switchDomain,
+  toDisplay,
+  validateProfile,
+  type ProfileErrors,
+} from './quality-profile-model.js';
 import './profiles.css';
 import { t } from '../../../i18n/index.js';
 
@@ -14,6 +28,8 @@ export interface QualityProfileEditorProps {
   profile: QualityProfile | null;
   template: QualityProfileInput;
   customFormats: readonly CustomFormat[];
+  /** Domain of a new profile (ignored when editing). */
+  initialDomain?: MediaDomain | undefined;
   onClose: () => void;
 }
 
@@ -23,10 +39,20 @@ const intOr = (text: string, fallback: number) => {
 };
 
 /** Dialog body + state for one quality profile. Mount it only while open (key by profile id). */
-export function QualityProfileEditor({ profile, template, customFormats, onClose }: QualityProfileEditorProps) {
-  const initial = profile ?? template;
-  // `items` is held best-first while editing.
-  const [draft, setDraft] = useState<QualityProfileInput>(() => ({ ...structuredClone(initial), items: toDisplay(initial.items) }));
+export function QualityProfileEditor({ profile, template, customFormats, initialDomain, onClose }: QualityProfileEditorProps) {
+  const features = useFeatures();
+  // `items` is held best-first while editing; a new profile starts in the requested domain.
+  const [draft, setDraft] = useState<QualityProfileInput>(() => {
+    const start = { ...structuredClone(profile ?? template), items: toDisplay((profile ?? template).items) };
+    const domain = profile ? profileDomain(profile) : (initialDomain ?? profileDomain(template));
+    if (!profile && domain !== profileDomain(template)) return switchDomain(start, domain, customFormats);
+    return { ...start, mediaDomain: domain, items: itemsInDomain(start.items, domain) };
+  });
+  const domain = profileDomain(draft);
+  const domainOptions = (['video', 'music', 'audiobook'] as const)
+    .filter((d) => d === 'video' || d === domain || (d === 'music' ? features.music : features.audiobooks))
+    .map((d) => ({ value: d, label: domainLabel(d) }));
+  const formats = formatsForDomain(customFormats, domain);
   const [errors, setErrors] = useState<ProfileErrors>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
   const save = useSaveQualityProfile();
@@ -91,6 +117,28 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
         }
       >
         <div className="al-profile-editor">
+          {domainOptions.length > 1 ? (
+            <Field
+              label={t('settings.profiles.domain.label')}
+              hint={profile ? t('settings.profiles.domain.fixedHint') : t('settings.profiles.domain.hint')}
+            >
+              {profile ? (
+                <span className="al-profile-editor__domain" data-testid="profile-domain">
+                  {domainLabel(domain)}
+                </span>
+              ) : (
+                <Segmented
+                  aria-label={t('settings.profiles.domain.label')}
+                  value={domain}
+                  onChange={(d) => {
+                    setDraft(switchDomain(draft, d, customFormats));
+                    setErrors({});
+                  }}
+                  options={domainOptions}
+                />
+              )}
+            </Field>
+          ) : null}
           <Field label={t('common.name')} error={errors.name}>
             <Input value={draft.name} onChange={(e) => set('name', e.currentTarget.value)} />
           </Field>
@@ -136,13 +184,16 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
                 />
               </Field>
             </div>
-            {customFormats.length === 0 ? (
-              <p className="al-muted">{t('settings.profiles.qualityProfileEditor.noCustomFormatsYetAdd')}</p>
+            {formats.length === 0 ? (
+              <p className="al-muted">
+                {customFormats.length === 0 ? t('settings.profiles.qualityProfileEditor.noCustomFormatsYetAdd') : t('settings.profiles.domain.noFormatsForDomain', { domain: domainLabel(domain) })}
+              </p>
             ) : (
-              <Table columns={scoreColumns} rows={customFormats} rowKey={(cf) => cf.id} caption={t('settings.profiles.qualityProfileEditor.customFormatScores')} />
+              <Table columns={scoreColumns} rows={formats} rowKey={(cf) => cf.id} caption={t('settings.profiles.qualityProfileEditor.customFormatScores')} />
             )}
           </SettingsSection>
 
+          {domain === 'video' ? (
           <SettingsSection label={t('common.languages')}>
             <p className="al-caption">{t('settings.profiles.qualityProfileEditor.acceptedLanguagesNoneSelectedMeans')}</p>
             <div className="al-tag-toggles" role="group" aria-label={t('common.languages')}>
@@ -162,6 +213,7 @@ export function QualityProfileEditor({ profile, template, customFormats, onClose
               })}
             </div>
           </SettingsSection>
+          ) : null}
           <SaveError error={save.error} />
         </div>
       </Modal>

@@ -99,6 +99,8 @@ export function deliveriesFor(db: Db, push: Pick<PushService, 'managers'>, event
   }
   if (event.type === 'import') {
     if (event.action !== 'imported' || !event.mediaType || event.mediaId === undefined) return [];
+    // Audio availability arrives with audio requests (Wave 4).
+    if (event.mediaType !== 'series' && event.mediaType !== 'movie') return [];
     const mediaType = event.mediaType;
     const mediaId = event.mediaId;
     const rows = db

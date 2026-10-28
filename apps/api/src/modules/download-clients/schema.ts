@@ -3,7 +3,7 @@ import type { DownloadItemPhase } from '@arclight/download-clients';
 import type {
   DownloadClientImplementation,
   DownloadEventType,
-  MediaType,
+  AnyMediaType,
   QueueItemLive,
   QueueItemStateCode,
   QueueSeverity,
@@ -91,7 +91,7 @@ export const trackedDownloads = sqliteTable(
     addedAt: text('added_at').notNull(),
     lastSeenAt: text('last_seen_at'),
     updatedAt: text('updated_at').notNull(),
-    mediaType: text('media_type').$type<MediaType>(),
+    mediaType: text('media_type').$type<AnyMediaType>(),
     seriesId: integer('series_id'),
     episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>(),
     movieId: integer('movie_id'),

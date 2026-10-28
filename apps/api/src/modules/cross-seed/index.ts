@@ -70,6 +70,8 @@ export const crossSeedModule: AppModule = (ctx) => async (app) => {
   const unresolve = trackerStatsServiceFor(ctx).registerInfoHashResolver((h) => service.indexerFor(h));
   const unsubscribe = ctx.bus.subscribe((event) => {
     if (event.type !== 'import' || event.action !== 'imported' || !event.mediaType || event.mediaId === undefined) return;
+    // Video only: music imports carry an artist id.
+    if (event.mediaType !== 'series' && event.mediaType !== 'movie') return;
     void service
       .searchAfterImport(event.mediaType, event.mediaId)
       .catch((err: unknown) => ctx.log.warn({ err }, 'cross-seed search after import failed'));

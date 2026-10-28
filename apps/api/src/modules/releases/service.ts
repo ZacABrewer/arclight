@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, lte } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import type { SearchRequest } from '@arclight/indexers';
-import { parseRelease } from '@arclight/parser';
+import { domainFromCategories, type SearchRequest } from '@arclight/indexers';
+import { musicAudioEvaluation, musicReleaseKind, parseMusicRelease, parseRelease, type ParsedMusicRelease, type ParsedRelease } from '@arclight/parser';
 import {
   MovieListQuery,
   SeriesListQuery,
@@ -37,10 +37,17 @@ import {
   type Series,
   type TrackedDownloadState,
 } from '@arclight/shared';
-import { selectDelayProfile } from '@arclight/profiles-engine';
+import { customFormatFitsDomain, isQualityCutoffMet, qualityIndex, selectDelayProfile } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import type { EventBus } from '../../events.js';
-import { additionalLanguages, episodes as episodeTable, movies as movieTable, series as seriesTable } from '../../db/schema.js';
+import {
+  additionalLanguages,
+  albums as albumTable,
+  artists as artistTable,
+  episodes as episodeTable,
+  movies as movieTable,
+  series as seriesTable,
+} from '../../db/schema.js';
 import {
   fileAudioLanguages,
   releaseAudioLanguages,
@@ -48,10 +55,16 @@ import {
   slotLanguageFit,
   type AudioRequirementRow,
 } from '../additional-languages/audio.js';
+import * as musicService from '../music/service.js';
+import { albumStatistics } from '../music/statistics.js';
 import { createCutoffChecker, isVersioned, libraryService, pickVersion, sameTag, slotOf } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import { loadSceneRules } from '../scene-mapping/service.js';
 import type { SceneRule } from '../scene-mapping/mapping.js';
+import { MusicLibrary } from './audio-library.js';
+import { hasAudioMarker, matchAlbum, type AlbumMatch, type AudioMatchResult } from './audio-matcher.js';
+import { albumSearchPlan, artistSearchPlan, type PlanAlbum, type SearchStep } from './audio-search.js';
+import { musicSpecifications } from './audio-specs.js';
 import { DecisionLog, DecisionLogNotFound, toLogSource, type DecisionLogRow } from './decision-log.js';
 import {
   DEFAULT_RELEASE_SETTINGS,
@@ -65,9 +78,13 @@ import {
   type ReleasesDeps,
 } from './deps.js';
 import {
+  albumMinutes,
+  albumsGainedBy,
   buildDecision,
   evaluate,
   evaluateFormats,
+  itemTags,
+  musicInfoOf,
   prioritize,
   qualityModelOf,
   releaseIndexerFlags,
@@ -84,7 +101,14 @@ import {
   type Ranked,
   type SearchCriteria,
 } from './engine.js';
-import { CUTOFF_UNMET_SEARCH_JOB, MISSING_EPISODE_SEARCH_JOB, MISSING_MOVIE_SEARCH_JOB, SEARCH_JOB_CRONS } from './jobs.js';
+import {
+  CUTOFF_UNMET_AUDIO_SEARCH_JOB,
+  CUTOFF_UNMET_SEARCH_JOB,
+  MISSING_ALBUM_SEARCH_JOB,
+  MISSING_EPISODE_SEARCH_JOB,
+  MISSING_MOVIE_SEARCH_JOB,
+  SEARCH_JOB_CRONS,
+} from './jobs.js';
 import { matchRelease, type LibrarySnapshot, type MovieMatch, type SeriesMatch } from './matcher.js';
 import { pendingReleases, releaseSearchResults, releaseSearchState } from './schema.js';
 import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, type ItemOutcome } from './search-status.js';
@@ -156,10 +180,13 @@ export interface DownloadClientGrab {
 }
 
 export interface DownloadTracking {
-  mediaType?: 'series' | 'movie';
+  mediaType?: 'series' | 'movie' | 'music';
   seriesId?: number;
   episodeIds?: number[];
   movieId?: number;
+  /** Music grabs: the artist and the albums the release fills or upgrades. */
+  artistId?: number;
+  albumIds?: number[];
   grabbedRelease?: unknown;
   tags?: number[];
 }
@@ -173,6 +200,8 @@ export interface TrackedView {
   trackedState: TrackedDownloadState;
   episodeIds?: number[] | undefined;
   movieId?: number | undefined;
+  artistId?: number | undefined;
+  albumIds?: number[] | undefined;
   sizeBytes: number;
 }
 
@@ -204,8 +233,22 @@ export interface Evaluated extends Ranked {
 export type SearchTarget =
   | { seriesId: number; seasonNumber?: number; episodeIds?: number[] }
   | { movieId: number }
+  /** Music: the artist's wanted albums (or only `albumIds`); with `albumIds` alone, their artist. */
   | { artistId: number; albumIds?: number[] }
+  | { albumIds: number[] }
   | { authorId: number; bookIds?: number[] };
+
+/** Pins the library mapping of a release (interactive grab, pending re-check). */
+export interface MatchOverride {
+  seriesId?: number | undefined;
+  episodeIds?: number[] | undefined;
+  movieId?: number | undefined;
+  artistId?: number | undefined;
+  albumIds?: number[] | undefined;
+}
+
+type VideoCandidate = Candidate & { match: SeriesMatch | MovieMatch };
+type MusicCandidate = Candidate & { match: AlbumMatch };
 
 export interface SearchSummary {
   releases: number;
@@ -225,6 +268,8 @@ interface ProcessResult {
 export const MISSING_EPISODE_SEARCH_LIMIT = 200;
 export const MISSING_MOVIE_SEARCH_LIMIT = 100;
 export const CUTOFF_UNMET_SEARCH_LIMIT = 100;
+export const MISSING_ALBUM_SEARCH_LIMIT = 50;
+export const CUTOFF_UNMET_AUDIO_SEARCH_LIMIT = 50;
 
 /** The live schedule of a job (Scheduler.jobSchedule); null when it is not registered. */
 export type JobScheduleLookup = (name: string) => { cron: string | null; enabled: boolean } | null;
@@ -252,25 +297,43 @@ class Batch implements LibrarySnapshot {
   readonly pending: PendingRow[];
   private sceneRules?: SceneRule[];
   private audioRows?: AudioRequirementRow[];
+  private musicLimits?: Map<number, QualityDefinitionItem>;
+  private musicFormats?: CustomFormat[];
+  /** The music library (artists, albums, track files), read on first use. */
+  readonly music: MusicLibrary;
 
   constructor(
     private readonly db: Db,
-    profiles: ProfilesService,
+    private readonly profilesService: ProfilesService,
     indexers: IndexerPort,
     downloads: DownloadPort,
     private readonly log?: Logger,
   ) {
-    this.profiles = new Map(profiles.listQualityProfiles().map((p) => [p.id, p]));
-    this.formats = profiles.listCustomFormats();
-    this.delayProfiles = profiles.listDelayProfiles();
-    this.releaseProfiles = profiles.listReleaseProfiles();
-    this.limits = new Map(profiles.listQualityDefinitions().map((d) => [d.qualityId, d]));
+    this.profiles = new Map(profilesService.listQualityProfiles().map((p) => [p.id, p]));
+    this.formats = profilesService.listCustomFormats();
+    this.delayProfiles = profilesService.listDelayProfiles();
+    this.releaseProfiles = profilesService.listReleaseProfiles();
+    this.limits = new Map(profilesService.listQualityDefinitions().map((d) => [d.qualityId, d]));
     this.indexers = new Map(indexers.list().map((i) => [i.id, i]));
     this.queue = downloads.listTracked(ACTIVE_QUEUE_STATES).map((q) => {
-      const p = parseRelease(q.title);
-      return { ...q, parsedQuality: qualityModelOf(p.quality) };
+      // Music downloads are named like albums: their quality comes from the music parser.
+      const quality = q.albumIds?.length ? parseMusicRelease(q.title).audio : parseRelease(q.title).quality;
+      return { ...q, parsedQuality: qualityModelOf(quality) };
     });
     this.pending = db.select().from(pendingReleases).all();
+    this.music = new MusicLibrary(db);
+  }
+
+  /** Music quality definitions (MB per minute), loaded for the first audio decision of the batch. */
+  audioLimits(): Map<number, QualityDefinitionItem> {
+    this.musicLimits ??= new Map(this.profilesService.listQualityDefinitions('music').map((d) => [d.qualityId, d]));
+    return this.musicLimits;
+  }
+
+  /** Custom formats that can apply to music releases. */
+  audioFormats(): CustomFormat[] {
+    this.musicFormats ??= this.formats.filter((f) => customFormatFitsDomain(f, 'music'));
+    return this.musicFormats;
   }
 
   series(): readonly Series[] {
@@ -399,7 +462,7 @@ export class ReleasesService {
     source: ReleaseSource,
     opts: {
       criteria?: SearchCriteria;
-      override?: { seriesId?: number | undefined; episodeIds?: number[] | undefined; movieId?: number | undefined };
+      override?: MatchOverride;
       batch?: Batch;
       /** Decision-log batch id; a new one by default. */
       batchId?: string;
@@ -440,21 +503,48 @@ export class ReleasesService {
     settings: ReleaseSettings,
     propers: DownloadPropersAndRepacks,
     criteria: SearchCriteria | undefined,
-    override: { seriesId?: number | undefined; episodeIds?: number[] | undefined; movieId?: number | undefined } | undefined,
+    override: MatchOverride | undefined,
   ): Promise<Evaluated | null> {
+    // The indexer category picks the parser (design 8.3): music categories go to the audio path,
+    // as do searches for albums and grabs pinned to an artist.
+    const domain = domainFromCategories(release.categories);
+    const audioOverride = override?.artistId !== undefined || (override?.albumIds?.length ?? 0) > 0;
+    const videoOverride = override !== undefined && (override.movieId !== undefined || override.seriesId !== undefined || (override.episodeIds?.length ?? 0) > 0);
+    if (audioOverride || (!videoOverride && (domain === 'music' || criteria?.mediaType === 'music'))) {
+      return this.decideAudio(release, source, batch, settings, propers, criteria, audioOverride ? override : undefined, null);
+    }
+    if (domain === 'audiobook' || criteria?.mediaType === 'audiobook') {
+      // Audiobook decisions arrive with Wave 3.
+      if (!criteria && (source === 'rss' || source === 'releasePush')) return null;
+      return {
+        decision: unmatchedDecision(source, release, null, null, {
+          reason: 'audiobooksNotSupported',
+          message: 'Audiobook releases are not supported yet',
+          type: 'permanent',
+        }),
+      };
+    }
+
     const ids = { tvdbId: release.tvdbId, tmdbId: release.tmdbId, imdbId: release.imdbId };
-    const hint = hintFromCategories(release.categories);
+    const hint = domain === 'series' || domain === 'movie' ? domain : 'auto';
     const outcome = matchRelease(release.title, ids, batch, { hint, ...(criteria ? { criteria } : {}) });
     const parsed = outcome.parsed;
     let match = outcome.match;
 
-    if (override && (override.movieId !== undefined || override.seriesId !== undefined || override.episodeIds?.length)) {
+    if (videoOverride && override) {
       const pinned = this.overrideMatch(batch, override, parsed.series?.fullSeason ?? false);
       if (!pinned) throw new ReleasesError('VALIDATION', 'override does not refer to a library item');
       match = pinned;
     }
 
     if (match.status !== 'mapped') {
+      // Uncategorised releases that name an audio codec may be albums: only a library hit counts.
+      if (domain === 'auto' && !videoOverride && hasAudioMarker(release.title) && batch.music.enabled()) {
+        const audio = this.audioMatch(release, batch, criteria, undefined);
+        if (audio.match.status === 'mapped') {
+          return this.decideAudio(release, source, batch, settings, propers, criteria, undefined, audio);
+        }
+      }
       // Plain RSS/push drops what it cannot parse (§1.2.1).
       if (match.reason === 'unableToParse' && !criteria && (source === 'rss' || source === 'releasePush')) return null;
       return { decision: unmatchedDecision(source, release, parsed, match) };
@@ -504,7 +594,7 @@ export class ReleasesService {
     });
     const now = this.now();
     const ageMinutes = Math.max(0, (now.getTime() - Date.parse(release.publishDate)) / MINUTE) || 0;
-    const candidate: Candidate = {
+    const candidate: VideoCandidate = {
       release,
       parsed,
       match,
@@ -545,7 +635,7 @@ export class ReleasesService {
 
   private overrideMatch(
     batch: Batch,
-    override: { seriesId?: number | undefined; episodeIds?: number[] | undefined; movieId?: number | undefined },
+    override: MatchOverride,
     fullSeason: boolean,
   ): SeriesMatch | MovieMatch | null {
     if (override.movieId !== undefined) {
@@ -573,9 +663,256 @@ export class ReleasesService {
     };
   }
 
+  // ---- music decisions ----------------------------------------------------------------
+
+  /** Parse a music release and map it to the library (or to the pinned artist / albums). */
+  private audioMatch(
+    release: ReleaseResource,
+    batch: Batch,
+    criteria: SearchCriteria | undefined,
+    override: MatchOverride | undefined,
+  ): { parsed: ParsedMusicRelease; match: AudioMatchResult } {
+    const parsed = parseMusicRelease(release.title);
+    const lib = batch.music;
+    const now = this.now();
+    if (!override) return { parsed, match: matchAlbum(parsed.music, lib, { ...(criteria ? { criteria } : {}), now }) };
+
+    let artistId = override.artistId;
+    if (artistId === undefined && override.albumIds?.length) artistId = lib.album(override.albumIds[0]!)?.artistId;
+    const artist = artistId !== undefined ? lib.artist(artistId) : undefined;
+    if (!artist) throw new ReleasesError('VALIDATION', 'override does not refer to an artist in the library');
+    const own = lib.albums(artist.id);
+    let albums = override.albumIds?.length ? own.filter((a) => override.albumIds!.includes(a.id)) : [];
+    if (override.albumIds?.length && albums.length === 0) throw new ReleasesError('VALIDATION', 'override albums do not belong to the artist');
+    if (albums.length === 0) {
+      // Artist pinned, albums not: let the matcher find them under that artist.
+      const found = matchAlbum(parsed.music, { artists: () => [artist], albums: (id) => lib.albums(id), albumTypeProfile: (id) => lib.albumTypeProfile(id) }, {
+        criteria: { mediaType: 'music', artistId: artist.id },
+        now,
+      });
+      if (found.status !== 'mapped') {
+        throw new ReleasesError('VALIDATION', `Cannot map release to an album of ${artist.name} (${found.message}); pass albumIds`);
+      }
+      albums = found.albums;
+    }
+    return {
+      parsed,
+      match: { status: 'mapped', mediaType: 'music', artist, albums: [...albums], pack: parsed.music?.packType ?? null, matchType: 'override' },
+    };
+  }
+
+  /** Decide on a music release (design 8.4): the shared specs plus the album specs. */
+  private async decideAudio(
+    release: ReleaseResource,
+    source: ReleaseSource,
+    batch: Batch,
+    settings: ReleaseSettings,
+    propers: DownloadPropersAndRepacks,
+    criteria: SearchCriteria | undefined,
+    override: MatchOverride | undefined,
+    matched: { parsed: ParsedMusicRelease; match: AudioMatchResult } | null,
+  ): Promise<Evaluated | null> {
+    if (!batch.music.enabled() && !override) {
+      if (!criteria && (source === 'rss' || source === 'releasePush')) return null;
+      return { decision: audioUnmatchedDecision(source, release, null, { reason: 'musicDisabled', message: 'Music is not enabled', type: 'permanent' }) };
+    }
+    const { parsed, match } = matched ?? this.audioMatch(release, batch, criteria, override);
+    const info = parsed.music;
+    if (match.status !== 'mapped') {
+      if (match.reason === 'unableToParse' && !criteria && (source === 'rss' || source === 'releasePush')) return null;
+      return {
+        decision: audioUnmatchedDecision(source, release, parsed, { reason: match.reason, message: match.message, type: 'permanent' }, match.artist),
+      };
+    }
+    const artist = match.artist;
+    const profile = batch.profiles.get(artist.qualityProfileId);
+    if (!profile) {
+      return {
+        decision: audioUnmatchedDecision(source, release, parsed, {
+          reason: 'decisionError',
+          message: `Quality profile ${artist.qualityProfileId} does not exist`,
+          type: 'permanent',
+        }),
+      };
+    }
+
+    const quality: QualityModel = qualityModelOf(parsed.audio);
+    const releaseGroup = parsed.releaseGroup ?? undefined;
+    const formats = evaluateFormats(profile, batch.audioFormats(), {
+      title: release.title,
+      quality,
+      mediaType: 'music',
+      sizeBytes: release.size,
+      releaseGroup: releaseGroup ?? null,
+      ...(info?.year ? { year: info.year } : {}),
+      releaseKind: info ? musicReleaseKind(info) : releaseKindOf(match),
+      indexerFlags: releaseIndexerFlags(release),
+      ...(info ? { audio: musicAudioEvaluation(info) } : {}),
+    });
+    const now = this.now();
+    const ageMinutes = Math.max(0, (now.getTime() - Date.parse(release.publishDate)) / MINUTE) || 0;
+    const candidate: MusicCandidate = {
+      release,
+      parsed: emptyVideoParse(parsed),
+      match,
+      ...(info ? { music: info } : {}),
+      quality,
+      languages: [],
+      customFormats: formats.formats,
+      formatScore: formats.score,
+      releaseGroup,
+      ageMinutes,
+    };
+    const ctx = await this.buildAudioContext(batch, candidate, profile, source, settings, propers, criteria, now);
+    const ev = evaluate(ctx, candidate, musicSpecifications);
+    // A pack is only worth the albums it fills or upgrades: track and record just those.
+    let tracked: MusicCandidate = candidate;
+    if (match.pack) {
+      const gained = new Set(albumsGainedBy(ctx, candidate));
+      const albums = match.albums.filter((a) => gained.has(a.id));
+      if (albums.length > 0) tracked = { ...candidate, match: { ...match, albums } };
+    }
+    const decision = buildDecision(source, tracked, ev);
+    const limits = batch.audioLimits().get(quality.quality.id);
+    return {
+      decision,
+      candidate: tracked,
+      rank: {
+        profile,
+        preferredProtocol: ctx.delayProfile?.preferredProtocol,
+        runtimeMinutes: albumMinutes(match),
+        preferredSizeMbPerMinute: limits?.preferredSize ?? null,
+        isAnime: false,
+        firstEpisodeNumber: 0,
+        preferIndexerFlags: settings.preferIndexerFlags,
+      },
+    };
+  }
+
+  private async buildAudioContext(
+    batch: Batch,
+    c: MusicCandidate,
+    profile: QualityProfile,
+    source: ReleaseSource,
+    settings: ReleaseSettings,
+    propers: DownloadPropersAndRepacks,
+    criteria: SearchCriteria | undefined,
+    now: Date,
+  ): Promise<DecisionContext> {
+    const { artist, albums } = c.match;
+    const albumIds = albums.map((a) => a.id);
+    const indexer = batch.indexers.get(c.release.indexerId);
+    const scoreOf = (title: string, quality: QualityModel, sizeBytes?: number, releaseGroup?: string | null) =>
+      evaluateFormats(profile, batch.audioFormats(), {
+        title,
+        quality,
+        mediaType: 'music',
+        ...(sizeBytes ? { sizeBytes } : {}),
+        releaseGroup: releaseGroup ?? null,
+      }).score;
+
+    // One "file" per album: the album is as good as its worst track.
+    const files: ExistingFile[] = [];
+    const trackFiles = batch.music.files(artist.id);
+    for (const album of albums) {
+      const own = trackFiles.filter((f) => f.albumId === album.id);
+      if (own.length === 0) continue;
+      const lowest = own.reduce((worst, f) => (qualityIndex(profile, f.quality) < qualityIndex(profile, worst.quality) ? f : worst));
+      files.push({
+        id: lowest.id,
+        quality: lowest.quality,
+        formatScore: scoreOf(lowest.sceneName ?? lowest.relativePath, lowest.quality, lowest.sizeBytes, lowest.releaseGroup),
+        releaseGroup: lowest.releaseGroup,
+        dateAdded: own.reduce((latest, f) => (f.dateAdded > latest ? f.dateAdded : latest), lowest.dateAdded),
+        episodeIds: [],
+        albumIds: [album.id],
+        sizeBytes: own.reduce((sum, f) => sum + f.sizeBytes, 0),
+      });
+    }
+
+    const overlaps = (ids: readonly number[] | null | undefined) => (ids ?? []).some((id) => albumIds.includes(id));
+    const queue: QueuedItem[] = batch.queue
+      .filter((q) => overlaps(q.albumIds))
+      .map((q) => ({
+        title: q.title,
+        quality: q.parsedQuality,
+        formatScore: scoreOf(q.title, q.parsedQuality, q.sizeBytes),
+        state: q.trackedState,
+        downloadId: q.downloadId,
+        albumIds: q.albumIds ?? [],
+      }));
+    const pending: PendingItem[] = batch.pending
+      .filter((p) => overlaps(p.albumIds))
+      .map((p) => ({ id: p.id, guid: p.guid, indexerId: p.indexerId, addedAt: p.addedAt, albumIds: p.albumIds ?? [] }));
+
+    const history = this.deps.history ?? noopHistory;
+    const latestHistory: HistoryItem[] = [];
+    const importedGrabs: Array<{ grab: HistoryEventSummary; imported: HistoryEventSummary }> = [];
+    if (history.latestFor) {
+      for (const album of albums) {
+        const item: ItemRef = { albumId: album.id, artistId: artist.id };
+        const event = await history.latestFor(item);
+        if (event) {
+          latestHistory.push({ event, formatScore: scoreOf(event.sourceTitle, event.quality, event.sizeBytes) });
+        }
+        if (album.trackFileCount > 0 && history.findByDownloadId) {
+          const grab = await history.latestFor(item, 'grabbed');
+          if (grab?.downloadId) {
+            const imported = await history.findByDownloadId(grab.downloadId, 'downloadFolderImported');
+            if (imported && imported.quality.quality.id !== grab.quality.quality.id) importedGrabs.push({ grab, imported });
+          }
+        }
+      }
+    }
+
+    const blocklisted = await (this.deps.blocklist ?? noopBlocklist).isBlocklisted({
+      mediaType: 'music',
+      artistId: artist.id,
+      albumIds,
+      title: c.release.title,
+      protocol: c.release.protocol,
+      indexerId: c.release.indexerId,
+      ...(c.release.infoHash ? { infoHash: c.release.infoHash } : {}),
+      publishDate: c.release.publishDate,
+    });
+
+    let freeSpaceBytes: number | null = null;
+    if (this.deps.freeSpace) {
+      try {
+        freeSpaceBytes = await this.deps.freeSpace(artist.path);
+      } catch {
+        freeSpaceBytes = null;
+      }
+    }
+
+    return {
+      source,
+      now,
+      settings,
+      propers,
+      profile,
+      delayProfile: selectDelayProfile(batch.delayProfiles, artist.tags),
+      releaseProfiles: batch.releaseProfiles,
+      qualityLimits: (id) => batch.audioLimits().get(id) ?? batch.limits.get(id),
+      indexer,
+      indexerDisabledTill: indexer?.status?.disabledTill,
+      existingFiles: files,
+      queue,
+      pending,
+      latestHistory,
+      importedGrabs,
+      blocklisted,
+      criteria,
+      freeSpaceBytes,
+      minimumFreeSpaceMb: this.deps.minimumFreeSpaceMb ?? 100,
+      releaseFilter: this.deps.releaseFilter?.(c.release.indexerId, c.release) ?? null,
+      mismatchAction: this.deps.profileMigration?.mismatchActionFor(profile.id) ?? 'none',
+    };
+  }
+
   private async buildContext(
     batch: Batch,
-    c: Candidate,
+    c: VideoCandidate,
     profile: QualityProfile,
     source: ReleaseSource,
     settings: ReleaseSettings,
@@ -776,16 +1113,18 @@ export class ReleasesService {
     if ('decision' in request) return this.grabEvaluated(request);
     const cached = this.cachedRelease(request.indexerId, request.guid);
     if (!cached) throw new ReleasesError('NOT_FOUND', 'Release not found; search again before grabbing');
-    const override = {
+    const override: MatchOverride = {
       seriesId: request.seriesId,
       episodeIds: request.episodeIds,
       movieId: request.movieId,
+      artistId: request.artistId,
+      albumIds: request.albumIds,
     };
     const [evaluated] = await this.decide([cached], 'interactiveSearch', { override });
     if (!evaluated?.candidate) {
       throw new ReleasesError(
         'VALIDATION',
-        `Cannot map release to a library item (${evaluated?.decision.rejections[0]?.message ?? 'unknown'}); pass seriesId/episodeIds or movieId`,
+        `Cannot map release to a library item (${evaluated?.decision.rejections[0]?.message ?? 'unknown'}); pass seriesId/episodeIds, movieId or artistId/albumIds`,
       );
     }
     const tracked = await this.grabEvaluated(evaluated, request.downloadClientId);
@@ -820,13 +1159,12 @@ export class ReleasesService {
       ...(seedTime !== undefined ? { seedTimeLimitMinutes: Math.round(seedTime / MINUTE) } : {}),
     };
     const match = c.match;
-    const tags = match.mediaType === 'series' ? match.series.tags : match.movie.tags;
+    const tags = itemTags(c);
+    const target = targetIdsOf(match);
     const tracking: DownloadTracking = {
       mediaType: match.mediaType,
       tags,
-      ...(match.mediaType === 'series'
-        ? { seriesId: match.series.id, episodeIds: match.episodes.map((ep) => ep.id) }
-        : { movieId: match.movie.id }),
+      ...target,
       grabbedRelease: {
         guid: release.guid,
         title: release.title,
@@ -871,9 +1209,7 @@ export class ReleasesService {
     try {
       await (this.deps.history ?? noopHistory).recordGrab({
         mediaType: match.mediaType,
-        ...(match.mediaType === 'series'
-          ? { seriesId: match.series.id, episodeIds: match.episodes.map((ep) => ep.id) }
-          : { movieId: match.movie.id }),
+        ...target,
         sourceTitle: release.title,
         quality: d.quality,
         languages: d.languages,
@@ -1025,6 +1361,8 @@ export class ReleasesService {
       seriesId: d.seriesId ?? null,
       episodeIds: d.episodeIds ?? null,
       movieId: d.movieId ?? null,
+      artistId: d.artistId ?? null,
+      albumIds: d.albumIds ?? null,
       reason,
       release,
       addedAt: now.toISOString(),
@@ -1035,7 +1373,15 @@ export class ReleasesService {
       .values(values)
       .onConflictDoUpdate({
         target: [pendingReleases.guid, pendingReleases.indexerId],
-        set: { reason, eligibleAt, seriesId: values.seriesId, episodeIds: values.episodeIds, movieId: values.movieId },
+        set: {
+          reason,
+          eligibleAt,
+          seriesId: values.seriesId,
+          episodeIds: values.episodeIds,
+          movieId: values.movieId,
+          artistId: values.artistId,
+          albumIds: values.albumIds,
+        },
       })
       .run();
     this.bus?.publish({ type: 'release', action: 'pending', title: d.title, ...mediaRef(d) });
@@ -1044,6 +1390,13 @@ export class ReleasesService {
   private clearPendingFor(d: ReleaseDecision): void {
     if (d.movieId !== undefined) {
       this.db.delete(pendingReleases).where(eq(pendingReleases.movieId, d.movieId)).run();
+      return;
+    }
+    if (d.artistId !== undefined && d.albumIds?.length) {
+      const albums = new Set(d.albumIds);
+      const rows = this.db.select().from(pendingReleases).where(eq(pendingReleases.artistId, d.artistId)).all();
+      const doomed = rows.filter((r) => (r.albumIds ?? []).some((id) => albums.has(id))).map((r) => r.id);
+      if (doomed.length > 0) this.db.delete(pendingReleases).where(inArray(pendingReleases.id, doomed)).run();
       return;
     }
     if (d.seriesId === undefined) return;
@@ -1060,7 +1413,7 @@ export class ReleasesService {
       .from(pendingReleases)
       .all()
       .map((row) => {
-        const parsed = parseRelease(row.title);
+        const quality = row.albumIds?.length ? parseMusicRelease(row.title).audio : parseRelease(row.title).quality;
         return {
           id: row.id,
           guid: row.guid,
@@ -1074,7 +1427,9 @@ export class ReleasesService {
           ...(row.seriesId !== null ? { seriesId: row.seriesId } : {}),
           ...(row.episodeIds ? { episodeIds: row.episodeIds } : {}),
           ...(row.movieId !== null ? { movieId: row.movieId } : {}),
-          quality: qualityModelOf(parsed.quality),
+          ...(row.artistId !== null ? { artistId: row.artistId } : {}),
+          ...(row.albumIds ? { albumIds: row.albumIds } : {}),
+          quality: qualityModelOf(quality),
           customFormatScore: 0,
           reason: row.reason,
           added: row.addedAt,
@@ -1115,6 +1470,8 @@ export class ReleasesService {
             seriesId: row.seriesId ?? undefined,
             episodeIds: row.episodeIds ?? undefined,
             movieId: row.movieId ?? undefined,
+            artistId: row.artistId ?? undefined,
+            albumIds: row.albumIds ?? undefined,
           },
         });
         if (e) evaluated.push({ ...e, row });
@@ -1171,10 +1528,11 @@ export class ReleasesService {
       };
       return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [movie.id] } };
     }
-    // Audio searches (album/book plans) arrive with audio acquisition (Wave 2): nothing to ask yet.
-    if ('artistId' in target) {
-      return { requests: [], criteria: { mediaType: 'music', artistId: target.artistId, userInvoked }, items: { kind: 'episode', ids: [] } };
+    if (isMusicTarget(target)) {
+      const plan = this.buildAudioSearch(target, userInvoked);
+      return { requests: plan.steps.flatMap((s) => s.requests), criteria: plan.criteria, items: { kind: 'album', ids: plan.albumIds } };
     }
+    // Audiobook searches arrive with Wave 3: nothing to ask yet.
     if ('authorId' in target) {
       return { requests: [], criteria: { mediaType: 'audiobook', authorId: target.authorId, userInvoked }, items: { kind: 'episode', ids: [] } };
     }
@@ -1245,6 +1603,7 @@ export class ReleasesService {
   /** Automatic search + grab for a library item. `userInvoked` relaxes delay/monitored specs. */
   async searchFor(target: SearchTarget, opts: { userInvoked?: boolean; signal?: AbortSignal } = {}): Promise<SearchSummary> {
     const userInvoked = opts.userInvoked ?? false;
+    if (isMusicTarget(target)) return this.searchAudio(target, { userInvoked, ...(opts.signal ? { signal: opts.signal } : {}) });
     const { requests, criteria, items } = this.buildSearch(target, userInvoked);
     if (requests.length === 0) return { releases: 0, approved: 0, grabbed: [], pending: 0 };
     const source: SearchRunSource = userInvoked ? 'manual' : 'automatic';
@@ -1270,8 +1629,13 @@ export class ReleasesService {
   }
 
   /** Interactive search: every decision, approved first then by rank, nothing grabbed. */
-  async interactiveSearch(query: { seriesId?: number | undefined; seasonNumber?: number | undefined; episodeId?: number | undefined; movieId?: number | undefined }, signal?: AbortSignal): Promise<ReleaseDecision[]> {
+  async interactiveSearch(query: SearchQueryIds, signal?: AbortSignal): Promise<ReleaseDecision[]> {
     const target = this.targetFromQuery(query);
+    if (isMusicTarget(target)) {
+      const { evaluated } = await this.runAudioSearch(target, { userInvoked: true, interactive: true, ...(signal ? { signal } : {}) });
+      const sorted = prioritize(evaluated, this.propers()).map((e) => e.decision);
+      return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
+    }
     const { requests, criteria, items } = this.buildSearch(target, true);
     let evaluated: Evaluated[];
     try {
@@ -1287,8 +1651,10 @@ export class ReleasesService {
     return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
   }
 
-  private targetFromQuery(query: { seriesId?: number | undefined; seasonNumber?: number | undefined; episodeId?: number | undefined; movieId?: number | undefined }): SearchTarget {
+  private targetFromQuery(query: SearchQueryIds): SearchTarget {
     if (query.movieId !== undefined) return { movieId: query.movieId };
+    if (query.albumId !== undefined) return { albumIds: [query.albumId] };
+    if (query.artistId !== undefined) return { artistId: query.artistId };
     if (query.episodeId !== undefined) {
       const episode = libraryService.getEpisode(this.db, query.episodeId);
       return { seriesId: episode.seriesId, episodeIds: [episode.id] };
@@ -1296,21 +1662,207 @@ export class ReleasesService {
     if (query.seriesId !== undefined) {
       return { seriesId: query.seriesId, ...(query.seasonNumber !== undefined ? { seasonNumber: query.seasonNumber } : {}) };
     }
-    throw new ReleasesError('VALIDATION', 'seriesId, episodeId or movieId is required');
+    throw new ReleasesError('VALIDATION', 'seriesId, episodeId, movieId, albumId or artistId is required');
   }
 
   seriesIdForEpisode(episodeId: number): number {
     return libraryService.getEpisode(this.db, episodeId).seriesId;
   }
 
+  /** The artist of an album; NOT_FOUND when the album does not exist. */
+  artistIdForAlbum(albumId: number): number {
+    const row = this.db.select({ artistId: albumTable.artistId }).from(albumTable).where(eq(albumTable.id, albumId)).get();
+    if (!row) throw new ReleasesError('NOT_FOUND', `Album ${albumId} not found`);
+    return row.artistId;
+  }
+
   /** Lets GET /search?seriesId= on the indexers module resolve library ids. */
   resolveManualSearch(request: ManualSearchRequest): SearchRequest | null {
     try {
-      const target = this.targetFromQuery(request);
+      const target = this.targetFromQuery({
+        ...(request.seriesId !== undefined ? { seriesId: request.seriesId } : {}),
+        ...(request.seasonNumber !== undefined ? { seasonNumber: request.seasonNumber } : {}),
+        ...(request.episodeId !== undefined ? { episodeId: request.episodeId } : {}),
+        ...(request.movieId !== undefined ? { movieId: request.movieId } : {}),
+        ...(request.albumId !== undefined ? { albumId: request.albumId } : {}),
+        ...(request.artistId !== undefined ? { artistId: request.artistId } : {}),
+      });
       return this.buildSearch(target, true).requests[0] ?? null;
     } catch {
       return null;
     }
+  }
+
+  // ---- music searches ---------------------------------------------------------------
+
+  /** Albums of the artist a search should look for: released, monitored (unless asked for by id) and missing or below cutoff. */
+  private wantedAlbums(artistId: number, lib: MusicLibrary, profile: QualityProfile | undefined): number[] {
+    const now = this.now().getTime() + DAY;
+    const files = lib.files(artistId);
+    return lib
+      .albums(artistId)
+      .filter((a) => a.monitored)
+      .filter((a) => {
+        const ms = a.releaseDate ? Date.parse(/^\d{4}$/.test(a.releaseDate) ? `${a.releaseDate}-01-01` : a.releaseDate.length === 7 ? `${a.releaseDate}-01` : a.releaseDate) : NaN;
+        return !Number.isFinite(ms) || ms <= now;
+      })
+      .filter((a) => {
+        const own = files.filter((f) => f.albumId === a.id);
+        if (own.length === 0) return true;
+        if (a.trackCount > 0 && a.trackFileCount < a.trackCount) return true;
+        return profile !== undefined && own.some((f) => !isQualityCutoffMet(profile, f.quality));
+      })
+      .map((a) => a.id);
+  }
+
+  /** Steps, criteria and albums of a music search target (design 8.2). */
+  buildAudioSearch(
+    target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
+    userInvoked: boolean,
+  ): { steps: SearchStep[]; criteria: SearchCriteria; albumIds: number[]; artistId: number | null } {
+    const lib = new MusicLibrary(this.db);
+    const explicit = target.albumIds?.length ? [...new Set(target.albumIds)] : null;
+    const artistId = 'artistId' in target ? target.artistId : explicit ? (lib.album(explicit[0]!)?.artistId ?? null) : null;
+    if (artistId === null) throw new ReleasesError('NOT_FOUND', `Album ${explicit?.[0] ?? ''} not found`);
+    const artist = lib.artist(artistId);
+    if (!artist) throw new ReleasesError('NOT_FOUND', `Artist ${artistId} not found`);
+    const own = lib.albums(artist.id);
+    if (explicit) {
+      const missing = explicit.filter((id) => !own.some((a) => a.id === id));
+      if (missing.length > 0) throw new ReleasesError('NOT_FOUND', `Album ${missing.join(', ')} not found for artist ${artist.name}`);
+    }
+    const ids = explicit ?? this.wantedAlbums(artist.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === artist.qualityProfileId));
+    const albums: PlanAlbum[] = own.filter((a) => ids.includes(a.id)).map((a) => ({ id: a.id, title: a.title, year: a.year }));
+    const planArtist = { id: artist.id, name: artist.name };
+    // An album search asks per album; an artist search (or several albums of one artist) asks for the artist once first.
+    const steps = 'artistId' in target ? artistSearchPlan(planArtist, albums) : albumSearchPlan(planArtist, albums);
+    return {
+      steps,
+      criteria: { mediaType: 'music', artistId: artist.id, albumIds: albums.map((a) => a.id), userInvoked },
+      albumIds: albums.map((a) => a.id),
+      artistId: artist.id,
+    };
+  }
+
+  /**
+   * Run a music search plan: each step's queries in order, deciding (and, unless interactive,
+   * grabbing) after every query, and moving on once the step's albums have an approved release.
+   */
+  private async runAudioSearch(
+    target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
+    opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
+  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
+    const interactive = opts.interactive ?? false;
+    const runSource: SearchRunSource = interactive ? 'interactive' : opts.userInvoked ? 'manual' : 'automatic';
+    const releaseSource: ReleaseSource = interactive ? 'interactiveSearch' : opts.userInvoked ? 'userInvokedSearch' : 'search';
+    const plan = this.buildAudioSearch(target, opts.userInvoked);
+    const items = { kind: 'album' as const, ids: plan.albumIds };
+    const evaluated: Evaluated[] = [];
+    const result: ProcessResult = { grabbed: [], pending: 0, pendingDecisions: [] };
+    const seen = new Set<string>();
+    const settled = new Set<number>();
+    let releases = 0;
+    try {
+      for (const step of plan.steps) {
+        const open = step.albumIds.filter((id) => !settled.has(id));
+        if (open.length === 0) continue;
+        const criteria: SearchCriteria = { ...plan.criteria, albumIds: open };
+        for (const request of step.requests) {
+          if (opts.signal?.aborted) break;
+          const found = (await this.indexers.search(request, { mode: interactive ? 'interactive' : 'automatic', ...(opts.signal ? { signal: opts.signal } : {}) })).filter(
+            (r) => {
+              const key = `${r.indexerId}:${r.guid}`;
+              if (seen.has(key)) return false;
+              seen.add(key);
+              return true;
+            },
+          );
+          if (found.length === 0) continue;
+          releases += found.length;
+          this.cacheReleases(found);
+          const batch = await this.decide(found, releaseSource, { criteria });
+          evaluated.push(...batch);
+          if (!interactive) {
+            const r = await this.processDecisions(batch);
+            result.grabbed.push(...r.grabbed);
+            result.pending += r.pending;
+            result.pendingDecisions.push(...r.pendingDecisions);
+            this.logDecisions(batch, 'search', r.grabbed, criteria);
+          }
+          for (const e of batch) {
+            if (!e.rank || !(e.decision.approved || e.decision.temporarilyRejected)) continue;
+            for (const id of e.decision.albumIds ?? []) settled.add(id);
+          }
+          if (open.every((id) => settled.has(id))) break;
+        }
+      }
+    } catch (err) {
+      if (!opts.signal?.aborted) this.recordSearchError(items, runSource, err);
+      throw err;
+    }
+    if (interactive) this.logDecisions(evaluated, 'interactive', [], plan.criteria);
+    this.recordSearchResults(items, runSource, evaluated, result);
+    return { evaluated, result, releases };
+  }
+
+  private async searchAudio(
+    target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
+    opts: { userInvoked: boolean; signal?: AbortSignal },
+  ): Promise<SearchSummary> {
+    const { evaluated, result, releases } = await this.runAudioSearch(target, opts);
+    return {
+      releases,
+      approved: evaluated.filter((e) => e.decision.approved).length,
+      grabbed: result.grabbed.map((e) => e.decision.title),
+      pending: result.pending,
+    };
+  }
+
+  /** Wanted albums in job order, grouped per artist, at most `limit` due ones. */
+  private async searchAlbumSet(
+    albums: ReadonlyArray<{ id: number; artistId: number }>,
+    signal: AbortSignal | undefined,
+    limit: number,
+  ): Promise<{ searched: number; grabbed: number }> {
+    const due = albums.filter((a) => this.shouldSearch('album', a.id)).slice(0, limit);
+    const byArtist = new Map<number, number[]>();
+    for (const a of due) byArtist.set(a.artistId, [...(byArtist.get(a.artistId) ?? []), a.id]);
+    let grabbed = 0;
+    for (const [artistId, ids] of byArtist) {
+      if (signal?.aborted) break;
+      this.markSearched('album', ids);
+      try {
+        const target = ids.length > 1 ? { artistId, albumIds: ids } : { albumIds: ids };
+        grabbed += (await this.searchFor(target, signal ? { signal } : {})).grabbed.length;
+      } catch (err) {
+        this.log?.warn({ err, artistId }, 'album search failed');
+      }
+    }
+    return { searched: due.length, grabbed };
+  }
+
+  private missingAlbums(): Array<{ id: number; artistId: number }> {
+    const now = this.now();
+    return this.allPages((page) => musicService.listMissingAlbums(this.db, { page, pageSize: 500 }, now));
+  }
+
+  private cutoffUnmetAlbums(): Array<{ id: number; artistId: number }> {
+    const profiles = this.profilesService.listQualityProfiles('music');
+    return this.allPages((page) => musicService.listCutoffUnmetAlbums(this.db, { page, pageSize: 500 }, profiles));
+  }
+
+  /** MissingAlbumSearch: monitored released albums without (all) their tracks, with the per-album back-off. */
+  async missingAlbumSearch(signal?: AbortSignal, limit = MISSING_ALBUM_SEARCH_LIMIT): Promise<string> {
+    if (!musicService.musicEnabled(this.db)) return 'skipped: music is not enabled';
+    const r = await this.searchAlbumSet(this.missingAlbums(), signal, limit);
+    return `missing albums: searched ${r.searched}, grabbed ${r.grabbed}`;
+  }
+
+  /** CutoffUnmetAudioSearch: albums whose lowest track quality is below the profile cutoff. */
+  async cutoffUnmetAudioSearch(signal?: AbortSignal, limit = CUTOFF_UNMET_AUDIO_SEARCH_LIMIT): Promise<string> {
+    if (!musicService.musicEnabled(this.db)) return 'skipped: music is not enabled';
+    const r = await this.searchAlbumSet(this.cutoffUnmetAlbums(), signal, limit);
+    return `cutoff unmet albums: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
   // ---- push -------------------------------------------------------------------------
@@ -1375,7 +1927,12 @@ export class ReleasesService {
       const ordered = prioritize(evaluated, this.propers()).filter((e) => e.rank);
       const byItem = new Map<string, Evaluated[]>();
       for (const e of ordered) {
-        const key = e.decision.movieId !== undefined ? `m${e.decision.movieId}` : `s${e.decision.seriesId ?? 0}`;
+        const key =
+          e.decision.movieId !== undefined
+            ? `m${e.decision.movieId}`
+            : e.decision.artistId !== undefined
+              ? `a${e.decision.artistId}`
+              : `s${e.decision.seriesId ?? 0}`;
         byItem.set(key, [...(byItem.get(key) ?? []), e]);
       }
       for (const group of byItem.values()) {
@@ -1384,14 +1941,17 @@ export class ReleasesService {
       }
       const rows: DecisionLogRow[] = evaluated.map((e) => {
         const d = e.decision;
-        const fallback = !e.candidate && d.seriesId === undefined && d.movieId === undefined ? criteria : undefined;
+        const fallback =
+          !e.candidate && d.seriesId === undefined && d.movieId === undefined && d.artistId === undefined ? criteria : undefined;
         const mediaType = d.mediaType ?? fallback?.mediaType ?? null;
+        const music = mediaType === 'music';
         return {
-          // The decision log is video-only until audio decisions exist (Wave 2).
-          mediaType: mediaType === 'series' || mediaType === 'movie' ? mediaType : null,
+          mediaType: mediaType === 'audiobook' ? null : mediaType,
           seriesId: d.seriesId ?? (fallback?.mediaType === 'series' ? (fallback.seriesId ?? null) : null),
           episodeIds: d.episodeIds ?? (fallback?.episodeIds ? [...fallback.episodeIds] : []),
           movieId: d.movieId ?? (fallback?.mediaType === 'movie' ? (fallback.movieId ?? null) : null),
+          artistId: d.artistId ?? (music ? (fallback?.artistId ?? null) : null),
+          albumIds: d.albumIds ?? (music && fallback?.albumIds ? [...fallback.albumIds] : music ? [] : null),
           guid: d.guid,
           indexerId: d.indexerId,
           title: d.title,
@@ -1413,7 +1973,7 @@ export class ReleasesService {
 
   /** GET /release/decisions. */
   listDecisionBatches(query: DecisionLogQuery): DecisionLogPage {
-    return this.decisionLog.list(query, (episodeId) => this.seriesIdForEpisode(episodeId));
+    return this.decisionLog.list(query, (episodeId) => this.seriesIdForEpisode(episodeId), (albumId) => this.artistIdForAlbum(albumId));
   }
 
   /** GET /release/decisions/:batchId. */
@@ -1434,7 +1994,7 @@ export class ReleasesService {
 
   // ---- scheduled searches -----------------------------------------------------------
 
-  private shouldSearch(kind: 'episode' | 'movie', itemId: number): boolean {
+  private shouldSearch(kind: 'episode' | 'movie' | 'album', itemId: number): boolean {
     const row = this.db
       .select()
       .from(releaseSearchState)
@@ -1443,7 +2003,7 @@ export class ReleasesService {
     return isSearchDue(row, this.now().getTime());
   }
 
-  private markSearched(kind: 'episode' | 'movie', itemIds: readonly number[]): void {
+  private markSearched(kind: 'episode' | 'movie' | 'album', itemIds: readonly number[]): void {
     const nowIso = this.now().toISOString();
     for (const itemId of itemIds) {
       const row = this.db
@@ -1468,6 +2028,11 @@ export class ReleasesService {
       this.db
         .delete(releaseSearchState)
         .where(and(eq(releaseSearchState.mediaType, 'movie'), eq(releaseSearchState.itemId, d.movieId)))
+        .run();
+    } else if (d.albumIds?.length) {
+      this.db
+        .delete(releaseSearchState)
+        .where(and(eq(releaseSearchState.mediaType, 'album'), inArray(releaseSearchState.itemId, d.albumIds)))
         .run();
     } else if (d.episodeIds?.length) {
       this.db
@@ -1635,7 +2200,7 @@ export class ReleasesService {
   searchStatus(query: SearchStatusQuery): ItemSearchStatus[] {
     const kind = query.mediaType;
     const ids = [...new Set(query.ids)];
-    const facts = kind === 'episode' ? this.episodeFacts(ids) : this.movieFacts(ids);
+    const facts = kind === 'episode' ? this.episodeFacts(ids) : kind === 'album' ? this.albumFacts(ids) : this.movieFacts(ids);
     const last = new Map<number, LastSearch>();
     for (const r of this.db
       .select()
@@ -1653,24 +2218,35 @@ export class ReleasesService {
         .map((s) => [s.itemId, s]),
     );
 
-    const missingJob = kind === 'episode' ? MISSING_EPISODE_SEARCH_JOB : MISSING_MOVIE_SEARCH_JOB;
-    const missing = kind === 'episode' ? this.missingEpisodes() : this.missingMovies();
+    const album = kind === 'album';
+    const musicOn = !album || musicService.musicEnabled(this.db);
+    const missingJob = kind === 'episode' ? MISSING_EPISODE_SEARCH_JOB : album ? MISSING_ALBUM_SEARCH_JOB : MISSING_MOVIE_SEARCH_JOB;
+    const cutoffJob = album ? CUTOFF_UNMET_AUDIO_SEARCH_JOB : CUTOFF_UNMET_SEARCH_JOB;
+    const missing: ReadonlyArray<{ id: number }> =
+      kind === 'episode' ? this.missingEpisodes() : album ? (musicOn ? this.missingAlbums() : []) : this.missingMovies();
     const missingIds = new Set(missing.map((m) => m.id));
     // The cutoff list costs a pass over every file; only build it when an asked item may be on it.
-    const needCutoff = ids.some((id) => !missingIds.has(id) && facts.get(id)?.monitored && facts.get(id)?.hasFile);
-    const cutoff = needCutoff ? (kind === 'episode' ? this.cutoffUnmetEpisodes() : this.cutoffUnmetMovies()) : [];
+    const needCutoff = musicOn && ids.some((id) => !missingIds.has(id) && facts.get(id)?.monitored && facts.get(id)?.hasFile);
+    const cutoff: ReadonlyArray<{ id: number }> = needCutoff
+      ? kind === 'episode'
+        ? this.cutoffUnmetEpisodes()
+        : album
+          ? this.cutoffUnmetAlbums()
+          : this.cutoffUnmetMovies()
+      : [];
     const cutoffIds = new Set(cutoff.map((c) => c.id));
+    const missingLimit = kind === 'episode' ? MISSING_EPISODE_SEARCH_LIMIT : album ? MISSING_ALBUM_SEARCH_LIMIT : MISSING_MOVIE_SEARCH_LIMIT;
     const plans = new Map<string, Map<number, { at: Date | null; runsAhead: number }> | null>([
-      [missingJob, this.planJob(missingJob, missing, states, kind === 'episode' ? MISSING_EPISODE_SEARCH_LIMIT : MISSING_MOVIE_SEARCH_LIMIT)],
+      [missingJob, this.planJob(missingJob, missing, states, missingLimit)],
     ]);
-    if (needCutoff) plans.set(CUTOFF_UNMET_SEARCH_JOB, this.planJob(CUTOFF_UNMET_SEARCH_JOB, cutoff, states, CUTOFF_UNMET_SEARCH_LIMIT));
+    if (needCutoff) plans.set(cutoffJob, this.planJob(cutoffJob, cutoff, states, album ? CUTOFF_UNMET_AUDIO_SEARCH_LIMIT : CUTOFF_UNMET_SEARCH_LIMIT));
 
     const out: ItemSearchStatus[] = [];
     for (const id of ids) {
       const f = facts.get(id);
       if (!f) continue;
       const base = { job: null, nextSearchAt: null, searchCount: states.get(id)?.searchCount ?? 0, runsAhead: 0 };
-      const job = missingIds.has(id) ? missingJob : cutoffIds.has(id) ? CUTOFF_UNMET_SEARCH_JOB : null;
+      const job = missingIds.has(id) ? missingJob : cutoffIds.has(id) ? cutoffJob : null;
       let automatic: ItemSearchStatus['automatic'];
       if (job !== null) {
         const plan = plans.get(job) ?? null;
@@ -1726,6 +2302,21 @@ export class ReleasesService {
     return new Map(rows.map((r) => [r.id, { monitored: r.monitored && r.seriesMonitored, hasFile: r.hasFile, special: r.seasonNumber === 0 }]));
   }
 
+  /** Monitored (album and artist) and has-any-track-file flags of the asked albums. */
+  private albumFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
+    const rows = this.db
+      .select({ id: albumTable.id, monitored: albumTable.monitored, artistMonitored: artistTable.monitored })
+      .from(albumTable)
+      .innerJoin(artistTable, eq(albumTable.artistId, artistTable.id))
+      .where(inArray(albumTable.id, [...ids]))
+      .all();
+    const stats = albumStatistics(
+      this.db,
+      rows.map((r) => r.id),
+    );
+    return new Map(rows.map((r) => [r.id, { monitored: r.monitored && r.artistMonitored, hasFile: (stats.get(r.id)?.sizeOnDisk ?? 0) > 0 }]));
+  }
+
   private movieFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
     const rows = this.db
       .select({ id: movieTable.id, monitored: movieTable.monitored, hasFile: movieTable.hasFile })
@@ -1736,22 +2327,72 @@ export class ReleasesService {
   }
 }
 
+/** Library ids of GET /release (interactive search). */
+export interface SearchQueryIds {
+  seriesId?: number | undefined;
+  seasonNumber?: number | undefined;
+  episodeId?: number | undefined;
+  movieId?: number | undefined;
+  albumId?: number | undefined;
+  artistId?: number | undefined;
+}
+
+/** Music search targets: an artist (optionally some of its albums) or albums by id. */
+export function isMusicTarget(target: SearchTarget): target is { artistId: number; albumIds?: number[] } | { albumIds: number[] } {
+  return 'artistId' in target || ('albumIds' in target && !('seriesId' in target) && !('movieId' in target) && !('authorId' in target));
+}
+
 /** The fields of a wanted episode the scheduled searches use. */
 type WantedEpisodeRef = { id: number; seriesId: number; seasonNumber: number };
 
 // ---- helpers ------------------------------------------------------------------------
 
-function hintFromCategories(categories: readonly number[]): 'series' | 'movie' | 'auto' {
-  if (categories.length === 0) return 'auto';
-  const tv = categories.every((c) => c >= 5000 && c < 6000);
-  const movie = categories.every((c) => c >= 2000 && c < 3000);
-  return tv ? 'series' : movie ? 'movie' : 'auto';
+/** The library ids a grab is tracked and recorded under. */
+function targetIdsOf(
+  match: SeriesMatch | MovieMatch | AlbumMatch,
+): { seriesId: number; episodeIds: number[] } | { movieId: number } | { artistId: number; albumIds: number[] } {
+  if (match.mediaType === 'music') return { artistId: match.artist.id, albumIds: match.albums.map((a) => a.id) };
+  if (match.mediaType === 'series') return { seriesId: match.series.id, episodeIds: match.episodes.map((ep) => ep.id) };
+  return { movieId: match.movie.id };
+}
+
+/** A video parse with nothing in it, carried by music candidates (their name is in `Candidate.music`). */
+function emptyVideoParse(parsed: ParsedMusicRelease): ParsedRelease {
+  return {
+    releaseTitle: parsed.releaseTitle,
+    quality: { quality: parsed.audio.quality, revision: parsed.audio.revision, detectionSource: parsed.audio.detectionSource },
+    languages: [],
+    releaseGroup: parsed.releaseGroup,
+    releaseHash: parsed.releaseHash,
+    series: null,
+    movie: null,
+  };
+}
+
+/** Decision for a music release that did not reach the specs (unparseable, unknown artist / album). */
+function audioUnmatchedDecision(
+  source: ReleaseSource,
+  release: ReleaseResource,
+  parsed: ParsedMusicRelease | null,
+  rejection: { reason: string; message: string; type: 'permanent' | 'temporary' },
+  artist?: { id: number; name: string },
+): ReleaseDecision {
+  const base = unmatchedDecision(source, release, null, null, rejection);
+  return {
+    ...base,
+    mediaType: 'music',
+    ...(parsed ? { quality: qualityModelOf(parsed.audio) } : {}),
+    ...(parsed?.releaseGroup ? { releaseGroup: parsed.releaseGroup } : {}),
+    ...(parsed?.music ? { music: musicInfoOf(parsed.music) } : {}),
+    ...(artist ? { artistId: artist.id, artistName: artist.name } : {}),
+  };
 }
 
 /** Keys a decision covers, for "one release per episode set" bookkeeping. */
 function coverageKeys(d: ReleaseDecision): string[] {
   const v = d.versionTag ? `:${d.versionTag}` : '';
   if (d.movieId !== undefined) return [`m${d.movieId}${v}`];
+  if (d.albumIds?.length) return d.albumIds.map((id) => `al${id}`);
   return (d.episodeIds ?? []).map((id) => `e${id}${v}`);
 }
 
@@ -1810,7 +2451,8 @@ function decisionToRelease(d: ReleaseDecision): ReleaseResource {
 /** Pending rows grouped by overlapping item, keeping only groups with at least one due row. */
 function groupPending(rows: PendingRow[], due: Set<number>): PendingRow[][] {
   const groups: PendingRow[][] = [];
-  const keysOf = (r: PendingRow) => (r.movieId !== null ? [`m${r.movieId}`] : (r.episodeIds ?? []).map((id) => `e${id}`));
+  const keysOf = (r: PendingRow) =>
+    r.movieId !== null ? [`m${r.movieId}`] : r.albumIds?.length ? r.albumIds.map((id) => `al${id}`) : (r.episodeIds ?? []).map((id) => `e${id}`);
   for (const row of rows) {
     const keys = keysOf(row);
     const group = groups.find((g) => g.some((r) => keysOf(r).some((k) => keys.includes(k))));

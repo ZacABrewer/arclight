@@ -47,6 +47,10 @@ import {
   type RowAction,
 } from './mapping.js';
 import { VersionPicker } from '../../library/versions/versions-editor.js';
+import type { AudioManualImportQueryInput } from '@arclight/shared';
+import { useFeatures } from '../../../hooks/music.js';
+import { isMusicRecord } from '../music-media.js';
+import { AudioImportWizard } from './audio-import.js';
 import { t } from '../../../i18n/index.js';
 
 const route = getRouteApi('/activity/manual-import');
@@ -56,6 +60,8 @@ export interface ManualImportSearch {
   downloadId?: string;
   seriesId?: number;
   movieId?: number;
+  /** Audio mode (music files: artist / album / track mapping). */
+  mediaType?: 'music';
 }
 
 /** Route search parsing: unknown or malformed params are dropped. */
@@ -68,7 +74,16 @@ export function parseManualImportSearch(search: Record<string, unknown>): Manual
   const movieId = num(search['movieId']);
   if (seriesId !== undefined) out.seriesId = seriesId;
   if (movieId !== undefined) out.movieId = movieId;
+  if (search['mediaType'] === 'music') out.mediaType = 'music';
   return out;
+}
+
+/** The audio scan query for a music source, or null when none is chosen. */
+export function toAudioImportQuery(s: ManualImportSearch): AudioManualImportQueryInput | null {
+  if (s.mediaType !== 'music') return null;
+  if (s.downloadId) return { downloadId: s.downloadId };
+  if (s.folder) return { folder: s.folder };
+  return null;
 }
 
 /** The GET /manualimport query for a wizard source, or null when nothing is chosen. */
@@ -100,11 +115,39 @@ export const MODE_OPTIONS: ReadonlyArray<{ value: ImportMode; label: string; hin
 
 // ---- Path ---------------------------------------------------------------------------------
 
-function PathStep({ folder, onFolder, onChoose }: { folder: string; onFolder: (v: string) => void; onChoose: (s: ManualImportSearch) => void }) {
+type SourceKind = 'video' | 'music';
+
+function PathStep({
+  folder,
+  onFolder,
+  onChoose,
+  kind,
+  onKind,
+}: {
+  folder: string;
+  onFolder: (v: string) => void;
+  onChoose: (s: ManualImportSearch) => void;
+  kind: SourceKind;
+  onKind: (k: SourceKind) => void;
+}) {
+  const features = useFeatures();
   const queue = useQuery({ queryKey: ['queue', 'list', 'manual-import'], queryFn: () => queueApi.list({ page: 1, pageSize: 100 }) });
   const candidates = (queue.data?.records ?? []).filter((q) => q.outputPath !== undefined);
   return (
     <div className="al-mi-step">
+      {features.music ? (
+        <Field label={t('activity.manualImport.audio.filesAre')} hint={kind === 'music' ? t('activity.manualImport.audio.musicHint') : undefined}>
+          <Segmented
+            aria-label={t('activity.manualImport.audio.filesAre')}
+            value={kind}
+            onChange={onKind}
+            options={[
+              { value: 'video', label: t('activity.manualImport.audio.video') },
+              { value: 'music', label: t('common.music') },
+            ]}
+          />
+        </Field>
+      ) : null}
       <Field label={t('activity.manualImport.folder')} hint={t('activity.manualImport.everyVideoFileUnderIt')}>
         <PathInput aria-label={t('activity.manualImport.folder')} value={folder} onChange={onFolder} placeholder="/downloads/complete" pickerTitle={t('activity.manualImport.chooseAFolderToImport')} />
       </Field>
@@ -120,7 +163,7 @@ function PathStep({ folder, onFolder, onChoose }: { folder: string; onFolder: (v
               const chip = queueChip(q);
               return (
                 <li key={q.id}>
-                  <button type="button" className="al-mi-list__row" onClick={() => onChoose({ downloadId: q.downloadId })}>
+                  <button type="button" className="al-mi-list__row" onClick={() => onChoose(isMusicRecord(q) ? { downloadId: q.downloadId, mediaType: 'music' } : { downloadId: q.downloadId })}>
                     <span className="al-mi-list__title">{q.title}</span>
                     {needsManualImport(q) ? <Chip tone="warn">{t('activity.manualImport.needsImport')}</Chip> : <StatusChip status={chip.status} cause={chip.cause} />}
                   </button>
@@ -459,9 +502,21 @@ export function ResultsView({ result }: { result: ManualImportResult }) {
 // ---- page ---------------------------------------------------------------------------------
 
 export function ManualImportPage() {
+  const search = route.useSearch();
+  const navigate = route.useNavigate();
+  const audio = toAudioImportQuery(search);
+  if (audio) {
+    const label = search.folder ?? t('activity.manualImport.downloadDownloadid', { downloadId: search.downloadId ?? '' });
+    return <AudioImportWizard key={JSON.stringify(audio)} query={audio} sourceLabel={label} onStartOver={() => void navigate({ search: {} })} />;
+  }
+  return <VideoManualImport />;
+}
+
+function VideoManualImport() {
   useDocumentTitle(t('activity.manualImport.documentTitle'));
   const search = route.useSearch();
   const navigate = route.useNavigate();
+  const [kind, setKind] = useState<SourceKind>('video');
   const qc = useQueryClient();
   const query = toManualImportQuery(search);
   const [step, setStep] = useState<WizardStep>(query ? 'files' : 'path');
@@ -517,9 +572,9 @@ export function ManualImportPage() {
   let onContinue: () => void = () => {};
   let continueLabel = t('activity.manualImport.continue');
   if (step === 'path') {
-    body = <PathStep folder={folder} onFolder={setFolder} onChoose={(s) => void navigate({ search: s })} />;
+    body = <PathStep folder={folder} onFolder={setFolder} onChoose={(s) => void navigate({ search: s })} kind={kind} onKind={setKind} />;
     canContinue = folder.trim() !== '';
-    onContinue = () => void navigate({ search: { folder: folder.trim() } });
+    onContinue = () => void navigate({ search: kind === 'music' ? { folder: folder.trim(), mediaType: 'music' } : { folder: folder.trim() } });
   } else if (step === 'files' || step === 'mapping') {
     if (files.isPending) body = <Skeleton lines={5} />;
     else if (files.isError)

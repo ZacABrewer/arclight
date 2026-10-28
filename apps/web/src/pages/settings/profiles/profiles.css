@@ -40,3 +40,6 @@
   .al-qlist__row { min-height: 48px; flex-wrap: wrap; padding: 4px 8px; }
   .al-qlist__move, .al-row-actions .al-btn { min-width: 44px; min-height: 44px; }
 }
+.al-profile-editor__domain { font-family: var(--al-mono); font-size: 13px; color: var(--al-text-2); }
+.al-profile-domain { display: flex; flex-direction: column; gap: 12px; }
+.al-profile-domain + .al-profile-domain { margin-top: 22px; }

@@ -99,6 +99,16 @@ export function useAlbum(id: number) {
   });
 }
 
+/** GET /album?artistId=: the artist's albums without tracks (cheap title lookups). */
+export function useArtistAlbums(artistId: number | null | undefined, enabled = true) {
+  return useQuery({
+    queryKey: musicKeys.albums.list(artistId ?? 0),
+    queryFn: () => musicApi.albums.list(artistId!),
+    enabled: enabled && artistId != null && artistId > 0,
+    staleTime: 60_000,
+  });
+}
+
 export function useArtistLookup(term: string) {
   const trimmed = term.trim();
   return useQuery({

@@ -488,15 +488,16 @@ describe('commands and album-type profiles', () => {
     h = await harness();
   });
 
-  it('search commands report that search is not available yet; unknown ids are 404', async () => {
+  it('search commands run through the release pipeline (no indexers here); unknown ids are 404', async () => {
     const added = await addRadiohead();
     const res = await h.api('POST', '/command', { name: 'ArtistSearch', artistIds: [added.id] });
     expect(res.statusCode).toBe(202);
     await h.idle();
-    expect(latestJob('ArtistSearch')).toMatchObject({ status: 'completed', message: SEARCH_NOT_AVAILABLE });
+    expect(latestJob('ArtistSearch')).toMatchObject({ status: 'completed', message: 'searched 1 artist: 0 releases, 0 grabbed' });
     expect((await h.api('POST', '/command', { name: 'AlbumSearch', albumIds: [added.albums[0]!.id] })).statusCode).toBe(202);
     await h.idle();
-    expect(latestJob('AlbumSearch')?.message).toBe(SEARCH_NOT_AVAILABLE);
+    expect(latestJob('AlbumSearch')?.message).toBe('searched 1 album: 0 releases, 0 grabbed');
+    expect(latestJob('AlbumSearch')?.message).not.toBe(SEARCH_NOT_AVAILABLE);
     expect((await h.api('POST', '/command', { name: 'RefreshArtist', artistIds: [9999] })).statusCode).toBe(404);
     expect((await h.api('POST', '/command', { name: 'Nope' })).statusCode).toBe(400);
   });

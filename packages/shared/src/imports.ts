@@ -46,6 +46,15 @@ export const ImportRejectionReason = z.enum([
   'sameFile',
   'episodeCountMismatch',
   'noEpisodes',
+  // Music import (docs/design/music-audiobooks.md 9.2).
+  'unknownArtist',
+  'unknownAlbum',
+  /** A file maps to no track of the release, or two files map to the same track. */
+  'trackMapping',
+  /** One file next to a cue sheet: a disc image, which needs manual import. */
+  'cueImage',
+  /** Files of more than one edition of the album in one folder. */
+  'mixedReleases',
 ]);
 export type ImportRejectionReason = z.infer<typeof ImportRejectionReason>;
 
@@ -137,6 +146,112 @@ export const ManualImportResult = z.object({
   failed: z.array(z.object({ path: z.string(), error: z.string() })),
 });
 export type ManualImportResult = z.infer<typeof ManualImportResult>;
+
+// ---------------------------------------------------------------------------------------
+// Manual import, audio mode (music; docs/design/music-audiobooks.md 9.2)
+// ---------------------------------------------------------------------------------------
+
+const flag = z
+  .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+  .transform((v) => v === true || v === 'true' || v === '1');
+
+/**
+ * GET /manualimport/audio: scan `folder` (or the tracked download's output folder) and propose
+ * an artist, album, edition and track for every audio file. `artistId` / `albumId` pin the
+ * proposal (the user picked them); otherwise the download's target or a tag lookup decides.
+ */
+export const AudioManualImportQuery = z
+  .object({
+    folder: z.string().min(1).optional(),
+    downloadId: z.string().min(1).optional(),
+    artistId: z.coerce.number().int().optional(),
+    /** Match every group against this album only. */
+    albumId: z.coerce.number().int().optional(),
+    filterExistingFiles: flag.default(true),
+  })
+  .refine((q) => q.folder !== undefined || q.downloadId !== undefined || q.artistId !== undefined, {
+    message: 'folder, downloadId or artistId is required',
+  });
+export type AudioManualImportQuery = z.infer<typeof AudioManualImportQuery>;
+export type AudioManualImportQueryInput = z.input<typeof AudioManualImportQuery>;
+
+/** What the file's own tags say (shown next to the proposed track). */
+export const AudioManualImportFileTags = z.object({
+  title: z.string().nullable(),
+  artist: z.string().nullable(),
+  albumArtist: z.string().nullable(),
+  album: z.string().nullable(),
+  trackNo: z.number().int().nullable(),
+  discNo: z.number().int().nullable(),
+  durationMs: z.number().int().nullable(),
+  codec: z.string().nullable(),
+  bitrateKbps: z.number().int().nullable(),
+  sampleRateHz: z.number().int().nullable(),
+  bitDepth: z.number().int().nullable(),
+});
+export type AudioManualImportFileTags = z.infer<typeof AudioManualImportFileTags>;
+
+/**
+ * One audio file with the mapping Arclight proposes. Files of one album folder share
+ * `groupKey`; `confidence` is the group's release match (0-1), `trackScore` this file's fit to
+ * its proposed track. Ids are absent when nothing was proposed.
+ */
+export const AudioManualImportItem = z.object({
+  path: z.string(),
+  relativePath: z.string(),
+  name: z.string(),
+  sizeBytes: z.number().int(),
+  quality: QualityModel,
+  mediaType: z.literal('music'),
+  groupKey: z.string(),
+  /** The album folder of the group (disc sub-folders fold into it). */
+  groupFolder: z.string(),
+  artistId: z.number().int().optional(),
+  albumId: z.number().int().optional(),
+  /** album_releases.id the tracks belong to (the album's selected edition). */
+  albumReleaseId: z.number().int().optional(),
+  /** The proposed track (one id; an array like `episodeIds`). */
+  trackIds: z.array(z.number().int()).optional(),
+  mediumNumber: z.number().int().optional(),
+  trackNumber: z.number().int().optional(),
+  trackTitle: z.string().optional(),
+  confidence: z.number().min(0).max(1),
+  trackScore: z.number().min(0).max(1).optional(),
+  tags: AudioManualImportFileTags,
+  rejections: z.array(ImportRejection),
+  /** Accepted with a note (e.g. the album is incomplete and stays wanted). */
+  warnings: z.array(z.string()),
+  downloadId: z.string().optional(),
+});
+export type AudioManualImportItem = z.infer<typeof AudioManualImportItem>;
+
+/** One audio file to import with the user's mapping. Specs are bypassed, like video manual import. */
+export const AudioManualImportRequestItem = z.object({
+  path: z.string().min(1),
+  mediaType: z.literal('music').default('music'),
+  artistId: z.number().int(),
+  albumId: z.number().int(),
+  /** When given it must be the album's selected edition (switch editions with PUT /album/:id first). */
+  albumReleaseId: z.number().int().optional(),
+  /** Exactly one track of the album's selected edition. */
+  trackIds: z.array(z.number().int()).length(1),
+  quality: QualityModel.optional(),
+  downloadId: z.string().optional(),
+});
+export type AudioManualImportRequestItem = z.infer<typeof AudioManualImportRequestItem>;
+
+export const AudioManualImportRequest = z.object({
+  items: z.array(AudioManualImportRequestItem).min(1),
+  importMode: ImportMode.default('auto'),
+});
+export type AudioManualImportRequest = z.infer<typeof AudioManualImportRequest>;
+export type AudioManualImportRequestInput = z.input<typeof AudioManualImportRequest>;
+
+export const AudioManualImportResult = z.object({
+  imported: z.array(z.object({ path: z.string(), audioFileId: z.number().int(), trackId: z.number().int(), destination: z.string() })),
+  failed: z.array(z.object({ path: z.string(), error: z.string() })),
+});
+export type AudioManualImportResult = z.infer<typeof AudioManualImportResult>;
 
 // ---------------------------------------------------------------------------------------
 // Rename

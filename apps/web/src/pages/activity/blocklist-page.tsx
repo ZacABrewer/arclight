@@ -26,6 +26,7 @@ import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
 import { ActivityHeader, Pager } from './activity-shared.js';
+import { isMusicRecord, MusicMediaLabel } from './music-media.js';
 import { t } from '../../i18n/index.js';
 
 export function BlocklistPage() {
@@ -42,7 +43,21 @@ export function BlocklistPage() {
   const total = list.data?.totalRecords ?? 0;
 
   const columns: Column<BlocklistItem>[] = [
-    { key: 'sourceTitle', header: t('common.sourceTitle'), cell: (r) => <span className="al-activity-break">{r.sourceTitle}</span> },
+    {
+      key: 'sourceTitle',
+      header: t('common.sourceTitle'),
+      cell: (r) =>
+        isMusicRecord(r) ? (
+          <div className="al-activity-title">
+            <span className="al-activity-break">{r.sourceTitle}</span>
+            <span className="al-activity-title__sub">
+              <MusicMediaLabel record={r} />
+            </span>
+          </div>
+        ) : (
+          <span className="al-activity-break">{r.sourceTitle}</span>
+        ),
+    },
     { key: 'quality', header: t('common.quality'), mono: true, cell: (r) => r.quality?.quality?.name ?? '—' },
     {
       key: 'protocol',

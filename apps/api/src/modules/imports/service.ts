@@ -27,6 +27,10 @@ import {
   type ManualImportQuery,
   type ManualImportRequest,
   type ManualImportResult,
+  type AudioManualImportItem,
+  type AudioManualImportQuery,
+  type AudioManualImportRequest,
+  type AudioManualImportResult,
   type MediaFile,
   type MediaType,
   type Movie,
@@ -83,23 +87,15 @@ import {
   type ScanResult,
   type ScannedFile,
 } from './scan.js';
+import { MusicImporter } from './audio/music-import.js';
+import { ImportsError } from './errors.js';
 import { importedDownloads } from './schema.js';
 import { filesInSlot, formatFor, placeVersioned } from './versions.js';
 
 // The import pipeline: completed downloads → decisions → files placed in the library, plus
 // manual import, rescans and renames. Spec: docs/spec/import.md (paths per docs/spec/naming.md).
 
-export type ImportsErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'CONFLICT';
-
-export class ImportsError extends Error {
-  constructor(
-    readonly code: ImportsErrorCode,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ImportsError';
-  }
-}
+export { ImportsError, type ImportsErrorCode } from './errors.js';
 
 /** The slice of the download-clients service the importer uses. */
 export type DownloadClientsPort = Pick<DownloadClientsService, 'setState' | 'markImported' | 'listTracked'> &
@@ -122,9 +118,14 @@ export interface ImportOutcome {
   status: 'imported' | 'rejected' | 'failed';
   rejections: ImportRejection[];
   error?: string;
+  /** Video: media_files.id. Music: audio_files.id. */
   mediaFileId?: number;
   destination?: string;
   replacedFileIds?: number[];
+  /** Music: accepted with a note (incomplete album). */
+  warnings?: string[];
+  albumId?: number;
+  trackId?: number;
 }
 
 export interface ImportRunResult {
@@ -203,6 +204,8 @@ export class ImportsService {
   private readonly profiles: ProfilesService;
   /** Tracked downloads whose last attempt failed only on temporary rejections. */
   private readonly retryable = new Set<number>();
+  /** Music downloads and the audio manual import (imports/audio/music-import.ts). */
+  private readonly music: MusicImporter;
 
   constructor(options: ImportsServiceOptions) {
     this.db = options.db;
@@ -214,6 +217,24 @@ export class ImportsService {
     this.now = options.now ?? (() => new Date());
     this.fsOps = options.fsOps;
     this.profiles = new ProfilesService({ db: options.db });
+    this.music = new MusicImporter({
+      db: this.db,
+      bus: this.bus,
+      log: this.log,
+      deps: () => this.deps,
+      profiles: this.profiles,
+      platform: this.platform,
+      now: this.now,
+      fsOps: this.fsOps,
+      mediaManagement: () => this.getMediaManagement(),
+      naming: () => this.getNaming(),
+      freeSpace: (path) => this.freeSpace(path),
+      downloads: {
+        listTracked: () => this.downloads.listTracked(),
+        markImported: (id) => this.downloads.markImported(id),
+        setImportProgress: this.downloads.setImportProgress ? (id, p) => this.downloads.setImportProgress?.(id, p) : undefined,
+      },
+    });
   }
 
   /** Wire (or replace) hooks after construction. */
@@ -269,8 +290,8 @@ export class ImportsService {
     const settings = this.getMediaManagement();
     const result: ImportRunResult = { trackedDownloadId: item.id, verified: false, outcomes: [], messages: [] };
     if (!settings.enableCompletedDownloadHandling) return result;
-    // Audio downloads belong to the audio importer (imports/audio); this one is video-only.
-    if (item.mediaType === 'music' || item.mediaType === 'audiobook') return result;
+    // Audiobook downloads wait for the audiobook importer (Wave 3).
+    if (item.mediaType === 'audiobook') return result;
     this.retryable.delete(item.id);
 
     const path = item.outputPath;
@@ -278,6 +299,7 @@ export class ImportsService {
     if (!isAbsolute(path)) {
       return this.block(item, result, [`Import failed, path is not a valid local path: ${path}. You may need a Remote Path Mapping.`]);
     }
+    if (item.mediaType === 'music') return this.importMusicDownload(item, path, result);
 
     const grab = this.grabFor(item);
     const target = this.resolveTarget(item, grab);
@@ -369,6 +391,32 @@ export class ImportsService {
     return this.block(item, result, lines);
   }
 
+  private async importMusicDownload(item: TrackedDownload, path: string, result: ImportRunResult): Promise<ImportRunResult> {
+    this.downloads.setState(item.id, 'importing');
+    const run = await this.music.importCompletedDownload(item, path);
+    result.outcomes = run.outcomes.map(({ audioFileId, ...o }) => ({ ...o, ...(audioFileId !== undefined ? { mediaFileId: audioFileId } : {}) }));
+    if (run.verified) {
+      result.verified = true;
+      if (run.warnings.length > 0) this.log?.info({ id: item.id, warnings: run.warnings }, 'music import accepted with warnings');
+      await this.downloads.markImported(item.id);
+      return result;
+    }
+    if (run.retryable) this.retryable.add(item.id);
+    return this.block(item, result, run.messages);
+  }
+
+  // ---- manual import, audio mode -------------------------------------------------------
+
+  /** GET /manualimport/audio. */
+  listAudioManualImport(query: AudioManualImportQuery): Promise<AudioManualImportItem[]> {
+    return this.music.listManualImport(query);
+  }
+
+  /** POST /manualimport/audio. */
+  executeAudioManualImport(request: AudioManualImportRequest): Promise<AudioManualImportResult> {
+    return this.music.executeManualImport(request);
+  }
+
   /** Re-runs imports that failed only on temporary rejections (unpacking, sample undetermined). */
   async retryPendingImports(): Promise<number> {
     if (this.retryable.size === 0) return 0;
@@ -389,8 +437,12 @@ export class ImportsService {
       type: 'import',
       action: 'manualRequired',
       title: item.title,
-      ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
-      ...(item.seriesId !== undefined ? { mediaId: item.seriesId } : item.movieId !== undefined ? { mediaId: item.movieId } : {}),
+      ...(item.mediaType === 'music'
+        ? { mediaType: 'music' as const, ...(item.artistId !== undefined ? { mediaId: item.artistId } : {}), ...(item.albumIds?.length ? { albumIds: item.albumIds } : {}) }
+        : {
+            ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
+            ...(item.seriesId !== undefined ? { mediaId: item.seriesId } : item.movieId !== undefined ? { mediaId: item.movieId } : {}),
+          }),
       message: lines.join('; '),
     });
     void this.callHook(() => this.deps.notifications?.onManualInteractionRequired?.(item, lines));

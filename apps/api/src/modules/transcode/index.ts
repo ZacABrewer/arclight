@@ -81,7 +81,7 @@ export const transcodeModuleWith =
     // which ends with a `library updated` event for the item.
     const unsubscribe = ctx.bus.subscribe((event) => {
       try {
-        if (event.type === 'import' && event.action === 'imported' && event.mediaType && event.mediaId) {
+        if (event.type === 'import' && event.action === 'imported' && (event.mediaType === 'series' || event.mediaType === 'movie') && event.mediaId) {
           service.onImported(event.mediaType, event.mediaId);
         } else if (event.type === 'library' && event.action === 'updated') {
           service.onAnalyzed(event.mediaType, event.id);

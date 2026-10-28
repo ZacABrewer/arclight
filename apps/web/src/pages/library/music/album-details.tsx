@@ -1,13 +1,15 @@
 import { useId, useMemo, useState } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import type { AlbumDetails, AudioFile, Track } from '@arclight/shared';
-import { EmptyState, KeyValue, QualityTag, SectionLabel, Select, StatusChip, Table, Tabs, Toggle, type Column } from '../../../arclight/index.js';
+import { Button, EmptyState, KeyValue, QualityTag, SectionLabel, Select, StatusChip, Table, Tabs, Toggle, type Column } from '../../../arclight/index.js';
 import { formatBytes, formatDate } from '../../../components/media/format.js';
 import { Loading, MonitorSwitch, QualityLabel, QueryError } from '../../../components/media/media-kit.js';
 import { useAlbum, useSetAlbumsMonitored, useUpdateAlbum } from '../../../hooks/music.js';
+import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { DetailsHero } from '../details-kit.js';
 import { AudioFilesTable } from '../media-files-table.js';
-import { MusicCrumb, MusicGate, NotYetButton, SquareArt } from './music-kit.js';
+import { MusicCrumb, MusicGate, SquareArt } from './music-kit.js';
+import { MusicInteractiveSearchModal } from './music-release-table.js';
 import { albumCover, albumTypeLabel, albumYear, artistBackdrop, formatDuration, groupTracks, releaseLabel, trackProgress, type DiscGroup } from './music-model.js';
 import '../library.css';
 import './music.css';
@@ -29,6 +31,8 @@ function AlbumDetailsView() {
   const album = useAlbum(id);
   const setMonitored = useSetAlbumsMonitored();
   const [tab, setTab] = useState('tracks');
+  const [interactive, setInteractive] = useState(false);
+  const search = useMusicSearch();
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('music.invalidAlbumId', { rawId }))} title={t('music.albumNotFound')} />;
   if (album.isPending) return <Loading />;
@@ -82,8 +86,10 @@ function AlbumDetailsView() {
         overview={a.overview}
         actions={
           <>
-            <NotYetButton variant="primary">{t('common.search')}</NotYetButton>
-            <NotYetButton>{t('library.seriesDetails.interactiveSearch')}</NotYetButton>
+            <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ name: 'AlbumSearch', albumIds: [a.id] })}>
+              {t('common.search')}
+            </Button>
+            <Button onClick={() => setInteractive(true)}>{t('library.seriesDetails.interactiveSearch')}</Button>
           </>
         }
       >
@@ -98,6 +104,12 @@ function AlbumDetailsView() {
           { id: 'tracks', label: t('music.tracks'), count: a.tracks.length, content: <TrackList album={a} /> },
           { id: 'files', label: t('common.files'), count: a.files.length, content: <AudioFilesTable files={a.files} error={null} loading={false} /> },
         ]}
+      />
+      <MusicInteractiveSearchModal
+        target={interactive ? { albumId: a.id, artistId: a.artistId } : null}
+        title={`${a.artist.name} – ${a.title}`}
+        albumTitles={new Map([[a.id, a.title]])}
+        onClose={() => setInteractive(false)}
       />
     </div>
   );

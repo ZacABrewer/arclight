@@ -11,7 +11,8 @@ export const pendingReleases = sqliteTable(
     guid: text('guid').notNull(),
     indexerId: integer('indexer_id').notNull(),
     title: text('title').notNull(),
-    mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),
+    // 'music' / 'audiobook' are TS-only additions (Drizzle enums are not enforced on SQLite).
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }).notNull(),
     seriesId: integer('series_id'),
     episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>(),
     movieId: integer('movie_id'),
@@ -82,7 +83,7 @@ export const releaseDecisions = sqliteTable(
     batchId: text('batch_id').notNull(),
     time: text('time').notNull(),
     source: text('source', { enum: ['rss', 'search', 'interactive', 'push', 'pending'] }).notNull(),
-    mediaType: text('media_type', { enum: ['series', 'movie'] }),
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }),
     itemKey: text('item_key').notNull(),
     seriesId: integer('series_id'),
     episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>().notNull(),

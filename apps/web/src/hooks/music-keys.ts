@@ -12,6 +12,8 @@ export const musicKeys = {
   albums: {
     all: ['music', 'album'] as const,
     detail: (id: number) => ['music', 'album', 'detail', id] as const,
+    /** One artist's albums (activity rows resolve album titles through it). */
+    list: (artistId: number) => ['music', 'album', 'list', artistId] as const,
   },
   /** MusicBrainz search results: a snapshot, kept out of ['music'] so library events leave them alone. */
   lookup: (term: string) => ['musicLookup', term] as const,

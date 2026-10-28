@@ -30,7 +30,7 @@ import {
   TERMINAL_TRACKED_STATES,
   type DownloadClientTestAllResult,
   type DownloadClientTestResult,
-  type MediaType,
+  type AnyMediaType,
   type DownloadEventType,
   type DownloadTimeline,
   type QueueItem,
@@ -144,10 +144,13 @@ export interface GrabRequest {
 }
 
 export interface TrackingInfo {
-  mediaType?: MediaType;
+  mediaType?: AnyMediaType;
   seriesId?: number;
   episodeIds?: number[];
   movieId?: number;
+  /** Music grabs: the artist and the albums the release covers. */
+  artistId?: number;
+  albumIds?: number[];
   /** Opaque release snapshot, handed back to blocklist hooks. */
   grabbedRelease?: unknown;
   /** Tags of the series/movie; used by `pickClient` when no client is given. */
@@ -2368,6 +2371,8 @@ function trackingColumns(t: TrackingInfo) {
     seriesId: t.seriesId ?? null,
     episodeIds: t.episodeIds ?? null,
     movieId: t.movieId ?? null,
+    artistId: t.artistId ?? null,
+    albumIds: t.albumIds ?? null,
     grabbedRelease: t.grabbedRelease ?? null,
   };
 }
@@ -2378,15 +2383,17 @@ function trackingFromRow(row: TrackedDownloadRow) {
     ...(row.seriesId !== null ? { seriesId: row.seriesId } : {}),
     ...(row.episodeIds !== null ? { episodeIds: row.episodeIds } : {}),
     ...(row.movieId !== null ? { movieId: row.movieId } : {}),
+    ...(row.artistId !== null ? { artistId: row.artistId } : {}),
+    ...(row.albumIds !== null ? { albumIds: row.albumIds } : {}),
   };
 }
 
 function isGrabbed(row: TrackedDownloadRow): boolean {
-  return row.grabbedRelease !== null || row.mediaType !== null || row.seriesId !== null || row.movieId !== null;
+  return row.grabbedRelease !== null || row.mediaType !== null || row.seriesId !== null || row.movieId !== null || row.artistId !== null;
 }
 
 function isUnknownMedia(item: QueueItem): boolean {
-  return item.mediaType === undefined && item.seriesId === undefined && item.movieId === undefined;
+  return item.mediaType === undefined && item.seriesId === undefined && item.movieId === undefined && item.artistId === undefined;
 }
 
 function stripTracked(item: TrackedDownload): QueueItem {

@@ -172,7 +172,7 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 |---|---|---|
 | GET | `/settings/metadata` | TMDB settings; API key masked |
 | PUT | `/settings/metadata` | Update TMDB settings; a masked key keeps the stored value |
-| GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired, `decisionLogDays` (default 14) for the release decision log) |
+| GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired, `decisionLogDays` (default 14) for the release decision log; music: `allowDiscographyPacks` (default false: discography / multi-album packs are only grabbed interactively) and `minPackWanted` (default 2: a pack must fill or upgrade at least this many monitored albums to be grabbed automatically)) |
 | PUT | `/settings/releases` | Replace the releases settings section |
 
 ## theme (theme packs)
@@ -299,7 +299,7 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | GET | `/artist` | `ArtistListQuery` → `Artist[]` with `statistics` (`ArtistStatistics`). Filters `monitored`, `status`, `qualityProfileId`, `albumTypeProfileId`, `rootFolderPath`, `tag`, `mbArtistId`, `search` (name and aliases); `sortKey` (`sortName` default, `added`, `status`, `qualityProfileId`, `path`, `sizeOnDisk`), `sortOrder`; `includeStatistics=false` skips the counts |
 | GET | `/artist/lookup` | `?term=` → `ArtistSearchResult[]`: MusicBrainz artist search (interactive priority), `artistId` set for artists already in the library. `mbid:<uuid>` (or a bare MBID) looks one artist up by id |
 | GET | `/artist/:id` | `ArtistDetails`: the artist with statistics and its `albums` (each with `AlbumStatistics`) |
-| POST | `/artist` | `AddArtistRequest` → **201** `Artist`. Checks the root folder (type `music`), the quality profile (domain `music`), the album-type profile (default when omitted), tags and the exclusion list, fetches the artist record, inserts it at `<root>/<Artist Name>` and starts the `ArtistAdd` job; albums and tracks arrive while the job runs. 409 when the artist is already added or excluded; 502/503 when MusicBrainz fails |
+| POST | `/artist` | `AddArtistRequest` → **201** `Artist`. Checks the root folder (type `music`), the quality profile (domain `music`), the album-type profile (default when omitted), tags and the exclusion list, fetches the artist record, inserts it at `<root>/<Artist Name>` and starts the `ArtistAdd` job; albums and tracks arrive while the job runs. `searchOnAdd: true` starts an `ArtistSearch` job once the albums are loaded (and the folder rescanned). 409 when the artist is already added or excluded; 502/503 when MusicBrainz fails |
 | PUT | `/artist/editor` | `BulkArtistUpdateRequest` → `Artist[]`: `ids` plus any of `monitored`, `monitorOption` (re-applied to every album), `monitorNewAlbums`, `qualityProfileId`, `albumTypeProfileId`, `rootFolderPath`, `tags: {add?, remove?}`; `refresh: true` starts `RefreshArtist` for the ids after the update |
 | PUT | `/artist/:id` | `UpdateArtistRequest` → `Artist`: `monitored`, `monitorNewAlbums`, `monitorOption`, `qualityProfileId`, `albumTypeProfileId` (applies from the next refresh), `rootFolderPath` (path becomes `<root>/<Artist Name>` unless `path` is given), `path`, `tags`. Files are not moved |
 | DELETE | `/artist/:id` | `DeleteArtistQuery`: `deleteFiles` (removes the artist folder, only inside its root folder), `addExclusion` (never re-add this MBID). Cascades to albums, editions, tracks and `audio_files` rows. **204** |
@@ -313,7 +313,7 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
 | PUT | `/albumtypeprofile/:id` | `AlbumTypeProfileInput` → `AlbumTypeProfile`. The default cannot be un-defaulted directly; mark another one instead |
 | DELETE | `/albumtypeprofile/:id` | **204**; 400 for the default profile, 409 while an artist uses it |
-| POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands only report `not available yet` until music acquisition ships (Wave 2). Unknown ids 404 (no job starts), unknown names 400 |
+| POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands search through the release pipeline (see "releases: music"): `ArtistSearch` looks for each artist's wanted albums, `AlbumSearch` for each album; the job message is `searched N artists: R releases, G grabbed`. Unknown ids 404 (no job starts), unknown names 400 |
 | GET | `/wanted/missing/albums` | `WantedAlbumsQuery` (`page`, `pageSize`) → `WantedAlbumsPage`: monitored albums of monitored artists, released (a partial date counts from the start of its year or month), with fewer track files than tracks (or no tracks loaded and nothing on disk). Newest first. Read-only in Wave 1 |
 | GET | `/wanted/cutoff/albums` | `WantedAlbumsPage`: monitored albums with files where any track file's quality is below the artist's profile cutoff (custom-format scores for audio arrive in Wave 2) |
 
@@ -361,6 +361,93 @@ Wikidata image.
 `AlbumSearch`. Scheduled: `RefreshArtists`, `MetadataCacheCleanup` (see Scheduler jobs). No
 `library` WebSocket events are published for music yet; the `job` events of these jobs say when
 to refetch.
+
+## imports: music import and manual import (audio mode)
+
+Contract: `packages/shared/src/imports.ts` (`AudioManualImport*`). Code:
+`apps/api/src/modules/imports/audio/music-import.ts`, dispatched from `imports/service.ts`
+when a tracked download's `mediaType` is `music`.
+
+**Completed downloads.** The download folder is scanned with the tag reader and grouped into
+albums (MusicBrainz release-group id, then album and album-artist tags, then the folder; `CD1`
+style disc folders fold into their album). The target is the queue item's `artistId` / `albumIds`
+(else the grab snapshot, else the release title's artist). Each group is matched to the target
+albums' selected edition (`audio.trackMatchThreshold`, default 0.8). With `anyReleaseOk` and no
+files on the album yet, an edition that fits badly (below the threshold, files left over or
+tracks missing) is matched again against the album's other editions; a better fit becomes the
+selected edition (tracks reloaded from MusicBrainz, like `PUT /album/:id`). A download without
+`albumIds` (or a discography pack) imports every album of the artist it matches, and only those.
+
+Specs per file: `absolutePath`, `freeSpace` (the album's total against the artist's root
+folder), `notUnpacking` (temporary), `sameFile`, `alreadyImported`, `upgrade` (a track's file is
+replaced only by a strictly better quality under the artist's profile), `trackMapping` (one file
+per track; files that fit no track are rejected), `mixedReleases` (files of two editions of one
+album), `cueImage` (one file plus a cue sheet: the download needs manual import). An incomplete
+album is accepted with a warning and stays wanted.
+
+Files go to `<artist path>/<album folder>/<track file>` with the media-management transfer mode
+(hard link, else copy, or move when the client allows), replaced files to the recycle bin. The
+track name comes from the naming config when `renameTracks` is on (multi-disc: the `prefix` or
+`subfolder` style); otherwise the original name (and any disc sub-folder) is kept below the
+built album folder. Extras of the album folder follow: `.cue`, `.log`, cover images, and `.lrc`
+(renamed with its track). **Files are never retagged.** Each file gets an `audio_files` row
+(quality from the measured codec/bitrate/bit depth, else the file and folder names, else the
+release title; codec, bitrate, sample rate, bit depth, duration, tags) linked from
+`tracks.audio_file_id`, so album and artist statistics change at once. The download is
+`imported` once every target album received files; otherwise it stays `importPending` with the
+reasons as status messages (and an `import manualRequired` event).
+
+Per imported album: one `import imported` WebSocket event (`mediaType: "music"`, `mediaId` the
+artist id, `albumIds`), one history record (`downloadFolderImported`, target
+`{mediaType: "music", artistId, albumIds}`), one `import` (or `upgrade`) notification ("Artist –
+Album [FLAC]", with the track list), and a media-server refresh of the album folder (servers
+flagged for refresh whose music library contains it).
+
+### Manual import, audio mode
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/manualimport/audio` | `AudioManualImportQuery` → `AudioManualImportItem[]` (one per audio file) |
+| POST | `/manualimport/audio` | `AudioManualImportRequest` → `AudioManualImportResult` |
+
+`GET` query (one of `folder`, `downloadId`, `artistId` is required):
+
+| Field | Meaning |
+|---|---|
+| `folder` | Folder (or file) to scan |
+| `downloadId` | A tracked download: its output folder and its artist |
+| `artistId` | Pin the artist (else the download's, else the tags' album artist / MusicBrainz artist id, else the folder name); alone it scans the artist folder |
+| `albumId` | Match every group against this album only (the user picked it) |
+| `filterExistingFiles` | Default `true`: skip files already in `audio_files` |
+
+`AudioManualImportItem`:
+
+| Field | Meaning |
+|---|---|
+| `path`, `relativePath`, `name`, `sizeBytes` | The file |
+| `quality` | `QualityModel` the import would record |
+| `mediaType` | Always `music` |
+| `groupKey`, `groupFolder` | Files of one album folder share the key; `groupFolder` folds disc folders |
+| `artistId`, `albumId`, `albumReleaseId` | The proposal (absent when nothing fits); `albumReleaseId` is the album's selected edition |
+| `trackIds` | `[trackId]` of the proposed track, with `mediumNumber`, `trackNumber`, `trackTitle` |
+| `confidence` | 0-1, the group's edition match |
+| `trackScore` | 0-1, this file's fit to its proposed track |
+| `tags` | What the file says: `title`, `artist`, `albumArtist`, `album`, `trackNo`, `discNo`, `durationMs`, `codec`, `bitrateKbps`, `sampleRateHz`, `bitDepth` |
+| `rejections` | Why automatic import would refuse it (`ImportRejection[]`: `unknownArtist`, `unknownAlbum`, `trackMapping`, `cueImage`, `mixedReleases`, `notQualityUpgrade`, `sameFile` ...). Files below the threshold still get the best album and track proposed |
+| `warnings` | Accepted with a note, e.g. the album is incomplete |
+| `downloadId` | When listed for a tracked download |
+
+`POST` body: `{ items: AudioManualImportRequestItem[], importMode: "auto" | "move" | "copy" }`
+(`auto`: move unless the tracked download may not be moved). Each item: `path`, `artistId`,
+`albumId`, `trackIds` (exactly one track of the album's selected edition), optional
+`albumReleaseId` (must equal the selected edition: to use another edition, switch it with
+`PUT /album/:id {selectedReleaseId}` and list again), `quality` (override), `downloadId`. Specs
+are bypassed (like video manual import); a track mapped twice, a track of another album or
+edition, or a missing file fails that item only. A file already inside the artist folder is
+registered in place. Result: `{ imported: [{path, audioFileId, trackId, destination}], failed:
+[{path, error}] }`. Each album imported gets the same events, history, notification and refresh
+as an automatic import (`manual: true`), and a tracked download becomes `imported` once all its
+albums have files from it.
 
 ## profiles
 
@@ -1062,6 +1149,85 @@ movies, 100 cutoff-unmet episodes and movies per run, in list order); `runsAhead
 due runs the limit makes the item sit out. Null when no run within two weeks reaches it. RSS sync
 can grab the item at any time in between.
 
+## releases: music (album search, decisions, grabs)
+
+Music releases go through the same pipeline as video (`/release`, `/release/push`,
+`/command/search`, RSS, pending releases, decision log) when `features.music` is on. The indexer
+category picks the parser: Audio categories (3xxx except 3020 Audio/Video and 3030 Audiobook) use
+the music parser; uncategorised releases use it only when the title names an audio codec or
+container (FLAC, MP3, 320, V0, 24bit, ...) and no series/movie matched, and only a library hit
+counts. Matching: artist by name or alias (accents, punctuation, a leading "The" ignored, "&" =
+"and"); Various Artists releases by the album alone; album by title without edition words, year
+within one (another year is accepted when the title is unique for the artist); discography and
+multi-album packs map to the artist's albums inside the stated years that pass the album-type
+profile. Album current quality is its lowest track-file quality; a pack only counts (and is
+tracked) for the albums it fills or strictly upgrades.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/release?albumId=` | Interactive search for one album (its artist implied). `?artistId=` searches the artist (an artist query, then each wanted album). Runs the album plan (below) and stops after the first query with an approved release; nothing is grabbed. Answers `ReleaseDecision[]`, approved first, then by rank |
+| POST | `/release` | `ReleaseGrabRequest`: `guid`, `indexerId`, optional `artistId` and/or `albumIds` to pin the mapping of an ambiguous release (`albumIds` alone implies their artist). The user may grab a rejected release |
+| POST | `/command/search` | `{artistId, albumIds?}` searches the artist's wanted albums (monitored, released, missing or below cutoff), or only `albumIds`; `{albumIds}` alone searches those albums (one artist). `SearchCommandResponse` |
+| GET | `/release/pending` | `PendingRelease` gains `mediaType: "music"`, `artistId`, `albumIds` |
+| GET | `/release/decisions` | `DecisionLogQuery` also takes `artistId` or `albumId` (rows covering the album). Music rows carry `mediaType: "music"`, `artistId`, `albumIds` |
+| GET | `/release/searchstatus` | `mediaType` also takes `album`; jobs `MissingAlbumSearch` / `CutoffUnmetAudioSearch` |
+
+**Music fields of `ReleaseDecision`** (contract `packages/shared/src/releases.ts`; absent on video
+decisions). The interactive album search shows these next to the usual release columns:
+
+```ts
+{
+  mediaType: 'music',
+  artistId: number,                 // matched artist (also set when only the album failed to match)
+  artistName: string,
+  albumIds: number[],               // albums the release fills or upgrades (a pack: only the wanted ones)
+  albums: { id: number; title: string; year: number | null }[],   // same order as albumIds
+  music: {                          // ReleaseMusicInfo: what the parser read from the name
+    artist: string | null, album: string | null, year: number | null, edition: string | null,
+    isVariousArtists: boolean,
+    packType: 'discography' | 'multiAlbum' | null, discographyYears: { start, end } | null,
+    releaseTypeHint: string | null,  // EP, Single, Live, Compilation, Soundtrack, Bootleg
+    media: string,                   // CD, WEB, Vinyl, SACD, Cassette, DVD, BD, Unknown
+    catalogNumber: string | null, discCount: number | null,
+    codec: string, bitrateKbps: number | null, bitDepth: number | null, sampleRateHz: number | null,
+    hasLog: boolean, logScore: number | null, hasCue: boolean,
+  },
+  quality: QualityModel,            // a music quality (FLAC, MP3-320, FLAC-24bit, ...)
+  languages: [], fullSeason: false,
+}
+```
+
+Unmatched music releases come back with `approved: false`, `mediaType: "music"`, `music` (when
+parsed) and one rejection: `unknownArtist`, `unknownAlbum` (ambiguous titles too; `artistId` set),
+`emptyPack`, `unableToParse` or `musicDisabled`.
+
+**Music rejection reasons** (besides the shared ones such as `qualityNotWanted`,
+`customFormatMinimumScore`, `blocklisted`, `alreadyInQueue`, `diskCutoffMet`, `minimumAgeDelay`):
+`artistNotMonitored`, `albumNotMonitored`, `wrongArtist`, `wrongAlbum`, `albumNotReleased`
+(automatic only), `discographyNotAllowed` and `packTooFewWanted` (automatic only, see
+`/settings/releases`), `audioSizeImplausible` (too small, or for single albums too large, for
+the codec and the album's running time), `belowMinimumSize` / `aboveMaximumSize` (quality
+definition MB/min × album duration; packs have no upper bound), `diskNotUpgrade` (a pack that
+upgrades none of its albums).
+
+**Search plans.** Album: `t=music` with artist + album (+ year), then `q="{artist} {album}"`,
+then the title without edition brackets; Various Artists albums by the album alone. Artist: one
+`q="{artist}"` query first (packs and several albums come back on it), then each album it did not
+settle. Indexers without `t=music` fall back to `t=search` with the same words. Each query is
+decided (and, for automatic searches, grabbed) before the next one runs.
+
+**Grabs and failures.** A music grab records one `grabbed` history row with `artistId` and
+`albumIds`; the tracked download and the queue item (`QueueItem.artistId` / `albumIds`,
+`mediaType: "music"`) carry the same. A failed download writes `downloadFailed`, blocklists the
+release under the artist and, with `mediaManagement.autoRedownloadFailed`, searches those albums
+again. Delay profiles (selected by the artist's tags) park music releases as pending like video.
+
+**Scheduled jobs.** `MissingAlbumSearch` (04:10 daily, 50 albums per run) and
+`CutoffUnmetAudioSearch` (04:30 daily, 50 per run) walk the Wanted lists with the same per-item
+back-off as the video searches (`release_search_state`, `media_type = 'album'`, a day per search
+without a grab, at most 7; a grab resets it). Several albums of one artist are searched together
+(artist query first). Both are no-ops while `features.music` is off.
+
 ## scene-mapping
 
 Contract: `packages/shared/src/scene-mapping.ts`. Per-series scene numbering rules in
@@ -1096,12 +1262,12 @@ Contract: `packages/shared/src/history.ts`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/history` | Paged, sortable, filterable history (`eventType`, `mediaType`, `seriesId`, `episodeId`, `movieId`, `downloadId`, `quality`, `language`, `include*`) |
+| GET | `/history` | Paged, sortable, filterable history (`eventType`, `mediaType` (`series`, `movie`, `music`), `seriesId`, `episodeId`, `movieId`, `artistId`, `albumId`, `downloadId`, `quality`, `language`, `include*`). Music rows: one row per event for the whole release, `mediaType: "music"`, `artistId` and `albumIds` set (absent on video rows), `seriesId`/`episodeId`/`movieId` null |
 | GET | `/history/since` | Records since `date` (optional `eventType`) |
 | GET | `/history/series` | Records of a series (`seriesId`, `seasonNumber?`, `eventType?`) |
 | GET | `/history/movie` | Records of a movie (`movieId`, `eventType?`) |
 | POST | `/history/failed/:id` | Mark the grab failed (`{message?, skipRedownload?}`): writes `downloadFailed`, blocklists the release, and unless `skipRedownload` is set (or `mediaManagement.autoRedownloadFailed` is off) re-searches the record's episodes/movie in the background (wiring.ts, priority-100 handler). Answers the new `downloadFailed` records |
-| POST | `/history/:id/redownload` | Re-run the automatic search for the record's movie, or its episode plus every episode recorded under the same download id and event type. Answers **202** with the started `HistoryRedownload` `Job`; 404 unknown id, 400 for a record without an episode or movie, 503 when release search is not wired |
+| POST | `/history/:id/redownload` | Re-run the automatic search for the record's movie, its albums (music), or its episode plus every episode recorded under the same download id and event type. Answers **202** with the started `HistoryRedownload` `Job`; 404 unknown id, 400 for a record without an episode or movie, 503 when release search is not wired |
 
 ## blocklist
 
@@ -1109,7 +1275,7 @@ Contract: `packages/shared/src/history.ts`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/blocklist` | Paged, sortable list (`mediaType`, `seriesId`, `movieId`, `protocol` filters) |
+| GET | `/blocklist` | Paged, sortable list (`mediaType`, `seriesId`, `movieId`, `artistId`, `protocol` filters). Music entries are scoped to the artist (a release blocked for one artist is fine for another) and list the blocked grab's `albumIds` |
 | GET | `/blocklist/series` | Entries of a series (`seriesId`) |
 | GET | `/blocklist/movie` | Entries of a movie (`movieId`) |
 | POST | `/blocklist` | Add an entry by hand (`BlocklistAddRequest`: `mediaType`, `seriesId` + `episodeIds` or `movieId`, `sourceTitle`, `quality`, `protocol`, optional indexer, hash, size, message), 201 |
@@ -1525,6 +1691,8 @@ of them with `POST /jobs/run`.
 | `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |
 | `MissingMovieSearch` | `20 3 * * *` | releases | The same for `GET /wanted/missing/movies`, up to 100 a run |
 | `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), in list order, items past their back-off only, up to 100 episodes and 100 movies a run; `GET /release/searchstatus` estimates the next run per item |
+| `MissingAlbumSearch` | `10 4 * * *` | releases | Music: searches the albums `GET /wanted/missing/albums` lists, in list order, past their back-off only, up to 50 a run, grouped per artist. Nothing while music is off |
+| `CutoffUnmetAudioSearch` | `30 4 * * *` | releases | Music: the same for albums whose lowest track quality is below the artist's profile cutoff, up to 50 a run |
 | `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library, or from the media server when `useMediaServerAvailability` is on (Jellyfin/Emby provider ids, Plex guids, per-season episode counts), completes requests, sends available notifications |
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists (users with a token) and Jellyfin/Emby favourites (linked users); auto-requests when `autoRequestFromWatchlist`, `AUTO_REQUEST*` and the per-type sync flag allow |
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |
@@ -1568,7 +1736,7 @@ The RSS and status crons can be overridden through `registerIndexerJobs` options
 | `download` | `action` (`event`), `event` (a DownloadEvent: new timeline entry of a tracked download) |
 | `torrent` | `action` (`lockdown` `unlocked`), optional `reason`, `infoHashes` (torrents the kill switch paused / resumed) |
 | `release` | `action` (`grabbed` `rejected` `pending`), `title`, optional `mediaType`, `mediaId` |
-| `import` | `action` (`imported` `failed` `manualRequired`), `title`, optional `mediaType`, `mediaId`, `message` |
+| `import` | `action` (`imported` `failed` `manualRequired`), `title`, optional `mediaType` (`series` `movie` `music` `audiobook`), `mediaId` (series/movie id; the artist id for music), `albumIds` (music), `message` |
 | `indexer` | `action` (`failed` `recovered`), `id`, `name` |
 | `history` | `action` (`added`) |
 | `settings` | `section` |

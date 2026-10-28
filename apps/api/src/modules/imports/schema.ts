@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index } from 'drizzle-orm/sqlite-core';
-import type { MediaType } from '@arclight/shared';
+import type { AnyMediaType } from '@arclight/shared';
 
 // Imports module tables. `imported_downloads` is the "download history" of spec 2.4 reduced to
 // what the importer needs: which download id produced which library file, and when. It backs
@@ -10,7 +10,7 @@ export const importedDownloads = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     downloadId: text('download_id').notNull(),
-    mediaType: text('media_type').$type<MediaType>().notNull(),
+    mediaType: text('media_type').$type<AnyMediaType>().notNull(),
     seriesId: integer('series_id'),
     movieId: integer('movie_id'),
     episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>().notNull(),

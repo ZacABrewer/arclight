@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import type { ProfileMigrationProgress, QualityProfile } from '@arclight/shared';
+import type { MediaDomain, ProfileMigrationProgress, QualityProfile } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
-import { Button, Chip, ErrorBlock, QualityTag, Skeleton } from '../../../arclight/index.js';
+import { Button, Chip, ErrorBlock, QualityTag, SectionLabel, Skeleton } from '../../../arclight/index.js';
+import { useFeatures } from '../../../hooks/music.js';
 import { useCustomFormatList, useQualityProfileList, useQualityProfileSchema } from '../../../hooks/profiles.js';
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
 import { useProfileMigrationProgressList } from '../../../hooks/profile-migration.js';
 import { DelayProfilesSection } from './delay-profiles.js';
 import { MismatchCount, ProfileMigrationSection } from './profile-migration-section.js';
-import { itemId, itemName, toDisplay } from './quality-profile-model.js';
+import { DOMAIN_ORDER, domainLabel, groupByDomain, itemId, itemName, toDisplay } from './quality-profile-model.js';
 import { QualityProfileEditor } from './quality-profile-editor.js';
 import { ReleaseProfilesSection } from './release-profiles.js';
 import { AlbumTypeProfilesSection } from './album-type-profiles.js';
@@ -45,19 +46,33 @@ export function QualityProfileCard({ profile, onEdit, migration }: { profile: Qu
   );
 }
 
+type Editing = { profile: QualityProfile } | { domain: MediaDomain } | null;
+
 function QualityProfilesSection() {
   const list = useQualityProfileList();
   const schema = useQualityProfileSchema();
   const formats = useCustomFormatList();
   const migration = useProfileMigrationProgressList();
-  const [editing, setEditing] = useState<QualityProfile | 'new' | null>(null);
+  const features = useFeatures();
+  const [editing, setEditing] = useState<Editing>(null);
+
+  // One grid per domain once audio is in play: video always, music / audiobooks while their
+  // flag is on or a profile of theirs exists.
+  const groups = groupByDomain(list.data ?? []);
+  const shown = DOMAIN_ORDER.filter(
+    (d) => d === 'video' || groups.some((g) => g.domain === d) || (d === 'music' ? features.music : features.audiobooks),
+  );
+  const grouped = shown.length > 1;
+  const card = (p: QualityProfile) => (
+    <QualityProfileCard key={p.id} profile={p} onEdit={() => setEditing({ profile: p })} migration={migration.data?.find((m) => m.qualityProfileId === p.id)} />
+  );
 
   return (
     <SettingsSection
       label={t('settings.profiles.qualityProfiles')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
-        <Button size="sm" variant="secondary" onClick={() => setEditing('new')} disabled={!schema.data}>
+        <Button size="sm" variant="secondary" onClick={() => setEditing({ domain: 'video' })} disabled={!schema.data}>
           {t('settings.profiles.addQualityProfile')}
         </Button>
       }
@@ -68,19 +83,34 @@ function QualityProfilesSection() {
         <ErrorBlock title={t('settings.profiles.couldntLoadQualityProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
+      ) : grouped ? (
+        shown.map((domain) => {
+          const profiles = groups.find((g) => g.domain === domain)?.profiles ?? [];
+          const label = t('settings.profiles.domain.profilesOf', { domain: domainLabel(domain) });
+          return (
+            <section key={domain} className="al-profile-domain" aria-label={label} data-testid={`profiles-${domain}`}>
+              <SectionLabel as="h3" count={profiles.length}>
+                {domainLabel(domain)}
+              </SectionLabel>
+              <CardGrid label={label}>
+                {profiles.map(card)}
+                <AddCard label={t('settings.profiles.domain.addProfileOf', { domain: domainLabel(domain) })} onClick={() => setEditing({ domain })} />
+              </CardGrid>
+            </section>
+          );
+        })
       ) : (
         <CardGrid label={t('settings.profiles.qualityProfiles')}>
-          {list.data.map((p) => (
-            <QualityProfileCard key={p.id} profile={p} onEdit={() => setEditing(p)} migration={migration.data?.find((m) => m.qualityProfileId === p.id)} />
-          ))}
-          <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing('new')} />
+          {list.data.map(card)}
+          <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing({ domain: 'video' })} />
         </CardGrid>
       )}
       {editing && schema.data ? (
         <QualityProfileEditor
-          key={editing === 'new' ? 'new' : editing.id}
-          profile={editing === 'new' ? null : editing}
+          key={'profile' in editing ? editing.profile.id : `new-${editing.domain}`}
+          profile={'profile' in editing ? editing.profile : null}
           template={schema.data}
+          initialDomain={'domain' in editing ? editing.domain : undefined}
           customFormats={formats.data ?? []}
           onClose={() => setEditing(null)}
         />

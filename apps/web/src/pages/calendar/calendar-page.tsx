@@ -38,7 +38,7 @@ import {
   type CalendarEntry,
   type CalendarView,
 } from './calendar-math.js';
-import { MusicChip, NotYetButton, SquareArt } from '../library/music/music-kit.js';
+import { AlbumSearchButton, MusicChip, SquareArt } from '../library/music/music-kit.js';
 import './calendar.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -218,7 +218,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
                 {t('common.search')}
               </Button>
             ) : (
-              <NotYetButton size="sm">{t('common.search')}</NotYetButton>
+              entry.kind === 'album' ? <AlbumSearchButton albumId={Number(entry.link.params.id)} /> : null
             )
           ) : null}
         </div>

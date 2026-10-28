@@ -205,6 +205,7 @@ describe('add artist', () => {
       monitorOption: 'future',
       monitorNewAlbums: 'none',
       tags: [],
+      searchOnAdd: false,
     });
     // The profile picker asked for music profiles.
     expect(api.calls.some((c) => c.path === '/api/v1/qualityprofile')).toBe(true);
@@ -253,8 +254,9 @@ describe('artist details', () => {
 
     fireEvent.click(screen.getByRole('button', { name: 'Refresh' }));
     await waitFor(() => expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/command')?.body).toEqual({ name: 'RefreshArtist', artistIds: [1] }));
-    // Music searches are not available in this wave: disabled, with the reason.
-    expect(screen.getByRole('button', { name: 'Search monitored' }).getAttribute('aria-disabled')).toBe('true');
+    // "Search monitored" starts an ArtistSearch.
+    fireEvent.click(screen.getByRole('button', { name: 'Search monitored' }));
+    await waitFor(() => expect(api.calls.filter((c) => c.method === 'POST' && c.path === '/api/v1/command').map((c) => c.body)).toContainEqual({ name: 'ArtistSearch', artistIds: [1] }));
   });
 
   it('says albums are loading for an artist that was just added', async () => {
@@ -314,11 +316,12 @@ describe('album details', () => {
 });
 
 describe('wanted albums', () => {
-  it('adds an Albums kind to missing with a read-only list', async () => {
+  it('adds an Albums kind to missing with a searchable list', async () => {
     const wanted = { ...makeAlbum({ id: 4, title: 'In Rainbows', releaseDate: '2007-10-10' }), artistName: 'Radiohead', mbArtistId: radiohead.mbArtistId, qualityProfileId: 11 };
     const api = musicApi({
       '/api/v1/wanted/missing/episodes': { page: 1, pageSize: 50, totalRecords: 0, records: [] },
       '/api/v1/wanted/missing/albums': { page: 1, pageSize: 50, totalRecords: 1, records: [wanted] },
+      'POST /api/v1/command': { id: 71, name: 'AlbumSearch', status: 'queued', trigger: 'manual', message: null, queuedAt: '2026-10-26T10:00:00.000Z', startedAt: null, endedAt: null, durationMs: null },
     });
     renderAt('/wanted/missing');
     fireEvent.click(await screen.findByRole('button', { name: 'Albums' }));
@@ -327,7 +330,8 @@ describe('wanted albums', () => {
     expect(within(table).getByRole('link', { name: 'In Rainbows' }).getAttribute('href')).toBe('/library/music/album/4');
     expect(within(table).getByText('5/10')).toBeTruthy();
     expect(within(table).getByText('Lossless')).toBeTruthy();
-    expect(within(table).getByRole('button', { name: 'Search Radiohead - In Rainbows' }).getAttribute('aria-disabled')).toBe('true');
+    fireEvent.click(within(table).getByRole('button', { name: 'Search Radiohead - In Rainbows' }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/command')?.body).toEqual({ name: 'AlbumSearch', albumIds: [4] }));
     expect(api.calls.some((c) => c.path === '/api/v1/wanted/missing/albums')).toBe(true);
     // The header keeps the kind switch only: no route tabs.
     expect(screen.queryByRole('tablist')).toBeNull();

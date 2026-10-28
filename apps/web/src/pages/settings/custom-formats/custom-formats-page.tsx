@@ -11,6 +11,9 @@ import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
 import { CustomFormatEditor } from './custom-format-editor.js';
 import { exportCustomFormat, parseCustomFormatJson, type ImportResult, type SourceApp } from './custom-format-json.js';
+import { useFeatures } from '../../../hooks/music.js';
+import { customFormatDomain } from '../../../lib/custom-format-domain.js';
+import { domainLabel } from '../profiles/quality-profile-model.js';
 import './custom-formats.css';
 import { t } from '../../../i18n/index.js';
 
@@ -159,17 +162,38 @@ export function profileScores(format: CustomFormat, profiles: readonly QualityPr
   });
 }
 
-export function CustomFormatCard({ format, profiles, onEdit }: { format: CustomFormat; profiles: readonly QualityProfile[]; onEdit: () => void }) {
+export function CustomFormatCard({
+  format,
+  profiles,
+  onEdit,
+  showDomain = false,
+}: {
+  format: CustomFormat;
+  profiles: readonly QualityProfile[];
+  onEdit: () => void;
+  /** Label the format with its media domain (video / music / audiobook / any). */
+  showDomain?: boolean;
+}) {
   const scores = profileScores(format, profiles);
+  const domain = customFormatDomain(format);
   return (
     <ItemCard
       title={format.name}
       onClick={onEdit}
       status={
-        format.includeWhenRenaming ? (
-          <Chip tone="neutral" dot="none">
-            {t('settings.customFormats.renaming')}
-          </Chip>
+        format.includeWhenRenaming || showDomain ? (
+          <span className="al-chip-row">
+            {showDomain ? (
+              <Chip tone={domain === 'any' ? 'muted' : 'neutral'} dot="none" data-testid="format-domain" data-domain={domain}>
+                {domainLabel(domain)}
+              </Chip>
+            ) : null}
+            {format.includeWhenRenaming ? (
+              <Chip tone="neutral" dot="none">
+                {t('settings.customFormats.renaming')}
+              </Chip>
+            ) : null}
+          </span>
         ) : null
       }
     >
@@ -200,6 +224,7 @@ export function CustomFormatsPage() {
   const list = useCustomFormatList();
   const schema = useCustomFormatSchema();
   const profiles = useQualityProfileList();
+  const features = useFeatures();
   const [editing, setEditing] = useState<CustomFormat | 'new' | null>(null);
   const [prefill, setPrefill] = useState<CustomFormatInput | undefined>();
   const [importing, setImporting] = useState(false);
@@ -242,7 +267,7 @@ export function CustomFormatsPage() {
         ) : (
           <CardGrid label={t('settings.customFormats.customFormats')}>
             {list.data.map((cf) => (
-              <CustomFormatCard key={cf.id} format={cf} profiles={profiles.data ?? []} onEdit={() => setEditing(cf)} />
+              <CustomFormatCard key={cf.id} format={cf} profiles={profiles.data ?? []} onEdit={() => setEditing(cf)} showDomain={features.music || features.audiobooks} />
             ))}
             <AddCard label={t('settings.customFormats.addCustomFormat')} onClick={addNew} />
           </CardGrid>

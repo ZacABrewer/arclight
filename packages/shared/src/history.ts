@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MediaType, SortOrder } from './library.js';
+import { AnyMediaType, MediaType, SortOrder } from './library.js';
 import { LanguageCode, ReleaseProtocol } from './profiles.js';
 import { QualityModel } from './quality.js';
 
@@ -108,10 +108,13 @@ export type HistoryMovieSummary = z.infer<typeof HistoryMovieSummary>;
 export const HistoryRecord = z.object({
   id: z.number().int(),
   eventType: HistoryEventType,
-  mediaType: MediaType,
+  mediaType: AnyMediaType,
   seriesId: z.number().int().nullable(),
   episodeId: z.number().int().nullable(),
   movieId: z.number().int().nullable(),
+  /** Music rows: the artist and the albums of the event (absent on video rows). */
+  artistId: z.number().int().nullable().optional(),
+  albumIds: z.array(z.number().int()).optional(),
   sourceTitle: z.string(),
   quality: QualityModel,
   languages: z.array(LanguageCode),
@@ -139,8 +142,12 @@ export const HistoryListQuery = z.object({
   sortDirection: SortOrder.default('desc'),
   /** One or more event types (comma separated or repeated). */
   eventType: listOf(HistoryEventType),
-  mediaType: MediaType.optional(),
+  mediaType: AnyMediaType.optional(),
   seriesId: intList,
+  /** Music: rows of these artists. */
+  artistId: intList,
+  /** Music: rows that cover this album. */
+  albumId: z.coerce.number().int().optional(),
   episodeId: z.coerce.number().int().optional(),
   movieId: intList,
   downloadId: z.string().min(1).optional(),
@@ -207,11 +214,14 @@ export type HistoryErrorResponse = z.infer<typeof HistoryErrorResponse>;
 
 export const BlocklistRecord = z.object({
   id: z.number().int(),
-  mediaType: MediaType,
+  mediaType: AnyMediaType,
   seriesId: z.number().int().nullable(),
   /** TV: the episodes of the blocked grab. Empty for movies. */
   episodeIds: z.array(z.number().int()),
   movieId: z.number().int().nullable(),
+  /** Music: the artist the entry is scoped to and the albums of the blocked grab. */
+  artistId: z.number().int().nullable().optional(),
+  albumIds: z.array(z.number().int()).optional(),
   sourceTitle: z.string(),
   quality: QualityModel,
   languages: z.array(LanguageCode),
@@ -268,9 +278,10 @@ export const BlocklistListQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(1000).default(20),
   sortKey: BlocklistSortKey.default('date'),
   sortDirection: SortOrder.default('desc'),
-  mediaType: MediaType.optional(),
+  mediaType: AnyMediaType.optional(),
   seriesId: intList,
   movieId: intList,
+  artistId: intList,
   protocol: listOf(ReleaseProtocol),
 });
 export type BlocklistListQuery = z.infer<typeof BlocklistListQuery>;

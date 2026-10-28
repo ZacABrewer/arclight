@@ -8,7 +8,8 @@ export const blocklist = sqliteTable(
   'blocklist',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),
+    // 'music' and 'audiobook' are TS-only (Drizzle does not enforce enums on SQLite).
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }).notNull(),
     seriesId: integer('series_id'),
     episodeIds: text('episode_ids', { mode: 'json' }).$type<number[]>().notNull(),
     movieId: integer('movie_id'),

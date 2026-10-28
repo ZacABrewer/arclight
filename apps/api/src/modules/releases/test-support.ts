@@ -1,5 +1,6 @@
 import { buildItems, findItem, itemId } from '@arclight/profiles-engine';
-import { parseRelease } from '@arclight/parser';
+import { parseMusicRelease, parseRelease } from '@arclight/parser';
+import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import {
   QualityProfileInput,
@@ -18,6 +19,7 @@ import { createTestDb } from '../../db/test-utils.js';
 import * as schema from '../../db/schema.js';
 import { EventBus } from '../../events.js';
 import { ProfilesService } from '../profiles/index.js';
+import { setSection } from '../settings/service.js';
 import { DEFAULT_RELEASE_SETTINGS, type ReleasesDeps } from './deps.js';
 import {
   evaluateFormats,
@@ -27,6 +29,7 @@ import {
   type Candidate,
   type DecisionContext,
 } from './engine.js';
+import { matchAlbum, type AlbumTypeFilter, type AudioAlbum, type AudioArtist, type AudioLibrarySnapshot } from './audio-matcher.js';
 import { matchRelease, type LibrarySnapshot } from './matcher.js';
 import * as tables from './schema.js';
 import { ReleasesService, type DownloadClientGrab, type DownloadTracking, type TrackedView } from './service.js';
@@ -424,3 +427,196 @@ export async function harness(opts: { deps?: ReleasesDeps; allowed?: QualityName
 }
 
 export { parseRelease };
+
+// ---- music --------------------------------------------------------------------------
+
+export const MUSIC_ALLOWED: QualityName[] = ['MP3-192', 'MP3-VBR-V0', 'MP3-320', 'FLAC', 'FLAC-24bit'];
+
+export function makeMusicProfile(allowed: QualityName[] = MUSIC_ALLOWED, overrides: Partial<QualityProfile> = {}, cutoffName: QualityName = 'FLAC'): QualityProfile {
+  const items = buildItems(allowed, 'music');
+  const draft: QualityProfile = {
+    id: 1,
+    name: 'Lossless',
+    upgradeAllowed: true,
+    cutoff: 0,
+    items,
+    minFormatScore: 0,
+    cutoffFormatScore: 0,
+    minUpgradeFormatScore: 1,
+    formatItems: [],
+    languages: [],
+    ...overrides,
+  };
+  const cutoffItem = findItem(draft, QUALITIES[cutoffName].id);
+  return { ...draft, cutoff: overrides.cutoff ?? (cutoffItem ? itemId(cutoffItem) : 0) };
+}
+
+export function makeArtist(overrides: Partial<AudioArtist> = {}): AudioArtist {
+  const id = overrides.id ?? nextId++;
+  return {
+    id,
+    name: 'Radiohead',
+    aliases: [],
+    monitored: true,
+    qualityProfileId: 1,
+    albumTypeProfileId: 1,
+    tags: [],
+    path: `/music/artist-${id}`,
+    ...overrides,
+  };
+}
+
+export function makeAlbum(artistId: number, title: string, year: number | null, overrides: Partial<AudioAlbum> = {}): AudioAlbum {
+  return {
+    id: overrides.id ?? nextId++,
+    artistId,
+    title,
+    year,
+    releaseDate: year !== null ? `${year}-06-01` : null,
+    primaryType: 'Album',
+    secondaryTypes: [],
+    monitored: true,
+    durationMs: 50 * 60_000,
+    trackCount: 12,
+    trackFileCount: 0,
+    ...overrides,
+  };
+}
+
+export function audioSnapshot(artists: AudioArtist[], albums: AudioAlbum[], profiles: Record<number, AlbumTypeFilter> = {}): AudioLibrarySnapshot {
+  return {
+    artists: () => artists,
+    albums: (id) => albums.filter((a) => a.artistId === id),
+    albumTypeProfile: (id) => profiles[id],
+  };
+}
+
+/** Parse + match a music release against an audio snapshot and build an engine candidate. */
+export function makeAudioCandidate(
+  release: ReleaseResource,
+  lib: AudioLibrarySnapshot,
+  profile: QualityProfile = makeMusicProfile(),
+  now: Date = NOW,
+): Candidate {
+  const parsed = parseMusicRelease(release.title);
+  const match = matchAlbum(parsed.music, lib, { now });
+  if (match.status !== 'mapped') throw new Error(`test release did not map: ${release.title} (${match.reason})`);
+  const q = qualityModelOf(parsed.audio);
+  const f = evaluateFormats(profile, [], { title: release.title, quality: q, mediaType: 'music', releaseKind: releaseKindOf(match) });
+  return {
+    release,
+    parsed: {
+      releaseTitle: parsed.releaseTitle,
+      quality: { quality: parsed.audio.quality, revision: parsed.audio.revision, detectionSource: parsed.audio.detectionSource },
+      languages: [],
+      releaseGroup: parsed.releaseGroup,
+      releaseHash: parsed.releaseHash,
+      series: null,
+      movie: null,
+    },
+    match,
+    ...(parsed.music ? { music: parsed.music } : {}),
+    quality: q,
+    languages: [],
+    customFormats: f.formats,
+    formatScore: f.score,
+    releaseGroup: parsed.releaseGroup ?? undefined,
+    ageMinutes: (now.getTime() - Date.parse(release.publishDate)) / MINUTE,
+  };
+}
+
+/** Music rows for a DB harness: turn music on, add artists / albums (with an edition and tracks) / track files. */
+export function musicFixtures(db: Awaited<ReturnType<typeof createTestDb>>, profiles: ProfilesService) {
+  setSection(db, 'features', { music: true, audiobooks: false });
+  const music = makeMusicProfile();
+  const { id: _id, ...input } = music;
+  const profile = profiles.createQualityProfile(QualityProfileInput.parse({ ...input, name: 'Test Lossless', mediaDomain: 'music' }));
+  const typeProfile = db
+    .insert(schema.albumTypeProfiles)
+    .values({ name: `Studio ${Math.random()}`, primaryTypes: ['Album', 'EP'], secondaryTypes: [], releaseStatuses: ['Official'], isDefault: false })
+    .returning()
+    .get();
+  let mb = 1;
+  const mbid = () => `00000000-0000-4000-8000-${String(mb++).padStart(12, '0')}`;
+  function addArtist(values: Partial<typeof schema.artists.$inferInsert> = {}) {
+    const name = values.name ?? 'Radiohead';
+    return db
+      .insert(schema.artists)
+      .values({
+        mbArtistId: mbid(),
+        name,
+        sortName: name,
+        cleanName: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        genres: [],
+        images: [],
+        links: [],
+        aliases: [],
+        path: `/music/${name}-${Math.random()}`,
+        rootFolderPath: '/music',
+        qualityProfileId: profile.id,
+        albumTypeProfileId: typeProfile.id,
+        tags: [],
+        added: NOW.toISOString(),
+        ...values,
+      })
+      .returning()
+      .get();
+  }
+  function addAlbum(artistId: number, title: string, year: number, values: Partial<typeof schema.albums.$inferInsert> & { tracks?: number; minutes?: number } = {}) {
+    const { tracks: trackCount = 10, minutes = 45, ...rest } = values;
+    const album = db
+      .insert(schema.albums)
+      .values({
+        artistId,
+        mbReleaseGroupId: mbid(),
+        title,
+        cleanTitle: title.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        primaryType: 'Album',
+        secondaryTypes: [],
+        releaseDate: `${year}-05-01`,
+        year,
+        genres: [],
+        images: [],
+        ratings: {},
+        added: NOW.toISOString(),
+        ...rest,
+      })
+      .returning()
+      .get();
+    const release = db
+      .insert(schema.albumReleases)
+      .values({ albumId: album.id, mbReleaseId: mbid(), title, labels: [], formats: ['CD'], mediumCount: 1, trackCount, durationMs: minutes * 60_000, media: [] })
+      .returning()
+      .get();
+    db.update(schema.albums).set({ selectedReleaseId: release.id }).where(eq(schema.albums.id, album.id)).run();
+    const trackRows = Array.from({ length: trackCount }, (_, i) =>
+      db
+        .insert(schema.tracks)
+        .values({ albumId: album.id, albumReleaseId: release.id, absoluteNumber: i + 1, trackNumber: i + 1, title: `Track ${i + 1}`, durationMs: (minutes * 60_000) / trackCount })
+        .returning()
+        .get(),
+    );
+    return { ...album, selectedReleaseId: release.id, trackRows };
+  }
+  /** Gives every track of the album a file of `qualityName` (the first track `lowest` when given). */
+  function addFiles(album: ReturnType<typeof addAlbum>, qualityName: QualityName, lowest?: QualityName) {
+    album.trackRows.forEach((t, i) => {
+      const file = db
+        .insert(schema.audioFiles)
+        .values({
+          mediaType: 'music',
+          artistId: album.artistId,
+          albumId: album.id,
+          path: `/music/${album.id}/${i}.flac`,
+          relativePath: `${album.id}/${i}.flac`,
+          sizeBytes: 30 * 1024 * 1024,
+          dateAdded: NOW.toISOString(),
+          quality: quality(i === 0 && lowest ? lowest : qualityName),
+        })
+        .returning()
+        .get();
+      db.update(schema.tracks).set({ hasFile: true, audioFileId: file.id }).where(eq(schema.tracks.id, t.id)).run();
+    });
+  }
+  return { profile, typeProfile, addArtist, addAlbum, addFiles };
+}

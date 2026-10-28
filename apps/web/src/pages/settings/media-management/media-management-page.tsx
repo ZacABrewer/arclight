@@ -18,6 +18,7 @@ import { useRootFolders } from '../../../hooks/library.js';
 import { useFeatures } from '../../../hooks/music.js';
 import { rootKindLabel } from '../../../components/media/root-kind.js';
 import { AudioImportSection } from './audio-import-section.js';
+import { MusicReleasesSection } from './music-releases-section.js';
 import {
   useAddRootFolder,
   useDeleteRootFolder,
@@ -472,6 +473,7 @@ export function MediaManagementPage() {
 
       <RootFoldersSection />
       <AudioImportSection />
+      <MusicReleasesSection />
 
       {settings.isPending ? <Skeleton lines={4} /> : null}
       {settingsMissing ? (

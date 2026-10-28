@@ -8,7 +8,7 @@ import { registerMetadataJobs } from './jobs.js';
 import { createMetadataLookup } from './lookup.js';
 import { metadataRoutes } from './routes.js';
 import { MetadataService } from './service.js';
-import { MusicRefresher, registerMusicJobs } from './music-jobs.js';
+import { MusicRefresher, registerMusicJobs, type MusicSearchPort } from './music-jobs.js';
 import { MusicMetadataService, type MusicProviderOverrides } from './music-service.js';
 
 export { MetadataService, MetadataNotConfiguredError } from './service.js';
@@ -36,6 +36,7 @@ export {
   REFRESH_ARTISTS_JOB,
   RESCAN_ARTIST_JOB,
   SEARCH_NOT_AVAILABLE,
+  type MusicSearchPort,
 } from './music-jobs.js';
 export { createMetadataCacheStore, withPersistentCache, CACHE_RETENTION_MS, type MetadataCacheStore } from './cache.js';
 
@@ -43,6 +44,13 @@ const refreshers = new WeakMap<AppContext, MetadataRefresher>();
 const musicRefreshers = new WeakMap<AppContext, MusicRefresher>();
 const musicServices = new WeakMap<AppContext, MusicMetadataService>();
 const musicOverrides = new WeakMap<AppContext, MusicProviderOverrides>();
+const musicSearchPorts = new WeakMap<AppContext, MusicSearchPort>();
+
+/** Where ArtistSearch / AlbumSearch run their searches (wiring.ts sets the release pipeline). */
+export function setMusicSearchPort(ctx: AppContext, port: MusicSearchPort | undefined): void {
+  if (port) musicSearchPorts.set(ctx, port);
+  else musicSearchPorts.delete(ctx);
+}
 
 /** Test seam: MusicBrainz/Wikidata/Fanart fetch, limiter and clock. Call from `onContext`. */
 export function setMusicProviders(ctx: AppContext, overrides: MusicProviderOverrides): void {
@@ -106,6 +114,7 @@ export const metadataModule: AppModule = (ctx) => async (app) => {
     service: musicService,
     log: musicLog,
     tagReader: () => createCombinedTagReader({ ffprobe: createFfprobeTagReader({ runner: ffprobeRunnerFor(ctx) }) }),
+    search: () => musicSearchPorts.get(ctx) ?? null,
     ...(overrides?.now ? { now: overrides.now } : {}),
   });
   musicServices.set(ctx, musicService);

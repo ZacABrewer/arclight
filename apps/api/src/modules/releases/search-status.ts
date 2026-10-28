@@ -102,6 +102,8 @@ export interface OutcomeDecision {
   movieId?: number | undefined;
   episodeIds?: readonly number[] | undefined;
   seriesId?: number | undefined;
+  artistId?: number | undefined;
+  albumIds?: readonly number[] | undefined;
 }
 
 export interface ItemOutcome {
@@ -117,16 +119,20 @@ export interface ItemOutcome {
  * "all rejected: unknown series" shows instead of "nothing found".
  */
 export function itemOutcomes<D extends OutcomeDecision>(
-  kind: 'episode' | 'movie',
+  kind: 'episode' | 'movie' | 'album',
   itemIds: readonly number[],
   decisions: readonly D[],
   grabbed: ReadonlySet<D>,
   pending: ReadonlySet<D>,
 ): Map<number, ItemOutcome> {
-  const unmatched = decisions.filter((d) => d.movieId === undefined && d.seriesId === undefined && !(d.episodeIds?.length ?? 0));
+  const unmatched = decisions.filter(
+    (d) => d.movieId === undefined && d.seriesId === undefined && d.artistId === undefined && !(d.episodeIds?.length ?? 0) && !(d.albumIds?.length ?? 0),
+  );
   const out = new Map<number, ItemOutcome>();
   for (const id of itemIds) {
-    const own = decisions.filter((d) => (kind === 'movie' ? d.movieId === id : (d.episodeIds ?? []).includes(id)));
+    const own = decisions.filter((d) =>
+      kind === 'movie' ? d.movieId === id : kind === 'album' ? (d.albumIds ?? []).includes(id) : (d.episodeIds ?? []).includes(id),
+    );
     const relevant = [...own, ...unmatched];
     const approved = relevant.filter((d) => d.approved).length;
     const base = { releases: relevant.length, approved };

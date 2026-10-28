@@ -111,7 +111,7 @@ export interface CalendarEntry {
   /** Episode title (episodes), album title (albums). */
   subtitle: string | null;
   posterUrl: string | undefined;
-  /** Automatic search body for this item; null where search is not available yet (albums). */
+  /** Automatic search body (POST /command/search) for videos; null for albums, which search through AlbumSearch. */
   search: { episodeIds: number[] } | { movieId: number } | null;
   link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id'; params: { id: string } };
 }

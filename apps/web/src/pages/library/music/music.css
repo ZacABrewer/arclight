@@ -45,4 +45,7 @@
   .music-album__title { font-size: 14px; }
   .music-type-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
-.music-disabled, .music-disabled:hover { opacity: .45; cursor: not-allowed; }
+
+/* Music interactive search: the release title with its pack badge and the albums it covers. */
+.music-release { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.music-release__covers { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; }

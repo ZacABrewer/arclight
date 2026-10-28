@@ -33,15 +33,16 @@ export function toLogSource(source: ReleaseSource): DecisionLogSource {
   }
 }
 
-function itemKeyOf(row: { seriesId?: number | null | undefined; movieId?: number | null | undefined }): string | null {
+function itemKeyOf(row: { seriesId?: number | null | undefined; movieId?: number | null | undefined; artistId?: number | null | undefined }): string | null {
   if (row.movieId != null) return `m${row.movieId}`;
   if (row.seriesId != null) return `s${row.seriesId}`;
+  if (row.artistId != null) return `a${row.artistId}`;
   return null;
 }
 
 function toEntry(row: Row): DecisionLogEntry {
-  const { itemKey: _key, ...rest } = row;
-  return rest;
+  const { itemKey: _key, artistId, albumIds, authorId: _author, bookIds: _books, ...rest } = row;
+  return artistId !== null ? { ...rest, artistId, albumIds: albumIds ?? [] } : rest;
 }
 
 function compareRows(a: Row, b: Row): number {
@@ -105,9 +106,23 @@ export class DecisionLog {
    * Batches for one item, newest first. Per episode: the series's batches, keeping the rows that
    * cover the episode (`seriesIdForEpisode` resolves its series).
    */
-  list(query: DecisionLogQuery, seriesIdForEpisode: (episodeId: number) => number): DecisionLogPage {
+  list(
+    query: DecisionLogQuery,
+    seriesIdForEpisode: (episodeId: number) => number,
+    artistIdForAlbum: (albumId: number) => number = () => 0,
+  ): DecisionLogPage {
     let rows: Row[];
-    if (query.movieId !== undefined) {
+    if (query.artistId !== undefined) {
+      rows = this.db.select().from(releaseDecisions).where(eq(releaseDecisions.itemKey, `a${query.artistId}`)).all();
+    } else if (query.albumId !== undefined) {
+      const albumId = query.albumId;
+      rows = this.db
+        .select()
+        .from(releaseDecisions)
+        .where(eq(releaseDecisions.itemKey, `a${artistIdForAlbum(albumId)}`))
+        .all()
+        .filter((r) => (r.albumIds ?? []).includes(albumId));
+    } else if (query.movieId !== undefined) {
       rows = this.db.select().from(releaseDecisions).where(eq(releaseDecisions.itemKey, `m${query.movieId}`)).all();
     } else if (query.seriesId !== undefined) {
       rows = this.db.select().from(releaseDecisions).where(eq(releaseDecisions.itemKey, `s${query.seriesId}`)).all();

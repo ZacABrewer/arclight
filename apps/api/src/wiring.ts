@@ -1,10 +1,10 @@
 import { statfs } from 'node:fs/promises';
-import { dirname } from 'node:path';
+import { dirname, relative } from 'node:path';
 import { desc, eq, inArray } from 'drizzle-orm';
-import type { MediaFileInfo, NotificationEvent, ReleaseInfo } from '@arclight/notifications';
-import type { AnyMediaType, HistoryEventType, HistoryRecord, HistoryReleaseSource, Job, MediaFile } from '@arclight/shared';
+import type { AlbumInfo, ArtistInfo, MediaFileInfo, MediaImage, MediaInfo, NotificationEvent, ReleaseInfo, TrackInfo } from '@arclight/notifications';
+import type { AnyMediaType, AudioFile, HistoryEventType, HistoryRecord, HistoryReleaseSource, Job, MediaFile } from '@arclight/shared';
 import type { AppContext } from './app.js';
-import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
+import { albumReleases, albums, artists, downloadClients, episodes, mediaFiles, tags as tagsTable, trackedDownloads, tracks } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
 import { vpnServiceFor, GRAB_GUARD_REASON } from './modules/vpn/service.js';
 import { subtitlesServiceFor } from './modules/subtitles/index.js';
@@ -21,12 +21,14 @@ import { createAnalysisProbe, ffprobeRunnerFor, mediaAnalysisFor } from './modul
 import { containerUpdatesCheckFor, updateAvailableCheckFor } from './modules/updates/index.js';
 import {
   getImportsService,
+  type AudioImportedEvent,
   type ImportedEvent,
   type ImportsDeps,
 } from './modules/imports/index.js';
+import { mediaServersServiceFor } from './modules/media-servers/index.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
 import type { LibraryCommands, LibraryCommandTarget } from './modules/library/index.js';
-import { ARTIST_SEARCH_JOB, metadataRefresherFor, musicRefresherFor } from './modules/metadata/index.js';
+import { ARTIST_SEARCH_JOB, metadataRefresherFor, musicMetadataFor, musicRefresherFor, setMusicSearchPort } from './modules/metadata/index.js';
 import { profileMigrationServiceFor } from './modules/profile-migration/index.js';
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
@@ -62,7 +64,11 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 //   from the import result + library rows, dispatched through notificationsServiceFor). The bus
 //   translator's own `import imported` translation is switched off in app.ts
 //   (`notificationsModuleWith({ translateImported: false })`) so imports notify exactly once.
-//   `import manualRequired` still reaches notifications through the bus only.
+//   `import manualRequired` still reaches notifications through the bus only. Music imports
+//   report once per album: deps.history.recordAudioImport (a music history target),
+//   deps.notifications.onAudioImported (an "Artist – Album" import/upgrade notification from
+//   musicNotificationContext) and deps.mediaServers.refreshPath for the album folder.
+//   deps.musicReleases loads other editions when the importer switches an album's edition.
 //
 // * Failed download: download-clients onItemFailed -> imports.handleFailedDownload ->
 //   deps.blocklist.add (adapter -> history.failTracked) -> history writes `downloadFailed` and
@@ -90,8 +96,10 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 //
 // * Library commands: the bulk editor's `refresh` / `search` flags and "search on add" call
 //   libraryCommands below: refresh -> the metadata module's MetadataRefresher, search ->
-//   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` job. `artistIds` go to
-//   the metadata module's MusicRefresher (RefreshArtist); artist search is a stub until Wave 2.
+//   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` / `ArtistSearch` job.
+//   `artistIds` refresh through the metadata module's MusicRefresher (RefreshArtist). The music
+//   commands (ArtistSearch, AlbumSearch, search on add) reach the release pipeline through the
+//   music search port registered in wireModules (runMusicSearch).
 //
 // * Library deletes: the history and blocklist modules subscribe to `library deleted` on the
 //   bus themselves; the library routes publish added/updated/deleted/fileDeleted and the
@@ -142,6 +150,12 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
       .then((summary) => log.info({ target, grabbed: summary.grabbed }, 'automatic re-search after failed download'))
       .catch((err: unknown) => log.warn({ err, target }, 'automatic re-search after failed download failed'));
   }, REDOWNLOAD_PRIORITY));
+
+  // Music commands (ArtistSearch, AlbumSearch, search on add) search through the release pipeline.
+  setMusicSearchPort(ctx, {
+    artists: (ids, signal) => runMusicSearch(ctx, { artistIds: ids }, signal),
+    albums: (ids, signal) => runMusicSearch(ctx, { albumIds: ids }, signal),
+  });
 
   // Manual redownload of a history record: one search, run as a job so the UI can follow it.
   const history = historyServiceFor(ctx);
@@ -229,10 +243,47 @@ export function libraryCommands(ctx: AppContext): LibraryCommands {
     },
     search: (target) => {
       startLibrarySearch(ctx, target);
-      // Music acquisition is Wave 2: the job only reports that search is not available yet.
-      if (target.artistIds?.length) musicRefresherFor(ctx)?.searchStub(ARTIST_SEARCH_JOB, target.artistIds);
     },
   };
+}
+
+function searchTargetKey(t: SearchTarget): string {
+  if ('movieId' in t) return String(t.movieId);
+  if ('seriesId' in t) return String(t.seriesId);
+  if ('artistId' in t) return `a${t.artistId}`;
+  if ('authorId' in t) return `w${t.authorId}`;
+  return `al${t.albumIds.join('+')}`;
+}
+
+/**
+ * Artist / album searches for the music module's ArtistSearch and AlbumSearch commands (and
+ * search on add): each artist, or each album, in turn. Returns a one-line summary.
+ */
+export async function runMusicSearch(
+  ctx: AppContext,
+  target: { artistIds: readonly number[] } | { albumIds: readonly number[] },
+  signal: AbortSignal,
+): Promise<string> {
+  const releases = releasesServiceFor(ctx);
+  const targets: SearchTarget[] =
+    'artistIds' in target ? target.artistIds.map((artistId) => ({ artistId })) : target.albumIds.map((id) => ({ albumIds: [id] }));
+  let grabbed = 0;
+  let found = 0;
+  let failed = 0;
+  for (const t of targets) {
+    if (signal.aborted) break;
+    try {
+      const summary = await releases.searchFor(t, { userInvoked: true, signal });
+      grabbed += summary.grabbed.length;
+      found += summary.releases;
+    } catch (err) {
+      failed++;
+      ctx.log.warn({ err, target: t }, 'music search failed');
+    }
+  }
+  const n = targets.length;
+  const what = 'artistIds' in target ? `${n} artist${n === 1 ? '' : 's'}` : `${n} album${n === 1 ? '' : 's'}`;
+  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}`;
 }
 
 /** One job per media type that searches each item in turn; returns the started jobs. */
@@ -252,9 +303,10 @@ export function startLibrarySearch(ctx: AppContext, target: LibraryCommandTarget
         }
       }
       return `searched ${targets.length}, grabbed ${grabbed}${failed ? `, ${failed} failed` : ''}`;
-    }, { key: `${name}:${targets.map((t) => ('movieId' in t ? t.movieId : 'seriesId' in t ? t.seriesId : 'artistId' in t ? `a${t.artistId}` : `w${t.authorId}`)).join(',')}` });
+    }, { key: `${name}:${targets.map(searchTargetKey).join(',')}` });
   if (target.seriesIds?.length) started.push(run(SERIES_SEARCH_JOB, target.seriesIds.map((seriesId) => ({ seriesId }))));
   if (target.movieIds?.length) started.push(run(MOVIE_SEARCH_JOB, target.movieIds.map((movieId) => ({ movieId }))));
+  if (target.artistIds?.length) started.push(run(ARTIST_SEARCH_JOB, target.artistIds.map((artistId) => ({ artistId }))));
   return started;
 }
 
@@ -272,9 +324,11 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
       latestFor: (item, eventType) => {
         const history = historyServiceFor(ctx);
         const type = eventType as HistoryEventType | undefined;
-        // Audio items have no history yet (Wave 2).
-        if (!('movieId' in item) && !('episodeId' in item)) return null;
-        const row = 'movieId' in item ? history.mostRecentForMovie(item.movieId, type) : history.mostRecentForEpisode(item.episodeId, type);
+        let row: HistoryRecord | null;
+        if ('movieId' in item) row = history.mostRecentForMovie(item.movieId, type);
+        else if ('episodeId' in item) row = history.mostRecentForEpisode(item.episodeId, type);
+        else if ('albumId' in item) row = history.mostRecentForAlbum(item.albumId, type);
+        else return null; // audiobooks: Wave 3
         return row ? toEventSummary(row) : null;
       },
       findByDownloadId: (downloadId, eventType) => {
@@ -325,6 +379,8 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
           allowHardcodedSubs: i.allowHardcodedSubs,
           whitelistedHardcodedSubs: i.whitelistedHardcodedSubs,
           preferIndexerFlags: i.preferIndexerFlags,
+          allowDiscographyPacks: r.allowDiscographyPacks,
+          minPackWanted: r.minPackWanted,
         };
       },
     },
@@ -379,9 +435,18 @@ export function recordGrabInHistory(ctx: AppContext, grab: GrabHistoryInput): vo
   );
 }
 
-function historyTarget(input: { mediaType: AnyMediaType; seriesId?: number; episodeIds?: number[]; movieId?: number }): HistoryTarget | null {
-  // Audio grabs are not recorded until audio acquisition lands (Wave 2).
-  if (input.mediaType === 'music' || input.mediaType === 'audiobook') return null;
+export function historyTarget(input: {
+  mediaType: AnyMediaType;
+  seriesId?: number;
+  episodeIds?: number[];
+  movieId?: number;
+  artistId?: number;
+  albumIds?: number[];
+}): HistoryTarget | null {
+  if (input.mediaType === 'music') {
+    return input.artistId === undefined ? null : { mediaType: 'music', artistId: input.artistId, albumIds: input.albumIds ?? [] };
+  }
+  if (input.mediaType === 'audiobook') return null; // Wave 3
   if (input.mediaType === 'movie') return input.movieId === undefined ? null : { mediaType: 'movie', movieId: input.movieId };
   return input.seriesId === undefined ? null : { mediaType: 'series', seriesId: input.seriesId, episodeIds: input.episodeIds ?? [] };
 }
@@ -415,8 +480,12 @@ function toReleaseSource(source: string): HistoryReleaseSource {
   return RELEASE_SOURCES.has(source) ? (source as HistoryReleaseSource) : 'unknown';
 }
 
-function searchTargetFor(target: HistoryTarget): SearchTarget | null {
-  if (target.mediaType === 'music' || target.mediaType === 'audiobook') return null; // Wave 2
+export function searchTargetFor(target: HistoryTarget): SearchTarget | null {
+  if (target.mediaType === 'music') {
+    // A failed album download searches those albums again (never the whole artist).
+    return target.albumIds.length > 0 ? { artistId: target.artistId, albumIds: [...target.albumIds] } : null;
+  }
+  if (target.mediaType === 'audiobook') return null; // Wave 3
   if (target.mediaType === 'movie') return { movieId: target.movieId };
   // A failed download without known episodes would turn into a whole-series search; skip it.
   if (target.episodeIds.length === 0) return null;
@@ -426,6 +495,7 @@ function searchTargetFor(target: HistoryTarget): SearchTarget | null {
 /** Search target of a queue item's episodes / movie; null when it is not linked to any. */
 function searchTargetForTracked(item: TrackedDownload): SearchTarget | null {
   if (item.movieId !== undefined) return { movieId: item.movieId };
+  if (item.artistId !== undefined) return item.albumIds?.length ? { artistId: item.artistId, albumIds: [...item.albumIds] } : null;
   if (item.seriesId === undefined || !item.episodeIds?.length) return null;
   return { seriesId: item.seriesId, episodeIds: [...item.episodeIds] };
 }
@@ -455,8 +525,15 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
       recordImport: (event) => {
         recordImportInHistory(ctx, event);
       },
+      recordAudioImport: (event) => {
+        recordAudioImportInHistory(ctx, event);
+      },
     },
     notifications: {
+      onAudioImported: async (event) => {
+        const built = buildAudioImportNotification(ctx, event);
+        if (built) await notificationsServiceFor(ctx).dispatch(built);
+      },
       onImported: async (event) => {
         const built = buildImportNotification(ctx, event);
         if (built) await notificationsServiceFor(ctx).dispatch(built);
@@ -477,6 +554,24 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
     },
     // Same rule on the import side: a file the profile no longer allows gives way under `replace`.
     profileMigration: { mismatchActionFor: (id) => profileMigrationServiceFor(ctx).mismatchActionFor(id) },
+    // Music imports: media servers with a music library holding the album folder rescan it.
+    mediaServers: {
+      refreshPath: async (input) => {
+        const results = await mediaServersServiceFor(ctx).refreshPath(input);
+        for (const r of results) {
+          if (r.status === 'failed') ctx.log.warn({ server: r.name, path: input.path, message: r.message }, 'media server refresh after import failed');
+        }
+        return results;
+      },
+    },
+    // Edition switches during music import load the other editions through the cached client.
+    musicReleases: {
+      getRelease: async (mbReleaseId) => {
+        const service = musicMetadataFor(ctx);
+        if (!service) throw new Error('music metadata is not available');
+        return service.musicBrainz().getRelease(mbReleaseId, { priority: 'background' });
+      },
+    },
   };
 }
 
@@ -569,6 +664,166 @@ export function buildImportNotification(ctx: AppContext, event: ImportedEvent): 
   return { ...common, type: 'import' };
 }
 
+/** imports' AudioImportedEvent -> history.recordImport with a music target (one record per album). */
+export function recordAudioImportInHistory(ctx: AppContext, event: AudioImportedEvent): void {
+  const history = historyServiceFor(ctx);
+  const grabbed = event.downloadId ? history.mostRecentForDownloadId(event.downloadId, 'grabbed') : null;
+  const downloadClient = grabbed ? dataValue(grabbed.data, 'downloadClient') : undefined;
+  const downloadClientName = grabbed ? dataValue(grabbed.data, 'downloadClientName') : undefined;
+  const first = event.files[0];
+  history.recordImport({
+    target: { mediaType: 'music', artistId: event.artistId, albumIds: event.albumIds },
+    quality: event.quality,
+    languages: [],
+    sceneName: event.sourceTitle,
+    droppedPath: event.sourcePath,
+    importedPath: event.albumFolder,
+    ...(first ? { fileId: first.id } : {}),
+    downloadId: event.downloadId,
+    size: event.files.reduce((n, f) => n + f.sizeBytes, 0),
+    ...(first?.releaseGroup ? { releaseGroup: first.releaseGroup } : {}),
+    ...(downloadClient ? { downloadClient } : {}),
+    ...(downloadClientName ? { downloadClientName } : {}),
+    ...(grabbed && grabbed.customFormatScore !== 0 ? { customFormatScore: grabbed.customFormatScore } : {}),
+  });
+}
+
+const MUSIC_COVER_TYPES: Record<string, MediaImage['coverType'] | undefined> = {
+  poster: 'poster',
+  cover: 'poster',
+  fanart: 'fanart',
+  banner: 'banner',
+  clearlogo: 'clearlogo',
+  logo: 'clearlogo',
+};
+
+/**
+ * Notification context of a music item: the artist as `MediaInfo` (music headlines read
+ * "Artist - Album [FLAC]"), plus artist and album details. Null when the artist is gone.
+ * Shared by the music grab and import notifications.
+ */
+export function musicNotificationContext(
+  ctx: AppContext,
+  artistId: number,
+  albumId?: number,
+): { media: MediaInfo; artist: ArtistInfo; album?: AlbumInfo } | null {
+  const db = ctx.db;
+  const artist = db.select().from(artists).where(eq(artists.id, artistId)).get();
+  if (!artist) return null;
+  const album = albumId !== undefined ? db.select().from(albums).where(eq(albums.id, albumId)).get() : undefined;
+  const release =
+    album?.selectedReleaseId != null ? db.select().from(albumReleases).where(eq(albumReleases.id, album.selectedReleaseId)).get() : undefined;
+  const tagLabels = artist.tags.length ? db.select().from(tagsTable).where(inArray(tagsTable.id, artist.tags)).all().map((t) => t.label) : [];
+  const images = artist.images.flatMap((img): MediaImage[] => {
+    const coverType = MUSIC_COVER_TYPES[img.coverType];
+    const url = /^https?:\/\//.test(img.url) ? img.url : (img.remoteUrl ?? undefined);
+    return coverType && url ? [{ coverType, url }] : [];
+  });
+  const media: MediaInfo = {
+    id: artist.id,
+    mediaType: 'music',
+    title: artist.name,
+    year: album?.year ?? 0,
+    tmdbId: 0,
+    path: artist.path,
+    ...(artist.overview ? { overview: artist.overview } : {}),
+    genres: artist.genres,
+    tags: tagLabels,
+    images,
+  };
+  const artistInfo: ArtistInfo = {
+    id: artist.id,
+    name: artist.name,
+    mbArtistId: artist.mbArtistId,
+    ...(artist.disambiguation ? { disambiguation: artist.disambiguation } : {}),
+    path: artist.path,
+  };
+  if (!album) return { media, artist: artistInfo };
+  const albumInfo: AlbumInfo = {
+    id: album.id,
+    title: album.title,
+    albumType: album.primaryType,
+    ...(album.releaseDate ? { releaseDate: album.releaseDate } : {}),
+    mbReleaseGroupId: album.mbReleaseGroupId,
+    ...(release ? { mbReleaseId: release.mbReleaseId } : {}),
+  };
+  return { media, artist: artistInfo, album: albumInfo };
+}
+
+/** An `import` (or `upgrade`) notification for one imported album. */
+export function buildAudioImportNotification(ctx: AppContext, event: AudioImportedEvent): NotificationEvent | null {
+  const context = musicNotificationContext(ctx, event.artistId, event.albumId);
+  const firstFile = event.files[0];
+  if (!context || !firstFile) return null;
+  const db = ctx.db;
+  const artistPath = context.artist.path ?? event.albumFolder;
+  const trackRows = event.trackIds.length ? db.select().from(tracks).where(inArray(tracks.id, event.trackIds)).all() : [];
+  const trackInfos: TrackInfo[] = trackRows
+    .sort((a, b) => a.mediumNumber - b.mediumNumber || a.trackNumber - b.trackNumber)
+    .map((t) => ({
+      id: t.id,
+      title: t.title,
+      mediumNumber: t.mediumNumber,
+      trackNumber: t.trackNumber,
+      ...(t.durationMs != null ? { durationMs: t.durationMs } : {}),
+      ...(t.mbRecordingId ? { mbRecordingId: t.mbRecordingId } : {}),
+    }));
+  // The album as one "file": its folder, total size and best quality.
+  const file: MediaFileInfo = {
+    id: firstFile.id,
+    path: event.albumFolder,
+    relativePath: relative(artistPath, event.albumFolder),
+    quality: event.quality.quality.name,
+    qualityVersion: event.quality.revision.version,
+    ...(firstFile.releaseGroup ? { releaseGroup: firstFile.releaseGroup } : {}),
+    size: event.files.reduce((n, f) => n + f.sizeBytes, 0),
+    dateAdded: firstFile.dateAdded,
+    languages: [],
+    sourcePath: event.sourcePath,
+  };
+  const tracked = event.downloadId
+    ? db
+        .select({ row: trackedDownloads, clientName: downloadClients.name, clientType: downloadClients.implementation })
+        .from(trackedDownloads)
+        .leftJoin(downloadClients, eq(trackedDownloads.clientId, downloadClients.id))
+        .where(eq(trackedDownloads.downloadId, event.downloadId))
+        .orderBy(desc(trackedDownloads.id))
+        .get()
+    : undefined;
+  const release: ReleaseInfo | undefined = tracked ? releaseFrom(event.sourceTitle, tracked.row.grabbedRelease, tracked.row.size) : undefined;
+  const common = {
+    instanceName: 'Arclight',
+    timestamp: new Date().toISOString(),
+    media: context.media,
+    artist: context.artist,
+    ...(context.album ? { album: { ...context.album, path: event.albumFolder } } : {}),
+    tracks: trackInfos,
+    file,
+    ...(release ? { release } : {}),
+    ...(tracked?.clientName ? { downloadClient: tracked.clientName } : {}),
+    ...(tracked?.clientType ? { downloadClientType: tracked.clientType } : {}),
+    ...(event.downloadId ? { downloadId: event.downloadId } : {}),
+  };
+  if (event.isUpgrade && event.replacedFiles.length > 0) {
+    return { ...common, type: 'upgrade', oldFiles: event.replacedFiles.map(audioFileInfoFrom) };
+  }
+  return { ...common, type: 'import' };
+}
+
+function audioFileInfoFrom(file: AudioFile): MediaFileInfo {
+  return {
+    id: file.id,
+    path: file.path,
+    relativePath: file.relativePath,
+    quality: file.quality.quality.name,
+    qualityVersion: file.quality.revision.version,
+    ...(file.releaseGroup ? { releaseGroup: file.releaseGroup } : {}),
+    size: file.sizeBytes,
+    dateAdded: file.dateAdded,
+    languages: [],
+  };
+}
+
 function fileInfoFrom(file: MediaFile): MediaFileInfo {
   return {
     id: file.id,
@@ -624,6 +879,8 @@ export async function failTrackedDownload(
         ...(item.seriesId !== undefined ? { seriesId: item.seriesId } : {}),
         ...(item.episodeIds ? { episodeIds: item.episodeIds } : {}),
         ...(item.movieId !== undefined ? { movieId: item.movieId } : {}),
+        ...(item.artistId !== undefined ? { artistId: item.artistId } : {}),
+        ...(item.albumIds ? { albumIds: item.albumIds } : {}),
       },
       message ?? 'Manually marked as failed',
     );

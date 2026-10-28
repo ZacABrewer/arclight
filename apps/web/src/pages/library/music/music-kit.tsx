@@ -1,9 +1,10 @@
 import { useState, type CSSProperties, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import { Button, Chip, Tooltip, type ButtonProps } from '../../../arclight/index.js';
+import { Button, Chip, type ButtonProps } from '../../../arclight/index.js';
 import { cx } from '../../../arclight/cx.js';
 import { Loading } from '../../../components/media/media-kit.js';
 import { useFeatures } from '../../../hooks/music.js';
+import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { NotFoundPage } from '../../not-found.js';
 import { initialOf } from './music-model.js';
 import './music.css';
@@ -79,17 +80,13 @@ export function MusicChip({ large }: { large?: boolean }) {
   );
 }
 
-/**
- * A control for something Wave 1 does not do yet (music searches): looks disabled, stays
- * focusable so the tooltip says why, and does nothing when pressed.
- */
-export function NotYetButton({ children, size, variant, label }: { children: ReactNode; size?: ButtonProps['size']; variant?: ButtonProps['variant']; label?: string }) {
+/** Automatic search for one album (AlbumSearch), e.g. from the calendar or a list row. */
+export function AlbumSearchButton({ albumId, size = 'sm', variant, label }: { albumId: number; size?: ButtonProps['size']; variant?: ButtonProps['variant']; label?: string }) {
+  const search = useMusicSearch();
   return (
-    <Tooltip content={t('music.searchComesLater')}>
-      <Button size={size} variant={variant} aria-disabled="true" aria-label={label} className="music-disabled" onClick={(e) => e.preventDefault()}>
-        {children}
-      </Button>
-    </Tooltip>
+    <Button size={size} variant={variant} aria-label={label} loading={search.isPending} onClick={() => search.mutate({ name: 'AlbumSearch', albumIds: [albumId] })}>
+      {t('common.search')}
+    </Button>
   );
 }
 

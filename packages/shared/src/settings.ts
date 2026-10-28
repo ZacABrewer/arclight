@@ -135,6 +135,10 @@ export const ReleasesSettings = z.object({
   unairedToleranceMinutes: z.number().int().min(0).default(60),
   /** Release decision log: rows older than this many days are pruned nightly (DecisionLogCleanup). */
   decisionLogDays: z.number().int().min(1).max(365).default(14),
+  /** Music: automatic searches and RSS may grab discography / multi-album packs (interactive grabs always may). */
+  allowDiscographyPacks: z.boolean().default(false),
+  /** Music: a pack is grabbed automatically only when it fills or upgrades at least this many wanted albums. */
+  minPackWanted: z.number().int().min(1).max(100).default(2),
 });
 export type ReleasesSettings = z.infer<typeof ReleasesSettings>;
 export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;

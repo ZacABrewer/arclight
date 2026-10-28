@@ -13,9 +13,12 @@ export const BlocklistItem = z.looseObject({
   protocol: z.string().nullish(),
   indexer: z.string().nullish(),
   message: z.string().nullish(),
-  mediaType: z.enum(['series', 'movie']).nullish(),
+  mediaType: z.enum(['series', 'movie', 'music', 'audiobook']).nullish(),
   seriesId: z.number().int().nullish(),
   movieId: z.number().int().nullish(),
+  /** Music rows: the artist and the albums of the blocked release. */
+  artistId: z.number().int().nullish(),
+  albumIds: z.array(z.number().int()).nullish(),
   quality: z.looseObject({ quality: z.looseObject({ name: z.string() }).optional() }).nullish(),
 });
 export type BlocklistItem = z.infer<typeof BlocklistItem>;

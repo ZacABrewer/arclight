@@ -18,7 +18,7 @@ import type {
   ReleaseProtocol,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { episodes, movies, series } from '../../db/schema.js';
+import { artists, episodes, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import { history, type HistoryRow, type NewHistoryRow } from './schema.js';
 
@@ -382,7 +382,12 @@ export class HistoryService {
     if (!row) throw new HistoryError('NOT_FOUND', `history item ${id} not found`);
     if (!this.redownloadHandler) throw new HistoryError('UNAVAILABLE', 'release search is not available');
     let target: HistoryTarget;
-    if (row.mediaType === 'movie') {
+    if (row.mediaType === 'music') {
+      if (row.artistId == null || !row.albumIds?.length) throw new HistoryError('VALIDATION', `history item ${id} has no albums to search for`);
+      target = { mediaType: 'music', artistId: row.artistId, albumIds: [...row.albumIds] };
+    } else if (row.mediaType === 'audiobook') {
+      throw new HistoryError('VALIDATION', `history item ${id} is an audiobook; searching for audiobooks is not supported yet`);
+    } else if (row.mediaType === 'movie') {
       if (row.movieId === null) throw new HistoryError('VALIDATION', `history item ${id} has no movie`);
       target = { mediaType: 'movie', movieId: row.movieId };
     } else {
@@ -587,15 +592,21 @@ export class HistoryService {
     const template = grabbed[0];
     if (!template) throw new HistoryError('NOT_GRABBED', 'No grabbed history to build a failed event from');
     const target: HistoryTarget =
-      template.mediaType === 'series'
+      template.mediaType === 'music'
         ? {
-            mediaType: 'series',
-            seriesId: template.seriesId ?? 0,
-            episodeIds: [...new Set(grabbed.map((r) => r.episodeId).filter((id): id is number => id !== null))].sort(
-              (a, b) => a - b,
-            ),
+            mediaType: 'music',
+            artistId: template.artistId ?? 0,
+            albumIds: [...new Set(grabbed.flatMap((r) => r.albumIds ?? []))].sort((a, b) => a - b),
           }
-        : { mediaType: 'movie', movieId: template.movieId ?? 0 };
+        : template.mediaType === 'series'
+          ? {
+              mediaType: 'series',
+              seriesId: template.seriesId ?? 0,
+              episodeIds: [...new Set(grabbed.map((r) => r.episodeId).filter((id): id is number => id !== null))].sort(
+                (a, b) => a - b,
+              ),
+            }
+          : { mediaType: 'movie', movieId: template.movieId ?? 0 };
     const event: DownloadFailedEvent = {
       target,
       sourceTitle: template.sourceTitle,
@@ -708,6 +719,28 @@ export class HistoryService {
 
   mostRecentForMovie(movieId: number, eventType?: HistoryEventType): HistoryRecord | null {
     return this.mostRecent({ movieId }, eventType);
+  }
+
+  /** Newest music row that covers the album (optionally of one event type). */
+  mostRecentForAlbum(albumId: number, eventType?: HistoryEventType): HistoryRecord | null {
+    const conds: SQL[] = [eq(history.mediaType, 'music'), coversAlbum(albumId)];
+    if (eventType) conds.push(eq(history.eventType, eventType));
+    const row = this.db
+      .select()
+      .from(history)
+      .where(and(...conds))
+      .orderBy(desc(history.date), desc(history.id))
+      .limit(1)
+      .get();
+    return row ? this.toRecord(row) : null;
+  }
+
+  /** Music rows of an artist (optionally only those covering one album), newest first. */
+  forArtist(artistId: number, opts: { albumId?: number; eventType?: HistoryEventType } = {}): HistoryRecord[] {
+    const conds: SQL[] = [eq(history.artistId, artistId), eq(history.mediaType, 'music')];
+    if (opts.albumId !== undefined) conds.push(coversAlbum(opts.albumId));
+    if (opts.eventType) conds.push(eq(history.eventType, opts.eventType));
+    return this.select(and(...conds), 'newest');
   }
 
   private mostRecent(ref: HistoryItemRef, eventType?: HistoryEventType): HistoryRecord | null {
@@ -868,6 +901,8 @@ export class HistoryService {
     if (query.seriesId && query.seriesId.length > 0) conds.push(inArray(history.seriesId, query.seriesId));
     if (query.episodeId !== undefined) conds.push(eq(history.episodeId, query.episodeId));
     if (query.movieId && query.movieId.length > 0) conds.push(inArray(history.movieId, query.movieId));
+    if (query.artistId && query.artistId.length > 0) conds.push(inArray(history.artistId, query.artistId));
+    if (query.albumId !== undefined) conds.push(coversAlbum(query.albumId));
     if (query.downloadId) conds.push(eq(history.downloadId, query.downloadId));
     if (query.quality && query.quality.length > 0) {
       conds.push(
@@ -899,7 +934,7 @@ export class HistoryService {
         case 'sourceTitle':
           return sql`lower(${history.sourceTitle})`;
         case 'title':
-          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle})`;
+          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName})`;
         case 'quality':
           return sql`json_extract(${history.quality}, '$.quality.weight')`;
         case 'eventType':
@@ -914,6 +949,7 @@ export class HistoryService {
       .from(history)
       .leftJoin(series, eq(history.seriesId, series.id))
       .leftJoin(movies, eq(history.movieId, movies.id))
+      .leftJoin(artists, eq(history.artistId, artists.id))
       .where(where)
       .orderBy(dir(sortExpr), dir(history.id))
       .limit(query.pageSize)
@@ -980,6 +1016,15 @@ export class HistoryService {
         ),
       )
       .run().changes;
+    orphaned += this.db
+      .delete(history)
+      .where(
+        and(
+          eq(history.mediaType, 'music'),
+          or(sql`${history.artistId} is null`, notInArray(history.artistId, this.db.select({ id: artists.id }).from(artists))),
+        ),
+      )
+      .run().changes;
 
     let expired = 0;
     if (retentionDays !== null && retentionDays > 0) {
@@ -995,9 +1040,30 @@ export class HistoryService {
     target: HistoryTarget,
     base: Omit<NewHistoryRow, 'id' | 'date' | 'mediaType' | 'seriesId' | 'episodeId' | 'movieId'>,
   ): HistoryRecord[] {
-    // Audio history arrives with audio acquisition (Wave 2); nothing produces audio targets yet.
-    if (isAudioTarget(target)) return [];
+    // Audiobook history arrives with Wave 3.
+    if (target.mediaType === 'audiobook') return [];
     const date = this.now().toISOString();
+    if (target.mediaType === 'music') {
+      // One row per event for the whole release; `album_ids` lists the albums it covers.
+      const languages = [...new Set(base.languages.map((l) => l.toLowerCase()))].filter((l) => l !== 'unknown');
+      const rows = this.db
+        .insert(history)
+        .values({
+          ...base,
+          languages,
+          date,
+          mediaType: 'music',
+          seriesId: null,
+          episodeId: null,
+          movieId: null,
+          artistId: target.artistId,
+          albumIds: [...new Set(target.albumIds)],
+        })
+        .returning()
+        .all();
+      if (rows.length > 0) this.bus?.publish({ type: 'history', action: 'added' });
+      return rows.map((r) => this.toRecord(r));
+    }
     base = this.withLanguages(target, base);
     const values: NewHistoryRow[] =
       target.mediaType === 'movie'
@@ -1058,6 +1124,7 @@ export class HistoryService {
       date: row.date,
       downloadId: row.downloadId,
       data: row.data,
+      ...(row.artistId !== null ? { artistId: row.artistId, albumIds: row.albumIds ?? [] } : {}),
     };
     return { ...base, customFormats: this.resolveFormats ? this.resolveFormats(base) : [] };
   }
@@ -1134,6 +1201,11 @@ export class HistoryService {
       return out;
     });
   }
+}
+
+/** The row's `album_ids` JSON list holds the album. */
+function coversAlbum(albumId: number): SQL {
+  return sql`exists (select 1 from json_each(${history.albumIds}) where json_each.value = ${albumId})`;
 }
 
 function blankToNull(value: string | null | undefined): string | null {

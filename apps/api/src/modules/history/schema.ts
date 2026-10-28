@@ -27,7 +27,8 @@ export const history = sqliteTable(
         'additionalLanguage',
       ],
     }).notNull(),
-    mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),
+    // 'music' and 'audiobook' are TS-only (Drizzle does not enforce enums on SQLite).
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }).notNull(),
     seriesId: integer('series_id'),
     episodeId: integer('episode_id'),
     movieId: integer('movie_id'),

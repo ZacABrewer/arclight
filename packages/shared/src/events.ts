@@ -41,8 +41,10 @@ export const ServerEvent = z.discriminatedUnion('type', [
     type: z.literal('import'),
     action: z.enum(['imported', 'failed', 'manualRequired']),
     title: z.string(),
-    mediaType: z.enum(['series', 'movie']).optional(),
+    /** Music imports carry the artist id as `mediaId` and the album in `albumIds`. */
+    mediaType: z.enum(['series', 'movie', 'music', 'audiobook']).optional(),
     mediaId: z.number().int().optional(),
+    albumIds: z.array(z.number().int()).optional(),
     message: z.string().optional(),
   }),
   z.object({ type: z.literal('indexer'), action: z.enum(['failed', 'recovered']), id: z.number().int(), name: z.string() }),

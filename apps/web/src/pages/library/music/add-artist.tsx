@@ -123,6 +123,7 @@ interface ArtistFormState {
   monitorOption: MusicMonitorOption;
   monitorNewAlbums: MonitorNewAlbums;
   tags: number[];
+  searchOnAdd: boolean;
 }
 
 function initialState(rootFolders: readonly RootFolder[], profiles: readonly QualityProfile[], typeProfiles: readonly AlbumTypeProfile[]): ArtistFormState {
@@ -137,6 +138,7 @@ function initialState(rootFolders: readonly RootFolder[], profiles: readonly Qua
     monitorOption: 'all',
     monitorNewAlbums: 'all',
     tags: [],
+    searchOnAdd: false,
   };
 }
 
@@ -197,6 +199,7 @@ function AddArtistForm({
         monitorOption: form.monitorOption,
         monitorNewAlbums: form.monitorNewAlbums,
         tags: form.tags,
+        searchOnAdd: form.searchOnAdd,
       },
       {
         onSuccess: (artist) => {
@@ -294,8 +297,8 @@ function AddArtistForm({
         <TagPicker value={form.tags} onChange={(tags) => set('tags', tags)} />
       </FormRow>
 
-      <FormRow label={t('common.searchOnAdd')} htmlFor={fid('search')} captionInline caption={t('music.searchComesLater')}>
-        <Toggle id={fid('search')} checked={false} disabled onChange={() => {}} />
+      <FormRow label={t('common.searchOnAdd')} htmlFor={fid('search')} captionInline caption={t('music.add.searchOnAddCaption')}>
+        <Toggle id={fid('search')} checked={form.searchOnAdd} onChange={(e) => set('searchOnAdd', e.currentTarget.checked)} />
       </FormRow>
 
       <FormRow label={t('library.addDialog.destination')}>

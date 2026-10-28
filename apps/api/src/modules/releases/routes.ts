@@ -110,6 +110,12 @@ export function releasesRoutes(service: ReleasesService): FastifyPluginAsync<Rec
       async (req) => {
         const b = req.body;
         if (b.movieId !== undefined) return service.searchFor({ movieId: b.movieId }, { userInvoked: true });
+        if (b.artistId !== undefined) {
+          return service.searchFor({ artistId: b.artistId, ...(b.albumIds?.length ? { albumIds: b.albumIds } : {}) }, { userInvoked: true });
+        }
+        if (b.albumIds?.length && b.seriesId === undefined && !b.episodeIds?.length) {
+          return service.searchFor({ albumIds: b.albumIds }, { userInvoked: true });
+        }
         let seriesId = b.seriesId;
         if (seriesId === undefined) seriesId = service.seriesIdForEpisode(b.episodeIds![0]!);
         return service.searchFor(

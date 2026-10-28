@@ -18,8 +18,10 @@ import {
   useSetArtistMonitored,
   useUpdateArtist,
 } from '../../../hooks/music.js';
+import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { DetailsHero } from '../details-kit.js';
-import { MusicCrumb, MusicGate, NotYetButton, SquareArt } from './music-kit.js';
+import { MusicCrumb, MusicGate, SquareArt } from './music-kit.js';
+import { MusicInteractiveSearchModal } from './music-release-table.js';
 import {
   MONITOR_OPTIONS,
   NEW_ALBUM_OPTIONS,
@@ -64,6 +66,8 @@ function ArtistDetailsView() {
   const navigate = useNavigate();
   const [editing, setEditing] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [interactive, setInteractive] = useState(false);
+  const search = useMusicSearch();
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('music.invalidArtistId', { rawId }))} title={t('music.artistNotFound')} />;
   if (artist.isPending) return <Loading />;
@@ -111,7 +115,10 @@ function ArtistDetailsView() {
         overview={a.overview}
         actions={
           <>
-            <NotYetButton variant="primary">{t('library.seriesDetails.searchMonitored')}</NotYetButton>
+            <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ name: 'ArtistSearch', artistIds: [a.id] })}>
+              {t('library.seriesDetails.searchMonitored')}
+            </Button>
+            <Button onClick={() => setInteractive(true)}>{t('library.seriesDetails.interactiveSearch')}</Button>
             <Button loading={running === 'RefreshArtist'} disabled={running === 'RescanArtist'} onClick={() => command.mutate({ name: 'RefreshArtist', artistId: a.id })}>
               {t('common.refresh')}
             </Button>
@@ -141,6 +148,12 @@ function ArtistDetailsView() {
       <AlbumGroups artist={a} />
 
       {editing ? <EditArtistModal artist={a} onClose={() => setEditing(false)} /> : null}
+      <MusicInteractiveSearchModal
+        target={interactive ? { artistId: a.id } : null}
+        title={a.name}
+        albumTitles={new Map(a.albums.map((x) => [x.id, x.title]))}
+        onClose={() => setInteractive(false)}
+      />
       <DeleteMediaDialog
         open={deleting}
         onClose={() => setDeleting(false)}

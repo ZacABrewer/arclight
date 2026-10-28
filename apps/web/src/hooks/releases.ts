@@ -23,6 +23,8 @@ export function useGrabPending() {
         ...(p.seriesId !== undefined ? { seriesId: p.seriesId } : {}),
         ...(p.episodeIds?.length ? { episodeIds: p.episodeIds } : {}),
         ...(p.movieId !== undefined ? { movieId: p.movieId } : {}),
+        ...(p.artistId !== undefined ? { artistId: p.artistId } : {}),
+        ...(p.albumIds?.length ? { albumIds: p.albumIds } : {}),
       }),
     [releaseKeys.pending, ['queue']],
     { errorTitle: t('hooks.releases.couldNotGrabRelease') },

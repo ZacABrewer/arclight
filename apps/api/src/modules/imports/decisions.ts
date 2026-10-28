@@ -120,7 +120,10 @@ function sxe(e: Episode): string {
 // File-level specs
 // ---------------------------------------------------------------------------------------
 
-export const absolutePathSpec: ImportSpec = (item) =>
+// The file-level specs below take only the fields they read, so the music importer
+// (audio/music-import.ts) runs the same rules over its own items.
+
+export const absolutePathSpec = (item: Pick<LocalItem, 'path'>): ImportRejection | null =>
   isAbsolute(item.path) ? null : permanent('invalidFilePath', `Path is not absolute: ${item.path}`);
 
 export const mediaExtensionSpec: ImportSpec = (item) => {
@@ -132,13 +135,19 @@ export const mediaExtensionSpec: ImportSpec = (item) => {
   return null;
 };
 
-export const freeSpaceSpec: ImportSpec = (item, ctx) => {
+export const freeSpaceSpec = (
+  item: Pick<LocalItem, 'existingFile' | 'sizeBytes'>,
+  ctx: Pick<DecisionContext, 'settings' | 'freeSpaceBytes'>,
+): ImportRejection | null => {
   if (item.existingFile || ctx.settings.skipFreeSpaceCheck || ctx.freeSpaceBytes === null) return null;
   const needed = item.sizeBytes + ctx.settings.minimumFreeSpaceMb * 1024 * 1024;
   return ctx.freeSpaceBytes < needed ? permanent('minimumFreeSpace', 'Not enough free space') : null;
 };
 
-export const notUnpackingSpec: ImportSpec = (item, ctx) =>
+export const notUnpackingSpec = (
+  item: Pick<LocalItem, 'path' | 'mtimeMs'>,
+  ctx: Pick<DecisionContext, 'settings' | 'platform' | 'now'>,
+): ImportRejection | null =>
   isUnpacking(item, ctx.settings.downloadClientWorkingFolders, ctx.platform, ctx.now.getTime())
     ? temporary('unpacking', 'File is still being unpacked')
     : null;
@@ -164,7 +173,7 @@ export const notSampleSpec: ImportSpec = (item) => {
 export const hasAudioSpec: ImportSpec = (item) =>
   item.audioStreams === 0 ? permanent('noAudio', 'No audio tracks detected') : null;
 
-export const sameFileSpec: ImportSpec = (item, ctx) =>
+export const sameFileSpec = (item: Pick<LocalItem, 'path'>, ctx: Pick<DecisionContext, 'libraryPaths'>): ImportRejection | null =>
   ctx.libraryPaths.has(item.path) ? permanent('sameFile', 'File is already registered in the library') : null;
 
 export const alreadyImportedSpec: ImportSpec = (item, ctx) => {
@@ -299,7 +308,8 @@ export const absoluteNumberSpec: ImportSpec = (item, ctx) => {
 // Upgrade (spec 7.1 Upgrade)
 // ---------------------------------------------------------------------------------------
 
-function compareQ(profile: QualityProfile | null, a: QualityModel, b: QualityModel): number {
+/** Quality order under the profile (falls back to quality weight without one). */
+export function compareQ(profile: QualityProfile | null, a: QualityModel, b: QualityModel): number {
   if (profile) return compareQuality(profile, a, b);
   return Math.sign(qualityById(a.quality.id).weight - qualityById(b.quality.id).weight);
 }

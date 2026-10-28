@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import type { PendingReason, PendingRelease } from '@arclight/shared';
+import { isMusicRecord, MusicMediaLabel } from './music-media.js';
 import { errorMessage } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, Pane, ProtocolBadge, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
@@ -63,6 +64,7 @@ export function useNow(intervalMs = 1000): number {
 }
 
 function MediaCell({ p, seriesTitles, movieTitles }: { p: PendingRelease; seriesTitles: Map<number, string>; movieTitles: Map<number, string> }) {
+  if (isMusicRecord(p)) return <MusicMediaLabel record={p} />;
   if (p.mediaType === 'series' && p.seriesId !== undefined) {
     return (
       <Link className="al-link" to="/library/series/$id" params={{ id: String(p.seriesId) }}>
