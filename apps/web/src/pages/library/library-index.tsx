@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import type { QualityProfile, QueueSummaryItem, RootFolder, Tag } from '@arclight/shared';
 import {
   Button,
@@ -144,7 +144,6 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
   const profiles = useQualityProfiles();
   const rootFolders = useRootFolders();
   const tags = useTags();
-  const navigate = useNavigate();
 
   const [storedView, setView] = usePersistent<LibraryView>(`library.${kind}.view`, 'posters');
   const view: LibraryView = kind === 'series' && storedView === 'collections' ? 'posters' : storedView;
@@ -230,15 +229,6 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
           </>
         }
       >
-        <Segmented
-          aria-label={t('library.libraryType')}
-          value={kind}
-          onChange={(k) => void navigate({ to: k === 'series' ? '/library/tv' : '/library/movies' })}
-          options={[
-            { value: 'series', label: t('common.series') },
-            { value: 'movie', label: t('common.movies') },
-          ]}
-        />
         {query.data ? (
           <span className="mk-count">
             {rows.length !== allRows.length ? (

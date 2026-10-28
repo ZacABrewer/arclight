@@ -1,9 +1,7 @@
 import { useEffect, type ReactNode } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import { useQueryClient } from '@tanstack/react-query';
-import { Button, buttonClass, PageHeader, Paginator, Tabs, Trail, type TrailState } from '../../arclight/index.js';
-import { useQueueStatus } from '../../hooks/activity.js';
-import { usePendingReleases } from '../../hooks/releases.js';
+import { Button, buttonClass, PageHeader, Paginator, Trail, type TrailState } from '../../arclight/index.js';
 import { useTorrentStatus } from '../../hooks/torrent.js';
 import { formatRate } from '../../lib/format.js';
 import './activity.css';
@@ -70,12 +68,6 @@ export function ProgressBar({ value, state = 'active' }: { value: number; state?
 
 export type ActivityTab = 'queue' | 'history' | 'blocklist' | 'pending';
 
-const TAB_ROUTES: Record<ActivityTab, '/activity/queue' | '/activity/history' | '/activity/blocklist' | '/activity/pending'> = {
-  queue: '/activity/queue',
-  history: '/activity/history',
-  blocklist: '/activity/blocklist',
-  pending: '/activity/pending',
-};
 
 const TAB_LABELS: Record<ActivityTab, string> = { get queue() { return t('common.queue'); }, get history() { return t('common.history'); }, get blocklist() { return t('common.blocklist'); }, get pending() { return t('common.pending'); } };
 
@@ -85,10 +77,7 @@ const TAB_LABELS: Record<ActivityTab, string> = { get queue() { return t('common
  */
 export function ActivityHeader({ active, actions }: { active: ActivityTab; actions?: ReactNode }) {
   useDocumentTitle(TAB_LABELS[active]);
-  const navigate = useNavigate();
   const qc = useQueryClient();
-  const status = useQueueStatus();
-  const pending = usePendingReleases();
   const engine = useTorrentStatus({ enabled: active === 'queue' });
   const speeds = active === 'queue' && engine.data ? engine.data : null;
   return (
@@ -118,19 +107,6 @@ export function ActivityHeader({ active, actions }: { active: ActivityTab; actio
           </Button>
         </>
       }
-    >
-      <Tabs
-        compact
-        aria-label={t('common.activity')}
-        value={active}
-        onChange={(id) => void navigate({ to: TAB_ROUTES[id as ActivityTab] })}
-        tabs={[
-          { id: 'queue', label: t('common.queue'), count: status.data?.totalCount },
-          { id: 'history', label: t('common.history') },
-          { id: 'blocklist', label: t('common.blocklist') },
-          { id: 'pending', label: t('common.pending'), count: pending.data?.length },
-        ]}
-      />
-    </PageHeader>
+    />
   );
 }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link } from '@tanstack/react-router';
 import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedEpisode } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
@@ -12,7 +12,6 @@ import {
   Segmented,
   StatusChip,
   Table,
-  Tabs,
   type Column,
   type RowKey,
 } from '../../arclight/index.js';
@@ -38,13 +37,6 @@ type Mode = 'missing' | 'cutoff' | 'mismatch';
 type ListMode = Exclude<Mode, 'mismatch'>;
 type Kind = 'episodes' | 'movies';
 
-const MODE_TABS = [
-  { id: 'missing', get label() { return t('status.missing'); } },
-  { id: 'cutoff', get label() { return t('status.cutoffUnmet'); } },
-  { id: 'mismatch', get label() { return t('profileMigration.wanted.tab'); } },
-] as const;
-
-const MODE_PATHS = { missing: '/wanted/missing', cutoff: '/wanted/cutoff', mismatch: '/wanted/mismatch' } as const;
 const MODE_TITLES: Record<Mode, string> = { missing: 'Missing', cutoff: 'Cutoff unmet', mismatch: 'Profile mismatch' };
 
 const KIND_OPTIONS = [
@@ -70,7 +62,6 @@ export function shortDate(value: string | null | undefined): string {
 }
 
 function WantedPage({ mode }: { mode: Mode }) {
-  const navigate = useNavigate();
   const [kind, setKind] = useState<Kind>('episodes');
   useEffect(() => {
     document.title = t('wanted.valueArclight', { value: MODE_TITLES[mode] });
@@ -78,13 +69,6 @@ function WantedPage({ mode }: { mode: Mode }) {
   return (
     <div className="wanted-page">
       <PageHeader index="05" title={t('common.wanted')}>
-        <Tabs
-          compact
-          aria-label={t('wanted.wantedLists')}
-          value={mode}
-          tabs={MODE_TABS}
-          onChange={(id) => void navigate({ to: MODE_PATHS[id as Mode] })}
-        />
         <Segmented aria-label={t('common.mediaType')} options={KIND_OPTIONS} value={kind} onChange={setKind} />
       </PageHeader>
       {mode === 'mismatch' ? (

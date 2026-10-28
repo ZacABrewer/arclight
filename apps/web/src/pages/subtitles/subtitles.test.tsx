@@ -73,8 +73,8 @@ describe('wanted subtitles page', () => {
     });
     renderAt('/subtitles/wanted');
     expect(await screen.findByRole('heading', { level: 1, name: 'Subtitles' })).toBeTruthy();
-    const sections = screen.getByRole('tablist', { name: 'Subtitles sections' });
-    expect(within(sections).getByRole('tab', { name: 'Wanted' }).getAttribute('aria-selected')).toBe('true');
+    // The sections (Wanted / History / Blacklist) live in the shell's sub-navigation, not the header.
+    expect(screen.queryByRole('tablist', { name: 'Subtitles sections' })).toBeNull();
     const tv = screen.getByRole('tab', { name: 'TV' });
     const movies = screen.getByRole('tab', { name: 'Movies' });
     expect(tv.getAttribute('aria-selected')).toBe('true');
@@ -95,8 +95,6 @@ describe('wanted subtitles page', () => {
     expect(await screen.findByRole('button', { name: 'Search subtitles for Dune' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Search subtitles for The Expanse S01E02' })).toBeNull();
 
-    fireEvent.click(within(sections).getByRole('tab', { name: 'History' }));
-    await waitFor(() => expect(calls.some((c) => c.path === '/subtitle/history')).toBe(true));
   });
 });
 

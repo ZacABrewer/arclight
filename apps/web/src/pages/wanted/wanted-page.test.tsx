@@ -126,7 +126,6 @@ describe('wanted page', () => {
     expect(within(table).getAllByText('Missing')).toHaveLength(1);
     expect(within(table).getByText('S02E08').className).toContain('al-td--mono');
     expect(screen.getByText('2 episodes')).toBeTruthy();
-    expect(screen.getByRole('tab', { name: 'Missing' }).getAttribute('aria-selected')).toBe('true');
   });
 
   it('shows per row the last search, the next automatic search and the queue state', async () => {
@@ -173,7 +172,8 @@ describe('wanted page', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Movies' }));
     expect(await screen.findByRole('link', { name: 'Arrival' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Episodes' }));
-    fireEvent.click(screen.getByRole('tab', { name: 'Cutoff unmet' }));
+    // The lists are switched from the shell's sub-navigation.
+    await router.navigate({ to: '/wanted/cutoff' });
     await waitFor(() => expect(router.state.location.pathname).toBe('/wanted/cutoff'));
     const silo = await screen.findByRole('link', { name: 'Silo' });
     expect(within(silo.closest('table')!).getAllByText('Cutoff unmet').length).toBeGreaterThan(0);

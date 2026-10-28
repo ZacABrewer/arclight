@@ -204,8 +204,7 @@ describe('queue torrent drawer', () => {
 
   it('shows the bulk bar for a selection and removes with the chosen flags', async () => {
     renderAt('/activity/queue');
-    const header = await screen.findByRole('tab', { name: /^Queue/ }, { timeout: 5000 });
-    expect(header.getAttribute('aria-selected')).toBe('true');
+    expect(await screen.findByRole('heading', { level: 1, name: 'Activity' }, { timeout: 5000 })).toBeTruthy();
     const check = await screen.findByRole('checkbox', { name: 'Select Remote.Release' }, { timeout: 5000 });
     expect(screen.queryByRole('toolbar', { name: 'Bulk actions' })).toBeNull();
     fireEvent.click(check);
