@@ -1,11 +1,15 @@
 import type { AppContext, AppModule } from '../../app.js';
+import { createCombinedTagReader, createFfprobeTagReader } from '../imports/audio/index.js';
 import { getImportsService } from '../imports/index.js';
+import { ffprobeRunnerFor } from '../media-analysis/index.js';
 import type { MetadataLookup } from '../library/index.js';
 import { MetadataRefresher, type RescanPort } from './commands.js';
 import { registerMetadataJobs } from './jobs.js';
 import { createMetadataLookup } from './lookup.js';
 import { metadataRoutes } from './routes.js';
 import { MetadataService } from './service.js';
+import { MusicRefresher, registerMusicJobs } from './music-jobs.js';
+import { MusicMetadataService, type MusicProviderOverrides } from './music-service.js';
 
 export { MetadataService, MetadataNotConfiguredError } from './service.js';
 export { createMetadataLookup } from './lookup.js';
@@ -21,7 +25,39 @@ export {
   type Started,
 } from './commands.js';
 
+export { MusicMetadataService, albumCoverImages, musicUserAgent, PROJECT_URL, type MusicProviderOverrides } from './music-service.js';
+export {
+  ALBUM_SEARCH_JOB,
+  ARTIST_ADD_JOB,
+  ARTIST_SEARCH_JOB,
+  METADATA_CACHE_CLEANUP_JOB,
+  MusicRefresher,
+  REFRESH_ARTIST_JOB,
+  REFRESH_ARTISTS_JOB,
+  RESCAN_ARTIST_JOB,
+  SEARCH_NOT_AVAILABLE,
+} from './music-jobs.js';
+export { createMetadataCacheStore, withPersistentCache, CACHE_RETENTION_MS, type MetadataCacheStore } from './cache.js';
+
 const refreshers = new WeakMap<AppContext, MetadataRefresher>();
+const musicRefreshers = new WeakMap<AppContext, MusicRefresher>();
+const musicServices = new WeakMap<AppContext, MusicMetadataService>();
+const musicOverrides = new WeakMap<AppContext, MusicProviderOverrides>();
+
+/** Test seam: MusicBrainz/Wikidata/Fanart fetch, limiter and clock. Call from `onContext`. */
+export function setMusicProviders(ctx: AppContext, overrides: MusicProviderOverrides): void {
+  musicOverrides.set(ctx, overrides);
+}
+
+/** The running app's music refresher (null before the metadata module registered). */
+export function musicRefresherFor(ctx: AppContext): MusicRefresher | null {
+  return musicRefreshers.get(ctx) ?? null;
+}
+
+/** The running app's music metadata clients (null before the metadata module registered). */
+export function musicMetadataFor(ctx: AppContext): MusicMetadataService | null {
+  return musicServices.get(ctx) ?? null;
+}
 
 /** The running app's on-demand refresher (null before the metadata module registered). */
 export function metadataRefresherFor(ctx: AppContext): MetadataRefresher | null {
@@ -60,5 +96,21 @@ export const metadataModule: AppModule = (ctx) => async (app) => {
   registerMetadataJobs(ctx.scheduler, { db: ctx.db, service });
   const refresher = new MetadataRefresher(ctx.db, ctx.scheduler, service, () => rescanPort(ctx), ctx.bus);
   refreshers.set(ctx, refresher);
+
+  const overrides = musicOverrides.get(ctx);
+  const musicLog = ctx.log.child({ module: 'music-metadata' });
+  const musicService = new MusicMetadataService({ db: ctx.db, log: musicLog, ...(overrides ? { overrides } : {}) });
+  const musicRefresher = new MusicRefresher({
+    db: ctx.db,
+    scheduler: ctx.scheduler,
+    service: musicService,
+    log: musicLog,
+    tagReader: () => createCombinedTagReader({ ffprobe: createFfprobeTagReader({ runner: ffprobeRunnerFor(ctx) }) }),
+    ...(overrides?.now ? { now: overrides.now } : {}),
+  });
+  musicServices.set(ctx, musicService);
+  musicRefreshers.set(ctx, musicRefresher);
+  registerMusicJobs(ctx.scheduler, musicRefresher);
+
   await app.register(metadataRoutes(service, refresher));
 };

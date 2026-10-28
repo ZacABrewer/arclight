@@ -20,7 +20,13 @@ async function setup() {
 }
 
 const labels = (items: CalendarItem[]) =>
-  items.map((i) => (i.type === 'episode' ? `${i.seriesTitle} ${i.episode.episodeNumber}` : `${i.movie.title} ${i.releaseKind}`));
+  items.map((i) =>
+    i.type === 'episode'
+      ? `${i.seriesTitle} ${i.episode.episodeNumber}`
+      : i.type === 'movie'
+        ? `${i.movie.title} ${i.releaseKind}`
+        : `${i.artistName} - ${i.album.title}`,
+  );
 
 describe('calendar range queries', () => {
   it('returns episodes whose UTC air time falls inside the inclusive range', async () => {

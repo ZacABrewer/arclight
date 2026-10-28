@@ -11,6 +11,7 @@ import {
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Db } from '../../db/index.js';
+import { ProfilesService } from '../profiles/service.js';
 import {
   getAudioImportSettings,
   getFeatureSettings,
@@ -46,12 +47,18 @@ export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>,
       async (req) => updateMetadataSettings(db, req.body),
     );
 
-    app.get('/settings/features', { schema: { response: { 200: FeatureSettings } } }, async () => getFeatureSettings(db));
+    // Every signed-in user reads the feature flags: the nav shows Music/Audiobooks from them.
+    app.get('/settings/features', { config: { access: { portal: true } }, schema: { response: { 200: FeatureSettings } } }, async () => getFeatureSettings(db));
 
     app.put(
       '/settings/features',
       { schema: { body: FeatureSettings, response: { 200: FeatureSettings, 400: SettingsErrorResponse } } },
-      async (req) => updateFeatureSettings(db, req.body),
+      async (req) => {
+        const saved = updateFeatureSettings(db, req.body);
+        // Switching music on gives it starter quality profiles, so an artist can be added at once.
+        if (saved.music) new ProfilesService({ db }).seedMusicDefaults();
+        return saved;
+      },
     );
 
     app.get('/settings/musicmetadata', { schema: { response: { 200: MusicMetadataSettingsResponse } } }, async () =>

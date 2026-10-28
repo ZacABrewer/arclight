@@ -1,5 +1,5 @@
 import { Link } from '@tanstack/react-router';
-import { activeTab, sectionTabs } from '../nav.js';
+import { NAV, activeTab, sectionTabs, type NavSection } from '../nav.js';
 import type { Access } from '../auth/access.js';
 import { t } from '../i18n/index.js';
 
@@ -7,8 +7,8 @@ import { t } from '../i18n/index.js';
  * Route-driven tabs for the section the rail has active (Library: TV / Movies / Add new …).
  * Hidden when the section has a single page or draws its own sub-nav (Settings).
  */
-export function SectionNav({ pathname, access }: { pathname: string; access: Access | boolean }) {
-  const tabs = sectionTabs(pathname, access);
+export function SectionNav({ pathname, access, nav = NAV }: { pathname: string; access: Access | boolean; nav?: readonly NavSection[] }) {
+  const tabs = sectionTabs(pathname, access, nav);
   if (tabs.length === 0) return null;
   const current = activeTab(pathname, tabs);
   return (

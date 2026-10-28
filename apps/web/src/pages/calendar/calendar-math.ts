@@ -2,6 +2,7 @@ import type { CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
+import { albumCover, albumState, albumTypeLabel, artistImage } from '../library/music/music-model.js';
 import { t, intlLocale } from '../../i18n/index.js';
 
 // Pure calendar math: month grids, request ranges, grouping items by local day.
@@ -97,7 +98,7 @@ export interface CalendarEntry {
   sortTime: number;
   /** Local time label when the item has a time component. */
   time: string | null;
-  kind: 'episode' | 'movie';
+  kind: 'episode' | 'movie' | 'album';
   title: string;
   detail: string;
   status: EpisodeStatus;
@@ -105,14 +106,14 @@ export interface CalendarEntry {
   monitored: boolean;
   /** Local hour as a fraction (21.5 = 21:30); null for date-only items. */
   hour: number | null;
-  /** "S02E03" for episodes, the release label for movies. */
+  /** "S02E03" for episodes, the release label for movies, the album type for albums. */
   code: string;
-  /** Episode title (episodes only). */
+  /** Episode title (episodes), album title (albums). */
   subtitle: string | null;
   posterUrl: string | undefined;
-  /** Automatic search body for this item. */
-  search: { episodeIds: number[] } | { movieId: number };
-  link: { to: '/library/series/$id' | '/library/movie/$id'; params: { id: string } };
+  /** Automatic search body for this item; null where search is not available yet (albums). */
+  search: { episodeIds: number[] } | { movieId: number } | null;
+  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id'; params: { id: string } };
 }
 
 const RELEASE_LABELS = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('calendar.math.digitalRelease'); }, get physical() { return t('calendar.math.physicalRelease'); } } as const;
@@ -148,6 +149,29 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
       posterUrl: imageUrl(item.series?.images, 'poster'),
       search: { episodeIds: [ep.id] },
       link: { to: '/library/series/$id', params: { id: String(item.seriesId) } },
+    };
+  }
+  if (item.type === 'album') {
+    const album = item.album;
+    const status: EpisodeStatus = albumState(album, now);
+    const monitored = album.monitored && item.artist.monitored;
+    return {
+      key: `a${album.id}`,
+      day,
+      sortTime,
+      time,
+      kind: 'album',
+      title: item.artistName,
+      detail: album.title,
+      status,
+      tone: barTone(status),
+      monitored,
+      hour,
+      code: albumTypeLabel(album.primaryType),
+      subtitle: album.title,
+      posterUrl: albumCover(album) ?? artistImage(item.artist),
+      search: null,
+      link: { to: '/library/music/album/$id', params: { id: String(album.id) } },
     };
   }
   const m = item.movie;

@@ -1,7 +1,7 @@
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { QUALITIES, QUALITY_GROUP_ID_BASE, type QualityProfileInput } from '@arclight/shared';
+import { QUALITIES, QUALITY_GROUP_ID_BASE, qualityById, qualityDomain, type QualityProfileInput } from '@arclight/shared';
 import { buildItems } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
 import { albumTypeProfiles, artists, series } from '../../db/schema.js';
@@ -64,6 +64,21 @@ describe('ProfilesService', () => {
       const any = service.listQualityProfiles().find((p) => p.name === 'Any')!;
       await service.deleteQualityProfile(any.id);
       expect(service.seedDefaults().qualityProfiles).toBe(0);
+    });
+
+    it('seeds the music profiles once, with music qualities only', () => {
+      service.seedDefaults();
+      expect(service.seedMusicDefaults()).toBe(4);
+      expect(service.seedMusicDefaults()).toBe(0);
+      const music = service.listQualityProfiles('music');
+      expect(music.map((p) => p.name)).toEqual(expect.arrayContaining(['Lossless', 'Hi-Res', 'High-quality lossy', 'Any (music)']));
+      for (const p of music) {
+        expect(p.mediaDomain).toBe('music');
+        // Unknown (id 0) heads every profile; everything else is a music quality.
+        for (const item of p.items) if (item.kind === 'quality' && item.qualityId !== 0) expect(qualityDomain(qualityById(item.qualityId))).toBe('music');
+      }
+      // Video profiles are untouched.
+      expect(service.listQualityProfiles('video').every((p) => p.mediaDomain === 'video')).toBe(true);
     });
   });
 

@@ -12,7 +12,7 @@ import { settingsKeys, useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
 
 export function useQualityProfileList() {
-  return useQuery({ queryKey: settingsKeys.qualityProfiles, queryFn: profilesApi.quality.list });
+  return useQuery({ queryKey: settingsKeys.qualityProfiles, queryFn: () => profilesApi.quality.list() });
 }
 
 export function useQualityProfileSchema() {

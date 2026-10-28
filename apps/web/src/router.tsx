@@ -15,7 +15,10 @@ import { DashboardPage } from './pages/dashboard.js';
 import { NotFoundPage } from './pages/not-found.js';
 import { SearchPage } from './pages/search.js';
 import { CalendarPage } from './pages/calendar/calendar-page.js';
-import { AddNewPage } from './pages/library/add-new.js';
+import { AddNewPage, parseAddNewSearch } from './pages/library/add-new.js';
+import { ArtistIndexPage } from './pages/library/music/artist-index.js';
+import { ArtistDetailsPage } from './pages/library/music/artist-details.js';
+import { AlbumDetailsPage } from './pages/library/music/album-details.js';
 import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
 import { MovieDetailsPage } from './pages/library/movie-details.js';
 import { SeriesDetailsPage } from './pages/library/series-details.js';
@@ -188,6 +191,14 @@ const historyRoute = createRoute({
   component: HistoryPage,
 });
 
+// ?type=music opens the Music tab (Library → Music "Add artist").
+const addNewRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/library/add',
+  validateSearch: parseAddNewSearch,
+  component: AddNewPage,
+});
+
 const manualImportRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/activity/manual-import',
@@ -224,7 +235,11 @@ export const routeTree = rootRoute.addChildren([
   sectionRedirect('/library', '/library/tv'),
   page('/library/tv', SeriesLibraryPage),
   page('/library/movies', MovieLibraryPage),
-  page('/library/add', AddNewPage),
+  addNewRoute,
+  // Music (feature flag `music`; the pages answer 404 while it is off).
+  page('/library/music', ArtistIndexPage),
+  page('/library/music/artist/$id', ArtistDetailsPage),
+  page('/library/music/album/$id', AlbumDetailsPage),
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
   page('/library/collections', CollectionsPage),

@@ -11,6 +11,7 @@ import { activityMax, bucketShares, fillDays, formatDelta, groupedBars, rootUsag
 import '../../indexers/stats.css';
 import './stats.css';
 import { t, intlLocale } from '../../../i18n/index.js';
+import { rootKindLabel } from '../../../components/media/root-kind.js';
 
 // Chart geometry in viewBox units; the SVG scales to the pane width (mobile included).
 const W = 640;
@@ -166,7 +167,7 @@ function StoragePane({ data }: { data: StorageStats }) {
               <li key={r.path} className="al-stats-root">
                 <div className="al-stats-root__head">
                   <span className="al-num al-stats-root__path">{r.path}</span>
-                  <span className="al-caption">{r.mediaType === 'series' ? t('common.tv') : t('common.movies')}</span>
+                  <span className="al-caption">{rootKindLabel(r.mediaType)}</span>
                 </div>
                 <Meter
                   value={u.usedPct ?? 0}

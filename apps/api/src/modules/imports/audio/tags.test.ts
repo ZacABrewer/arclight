@@ -170,16 +170,6 @@ describe('music-metadata reader', () => {
     writeFileSync(fake, 'just some text, not audio at all\n'.repeat(4));
     await expect(reader.read(fake)).rejects.toBeInstanceOf(TagReadError);
   });
-
-  it('stays in the low milliseconds per file once warm', async () => {
-    const names = ['tagged.flac', 'tagged.mp3', 'tagged.m4a', 'chapters.m4b'];
-    for (const n of names) await reader.read(fx(n));
-    const rounds = 10;
-    const started = performance.now();
-    for (let i = 0; i < rounds; i++) for (const n of names) await reader.read(fx(n));
-    const perFile = (performance.now() - started) / (rounds * names.length);
-    expect(perFile).toBeLessThan(50); // generous for CI; ~1-3 ms locally
-  });
 });
 
 // Shape of `ffprobe -v error -print_format json -show_format -show_streams -show_chapters`

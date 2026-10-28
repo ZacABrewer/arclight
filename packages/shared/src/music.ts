@@ -11,6 +11,11 @@ import { SECRET_MASK } from './settings.js';
 
 const isoDate = () => z.string().describe('ISO-8601 date or timestamp');
 const idList = () => z.array(z.number().int().positive());
+/**
+ * Query-string boolean: `true`/`false`/`1`/`0` (and real booleans from typed callers).
+ * `z.coerce.boolean()` would read the string "false" as true.
+ */
+const qsBool = () => z.union([z.boolean(), z.stringbool()]);
 
 /** A MusicBrainz identifier (UUID). Stored lower-case. */
 export const Mbid = z
@@ -429,8 +434,8 @@ export const BulkArtistUpdateRequest = z.object({
 export type BulkArtistUpdateRequest = z.infer<typeof BulkArtistUpdateRequest>;
 
 export const DeleteArtistQuery = z.object({
-  deleteFiles: z.coerce.boolean().default(false),
-  addExclusion: z.coerce.boolean().default(false),
+  deleteFiles: qsBool().default(false),
+  addExclusion: qsBool().default(false),
 });
 export type DeleteArtistQuery = z.infer<typeof DeleteArtistQuery>;
 
@@ -438,7 +443,7 @@ export const ArtistSortKey = z.enum(['sortName', 'added', 'status', 'qualityProf
 export type ArtistSortKey = z.infer<typeof ArtistSortKey>;
 
 export const ArtistListQuery = z.object({
-  monitored: z.coerce.boolean().optional(),
+  monitored: qsBool().optional(),
   status: ArtistStatus.optional(),
   qualityProfileId: z.coerce.number().int().optional(),
   albumTypeProfileId: z.coerce.number().int().optional(),
@@ -447,7 +452,7 @@ export const ArtistListQuery = z.object({
   mbArtistId: z.string().optional(),
   /** Case-insensitive substring match on name and aliases. */
   search: z.string().optional(),
-  includeStatistics: z.coerce.boolean().default(true),
+  includeStatistics: qsBool().default(true),
   sortKey: ArtistSortKey.default('sortName'),
   sortOrder: SortOrder.default('asc'),
 });
@@ -459,9 +464,9 @@ export type ArtistListResponse = z.infer<typeof ArtistListResponse>;
 
 export const AlbumListQuery = z.object({
   artistId: z.coerce.number().int().optional(),
-  monitored: z.coerce.boolean().optional(),
+  monitored: qsBool().optional(),
   mbReleaseGroupId: z.string().optional(),
-  includeStatistics: z.coerce.boolean().default(true),
+  includeStatistics: qsBool().default(true),
 });
 export type AlbumListQuery = z.infer<typeof AlbumListQuery>;
 
@@ -507,6 +512,24 @@ export type WantedAlbum = z.infer<typeof WantedAlbum>;
 
 export const WantedAlbumsPage = Paged(WantedAlbum);
 export type WantedAlbumsPage = z.infer<typeof WantedAlbumsPage>;
+
+// ---------------------------------------------------------------------------------------
+// Commands (POST /api/v1/command, answered 202 with the started Job)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Music commands. `RefreshArtist` re-fetches metadata (and new release groups) for the
+ * artists; `RescanArtist` re-reads their folders into `audio_files`. `ArtistSearch` /
+ * `AlbumSearch` are accepted but only report "not available yet" until Wave 2.
+ */
+export const MusicCommand = z.discriminatedUnion('name', [
+  z.object({ name: z.literal('RefreshArtist'), artistIds: idList().min(1) }),
+  z.object({ name: z.literal('RescanArtist'), artistIds: idList().min(1) }),
+  z.object({ name: z.literal('ArtistSearch'), artistIds: idList().min(1) }),
+  z.object({ name: z.literal('AlbumSearch'), albumIds: idList().min(1) }),
+]);
+export type MusicCommand = z.infer<typeof MusicCommand>;
+export type MusicCommandName = MusicCommand['name'];
 
 // ---------------------------------------------------------------------------------------
 // Lookup (MusicBrainz search)

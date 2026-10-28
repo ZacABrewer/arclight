@@ -11,7 +11,7 @@ export interface UpcomingRow {
   time: string;
   title: string;
   detail: string;
-  href: { to: '/library/series/$id' | '/library/movie/$id'; params: { id: string } };
+  href: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id'; params: { id: string } };
 }
 
 const RELEASE_LABEL = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('dashboard.digitalRelease'); }, get physical() { return t('dashboard.physicalRelease'); } } as const;
@@ -39,6 +39,15 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
           title: it.seriesTitle,
           detail: [code, network].filter(Boolean).join(' · '),
           href: { to: '/library/series/$id', params: { id: String(it.seriesId) } },
+        };
+      }
+      if (it.type === 'album') {
+        return {
+          key: `a-${it.album.id}`,
+          time: formatClock(when),
+          title: it.artistName,
+          detail: [it.album.title, t('common.music')].join(' · '),
+          href: { to: '/library/music/album/$id', params: { id: String(it.album.id) } },
         };
       }
       return {

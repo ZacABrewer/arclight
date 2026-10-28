@@ -2,6 +2,7 @@ import type { RailCode } from './arclight/index.js';
 import type { AppPath } from './router.js';
 import { t } from './i18n/index.js';
 import { canOpenAppPath, toAccess, type Access } from './auth/access.js';
+import type { FeatureSettings } from '@arclight/shared';
 
 // The navigation tree. Each section sits under one of the 11 rail codes (several sections can
 // share a code: Issues and Watchlist live under RQ, Search under IX); the shell turns the
@@ -16,7 +17,13 @@ export interface NavLeaf {
   adminOnly?: boolean;
   /** Shown only to non-admins (the way back to the request portal). */
   userOnly?: boolean;
+  /** Shown only while this feature flag (Settings → General → Features) is on. */
+  feature?: FeatureFlag;
 }
+
+/** The optional media types behind a flag (shared FeatureSettings). */
+export type FeatureFlag = keyof FeatureSettings;
+
 
 export interface NavSection extends NavLeaf {
   /** Rail code the section lives under (handoff README: DB LB DS RQ CL WN AC SB IX ST SY). */
@@ -28,7 +35,8 @@ export interface NavSection extends NavLeaf {
   children?: readonly NavLeaf[];
 }
 
-export const NAV: readonly NavSection[] = [
+/** Every section and leaf, feature-gated ones included (titles, `navEntry`). */
+export const FULL_NAV: readonly NavSection[] = [
   { get label() { return t('common.dashboard'); }, to: '/', rail: 'DB' },
   // Non-admins: their home is the request portal (discover, requests, account).
   { get label() { return t('nav.requestPortal'); }, to: '/portal', rail: 'DS', userOnly: true },
@@ -42,6 +50,7 @@ export const NAV: readonly NavSection[] = [
     children: [
       { get label() { return t('common.tv'); }, to: '/library/tv' },
       { get label() { return t('common.movies'); }, to: '/library/movies' },
+      { get label() { return t('common.music'); }, to: '/library/music', feature: 'music' },
       { get label() { return t('common.collections'); }, to: '/library/collections' },
       { get label() { return t('nav.addNew'); }, to: '/library/add' },
       { get label() { return t('common.retention'); }, to: '/library/retention', adminOnly: true },
@@ -200,6 +209,20 @@ export const NAV: readonly NavSection[] = [
   { get label() { return t('nav.healthDocs'); }, to: '/docs/system/health', base: '/docs', rail: 'SY', adminOnly: true },
 ];
 
+/** The tree with the leaves of switched-off features removed (`undefined`: every flag off). */
+export function navFor(features: Partial<FeatureSettings> | undefined, nav: readonly NavSection[] = FULL_NAV): NavSection[] {
+  const on = (leaf: NavLeaf) => leaf.feature === undefined || features?.[leaf.feature] === true;
+  return nav.filter(on).map((s) => {
+    if (!s.children || s.children.every(on)) return s;
+    // Copy the descriptors, not the values: labels are getters that follow the UI language.
+    const copy = Object.defineProperties({}, Object.getOwnPropertyDescriptors(s)) as NavSection;
+    return Object.defineProperty(copy, 'children', { value: s.children.filter(on), enumerable: true });
+  });
+}
+
+/** The default tree: optional media types off (what a fresh install shows). */
+export const NAV: readonly NavSection[] = navFor(undefined);
+
 /**
  * The navigation as a person sees it (`true`/`false`: admin or a portal-only user). Admins see
  * every section; anyone else only the pages they may open (the granted app areas, request and
@@ -220,7 +243,7 @@ export function visibleNav(who: Access | boolean, nav: readonly NavSection[] = N
 
 /** Find the nav entry for a path (used for placeholder titles and the document title). */
 export function navEntry(path: string): { label: string; phase?: string | undefined; section?: string } | undefined {
-  for (const section of NAV) {
+  for (const section of FULL_NAV) {
     if (section.to === path && !section.children) return section;
     for (const child of section.children ?? []) {
       if (child.to === path) {

@@ -3,6 +3,7 @@ import { useQueryClient, type QueryClient } from '@tanstack/react-query';
 import type { Job, ServerEvent } from '@arclight/shared';
 import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
+import { isMusicJob, musicKeys } from './hooks/music-keys.js';
 import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
 import { searchStatusKeys } from './hooks/search-status.js';
@@ -31,6 +32,13 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
         void qc.invalidateQueries({ queryKey: queryKeys.jobs.scheduled });
         // A finished search job moves "last searched" / "next search" lines.
         void qc.invalidateQueries({ queryKey: searchStatusKeys.all });
+        // Music has no library events yet: a finished artist job (ArtistAdd, RefreshArtist,
+        // RescanArtist, RefreshArtists) is what says albums, tracks or files changed.
+        if (isMusicJob(event.job.name)) {
+          void qc.invalidateQueries({ queryKey: musicKeys.all });
+          void qc.invalidateQueries({ queryKey: ['wanted'] });
+          void qc.invalidateQueries({ queryKey: ['calendar'] });
+        }
       }
       return;
     case 'health':

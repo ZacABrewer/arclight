@@ -27,6 +27,7 @@ import {
   defaultCustomFormats,
   defaultDelayProfile,
   defaultQualityProfiles,
+  defaultMusicProfiles,
   isValidTerm,
   matchCustomFormats,
   reorderDelayProfiles,
@@ -133,6 +134,24 @@ export class ProfilesService {
 
     if (Object.values(seeded).some((n) => n > 0)) this.log?.info(seeded, 'seeded profile defaults');
     return seeded;
+  }
+
+  /**
+   * Music quality profiles (Lossless, Hi-Res, High-quality lossy, Any), once: when music is first
+   * switched on and on boots while it is on, if there is no music profile yet.
+   */
+  seedMusicDefaults(): number {
+    const have = this.db.select({ id: qualityProfiles.id }).from(qualityProfiles).where(eq(qualityProfiles.mediaDomain, 'music')).limit(1).all();
+    if (have.length > 0) return 0;
+    const taken = new Set(this.db.select({ name: qualityProfiles.name }).from(qualityProfiles).all().map((r) => r.name));
+    let n = 0;
+    for (const p of defaultMusicProfiles()) {
+      if (taken.has(p.name)) continue;
+      this.db.insert(qualityProfiles).values(p).run();
+      n++;
+    }
+    if (n > 0) this.log?.info({ qualityProfiles: n }, 'seeded music profile defaults');
+    return n;
   }
 
   // -------------------------------------------------------------------------------------

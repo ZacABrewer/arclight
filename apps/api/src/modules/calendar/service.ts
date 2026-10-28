@@ -1,6 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import { and, eq, gte, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import {
+  type CalendarAlbumItem,
   type CalendarEpisodeItem,
   type CalendarItem,
   type CalendarMovieItem,
@@ -12,11 +13,13 @@ import {
   type MediaFile,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
+import { albums, artists, episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
+import { albumStatistics } from '../music/statistics.js';
+import { getSection } from '../settings/service.js';
 
 // Calendar over the library tables: episodes by air date, movies by each of their release
-// dates. Ranges are inclusive at both ends. A date-only value (YYYY-MM-DD) counts as
-// midnight UTC of that day.
+// dates and, while `features.music` is on, albums by release date. Ranges are inclusive at both
+// ends. A date-only value (YYYY-MM-DD) counts as midnight UTC of that day.
 
 type SeriesRow = typeof series.$inferSelect;
 type MovieRow = typeof movies.$inferSelect;
@@ -72,8 +75,9 @@ export class CalendarService {
     const range = resolveRange(query, this.now());
     const mediaType = query.mediaType ?? 'all';
     const items: CalendarItem[] = [
-      ...(mediaType === 'movie' ? [] : this.episodeItems(range, query)),
-      ...(mediaType === 'series' ? [] : this.movieItems(range, query)),
+      ...(mediaType === 'all' || mediaType === 'series' ? this.episodeItems(range, query) : []),
+      ...(mediaType === 'all' || mediaType === 'movie' ? this.movieItems(range, query) : []),
+      ...((mediaType === 'all' || mediaType === 'music') && getSection(this.db, 'features').music ? this.albumItems(range, query) : []),
     ];
     return items.sort(
       (a, b) => instant(a.date) - instant(b.date) || titleOf(a).localeCompare(titleOf(b)) || orderOf(a) - orderOf(b),
@@ -162,6 +166,52 @@ export class CalendarService {
     return items;
   }
 
+  // ---- albums --------------------------------------------------------------------------------
+
+  private albumItems(range: CalendarRange, query: Omit<CalendarQuery, 'mediaType'>): CalendarAlbumItem[] {
+    const lo = isoDay(range.start.getTime() - DAY_MS);
+    const hi = isoDay(range.end.getTime() + DAY_MS) + '~';
+    const rows = this.db
+      .select({ album: albums, artist: artists })
+      .from(albums)
+      .innerJoin(artists, eq(albums.artistId, artists.id))
+      .where(
+        and(
+          isNotNull(albums.releaseDate),
+          gte(albums.releaseDate, lo),
+          lte(albums.releaseDate, hi),
+          query.unmonitored ? undefined : and(eq(albums.monitored, true), eq(artists.monitored, true)),
+        ),
+      )
+      .all()
+      // Only full dates go on a calendar; "2026" or "2026-05" names no day.
+      .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.album.releaseDate ?? '') && inRange(r.album.releaseDate!, range))
+      .filter((r) => matchesTags(r.artist.tags, query.tags));
+    const stats = albumStatistics(
+      this.db,
+      rows.map((r) => r.album.id),
+    );
+    return rows.map(({ album, artist }) => ({
+      type: 'album' as const,
+      date: album.releaseDate!,
+      artistId: artist.id,
+      artistName: artist.name,
+      album: { ...album, ...(stats.get(album.id) ? { statistics: stats.get(album.id) } : {}) },
+      artist: {
+        id: artist.id,
+        mbArtistId: artist.mbArtistId,
+        name: artist.name,
+        sortName: artist.sortName,
+        status: artist.status,
+        monitored: artist.monitored,
+        images: artist.images,
+        tags: artist.tags,
+        path: artist.path,
+        qualityProfileId: artist.qualityProfileId,
+      },
+    }));
+  }
+
   // ---- iCal token ----------------------------------------------------------------------------
 
   /** The per-install feed token, created on first use. */
@@ -224,7 +274,7 @@ function matchesTags(itemTags: number[], wanted: number[]): boolean {
 }
 
 function titleOf(item: CalendarItem): string {
-  return item.type === 'episode' ? item.seriesTitle : item.movie.title;
+  return item.type === 'episode' ? item.seriesTitle : item.type === 'movie' ? item.movie.title : item.artistName;
 }
 
 function orderOf(item: CalendarItem): number {

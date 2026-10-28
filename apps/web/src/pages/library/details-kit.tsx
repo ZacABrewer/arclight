@@ -31,15 +31,17 @@ export interface DetailsHeroProps {
   actions?: ReactNode;
   children?: ReactNode;
   label: string;
+  /** Replaces the 2:3 poster (music: square artwork with an initial fallback). */
+  art?: ReactNode;
 }
 
 /** Backdrop (fade left 92%→20% and bottom), 208px poster, title-xl + mono year, meta, chips, facts, verbs. */
-export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips, facts, overview, actions, children, label }: DetailsHeroProps) {
+export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips, facts, overview, actions, children, label, art }: DetailsHeroProps) {
   return (
     <section className="mk-hero" aria-label={label}>
       <BackdropFrame src={backdrop} title="" fade bleed loading="eager" />
       <div className="mk-hero__grid">
-        <Poster src={poster} title={title} className="mk-hero__poster" loading="eager" />
+        {art ?? <Poster src={poster} title={title} className="mk-hero__poster" loading="eager" />}
         <div className="mk-hero__body">
           <nav className="mk-crumb" aria-label={t('library.detailsKit.breadcrumb')}>
             {crumb}

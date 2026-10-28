@@ -10,6 +10,7 @@ import {
   ReleaseProfile,
   SpecImplementationDefinition,
   type CustomFormatInput,
+  type MediaDomain,
   type CustomFormatTestRequest,
   type DelayProfileInput,
   type DelayProfileReorderRequest,
@@ -48,7 +49,9 @@ export function fallbackQualityProfileTemplate(): QualityProfileInput {
 
 export const profilesApi = {
   quality: {
-    list: () => request('/qualityprofile', QualityProfile.array()),
+    /** Every profile, or one domain's (`video` for series/movies, `music`, `audiobook`). */
+    list: (mediaDomain?: MediaDomain) =>
+      request('/qualityprofile', QualityProfile.array(), mediaDomain ? { query: { mediaDomain } } : undefined),
     schema: async (): Promise<QualityProfileInput> => {
       try {
         return await request('/qualityprofile/schema', QualityProfileTemplate);

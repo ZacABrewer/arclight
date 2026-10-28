@@ -72,5 +72,6 @@ export {
   defaultCustomFormats,
   defaultDelayProfile,
   defaultQualityProfiles,
+  defaultMusicProfiles,
   qualitiesByWeight,
 } from './defaults.js';

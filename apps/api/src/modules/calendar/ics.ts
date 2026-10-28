@@ -83,6 +83,22 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
     lines.push(`STATUS:${ep.hasFile ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
     return lines;
   }
+  if (item.type === 'album') {
+    const a = item.album;
+    const s = a.statistics;
+    const complete = s ? s.trackCount > 0 && s.trackFileCount >= s.trackCount : false;
+    const lines = [
+      'BEGIN:VEVENT',
+      `UID:arclight-album-${a.id}@arclight`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${dateValue(item.date)}`,
+      `DTEND;VALUE=DATE:${nextDay(item.date)}`,
+      `SUMMARY:${escapeText(`${item.artistName} - ${a.title} (${a.primaryType})`)}`,
+    ];
+    if (a.overview) lines.push(`DESCRIPTION:${escapeText(a.overview)}`);
+    lines.push('CATEGORIES:Music', `STATUS:${complete ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
+    return lines;
+  }
   const m = item.movie;
   const lines = [
     'BEGIN:VEVENT',

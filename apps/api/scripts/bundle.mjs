@@ -19,10 +19,11 @@ const repoRoot = resolve(apiRoot, '..', '..');
 /** Packages left out of the bundle; the image installs exactly these. */
 export const EXTERNALS = ['better-sqlite3'];
 /**
- * Optional native accelerators `ws` require()s inside try/catch; esbuild leaves them as
- * runtime requires, they are not installed and ws falls back to its JavaScript paths.
+ * Optional modules required inside try/catch and left as runtime requires: the native
+ * accelerators of `ws` (it falls back to its JavaScript paths) and `supports-color`, which
+ * `debug` (pulled in by music-metadata) only uses for coloured output.
  */
-export const OPTIONAL_RUNTIME_REQUIRES = ['bufferutil', 'utf-8-validate'];
+export const OPTIONAL_RUNTIME_REQUIRES = ['bufferutil', 'utf-8-validate', 'supports-color'];
 
 const outIdx = process.argv.indexOf('--outdir');
 const outDir = outIdx > 0 ? resolve(process.argv[outIdx + 1]) : join(apiRoot, 'dist');

@@ -3,8 +3,9 @@ import { t } from '../i18n/index.js';
 
 // Query keys for the settings and activity pages. First segments line up with what live.ts
 // invalidates: ['settings'] on a settings event, ['indexers'] on an indexer event, ['queue'] and
-// ['history'] on queue/release/import/history events. The quality-profile key is shared with
-// the library pages (libraryKeys.qualityProfiles) so both read one cache entry.
+// ['history'] on queue/release/import/history events. The library pages' per-domain profile
+// keys (libraryKeys.qualityProfiles, musicKeys.qualityProfiles) sit under the quality-profile
+// key, so a profile save refreshes them too.
 export const settingsKeys = {
   qualityProfiles: ['settings', 'qualityprofiles'] as const,
   customFormats: ['settings', 'customformats'] as const,

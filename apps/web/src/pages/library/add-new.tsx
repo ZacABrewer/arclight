@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useSearch } from '@tanstack/react-router';
 import type { MetadataSearchResult, MetadataSearchType } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { isMissingTmdbKey } from '../../api/metadata.js';
@@ -7,16 +7,31 @@ import { Button, Chip, EmptyState, ErrorBlock, Input, PageHeader, Poster, Segmen
 import { Loading } from '../../components/media/media-kit.js';
 import { useMovieList, useQualityProfiles, useRootFolders, useSeriesList } from '../../hooks/library.js';
 import { useDebouncedValue, useMetadataSearch } from '../../hooks/metadata.js';
+import { useFeatures } from '../../hooks/music.js';
+import { AddArtistResults } from './music/add-artist.js';
 import { AddDialog } from './add-dialog.js';
 import { resultMeta } from './add-form.js';
 import './library.css';
 import { t } from '../../i18n/index.js';
 
+/** Add New tabs: the TMDB kinds, plus Music (MusicBrainz) while the music flag is on. */
+export type AddNewType = MetadataSearchType | 'music';
+
+/** `/library/add?type=music` opens the Music tab (the artist index's "Add artist"). */
+export function parseAddNewSearch(search: Record<string, unknown>): { type?: 'music' } {
+  return search.type === 'music' ? { type: 'music' } : {};
+}
+
 export function AddNewPage() {
+  const params = useSearch({ strict: false }) as { type?: string };
+  const features = useFeatures();
   const [term, setTerm] = useState('');
-  const [type, setType] = useState<MetadataSearchType>('all');
+  const [picked, setType] = useState<AddNewType>(params.type === 'music' ? 'music' : 'all');
+  // Music falls back to "All" while the flag is off (or still loading).
+  const type: AddNewType = picked === 'music' && !features.music ? 'all' : picked;
+  const music = type === 'music';
   const debounced = useDebouncedValue(term, 400);
-  const search = useMetadataSearch(debounced, type);
+  const search = useMetadataSearch(music ? '' : debounced, music ? 'all' : type);
   const [adding, setAdding] = useState<MetadataSearchResult | null>(null);
 
   const series = useSeriesList();
@@ -35,13 +50,13 @@ export function AddNewPage() {
 
   return (
     <div>
-      <PageHeader index="01" title={t('library.addNew.addNew')} subtitle={t('library.addNew.searchTmdbForASeries')} />
+      <PageHeader index="01" title={t('library.addNew.addNew')} subtitle={music ? t('music.add.subtitle') : t('library.addNew.searchTmdbForASeries')} />
       <div className="lib-add-search" role="search">
         <Input
           type="search"
           size="lg"
-          aria-label={t('library.addNew.searchTmdb')}
-          placeholder={t('library.addNew.titleEGTheExpanse')}
+          aria-label={music ? t('music.add.searchMusicBrainz') : t('library.addNew.searchTmdb')}
+          placeholder={music ? t('music.add.artistPlaceholder') : t('library.addNew.titleEGTheExpanse')}
           autoFocus
           value={term}
           onChange={(e) => setTerm(e.target.value)}
@@ -56,6 +71,7 @@ export function AddNewPage() {
             { value: 'all', label: t('common.all') },
             { value: 'series', label: t('common.series') },
             { value: 'movie', label: t('common.movies') },
+            ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
           ]}
         />
         <Link to="/activity/manual-import" className={buttonClass({ variant: 'ghost' })}>
@@ -63,7 +79,9 @@ export function AddNewPage() {
         </Link>
       </div>
 
-      {!active ? (
+      {music ? (
+        <AddArtistResults term={debounced} />
+      ) : !active ? (
         <EmptyState title={t('library.addNew.typeATitleToSearch')}>{t('library.addNew.resultsComeFromTmdbTitles')}</EmptyState>
       ) : search.isError ? (
         isMissingTmdbKey(search.error) ? (

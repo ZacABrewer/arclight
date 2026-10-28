@@ -37,7 +37,7 @@ export function toAccess(access: Access | boolean): Access {
 
 /** App pages each area opens (read-only; the api refuses writes). */
 export const AREA_PATHS: Readonly<Record<AppArea, readonly string[]>> = {
-  library: ['/library/tv', '/library/movies', '/library/series', '/library/movie', '/library/collections'],
+  library: ['/library/tv', '/library/movies', '/library/series', '/library/movie', '/library/collections', '/library/music'],
   calendar: ['/calendar'],
   activity: ['/activity/queue', '/activity/history', '/activity/blocklist'],
   wanted: ['/wanted/missing', '/wanted/cutoff', '/wanted/mismatch'],

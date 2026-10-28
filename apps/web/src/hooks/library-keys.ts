@@ -36,8 +36,11 @@ export const libraryKeys = {
     all: ['calendar'] as const,
     range: (start: string, end: string, unmonitored: boolean) => ['calendar', start, end, unmonitored] as const,
   },
-  /** Profiles change through settings; live.ts invalidates ['settings'] on a settings event. */
-  qualityProfiles: ['settings', 'qualityprofiles'] as const,
+  /**
+   * Video-domain profiles for the series/movie pages. Under the settings profile key, so the
+   * profile pages' saves and live.ts (['settings'] on a settings event) refresh it too.
+   */
+  qualityProfiles: ['settings', 'qualityprofiles', 'domain', 'video'] as const,
   /** Interactive search results; not invalidated by events (a search is a snapshot). */
   releases: (target: object | null) => ['releases', 'search', target] as const,
   metadata: {

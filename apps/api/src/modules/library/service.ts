@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, like, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, like, sql, type SQL } from 'drizzle-orm';
 import { statfs, stat, rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import type {
@@ -43,7 +43,7 @@ import { episodeAiredMs } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
-import { qualityProfiles } from '../../db/schema.js';
+import { albums, artists, audioFiles, qualityProfiles, tracks } from '../../db/schema.js';
 import * as t from './schema.js';
 import { enabledVersions, isVersioned, primaryOf, sameTag, slotOf } from './versions.js';
 
@@ -334,7 +334,7 @@ export function updateTag(db: LibraryDb, id: number, label: string): Tag {
   return row;
 }
 
-/** Deletes the tag and removes its id from every series and movie that carried it. */
+/** Deletes the tag and removes its id from every series, movie and artist that carried it. */
 export function deleteTag(db: Db, id: number): void {
   db.transaction((tx) => {
     const deleted = tx.delete(t.tags).where(eq(t.tags.id, id)).returning().get();
@@ -347,6 +347,11 @@ export function deleteTag(db: Db, id: number): void {
     for (const m of tx.select({ id: t.movies.id, tags: t.movies.tags }).from(t.movies).all()) {
       if (m.tags.includes(id)) {
         tx.update(t.movies).set({ tags: m.tags.filter((x) => x !== id) }).where(eq(t.movies.id, m.id)).run();
+      }
+    }
+    for (const a of tx.select({ id: artists.id, tags: artists.tags }).from(artists).all()) {
+      if (a.tags.includes(id)) {
+        tx.update(artists).set({ tags: a.tags.filter((x) => x !== id) }).where(eq(artists.id, a.id)).run();
       }
     }
   });
@@ -1716,7 +1721,40 @@ export async function getLibraryStatistics(db: LibraryDb, now: string = nowIso()
     monitoredMovieCount: movieRows.filter((m) => m.monitored).length,
     movieFileCount: movieRows.filter((m) => m.hasFile).length,
     sizeOnDisk: fileRows.reduce((sum, f) => sum + f.sizeBytes, 0),
+    ...(getSection(db as Db, 'features').music ? musicCounts(db) : {}),
     rootFolders: await listRootFolders(db),
+  };
+}
+
+/** Artist, album and track counts plus audio bytes (only while `features.music` is on). */
+function musicCounts(db: LibraryDb): Pick<
+  LibraryStatistics,
+  'artistCount' | 'monitoredArtistCount' | 'albumCount' | 'monitoredAlbumCount' | 'trackCount' | 'trackFileCount' | 'audioSizeOnDisk'
+> {
+  const n = (v: unknown) => Number(v ?? 0);
+  const a = db
+    .select({ total: sql<number>`count(*)`, monitored: sql<number>`coalesce(sum(case when ${artists.monitored} then 1 else 0 end), 0)` })
+    .from(artists)
+    .get();
+  const al = db
+    .select({ total: sql<number>`count(*)`, monitored: sql<number>`coalesce(sum(case when ${albums.monitored} then 1 else 0 end), 0)` })
+    .from(albums)
+    .get();
+  // Tracks of each album's selected edition (the only ones stored, but be exact).
+  const tr = db
+    .select({ total: sql<number>`count(${tracks.id})`, files: sql<number>`coalesce(sum(case when ${tracks.hasFile} then 1 else 0 end), 0)` })
+    .from(tracks)
+    .innerJoin(albums, and(eq(tracks.albumId, albums.id), eq(tracks.albumReleaseId, albums.selectedReleaseId)))
+    .get();
+  const size = db.select({ bytes: sql<number>`coalesce(sum(${audioFiles.sizeBytes}), 0)` }).from(audioFiles).get();
+  return {
+    artistCount: n(a?.total),
+    monitoredArtistCount: n(a?.monitored),
+    albumCount: n(al?.total),
+    monitoredAlbumCount: n(al?.monitored),
+    trackCount: n(tr?.total),
+    trackFileCount: n(tr?.files),
+    audioSizeOnDisk: n(size?.bytes),
   };
 }
 

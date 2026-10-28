@@ -4,7 +4,8 @@ import { Backdrop, Button, ContentInset, Drawer, Icon, MobileTabBar, Rail, TopBa
 import { useAuth } from '../auth/auth-context.js';
 import type { Access } from '../auth/access.js';
 import { useLiveEvents } from '../live.js';
-import { activeMobileTab, activeRailCode, mobileTabsFor, railFor, visibleNav } from '../nav.js';
+import { activeMobileTab, activeRailCode, mobileTabsFor, railFor, visibleNav, type NavSection } from '../nav.js';
+import { useNav } from './use-nav.js';
 import { RestartBanner } from './restart-banner.js';
 import { SectionNav } from './section-nav.js';
 import { ShellOptionsProvider, useResolvedBackdrop } from './shell-options.js';
@@ -24,11 +25,11 @@ function ShellBackdrop() {
 }
 
 /** Mobile "More": every section the role can open, as 44px rows. */
-function MoreDrawer({ open, onClose, access }: { open: boolean; onClose: () => void; access: Access }) {
+function MoreDrawer({ open, onClose, access, nav }: { open: boolean; onClose: () => void; access: Access; nav: readonly NavSection[] }) {
   return (
     <Drawer open={open} onClose={onClose} title={t('common.more')} width={320}>
       <ul className="al-more-list">
-        {visibleNav(access).map((s) => (
+        {visibleNav(access, nav).map((s) => (
           <li key={s.label}>
             <Link to={s.to} className="al-more-list__item" onClick={onClose}>
               {s.label}
@@ -50,6 +51,7 @@ function Shell() {
   const [more, setMore] = useState(false);
   const [sheet, setSheet] = useState(false);
   const user = useUserMenu(() => setSheet(true));
+  const nav = useNav();
 
   const go = (href: string | undefined, e: MouseEvent<HTMLElement>) => {
     if (!href || !isPlainClick(e)) return;
@@ -57,7 +59,7 @@ function Shell() {
     void router.navigate({ to: href as never });
   };
 
-  const rail: RailItem[] = railFor(access).map((r) => ({ code: r.code, label: r.label, title: r.title, href: r.href }));
+  const rail: RailItem[] = railFor(access, nav).map((r) => ({ code: r.code, label: r.label, title: r.title, href: r.href }));
   const tabs: TabBarItem[] = mobileTabsFor(access).map((mobileTab) => ({ id: mobileTab.id, label: mobileTab.label, icon: mobileTab.icon, href: mobileTab.href ?? undefined }));
 
   return (
@@ -89,7 +91,7 @@ function Shell() {
       </TopBar>
       <ContentInset id="main">
         <RestartBanner />
-        <SectionNav pathname={pathname} access={access} />
+        <SectionNav pathname={pathname} access={access} nav={nav} />
         <Outlet />
       </ContentInset>
       <MobileTabBar
@@ -104,7 +106,7 @@ function Shell() {
           go(tabs.find((tabBar) => tabBar.id === id)?.href, e);
         }}
       />
-      <MoreDrawer open={more} onClose={() => setMore(false)} access={access} />
+      <MoreDrawer open={more} onClose={() => setMore(false)} access={access} nav={nav} />
       <ShellOverlays isAdmin={isAdmin} search={search} setSearch={setSearch} sheet={sheet} setSheet={setSheet} />
     </div>
   );

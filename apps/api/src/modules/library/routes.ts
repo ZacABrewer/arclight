@@ -55,6 +55,8 @@ export interface MetadataLookup {
 export interface LibraryCommandTarget {
   seriesIds?: number[];
   movieIds?: number[];
+  /** Music artists (the music module's bulk editor). */
+  artistIds?: number[];
 }
 
 /**

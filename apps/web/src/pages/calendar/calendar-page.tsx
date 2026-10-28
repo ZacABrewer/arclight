@@ -38,6 +38,7 @@ import {
   type CalendarEntry,
   type CalendarView,
 } from './calendar-math.js';
+import { MusicChip, NotYetButton, SquareArt } from '../library/music/music-kit.js';
 import './calendar.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -168,10 +169,16 @@ function EventBar({ entry, popover, placement = 'bottom-start', block = false }:
           className={block ? 'cal-event cal-event--block' : 'cal-event'}
           data-tone={entry.tone}
           data-unmonitored={entry.monitored ? undefined : true}
-          aria-label={`${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
+          aria-label={`${entry.kind === 'album' ? `${t('common.music')}: ` : ''}${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
+          data-kind={entry.kind}
           {...props}
         >
           <span className="cal-event__time al-num">{entry.time ?? '—'}</span>
+          {entry.kind === 'album' ? (
+            <span className="cal-event__kind" aria-hidden="true">
+              {t('calendar.musicShort')}
+            </span>
+          ) : null}
           <span className="cal-event__title">{entry.title}</span>
         </button>
       )}
@@ -186,7 +193,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
   const chip = episodeChip(entry.status);
   return (
     <div className="cal-detail">
-      <Poster src={entry.posterUrl} title={entry.title} width={64} />
+      {entry.kind === 'album' ? <SquareArt src={entry.posterUrl} title={entry.subtitle ?? entry.title} width={64} /> : <Poster src={entry.posterUrl} title={entry.title} width={64} />}
       <div className="cal-detail__body">
         <div className="cal-detail__title">{entry.title}</div>
         <div className="cal-detail__code">
@@ -197,7 +204,8 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
           {formatPreferredDate(entry.day)}
           {entry.time ? ` · ${entry.time}` : ''}
         </div>
-        <div>
+        <div className="mk-row" style={{ gap: 6 }}>
+          {entry.kind === 'album' ? <MusicChip /> : null}
           <StatusChip status={chip.status} label={chip.label} />
         </div>
         <div className="cal-detail__actions">
@@ -205,9 +213,13 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
             {t('common.open')}
           </Link>
           {entry.status !== 'downloaded' && entry.status !== 'unaired' && entry.status !== 'tba' ? (
-            <Button size="sm" loading={search.isPending} onClick={() => search.mutate(entry.search)}>
-              {t('common.search')}
-            </Button>
+            entry.search ? (
+              <Button size="sm" loading={search.isPending} onClick={() => entry.search && search.mutate(entry.search)}>
+                {t('common.search')}
+              </Button>
+            ) : (
+              <NotYetButton size="sm">{t('common.search')}</NotYetButton>
+            )
           ) : null}
         </div>
       </div>
@@ -331,6 +343,7 @@ function Agenda({ days, byDay, popover }: { days: Date[]; byDay: Map<string, Cal
                       <EventBar entry={e} popover={popover} />
                     </span>
                     <span className="cal-agenda__code">
+                      {e.kind === 'album' ? <MusicChip /> : null}
                       <span className="al-num">{e.code}</span>
                       {e.subtitle ? ` · ${e.subtitle}` : ''}
                     </span>

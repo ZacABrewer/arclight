@@ -36,6 +36,7 @@ import { VpnSettingsPage } from '../settings/vpn.js';
 import { crumbsFor } from './path-crumbs.js';
 import { UserDefaultsFields, useUserDefaults } from '../../features/users/user-defaults.js';
 import { t, chooseLocale, deviceLocale, type LocaleSetting } from '../../i18n/index.js';
+import { rootKindLabel } from '../../components/media/root-kind.js';
 
 // Page 08 first-run wizard: Admin → User defaults → TMDB → Root folders → Download client →
 // Indexer → VPN. One chamfered card per step under a diamond stepper. The admin step creates a
@@ -382,7 +383,7 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
                 <span className="wiz-added__dot" aria-hidden="true" />
                 <span className="al-num wiz-added__path">{f.path}</span>
                 <span className="wiz-muted">
-                  {f.mediaType === 'series' || f.mediaType === 'movie' ? ROOT_KIND_LABEL[f.mediaType] : f.mediaType}
+                  {rootKindLabel(f.mediaType)}
                   {f.freeSpaceBytes != null ? (
                     <>
                       {' · '}

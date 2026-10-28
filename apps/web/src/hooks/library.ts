@@ -76,8 +76,9 @@ export function useTags() {
   return useQuery({ queryKey: libraryKeys.library.tags, queryFn: libraryApi.tags.list, staleTime: 60_000 });
 }
 
+/** Series and movie profiles (the `video` domain): what the series/movie dialogs offer. */
 export function useQualityProfiles() {
-  return useQuery({ queryKey: libraryKeys.qualityProfiles, queryFn: profilesApi.quality.list, staleTime: 60_000 });
+  return useQuery({ queryKey: libraryKeys.qualityProfiles, queryFn: () => profilesApi.quality.list('video'), staleTime: 60_000 });
 }
 
 export type WantedPage = WantedEpisodesPage | WantedMoviesPage;

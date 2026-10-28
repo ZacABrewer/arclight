@@ -10,8 +10,9 @@ import { normalizeTitle } from '@arclight/parser';
 // mean pair score over the files (unmatched files count 0) scaled by track coverage, plus a
 // recording-id bonus. The best release at or above the threshold (default 0.8) is accepted.
 //
-// Input shapes are local until `@arclight/shared` ships the music contracts: `ReleaseCandidate`
-// mirrors `album_releases.media` and `tracks` rows; `ref` carries a DB id through untouched.
+// The input shapes are matcher-specific on purpose (media nested, positions per medium, opaque
+// `ref`s) rather than the API's `AlbumRelease` / `Track`: the music service builds them from the
+// `album_releases` and `tracks` rows (`knownAlbumsFor`), with `ref` carrying the row ids through.
 
 export interface TrackCandidate {
   /** Position on its medium, 1-based (MusicBrainz `position`). */

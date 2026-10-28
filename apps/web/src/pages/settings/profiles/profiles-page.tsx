@@ -11,6 +11,7 @@ import { MismatchCount, ProfileMigrationSection } from './profile-migration-sect
 import { itemId, itemName, toDisplay } from './quality-profile-model.js';
 import { QualityProfileEditor } from './quality-profile-editor.js';
 import { ReleaseProfilesSection } from './release-profiles.js';
+import { AlbumTypeProfilesSection } from './album-type-profiles.js';
 import './profiles.css';
 import { t } from '../../../i18n/index.js';
 
@@ -100,6 +101,7 @@ export function ProfilesPage() {
       <ProfileMigrationPanel />
       <DelayProfilesSection />
       <ReleaseProfilesSection />
+      <AlbumTypeProfilesSection />
     </SettingsPage>
   );
 }

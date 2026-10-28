@@ -3,7 +3,7 @@ import {
   ColonReplacement,
   MultiEpisodeStyle,
   NAMING_DEFAULTS,
-  type MediaType,
+  type AnyMediaType,
   type NamingConfig,
   type RootFolder,
 } from '@arclight/shared';
@@ -15,6 +15,9 @@ import { SchemaForm } from '../../../components/forms/schema-form.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { PathPickerDialog } from '../../../components/path-picker/index.js';
 import { useRootFolders } from '../../../hooks/library.js';
+import { useFeatures } from '../../../hooks/music.js';
+import { rootKindLabel } from '../../../components/media/root-kind.js';
+import { AudioImportSection } from './audio-import-section.js';
 import {
   useAddRootFolder,
   useDeleteRootFolder,
@@ -301,7 +304,7 @@ export function RootFolderRow({ folder, maxFree, onRemove }: { folder: RootFolde
           </Chip>
         )}
       </span>
-      <span className="al-root-row__kind">{folder.mediaType === 'series' ? t('common.series') : t('common.movies')}</span>
+      <span className="al-root-row__kind">{rootKindLabel(folder.mediaType, t('common.series'))}</span>
       <Meter
         value={pct}
         tone={low ? 'warn' : 'default'}
@@ -318,7 +321,10 @@ function RootFoldersSection() {
   const add = useAddRootFolder();
   const remove = useDeleteRootFolder();
   const [picking, setPicking] = useState(false);
-  const [pending, setPending] = useState<{ path: string; mediaType: MediaType } | null>(null);
+  const [pending, setPending] = useState<{ path: string; mediaType: AnyMediaType } | null>(null);
+  const features = useFeatures();
+  // Music roots while the music flag is on; audiobook roots arrive with the audiobooks feature.
+  const kinds: AnyMediaType[] = ['series', 'movie', ...(features.music ? (['music'] as const) : [])];
   const [removing, setRemoving] = useState<RootFolder | null>(null);
   const kindId = useId();
 
@@ -357,11 +363,11 @@ function RootFoldersSection() {
                 <Select
                   id={kindId}
                   value={pending.mediaType}
-                  onChange={(e) => setPending({ ...pending, mediaType: e.currentTarget.value === 'movie' ? 'movie' : 'series' })}
-                  options={[
-                    { value: 'series', label: t('common.series') },
-                    { value: 'movie', label: t('common.movies') },
-                  ]}
+                  onChange={(e) => {
+                    const next = kinds.find((k) => k === e.currentTarget.value) ?? 'series';
+                    setPending({ ...pending, mediaType: next });
+                  }}
+                  options={kinds.map((k) => ({ value: k, label: rootKindLabel(k, t('common.series')) }))}
                 />
               </span>
               <span className="al-root-row__pending-actions">
@@ -463,6 +469,7 @@ export function MediaManagementPage() {
       {namingReady ? <NamingSections value={draft.value.naming} set={setNaming} advanced={advanced} disabled={saving} /> : null}
 
       <RootFoldersSection />
+      <AudioImportSection />
 
       {settings.isPending ? <Skeleton lines={4} /> : null}
       {settingsMissing ? (

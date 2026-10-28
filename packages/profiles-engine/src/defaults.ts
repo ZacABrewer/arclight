@@ -62,12 +62,13 @@ function groupIdFor(name: QualityName): number {
   return DEFAULT_GROUPS.find((g) => g.members.includes(name))?.id ?? QUALITIES[name].id;
 }
 
-function profile(name: string, cutoff: QualityName, allowed: QualityName[]): QualityProfileInput {
+function profile(name: string, cutoff: QualityName, allowed: QualityName[], domain: MediaDomain = 'video'): QualityProfileInput {
   return {
     name,
+    ...(domain === 'video' ? {} : { mediaDomain: domain }),
     upgradeAllowed: true,
     cutoff: groupIdFor(cutoff),
-    items: buildItems(allowed),
+    items: buildItems(allowed, domain),
     minFormatScore: 0,
     cutoffFormatScore: 0,
     minUpgradeFormatScore: 1,
@@ -89,6 +90,20 @@ export function defaultQualityProfiles(): QualityProfileInput[] {
     profile('HD-1080p', 'Bluray-1080p', HD1080),
     profile('HD-720p/1080p', 'Bluray-1080p', [...HD720, ...HD1080]),
     profile('Ultra-HD', 'Bluray-2160p', UHD),
+  ];
+}
+
+const LOSSY_HQ: QualityName[] = ['MP3-VBR-V0', 'MP3-320', 'AAC-256', 'AAC-320', 'Opus'];
+const LOSSLESS: QualityName[] = ['ALAC', 'FLAC', 'Lossless-Other'];
+const HI_RES: QualityName[] = ['ALAC-24bit', 'FLAC-24bit'];
+
+/** Music profiles, seeded the first time music is switched on (design section 7.2). */
+export function defaultMusicProfiles(): QualityProfileInput[] {
+  return [
+    profile('Lossless', 'FLAC', LOSSLESS, 'music'),
+    profile('Hi-Res', 'FLAC-24bit', [...LOSSLESS, ...HI_RES], 'music'),
+    profile('High-quality lossy', 'MP3-320', LOSSY_HQ, 'music'),
+    profile('Any (music)', 'FLAC', ['MP3-192', 'MP3-VBR-V2', 'MP3-256', ...LOSSY_HQ, 'AAC-Low', 'Vorbis', ...LOSSLESS, ...HI_RES], 'music'),
   ];
 }
 

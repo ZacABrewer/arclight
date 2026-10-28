@@ -1,5 +1,6 @@
 import type { AppModule } from '../../app.js';
 import { profilesRoutes } from './routes.js';
+import { getSection } from '../settings/service.js';
 import { ProfilesService } from './service.js';
 
 export { ProfilesService, ProfileError, qualityProfileDomainMismatch } from './service.js';
@@ -14,5 +15,6 @@ export const profilesModule: AppModule = (ctx) => async (app) => {
     // through the context, nothing is considered in use.
   });
   service.seedDefaults();
+  if (getSection(ctx.db, 'features').music) service.seedMusicDefaults();
   await app.register(profilesRoutes(service, (change) => ctx.bus.publish({ type: 'profile', ...change })));
 };

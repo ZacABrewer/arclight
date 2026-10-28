@@ -106,7 +106,7 @@ function routes(call: Call): unknown {
         { id: 1, path: '/media/tv', mediaType: 'series', accessible: true },
         { id: 2, path: '/media/movies', mediaType: 'movie', accessible: true },
       ];
-    case 'GET /api/v1/qualityprofile':
+    case 'GET /api/v1/qualityprofile?mediaDomain=video':
       return [{ id: 1, name: 'HD-1080p', upgradeAllowed: true, cutoff: 3, items: [{ kind: 'quality', qualityId: 3, allowed: true }], minFormatScore: 0, cutoffFormatScore: 0, minUpgradeFormatScore: 1, formatItems: [], languages: [] }];
     case 'GET /api/v1/tag':
       return [{ id: 7, label: 'kids' }];

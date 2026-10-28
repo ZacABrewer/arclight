@@ -26,7 +26,7 @@ import {
 } from './modules/imports/index.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
 import type { LibraryCommands, LibraryCommandTarget } from './modules/library/index.js';
-import { metadataRefresherFor } from './modules/metadata/index.js';
+import { ARTIST_SEARCH_JOB, metadataRefresherFor, musicRefresherFor } from './modules/metadata/index.js';
 import { profileMigrationServiceFor } from './modules/profile-migration/index.js';
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
@@ -90,7 +90,8 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 //
 // * Library commands: the bulk editor's `refresh` / `search` flags and "search on add" call
 //   libraryCommands below: refresh -> the metadata module's MetadataRefresher, search ->
-//   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` job.
+//   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` job. `artistIds` go to
+//   the metadata module's MusicRefresher (RefreshArtist); artist search is a stub until Wave 2.
 //
 // * Library deletes: the history and blocklist modules subscribe to `library deleted` on the
 //   bus themselves; the library routes publish added/updated/deleted/fileDeleted and the
@@ -224,9 +225,12 @@ export function libraryCommands(ctx: AppContext): LibraryCommands {
       }
       if (target.seriesIds?.length) refresher.series(target.seriesIds);
       if (target.movieIds?.length) refresher.movies(target.movieIds);
+      if (target.artistIds?.length) musicRefresherFor(ctx)?.refresh(target.artistIds);
     },
     search: (target) => {
       startLibrarySearch(ctx, target);
+      // Music acquisition is Wave 2: the job only reports that search is not available yet.
+      if (target.artistIds?.length) musicRefresherFor(ctx)?.searchStub(ARTIST_SEARCH_JOB, target.artistIds);
     },
   };
 }

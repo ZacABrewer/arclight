@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedEpisode } from '@arclight/shared';
+import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedAlbum, WantedEpisode } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
 import {
@@ -22,6 +22,9 @@ import { useToast } from '../../components/toast.js';
 import { useQueueSummary } from '../../hooks/activity.js';
 import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
+import { useFeatures, useMusicQualityProfiles, useWantedAlbums } from '../../hooks/music.js';
+import { NotYetButton } from '../library/music/music-kit.js';
+import { albumTypeLabel, progressText, trackProgress } from '../library/music/music-model.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
 import { ProfileMismatchList } from './profile-mismatch.js';
@@ -35,14 +38,17 @@ const MAX_PAGE = 500;
 type Mode = 'missing' | 'cutoff' | 'mismatch';
 /** The lists backed by the library's wanted queries (the mismatch list has its own). */
 type ListMode = Exclude<Mode, 'mismatch'>;
-type Kind = 'episodes' | 'movies';
+type Kind = 'episodes' | 'movies' | 'albums';
+/** The kinds the video lists (and the profile-mismatch list) know. */
+type VideoKind = Exclude<Kind, 'albums'>;
 
 const MODE_TITLES: Record<Mode, string> = { missing: 'Missing', cutoff: 'Cutoff unmet', mismatch: 'Profile mismatch' };
 
-const KIND_OPTIONS = [
-  { value: 'episodes' as const, get label() { return t('common.episodes'); } },
-  { value: 'movies' as const, get label() { return t('common.movies'); } },
+const KIND_OPTIONS: ReadonlyArray<{ value: Kind; label: string }> = [
+  { value: 'episodes', get label() { return t('common.episodes'); } },
+  { value: 'movies', get label() { return t('common.movies'); } },
 ];
+const ALBUM_OPTION: { value: Kind; label: string } = { value: 'albums', get label() { return t('music.albums'); } };
 
 export function WantedMissingPage() {
   return <WantedPage mode="missing" />;
@@ -62,17 +68,24 @@ export function shortDate(value: string | null | undefined): string {
 }
 
 function WantedPage({ mode }: { mode: Mode }) {
-  const [kind, setKind] = useState<Kind>('episodes');
+  const [picked, setKind] = useState<Kind>('episodes');
+  const features = useFeatures();
+  // Albums: missing and cutoff unmet only, and only while music is on.
+  const albums = features.music && mode !== 'mismatch';
+  const kind: Kind = picked === 'albums' && !albums ? 'episodes' : picked;
+  const options = albums ? [...KIND_OPTIONS, ALBUM_OPTION] : KIND_OPTIONS;
   useEffect(() => {
     document.title = t('wanted.valueArclight', { value: MODE_TITLES[mode] });
   }, [mode]);
   return (
     <div className="wanted-page">
       <PageHeader index="05" title={t('common.wanted')}>
-        <Segmented aria-label={t('common.mediaType')} options={KIND_OPTIONS} value={kind} onChange={setKind} />
+        <Segmented aria-label={t('common.mediaType')} options={options} value={kind} onChange={setKind} />
       </PageHeader>
       {mode === 'mismatch' ? (
-        <ProfileMismatchList key={`p-${kind}`} kind={kind} />
+        <ProfileMismatchList key={`p-${kind}`} kind={kind === 'albums' ? 'episodes' : kind} />
+      ) : kind === 'albums' ? (
+        <AlbumsList key={`a-${mode}`} mode={mode} />
       ) : kind === 'episodes' ? (
         <EpisodesList key={`e-${mode}`} mode={mode} />
       ) : (
@@ -82,7 +95,7 @@ function WantedPage({ mode }: { mode: Mode }) {
   );
 }
 
-function useWantedList(mode: ListMode, kind: Kind, page: number) {
+function useWantedList(mode: ListMode, kind: VideoKind, page: number) {
   // Both hooks are always called (rules of hooks); only the one for this mode is enabled.
   const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing');
   const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff');
@@ -406,5 +419,113 @@ function MoviesList({ mode }: { mode: ListMode }) {
       onSearchRows={(ids) => void batch.run(ids.map((movieId) => ({ movieId })))}
       onSearchAll={() => void searchAll()}
     />
+  );
+}
+
+/** Albums missing tracks / below cutoff (read-only in Wave 1: music searches come later). */
+function AlbumsList({ mode }: { mode: ListMode }) {
+  const [page, setPage] = useState(1);
+  const list = useWantedAlbums(mode, page, PAGE_SIZE);
+  const profiles = useMusicQualityProfiles();
+  const mobile = useIsMobile();
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('music.wanted.couldNotLoad')} />;
+  const rows = list.data?.records;
+  const total = list.data?.totalRecords;
+  const pages = Math.max(1, Math.ceil((total ?? 0) / PAGE_SIZE));
+  const noun = t('music.albumNoun', { count: total ?? 0 });
+  const plural = t('music.albumNoun', { count: 2 });
+  const label = (r: WantedAlbum) => `${r.artistName} - ${r.title}`;
+  const chip = mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
+  const empty = (
+    <EmptyState title={mode === 'missing' ? t('wanted.noMissingNoun', { noun: plural }) : t('wanted.noNounBelowCutoff', { noun: plural })}>
+      {mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
+    </EmptyState>
+  );
+  const columns: Column<WantedAlbum>[] = [
+    {
+      key: 'artist',
+      header: t('music.artist'),
+      cell: (r) => (
+        <Link className="mk-link" to="/library/music/artist/$id" params={{ id: String(r.artistId) }}>
+          {r.artistName}
+        </Link>
+      ),
+    },
+    {
+      key: 'album',
+      header: t('music.album'),
+      cell: (r) => (
+        <Link className="mk-link" to="/library/music/album/$id" params={{ id: String(r.id) }}>
+          {r.title}
+        </Link>
+      ),
+    },
+    { key: 'type', header: t('common.type'), muted: true, cell: (r) => albumTypeLabel(r.primaryType), width: '96px' },
+    { key: 'released', header: t('common.released'), mono: true, cell: (r) => shortDate(r.releaseDate), width: '130px' },
+    { key: 'tracks', header: t('music.tracks'), mono: true, cell: (r) => progressText(trackProgress(r.statistics)), width: '96px' },
+    { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
+    { key: 'status', header: t('common.status'), cell: () => chip, width: '150px' },
+    {
+      key: 'search',
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
+      align: 'right',
+      width: '96px',
+      cell: (r) => (
+        <NotYetButton size="sm" label={t('wanted.searchLabel', { label: label(r) })}>
+          {t('common.search')}
+        </NotYetButton>
+      ),
+    },
+  ];
+  return (
+    <Pane
+      flush
+      title={total === undefined ? t('music.albums').toUpperCase() : `${total} ${noun}`}
+      actions={
+        <NotYetButton variant="primary" size="sm">
+          {t('wanted.searchAll')}
+        </NotYetButton>
+      }
+    >
+      {mobile ? (
+        list.isPending ? (
+          <Loading />
+        ) : (rows ?? []).length === 0 ? (
+          empty
+        ) : (
+          <div className="mk-mlist" role="list" aria-label={t('wanted.wantedNoun', { noun: plural })}>
+            {(rows ?? []).map((r) => (
+              <div key={r.id} className="mk-mrow" role="listitem">
+                <div style={{ minWidth: 0 }}>
+                  <Link className="mk-mrow__title mk-link" to="/library/music/album/$id" params={{ id: String(r.id) }}>
+                    {r.title}
+                  </Link>
+                  <div className="mk-mrow__sub al-num">
+                    {r.artistName} · {shortDate(r.releaseDate)} · {progressText(trackProgress(r.statistics))}
+                  </div>
+                </div>
+                {chip}
+              </div>
+            ))}
+          </div>
+        )
+      ) : (
+        <Table
+          columns={columns}
+          rows={rows}
+          loading={list.isPending}
+          rowKey={(r) => r.id}
+          density="rich"
+          sortable={false}
+          empty={empty}
+          caption={t('wanted.wantedNoun', { noun: plural })}
+        />
+      )}
+      {pages > 1 ? (
+        <div className="wanted-foot">
+          <Paginator page={page} pageCount={pages} onPageChange={setPage} />
+        </div>
+      ) : null}
+    </Pane>
   );
 }

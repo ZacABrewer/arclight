@@ -286,6 +286,82 @@ upgraded on its own against its own profile; a disabled slot keeps its file but 
 | DELETE | `/library/exclusions/:id` | Remove an import exclusion |
 | GET | `/library/statistics` | Library counts and sizes |
 
+## music
+
+Contract: `packages/shared/src/music.ts`. Artists from MusicBrainz, their albums (release groups),
+editions (releases), the selected edition's tracks and the audio files on disk. Every route
+answers **404** `{code: "MUSIC_DISABLED"}` while `features.music` is off (`PUT /settings/features`),
+and the music jobs do nothing. Reads open to app-area users like the series/movie reads
+(`library`: artist, album, audio file; `wanted`: the wanted lists); everything else is admin-only.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/artist` | `ArtistListQuery` → `Artist[]` with `statistics` (`ArtistStatistics`). Filters `monitored`, `status`, `qualityProfileId`, `albumTypeProfileId`, `rootFolderPath`, `tag`, `mbArtistId`, `search` (name and aliases); `sortKey` (`sortName` default, `added`, `status`, `qualityProfileId`, `path`, `sizeOnDisk`), `sortOrder`; `includeStatistics=false` skips the counts |
+| GET | `/artist/lookup` | `?term=` → `ArtistSearchResult[]`: MusicBrainz artist search (interactive priority), `artistId` set for artists already in the library. `mbid:<uuid>` (or a bare MBID) looks one artist up by id |
+| GET | `/artist/:id` | `ArtistDetails`: the artist with statistics and its `albums` (each with `AlbumStatistics`) |
+| POST | `/artist` | `AddArtistRequest` → **201** `Artist`. Checks the root folder (type `music`), the quality profile (domain `music`), the album-type profile (default when omitted), tags and the exclusion list, fetches the artist record, inserts it at `<root>/<Artist Name>` and starts the `ArtistAdd` job; albums and tracks arrive while the job runs. 409 when the artist is already added or excluded; 502/503 when MusicBrainz fails |
+| PUT | `/artist/editor` | `BulkArtistUpdateRequest` → `Artist[]`: `ids` plus any of `monitored`, `monitorOption` (re-applied to every album), `monitorNewAlbums`, `qualityProfileId`, `albumTypeProfileId`, `rootFolderPath`, `tags: {add?, remove?}`; `refresh: true` starts `RefreshArtist` for the ids after the update |
+| PUT | `/artist/:id` | `UpdateArtistRequest` → `Artist`: `monitored`, `monitorNewAlbums`, `monitorOption`, `qualityProfileId`, `albumTypeProfileId` (applies from the next refresh), `rootFolderPath` (path becomes `<root>/<Artist Name>` unless `path` is given), `path`, `tags`. Files are not moved |
+| DELETE | `/artist/:id` | `DeleteArtistQuery`: `deleteFiles` (removes the artist folder, only inside its root folder), `addExclusion` (never re-add this MBID). Cascades to albums, editions, tracks and `audio_files` rows. **204** |
+| GET | `/album` | `AlbumListQuery` (`artistId`, `monitored`, `mbReleaseGroupId`, `includeStatistics`) → `Album[]` |
+| GET | `/album/:id` | `AlbumDetails`: the album with `artist` (`ArtistSummary`), every edition in `releases`, the selected edition's `tracks` and the album's `files` (`AudioFile`) |
+| PUT | `/album/monitor` | `BulkAlbumMonitorRequest` (`albumIds`, `monitored`) → `Album[]` |
+| PUT | `/album/:id` | `UpdateAlbumRequest` → `AlbumDetails`: `monitored`, `anyReleaseOk`, `selectedReleaseId` (an `album_releases.id` of this album; anything else is 400). Switching the edition fetches its tracks from MusicBrainz, replaces the stored tracks and re-links the album's files by MusicBrainz recording id, then by disc/track position |
+| GET | `/audiofile` | `AudioFileListQuery` (`artistId` and/or `albumId`) → `AudioFile[]` |
+| GET | `/albumtypeprofile` | `AlbumTypeProfile[]` ("Studio albums", the default, and "Everything" on a fresh install) |
+| GET | `/albumtypeprofile/:id` | One profile |
+| POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
+| PUT | `/albumtypeprofile/:id` | `AlbumTypeProfileInput` → `AlbumTypeProfile`. The default cannot be un-defaulted directly; mark another one instead |
+| DELETE | `/albumtypeprofile/:id` | **204**; 400 for the default profile, 409 while an artist uses it |
+| POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands only report `not available yet` until music acquisition ships (Wave 2). Unknown ids 404 (no job starts), unknown names 400 |
+| GET | `/wanted/missing/albums` | `WantedAlbumsQuery` (`page`, `pageSize`) → `WantedAlbumsPage`: monitored albums of monitored artists, released (a partial date counts from the start of its year or month), with fewer track files than tracks (or no tracks loaded and nothing on disk). Newest first. Read-only in Wave 1 |
+| GET | `/wanted/cutoff/albums` | `WantedAlbumsPage`: monitored albums with files where any track file's quality is below the artist's profile cutoff (custom-format scores for audio arrive in Wave 2) |
+
+**Album-type profiles.** A release group becomes an album row when its primary type is listed,
+every one of its secondary types is listed, and (once its editions are known) at least one
+edition has a listed status. Albums that stop passing (or vanish from MusicBrainz) are removed on
+the next refresh unless they have files.
+
+**Monitoring.** `monitorOption` (`MusicMonitorOption`): `all`, `none` (also unmonitors the
+artist on add), `future` (not yet released, undated included), `missing` / `existing` (by
+track files), `latest` / `first` (by release date among the released albums). On refresh, new
+release groups follow `monitorNewAlbums`: `all`, `none`, or `future` (only unreleased ones).
+
+**Editions.** The default edition is picked by `chooseRelease` with the `musicMetadata`
+preferences: official first, then `preferredCountries`, `preferredFormats` (by the least preferred
+medium), the most common track count, the earliest date. Only the selected edition's tracks are
+stored.
+
+**Statistics.** `AlbumStatistics`: `trackCount` (stored tracks of the selected edition),
+`trackFileCount`, `totalTrackCount` (MusicBrainz's count for the edition), `sizeOnDisk` (the
+album's audio files), `percentOfTracks`. `ArtistStatistics` adds `albumCount`,
+`monitoredAlbumCount`, `completeAlbumCount`; its `trackCount` counts tracks of monitored albums
+plus any track with a file. `GET /library/statistics` gains `artistCount`,
+`monitoredArtistCount`, `albumCount`, `monitoredAlbumCount`, `trackCount`, `trackFileCount` and
+`audioSizeOnDisk` while music is on (`sizeOnDisk` stays video-only).
+
+**Rescans.** `RescanArtist` (also run at the end of `ArtistAdd` when the artist folder exists)
+scans the folder with the tag reader (music-metadata, ffprobe as fallback), groups the files into
+albums and matches each group to the album's selected edition (`audio.trackMatchThreshold`). Every
+matched file gets one `audio_files` row (quality from the measured codec, bitrate and bit depth);
+`tracks.has_file` / `audio_file_id` follow the matches, and rows of files that are gone or no
+longer match are removed. Unmatched folders are reported in the job message.
+
+**MusicBrainz.** Base URL and rate from `musicMetadata` (the public host is locked at 1 request
+per second), User-Agent `Arclight/<version> ( https://github.com/ZacABrewer/arclight [contact
+email] )`. Lookups and edition switches are interactive and go before the jobs, which run at
+background priority. Artist, release-group, edition and release answers are cached in
+`metadata_cache` (7 days, 1 day, 1 day, 30 days); manual refreshes skip the cached artist and
+release-group answers. Album covers are Cover Art Archive URLs
+(`https://coverartarchive.org/release-group/<mbid>/front-500`, 404 when there is none); artist
+images come from Fanart.tv when `musicMetadata.fanartApiKey` is set, else from the artist's
+Wikidata image.
+
+**Jobs.** Ad hoc: `ArtistAdd` (one per artist), `RefreshArtist`, `RescanArtist`, `ArtistSearch`,
+`AlbumSearch`. Scheduled: `RefreshArtists`, `MetadataCacheCleanup` (see Scheduler jobs). No
+`library` WebSocket events are published for music yet; the `job` events of these jobs say when
+to refetch.
+
 ## profiles
 
 | Method | Path | Purpose |
@@ -1044,11 +1120,15 @@ Contract: `packages/shared/src/history.ts`.
 ## calendar
 
 Contract: `packages/shared/src/calendar.ts`. Episodes by air date, movies once per release date
-(cinema, digital, physical). Week and day views are client-side over `start`/`end`.
+(cinema, digital, physical) and, while `features.music` is on, albums by release date
+(`CalendarAlbumItem`: `type: "album"`, `date`, `artistId`, `artistName`, `album` with
+`statistics`, `artist` summary; albums MusicBrainz dates only to the month or year are left out;
+in the iCal feed as all-day `Artist - Album (Type)` events). Week and day views are client-side
+over `start`/`end`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/calendar` | Items in `[start, end]` (defaults: today, +7 days). Filters: `mediaType` (`all` default, `series`, `movie`), `tags` (any of), `unmonitored` (include unmonitored items, default false), plus `includeSeries`, `includeEpisodeFile` |
+| GET | `/calendar` | Items in `[start, end]` (defaults: today, +7 days). Filters: `mediaType` (`all` default, `series`, `movie`, `music`), `tags` (any of), `unmonitored` (include unmonitored items, default false), plus `includeSeries`, `includeEpisodeFile` |
 | GET | `/calendar/feed` | `{token, path}` of the iCal feed |
 | POST | `/calendar/feed/regenerate` | Admin. Rotates the feed token, answers `{token, path}`; the old feed URL answers 401 from then on |
 | GET | `/calendar/feed.ics` | Public, `?token=` required; `pastDays`, `futureDays`, `tags`, `unmonitored` |
@@ -1440,6 +1520,8 @@ of them with `POST /jobs/run`.
 | `ThemesSync` | minute 41 every `themes.syncIntervalHours` hours (24 by default; on demand only when disabled); also run 90 s after start when overdue | themes | Downloads new and updated theme packs from `themes.sourceUrl` |
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |
+| `RefreshArtists` | `20 */6 * * *` | metadata | Music: refreshes artists due by `next_refresh_at` (oldest first) for at most 20 minutes; the next refresh is 1 day out after a release in the last 90 days or an upcoming one, else 7 days (continuing) or 30 days (ended). New release groups follow the album-type profile and `monitorNewAlbums`. Nothing while music is off |
+| `MetadataCacheCleanup` | `50 5 * * *` | metadata | Deletes `metadata_cache` rows that expired more than 30 days ago |
 | `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |
 | `MissingMovieSearch` | `20 3 * * *` | releases | The same for `GET /wanted/missing/movies`, up to 100 a run |
 | `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), in list order, items past their back-off only, up to 100 episodes and 100 movies a run; `GET /release/searchstatus` estimates the next run per item |
