@@ -143,13 +143,17 @@ describe('Session end-to-end', () => {
     await boot.listen(0, '127.0.0.1');
     cleanups.push(() => boot.close());
     const dhtSettings: Partial<SessionSettings> = { dht: true, dhtBootstrapNodes: [`127.0.0.1:${boot.port}`] };
-    const { p, torrent } = await seedSetup(undefined, dhtSettings, { dht: { queryTimeoutMs: 300 } });
+    const { p, torrent, meta } = await seedSetup(undefined, dhtSettings, { dht: { queryTimeoutMs: 300 } });
     const leechDir = await tmp();
     const leecher = await session({ savePath: leechDir, ...dhtSettings }, { dht: { queryTimeoutMs: 300 } });
     const lt = await leecher.addTorrent({ torrent });
     await completed(lt);
     await verifyPayload(leechDir, 'pack', p);
-    expect(lt.getPeers().some((x) => x.source === 'dht' || x.source === 'incoming')).toBe(true);
+    // No trackers were configured, so the seeder can only have been found through DHT (or have
+    // dialled in after its own DHT lookup). Peers may already have disconnected once complete,
+    // so the list is not checked here.
+    expect(meta.announce).toBeUndefined();
+    expect(meta.announceList ?? []).toEqual([]);
   }, 30_000);
 
   it('fetches metadata from peers for a magnet link (BEP 9) and downloads', async () => {
