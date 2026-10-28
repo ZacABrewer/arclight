@@ -1,0 +1,1143 @@
+{
+  "product_filters": [],
+  "products": [
+    {
+      "asin": "B08G9PRS1K",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574427011",
+              "name": "Action & Adventure"
+            },
+            {
+              "id": "18574429011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574433011",
+              "name": "Thriller & Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574639011",
+              "name": "Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580645011",
+              "name": "Space Opera"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2021-05-04",
+      "language": "english",
+      "merchandising_summary": "<p>When the Sun is threatened by an alien microbe, the fate of humanity rests on the shoulders of an unlikely hero – and an even more unlikely friendship.</p>",
+      "narrators": [
+        {
+          "name": "Ray Porter"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51POf8gOyLL._SL500_.jpg"
+      },
+      "publication_datetime": "2021-05-04T07:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 48449,
+        "overall_distribution": {
+          "average_rating": 4.874462013991595,
+          "display_average_rating": "4.9",
+          "display_stars": 5,
+          "num_five_star_ratings": 284660,
+          "num_four_star_ratings": 25099,
+          "num_one_star_ratings": 699,
+          "num_ratings": 315761,
+          "num_three_star_ratings": 4164,
+          "num_two_star_ratings": 1139
+        }
+      },
+      "release_date": "2021-05-04",
+      "runtime_length_min": 970,
+      "short_description": "A lone astronaut must save the earth from disaster in this incredible new science-based thriller from the number-one New York Times best-selling author of The Martian.",
+      "title": "Project Hail Mary"
+    },
+    {
+      "asin": "B082BHJMFF",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574639011",
+              "name": "Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2020-01-01",
+      "language": "english",
+      "merchandising_summary": "Stranded on the surface of Mars, astronaut Mark Watney’s only hope for survival is science, a sense of humor, and maybe some potatoes.",
+      "narrators": [
+        {
+          "name": "Wil Wheaton"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/414J3xG+7+L._SL500_.jpg"
+      },
+      "publication_datetime": "2020-01-01T08:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 4077,
+        "overall_distribution": {
+          "average_rating": 4.798306987993436,
+          "display_average_rating": "4.8",
+          "display_stars": 5,
+          "num_five_star_ratings": 39261,
+          "num_four_star_ratings": 5485,
+          "num_one_star_ratings": 216,
+          "num_ratings": 46308,
+          "num_three_star_ratings": 1047,
+          "num_two_star_ratings": 299
+        }
+      },
+      "release_date": "2020-01-01",
+      "runtime_length_min": 659,
+      "title": "The Martian"
+    },
+    {
+      "asin": "1799755193",
+      "authors": [
+        {
+          "name": "Veronica Roth"
+        },
+        {
+          "name": "Blake Crouch"
+        },
+        {
+          "name": "N. K. Jemisin"
+        },
+        {
+          "name": "Amor Towles"
+        },
+        {
+          "name": "Paul Tremblay"
+        },
+        {
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574446011",
+              "name": "Anthologies & Short Stories"
+            },
+            {
+              "id": "18574447011",
+              "name": "Anthologies"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580632011",
+              "name": "Anthologies & Short Stories"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580643011",
+              "name": "Post-Apocalyptic"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2019-10-08",
+      "language": "english",
+      "merchandising_summary": "2020 Audie Award Finalist for Best Short Stories/Collection Audiobook For some, it’s the end of the world. For others, it’s just the beginning. With brilliant imagination, today’s most visionary writers point to the future in a collection curated by bestselling author Blake Crouch. These...",
+      "narrators": [
+        {
+          "name": "Evan Rachel Wood"
+        },
+        {
+          "name": "Rosa Salazar"
+        },
+        {
+          "name": "Jason Isaacs"
+        },
+        {
+          "name": "David Harbour"
+        },
+        {
+          "name": "Steven Strait"
+        },
+        {
+          "name": "Janina Gavankar"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51m8Uw5mVvL._SL500_.jpg"
+      },
+      "publication_datetime": "2019-10-08T07:00:00Z",
+      "publication_name": "Forward Collection",
+      "publisher_name": "Amazon Original Stories",
+      "rating": {
+        "num_reviews": 142,
+        "overall_distribution": {
+          "average_rating": 4.171646162858817,
+          "display_average_rating": "4.2",
+          "display_stars": 4,
+          "num_five_star_ratings": 795,
+          "num_four_star_ratings": 550,
+          "num_one_star_ratings": 44,
+          "num_ratings": 1707,
+          "num_three_star_ratings": 266,
+          "num_two_star_ratings": 52
+        }
+      },
+      "release_date": "2019-10-08",
+      "runtime_length_min": 504,
+      "series": [
+        {
+          "asin": "B07XJZMWHW",
+          "sequence": "1-6",
+          "title": "Forward Collection",
+          "url": "/pd/Forward-Collection-Audiobook/B07XJZMWHW"
+        }
+      ],
+      "subtitle": "Stories of Tomorrow",
+      "title": "Forward"
+    },
+    {
+      "asin": "1978650817",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574446011",
+              "name": "Anthologies & Short Stories"
+            },
+            {
+              "id": "18574447011",
+              "name": "Anthologies"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574598011",
+              "name": "Crime Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574640011",
+              "name": "Technothrillers"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580632011",
+              "name": "Anthologies & Short Stories"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2019-09-17",
+      "language": "english",
+      "merchandising_summary": "Audible narration by Janina Gavankar (True Blood) In the near future, if Vegas games are ingeniously scam-proof, then the heists have to be too, in this imaginative and whip-smart story by the New York Times bestselling author of The Martian. An IT whiz at the Babylon Casino is enlisted to...",
+      "narrators": [
+        {
+          "name": "Janina Gavankar"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51GYTiZhzwL._SL500_.jpg"
+      },
+      "publication_datetime": "2019-09-17T07:00:00Z",
+      "publication_name": "Forward Collection",
+      "publisher_name": "Amazon Original Stories",
+      "rating": {
+        "num_reviews": 203,
+        "overall_distribution": {
+          "average_rating": 4.1761336515513126,
+          "display_average_rating": "4.2",
+          "display_stars": 4,
+          "num_five_star_ratings": 1971,
+          "num_four_star_ratings": 1295,
+          "num_one_star_ratings": 76,
+          "num_ratings": 4190,
+          "num_three_star_ratings": 691,
+          "num_two_star_ratings": 157
+        }
+      },
+      "release_date": "2019-09-17",
+      "runtime_length_min": 50,
+      "series": [
+        {
+          "asin": "B07XJZMWHW",
+          "sequence": "",
+          "title": "Forward Collection",
+          "url": "/pd/Forward-Collection-Audiobook/B07XJZMWHW"
+        }
+      ],
+      "subtitle": "Forward collection",
+      "title": "Randomize"
+    },
+    {
+      "asin": "0593102878",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18572091011",
+              "name": "Children's Audiobooks"
+            },
+            {
+              "id": "18572586011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18572587011",
+              "name": "Fantasy & Magic"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580715011",
+              "name": "Teen & Young Adult"
+            },
+            {
+              "id": "18580894011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18580895011",
+              "name": "Action & Adventure"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2019-07-09",
+      "language": "english",
+      "merchandising_summary": "#1 New York Times bestselling author Andy Weir and acclaimed illustrator Sarah Andersen tackle what transpires after \"happily ever after.\" What happens to Alice when she comes back from Wonderland? Wendy from Neverland? Dorothy from Oz? The three meet here, at Cheshire Crossing—a boarding...",
+      "narrators": [
+        {
+          "name": "Sophie Amoss"
+        },
+        {
+          "name": "Brittany Pressley"
+        },
+        {
+          "name": "Kristen DiMercurio"
+        },
+        {
+          "name": "Rebecca Soler"
+        },
+        {
+          "name": "Lisa Flanagan"
+        },
+        {
+          "name": "James Monroe Iglehart"
+        },
+        {
+          "name": "Neil Hellegers"
+        },
+        {
+          "name": "Sean Patrick Hopkins"
+        },
+        {
+          "name": "Peter Coleman"
+        },
+        {
+          "name": "Pete Bradbury"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51eE4N8g9iL._SL500_.jpg"
+      },
+      "publication_datetime": "2019-07-09T07:00:00Z",
+      "publisher_name": "Random House Audio",
+      "rating": {
+        "num_reviews": 17,
+        "overall_distribution": {
+          "average_rating": 4.300813008130081,
+          "display_average_rating": "4.3",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 70,
+          "num_four_star_ratings": 30,
+          "num_one_star_ratings": 2,
+          "num_ratings": 123,
+          "num_three_star_ratings": 15,
+          "num_two_star_ratings": 6
+        }
+      },
+      "release_date": "2019-07-09",
+      "runtime_length_min": 98,
+      "title": "Cheshire Crossing"
+    },
+    {
+      "asin": "B079Q9DPY2",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "abridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2018-03-05",
+      "language": "german",
+      "merchandising_summary": "Der neue Roman vom Autor des Weltbestsellers \"Der Marsianer\" Jazz Bashara ist kriminell. Zumindest ein bisschen. Schließlich ist das Leben in Artemis, der ersten und einzigen Stadt auf dem Mond, verdammt teuer und, wenn man kein Millionär ist, verdammt ungemütlich. Also tut Jazz, was getan...",
+      "narrators": [
+        {
+          "name": "Gabrielle Pietermann"
+        },
+        {
+          "name": "Marius Clarén"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51PBHsGFWCL._SL500_.jpg"
+      },
+      "publication_datetime": "2018-03-05T00:00:00Z",
+      "publisher_name": "Random House Audio, Deutschland",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2018-03-05",
+      "runtime_length_min": 550,
+      "title": "Artemis"
+    },
+    {
+      "asin": "B079LSG4Q9",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2018-03-02",
+      "language": "german",
+      "merchandising_summary": "Der neue Roman vom Autor des Weltbestsellers \"Der Marsianer\" Jazz Bashara ist kriminell. Zumindest ein bisschen. Schließlich ist das Leben in Artemis, der ersten und einzigen Stadt auf dem Mond, verdammt teuer und, wenn man kein Millionär ist, verdammt ungemütlich. Also tut Jazz, was getan...",
+      "narrators": [
+        {
+          "name": "Gabrielle Pietermann"
+        },
+        {
+          "name": "Marius Clarén"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51Y7y-C2uOL._SL500_.jpg"
+      },
+      "publication_datetime": "2018-03-02T08:00:00Z",
+      "publisher_name": "Random House Audio, Deutschland",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 4.666666666666667,
+          "display_average_rating": "4.7",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 5,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 6,
+          "num_three_star_ratings": 1,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2018-03-02",
+      "runtime_length_min": 609,
+      "title": "Artemis"
+    },
+    {
+      "asin": "B079Y7BBL3",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Javier Guerrero Gimeno"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574639011",
+              "name": "Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580645011",
+              "name": "Space Opera"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2018-02-22",
+      "language": "spanish",
+      "merchandising_summary": "<p>Jazz Bashara es una criminal... O al menos lo parece. La vida en Artemisa, la primera y única ciudad de la Luna, es difícil si no eres un turista adinerado o un multimillonario excéntrico....</p>",
+      "narrators": [
+        {
+          "name": "Isabel Valls"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41Ljvmj2wHL._SL500_.jpg"
+      },
+      "publication_datetime": "2018-02-22T08:00:00Z",
+      "publisher_name": "Penguin Random House Grupo Editorial",
+      "rating": {
+        "num_reviews": 35,
+        "overall_distribution": {
+          "average_rating": 4.351778656126482,
+          "display_average_rating": "4.4",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 141,
+          "num_four_star_ratings": 68,
+          "num_one_star_ratings": 2,
+          "num_ratings": 253,
+          "num_three_star_ratings": 38,
+          "num_two_star_ratings": 4
+        }
+      },
+      "release_date": "2018-02-22",
+      "runtime_length_min": 638,
+      "title": "Artemisa (Spanish Edition)"
+    },
+    {
+      "asin": "B079YDJ18Z",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Javier Guerrero Gimeno"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2018-02-22",
+      "language": "spanish",
+      "merchandising_summary": "<p>Seis días atrás el astronauta Mark Watney se convirtió en uno de los primeros hombres en caminar por la superficie de Marte. Ahora está seguro de que será el primer hombre en morir allí. La tripulación de la nave en que viajaba se ve obligada a evacuar el planeta....</p>",
+      "narrators": [
+        {
+          "name": "Xavi Fernández"
+        },
+        {
+          "name": "José Posada"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41LuqZpUz8L._SL500_.jpg"
+      },
+      "publication_datetime": "2018-02-22T08:00:00Z",
+      "publisher_name": "Penguin Random House Grupo Editorial",
+      "rating": {
+        "num_reviews": 50,
+        "overall_distribution": {
+          "average_rating": 4.72,
+          "display_average_rating": "4.7",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 302,
+          "num_four_star_ratings": 51,
+          "num_one_star_ratings": 3,
+          "num_ratings": 375,
+          "num_three_star_ratings": 15,
+          "num_two_star_ratings": 4
+        }
+      },
+      "release_date": "2018-02-22",
+      "runtime_length_min": 755,
+      "title": "El marciano [The Martian]"
+    },
+    {
+      "asin": "B072R1CY4P",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574427011",
+              "name": "Action & Adventure"
+            },
+            {
+              "id": "18574429011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574433011",
+              "name": "Thriller & Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574639011",
+              "name": "Suspense"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580607011",
+              "name": "Fantasy"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2017-11-14",
+      "language": "english",
+      "merchandising_summary": "On the Moon, crime pays, but small-time crook Jazz Bashara may have just uncovered a conspiracy of lunar proportions. Welcome to Artemis.",
+      "narrators": [
+        {
+          "asin": "B0C9M888W1",
+          "name": "Rosario Dawson"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51fisVXQNrL._SL500_.jpg"
+      },
+      "publication_datetime": "2017-11-14T08:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 7952,
+        "overall_distribution": {
+          "average_rating": 4.346981497098071,
+          "display_average_rating": "4.3",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 55691,
+          "num_four_star_ratings": 29673,
+          "num_one_star_ratings": 1148,
+          "num_ratings": 100795,
+          "num_three_star_ratings": 11293,
+          "num_two_star_ratings": 2990
+        }
+      },
+      "release_date": "2017-11-14",
+      "runtime_length_min": 537,
+      "title": "Artemis"
+    }
+  ],
+  "response_groups": [
+    "product_desc",
+    "always-returned",
+    "contributors",
+    "series",
+    "rating",
+    "media",
+    "category_ladders",
+    "product_attrs"
+  ],
+  "total_results": 25
+}

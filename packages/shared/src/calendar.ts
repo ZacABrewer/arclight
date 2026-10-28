@@ -1,12 +1,13 @@
 import { z } from 'zod';
 import { Episode, MediaFile, MediaImage, MovieStatus, SeriesStatus } from './library.js';
 import { Album, Artist } from './music.js';
+import { Author, Book } from './audiobooks.js';
 
 // Calendar contract: upcoming/recent episodes by air date, movies by release date and (with
 // music enabled) albums by release date. Dates are ISO-8601. An episode's `date` is its UTC air
 // time when known, else its air date (YYYY-MM-DD); a movie's `date` is the release date of its
 // `releaseKind`; an album's `date` is its release date (YYYY-MM-DD; albums MusicBrainz only
-// dates to the month or year are left out).
+// dates to the month or year are left out); a book's `date` is its release date (audiobooks).
 
 export const CalendarReleaseKind = z.enum(['cinema', 'digital', 'physical']);
 export type CalendarReleaseKind = z.infer<typeof CalendarReleaseKind>;
@@ -97,7 +98,35 @@ export const CalendarAlbumItem = z.object({
 });
 export type CalendarAlbumItem = z.infer<typeof CalendarAlbumItem>;
 
-export const CalendarItem = z.discriminatedUnion('type', [CalendarEpisodeItem, CalendarMovieItem, CalendarAlbumItem]);
+/** The author fields a calendar book entry shows. */
+export const CalendarAuthorSummary = Author.pick({
+  id: true,
+  asin: true,
+  name: true,
+  sortName: true,
+  monitored: true,
+  images: true,
+  tags: true,
+  path: true,
+  qualityProfileId: true,
+});
+export type CalendarAuthorSummary = z.infer<typeof CalendarAuthorSummary>;
+
+/**
+ * A book release date (audiobooks; only while `features.audiobooks` is on). `date` is the
+ * book's `releaseDate` (YYYY-MM-DD; books dated only to the year are left out).
+ */
+export const CalendarBookItem = z.object({
+  type: z.literal('book'),
+  date: z.string(),
+  authorId: z.number().int(),
+  authorName: z.string(),
+  book: Book,
+  author: CalendarAuthorSummary,
+});
+export type CalendarBookItem = z.infer<typeof CalendarBookItem>;
+
+export const CalendarItem = z.discriminatedUnion('type', [CalendarEpisodeItem, CalendarMovieItem, CalendarAlbumItem, CalendarBookItem]);
 export type CalendarItem = z.infer<typeof CalendarItem>;
 
 /** Query-string boolean: accepts true/false/1/0 (and real booleans from typed callers). */
@@ -134,8 +163,8 @@ export const CalendarQuery = z.object({
   includeSeries: qsBool(false),
   includeEpisodeFile: qsBool(false),
   tags: qsTags,
-  /** Only episodes (`series`), only movies (`movie`) or only albums (`music`); default all. */
-  mediaType: z.enum(['all', 'series', 'movie', 'music']).default('all'),
+  /** Only episodes (`series`), movies (`movie`), albums (`music`) or books (`audiobook`); default all. */
+  mediaType: z.enum(['all', 'series', 'movie', 'music', 'audiobook']).default('all'),
 });
 export type CalendarQuery = z.infer<typeof CalendarQuery>;
 export type CalendarQueryInput = z.input<typeof CalendarQuery>;

@@ -274,7 +274,9 @@ function matchesTags(itemTags: number[], wanted: number[]): boolean {
 }
 
 function titleOf(item: CalendarItem): string {
-  return item.type === 'episode' ? item.seriesTitle : item.type === 'movie' ? item.movie.title : item.artistName;
+  if (item.type === 'episode') return item.seriesTitle;
+  if (item.type === 'movie') return item.movie.title;
+  return item.type === 'album' ? item.artistName : item.authorName;
 }
 
 function orderOf(item: CalendarItem): number {

@@ -52,6 +52,7 @@ import {
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { artists } from '../music/schema.js';
+import { authors } from '../audiobooks/schema.js';
 import { getFeatureSettings } from '../settings/service.js';
 import { DefinitionStore } from './definitions.js';
 import { IndexersError, parseOrThrow } from './errors.js';
@@ -1387,8 +1388,14 @@ function audioDomainsFromDb(db: Db): AudioDomains {
       music = false; // music tables missing (module-only schema in tests)
     }
   }
-  // TODO(wave 3): also require a monitored author once the audiobooks authors table exists.
-  const audiobooks = features.audiobooks;
+  let audiobooks = false;
+  if (features.audiobooks) {
+    try {
+      audiobooks = db.select({ id: authors.id }).from(authors).where(eq(authors.monitored, true)).limit(1).get() !== undefined;
+    } catch {
+      audiobooks = false; // audiobook tables missing (module-only schema in tests)
+    }
+  }
   return { music, audiobooks };
 }
 

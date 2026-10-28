@@ -25,7 +25,9 @@ const labels = (items: CalendarItem[]) =>
       ? `${i.seriesTitle} ${i.episode.episodeNumber}`
       : i.type === 'movie'
         ? `${i.movie.title} ${i.releaseKind}`
-        : `${i.artistName} - ${i.album.title}`,
+        : i.type === 'album'
+          ? `${i.artistName} - ${i.album.title}`
+          : `${i.authorName} - ${i.book.title}`,
   );
 
 describe('calendar range queries', () => {

@@ -1,0 +1,493 @@
+{
+  "product_filters": [],
+  "products": [
+    {
+      "asin": "B0GTS2XN16",
+      "authors": [
+        {
+          "name": "Dmitry Dornichev"
+        },
+        {
+          "name": "Evgeny Fox"
+        },
+        {
+          "name": "Ciaran Patrick Traynor - Translator - translator"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580607011",
+              "name": "Fantasy"
+            },
+            {
+              "id": "18580608011",
+              "name": "Action & Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580633011",
+              "name": "Cyberpunk"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580643011",
+              "name": "Post-Apocalyptic"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2026-05-05",
+      "language": "english",
+      "merchandising_summary": "Well, if it isn't my favorite bald monkey, my most intrepid Legionnaire—Caesar! Ha, I see you've got yourself into a pickle as usual. What's that? You say you've had enough of thugs, nobles, and laws? Then why not take your mind off things with a little mission and earn us both some credits...",
+      "narrators": [
+        {
+          "name": "GM Hakim"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51T0ZCgmH7L._SL500_.jpg"
+      },
+      "publication_datetime": "2026-05-05T07:00:00Z",
+      "publication_name": "We Are Legion",
+      "publisher_name": "Tantor Media",
+      "rating": {
+        "num_reviews": 2,
+        "overall_distribution": {
+          "average_rating": 4.6875,
+          "display_average_rating": "4.7",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 13,
+          "num_four_star_ratings": 2,
+          "num_one_star_ratings": 0,
+          "num_ratings": 16,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 1
+        }
+      },
+      "release_date": "2026-05-05",
+      "runtime_length_min": 440,
+      "series": [
+        {
+          "asin": "B0F7ZQ1Q9K",
+          "sequence": "4",
+          "title": "We Are Legion",
+          "url": "/pd/We-Are-Legion-Audiobook/B0F7ZQ1Q9K"
+        }
+      ],
+      "title": "We Are Legion #4"
+    },
+    {
+      "asin": "B0F7SVBRYC",
+      "authors": [
+        {
+          "asin": "B0CKTZKQH2",
+          "name": "Dmitry Dornichev"
+        },
+        {
+          "asin": "B0DNR12MZZ",
+          "name": "Evgeny Fox"
+        },
+        {
+          "name": "Ciaran Patrick Traynor - translator"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580636011",
+              "name": "First Contact"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2025-07-29",
+      "language": "english",
+      "merchandising_summary": "Greetings, bald monkey! What's with you? Surprised to see an alien? Ha! Believe me, you're better off with me than the Swarm that Swallows Systems. It'll be here in ten years or so, and then you'll all be done for. Just so you know. What's that? You want to live? Then you best join the Legion!...",
+      "narrators": [
+        {
+          "name": "GM Hakim"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51-LT01j+yL._SL500_.jpg"
+      },
+      "publication_datetime": "2025-07-29T07:00:00Z",
+      "publication_name": "We Are Legion",
+      "publisher_name": "Tantor Media",
+      "rating": {
+        "num_reviews": 4,
+        "overall_distribution": {
+          "average_rating": 4.518518518518518,
+          "display_average_rating": "4.5",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 22,
+          "num_four_star_ratings": 2,
+          "num_one_star_ratings": 2,
+          "num_ratings": 27,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 1
+        }
+      },
+      "release_date": "2025-07-29",
+      "runtime_length_min": 541,
+      "series": [
+        {
+          "asin": "B0F7ZQ1Q9K",
+          "sequence": "1",
+          "title": "We Are Legion",
+          "url": "/pd/We-Are-Legion-Audiobook/B0F7ZQ1Q9K"
+        }
+      ],
+      "subtitle": "We Are Legion, Book 1",
+      "title": "We Are Legion #1"
+    },
+    {
+      "asin": "B07341FZDC",
+      "authors": [
+        {
+          "asin": "B010ETTBJC",
+          "name": "Dennis E. Taylor"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580636011",
+              "name": "First Contact"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2017-08-08",
+      "language": "english",
+      "merchandising_summary": "<p>The epic and highly anticipated conclusion to the listener-favorite series that had countless Audible listeners (and employees) hooked from the very first Bob - featuring, as always, a flawless performance from the inimitable Ray Porter....</p>",
+      "narrators": [
+        {
+          "name": "Ray Porter"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51pdrrgwa+L._SL500_.jpg"
+      },
+      "program_participation": "Audible Original",
+      "publication_datetime": "2017-08-08T07:00:00Z",
+      "publication_name": "Bobiverse",
+      "publisher_name": "Audible Originals",
+      "rating": {
+        "num_reviews": 3085,
+        "overall_distribution": {
+          "average_rating": 4.7801407214492295,
+          "display_average_rating": "4.8",
+          "display_stars": 5,
+          "num_five_star_ratings": 56798,
+          "num_four_star_ratings": 10526,
+          "num_one_star_ratings": 81,
+          "num_ratings": 69499,
+          "num_three_star_ratings": 1852,
+          "num_two_star_ratings": 242
+        }
+      },
+      "release_date": "2017-08-08",
+      "runtime_length_min": 476,
+      "series": [
+        {
+          "asin": "B01M1RDL6W",
+          "sequence": "3",
+          "title": "Bobiverse",
+          "url": "/pd/Bobiverse-Audiobook/B01M1RDL6W"
+        }
+      ],
+      "subtitle": "Bobiverse, Book 3",
+      "title": "All These Worlds"
+    },
+    {
+      "asin": "B09XXZ2QWR",
+      "authors": [
+        {
+          "asin": "B010ETTBJC",
+          "name": "Dennis E. Taylor"
+        },
+        {
+          "name": "Anna Roig - translator"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580640011",
+              "name": "Humorous"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "original_recording",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2022-07-08",
+      "language": "spanish",
+      "merchandising_summary": "<p>Bob Johansson recién vendió su compañía de software por una pequeña fortuna y le ilusiona vivir la vida en grande. Lo primero en su lista de pendientes: gastar su nuevo dinero. En un derroche, contrata un servicio para preservar su cabeza en criogenia, en caso de muerte....</p>",
+      "narrators": [
+        {
+          "name": "Antonio Raluy"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/5137LWWo1OL._SL500_.jpg"
+      },
+      "program_participation": "Audible Original",
+      "publication_datetime": "2022-07-08T07:00:00Z",
+      "publication_name": "Bobiverse [Spanish Edition]",
+      "publisher_name": "Audible Originals",
+      "rating": {
+        "num_reviews": 12,
+        "overall_distribution": {
+          "average_rating": 4.578125,
+          "display_average_rating": "4.6",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 45,
+          "num_four_star_ratings": 14,
+          "num_one_star_ratings": 0,
+          "num_ratings": 64,
+          "num_three_star_ratings": 2,
+          "num_two_star_ratings": 3
+        }
+      },
+      "release_date": "2022-07-08",
+      "runtime_length_min": 686,
+      "series": [
+        {
+          "asin": "B0B5VMNHRD",
+          "sequence": "1",
+          "title": "Bobiverso",
+          "url": "/pd/Bobiverso-Audiobook/B0B5VMNHRD"
+        }
+      ],
+      "subtitle": "Bobiverso, Libro 1 [Bobiverse, Book 1]",
+      "title": "Somos legión (Somos Bob) [We Are Legion (We Are Bob)]"
+    },
+    {
+      "asin": "B0BWFTZW3K",
+      "authors": [
+        {
+          "asin": "B010ETTBJC",
+          "name": "Dennis E. Taylor"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580607011",
+              "name": "Fantasy"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580638011",
+              "name": "Genetic Engineering"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2023-02-23",
+      "language": "italian",
+      "merchandising_summary": "<p>Bob Johansson ha appena guadagnato una piccola fortuna dalla vendita della sua azienda di software e non vede l'ora di godersi la sua nuova vita all'insegna...</p>",
+      "narrators": [
+        {
+          "name": "Alberto Onofrietti"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51BwGLIFOjL._SL500_.jpg"
+      },
+      "program_participation": "Audible Original",
+      "publication_datetime": "2023-02-23T01:00:00Z",
+      "publisher_name": "Audible Originals",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2023-02-23",
+      "runtime_length_min": 625,
+      "series": [
+        {
+          "asin": "B0BWFNGMRQ",
+          "sequence": "1",
+          "title": "Bobiverse [Italian Edition]",
+          "url": "/pd/Bobiverse-Italian-Edition-Audiobook/B0BWFNGMRQ"
+        }
+      ],
+      "subtitle": "Bobiverse 1 [Bobiverse, Book 1]",
+      "title": "Noi siamo infinito (Noi siamo Bob) [We Are Legion (We Are Bob)]"
+    }
+  ],
+  "response_groups": [
+    "product_desc",
+    "always-returned",
+    "contributors",
+    "series",
+    "rating",
+    "media",
+    "category_ladders",
+    "product_attrs"
+  ],
+  "total_results": 10
+}

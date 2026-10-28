@@ -22,6 +22,8 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
   const start = from.getTime();
   const end = start + hours * 3_600_000;
   return items
+    // Audiobook release dates are not shown here yet (the Audiobooks web work adds them).
+    .filter((it): it is Exclude<CalendarItem, { type: 'book' }> => it.type !== 'book')
     .map((it) => {
       const when = it.type === 'episode' ? (it.episode.airDateUtc ?? it.date) : it.date;
       return { it, at: new Date(when).getTime(), when };

@@ -174,6 +174,8 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
       link: { to: '/library/music/album/$id', params: { id: String(album.id) } },
     };
   }
+  // Audiobook release dates: the API does not send them yet; the Audiobooks web work renders them.
+  if (item.type === 'book') return null;
   const m = item.movie;
   const released = parsed.getTime() <= now.getTime();
   const status: EpisodeStatus = m.hasFile ? 'downloaded' : !released ? 'unaired' : m.monitored ? 'wanted' : 'missing';

@@ -1,0 +1,67 @@
+{
+  "numFound": 2,
+  "start": 0,
+  "numFoundExact": true,
+  "docs": [
+    {
+      "alternate_names": [
+        "Jack Sharp"
+      ],
+      "birth_date": "16 June 1972",
+      "key": "OL7234434A",
+      "name": "Andy Weir",
+      "top_subjects": [
+        "Fiction",
+        "Science-Fiction",
+        "New York Times bestseller",
+        "Fiction, science fiction, action & adventure",
+        "Science Fiction",
+        "Romans, nouvelles",
+        "Fiction, science fiction, hard science fiction",
+        "Fiction, science fiction, general",
+        "Fantasy",
+        "Earth"
+      ],
+      "top_work": "The Martian",
+      "type": "author",
+      "work_count": 13,
+      "ratings_average": 4.2685623,
+      "ratings_sortable": 4.19911,
+      "ratings_count": 633,
+      "ratings_count_1": 7,
+      "ratings_count_2": 23,
+      "ratings_count_3": 83,
+      "ratings_count_4": 200,
+      "ratings_count_5": 320,
+      "want_to_read_count": 2038,
+      "already_read_count": 914,
+      "currently_reading_count": 106,
+      "stopped_reading_count": 0,
+      "readinglog_count": 3058,
+      "_root_": "/authors/OL7234434A",
+      "_version_": 1867312457559572500
+    },
+    {
+      "key": "OL12970306A",
+      "name": "Andy Weir bush",
+      "top_work": "Adventures of Brian May",
+      "type": "author",
+      "work_count": 1,
+      "ratings_average": 0,
+      "ratings_sortable": 2.047372,
+      "ratings_count": 0,
+      "ratings_count_1": 0,
+      "ratings_count_2": 0,
+      "ratings_count_3": 0,
+      "ratings_count_4": 0,
+      "ratings_count_5": 0,
+      "want_to_read_count": 0,
+      "already_read_count": 0,
+      "currently_reading_count": 0,
+      "stopped_reading_count": 0,
+      "readinglog_count": 0,
+      "_root_": "/authors/OL12970306A",
+      "_version_": 1867219374295744500
+    }
+  ]
+}

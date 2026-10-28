@@ -161,12 +161,12 @@ export function specImplementations(): SpecImplementationDefinition[] {
         { name: 'requireCue', label: 'Require Cue', type: 'checkbox', default: false, helpText: 'With nothing required, matches any release with a log or a cue sheet' },
       ],
     },
-    // ---- audiobooks (evaluated from wave 3 on)
+    // ---- audiobooks
     {
       implementation: 'fileLayout',
       label: 'File Layout',
       mediaTypes: ['audiobook'],
-      fields: [{ name: 'layout', label: 'Layout', type: 'select', options: AudioFileLayout.options.map((l) => ({ value: l, label: l === 'single' ? 'Single file' : 'Multiple files' })) }],
+      fields: [{ name: 'layout', label: 'Layout', type: 'select', options: AudioFileLayout.options.map((l) => ({ value: l, label: l === 'single' ? 'Single file' : 'Multiple files' })), helpText: 'From the file count when known, else the name (m4b is one file; mp3 and flac are one file per part)' }],
     },
     {
       implementation: 'formatType',

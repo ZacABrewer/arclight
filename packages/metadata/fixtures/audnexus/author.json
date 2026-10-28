@@ -1,0 +1,58 @@
+{
+  "asin": "B00G0WYW92",
+  "description": "ANDY WEIR built a two-decade career as a software engineer until the success of his first published novel, The Martian, allowed him to live out his dream of writing full-time. He is a lifelong space nerd and a devoted hobbyist of such subjects as relativistic physics, orbital mechanics, and the history of manned spaceflight. He also mixes a mean cocktail. He lives in California.",
+  "genres": [
+    {
+      "asin": "18580606011",
+      "name": "Science Fiction & Fantasy",
+      "type": "genre"
+    },
+    {
+      "asin": "18574426011",
+      "name": "Literature & Fiction",
+      "type": "genre"
+    },
+    {
+      "asin": "18574597011",
+      "name": "Mystery, Thriller & Suspense",
+      "type": "genre"
+    }
+  ],
+  "image": "https://images-na.ssl-images-amazon.com/images/S/amzn-author-media-prod/dcqug62o4s52ubd61ogont4t3l.jpg",
+  "name": "Andy Weir",
+  "region": "us",
+  "similar": [
+    {
+      "asin": "B001H6U8X0",
+      "name": "Blake Crouch"
+    },
+    {
+      "asin": "B001IGFHW6",
+      "name": "Brandon Sanderson"
+    },
+    {
+      "asin": "B007JP96JU",
+      "name": "Cixin Liu"
+    },
+    {
+      "asin": "B004XRR8Z6",
+      "name": "Ernest Cline"
+    },
+    {
+      "asin": "B00ME7ACR8",
+      "name": "James Islington"
+    },
+    {
+      "asin": "B002BLP1QY",
+      "name": "Matt Dinniman"
+    },
+    {
+      "asin": "B00EDBZVNI",
+      "name": "Pierce Brown"
+    },
+    {
+      "asin": "B000AQ0842",
+      "name": "Stephen King"
+    }
+  ]
+}

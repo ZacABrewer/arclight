@@ -99,6 +99,21 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
     lines.push('CATEGORIES:Music', `STATUS:${complete ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
     return lines;
   }
+  if (item.type === 'book') {
+    const b = item.book;
+    const narrators = b.narrators.length > 0 ? ` (narrated by ${b.narrators.join(', ')})` : '';
+    const lines = [
+      'BEGIN:VEVENT',
+      `UID:arclight-book-${b.id}@arclight`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${dateValue(item.date)}`,
+      `DTEND;VALUE=DATE:${nextDay(item.date)}`,
+      `SUMMARY:${escapeText(`${item.authorName} - ${b.title}${narrators}`)}`,
+    ];
+    if (b.overview) lines.push(`DESCRIPTION:${escapeText(b.overview)}`);
+    lines.push('CATEGORIES:Audiobooks', `STATUS:${b.hasFile ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
+    return lines;
+  }
   const m = item.movie;
   const lines = [
     'BEGIN:VEVENT',

@@ -124,3 +124,12 @@ export {
   type FanartClientOptions,
   type FanartImage,
 } from './fanart/index.js';
+
+// ---------------------------------------------------------------------------
+// Audiobooks: Audnexus, Audible catalog (unofficial), OpenLibrary, and the combined catalog
+
+export * from './audnexus/index.js';
+export * from './audible/index.js';
+export * from './openlibrary/index.js';
+export * from './audiobook-catalog/index.js';
+export { normalizeIsbn, toIsbn13 } from './audiobook-util.js';

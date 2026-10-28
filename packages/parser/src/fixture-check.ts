@@ -7,6 +7,7 @@ import { parseReleaseGroup } from './group.js';
 import { parseSeasonTitle } from './series.js';
 import { isHashedRelease } from './hash.js';
 import { parseAudioPath, parseMusicRelease } from './music.js';
+import { parseAudiobookRelease } from './audiobook.js';
 
 export interface FixtureCase {
   input: string;
@@ -55,6 +56,33 @@ function checkMusicCase(c: FixtureCase): CaseResult {
   return c.skip ? { ok, problems, skipped: c.skip } : { ok, problems };
 }
 
+const AUDIOBOOK_FIELDS = [
+  'authors', 'title', 'subtitle', 'series', 'seriesPosition', 'narrators', 'year', 'formatType', 'container', 'bitrateKbps',
+  'asin', 'isbn', 'isPack', 'language', 'retail', 'chapterized', 'fileLayout', 'scene',
+] as const;
+
+/** Audiobook fixtures: `parseAudiobookRelease`, or `parseAudioPath(path, 'audiobook')` for paths. */
+function checkAudiobookCase(c: FixtureCase): CaseResult {
+  const e = c.expected ?? c.expect ?? {};
+  const problems: string[] = [];
+  const path = c.parser === 'path' || (c.parser !== 'release' && /[\\/]/.test(c.input));
+  const r = path ? parseAudioPath(c.input, 'audiobook') : parseAudiobookRelease(c.input);
+  const check = (name: string, actual: unknown) => {
+    if (name in e && !eq(e[name], actual)) problems.push(`${name}: expected ${JSON.stringify(e[name])}, got ${JSON.stringify(actual)}`);
+  };
+  if ('audiobook' in e && e['audiobook'] === null) {
+    if (r.audiobook !== null) problems.push(`audiobook: expected null, got ${JSON.stringify({ authors: r.audiobook.authors, title: r.audiobook.title })}`);
+  } else if (AUDIOBOOK_FIELDS.some((f) => f in e)) {
+    if (!r.audiobook) problems.push('audiobook: not parsed');
+    else for (const f of AUDIOBOOK_FIELDS) check(f, r.audiobook[f]);
+  }
+  check('releaseGroup', r.releaseGroup);
+  for (const f of AUDIO_FIELDS) check(f, r.audio[f]);
+  check('quality', r.audio.quality.name);
+  const ok = problems.length === 0;
+  return c.skip ? { ok, problems, skipped: c.skip } : { ok, problems };
+}
+
 const RADARR_SOURCE_TO_OURS: Record<string, string[]> = {
   tv: ['television', 'televisionRaw'],
   dvd: ['dvd'],
@@ -80,6 +108,7 @@ function eq(a: unknown, b: unknown): boolean {
 
 export function checkCase(file: string, c: FixtureCase): CaseResult {
   if (file.startsWith('music')) return checkMusicCase(c);
+  if (file.startsWith('audiobook')) return checkAudiobookCase(c);
   const problems: string[] = [];
   const e = c.expect ?? c.expected ?? {};
   // Roman numerals, slugs and ISO lookups belong to metadata/organizer, not the parser.

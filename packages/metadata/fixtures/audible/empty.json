@@ -1,0 +1,15 @@
+{
+  "product_filters": [],
+  "products": [],
+  "response_groups": [
+    "product_desc",
+    "always-returned",
+    "contributors",
+    "series",
+    "rating",
+    "media",
+    "category_ladders",
+    "product_attrs"
+  ],
+  "total_results": 0
+}

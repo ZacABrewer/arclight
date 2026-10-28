@@ -1,0 +1,472 @@
+{
+  "product_filters": [],
+  "products": [
+    {
+      "asin": "B0716H7M7K",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574446011",
+              "name": "Anthologies & Short Stories"
+            },
+            {
+              "id": "18574447011",
+              "name": "Anthologies"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574446011",
+              "name": "Anthologies & Short Stories"
+            },
+            {
+              "id": "18574448011",
+              "name": "Short Stories"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2017-06-06",
+      "language": "english",
+      "merchandising_summary": "Collected for the first time anywhere, the nine tales in The Egg and Other Stories highlight Andy Weir's trademark wit and unexpected twists....",
+      "narrators": [
+        {
+          "name": "Jonathan Davis"
+        },
+        {
+          "name": "Christy Romano"
+        },
+        {
+          "name": "R.C. Bray"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41Kcd3us6+L._SL500_.jpg"
+      },
+      "publication_datetime": "2017-06-06T07:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 803,
+        "overall_distribution": {
+          "average_rating": 4.541796287004516,
+          "display_average_rating": "4.5",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 6764,
+          "num_four_star_ratings": 2156,
+          "num_one_star_ratings": 72,
+          "num_ratings": 9965,
+          "num_three_star_ratings": 797,
+          "num_two_star_ratings": 176
+        }
+      },
+      "release_date": "2017-06-06",
+      "runtime_length_min": 77,
+      "title": "The Egg and Other Stories"
+    },
+    {
+      "asin": "B071CGXYVJ",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574606011",
+              "name": "Mystery"
+            },
+            {
+              "id": "18574615011",
+              "name": "Historical"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18574597011",
+              "name": "Mystery, Thriller & Suspense"
+            },
+            {
+              "id": "18574621011",
+              "name": "Thriller & Suspense"
+            },
+            {
+              "id": "18574627011",
+              "name": "Historical"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2017-06-06",
+      "language": "english",
+      "merchandising_summary": "His razor-sharp intellect, uncanny powers of deduction, and knowledge of the criminal underground are legendary throughout London....",
+      "narrators": [
+        {
+          "asin": "B0C9M7ZZQP",
+          "name": "Graeme Malcolm"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/514eYOli8TL._SL500_.jpg"
+      },
+      "publication_datetime": "2017-06-06T07:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 430,
+        "overall_distribution": {
+          "average_rating": 4.436563741974931,
+          "display_average_rating": "4.4",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 3970,
+          "num_four_star_ratings": 1701,
+          "num_one_star_ratings": 52,
+          "num_ratings": 6542,
+          "num_three_star_ratings": 680,
+          "num_two_star_ratings": 139
+        }
+      },
+      "release_date": "2017-06-06",
+      "runtime_length_min": 70,
+      "title": "James Moriarty, Consulting Criminal"
+    },
+    {
+      "asin": "B014PNQQZA",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Jürgen Langowski"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574456011",
+              "name": "Genre Fiction"
+            },
+            {
+              "id": "18574473011",
+              "name": "Movie, TV & Video Game Tie-Ins"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "abridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2015-09-14",
+      "language": "german",
+      "merchandising_summary": "Das Hörbuch zum Blockbuster des Jahres! Bei einer Expedition auf dem Mars gerät der Astronaut Mark Watney in einen Sandsturm und wird bewusstlos. Als er aus seiner Ohnmacht erwacht, ist er allein. Auf dem Mars. Ohne Crew. Die spektakulärste Rettungsmission um das Überleben eines einzelnen...",
+      "narrators": [
+        {
+          "name": "Richard Barenberg"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/61qORVC+2SL._SL500_.jpg"
+      },
+      "publication_datetime": "2015-09-14T07:00:00Z",
+      "publisher_name": "Random House Audio",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 5,
+          "display_average_rating": "5.0",
+          "display_stars": 5,
+          "num_five_star_ratings": 2,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 2,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2015-09-14",
+      "runtime_length_min": 603,
+      "subtitle": "Rettet Mark Watney",
+      "title": "Der Marsianer"
+    },
+    {
+      "asin": "B00Q5NQ3DO",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580632011",
+              "name": "Anthologies & Short Stories"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "24427740011",
+              "name": "Comedy & Humor"
+            },
+            {
+              "id": "18574496011",
+              "name": "Literature & Fiction"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2014-11-26",
+      "language": "english",
+      "merchandising_summary": "<p>You were on your way home when you died. It was a car accident. Nothing particularly remarkable, but fatal nonetheless. You left behind a wife and two children. It was a painless death....</p>",
+      "narrators": [
+        {
+          "name": "R.C. Bray"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/41no1-0LCwL._SL500_.jpg"
+      },
+      "publication_datetime": "2014-11-26T13:10:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 506,
+        "overall_distribution": {
+          "average_rating": 4.329851833859607,
+          "display_average_rating": "4.3",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 2691,
+          "num_four_star_ratings": 719,
+          "num_one_star_ratings": 253,
+          "num_ratings": 4117,
+          "num_three_star_ratings": 334,
+          "num_two_star_ratings": 120
+        }
+      },
+      "release_date": "2014-11-26",
+      "runtime_length_min": 8,
+      "title": "The Egg"
+    },
+    {
+      "asin": "B00NWCJH8E",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18574426011",
+              "name": "Literature & Fiction"
+            },
+            {
+              "id": "18574456011",
+              "name": "Genre Fiction"
+            },
+            {
+              "id": "18574473011",
+              "name": "Movie, TV & Video Game Tie-Ins"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580607011",
+              "name": "Fantasy"
+            },
+            {
+              "id": "18580621011",
+              "name": "Movie, TV & Video Game Tie-Ins"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2014-10-10",
+      "language": "german",
+      "merchandising_summary": "Gestrandet auf dem Mars - Das Science Fiction Ereignis des Jahres Bei einer Expedition auf dem Mars gerät der Astronaut Mark Watney in einen Sandsturm und wird bewusstlos. Als er aus seiner Ohnmacht erwacht, ist er allein. Auf dem Mars. Ohne Crew. Die spektakulärste Rettungsmission um das...",
+      "narrators": [
+        {
+          "name": "Richard Barenberg"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/61qORVC+2SL._SL500_.jpg"
+      },
+      "publication_datetime": "2014-10-10T07:00:00Z",
+      "publisher_name": "Random House Audio, Deutschland",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 4.638888888888889,
+          "display_average_rating": "4.6",
+          "display_stars": 4.5,
+          "num_five_star_ratings": 24,
+          "num_four_star_ratings": 11,
+          "num_one_star_ratings": 0,
+          "num_ratings": 36,
+          "num_three_star_ratings": 1,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2014-10-10",
+      "runtime_length_min": 756,
+      "title": "Der Marsianer"
+    }
+  ],
+  "response_groups": [
+    "product_desc",
+    "always-returned",
+    "contributors",
+    "series",
+    "rating",
+    "media",
+    "category_ladders",
+    "product_attrs"
+  ],
+  "total_results": 25
+}

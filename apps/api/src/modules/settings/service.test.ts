@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { SECRET_MASK } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
+import { ProfilesService } from '../profiles/service.js';
 import { settingsRoutes } from './routes.js';
 import { applyMetadataUpdate, getSection, maskMetadataSettings, setSection } from './service.js';
 
@@ -117,6 +118,43 @@ describe('music and feature sections', () => {
     expect(features.json()).toEqual({ music: true, audiobooks: false });
     const bad = await a.inject({ method: 'PUT', url: '/api/v1/settings/audio', payload: { trackMatchThreshold: 2 } });
     expect(bad.statusCode).toBe(400);
+    await a.close();
+  });
+
+  it('audiobook metadata: defaults, partial updates, validation, and profiles seeded on enable', async () => {
+    expect(getSection(db, 'audiobookMetadata')).toEqual({
+      audibleRegion: 'us',
+      audnexusBaseUrl: 'https://api.audnex.us/',
+      openLibraryFallback: true,
+      languages: [],
+      audnexusRateLimitPerSecond: 1,
+      audibleRateLimitPerSecond: 2,
+      openLibraryRateLimitPerSecond: 1,
+    });
+    const a = await app();
+    const get = await a.inject({ method: 'GET', url: '/api/v1/settings/audiobookmetadata' });
+    expect(get.statusCode).toBe(200);
+    expect(get.json()).toMatchObject({ audibleRegion: 'us' });
+
+    const put = await a.inject({
+      method: 'PUT',
+      url: '/api/v1/settings/audiobookmetadata',
+      payload: { audibleRegion: 'de', languages: ['German'], audibleRateLimitPerSecond: 1 },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ audibleRegion: 'de', languages: ['german'], audibleRateLimitPerSecond: 1, openLibraryFallback: true });
+    await a.inject({ method: 'PUT', url: '/api/v1/settings/audiobookmetadata', payload: { openLibraryFallback: false } });
+    expect(getSection(db, 'audiobookMetadata')).toMatchObject({ audibleRegion: 'de', languages: ['german'], openLibraryFallback: false });
+
+    const badRegion = await a.inject({ method: 'PUT', url: '/api/v1/settings/audiobookmetadata', payload: { audibleRegion: 'xx' } });
+    expect(badRegion.statusCode).toBe(400);
+    const badRate = await a.inject({ method: 'PUT', url: '/api/v1/settings/audiobookmetadata', payload: { audnexusRateLimitPerSecond: 0 } });
+    expect(badRate.statusCode).toBe(400);
+
+    const features = await a.inject({ method: 'PUT', url: '/api/v1/settings/features', payload: { music: false, audiobooks: true } });
+    expect(features.json()).toEqual({ music: false, audiobooks: true });
+    const names = new ProfilesService({ db }).listQualityProfiles('audiobook').map((p) => p.name);
+    expect(names).toEqual(['Standard', 'M4B only', 'Any (audiobook)']);
     await a.close();
   });
 });

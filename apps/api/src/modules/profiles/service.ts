@@ -28,6 +28,7 @@ import {
   defaultDelayProfile,
   defaultQualityProfiles,
   defaultMusicProfiles,
+  defaultAudiobookProfiles,
   defaultQualitySize,
   isValidTerm,
   matchCustomFormats,
@@ -36,7 +37,7 @@ import {
   validateQualityProfile,
 } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
-import { albumTypeProfiles, artists, movies, series } from '../../db/schema.js';
+import { albumTypeProfiles, artists, authors, movies, series } from '../../db/schema.js';
 import { customFormats, delayProfiles, qualityDefinitions, qualityProfiles, releaseProfiles } from './schema.js';
 
 export type ProfileErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'IN_USE' | 'CONFLICT';
@@ -150,16 +151,29 @@ export class ProfilesService {
    * switched on and on boots while it is on, if there is no music profile yet.
    */
   seedMusicDefaults(): number {
-    const have = this.db.select({ id: qualityProfiles.id }).from(qualityProfiles).where(eq(qualityProfiles.mediaDomain, 'music')).limit(1).all();
+    return this.seedDomainProfiles('music', defaultMusicProfiles());
+  }
+
+  /**
+   * Audiobook quality profiles (Standard, M4B only, Any), once: when audiobooks are first
+   * switched on and on boots while they are on, if there is no audiobook profile yet.
+   */
+  seedAudiobookDefaults(): number {
+    return this.seedDomainProfiles('audiobook', defaultAudiobookProfiles());
+  }
+
+  /** Insert a domain's starter profiles unless the domain already has one; names in use are skipped. */
+  private seedDomainProfiles(domain: Exclude<MediaDomain, 'video'>, profiles: QualityProfileInput[]): number {
+    const have = this.db.select({ id: qualityProfiles.id }).from(qualityProfiles).where(eq(qualityProfiles.mediaDomain, domain)).limit(1).all();
     if (have.length > 0) return 0;
     const taken = new Set(this.db.select({ name: qualityProfiles.name }).from(qualityProfiles).all().map((r) => r.name));
     let n = 0;
-    for (const p of defaultMusicProfiles()) {
+    for (const p of profiles) {
       if (taken.has(p.name)) continue;
       this.db.insert(qualityProfiles).values(p).run();
       n++;
     }
-    if (n > 0) this.log?.info({ qualityProfiles: n }, 'seeded music profile defaults');
+    if (n > 0) this.log?.info({ qualityProfiles: n }, `seeded ${domain} profile defaults`);
     return n;
   }
 
@@ -203,13 +217,14 @@ export class ProfilesService {
     };
   }
 
-  /** How many series, movies and artists use the profile (video version slots are not counted). */
+  /** How many series, movies, artists and authors use the profile (video version slots are not counted). */
   private qualityProfileUsers(id: number): number {
     const count = (n: { c: number } | undefined) => n?.c ?? 0;
     return (
       count(this.db.select({ c: sql<number>`count(*)` }).from(series).where(eq(series.qualityProfileId, id)).get()) +
       count(this.db.select({ c: sql<number>`count(*)` }).from(movies).where(eq(movies.qualityProfileId, id)).get()) +
-      count(this.db.select({ c: sql<number>`count(*)` }).from(artists).where(eq(artists.qualityProfileId, id)).get())
+      count(this.db.select({ c: sql<number>`count(*)` }).from(artists).where(eq(artists.qualityProfileId, id)).get()) +
+      count(this.db.select({ c: sql<number>`count(*)` }).from(authors).where(eq(authors.qualityProfileId, id)).get())
     );
   }
 
@@ -514,7 +529,8 @@ export function qualityProfileDomainMismatch(db: Db, id: number, domain: MediaDo
   const row = db.select({ mediaDomain: qualityProfiles.mediaDomain }).from(qualityProfiles).where(eq(qualityProfiles.id, id)).get();
   if (!row || row.mediaDomain === domain) return null;
   const who = domain === 'video' ? 'series and movies' : domain === 'music' ? 'artists' : 'authors';
-  return `quality profile ${id} is a ${row.mediaDomain} profile; ${who} need a ${domain} profile`;
+  const a = (d: MediaDomain) => (d === 'audiobook' ? `an ${d}` : `a ${d}`);
+  return `quality profile ${id} is ${a(row.mediaDomain)} profile; ${who} need ${a(domain)} profile`;
 }
 
 function rowToReleaseProfile(row: typeof releaseProfiles.$inferSelect): ReleaseProfile {

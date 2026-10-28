@@ -2,7 +2,9 @@ import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   AlertSettings,
+  applyAudiobookMetadataUpdate,
   applyMusicMetadataUpdate,
+  AudiobookMetadataSettings,
   AudioImportSettings,
   BackupSettings,
   CompatSettings,
@@ -43,6 +45,7 @@ import {
   type MetadataSettingsUpdate,
   type MusicMetadataSettingsResponse,
   type MusicMetadataSettingsUpdate,
+  type AudiobookMetadataSettingsUpdate,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { settings } from '../../db/schema.js';
@@ -116,6 +119,9 @@ const sections = {
   // Owned by the music module: MusicBrainz / Fanart.tv access and release choice (routes under
   // /settings/musicmetadata; fanartApiKey masked there).
   musicMetadata: MusicMetadataSettings,
+  // Owned by the audiobooks module: Audible region, Audnexus / OpenLibrary access and rate limits
+  // (routes under /settings/audiobookmetadata; no secrets).
+  audiobookMetadata: AudiobookMetadataSettings,
   // Owned by the audio importer (imports/audio): track matching (routes under /settings/audio).
   audio: AudioImportSettings,
 } as const;
@@ -221,6 +227,18 @@ export function getMusicMetadataSettings(db: Db): MusicMetadataSettingsResponse 
 export function updateMusicMetadataSettings(db: Db, update: MusicMetadataSettingsUpdate): MusicMetadataSettingsResponse {
   const next = applyMusicMetadataUpdate(getSection(db, 'musicMetadata'), update);
   return maskMusicMetadataSettings(setSection(db, 'musicMetadata', next));
+}
+
+// ---------------------------------------------------------------------------------------
+// audiobookMetadata section (merge helper lives in the shared contract)
+// ---------------------------------------------------------------------------------------
+
+export function getAudiobookMetadataSettings(db: Db): AudiobookMetadataSettings {
+  return getSection(db, 'audiobookMetadata');
+}
+
+export function updateAudiobookMetadataSettings(db: Db, update: AudiobookMetadataSettingsUpdate): AudiobookMetadataSettings {
+  return setSection(db, 'audiobookMetadata', applyAudiobookMetadataUpdate(getSection(db, 'audiobookMetadata'), update));
 }
 
 // ---------------------------------------------------------------------------------------

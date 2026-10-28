@@ -1,0 +1,148 @@
+{
+  "links": {
+    "self": "/authors/OL7234434A/works.json?limit=10&offset=10",
+    "author": "/authors/OL7234434A",
+    "prev": "/authors/OL7234434A/works.json?limit=10&offset=0"
+  },
+  "size": 13,
+  "entries": [
+    {
+      "description": {
+        "type": "/type/text",
+        "value": "A gunter named Lacero searches for the first clue of James Halliday's Easter Egg hunt."
+      },
+      "links": [
+        {
+          "url": "http://www.galactanet.com/oneoff/lacero.html",
+          "type": {
+            "key": "/type/link"
+          },
+          "title": "Galactanet"
+        }
+      ],
+      "title": "Lacero",
+      "created": {
+        "type": "/type/datetime",
+        "value": "2015-02-17T12:38:35.423906"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2019-03-18T21:24:21.595190"
+      },
+      "covers": [
+        8445997
+      ],
+      "subjects": [
+        "Science-Fiction",
+        "Fan-Fiction"
+      ],
+      "latest_revision": 5,
+      "key": "/works/OL17082024W",
+      "authors": [
+        {
+          "type": {
+            "key": "/type/author_role"
+          },
+          "author": {
+            "key": "/authors/OL7234434A"
+          }
+        }
+      ],
+      "subject_times": [
+        "2040"
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "revision": 5
+    },
+    {
+      "description": "The story is about the main character, who is \"you\" (in second person), and God, who is \"me\" (in first person).",
+      "links": [
+        {
+          "title": "Galactanet",
+          "url": "http://galactanet.com/oneoff/theegg_mod.html",
+          "type": {
+            "key": "/type/link"
+          }
+        }
+      ],
+      "key": "/works/OL17365207W",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "title": "The Egg",
+      "subjects": [
+        "Science-Fiction",
+        "Fiction",
+        "Science Fiction"
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "genres": [
+        "/tags/OL179T"
+      ],
+      "latest_revision": 6,
+      "revision": 6,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2016-09-03T19:24:00.131845"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-08-29T14:16:03.070255"
+      }
+    },
+    {
+      "description": {
+        "type": "/type/text",
+        "value": "The adventures of a mad scientist."
+      },
+      "links": [
+        {
+          "url": "http://www.galactanet.com/comic/",
+          "type": {
+            "key": "/type/link"
+          },
+          "title": "Galactanet"
+        }
+      ],
+      "covers": [
+        8446041
+      ],
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2019-03-18T22:04:39.360818"
+      },
+      "latest_revision": 5,
+      "key": "/works/OL17841385W",
+      "authors": [
+        {
+          "type": {
+            "key": "/type/author_role"
+          },
+          "author": {
+            "key": "/authors/OL7234434A"
+          }
+        }
+      ],
+      "created": {
+        "type": "/type/datetime",
+        "value": "2018-02-16T11:17:40.553960"
+      },
+      "title": "Casey and Andy",
+      "type": {
+        "key": "/type/work"
+      },
+      "revision": 5
+    }
+  ]
+}

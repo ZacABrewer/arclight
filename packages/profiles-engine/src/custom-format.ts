@@ -1,4 +1,5 @@
 import type {
+  AudioFileLayout,
   AudioVbrPreset,
   CustomFormat,
   CustomFormatSpec,
@@ -54,6 +55,38 @@ function ripLogMatches(fields: { requireLog: boolean; minScore: number; requireC
   if (fields.minScore > 0 && (audio.logScore === undefined || audio.logScore < fields.minScore)) return false;
   if (fields.requireCue && !audio.hasCue) return false;
   return true;
+}
+
+/**
+ * Audiobook layout hints beyond the shared schema: the release's file count (from the
+ * indexer's file list or the download client) and its container ("m4b", "mp3"). Both are
+ * optional and read structurally, so a plain `ReleaseAudioEvaluation` still works.
+ */
+export interface AudioLayoutHints {
+  fileCount?: number;
+  container?: string;
+}
+
+/** Containers that hold a whole book in one file, and those that come one file per part. */
+const SINGLE_FILE_CONTAINERS = new Set(['m4b']);
+const MULTI_FILE_CONTAINERS = new Set(['mp3', 'flac']);
+
+/**
+ * The file layout a `fileLayout` spec compares: the file count when known (1 → single,
+ * more → multi), else the layout the parser stated, else the container hint (m4b → single;
+ * mp3, flac → multi). Undefined when nothing tells, so the spec does not match either way.
+ */
+export function resolveFileLayout(
+  audio: ReleaseAudioEvaluation & AudioLayoutHints,
+  ev?: Pick<ReleaseEvaluation, 'mediaType'> & AudioLayoutHints,
+): AudioFileLayout | undefined {
+  const count = audio.fileCount ?? ev?.fileCount;
+  if (count !== undefined && Number.isFinite(count) && count > 0) return count === 1 ? 'single' : 'multi';
+  if (audio.fileLayout) return audio.fileLayout;
+  const container = (audio.container ?? ev?.container)?.toLowerCase().replace(/^\./, '');
+  if (container && SINGLE_FILE_CONTAINERS.has(container)) return 'single';
+  if (container && MULTI_FILE_CONTAINERS.has(container)) return 'multi';
+  return undefined;
 }
 
 /** Raw match of one specification, before `negate` is applied. */
@@ -112,13 +145,17 @@ export function specMatchesRaw(spec: CustomFormatSpec, ev: ReleaseEvaluation): b
       return ev.audio?.source !== undefined && ev.audio.source === spec.fields.source;
     case 'ripLog':
       return ev.audio !== undefined && ripLogMatches(spec.fields, ev.audio);
-    // Audiobook specs (evaluated from wave 3 on, when the audiobook parser fills these in).
-    case 'fileLayout':
-      return ev.audio?.fileLayout !== undefined && ev.audio.fileLayout === spec.fields.layout;
+    // Audiobook specs. Unknown layout / format / narrators never match.
+    case 'fileLayout': {
+      if (!ev.audio) return false;
+      const layout = resolveFileLayout(ev.audio as ReleaseAudioEvaluation & AudioLayoutHints, ev as ReleaseEvaluation & AudioLayoutHints);
+      return layout !== undefined && layout === spec.fields.layout;
+    }
     case 'formatType':
       return ev.audio?.formatType !== undefined && ev.audio.formatType === spec.fields.formatType;
     case 'narrator':
-      return (ev.audio?.narrators ?? []).some((n) => matchString(spec.fields.pattern, n));
+      // Any one narrator matching is enough ("Full cast with Jane Voice").
+      return (ev.audio?.narrators ?? []).some((n) => matchString(spec.fields.pattern, n.trim()));
   }
 }
 

@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "REGION_UNAVAILABLE",
+    "message": "Item not available in region 'us' for ASIN: B000000000",
+    "details": {
+      "asin": "B000000000",
+      "code": "REGION_UNAVAILABLE"
+    }
+  }
+}

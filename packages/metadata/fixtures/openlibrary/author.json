@@ -1,0 +1,107 @@
+{
+  "personal_name": "Andy Weir",
+  "name": "Andy Weir",
+  "bio": {
+    "type": "/type/text",
+    "value": "Andy Weir built a career as a software engineer until the success of his first published novel, THE MARTIAN, allowed him to live out his dream of writing fulltime. He is a lifelong space nerd and a devoted hobbyist of subjects such as relativistic physics, orbital mechanics, and the history of manned spaceflight. He also mixes a mean cocktail. He lives in California."
+  },
+  "birth_date": "16 June 1972",
+  "remote_ids": {
+    "viaf": "307458091",
+    "wikidata": "Q18590295",
+    "isni": "000000043050228X",
+    "amazon": "B00G0WYW92",
+    "bookbrainz": "4d53a916-5591-4ad5-8bf5-8b11a997a58c",
+    "musicbrainz": "c8c1f688-5b79-44cf-b526-371077d17dd5",
+    "librarything": "weirandy",
+    "goodreads": "6540057",
+    "gnd": "1060353520",
+    "lc_naf": "no2014013631",
+    "imdb": "nm1083982",
+    "storygraph": "f58b6fd4-b07b-478b-8416-8d72f26a82f1",
+    "inventaire": "wd:Q18590295",
+    "opac_sbn": "LO1V423071"
+  },
+  "source_records": [
+    "amazon:0593357132",
+    "amazon:8418037016",
+    "amazon:1491523220",
+    "amazon:0606367209",
+    "amazon:0525572678",
+    "amazon:841792227X",
+    "marc:harvard_bibliographic_metadata/ab.bib.14.20150123.full.mrc:314725877:879",
+    "promise:bwb_daily_pallets_2024-12-19:KV-010-486"
+  ],
+  "links": [
+    {
+      "title": "Official Website",
+      "url": "https://andyweirauthor.com",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "Author's Website - Galactanet",
+      "url": "https://www.galactanet.com",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "Author's Facebook",
+      "url": "https://www.facebook.com/pages/Andy-Weir/462962073803090",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "Author's Twitter (X)",
+      "url": "https://x.com/andyweirauthor",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "Fantastic Fiction Author Entry",
+      "url": "https://www.fantasticfiction.com/w/andy-weir/",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "ISFDB Author Entry",
+      "url": "https://www.isfdb.org/cgi-bin/ea.cgi?198846",
+      "type": {
+        "key": "/type/link"
+      }
+    },
+    {
+      "title": "SFE Author Entry",
+      "url": "https://sf-encyclopedia.com/entry/weir_andy",
+      "type": {
+        "key": "/type/link"
+      }
+    }
+  ],
+  "alternate_names": [
+    "Jack Sharp"
+  ],
+  "photos": [
+    8137363,
+    14631002
+  ],
+  "key": "/authors/OL7234434A",
+  "type": {
+    "key": "/type/author"
+  },
+  "latest_revision": 20,
+  "revision": 20,
+  "created": {
+    "type": "/type/datetime",
+    "value": "2015-03-09T15:32:32.077510"
+  },
+  "last_modified": {
+    "type": "/type/datetime",
+    "value": "2026-03-29T19:57:58.053348"
+  }
+}

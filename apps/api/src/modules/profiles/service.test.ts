@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { QUALITIES, QUALITY_GROUP_ID_BASE, qualityById, qualityDomain, type QualityProfileInput } from '@arclight/shared';
 import { buildItems } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
-import { albumTypeProfiles, artists, series } from '../../db/schema.js';
+import { albumTypeProfiles, artists, authors, series } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { ProfileError, ProfilesService } from './service.js';
 import { profilesRoutes } from './routes.js';
@@ -79,6 +79,62 @@ describe('ProfilesService', () => {
       }
       // Video profiles are untouched.
       expect(service.listQualityProfiles('video').every((p) => p.mediaDomain === 'video')).toBe(true);
+    });
+
+    it('seeds the audiobook profiles once, with audiobook qualities only', () => {
+      service.seedDefaults();
+      expect(service.seedAudiobookDefaults()).toBe(3);
+      expect(service.seedAudiobookDefaults()).toBe(0);
+      const books = service.listQualityProfiles('audiobook');
+      expect(books.map((p) => p.name)).toEqual(['Standard', 'M4B only', 'Any (audiobook)']);
+      for (const p of books) {
+        expect(p.mediaDomain).toBe('audiobook');
+        expect(p.cutoff).toBe(QUALITIES['AB-AAC'].id);
+        for (const item of p.items) if (item.kind === 'quality' && item.qualityId !== 0) expect(qualityDomain(qualityById(item.qualityId))).toBe('audiobook');
+      }
+      const allowed = (name: string) =>
+        books.find((p) => p.name === name)!.items.filter((i) => i.kind === 'quality' && i.allowed).map((i) => (i.kind === 'quality' ? i.qualityId : 0));
+      expect(allowed('Standard').sort()).toEqual([QUALITIES['AB-MP3'].id, QUALITIES['AB-MP3-High'].id, QUALITIES['AB-AAC'].id].sort());
+      expect(allowed('M4B only').sort()).toEqual([QUALITIES['AB-AAC-Low'].id, QUALITIES['AB-AAC'].id].sort());
+      // Music and video profiles are untouched; music seeding still works independently.
+      expect(service.listQualityProfiles('music')).toEqual([]);
+      expect(service.seedMusicDefaults()).toBe(4);
+    });
+
+    it('seeds the audiobook quality definitions with the default MB/min bands', () => {
+      service.seedDefaults();
+      const defs = service.listQualityDefinitions('audiobook');
+      expect(defs.map((d) => d.qualityId).sort((a, b) => a - b)).toEqual([201, 202, 203, 210, 211, 212, 220]);
+      expect(defs.find((d) => d.qualityId === QUALITIES['AB-AAC'].id)).toMatchObject({ minSize: 0.25, maxSize: 1.5 });
+      for (const d of defs) expect(d.minSize).not.toBeNull();
+    });
+
+    it('rejects an audiobook profile for artists and a music profile for authors, and counts authors as users', async () => {
+      service.seedDefaults();
+      service.seedMusicDefaults();
+      service.seedAudiobookDefaults();
+      const book = service.listQualityProfiles('audiobook')[0]!;
+      const music = service.listQualityProfiles('music')[0]!;
+      expect(service.domainMismatch(book.id, 'audiobook')).toBeNull();
+      expect(service.domainMismatch(music.id, 'audiobook')).toMatch(/authors need an audiobook profile/);
+      expect(service.domainMismatch(book.id, 'music')).toMatch(/artists need a music profile/);
+      db.insert(authors)
+        .values({
+          name: 'A',
+          sortName: 'A',
+          cleanName: 'a',
+          images: [],
+          genres: [],
+          aliases: [],
+          path: '/books/A',
+          rootFolderPath: '/books',
+          qualityProfileId: book.id,
+          languages: [],
+          tags: [],
+          added: '2026-01-01T00:00:00.000Z',
+        })
+        .run();
+      expect(code(() => service.updateQualityProfile(book.id, { ...book, mediaDomain: 'music' }))).toBe('IN_USE');
     });
   });
 

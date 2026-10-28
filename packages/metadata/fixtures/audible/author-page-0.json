@@ -1,0 +1,839 @@
+{
+  "product_filters": [],
+  "products": [
+    {
+      "asin": "B0HDFGKSTL",
+      "authors": [
+        {
+          "asin": "B001JS311C",
+          "name": "Benjamin Percy"
+        },
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580645011",
+              "name": "Space Opera"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580647011",
+              "name": "Time Travel"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "original_recording",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2026-11-05",
+      "language": "english",
+      "merchandising_summary": "<p>When the starship Wild Blue Yonder is torn apart by a quantum anomaly, each surviving crew member crash-lands in a different era on the same deadly exoplanet—hunted, alone, and running out of time.</p>",
+      "narrators": [
+        {
+          "name": "Anthony Mackie"
+        },
+        {
+          "name": "Ariana DeBose"
+        },
+        {
+          "name": "John Leguizamo"
+        },
+        {
+          "name": "Ray Porter"
+        },
+        {
+          "name": "Cherry Jones"
+        },
+        {
+          "name": "Aida Osman"
+        },
+        {
+          "name": "Charlie Plummer"
+        },
+        {
+          "name": "Sufe Bradshaw"
+        },
+        {
+          "name": "Full cast"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51QMmltt5IL._SL500_.jpg"
+      },
+      "program_participation": "Audible Original",
+      "publication_datetime": "2026-11-05T08:00:00Z",
+      "publisher_name": "Audible Originals",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2026-11-05",
+      "runtime_length_min": 248,
+      "title": "Exoplanet"
+    },
+    {
+      "asin": "B0HC88PGKV",
+      "authors": [
+        {
+          "asin": "B001H6U8X0",
+          "name": "Blake Crouch"
+        },
+        {
+          "name": "N.K. Jemisin"
+        },
+        {
+          "name": "Veronica Roth"
+        },
+        {
+          "asin": "B004MW8MG6",
+          "name": "Amor Towles"
+        },
+        {
+          "name": "Paul Tremblay"
+        },
+        {
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Braulio Tavares - translator"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580632011",
+              "name": "Anthologies & Short Stories"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580639011",
+              "name": "Hard Science Fiction"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2026-08-04",
+      "language": "portuguese",
+      "merchandising_summary": "<p>Para alguns, a tecnologia é o prenúncio do fim do mundo. Para outros, é apenas o começo de uma nova era. Renomado escritor de ficção científica, autor dos best-sellers <i>Matéria e….</i></p>",
+      "narrators": [
+        {
+          "name": "Regis Salvarani"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51fgLjCmHqL._SL500_.jpg"
+      },
+      "publication_datetime": "2026-08-04T00:00:00Z",
+      "publisher_name": "Audible Studios",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2026-08-04",
+      "runtime_length_min": 555,
+      "title": "Forward (Portuguese Edition)"
+    },
+    {
+      "asin": "B0H3PKZY2C",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Nenad Savic - traducteur"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "SinglePartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": false,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2026-07-15",
+      "language": "french",
+      "merchandising_summary": "<p>Jazz n'a pas demandé à devenir une héroïne. Elle voulait juste être riche, pas comme les milliardaires qui visitent Artémis, la seule colonie humaine de l'espace, mais assez riche pour dormir dans un vrai lit et manger autre chose qu'une infâme bouillie d'algues.</p>",
+      "narrators": [
+        {
+          "name": "Hélie-Rose Dalmay"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51Y0yJecF6L._SL500_.jpg"
+      },
+      "publication_datetime": "2026-07-15T07:00:00Z",
+      "publisher_name": "Audiolib",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2026-07-15",
+      "runtime_length_min": 550,
+      "title": "Artémis"
+    },
+    {
+      "asin": "B0GZNM3QTC",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Nenad Savic - traducteur"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580607011",
+              "name": "Fantasy"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2026-06-24",
+      "language": "french",
+      "merchandising_summary": "<p>Le roman à l'origine du film au succès mondial ! Mark Watney est l'un des premiers humains à poser le pied sur Mars. Il pourrait bien être le premier à y mourir.</p>",
+      "narrators": [
+        {
+          "name": "Damien Witecka"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51-G0iFk0pL._SL500_.jpg"
+      },
+      "publication_datetime": "2026-06-24T07:00:00Z",
+      "publisher_name": "Audiolib",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 0,
+          "display_average_rating": "0.0",
+          "display_stars": 0,
+          "num_five_star_ratings": 0,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 0,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2026-06-24",
+      "runtime_length_min": 803,
+      "title": "Seul sur Mars"
+    },
+    {
+      "asin": "B0CTZVXP8H",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580645011",
+              "name": "Space Opera"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2024-02-05",
+      "language": "italian",
+      "merchandising_summary": "<p>Quando Ryland Grace si risveglia, non ha assolutamente idea di dove si trovi né di chi sia. Vede solo che il suo corpo è collegato a decine di tubi, che gli...</p>",
+      "narrators": [
+        {
+          "name": "William Angiuli"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/518QYtjHxGL._SL500_.jpg"
+      },
+      "publication_datetime": "2024-02-05T13:58:00Z",
+      "publisher_name": "Mondadori Libri S.p.A.",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 5,
+          "display_average_rating": "5.0",
+          "display_stars": 5,
+          "num_five_star_ratings": 6,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 6,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2024-02-05",
+      "runtime_length_min": 1025,
+      "title": "Project Hail Mary (Italian edition)"
+    },
+    {
+      "asin": "B0CJWV4F6B",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "asin": "B0C7TDJSYT",
+          "name": "Natalie Gerhardt"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580636011",
+              "name": "First Contact"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2023-09-27",
+      "language": "portuguese",
+      "merchandising_summary": "Neste novo thriller científico de Andy Weir, autor best-seller de Perdido em Marte, um astronauta precisa encontrar sozinho um jeito de salvar a Terra da destruição. Ryland Grace é o único sobrevivente de uma desesperada missão de emergência — se ele falhar, toda a humanidade e o...",
+      "narrators": [
+        {
+          "name": "Rafael Maia"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51a9lBsBLKL._SL500_.jpg"
+      },
+      "publication_datetime": "2023-09-27T13:06:00Z",
+      "publisher_name": "Suma",
+      "rating": {
+        "num_reviews": 1,
+        "overall_distribution": {
+          "average_rating": 5,
+          "display_average_rating": "5.0",
+          "display_stars": 5,
+          "num_five_star_ratings": 18,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 18,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2023-09-27",
+      "runtime_length_min": 1046,
+      "subtitle": "O livro que deu origem ao filme",
+      "title": "Devoradores de estrelas"
+    },
+    {
+      "asin": "B09VT9G54G",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Nenad Savic - translator"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2022-04-29",
+      "language": "french",
+      "merchandising_summary": "La nouvelle passionnante aventure spatiale de l'auteur du best-seller Seul sur Mars, bientôt portée à l'écran avec Ryan Gosling. Ryland Grace est le seul survivant d'une expédition spatiale de la dernière chance. S'il échoue, c'est le sort de l'humanité et la Terre tout entière qui sera...",
+      "narrators": [
+        {
+          "name": "François Montagut"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51s-VKFjIgL._SL500_.jpg"
+      },
+      "publication_datetime": "2022-04-29T07:00:00Z",
+      "publisher_name": "Hardigan",
+      "rating": {
+        "num_reviews": 1,
+        "overall_distribution": {
+          "average_rating": 5,
+          "display_average_rating": "5.0",
+          "display_stars": 5,
+          "num_five_star_ratings": 20,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 20,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2022-04-29",
+      "runtime_length_min": 1098,
+      "title": "Projet Dernière chance"
+    },
+    {
+      "asin": "8418037121",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        },
+        {
+          "name": "Javier Guerrero Gimeno"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580644011",
+              "name": "Space Exploration"
+            }
+          ],
+          "root": "Genres"
+        },
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580645011",
+              "name": "Space Opera"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2021-06-01",
+      "language": "spanish",
+      "merchandising_summary": "<p><i>Proyecto Hail Mary</i>, una aventura interestelar irresistible como solo Andy Weir podía imaginar, es una historia de descubrimiento, especulación y supervivencia a la altura de <i>El marciano</i>, que nos lleva a lugares que nunca soñamos alcanzar....</p>",
+      "narrators": [
+        {
+          "name": "Raül Llorens"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51E+0azDcuL._SL500_.jpg"
+      },
+      "publication_datetime": "2021-06-01T21:00:00Z",
+      "publisher_name": "Penguin Random House Audio",
+      "rating": {
+        "num_reviews": 350,
+        "overall_distribution": {
+          "average_rating": 4.867562380038388,
+          "display_average_rating": "4.9",
+          "display_stars": 5,
+          "num_five_star_ratings": 1380,
+          "num_four_star_ratings": 162,
+          "num_one_star_ratings": 1,
+          "num_ratings": 1563,
+          "num_three_star_ratings": 19,
+          "num_two_star_ratings": 1
+        }
+      },
+      "release_date": "2021-06-01",
+      "runtime_length_min": 1103,
+      "title": "Proyecto Hail Mary"
+    },
+    {
+      "asin": "3837155668",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "unabridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2021-05-24",
+      "language": "german",
+      "merchandising_summary": "Der neue Science-Fiction-Thriller von Andy Weir, dem Autor des Weltbestsellers Der Marsianer. Als Ryland Grace erwacht, muss er feststellen, dass er ganz allein ist. Er ist anscheinend der einzige Überlebende einer Raumfahrtmission, Millionen Kilometer von zu Hause entfernt, auf einem Flug ins...",
+      "narrators": [
+        {
+          "name": "Richard Barenberg"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51dMenWjcXL._SL500_.jpg"
+      },
+      "publication_datetime": "2021-05-24T00:00:00Z",
+      "publisher_name": "Random House Audio, Deutschland",
+      "rating": {
+        "num_reviews": 6,
+        "overall_distribution": {
+          "average_rating": 4.914285714285715,
+          "display_average_rating": "4.9",
+          "display_stars": 5,
+          "num_five_star_ratings": 33,
+          "num_four_star_ratings": 1,
+          "num_one_star_ratings": 0,
+          "num_ratings": 35,
+          "num_three_star_ratings": 1,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2021-05-24",
+      "runtime_length_min": 1096,
+      "title": "Der Astronaut"
+    },
+    {
+      "asin": "383715565X",
+      "authors": [
+        {
+          "asin": "B00G0WYW92",
+          "name": "Andy Weir"
+        }
+      ],
+      "category_ladders": [
+        {
+          "ladder": [
+            {
+              "id": "18580606011",
+              "name": "Science Fiction & Fantasy"
+            },
+            {
+              "id": "18580628011",
+              "name": "Science Fiction"
+            },
+            {
+              "id": "18580629011",
+              "name": "Adventure"
+            }
+          ],
+          "root": "Genres"
+        }
+      ],
+      "content_delivery_type": "MultiPartBook",
+      "content_type": "Product",
+      "format_type": "abridged",
+      "has_children": true,
+      "is_adult_product": false,
+      "is_listenable": true,
+      "is_purchasability_suppressed": false,
+      "is_vvab": false,
+      "issue_date": "2021-05-24",
+      "language": "german",
+      "merchandising_summary": "Der neue Science-Fiction-Thriller von Andy Weir, dem Autor des Weltbestsellers Der Marsianer. Als Ryland Grace erwacht, muss er feststellen, dass er ganz allein ist. Er ist anscheinend der einzige Überlebende einer Raumfahrtmission, Millionen Kilometer von zu Hause entfernt, auf einem Flug ins...",
+      "narrators": [
+        {
+          "name": "Richard Barenberg"
+        }
+      ],
+      "product_images": {
+        "500": "https://m.media-amazon.com/images/I/51S6QyK1ycS._SL500_.jpg"
+      },
+      "publication_datetime": "2021-05-24T00:00:00Z",
+      "publisher_name": "Random House Audio, Deutschland",
+      "rating": {
+        "num_reviews": 0,
+        "overall_distribution": {
+          "average_rating": 5,
+          "display_average_rating": "5.0",
+          "display_stars": 5,
+          "num_five_star_ratings": 2,
+          "num_four_star_ratings": 0,
+          "num_one_star_ratings": 0,
+          "num_ratings": 2,
+          "num_three_star_ratings": 0,
+          "num_two_star_ratings": 0
+        }
+      },
+      "release_date": "2021-05-24",
+      "runtime_length_min": 930,
+      "title": "Der Astronaut"
+    }
+  ],
+  "response_groups": [
+    "product_desc",
+    "always-returned",
+    "contributors",
+    "series",
+    "rating",
+    "media",
+    "category_ladders",
+    "product_attrs"
+  ],
+  "total_results": 25
+}

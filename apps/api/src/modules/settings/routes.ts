@@ -1,4 +1,6 @@
 import {
+  AudiobookMetadataSettingsResponse,
+  AudiobookMetadataSettingsUpdate,
   AudioImportSettings,
   FeatureSettings,
   MetadataSettingsResponse,
@@ -13,12 +15,14 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Db } from '../../db/index.js';
 import { ProfilesService } from '../profiles/service.js';
 import {
+  getAudiobookMetadataSettings,
   getAudioImportSettings,
   getFeatureSettings,
   getMetadataSettings,
   getMusicMetadataSettings,
   getReleasesSettings,
   SettingsError,
+  updateAudiobookMetadataSettings,
   updateAudioImportSettings,
   updateFeatureSettings,
   updateMetadataSettings,
@@ -55,8 +59,10 @@ export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>,
       { schema: { body: FeatureSettings, response: { 200: FeatureSettings, 400: SettingsErrorResponse } } },
       async (req) => {
         const saved = updateFeatureSettings(db, req.body);
-        // Switching music on gives it starter quality profiles, so an artist can be added at once.
+        // Switching music or audiobooks on gives it starter quality profiles, so an artist or
+        // author can be added at once.
         if (saved.music) new ProfilesService({ db }).seedMusicDefaults();
+        if (saved.audiobooks) new ProfilesService({ db }).seedAudiobookDefaults();
         return saved;
       },
     );
@@ -69,6 +75,21 @@ export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>,
       '/settings/musicmetadata',
       { schema: { body: MusicMetadataSettingsUpdate, response: { 200: MusicMetadataSettingsResponse, 400: SettingsErrorResponse } } },
       async (req) => updateMusicMetadataSettings(db, req.body),
+    );
+
+    app.get('/settings/audiobookmetadata', { schema: { response: { 200: AudiobookMetadataSettingsResponse } } }, async () =>
+      getAudiobookMetadataSettings(db),
+    );
+
+    app.put(
+      '/settings/audiobookmetadata',
+      {
+        schema: {
+          body: AudiobookMetadataSettingsUpdate,
+          response: { 200: AudiobookMetadataSettingsResponse, 400: SettingsErrorResponse },
+        },
+      },
+      async (req) => updateAudiobookMetadataSettings(db, req.body),
     );
 
     app.get('/settings/audio', { schema: { response: { 200: AudioImportSettings } } }, async () => getAudioImportSettings(db));

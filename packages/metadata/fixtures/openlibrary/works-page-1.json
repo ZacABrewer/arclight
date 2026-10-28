@@ -1,0 +1,718 @@
+{
+  "links": {
+    "self": "/authors/OL7234434A/works.json?limit=10&offset=0",
+    "author": "/authors/OL7234434A",
+    "next": "/authors/OL7234434A/works.json?limit=10&offset=10"
+  },
+  "size": 13,
+  "entries": [
+    {
+      "title": "아르테미스",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "key": "/works/OL45265825W",
+      "type": {
+        "key": "/type/work"
+      },
+      "latest_revision": 1,
+      "revision": 1,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2026-04-29T09:03:01.138191"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-04-29T09:03:01.138191"
+      }
+    },
+    {
+      "type": {
+        "key": "/type/work"
+      },
+      "title": "The Egg and Other Stories",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "key": "/works/OL27699165W",
+      "covers": [
+        13608030
+      ],
+      "identifiers": {
+        "librarything": [
+          "20296371"
+        ]
+      },
+      "description": {
+        "type": "/type/text",
+        "value": "Collected for the first time anywhere, the nine tales in ***The Egg and Other Stories*** highlight Andy Weir's trademark wit and unexpected twists. For the few who have yet to experience ***The Martian***, it's a perfect appetizer. For passionate Weir fans, it's a delicious dessert. \r\nStories included in this audio-exclusive collection are:\r\n\r\n- ***Access***\r\n- ***Antihypoxiant***\r\n- ***Annie's Day***\r\n- ***The Real Deal***\r\n- ***Bored Worl***\r\n- ***The Midtown Butcher***\r\n- ***Meeting Sarah***\r\n- ***The Chef***\r\n- ***The Egg***"
+      },
+      "subjects": [
+        "Short Stories",
+        "Fiction",
+        "Science Fiction",
+        "Fantasy",
+        "Anthologies",
+        "Humor",
+        "Science Fiction Fantasy",
+        "Adult",
+        "Speculative Fiction"
+      ],
+      "latest_revision": 4,
+      "revision": 4,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2022-03-24T23:29:08.299820"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-04-06T19:06:00.468064"
+      }
+    },
+    {
+      "description": "The three meet here, at Cheshire Crossing—a boarding school where girls like them learn how to cope with their supernatural experiences and harness their magical world-crossing powers.\r\n \r\nBut the trio—now teenagers, who’ve had their fill of meddling authority figures—aren’t content to sit still in a classroom. Soon they’re dashing from one universe to the next, leaving havoc in their wake—and, inadvertently, bringing the Wicked Witch and Hook together in a deadly supervillain love match.\r\n \r\nTo stop them, the girls will have to draw on all of their powers . . . and marshal a team of unlikely allies from across the magical multiverse.",
+      "key": "/works/OL17841386W",
+      "title": "Cheshire Crossing",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "covers": [
+        8446071,
+        8446069,
+        13464089
+      ],
+      "subjects": [
+        "Comic books, strips",
+        "Fiction",
+        "Teenage girls",
+        "Imaginary places",
+        "Oz (Imaginary place)",
+        "Boarding schools",
+        "Plurality of worlds",
+        "Women adventurers",
+        "Characters in literature",
+        "Fantasy",
+        "Graphic novels",
+        "Young Adult",
+        "Comics",
+        "Retellings",
+        "Middle Grade",
+        "Adventure",
+        "Graphic Novels Comics",
+        "Magic",
+        "Young adult fiction, action & adventure, general",
+        "Young adult fiction, comics & graphic novels, fantasy",
+        "Young adult fiction, comics & graphic novels, fairy tales, folklore, legends & mythology"
+      ],
+      "identifiers": {
+        "librarything": [
+          "23444147"
+        ]
+      },
+      "genres": [
+        "/tags/OL169T",
+        "/tags/OL164T"
+      ],
+      "latest_revision": 11,
+      "revision": 11,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2018-02-16T11:20:38.823979"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-08-20T02:13:56.235705"
+      }
+    },
+    {
+      "description": "The Martian is a 2011 science fiction novel written by Andy Weir. It was his debut novel under his own name. It was originally self-published in 2011; Crown Publishing purchased the rights and re-released it in 2014. The story follows an American astronaut, Mark Watney, as he becomes stranded alone on Mars in 2035 and must improvise in order to survive.",
+      "links": [
+        {
+          "title": "Author's book page",
+          "url": "http://andyweirauthor.com/books/the-martian-hc",
+          "type": {
+            "key": "/type/link"
+          }
+        },
+        {
+          "title": "The Martian (Weir novel) - Wikipedia",
+          "url": "https://en.wikipedia.org/wiki/The_Martian_(Weir_novel)",
+          "type": {
+            "key": "/type/link"
+          }
+        }
+      ],
+      "title": "The Martian",
+      "covers": [
+        11447888,
+        10860735,
+        8223196,
+        8217493,
+        8069657,
+        8137214,
+        10306579,
+        8575355,
+        10191568,
+        10720131,
+        10805615,
+        10848983,
+        8999404,
+        10362442,
+        10331621,
+        11950614,
+        13832054,
+        13212741,
+        14149828,
+        14149827
+      ],
+      "subject_places": [
+        "Mars (Planet)",
+        "Earth",
+        "Acidalia Planitia (Mars)",
+        "Schiaparelli (Mars)",
+        "Houston (Tex.)",
+        "Cape Canaveral (Fla.)",
+        "Chicago (Ill.)",
+        "Marte (Planeta)",
+        "Mars (Planète)"
+      ],
+      "subjects": [
+        "Science-Fiction",
+        "Science Fiction & Fantasy",
+        "Suspense & Thriller",
+        "Science fiction",
+        "Amerikanisches Englisch",
+        "Astronauts",
+        "Survival",
+        "Fiction",
+        "Survival skills",
+        "Supervivencia",
+        "Novela",
+        "Astronautas",
+        "Reading Level-Grade 7",
+        "Reading Level-Grade 9",
+        "Reading Level-Grade 8",
+        "Reading Level-Grade 11",
+        "Reading Level-Grade 10",
+        "Reading Level-Grade 12",
+        "Fiction, science fiction, action & adventure",
+        "Fiction, science fiction, general",
+        "Large type books",
+        "Arabic language materials",
+        "Romans, nouvelles",
+        "nyt:hardcover-fiction=2014-03-02",
+        "New York Times bestseller",
+        "Chang pian xiao shuo",
+        "Children's fiction",
+        "Adventure and adventurers, fiction",
+        "Fantasy fiction"
+      ],
+      "subject_people": [
+        "Mark Watney (fictional character)",
+        "Melissa Lewis (fictional character)",
+        "Rick Martinez (fictional character)",
+        "Beth Johanssen (fictional character)",
+        "Chris Beck (fictional character)",
+        "Alex Vogel (fictional character)",
+        "Teddy Sanders (fictional character)",
+        "Venkat Kapoor (fictional character)",
+        "Mitch Henderson (fictional character)",
+        "Mindy Park (fictional character)"
+      ],
+      "key": "/works/OL17091839W",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "excerpts": [
+        {
+          "excerpt": "LOG ENTRY: SOL 6\r\n\r\nI’m pretty much fucked.",
+          "comment": "first sentence",
+          "author": {
+            "key": "/people/seabelis"
+          }
+        }
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "identifiers": {
+        "bookbrainz": [
+          "7b5e4cad-2cb1-4d9c-9853-dc1e0172af93"
+        ],
+        "wikidata": [
+          "Q17111624"
+        ]
+      },
+      "subject_times": [
+        "2035"
+      ],
+      "genres": [
+        "/tags/OL179T",
+        "/tags/OL164T",
+        "/tags/OL169T"
+      ],
+      "latest_revision": 60,
+      "revision": 60,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2015-03-09T15:32:32.077510"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-08-18T06:19:34.294689"
+      }
+    },
+    {
+      "type": {
+        "key": "/type/work"
+      },
+      "title": "The Martian / Artemis / Project Hail Mary",
+      "subjects": [
+        "Fiction, science fiction, general",
+        "Anthology"
+      ],
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "key": "/works/OL36735881W",
+      "identifiers": {
+        "librarything": [
+          "28432112"
+        ]
+      },
+      "description": {
+        "type": "/type/text",
+        "value": "***Project Hail Mary***\r\nRyland Grace is the sole survivor on a desperate, last-chance mission – and if he fails, humanity and the earth itself will perish. Except that right now, he doesn't know that. He can't even remember his own name, let alone the nature of his assignment or how to complete it.\r\n\r\n***Artemis***\r\nJazz Bashara is one of the criminals. She lives in a poor area of Artemis and subsidises her work as a porter with smuggling contraband onto the moon. But it's not enough. So when she's offered the chance to make a lot of money she jumps at it. But though planning a crime in 1/6th gravity may be more fun, it's also a lot more dangerous.\r\n\r\n***The Martian***\r\nIf the oxygenator breaks down, I'll suffocate. If the water reclaimer breaks down, I'll die of thirst. If the hab breaches, I'll just kind of explode. If none of those things happen, I'll eventually run out of food and starve to death."
+      },
+      "genres": [
+        "/tags/OL179T"
+      ],
+      "latest_revision": 4,
+      "revision": 4,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2023-09-17T21:36:13.782046"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-09-01T01:33:56.253676"
+      }
+    },
+    {
+      "description": "**JASMINE BASHARA** never signed up to be a hero. She just wanted to get rich.\r\n\r\nNot crazy, eccentric-billionaire rich, like many of the visitors to her hometown of Artemis, humanity's first and only lunar colony. Just rich enough to move out of her coffin-sized apartment and eat something better than flavored algae. Rich enough to pay off a debt she's owed for a long time.\r\n\r\nSo when a chance at a huge score finally comes her way, Jazz can't say no. Sure, it requires her to graduate from small-time smuggler to full-on criminal mastermind. And it calls for a particular combination of cunning, technical skills, and large explosions--not to mention sheer brazen swagger. But Jazz has never run into a challenge her intellect can't handle, and she figures she's got the \"swagger\" part down.\r\n\r\nThe trouble is, engineering the perfect crime is just the start of Jazz's problems. Because her little heist is about to land her in the middle of a conspiracy for control of Artemis itself.\r\n\r\nTrapped between competing forces, pursued by a killer and the law alike, even Jazz has to admit she's in way over her head. She'll have to hatch a truly spectacular scheme to have a chance at staying alive and saving her city.\r\n\r\nJazz is no hero, but she is a very good criminal.\r\n\r\nThat'll have to do.\r\n\r\nPropelled by its heroine's wisecracking voice, set in a city that's at once stunningly imagined and intimately familiar, and brimming over with clever problem solving and heisty fun, *Artemis* is another irresistible brew of science, suspense, and humor from #1 bestselling author Andy Weir.\r\n\r\nThis description comes from the publisher.",
+      "subjects": [
+        "Fiction",
+        "Science fiction",
+        "Smuggling",
+        "Conspiracies",
+        "Fiction, science fiction, hard science fiction",
+        "Fiction, science fiction, action & adventure",
+        "Conspiraciones",
+        "Contrabando",
+        "Luna",
+        "Ficción",
+        "Spanish language materials",
+        "nyt:combined-print-and-e-book-fiction=2017-12-03",
+        "New York Times bestseller",
+        "Suspense fiction",
+        "Moon",
+        "Hard Science Fiction"
+      ],
+      "key": "/works/OL17837968W",
+      "title": "Artemis",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "covers": [
+        8235551,
+        10164454,
+        8783052,
+        8783841,
+        10848991,
+        11530154,
+        12328857,
+        13122271
+      ],
+      "subject_places": [
+        "Moon"
+      ],
+      "subject_people": [
+        "Jazz Bashara"
+      ],
+      "genres": [
+        "/tags/OL179T",
+        "/tags/OL180T"
+      ],
+      "latest_revision": 12,
+      "revision": 12,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2018-02-08T03:57:06.676048"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-08-31T09:39:01.345051"
+      }
+    },
+    {
+      "title": "Randomize",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "key": "/works/OL33476532W",
+      "type": {
+        "key": "/type/work"
+      },
+      "description": {
+        "type": "/type/text",
+        "value": "In the near future, if Vegas games are ingeniously scam-proof, then the heists have to be too, in this imaginative and whip-smart story by the New York Times bestselling author of The Martian.\n\nAn IT whiz at the Babylon Casino is enlisted to upgrade security for the game of keno and its random-number generator. The new quantum computer system is foolproof. But someone on the inside is no fool. For once the odds may not favor the house—unless human ingenuity isn’t entirely a thing of the past.\n\nAndy Weir’s Randomize is part of Forward, a collection of six stories of the near and far future from out-of-this-world authors. Each piece can be read or listened to in a single thought-provoking sitting."
+      },
+      "latest_revision": 2,
+      "revision": 2,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2023-01-06T15:02:52.296484"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-10-01T10:29:32.234509"
+      }
+    },
+    {
+      "description": {
+        "type": "/type/text",
+        "value": "Ryland Grace is the sole survivor on a desperate, last-chance mission–and if he fails, humanity and the earth itself will perish. Except that right now, he doesn’t know that. He can’t even remember his own name, let alone the nature of his assignment or how to complete it. All he knows is that he’s been asleep for a very, very long time. And he’s just been awakened to find himself millions of miles from home, with nothing but two corpses for company.\r\n\r\nHis crewmates dead, his memories fuzzily returning, he realizes that an impossible task now confronts him. Alone on this tiny ship that’s been cobbled together by every government and space agency on the planet and hurled into the depths of space, it’s up to him to conquer an extinction-level threat to our species.\r\n\r\nAnd thanks to an unexpected ally, he just might have a chance.\r\n\r\nPart scientific mystery, part dazzling interstellar journey, *Project Hail Mary* is a tale of discovery, speculation, and survival to rival *The Martian*–while taking us to places it never dreamed of going."
+      },
+      "title": "Project Hail Mary",
+      "key": "/works/OL21745884W",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "subjects": [
+        "hard science-fiction",
+        "science-fiction",
+        "sci-fi",
+        "hard sci-fi",
+        "nyt:hardcover-fiction=2021-05-23",
+        "New York Times bestseller",
+        "New York Times reviewed",
+        "Fiction, science fiction, action & adventure",
+        "Fiction, science fiction, hard science fiction",
+        "End of the world",
+        "Fiction",
+        "Astronauts",
+        "Space flight",
+        "Memory disorders",
+        "Survival",
+        "Fin du monde",
+        "Romans, nouvelles",
+        "Astronautes",
+        "Vol spatial",
+        "Habiletés de survie",
+        "FICTION / Science Fiction / Action & Adventure",
+        "FICTION / Science Fiction / Hard Science Fiction",
+        "FICTION / Thrillers / Suspense",
+        "Survival after airplane accidents, shipwrecks",
+        "nyt:trade-fiction-paperback=2022-11-13"
+      ],
+      "links": [
+        {
+          "title": "Book page on author's web site",
+          "url": "https://www.andyweirauthor.com/books/project-hail-mary",
+          "type": {
+            "key": "/type/link"
+          }
+        },
+        {
+          "title": "New York Times review",
+          "url": "https://www.nytimes.com/2021/05/04/books/review/andy-weir-project-hail-mary.html",
+          "type": {
+            "key": "/type/link"
+          }
+        },
+        {
+          "title": "Starmap of the locations mentioned in Project Hail Mary",
+          "url": "https://valhovey.github.io/gaia-mary/",
+          "type": {
+            "key": "/type/link"
+          }
+        }
+      ],
+      "covers": [
+        11200092,
+        11212360,
+        11482074,
+        -1,
+        12257067,
+        13199102,
+        14626267,
+        14248233,
+        13488956
+      ],
+      "subject_places": [
+        "Epsilon Eridani",
+        "Earth",
+        "Tau Ceti",
+        "San Francisco (Calif.)",
+        "Pasadena (Calif.)",
+        "Antarctica",
+        "40 Eridani",
+        "Baikonur (Kazakhstan)",
+        "South China Sea region",
+        "Sahara Desert (Africa)"
+      ],
+      "subject_people": [
+        "Dr Ryland Grace",
+        "Rocky",
+        "Eva Stratt"
+      ],
+      "identifiers": {
+        "bookbrainz": [
+          "2303972b-c218-40f1-8f75-9fa27190020f"
+        ],
+        "wikidata": [
+          "Q106852836"
+        ],
+        "musicbrainz": [
+          "2c38627b-f091-4b27-a33b-4f08bf3c1b58"
+        ],
+        "isfdb": [
+          "2848254",
+          "3170784",
+          "2921045",
+          "2945257",
+          "2907382",
+          "2872322",
+          "3418977",
+          "3418979"
+        ],
+        "librarything": [
+          "25215827"
+        ],
+        "goodreads": [
+          "79106958"
+        ]
+      },
+      "latest_revision": 31,
+      "revision": 31,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2020-08-28T19:49:24.483076"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-08-25T23:09:27.357457"
+      }
+    },
+    {
+      "title": "The Road with No Return / The Sky People / Sandrunners / Diary of an AssCan / The Messenger / Starlight Dreamer / Whispers of the Mist Children / Speedstream",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL368638A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL242164A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL2965123A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL40784A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL28006A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL2629960A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        },
+        {
+          "author": {
+            "key": "/authors/OL30024A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "key": "/works/OL24719426W",
+      "type": {
+        "key": "/type/work"
+      },
+      "description": {
+        "type": "/type/text",
+        "value": "Retrouvez le monde du sorceleur, le héros de Seul sur Mars, le cycle de Krondor et bien d’autres encore... et découvrez pour la première fois une préquelle inédite à la saga Dragon Blood !\r\n\r\nDe l’aube des temps au futur le plus lointain, à dos de dragon ou à bord d’un vaisseau spatial, replongez dans les univers les plus emblématiques paris chez Bragelonne, à travers huit récits signés par quelques uns des plus grands noms de la Fantasy et de la science fiction.\r\n\r\nCet ouvrage contient les nouvelles suivantes :\r\n• La Route d'où l'on ne revient pas, d'Andrzej Sapkowski\r\n• Le Peuple-Ciel, de Terry Goodkind\r\n• Brûlesables, d'Anthony Ryan\r\n• Journal d'un CanAstro, d'Andy Weir\r\n• Le Messager, de Raymond E. Feist\r\n• Je rêvais d'étoiles, de Peter F. Hamilton\r\n• La Rumeur des enfants de la brume, de Trudi Canavan\r\n• Continuum, de James Lovegrove"
+      },
+      "identifiers": {
+        "librarything": [
+          "25582674"
+        ]
+      },
+      "latest_revision": 3,
+      "revision": 3,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2021-07-17T17:52:15.808840"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-04-06T19:14:21.785214"
+      }
+    },
+    {
+      "title": "James Moriarty, Consulting Criminal",
+      "covers": [
+        8565904
+      ],
+      "key": "/works/OL19650131W",
+      "authors": [
+        {
+          "author": {
+            "key": "/authors/OL7234434A"
+          },
+          "type": {
+            "key": "/type/author_role"
+          }
+        }
+      ],
+      "type": {
+        "key": "/type/work"
+      },
+      "identifiers": {
+        "librarything": [
+          "20566853"
+        ]
+      },
+      "description": {
+        "type": "/type/text",
+        "value": "His razor-sharp intellect, uncanny powers of deduction, and knowledge of the criminal underground are legendary throughout London. He solves cases with the able assistance of his close friend and confidant. And, one day, he will become the arch enemy of Sherlock Holmes.\r\n\r\nMeet Professor James Moriarty - consulting criminal.\r\n\r\nIn these three original tales - collected for the first time - Andy Weir brings to life a Moriarty worthy of the Great Detective himself."
+      },
+      "subjects": [
+        "Mystery",
+        "Fiction",
+        "Short Stories",
+        "Crime",
+        "Historical Fiction",
+        "Mystery Thriller",
+        "Thriller",
+        "Detective",
+        "Victorian"
+      ],
+      "subject_people": [
+        "James Moriarty"
+      ],
+      "latest_revision": 3,
+      "revision": 3,
+      "created": {
+        "type": "/type/datetime",
+        "value": "2019-04-28T17:53:56.796087"
+      },
+      "last_modified": {
+        "type": "/type/datetime",
+        "value": "2026-04-06T18:57:57.035533"
+      }
+    }
+  ]
+}

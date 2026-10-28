@@ -2,6 +2,7 @@ import type { AudioSourceKind, ReleaseAudioEvaluation, ReleaseKind } from '@arcl
 import { mergeAudioQuality, parseAudioQuality, stripAudioExtension, type ParsedAudioQuality } from './audio-quality.js';
 import { parseReleaseHash } from './hash.js';
 import { prepare } from './normalize.js';
+import { parseAudiobookPath, type ParsedAudiobookRelease } from './audiobook.js';
 
 // Music release names. Two families:
 //
@@ -595,8 +596,11 @@ const TRACK_FILE = /^(?:\d{1,2}[-.])?\d{1,3}(?:\s*[-.]\s*|\s+|_)|^[A-D]\d{1,2}[\
  * with the folder filling gaps. Audio facts merge: the file and its extension win, the
  * folder name fills in bit depth, sample rate and bitrate of the same codec.
  */
-export function parseAudioPath(path: string, domain: 'music' = 'music'): ParsedMusicRelease {
-  void domain; // audiobook paths arrive with the audiobook parser (wave 3)
+export function parseAudioPath(path: string, domain?: 'music'): ParsedMusicRelease;
+/** Audiobook paths: see `parseAudiobookPath` (Author/Title, Author/Series/Book N - Title). */
+export function parseAudioPath(path: string, domain: 'audiobook'): ParsedAudiobookRelease;
+export function parseAudioPath(path: string, domain: 'music' | 'audiobook' = 'music'): ParsedMusicRelease | ParsedAudiobookRelease {
+  if (domain === 'audiobook') return parseAudiobookPath(path);
   const parts = path.split(/[\\/]+/).filter(Boolean);
   const fileName = parts[parts.length - 1] ?? path;
   const folders = parts.slice(0, -1).filter((p) => !/^[a-z]:$/i.test(p));

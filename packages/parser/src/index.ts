@@ -20,6 +20,18 @@ export {
   type ParsedAudioQuality,
 } from './audio-quality.js';
 export {
+  audiobookAudioEvaluation,
+  audiobookFileLayout,
+  audiobookQualityFor,
+  audiobookReleaseKind,
+  parseAudiobookPath,
+  parseAudiobookRelease,
+  type AudiobookContainer,
+  type AudiobookFormat,
+  type ParsedAudiobookInfo,
+  type ParsedAudiobookRelease,
+} from './audiobook.js';
+export {
   musicAudioEvaluation,
   musicReleaseKind,
   parseAudioPath,

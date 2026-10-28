@@ -3,6 +3,7 @@ import type { IndexerCreate, IndexerSettings } from '@arclight/shared';
 import { createTestDb } from '../../db/test-utils.js';
 import type { Db } from '../../db/index.js';
 import { albumTypeProfiles, artists } from '../music/schema.js';
+import { authors } from '../audiobooks/schema.js';
 import { updateFeatureSettings } from '../settings/service.js';
 import { indexerCapsCache, indexers } from './schema.js';
 import {
@@ -322,8 +323,36 @@ describe('audio domains from the database', () => {
     expect(real.audioDomains().music).toBe(true);
   });
 
-  it('enables audiobooks on the flag alone (no authors table yet)', () => {
+  function addAuthor(monitored: boolean): void {
+    db.insert(authors)
+      .values({
+        asin: null,
+        name: 'Author',
+        sortName: 'Author',
+        cleanName: 'author',
+        images: [],
+        genres: [],
+        aliases: [],
+        path: `/audiobooks/author-${Math.random()}`,
+        rootFolderPath: '/audiobooks',
+        qualityProfileId: 1,
+        monitored,
+        languages: [],
+        tags: [],
+        added: new Date(T0).toISOString(),
+      })
+      .run();
+  }
+
+  it('enables audiobooks only with the flag and a monitored author', () => {
+    addAuthor(true);
+    expect(real.audioDomains().audiobooks).toBe(false);
     updateFeatureSettings(db, { music: false, audiobooks: true });
+    db.delete(authors).run();
+    expect(real.audioDomains().audiobooks).toBe(false);
+    addAuthor(false);
+    expect(real.audioDomains().audiobooks).toBe(false);
+    addAuthor(true);
     expect(real.audioDomains()).toEqual({ music: false, audiobooks: true });
   });
 });

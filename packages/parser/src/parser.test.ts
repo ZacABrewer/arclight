@@ -8,6 +8,7 @@ import { normalizeImdbId, normalizeTitle, parsePath, parseRelease, parseSeasonTi
 // Per-file minimum pass rates (whole percent, rounded down from what the parser achieves).
 // Raising a number is fine; lowering one needs a reason in the commit message.
 const THRESHOLDS: Record<string, number> = {
+  'audiobook.json': 98,
   'group/anime-subgroup.json': 100,
   'group/radarr-group.json': 100,
   'group/sonarr-group.json': 100,

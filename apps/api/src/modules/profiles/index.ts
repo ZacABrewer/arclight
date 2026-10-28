@@ -15,6 +15,8 @@ export const profilesModule: AppModule = (ctx) => async (app) => {
     // through the context, nothing is considered in use.
   });
   service.seedDefaults();
-  if (getSection(ctx.db, 'features').music) service.seedMusicDefaults();
+  const features = getSection(ctx.db, 'features');
+  if (features.music) service.seedMusicDefaults();
+  if (features.audiobooks) service.seedAudiobookDefaults();
   await app.register(profilesRoutes(service, (change) => ctx.bus.publish({ type: 'profile', ...change })));
 };

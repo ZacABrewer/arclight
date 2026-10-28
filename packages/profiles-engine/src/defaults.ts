@@ -107,6 +107,24 @@ export function defaultMusicProfiles(): QualityProfileInput[] {
   ];
 }
 
+const AB_STANDARD: QualityName[] = ['AB-MP3', 'AB-MP3-High', 'AB-AAC'];
+/** AAC audiobook qualities are the m4a/m4b ones (design section 7). */
+const AB_M4B: QualityName[] = ['AB-AAC-Low', 'AB-AAC'];
+
+/** Audiobook profiles, seeded the first time audiobooks are switched on (design section 7). */
+export function defaultAudiobookProfiles(): QualityProfileInput[] {
+  return [
+    profile('Standard', 'AB-AAC', AB_STANDARD, 'audiobook'),
+    profile('M4B only', 'AB-AAC', AB_M4B, 'audiobook'),
+    profile(
+      'Any (audiobook)',
+      'AB-AAC',
+      ['AB-MP3-Low', 'AB-AAC-Low', 'AB-MP3', 'AB-MP3-High', 'AB-Opus', 'AB-AAC', 'AB-Lossless'],
+      'audiobook',
+    ),
+  ];
+}
+
 /** Ships empty: formats are opinionated and belong to the user (or a later preset import). */
 export function defaultCustomFormats(): Omit<CustomFormat, 'id'>[] {
   return [];
