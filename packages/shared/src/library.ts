@@ -6,7 +6,14 @@ import { QualityModel } from './quality.js';
 // gives no time; full timestamps elsewhere). Fields that may be unknown are `.nullish()` so a
 // DB `null` and an absent key are both valid on the wire.
 
+/**
+ * A query-string boolean: true/false, 1/0, yes/no, on/off. Never `z.coerce.boolean()`, which
+ * reads the string "false" as true (so `?deleteFiles=false` would delete files).
+ */
+const queryFlag = () => z.union([z.boolean(), z.stringbool()]);
+
 /** Video media types. Video-only modules keep speaking this; audio never widens it. */
+
 export const MediaType = z.enum(['series', 'movie']);
 export type MediaType = z.infer<typeof MediaType>;
 
@@ -333,8 +340,8 @@ export const BulkEpisodeMonitorRequest = z.object({
 export type BulkEpisodeMonitorRequest = z.infer<typeof BulkEpisodeMonitorRequest>;
 
 export const DeleteMediaQuery = z.object({
-  deleteFiles: z.coerce.boolean().default(false),
-  addExclusion: z.coerce.boolean().default(false),
+  deleteFiles: queryFlag().default(false),
+  addExclusion: queryFlag().default(false),
 });
 export type DeleteMediaQuery = z.infer<typeof DeleteMediaQuery>;
 
@@ -345,7 +352,7 @@ export const SeriesSortKey = z.enum(['sortTitle', 'added', 'year', 'status', 'qu
 export type SeriesSortKey = z.infer<typeof SeriesSortKey>;
 
 export const SeriesListQuery = z.object({
-  monitored: z.coerce.boolean().optional(),
+  monitored: queryFlag().optional(),
   status: SeriesStatus.optional(),
   seriesType: SeriesType.optional(),
   qualityProfileId: z.coerce.number().int().optional(),
@@ -354,7 +361,7 @@ export const SeriesListQuery = z.object({
   tmdbId: z.coerce.number().int().optional(),
   /** Case-insensitive substring match on title. */
   search: z.string().optional(),
-  includeStatistics: z.coerce.boolean().default(true),
+  includeStatistics: queryFlag().default(true),
   sortKey: SeriesSortKey.default('sortTitle'),
   sortOrder: SortOrder.default('asc'),
 });
@@ -363,8 +370,8 @@ export type SeriesListQuery = z.infer<typeof SeriesListQuery>;
 export const EpisodeListQuery = z.object({
   seriesId: z.coerce.number().int(),
   seasonNumber: z.coerce.number().int().min(0).optional(),
-  monitored: z.coerce.boolean().optional(),
-  hasFile: z.coerce.boolean().optional(),
+  monitored: queryFlag().optional(),
+  hasFile: queryFlag().optional(),
 });
 export type EpisodeListQuery = z.infer<typeof EpisodeListQuery>;
 
@@ -480,8 +487,8 @@ export const MovieSortKey = z.enum(['sortTitle', 'added', 'year', 'status', 'inC
 export type MovieSortKey = z.infer<typeof MovieSortKey>;
 
 export const MovieListQuery = z.object({
-  monitored: z.coerce.boolean().optional(),
-  hasFile: z.coerce.boolean().optional(),
+  monitored: queryFlag().optional(),
+  hasFile: queryFlag().optional(),
   status: MovieStatus.optional(),
   minimumAvailability: MinimumAvailability.optional(),
   qualityProfileId: z.coerce.number().int().optional(),
@@ -606,7 +613,7 @@ export const MediaFileListQuery = z
 export type MediaFileListQuery = z.infer<typeof MediaFileListQuery>;
 
 export const DeleteMediaFileQuery = z.object({
-  deleteFromDisk: z.coerce.boolean().default(true),
+  deleteFromDisk: queryFlag().default(true),
 });
 export type DeleteMediaFileQuery = z.infer<typeof DeleteMediaFileQuery>;
 
@@ -621,7 +628,7 @@ export const PageQuery = z.object({
 export type PageQuery = z.infer<typeof PageQuery>;
 
 export const WantedEpisodesQuery = PageQuery.extend({
-  includeSpecials: z.coerce.boolean().default(false),
+  includeSpecials: queryFlag().default(false),
 });
 export type WantedEpisodesQuery = z.infer<typeof WantedEpisodesQuery>;
 

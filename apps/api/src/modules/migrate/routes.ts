@@ -81,7 +81,7 @@ export const migrateRoutes =
 
     app.get(
       '/migrate/stack/report',
-      { schema: { querystring: z.object({ runId: z.coerce.number().int().optional(), download: z.coerce.boolean().optional() }), response: { 200: MigrateReport, ...errors } } },
+      { schema: { querystring: z.object({ runId: z.coerce.number().int().optional(), download: z.union([z.boolean(), z.stringbool()]).optional() }), response: { 200: MigrateReport, ...errors } } },
       async (req, reply) => {
         const report = stack.report(req.query.runId);
         if (req.query.download) reply.header('Content-Disposition', `attachment; filename="arclight-import-report-${report.runId}.json"`);
