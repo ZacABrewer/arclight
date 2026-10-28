@@ -1,5 +1,6 @@
 import {
   qualityById,
+  qualityInDomain,
   type QualityDefinition,
   type QualityModel,
   type QualityProfile,
@@ -183,6 +184,7 @@ export function validateQualityProfile(profile: Omit<QualityProfile, 'id'>): Pro
   const issues: ProfileValidationIssue[] = [];
   const seenQualities = new Set<number>();
   const seenIds = new Set<number>();
+  const domain = profile.mediaDomain ?? 'video';
 
   profile.items.forEach((item, i) => {
     const id = itemId(item);
@@ -190,6 +192,7 @@ export function validateQualityProfile(profile: Omit<QualityProfile, 'id'>): Pro
     seenIds.add(id);
     for (const q of itemQualityIds(item)) {
       if (qualityById(q).id !== q) issues.push({ path: `items[${i}]`, message: `unknown quality id ${q}` });
+      else if (!qualityInDomain(q, domain)) issues.push({ path: `items[${i}]`, message: `quality ${q} is not a ${domain} quality` });
       if (seenQualities.has(q)) issues.push({ path: `items[${i}]`, message: `quality ${q} listed more than once` });
       seenQualities.add(q);
     }

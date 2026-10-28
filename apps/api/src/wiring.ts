@@ -2,7 +2,7 @@ import { statfs } from 'node:fs/promises';
 import { dirname } from 'node:path';
 import { desc, eq, inArray } from 'drizzle-orm';
 import type { MediaFileInfo, NotificationEvent, ReleaseInfo } from '@arclight/notifications';
-import type { HistoryEventType, HistoryRecord, HistoryReleaseSource, Job, MediaFile } from '@arclight/shared';
+import type { AnyMediaType, HistoryEventType, HistoryRecord, HistoryReleaseSource, Job, MediaFile } from '@arclight/shared';
 import type { AppContext } from './app.js';
 import { downloadClients, episodes, mediaFiles, trackedDownloads } from './db/schema.js';
 import { blocklistServiceFor } from './modules/blocklist/index.js';
@@ -248,7 +248,7 @@ export function startLibrarySearch(ctx: AppContext, target: LibraryCommandTarget
         }
       }
       return `searched ${targets.length}, grabbed ${grabbed}${failed ? `, ${failed} failed` : ''}`;
-    }, { key: `${name}:${targets.map((t) => ('movieId' in t ? t.movieId : t.seriesId)).join(',')}` });
+    }, { key: `${name}:${targets.map((t) => ('movieId' in t ? t.movieId : 'seriesId' in t ? t.seriesId : 'artistId' in t ? `a${t.artistId}` : `w${t.authorId}`)).join(',')}` });
   if (target.seriesIds?.length) started.push(run(SERIES_SEARCH_JOB, target.seriesIds.map((seriesId) => ({ seriesId }))));
   if (target.movieIds?.length) started.push(run(MOVIE_SEARCH_JOB, target.movieIds.map((movieId) => ({ movieId }))));
   return started;
@@ -268,6 +268,8 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
       latestFor: (item, eventType) => {
         const history = historyServiceFor(ctx);
         const type = eventType as HistoryEventType | undefined;
+        // Audio items have no history yet (Wave 2).
+        if (!('movieId' in item) && !('episodeId' in item)) return null;
         const row = 'movieId' in item ? history.mostRecentForMovie(item.movieId, type) : history.mostRecentForEpisode(item.episodeId, type);
         return row ? toEventSummary(row) : null;
       },
@@ -373,15 +375,21 @@ export function recordGrabInHistory(ctx: AppContext, grab: GrabHistoryInput): vo
   );
 }
 
-function historyTarget(input: { mediaType: 'series' | 'movie'; seriesId?: number; episodeIds?: number[]; movieId?: number }): HistoryTarget | null {
+function historyTarget(input: { mediaType: AnyMediaType; seriesId?: number; episodeIds?: number[]; movieId?: number }): HistoryTarget | null {
+  // Audio grabs are not recorded until audio acquisition lands (Wave 2).
+  if (input.mediaType === 'music' || input.mediaType === 'audiobook') return null;
   if (input.mediaType === 'movie') return input.movieId === undefined ? null : { mediaType: 'movie', movieId: input.movieId };
   return input.seriesId === undefined ? null : { mediaType: 'series', seriesId: input.seriesId, episodeIds: input.episodeIds ?? [] };
 }
 
-/** Blocklist entries are scoped to the parent (series or movie) of the candidate. */
-export function blocklistScopeFor(candidate: BlocklistCandidate): { seriesId: number } | { movieId: number } | null {
+/** Blocklist entries are scoped to the parent (series, movie, artist or author) of the candidate. */
+export function blocklistScopeFor(
+  candidate: BlocklistCandidate,
+): { seriesId: number } | { movieId: number } | { artistId: number } | { authorId: number } | null {
   if (candidate.seriesId !== undefined) return { seriesId: candidate.seriesId };
   if (candidate.movieId !== undefined) return { movieId: candidate.movieId };
+  if (candidate.artistId !== undefined) return { artistId: candidate.artistId };
+  if (candidate.authorId !== undefined) return { authorId: candidate.authorId };
   return null;
 }
 
@@ -404,6 +412,7 @@ function toReleaseSource(source: string): HistoryReleaseSource {
 }
 
 function searchTargetFor(target: HistoryTarget): SearchTarget | null {
+  if (target.mediaType === 'music' || target.mediaType === 'audiobook') return null; // Wave 2
   if (target.mediaType === 'movie') return { movieId: target.movieId };
   // A failed download without known episodes would turn into a whole-series search; skip it.
   if (target.episodeIds.length === 0) return null;

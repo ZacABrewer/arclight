@@ -19,6 +19,11 @@ export const importedDownloads = sqliteTable(
     sourcePath: text('source_path').notNull(),
     destinationPath: text('destination_path').notNull(),
     importedAt: text('imported_at').notNull(),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [index('imported_downloads_download_idx').on(t.downloadId)],
 );

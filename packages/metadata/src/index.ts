@@ -66,3 +66,61 @@ export {
   type WatchProviderRef,
   type WatchRegion,
 } from './types.js';
+
+// ---------------------------------------------------------------------------
+// Music: rate limiting, MusicBrainz, Cover Art Archive, Wikidata/Commons, Fanart.tv
+
+export {
+  RateLimiter,
+  computeBackoffMs,
+  defaultRateLimiter,
+  isThrottleStatus,
+  systemClock,
+  type AcquireOptions,
+  type Clock,
+  type ProviderLimit,
+  type RateLimiterOptions,
+  type RequestPriority,
+  type ScheduleOptions,
+} from './rate-limit.js';
+
+export { type RequestOptions } from './http.js';
+
+export * from './musicbrainz/index.js';
+
+export {
+  COVER_ART_ARCHIVE_BASE_URL,
+  COVER_ART_SIZES,
+  coverArtReleaseFrontUrl,
+  coverArtReleaseGroupFrontUrl,
+  createCoverArtUrlBuilder,
+  type CoverArtSize,
+  type CoverArtUrlBuilder,
+  type CoverArtUrls,
+} from './coverart/index.js';
+
+export {
+  COMMONS_BASE_URL,
+  WIKIDATA_DEFAULT_API_URL,
+  WIKIDATA_PROVIDER,
+  commonsFilePageUrl,
+  commonsThumbnailUrl,
+  createWikidataClient,
+  findWikidataId,
+  wikidataIdFromUrl,
+  type ArtistImage,
+  type ResolveImageOptions,
+  type WikidataClient,
+  type WikidataClientOptions,
+} from './wikidata/index.js';
+
+export {
+  FANART_DEFAULT_BASE_URL,
+  FANART_PROVIDER,
+  createFanartClient,
+  type FanartAlbumImages,
+  type FanartArtistImages,
+  type FanartClient,
+  type FanartClientOptions,
+  type FanartImage,
+} from './fanart/index.js';

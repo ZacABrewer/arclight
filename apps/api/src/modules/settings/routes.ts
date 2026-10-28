@@ -1,6 +1,10 @@
 import {
+  AudioImportSettings,
+  FeatureSettings,
   MetadataSettingsResponse,
   MetadataSettingsUpdate,
+  MusicMetadataSettingsResponse,
+  MusicMetadataSettingsUpdate,
   ReleasesSettings,
   SettingsErrorResponse,
 } from '@arclight/shared';
@@ -8,10 +12,16 @@ import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import type { Db } from '../../db/index.js';
 import {
+  getAudioImportSettings,
+  getFeatureSettings,
   getMetadataSettings,
+  getMusicMetadataSettings,
   getReleasesSettings,
   SettingsError,
+  updateAudioImportSettings,
+  updateFeatureSettings,
   updateMetadataSettings,
+  updateMusicMetadataSettings,
   updateReleasesSettings,
 } from './service.js';
 
@@ -34,6 +44,32 @@ export function settingsRoutes(db: Db): FastifyPluginAsync<Record<never, never>,
       '/settings/metadata',
       { schema: { body: MetadataSettingsUpdate, response: { 200: MetadataSettingsResponse, 400: SettingsErrorResponse } } },
       async (req) => updateMetadataSettings(db, req.body),
+    );
+
+    app.get('/settings/features', { schema: { response: { 200: FeatureSettings } } }, async () => getFeatureSettings(db));
+
+    app.put(
+      '/settings/features',
+      { schema: { body: FeatureSettings, response: { 200: FeatureSettings, 400: SettingsErrorResponse } } },
+      async (req) => updateFeatureSettings(db, req.body),
+    );
+
+    app.get('/settings/musicmetadata', { schema: { response: { 200: MusicMetadataSettingsResponse } } }, async () =>
+      getMusicMetadataSettings(db),
+    );
+
+    app.put(
+      '/settings/musicmetadata',
+      { schema: { body: MusicMetadataSettingsUpdate, response: { 200: MusicMetadataSettingsResponse, 400: SettingsErrorResponse } } },
+      async (req) => updateMusicMetadataSettings(db, req.body),
+    );
+
+    app.get('/settings/audio', { schema: { response: { 200: AudioImportSettings } } }, async () => getAudioImportSettings(db));
+
+    app.put(
+      '/settings/audio',
+      { schema: { body: AudioImportSettings, response: { 200: AudioImportSettings, 400: SettingsErrorResponse } } },
+      async (req) => updateAudioImportSettings(db, req.body),
     );
 
     app.get('/settings/releases', { schema: { response: { 200: ReleasesSettings } } }, async () => getReleasesSettings(db));

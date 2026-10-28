@@ -1,0 +1,41 @@
+{
+  "claims": {
+    "P18": [
+      {
+        "mainsnak": {
+          "snaktype": "value",
+          "property": "P18",
+          "hash": "f4a39e35c46abd6959686f8c6434768127e5ec37",
+          "datavalue": {
+            "value": "RadioheadO2211125 composite.jpg",
+            "type": "string"
+          },
+          "datatype": "commonsMedia"
+        },
+        "type": "statement",
+        "qualifiers": {
+          "P2096": [
+            {
+              "snaktype": "value",
+              "property": "P2096",
+              "hash": "066af206817974b95555cba0dc8f304e1a6fd54f",
+              "datavalue": {
+                "value": {
+                  "text": "Radiohead in 2025. From left: Ed O'Brien, Thom Yorke, Colin Greenwood, Philip Selway, Jonny Greenwood",
+                  "language": "en"
+                },
+                "type": "monolingualtext"
+              },
+              "datatype": "monolingualtext"
+            }
+          ]
+        },
+        "qualifiers-order": [
+          "P2096"
+        ],
+        "id": "Q44190$7E6BC4CF-10A5-4CE7-84B6-05F24A96233D",
+        "rank": "normal"
+      }
+    ]
+  }
+}

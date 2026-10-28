@@ -2,7 +2,7 @@ import type { AppModule } from '../../app.js';
 import { profilesRoutes } from './routes.js';
 import { ProfilesService } from './service.js';
 
-export { ProfilesService, ProfileError } from './service.js';
+export { ProfilesService, ProfileError, qualityProfileDomainMismatch } from './service.js';
 export type { ProfileChange } from './routes.js';
 export * from './schema.js';
 

@@ -20,6 +20,11 @@ export const pendingReleases = sqliteTable(
     release: text('release', { mode: 'json' }).$type<ReleaseResource>().notNull(),
     addedAt: text('added_at').notNull(),
     eligibleAt: text('eligible_at').notNull(),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [
     uniqueIndex('pending_releases_guid_indexer_idx').on(t.guid, t.indexerId),
@@ -33,7 +38,7 @@ export const releaseSearchState = sqliteTable(
   'release_search_state',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    mediaType: text('media_type', { enum: ['episode', 'movie'] }).notNull(),
+    mediaType: text('media_type', { enum: ['episode', 'movie', 'album', 'book'] }).notNull(),
     itemId: integer('item_id').notNull(),
     lastSearchedAt: text('last_searched_at').notNull(),
     /** Consecutive automatic searches without a grab. */
@@ -51,7 +56,7 @@ export const releaseSearchResults = sqliteTable(
   'release_search_results',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    mediaType: text('media_type', { enum: ['episode', 'movie'] }).notNull(),
+    mediaType: text('media_type', { enum: ['episode', 'movie', 'album', 'book'] }).notNull(),
     itemId: integer('item_id').notNull(),
     searchedAt: text('searched_at').notNull(),
     source: text('source', { enum: ['automatic', 'manual', 'interactive'] }).notNull(),
@@ -92,6 +97,11 @@ export const releaseDecisions = sqliteTable(
     rejections: text('rejections', { mode: 'json' }).$type<ReleaseRejection[]>().notNull(),
     chosen: integer('chosen', { mode: 'boolean' }).notNull().default(false),
     rank: integer('rank'),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [
     index('release_decisions_batch_idx').on(t.batchId),

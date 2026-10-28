@@ -216,7 +216,7 @@ describe('config import planning', () => {
 
   it('reports invalid entries with their path', async () => {
     const db = await createTestDb();
-    const out = importDocument(db, { rootFolders: { '/x': { mediaType: 'music' } }, downloadClients: { Y: { protocol: 'torrent' } } });
+    const out = importDocument(db, { rootFolders: { '/x': { mediaType: 'comics' } }, downloadClients: { Y: { protocol: 'torrent' } } });
     expect(out.applied).toBe(false);
     expect(out.errors.map((e) => e.path)).toEqual(['downloadClients.Y.implementation', 'rootFolders./x.mediaType']);
   });

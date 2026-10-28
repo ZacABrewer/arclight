@@ -2,11 +2,16 @@ import { eq } from 'drizzle-orm';
 import type { z } from 'zod';
 import {
   AlertSettings,
+  applyMusicMetadataUpdate,
+  AudioImportSettings,
   BackupSettings,
   CompatSettings,
   CrossSeedSettings,
   DiscordBotSettings,
   EngineAgentSettings,
+  FeatureSettings,
+  maskMusicMetadataSettings,
+  MusicMetadataSettings,
   CommunityCatalogueSettings,
   DefinitionFeedSettings,
   GuidesSettings,
@@ -36,6 +41,8 @@ import {
   VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
+  type MusicMetadataSettingsResponse,
+  type MusicMetadataSettingsUpdate,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { settings } from '../../db/schema.js';
@@ -104,6 +111,13 @@ const sections = {
   profileMigration: ProfileMigrationSettings,
   // Owned by the themes module: default theme, user choice and pack sync (routes under /settings/themes).
   themes: ThemeSettings,
+  // Media types beyond series and movies, off by default (routes under /settings/features).
+  features: FeatureSettings,
+  // Owned by the music module: MusicBrainz / Fanart.tv access and release choice (routes under
+  // /settings/musicmetadata; fanartApiKey masked there).
+  musicMetadata: MusicMetadataSettings,
+  // Owned by the audio importer (imports/audio): track matching (routes under /settings/audio).
+  audio: AudioImportSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
@@ -194,6 +208,39 @@ export function getMetadataSettings(db: Db): MetadataSettingsResponse {
 export function updateMetadataSettings(db: Db, update: MetadataSettingsUpdate): MetadataSettingsResponse {
   const next = applyMetadataUpdate(getSection(db, 'metadata'), update);
   return maskMetadataSettings(setSection(db, 'metadata', next));
+}
+
+// ---------------------------------------------------------------------------------------
+// musicMetadata section: secret masking (helpers live in the shared contract)
+// ---------------------------------------------------------------------------------------
+
+export function getMusicMetadataSettings(db: Db): MusicMetadataSettingsResponse {
+  return maskMusicMetadataSettings(getSection(db, 'musicMetadata'));
+}
+
+export function updateMusicMetadataSettings(db: Db, update: MusicMetadataSettingsUpdate): MusicMetadataSettingsResponse {
+  const next = applyMusicMetadataUpdate(getSection(db, 'musicMetadata'), update);
+  return maskMusicMetadataSettings(setSection(db, 'musicMetadata', next));
+}
+
+// ---------------------------------------------------------------------------------------
+// features / audio sections
+// ---------------------------------------------------------------------------------------
+
+export function getFeatureSettings(db: Db): FeatureSettings {
+  return getSection(db, 'features');
+}
+
+export function updateFeatureSettings(db: Db, value: FeatureSettings): FeatureSettings {
+  return setSection(db, 'features', value);
+}
+
+export function getAudioImportSettings(db: Db): AudioImportSettings {
+  return getSection(db, 'audio');
+}
+
+export function updateAudioImportSettings(db: Db, value: AudioImportSettings): AudioImportSettings {
+  return setSection(db, 'audio', value);
 }
 
 // ---------------------------------------------------------------------------------------

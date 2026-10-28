@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MediaType } from './library.js';
+import { AnyMediaType, MediaType } from './library.js';
 import { ReleaseProtocol } from './profiles.js';
 
 // Download client settings, remote path mappings and the queue contract.
@@ -656,10 +656,16 @@ export const QueueItem = z.object({
   outputPath: z.string().optional(),
   added: z.string(),
   trackedState: TrackedDownloadState,
-  mediaType: MediaType.optional(),
+  mediaType: AnyMediaType.optional(),
   seriesId: z.number().int().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),
+  /** Music grabs: the artist and the albums the release covers. */
+  artistId: z.number().int().optional(),
+  albumIds: z.array(z.number().int()).optional(),
+  /** Audiobook grabs: the author and the books the release covers. */
+  authorId: z.number().int().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   /** Why the item is (not) moving. Optional: older servers and some paths omit it. */
   stateCode: QueueItemStateCode.optional(),
   stateReason: z.string().optional(),
@@ -722,7 +728,7 @@ export type QueuePage = z.infer<typeof QueuePage>;
  */
 export const QueueSummaryItem = z.object({
   id: z.number().int(),
-  mediaType: MediaType.optional(),
+  mediaType: AnyMediaType.optional(),
   seriesId: z.number().int().optional(),
   episodeIds: z.array(z.number().int()).optional(),
   movieId: z.number().int().optional(),

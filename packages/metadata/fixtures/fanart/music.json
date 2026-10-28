@@ -1,0 +1,30 @@
+{
+  "name": "Example Band",
+  "mbid_id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+  "artistthumb": [
+    { "id": "1001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/artistthumb/example-1001.jpg", "likes": "2" },
+    { "id": "1002", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/artistthumb/example-1002.jpg", "likes": "7" }
+  ],
+  "artistbackground": [
+    { "id": "2001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/artistbackground/example-2001.jpg", "likes": "4" }
+  ],
+  "hdmusiclogo": [
+    { "id": "3001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/hdmusiclogo/example-3001.png", "likes": "1" }
+  ],
+  "musiclogo": [
+    { "id": "3101", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/musiclogo/example-3101.png", "likes": "9" }
+  ],
+  "musicbanner": [
+    { "id": "4001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/musicbanner/example-4001.jpg", "likes": "0" }
+  ],
+  "albums": {
+    "b1392450-e666-3926-a536-22c65f834433": {
+      "albumcover": [
+        { "id": "5001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/albumcover/example-5001.jpg", "likes": "3" }
+      ],
+      "cdart": [
+        { "id": "6001", "url": "https://assets.fanart.tv/fanart/music/a74b1b7f-71a5-4011-9441-d0b5e4122711/cdart/example-6001.png", "likes": "1", "disc": "1", "size": "1000" }
+      ]
+    }
+  }
+}

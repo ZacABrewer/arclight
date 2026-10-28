@@ -1,5 +1,5 @@
 import {
-  ALL_QUALITIES,
+  VIDEO_QUALITIES,
   PROFILE_LANGUAGES,
   QualityModifier,
   QualitySource,
@@ -9,7 +9,7 @@ import {
   type SpecImplementationDefinition,
 } from '@arclight/shared';
 
-const resolutions = [...new Set(ALL_QUALITIES.map((q) => q.resolution))].sort((a, b) => a - b);
+const resolutions = [...new Set(VIDEO_QUALITIES.map((q) => q.resolution))].sort((a, b) => a - b);
 
 const label = (s: string) => s.replace(/([a-z])([A-Z0-9])/g, '$1 $2').replace(/^./, (c) => c.toUpperCase());
 

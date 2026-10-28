@@ -30,11 +30,16 @@ export interface ReleaseIds {
 
 /** The item a search is running for; matching prefers it (§3.1.3 step 2, §3.3.1 step 2). */
 export interface MatchCriteria {
-  mediaType: 'series' | 'movie';
+  mediaType: 'series' | 'movie' | 'music' | 'audiobook';
   seriesId?: number;
   episodeIds?: readonly number[];
   seasonNumber?: number;
   movieId?: number;
+  /** Audio criteria (Wave 2 audio matcher); the video matcher ignores them. */
+  artistId?: number;
+  albumIds?: readonly number[];
+  authorId?: number;
+  bookIds?: readonly number[];
 }
 
 export type MatchType = 'title' | 'alias' | 'id' | 'criteria' | 'override';
@@ -518,7 +523,10 @@ export function matchRelease(
   lib: LibrarySnapshot,
   opts: { hint?: MediaTypeHint; criteria?: MatchCriteria } = {},
 ): MatchOutcome {
-  const hint: MediaTypeHint = opts.criteria?.mediaType ?? opts.hint ?? 'auto';
+  // The video matcher ignores audio criteria (the audio matcher handles music/audiobooks).
+  const criteriaType = opts.criteria?.mediaType;
+  const videoCriteriaType = criteriaType === 'series' || criteriaType === 'movie' ? criteriaType : undefined;
+  const hint: MediaTypeHint = videoCriteriaType ?? opts.hint ?? 'auto';
   const criteria = opts.criteria;
   if (hint === 'series') {
     const parsed = parseRelease(title, 'series');

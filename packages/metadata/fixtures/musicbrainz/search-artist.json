@@ -1,0 +1,148 @@
+{
+  "created": "2026-10-28T20:48:00.338Z",
+  "count": 29,
+  "offset": 0,
+  "artists": [
+    {
+      "id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+      "type": "Group",
+      "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+      "score": 100,
+      "name": "Radiohead",
+      "sort-name": "Radiohead",
+      "country": "GB",
+      "area": {
+        "id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed",
+        "type": "Country",
+        "type-id": "06dd0ae4-8c74-30bb-b43d-95dcedf961de",
+        "name": "United Kingdom",
+        "sort-name": "United Kingdom",
+        "life-span": {
+          "ended": null
+        }
+      },
+      "begin-area": {
+        "id": "d840d4b3-8987-4626-928b-398de760cc24",
+        "type": "City",
+        "type-id": "6fd8f29a-3d0a-32fc-980d-ea697b69da78",
+        "name": "Abingdon-on-Thames",
+        "sort-name": "Abingdon-on-Thames",
+        "life-span": {
+          "ended": null
+        }
+      },
+      "isnis": [
+        "0000000115475162"
+      ],
+      "life-span": {
+        "begin": "1991",
+        "ended": null
+      },
+      "aliases": [
+        {
+          "sort-name": "Radiohead",
+          "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+          "name": "Radiohead",
+          "locale": "en",
+          "type": "Artist name",
+          "primary": true,
+          "begin-date": null,
+          "end-date": null
+        },
+        {
+          "sort-name": "r/head",
+          "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+          "name": "r/head",
+          "locale": null,
+          "type": "Search hint",
+          "primary": null,
+          "begin-date": null,
+          "end-date": null
+        }
+      ]
+    },
+    {
+      "id": "c74f4726-2671-4011-81b6-f70da905c05a",
+      "type": "Group",
+      "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+      "score": 64,
+      "name": "On a Friday",
+      "sort-name": "On a Friday",
+      "area": {
+        "id": "d840d4b3-8987-4626-928b-398de760cc24",
+        "type": "City",
+        "type-id": "6fd8f29a-3d0a-32fc-980d-ea697b69da78",
+        "name": "Abingdon-on-Thames",
+        "sort-name": "Abingdon-on-Thames",
+        "life-span": {
+          "ended": null
+        }
+      },
+      "begin-area": {
+        "id": "d840d4b3-8987-4626-928b-398de760cc24",
+        "type": "City",
+        "type-id": "6fd8f29a-3d0a-32fc-980d-ea697b69da78",
+        "name": "Abingdon-on-Thames",
+        "sort-name": "Abingdon-on-Thames",
+        "life-span": {
+          "ended": null
+        }
+      },
+      "disambiguation": "pre‐Radiohead group, until 1991",
+      "life-span": {
+        "begin": "1985",
+        "end": "1991",
+        "ended": true
+      },
+      "aliases": [
+        {
+          "sort-name": "Radiohead",
+          "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+          "name": "Radiohead",
+          "locale": null,
+          "type": "Search hint",
+          "primary": null,
+          "begin-date": null,
+          "end-date": null
+        },
+        {
+          "sort-name": "Shindig",
+          "name": "Shindig",
+          "locale": null,
+          "type": null,
+          "primary": null,
+          "begin-date": null,
+          "end-date": null
+        }
+      ]
+    },
+    {
+      "id": "3ecaa799-94ae-45cd-9ad1-bcabae4073e1",
+      "score": 62,
+      "name": "radiohead 3",
+      "sort-name": "radiohead 3",
+      "disambiguation": "Capsmusic LTD. artist",
+      "life-span": {
+        "ended": null
+      }
+    },
+    {
+      "id": "118b7a68-9249-4f5a-91f4-1fd046c07f8f",
+      "score": 62,
+      "name": "DJ Radiohead",
+      "sort-name": "Radiohead, DJ",
+      "life-span": {
+        "ended": null
+      }
+    },
+    {
+      "id": "33bfaa56-037f-4f7d-9a0a-c2412c636e56",
+      "score": 62,
+      "name": "Radiohead 2",
+      "sort-name": "Radiohead 2",
+      "life-span": {
+        "ended": null
+      }
+    }
+  ]
+}

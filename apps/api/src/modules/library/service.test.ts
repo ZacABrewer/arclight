@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { AddMovieRequest, AddSeriesRequest, QUALITIES, QualityModel, type MonitorOption } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { qualityProfiles } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { LibraryError } from './errors.js';
 import * as lib from './schema.js';
@@ -263,6 +264,35 @@ describe('addSeries', () => {
     expect(() => svc.addSeries(db, seriesMeta(), addReq(), NOW)).toThrow(/already exists/);
     expect(() => svc.addSeries(db, seriesMeta({ tmdbId: 7 }), addReq({ rootFolderPath: join(tmp, 'nope') }), NOW)).toThrow(/not a registered/);
     expect(() => svc.addSeries(db, seriesMeta({ tmdbId: 7 }), addReq({ rootFolderPath: movieRoot }), NOW)).toThrow(/not a registered series/);
+  });
+
+  it('refuses a music or audiobook quality profile for series and movies', async () => {
+    const music = db
+      .insert(qualityProfiles)
+      .values({ name: 'Lossless', cutoff: 131, items: [{ kind: 'quality', qualityId: 131, allowed: true }], formatItems: [], languages: [], mediaDomain: 'music' })
+      .returning()
+      .get();
+    const video = db
+      .insert(qualityProfiles)
+      .values({ name: 'HD', cutoff: 7, items: [{ kind: 'quality', qualityId: 7, allowed: true }], formatItems: [], languages: [] })
+      .returning()
+      .get();
+    expect(video.mediaDomain).toBe('video');
+    expect(() => svc.addSeries(db, seriesMeta(), addReq({ qualityProfileId: music.id }), NOW)).toThrow(/music profile/);
+    expect(() => svc.addMovie(db, movieMeta(), movieReq({ qualityProfileId: music.id }), NOW)).toThrow(/music profile/);
+    const s = svc.addSeries(db, seriesMeta(), addReq({ qualityProfileId: video.id }), NOW);
+    expect(() => svc.updateSeries(db, s.id, { qualityProfileId: music.id }, NOW)).toThrow(LibraryError);
+    expect(() => svc.bulkUpdateSeries(db, { ids: [s.id], qualityProfileId: music.id }, NOW)).toThrow(/video profile/);
+    expect(() =>
+      svc.updateSeries(db, s.id, { versions: [{ tag: '4K', qualityProfileId: music.id, enabled: true }] }, NOW),
+    ).toThrow(/music profile/);
+    const m = svc.addMovie(db, movieMeta(), movieReq({ qualityProfileId: video.id }), NOW);
+    expect(() => svc.updateMovie(db, m.id, { qualityProfileId: music.id }, NOW)).toThrow(/music profile/);
+    // Audio root folders are their own media types.
+    const musicRoot = join(tmp, 'music');
+    await mkdir(musicRoot, { recursive: true });
+    expect((await svc.addRootFolder(db, { path: musicRoot, mediaType: 'music' })).mediaType).toBe('music');
+    expect(() => svc.addSeries(db, seriesMeta({ tmdbId: 9 }), addReq({ tmdbId: 9, rootFolderPath: musicRoot, qualityProfileId: video.id }), NOW)).toThrow(/not a registered series/);
   });
 
   it('rejects a second series that would share a folder', () => {

@@ -1,5 +1,15 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { MediaImage, MediaInfo, MediaVersion, Ratings, MovieCollection, QualityModel } from '@arclight/shared';
+import type {
+  AudioFileTags,
+  AudioMediaInfo,
+  MediaImage,
+  MediaInfo,
+  MediaVersion,
+  Ratings,
+  MovieCollection,
+  QualityModel,
+} from '@arclight/shared';
+import { albums, artists } from '../music/schema.js';
 
 // Library tables. One family of rows that every other module (releases, downloads, organizer,
 // subtitles, requests, calendar) reads and attaches to. JSON columns hold the small, rarely
@@ -10,7 +20,8 @@ export const rootFolders = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     path: text('path').notNull(),
-    mediaType: text('media_type', { enum: ['series', 'movie'] }).notNull(),
+    // Enum is TS-only on SQLite; music/audiobook roots need no migration of the column.
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }).notNull(),
   },
   (t) => [uniqueIndex('root_folders_path_idx').on(t.path)],
 );
@@ -227,4 +238,64 @@ export const importExclusions = sqliteTable(
     year: integer('year'),
   },
   (t) => [uniqueIndex('import_exclusions_media_tmdb_idx').on(t.mediaType, t.tmdbId)],
+);
+
+// Audio files of both audio domains (docs/design/music-audiobooks.md section 4.1). Separate from
+// `media_files` on purpose: video modules (hygiene, media analysis, retention, subtitles) query
+// that table and would mishandle audio rows. Music rows set artist_id/album_id, audiobook rows
+// author_id/book_id. The authors/books tables arrive in migration 0019, so those two columns
+// carry no foreign key; the audiobooks module deletes its files itself.
+export const audioFiles = sqliteTable(
+  'audio_files',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    mediaType: text('media_type', { enum: ['music', 'audiobook'] }).notNull(),
+    artistId: integer('artist_id').references(() => artists.id, { onDelete: 'cascade' }),
+    albumId: integer('album_id').references(() => albums.id, { onDelete: 'cascade' }),
+    authorId: integer('author_id'),
+    bookId: integer('book_id'),
+    path: text('path').notNull(),
+    relativePath: text('relative_path').notNull(),
+    sizeBytes: integer('size_bytes').notNull().default(0),
+    dateAdded: text('date_added').notNull(),
+    mtime: text('mtime'),
+    quality: text('quality', { mode: 'json' }).$type<QualityModel>().notNull(),
+    releaseGroup: text('release_group'),
+    sceneName: text('scene_name'),
+    codec: text('codec'),
+    container: text('container'),
+    bitrateKbps: integer('bitrate_kbps'),
+    sampleRateHz: integer('sample_rate_hz'),
+    bitDepth: integer('bit_depth'),
+    channels: integer('channels'),
+    durationMs: integer('duration_ms'),
+    discNumber: integer('disc_number'),
+    trackNumber: integer('track_number'),
+    partNumber: integer('part_number'),
+    chapterCount: integer('chapter_count'),
+    tags: text('tags', { mode: 'json' }).$type<AudioFileTags>(),
+    mediaInfo: text('media_info', { mode: 'json' }).$type<AudioMediaInfo>(),
+  },
+  (t) => [
+    uniqueIndex('audio_files_path_idx').on(t.path),
+    index('audio_files_album_idx').on(t.albumId),
+    index('audio_files_book_idx').on(t.bookId),
+    index('audio_files_artist_idx').on(t.artistId),
+    index('audio_files_author_idx').on(t.authorId),
+  ],
+);
+
+// Audio items the user deleted and asked never to be re-added (`import_exclusions.tmdb_id` is
+// NOT NULL, so audio gets its own table). `foreign_id` is the MusicBrainz artist id for music and
+// the ASIN (or OpenLibrary author id) for audiobooks.
+export const audioImportExclusions = sqliteTable(
+  'audio_import_exclusions',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    mediaType: text('media_type', { enum: ['music', 'audiobook'] }).notNull(),
+    foreignId: text('foreign_id').notNull(),
+    title: text('title').notNull(),
+    year: integer('year'),
+  },
+  (t) => [uniqueIndex('audio_import_exclusions_media_foreign_idx').on(t.mediaType, t.foreignId)],
 );

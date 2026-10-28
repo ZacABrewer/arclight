@@ -77,3 +77,46 @@ describe('GET/PUT /settings/metadata', () => {
     expect(bad.statusCode).toBe(400);
   });
 });
+
+describe('music and feature sections', () => {
+  const app = async () => {
+    const a = Fastify().withTypeProvider<ZodTypeProvider>();
+    a.setValidatorCompiler(validatorCompiler);
+    a.setSerializerCompiler(serializerCompiler);
+    await a.register(settingsRoutes(db), { prefix: '/api/v1' });
+    return a;
+  };
+
+  it('defaults: features off, MusicBrainz at 1 req/s, track match 0.8', () => {
+    expect(getSection(db, 'features')).toEqual({ music: false, audiobooks: false });
+    expect(getSection(db, 'musicMetadata')).toEqual({
+      baseUrl: 'https://musicbrainz.org/ws/2/',
+      rateLimitPerSecond: 1,
+      preferredCountries: ['XW', 'US', 'GB'],
+      preferredFormats: ['Digital Media', 'CD'],
+    });
+    expect(getSection(db, 'audio')).toEqual({ trackMatchThreshold: 0.8 });
+  });
+
+  it('masks the Fanart.tv key and keeps it on a masked update', async () => {
+    const a = await app();
+    const put = await a.inject({
+      method: 'PUT',
+      url: '/api/v1/settings/musicmetadata',
+      payload: { fanartApiKey: 'fan-key', contactEmail: 'ops@example.com', preferredCountries: ['gb'] },
+    });
+    expect(put.statusCode).toBe(200);
+    expect(put.json()).toMatchObject({ fanartApiKey: SECRET_MASK, contactEmail: 'ops@example.com', preferredCountries: ['GB'] });
+    await a.inject({ method: 'PUT', url: '/api/v1/settings/musicmetadata', payload: { fanartApiKey: SECRET_MASK, rateLimitPerSecond: 2 } });
+    expect(getSection(db, 'musicMetadata')).toMatchObject({ fanartApiKey: 'fan-key', rateLimitPerSecond: 2, contactEmail: 'ops@example.com' });
+    await a.inject({ method: 'PUT', url: '/api/v1/settings/musicmetadata', payload: { fanartApiKey: null, contactEmail: '' } });
+    expect(getSection(db, 'musicMetadata')).not.toHaveProperty('fanartApiKey');
+    expect(getSection(db, 'musicMetadata')).not.toHaveProperty('contactEmail');
+
+    const features = await a.inject({ method: 'PUT', url: '/api/v1/settings/features', payload: { music: true } });
+    expect(features.json()).toEqual({ music: true, audiobooks: false });
+    const bad = await a.inject({ method: 'PUT', url: '/api/v1/settings/audio', payload: { trackMatchThreshold: 2 } });
+    expect(bad.statusCode).toBe(400);
+    await a.close();
+  });
+});

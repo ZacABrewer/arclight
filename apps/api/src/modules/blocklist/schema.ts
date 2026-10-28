@@ -26,12 +26,19 @@ export const blocklist = sqliteTable(
     torrentInfoHash: text('torrent_info_hash'),
     source: text('source'),
     releaseType: text('release_type'),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [
     index('blocklist_series_id_idx').on(t.seriesId),
     index('blocklist_movie_id_idx').on(t.movieId),
     index('blocklist_torrent_info_hash_idx').on(t.torrentInfoHash),
     index('blocklist_date_idx').on(t.date),
+    index('blocklist_artist_id_idx').on(t.artistId),
+    index('blocklist_author_id_idx').on(t.authorId),
   ],
 );
 

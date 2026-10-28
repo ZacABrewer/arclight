@@ -45,7 +45,17 @@ export function historyHttpStatus(code: HistoryErrorCode): number {
 /** Which items an event touches: the episodes of one series, or one movie. */
 export type HistoryTarget =
   | { mediaType: 'series'; seriesId: number; episodeIds: readonly number[] }
-  | { mediaType: 'movie'; movieId: number };
+  | { mediaType: 'movie'; movieId: number }
+  | { mediaType: 'music'; artistId: number; albumIds: readonly number[] }
+  | { mediaType: 'audiobook'; authorId: number; bookIds: readonly number[] };
+
+/** The series/movie members of `HistoryTarget`. */
+export type VideoHistoryTarget = Extract<HistoryTarget, { mediaType: 'series' | 'movie' }>;
+export type AudioHistoryTarget = Extract<HistoryTarget, { mediaType: 'music' | 'audiobook' }>;
+
+export function isAudioTarget(target: HistoryTarget): target is AudioHistoryTarget {
+  return target.mediaType === 'music' || target.mediaType === 'audiobook';
+}
 
 /** A single item: one episode or one movie. */
 export type HistoryItemRef = { episodeId: number } | { movieId: number };
@@ -815,6 +825,7 @@ export class HistoryService {
    * nothing is still downloading or the answer is ambiguous.
    */
   findDownloadIdForImport(target: HistoryTarget, quality: QualityModel): string | null {
+    if (isAudioTarget(target)) return null; // audio history arrives with audio acquisition (Wave 2)
     const parentCond =
       target.mediaType === 'series' ? eq(history.seriesId, target.seriesId) : eq(history.movieId, target.movieId);
     let rows = this.select(
@@ -984,6 +995,8 @@ export class HistoryService {
     target: HistoryTarget,
     base: Omit<NewHistoryRow, 'id' | 'date' | 'mediaType' | 'seriesId' | 'episodeId' | 'movieId'>,
   ): HistoryRecord[] {
+    // Audio history arrives with audio acquisition (Wave 2); nothing produces audio targets yet.
+    if (isAudioTarget(target)) return [];
     const date = this.now().toISOString();
     base = this.withLanguages(target, base);
     const values: NewHistoryRow[] =
@@ -1007,7 +1020,7 @@ export class HistoryService {
    * "unknown" alone is recorded as the item's original language with `languageAssumed` set.
    * Codes are lower-case either way ("Unknown" and "unknown" were both being stored).
    */
-  private withLanguages<T extends { languages: readonly string[]; data: Record<string, string> }>(target: HistoryTarget, base: T): T {
+  private withLanguages<T extends { languages: readonly string[]; data: Record<string, string> }>(target: VideoHistoryTarget, base: T): T {
     const known = [...new Set(base.languages.map((l) => l.toLowerCase()))].filter((l) => l !== 'unknown');
     if (known.length > 0) return { ...base, languages: known };
     const original =

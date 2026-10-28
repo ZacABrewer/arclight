@@ -117,6 +117,11 @@ export const trackedDownloads = sqliteTable(
     reannouncedAt: text('reannounced_at'),
     /** Set while the disk-space guard holds this download paused (it resumes it later). */
     diskPausedAt: text('disk_paused_at'),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [
     uniqueIndex('tracked_downloads_client_download_idx').on(t.clientId, t.downloadId),

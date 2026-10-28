@@ -7,6 +7,7 @@ import {
   DelayProfile,
   DelayProfileInput,
   DelayProfileReorderRequest,
+  MediaDomain,
   ProfilesErrorResponse,
   QualityDefinitionItem,
   QualityDefinitionLimits,
@@ -25,6 +26,8 @@ import { ADVANCED_REQUESTERS } from '../auth/hook.js';
 const IdParams = z.object({ id: z.coerce.number().int().min(1) });
 const QualityIdParams = z.object({ qualityId: z.coerce.number().int().min(0) });
 const Empty = z.null();
+/** Optional `?mediaDomain=video|music|audiobook` filter / template selector. */
+const DomainQuery = z.object({ mediaDomain: MediaDomain.optional() });
 
 const errors = { 400: ProfilesErrorResponse, 404: ProfilesErrorResponse, 409: ProfilesErrorResponse };
 
@@ -61,13 +64,15 @@ export function profilesRoutes(
 
     // ---- quality profiles --------------------------------------------------------------
 
-    app.get('/qualityprofile', { config: { access: { areas: ['library', 'wanted'], permissions: ADVANCED_REQUESTERS } }, schema: { response: { 200: z.array(QualityProfile) } } }, async () =>
-      service.listQualityProfiles(),
+    app.get('/qualityprofile', { config: { access: { areas: ['library', 'wanted'], permissions: ADVANCED_REQUESTERS } }, schema: { querystring: DomainQuery, response: { 200: z.array(QualityProfile) } } }, async (req) =>
+      service.listQualityProfiles(req.query.mediaDomain),
     );
 
     // The template has an empty name for the user to fill in, so it is not a valid input yet.
-    app.get('/qualityprofile/schema', { schema: { response: { 200: QualityProfileInput.extend({ name: z.string() }) } } }, async () =>
-      service.qualityProfileTemplate(),
+    app.get(
+      '/qualityprofile/schema',
+      { schema: { querystring: DomainQuery, response: { 200: QualityProfileInput.extend({ name: z.string() }) } } },
+      async (req) => service.qualityProfileTemplate(req.query.mediaDomain),
     );
 
     app.get('/qualityprofile/:id', { config: { access: { areas: ['library', 'wanted'] } }, schema: { params: IdParams, response: { 200: QualityProfile, ...errors } } }, async (req) =>
@@ -186,8 +191,8 @@ export function profilesRoutes(
 
     // ---- quality definitions -----------------------------------------------------------
 
-    app.get('/qualitydefinition', { schema: { response: { 200: z.array(QualityDefinitionItem) } } }, async () =>
-      service.listQualityDefinitions(),
+    app.get('/qualitydefinition', { schema: { querystring: DomainQuery, response: { 200: z.array(QualityDefinitionItem) } } }, async (req) =>
+      service.listQualityDefinitions(req.query.mediaDomain),
     );
 
     app.put(

@@ -43,6 +43,7 @@ import { episodeAiredMs } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { LibraryError } from './errors.js';
+import { qualityProfiles } from '../../db/schema.js';
 import * as t from './schema.js';
 import { enabledVersions, isVersioned, primaryOf, sameTag, slotOf } from './versions.js';
 
@@ -277,6 +278,25 @@ export function deleteRootFolder(db: LibraryDb, id: number): void {
   if (!deleted) throw LibraryError.notFound('root folder', id);
 }
 
+/**
+ * Series and movies (and their version slots) may only use `video` quality profiles; a music or
+ * audiobook profile would rank qualities they can never have. Unknown profile ids are left to
+ * the existing handling.
+ */
+function requireVideoProfiles(db: LibraryDb, profileId: number | undefined, versions?: ReadonlyArray<{ qualityProfileId: number }> | null): void {
+  const ids = [...new Set([...(profileId !== undefined ? [profileId] : []), ...(versions ?? []).map((v) => v.qualityProfileId)])];
+  if (ids.length === 0) return;
+  const rows = db
+    .select({ id: qualityProfiles.id, mediaDomain: qualityProfiles.mediaDomain })
+    .from(qualityProfiles)
+    .where(inArray(qualityProfiles.id, ids))
+    .all();
+  const wrong = rows.find((r) => r.mediaDomain !== 'video');
+  if (wrong) {
+    throw new LibraryError('VALIDATION', `quality profile ${wrong.id} is a ${wrong.mediaDomain} profile; series and movies need a video profile`);
+  }
+}
+
 function requireRootFolder(db: LibraryDb, path: string, mediaType: 'series' | 'movie'): string {
   const rows = db.select().from(t.rootFolders).where(eq(t.rootFolders.mediaType, mediaType)).all();
   const match = rows.find((r) => resolve(r.path) === resolve(path));
@@ -501,6 +521,7 @@ function languageProfileFor(db: Db, mediaType: 'series' | 'movie', requested: nu
 
 export function addSeries(db: Db, meta: SeriesMetadataInput, req: AddSeriesRequest, now: string = nowIso()): Series {
   const languageProfileId = languageProfileFor(db, 'series', req.languageProfileId);
+  requireVideoProfiles(db, req.qualityProfileId, req.versions);
   return db.transaction((tx) => {
     if (tx.select({ id: t.series.id }).from(t.series).where(eq(t.series.tmdbId, meta.tmdbId)).get()) {
       throw new LibraryError('CONFLICT', `series with tmdbId ${meta.tmdbId} already exists`);
@@ -613,6 +634,7 @@ function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
 }
 
 export function updateSeries(db: Db, id: number, req: UpdateSeriesRequest, now: string = nowIso()): Series {
+  requireVideoProfiles(db, req.qualityProfileId, req.versions);
   return db.transaction((tx) => {
     const current = tx.select().from(t.series).where(eq(t.series.id, id)).get();
     if (!current) throw LibraryError.notFound('series', id);
@@ -647,6 +669,7 @@ export function updateSeries(db: Db, id: number, req: UpdateSeriesRequest, now: 
 }
 
 export function bulkUpdateSeries(db: Db, req: BulkSeriesUpdateRequest, now: string = nowIso()): Series[] {
+  requireVideoProfiles(db, req.qualityProfileId);
   return db.transaction((tx) => {
     const rows = tx.select().from(t.series).where(inArray(t.series.id, req.ids)).all();
     const found = new Set(rows.map((r) => r.id));
@@ -1007,6 +1030,7 @@ function movieMetadataColumns(meta: MovieMetadataInput) {
 
 export function addMovie(db: Db, meta: MovieMetadataInput, req: AddMovieRequest, now: string = nowIso()): Movie {
   const languageProfileId = languageProfileFor(db, 'movie', req.languageProfileId);
+  requireVideoProfiles(db, req.qualityProfileId, req.versions);
   return db.transaction((tx) => {
     if (tx.select({ id: t.movies.id }).from(t.movies).where(eq(t.movies.tmdbId, meta.tmdbId)).get()) {
       throw new LibraryError('CONFLICT', `movie with tmdbId ${meta.tmdbId} already exists`);
@@ -1095,6 +1119,7 @@ export function listMovies(db: LibraryDb, query: MovieListQuery, now: string = n
 }
 
 export function updateMovie(db: Db, id: number, req: UpdateMovieRequest, now: string = nowIso()): Movie {
+  requireVideoProfiles(db, req.qualityProfileId, req.versions);
   return db.transaction((tx) => {
     const current = tx.select().from(t.movies).where(eq(t.movies.id, id)).get();
     if (!current) throw LibraryError.notFound('movie', id);
@@ -1122,6 +1147,7 @@ export function updateMovie(db: Db, id: number, req: UpdateMovieRequest, now: st
 }
 
 export function bulkUpdateMovies(db: Db, req: BulkMovieUpdateRequest, now: string = nowIso()): Movie[] {
+  requireVideoProfiles(db, req.qualityProfileId);
   return db.transaction((tx) => {
     const rows = tx.select().from(t.movies).where(inArray(t.movies.id, req.ids)).all();
     const found = new Set(rows.map((r) => r.id));

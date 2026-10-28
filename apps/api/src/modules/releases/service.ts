@@ -203,7 +203,9 @@ export interface Evaluated extends Ranked {
 
 export type SearchTarget =
   | { seriesId: number; seasonNumber?: number; episodeIds?: number[] }
-  | { movieId: number };
+  | { movieId: number }
+  | { artistId: number; albumIds?: number[] }
+  | { authorId: number; bookIds?: number[] };
 
 export interface SearchSummary {
   releases: number;
@@ -1169,6 +1171,13 @@ export class ReleasesService {
       };
       return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [movie.id] } };
     }
+    // Audio searches (album/book plans) arrive with audio acquisition (Wave 2): nothing to ask yet.
+    if ('artistId' in target) {
+      return { requests: [], criteria: { mediaType: 'music', artistId: target.artistId, userInvoked }, items: { kind: 'episode', ids: [] } };
+    }
+    if ('authorId' in target) {
+      return { requests: [], criteria: { mediaType: 'audiobook', authorId: target.authorId, userInvoked }, items: { kind: 'episode', ids: [] } };
+    }
     const series = libraryService.getSeries(this.db, target.seriesId, { includeStatistics: false });
     const episodes = libraryService.listEpisodes(this.db, { seriesId: series.id });
     let targeted: Episode[];
@@ -1376,8 +1385,10 @@ export class ReleasesService {
       const rows: DecisionLogRow[] = evaluated.map((e) => {
         const d = e.decision;
         const fallback = !e.candidate && d.seriesId === undefined && d.movieId === undefined ? criteria : undefined;
+        const mediaType = d.mediaType ?? fallback?.mediaType ?? null;
         return {
-          mediaType: d.mediaType ?? fallback?.mediaType ?? null,
+          // The decision log is video-only until audio decisions exist (Wave 2).
+          mediaType: mediaType === 'series' || mediaType === 'movie' ? mediaType : null,
           seriesId: d.seriesId ?? (fallback?.mediaType === 'series' ? (fallback.seriesId ?? null) : null),
           episodeIds: d.episodeIds ?? (fallback?.episodeIds ? [...fallback.episodeIds] : []),
           movieId: d.movieId ?? (fallback?.mediaType === 'movie' ? (fallback.movieId ?? null) : null),

@@ -161,6 +161,11 @@ function toQualityModel(q: ParsedQuality | { quality: QualityModel['quality'] | 
   };
 }
 
+/** The video media type of a tracked download; audio downloads (music/audiobook) give undefined. */
+function videoMediaType(t: TrackedDownload['mediaType']): MediaType | undefined {
+  return t === 'series' || t === 'movie' ? t : undefined;
+}
+
 function safeParsePath(path: string, hint: MediaType | 'auto'): ParsedRelease | null {
   try {
     return parsePath(path, hint);
@@ -264,6 +269,8 @@ export class ImportsService {
     const settings = this.getMediaManagement();
     const result: ImportRunResult = { trackedDownloadId: item.id, verified: false, outcomes: [], messages: [] };
     if (!settings.enableCompletedDownloadHandling) return result;
+    // Audio downloads belong to the audio importer (imports/audio); this one is video-only.
+    if (item.mediaType === 'music' || item.mediaType === 'audiobook') return result;
     this.retryable.delete(item.id);
 
     const path = item.outputPath;
@@ -382,7 +389,7 @@ export class ImportsService {
       type: 'import',
       action: 'manualRequired',
       title: item.title,
-      ...(item.mediaType ? { mediaType: item.mediaType } : {}),
+      ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
       ...(item.seriesId !== undefined ? { mediaId: item.seriesId } : item.movieId !== undefined ? { mediaId: item.movieId } : {}),
       message: lines.join('; '),
     });
@@ -391,7 +398,7 @@ export class ImportsService {
       this.deps.history?.recordImportFailed?.({
         downloadId: item.downloadId,
         sourceTitle: item.title,
-        ...(item.mediaType ? { mediaType: item.mediaType } : {}),
+        ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
         ...(item.seriesId !== undefined ? { seriesId: item.seriesId } : {}),
         ...(item.movieId !== undefined ? { movieId: item.movieId } : {}),
         ...(item.episodeIds ? { episodeIds: item.episodeIds } : {}),
@@ -412,7 +419,8 @@ export class ImportsService {
   private grabFor(item: TrackedDownload): GrabbedInfo | null {
     const fromRelease = readGrabbedRelease(item.grabbedRelease) ?? {};
     const grab: GrabbedInfo = { ...fromRelease };
-    if (item.mediaType) grab.mediaType = item.mediaType;
+    const mediaType = videoMediaType(item.mediaType);
+    if (mediaType) grab.mediaType = mediaType;
     if (item.seriesId !== undefined) grab.seriesId = item.seriesId;
     if (item.movieId !== undefined) grab.movieId = item.movieId;
     if (item.episodeIds && item.episodeIds.length > 0) grab.episodeIds = item.episodeIds;
@@ -431,7 +439,7 @@ export class ImportsService {
       const movie = this.tryMovie(movieId);
       if (movie) return { mediaType: 'movie', movie };
     }
-    const parsed = safeParseRelease(item.title, item.mediaType ?? 'auto');
+    const parsed = safeParseRelease(item.title, videoMediaType(item.mediaType) ?? 'auto');
     if (!parsed) return null;
     if (parsed.series && item.mediaType !== 'movie') {
       const series = this.findSeriesByTitle(parsed);
@@ -481,7 +489,7 @@ export class ImportsService {
       type: 'import',
       action: 'failed',
       title: item.title,
-      ...(item.mediaType ? { mediaType: item.mediaType } : {}),
+      ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
       message,
     });
     await this.callHook(() => this.deps.blocklist?.add({ item, message, grabbedRelease: item.grabbedRelease }));

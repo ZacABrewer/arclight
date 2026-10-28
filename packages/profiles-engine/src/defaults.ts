@@ -1,17 +1,21 @@
 import {
-  ALL_QUALITIES,
   QUALITIES,
   QUALITY_GROUP_ID_BASE,
+  qualitiesForDomain,
   type CustomFormat,
   type DelayProfile,
+  type MediaDomain,
   type QualityName,
   type QualityProfileInput,
   type QualityProfileItem,
 } from '@arclight/shared';
 
-/** The vocabulary ordered worst → best by default weight. */
-export function qualitiesByWeight() {
-  return [...ALL_QUALITIES].sort((a, b) => a.weight - b.weight || a.id - b.id);
+/**
+ * The vocabulary of one domain ordered worst → best by default weight. Defaults to video, so
+ * series/movie callers never see audio qualities.
+ */
+export function qualitiesByWeight(domain: MediaDomain = 'video') {
+  return [...qualitiesForDomain(domain)].sort((a, b) => a.weight - b.weight || a.id - b.id);
 }
 
 interface GroupSpec {
@@ -29,18 +33,18 @@ export const DEFAULT_GROUPS: ReadonlyArray<GroupSpec> = [
 ];
 
 /**
- * Every quality as an item, worst → best, with WEB-DL/WEBRip pairs grouped. Only the
- * listed names are allowed. This is also the `/qualityprofile/schema` template when
- * `allowed` is empty.
+ * Every quality of the domain as an item, worst → best, with WEB-DL/WEBRip pairs grouped
+ * (video). Only the listed names are allowed; names of another domain are ignored. This is
+ * also the `/qualityprofile/schema` template when `allowed` is empty.
  */
-export function buildItems(allowed: ReadonlyArray<QualityName>): QualityProfileItem[] {
+export function buildItems(allowed: ReadonlyArray<QualityName>, domain: MediaDomain = 'video'): QualityProfileItem[] {
   const allowedIds = new Set(allowed.map((n) => QUALITIES[n].id));
   const grouped = new Map<number, GroupSpec>();
-  for (const g of DEFAULT_GROUPS) for (const m of g.members) grouped.set(QUALITIES[m].id, g);
+  if (domain === 'video') for (const g of DEFAULT_GROUPS) for (const m of g.members) grouped.set(QUALITIES[m].id, g);
 
   const items: QualityProfileItem[] = [];
   const emitted = new Set<number>();
-  for (const q of qualitiesByWeight()) {
+  for (const q of qualitiesByWeight(domain)) {
     const group = grouped.get(q.id);
     if (!group) {
       items.push({ kind: 'quality', qualityId: q.id, allowed: allowedIds.has(q.id) });

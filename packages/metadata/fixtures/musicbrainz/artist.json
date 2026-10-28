@@ -1,0 +1,378 @@
+{
+  "genres": [
+    {
+      "id": "ceeaa283-5d7b-4202-8d1d-e25d116b2a18",
+      "name": "alternative rock",
+      "count": 43,
+      "disambiguation": ""
+    },
+    {
+      "count": 1,
+      "disambiguation": "",
+      "id": "2cdcecfe-3e7c-4055-ab34-78eceabe4d9b",
+      "name": "ambient pop"
+    },
+    {
+      "name": "art pop",
+      "id": "930ef127-3653-4677-9b95-ecc90c7c1a14",
+      "disambiguation": "",
+      "count": 3
+    },
+    {
+      "disambiguation": "",
+      "count": 30,
+      "name": "art rock",
+      "id": "b7ef058e-6d83-4ca4-8123-9724bff4648b"
+    },
+    {
+      "count": 2,
+      "disambiguation": "",
+      "id": "f1c9b874-7ef2-4e79-9419-c0bcb5f33a30",
+      "name": "britpop"
+    },
+    {
+      "name": "chamber pop",
+      "id": "f0843e91-c025-4dd7-8aef-6fe3d35470d9",
+      "disambiguation": "",
+      "count": 1
+    },
+    {
+      "id": "eee90717-3eee-41bd-b463-003c180544bd",
+      "name": "crossover prog",
+      "count": 1,
+      "disambiguation": ""
+    },
+    {
+      "name": "electronic",
+      "id": "89255676-1f14-4dd8-bbad-fca839d6aff4",
+      "disambiguation": "",
+      "count": 14
+    },
+    {
+      "disambiguation": "",
+      "count": 1,
+      "name": "electronic rock",
+      "id": "c4a69842-f891-4569-9506-1882aa5db433"
+    },
+    {
+      "name": "electronica",
+      "id": "53a3cea3-17af-4421-a07a-5824b540aeb5",
+      "disambiguation": "",
+      "count": 2
+    },
+    {
+      "count": 3,
+      "disambiguation": "",
+      "id": "68c81274-5770-4e7b-a4bf-ab0d7d425d99",
+      "name": "experimental"
+    },
+    {
+      "disambiguation": "",
+      "count": 14,
+      "name": "experimental rock",
+      "id": "65c97e89-b42b-45c2-a70e-0eca1b8f0ff7"
+    },
+    {
+      "name": "idm",
+      "id": "8eb583f1-4fd7-460c-8246-dcdccc0e3ef9",
+      "disambiguation": "",
+      "count": 1
+    },
+    {
+      "disambiguation": "",
+      "count": 5,
+      "name": "indie rock",
+      "id": "ccd19ebf-052c-4afe-8ad9-fbb0a73f94a7"
+    },
+    {
+      "name": "indietronica",
+      "id": "9e7ae1de-d5f2-46a5-b105-11c7367dc70d",
+      "disambiguation": "",
+      "count": 1
+    },
+    {
+      "count": 2,
+      "disambiguation": "",
+      "id": "a493b79c-4072-4371-a14c-446b1027982a",
+      "name": "post-britpop"
+    },
+    {
+      "name": "post-grunge",
+      "id": "bbb1310c-24cb-4fc9-97c4-f93e4549f1e2",
+      "disambiguation": "",
+      "count": 1
+    },
+    {
+      "name": "rock",
+      "id": "0e3fc579-2d24-4f20-9dae-736e1ec78798",
+      "disambiguation": "",
+      "count": 19
+    }
+  ],
+  "type-id": "e431f5f6-b5d2-343d-8b36-72607fffb74b",
+  "type": "Group",
+  "disambiguation": "",
+  "life-span": {
+    "end": null,
+    "ended": false,
+    "begin": "1991"
+  },
+  "aliases": [
+    {
+      "name": "Radio Head",
+      "begin": null,
+      "locale": null,
+      "ended": false,
+      "type": "Search hint",
+      "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+      "sort-name": "Radio Head",
+      "end": null,
+      "primary": null
+    },
+    {
+      "name": "Radiohead",
+      "begin": null,
+      "ended": false,
+      "locale": "en",
+      "sort-name": "Radiohead",
+      "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+      "type": "Artist name",
+      "primary": true,
+      "end": null
+    },
+    {
+      "sort-name": "Radiohead & Thom Yorke",
+      "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+      "type": "Search hint",
+      "end": null,
+      "primary": null,
+      "begin": null,
+      "name": "Radiohead & Thom Yorke",
+      "ended": false,
+      "locale": null
+    },
+    {
+      "begin": null,
+      "name": "r/head",
+      "locale": null,
+      "ended": false,
+      "type-id": "1937e404-b981-3cb7-8151-4c86ebfc8d8e",
+      "type": "Search hint",
+      "sort-name": "r/head",
+      "end": null,
+      "primary": null
+    },
+    {
+      "locale": "ja",
+      "ended": false,
+      "begin": null,
+      "name": "レディオヘッド",
+      "end": null,
+      "primary": true,
+      "type": "Artist name",
+      "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+      "sort-name": "れでぃおへっど"
+    },
+    {
+      "locale": "zh",
+      "ended": false,
+      "begin": null,
+      "name": "电台司令",
+      "primary": true,
+      "end": null,
+      "type": "Artist name",
+      "type-id": "894afba6-2816-3c24-8072-eadb66bd04bc",
+      "sort-name": "电台司令"
+    }
+  ],
+  "begin-area": {
+    "name": "Abingdon-on-Thames",
+    "id": "d840d4b3-8987-4626-928b-398de760cc24",
+    "sort-name": "Abingdon-on-Thames",
+    "type": null,
+    "type-id": null,
+    "disambiguation": ""
+  },
+  "id": "a74b1b7f-71a5-4011-9441-d0b5e4122711",
+  "area": {
+    "type": null,
+    "type-id": null,
+    "sort-name": "United Kingdom",
+    "disambiguation": "",
+    "id": "8a754a16-0027-3a29-b6d7-2b40ea0481ed",
+    "name": "United Kingdom",
+    "iso-3166-1-codes": [
+      "GB"
+    ]
+  },
+  "relations": [
+    {
+      "attribute-values": {},
+      "end": null,
+      "direction": "forward",
+      "source-credit": "",
+      "ended": false,
+      "url": {
+        "resource": "https://www.allmusic.com/artist/mn0000326249",
+        "id": "a049e9f0-b290-461d-8977-031464a00ead"
+      },
+      "attribute-ids": {},
+      "target-credit": "",
+      "begin": null,
+      "target-type": "url",
+      "type-id": "6b3e3c85-0002-4f34-aca6-80ace0d7e846",
+      "type": "allmusic",
+      "attributes": []
+    },
+    {
+      "direction": "forward",
+      "end": null,
+      "attribute-values": {},
+      "attributes": [],
+      "type": "bandcamp",
+      "type-id": "c550166e-0548-4a18-b1d4-e2ae423a3e88",
+      "target-type": "url",
+      "begin": null,
+      "target-credit": "",
+      "url": {
+        "id": "146f8bf6-cc29-4317-aae4-459579ebacb2",
+        "resource": "https://radiohead.bandcamp.com/"
+      },
+      "attribute-ids": {},
+      "source-credit": "",
+      "ended": false
+    },
+    {
+      "attribute-values": {},
+      "direction": "forward",
+      "end": null,
+      "url": {
+        "resource": "https://www.bandsintown.com/a/25874",
+        "id": "3f41e9cc-5cba-4379-ad74-5bf7078c52cf"
+      },
+      "attribute-ids": {},
+      "target-credit": "",
+      "begin": null,
+      "source-credit": "",
+      "ended": false,
+      "type": "bandsintown",
+      "type-id": "ea45ed3d-2d5e-456e-8c32-94b6f51426e2",
+      "attributes": [],
+      "target-type": "url"
+    },
+    {
+      "attribute-values": {},
+      "direction": "forward",
+      "end": "2020-11-19",
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {},
+      "url": {
+        "resource": "https://www.bbc.co.uk/music/artists/a74b1b7f-71a5-4011-9441-d0b5e4122711",
+        "id": "367918c3-81d5-424f-9447-005530da230b"
+      },
+      "ended": true,
+      "source-credit": "",
+      "attributes": [],
+      "type": "BBC Music page",
+      "type-id": "d028a975-000c-4525-9333-d3c8425e4b54",
+      "target-type": "url"
+    },
+    {
+      "target-type": "url",
+      "type": "blog",
+      "type-id": "eb535226-f8ca-499d-9b18-6a144df4ae6f",
+      "attributes": [],
+      "source-credit": "",
+      "ended": true,
+      "attribute-ids": {},
+      "url": {
+        "resource": "https://radiohead.tumblr.com/",
+        "id": "29ac18ae-bf7e-4cc6-9c69-6ccd23ac8e3e"
+      },
+      "begin": null,
+      "target-credit": "",
+      "end": null,
+      "direction": "forward",
+      "attribute-values": {}
+    },
+    {
+      "attribute-values": {},
+      "end": null,
+      "direction": "forward",
+      "source-credit": "",
+      "ended": true,
+      "target-credit": "",
+      "begin": null,
+      "url": {
+        "resource": "http://www.btinternet.com/~r.j.arthur/rh/rhdisc.htm",
+        "id": "1368e9f8-bb88-42f5-975d-1546d3982744"
+      },
+      "attribute-ids": {},
+      "target-type": "url",
+      "attributes": [],
+      "type": "discography page",
+      "type-id": "4fb0eeec-a6eb-4ae3-ad52-b55765b94e8f"
+    },
+    {
+      "target-type": "url",
+      "type": "discogs",
+      "type-id": "04a5b104-a4c2-4bac-99a1-7b837c37d9e4",
+      "attributes": [],
+      "ended": false,
+      "source-credit": "",
+      "attribute-ids": {},
+      "url": {
+        "resource": "https://www.discogs.com/artist/3840",
+        "id": "f49de6eb-d9db-4474-9406-f3b02ec95b42"
+      },
+      "target-credit": "",
+      "begin": null,
+      "end": null,
+      "direction": "forward",
+      "attribute-values": {}
+    },
+    {
+      "end": null,
+      "direction": "forward",
+      "attribute-values": {},
+      "target-type": "url",
+      "attributes": [],
+      "type": "official homepage",
+      "type-id": "fe33d22f-c3b0-4d68-bd53-a856badf2b15",
+      "ended": false,
+      "source-credit": "",
+      "target-credit": "",
+      "begin": null,
+      "attribute-ids": {},
+      "url": {
+        "resource": "http://www.radiohead.com/",
+        "id": "3731db81-d717-4658-a7b1-f2ef13c3033b"
+      }
+    },
+    {
+      "attribute-values": {},
+      "end": null,
+      "direction": "forward",
+      "ended": false,
+      "source-credit": "",
+      "begin": null,
+      "target-credit": "",
+      "url": {
+        "id": "0d8cb250-f92f-4481-bb00-a0b40391912b",
+        "resource": "https://www.wikidata.org/wiki/Q44190"
+      },
+      "attribute-ids": {},
+      "target-type": "url",
+      "attributes": [],
+      "type": "wikidata",
+      "type-id": "689870a4-a1e4-4912-b17f-7b2664215698"
+    }
+  ],
+  "sort-name": "Radiohead",
+  "country": "GB",
+  "gender-id": null,
+  "name": "Radiohead",
+  "gender": null,
+  "end-area": null
+}

@@ -38,6 +38,11 @@ export const history = sqliteTable(
     downloadId: text('download_id'),
     /** camelCase keys, string values. */
     data: text('data', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+    // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
+    artistId: integer('artist_id'),
+    albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
+    authorId: integer('author_id'),
+    bookIds: text('book_ids', { mode: 'json' }).$type<number[]>(),
   },
   (t) => [
     index('history_download_id_idx').on(t.downloadId),
@@ -46,6 +51,8 @@ export const history = sqliteTable(
     index('history_movie_id_idx').on(t.movieId),
     index('history_event_type_idx').on(t.eventType),
     index('history_date_idx').on(t.date),
+    index('history_artist_id_idx').on(t.artistId),
+    index('history_author_id_idx').on(t.authorId),
   ],
 );
 

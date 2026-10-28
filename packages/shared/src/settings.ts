@@ -138,3 +138,15 @@ export const ReleasesSettings = z.object({
 });
 export type ReleasesSettings = z.infer<typeof ReleasesSettings>;
 export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;
+
+// ---------------------------------------------------------------------------------------
+// features (GET/PUT /settings/features): media types beyond series and movies. Off by default
+// and kept permanently, so a video-only install can hide music and audiobooks for good.
+// ---------------------------------------------------------------------------------------
+
+export const FeatureSettings = z.object({
+  music: z.boolean().default(false),
+  audiobooks: z.boolean().default(false),
+});
+export type FeatureSettings = z.infer<typeof FeatureSettings>;
+export type FeatureSettingsInput = z.input<typeof FeatureSettings>;

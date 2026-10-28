@@ -165,7 +165,11 @@ export class LibraryHygieneService {
   // -------------------------------------------------------------------------------------
 
   async scan(opts: { signal?: AbortSignal } = {}): Promise<HygieneScanSummary> {
-    const roots = this.db.select().from(rootFolders).all();
+    // Video-only module: music/audiobook roots are not walked, but still excluded when nested.
+    const allRoots = this.db.select().from(rootFolders).all();
+    const roots = allRoots.filter(
+      (r): r is (typeof allRoots)[number] & { mediaType: 'series' | 'movie' } => r.mediaType === 'series' || r.mediaType === 'movie',
+    );
     const settings = getSection(this.db, 'mediaManagement');
     const recycleBin = settings.recycleBinPath?.trim() || null;
     const allSeries: SeriesLite[] = this.db
@@ -203,7 +207,7 @@ export class LibraryHygieneService {
         continue;
       }
       summary.rootFolders++;
-      const nested = roots.filter((r) => r.id !== root.id && isUnder(r.path, root.path) && this.norm(r.path) !== this.norm(root.path)).map((r) => r.path);
+      const nested = allRoots.filter((r) => r.id !== root.id && isUnder(r.path, root.path) && this.norm(r.path) !== this.norm(root.path)).map((r) => r.path);
       const result = await walkRoot(root.path, { excluded: [...nested, ...(recycleBin ? [recycleBin] : [])] });
       summary.filesScanned += result.videos.length;
       for (const file of result.videos) walked.push({ root, file });

@@ -1,14 +1,18 @@
-import { asc, eq } from 'drizzle-orm';
+import { asc, eq, sql } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import {
   ALL_QUALITIES,
+  defaultAlbumTypeProfiles,
+  qualitiesForDomain,
   qualityById,
+  qualityDomain,
   type CustomFormat,
   type CustomFormatInput,
   type CustomFormatTestRequest,
   type CustomFormatTestResponse,
   type DelayProfile,
   type DelayProfileInput,
+  type MediaDomain,
   type QualityDefinitionItem,
   type QualityDefinitionLimits,
   type QualityProfile,
@@ -30,6 +34,7 @@ import {
   validateQualityProfile,
 } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
+import { albumTypeProfiles, artists, movies, series } from '../../db/schema.js';
 import { customFormats, delayProfiles, qualityDefinitions, qualityProfiles, releaseProfiles } from './schema.js';
 
 export type ProfileErrorCode = 'NOT_FOUND' | 'VALIDATION' | 'IN_USE' | 'CONFLICT';
@@ -85,8 +90,14 @@ export class ProfilesService {
   // seeding
 
   /** Insert defaults into any empty table. Safe to call on every start. */
-  seedDefaults(): { qualityProfiles: number; customFormats: number; delayProfiles: number; qualityDefinitions: number } {
-    const seeded = { qualityProfiles: 0, customFormats: 0, delayProfiles: 0, qualityDefinitions: 0 };
+  seedDefaults(): {
+    qualityProfiles: number;
+    customFormats: number;
+    delayProfiles: number;
+    qualityDefinitions: number;
+    albumTypeProfiles: number;
+  } {
+    const seeded = { qualityProfiles: 0, customFormats: 0, delayProfiles: 0, qualityDefinitions: 0, albumTypeProfiles: 0 };
 
     if (this.db.select({ id: qualityProfiles.id }).from(qualityProfiles).limit(1).all().length === 0) {
       for (const p of defaultQualityProfiles()) {
@@ -111,6 +122,15 @@ export class ProfilesService {
       seeded.qualityDefinitions++;
     }
 
+    // Album-type profiles (music): which release groups become albums. Seeded on every install
+    // (cheap, and an artist always needs one) whether or not music is enabled.
+    if (this.db.select({ id: albumTypeProfiles.id }).from(albumTypeProfiles).limit(1).all().length === 0) {
+      for (const p of defaultAlbumTypeProfiles()) {
+        this.db.insert(albumTypeProfiles).values(p).run();
+        seeded.albumTypeProfiles++;
+      }
+    }
+
     if (Object.values(seeded).some((n) => n > 0)) this.log?.info(seeded, 'seeded profile defaults');
     return seeded;
   }
@@ -118,8 +138,18 @@ export class ProfilesService {
   // -------------------------------------------------------------------------------------
   // quality profiles
 
-  listQualityProfiles(): QualityProfile[] {
-    return this.db.select().from(qualityProfiles).orderBy(asc(qualityProfiles.id)).all();
+  /** Every profile, or only those of one domain. */
+  listQualityProfiles(domain?: MediaDomain): QualityProfile[] {
+    const rows = this.db.select().from(qualityProfiles).orderBy(asc(qualityProfiles.id)).all();
+    return domain === undefined ? rows : rows.filter((p) => p.mediaDomain === domain);
+  }
+
+  /**
+   * Null when profile `id` may be assigned to an item of `domain`; otherwise why not. A profile
+   * that does not exist is not this check's business (callers keep their existing handling).
+   */
+  domainMismatch(id: number, domain: MediaDomain): string | null {
+    return qualityProfileDomainMismatch(this.db, id, domain);
   }
 
   getQualityProfile(id: number): QualityProfile {
@@ -128,19 +158,31 @@ export class ProfilesService {
     return row;
   }
 
-  /** An empty profile with every quality listed (worst → best) and nothing allowed. */
-  qualityProfileTemplate(): QualityProfileInput {
+  /** An empty profile with every quality of the domain listed (worst → best) and nothing allowed. */
+  qualityProfileTemplate(domain: MediaDomain = 'video'): QualityProfileInput {
     return {
       name: '',
       upgradeAllowed: true,
       cutoff: 0,
-      items: buildItems([]),
+      items: buildItems([], domain),
       minFormatScore: 0,
       cutoffFormatScore: 0,
       minUpgradeFormatScore: 1,
       formatItems: [],
       languages: [],
+      // Video templates stay exactly as they were before domains existed.
+      ...(domain !== 'video' && { mediaDomain: domain }),
     };
+  }
+
+  /** How many series, movies and artists use the profile (video version slots are not counted). */
+  private qualityProfileUsers(id: number): number {
+    const count = (n: { c: number } | undefined) => n?.c ?? 0;
+    return (
+      count(this.db.select({ c: sql<number>`count(*)` }).from(series).where(eq(series.qualityProfileId, id)).get()) +
+      count(this.db.select({ c: sql<number>`count(*)` }).from(movies).where(eq(movies.qualityProfileId, id)).get()) +
+      count(this.db.select({ c: sql<number>`count(*)` }).from(artists).where(eq(artists.qualityProfileId, id)).get())
+    );
   }
 
   private validateQualityProfileInput(input: QualityProfileInput): void {
@@ -155,18 +197,29 @@ export class ProfilesService {
   createQualityProfile(input: QualityProfileInput): QualityProfile {
     this.validateQualityProfileInput(input);
     try {
-      return this.db.insert(qualityProfiles).values(input).returning().get();
+      return this.db
+        .insert(qualityProfiles)
+        .values({ ...input, mediaDomain: input.mediaDomain ?? 'video' })
+        .returning()
+        .get();
     } catch (err) {
       if (isUniqueViolation(err)) throw new ProfileError('CONFLICT', `quality profile "${input.name}" already exists`);
       throw err;
     }
   }
 
+  /** An omitted `mediaDomain` keeps the stored one; a profile in use cannot change domain. */
   updateQualityProfile(id: number, input: QualityProfileInput): QualityProfile {
-    this.getQualityProfile(id);
-    this.validateQualityProfileInput(input);
+    const existing = this.getQualityProfile(id);
+    const current = existing.mediaDomain ?? 'video';
+    const mediaDomain = input.mediaDomain ?? current;
+    if (mediaDomain !== current && this.qualityProfileUsers(id) > 0) {
+      throw new ProfileError('IN_USE', `quality profile ${id} is in use; its media domain (${current}) cannot change`);
+    }
+    const next = { ...input, mediaDomain };
+    this.validateQualityProfileInput(next);
     try {
-      return this.db.update(qualityProfiles).set(input).where(eq(qualityProfiles.id, id)).returning().get()!;
+      return this.db.update(qualityProfiles).set(next).where(eq(qualityProfiles.id, id)).returning().get()!;
     } catch (err) {
       if (isUniqueViolation(err)) throw new ProfileError('CONFLICT', `quality profile "${input.name}" already exists`);
       throw err;
@@ -246,7 +299,8 @@ export class ProfilesService {
     };
     const matchedFormats = matchCustomFormats(this.listCustomFormats(), evaluation);
     const ids = matchedFormats.map((f) => f.id);
-    const scores = this.listQualityProfiles().map((p) => ({
+    // The request scores a series or movie release, so only video profiles apply.
+    const scores = this.listQualityProfiles('video').map((p) => ({
       profileId: p.id,
       profileName: p.name,
       score: calculateFormatScore(p, ids),
@@ -381,9 +435,15 @@ export class ProfilesService {
   // -------------------------------------------------------------------------------------
   // quality definitions
 
-  listQualityDefinitions(): QualityDefinitionItem[] {
+  /**
+   * The quality definitions of one domain (video by default: the list this route has always
+   * served, and the one the Sonarr/Radarr compat layer exposes).
+   */
+  listQualityDefinitions(domain: MediaDomain = 'video'): QualityDefinitionItem[] {
     const limits = new Map(this.db.select().from(qualityDefinitions).all().map((r) => [r.qualityId, r]));
-    return ALL_QUALITIES.map((q) => {
+    // Audio profiles list `Unknown` too, but its size limits belong to the video list.
+    const qualities = domain === 'video' ? qualitiesForDomain('video') : qualitiesForDomain(domain).filter((q) => q.id !== 0);
+    return qualities.map((q) => {
       const l = limits.get(q.id);
       return {
         qualityId: q.id,
@@ -393,6 +453,7 @@ export class ProfilesService {
         modifier: q.modifier,
         weight: q.weight,
         mediaTypes: [...q.mediaTypes],
+        ...(q.audio !== undefined && { audio: q.audio }),
         minSize: l?.minSize ?? null,
         maxSize: l?.maxSize ?? null,
         preferredSize: l?.preferredSize ?? null,
@@ -414,10 +475,18 @@ export class ProfilesService {
       .values({ qualityId, ...limits })
       .onConflictDoUpdate({ target: qualityDefinitions.qualityId, set: limits })
       .run();
-    const item = this.listQualityDefinitions().find((d) => d.qualityId === qualityId);
+    const item = this.listQualityDefinitions(qualityDomain(qualityById(qualityId))).find((d) => d.qualityId === qualityId);
     if (!item) throw new ProfileError('NOT_FOUND', `quality ${qualityId} not found`);
     return item;
   }
+}
+
+/** See `ProfilesService.domainMismatch`. Usable without a service instance (library module). */
+export function qualityProfileDomainMismatch(db: Db, id: number, domain: MediaDomain): string | null {
+  const row = db.select({ mediaDomain: qualityProfiles.mediaDomain }).from(qualityProfiles).where(eq(qualityProfiles.id, id)).get();
+  if (!row || row.mediaDomain === domain) return null;
+  const who = domain === 'video' ? 'series and movies' : domain === 'music' ? 'artists' : 'authors';
+  return `quality profile ${id} is a ${row.mediaDomain} profile; ${who} need a ${domain} profile`;
 }
 
 function rowToReleaseProfile(row: typeof releaseProfiles.$inferSelect): ReleaseProfile {

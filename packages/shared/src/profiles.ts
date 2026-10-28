@@ -1,5 +1,13 @@
 import { z } from 'zod';
-import { QualityModel, QualityModifier, QualitySource, Resolution } from './quality.js';
+import {
+  AudioQualityDescriptor,
+  MediaDomain,
+  QualityMediaType,
+  QualityModel,
+  QualityModifier,
+  QualitySource,
+  Resolution,
+} from './quality.js';
 
 // Profiles: everything that decides "how good is this release and is it good enough".
 // Quality profiles rank qualities, custom formats score releases, delay profiles hold a
@@ -127,9 +135,16 @@ export const QualityProfileInput = z.object({
   formatItems: z.array(ProfileFormatItem).default([]),
   /** Accepted languages; empty means any. */
   languages: z.array(LanguageCode).default([]),
+  /**
+   * Which media the profile ranks; omitted means `video` (series and movies). Items may only
+   * list qualities of this domain, and a series/movie can only use a `video` profile.
+   * Fixed once the profile is in use.
+   */
+  mediaDomain: MediaDomain.optional(),
 });
 export type QualityProfileInput = z.infer<typeof QualityProfileInput>;
 
+/** The api always fills `mediaDomain` on profiles it returns (`video` for every profile created before audio). */
 export const QualityProfile = QualityProfileInput.extend({ id: z.number().int().min(1) });
 export type QualityProfile = z.infer<typeof QualityProfile>;
 
@@ -381,7 +396,9 @@ export const QualityDefinitionItem = QualityDefinitionLimits.extend({
   resolution: Resolution,
   modifier: QualityModifier,
   weight: z.number().int(),
-  mediaTypes: z.array(EvaluationMediaType),
+  mediaTypes: z.array(QualityMediaType),
+  /** Audio qualities only. */
+  audio: AudioQualityDescriptor.optional(),
 });
 export type QualityDefinitionItem = z.infer<typeof QualityDefinitionItem>;
 

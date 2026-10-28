@@ -24,7 +24,7 @@ async function build(db?: Db) {
   return { app, db: database, service };
 }
 
-const BROKEN = ['rootFolders:', '  /x:', '    mediaType: music', ''].join('\n');
+const BROKEN = ['rootFolders:', '  /x:', '    mediaType: comics', ''].join('\n');
 
 describe('config routes', () => {
   it('GET /config/export serves YAML by default and JSON on request, masked', async () => {

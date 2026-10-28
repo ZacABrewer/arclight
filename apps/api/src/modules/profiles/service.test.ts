@@ -1,72 +1,17 @@
-import Database from 'better-sqlite3';
-import { drizzle } from 'drizzle-orm/better-sqlite3';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { QUALITIES, QUALITY_GROUP_ID_BASE, type QualityProfileInput } from '@arclight/shared';
 import { buildItems } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
-import * as schema from './schema.js';
+import { albumTypeProfiles, artists, series } from '../../db/schema.js';
+import { createTestDb } from '../../db/test-utils.js';
 import { ProfileError, ProfilesService } from './service.js';
 import { profilesRoutes } from './routes.js';
 
-// Local in-memory database with this module's tables. The shared createTestDb() helper is
-// being added by another module in parallel; this stays self-contained on purpose.
-function createProfilesTestDb(): Db {
-  const sqlite = new Database(':memory:');
-  sqlite.pragma('foreign_keys = ON');
-  sqlite.exec(`
-    CREATE TABLE quality_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      upgrade_allowed INTEGER NOT NULL DEFAULT 1,
-      cutoff INTEGER NOT NULL,
-      items TEXT NOT NULL,
-      min_format_score INTEGER NOT NULL DEFAULT 0,
-      cutoff_format_score INTEGER NOT NULL DEFAULT 0,
-      min_upgrade_format_score INTEGER NOT NULL DEFAULT 1,
-      format_items TEXT NOT NULL,
-      languages TEXT NOT NULL
-    );
-    CREATE TABLE custom_formats (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE,
-      include_when_renaming INTEGER NOT NULL DEFAULT 0,
-      specifications TEXT NOT NULL,
-      guide_id TEXT
-    );
-    CREATE TABLE delay_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      "order" INTEGER NOT NULL,
-      tags TEXT NOT NULL,
-      preferred_protocol TEXT NOT NULL DEFAULT 'usenet',
-      usenet_delay_minutes INTEGER NOT NULL DEFAULT 0,
-      torrent_delay_minutes INTEGER NOT NULL DEFAULT 0,
-      bypass_if_highest_quality INTEGER NOT NULL DEFAULT 0,
-      bypass_if_above_custom_format_score INTEGER NOT NULL DEFAULT 0,
-      minimum_custom_format_score INTEGER NOT NULL DEFAULT 0
-    );
-    CREATE INDEX delay_profiles_order_idx ON delay_profiles("order");
-    CREATE TABLE release_profiles (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      required TEXT NOT NULL,
-      ignored TEXT NOT NULL,
-      indexer_id INTEGER,
-      tags TEXT NOT NULL
-    );
-    CREATE TABLE quality_definitions (
-      quality_id INTEGER PRIMARY KEY,
-      min_size REAL,
-      max_size REAL,
-      preferred_size REAL
-    );
-  `);
-  // The real Db is built over the aggregate schema; this module only touches its own tables,
-  // so a Db typed over the aggregate but opened with the module schema is interchangeable here.
-  return drizzle(sqlite, { schema }) as unknown as Db;
-}
+// The aggregate schema: seeding also writes music's album-type profiles, and domain checks
+// count series/movies/artists.
+const createProfilesTestDb = (): Promise<Db> => createTestDb();
 
 const hd1080Input = (over: Partial<QualityProfileInput> = {}): QualityProfileInput => ({
   name: 'Test 1080p',
@@ -96,8 +41,8 @@ describe('ProfilesService', () => {
   let service: ProfilesService;
   let inUse: Set<number>;
 
-  beforeEach(() => {
-    db = createProfilesTestDb();
+  beforeEach(async () => {
+    db = await createProfilesTestDb();
     inUse = new Set();
     service = new ProfilesService({ db, isQualityProfileInUse: (id) => inUse.has(id) });
   });
@@ -108,7 +53,8 @@ describe('ProfilesService', () => {
       expect(first.qualityProfiles).toBeGreaterThanOrEqual(5);
       expect(first.delayProfiles).toBe(1);
       expect(first.qualityDefinitions).toBeGreaterThan(20);
-      expect(service.seedDefaults()).toEqual({ qualityProfiles: 0, customFormats: 0, delayProfiles: 0, qualityDefinitions: 0 });
+      expect(first.albumTypeProfiles).toBe(2);
+      expect(service.seedDefaults()).toEqual({ qualityProfiles: 0, customFormats: 0, delayProfiles: 0, qualityDefinitions: 0, albumTypeProfiles: 0 });
       expect(service.listQualityProfiles().map((p) => p.name)).toContain('HD-1080p');
       expect(service.listDelayProfiles()[0]?.tags).toEqual([]);
     });
@@ -272,9 +218,85 @@ describe('ProfilesService', () => {
   });
 });
 
+describe('media domains', () => {
+  let db: Db;
+  let service: ProfilesService;
+  const flacInput = (over: Partial<QualityProfileInput> = {}): QualityProfileInput => ({
+    ...hd1080Input({ name: 'Lossless', cutoff: QUALITIES.FLAC.id, items: buildItems(['FLAC', 'FLAC-24bit'], 'music') }),
+    mediaDomain: 'music',
+    ...over,
+  });
+
+  beforeEach(async () => {
+    db = await createProfilesTestDb();
+    service = new ProfilesService({ db });
+    service.seedDefaults();
+  });
+
+  it('seeds the album-type profiles with "Studio albums" as the default', () => {
+    const rows = db.select().from(albumTypeProfiles).all();
+    expect(rows.map((r) => r.name)).toEqual(['Studio albums', 'Everything']);
+    expect(rows.find((r) => r.isDefault)).toMatchObject({ name: 'Studio albums', primaryTypes: ['Album', 'EP'], secondaryTypes: [], releaseStatuses: ['Official'] });
+  });
+
+  it('defaults new and seeded profiles to video, and filters by domain', () => {
+    expect(service.listQualityProfiles().every((p) => p.mediaDomain === 'video')).toBe(true);
+    const video = service.createQualityProfile(hd1080Input());
+    expect(video.mediaDomain).toBe('video');
+    const music = service.createQualityProfile(flacInput());
+    expect(music.mediaDomain).toBe('music');
+    expect(service.listQualityProfiles('music').map((p) => p.id)).toEqual([music.id]);
+    expect(service.listQualityProfiles('video').map((p) => p.id)).not.toContain(music.id);
+  });
+
+  it('refuses qualities of another domain', () => {
+    expect(code(() => service.createQualityProfile(flacInput({ mediaDomain: undefined })))).toBe('VALIDATION');
+    expect(code(() => service.createQualityProfile(hd1080Input({ mediaDomain: 'music' })))).toBe('VALIDATION');
+  });
+
+  it('keeps the stored domain on update and refuses a change while in use', () => {
+    const music = service.createQualityProfile(flacInput());
+    const { mediaDomain: _omit, ...withoutDomain } = flacInput({ name: 'Lossless 2' });
+    expect(service.updateQualityProfile(music.id, withoutDomain).mediaDomain).toBe('music');
+
+    const video = service.createQualityProfile(hd1080Input());
+    db.insert(series)
+      .values({
+        tmdbId: 1, title: 'S', sortTitle: 's', cleanTitle: 's', year: 2020, status: 'continuing', genres: [], images: [], ratings: {},
+        originalLanguage: 'en', path: '/tv/S', rootFolderPath: '/tv', qualityProfileId: video.id, tags: [], added: '2026-01-01T00:00:00Z',
+      })
+      .run();
+    expect(code(() => service.updateQualityProfile(video.id, flacInput({ name: video.name })))).toBe('IN_USE');
+    expect(db.select().from(artists).all()).toEqual([]);
+  });
+
+  it('answers cross-domain assignment questions', () => {
+    const music = service.createQualityProfile(flacInput());
+    const video = service.listQualityProfiles('video')[0]!;
+    expect(service.domainMismatch(video.id, 'video')).toBeNull();
+    expect(service.domainMismatch(music.id, 'music')).toBeNull();
+    expect(service.domainMismatch(music.id, 'video')).toMatch(/music profile/);
+    expect(service.domainMismatch(9999, 'video')).toBeNull();
+  });
+
+  it('serves video templates and definitions exactly as before, audio ones on request', () => {
+    const template = service.qualityProfileTemplate();
+    expect(template).not.toHaveProperty('mediaDomain');
+    expect(template.items).toEqual(buildItems([]));
+    expect(service.qualityProfileTemplate('music')).toMatchObject({ mediaDomain: 'music' });
+
+    const video = service.listQualityDefinitions();
+    expect(video.every((d) => d.qualityId < 100 && d.audio === undefined)).toBe(true);
+    const music = service.listQualityDefinitions('music');
+    expect(music.length).toBeGreaterThan(10);
+    expect(music.every((d) => d.qualityId >= 100 && d.qualityId < 200 && d.audio !== undefined)).toBe(true);
+    expect(service.updateQualityDefinition(QUALITIES.FLAC.id, { minSize: 3.5, maxSize: 12, preferredSize: null })).toMatchObject({ qualityId: 131, minSize: 3.5 });
+  });
+});
+
 describe('profiles routes', () => {
   it('registers under a prefix and maps service errors to HTTP', async () => {
-    const service = new ProfilesService({ db: createProfilesTestDb() });
+    const service = new ProfilesService({ db: await createProfilesTestDb() });
     service.seedDefaults();
     const app = Fastify().withTypeProvider<ZodTypeProvider>();
     app.setValidatorCompiler(validatorCompiler);

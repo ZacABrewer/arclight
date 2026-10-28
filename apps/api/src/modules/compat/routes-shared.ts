@@ -8,6 +8,7 @@ import {
   HistoryListQuery,
   ReleasePushRequest,
   TagRequest,
+  qualityInDomain,
   type HistoryRecord,
   type HistorySortKey,
   type QueueItem,
@@ -105,8 +106,14 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
     return toV3RootFolder(r, total);
   };
 
-  app.get('/rootfolder', async () => Promise.all((await lib.listRootFolders(db)).map(rootFolderJson)));
-  app.get('/rootfolder/:id', async (req) => rootFolderJson(await lib.getRootFolder(db, parseOr400(IdParam, req.params).id)));
+  // Music/audiobook roots are not Sonarr/Radarr's business.
+  const isVideoRoot = (r: { mediaType: string }) => r.mediaType === 'series' || r.mediaType === 'movie';
+  app.get('/rootfolder', async () => Promise.all((await lib.listRootFolders(db)).filter(isVideoRoot).map(rootFolderJson)));
+  app.get('/rootfolder/:id', async (req) => {
+    const root = await lib.getRootFolder(db, parseOr400(IdParam, req.params).id);
+    if (!isVideoRoot(root)) throw CompatError.notFound();
+    return rootFolderJson(root);
+  });
   app.post('/rootfolder', async (req, reply) => {
     const body = parseOr400(z.object({ path: z.string().min(1), mediaType: z.enum(['series', 'movie']).optional() }).passthrough(), req.body);
     // Sonarr/Radarr do not send a media type; guess from the folder name, default series.
@@ -156,12 +163,18 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
   app.get('/languageprofile/:id', async () => languageProfile);
 
   // ---------------------------------------------------------------------------- profiles
+  // Sonarr/Radarr only know video: music/audiobook profiles (and qualities) are never exposed.
+  const videoProfile = (id: number) => {
+    const p = s.profiles.getQualityProfile(id);
+    if ((p.mediaDomain ?? 'video') !== 'video') throw CompatError.notFound();
+    return p;
+  };
   app.get('/qualityprofile', async () => {
     const formats = s.profiles.listCustomFormats();
-    return s.profiles.listQualityProfiles().map((p) => toV3QualityProfile(p, formats));
+    return s.profiles.listQualityProfiles('video').map((p) => toV3QualityProfile(p, formats));
   });
   app.get('/qualityprofile/:id', async (req) =>
-    toV3QualityProfile(s.profiles.getQualityProfile(parseOr400(IdParam, req.params).id), s.profiles.listCustomFormats()),
+    toV3QualityProfile(videoProfile(parseOr400(IdParam, req.params).id), s.profiles.listCustomFormats()),
   );
   app.post('/qualityprofile', async (req, reply) => {
     const created = s.profiles.createQualityProfile(fromV3QualityProfile(parseOr400(QualityProfileBody, req.body)));
@@ -169,15 +182,15 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
   });
   app.put('/qualityprofile/:id', async (req, reply) => {
     const { id } = parseOr400(IdParam, req.params);
-    const existing = s.profiles.getQualityProfile(id);
+    const existing = videoProfile(id);
     const updated = s.profiles.updateQualityProfile(id, fromV3QualityProfile(parseOr400(QualityProfileBody, req.body), existing));
     return reply.code(202).send(toV3QualityProfile(updated, s.profiles.listCustomFormats()));
   });
 
-  app.get('/qualitydefinition', async () => s.profiles.listQualityDefinitions().map(toV3QualityDefinition));
+  app.get('/qualitydefinition', async () => s.profiles.listQualityDefinitions('video').map(toV3QualityDefinition));
   app.get('/qualitydefinition/:id', async (req) => {
     const { id } = parseOr400(z.object({ id: z.coerce.number().int().min(0) }), req.params);
-    const found = s.profiles.listQualityDefinitions().find((d) => d.qualityId === id);
+    const found = s.profiles.listQualityDefinitions('video').find((d) => d.qualityId === id);
     if (!found) throw CompatError.notFound();
     return toV3QualityDefinition(found);
   });
@@ -193,6 +206,7 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
   const updateDefinition = (raw: z.infer<typeof DefinitionBody>, fallbackId?: number) => {
     const qualityId = raw.quality?.id ?? raw.id ?? fallbackId;
     if (qualityId === undefined) throw CompatError.validation('quality', 'quality.id is required');
+    if (!qualityInDomain(qualityId, 'video')) throw CompatError.notFound();
     return toV3QualityDefinition(
       s.profiles.updateQualityDefinition(qualityId, {
         minSize: raw.minSize ?? null,

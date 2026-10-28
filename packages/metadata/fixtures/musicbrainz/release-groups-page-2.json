@@ -1,0 +1,568 @@
+{
+  "release-groups": [
+    {
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "id": "01618034-2de5-4ace-a057-fcd0bca4cf08",
+      "primary-type": "Album",
+      "title": "1995‐06‐10: Cabaret Metro, Chicago, IL, USA",
+      "disambiguation": "",
+      "first-release-date": "1995-06-10",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2000-09-08",
+      "disambiguation": "",
+      "title": "2000‐09‐08: Valbyhallen, Copenhagen, Denmark",
+      "id": "02c5fa8c-1ea0-431a-a4cd-39af6c49d4ae",
+      "primary-type": "Album",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ]
+    },
+    {
+      "first-release-date": "1992",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "disambiguation": "",
+      "id": "0479139d-c3ed-4bc7-807a-bee5d2e66b62",
+      "primary-type": "Album",
+      "title": "1992‐11‐11: Huddersfield University, Huddersfield, UK",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ]
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "1995-12-12",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "title": "1995‐12‐12: Warehouse, Toronto, ON, Canada",
+      "primary-type": "Album",
+      "id": "04f9826d-419a-4484-a282-7c3a571979dd",
+      "disambiguation": ""
+    },
+    {
+      "first-release-date": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "primary-type": "Album",
+      "id": "0711af11-e061-3ec9-a2a8-8c85738be984",
+      "title": "Fond, but Not in Love: The B Sides",
+      "disambiguation": "",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ]
+    },
+    {
+      "first-release-date": "2001",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "disambiguation": "",
+      "primary-type": "Album",
+      "id": "083d02aa-2770-4d84-8c2c-e70e012fa90e",
+      "title": "Kid Eh?"
+    },
+    {
+      "id": "0b1fce60-47b8-4664-8f59-3d7520456ae2",
+      "primary-type": "Album",
+      "title": "BBC in Concert 601: Glastonbury Festival 1994",
+      "disambiguation": "",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "first-release-date": "1994",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "id": "0be7bec9-8bc0-4613-9adf-ea707e9b9897",
+      "primary-type": "Album",
+      "title": "Hovering Above the Tower",
+      "disambiguation": "",
+      "first-release-date": "2005",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2020",
+      "title": "Take Me Back: Live Recordings 2000–2018",
+      "primary-type": "Album",
+      "id": "10333b16-c430-4294-a192-e0893f83e1e8",
+      "disambiguation": "",
+      "secondary-types": [
+        "Compilation",
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1",
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ]
+    },
+    {
+      "disambiguation": "",
+      "title": "1996‐08‐19: Continental Airlines Arena, East Rutherford, NJ, USA",
+      "id": "1118b879-b8f0-4f25-9db9-3df2a7fe5c99",
+      "primary-type": "Album",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "1996-08-19"
+    },
+    {
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "id": "11a5cc29-6314-4e25-b83a-e90ee7917f1e",
+      "primary-type": "Album",
+      "title": "1994‐06‐26: Glastonbury Festival, NME Stage, Worthy Farm, Glastonbury, England, UK",
+      "disambiguation": "",
+      "first-release-date": "1994-06-26",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "first-release-date": "1996",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "disambiguation": "",
+      "id": "1afa76fe-26bc-3dbe-9d5c-45a02bd8f75e",
+      "primary-type": "Album",
+      "title": "Pop Is Dead"
+    },
+    {
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "primary-type": "Album",
+      "id": "1e14dc24-8a10-4ef2-885c-4b8a0d02f551",
+      "title": "1995‐04‐19: The Anson Rooms, Bristol, UK",
+      "disambiguation": "",
+      "first-release-date": "1995-04-19",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2025-08",
+      "title": "Transmission Impossible",
+      "id": "24d688b1-7c73-467f-8e1b-109d6cc8174b",
+      "primary-type": "Album",
+      "disambiguation": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ]
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "title": "Kill All the Rarities",
+      "id": "2a3892ce-ce25-3577-8c1c-634dc3faaf8b",
+      "primary-type": "Album",
+      "disambiguation": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ]
+    },
+    {
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "title": "Hail and Backtrack",
+      "id": "2c435990-69a2-43e0-b124-c96e8b02c455",
+      "primary-type": "Album",
+      "disambiguation": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2003"
+    },
+    {
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "title": "1998‐04‐17: Radio City Music Hall, New York, NY, USA",
+      "id": "32037716-3ef9-4ec1-8d5d-af454e2738bb",
+      "primary-type": "Album",
+      "disambiguation": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "1998-04-17"
+    },
+    {
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "title": "Complete B-Sides",
+      "primary-type": "Album",
+      "id": "32c97b05-44a7-309b-b498-3fbfa24bdb11",
+      "disambiguation": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": ""
+    },
+    {
+      "first-release-date": "2020-03-20",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "primary-type": "Album",
+      "id": "345686b4-5976-42df-a6ed-c65711dfee4d",
+      "title": "Kid Amnesiac",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "disambiguation": "",
+      "title": "B‐Sides, Vol. 1",
+      "primary-type": "Album",
+      "id": "37410f3e-b7a0-40e3-8bcd-ba3aabc339ce"
+    },
+    {
+      "first-release-date": "2017",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "disambiguation": "",
+      "primary-type": "Album",
+      "id": "39baf9d2-f625-4bae-bec8-5505d81c80fd",
+      "title": "Every Last Crumb"
+    },
+    {
+      "disambiguation": "",
+      "id": "457cd28b-de76-41b2-85e1-d4a0bb9f3253",
+      "primary-type": "Album",
+      "title": "1998‐01‐24: Akasaka Blitz, Tokyo, Japan",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "first-release-date": "1998-01-24",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "disambiguation": "",
+      "primary-type": "Album",
+      "id": "45c89737-53d3-42de-bd0a-ff639719f082",
+      "title": "Unplugged",
+      "first-release-date": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc"
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "disambiguation": "",
+      "title": "B-Sides",
+      "primary-type": "Album",
+      "id": "46479293-ce6d-3a4d-8fe9-73ebb5ee5881",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ]
+    },
+    {
+      "first-release-date": "2001",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "disambiguation": "",
+      "id": "475d452c-a8c1-3b4f-9cf9-299f93fa01e2",
+      "primary-type": "Album",
+      "title": "NPA Live",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ]
+    },
+    {
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "title": "2000-10-17: Street Spirits: Sears Theatre, Toronto, ON, Canada",
+      "id": "4b69ebc4-1219-342a-b364-8a4a6194954e",
+      "primary-type": "Album",
+      "disambiguation": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2000"
+    },
+    {
+      "first-release-date": "2013",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "id": "4e0ea78b-d058-461b-ac7c-3de43823a131",
+      "primary-type": "Album",
+      "title": "Oxford Angels: The Rarities",
+      "disambiguation": "",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ]
+    },
+    {
+      "first-release-date": "2001-08-14",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "disambiguation": "",
+      "id": "4e4e560f-2b48-425d-93be-bf5b99035e60",
+      "primary-type": "Album",
+      "title": "2001‐08‐14: Suffolk Downs, Boston, MA, USA"
+    },
+    {
+      "first-release-date": "2017-07-01",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "id": "4f33db0c-051e-472d-b010-14882fbea23d",
+      "primary-type": "Album",
+      "title": "OKNOTOK: White Cassette Tape",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "title": "Rarities",
+      "primary-type": "Album",
+      "id": "502b7edd-701b-3ba5-b56e-09ce581bdfe1",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "1997",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "title": "Computer K.O.",
+      "id": "53f59e5b-adc9-4c36-a724-cf3aeab69b38",
+      "primary-type": "Album",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "1999",
+      "title": "Unplugged and Unreleased",
+      "primary-type": "Album",
+      "id": "54ec58a5-4149-4fa3-b395-052fede66730",
+      "disambiguation": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ]
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2000",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "disambiguation": "",
+      "title": "2000-10-02: Victoria Park, Cheshire, Warrington, UK",
+      "primary-type": "Album",
+      "id": "57af012a-443b-3a41-a875-a6c1870cfcc5"
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "disambiguation": "",
+      "title": "Mne$i@¢",
+      "primary-type": "Album",
+      "id": "612fd528-2ebb-43e4-928b-14a6b6090a10"
+    },
+    {
+      "first-release-date": "",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "disambiguation": "",
+      "primary-type": "Album",
+      "id": "63fb90c6-e005-3c9a-a808-6900908b9b3b",
+      "title": "Uncut"
+    },
+    {
+      "first-release-date": "2018",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "secondary-types": [
+        "Compilation"
+      ],
+      "primary-type": "Album",
+      "id": "65281add-0a95-447f-8f7c-a38bcb158469",
+      "title": "Greatest Songs",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ],
+      "title": "A Total Waste of Time",
+      "primary-type": "Album",
+      "id": "65d99b2c-05c1-378a-9218-5e0c19bc106f",
+      "disambiguation": ""
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "2000-07-01",
+      "disambiguation": "",
+      "title": "2000‐07‐01: Meltdown Festival, Royal Festival Hall, London, England, UK",
+      "primary-type": "Album",
+      "id": "6be1f03a-3148-494e-b370-99b452cf45b2",
+      "secondary-types": [
+        "Live"
+      ],
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ]
+    },
+    {
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "first-release-date": "",
+      "disambiguation": "",
+      "title": "Oxford Devils",
+      "primary-type": "Album",
+      "id": "6c70ab0d-2559-31d6-b4c5-15cf513aa076",
+      "secondary-types": [
+        "Compilation"
+      ],
+      "secondary-type-ids": [
+        "dd2a21e1-0c00-3729-a7a0-de60b84eb5d1"
+      ]
+    },
+    {
+      "first-release-date": "2000",
+      "primary-type-id": "f529b476-6e62-324f-b0aa-1f3e33d313fc",
+      "secondary-type-ids": [
+        "6fd474e2-6b58-3102-9d17-d6f7eb7da0a0"
+      ],
+      "secondary-types": [
+        "Live"
+      ],
+      "id": "6ce5deab-be1a-4599-9e23-c21ea2ab10e8",
+      "primary-type": "Album",
+      "title": "Kid Alive",
+      "disambiguation": ""
+    }
+  ],
+  "release-group-count": 140,
+  "release-group-offset": 100
+}

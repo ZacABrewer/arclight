@@ -122,7 +122,7 @@ export const ConfigRemotePathMapping = z.object({
 });
 export type ConfigRemotePathMapping = z.infer<typeof ConfigRemotePathMapping>;
 
-export const ConfigRootFolder = z.object({ mediaType: z.enum(['series', 'movie']) });
+export const ConfigRootFolder = z.object({ mediaType: z.enum(['series', 'movie', 'music', 'audiobook']) });
 export type ConfigRootFolder = z.infer<typeof ConfigRootFolder>;
 
 const flag = z.boolean().default(false);

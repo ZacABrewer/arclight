@@ -213,7 +213,9 @@ export function ImportListsPage() {
           <ImportListEditor
             key={'list' in editing ? editing.list.id : editing.schema.implementation}
             editing={editing}
-            rootFolders={rootFolders.data}
+            rootFolders={rootFolders.data.filter(
+              (r): r is typeof r & { mediaType: 'series' | 'movie' } => r.mediaType === 'series' || r.mediaType === 'movie',
+            )}
             profiles={profiles.data}
             onClose={() => setEditing(null)}
           />

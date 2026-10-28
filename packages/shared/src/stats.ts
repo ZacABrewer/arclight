@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { MediaType } from './library.js';
+import { AnyMediaType, MediaType } from './library.js';
 
 // Library analytics: storage (per root folder, top items, quality/codec/resolution breakdowns,
 // growth from daily snapshots), library counts and activity per day.
@@ -11,7 +11,7 @@ export type StatsBucket = z.infer<typeof StatsBucket>;
 
 export const StatsRootFolder = z.object({
   path: z.string(),
-  mediaType: MediaType,
+  mediaType: AnyMediaType,
   accessible: z.boolean(),
   totalBytes: int().nullable(),
   freeBytes: int().nullable(),

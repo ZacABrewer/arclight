@@ -6,8 +6,25 @@ import { QualityModel } from './quality.js';
 // gives no time; full timestamps elsewhere). Fields that may be unknown are `.nullish()` so a
 // DB `null` and an absent key are both valid on the wire.
 
+/** Video media types. Video-only modules keep speaking this; audio never widens it. */
 export const MediaType = z.enum(['series', 'movie']);
 export type MediaType = z.infer<typeof MediaType>;
+
+/** Audio media types (docs/design/music-audiobooks.md section 1). */
+export const AudioMediaType = z.enum(['music', 'audiobook']);
+export type AudioMediaType = z.infer<typeof AudioMediaType>;
+
+/** Every media type. Only pipeline modules (and root folders) widen to this. */
+export const AnyMediaType = z.enum(['series', 'movie', 'music', 'audiobook']);
+export type AnyMediaType = z.infer<typeof AnyMediaType>;
+
+export function isAudioMediaType(t: AnyMediaType): t is AudioMediaType {
+  return t === 'music' || t === 'audiobook';
+}
+
+export function isVideoMediaType(t: AnyMediaType): t is MediaType {
+  return t === 'series' || t === 'movie';
+}
 
 const isoDate = () => z.string().describe('ISO-8601 date or timestamp');
 const idList = () => z.array(z.number().int().positive());
@@ -50,7 +67,8 @@ export type MovieCollection = z.infer<typeof MovieCollection>;
 export const RootFolder = z.object({
   id: z.number().int(),
   path: z.string(),
-  mediaType: MediaType,
+  /** Each media type has its own roots; a music root never holds series. */
+  mediaType: AnyMediaType,
   freeSpaceBytes: z.number().int().nullish(),
   accessible: z.boolean(),
 });
@@ -58,7 +76,7 @@ export type RootFolder = z.infer<typeof RootFolder>;
 
 export const AddRootFolderRequest = z.object({
   path: z.string().min(1),
-  mediaType: MediaType,
+  mediaType: AnyMediaType,
 });
 export type AddRootFolderRequest = z.infer<typeof AddRootFolderRequest>;
 
@@ -646,6 +664,15 @@ export const LibraryStatistics = z.object({
   movieFileCount: z.number().int(),
   sizeOnDisk: z.number().int(),
   rootFolders: z.array(RootFolder),
+  // Music (filled once the music module is registered; absent on video-only builds).
+  artistCount: z.number().int().optional(),
+  monitoredArtistCount: z.number().int().optional(),
+  albumCount: z.number().int().optional(),
+  monitoredAlbumCount: z.number().int().optional(),
+  trackCount: z.number().int().optional(),
+  trackFileCount: z.number().int().optional(),
+  /** Bytes of audio files (music and audiobooks); `sizeOnDisk` stays video-only. */
+  audioSizeOnDisk: z.number().int().optional(),
 });
 export type LibraryStatistics = z.infer<typeof LibraryStatistics>;
 

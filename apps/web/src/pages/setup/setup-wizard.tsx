@@ -382,7 +382,7 @@ function RootFoldersStep({ onBack, onDone }: { onBack: () => void; onDone: () =>
                 <span className="wiz-added__dot" aria-hidden="true" />
                 <span className="al-num wiz-added__path">{f.path}</span>
                 <span className="wiz-muted">
-                  {ROOT_KIND_LABEL[f.mediaType]}
+                  {f.mediaType === 'series' || f.mediaType === 'movie' ? ROOT_KIND_LABEL[f.mediaType] : f.mediaType}
                   {f.freeSpaceBytes != null ? (
                     <>
                       {' · '}

@@ -1,4 +1,4 @@
-import type { ProfileMismatchAction, QualityModel, ReleaseProtocol, ReleaseResource } from '@arclight/shared';
+import type { AnyMediaType, ProfileMismatchAction, QualityModel, ReleaseProtocol, ReleaseResource } from '@arclight/shared';
 
 // Hooks the releases module needs from modules written in parallel (history, blocklist,
 // settings). Each has a no-op default so the module works stand-alone; the app wires the
@@ -7,7 +7,11 @@ import type { ProfileMismatchAction, QualityModel, ReleaseProtocol, ReleaseResou
 export type DownloadPropersAndRepacks = 'preferAndUpgrade' | 'doNotUpgrade' | 'doNotPrefer';
 
 /** Library item a history/blocklist question is scoped to. */
-export type ItemRef = { episodeId: number; seriesId: number } | { movieId: number };
+export type ItemRef =
+  | { episodeId: number; seriesId: number }
+  | { movieId: number }
+  | { albumId: number; artistId: number }
+  | { bookId: number; authorId: number };
 
 export interface HistoryEventSummary {
   eventType: 'grabbed' | 'downloadFolderImported' | 'downloadFailed' | (string & {});
@@ -20,10 +24,14 @@ export interface HistoryEventSummary {
 }
 
 export interface GrabHistoryInput {
-  mediaType: 'series' | 'movie';
+  mediaType: AnyMediaType;
   seriesId?: number;
   episodeIds?: number[];
   movieId?: number;
+  artistId?: number;
+  albumIds?: number[];
+  authorId?: number;
+  bookIds?: number[];
   sourceTitle: string;
   quality: QualityModel;
   languages: string[];
@@ -57,10 +65,14 @@ export interface HistoryWriter {
 }
 
 export interface BlocklistCandidate {
-  mediaType: 'series' | 'movie';
+  mediaType: AnyMediaType;
   seriesId?: number;
   episodeIds?: number[];
   movieId?: number;
+  artistId?: number;
+  albumIds?: number[];
+  authorId?: number;
+  bookIds?: number[];
   title: string;
   protocol: ReleaseProtocol;
   indexerId: number;

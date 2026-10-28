@@ -108,7 +108,7 @@ describe('boot overlay (managed mode)', () => {
 
   it('a broken file is reported, not thrown, and nothing from it is applied', async () => {
     const db = await createTestDb();
-    const bad = configFile('rootFolders:\n  /tv:\n    mediaType: music\n');
+    const bad = configFile('rootFolders:\n  /tv:\n    mediaType: comics\n');
     const managed = new ConfigService({ db, env: { ARCLIGHT_CONFIG_FILE: bad } }).applyBootOverlay();
     expect(managed.errors[0]!.path).toMatch(/^file:rootFolders/);
     expect(managed.resources).toEqual({});

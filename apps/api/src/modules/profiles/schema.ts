@@ -21,6 +21,8 @@ export const qualityProfiles = sqliteTable('quality_profiles', {
   minUpgradeFormatScore: integer('min_upgrade_format_score').notNull().default(1),
   formatItems: text('format_items', { mode: 'json' }).$type<ProfileFormatItem[]>().notNull(),
   languages: text('languages', { mode: 'json' }).$type<LanguageCode[]>().notNull(),
+  /** video (series + movies) | music | audiobook. Existing rows are video. */
+  mediaDomain: text('media_domain', { enum: ['video', 'music', 'audiobook'] }).notNull().default('video'),
 });
 
 export const customFormats = sqliteTable(

@@ -8,6 +8,7 @@ import {
   type BlocklistPage,
   type BlocklistRecord,
   type HistoryCustomFormat,
+  type AnyMediaType,
   type MediaType,
   type QualityModel,
   type ReleaseProtocol,
@@ -38,7 +39,7 @@ export function blocklistHttpStatus(code: BlocklistErrorCode): number {
 // ---- public types -------------------------------------------------------------------
 
 /** Entries are scoped to one parent; a release blocked for series A is fine for series B. */
-export type BlocklistScope = { seriesId: number } | { movieId: number };
+export type BlocklistScope = { seriesId: number } | { movieId: number } | { artistId: number } | { authorId: number };
 
 /** The release fields matching needs. */
 export interface BlocklistCandidate {
@@ -57,10 +58,14 @@ export interface TrackedBlocklistItem {
   downloadId: string;
   protocol: ReleaseProtocol;
   sizeBytes?: number;
-  mediaType?: MediaType;
+  mediaType?: AnyMediaType;
   seriesId?: number;
   episodeIds?: readonly number[];
   movieId?: number;
+  artistId?: number;
+  albumIds?: readonly number[];
+  authorId?: number;
+  bookIds?: readonly number[];
   quality?: QualityModel;
   languages?: readonly string[];
   indexer?: string;
@@ -465,12 +470,18 @@ export class BlocklistService {
 }
 
 function scopeCond(scope: BlocklistScope): SQL {
-  return 'seriesId' in scope ? eq(blocklist.seriesId, scope.seriesId) : eq(blocklist.movieId, scope.movieId);
+  if ('seriesId' in scope) return eq(blocklist.seriesId, scope.seriesId);
+  if ('movieId' in scope) return eq(blocklist.movieId, scope.movieId);
+  return 'artistId' in scope ? eq(blocklist.artistId, scope.artistId) : eq(blocklist.authorId, scope.authorId);
 }
 
 function scopeOf(
   target: HistoryTarget,
 ): { mediaType: 'series'; seriesId: number; episodeIds: number[] } | { mediaType: 'movie'; movieId: number } {
+  // Audio blocklisting arrives with audio acquisition (Wave 2); nothing produces audio targets yet.
+  if (target.mediaType === 'music' || target.mediaType === 'audiobook') {
+    throw new BlocklistError('VALIDATION', `blocklisting ${target.mediaType} releases is not supported yet`);
+  }
   return target.mediaType === 'series'
     ? { mediaType: 'series', seriesId: target.seriesId, episodeIds: [...target.episodeIds] }
     : { mediaType: 'movie', movieId: target.movieId };

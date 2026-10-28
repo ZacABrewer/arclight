@@ -458,6 +458,42 @@ describe('compat api', () => {
     expect(updated.json<{ upgradeAllowed: boolean }>().upgradeAllowed).toBe(false);
   });
 
+  it('never exposes music/audiobook profiles, qualities or root folders', async () => {
+    const music = await h.call('POST', '/api/v1/qualityprofile', {
+      name: 'Compat Lossless',
+      cutoff: 131,
+      mediaDomain: 'music',
+      items: [
+        { kind: 'quality', qualityId: 0, allowed: false },
+        { kind: 'quality', qualityId: 131, allowed: true },
+      ],
+    });
+    expect(music.statusCode).toBe(201);
+    const musicId = music.json<{ id: number }>().id;
+    const musicRoot = join(h.tmp, 'music');
+    await mkdir(musicRoot, { recursive: true });
+    const root = await h.call('POST', '/api/v1/rootfolder', { path: musicRoot, mediaType: 'music' });
+    expect(root.statusCode).toBe(201);
+    const rootId = root.json<{ id: number }>().id;
+
+    const profiles = (await h.call('GET', '/api/v3/qualityprofile')).json<Array<{ id: number; items: unknown }>>();
+    expect(profiles.map((p) => p.id)).not.toContain(musicId);
+    expect(JSON.stringify(profiles.map((p) => p.items))).not.toMatch(/"id":1[0-9]{2}/);
+    expect((await h.call('GET', `/api/v3/qualityprofile/${musicId}`)).statusCode).toBe(404);
+    const defs = (await h.call('GET', '/api/v3/qualitydefinition')).json<Array<{ quality: { id: number } }>>();
+    expect(defs.length).toBe(30);
+    expect(defs.every((d) => d.quality.id < 100)).toBe(true);
+    expect((await h.call('GET', '/api/v3/qualitydefinition/131')).statusCode).toBe(404);
+    expect((await h.call('GET', '/api/v3/rootfolder')).json<unknown[]>()).toHaveLength(2);
+    expect((await h.call('GET', `/api/v3/rootfolder/${rootId}`)).statusCode).toBe(404);
+
+    // /api/v1 still lists it for the music UI.
+    expect((await h.call('GET', '/api/v1/qualityprofile?mediaDomain=music')).json<Array<{ id: number }>>().map((p) => p.id)).toEqual([musicId]);
+
+    expect((await h.call('DELETE', `/api/v1/rootfolder/${rootId}`)).statusCode).toBeLessThan(300);
+    expect((await h.call('DELETE', `/api/v1/qualityprofile/${musicId}`)).statusCode).toBe(204);
+  });
+
   // ---- series ---------------------------------------------------------------------------------
   it('series/lookup resolves tvdb: terms to full series (golden shape)', async () => {
     const res = await h.call('GET', '/api/v3/series/lookup?term=tvdb:81189');

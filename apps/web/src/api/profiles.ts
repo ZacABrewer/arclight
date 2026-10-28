@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import {
-  ALL_QUALITIES,
+  VIDEO_QUALITIES,
   CustomFormat,
   CustomFormatTestResponse,
   DelayProfile,
@@ -29,7 +29,7 @@ const QualityProfileTemplate = QualityProfileInput.extend({ name: z.string() });
  * schema rejects the template's empty name.
  */
 export function fallbackQualityProfileTemplate(): QualityProfileInput {
-  const items = [...ALL_QUALITIES]
+  const items = [...VIDEO_QUALITIES]
     .filter((q) => q.id !== 0)
     .sort((a, b) => a.weight - b.weight)
     .map((q) => ({ kind: 'quality' as const, qualityId: q.id, allowed: false }));

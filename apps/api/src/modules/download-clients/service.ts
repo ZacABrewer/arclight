@@ -102,6 +102,7 @@ export class DownloadClientsError extends Error {
 // ---------------------------------------------------------------------------------------
 
 /** A queue item plus the fields the import/failed-download handling needs. */
+/** Audio grabs carry `artistId`/`albumIds` or `authorId`/`bookIds` (from QueueItem) instead of series/movie ids. */
 export type TrackedDownload = QueueItem & {
   /** Output path exactly as the client reports it. */
   remoteOutputPath?: string;
