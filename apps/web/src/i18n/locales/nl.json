@@ -4406,7 +4406,6 @@
   "status.unmonitored": "[nl] Unmonitored",
   "status.waiting": "[nl] Waiting for air date",
   "subtitles.header.subtitlesArclight": "[nl] Subtitles · Arclight",
-  "subtitles.header.subtitlesSections": "[nl] Subtitles sections",
   "subtitles.itemTab.allProfileLanguages": "[nl] All profile languages",
   "subtitles.itemTab.blacklistLabelSubtitle": "[nl] Blacklist {label} subtitle",
   "subtitles.itemTab.blacklistLabelSubtitle2": "[nl] Blacklist {label} subtitle?",
@@ -5139,6 +5138,5 @@
   "wanted.selectRowlabel": "[nl] Select {rowLabel}",
   "wanted.valueArclight": "[nl] {value} · Arclight",
   "wanted.versions": "[nl] Versions",
-  "wanted.wantedLists": "[nl] Wanted lists",
   "wanted.wantedNoun": "[nl] Wanted {noun}"
 }

@@ -4406,7 +4406,6 @@
   "status.unmonitored": "[es] Unmonitored",
   "status.waiting": "[es] Waiting for air date",
   "subtitles.header.subtitlesArclight": "[es] Subtitles · Arclight",
-  "subtitles.header.subtitlesSections": "[es] Subtitles sections",
   "subtitles.itemTab.allProfileLanguages": "[es] All profile languages",
   "subtitles.itemTab.blacklistLabelSubtitle": "[es] Blacklist {label} subtitle",
   "subtitles.itemTab.blacklistLabelSubtitle2": "[es] Blacklist {label} subtitle?",
@@ -5139,6 +5138,5 @@
   "wanted.selectRowlabel": "[es] Select {rowLabel}",
   "wanted.valueArclight": "[es] {value} · Arclight",
   "wanted.versions": "[es] Versions",
-  "wanted.wantedLists": "[es] Wanted lists",
   "wanted.wantedNoun": "[es] Wanted {noun}"
 }
