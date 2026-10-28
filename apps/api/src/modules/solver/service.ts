@@ -61,7 +61,7 @@ export class SolverService {
     return this.settings().enabled && this.browser() !== null;
   }
 
-  status(proxyId: number | null): SolverStatus {
+  status(proxyId: number | null): Omit<SolverStatus, 'externalSolvers' | 'docker'> {
     const s = this.settings();
     const solver = this.current?.solver;
     return {

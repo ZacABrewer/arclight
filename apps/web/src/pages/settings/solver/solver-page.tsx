@@ -11,19 +11,31 @@ import '../vpn.css';
 import './solver.css';
 import { t } from '../../../i18n/index.js';
 
-export const SOLVER_DOCS_URL = 'https://github.com/arclight/arclight/blob/main/docs/CLOUDFLARE.md';
+export const SOLVER_DOCS_URL = 'https://github.com/ZacABrewer/arclight/blob/main/docs/CLOUDFLARE.md';
 export const SOLVER_TEST_URL = 'https://example.com/';
 
-/** "Ready", "Solving · 2 queued", "No browser found", "Off". */
+/**
+ * "Ready", "Solving · 2 queued", "FlareSolverr handles challenges", "No browser found", "Off".
+ * A FlareSolverr proxy solves with its own browser, so a missing local browser is only a problem
+ * when there is no such proxy.
+ */
 export function solverStatusText(status: SolverStatus | undefined): { text: string; tone: 'ok' | 'warn' | 'off' } {
+  const external = status?.externalSolvers ?? [];
+  const names = external.map((p) => p.name).join(', ');
+  if (status?.enabled && status.browser) {
+    if (status.pending > 0) return { text: t('settings.solver.solvingRequestsInProgress', { pending: status.pending }), tone: 'ok' };
+    return { text: status.running ? t('settings.solver.readyBrowserRunning') : t('settings.solver.readyBrowserStartsOnFirst'), tone: 'ok' };
+  }
+  if (external.length > 0) return { text: t('settings.solver.externalHandlesChallenges', { names }), tone: 'ok' };
   if (!status || !status.enabled) return { text: t('common.off'), tone: 'off' };
-  if (!status.browser) return { text: t('settings.solver.noBrowserFoundInstallEdge'), tone: 'warn' };
-  if (status.pending > 0) return { text: t('settings.solver.solvingRequestsInProgress', { pending: status.pending }), tone: 'ok' };
-  return { text: status.running ? t('settings.solver.readyBrowserRunning') : t('settings.solver.readyBrowserStartsOnFirst'), tone: 'ok' };
+  if (status.docker) return { text: t('settings.solver.noSolverInDocker'), tone: 'warn' };
+  return { text: t('settings.solver.noBrowserFoundInstallEdge'), tone: 'warn' };
 }
 
 export function solverStatusItems(status: SolverStatus): KeyValueItem[] {
+  const external = status.externalSolvers ?? [];
   return [
+    { label: t('settings.solver.flareSolverr'), value: external.length ? external.map((p) => p.name).join(', ') : t('settings.solver.noneConnected'), mono: false },
     { label: t('settings.solver.browser'), value: status.browser?.name ?? 'none found', mono: false },
     { label: t('common.path'), value: status.browser?.path ?? '—' },
     { label: t('common.running'), value: status.running ? 'yes' : 'no' },
@@ -135,6 +147,7 @@ function SolverForm({ data }: { data: SolverSettings }) {
       }
     >
       <SettingsSection label={t('settings.solver.builtInSolver')}>
+        <BuiltinNote />
         <div className="al-vpn-rows">
           <FormRow label={t('settings.solver.solver')} htmlFor={ids.enabled} captionInline>
             <Toggle id={ids.enabled} checked={v.enabled} label={t('settings.solver.useALocalBrowserTo')} onChange={(e) => set('enabled', e.currentTarget.checked)} />
@@ -164,6 +177,23 @@ function SolverForm({ data }: { data: SolverSettings }) {
         </div>
       </SettingsSection>
     </SettingsPage>
+  );
+}
+
+/**
+ * In a container there is no local browser: say that FlareSolverr does the work (or should),
+ * so the built-in solver reads as optional rather than broken.
+ */
+function BuiltinNote() {
+  const status = useSolverStatus().data;
+  if (!status?.docker || status.browser) return null;
+  const external = status.externalSolvers ?? [];
+  return (
+    <p className="al-caption al-solver-note" role="note">
+      {external.length > 0
+        ? t('settings.solver.dockerNoteConnected', { names: external.map((p) => p.name).join(', ') })
+        : t('settings.solver.dockerNoteMissing')}
+    </p>
   );
 }
 

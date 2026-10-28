@@ -13,6 +13,10 @@ export interface SolverRoutesOptions {
   service: SolverService;
   /** Id of the "Built-in solver" proxy, if registered. */
   builtinProxyId: () => number | null;
+  /** FlareSolverr proxies other than the built-in one. */
+  externalSolvers?: () => Array<{ id: number; name: string }>;
+  /** Arclight runs in a container. */
+  docker?: boolean;
   /** Run ProxyAutoDetect now. */
   autodetect: () => Promise<ProxyAutoDetectResult>;
 }
@@ -35,7 +39,11 @@ export function solverRoutes(opts: SolverRoutesOptions): FastifyPluginAsync<Reco
       return reply.code(result.httpStatus).send(result.body);
     });
 
-    app.get('/solver/status', { schema: { response: { 200: SolverStatus } } }, async () => service.status(opts.builtinProxyId()));
+    app.get('/solver/status', { schema: { response: { 200: SolverStatus } } }, async () => ({
+      ...service.status(opts.builtinProxyId()),
+      externalSolvers: opts.externalSolvers?.() ?? [],
+      docker: opts.docker ?? false,
+    }));
 
     app.post('/solver/autodetect', { schema: { response: { 200: ProxyAutoDetectResult } } }, async () => opts.autodetect());
 

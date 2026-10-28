@@ -5134,5 +5134,11 @@
   "settings.general.themes.installed": "Installed {names}",
   "settings.general.themes.upToDate": "Theme packs are up to date",
   "settings.general.themes.skipped": "Skipped the {id} pack",
-  "portal.theme": "Theme"
+  "portal.theme": "Theme",
+  "settings.solver.externalHandlesChallenges": "Challenges go through {names}, which runs its own browser.",
+  "settings.solver.noSolverInDocker": "No solver: the Arclight image has no browser. Add the FlareSolverr container.",
+  "settings.solver.flareSolverr": "FlareSolverr",
+  "settings.solver.noneConnected": "none connected",
+  "settings.solver.dockerNoteConnected": "Arclight runs in a container, which has no browser, so {names} solves challenges with its own. You can leave the built-in solver off.",
+  "settings.solver.dockerNoteMissing": "Arclight runs in a container, which has no browser. Run the FlareSolverr container next to it (it registers itself under Indexers → Proxies); the built-in solver is for installs outside Docker."
 }

@@ -31,6 +31,10 @@ export const SolverStatus = z.object({
   profileDir: z.string(),
   /** Id of the "Built-in solver" indexer proxy, when registered. */
   proxyId: z.number().int().nullable(),
+  /** FlareSolverr proxies other than the built-in one (e.g. the bundled container): they solve with their own browser. */
+  externalSolvers: z.array(z.object({ id: z.number().int(), name: z.string() })).default([]),
+  /** Arclight runs in a container, where the image ships no browser. */
+  docker: z.boolean().default(false),
 });
 export type SolverStatus = z.infer<typeof SolverStatus>;
 

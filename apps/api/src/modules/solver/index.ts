@@ -69,7 +69,12 @@ export function solverModuleWith(opts: SolverModuleOptions = {}): AppModule {
     const autodetect = () => runProxyAutoDetect(autoDetectDepsFor(ctx, opts.autodetect));
     const builtinProxyId = () => indexersServiceFor(ctx).proxies.allRows().find(isBuiltinSolverRow)?.id ?? null;
 
-    await app.register(solverRoutes({ service, builtinProxyId, autodetect }));
+    const externalSolvers = () =>
+      indexersServiceFor(ctx)
+        .proxies.allRows()
+        .filter((r) => r.type === 'flaresolverr' && !isBuiltinSolverRow(r))
+        .map((r) => ({ id: r.id, name: r.name }));
+    await app.register(solverRoutes({ service, builtinProxyId, autodetect, externalSolvers, docker: ctx.config.isDocker }));
 
     ctx.scheduler.register({
       name: PROXY_AUTODETECT_JOB,

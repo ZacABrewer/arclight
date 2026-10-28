@@ -21,6 +21,8 @@ const status: SolverStatus = {
   pending: 0,
   profileDir: 'C:\\arclight\\solver-profile',
   proxyId: 4,
+  externalSolvers: [],
+  docker: false,
 };
 
 describe('solver helpers', () => {
@@ -29,6 +31,16 @@ describe('solver helpers', () => {
     expect(solverStatusText({ ...status, browser: null }).tone).toBe('warn');
     expect(solverStatusText(status).text).toBe('Ready · browser starts on first use');
     expect(solverStatusText({ ...status, running: true, pending: 2 }).text).toBe('Solving · 2 requests in progress');
+  });
+
+  it('treats a missing browser as fine when a FlareSolverr proxy solves challenges', () => {
+    const docker = { ...status, browser: null, docker: true };
+    expect(solverStatusText({ ...docker, externalSolvers: [{ id: 2, name: 'FlareSolverr (bundled)' }] })).toEqual({
+      text: 'Challenges go through FlareSolverr (bundled), which runs its own browser.',
+      tone: 'ok',
+    });
+    expect(solverStatusText({ ...docker, enabled: false, externalSolvers: [{ id: 2, name: 'FS' }] }).tone).toBe('ok');
+    expect(solverStatusText(docker)).toEqual({ text: 'No solver: the Arclight image has no browser. Add the FlareSolverr container.', tone: 'warn' });
   });
 
   it('formats the test result with the elapsed time', () => {
