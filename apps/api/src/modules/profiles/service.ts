@@ -28,6 +28,7 @@ import {
   defaultDelayProfile,
   defaultQualityProfiles,
   defaultMusicProfiles,
+  defaultQualitySize,
   isValidTerm,
   matchCustomFormats,
   reorderDelayProfiles,
@@ -116,11 +117,19 @@ export class ProfilesService {
       this.db.insert(delayProfiles).values(defaultDelayProfile()).run();
       seeded.delayProfiles++;
     }
-    const existingDefs = new Set(this.db.select({ qualityId: qualityDefinitions.qualityId }).from(qualityDefinitions).all().map((r) => r.qualityId));
+    const existingDefs = new Map(this.db.select().from(qualityDefinitions).all().map((r) => [r.qualityId, r]));
     for (const q of ALL_QUALITIES) {
-      if (existingDefs.has(q.id)) continue;
-      this.db.insert(qualityDefinitions).values({ qualityId: q.id, minSize: null, maxSize: null, preferredSize: null }).run();
-      seeded.qualityDefinitions++;
+      const existing = existingDefs.get(q.id);
+      // Video ships without limits; audio rows get the default MB/min bands, also when an
+      // earlier version inserted them with no limits at all.
+      const defaults = defaultQualitySize(q.id);
+      if (!existing) {
+        this.db.insert(qualityDefinitions).values({ qualityId: q.id, ...defaults }).run();
+        seeded.qualityDefinitions++;
+      } else if (defaults.minSize !== null && existing.minSize === null && existing.maxSize === null && existing.preferredSize === null) {
+        this.db.update(qualityDefinitions).set(defaults).where(eq(qualityDefinitions.qualityId, q.id)).run();
+        seeded.qualityDefinitions++;
+      }
     }
 
     // Album-type profiles (music): which release groups become albums. Seeded on every install

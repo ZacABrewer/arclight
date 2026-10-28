@@ -9,7 +9,13 @@ import { t } from '../../../i18n/index.js';
 // /indexer/schema returns ready-to-fill templates but no field definitions, so the field list
 // for the schema form lives here, written against IndexerSettings in packages/shared.
 
-export function indexerFields(implementation: IndexerImplementation): FieldDefinition[] {
+/** Which audio domains are switched on (`GET /settings/features`); their pickers show only then. */
+export interface IndexerFieldFeatures {
+  music?: boolean;
+  audiobooks?: boolean;
+}
+
+export function indexerFields(implementation: IndexerImplementation, features: IndexerFieldFeatures = {}): FieldDefinition[] {
   const torrent = implementation === 'torznab';
   const fields: FieldDefinition[] = [
     { name: 'name', label: t('common.name'), type: 'text', required: true },
@@ -22,6 +28,13 @@ export function indexerFields(implementation: IndexerImplementation): FieldDefin
     { name: 'settings.categories', label: t('common.categories'), type: 'multiSelect', helpText: t('settings.indexers.indexerFields.categoriesSearchedForStandardContent') },
     { name: 'settings.animeCategories', label: t('settings.indexers.indexerFields.animeCategories'), type: 'multiSelect', advanced: true, helpText: t('settings.indexers.indexerFields.categoriesSearchedForAnime') },
   ];
+  // Hidden pickers keep their saved values: the form still sends them back unchanged.
+  if (features.music) {
+    fields.push({ name: 'settings.musicCategories', label: t('settings.indexers.indexerFields.musicCategories'), type: 'multiSelect', helpText: t('settings.indexers.indexerFields.categoriesSearchedForMusic') });
+  }
+  if (features.audiobooks) {
+    fields.push({ name: 'settings.audiobookCategories', label: t('settings.indexers.indexerFields.audiobookCategories'), type: 'multiSelect', helpText: t('settings.indexers.indexerFields.categoriesSearchedForAudiobooks') });
+  }
   if (torrent) {
     fields.push(
       { name: 'settings.minimumSeeders', label: t('settings.indexers.indexerFields.minimumSeeders'), type: 'number', min: 0, advanced: true },

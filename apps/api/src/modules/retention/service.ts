@@ -2,7 +2,8 @@ import { and, asc, eq, inArray } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import type { RetentionEvent, RetentionLine } from '@arclight/notifications';
-import type { MediaKind } from '@arclight/media-servers';
+// Retention evaluates video only (series/movies); music and audiobooks are not swept.
+import type { VideoMediaKind as MediaKind } from '@arclight/media-servers';
 import {
   RetentionRuleInput,
   WATCH_CONDITIONS,

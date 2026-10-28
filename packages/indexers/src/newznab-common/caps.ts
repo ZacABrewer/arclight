@@ -1,6 +1,8 @@
 import {
+  BOOK_SEARCH_PARAMS,
   IndexerError,
-  SEARCH_PARAMS,
+  MUSIC_SEARCH_PARAMS,
+  VIDEO_SEARCH_PARAMS,
   type CapsCategory,
   type IndexerCapabilities,
   type SearchModeCapabilities,
@@ -18,6 +20,8 @@ export function defaultCapabilities(): IndexerCapabilities {
       search: { available: true, supportedParams: ['q'] },
       tvSearch: { available: false, supportedParams: [] },
       movieSearch: { available: false, supportedParams: [] },
+      musicSearch: { available: false, supportedParams: [] },
+      bookSearch: { available: false, supportedParams: [] },
     },
     categories: [],
   };
@@ -46,9 +50,15 @@ export function parseCaps(doc: XmlNode): IndexerCapabilities {
   const searching = root['searching'];
   if (isRecord(searching)) {
     caps.searching = {
-      search: parseMode(searching['search']),
-      tvSearch: parseMode(searching['tv-search']),
-      movieSearch: parseMode(searching['movie-search']),
+      search: parseMode(searching['search'], VIDEO_SEARCH_PARAMS),
+      tvSearch: parseMode(searching['tv-search'], VIDEO_SEARCH_PARAMS),
+      movieSearch: parseMode(searching['movie-search'], VIDEO_SEARCH_PARAMS),
+      // Newznab documents `audio-search`; Torznab (Jackett, Prowlarr) uses `music-search`.
+      musicSearch: firstAvailable(
+        parseMode(searching['music-search'], MUSIC_SEARCH_PARAMS),
+        parseMode(searching['audio-search'], MUSIC_SEARCH_PARAMS),
+      ),
+      bookSearch: parseMode(searching['book-search'], BOOK_SEARCH_PARAMS),
     };
   }
 
@@ -56,7 +66,11 @@ export function parseCaps(doc: XmlNode): IndexerCapabilities {
   return caps;
 }
 
-function parseMode(node: unknown): SearchModeCapabilities {
+function firstAvailable(...modes: SearchModeCapabilities[]): SearchModeCapabilities {
+  return modes.find((m) => m.available) ?? { available: false, supportedParams: [] };
+}
+
+function parseMode(node: unknown, allowed: readonly SearchParam[]): SearchModeCapabilities {
   if (!isRecord(node) || attrOf(node, 'available')?.toLowerCase() !== 'yes') {
     return { available: false, supportedParams: [] };
   }
@@ -66,13 +80,13 @@ function parseMode(node: unknown): SearchModeCapabilities {
   const params: SearchParam[] = [];
   for (const piece of raw.split(',')) {
     const name = piece.trim().toLowerCase();
-    if (isSearchParam(name) && !params.includes(name)) params.push(name);
+    if (isAllowed(name, allowed) && !params.includes(name)) params.push(name);
   }
   return { available: true, supportedParams: params };
 }
 
-function isSearchParam(name: string): name is SearchParam {
-  return (SEARCH_PARAMS as readonly string[]).includes(name);
+function isAllowed(name: string, allowed: readonly SearchParam[]): name is SearchParam {
+  return (allowed as readonly string[]).includes(name);
 }
 
 function parseCategories(node: unknown): CapsCategory[] {

@@ -174,7 +174,8 @@ export function toV3QualityDefinition(d: QualityDefinitionItem): Json {
 
 // ---- custom formats, delay / release profiles -------------------------------------------
 
-const SPEC_IMPLEMENTATION: Record<CustomFormatSpec['implementation'], string> = {
+/** Video spec kinds only: audio formats are never shown to Sonarr/Radarr clients (see routes-shared). */
+const SPEC_IMPLEMENTATION: Partial<Record<CustomFormatSpec['implementation'], string>> = {
   releaseTitle: 'ReleaseTitleSpecification',
   releaseGroup: 'ReleaseGroupSpecification',
   edition: 'EditionSpecification',
@@ -213,6 +214,8 @@ function specFields(spec: CustomFormatSpec): V3Field[] {
       return [field(0, 'value', spec.fields.releaseType, 'select')];
     case 'releaseExtras':
       return [field(0, 'value', spec.fields.kinds, 'tag')];
+    default:
+      return [];
   }
 }
 
@@ -221,14 +224,18 @@ export function toV3CustomFormat(f: CustomFormat): Json {
     id: f.id,
     name: f.name,
     includeCustomFormatWhenRenaming: f.includeWhenRenaming,
-    specifications: f.specifications.map((s) => ({
+    specifications: f.specifications.flatMap((s) => {
+      const implementation = SPEC_IMPLEMENTATION[s.implementation];
+      if (!implementation) return [];
+      return [{
       name: s.name,
-      implementation: SPEC_IMPLEMENTATION[s.implementation],
-      implementationName: SPEC_IMPLEMENTATION[s.implementation].replace(/Specification$/, '').replace(/([a-z])([A-Z])/g, '$1 $2'),
+      implementation,
+      implementationName: implementation.replace(/Specification$/, '').replace(/([a-z])([A-Z])/g, '$1 $2'),
       negate: s.negate,
       required: s.required,
       fields: specFields(s),
-    })),
+      }];
+    }),
   };
 }
 

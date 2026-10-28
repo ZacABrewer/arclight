@@ -134,10 +134,32 @@ export function emptyIds(): ProviderIds {
   return { tmdbId: null, tvdbId: null, imdbId: null };
 }
 
+const sameText = (a: string | null | undefined, b: string | null | undefined): boolean =>
+  Boolean(a && b && a.trim().toLowerCase() === b.trim().toLowerCase());
+
+/** ISBN without hyphens/spaces, upper-case X. */
+export function normaliseIsbn(value: string): string {
+  return value.replace(/[\s-]/g, '').toUpperCase();
+}
+
 /** True when any id in the query matches the item's ids. */
-export function idsMatchQuery(ids: ProviderIds, q: { tmdbId?: number | null; tvdbId?: number | null; imdbId?: string | null }): boolean {
+export function idsMatchQuery(
+  ids: ProviderIds,
+  q: Partial<Pick<ProviderIds, 'tmdbId' | 'tvdbId' | 'imdbId' | 'mbReleaseGroupId' | 'mbArtistId' | 'asin' | 'isbn'>>,
+): boolean {
   if (q.tmdbId && ids.tmdbId === q.tmdbId) return true;
   if (q.tvdbId && ids.tvdbId === q.tvdbId) return true;
   if (q.imdbId && ids.imdbId !== null && ids.imdbId.toLowerCase() === q.imdbId.toLowerCase()) return true;
+  if (sameText(q.mbReleaseGroupId, ids.mbReleaseGroupId)) return true;
+  if (sameText(q.mbArtistId, ids.mbArtistId)) return true;
+  if (sameText(q.asin, ids.asin)) return true;
+  if (q.isbn && ids.isbn && normaliseIsbn(q.isbn) === normaliseIsbn(ids.isbn)) return true;
   return false;
 }
+
+/** True when the query names at least one id. */
+export function queryHasIds(q: FindItemsQueryIds): boolean {
+  return Boolean(q.tmdbId || q.tvdbId || q.imdbId || q.mbReleaseGroupId || q.mbArtistId || q.asin || q.isbn);
+}
+
+type FindItemsQueryIds = Partial<Pick<ProviderIds, 'tmdbId' | 'tvdbId' | 'imdbId' | 'mbReleaseGroupId' | 'mbArtistId' | 'asin' | 'isbn'>>;

@@ -4,7 +4,15 @@
  */
 import { createHash } from 'node:crypto';
 import { STANDARD_CATEGORIES } from '../categories.js';
-import { SEARCH_PARAMS, type CapsCategory, type IndexerCapabilities, type SearchParam } from '../types.js';
+import {
+  BOOK_SEARCH_PARAMS,
+  MUSIC_SEARCH_PARAMS,
+  VIDEO_SEARCH_PARAMS,
+  type CapsCategory,
+  type IndexerCapabilities,
+  type SearchModeCapabilities,
+  type SearchParam,
+} from '../types.js';
 import type { Definition } from './schema.js';
 
 export interface CategoryMapping {
@@ -127,22 +135,26 @@ export function supportedCategories(map: CategoryMap, requested: readonly number
   return requested.filter((id) => map.known.has(id));
 }
 
-function params(list: readonly string[] | undefined): SearchParam[] {
-  return (list ?? []).filter((p): p is SearchParam => (SEARCH_PARAMS as readonly string[]).includes(p));
+function params(list: readonly string[] | undefined, allowed: readonly SearchParam[]): SearchParam[] {
+  return (list ?? []).filter((p): p is SearchParam => (allowed as readonly string[]).includes(p));
+}
+
+function mode(list: readonly string[] | undefined, allowed: readonly SearchParam[]): SearchModeCapabilities {
+  return { available: list !== undefined, supportedParams: params(list, allowed) };
 }
 
 /** Capabilities advertised for a definition-backed indexer. */
 export function synthesizeCaps(def: Definition, map: CategoryMap): IndexerCapabilities {
-  const tv = def.caps.modes['tv-search'];
-  const movie = def.caps.modes['movie-search'];
   const max = def.caps.limits?.max ?? 100;
   return {
     serverTitle: def.name,
     limits: { max, default: def.caps.limits?.default ?? Math.min(100, max) },
     searching: {
       search: { available: true, supportedParams: ['q'] },
-      tvSearch: { available: tv !== undefined, supportedParams: params(tv) },
-      movieSearch: { available: movie !== undefined, supportedParams: params(movie) },
+      tvSearch: mode(def.caps.modes['tv-search'], VIDEO_SEARCH_PARAMS),
+      movieSearch: mode(def.caps.modes['movie-search'], VIDEO_SEARCH_PARAMS),
+      musicSearch: mode(def.caps.modes['music-search'], MUSIC_SEARCH_PARAMS),
+      bookSearch: mode(def.caps.modes['book-search'], BOOK_SEARCH_PARAMS),
     },
     categories: map.tree.map((c) => ({ ...c, subcats: [...c.subcats] })),
   };

@@ -31,6 +31,7 @@ import { SettingsPage, countChanges, useDraft } from '../settings-layout.js';
 import { PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
 import { previewCaption, type PreviewKind } from './naming-preview.js';
 import { VersionNamingSection } from './version-naming.js';
+import { MusicNamingSection } from './music-naming.js';
 import './media-management.css';
 import { t } from '../../../i18n/index.js';
 
@@ -279,6 +280,7 @@ function NamingSections({
           {rows('movie')}
         </div>
       </SettingsSection>
+      <MusicNamingSection value={value} set={set} disabled={disabled} />
       <VersionNamingSection value={value} set={set} disabled={disabled} />
     </>
   );

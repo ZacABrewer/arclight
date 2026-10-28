@@ -34,7 +34,9 @@ describe('MediaBrowserServerClient (Jellyfin/Emby)', () => {
     expect(libs.map((l) => [l.id, l.type])).toEqual([
       ['lib-movies', 'movie'],
       ['lib-tv', 'series'],
-      ['lib-music', 'other'],
+      ['lib-music', 'music'],
+      ['lib-books', 'audiobook'],
+      ['lib-photos', 'other'],
     ]);
     expect(libs[1]!.locations).toEqual(['/data/tv', '/data/anime']);
   });

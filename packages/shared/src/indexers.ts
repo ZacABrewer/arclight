@@ -23,6 +23,26 @@ export const INDEXER_PRIORITY_MAX = 50;
 export const INDEXER_PRIORITY_DEFAULT = 25;
 
 const CategoryId = z.number().int().min(0);
+
+/** Default music categories: Audio, Audio/MP3, Audio/Lossless. */
+export const DEFAULT_INDEXER_MUSIC_CATEGORIES: readonly number[] = [3000, 3010, 3040];
+/** Default audiobook categories: Audio/Audiobook. */
+export const DEFAULT_INDEXER_AUDIOBOOK_CATEGORIES: readonly number[] = [3030];
+
+/**
+ * The music / audiobook lists are optional in stored settings: indexers saved before music
+ * support lack them and read as the defaults (see `indexerAudioCategories`). The api fills
+ * them in on every indexer it serves; create bodies default them.
+ */
+export function indexerAudioCategories(settings: {
+  musicCategories?: readonly number[] | undefined;
+  audiobookCategories?: readonly number[] | undefined;
+}): { musicCategories: number[]; audiobookCategories: number[] } {
+  return {
+    musicCategories: [...(settings.musicCategories ?? DEFAULT_INDEXER_MUSIC_CATEGORIES)],
+    audiobookCategories: [...(settings.audiobookCategories ?? DEFAULT_INDEXER_AUDIOBOOK_CATEGORIES)],
+  };
+}
 const Priority = z.number().int().min(INDEXER_PRIORITY_MIN).max(INDEXER_PRIORITY_MAX);
 const NonNegativeInt = z.number().int().min(0);
 
@@ -50,6 +70,10 @@ export const IndexerSettings = z.object({
   apiKey: z.string().optional(),
   categories: z.array(CategoryId),
   animeCategories: z.array(CategoryId),
+  /** Searched by `music` requests; added to RSS while music is enabled and an artist is monitored. */
+  musicCategories: z.array(CategoryId).optional(),
+  /** Searched by `book` requests; added to RSS while audiobooks are enabled. */
+  audiobookCategories: z.array(CategoryId).optional(),
   minimumSeeders: NonNegativeInt.optional(),
   seedRatio: z.number().min(0).optional(),
   /** Milliseconds. */
@@ -76,6 +100,8 @@ export const IndexerSettingsInput = IndexerSettings.extend({
   apiPath: z.string().trim().default('/api'),
   categories: z.array(CategoryId).default([]),
   animeCategories: z.array(CategoryId).default([]),
+  musicCategories: z.array(CategoryId).default(() => [...DEFAULT_INDEXER_MUSIC_CATEGORIES]),
+  audiobookCategories: z.array(CategoryId).default(() => [...DEFAULT_INDEXER_AUDIOBOOK_CATEGORIES]),
 });
 export type IndexerSettingsInput = z.input<typeof IndexerSettingsInput>;
 
@@ -138,6 +164,7 @@ export const IndexerUpdate = z.object({
   downloadClientId: z.number().int().nullish(),
   proxyId: z.number().int().nullish(),
   tags: z.array(z.number().int()).optional(),
+  // No defaults here: an absent list keeps the saved one instead of resetting it.
   settings: IndexerSettings.partial().optional(),
 });
 export type IndexerUpdate = z.input<typeof IndexerUpdate>;
@@ -148,6 +175,7 @@ export const IndexerSearchModeCapabilities = z.object({
   available: z.boolean(),
   supportedParams: z.array(z.string()),
 });
+export type IndexerSearchModeCapabilities = z.infer<typeof IndexerSearchModeCapabilities>;
 
 export const IndexerCapabilitiesResource = z.object({
   serverTitle: z.string().optional(),
@@ -156,6 +184,10 @@ export const IndexerCapabilitiesResource = z.object({
     search: IndexerSearchModeCapabilities,
     tvSearch: IndexerSearchModeCapabilities,
     movieSearch: IndexerSearchModeCapabilities,
+    /** `music-search` / `audio-search`; absent in caps cached before music support (= unavailable). */
+    musicSearch: IndexerSearchModeCapabilities.optional(),
+    /** `book-search`; absent in caps cached before audiobook support (= unavailable). */
+    bookSearch: IndexerSearchModeCapabilities.optional(),
   }),
   categories: z.array(
     z.object({
@@ -308,7 +340,7 @@ const IdList = z
 
 const OptionalInt = z.coerce.number().int().min(0).optional();
 
-export const ManualSearchType = z.enum(['search', 'tv', 'movie']);
+export const ManualSearchType = z.enum(['search', 'tv', 'movie', 'music', 'book']);
 export type ManualSearchType = z.infer<typeof ManualSearchType>;
 
 /**
@@ -323,6 +355,9 @@ export const ManualSearchRequest = z.object({
   seasonNumber: OptionalInt,
   episodeId: OptionalInt,
   movieId: OptionalInt,
+  /** Music library ids, resolved by the release pipeline like `seriesId` / `movieId`. */
+  artistId: OptionalInt,
+  albumId: OptionalInt,
   tvdbId: OptionalInt,
   tmdbId: OptionalInt,
   imdbId: z.string().trim().min(1).optional(),
@@ -331,6 +366,13 @@ export const ManualSearchRequest = z.object({
   year: OptionalInt,
   /** `YYYY-MM-DD` for daily shows. */
   airDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  /** `type: music` fields (`year` and `query` are shared). */
+  artist: z.string().trim().min(1).optional(),
+  album: z.string().trim().min(1).optional(),
+  label: z.string().trim().min(1).optional(),
+  /** `type: book` fields. */
+  author: z.string().trim().min(1).optional(),
+  title: z.string().trim().min(1).optional(),
   categories: IdList,
   indexerIds: IdList,
 });

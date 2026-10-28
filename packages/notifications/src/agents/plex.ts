@@ -5,7 +5,7 @@
 
 import { hostUrl, httpRequest, joinUrl, readJson } from '../http.js';
 import type { PlexSettings } from '../settings.js';
-import { NotificationError, type MediaInfo, type NotificationEvent } from '../types.js';
+import { NotificationError, type MediaInfo, type MediaType, type NotificationEvent } from '../types.js';
 import { BaseAgent, LIBRARY_EVENTS, type AgentDeps } from './base.js';
 
 export interface PlexSection {
@@ -39,6 +39,16 @@ export function pathIsInside(child: string, parent: string): boolean {
   return c === p || c.startsWith(`${p}/`);
 }
 
+/** Plex section type per media type. */
+export const PLEX_SECTION_TYPE: Record<MediaType, string> = {
+  series: 'show',
+  movie: 'movie',
+  music: 'artist',
+  audiobook: 'artist',
+};
+
+const PLEX_LIBRARY_LABEL: Record<MediaType, string> = { series: 'TV', movie: 'movie', music: 'music', audiobook: 'music' };
+
 export class PlexAgent extends BaseAgent {
   readonly kind = 'plex' as const;
   readonly supportedEvents = LIBRARY_EVENTS;
@@ -65,9 +75,12 @@ export class PlexAgent extends BaseAgent {
     }));
   }
 
-  /** Sections of the right type whose root folder contains `media.path`. */
+  /**
+   * Sections of the right type whose root folder contains `media.path`. Music and audiobooks
+   * both live in Plex `artist` (music) sections; the path decides which one.
+   */
   matchSections(sections: PlexSection[], media: MediaInfo): PlexSection[] {
-    const wanted = media.mediaType === 'series' ? 'show' : 'movie';
+    const wanted = PLEX_SECTION_TYPE[media.mediaType];
     return sections.filter((s) => s.type === wanted && s.locations.some((loc) => pathIsInside(media.path, loc)));
   }
 
@@ -78,7 +91,7 @@ export class PlexAgent extends BaseAgent {
       throw new NotificationError(
         this.kind,
         'notFound',
-        `No Plex ${event.media.mediaType === 'series' ? 'TV' : 'movie'} library contains "${event.media.path}"`,
+        `No Plex ${PLEX_LIBRARY_LABEL[event.media.mediaType]} library contains "${event.media.path}"`,
       );
     }
     for (const section of sections) {

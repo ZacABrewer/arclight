@@ -4,7 +4,9 @@ import {
   createMediaServerClient,
   MediaServerError,
   normaliseBaseUrl,
+  pathIsInside,
   type FetchLike,
+  type MediaKind,
   type MediaServerClient,
   type MediaServerClientOptions,
 } from '@arclight/media-servers';
@@ -16,6 +18,7 @@ import {
   type MediaServerConfig,
   type MediaServerInputRaw,
   type MediaServerProbeResult,
+  type MediaServerRefreshResult,
   type MediaServerResource,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
@@ -57,6 +60,24 @@ export interface MediaServersServiceOptions {
   clientFactory?: MediaServerClientFactory;
   fetch?: FetchLike;
   newId?: () => string;
+}
+
+/** What changed on disk, for `refreshPath`. */
+export interface RefreshPathInput {
+  /** Absolute folder (or file) that changed: an album/artist folder after a music import. */
+  path: string;
+  /** Library kind the path belongs to; decides which libraries may contain it. */
+  mediaType: MediaKind;
+  /** Jellyfin/Emby partial refresh type. Default `Modified`. */
+  updateType?: 'Created' | 'Modified' | 'Deleted';
+}
+
+/**
+ * Library kinds that may hold a path of `mediaType`. Plex has no audiobook section type, so
+ * audiobooks may also sit in music libraries (the path decides).
+ */
+export function libraryKindsFor(mediaType: MediaKind): readonly MediaKind[] {
+  return mediaType === 'audiobook' ? ['audiobook', 'music'] : [mediaType];
 }
 
 export interface ConfiguredClient {
@@ -143,6 +164,39 @@ export class MediaServersService {
           return [];
         }
       });
+  }
+
+  // ---- refresh after import --------------------------------------------------------------
+
+  /**
+   * Post-import refresh: every enabled server flagged `usedForRefresh` whose libraries of a
+   * matching kind have a folder containing `path` is asked to rescan that path. Servers with
+   * no such library are skipped, failures are reported per server (never thrown), so one
+   * unreachable server does not stop the others.
+   */
+  async refreshPath(input: RefreshPathInput): Promise<MediaServerRefreshResult[]> {
+    const kinds = libraryKindsFor(input.mediaType);
+    const results: MediaServerRefreshResult[] = [];
+    for (const { config, client } of this.clients('refresh')) {
+      const result: MediaServerRefreshResult = { serverId: config.id, name: config.name, status: 'skipped', libraries: [] };
+      try {
+        const matching = (await client.libraries()).filter(
+          (l) => l.type !== 'other' && kinds.includes(l.type) && l.locations.some((loc) => pathIsInside(input.path, loc)),
+        );
+        result.libraries = matching.map((l) => l.name);
+        if (matching.length === 0) {
+          result.message = `No ${kinds.join('/')} library contains ${input.path}`;
+        } else {
+          await client.refreshLibrary({ path: input.path, mediaType: input.mediaType, ...(input.updateType ? { updateType: input.updateType } : {}) });
+          result.status = 'refreshed';
+        }
+      } catch (err) {
+        result.status = 'failed';
+        result.message = err instanceof Error ? err.message : String(err);
+      }
+      results.push(result);
+    }
+    return results;
   }
 
   // ---- probes ----------------------------------------------------------------------------

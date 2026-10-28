@@ -8,10 +8,18 @@ export {
   buildSeriesFolder,
   buildMovieFileName,
   buildMovieFolder,
+  buildArtistFolder,
+  buildAlbumFolder,
+  buildTrackFileName,
+  trackFormatFor,
+  buildAuthorFolder,
+  buildBookFolder,
+  buildBookFileName,
   requiresEpisodeTitle,
   requiresAbsoluteNumber,
   getSamples,
 } from './build.js';
+export { releaseYearOf, seriesPositionText } from './tokens.js';
 export { parseFormat, normalizeTokenName, hasVersionToken, type FormatPart, type Token, type Literal } from './tokens.js';
 export { cleanTitle, titleThe } from './text.js';
 export { SAMPLES } from './samples.js';

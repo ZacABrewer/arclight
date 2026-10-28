@@ -1,6 +1,7 @@
 import { eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import {
+  categoriesFor,
   CookieJar,
   createDefinitionIndexer,
   createIndexer,
@@ -24,6 +25,9 @@ import {
   type SettingsValues,
 } from '@arclight/indexers';
 import {
+  DEFAULT_INDEXER_AUDIOBOOK_CATEGORIES,
+  DEFAULT_INDEXER_MUSIC_CATEGORIES,
+  indexerAudioCategories,
   IndexerCreate,
   IndexerSettings,
   IndexerUpdate,
@@ -47,6 +51,8 @@ import {
   type SearchGrabResponse,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { artists } from '../music/schema.js';
+import { getFeatureSettings } from '../settings/service.js';
 import { DefinitionStore } from './definitions.js';
 import { IndexersError, parseOrThrow } from './errors.js';
 import { ProxiesService, type TunnelOpener } from './proxies.js';
@@ -54,6 +60,8 @@ import { indexerCapsCache, indexerRssState, indexers, indexerStatus } from './sc
 import { IndexerStatsRecorder } from './stats.js';
 
 export { IndexersError, type IndexersErrorCode } from './errors.js';
+/** Domain hint for a release's categories (`series | movie | music | audiobook | auto`). */
+export { domainFromCategories, type CategoryDomain } from '@arclight/indexers';
 
 // ---- public types -------------------------------------------------------------------
 
@@ -100,6 +108,15 @@ export type ReleaseDownload =
   | { kind: 'magnet'; magnetUrl: string }
   | { kind: 'file'; protocol: 'torrent' | 'usenet'; data: Uint8Array; contentType: string; fileName: string };
 
+/**
+ * Audio domains whose categories RSS (and free-text search) add to the video ones. A domain
+ * is enabled when its feature flag is on and it has something monitored.
+ */
+export interface AudioDomains {
+  music: boolean;
+  audiobooks: boolean;
+}
+
 export interface IndexersServiceOptions {
   db: Db;
   log?: Logger;
@@ -115,6 +132,8 @@ export interface IndexersServiceOptions {
   definitions?: DefinitionStore;
   /** Test seam for proxy connectivity checks. */
   openTunnel?: TunnelOpener;
+  /** Which audio domains are enabled; defaults to the feature flags plus monitored items in the db. */
+  audioDomains?: () => AudioDomains;
 }
 
 // ---- constants ----------------------------------------------------------------------
@@ -163,6 +182,7 @@ export class IndexersService {
   private readonly searchCache = new Map<string, { release: ReleaseResource; at: number }>();
   private manualResolver: ManualSearchResolver | undefined;
   private searchGrabber: SearchGrabber | undefined;
+  private readonly audioDomainsOf: () => AudioDomains;
 
   constructor(opts: IndexersServiceOptions) {
     this.db = opts.db;
@@ -182,6 +202,12 @@ export class IndexersService {
       ...(opts.openTunnel ? { openTunnel: opts.openTunnel } : {}),
     });
     this.stats = new IndexerStatsRecorder(opts.db, this.now);
+    this.audioDomainsOf = opts.audioDomains ?? (() => audioDomainsFromDb(opts.db));
+  }
+
+  /** Audio domains currently enabled for RSS (flag on and something monitored). */
+  audioDomains(): AudioDomains {
+    return this.audioDomainsOf();
   }
 
   // ---- hooks ------------------------------------------------------------------------
@@ -344,6 +370,8 @@ export class IndexersService {
           apiKey: '',
           categories: [2000, 5000],
           animeCategories: [5070],
+          musicCategories: [...DEFAULT_INDEXER_MUSIC_CATEGORIES],
+          audiobookCategories: [...DEFAULT_INDEXER_AUDIOBOOK_CATEGORIES],
           ...(implementation === 'torznab' ? { minimumSeeders: 1 } : {}),
         },
       },
@@ -457,17 +485,19 @@ export class IndexersService {
   async search(request: SearchRequest, opts: SearchOptions): Promise<ReleaseResource[]> {
     const rows = this.eligible(opts.mode === 'automatic' ? 'enableAutomaticSearch' : 'enableInteractiveSearch', opts.indexerIds);
     const started = this.now();
+    // Only free-text searches mix domains; typed searches pick their own list.
+    const domains = request.kind === 'search' && !opts.categories && rows.length > 0 ? this.audioDomainsOf() : NO_AUDIO_DOMAINS;
     const results = await Promise.allSettled(
       rows.map((row) =>
         this.timed(row, 'query', opts.signal, () =>
           this.guarded(row, opts.signal, async (signal) => {
             if (row.implementation === 'definition') {
               const client = await this.definitionClient(row);
-              const categories = opts.categories ?? (row.settings.categories.length > 0 ? row.settings.categories : undefined);
+              const categories = opts.categories ?? definitionCategories(row, request.kind, domains);
               return client.search({ ...request, ...(categories ? { categories } : {}) });
             }
             const caps = await this.loadCaps(row, signal, false);
-            const def = toDefinition(row, opts.categories);
+            const def = toDefinition(row, { kind: request.kind, domains, ...(opts.categories ? { override: opts.categories } : {}) });
             return protocolOf(row.implementation).search(def, request, toPackageCaps(caps), this.clientOptions(row, signal));
           }),
         ),
@@ -488,7 +518,11 @@ export class IndexersService {
   /** Interactive search from the API: raw ids/query search directly, library ids go through the resolver. */
   async manualSearch(request: ManualSearchRequest, signal?: AbortSignal): Promise<ReleaseResource[]> {
     const usesLibraryIds =
-      request.seriesId !== undefined || request.episodeId !== undefined || request.movieId !== undefined;
+      request.seriesId !== undefined ||
+      request.episodeId !== undefined ||
+      request.movieId !== undefined ||
+      request.artistId !== undefined ||
+      request.albumId !== undefined;
     let resolved: SearchRequest | null = null;
     if (usesLibraryIds && this.manualResolver) {
       resolved = await this.manualResolver(request);
@@ -500,7 +534,7 @@ export class IndexersService {
           'VALIDATION',
           usesLibraryIds
             ? 'searching by library id is not available yet; pass query or tvdbId/tmdbId/imdbId'
-            : 'nothing to search: pass query or tvdbId/tmdbId/imdbId',
+            : 'nothing to search: pass query, tvdbId/tmdbId/imdbId, artist/album or author/title',
         );
       }
     }
@@ -634,17 +668,19 @@ export class IndexersService {
   async rss(opts: { signal?: AbortSignal } = {}): Promise<ReleaseResource[]> {
     const rows = this.eligible('enableRss');
     const started = this.now();
+    const domains = rows.length > 0 ? this.audioDomainsOf() : NO_AUDIO_DOMAINS;
     const results = await Promise.allSettled(
       rows.map((row) =>
         this.timed(row, 'rss', opts.signal, () =>
           this.guarded(row, opts.signal, async (signal) => {
             let infos: ReleaseInfo[];
             if (row.implementation === 'definition') {
+              // Site definitions list their whole RSS page (already a superset of every domain).
               infos = await (await this.definitionClient(row)).rss();
             } else {
               const caps = await this.loadCaps(row, signal, false);
               infos = await protocolOf(row.implementation).search(
-                toDefinition(row),
+                toDefinition(row, { kind: 'rss', domains }),
                 { kind: 'rss' },
                 toPackageCaps(caps),
                 this.clientOptions(row, signal),
@@ -1055,6 +1091,7 @@ export class IndexersService {
       apiPath: '',
       categories: [...new Set(input.categories)],
       animeCategories: [...new Set(input.animeCategories)],
+      ...audioCategoryLists(input),
       definitionId,
       fields,
     };
@@ -1083,7 +1120,7 @@ export class IndexersService {
       enableInteractiveSearch: row.enableInteractiveSearch,
       priority: row.priority,
       tags: row.tags,
-      settings: row.settings,
+      settings: withAudioCategories(row.settings),
     };
     if (row.downloadClientId !== null) out.downloadClientId = row.downloadClientId;
     if (row.proxyId !== null) out.proxyId = row.proxyId;
@@ -1308,10 +1345,11 @@ function validateSettings(input: IndexerSettings): IndexerSettings {
   const apiPath = rawPath === '' ? '/api' : rawPath.startsWith('/') ? rawPath : `/${rawPath}`;
   const categories = [...new Set(input.categories)];
   const animeCategories = [...new Set(input.animeCategories)];
-  if (categories.length + animeCategories.length === 0) {
+  const audio = audioCategoryLists(input);
+  if (categories.length + animeCategories.length + audio.musicCategories.length + audio.audiobookCategories.length === 0) {
     throw new IndexersError('VALIDATION', 'settings.categories: select at least one category');
   }
-  const out: IndexerSettings = { baseUrl, apiPath, categories, animeCategories };
+  const out: IndexerSettings = { baseUrl, apiPath, categories, animeCategories, ...audio };
   const apiKey = input.apiKey?.trim();
   if (apiKey) out.apiKey = apiKey;
   const extra = input.additionalParameters?.trim();
@@ -1328,19 +1366,117 @@ function protocolOf(implementation: IndexerImplementation): typeof torznab | typ
   return implementation === 'newznab' ? newznab : torznab;
 }
 
-function toDefinition(
+const NO_AUDIO_DOMAINS: AudioDomains = { music: false, audiobooks: false };
+
+/**
+ * Feature flags plus "something monitored". Audiobooks have no library tables yet, so the
+ * flag alone enables them.
+ */
+function audioDomainsFromDb(db: Db): AudioDomains {
+  let features: { music: boolean; audiobooks: boolean };
+  try {
+    features = getFeatureSettings(db);
+  } catch {
+    return NO_AUDIO_DOMAINS; // settings table missing (module-only schema in tests)
+  }
+  let music = false;
+  if (features.music) {
+    try {
+      music = db.select({ id: artists.id }).from(artists).where(eq(artists.monitored, true)).limit(1).get() !== undefined;
+    } catch {
+      music = false; // music tables missing (module-only schema in tests)
+    }
+  }
+  // TODO(wave 3): also require a monitored author once the audiobooks authors table exists.
+  const audiobooks = features.audiobooks;
+  return { music, audiobooks };
+}
+
+type ResolvedSettings = IndexerSettings & { musicCategories: number[]; audiobookCategories: number[] };
+
+/** Saved settings from before music support have no audio lists; fill in the defaults. */
+export function withAudioCategories(s: IndexerSettings): ResolvedSettings {
+  return { ...s, ...audioCategoryLists(s) };
+}
+
+function audioCategoryLists(s: Pick<IndexerSettings, 'musicCategories' | 'audiobookCategories'>): {
+  musicCategories: number[];
+  audiobookCategories: number[];
+} {
+  const lists = indexerAudioCategories(s);
+  return {
+    musicCategories: [...new Set(lists.musicCategories)],
+    audiobookCategories: [...new Set(lists.audiobookCategories)],
+  };
+}
+
+/** How a request picks categories: by kind, with RSS / free text adding enabled audio domains. */
+export interface CategorySelection {
+  kind: SearchRequest['kind'];
+  domains: AudioDomains;
+  /** Replaces every configured list. */
+  override?: readonly number[];
+}
+
+/**
+ * Categories a definition indexer is searched with: the music / audiobook list for those
+ * kinds, the video list otherwise, plus enabled audio domains for free text. `undefined`
+ * lets the site use its defaults.
+ */
+export function definitionCategories(
+  row: Pick<IndexerRow, 'settings'>,
+  kind: SearchRequest['kind'],
+  domains: AudioDomains,
+): number[] | undefined {
+  const s = withAudioCategories(row.settings);
+  let list: number[];
+  if (kind === 'music') list = s.musicCategories;
+  else if (kind === 'book') list = s.audiobookCategories;
+  else if (s.categories.length === 0) return undefined;
+  else if (kind === 'search') {
+    list = [
+      ...new Set([
+        ...s.categories,
+        ...(domains.music ? s.musicCategories : []),
+        ...(domains.audiobooks ? s.audiobookCategories : []),
+      ]),
+    ];
+  } else list = s.categories;
+  return list.length > 0 ? list : undefined;
+}
+
+/** The `cat=` list a Torznab/Newznab request sends for this selection. */
+export function selectCategories(
   row: Pick<IndexerRow, 'name' | 'implementation' | 'settings'>,
-  categoryOverride?: readonly number[],
+  selection: CategorySelection,
+): number[] {
+  return categoriesFor(toDefinition(row, selection), selection.kind);
+}
+
+export function toDefinition(
+  row: Pick<IndexerRow, 'name' | 'implementation' | 'settings'>,
+  selection: Partial<CategorySelection> = {},
 ): IndexerDefinition {
-  const s = row.settings;
+  const s = withAudioCategories(row.settings);
+  const override = selection.override;
+  const kind = selection.kind ?? 'rss';
+  const domains = selection.domains ?? NO_AUDIO_DOMAINS;
   const def: IndexerDefinition = {
     name: row.name,
     baseUrl: s.baseUrl,
     apiPath: s.apiPath,
-    categories: categoryOverride ? [...categoryOverride] : s.categories,
-    animeCategories: categoryOverride ? [] : s.animeCategories,
+    categories: override ? [...override] : s.categories,
+    animeCategories: override ? [] : s.animeCategories,
     protocol: protocolForImplementation(row.implementation),
   };
+  // Typed audio searches always carry their list; RSS / free text only for enabled domains.
+  if (override) {
+    if (kind === 'music') def.musicCategories = [...override];
+    if (kind === 'book') def.audiobookCategories = [...override];
+  } else {
+    if (kind === 'music' || domains.music) def.musicCategories = s.musicCategories;
+    if (kind === 'book' || domains.audiobooks) def.audiobookCategories = s.audiobookCategories;
+  }
   if (s.apiKey) def.apiKey = s.apiKey;
   if (s.minimumSeeders !== undefined) def.minimumSeeders = s.minimumSeeders;
   if (s.seedRatio !== undefined) def.seedRatio = s.seedRatio;
@@ -1362,6 +1498,8 @@ function toCapsResource(caps: IndexerCapabilities): IndexerCapabilitiesResource 
       search: mode(caps.searching.search),
       tvSearch: mode(caps.searching.tvSearch),
       movieSearch: mode(caps.searching.movieSearch),
+      musicSearch: mode(caps.searching.musicSearch),
+      bookSearch: mode(caps.searching.bookSearch),
     },
     categories: caps.categories.map((c) => ({ id: c.id, name: c.name, subcats: c.subcats.map((s) => ({ ...s })) })),
   };
@@ -1369,9 +1507,10 @@ function toCapsResource(caps: IndexerCapabilities): IndexerCapabilitiesResource 
 
 function toPackageCaps(caps: IndexerCapabilitiesResource): IndexerCapabilities {
   const known = new Set<string>(SEARCH_PARAMS);
-  const mode = (m: IndexerCapabilitiesResource['searching']['search']) => ({
-    available: m.available,
-    supportedParams: m.supportedParams.filter((p): p is SearchParam => known.has(p)),
+  // Caps cached before music support have no music/book modes: unavailable.
+  const mode = (m: IndexerCapabilitiesResource['searching']['search'] | undefined) => ({
+    available: m?.available ?? false,
+    supportedParams: (m?.supportedParams ?? []).filter((p): p is SearchParam => known.has(p)),
   });
   return {
     ...(caps.serverTitle !== undefined ? { serverTitle: caps.serverTitle } : {}),
@@ -1380,6 +1519,8 @@ function toPackageCaps(caps: IndexerCapabilitiesResource): IndexerCapabilities {
       search: mode(caps.searching.search),
       tvSearch: mode(caps.searching.tvSearch),
       movieSearch: mode(caps.searching.movieSearch),
+      musicSearch: mode(caps.searching.musicSearch),
+      bookSearch: mode(caps.searching.bookSearch),
     },
     categories: caps.categories,
   };
@@ -1445,11 +1586,24 @@ export function dedupe(releases: ReleaseResource[]): ReleaseResource[] {
   );
 }
 
-function toSearchRequest(req: ManualSearchRequest): SearchRequest | null {
+export function toSearchRequest(req: ManualSearchRequest): SearchRequest | null {
+  const musicHints = req.artist !== undefined || req.album !== undefined || req.label !== undefined;
+  const bookHints = req.author !== undefined || req.title !== undefined;
   const tvHints = req.tvdbId !== undefined || req.season !== undefined || req.episode !== undefined || req.airDate !== undefined;
   const movieHints = req.tmdbId !== undefined || req.imdbId !== undefined || req.year !== undefined;
-  const type = req.type ?? (tvHints ? 'tv' : movieHints ? 'movie' : req.query ? 'search' : undefined);
+  const type =
+    req.type ??
+    (musicHints ? 'music' : bookHints ? 'book' : tvHints ? 'tv' : movieHints ? 'movie' : req.query ? 'search' : undefined);
   switch (type) {
+    case 'music':
+      if (!req.query && !req.artist && !req.album) return null;
+      return {
+        kind: 'music',
+        ...withoutUndefined({ query: req.query, artist: req.artist, album: req.album, year: req.year, label: req.label }),
+      };
+    case 'book':
+      if (!req.query && !req.author && !req.title) return null;
+      return { kind: 'book', ...withoutUndefined({ query: req.query, author: req.author, title: req.title }) };
     case 'tv':
       if (!req.query && req.tvdbId === undefined && req.tmdbId === undefined && req.imdbId === undefined) return null;
       return {

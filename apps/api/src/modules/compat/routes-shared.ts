@@ -1,6 +1,7 @@
 import { statfs } from 'node:fs/promises';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { customFormatFitsDomain } from '@arclight/profiles-engine';
 import {
   AddRootFolderRequest,
   BlocklistListQuery,
@@ -224,7 +225,8 @@ export function sharedRoutes(app: FastifyInstance, s: CompatServices): void {
     return reply.code(202).send(updateDefinition(parseOr400(DefinitionBody, req.body), id));
   });
 
-  app.get('/customformat', async () => s.profiles.listCustomFormats().map(toV3CustomFormat));
+  // Audio formats (codec, bitrate, rip log…) mean nothing to Sonarr/Radarr clients.
+  app.get('/customformat', async () => s.profiles.listCustomFormats().filter((f) => customFormatFitsDomain(f, 'video')).map(toV3CustomFormat));
   app.get('/customformat/:id', async (req) => toV3CustomFormat(s.profiles.getCustomFormat(parseOr400(IdParam, req.params).id)));
   app.get('/delayprofile', async () => s.profiles.listDelayProfiles().map(toV3DelayProfile));
   app.get('/delayprofile/:id', async (req) => toV3DelayProfile(s.profiles.getDelayProfile(parseOr400(IdParam, req.params).id)));

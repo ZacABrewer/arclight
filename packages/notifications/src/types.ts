@@ -13,7 +13,13 @@ import type { DailySummary, HealthCheck } from '@arclight/shared';
 
 export type { DailySummary, HealthCheck };
 
-export type MediaType = 'series' | 'movie';
+/** What an event is about. Music events carry `artist`/`album`/`tracks`, audiobook events `author`/`book`. */
+export type MediaType = 'series' | 'movie' | 'music' | 'audiobook';
+
+/** The video subset (requests, issues, retention and media-server lookups are video only). */
+export type VideoMediaType = 'series' | 'movie';
+
+export const isVideoMediaType = (t: MediaType): t is VideoMediaType => t === 'series' || t === 'movie';
 
 export interface MediaImage {
   coverType: 'poster' | 'fanart' | 'banner' | 'clearlogo';
@@ -21,12 +27,17 @@ export interface MediaImage {
   url: string;
 }
 
-/** The series or movie an event is about. */
+/**
+ * The series, movie, artist or author an event is about. Music: `title` is the artist name,
+ * `path` the artist folder, `tmdbId` 0. Audiobooks: `title` is the author name, `path` the
+ * author folder.
+ */
 export interface MediaInfo {
   id: number;
   mediaType: MediaType;
   title: string;
   year: number;
+  /** 0 for music and audiobooks. */
   tmdbId: number;
   imdbId?: string;
   tvdbId?: number;
@@ -38,6 +49,68 @@ export interface MediaInfo {
   /** 0..10 */
   rating?: number;
   images: MediaImage[];
+}
+
+/** Music: the artist (MediaInfo carries the same name as `title`). */
+export interface ArtistInfo {
+  id: number;
+  name: string;
+  /** MusicBrainz artist id. */
+  mbArtistId?: string;
+  disambiguation?: string;
+  /** Absolute artist folder. */
+  path?: string;
+}
+
+/** Music: the album an event is about. */
+export interface AlbumInfo {
+  id: number;
+  title: string;
+  /** `Album`, `EP`, `Single`... */
+  albumType?: string;
+  /** ISO-8601 date (YYYY-MM-DD) of the release group's first release. */
+  releaseDate?: string;
+  /** MusicBrainz release-group id. */
+  mbReleaseGroupId?: string;
+  /** MusicBrainz release id of the selected edition. */
+  mbReleaseId?: string;
+  /** Absolute album folder. */
+  path?: string;
+}
+
+/** Music: a track the event touched (imported, grabbed, deleted). */
+export interface TrackInfo {
+  id: number;
+  title: string;
+  mediumNumber: number;
+  trackNumber: number;
+  durationMs?: number;
+  /** MusicBrainz recording id. */
+  mbRecordingId?: string;
+}
+
+/** Audiobooks: the author (MediaInfo carries the same name as `title`). */
+export interface AuthorInfo {
+  id: number;
+  name: string;
+  asin?: string;
+  path?: string;
+}
+
+/** Audiobooks: the book an event is about. */
+export interface BookInfo {
+  id: number;
+  title: string;
+  subtitle?: string;
+  narrators: string[];
+  seriesTitle?: string;
+  seriesPosition?: string;
+  asin?: string;
+  isbn?: string;
+  /** ISO-8601 date. */
+  releaseDate?: string;
+  runtimeMs?: number;
+  path?: string;
 }
 
 export interface EpisodeInfo {
@@ -201,6 +274,13 @@ interface MediaEventBase extends EventBase {
   media: MediaInfo;
   /** Present for series events; absent (or empty) for movies. */
   episodes?: EpisodeInfo[];
+  /** Music events. */
+  artist?: ArtistInfo;
+  album?: AlbumInfo;
+  tracks?: TrackInfo[];
+  /** Audiobook events. */
+  author?: AuthorInfo;
+  book?: BookInfo;
 }
 
 export interface TestEvent extends EventBase {

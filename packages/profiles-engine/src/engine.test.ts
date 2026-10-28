@@ -355,7 +355,8 @@ describe('custom format composition', () => {
     const defs = specImplementations();
     const names = defs.map((d) => d.implementation).sort();
     expect(names).toEqual(
-      ['edition', 'indexerFlag', 'language', 'qualityModifier', 'releaseExtras', 'releaseGroup', 'releaseTitle', 'releaseType', 'resolution', 'size', 'source', 'year'].sort(),
+      ['edition', 'indexerFlag', 'language', 'qualityModifier', 'releaseExtras', 'releaseGroup', 'releaseTitle', 'releaseType', 'resolution', 'size', 'source', 'year',
+       'audioCodec', 'audioBitrate', 'bitDepth', 'sampleRate', 'audioSource', 'ripLog', 'fileLayout', 'formatType', 'narrator'].sort(),
     );
     expect(defs.every((d) => d.fields.length > 0)).toBe(true);
   });

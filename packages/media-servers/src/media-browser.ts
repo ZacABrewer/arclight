@@ -17,7 +17,9 @@ import {
   laterOf,
   list,
   normaliseBaseUrl,
+  normaliseIsbn,
   num,
+  queryHasIds,
   rec,
   request,
   requestJson,
@@ -57,19 +59,50 @@ export function ticksToMs(value: unknown): number {
   return n !== null && n > 0 ? Math.round(n / 10_000) : 0;
 }
 
-/** Reads `Tmdb`/`Tvdb`/`Imdb` provider ids regardless of key case. */
+const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Reads provider ids regardless of key case: `Tmdb`/`Tvdb`/`Imdb`, and for audio
+ * `MusicBrainzReleaseGroup`, `MusicBrainzAlbumArtist`/`MusicBrainzArtist`, `Audible`/`Asin`,
+ * `Isbn`. Audio ids are set only when present.
+ */
 export function mediaBrowserProviderIds(raw: unknown): ProviderIds {
   const out = emptyIds();
   for (const [key, value] of Object.entries(rec(raw))) {
     const k = key.toLowerCase();
+    const text = typeof value === 'string' ? value.trim() : '';
     if (k === 'tmdb') out.tmdbId = num(value);
     else if (k === 'tvdb') out.tvdbId = num(value);
-    else if (k === 'imdb' && typeof value === 'string' && /^tt\d+$/i.test(value)) out.imdbId = value.toLowerCase();
+    else if (k === 'imdb' && /^tt\d+$/i.test(text)) out.imdbId = text.toLowerCase();
+    else if (k === 'musicbrainzreleasegroup' && MBID.test(text)) out.mbReleaseGroupId = text.toLowerCase();
+    else if ((k === 'musicbrainzalbumartist' || (k === 'musicbrainzartist' && !out.mbArtistId)) && MBID.test(text)) out.mbArtistId = text.toLowerCase();
+    else if ((k === 'audible' || k === 'asin') && /^[0-9A-Z]{10}$/i.test(text)) out.asin = text.toUpperCase();
+    else if (k === 'isbn' && /^[\d\s-]{9,17}[\dX]$/i.test(text)) out.isbn = normaliseIsbn(text);
   }
   return out;
 }
 
 const ITEM_FIELDS = 'ProviderIds,Path,ProductionYear,ParentId';
+
+/** MediaBrowser item type listed for each kind (music items are albums). */
+const ITEM_TYPE: Record<MediaKind, string> = { movie: 'Movie', series: 'Series', music: 'MusicAlbum', audiobook: 'AudioBook' };
+
+/** Virtual-folder `CollectionType` to library kind. */
+export function mediaBrowserLibraryKind(collectionType: string | null): MediaKind | 'other' {
+  switch ((collectionType ?? '').toLowerCase()) {
+    case 'movies':
+      return 'movie';
+    case 'tvshows':
+      return 'series';
+    case 'music':
+      return 'music';
+    case 'books':
+    case 'audiobooks':
+      return 'audiobook';
+    default:
+      return 'other';
+  }
+}
 
 export class MediaBrowserServerClient implements MediaServerClient {
   readonly kind: MediaBrowserKind;
@@ -150,7 +183,7 @@ export class MediaBrowserServerClient implements MediaServerClient {
       return {
         id: str(f['ItemId']) ?? str(f['Id']) ?? str(f['Name']) ?? '',
         name: str(f['Name']) ?? '',
-        type: collection === 'movies' ? 'movie' : collection === 'tvshows' ? 'series' : 'other',
+        type: mediaBrowserLibraryKind(collection),
         locations: list(f['Locations']).flatMap((l) => (typeof l === 'string' && l ? [l] : [])),
       };
     });
@@ -179,7 +212,7 @@ export class MediaBrowserServerClient implements MediaServerClient {
     if (!cached) {
       cached = this.paged('Items', {
         Recursive: 'true',
-        IncludeItemTypes: mediaType === 'movie' ? 'Movie' : 'Series',
+        IncludeItemTypes: ITEM_TYPE[mediaType],
         Fields: ITEM_FIELDS,
       }).then((rows) => rows.flatMap((r) => toItem(r) ?? []));
       // A failed listing must not poison the cache.
@@ -194,11 +227,15 @@ export class MediaBrowserServerClient implements MediaServerClient {
     if (query.tmdbId) filter.push(`Tmdb.${query.tmdbId}`);
     if (query.tvdbId) filter.push(`Tvdb.${query.tvdbId}`);
     if (query.imdbId) filter.push(`Imdb.${query.imdbId}`);
-    if (filter.length === 0) return [];
+    if (query.mbReleaseGroupId) filter.push(`MusicBrainzReleaseGroup.${query.mbReleaseGroupId}`);
+    if (query.mbArtistId) filter.push(`MusicBrainzAlbumArtist.${query.mbArtistId}`);
+    if (query.asin) filter.push(`Audible.${query.asin}`);
+    if (query.isbn) filter.push(`Isbn.${query.isbn}`);
+    if (filter.length === 0 || !queryHasIds(query)) return [];
     const body = rec(
       await this.get('Items', {
         Recursive: 'true',
-        IncludeItemTypes: query.mediaType === 'movie' ? 'Movie' : 'Series',
+        IncludeItemTypes: ITEM_TYPE[query.mediaType],
         AnyProviderIdEquals: filter.join(','),
         Fields: ITEM_FIELDS,
         Limit: '50',
@@ -213,7 +250,8 @@ export class MediaBrowserServerClient implements MediaServerClient {
   }
 
   async playState(item: Pick<MediaServerItem, 'id' | 'mediaType'>, userId: string): Promise<PlayState> {
-    if (item.mediaType === 'movie') {
+    if (item.mediaType !== 'series') {
+      // Movies, albums and books carry their own user data.
       const body = rec(await this.get(`Users/${encodeURIComponent(userId)}/Items/${encodeURIComponent(item.id)}`));
       return stateOf(userId, body);
     }
@@ -229,8 +267,8 @@ export class MediaBrowserServerClient implements MediaServerClient {
 
   async listPlayStates(userId: string, mediaType: MediaKind): Promise<ItemPlayState[]> {
     const userPath = `Users/${encodeURIComponent(userId)}/Items`;
-    if (mediaType === 'movie') {
-      const rows = await this.paged(userPath, { Recursive: 'true', IncludeItemTypes: 'Movie', Fields: ITEM_FIELDS, EnableUserData: 'true' });
+    if (mediaType !== 'series') {
+      const rows = await this.paged(userPath, { Recursive: 'true', IncludeItemTypes: ITEM_TYPE[mediaType], Fields: ITEM_FIELDS, EnableUserData: 'true' });
       return rows.flatMap((r) => {
         const item = toItem(r);
         return item ? [{ item, state: stateOf(userId, r) }] : [];
@@ -273,8 +311,8 @@ function isPresent(ep: Record<string, unknown>): boolean {
 }
 
 function toItem(r: Record<string, unknown>): MediaServerItem | null {
-  const type = r['Type'];
-  const mediaType: MediaKind | null = type === 'Movie' ? 'movie' : type === 'Series' ? 'series' : null;
+  const type = str(r['Type']);
+  const mediaType = (Object.keys(ITEM_TYPE) as MediaKind[]).find((k) => ITEM_TYPE[k] === type) ?? null;
   const id = str(r['Id']);
   if (!mediaType || !id) return null;
   return {

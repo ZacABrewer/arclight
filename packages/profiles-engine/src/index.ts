@@ -30,6 +30,11 @@ export {
 export {
   calculateFormatScore,
   compilePattern,
+  customFormatDomain,
+  customFormatDomains,
+  customFormatFitsDomain,
+  effectiveBitrateKbps,
+  specDomains,
   formatMatches,
   isValidPattern,
   matchCustomFormats,
@@ -38,6 +43,7 @@ export {
   specMatches,
   specMatchesRaw,
   validateCustomFormat,
+  type CustomFormatDomain,
   type SpecValidationIssue,
 } from './custom-format.js';
 
@@ -73,5 +79,7 @@ export {
   defaultDelayProfile,
   defaultQualityProfiles,
   defaultMusicProfiles,
+  defaultQualitySize,
+  DEFAULT_AUDIO_SIZES,
   qualitiesByWeight,
 } from './defaults.js';

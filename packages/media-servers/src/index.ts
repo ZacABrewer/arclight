@@ -14,9 +14,9 @@ import { PlexServerReadClient } from './plex.js';
 import { MEDIA_SERVER_KINDS, MediaServerError, type MediaServerClient, type MediaServerClientOptions, type MediaServerKind } from './types.js';
 
 export * from './types.js';
-export { MediaBrowserServerClient, mediaBrowserProviderIds, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions } from './media-browser.js';
-export { PlexServerReadClient, plexProviderIds, pathIsInside, normalisePath, PLEX_OWNER_ACCOUNT_ID, type PlexServerOptions } from './plex.js';
-export { normaliseBaseUrl } from './http.js';
+export { MediaBrowserServerClient, mediaBrowserProviderIds, mediaBrowserLibraryKind, ticksToMs, type MediaBrowserKind, type MediaBrowserServerOptions } from './media-browser.js';
+export { PlexServerReadClient, plexProviderIds, plexLibraryKind, pathIsInside, normalisePath, PLEX_OWNER_ACCOUNT_ID, type PlexServerOptions } from './plex.js';
+export { normaliseBaseUrl, idsMatchQuery } from './http.js';
 
 export function isMediaServerKind(value: unknown): value is MediaServerKind {
   return typeof value === 'string' && (MEDIA_SERVER_KINDS as readonly string[]).includes(value);

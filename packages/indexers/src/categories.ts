@@ -163,3 +163,29 @@ export function isTvCategory(id: number): boolean {
 export function isAnimeCategory(id: number): boolean {
   return id === Category.TVAnime;
 }
+
+/** Default music categories for a new indexer: Audio, Audio/MP3, Audio/Lossless. */
+export const DEFAULT_MUSIC_CATEGORIES: readonly number[] = [3000, 3010, 3040];
+/** Default audiobook categories for a new indexer: Audio/Audiobook. */
+export const DEFAULT_AUDIOBOOK_CATEGORIES: readonly number[] = [3030];
+
+const AUDIO_VIDEO = 3020;
+const AUDIOBOOK = 3030;
+
+/** Library a release's categories point at; `auto` when they are empty, mixed or unknown. */
+export type CategoryDomain = 'series' | 'movie' | 'music' | 'audiobook' | 'auto';
+
+/**
+ * Domain hint from a release's categories. Every id must agree: all TV (5xxx) is `series`,
+ * all Movies (2xxx) is `movie`. Audio: 3030 is `audiobook` (alongside the bare 3000 parent
+ * at most), any other 3xxx except Audio/Video (3020) is `music`. Anything else is `auto`.
+ */
+export function domainFromCategories(categories: readonly number[]): CategoryDomain {
+  if (categories.length === 0) return 'auto';
+  if (categories.every((c) => c >= 5000 && c < 6000)) return 'series';
+  if (categories.every((c) => c >= 2000 && c < 3000)) return 'movie';
+  if (!categories.every((c) => c >= 3000 && c < 4000 && c !== AUDIO_VIDEO)) return 'auto';
+  const book = categories.includes(AUDIOBOOK);
+  if (!book) return 'music';
+  return categories.every((c) => c === AUDIOBOOK || c === Category.Audio) ? 'audiobook' : 'auto';
+}

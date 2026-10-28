@@ -6,7 +6,9 @@ import { migrateLegacyMediaServer } from './legacy.js';
 export {
   MediaServersService,
   MediaServersError,
+  libraryKindsFor,
   type ConfiguredClient,
+  type RefreshPathInput,
   type MediaServerClientFactory,
   type MediaServerPurpose,
   type MediaServersServiceOptions,

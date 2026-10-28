@@ -9,7 +9,7 @@
  * episode present (leafCount) appears in that account's history.
  */
 
-import { emptyIds, idsMatchQuery, isoFromSeconds, joinUrl, laterOf, list, normaliseBaseUrl, num, rec, request, requestJson, str } from './http.js';
+import { emptyIds, idsMatchQuery, isoFromSeconds, joinUrl, laterOf, list, normaliseBaseUrl, num, queryHasIds, rec, request, requestJson, str } from './http.js';
 import type {
   FetchLike,
   FindItemsQuery,
@@ -39,9 +39,16 @@ export interface PlexServerOptions {
   clientIdentifier?: string;
 }
 
-/** Ids from a Plex item: the new agents' `Guid` array and/or a legacy agent `guid` string. */
+const MBID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Ids from a Plex item: the new agents' `Guid` array and/or a legacy agent `guid` string.
+ * Music agents report `mbid://<uuid>`: a release group on albums (`type` album), the artist
+ * on artists.
+ */
 export function plexProviderIds(item: Record<string, unknown>): ProviderIds {
   const out = emptyIds();
+  const type = str(item['type']);
   const apply = (guid: string): void => {
     const m = /^(?:com\.plexapp\.agents\.)?([a-z]+):\/\/([^/?#]+)/i.exec(guid);
     if (!m) return;
@@ -50,6 +57,11 @@ export function plexProviderIds(item: Record<string, unknown>): ProviderIds {
     if ((scheme === 'tmdb' || scheme === 'themoviedb') && /^\d+$/.test(value)) out.tmdbId ??= Number(value);
     else if ((scheme === 'tvdb' || scheme === 'thetvdb') && /^\d+$/.test(value)) out.tvdbId ??= Number(value);
     else if (scheme === 'imdb' && /^tt\d+$/i.test(value)) out.imdbId ??= value.toLowerCase();
+    else if ((scheme === 'mbid' || scheme === 'musicbrainz') && MBID.test(value)) {
+      if (type === 'artist') out.mbArtistId ??= value.toLowerCase();
+      else out.mbReleaseGroupId ??= value.toLowerCase();
+    } else if (scheme === 'audible' && /^[0-9A-Z]{10}$/i.test(value)) out.asin ??= value.toUpperCase();
+    else if (scheme === 'isbn') out.isbn ??= value.replace(/[\s-]/g, '').toUpperCase();
   };
   for (const g of list(item['Guid'])) {
     const id = str(rec(g)['id']);
@@ -91,6 +103,14 @@ interface HistoryEntry {
   type: string;
   viewedAt: string | null;
 }
+
+/** Plex section type to library kind (`artist` sections hold music, and audiobooks by path). */
+export function plexLibraryKind(type: string | null): MediaKind | 'other' {
+  return type === 'movie' ? 'movie' : type === 'show' ? 'series' : type === 'artist' ? 'music' : 'other';
+}
+
+/** Section kind a media kind lives in on Plex. */
+const plexSectionKind = (kind: MediaKind): MediaKind => (kind === 'audiobook' ? 'music' : kind);
 
 export class PlexServerReadClient implements MediaServerClient {
   readonly kind = 'plex' as const;
@@ -165,7 +185,7 @@ export class PlexServerReadClient implements MediaServerClient {
           return {
             id: str(d['key']) ?? '',
             name: str(d['title']) ?? '',
-            type: type === 'movie' ? 'movie' : type === 'show' ? 'series' : 'other',
+            type: plexLibraryKind(type),
             locations: list(d['Location']).flatMap((l) => {
               const p = str(rec(l)['path']);
               return p ? [p] : [];
@@ -199,7 +219,9 @@ export class PlexServerReadClient implements MediaServerClient {
         const sections = (await this.libraries()).filter((s) => s.type === mediaType);
         const rows: IndexedRow[] = [];
         for (const section of sections) {
-          const metadata = await this.pagedMetadata(`library/sections/${encodeURIComponent(section.id)}/all`, { includeGuids: '1' });
+          // Music items are albums (type 9); the default listing of an artist section is artists.
+          const query: Record<string, string> = mediaType === 'music' ? { includeGuids: '1', type: '9' } : { includeGuids: '1' };
+          const metadata = await this.pagedMetadata(`library/sections/${encodeURIComponent(section.id)}/all`, query);
           for (const raw of metadata) {
             const item = toItem(raw, mediaType, section.id);
             if (item) rows.push({ item, raw });
@@ -218,7 +240,7 @@ export class PlexServerReadClient implements MediaServerClient {
   }
 
   async findItems(query: FindItemsQuery): Promise<MediaServerItem[]> {
-    if (!query.tmdbId && !query.tvdbId && !query.imdbId) return [];
+    if (!queryHasIds(query)) return [];
     return (await this.listItems(query.mediaType)).filter((i) => idsMatchQuery(i.ids, query));
   }
 
@@ -255,9 +277,8 @@ export class PlexServerReadClient implements MediaServerClient {
   }
 
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {
-    const sections = (await this.libraries()).filter((s) =>
-      options.mediaType ? s.type === options.mediaType : s.type === 'movie' || s.type === 'series',
-    );
+    const wanted = options.mediaType ? plexSectionKind(options.mediaType) : undefined;
+    const sections = (await this.libraries()).filter((s) => (wanted ? s.type === wanted : s.type === 'movie' || s.type === 'series'));
     const path = options.path;
     const matching = path ? sections.filter((s) => s.locations.some((loc) => pathIsInside(path, loc))) : sections;
     // A path outside every section: let Plex rescan the candidate sections in full.

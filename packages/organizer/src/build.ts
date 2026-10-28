@@ -1,7 +1,7 @@
 // Name assembly (spec sections 4, 8, 10): episode/movie file names, series/season/movie folders,
 // and the UI preview samples.
 
-import type { MultiEpisodeStyle, NamingConfig, NamingSample, NamingSamples } from '@arclight/shared';
+import { formatHasToken, type MultiEpisodeStyle, type NamingConfig, type NamingSample, type NamingSamples } from '@arclight/shared';
 import {
   EPISODE_TITLE_TOKENS,
   addCustomFormatTokens,
@@ -14,6 +14,12 @@ import {
   addSeasonTokens,
   addSeriesTokens,
   addVersionTokens,
+  addAlbumTokens,
+  addArtistTokens,
+  addAuthorTokens,
+  addBookTokens,
+  addPartTokens,
+  addTrackTokens,
   normalizeTokenName,
   originalTitle,
   padNumber,
@@ -34,7 +40,20 @@ import {
   truncateBytes,
   type CleanOptions,
 } from './text.js';
-import type { NamingEpisode, NamingExtras, NamingFile, NamingMovie, NamingSeries } from './types.js';
+import type {
+  NamingAlbum,
+  NamingArtist,
+  NamingAuthor,
+  NamingBook,
+  NamingBookExtras,
+  NamingEpisode,
+  NamingExtras,
+  NamingFile,
+  NamingMovie,
+  NamingSeries,
+  NamingTrack,
+  NamingTrackExtras,
+} from './types.js';
 import { SAMPLES } from './samples.js';
 
 export class NamingFormatError extends Error {
@@ -360,6 +379,162 @@ export function buildMovieFolder(config: NamingConfig, movie: NamingMovie, extra
 }
 
 // ---------------------------------------------------------------------------------------
+// Music and audiobooks (docs/design/music-audiobooks.md 9.4)
+// ---------------------------------------------------------------------------------------
+
+/** Empty `()` / `[]` / `{}` left by a token with no value (`Album ()` when the year is unknown). */
+function stripEmptyBrackets(text: string): string {
+  return text.replace(/\s*(?:\(\s*\)|\[\s*\]|\{\s*\})/g, '').replace(/ {2,}/g, ' ');
+}
+
+function requireFormat(format: string, label: string): void {
+  if (!format.trim()) throw new NamingFormatError(`${label} cannot be empty`);
+}
+
+function requireToken(format: string, token: string, label: string): void {
+  if (!formatHasToken(format, token)) throw new NamingFormatError(`${label} must contain {${token}}`);
+}
+
+/** Folder path (one or more levels) from a format, each level cleaned like a movie folder. */
+function renderAudioFolder(format: string, h: TokenHandlers, clean: (v: string) => string, extras: NamingExtras): string {
+  const limit = extras.maxFileNameBytes ?? DEFAULT_MAX_FILE_NAME_BYTES;
+  return splitPath(format)
+    .map((seg) => {
+      const out = cleanupFolderComponent(stripEmptyBrackets(renderParts(parseFormat(seg, { escapes: true }), h, clean)));
+      return finalizeComponent(cleanupFolderComponent(truncateBytes(out, limit)));
+    })
+    .filter(Boolean)
+    .join(extras.pathSeparator ?? '/');
+}
+
+/** File name (sub-folders allowed) from a format; the extension is appended when given. */
+function renderAudioFile(format: string, h: TokenHandlers, clean: (v: string) => string, extras: NamingExtras): string {
+  const components = splitPath(format);
+  const rendered = components.map((component, index) => {
+    const isLast = index === components.length - 1;
+    const tidy = (text: string): string => (isLast ? cleanupFileComponent(text) : cleanupFolderComponent(text));
+    const parts = protectLiteralEllipsis(parseFormat(component, { escapes: true }));
+    const out = tidy(stripEmptyBrackets(renderParts(parts, h, clean)));
+    return finalizeComponent(tidy(truncateBytes(out, limits(extras, isLast))));
+  });
+  return withExtension(rendered.filter(Boolean).join(extras.pathSeparator ?? '/'), extras);
+}
+
+function addAudioFileTokens(h: TokenHandlers, file: NamingFile, extras: NamingExtras, format: string): void {
+  const fallbackAllowed = tokensOf(parseFormat(format, { escapes: true })).length === 1;
+  addFileTokens(h, file, fallbackAllowed, extras.releaseGroupFallback ?? DEFAULT_RELEASE_GROUP);
+  addQualityTokens(h, file, false);
+  if (file.mediaInfo) addMediaInfoTokens(h, file.mediaInfo, file.sceneName, false);
+  addCustomFormatTokens(h, extras.customFormats ?? []);
+}
+
+/** Artist folder name (relative to the music root folder). */
+export function buildArtistFolder(config: NamingConfig, artist: NamingArtist, extras: NamingExtras = {}): string {
+  requireFormat(config.artistFolderFormat, 'Artist folder format');
+  const h: TokenHandlers = new Map();
+  addArtistTokens(h, artist);
+  return renderAudioFolder(config.artistFolderFormat, h, cleanerFor(config, 'tv'), extras);
+}
+
+/** Album folder relative to the artist folder; a `/` in the format makes nested folders. */
+export function buildAlbumFolder(
+  config: NamingConfig,
+  artist: NamingArtist,
+  album: NamingAlbum,
+  extras: NamingExtras = {},
+): string {
+  requireFormat(config.albumFolderFormat, 'Album folder format');
+  const h: TokenHandlers = new Map();
+  addArtistTokens(h, artist);
+  addAlbumTokens(h, album);
+  return renderAudioFolder(config.albumFolderFormat, h, cleanerFor(config, 'tv'), extras);
+}
+
+/** The format a track is named with; the `subfolder` multi-disc style prepends `Disc {medium}/`. */
+export function trackFormatFor(config: NamingConfig, mediumCount = 1): string {
+  if (mediumCount <= 1) return config.trackFormat;
+  return config.multiDiscStyle === 'subfolder' ? `Disc {medium}/${config.trackFormat}` : config.multiDiscTrackFormat;
+}
+
+/**
+ * Track file name relative to the album folder: `01 - Title`, `1-01 - Title` (multi-disc
+ * `prefix`) or `Disc 1/01 - Title` (multi-disc `subfolder`). With `renameTracks` off the
+ * original name is kept. The extension is appended only when `extras.extension` is given.
+ */
+export function buildTrackFileName(
+  config: NamingConfig,
+  artist: NamingArtist,
+  album: NamingAlbum,
+  track: NamingTrack,
+  file: NamingFile,
+  extras: NamingTrackExtras = {},
+): string {
+  const clean = cleanerFor(config, 'tv');
+  if (!config.renameTracks) return withExtension(clean(originalTitle(file, true)), extras);
+  const prefixStyle = (extras.mediumCount ?? 1) > 1 && config.multiDiscStyle === 'prefix';
+  const base = prefixStyle ? config.multiDiscTrackFormat : config.trackFormat;
+  const label = prefixStyle ? 'Multi-disc track format' : 'Track format';
+  requireFormat(base, label);
+  requireToken(base, 'track', label);
+  if (prefixStyle) requireToken(base, 'medium', label);
+  const h: TokenHandlers = new Map();
+  addArtistTokens(h, artist);
+  addAlbumTokens(h, album);
+  addTrackTokens(h, track, artist);
+  addAudioFileTokens(h, file, extras, base);
+  return renderAudioFile(trackFormatFor(config, extras.mediumCount ?? 1), h, clean, extras);
+}
+
+/** Author folder name (relative to the audiobook root folder). */
+export function buildAuthorFolder(config: NamingConfig, author: NamingAuthor, extras: NamingExtras = {}): string {
+  requireFormat(config.authorFolderFormat, 'Author folder format');
+  const h: TokenHandlers = new Map();
+  addAuthorTokens(h, author);
+  return renderAudioFolder(config.authorFolderFormat, h, cleanerFor(config, 'tv'), extras);
+}
+
+/**
+ * Book folder relative to the author folder: `seriesBookFolderFormat` when the book has a
+ * series (`Series/Book 3 - Title`), else `bookFolderFormat`.
+ */
+export function buildBookFolder(config: NamingConfig, author: NamingAuthor, book: NamingBook, extras: NamingExtras = {}): string {
+  const series = Boolean(book.seriesTitle?.trim());
+  const format = series ? config.seriesBookFolderFormat : config.bookFolderFormat;
+  requireFormat(format, series ? 'Series book folder format' : 'Book folder format');
+  const h: TokenHandlers = new Map();
+  addAuthorTokens(h, author);
+  addBookTokens(h, book);
+  return renderAudioFolder(format, h, cleanerFor(config, 'tv'), extras);
+}
+
+/**
+ * Book file name relative to the book folder: `bookFileFormat` for a single file,
+ * `bookPartFormat` (`{Part:00} - Title`) when `extras.partCount` > 1. With `renameAudiobooks`
+ * off the original name is kept. The extension is appended only when `extras.extension` is given.
+ */
+export function buildBookFileName(
+  config: NamingConfig,
+  author: NamingAuthor,
+  book: NamingBook,
+  file: NamingFile,
+  extras: NamingBookExtras = {},
+): string {
+  const clean = cleanerFor(config, 'tv');
+  if (!config.renameAudiobooks) return withExtension(clean(originalTitle(file, true)), extras);
+  const parts = (extras.partCount ?? 1) > 1;
+  const format = parts ? config.bookPartFormat : config.bookFileFormat;
+  const label = parts ? 'Book part format' : 'Book file format';
+  requireFormat(format, label);
+  if (parts) requireToken(format, 'part', label);
+  const h: TokenHandlers = new Map();
+  addAuthorTokens(h, author);
+  addBookTokens(h, book);
+  addPartTokens(h, extras.part ?? 1);
+  addAudioFileTokens(h, file, extras, format);
+  return renderAudioFile(format, h, clean, extras);
+}
+
+// ---------------------------------------------------------------------------------------
 // Predicates (spec 1.2)
 // ---------------------------------------------------------------------------------------
 
@@ -397,7 +572,7 @@ function sample(render: () => string): NamingSample {
  * shows the formats even while renaming is disabled. No extension is appended.
  */
 export function getSamples(config: NamingConfig): NamingSamples {
-  const c: NamingConfig = { ...config, renameEpisodes: true, renameMovies: true };
+  const c: NamingConfig = { ...config, renameEpisodes: true, renameMovies: true, renameTracks: true, renameAudiobooks: true };
   const s = SAMPLES;
   return {
     singleEpisode: sample(() => buildEpisodeFileName(c, s.series, [s.episode1], s.file, s.extras)),
@@ -410,5 +585,14 @@ export function getSamples(config: NamingConfig): NamingSamples {
     specialsFolder: sample(() => buildSeasonFolder(c, s.series, 0)),
     movie: sample(() => buildMovieFileName(c, s.movie, s.movieFile, s.extras)),
     movieFolder: sample(() => buildMovieFolder(c, s.movie)),
+    artistFolder: sample(() => buildArtistFolder(c, s.artist)),
+    albumFolder: sample(() => buildAlbumFolder(c, s.artist, s.album)),
+    track: sample(() => buildTrackFileName(c, s.artist, s.album, s.track, s.trackFile)),
+    multiDiscTrack: sample(() => buildTrackFileName(c, s.artist, s.album, s.discTrack, s.trackFile, { mediumCount: 2 })),
+    authorFolder: sample(() => buildAuthorFolder(c, s.author)),
+    bookFolder: sample(() => buildBookFolder(c, s.author, s.book)),
+    seriesBookFolder: sample(() => buildBookFolder(c, s.author, s.seriesBook)),
+    bookFile: sample(() => buildBookFileName(c, s.author, s.seriesBook, s.bookFile)),
+    bookPart: sample(() => buildBookFileName(c, s.author, s.seriesBook, s.bookFile, { part: 1, partCount: 12 })),
   };
 }

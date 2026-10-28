@@ -6,13 +6,53 @@ import { parseLanguages } from './language.js';
 import { parseReleaseGroup } from './group.js';
 import { parseSeasonTitle } from './series.js';
 import { isHashedRelease } from './hash.js';
+import { parseAudioPath, parseMusicRelease } from './music.js';
 
 export interface FixtureCase {
   input: string;
   method?: string;
   parser?: string;
   upstream?: string;
-  expect: Record<string, unknown>;
+  /** Upstream-derived fixtures use `expect`; Arclight's own (music) fixtures use `expected`. */
+  expect?: Record<string, unknown>;
+  expected?: Record<string, unknown>;
+  /** A known miss: reported separately and left out of the pass rate. */
+  skip?: string;
+}
+
+export interface CaseResult {
+  ok: boolean;
+  problems: string[];
+  /** Set when the case is a known miss (`skip`); `ok` then says whether it now passes. */
+  skipped?: string;
+}
+
+const MUSIC_FIELDS = [
+  'artist', 'album', 'year', 'isVariousArtists', 'edition', 'releaseTypeHint', 'isDiscography', 'packType', 'albumCount',
+  'discographyYears', 'catalogNumber', 'media', 'discCount', 'featuring', 'scene', 'hasLog', 'logScore', 'hasCue',
+] as const;
+const AUDIO_FIELDS = ['codec', 'bitrateKbps', 'vbrPreset', 'bitDepth', 'sampleRateHz', 'detectionSource'] as const;
+
+/** Music fixtures: `parseMusicRelease`, or `parseAudioPath` for paths. Only listed fields are checked. */
+function checkMusicCase(c: FixtureCase): CaseResult {
+  const e = c.expected ?? c.expect ?? {};
+  const problems: string[] = [];
+  const path = c.parser === 'path' || /[\\/]/.test(c.input);
+  const r = path ? parseAudioPath(c.input, 'music') : parseMusicRelease(c.input);
+  const check = (name: string, actual: unknown) => {
+    if (name in e && !eq(e[name], actual)) problems.push(`${name}: expected ${JSON.stringify(e[name])}, got ${JSON.stringify(actual)}`);
+  };
+  if ('music' in e && e['music'] === null) {
+    if (r.music !== null) problems.push(`music: expected null, got ${JSON.stringify({ artist: r.music.artist, album: r.music.album })}`);
+  } else if (MUSIC_FIELDS.some((f) => f in e)) {
+    if (!r.music) problems.push('music: not parsed');
+    else for (const f of MUSIC_FIELDS) check(f, r.music[f]);
+  }
+  check('releaseGroup', r.releaseGroup);
+  for (const f of AUDIO_FIELDS) check(f, r.audio[f]);
+  check('quality', r.audio.quality.name);
+  const ok = problems.length === 0;
+  return c.skip ? { ok, problems, skipped: c.skip } : { ok, problems };
 }
 
 const RADARR_SOURCE_TO_OURS: Record<string, string[]> = {
@@ -38,9 +78,10 @@ function eq(a: unknown, b: unknown): boolean {
   return JSON.stringify(a) === JSON.stringify(b);
 }
 
-export function checkCase(file: string, c: FixtureCase): { ok: boolean; problems: string[] } {
+export function checkCase(file: string, c: FixtureCase): CaseResult {
+  if (file.startsWith('music')) return checkMusicCase(c);
   const problems: string[] = [];
-  const e = c.expect;
+  const e = c.expect ?? c.expected ?? {};
   // Roman numerals, slugs and ISO lookups belong to metadata/organizer, not the parser.
   if (typeof c.input !== 'string' || file.includes('roman') || file.includes('slug') || file.includes('iso-codes')) {
     return { ok: true, problems: [] };

@@ -1,9 +1,11 @@
-import { isMovieCategory, isTvCategory } from '../categories.js';
+import { DEFAULT_AUDIOBOOK_CATEGORIES, DEFAULT_MUSIC_CATEGORIES, isMovieCategory, isTvCategory } from '../categories.js';
 import {
   IndexerError,
+  type BookSearchRequest,
   type IndexerCapabilities,
   type IndexerDefinition,
   type MovieSearchRequest,
+  type MusicSearchRequest,
   type SearchModeCapabilities,
   type SearchRequest,
   type TvSearchRequest,
@@ -13,7 +15,7 @@ export type Flavor = 'torznab' | 'newznab';
 
 /** The `t=` function plus the request-specific parameters, before paging and auth are added. */
 export interface SearchPlan {
-  t: 'search' | 'tvsearch' | 'movie';
+  t: 'search' | 'tvsearch' | 'movie' | 'music' | 'book';
   params: Array<[string, string]>;
   categories: number[];
 }
@@ -70,7 +72,9 @@ function unique(ids: readonly number[]): number[] {
 
 /**
  * Categories per request kind: movie searches drop standard TV ids, TV searches drop
- * standard movie ids and add the anime categories; RSS and free-text use everything.
+ * standard movie ids and add the anime categories, music and book searches use their own
+ * lists (defaults when unset). RSS and free-text use everything configured, including the
+ * music/audiobook lists only when the definition carries them.
  */
 export function categoriesFor(def: IndexerDefinition, kind: SearchRequest['kind']): number[] {
   const anime = def.animeCategories ?? [];
@@ -79,8 +83,12 @@ export function categoriesFor(def: IndexerDefinition, kind: SearchRequest['kind'
       return unique(def.categories.filter((id) => !isTvCategory(id)));
     case 'tv':
       return unique([...def.categories.filter((id) => !isMovieCategory(id)), ...anime]);
+    case 'music':
+      return unique(def.musicCategories ?? DEFAULT_MUSIC_CATEGORIES);
+    case 'book':
+      return unique(def.audiobookCategories ?? DEFAULT_AUDIOBOOK_CATEGORIES);
     default:
-      return unique([...def.categories, ...anime]);
+      return unique([...def.categories, ...anime, ...(def.musicCategories ?? []), ...(def.audiobookCategories ?? [])]);
   }
 }
 
@@ -143,6 +151,10 @@ export function planSearch(
       return planTv(request, caps, flavor, categories);
     case 'movie':
       return planMovie(request, caps, flavor, categories);
+    case 'music':
+      return planMusic(request, caps, categories);
+    case 'book':
+      return planBook(request, caps, categories);
   }
 }
 
@@ -227,4 +239,65 @@ function planMovie(
 
   const q = query !== undefined && req.year !== undefined ? `${query} ${req.year}` : query;
   return fallbackTextSearch(q, caps, categories, 'movie');
+}
+
+/** Space-joined non-empty parts, or undefined. */
+function joined(...parts: Array<string | undefined>): string | undefined {
+  return nonEmpty(parts.map((p) => p?.trim() ?? '').filter(Boolean).join(' '));
+}
+
+function planMusic(req: MusicSearchRequest, caps: IndexerCapabilities, categories: number[]): SearchPlan {
+  const mode = caps.searching.musicSearch;
+  const query = nonEmpty(req.query);
+  const artist = nonEmpty(req.artist);
+  const album = nonEmpty(req.album);
+  const label = nonEmpty(req.label);
+
+  if (mode.available) {
+    const params: Array<[string, string]> = [];
+    // Unsupported structured fields fold into q so they still narrow the search.
+    const loose: Array<string | undefined> = [query];
+    if (artist) {
+      if (supports(mode, 'artist')) params.push(['artist', artist]);
+      else loose.push(artist);
+    }
+    if (album) {
+      if (supports(mode, 'album')) params.push(['album', album]);
+      else loose.push(album);
+    }
+    if (label && supports(mode, 'label')) params.push(['label', label]);
+    const q = joined(...loose);
+    if (q && supports(mode, 'q')) params.unshift(['q', q]);
+    if (params.length > 0) {
+      if (req.year !== undefined && supports(mode, 'year')) params.push(['year', String(req.year)]);
+      return { t: 'music', params, categories };
+    }
+  }
+
+  return fallbackTextSearch(query ?? joined(artist, album), caps, categories, 'music');
+}
+
+function planBook(req: BookSearchRequest, caps: IndexerCapabilities, categories: number[]): SearchPlan {
+  const mode = caps.searching.bookSearch;
+  const query = nonEmpty(req.query);
+  const author = nonEmpty(req.author);
+  const title = nonEmpty(req.title);
+
+  if (mode.available) {
+    const params: Array<[string, string]> = [];
+    const loose: Array<string | undefined> = [query];
+    if (author) {
+      if (supports(mode, 'author')) params.push(['author', author]);
+      else loose.push(author);
+    }
+    if (title) {
+      if (supports(mode, 'title')) params.push(['title', title]);
+      else loose.push(title);
+    }
+    const q = joined(...loose);
+    if (q && supports(mode, 'q')) params.unshift(['q', q]);
+    if (params.length > 0) return { t: 'book', params, categories };
+  }
+
+  return fallbackTextSearch(query ?? joined(author, title), caps, categories, 'book');
 }

@@ -9,6 +9,28 @@ import type { MediaTypeHint, ParsedRelease } from './types.js';
 
 export * from './types.js';
 export {
+  AUDIO_EXTENSIONS,
+  audioQualityFor,
+  codecFromExtension,
+  mergeAudioQuality,
+  parseAudioQuality,
+  readAudioFacts,
+  stripAudioExtension,
+  type AudioFacts,
+  type ParsedAudioQuality,
+} from './audio-quality.js';
+export {
+  musicAudioEvaluation,
+  musicReleaseKind,
+  parseAudioPath,
+  parseMusicRelease,
+  type MusicMedia,
+  type MusicPackType,
+  type MusicReleaseTypeHint,
+  type ParsedMusicInfo,
+  type ParsedMusicRelease,
+} from './music.js';
+export {
   parseQuality,
   parseRevision,
   parseSeries,

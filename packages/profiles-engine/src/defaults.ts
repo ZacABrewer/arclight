@@ -125,3 +125,53 @@ export function defaultDelayProfile(): Omit<DelayProfile, 'id'> {
     order: 1,
   };
 }
+
+// ---------------------------------------------------------------------------------------
+// Default size limits (MB per minute of audio). Video qualities ship without limits; audio
+// gets defaults because an album or book with the wrong size for its codec is a strong sign
+// of a mislabelled release. MB/min = kbps × 0.0075; the bands leave room for container and
+// artwork overhead. Checked against album duration or book runtime (design section 7.1).
+
+type SizeBand = { minSize: number; preferredSize: number; maxSize: number };
+
+export const DEFAULT_AUDIO_SIZES: Readonly<Partial<Record<QualityName, SizeBand>>> = {
+  // Music, lossy
+  'MP3-Low': { minSize: 0.3, preferredSize: 1.0, maxSize: 1.4 },
+  'MP3-192': { minSize: 1.2, preferredSize: 1.45, maxSize: 1.8 },
+  'MP3-VBR-V2': { minSize: 1.1, preferredSize: 1.45, maxSize: 2.0 },
+  'MP3-256': { minSize: 1.7, preferredSize: 1.95, maxSize: 2.2 },
+  'MP3-VBR-V0': { minSize: 1.4, preferredSize: 1.85, maxSize: 2.4 },
+  'MP3-320': { minSize: 2.2, preferredSize: 2.4, maxSize: 2.6 },
+  'AAC-Low': { minSize: 0.4, preferredSize: 1.0, maxSize: 1.5 },
+  'AAC-256': { minSize: 1.4, preferredSize: 1.95, maxSize: 2.3 },
+  'AAC-320': { minSize: 2.1, preferredSize: 2.4, maxSize: 2.7 },
+  Vorbis: { minSize: 0.5, preferredSize: 1.6, maxSize: 3.0 },
+  Opus: { minSize: 0.4, preferredSize: 1.2, maxSize: 2.5 },
+  // Music, lossless (16/44.1 PCM is 10.6 MB/min; FLAC/ALAC compress it to roughly half)
+  'Lossless-Other': { minSize: 3.5, preferredSize: 6, maxSize: 12 },
+  PCM: { minSize: 9, preferredSize: 10.6, maxSize: 70 },
+  ALAC: { minSize: 3.5, preferredSize: 6, maxSize: 12 },
+  FLAC: { minSize: 3.5, preferredSize: 6, maxSize: 12 },
+  'ALAC-24bit': { minSize: 8, preferredSize: 18, maxSize: 40 },
+  'FLAC-24bit': { minSize: 8, preferredSize: 18, maxSize: 40 },
+  // DSD64 stereo is about 42 MB/min; multichannel and DSD128+ go higher.
+  DSD: { minSize: 20, preferredSize: 45, maxSize: 200 },
+  // Audiobooks (speech, mostly mono or low-bitrate stereo)
+  'AB-MP3-Low': { minSize: 0.1, preferredSize: 0.3, maxSize: 0.5 },
+  'AB-AAC-Low': { minSize: 0.1, preferredSize: 0.25, maxSize: 0.5 },
+  'AB-MP3': { minSize: 0.4, preferredSize: 0.5, maxSize: 1.0 },
+  'AB-MP3-High': { minSize: 0.9, preferredSize: 1.0, maxSize: 2.5 },
+  'AB-Opus': { minSize: 0.1, preferredSize: 0.3, maxSize: 1.0 },
+  'AB-AAC': { minSize: 0.25, preferredSize: 0.6, maxSize: 1.5 },
+  'AB-Lossless': { minSize: 3, preferredSize: 6, maxSize: 12 },
+};
+
+const SIZE_BY_ID = new Map<number, SizeBand>(
+  Object.entries(DEFAULT_AUDIO_SIZES).map(([name, band]) => [QUALITIES[name as QualityName].id, band]),
+);
+
+/** Default limits for a quality definition (MB/min); all null for video and Unknown. */
+export function defaultQualitySize(qualityId: number): { minSize: number | null; preferredSize: number | null; maxSize: number | null } {
+  const band = SIZE_BY_ID.get(qualityId);
+  return band ? { ...band } : { minSize: null, preferredSize: null, maxSize: null };
+}

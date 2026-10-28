@@ -9,7 +9,7 @@
  */
 
 import { httpRequest, joinUrl, readJson, type FetchLike } from './http.js';
-import { NotificationError, type MediaType } from './types.js';
+import { NotificationError, type VideoMediaType as MediaType } from './types.js';
 
 export type MediaBrowserKind = 'jellyfin' | 'emby';
 

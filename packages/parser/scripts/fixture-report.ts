@@ -17,22 +17,32 @@ function walk(dir: string): string[] {
 
 let totalPass = 0;
 let totalCases = 0;
+let totalSkipped = 0;
 for (const file of walk(root)) {
   const rel = relative(root, file).replace(/\\/g, '/');
   if (filter && !rel.includes(filter)) continue;
   const data = JSON.parse(readFileSync(file, 'utf8')) as { cases: FixtureCase[] };
   let pass = 0;
   const failures: string[] = [];
+  const skipped: string[] = [];
   for (const c of data.cases) {
     const result = checkCase(rel, c);
+    if (result.skipped !== undefined) {
+      skipped.push(`    ${JSON.stringify(c.input)}: ${result.skipped}${result.ok ? ' (now passes: drop the skip)' : ''}`);
+      continue;
+    }
     if (result.ok) pass++;
     else failures.push(`    ${JSON.stringify(c.input)}\n      ${result.problems.join('\n      ')}`);
   }
+  // Known misses (`skip`) are listed but left out of the rate.
+  const counted = data.cases.length - skipped.length;
   totalPass += pass;
-  totalCases += data.cases.length;
-  const pct = ((pass / data.cases.length) * 100).toFixed(1).padStart(5);
-  console.log(`${pct}%  ${String(pass).padStart(4)}/${String(data.cases.length).padEnd(4)} ${rel}`);
+  totalCases += counted;
+  totalSkipped += skipped.length;
+  const pct = ((pass / counted) * 100).toFixed(1).padStart(5);
+  console.log(`${pct}%  ${String(pass).padStart(4)}/${String(counted).padEnd(4)} ${rel}${skipped.length ? `  (${skipped.length} skipped)` : ''}`);
   for (const f of showAll ? failures : failures.slice(0, 6)) console.log(f);
   if (!showAll && failures.length > 6) console.log(`    … ${failures.length - 6} more`);
+  if (skipped.length) console.log(`  skipped:\n${skipped.join('\n')}`);
 }
-console.log(`\nTOTAL ${totalPass}/${totalCases} (${((totalPass / totalCases) * 100).toFixed(1)}%)`);
+console.log(`\nTOTAL ${totalPass}/${totalCases} (${((totalPass / totalCases) * 100).toFixed(1)}%)${totalSkipped ? `, ${totalSkipped} skipped` : ''}`);

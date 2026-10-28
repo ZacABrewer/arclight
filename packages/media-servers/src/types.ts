@@ -7,13 +7,27 @@
 export const MEDIA_SERVER_KINDS = ['jellyfin', 'emby', 'plex'] as const;
 export type MediaServerKind = (typeof MEDIA_SERVER_KINDS)[number];
 
-/** What a library item is. Series are matched and evaluated as a whole. */
-export type MediaKind = 'movie' | 'series';
+/**
+ * What a library (or item) holds. Series are matched and evaluated as a whole; music items are
+ * albums; audiobook items are books.
+ */
+export type MediaKind = 'movie' | 'series' | 'music' | 'audiobook';
+
+/** The video kinds (retention, TMDB-keyed availability). */
+export type VideoMediaKind = Extract<MediaKind, 'movie' | 'series'>;
+export const VIDEO_KINDS: readonly VideoMediaKind[] = ['movie', 'series'];
 
 export interface ProviderIds {
   tmdbId: number | null;
   tvdbId: number | null;
   imdbId: string | null;
+  /** MusicBrainz release-group id (music albums). Present only when the server reports one. */
+  mbReleaseGroupId?: string | null;
+  /** MusicBrainz artist id (album artist for albums). */
+  mbArtistId?: string | null;
+  /** Audible ASIN (audiobooks). */
+  asin?: string | null;
+  isbn?: string | null;
 }
 
 export interface ServerInfo {
@@ -28,7 +42,11 @@ export interface MediaServerLibrary {
   /** Jellyfin/Emby ItemId of the folder, Plex section key. */
   id: string;
   name: string;
-  /** `other` for music, photos, mixed folders. */
+  /**
+   * Jellyfin/Emby `movies`/`tvshows`/`music`/`books`; Plex `movie`/`show`/`artist`. Plex has no
+   * audiobook type: audiobooks sit in `artist` (music) sections and the path decides. `other`
+   * for photos, mixed folders and anything else.
+   */
   type: MediaKind | 'other';
   /** Folders on disk as the server sees them. */
   locations: string[];
@@ -86,12 +104,19 @@ export interface FindItemsQuery {
   tmdbId?: number | null;
   tvdbId?: number | null;
   imdbId?: string | null;
+  mbReleaseGroupId?: string | null;
+  mbArtistId?: string | null;
+  asin?: string | null;
+  isbn?: string | null;
 }
 
 export interface RefreshOptions {
   /** Folder (or file) that changed; without it the whole library is refreshed. */
   path?: string;
-  /** Limits a Plex refresh to sections of this type. */
+  /**
+   * Limits a Plex refresh to sections of this type (`audiobook` looks in music sections).
+   * Without it Plex considers movie and show sections only.
+   */
   mediaType?: MediaKind;
   /** Jellyfin/Emby partial refresh: what happened to `path`. Default `Modified`. */
   updateType?: 'Created' | 'Modified' | 'Deleted';

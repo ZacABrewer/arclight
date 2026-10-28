@@ -208,9 +208,13 @@ describe('CRUD and validation', () => {
   it('rejects priority outside 1..50 and empty categories', () => {
     expect(() => service.create(input('P', { priority: 51 }))).toThrow(expect.objectContaining({ code: 'VALIDATION' }));
     expect(() => service.create(input('P', { priority: 0 }))).toThrow(expect.objectContaining({ code: 'VALIDATION' }));
-    expect(() => service.create(input('C', { settings: { baseUrl: 'http://c.test', categories: [] } }))).toThrow(
-      expect.objectContaining({ code: 'VALIDATION' }),
-    );
+    expect(() =>
+      service.create(
+        input('C', {
+          settings: { baseUrl: 'http://c.test', categories: [], musicCategories: [], audiobookCategories: [] },
+        }),
+      ),
+    ).toThrow(expect.objectContaining({ code: 'VALIDATION' }));
   });
 
   it('normalizes baseUrl and apiPath', () => {

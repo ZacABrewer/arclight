@@ -25,7 +25,35 @@ export const DEFAULT_NAMING_FORMATS = {
   specialsFolderFormat: 'Specials',
   movieFormat: '{Movie Title} ({Release Year}) {Quality Full}',
   movieFolderFormat: '{Movie Title} ({Release Year})',
+  artistFolderFormat: '{Artist Name}',
+  albumFolderFormat: '{Album Title} ({Release Year})',
+  trackFormat: '{track:00} - {Track Title}',
+  multiDiscTrackFormat: '{medium:0}-{track:00} - {Track Title}',
+  authorFolderFormat: '{Author Name}',
+  seriesBookFolderFormat: '{Series Title}/Book {Series Position} - {Book Title}',
+  bookFolderFormat: '{Book Title}',
+  bookFileFormat: '{Book Title}',
+  bookPartFormat: '{Part:00} - {Book Title}',
 } as const;
+
+/**
+ * Albums with more than one medium: `prefix` names files with `multiDiscTrackFormat`
+ * (`1-01 - Title`), `subfolder` puts each disc in `Disc {medium}/` and names files with
+ * `trackFormat`.
+ */
+export const MultiDiscStyle = z.enum(['prefix', 'subfolder']);
+export type MultiDiscStyle = z.infer<typeof MultiDiscStyle>;
+
+/** True when `format` contains `{name}` or `{name:<zeros>}` (any case, spaces allowed). */
+export function formatHasToken(format: string, name: string): boolean {
+  return new RegExp(String.raw`\{\s*${name}\s*(?::0*)?\s*\}`, 'i').test(format);
+}
+
+const nonEmpty = (label: string) => z.string().refine((s) => s.trim().length > 0, { message: `${label} cannot be empty` });
+const withTokens = (label: string, tokens: readonly string[]) =>
+  nonEmpty(label).refine((s) => tokens.every((t) => formatHasToken(s, t)), {
+    message: `${label} must contain ${tokens.map((t) => `{${t}}`).join(' and ')}`,
+  });
 
 const ILLEGAL_IN_COLON_TEXT = /[:\\/<>?*|"]/;
 
@@ -55,6 +83,24 @@ export const NamingConfig = z.object({
    * in a `<tag>` sub-folder of the series/season or movie folder.
    */
   versionLayout: z.enum(['sideBySide', 'subfolder']).optional(),
+
+  // ---- music (docs/design/music-audiobooks.md 9.4) ----
+  renameTracks: z.boolean().default(false),
+  artistFolderFormat: nonEmpty('Artist folder format').default(DEFAULT_NAMING_FORMATS.artistFolderFormat),
+  albumFolderFormat: nonEmpty('Album folder format').default(DEFAULT_NAMING_FORMATS.albumFolderFormat),
+  trackFormat: withTokens('Track format', ['track']).default(DEFAULT_NAMING_FORMATS.trackFormat),
+  multiDiscTrackFormat: withTokens('Multi-disc track format', ['medium', 'track']).default(
+    DEFAULT_NAMING_FORMATS.multiDiscTrackFormat,
+  ),
+  multiDiscStyle: MultiDiscStyle.default('prefix'),
+
+  // ---- audiobooks ----
+  renameAudiobooks: z.boolean().default(false),
+  authorFolderFormat: nonEmpty('Author folder format').default(DEFAULT_NAMING_FORMATS.authorFolderFormat),
+  seriesBookFolderFormat: nonEmpty('Series book folder format').default(DEFAULT_NAMING_FORMATS.seriesBookFolderFormat),
+  bookFolderFormat: nonEmpty('Book folder format').default(DEFAULT_NAMING_FORMATS.bookFolderFormat),
+  bookFileFormat: nonEmpty('Book file format').default(DEFAULT_NAMING_FORMATS.bookFileFormat),
+  bookPartFormat: withTokens('Book part format', ['part']).default(DEFAULT_NAMING_FORMATS.bookPartFormat),
 });
 export type NamingConfig = z.infer<typeof NamingConfig>;
 export type NamingConfigInput = z.input<typeof NamingConfig>;
@@ -81,5 +127,15 @@ export const NamingSamples = z.object({
   specialsFolder: NamingSample,
   movie: NamingSample,
   movieFolder: NamingSample,
+  // Music and audiobooks (docs/design/music-audiobooks.md 9.4).
+  artistFolder: NamingSample,
+  albumFolder: NamingSample,
+  track: NamingSample,
+  multiDiscTrack: NamingSample,
+  authorFolder: NamingSample,
+  bookFolder: NamingSample,
+  seriesBookFolder: NamingSample,
+  bookFile: NamingSample,
+  bookPart: NamingSample,
 });
 export type NamingSamples = z.infer<typeof NamingSamples>;

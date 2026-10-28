@@ -119,3 +119,73 @@ export interface NamingExtras {
   /** Joins path components. Default `/`. */
   pathSeparator?: string;
 }
+
+// ---------------------------------------------------------------------------------------
+// Music (docs/design/music-audiobooks.md 9.4)
+// ---------------------------------------------------------------------------------------
+
+export interface NamingArtist {
+  name: string;
+  /** MusicBrainz disambiguation comment, for `{Artist Disambiguation}`. */
+  disambiguation?: Opt<string>;
+  mbArtistId?: Opt<string>;
+}
+
+export interface NamingAlbum {
+  title: string;
+  /** Primary type: `Album`, `EP`, `Single`, `Compilation`, `Live`... */
+  albumType?: Opt<string>;
+  /** `YYYY`, `YYYY-MM` or `YYYY-MM-DD`; `{Release Year}` takes the year from it. */
+  releaseDate?: Opt<string>;
+  /** Used when `releaseDate` is absent. */
+  year?: Opt<number>;
+  disambiguation?: Opt<string>;
+  mbReleaseGroupId?: Opt<string>;
+}
+
+export interface NamingTrack {
+  title: string;
+  /** Position on its medium, 1-based. */
+  trackNumber: number;
+  /** Disc number, 1-based. Default 1. */
+  mediumNumber?: Opt<number>;
+  /** Track artist when it differs from the album artist (features, compilations). */
+  artistName?: Opt<string>;
+}
+
+export interface NamingTrackExtras extends NamingExtras {
+  /**
+   * Media on the selected release. Above 1 the multi-disc style applies (`prefix` format or
+   * `Disc {medium}/` sub-folder). Default 1.
+   */
+  mediumCount?: number;
+}
+
+// ---------------------------------------------------------------------------------------
+// Audiobooks (docs/design/music-audiobooks.md 9.4)
+// ---------------------------------------------------------------------------------------
+
+export interface NamingAuthor {
+  name: string;
+}
+
+export interface NamingBook {
+  title: string;
+  subtitle?: Opt<string>;
+  /** Series the book belongs to; picks `seriesBookFolderFormat` over `bookFolderFormat`. */
+  seriesTitle?: Opt<string>;
+  /** `3`, `3.5`, `1-2`. Integers honour a padding modifier (`{Series Position:00}`). */
+  seriesPosition?: Opt<string | number>;
+  /** First narrator is `{Narrator}`; `{Narrators}` joins them all. */
+  narrators?: Opt<readonly string[]>;
+  /** `YYYY...` publish date; `{Release Year}`. */
+  releaseDate?: Opt<string>;
+  year?: Opt<number>;
+}
+
+export interface NamingBookExtras extends NamingExtras {
+  /** 1-based part of a multi-file book, for `{Part}`. */
+  part?: number;
+  /** Files in the book. Above 1 `bookPartFormat` is used. Default 1. */
+  partCount?: number;
+}

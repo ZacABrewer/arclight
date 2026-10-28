@@ -13,7 +13,7 @@ export * from './types.js';
 export * from './categories.js';
 export { createRateLimiter } from './rate-limit.js';
 import { createRateLimiter, defaultSleep } from './rate-limit.js';
-export { buildCapsUrl, buildSearchUrl, planSearch, redactUrl, type SearchPlan } from './newznab-common/index.js';
+export { buildCapsUrl, buildSearchUrl, categoriesFor, planSearch, redactUrl, type SearchPlan } from './newznab-common/index.js';
 export { torznab, newznab };
 export * from './proxy.js';
 export * from './definitions/index.js';

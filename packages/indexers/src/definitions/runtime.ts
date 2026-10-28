@@ -301,6 +301,26 @@ export function queryVariables(request: DefinitionSearchRequest): TemplateVars {
         set('IMDBIDShort', digits);
       }
       break;
+    case 'music': {
+      set('Type', 'music');
+      set('Artist', request.artist?.trim());
+      set('Album', request.album?.trim());
+      set('Label', request.label?.trim());
+      year = request.year;
+      set('Year', year);
+      // Sites without structured music search see "{artist} {album}" as the query.
+      const q = request.query?.trim() || [request.artist, request.album].map((p) => p?.trim() ?? '').filter(Boolean).join(' ');
+      set('Q', q);
+      break;
+    }
+    case 'book': {
+      set('Type', 'book');
+      set('Author', request.author?.trim());
+      set('Title', request.title?.trim());
+      const q = request.query?.trim() || [request.author, request.title].map((p) => p?.trim() ?? '').filter(Boolean).join(' ');
+      set('Q', q);
+      break;
+    }
   }
   const q = vars['Query.Q'];
   const keywords = [typeof q === 'string' ? q : '', year === undefined ? '' : String(year), episode ?? '']

@@ -5,6 +5,8 @@
  */
 
 import type {
+  AlbumInfo,
+  BookInfo,
   EpisodeInfo,
   MediaInfo,
   NotificationEvent,
@@ -116,8 +118,38 @@ export function episodeTitles(episodes: readonly EpisodeInfo[] | undefined): str
   return episodes.map((e) => e.title).filter((t) => t.length > 0).join(' + ');
 }
 
-/** "Title (Year) - S01E02 - Episode Title" or "Title (Year)" for movies. */
-export function mediaHeadline(media: MediaInfo, episodes?: readonly EpisodeInfo[]): string {
+/** Extra context for music/audiobook headlines. */
+export interface AudioContext {
+  album?: AlbumInfo | undefined;
+  book?: BookInfo | undefined;
+  /** Quality shown in brackets: "Artist – Album [FLAC]". */
+  quality?: string | undefined;
+}
+
+/** "Artist – Album [FLAC]" (album and quality when known). */
+export function musicHeadline(media: MediaInfo, ctx: AudioContext = {}): string {
+  const head = ctx.album?.title ? `${media.title} – ${ctx.album.title}` : media.title;
+  return ctx.quality ? `${head} [${ctx.quality}]` : head;
+}
+
+/** "Author – Title (narrated by X)" (narrators joined with "and"). */
+export function audiobookHeadline(media: MediaInfo, ctx: AudioContext = {}): string {
+  const book = ctx.book;
+  if (!book) return media.title;
+  const narrators = book.narrators.filter((n) => n.trim().length > 0);
+  const by = narrators.length > 0 ? ` (narrated by ${joinNames(narrators)})` : '';
+  return `${media.title} – ${book.title}${by}`;
+}
+
+function joinNames(names: readonly string[]): string {
+  if (names.length <= 1) return names[0] ?? '';
+  return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+}
+
+/** "Title (Year) - S01E02 - Episode Title", "Title (Year)" for movies, "Artist – Album [FLAC]" for music. */
+export function mediaHeadline(media: MediaInfo, episodes?: readonly EpisodeInfo[], audio: AudioContext = {}): string {
+  if (media.mediaType === 'music') return musicHeadline(media, audio);
+  if (media.mediaType === 'audiobook') return audiobookHeadline(media, audio);
   const parts = [mediaLabel(media)];
   const label = episodeLabel(episodes);
   if (label) parts.push(label);
@@ -126,11 +158,17 @@ export function mediaHeadline(media: MediaInfo, episodes?: readonly EpisodeInfo[
   return parts.join(' - ');
 }
 
-export function mediaLink(media: MediaInfo, applicationUrl?: string): string | undefined {
-  if (applicationUrl) {
-    const base = applicationUrl.replace(/\/+$/, '');
-    return `${base}/${media.mediaType === 'series' ? 'series' : 'movies'}/${media.id}`;
+export function mediaLink(media: MediaInfo, applicationUrl?: string, audio: AudioContext = {}): string | undefined {
+  const base = applicationUrl?.replace(/\/+$/, '');
+  if (media.mediaType === 'music') {
+    if (!base) return undefined;
+    return audio.album ? `${base}/library/music/album/${audio.album.id}` : `${base}/library/music/artist/${media.id}`;
   }
+  if (media.mediaType === 'audiobook') {
+    if (!base) return undefined;
+    return audio.book ? `${base}/library/audiobooks/book/${audio.book.id}` : `${base}/library/audiobooks/author/${media.id}`;
+  }
+  if (base) return `${base}/${media.mediaType === 'series' ? 'series' : 'movies'}/${media.id}`;
   if (media.tmdbId > 0) {
     return `https://www.themoviedb.org/${media.mediaType === 'series' ? 'tv' : 'movie'}/${media.tmdbId}`;
   }
@@ -144,8 +182,37 @@ export function imageUrl(media: MediaInfo, coverType: 'poster' | 'fanart'): stri
 
 function noun(media: MediaInfo | undefined, episodes: readonly EpisodeInfo[] | undefined): string {
   if (!media) return 'Download';
-  if (media.mediaType === 'movie') return 'Movie';
-  return episodes && episodes.length > 0 ? 'Episode' : 'Series';
+  switch (media.mediaType) {
+    case 'movie':
+      return 'Movie';
+    case 'music':
+      return 'Album';
+    case 'audiobook':
+      return 'Audiobook';
+    case 'series':
+      return episodes && episodes.length > 0 ? 'Episode' : 'Series';
+  }
+}
+
+/** The library item itself: "Series", "Movie", "Artist", "Author". */
+function itemNoun(media: MediaInfo): string {
+  switch (media.mediaType) {
+    case 'movie':
+      return 'Movie';
+    case 'music':
+      return 'Artist';
+    case 'audiobook':
+      return 'Author';
+    case 'series':
+      return 'Series';
+  }
+}
+
+/** What a request is for: albums and books are requested, not artists or authors. */
+function requestNoun(media: MediaInfo): string {
+  if (media.mediaType === 'music') return 'Album';
+  if (media.mediaType === 'audiobook') return 'Audiobook';
+  return itemNoun(media);
 }
 
 export function eventSubject(event: NotificationEvent): string {
@@ -159,11 +226,11 @@ export function eventSubject(event: NotificationEvent): string {
     case 'upgrade':
       return `${noun(event.media, event.episodes)} Upgraded`;
     case 'rename':
-      return `${event.media.mediaType === 'movie' ? 'Movie' : 'Series'} Renamed`;
+      return `${itemNoun(event.media)} Renamed`;
     case 'mediaAdded':
-      return `${event.media.mediaType === 'movie' ? 'Movie' : 'Series'} Added`;
+      return `${itemNoun(event.media)} Added`;
     case 'mediaDeleted':
-      return `${event.media.mediaType === 'movie' ? 'Movie' : 'Series'} Deleted`;
+      return `${itemNoun(event.media)} Deleted`;
     case 'fileDeleted':
       return `${noun(event.media, event.episodes)} File Deleted`;
     case 'healthIssue':
@@ -177,7 +244,7 @@ export function eventSubject(event: NotificationEvent): string {
     case 'subtitleDownloaded':
       return 'Subtitle Downloaded';
     case 'requestCreated':
-      return `${event.media.mediaType === 'movie' ? 'Movie' : 'Series'} Requested`;
+      return `${requestNoun(event.media)} Requested`;
     case 'requestApproved':
       return 'Request Approved';
     case 'requestAvailable':
@@ -370,9 +437,10 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
 
   const media = 'media' in event ? event.media : undefined;
   const episodes = 'episodes' in event ? event.episodes : undefined;
+  const audio = audioContextOf(event);
   if (media) {
-    title = mediaHeadline(media, episodes);
-    link = mediaLink(media, event.applicationUrl);
+    title = mediaHeadline(media, episodes, audio);
+    link = mediaLink(media, event.applicationUrl, audio);
     posterUrl = imageUrl(media, 'poster');
     fanartUrl = imageUrl(media, 'fanart');
   }
@@ -696,6 +764,8 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
     }
   }
 
+  if (media) fields.push(...audioFields(event));
+
   if (media?.overview && (event.type === 'grab' || event.type === 'mediaAdded' || event.type.startsWith('request'))) {
     fields.push({ name: 'Overview', value: truncate(media.overview, 300) });
   }
@@ -711,6 +781,50 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
   if (actions.length > 0) result.actions = actions;
   if (person) result.person = person;
   return result;
+}
+
+/** Album/book and the quality to bracket, for music and audiobook headlines. */
+export function audioContextOf(event: NotificationEvent): AudioContext {
+  if (!('media' in event) || !event.media) return {};
+  if (event.media.mediaType !== 'music' && event.media.mediaType !== 'audiobook') return {};
+  const quality =
+    'file' in event && event.file
+      ? event.file.quality
+      : 'release' in event && event.release
+        ? event.release.quality
+        : undefined;
+  const ctx: AudioContext = {};
+  if ('album' in event && event.album) ctx.album = event.album;
+  if ('book' in event && event.book) ctx.book = event.book;
+  // The quality bracket is for grabs and imports ("Artist – Album [FLAC]").
+  if (quality && (event.type === 'grab' || event.type === 'import' || event.type === 'upgrade')) ctx.quality = quality;
+  return ctx;
+}
+
+/** Track list (music) and narrator/series lines (audiobooks). */
+function audioFields(event: NotificationEvent): FormattedField[] {
+  const out: FormattedField[] = [];
+  if (!('media' in event) || !event.media) return out;
+  if (event.media.mediaType === 'music') {
+    const tracks = 'tracks' in event ? (event.tracks ?? []) : [];
+    if (tracks.length > 0) {
+      const sorted = [...tracks].sort((a, b) => a.mediumNumber - b.mediumNumber || a.trackNumber - b.trackNumber);
+      const multi = new Set(sorted.map((t) => t.mediumNumber)).size > 1;
+      const lines = sorted.slice(0, 15).map((t) => `${multi ? `${t.mediumNumber}-` : ''}${pad2(t.trackNumber)} ${t.title}`);
+      if (sorted.length > lines.length) lines.push(`...and ${sorted.length - lines.length} more`);
+      out.push({ name: sorted.length === 1 ? 'Track' : `Tracks (${sorted.length})`, value: lines.join('\n') });
+    }
+    const album = 'album' in event ? event.album : undefined;
+    if (album?.albumType) out.push({ name: 'Type', value: album.albumType, inline: true });
+    if (album?.releaseDate) out.push({ name: 'Released', value: album.releaseDate.slice(0, 10), inline: true });
+  } else if (event.media.mediaType === 'audiobook') {
+    const book = 'book' in event ? event.book : undefined;
+    if (book?.seriesTitle) {
+      out.push({ name: 'Series', value: book.seriesPosition ? `${book.seriesTitle} #${book.seriesPosition}` : book.seriesTitle, inline: true });
+    }
+    if (book?.runtimeMs) out.push({ name: 'Runtime', value: formatDuration(book.runtimeMs), inline: true });
+  }
+  return out;
 }
 
 function personOf(user: { username: string; avatar?: string }): NonNullable<FormattedEvent['person']> {

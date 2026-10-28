@@ -1,6 +1,8 @@
 import { z } from 'zod';
 import {
+  AudioCodec,
   AudioQualityDescriptor,
+  AudioVbrPreset,
   MediaDomain,
   QualityMediaType,
   QualityModel,
@@ -15,7 +17,8 @@ import {
 // logic lives in @arclight/profiles-engine; these are the shapes it speaks and the API
 // serves.
 
-export const EvaluationMediaType = z.enum(['series', 'movie']);
+/** What a release is being evaluated for. Spec definitions list the media types they apply to. */
+export const EvaluationMediaType = z.enum(['series', 'movie', 'music', 'audiobook']);
 export type EvaluationMediaType = z.infer<typeof EvaluationMediaType>;
 
 export const ReleaseProtocol = z.enum(['usenet', 'torrent']);
@@ -34,8 +37,13 @@ export const ReleaseIndexerFlag = z.enum([
 ]);
 export type ReleaseIndexerFlag = z.infer<typeof ReleaseIndexerFlag>;
 
-/** Single episode, several episodes in one file, or a whole season. Movies are always `single`. */
-export const ReleaseKind = z.enum(['single', 'multi', 'seasonPack']);
+/**
+ * Single episode, several episodes in one file, or a whole season. Movies are always `single`.
+ * Audio: a single album is `single`; `discography` is an artist's catalogue (or a year range of
+ * it), `multiAlbum` a fixed set of albums ("5 Albums", "The Albums Collection"), `bookPack`
+ * several audiobooks in one release.
+ */
+export const ReleaseKind = z.enum(['single', 'multi', 'seasonPack', 'discography', 'multiAlbum', 'bookPack']);
 export type ReleaseKind = z.infer<typeof ReleaseKind>;
 
 /** Extra material (not the feature/episode itself) detected in a release title. */
@@ -149,6 +157,21 @@ export const QualityProfile = QualityProfileInput.extend({ id: z.number().int().
 export type QualityProfile = z.infer<typeof QualityProfile>;
 
 // ---------------------------------------------------------------------------------------
+// Audio vocabulary used by custom formats and release evaluation
+
+/** Where an album was ripped or bought from, as custom formats see it. */
+export const AudioSourceKind = z.enum(['cd', 'web', 'vinyl', 'sacd', 'cassette', 'other']);
+export type AudioSourceKind = z.infer<typeof AudioSourceKind>;
+
+/** Audiobooks: one file for the whole book, or one file per chapter/part. */
+export const AudioFileLayout = z.enum(['single', 'multi']);
+export type AudioFileLayout = z.infer<typeof AudioFileLayout>;
+
+/** Audiobooks: how the text was performed. */
+export const AudiobookFormatType = z.enum(['unabridged', 'abridged', 'dramatized']);
+export type AudiobookFormatType = z.infer<typeof AudiobookFormatType>;
+
+// ---------------------------------------------------------------------------------------
 // Custom formats
 
 const regexFields = z.object({ pattern: z.string().min(1) });
@@ -244,6 +267,82 @@ export const CustomFormatSpec = z.discriminatedUnion('implementation', [
     /** Empty `kinds` matches any extra material. */
     fields: z.object({ kinds: z.array(ReleaseExtraKind).default([]) }),
   }),
+  // ---- audio (music + audiobooks). Evaluate false when the release has no `audio` block.
+  z.object({
+    implementation: z.literal('audioCodec'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    fields: z.object({ codec: AudioCodec }),
+  }),
+  z.object({
+    implementation: z.literal('audioBitrate'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    /** Inclusive kbps band. VBR presets without a stated bitrate use the preset's nominal rate. */
+    fields: z.object({ minKbps: z.number().min(0), maxKbps: z.number().positive() }),
+  }),
+  z.object({
+    implementation: z.literal('bitDepth'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    fields: z.object({ bitDepth: z.union([z.literal(16), z.literal(24), z.literal(32)]) }),
+  }),
+  z.object({
+    implementation: z.literal('sampleRate'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    /** Inclusive kHz band (44.1, 48, 96, 192 ...). */
+    fields: z.object({ minKhz: z.number().min(0), maxKhz: z.number().positive() }),
+  }),
+  z.object({
+    implementation: z.literal('audioSource'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    fields: z.object({ source: AudioSourceKind }),
+  }),
+  z.object({
+    implementation: z.literal('ripLog'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    /**
+     * Every set condition must hold. `minScore` > 0 implies a log. With nothing set the spec
+     * matches any release that ships a log or a cue sheet.
+     */
+    fields: z.object({
+      requireLog: z.boolean().default(false),
+      minScore: z.number().min(0).max(100).default(0),
+      requireCue: z.boolean().default(false),
+    }),
+  }),
+  // ---- audiobooks: defined now so the union is complete; evaluated from wave 3 on.
+  z.object({
+    implementation: z.literal('fileLayout'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    fields: z.object({ layout: AudioFileLayout }),
+  }),
+  z.object({
+    implementation: z.literal('formatType'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    fields: z.object({ formatType: AudiobookFormatType }),
+  }),
+  z.object({
+    implementation: z.literal('narrator'),
+    name: z.string().min(1),
+    negate: z.boolean().default(false),
+    required: z.boolean().default(false),
+    /** Matched against each narrator name, case-insensitive. */
+    fields: regexFields,
+  }),
 ]);
 export type CustomFormatSpec = z.infer<typeof CustomFormatSpec>;
 export type CustomFormatSpecImplementation = CustomFormatSpec['implementation'];
@@ -285,6 +384,28 @@ export type SpecImplementationDefinition = z.infer<typeof SpecImplementationDefi
 // ---------------------------------------------------------------------------------------
 // Release evaluation input (the normalized view of a release the engine scores)
 
+/**
+ * The audio side of a release, built from the parsed music (or audiobook) info. Audio specs
+ * evaluate false when a release has none.
+ */
+export const ReleaseAudioEvaluation = z.object({
+  codec: AudioCodec,
+  bitrateKbps: z.number().min(0).optional(),
+  vbrPreset: AudioVbrPreset.optional(),
+  bitDepth: z.number().int().min(1).optional(),
+  sampleRateHz: z.number().int().min(1).optional(),
+  source: AudioSourceKind.optional(),
+  hasLog: z.boolean().default(false),
+  /** Rip log score 0-100 when the release states one. */
+  logScore: z.number().min(0).max(100).optional(),
+  hasCue: z.boolean().default(false),
+  /** Audiobooks (wave 3). */
+  fileLayout: AudioFileLayout.optional(),
+  formatType: AudiobookFormatType.optional(),
+  narrators: z.array(z.string()).optional(),
+});
+export type ReleaseAudioEvaluation = z.infer<typeof ReleaseAudioEvaluation>;
+
 export const ReleaseEvaluation = z.object({
   title: z.string(),
   releaseGroup: z.string().optional(),
@@ -299,6 +420,8 @@ export const ReleaseEvaluation = z.object({
   releaseKind: ReleaseKind.optional(),
   extras: z.array(ReleaseExtraKind).optional(),
   mediaType: EvaluationMediaType,
+  /** Music and audiobook releases only. */
+  audio: ReleaseAudioEvaluation.optional(),
 });
 export type ReleaseEvaluation = z.infer<typeof ReleaseEvaluation>;
 

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<caps>
+  <server appversion="1.2.0" version="0.1" title="Example NZB" strapline="Usenet indexer" email="admin@example.invalid" url="https://nzb.example.invalid/" image="https://nzb.example.invalid/logo.png" />
+  <limits max="100" default="100" />
+  <registration available="no" open="no" />
+  <searching>
+    <search available="yes" supportedParams="q" />
+    <tv-search available="yes" supportedParams="q,rid,tvdbid,season,ep" />
+    <movie-search available="yes" supportedParams="q,imdbid" />
+    <audio-search available="yes" supportedParams="q,artist,album" />
+    <book-search available="no" />
+  </searching>
+  <categories>
+    <category id="3000" name="Audio">
+      <subcat id="3010" name="MP3" />
+      <subcat id="3020" name="Video" />
+      <subcat id="3030" name="Audiobook" />
+      <subcat id="3040" name="Lossless" />
+    </category>
+    <category id="5000" name="TV">
+      <subcat id="5040" name="HD" />
+    </category>
+  </categories>
+</caps>

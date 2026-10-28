@@ -163,7 +163,7 @@ export class DiscordAgent extends BaseAgent {
           break;
         case 'links':
           if (media) {
-            const links: string[] = [];
+            const links: string[] = audioLinks(event);
             if (media.tmdbId > 0) {
               links.push(`[TMDB](https://www.themoviedb.org/${media.mediaType === 'series' ? 'tv' : 'movie'}/${media.tmdbId})`);
             }
@@ -194,6 +194,8 @@ export class DiscordAgent extends BaseAgent {
       }
     }
 
+    // Music/audiobook context has no field toggle of its own: show it whenever it is there.
+    for (const f of formatted) if (/^Tracks? |^Track$|^Series$|^Runtime$/.test(f.name)) pushIf(out, f);
     if (event.type === 'upgrade') pushIf(out, byName.get('Replaced'));
     if (event.type === 'manualInteractionRequired') {
       pushIf(out, byName.get('Status'));
@@ -201,6 +203,21 @@ export class DiscordAgent extends BaseAgent {
     }
     return out;
   }
+}
+
+/** MusicBrainz / Audible / Open Library links for audio events. */
+function audioLinks(event: NotificationEvent): string[] {
+  const links: string[] = [];
+  if ('album' in event && event.album?.mbReleaseGroupId) {
+    links.push(`[MusicBrainz](https://musicbrainz.org/release-group/${event.album.mbReleaseGroupId})`);
+  } else if ('artist' in event && event.artist?.mbArtistId) {
+    links.push(`[MusicBrainz](https://musicbrainz.org/artist/${event.artist.mbArtistId})`);
+  }
+  if ('book' in event && event.book) {
+    if (event.book.asin) links.push(`[Audible](https://www.audible.com/pd/${event.book.asin})`);
+    if (event.book.isbn) links.push(`[Open Library](https://openlibrary.org/isbn/${event.book.isbn})`);
+  }
+  return links;
 }
 
 function pushIf(out: FormattedField[], field: FormattedField | undefined): void {

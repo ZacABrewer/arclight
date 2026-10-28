@@ -17,6 +17,7 @@ import {
   useTestAllIndexers,
   useUpdateIndexer,
 } from '../../../hooks/indexers.js';
+import { useFeatures } from '../../../hooks/music.js';
 import { formatDateTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
 import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
@@ -63,7 +64,11 @@ type Editing = { indexer: Indexer } | { template: IndexerTemplate; preset?: Inde
 
 function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => void }) {
   const implementation = 'indexer' in editing ? editing.indexer.implementation : editing.template.implementation;
-  const fields = useMemo(() => indexerFields(implementation), [implementation]);
+  const features = useFeatures();
+  const fields = useMemo(
+    () => indexerFields(implementation, { music: features.music, audiobooks: features.audiobooks }),
+    [implementation, features.music, features.audiobooks],
+  );
   const base = 'indexer' in editing ? editing.indexer : { ...editing.template.template, name: editing.template.implementationName };
   const form = useSchemaForm(fields, base as unknown as Record<string, unknown>);
   const categories = useIndexerCategories();
@@ -75,7 +80,13 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
 
   const renderers = useMemo(() => {
     const cats = categoryRenderer(categories.data ?? []);
-    return { tags: tagRenderer, 'settings.categories': cats, 'settings.animeCategories': cats };
+    return {
+      tags: tagRenderer,
+      'settings.categories': cats,
+      'settings.animeCategories': cats,
+      'settings.musicCategories': cats,
+      'settings.audiobookCategories': cats,
+    };
   }, [categories.data]);
 
   const submit = () => {

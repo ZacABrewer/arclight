@@ -3,7 +3,19 @@
 // the user types. The server stays the authority on the real file names.
 import { t } from '../../../i18n/index.js';
 
-export type PreviewKind = 'episode' | 'daily' | 'anime' | 'seriesFolder' | 'seasonFolder' | 'specialsFolder' | 'movie' | 'movieFolder';
+export type PreviewKind =
+  | 'episode'
+  | 'daily'
+  | 'anime'
+  | 'seriesFolder'
+  | 'seasonFolder'
+  | 'specialsFolder'
+  | 'movie'
+  | 'movieFolder'
+  | 'artistFolder'
+  | 'albumFolder'
+  | 'track'
+  | 'multiDiscTrack';
 
 /** Sample values keyed by the normalised token name (lower case, no separators). */
 export const SAMPLE_TOKENS: Readonly<Record<string, string | number>> = {
@@ -46,7 +58,33 @@ const MOVIE_OVERRIDES: Readonly<Record<string, string | number>> = {
   tmdbid: 693134,
 };
 
-const FILE_KINDS: ReadonlySet<PreviewKind> = new Set(['episode', 'daily', 'anime', 'movie']);
+/** Music sample: a two-disc album, track 3 (disc 2 for the multi-disc format). */
+const MUSIC_TOKENS: Readonly<Record<string, string | number>> = {
+  artistname: 'Daft Punk',
+  artistcleanname: 'Daft Punk',
+  artistnamethe: 'Daft Punk',
+  artistdisambiguation: '',
+  albumtitle: 'Discovery',
+  albumcleantitle: 'Discovery',
+  albumtype: 'Album',
+  albumdisambiguation: '',
+  releaseyear: 2001,
+  year: 2001,
+  medium: 1,
+  track: 3,
+  tracktitle: 'Digital Love',
+  trackcleantitle: 'Digital Love',
+  trackartistname: 'Daft Punk',
+  qualitytitle: 'FLAC',
+  qualityfull: 'FLAC',
+  releasegroup: 'GRP',
+};
+
+const MUSIC_KINDS: ReadonlySet<PreviewKind> = new Set(['artistFolder', 'albumFolder', 'track', 'multiDiscTrack']);
+
+const FILE_KINDS: ReadonlySet<PreviewKind> = new Set(['episode', 'daily', 'anime', 'movie', 'track', 'multiDiscTrack']);
+
+const extensionOf = (kind: PreviewKind): string => (MUSIC_KINDS.has(kind) ? '.flac' : '.mkv');
 
 export interface PreviewOptions {
   /** Version tag `{Version}` renders as; unversioned (empty) by default. */
@@ -57,6 +95,10 @@ function lookup(rawName: string, kind: PreviewKind, opts: PreviewOptions = {}): 
   const name = rawName.trim().toLowerCase();
   const key = name.replace(/[\s._-]+/g, '');
   if (key === 'version') return opts.version ?? '';
+  if (MUSIC_KINDS.has(kind)) {
+    if (key === 'medium' && kind === 'multiDiscTrack') return 2;
+    return MUSIC_TOKENS[key];
+  }
   if (kind === 'movie' || kind === 'movieFolder') {
     if (key in MOVIE_OVERRIDES) return MOVIE_OVERRIDES[key];
   }
@@ -89,7 +131,7 @@ export function renderPreview(format: string, kind: PreviewKind, opts: PreviewOp
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (!tidy) return '';
-  return FILE_KINDS.has(kind) ? `${tidy}.mkv` : tidy;
+  return FILE_KINDS.has(kind) ? `${tidy}${extensionOf(kind)}` : tidy;
 }
 
 /** The FormRow caption: "→ <name>", or a plain hint when the format is empty. */
@@ -122,11 +164,34 @@ export function versionedPreview(
 ): string {
   let name = renderPreview(file.format, file.kind, { version: tag });
   if (layout === 'sideBySide' && name && !hasVersionToken(file.format)) {
-    const ext = FILE_KINDS.has(file.kind) ? '.mkv' : '';
+    const ext = FILE_KINDS.has(file.kind) ? extensionOf(file.kind) : '';
     name = `${name.slice(0, name.length - ext.length)} - ${tag}${ext}`;
   }
   const parts = folders.map((f) => renderPreview(f.format, f.kind, { version: tag }));
   if (layout === 'subfolder') parts.push(tag);
   parts.push(name);
   return parts.filter(Boolean).join('/');
+}
+
+// ---- music (naming.artistFolderFormat ... multiDiscStyle) --------------------------------
+
+export type MultiDiscStyle = 'prefix' | 'subfolder';
+
+/**
+ * Sample path of a music track: artist folder / album folder / file, using the multi-disc
+ * format (prefix style) or `Disc {medium}/` + track format (subfolder style) when `multiDisc`.
+ */
+export function musicPreview(
+  formats: { artistFolderFormat: string; albumFolderFormat: string; trackFormat: string; multiDiscTrackFormat: string },
+  style: MultiDiscStyle,
+  multiDisc: boolean,
+): string {
+  const artist = renderPreview(formats.artistFolderFormat, 'artistFolder');
+  const album = renderPreview(formats.albumFolderFormat, 'albumFolder');
+  const file = !multiDisc
+    ? renderPreview(formats.trackFormat, 'track')
+    : style === 'subfolder'
+      ? `Disc 2/${renderPreview(formats.trackFormat, 'track')}`
+      : renderPreview(formats.multiDiscTrackFormat, 'multiDiscTrack');
+  return [artist, album, file].filter(Boolean).join('/');
 }

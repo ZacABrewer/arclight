@@ -15,6 +15,13 @@ export interface IndexerDefinition {
   categories: number[];
   /** Extra category ids searched for TV (anime) requests. */
   animeCategories?: number[];
+  /**
+   * Category ids for `music` requests; defaults to `DEFAULT_MUSIC_CATEGORIES`. RSS and
+   * free-text searches add them only when present, so leave them out to keep music off.
+   */
+  musicCategories?: number[];
+  /** Category ids for `book` (audiobook) requests; defaults to `DEFAULT_AUDIOBOOK_CATEGORIES`. Same RSS rule. */
+  audiobookCategories?: number[];
   protocol: IndexerProtocol;
   /** Torrent results with fewer known seeders are dropped. */
   minimumSeeders?: number;
@@ -34,7 +41,21 @@ export interface IndexerDefinition {
 }
 
 /** Search parameters a Newznab-family endpoint may advertise. */
-export type SearchParam = 'q' | 'tvdbid' | 'tmdbid' | 'imdbid' | 'rid' | 'season' | 'ep' | 'year';
+export type SearchParam =
+  | 'q'
+  | 'tvdbid'
+  | 'tmdbid'
+  | 'imdbid'
+  | 'rid'
+  | 'season'
+  | 'ep'
+  | 'year'
+  | 'artist'
+  | 'album'
+  | 'label'
+  | 'genre'
+  | 'author'
+  | 'title';
 
 export const SEARCH_PARAMS: readonly SearchParam[] = [
   'q',
@@ -45,7 +66,20 @@ export const SEARCH_PARAMS: readonly SearchParam[] = [
   'season',
   'ep',
   'year',
+  'artist',
+  'album',
+  'label',
+  'genre',
+  'author',
+  'title',
 ];
+
+/** Parameters Arclight reads from a `music-search` (or `audio-search`) mode. */
+export const MUSIC_SEARCH_PARAMS: readonly SearchParam[] = ['q', 'artist', 'album', 'label', 'year', 'genre'];
+/** Parameters Arclight reads from a `book-search` mode. */
+export const BOOK_SEARCH_PARAMS: readonly SearchParam[] = ['q', 'author', 'title'];
+/** Parameters Arclight reads from `search`, `tv-search` and `movie-search` modes. */
+export const VIDEO_SEARCH_PARAMS: readonly SearchParam[] = ['q', 'tvdbid', 'tmdbid', 'imdbid', 'rid', 'season', 'ep', 'year'];
 
 export interface SearchModeCapabilities {
   available: boolean;
@@ -70,6 +104,9 @@ export interface IndexerCapabilities {
     search: SearchModeCapabilities;
     tvSearch: SearchModeCapabilities;
     movieSearch: SearchModeCapabilities;
+    /** `music-search` (some servers call it `audio-search`). */
+    musicSearch: SearchModeCapabilities;
+    bookSearch: SearchModeCapabilities;
   };
   categories: CapsCategory[];
 }
@@ -103,7 +140,31 @@ export interface MovieSearchRequest {
   year?: number;
 }
 
-export type SearchRequest = RssRequest | BasicSearchRequest | TvSearchRequest | MovieSearchRequest;
+/** `t=music`; without music-search caps it falls back to `t=search` with `q="{artist} {album}"`. */
+export interface MusicSearchRequest {
+  kind: 'music';
+  query?: string;
+  artist?: string;
+  album?: string;
+  year?: number;
+  label?: string;
+}
+
+/** `t=book`; without book-search caps it falls back to `t=search` with `q="{author} {title}"`. */
+export interface BookSearchRequest {
+  kind: 'book';
+  query?: string;
+  author?: string;
+  title?: string;
+}
+
+export type SearchRequest =
+  | RssRequest
+  | BasicSearchRequest
+  | TvSearchRequest
+  | MovieSearchRequest
+  | MusicSearchRequest
+  | BookSearchRequest;
 
 /** One candidate download returned by an indexer. */
 export interface ReleaseInfo {

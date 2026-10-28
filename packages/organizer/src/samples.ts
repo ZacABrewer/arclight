@@ -1,6 +1,18 @@
 // Canned sample data for previews (spec section 10).
 
-import type { NamingCustomFormat, NamingEpisode, NamingExtras, NamingFile, NamingMovie, NamingSeries } from './types.js';
+import type {
+  NamingAlbum,
+  NamingArtist,
+  NamingAuthor,
+  NamingBook,
+  NamingCustomFormat,
+  NamingEpisode,
+  NamingExtras,
+  NamingFile,
+  NamingMovie,
+  NamingSeries,
+  NamingTrack,
+} from './types.js';
 
 const series: NamingSeries = {
   title: "The Series Title's!",
@@ -81,6 +93,30 @@ const movieFile: NamingFile = {
 
 const extras: NamingExtras = { customFormats };
 
+const artist: NamingArtist = { name: 'The Artist Name', disambiguation: 'UK band' };
+
+const album: NamingAlbum = { title: 'The Album Title: Deluxe', albumType: 'Album', releaseDate: '2020-05-01' };
+
+const track: NamingTrack = { title: 'Track Title', trackNumber: 3, mediumNumber: 1, artistName: 'The Artist Name feat. Guest' };
+
+const trackFile: NamingFile = {
+  id: 1,
+  relativePath: '03 track title.flac',
+  sceneName: 'The_Artist_Name-The_Album_Title-WEB-FLAC-2020-GRP',
+  releaseGroup: 'GRP',
+  quality: { quality: { name: 'FLAC' }, revision: { version: 1, real: 0 } },
+};
+
+const author: NamingAuthor = { name: 'Author Name' };
+
+const book: NamingBook = { title: 'Book Title', subtitle: 'A Subtitle', narrators: ['Narrator Name'], releaseDate: '2019-03-05' };
+
+const bookFile: NamingFile = {
+  id: 1,
+  relativePath: 'Book Title (Unabridged).m4b',
+  quality: { quality: { name: 'M4B' }, revision: { version: 1, real: 0 } },
+};
+
 export const SAMPLES = {
   series,
   dailySeries: { ...series, seriesType: 'daily' } satisfies NamingSeries,
@@ -92,4 +128,13 @@ export const SAMPLES = {
   movie,
   movieFile,
   extras,
+  artist,
+  album,
+  track,
+  discTrack: { ...track, mediumNumber: 2 } satisfies NamingTrack,
+  trackFile,
+  author,
+  book,
+  seriesBook: { ...book, seriesTitle: 'Series Title', seriesPosition: 3 } satisfies NamingBook,
+  bookFile,
 } as const;

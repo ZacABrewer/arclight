@@ -20,3 +20,4 @@
   .al-root-row__pending-actions .al-btn { min-height: 44px; }
 }
 .al-mm-version-sample { color: var(--al-text-2); overflow-wrap: anywhere; align-self: center; }
+.al-mm-sample-paths { display: flex; flex-direction: column; gap: 4px; color: var(--al-text-2); overflow-wrap: anywhere; align-self: center; }

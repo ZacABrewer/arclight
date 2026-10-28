@@ -3,7 +3,9 @@
   "virtualFolders": [
     { "Name": "Movies", "ItemId": "lib-movies", "CollectionType": "movies", "Locations": ["/data/movies"] },
     { "Name": "Shows", "ItemId": "lib-tv", "CollectionType": "tvshows", "Locations": ["/data/tv", "/data/anime"] },
-    { "Name": "Music", "ItemId": "lib-music", "CollectionType": "music", "Locations": ["/data/music"] }
+    { "Name": "Music", "ItemId": "lib-music", "CollectionType": "music", "Locations": ["/data/music"] },
+    { "Name": "Audiobooks", "ItemId": "lib-books", "CollectionType": "books", "Locations": ["/data/audiobooks"] },
+    { "Name": "Photos", "ItemId": "lib-photos", "CollectionType": "homevideos", "Locations": ["/data/photos"] }
   ],
   "users": [
     {

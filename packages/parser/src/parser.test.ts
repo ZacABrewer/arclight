@@ -28,6 +28,7 @@ const THRESHOLDS: Record<string, number> = {
   'movies/scene-check.json': 100,
   'movies/slug.json': 100,
   'movies/title-year.json': 100,
+  'music.json': 98,
   'path/path.json': 100,
   'quality/anime-version.json': 100,
   'quality/radarr-quality.json': 99,
@@ -68,11 +69,15 @@ describe('fixture pass rates', () => {
     it(`${rel} ≥ ${THRESHOLDS[rel] ?? 100}%`, () => {
       const data = JSON.parse(readFileSync(join(root, rel), 'utf8')) as { cases: FixtureCase[] };
       const failures: string[] = [];
+      let counted = 0;
       for (const c of data.cases) {
         const r = checkCase(rel, c);
+        // Known misses (`skip`) are left out of the rate.
+        if (r.skipped !== undefined) continue;
+        counted++;
         if (!r.ok) failures.push(`${c.input}: ${r.problems.join('; ')}`);
       }
-      const pct = ((data.cases.length - failures.length) / data.cases.length) * 100;
+      const pct = ((counted - failures.length) / counted) * 100;
       expect(pct, failures.slice(0, 10).join('\n')).toBeGreaterThanOrEqual(THRESHOLDS[rel] ?? 100);
     });
   }

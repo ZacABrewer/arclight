@@ -24,6 +24,11 @@ import {
   videoCodecName,
 } from './media-info.js';
 import type {
+  NamingAlbum,
+  NamingArtist,
+  NamingAuthor,
+  NamingBook,
+  NamingTrack,
   NamingCustomFormat,
   NamingEpisode,
   NamingFile,
@@ -456,4 +461,95 @@ export function addVersionTokens(h: TokenHandlers, file: NamingFile): void {
 /** Whether a format uses `{Version}` anywhere. */
 export function hasVersionToken(format: string): boolean {
   return tokensOf(parseFormat(format, { wrappers: true, escapes: true })).some((t) => normalizeTokenName(t.name) === 'version');
+}
+
+// ---------------------------------------------------------------------------------------
+// Music catalogue (docs/design/music-audiobooks.md 9.4)
+// ---------------------------------------------------------------------------------------
+
+/** Year from a `YYYY[-MM[-DD]]` date, else the explicit year, else ''. */
+export function releaseYearOf(date: string | null | undefined, year: number | null | undefined): string {
+  const m = /^(\d{4})/.exec(date?.trim() ?? '');
+  if (m?.[1] && m[1] !== '0000') return m[1];
+  return year && year > 0 ? String(year) : '';
+}
+
+export function addArtistTokens(h: TokenHandlers, artist: NamingArtist): void {
+  const name = artist.name ?? '';
+  text(h, 'Artist Name', () => name);
+  text(h, 'Artist CleanName', () => cleanTitle(name));
+  text(h, 'Artist NameThe', () => titleThe(name));
+  text(h, 'Artist CleanNameThe', () => titleThe(cleanTitle(name)));
+  plain(h, 'Artist NameFirstCharacter', () => firstCharacter(titleThe(name)));
+  text(h, 'Artist Disambiguation', () => artist.disambiguation ?? '');
+  plain(h, 'Artist MbId', () => artist.mbArtistId ?? '');
+}
+
+export function addAlbumTokens(h: TokenHandlers, album: NamingAlbum): void {
+  const title = album.title ?? '';
+  text(h, 'Album Title', () => title);
+  text(h, 'Album CleanTitle', () => cleanTitle(title));
+  text(h, 'Album TitleThe', () => titleThe(title));
+  text(h, 'Album CleanTitleThe', () => titleThe(cleanTitle(title)));
+  plain(h, 'Album Type', () => album.albumType?.trim() ?? '');
+  text(h, 'Album Disambiguation', () => album.disambiguation ?? '');
+  plain(h, 'Album MbId', () => album.mbReleaseGroupId ?? '');
+  plain(h, ['Release Year', 'Album ReleaseYear'], () => releaseYearOf(album.releaseDate, album.year));
+}
+
+export function addMediumTokens(h: TokenHandlers, mediumNumber: number): void {
+  register(h, 'medium', (t) => padNumber(mediumNumber, t.modifier));
+}
+
+export function addTrackTokens(h: TokenHandlers, track: NamingTrack, albumArtist: NamingArtist): void {
+  const title = track.title ?? '';
+  const trackArtist = track.artistName?.trim() || albumArtist.name;
+  addMediumTokens(h, track.mediumNumber ?? 1);
+  register(h, 'track', (t) => padNumber(track.trackNumber, t.modifier));
+  text(h, 'Track Title', () => title);
+  text(h, 'Track CleanTitle', () => cleanTitle(title));
+  text(h, 'Track ArtistName', () => trackArtist);
+  text(h, 'Track ArtistCleanName', () => cleanTitle(trackArtist));
+}
+
+// ---------------------------------------------------------------------------------------
+// Audiobook catalogue (docs/design/music-audiobooks.md 9.4)
+// ---------------------------------------------------------------------------------------
+
+export function addAuthorTokens(h: TokenHandlers, author: NamingAuthor): void {
+  const name = author.name ?? '';
+  text(h, 'Author Name', () => name);
+  text(h, 'Author CleanName', () => cleanTitle(name));
+  text(h, 'Author NameThe', () => titleThe(name));
+  plain(h, 'Author NameFirstCharacter', () => firstCharacter(titleThe(name)));
+}
+
+/** Series position text: integers take a zero-padding modifier, anything else is kept as is. */
+export function seriesPositionText(position: string | number | null | undefined, modifier: string | undefined): string {
+  if (position === null || position === undefined) return '';
+  const raw = String(position).trim();
+  if (/^\d+$/.test(raw)) return padNumber(Number(raw), modifier);
+  // `3.5` -> pad the integer part only.
+  const m = /^(\d+)(\.\d+)$/.exec(raw);
+  if (m?.[1] && m[2]) return padNumber(Number(m[1]), modifier) + m[2];
+  return raw;
+}
+
+export function addBookTokens(h: TokenHandlers, book: NamingBook): void {
+  const title = book.title ?? '';
+  const narrators = (book.narrators ?? []).map((n) => n.trim()).filter(Boolean);
+  text(h, 'Book Title', () => title);
+  text(h, 'Book CleanTitle', () => cleanTitle(title));
+  text(h, 'Book TitleThe', () => titleThe(title));
+  text(h, 'Book Subtitle', () => book.subtitle ?? '');
+  text(h, 'Series Title', () => book.seriesTitle ?? '');
+  text(h, 'Series CleanTitle', () => cleanTitle(book.seriesTitle ?? ''));
+  register(h, 'Series Position', (t) => seriesPositionText(book.seriesPosition, t.modifier));
+  text(h, 'Narrator', () => narrators[0] ?? '');
+  text(h, 'Narrators', () => narrators.join(', '));
+  plain(h, 'Release Year', () => releaseYearOf(book.releaseDate, book.year));
+}
+
+export function addPartTokens(h: TokenHandlers, part: number): void {
+  register(h, 'part', (t) => padNumber(part, t.modifier));
 }

@@ -65,12 +65,27 @@ export type MediaServerInputRaw = z.input<typeof MediaServerInput>;
 export const MediaServerTestRequest = MediaServerInput.extend({ id: z.string().optional() });
 export type MediaServerTestRequest = z.infer<typeof MediaServerTestRequest>;
 
+/** What a media-server library holds. */
+export const MediaServerLibraryType = z.enum(['movie', 'series', 'music', 'audiobook', 'other']);
+export type MediaServerLibraryType = z.infer<typeof MediaServerLibraryType>;
+
+/** One server's outcome of a post-import refresh (`MediaServersService.refreshPath`). */
+export const MediaServerRefreshResult = z.object({
+  serverId: z.string(),
+  name: z.string(),
+  status: z.enum(['refreshed', 'skipped', 'failed']),
+  /** Libraries whose folders contain the path. */
+  libraries: z.array(z.string()),
+  message: z.string().optional(),
+});
+export type MediaServerRefreshResult = z.infer<typeof MediaServerRefreshResult>;
+
 export const MediaServerProbeResult = z.object({
   ok: z.boolean(),
   serverName: z.string().optional(),
   version: z.string().optional(),
-  /** Movie/series libraries the server reports, on success. */
-  libraries: z.array(z.object({ id: z.string(), name: z.string(), type: z.enum(['movie', 'series', 'other']) })).optional(),
+  /** Libraries the server reports, on success (Plex audiobooks sit in `music` sections). */
+  libraries: z.array(z.object({ id: z.string(), name: z.string(), type: MediaServerLibraryType })).optional(),
   message: z.string().optional(),
   /** MediaServerError code on failure (unauthorized, network, timeout, ...). */
   code: z.string().optional(),

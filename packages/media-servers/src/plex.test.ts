@@ -37,7 +37,7 @@ describe('PlexServerReadClient', () => {
     expect(libs.map((l) => [l.id, l.type, l.locations[0]])).toEqual([
       ['1', 'movie', '/media/movies'],
       ['2', 'series', '/media/tv'],
-      ['3', 'other', '/media/music'],
+      ['3', 'music', '/media/music'],
     ]);
   });
 
