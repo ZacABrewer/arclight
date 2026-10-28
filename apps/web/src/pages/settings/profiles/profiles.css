@@ -8,7 +8,7 @@
 .al-qlist__bar { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
 .al-qlist__hint { margin: 0; }
 .al-qlist__rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
-.al-qlist__row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 8px 0 10px; border: 1px solid var(--al-line-1); background: rgba(0,0,0,.2); font-size: 14px; cursor: grab; }
+.al-qlist__row { position: relative; display: flex; align-items: center; gap: 12px; min-height: 44px; padding: 0 8px 0 10px; border: 1px solid var(--al-line-1); background: var(--al-well); font-size: 14px; cursor: grab; }
 .al-qlist__row.is-off { color: var(--al-text-4); }
 .al-qlist__row.is-over { border-color: var(--al-cyan); background: var(--al-cyan-a06); }
 .al-qlist__row.is-cutoff { border-bottom: 2px solid var(--al-cyan); }
@@ -16,7 +16,7 @@
 .al-qlist__name { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
 .al-qlist__name .al-num { font-size: 13px; }
 .al-qlist__members { font-size: 12px; color: var(--al-text-4); overflow-wrap: anywhere; }
-.al-qlist__cutoff { font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; color: var(--al-cyan); }
+.al-qlist__cutoff { font-family: var(--al-mono); font-size: 10px; letter-spacing: .2em; color: var(--al-cyan-text); }
 .al-qlist__actions { display: flex; align-items: center; gap: 2px; }
 .al-qlist__move { min-width: 32px; font-family: var(--al-mono); }
 .al-qlist__group { display: flex; gap: 8px; align-items: center; }

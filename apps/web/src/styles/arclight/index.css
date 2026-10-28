@@ -1,6 +1,7 @@
-/* Arclight stylesheet entry. Order matters: the kit file first (verbatim copy of
-   design/arclight-kit/handoff/arclight.css — never edit it, re-copy on kit updates), then
-   our layers. */
+/* Arclight stylesheet entry. Order matters: the kit file first (from
+   design/arclight-kit/handoff/arclight.css, now tokenized for theme packs: its colours, corners
+   and shadows read --al-* tokens whose :root values are the Tron look), then our layers.
+   Theme packs (themes/<id>/theme.css) load after all of this and override the tokens. */
 @import './arclight.css';
 @import './fonts.css';
 @import './layout.css';

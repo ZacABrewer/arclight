@@ -6,15 +6,16 @@ const at = new Date(2026, 9, 6, 21, 5);
 describe('ui preferences', () => {
   it('reads settings with defaults for missing or invalid keys', () => {
     expect(readUiPreferences(undefined)).toEqual(DEFAULT_UI_PREFERENCES);
-    expect(readUiPreferences({ firstDayOfWeek: 0, timeFormat: '12h', dateFormat: 'DD/MM/YYYY', posterColumns: 9, locale: 'en', reduceMotion: 'on' })).toEqual({
+    expect(readUiPreferences({ firstDayOfWeek: 0, timeFormat: '12h', dateFormat: 'DD/MM/YYYY', posterColumns: 9, locale: 'en', reduceMotion: 'on', theme: 'sorbet' })).toEqual({
       firstDayOfWeek: 0,
       timeFormat: '12h',
       dateFormat: 'DD/MM/YYYY',
       posterColumns: 9,
       locale: 'en',
       reduceMotion: 'on',
+      theme: 'sorbet',
     });
-    expect(readUiPreferences({ firstDayOfWeek: 3, timeFormat: 'x', dateFormat: 'nope', posterColumns: 42, reduceMotion: true })).toEqual(DEFAULT_UI_PREFERENCES);
+    expect(readUiPreferences({ firstDayOfWeek: 3, timeFormat: 'x', dateFormat: 'nope', posterColumns: 42, reduceMotion: true, theme: '../x' })).toEqual(DEFAULT_UI_PREFERENCES);
     expect(DEFAULT_UI_PREFERENCES.reduceMotion).toBe('system');
   });
 

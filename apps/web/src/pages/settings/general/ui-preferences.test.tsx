@@ -4,7 +4,7 @@ import { authRoutes, renderAt, stubApi, user } from '../../../features/requests/
 import { getActiveUiPreferences } from '../../../lib/ui-preferences.js';
 import { formatDateTime } from '../../../lib/format.js';
 import { getLocale, setLocale } from '../../../i18n/index.js';
-import { getReduceMotion, setReduceMotion } from '../../../arclight/index.js';
+import { BUILTIN_THEME, applyTheme, getReduceMotion, setReduceMotion } from '../../../arclight/index.js';
 
 afterEach(async () => {
   vi.unstubAllGlobals();
@@ -13,11 +13,20 @@ afterEach(async () => {
   await setLocale('en');
 });
 
+const CATALOG = {
+  defaultTheme: 'tron',
+  allowUserChoice: true,
+  themes: [
+    { id: 'tron', name: 'Tron', version: '1.0.0', description: '', author: '', colorScheme: 'dark', backdrop: 'tron', swatches: ['#02090c', '#6ef6ff'], source: 'builtin', css: null },
+    { id: 'sorbet', name: 'Sorbet', version: '1.0.0', description: 'Pastel', author: '', colorScheme: 'light', backdrop: 'shapes', swatches: ['#fff7ef', '#ff8fa3'], source: 'bundled', css: 'theme/sorbet/theme.css?v=1.0.0' },
+  ],
+};
+
 const admin = (settings: Record<string, unknown> = {}) => user({ id: 1, username: 'root', role: 'admin', permissions: 2, settings });
 
 describe('UI preferences', () => {
   it('saves the chosen preferences into the user settings and updates the cache', async () => {
-    const calls = stubApi({ ...authRoutes(admin({ locale: 'en' })) }, (url, method, body) =>
+    const calls = stubApi({ ...authRoutes(admin({ locale: 'en' })), '/api/v1/theme': CATALOG }, (url, method, body) =>
       method === 'PUT' && url === '/api/v1/user/me'
         ? { body: admin({ locale: 'en', ...(body as { settings: Record<string, unknown> }).settings }) }
         : undefined,
@@ -26,7 +35,7 @@ describe('UI preferences', () => {
     const section = await screen.findByRole('region', { name: 'UI' });
     const save = within(section).getByRole('button', { name: 'Save preferences' }) as HTMLButtonElement;
     expect(save.disabled).toBe(true);
-    expect((within(section).getByLabelText('Theme') as HTMLSelectElement).disabled).toBe(true);
+    expect(await within(section).findByRole('radiogroup', { name: 'Theme' })).toBeTruthy();
     expect((within(section).getByLabelText('Poster size') as HTMLSelectElement).value).toBe('7');
 
     fireEvent.click(within(section).getByRole('button', { name: 'Sunday' }));
@@ -46,7 +55,7 @@ describe('UI preferences', () => {
     await waitFor(() => expect(toasts.list().some((t) => t.title === 'UI preferences saved')).toBe(true));
     // The cached user now carries the settings, so the form is clean and formatters follow them.
     await waitFor(() => expect(save.disabled).toBe(true));
-    expect(getActiveUiPreferences()).toEqual({ firstDayOfWeek: 0, timeFormat: '12h', dateFormat: 'YYYY-MM-DD', posterColumns: 9, locale: 'en', reduceMotion: 'system' });
+    expect(getActiveUiPreferences()).toEqual({ firstDayOfWeek: 0, timeFormat: '12h', dateFormat: 'YYYY-MM-DD', posterColumns: 9, locale: 'en', reduceMotion: 'system', theme: 'default' });
     expect(formatDateTime(new Date(2026, 9, 6, 21, 5).toISOString())).toBe('2026-10-06 9:05 PM');
   });
 
@@ -90,5 +99,26 @@ describe('UI preferences', () => {
     await screen.findByRole('region', { name: 'UI' });
     await waitFor(() => expect(getReduceMotion()).toBe('off'));
     expect(document.documentElement.hasAttribute('data-motion')).toBe(false);
+  });
+
+  it('saves a picked theme at once and switches the page to it once its stylesheet loads', async () => {
+    const calls = stubApi({ ...authRoutes(admin()), '/api/v1/theme': CATALOG }, (url, method, body) =>
+      method === 'PUT' && url === '/api/v1/user/me' ? { body: admin((body as { settings: Record<string, unknown> }).settings) } : undefined,
+    );
+    renderAt('/settings/general');
+    const section = await screen.findByRole('region', { name: 'UI' });
+    const sorbet = await within(section).findByRole('radio', { name: /Sorbet/ });
+    expect(within(section).getByRole('radio', { name: /Server default/ }).getAttribute('aria-checked')).toBe('true');
+    fireEvent.click(sorbet);
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ settings: { theme: 'sorbet' } }));
+    const link = document.head.querySelector<HTMLLinkElement>('link[data-al-theme="sorbet"]');
+    expect(link?.getAttribute('href')).toBe('/api/v1/theme/sorbet/theme.css?v=1.0.0');
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    link!.dispatchEvent(new Event('load'));
+    await waitFor(() => expect(document.documentElement.dataset.theme).toBe('sorbet'));
+    await waitFor(() => expect(within(section).getByRole('radio', { name: /Sorbet/ }).getAttribute('aria-checked')).toBe('true'));
+    applyTheme(BUILTIN_THEME);
+    expect(document.documentElement.dataset.theme).toBeUndefined();
+    expect(document.head.querySelector('link[data-al-theme]')).toBeNull();
   });
 });

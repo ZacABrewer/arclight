@@ -6,7 +6,7 @@
 .req-check-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 10px 24px; }
 .req-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .req-results { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-family: var(--al-mono); font-size: 12px; }
-.req-results [data-ok="true"] { color: var(--al-cyan); }
+.req-results [data-ok="true"] { color: var(--al-cyan-text); }
 .req-results [data-ok="false"] { color: var(--al-danger-text); }
 .req-usage { margin: 4px 0 0; font-size: 13px; color: var(--al-text-4); display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
 @media (max-width: 640px) {

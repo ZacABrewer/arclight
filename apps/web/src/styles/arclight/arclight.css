@@ -1,4 +1,7 @@
 /* ARCLIGHT design system v1.1 — tokens + component classes
+   Tokenized for theme packs (v1.2): every colour, corner and shadow reads a --al-* custom
+   property whose :root value is the Tron look, so a pack (themes/<id>/theme.css) re-skins by
+   overriding tokens. This file is no longer a verbatim kit copy: edit it, keeping Tron's values.
    Fonts: <link href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,300..700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
    Visual reference: Arclight Design Kit.dc.html, Arclight Pages.dc.html */
 
@@ -38,55 +41,122 @@
   /* motion */
   --ease-out: cubic-bezier(.2,.8,.2,1); --ease-in-out: cubic-bezier(.6,0,.2,1);
   --t-press: 60ms; --t-fast: 120ms; --t-base: 200ms; --t-enter: 240ms; --t-slow: 320ms;
+
+  /* ---- theme-pack tokens (v1.2). Tron values; a pack (themes/<id>/theme.css, scoped to
+     [data-theme="<id>"]) overrides any of them. Named by role where there is one, else by
+     the Tron colour + alpha (aNN = alpha .NN), so the Tron rendering is unchanged. ---- */
+  /* shape: Tron is square and flat */
+  --al-radius-card: 0px; --al-radius-inner: 0px; --al-radius-control: 0px; --al-radius-check: 0px;
+  --al-radius-field: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-display: var(--al-font);
+  /* chamfers: the modal and float-bar cuts, plus --al-chamfer above. A pack that drops chamfers
+     sets --al-chamfer: 0px and --al-chamfer-clip: none (Tron leaves --al-chamfer-clip undefined,
+     which keeps the polygons) so rounded corners and shadows are not clipped. */
+  --al-chamfer-modal: 18px; --al-chamfer-bar: 14px;
+  /* accent tints (fills, glows, gradients) */
+  --al-cyan-a00: rgba(110,246,255,0); --al-cyan-a02: rgba(110,246,255,.02); --al-cyan-a04: rgba(110,246,255,.04);
+  --al-cyan-a07: rgba(110,246,255,.07); --al-cyan-a08: rgba(110,246,255,.08); --al-cyan-a10: rgba(110,246,255,.1);
+  --al-cyan-a14: rgba(110,246,255,.14); --al-cyan-a15: rgba(110,246,255,.15); --al-cyan-a16: rgba(110,246,255,.16);
+  --al-cyan-a20: rgba(110,246,255,.2); --al-cyan-a22: rgba(110,246,255,.22); --al-cyan-a35: rgba(110,246,255,.35);
+  --al-cyan-a45: rgba(110,246,255,.45); --al-cyan-a50: rgba(110,246,255,.5); --al-cyan-a55: rgba(110,246,255,.55);
+  --al-cyan-a60: rgba(110,246,255,.6); --al-cyan-a75: rgba(110,246,255,.75); --al-cyan-a80: rgba(110,246,255,.8);
+  /* dividers and outlines between --al-line-1..4 */
+  --al-line-a06: rgba(110,246,255,.06); --al-line-a07: rgba(110,246,255,.07); --al-line-a10: rgba(110,246,255,.1);
+  --al-line-a12: rgba(110,246,255,.12); --al-line-a14: rgba(110,246,255,.14); --al-line-a16: rgba(110,246,255,.16);
+  --al-line-a18: rgba(110,246,255,.18); --al-line-a22: rgba(110,246,255,.22); --al-line-a25: rgba(110,246,255,.25);
+  --al-line-a28: rgba(110,246,255,.28); --al-line-a30: rgba(110,246,255,.3); --al-line-a40: rgba(110,246,255,.4);
+  --al-line-a45: rgba(110,246,255,.45);
+  --al-check-line: rgba(230,251,255,.35); --al-neutral-a20: rgba(143,179,189,.2);
+  /* signal tints */
+  --al-warn-a00: rgba(255,154,77,0); --al-warn-a06: rgba(255,154,77,.06); --al-warn-a35: rgba(255,154,77,.35); --al-warn-a45: rgba(255,154,77,.45);
+  --al-danger-a05: rgba(255,90,70,.05); --al-danger-a06: rgba(255,90,70,.06); --al-danger-a08: rgba(255,90,70,.08);
+  --al-danger-a12: rgba(255,90,70,.12); --al-danger-a35: rgba(255,90,70,.35); --al-danger-a40: rgba(255,90,70,.4);
+  --al-danger-a45: rgba(255,90,70,.45); --al-danger-a70: rgba(255,90,70,.7); --al-danger-a80: rgba(255,90,70,.8);
+  --al-warn-wash: rgba(40,16,4,.55); --al-warn-wash-2: rgba(40,16,4,.4); --al-danger-wash: rgba(40,6,4,.55);
+  /* text extras */
+  /* the accent used as text (links, counts); a light pack whose accent fill is too pale for text sets it darker */
+  --al-cyan-text: var(--al-cyan);
+  --al-label: #8fb3bd; --al-placeholder: #6f939b; --al-rail-ink: #5d8790; --al-text-6: #3f5e66;
+  /* focus and field rings */
+  --al-focus-danger: 0 0 0 2px #000, 0 0 0 4px rgba(255,90,70,.7);
+  --al-field-focus: 0 0 0 3px rgba(110,246,255,.12); --al-field-invalid: 0 0 0 3px rgba(255,90,70,.1);
+  --al-knockout: #000;
+  /* surfaces */
+  --al-scrim: rgba(0,0,0,.72); --al-scrim-soft: rgba(0,0,0,.5);
+  --al-surface-solid: rgba(2,10,14,.92); --al-surface-pop: rgba(2,10,14,.95);
+  --al-well: rgba(0,0,0,.2); --al-well-2: rgba(0,0,0,.25);
+  --al-rail-bg: linear-gradient(180deg, rgba(6,22,28,.5), rgba(1,6,9,.6));
+  --al-topbar-bg: linear-gradient(180deg, rgba(4,16,20,.55), rgba(1,6,9,.2));
+  --al-tabbar-bg: linear-gradient(180deg, rgba(6,22,28,.6), rgba(1,6,9,.85));
+  --al-floatbar-bg: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.85));
+  --al-floatbar-save-bg: linear-gradient(180deg, rgba(12,36,44,.8), rgba(2,10,14,.9));
+  --al-toast-bg: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.88));
+  --al-acc-bg: linear-gradient(180deg, rgba(12,36,44,.4), rgba(2,10,14,.6));
+  --al-acc-bg-open: linear-gradient(180deg, rgba(12,36,44,.48), rgba(2,10,14,.66));
+  --al-portal-bar-bg: linear-gradient(180deg, rgba(1,6,9,.92), rgba(1,6,9,.78));
+  --al-wizbar-bg: rgba(1,6,9,.4); --al-login-glass: rgba(12,36,44,.55);
+  --al-chrome-btn-bg: rgba(1,6,9,.78); --al-sheet-bg: rgba(1,8,12,.96);
+  /* imagery */
+  --al-poster-bg: #03121a; --al-poster-track: rgba(0,0,0,.6); --al-muted-fill: #4f6c73;
+  --al-poster-sheen: linear-gradient(160deg, rgba(255,255,255,.1), transparent 30%);
+  --al-frame-fade: linear-gradient(90deg, rgba(0,0,0,.92) 0%, rgba(0,0,0,.6) 45%, rgba(0,0,0,.2) 100%), linear-gradient(180deg, transparent 40%, #000 100%);
+  --al-tile-fade: linear-gradient(180deg, rgba(1,6,9,0) 30%, rgba(1,6,9,.9));
+  --al-hero-shadow: 0 30px 60px rgba(0,0,0,.6);
+  /* light effects and the Tron backdrop */
+  --al-glint-a85: rgba(200,252,255,.85); --al-glint-a90: rgba(200,252,255,.9);
+  --al-packet-a00: rgba(233,253,255,0); --al-packet-a95: rgba(233,253,255,.95);
+  --al-scanline: rgba(255,255,255,.015); --al-vignette: rgba(0,0,0,.7);
+  --al-spire-tip: rgba(220,253,255,.95); --al-reflection: rgba(150,250,255,.3); --al-core: #f2feff;
 }
 
 /* ---------- base ---------- */
 html, body { margin: 0; background: var(--al-void); color: var(--al-text-2); font-family: var(--al-font); -webkit-font-smoothing: antialiased; }
 *, *::before, *::after { box-sizing: border-box; }
-a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-text-1); text-decoration: underline; }
+a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--al-text-1); text-decoration: underline; }
 :focus-visible { outline: none; box-shadow: var(--al-focus); }
 .al-num, .al-mono { font-family: var(--al-mono); font-variant-numeric: tabular-nums; }
 
 /* ---------- type ---------- */
-.al-display  { font-size: 44px; font-weight: 600; font-stretch: 125%; letter-spacing: .06em; color: var(--al-text-1); }
-.al-title-xl { font-size: 44px; font-weight: 600; font-stretch: 118%; line-height: 1; color: var(--al-text-1); }
-.al-title-l  { font-size: 28px; font-weight: 500; font-stretch: 118%; color: var(--al-text-1); }
-.al-title-m  { font-size: 22px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); }
+.al-display  { font-family: var(--al-display); font-size: 44px; font-weight: 600; font-stretch: 125%; letter-spacing: .06em; color: var(--al-text-1); }
+.al-title-xl { font-family: var(--al-display); font-size: 44px; font-weight: 600; font-stretch: 118%; line-height: 1; color: var(--al-text-1); }
+.al-title-l  { font-family: var(--al-display); font-size: 28px; font-weight: 500; font-stretch: 118%; color: var(--al-text-1); }
+.al-title-m  { font-family: var(--al-display); font-size: 22px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); }
 .al-body-l   { font-size: 16px; font-weight: 500; color: var(--al-text-1); }
 .al-body     { font-size: 14px; color: var(--al-text-2); }
 .al-caption  { font-size: 13px; color: var(--al-text-4); }
-.al-label    { font-family: var(--al-mono); font-size: 11px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: #8fb3bd; }
-.al-index    { font-family: var(--al-mono); font-size: 12px; letter-spacing: .2em; color: var(--al-cyan); }
+.al-label    { font-family: var(--al-mono); font-size: 11px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--al-label); }
+.al-index    { font-family: var(--al-mono); font-size: 12px; letter-spacing: .2em; color: var(--al-cyan-text); }
 
 /* ---------- backdrop (see Arclight Backdrop.dc.html for the generated floor) ---------- */
 .al-backdrop { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
   background: radial-gradient(70% 38% at 53% 52%, var(--al-horizon) 0%, var(--al-deep) 50%, var(--al-void) 85%); }
 .al-backdrop::after { content: ""; position: absolute; inset: 0;
-  background: repeating-linear-gradient(180deg, rgba(255,255,255,.015) 0 1px, transparent 1px 3px),
-              radial-gradient(130% 100% at 50% 50%, transparent 60%, rgba(0,0,0,.7)); }
+  background: repeating-linear-gradient(180deg, var(--al-scanline) 0 1px, transparent 1px 3px),
+              radial-gradient(130% 100% at 50% 50%, transparent 60%, var(--al-vignette)); }
 .al-horizon { position: absolute; left: 0; right: 0; top: 52%; height: 2px;
-  background: linear-gradient(90deg, transparent 5%, rgba(110,246,255,.45) 35%, rgba(200,252,255,.85) 50%, rgba(110,246,255,.45) 65%, transparent 95%); }
+  background: linear-gradient(90deg, transparent 5%, var(--al-cyan-a45) 35%, var(--al-glint-a85) 50%, var(--al-cyan-a45) 65%, transparent 95%); }
 
 /* ---------- glass ---------- */
 .al-pane { position: relative; background: linear-gradient(180deg, var(--al-glass), var(--al-glass-2));
   -webkit-backdrop-filter: blur(var(--al-blur)) saturate(150%); backdrop-filter: blur(var(--al-blur)) saturate(150%);
-  border: 1px solid var(--al-line-2); }
-.al-pane::before { content: ""; position: absolute; inset: 0; background: var(--al-sheen); pointer-events: none; }
+  border: 1px solid var(--al-line-2); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-card); }
+.al-pane::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--al-sheen); pointer-events: none; }
 .al-pane > * { position: relative; }
 /* hero chamfer — max 2 per screen. Variants: tl (top-left), br (bottom-right), both */
-.al-pane--chamfer-tl   { clip-path: polygon(var(--al-chamfer) 0, 100% 0, 100% 100%, 0 100%, 0 var(--al-chamfer)); }
-.al-pane--chamfer-br   { clip-path: polygon(0 0, 100% 0, 100% calc(100% - var(--al-chamfer)), calc(100% - var(--al-chamfer)) 100%, 0 100%); }
-.al-pane--chamfer-both { clip-path: polygon(var(--al-chamfer) 0, 100% 0, 100% calc(100% - var(--al-chamfer)), calc(100% - var(--al-chamfer)) 100%, 0 100%, 0 var(--al-chamfer)); }
+.al-pane--chamfer-tl   { clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer) 0, 100% 0, 100% 100%, 0 100%, 0 var(--al-chamfer))); }
+.al-pane--chamfer-br   { clip-path: var(--al-chamfer-clip, polygon(0 0, 100% 0, 100% calc(100% - var(--al-chamfer)), calc(100% - var(--al-chamfer)) 100%, 0 100%)); }
+.al-pane--chamfer-both { clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer) 0, 100% 0, 100% calc(100% - var(--al-chamfer)), calc(100% - var(--al-chamfer)) 100%, 0 100%, 0 var(--al-chamfer))); }
 /* lit cut edge: add <i class="al-edge al-edge--tl"></i> inside the pane */
 .al-edge { position: absolute; width: calc(var(--al-chamfer) * 1.414); height: 1px; background: var(--al-edge); transform: rotate(-45deg); transform-origin: 0 0; pointer-events: none; }
 .al-edge--tl { left: 0; top: var(--al-chamfer); }
 .al-edge--br { left: calc(100% - var(--al-chamfer)); top: calc(100% - 1px); }
-.al-pane__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-5); padding: 18px 24px; border-bottom: 1px solid rgba(110,246,255,.12); }
+.al-pane__head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--s-5); padding: 18px 24px; border-bottom: 1px solid var(--al-line-a12); }
 .al-pane__body { padding: 18px 24px; }
 
 /* ---------- buttons ---------- */
 .al-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px;
-  font: 600 14px/1 var(--al-font); border: 1px solid transparent; background: transparent; color: var(--al-text-2);
+  font: 600 14px/1 var(--al-font); border: 1px solid transparent; border-radius: var(--al-radius-control); background: transparent; color: var(--al-text-2);
   cursor: pointer; transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out), color var(--t-fast); }
 .al-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; } .al-btn--lg { height: 46px; padding: 0 22px; font-size: 15px; }
 .al-btn--primary { background: var(--al-cyan); border-color: var(--al-cyan); color: var(--al-cyan-ink); }
@@ -98,9 +168,9 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 .al-btn--ghost { color: var(--al-text-3); font-weight: 500; }
 .al-btn--ghost:hover { background: var(--al-cyan-a06); color: var(--al-text-1); }
 .al-btn--danger { border-color: var(--al-danger-line); color: var(--al-danger-text); font-weight: 500; }
-.al-btn--danger:hover { background: rgba(255,90,70,.08); border-color: rgba(255,90,70,.8); }
+.al-btn--danger:hover { background: var(--al-danger-a08); border-color: var(--al-danger-a80); }
 .al-btn--danger:active, .al-btn--danger-solid { background: var(--al-danger); border-color: var(--al-danger); color: var(--al-danger-ink); }
-.al-btn--danger:focus-visible { box-shadow: 0 0 0 2px #000, 0 0 0 4px rgba(255,90,70,.7); }
+.al-btn--danger:focus-visible { box-shadow: var(--al-focus-danger); }
 .al-btn:disabled, .al-btn[aria-disabled="true"] { opacity: .35; pointer-events: none; }
 
 /* ---------- inputs ---------- */
@@ -108,68 +178,68 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 .al-field__label { font-size: 13px; color: var(--al-text-3); }
 .al-field__help { font-size: 12px; color: var(--al-text-4); }
 .al-input, .al-select { height: 40px; padding: 0 12px; width: 100%; font: 14px var(--al-font); color: var(--al-text-1);
-  background: var(--al-field); border: 1px solid rgba(110,246,255,.22); border-radius: 0; transition: border-color var(--t-fast); }
+  background: var(--al-field); border: 1px solid var(--al-line-a22); border-radius: var(--al-radius-field); transition: border-color var(--t-fast); }
 .al-input--mono { font-family: var(--al-mono); font-size: 13px; }
-.al-input::placeholder { color: #6f939b; }
+.al-input::placeholder { color: var(--al-placeholder); }
 .al-input:hover { border-color: var(--al-line-3); }
-.al-input:focus { outline: none; border-color: var(--al-cyan); box-shadow: 0 0 0 3px rgba(110,246,255,.12); }
-.al-input[aria-invalid="true"] { border-color: rgba(255,90,70,.7); box-shadow: 0 0 0 3px rgba(255,90,70,.1); }
+.al-input:focus { outline: none; border-color: var(--al-cyan); box-shadow: var(--al-field-focus); }
+.al-input[aria-invalid="true"] { border-color: var(--al-danger-a70); box-shadow: var(--al-field-invalid); }
 .al-input[aria-invalid="true"] ~ .al-field__help { color: var(--al-danger-text); }
 .al-input:disabled { opacity: .45; }
 
 /* toggle: <button class="al-toggle" role="switch" aria-checked="true"></button> */
-.al-toggle { position: relative; width: 36px; height: 20px; padding: 0; border: 1px solid var(--al-line-3); background: transparent; cursor: pointer; }
-.al-toggle::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; background: var(--al-text-5); transition: left var(--t-fast) var(--ease-out), background var(--t-fast); }
-.al-toggle[aria-checked="true"] { border-color: var(--al-cyan); background: rgba(110,246,255,.2); }
+.al-toggle { position: relative; width: 36px; height: 20px; padding: 0; border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); background: transparent; cursor: pointer; }
+.al-toggle::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: var(--al-radius-control); background: var(--al-text-5); transition: left var(--t-fast) var(--ease-out), background var(--t-fast); }
+.al-toggle[aria-checked="true"] { border-color: var(--al-cyan); background: var(--al-cyan-a20); }
 .al-toggle[aria-checked="true"]::after { left: 18px; background: var(--al-cyan); }
-.al-check { appearance: none; width: 16px; height: 16px; margin: 0; border: 1.5px solid rgba(230,251,255,.35); background: transparent; display: inline-grid; place-content: center; cursor: pointer; }
+.al-check { appearance: none; width: 16px; height: 16px; margin: 0; border: 1.5px solid var(--al-check-line); border-radius: var(--al-radius-check); background: transparent; display: inline-grid; place-content: center; cursor: pointer; }
 .al-check:checked { background: var(--al-cyan); border-color: var(--al-cyan); }
 .al-check:checked::after { content: "✓"; font: 700 11px/1 var(--al-font); color: var(--al-cyan-ink); }
 .al-check:indeterminate { border-color: var(--al-cyan); } .al-check:indeterminate::after { content: ""; width: 8px; height: 2px; background: var(--al-cyan); }
 
 /* segmented + tabs */
-.al-seg { display: inline-flex; border: 1px solid var(--al-line-3); }
-.al-seg > button { padding: 7px 16px; border: 0; background: transparent; font: 500 14px var(--al-font); color: var(--al-text-3); cursor: pointer; }
+.al-seg { display: inline-flex; border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); }
+.al-seg > button { padding: 7px 16px; border: 0; border-radius: var(--al-radius-control); background: transparent; font: 500 14px var(--al-font); color: var(--al-text-3); cursor: pointer; }
 .al-seg > button[aria-pressed="true"] { background: var(--al-cyan); color: var(--al-cyan-ink); }
-.al-seg--soft > button[aria-pressed="true"] { background: rgba(110,246,255,.14); color: var(--al-text-1); }
-.al-tabs { display: flex; gap: 28px; border-bottom: 1px solid rgba(110,246,255,.16); }
+.al-seg--soft > button[aria-pressed="true"] { background: var(--al-cyan-a14); color: var(--al-text-1); }
+.al-tabs { display: flex; gap: 28px; border-bottom: 1px solid var(--al-line-a16); }
 .al-tabs > [role="tab"] { padding: 0 0 12px; margin-bottom: -1px; border: 0; border-bottom: 2px solid transparent; background: none; font: 500 15px var(--al-font); color: var(--al-text-4); cursor: pointer; }
 .al-tabs > [aria-selected="true"] { color: var(--al-text-1); border-bottom-color: var(--al-cyan); }
 
 /* ---------- chips & tags ---------- */
 .al-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; font: 500 12px var(--al-font); line-height: 1.35; white-space: normal; overflow-wrap: break-word;
-  border: 1px solid var(--al-line-3); color: var(--al-text-2); }
+  border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); color: var(--al-text-2); }
 .al-chip::before { content: ""; flex: none; width: 6px; height: 6px; background: var(--al-cyan); }
 .al-chip[data-status="downloading"], .al-chip[data-status="importing"], .al-chip[data-status="monitored"] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
-.al-chip[data-status="unaired"] { border-color: var(--al-neutral-line); color: #8fb3bd; } .al-chip[data-status="unaired"]::before { background: none; border: 1px solid #8fb3bd; }
+.al-chip[data-status="unaired"] { border-color: var(--al-neutral-line); color: var(--al-label); } .al-chip[data-status="unaired"]::before { background: none; border: 1px solid var(--al-label); }
 .al-chip[data-status="queued"], .al-chip[data-status="paused"] { border-color: var(--al-neutral-line); color: var(--al-text-3); } .al-chip[data-status="queued"]::before, .al-chip[data-status="paused"]::before { background: var(--al-text-5); }
-.al-chip[data-status="unmonitored"] { border-color: rgba(143,179,189,.2); color: var(--al-text-5); } .al-chip[data-status="unmonitored"]::before { background: none; border: 1px solid var(--al-text-5); }
+.al-chip[data-status="unmonitored"] { border-color: var(--al-neutral-a20); color: var(--al-text-5); } .al-chip[data-status="unmonitored"]::before { background: none; border: 1px solid var(--al-text-5); }
 .al-chip[data-status="missing"], .al-chip[data-status="cutoff"], .al-chip[data-status="stalled"] { border-color: var(--al-warn-line); color: var(--al-warn-text); }
 .al-chip[data-status="missing"]::before, .al-chip[data-status="stalled"]::before { background: var(--al-warn); }
 .al-chip[data-status="cutoff"]::before { background: none; border: 1px solid var(--al-warn); }
-.al-chip[data-status="stalled"] { background: rgba(255,154,77,.06); }
-.al-chip[data-status="failed"] { border-color: var(--al-danger-line); color: var(--al-danger-text); background: rgba(255,90,70,.06); } .al-chip[data-status="failed"]::before { background: var(--al-danger); }
-.al-tag { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; font-size: 13px; color: var(--al-text-3); border: 1px solid var(--al-line-2); }
-.al-quality { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; font: 12px var(--al-mono); color: var(--al-text-2); border: 1px solid rgba(110,246,255,.3); }
-.al-proto { display: inline-block; padding: 2px 6px; font: 10px var(--al-mono); color: var(--al-text-3); border: 1px solid rgba(110,246,255,.3); }
-.al-score { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font: 12px var(--al-mono); background: rgba(110,246,255,.08); color: var(--al-text-2); }
-.al-score--high { background: rgba(110,246,255,.14); color: var(--al-cyan); } .al-score--neg { background: rgba(255,90,70,.12); color: var(--al-danger-text); }
+.al-chip[data-status="stalled"] { background: var(--al-warn-a06); }
+.al-chip[data-status="failed"] { border-color: var(--al-danger-line); color: var(--al-danger-text); background: var(--al-danger-a06); } .al-chip[data-status="failed"]::before { background: var(--al-danger); }
+.al-tag { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; font-size: 13px; color: var(--al-text-3); border: 1px solid var(--al-line-2); border-radius: var(--al-radius-control); }
+.al-quality { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; font: 12px var(--al-mono); color: var(--al-text-2); border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-check); }
+.al-proto { display: inline-block; padding: 2px 6px; font: 10px var(--al-mono); color: var(--al-text-3); border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-check); }
+.al-score { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font: 12px var(--al-mono); border-radius: var(--al-radius-check); background: var(--al-cyan-a08); color: var(--al-text-2); }
+.al-score--high { background: var(--al-cyan-a14); color: var(--al-cyan-text); } .al-score--neg { background: var(--al-danger-a12); color: var(--al-danger-text); }
 
 /* ---------- progress ---------- */
 /* <div class="al-trail" style="--p:68%" data-state="active"><i></i></div> */
 .al-trail { position: relative; height: 10px; }
-.al-trail::before { content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 1px; background: rgba(110,246,255,.15); }
-.al-trail::after { content: ""; position: absolute; left: 0; top: 3px; height: 3px; width: var(--p, 0%); background: rgba(110,246,255,.55); transition: width var(--t-base) linear; }
+.al-trail::before { content: ""; position: absolute; left: 0; right: 0; top: 4px; height: 1px; background: var(--al-cyan-a15); }
+.al-trail::after { content: ""; position: absolute; left: 0; top: 3px; height: 3px; width: var(--p, 0%); background: var(--al-cyan-a55); transition: width var(--t-base) linear; }
 .al-trail > i { position: absolute; left: var(--p, 0%); top: 1px; width: 8px; height: 8px; margin-left: -4px; border-radius: 50%; display: none; transition: left var(--t-base) linear; }
 .al-trail[data-state="active"]::after { background: var(--al-trail); box-shadow: var(--al-glow); }
 .al-trail[data-state="active"] > i { display: block; background: var(--al-text-1); box-shadow: var(--al-glow); animation: al-pulse 1.6s ease-in-out infinite; }
-.al-trail[data-state="paused"]::after { background: rgba(110,246,255,.35); } .al-trail[data-state="paused"] > i { display: block; background: var(--al-text-5); }
-.al-trail[data-state="stalled"]::after { background: linear-gradient(90deg, rgba(255,154,77,0), var(--al-warn)); } .al-trail[data-state="stalled"] > i { display: block; background: var(--al-warn); }
+.al-trail[data-state="paused"]::after { background: var(--al-cyan-a35); } .al-trail[data-state="paused"] > i { display: block; background: var(--al-text-5); }
+.al-trail[data-state="stalled"]::after { background: linear-gradient(90deg, var(--al-warn-a00), var(--al-warn)); } .al-trail[data-state="stalled"] > i { display: block; background: var(--al-warn); }
 .al-trail[data-state="failed"]::after { background: var(--al-danger); }
-.al-meter { height: 2px; background: rgba(110,246,255,.1); } .al-meter > span { display: block; height: 100%; width: var(--p, 0%); background: var(--al-cyan); }
+.al-meter { height: 2px; background: var(--al-cyan-a10); } .al-meter > span { display: block; height: 100%; width: var(--p, 0%); background: var(--al-cyan); }
 .al-meter--warn > span { background: var(--al-warn); }
 .al-ring { --p: 0; position: relative; width: 84px; height: 84px; border-radius: 50%;
-  background: conic-gradient(var(--al-cyan) calc(var(--p) * 1%), rgba(110,246,255,.1) 0);
+  background: conic-gradient(var(--al-cyan) calc(var(--p) * 1%), var(--al-cyan-a10) 0);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
 
 /* ---------- status dot ---------- */
@@ -178,38 +248,40 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 
 /* ---------- table ---------- */
 .al-table { width: 100%; border-collapse: collapse; font-size: 14px; }
-.al-table th { text-align: left; padding: 10px 16px; font: 500 11px var(--al-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); border-bottom: 1px solid rgba(110,246,255,.12); }
-.al-table td { height: 44px; padding: 0 16px; border-bottom: 1px solid rgba(110,246,255,.06); color: var(--al-text-1); }
+.al-table th { text-align: left; padding: 10px 16px; font: 500 11px var(--al-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); border-bottom: 1px solid var(--al-line-a12); }
+.al-table td { height: 44px; padding: 0 16px; border-bottom: 1px solid var(--al-line-a06); color: var(--al-text-1); }
 .al-table--rich td { height: 62px; }
-.al-table tr:hover td { background: rgba(110,246,255,.04); }
-.al-table tr[aria-selected="true"] td { background: rgba(110,246,255,.08); }
+.al-table tr:hover td { background: var(--al-cyan-a04); }
+.al-table tr[aria-selected="true"] td { background: var(--al-cyan-a08); }
 
 /* ---------- overlays ---------- */
 .al-floatbar { display: flex; align-items: center; gap: 4px; height: 58px; padding: 0 10px 0 20px;
-  background: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.85)); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
-  border: 1px solid rgba(110,246,255,.45); clip-path: polygon(14px 0, 100% 0, 100% calc(100% - 14px), calc(100% - 14px) 100%, 0 100%, 0 14px); }
-.al-scrim { position: fixed; inset: 0; background: rgba(0,0,0,.72); z-index: 80; }
+  background: var(--al-floatbar-bg); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
+  border: 1px solid var(--al-line-a45); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
+  clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer-bar) 0, 100% 0, 100% calc(100% - var(--al-chamfer-bar)), calc(100% - var(--al-chamfer-bar)) 100%, 0 100%, 0 var(--al-chamfer-bar))); }
+.al-scrim { position: fixed; inset: 0; background: var(--al-scrim); z-index: 80; }
 .al-modal { position: relative; width: min(520px, calc(100vw - 32px)); background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
-  border: 1px solid rgba(110,246,255,.3); clip-path: polygon(18px 0, 100% 0, 100% 100%, 0 100%, 0 18px); z-index: 90; animation: al-rezz var(--t-base) var(--ease-out); }
-.al-modal__title { padding: 22px 24px 6px; font-size: 19px; font-weight: 600; color: var(--al-text-1); }
+  border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
+  clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer-modal) 0, 100% 0, 100% 100%, 0 100%, 0 var(--al-chamfer-modal))); z-index: 90; animation: al-rezz var(--t-base) var(--ease-out); }
+.al-modal__title { padding: 22px 24px 6px; font-family: var(--al-display); font-size: 19px; font-weight: 600; color: var(--al-text-1); }
 .al-modal__body { padding: 6px 24px 18px; font-size: 14px; line-height: 1.5; color: var(--al-text-3); }
-.al-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid rgba(110,246,255,.14); }
+.al-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--al-line-a14); }
 .al-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); z-index: 85; background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
-  -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-left: 1px solid rgba(110,246,255,.3); animation: al-slide var(--t-base) var(--ease-out); }
-.al-toast { display: flex; align-items: flex-start; gap: 12px; width: 360px; padding: 12px 14px; background: linear-gradient(180deg, rgba(12,36,44,.7), rgba(2,10,14,.88));
-  border: 1px solid rgba(110,246,255,.25); border-left: 2px solid var(--al-cyan); animation: al-slide var(--t-base) var(--ease-out); }
-.al-toast[data-tone="warn"] { border-color: rgba(255,154,77,.35); border-left-color: var(--al-warn); }
-.al-toast[data-tone="danger"] { border-color: rgba(255,90,70,.35); border-left-color: var(--al-danger); }
-.al-tooltip { max-width: 320px; padding: 10px 12px; font-size: 13px; color: var(--al-text-2); background: rgba(2,10,14,.95); border: 1px solid var(--al-line-3); }
+  -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-left: 1px solid var(--al-line-a30); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
+.al-toast { display: flex; align-items: flex-start; gap: 12px; width: 360px; padding: 12px 14px; background: var(--al-toast-bg);
+  border: 1px solid var(--al-line-a25); border-left: 2px solid var(--al-cyan); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
+.al-toast[data-tone="warn"] { border-color: var(--al-warn-a35); border-left-color: var(--al-warn); }
+.al-toast[data-tone="danger"] { border-color: var(--al-danger-a35); border-left-color: var(--al-danger); }
+.al-tooltip { max-width: 320px; padding: 10px 12px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: 1px solid var(--al-line-3); border-radius: var(--al-radius-check); box-shadow: var(--al-shadow-pop); }
 
 /* ---------- states ---------- */
-.al-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 20px; text-align: center; border: 1px dashed rgba(110,246,255,.3); }
-.al-skeleton { background: linear-gradient(90deg, rgba(110,246,255,.06), rgba(110,246,255,.16), rgba(110,246,255,.06)); background-size: 200% 100%; animation: al-shimmer 1.4s linear infinite; }
-.al-error { padding: 16px; border: 1px solid rgba(255,90,70,.4); background: rgba(255,90,70,.05); }
+.al-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 20px; text-align: center; border: 1px dashed var(--al-line-a30); border-radius: var(--al-radius-card); }
+.al-skeleton { background: linear-gradient(90deg, var(--al-cyan-a06), var(--al-cyan-a16), var(--al-cyan-a06)); background-size: 200% 100%; animation: al-shimmer 1.4s linear infinite; }
+.al-error { padding: 16px; border: 1px solid var(--al-danger-a40); border-radius: var(--al-radius-inner); background: var(--al-danger-a05); }
 
 /* ---------- circuit trace (decorative, aria-hidden) ---------- */
 .al-trace { position: absolute; height: 1px; background: var(--al-trace); transform-origin: 0 50%; pointer-events: none; }
-.al-node { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1.5px solid rgba(110,246,255,.6); background: #000; pointer-events: none; }
+.al-node { position: absolute; width: 8px; height: 8px; margin: -4px 0 0 -4px; border-radius: 50%; border: 1.5px solid var(--al-cyan-a60); background: var(--al-knockout); pointer-events: none; }
 
 /* ---------- motion ---------- */
 @keyframes al-rezz { from { opacity: 0; clip-path: inset(0 0 100% 0); } to { opacity: 1; clip-path: inset(0 0 0 0); } }
@@ -219,7 +291,7 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 @keyframes al-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
 /* derezz: apply .al-derezz to a row/card after confirm, remove from DOM on animationend */
 @keyframes al-derezz { 0% { opacity: 1; filter: none; } 40% { opacity: .8; transform: scaleY(.96); filter: url(#al-scan) brightness(1.4); } 100% { opacity: 0; transform: scaleY(.6) translateX(6px); } }
-.al-derezz { animation: al-derezz var(--t-slow) ease-in forwards; background-image: repeating-linear-gradient(180deg, rgba(110,246,255,.15) 0 1px, transparent 1px 3px); }
+.al-derezz { animation: al-derezz var(--t-slow) ease-in forwards; background-image: repeating-linear-gradient(180deg, var(--al-cyan-a15) 0 1px, transparent 1px 3px); }
 .al-enter { animation: al-rezz var(--t-enter) var(--ease-out) both; }
 .al-enter:nth-child(2) { animation-delay: 40ms; } .al-enter:nth-child(3) { animation-delay: 80ms; } .al-enter:nth-child(4) { animation-delay: 120ms; }
 
@@ -230,17 +302,17 @@ a { color: var(--al-cyan); text-decoration: none; } a:hover { color: var(--al-te
 /* Light runner on chrome borders. Parent must be position:relative/absolute.
    <i class="al-runner al-runner--v"></i> on the rail's right edge, <i class="al-runner al-runner--h"></i> on the top bar's bottom edge. */
 .al-runner { position: absolute; pointer-events: none; }
-.al-runner--v { right: -1px; top: -140px; width: 1px; height: 140px; background: linear-gradient(180deg, rgba(110,246,255,0), rgba(200,252,255,.9), rgba(110,246,255,0)); animation: al-rail-run var(--t-runner-v) linear 1.5s infinite; }
-.al-runner--h { left: -220px; bottom: -1px; width: 220px; height: 1px; background: linear-gradient(90deg, rgba(110,246,255,0), rgba(200,252,255,.9), rgba(110,246,255,0)); animation: al-bar-run var(--t-runner-h) linear 4s infinite; }
+.al-runner--v { right: -1px; top: -140px; width: 1px; height: 140px; background: linear-gradient(180deg, var(--al-cyan-a00), var(--al-glint-a90), var(--al-cyan-a00)); animation: al-rail-run var(--t-runner-v) linear 1.5s infinite; }
+.al-runner--h { left: -220px; bottom: -1px; width: 220px; height: 1px; background: linear-gradient(90deg, var(--al-cyan-a00), var(--al-glint-a90), var(--al-cyan-a00)); animation: al-bar-run var(--t-runner-h) linear 4s infinite; }
 /* Active trail: a light packet flows through the filled segment toward the head */
-.al-trail[data-state="active"]::after { background: linear-gradient(90deg, rgba(233,253,255,0), rgba(233,253,255,.95), rgba(233,253,255,0)) no-repeat, var(--al-trail);
+.al-trail[data-state="active"]::after { background: linear-gradient(90deg, var(--al-packet-a00), var(--al-packet-a95), var(--al-packet-a00)) no-repeat, var(--al-trail);
   background-size: 48px 100%, 100% 100%; animation: al-trail-flow var(--t-flow) linear infinite; }
 /* Hero chamfer edge: slow glint, opacity only (no glow) */
 .al-edge { animation: al-edge-glint 7s ease-in-out infinite; }
 /* Packet travelling a decorative trace. Set the trace as an SVG path in the pane's coordinate space:
    <i class="al-trace-pulse" style="--path: path('M524 404 L662 404 L758 500')"></i>  stagger the second with animation-delay. */
 .al-trace-pulse { position: absolute; left: 0; top: 0; width: 30px; height: 2px; pointer-events: none;
-  background: linear-gradient(90deg, rgba(110,246,255,0), var(--al-text-1)); offset-path: var(--path); offset-rotate: auto;
+  background: linear-gradient(90deg, var(--al-cyan-a00), var(--al-text-1)); offset-path: var(--path); offset-rotate: auto;
   animation: al-trace-run 5s cubic-bezier(.45,0,.55,1) infinite; }
 :root { --t-flow: 1.8s; --t-runner-v: 9s; --t-runner-h: 12s; }
 @keyframes al-rail-run { 0% { top: -140px; } 45%, 100% { top: 100%; } }

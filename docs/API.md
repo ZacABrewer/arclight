@@ -175,6 +175,27 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 | GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired, `decisionLogDays` (default 14) for the release decision log) |
 | PUT | `/settings/releases` | Replace the releases settings section |
 
+## theme (theme packs)
+
+Packs that re-skin the web app; see [Themes](THEMES.md) for the format. Settings section
+`themes`. The catalogue and files are public so the sign-in page and request portal can apply a
+theme; everything else is admin only.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/theme` | Public. `ThemeCatalog`: `themes[]` (`id`, `name`, `version`, `description`, `author`, `colorScheme` `dark`/`light`, `backdrop` `tron`/`shapes`/`none`, `swatches[]`, `source` `builtin`/`bundled`/`synced`, `css` path or null), `defaultTheme`, `allowUserChoice`. Tron is always first with `css: null`. `cache-control: no-cache` |
+| GET | `/theme/:id/theme.css` | Public. The pack's stylesheet (`text/css`); 404 for an unknown pack. `?v=<version>` equal to the current version is cached for a year (`immutable`), anything else is `no-cache` |
+| GET | `/theme/:id/fonts/:file` | Public. A `.woff2` the pack ships (`font/woff2`, cached a day); 404 otherwise |
+| GET | `/theme/status` | Admin. `ThemeStatus`: `settings`, `sync` (`lastSyncAt`, `lastError`, `lastChanged[]`) and `themes[]` |
+| POST | `/theme/sync` | Admin. Sync from the source now (one at a time). `ThemeSyncResult`: `ok`, `changed[]` (pack ids installed or updated), `skipped[{id, reason}]`, `error` |
+| GET | `/settings/themes` | Admin. `ThemeSettings`: `defaultTheme` (`tron`), `allowUserChoice` (true), `syncEnabled` (true), `syncIntervalHours` (1 to 168, default 24), `sourceUrl` (raw-content base serving `index.json` and `<id>/<file>`) |
+| PUT | `/settings/themes` | Admin. Replace the section; reschedules `ThemesSync` |
+
+A user's own pick is the `theme` field of their UI preferences (`default` follows
+`defaultTheme`; ignored for non-admins while `allowUserChoice` is off). The `ThemesSync` job is in
+the scheduler table; a sync also runs about 90 seconds after start when the last one is older than
+the interval.
+
 ## metadata
 
 | Method | Path | Purpose |
@@ -1416,6 +1437,7 @@ of them with `POST /jobs/run`.
 | `IndexerDefinitionFeedSync` | `41 */12 * * *` from `indexers.definitionFeed.intervalHours` (on demand only when disabled or `manual`) | indexers | Definition feed sync (see Definition feed) |
 | `IndexerCommunityCatalogueSync` | `23 4 * * *` from `indexers.communityCatalogue.intervalHours` (on demand only when disabled); also run 90 s after start when never synced or overdue | indexers | Community catalogue sync (see Community catalogue) |
 | `GuidesSync` | `17 4 * * *` from `guides.syncIntervalHours` (`17 */N * * *` below a day; on demand only when disabled) | guides | Guide fetch + diff; applies or stores the pending diff per `mode` |
+| `ThemesSync` | minute 41 every `themes.syncIntervalHours` hours (24 by default; on demand only when disabled); also run 90 s after start when overdue | themes | Downloads new and updated theme packs from `themes.sourceUrl` |
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |
 | `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |

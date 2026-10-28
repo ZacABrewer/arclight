@@ -13,6 +13,7 @@ import { SettingsSection } from '../shared.js';
 import { ApiKeyControls } from '../security/api-key.js';
 import '../security/security.css';
 import { UiPreferencesSection } from './ui-preferences-section.js';
+import { ThemesSection } from './themes-section.js';
 import { ConfigAsCodeSection } from './config-as-code.js';
 import { isSectionManaged, managedSectionKeys, useManagedKeys } from '../../../hooks/config.js';
 import { t } from '../../../i18n/index.js';
@@ -127,6 +128,8 @@ export function GeneralPage() {
       </FormSection>
 
       <UiPreferencesSection />
+
+      <ThemesSection />
 
       <ConfigAsCodeSection />
 

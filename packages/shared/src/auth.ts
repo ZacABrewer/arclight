@@ -35,7 +35,8 @@ export const AppAccess = z
   .transform((areas) => APP_AREAS.filter((a) => areas.includes(a)));
 export type AppAccess = z.infer<typeof AppAccess>;
 
-export const ThemeName = z.enum(['tron', 'dark', 'light']);
+/** A user's theme: a theme pack id (see themes.ts), `tron`, or `default` (the server default). */
+export const ThemeName = z.string().regex(/^[a-z0-9][a-z0-9-]{0,31}$/);
 export type ThemeName = z.infer<typeof ThemeName>;
 
 /**

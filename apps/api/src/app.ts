@@ -61,6 +61,7 @@ import { transcodeModule } from './modules/transcode/index.js';
 import { transferMetricsModule } from './modules/transfer-metrics/index.js';
 import { profileMigrationModule } from './modules/profile-migration/index.js';
 import { additionalLanguagesModule } from './modules/additional-languages/index.js';
+import { themesModule } from './modules/themes/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -130,6 +131,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     libraryModuleWith({ metadata: opts.metadata ?? metadata, commands: wiring.library }),
     profilesModule,
     guidesModule,
+    // Theme packs: catalogue, pack files and the sync from the repository.
+    themesModule,
     indexersModule,
     solverModule,
     downloadClientsModule,

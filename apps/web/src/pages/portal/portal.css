@@ -1,7 +1,7 @@
 /* Public request portal: own chrome on the open backdrop. Square corners, mono for data. */
 .portal { position: relative; min-height: 100vh; }
 .portal-head { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 24px; padding: 14px 40px;
-  border-bottom: 1px solid var(--al-line-2); background: linear-gradient(180deg, rgba(1, 6, 9, .92), rgba(1, 6, 9, .78));
+  border-bottom: 1px solid var(--al-line-2); background: var(--al-portal-bar-bg);
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 .portal-brand { display: flex; align-items: center; gap: 12px; min-width: 0; color: var(--al-text-1); text-decoration: none; }
 .portal-brand:hover { text-decoration: none; color: var(--al-text-1); }
@@ -46,3 +46,8 @@
   .portal-head .al-btn, .portal-logins .al-btn { min-height: 44px; }
   .portal .mk-hero { margin: -20px -16px 16px; padding: 20px 16px 16px; }
 }
+
+/* Theme popover (PortalThemeMenu). */
+.portal-theme { display: flex; flex-direction: column; gap: var(--s-4); padding: var(--s-5); }
+.portal-theme .al-label { margin: 0; }
+.portal-theme .theme-picker { grid-template-columns: repeat(2, minmax(0, 1fr)); }

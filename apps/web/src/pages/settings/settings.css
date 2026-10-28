@@ -40,7 +40,7 @@
 .al-item-card .al-pane__body { display: flex; flex-direction: column; gap: 12px; }
 .al-item-card__head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; min-width: 0; }
 .al-item-card__title { margin: 0; font-size: 18px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); min-width: 0; background: none; border: 0; padding: 0; text-align: left; cursor: pointer; font-family: var(--al-font); overflow-wrap: anywhere; }
-.al-item-card__title:hover { color: var(--al-cyan); }
+.al-item-card__title:hover { color: var(--al-cyan-text); }
 .al-item-card__meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 13px; color: var(--al-text-4); }
 .al-item-card__actions { display: flex; gap: 8px; margin-top: auto; flex-wrap: wrap; }
 .al-add-card { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 120px; border: 1px dashed var(--al-line-3); background: transparent; color: var(--al-text-3); font: inherit; font-size: 14px; cursor: pointer; }
@@ -52,9 +52,9 @@
 
 /* ---- row lists (root folders, mappings) ---- */
 .al-row-list { display: flex; flex-direction: column; gap: 8px; }
-.al-row-list__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; min-height: 46px; padding: 0 14px; border: 1px solid var(--al-line-1); background: rgba(0,0,0,.2); font-size: 14px; }
+.al-row-list__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 20px; align-items: center; min-height: 46px; padding: 0 14px; border: 1px solid var(--al-line-1); background: var(--al-well); font-size: 14px; }
 
-.al-notice { padding: 12px 16px; border: 1px solid var(--al-warn-line); color: var(--al-warn-text); background: rgba(40,16,4,.4); font-size: 14px; }
+.al-notice { padding: 12px 16px; border: 1px solid var(--al-warn-line); color: var(--al-warn-text); background: var(--al-warn-wash-2); font-size: 14px; }
 .al-inline-error { margin: 0; font-size: 13px; color: var(--al-danger-text); }
 .al-muted { color: var(--al-text-4); }
 

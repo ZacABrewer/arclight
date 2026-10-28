@@ -1,4 +1,4 @@
-/* Stylesheet entry: the Arclight kit (verbatim) + our layers, then the shell and the core
+/* Stylesheet entry: the Arclight kit (tokenized) + our layers, then the shell and the core
    pages. Page-specific CSS is imported by each page module. */
 @import './arclight/index.css';
 @import '../layout/shell.css';

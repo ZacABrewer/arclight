@@ -1,0 +1,73 @@
+{
+  "schema": 1,
+  "themes": [
+    {
+      "id": "sorbet",
+      "name": "Sorbet",
+      "version": "1.0.0",
+      "description": "Light, pastel and rounded: strawberry actions, fruit-tinted status chips, soft shadows and drifting blobs.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "shapes",
+      "swatches": [
+        "#fff7ef",
+        "#ff8fa3",
+        "#9fd67a",
+        "#f5d85c",
+        "#8fa2ff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 335,
+          "sha256": "cb58eef23f7f6156e6bbb902661d985697404690d8b071aef4e5358002c33de5"
+        },
+        {
+          "path": "theme.css",
+          "size": 62927,
+          "sha256": "a6e3f4a9b82f692534f0f5f5447995b397047b7621970988281ab18fc0be8ce0"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 4870,
+          "sha256": "4f500ec7bc59963462a6d6ef9e493460ae675c65c56aea3f33b7f579b7635a69"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/fredoka-latin-500-normal.woff2",
+          "size": 16248,
+          "sha256": "7d76e44a94b02894b384fc98c124ccf521d8460bf0e0bbe31c1b6b4be6099620"
+        },
+        {
+          "path": "fonts/fredoka-latin-600-normal.woff2",
+          "size": 16468,
+          "sha256": "b62f2898de150f019961f4884a49f83dcd2ce74375be5e0992c594ebb8f30294"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-400-normal.woff2",
+          "size": 13892,
+          "sha256": "d9976dd1dc9c0d65046b52810e7cc69cfc229ee9939628ffe637e17efe4ef1ed"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-600-normal.woff2",
+          "size": 14008,
+          "sha256": "e03e312b8b7abd8b69ecef4060ded626f80e45723becd13676ad8273cf568a6e"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-700-normal.woff2",
+          "size": 13836,
+          "sha256": "cb84238e7b852f2d22b91a598289f13b31cbc7a2d618fd2c0628ecb69459fbeb"
+        }
+      ]
+    }
+  ]
+}

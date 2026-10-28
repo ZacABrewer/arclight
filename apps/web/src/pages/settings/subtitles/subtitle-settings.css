@@ -4,7 +4,7 @@
 
 /* Ordered language list with ⋮⋮ drag handles (text-5). */
 .al-lang-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
-.al-lang-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; min-height: 46px; padding: 4px 8px 4px 10px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); font-size: 14px; }
+.al-lang-row { display: grid; grid-template-columns: 20px minmax(0, 1fr) auto auto auto; gap: 12px; align-items: center; min-height: 46px; padding: 4px 8px 4px 10px; border: 1px solid var(--al-line-1); background: var(--al-well); font-size: 14px; }
 .al-lang-row[data-dragging='true'] { opacity: .5; }
 .al-lang-row[data-over='true'] { border-color: var(--al-cyan); }
 .al-lang-row__handle { font-family: var(--al-mono); font-size: 14px; letter-spacing: -.12em; color: var(--al-text-5); cursor: grab; user-select: none; }

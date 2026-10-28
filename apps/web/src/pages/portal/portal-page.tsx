@@ -4,7 +4,9 @@ import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router'
 import type { DiscoverItem, PortalDocument, PublicPortal } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { kindOf, publicPortalApi } from '../../api/requests.js';
-import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Pane, Skeleton, buttonClass, type IconName } from '../../arclight/index.js';
+import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Pane, Popover, Skeleton, buttonClass, type IconName } from '../../arclight/index.js';
+import { ThemeChoice } from '../../features/themes/theme-choice.js';
+import { useThemeCatalog } from '../../features/themes/use-themes.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { DLink, DiscoverBaseProvider, type DiscoverPath } from '../../features/discover/base.js';
 import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
@@ -165,6 +167,7 @@ export function PortalLayout() {
                 <DiscoverSearchBox />
               </div>
             ) : null}
+            <PortalThemeMenu />
             {signedIn ? (
               <>
                 {appHref ? (
@@ -209,6 +212,30 @@ export function PortalLayout() {
         ) : null}
       </div>
     </DiscoverBaseProvider>
+  );
+}
+
+/** Theme cards in a popover; hidden while there is only the built-in theme or users may not choose. */
+function PortalThemeMenu() {
+  const { isAdmin } = useAuth();
+  const catalog = useThemeCatalog();
+  if (!catalog.data || catalog.data.themes.length < 2 || (!catalog.data.allowUserChoice && !isAdmin)) return null;
+  return (
+    <Popover
+      placement="bottom-end"
+      width={380}
+      label={t('portal.theme')}
+      trigger={(props) => (
+        <Button variant="ghost" aria-label={t('portal.theme')} title={t('portal.theme')} {...props}>
+          <Icon name="palette" size={20} />
+        </Button>
+      )}
+    >
+      <div className="portal-theme">
+        <p className="al-label">{t('portal.theme')}</p>
+        <ThemeChoice />
+      </div>
+    </Popover>
   );
 }
 

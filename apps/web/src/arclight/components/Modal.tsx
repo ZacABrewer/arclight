@@ -117,7 +117,7 @@ export function Drawer({ open, onClose, title, children, footer, width, classNam
   if (!open || !target) return null;
   return createPortal(
     <>
-      <div className="al-scrim" aria-hidden="true" onClick={onClose} style={{ background: 'rgba(0,0,0,.5)' }} />
+      <div className="al-scrim" aria-hidden="true" onClick={onClose} style={{ background: 'var(--al-scrim-soft)' }} />
       <div
         ref={ref}
         role="dialog"

@@ -1,13 +1,13 @@
 /* Import lists (Settings → Import lists). Square corners; mono for data. */
-.al-trakt { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--al-line-2); background: rgba(0, 0, 0, .25); }
+.al-trakt { display: flex; flex-direction: column; gap: 12px; padding: 16px; border: 1px solid var(--al-line-2); background: var(--al-well-2); }
 .al-trakt__step { margin: 0; font-size: 14px; color: var(--al-text-2); }
 .al-trakt__code { font-family: var(--al-mono); font-size: 30px; letter-spacing: .24em; color: var(--al-text-1); line-height: 1.2; word-break: break-all; }
-.al-trakt__url { font-family: var(--al-mono); font-size: 13px; color: var(--al-cyan); word-break: break-all; }
+.al-trakt__url { font-family: var(--al-mono); font-size: 13px; color: var(--al-cyan-text); word-break: break-all; }
 .al-trakt__status { margin: 0; font-size: 13px; color: var(--al-text-4); }
 .al-trakt__actions { display: flex; gap: 8px; flex-wrap: wrap; }
 
 .al-chooser { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
-.al-chooser__item { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; min-height: 44px; padding: 14px 16px; border: 1px solid var(--al-line-2); background: rgba(0, 0, 0, .25); color: var(--al-text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.al-chooser__item { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; width: 100%; min-height: 44px; padding: 14px 16px; border: 1px solid var(--al-line-2); background: var(--al-well-2); color: var(--al-text-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
 .al-chooser__item:hover, .al-chooser__item:focus-visible { border-color: var(--al-cyan); background: var(--al-cyan-a06); color: var(--al-text-1); }
 .al-chooser__name { font-size: 15px; font-weight: 600; color: var(--al-text-1); }
 .al-chooser__desc { color: var(--al-text-4); }

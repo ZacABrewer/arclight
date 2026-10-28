@@ -3,6 +3,7 @@ import { mountBackdrop } from './arclight-motion.js';
 import { cx } from './cx.js';
 import { useOsReducedMotion } from './hooks/use-media-query.js';
 import { useReduceMotionSetting } from './motion-preference.js';
+import { useActiveTheme } from './theme-store.js';
 
 // Port of the generator in "Arclight Backdrop.dc.html" (≈40 lines) to an SVG layer:
 // perspective grid floor (radial lines from the vanishing point + horizontals spaced
@@ -151,8 +152,27 @@ function canvasMotionSupported(canvas: HTMLCanvasElement): boolean {
   }
 }
 
-/** `<Backdrop>` — fixed, z 0, pointer-events none, aria-hidden. */
-export function Backdrop({ spire = true, circuit = true, vx, horizon, motion = true, contained, width, height, className }: BackdropProps) {
+/**
+ * `<Backdrop>` — fixed, z 0, pointer-events none, aria-hidden. Draws the active theme's backdrop:
+ * the Tron floor, or for a pack theme three `.al-backdrop__shape` elements its stylesheet styles
+ * (`shapes`) or just the background (`none`).
+ */
+export function Backdrop(props: BackdropProps) {
+  const kind = useActiveTheme().backdrop;
+  if (kind === 'tron') return <TronBackdrop {...props} />;
+  return (
+    <div
+      className={cx('al-backdrop', `al-backdrop--${kind}`, props.className)}
+      style={props.contained ? { position: 'absolute' } : undefined}
+      aria-hidden="true"
+      data-testid="al-backdrop"
+    >
+      {kind === 'shapes' ? [1, 2, 3].map((n) => <i key={n} className="al-backdrop__shape" data-shape={n} />) : null}
+    </div>
+  );
+}
+
+function TronBackdrop({ spire = true, circuit = true, vx, horizon, motion = true, contained, width, height, className }: BackdropProps) {
   const viewport = useViewportSize();
   const W = width ?? viewport.w;
   const H = height ?? viewport.h;

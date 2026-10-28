@@ -13,7 +13,7 @@
 .cal-event { display: flex; align-items: center; gap: 6px; width: 100%; min-width: 0; padding: 3px 6px; border: 0; border-left: 2px solid var(--al-cyan);
   background: var(--al-cyan-a06); font: inherit; font-size: 12px; text-align: left; white-space: nowrap; overflow: hidden; cursor: pointer; color: var(--al-text-1); }
 .cal-event:hover { background: var(--al-cyan-a12); }
-.cal-event[data-tone="upcoming"] { border-left-color: rgba(110,246,255,.4); }
+.cal-event[data-tone="upcoming"] { border-left-color: var(--al-line-a40); }
 .cal-event[data-tone="missing"] { border-left-color: var(--al-warn); }
 .cal-event[data-unmonitored] { opacity: .55; }
 .cal-event__time { color: var(--al-text-4); flex: none; }
@@ -22,13 +22,13 @@
 
 /* Month */
 .cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
-.cal-weekday { padding: 8px 12px; font-family: var(--al-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--al-text-4); border-bottom: 1px solid rgba(110,246,255,.14); }
+.cal-weekday { padding: 8px 12px; font-family: var(--al-mono); font-size: 11px; letter-spacing: .2em; text-transform: uppercase; color: var(--al-text-4); border-bottom: 1px solid var(--al-line-a14); }
 .cal-cell { position: relative; padding: 8px 10px; border-right: 1px solid var(--al-line-1); border-bottom: 1px solid var(--al-line-1); display: flex; flex-direction: column; gap: 5px; min-width: 0; }
 .cal-cell:nth-child(7n + 7) { border-right: 0; }
-.cal-cell[data-today] { background: rgba(110,246,255,.07); }
+.cal-cell[data-today] { background: var(--al-cyan-a07); }
 .cal-cell .al-anchor { display: flex; min-width: 0; }
 .cal-cell__date { align-self: flex-start; padding: 1px 5px; font-size: 13px; color: var(--al-text-2); }
-.cal-cell[data-outside] .cal-cell__date { color: #3f5e66; }
+.cal-cell[data-outside] .cal-cell__date { color: var(--al-text-6); }
 [data-today] > .cal-cell__date { background: var(--al-cyan); color: var(--al-cyan-ink); }
 
 /* Popover content */
@@ -42,7 +42,7 @@
 
 /* Week / day */
 .cal-time__head, .cal-time__allday, .cal-time__body { display: grid; }
-.cal-time__head { border-bottom: 1px solid rgba(110,246,255,.14); }
+.cal-time__head { border-bottom: 1px solid var(--al-line-a14); }
 .cal-time__day { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border-left: 1px solid var(--al-line-1); }
 .cal-time__allday { border-bottom: 1px solid var(--al-line-2); min-height: 36px; }
 .cal-time__allday-cell { padding: 4px 6px; display: flex; flex-direction: column; gap: 4px; border-left: 1px solid var(--al-line-1); min-width: 0; }

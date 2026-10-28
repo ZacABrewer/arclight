@@ -1,0 +1,10 @@
+{
+  "id": "sorbet",
+  "name": "Sorbet",
+  "version": "1.0.0",
+  "description": "Light, pastel and rounded: strawberry actions, fruit-tinted status chips, soft shadows and drifting blobs.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "shapes",
+  "swatches": ["#fff7ef", "#ff8fa3", "#9fd67a", "#f5d85c", "#8fa2ff"]
+}

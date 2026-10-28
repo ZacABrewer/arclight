@@ -17,17 +17,17 @@
 /* ---------- rail ---------- */
 .al-rail { position: fixed; left: 0; top: 0; bottom: 0; z-index: 50; width: var(--al-rail);
   display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 22px 0;
-  border-right: 1px solid rgba(110,246,255,.18);
-  background: linear-gradient(180deg, rgba(6,22,28,.5), rgba(1,6,9,.6));
+  border-right: 1px solid var(--al-line-a18);
+  background: var(--al-rail-bg);
   -webkit-backdrop-filter: blur(26px) saturate(150%); backdrop-filter: blur(26px) saturate(150%);
   overflow-y: auto; scrollbar-width: none; }
 .al-rail__mark { flex: none; margin-bottom: 22px; }
 .al-rail__list { display: flex; flex-direction: column; align-items: center; gap: 6px; margin: 0; padding: 0; list-style: none; }
 .al-rail__item { position: relative; width: 60px; height: 48px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2px;
-  color: #5d8790; background: transparent; border: 0; padding: 0; cursor: pointer; text-decoration: none;
+  color: var(--al-rail-ink); background: transparent; border: 0; border-radius: var(--al-radius-inner); padding: 0; cursor: pointer; text-decoration: none;
   transition: color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out); }
 .al-rail__item:hover { color: var(--al-text-2); background: var(--al-cyan-a06); text-decoration: none; }
-.al-rail__item[aria-current="page"] { color: var(--al-text-1); background: rgba(110,246,255,.1); }
+.al-rail__item[aria-current="page"] { color: var(--al-text-1); background: var(--al-cyan-a10); }
 .al-rail__bar { position: absolute; left: -12px; top: 8px; bottom: 8px; width: 2px; background: transparent; }
 .al-rail__item[aria-current="page"] .al-rail__bar { background: var(--al-cyan); box-shadow: 0 0 10px var(--al-cyan); }
 .al-rail__code { font-family: var(--al-mono); font-size: 14px; font-weight: 500; letter-spacing: .06em; }
@@ -51,16 +51,16 @@
 /* ---------- top bar ---------- */
 .al-topbar { position: fixed; left: var(--al-rail); right: 0; top: 0; z-index: 50; height: var(--al-topbar);
   display: flex; align-items: center; gap: 28px; padding: 0 28px 0 40px;
-  border-bottom: 1px solid rgba(110,246,255,.14);
-  background: linear-gradient(180deg, rgba(4,16,20,.55), rgba(1,6,9,.2));
+  border-bottom: 1px solid var(--al-line-a14);
+  background: var(--al-topbar-bg);
   -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px);
   font-size: 14px; color: var(--al-text-3); }
-.al-wordmark { font-stretch: 125%; font-weight: 600; font-size: 15px; letter-spacing: .14em; color: var(--al-text-1); white-space: nowrap; }
+.al-wordmark { font-family: var(--al-display); font-stretch: 125%; font-weight: 600; font-size: 15px; letter-spacing: .14em; color: var(--al-text-1); white-space: nowrap; }
 .al-topbar__search { flex: 1; max-width: 420px; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
-  border: 0; border-bottom: 1px solid rgba(110,246,255,.25); background: transparent; color: #6f939b; font: 14px var(--al-font); text-align: left; cursor: text;
+  border: 0; border-bottom: 1px solid var(--al-line-a25); border-radius: var(--al-radius-control); background: transparent; color: var(--al-placeholder); font: 14px var(--al-font); text-align: left; cursor: text;
   transition: border-color var(--t-fast); }
 .al-topbar__search:hover { border-bottom-color: var(--al-line-3); }
-.al-topbar__search kbd { margin-left: auto; font-family: var(--al-mono); font-size: 12px; color: var(--al-cyan); }
+.al-topbar__search kbd { margin-left: auto; font-family: var(--al-mono); font-size: 12px; color: var(--al-cyan-text); }
 .al-topbar__spacer { flex: 1; }
 .al-topbar__status { display: flex; align-items: center; gap: 28px; white-space: nowrap; }
 .al-topbar__conn { display: flex; align-items: center; gap: 8px; color: var(--al-text-2); }
@@ -69,7 +69,7 @@
 .al-topbar__issues[data-active="true"] { color: var(--al-warn-text); }
 .al-topbar__issues[data-active="true"] .al-topbar__count { color: inherit; }
 .al-avatar { position: relative; width: 34px; height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0;
-  border: 1px solid var(--al-line-3); background: transparent; font: 600 12px var(--al-font); font-stretch: 120%; color: var(--al-text-1); cursor: pointer; }
+  border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); background: transparent; font: 600 12px var(--al-font); font-stretch: 120%; color: var(--al-text-1); cursor: pointer; }
 .al-avatar:hover { border-color: var(--al-line-4); background: var(--al-cyan-a06); }
 .al-topbar__menu { position: absolute; right: 0; top: calc(100% + 10px); min-width: 220px; z-index: 60; }
 .al-topbar__user { position: relative; }
@@ -82,15 +82,15 @@
 /* ---------- mobile tab bar ---------- */
 .al-tabbar { position: fixed; left: 0; right: 0; bottom: 0; z-index: 50; display: none;
   height: calc(64px + max(22px, env(safe-area-inset-bottom))); padding-bottom: max(22px, env(safe-area-inset-bottom));
-  border-top: 1px solid rgba(110,246,255,.2);
-  background: linear-gradient(180deg, rgba(6,22,28,.6), rgba(1,6,9,.85));
+  border-top: 1px solid var(--al-line-2);
+  background: var(--al-tabbar-bg);
   -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
 /* Landscape phones with a notch: keep the tabs clear of the side insets too. */
 .al-tabbar { padding-left: env(safe-area-inset-left, 0px); padding-right: env(safe-area-inset-right, 0px); }
 .al-tabbar--always { display: flex; }
 @media (max-width: 767.98px) { .al-tabbar { display: flex; } }
 .al-tabbar__item { position: relative; flex: 1; min-height: 44px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px;
-  color: #5d8790; background: none; border: 0; padding: 0; font: 500 11px var(--al-font); cursor: pointer; text-decoration: none; }
+  color: var(--al-rail-ink); background: none; border: 0; padding: 0; font: 500 11px var(--al-font); cursor: pointer; text-decoration: none; }
 .al-tabbar__item:hover { color: var(--al-text-2); text-decoration: none; }
 .al-tabbar__item[aria-current="page"] { color: var(--al-text-1); }
 .al-tabbar__bar { position: absolute; top: -1px; left: 30%; right: 30%; height: 2px; background: transparent; }

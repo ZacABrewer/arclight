@@ -15,6 +15,7 @@ import {
 } from '../../../lib/ui-preferences.js';
 import { SettingsSection } from '../shared.js';
 import { LanguageSelect } from '../../../components/language-select.js';
+import { ThemeChoice } from '../../../features/themes/theme-choice.js';
 import { t, chooseLocale, deviceLocale, type LocaleSetting } from '../../../i18n/index.js';
 
 const WEEK_STARTS = [
@@ -51,6 +52,8 @@ const samePrefs = (a: UiPreferences, b: UiPreferences) =>
   a.locale === b.locale &&
   a.reduceMotion === b.reduceMotion;
 
+const withoutTheme = ({ theme: _theme, ...rest }: UiPreferences): Omit<UiPreferences, 'theme'> => rest;
+
 /**
  * Per-user UI preferences (stored in the signed-in user's settings, not the server-wide
  * settings), with their own Save so the page's float bar stays about the server settings.
@@ -67,8 +70,9 @@ export function UiPreferencesSection() {
   // Without a user account (API key / no-auth access) the language is a device choice.
   const [deviceChoice, setDeviceChoice] = useState<LocaleSetting>(() => deviceLocale() ?? 'auto');
 
+  // The theme saves itself when picked (ThemeChoice), so the Save button leaves it alone.
   const onSave = () =>
-    save.mutate(draft, {
+    save.mutate(withoutTheme(draft), {
       onSuccess: () => toast.push({ tone: 'ok', title: t('settings.general.uiPreferencesSection.uiPreferencesSaved') }),
     });
 
@@ -90,8 +94,8 @@ export function UiPreferencesSection() {
         ) : undefined
       }
     >
-      <FormRow label={t('settings.general.uiPreferencesSection.theme')} htmlFor="ui-theme" caption={t('settings.general.uiPreferencesSection.arclightIsTheOnlyTheme')}>
-        <Select id="ui-theme" value="arclight" disabled options={[{ value: 'arclight', label: t('settings.general.uiPreferencesSection.arclight') }]} />
+      <FormRow label={t('settings.general.uiPreferencesSection.theme')} caption={t('settings.general.uiPreferencesSection.themeCaption')}>
+        <ThemeChoice />
       </FormRow>
       {user ? (
         <FormRow label={t('settings.general.uiPreferencesSection.language')} htmlFor="ui-language" caption={t('settings.general.uiPreferencesSection.languageCaption')}>

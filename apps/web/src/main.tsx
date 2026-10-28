@@ -12,6 +12,7 @@ import { setUnauthorizedHandler } from './api/client.js';
 import { authKeys, isPublicPath, loginHref } from './auth/guard.js';
 import { registerServiceWorker } from './register-sw.js';
 import { I18nProvider, applyLocaleSetting } from './i18n/index.js';
+import { restoreTheme } from './arclight/theme-store.js';
 import './arclight/fonts.js';
 import './styles/index.css';
 
@@ -30,6 +31,8 @@ setUnauthorizedHandler(() => {
 });
 
 registerServiceWorker();
+// The theme this device used last, painted before the api answers (AuthProvider corrects it).
+restoreTheme();
 
 const rootEl = document.getElementById('root');
 if (!rootEl) throw new Error('#root element missing from index.html');

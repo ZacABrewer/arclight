@@ -11,6 +11,7 @@ export { cx } from './cx.js';
 export { Backdrop, generateBackdrop, type BackdropProps, type BackdropGeometry, type BackdropOptions, type Segment } from './Backdrop.js';
 export * from './Chrome/index.js';
 export { mountBackdrop, backdropGeometry, type BackdropMotion, type BackdropMotionOptions, type MotionGeometry } from './arclight-motion.js';
+export { applyTheme, restoreTheme, getActiveTheme, useActiveTheme, BUILTIN_THEME, type ActiveTheme, type ThemeBackdropKind } from './theme-store.js';
 export { setReduceMotion, getReduceMotion, useReduceMotionSetting, REDUCE_MOTION_SETTINGS, type ReduceMotionSetting } from './motion-preference.js';
 
 // Hooks

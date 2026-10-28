@@ -23,7 +23,7 @@
 
 /* Row-opening title button (history). */
 .al-activity-rowlink { all: unset; cursor: pointer; color: var(--al-text-1); overflow-wrap: anywhere; min-height: 24px; }
-.al-activity-rowlink:hover { color: var(--al-cyan); }
+.al-activity-rowlink:hover { color: var(--al-cyan-text); }
 .al-activity-rowlink:focus-visible { outline: none; box-shadow: var(--al-focus); }
 
 /* Manual import wizard: modal-sized hero pane. */

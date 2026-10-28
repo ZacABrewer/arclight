@@ -10,6 +10,7 @@ import {
   CommunityCatalogueSettings,
   DefinitionFeedSettings,
   GuidesSettings,
+  ThemeSettings,
   ImportListSettings,
   IndexerGlobalSettings,
   IndexerOptionsSection,
@@ -101,6 +102,8 @@ const sections = {
   alerts: AlertSettings,
   // Owned by the profile-migration module (automatic mode; routes under /profilemigration/settings).
   profileMigration: ProfileMigrationSettings,
+  // Owned by the themes module: default theme, user choice and pack sync (routes under /settings/themes).
+  themes: ThemeSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

@@ -17,4 +17,4 @@
 .addl-chips__item { display: inline-flex; align-items: center; gap: 2px; }
 .addl-chips__remove { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; background: none; color: var(--al-text-3); cursor: pointer; }
 .addl-chips__remove:hover,
-.addl-chips__remove:focus-visible { color: var(--al-cyan); }
+.addl-chips__remove:focus-visible { color: var(--al-cyan-text); }

@@ -154,7 +154,7 @@ export function SelectMenu<V extends string = string>({
         onClick={() => (open ? setOpen(false) : openList())}
         onKeyDown={onButtonKey}
       >
-        <span style={current ? undefined : { color: '#6f939b' }}>{current ? current.label : placeholder}</span>
+        <span style={current ? undefined : { color: 'var(--al-placeholder)' }}>{current ? current.label : placeholder}</span>
         <span className="al-selectmenu__caret" aria-hidden="true">
           {open ? '▴' : '▾'}
         </span>

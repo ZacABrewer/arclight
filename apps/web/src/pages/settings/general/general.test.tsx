@@ -108,7 +108,7 @@ describe('Settings -> General', () => {
   it('shows the UI section (account-only without a user) and links to backups', async () => {
     renderPage();
     expect(await screen.findByText(/UI preferences belong to a user account/)).toBeTruthy();
-    expect((screen.getByLabelText('Theme') as HTMLSelectElement).disabled).toBe(true);
+    expect(screen.getByText('Theme')).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Open backups' });
     expect(link.getAttribute('href')).toBe('/system/backup');
   });

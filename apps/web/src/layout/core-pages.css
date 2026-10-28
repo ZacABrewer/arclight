@@ -30,11 +30,11 @@
 .dash-upcoming__time { font-size: 15px; color: var(--al-text-2); }
 .dash-upcoming__body { display: flex; flex-direction: column; gap: 2px; min-width: 0; color: inherit; }
 .dash-upcoming__body:hover { text-decoration: none; }
-.dash-upcoming__body:hover .dash-upcoming__title { color: var(--al-cyan); }
+.dash-upcoming__body:hover .dash-upcoming__title { color: var(--al-cyan-text); }
 .dash-upcoming__title { font-size: 17px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
 .dash-upcoming__detail { font-size: 14px; color: var(--al-text-4); }
 
-.dash-status__block { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 16px 24px; border-bottom: 1px solid rgba(110,246,255,.1); }
+.dash-status__block { position: relative; display: flex; flex-direction: column; gap: 8px; padding: 16px 24px; border-bottom: 1px solid var(--al-line-a10); }
 .dash-status__block:last-child { border-bottom: 0; }
 .dash-status__headline { font-size: 18px; font-weight: 500; color: var(--al-text-1); }
 .dash-storage, .dash-issues { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 8px; }
@@ -48,7 +48,7 @@
 .dash-lower[data-admin] { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
 .dash-queue__head { display: flex; align-items: baseline; gap: 28px; font-size: 14px; color: var(--al-text-4); }
 .dash-queue__rows { margin: 0; padding: 6px 24px; list-style: none; }
-.dash-queue__row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 110px; gap: 24px; align-items: center; padding: 14px 0; border-bottom: 1px solid rgba(110,246,255,.07); }
+.dash-queue__row { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.6fr) 110px; gap: 24px; align-items: center; padding: 14px 0; border-bottom: 1px solid var(--al-line-a07); }
 .dash-queue__row:last-child { border-bottom: 0; }
 .dash-queue__title { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .dash-queue__name { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
@@ -58,7 +58,7 @@
 .dash-queue__eta { font-size: 12px; color: var(--al-text-4); }
 
 .dash-requests__rows { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 12px; }
-.dash-requests__rows > li { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid rgba(110,246,255,.07); }
+.dash-requests__rows > li { display: flex; align-items: center; gap: 12px; padding-bottom: 12px; border-bottom: 1px solid var(--al-line-a07); }
 .dash-requests__rows > li:last-child { border-bottom: 0; padding-bottom: 0; }
 .dash-requests__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
 .dash-requests__title { font-size: 16px; font-weight: 500; color: var(--al-text-1); overflow-wrap: anywhere; }
@@ -102,10 +102,10 @@
 
 /* ================================================================ Login (Page 07) */
 .login-main { position: relative; z-index: 2; width: min(420px, calc(100% - 32px)); margin: 0 auto; padding: 150px 0 40px; display: flex; flex-direction: column; gap: 16px; }
-.login-card { --al-glass: rgba(12,36,44,.55); }
+.login-card { --al-glass: var(--al-login-glass); }
 .login-form { position: relative; display: flex; flex-direction: column; gap: 20px; padding: 40px 40px 32px; }
 .login-brand { display: flex; flex-direction: column; align-items: center; gap: 22px; margin-bottom: 8px; }
-.login-wordmark { font-stretch: 125%; font-weight: 600; font-size: 22px; letter-spacing: .16em; color: var(--al-text-1); }
+.login-wordmark { font-family: var(--al-display); font-stretch: 125%; font-weight: 600; font-size: 22px; letter-spacing: .16em; color: var(--al-text-1); }
 .login-error { margin: 0; font-size: 14px; color: var(--al-danger-text); }
 .login-foot { margin: 0; text-align: center; font-size: 13px; color: var(--al-text-4); }
 @media (max-width: 767.98px) {
@@ -116,7 +116,7 @@
 
 /* ================================================================ Setup wizard (Page 08) */
 .wiz-bar { position: fixed; left: 0; right: 0; top: 0; z-index: 50; height: 72px; display: flex; align-items: center; gap: 16px; padding: 0 48px;
-  border-bottom: 1px solid rgba(110,246,255,.14); background: rgba(1,6,9,.4); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  border-bottom: 1px solid var(--al-line-a14); background: var(--al-wizbar-bg); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .wiz-bar .al-wordmark { margin-left: 6px; }
 .wiz-bar__label { margin-left: 12px; font-size: 14px; color: var(--al-text-4); }
 .wiz-bar__spacer { flex: 1; }

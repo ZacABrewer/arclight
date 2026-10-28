@@ -82,6 +82,7 @@ These pages follow the app's navigation.
 | [Cloudflare challenges](CLOUDFLARE.md) | Indexers behind Cloudflare, FlareSolverr, built-in solver |
 | [Remote engine](REMOTE-ENGINE.md) | Running the torrent engine on a different machine |
 | [API](API.md) | REST API and the Sonarr/Radarr-compatible API |
+| [Themes](THEMES.md) | Choosing a theme, theme pack sync, making and publishing your own |
 | [Translating](TRANSLATING.md) | Adding a language |
 | [Releasing](RELEASING.md), [Architecture](ARCHITECTURE.md), [Developing](DEVELOPING.md), [Roadmap](ROADMAP.md) | Contributors |
 | [QA checklists](qa/README.md) | Manual test procedures |

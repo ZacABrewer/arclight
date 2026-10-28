@@ -1,0 +1,13 @@
+/* Theme cards (features/themes/theme-picker.tsx). Colours come from the active theme's tokens. */
+.theme-picker { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: var(--s-4); width: 100%; }
+.theme-picker__card { display: flex; flex-direction: column; align-items: stretch; gap: 6px; padding: 10px; text-align: left; cursor: pointer;
+  font: inherit; color: var(--al-text-2); background: var(--al-field); border: 1px solid var(--al-line-2); border-radius: var(--al-radius-inner, 0);
+  transition: border-color var(--t-fast) var(--ease-out), background var(--t-fast) var(--ease-out); }
+.theme-picker__card:hover { border-color: var(--al-line-4); background: var(--al-cyan-a06); }
+.theme-picker__card[aria-checked="true"] { border-color: var(--al-cyan); box-shadow: inset 0 0 0 1px var(--al-cyan); }
+.theme-picker__card:disabled { opacity: .45; cursor: default; }
+.theme-picker__preview { display: flex; align-items: flex-end; gap: 4px; height: 44px; padding: 8px; border-radius: calc(var(--al-radius-inner, 0px) * .6);
+  box-shadow: inset 0 0 0 1px rgba(127,127,127,.25); }
+.theme-picker__preview i { display: block; width: 18px; height: 18px; border-radius: 50%; }
+.theme-picker__name { font-size: 14px; font-weight: 600; color: var(--al-text-1); }
+.theme-picker__caption { font-size: 12px; color: var(--al-text-4); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }

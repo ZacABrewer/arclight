@@ -21,6 +21,8 @@ export interface UiPreferences {
   locale: LocaleSetting;
   /** "Reduce motion": 'system' follows prefers-reduced-motion; 'on' / 'off' override it. */
   reduceMotion: ReduceMotionSetting;
+  /** Theme pack id, or 'default' (the server's default theme). */
+  theme: string;
 }
 
 export const POSTER_COLUMNS_MIN = 5;
@@ -33,6 +35,7 @@ export const DEFAULT_UI_PREFERENCES: Readonly<UiPreferences> = Object.freeze({
   posterColumns: 7,
   locale: 'auto',
   reduceMotion: 'system',
+  theme: 'default',
 });
 
 export const DATE_FORMATS: ReadonlyArray<{ value: DateFormat; label: string }> = [
@@ -56,6 +59,7 @@ export function readUiPreferences(settings: Readonly<Record<string, unknown>> | 
     posterColumns: cols >= POSTER_COLUMNS_MIN && cols <= POSTER_COLUMNS_MAX ? cols : DEFAULT_UI_PREFERENCES.posterColumns,
     locale: s.locale === 'auto' || isLocaleCode(s.locale) ? s.locale : DEFAULT_UI_PREFERENCES.locale,
     reduceMotion: s.reduceMotion === 'on' || s.reduceMotion === 'off' || s.reduceMotion === 'system' ? s.reduceMotion : DEFAULT_UI_PREFERENCES.reduceMotion,
+    theme: typeof s.theme === 'string' && /^[a-z0-9][a-z0-9-]{0,31}$/.test(s.theme) ? s.theme : DEFAULT_UI_PREFERENCES.theme,
   };
 }
 

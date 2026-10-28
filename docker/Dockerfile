@@ -36,6 +36,7 @@ ENV NODE_ENV=production \
     ARCLIGHT_DOCKER=1 \
     ARCLIGHT_CONFIG=/config \
     ARCLIGHT_WEB_DIST=/app/web \
+    ARCLIGHT_THEMES_DIR=/app/themes \
     ARCLIGHT_ASSET_ROOT=/app/dist \
     ARCLIGHT_VERSION=${VERSION} \
     ARCLIGHT_FFPROBE=/usr/local/bin/ffprobe \
@@ -51,6 +52,8 @@ WORKDIR /app
 COPY --from=externals /ext/node_modules /app/node_modules
 COPY --from=build /src/apps/api/dist /app/dist
 COPY --from=build /src/apps/web/dist /app/web
+# Theme packs bundled with this version (newer ones sync into /config/themes).
+COPY --from=build /src/themes /app/themes
 COPY docker/entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 VOLUME ["/config"]

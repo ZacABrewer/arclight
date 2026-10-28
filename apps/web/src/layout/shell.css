@@ -5,7 +5,7 @@
 .muted { color: var(--al-text-4); }
 html, body, #root { min-height: 100%; }
 body { font-size: 14px; line-height: 1.45; }
-a { color: var(--al-cyan); text-decoration: none; }
+a { color: var(--al-cyan-text); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
 .al-skip-link { position: absolute; left: 8px; top: -100px; z-index: 120; padding: 8px 12px; background: var(--al-cyan); color: var(--al-cyan-ink); font-weight: 600; }

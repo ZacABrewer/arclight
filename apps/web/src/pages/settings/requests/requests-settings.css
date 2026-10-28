@@ -8,7 +8,7 @@
 
 /* Ordered rows (discover sliders, language lists). */
 .al-order-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.al-order-row { display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 46px; padding: 0 10px 0 14px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); font-size: 14px; }
+.al-order-row { display: grid; grid-template-columns: 28px auto minmax(0, 1fr) auto; gap: 14px; align-items: center; min-height: 46px; padding: 0 10px 0 14px; border: 1px solid var(--al-line-1); background: var(--al-well); font-size: 14px; }
 .al-order-row__index { font-size: 12px; color: var(--al-text-5); }
 .al-order-row__title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; color: var(--al-text-1); }
 .al-order-row__actions { display: inline-flex; gap: 4px; flex-wrap: wrap; justify-content: flex-end; }
@@ -22,7 +22,7 @@
 }
 
 /* Approval windows: day toggles, hour range, action, summary line. */
-.al-window-row { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); }
+.al-window-row { display: flex; flex-direction: column; gap: 10px; padding: 12px 14px; border: 1px solid var(--al-line-1); background: var(--al-well); }
 .al-window-row__controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .al-window-row__controls .al-select { width: auto; min-width: 120px; }
 .al-window-row__summary { margin: 0; }
@@ -32,7 +32,7 @@
 }
 
 /* Public portal: paths and hostnames lists. */
-.al-portal-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 46px; padding: 6px 10px 6px 14px; border: 1px solid var(--al-line-1); background: rgba(0, 0, 0, .2); font-size: 14px; }
+.al-portal-row { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; min-height: 46px; padding: 6px 10px 6px 14px; border: 1px solid var(--al-line-1); background: var(--al-well); font-size: 14px; }
 .al-portal-row > .al-num { flex: 1; min-width: 0; color: var(--al-text-1); overflow-wrap: anywhere; }
 .al-portal-row__toggle { display: inline-flex; align-items: center; gap: 8px; }
 .al-portal-add { display: flex; flex-direction: column; gap: 6px; }

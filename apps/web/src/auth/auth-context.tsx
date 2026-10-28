@@ -7,6 +7,7 @@ import { ADMIN_ACCESS, accessOf, type Access } from './access.js';
 import { readUiPreferences, setActiveUiPreferences } from '../lib/ui-preferences.js';
 import { t, applyLocaleSetting } from '../i18n/index.js';
 import { setReduceMotion } from '../arclight/motion-preference.js';
+import { useThemeController } from '../features/themes/use-themes.js';
 
 export interface AuthState {
   /** null until loaded, or when the api does not serve /auth/status. */
@@ -69,6 +70,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // The global "Reduce motion" switch follows the signed-in user (signed out: the OS setting).
   const reduceMotion = readUiPreferences(value.user?.settings).reduceMotion;
   useEffect(() => setReduceMotion(reduceMotion), [reduceMotion]);
+  // The theme follows the signed-in user's pick (signed out: this device's last theme).
+  useThemeController(value.user ? readUiPreferences(value.user.settings).theme : null, value.isAdmin);
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

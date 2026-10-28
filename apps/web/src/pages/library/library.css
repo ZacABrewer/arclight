@@ -1,7 +1,7 @@
 /* Library pages (Page 02 / 03). Shared layout lives in components/media/media-kit.css. */
 .lib-poster-link { display: block; color: inherit; }
 .lib-poster-link:hover { text-decoration: none; }
-.lib-poster-link:hover .al-poster-card__title { color: var(--al-cyan); }
+.lib-poster-link:hover .al-poster-card__title { color: var(--al-cyan-text); }
 .lib-filters { margin-bottom: 24px; }
 .lib-collection-meter { width: 260px; }
 .lib-page { padding-bottom: 96px; }
