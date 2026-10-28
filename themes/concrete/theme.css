@@ -1,0 +1,60 @@
+/* Brutalist Concrete: an Arclight theme pack (light).
+   Raw and loud. 3px black borders, hard offset shadows, safety-yellow accent, no curves.
+   Active when <html data-theme="concrete">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Archivo Black"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/archivo-black-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/space-grotesk-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/space-grotesk-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/space-grotesk-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/space-mono-latin-400-normal.woff2) format("woff2"); }
+
+[data-theme="concrete"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #d9d6d0; --al-deep: #d9d6d0;
+  --al-backdrop: radial-gradient(rgba(0,0,0,.10) 1px,transparent 1.5px) 0 0/14px 14px;
+  --al-glass: #f2efe8; --al-glass-2: #f2efe8;
+  --al-glass-strong: #f2efe8; --al-glass-strong-2: #f2efe8;
+  --al-field: #ffffff; --al-tile: #ffffff;
+  /* lines */
+  --al-line-1: rgba(0,0,0,.2); --al-line-2: #111; --al-line-3: #111; --al-line-4: #111;
+  --al-border-width: 3px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #111111; --al-text-2: #262626; --al-text-3: #454545; --al-text-4: #454545; --al-text-5: #454545;
+  /* accent */
+  --al-cyan: #ffd400; --al-cyan-ink: #111111;
+  --al-cyan-a06: #ffd400; --al-cyan-a12: #ffd400; --al-accent-text: #111111;
+  --al-nav-active-bg: #111111; --al-nav-active-text: #ffd400;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #b9f5a0;  --al-tone-accent-ink: #111111;
+  --al-tone-default: #a9c8ff; --al-tone-default-ink: #111111;
+  --al-tone-warn: #ff9b5e;   --al-tone-warn-ink: #111111;
+  --al-tone-people: #f2b5ff;  --al-tone-people-ink: #111111;
+  --al-warn: #ff6a00; --al-warn-text: #111111; --al-ok: #111111;
+  /* progress */
+  --al-trail: #111111; --al-track: #ffffff;
+  --al-bar-height: 14px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,212,0,.9);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 6px 6px 0 #111; --al-shadow-pop: 6px 6px 0 #111;
+  --al-focus: 0 0 0 2px #d9d6d0, 0 0 0 4px #ffd400;
+  /* shape */
+  --al-radius-card: 0px; --al-radius-inner: 0px; --al-radius-control: 0px; --al-radius-avatar: 0px;
+  /* type */
+  --al-display: "Archivo Black", sans-serif;
+  --al-font: "Space Grotesk", system-ui, sans-serif;
+  --al-mono: "Space Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: uppercase; --al-display-tracking: -.01em;
+  --al-label-case: uppercase; --al-label-tracking: .06em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="concrete"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

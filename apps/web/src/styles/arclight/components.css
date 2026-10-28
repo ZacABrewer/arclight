@@ -42,12 +42,12 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 /* custom select menu (Design Kit §08 "UHD-2160 ▴") */
 .al-selectmenu { position: relative; display: inline-block; width: 240px; }
 .al-selectmenu__button { width: 100%; height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 0 12px;
-  font: 14px var(--al-font); color: var(--al-text-1); text-align: left; background: var(--al-field); border: 1px solid var(--al-line-a22); border-radius: var(--al-radius-field); cursor: pointer; }
+  font: 14px var(--al-font); color: var(--al-text-1); text-align: left; background: var(--al-field); border: var(--al-border-width) solid var(--al-line-a22); border-radius: var(--al-radius-field); cursor: pointer; }
 .al-selectmenu__button:hover { border-color: var(--al-line-3); }
 .al-selectmenu__caret { color: var(--al-cyan-text); font-size: 12px; }
 .al-selectmenu[data-open="true"] .al-selectmenu__button { border-color: var(--al-line-3); border-bottom-color: var(--al-line-2); background: var(--al-surface-solid); }
 .al-listbox { position: absolute; left: 0; right: 0; top: 100%; z-index: 70; margin: 0; padding: 0; list-style: none; max-height: 280px; overflow-y: auto;
-  border: 1px solid var(--al-line-3); border-top: 0; border-radius: 0 0 var(--al-radius-inner) var(--al-radius-inner); background: var(--al-surface-solid); box-shadow: var(--al-shadow-pop); }
+  border: var(--al-border-width) solid var(--al-line-3); border-top: 0; border-radius: 0 0 var(--al-radius-inner) var(--al-radius-inner); background: var(--al-surface-solid); box-shadow: var(--al-shadow-pop); }
 .al-listbox__option { padding: 9px 12px; font-size: 14px; color: var(--al-text-3); cursor: pointer; }
 .al-listbox__option[data-active="true"] { background: var(--al-cyan-a06); color: var(--al-text-1); }
 .al-listbox__option[aria-selected="true"] { background: var(--al-cyan-a12); color: var(--al-text-1); }
@@ -102,6 +102,18 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-range:disabled { opacity: .4; cursor: default; }
 
 /* ---------- chips & tags ---------- */
+/* Generic tones (Chip sets data-tone next to the status it maps to). The tone tokens' Tron values
+   repeat what that status rule draws, so these change nothing in Tron; packs retint by token. */
+.al-chip[data-tone="accent"] { border-color: var(--al-tone-accent-line); background: var(--al-tone-accent); color: var(--al-tone-accent-ink); }
+.al-chip[data-tone="accent"]::before { background: var(--al-tone-accent-dot); }
+.al-chip[data-tone="default"] { border-color: var(--al-tone-default-line); background: var(--al-tone-default); color: var(--al-tone-default-ink); }
+.al-chip[data-tone="default"]::before { background: var(--al-tone-default-dot); }
+.al-chip[data-tone="warn"] { border-color: var(--al-tone-warn-line); background: var(--al-tone-warn); color: var(--al-tone-warn-ink); }
+.al-chip[data-tone="warn"]::before { background: var(--al-tone-warn-dot); }
+.al-chip[data-tone="danger"] { border-color: var(--al-tone-danger-line); background: var(--al-tone-danger); color: var(--al-tone-danger-ink); }
+.al-chip[data-tone="danger"]::before { background: var(--al-tone-danger-dot); }
+.al-chip[data-tone="neutral"] { border-color: var(--al-tone-neutral-line); background: var(--al-tone-neutral); color: var(--al-tone-neutral-ink); }
+.al-chip[data-tone="neutral"]::before { background: var(--al-tone-neutral-dot); }
 .al-chip--nodot::before { display: none; }
 .al-chip.al-chip--ring::before { background: none; border: 1px solid currentColor; }
 .al-chip--lg { height: 26px; padding: 0 10px; font-size: 13px; }
@@ -190,7 +202,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-tooltip--float { position: absolute; z-index: 70; left: 50%; transform: translateX(-50%); width: max-content; pointer-events: none; }
 .al-tooltip--top { bottom: calc(100% + 8px); }
 .al-tooltip--bottom { top: calc(100% + 8px); }
-.al-popover { position: absolute; z-index: 70; width: 320px; max-width: calc(100vw - 32px); padding: 16px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: 1px solid var(--al-line-3); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); }
+.al-popover { position: absolute; z-index: 70; width: 320px; max-width: calc(100vw - 32px); padding: 16px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); }
 .al-popover--bottom-start { left: 0; top: calc(100% + 8px); }
 .al-popover--bottom-end { right: 0; top: calc(100% + 8px); }
 .al-popover--top-start { left: 0; bottom: calc(100% + 8px); }
@@ -203,7 +215,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 
 /* banner (Login "session expired" = warn tone) */
 .al-banner { display: flex; align-items: center; gap: 12px; padding: 12px 16px; font-size: 14px; color: var(--al-text-2);
-  border: 1px solid var(--al-line-3); border-radius: var(--al-radius-inner); background: var(--al-glass-2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
+  border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-inner); background: var(--al-glass-2); -webkit-backdrop-filter: blur(16px); backdrop-filter: blur(16px); }
 .al-banner::before { content: ""; width: 6px; height: 6px; flex: none; background: var(--al-cyan); }
 .al-banner[data-tone="warn"] { border-color: var(--al-warn-a45); background: var(--al-warn-wash); color: var(--al-warn-text); }
 .al-banner[data-tone="warn"]::before { background: var(--al-warn); }
@@ -222,7 +234,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 
 /* ---------- accordion (Page 03 season rows) ---------- */
 .al-acc-stack { display: flex; flex-direction: column; gap: 10px; }
-.al-acc { position: relative; border: 1px solid var(--al-line-a16); border-radius: var(--al-radius-inner); background: var(--al-acc-bg); }
+.al-acc { position: relative; border: var(--al-border-width) solid var(--al-line-a16); border-radius: var(--al-radius-inner); background: var(--al-acc-bg); }
 .al-acc[data-open="true"] { border-color: var(--al-line-a28); background: var(--al-acc-bg-open); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px); }
 .al-acc__head { height: 46px; display: flex; align-items: center; gap: 16px; padding: 0 18px; font-size: 15px; }
 .al-acc[data-open="true"] > .al-acc__head { height: 50px; border-bottom: 1px solid var(--al-line-a14); }
@@ -276,7 +288,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-label[data-tone="accent"] { color: var(--al-cyan-text); }
 
 /* ---------- imagery ---------- */
-.al-poster, .al-backdrop-frame { position: relative; overflow: hidden; border: 1px solid var(--al-line-2); border-radius: var(--al-radius-inner); background: var(--al-poster-bg); }
+.al-poster, .al-backdrop-frame { position: relative; overflow: hidden; border: var(--al-border-width) solid var(--al-line-2); border-radius: var(--al-radius-inner); background: var(--al-poster-bg); }
 .al-poster { aspect-ratio: 2 / 3; }
 .al-backdrop-frame { aspect-ratio: 16 / 9; }
 .al-poster > img, .al-backdrop-frame > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -314,7 +326,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-timeline__desc { font-size: 13px; color: var(--al-text-4); }
 
 /* ---------- date picker ---------- */
-.al-datepicker { width: 296px; padding: 14px; background: var(--al-surface-pop); border: 1px solid var(--al-line-3); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); }
+.al-datepicker { width: 296px; padding: 14px; background: var(--al-surface-pop); border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); }
 .al-datepicker__head { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; }
 .al-datepicker__month { flex: 1; font-size: 15px; font-weight: 600; color: var(--al-text-1); }
 .al-datepicker__grid { display: grid; grid-template-columns: repeat(7, minmax(0,1fr)); gap: 2px; }
@@ -330,7 +342,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-pathpicker { display: flex; flex-direction: column; gap: 10px; }
 .al-pathpicker__row { display: flex; gap: 10px; }
 .al-pathpicker__row > .al-input { flex: 1; }
-.al-browser { border: 1px solid var(--al-line-a14); border-radius: var(--al-radius-inner); background: var(--al-well-2); }
+.al-browser { border: var(--al-border-width) solid var(--al-line-a14); border-radius: var(--al-radius-inner); background: var(--al-well-2); }
 .al-browser__crumbs { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 10px 14px; border-bottom: 1px solid var(--al-line-a10); font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
 .al-browser__crumb { padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
 .al-browser__crumb:hover { color: var(--al-text-1); }
@@ -392,7 +404,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 @media (max-width: 767.98px) { .al-keys { grid-template-columns: minmax(0,1fr); } }
 .al-keys__group { display: flex; flex-direction: column; gap: 10px; }
 .al-keys__row { display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 14px; color: var(--al-text-2); }
-.al-kbd { display: inline-flex; align-items: center; min-width: 22px; height: 22px; justify-content: center; padding: 0 6px; font: 12px var(--al-mono); color: var(--al-text-1); border: 1px solid var(--al-line-2); border-radius: var(--al-radius-check); background: var(--al-field); }
+.al-kbd { display: inline-flex; align-items: center; min-width: 22px; height: 22px; justify-content: center; padding: 0 6px; font: 12px var(--al-mono); color: var(--al-text-1); border: var(--al-border-width) solid var(--al-line-2); border-radius: var(--al-radius-check); background: var(--al-field); }
 .al-kbd-combo { display: inline-flex; gap: 4px; align-items: center; font-family: var(--al-mono); font-size: 11px; color: var(--al-text-4); }
 
 /* ---------- command palette + global search ---------- */

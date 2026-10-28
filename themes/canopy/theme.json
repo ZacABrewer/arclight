@@ -1,0 +1,16 @@
+{
+  "id": "canopy",
+  "name": "Forest Canopy",
+  "version": "1.0.0",
+  "description": "Under the trees at dusk. Moss greens, amber light, generous 18px corners.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#102219",
+    "#e3b35a",
+    "#bfe39a",
+    "#f4ab84",
+    "#dcc6ea"
+  ]
+}

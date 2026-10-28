@@ -1,9 +1,12 @@
 /* Arclight stylesheet entry. Order matters: the kit file first (from
    design/arclight-kit/handoff/arclight.css, now tokenized for theme packs: its colours, corners
    and shadows read --al-* tokens whose :root values are the Tron look), then our layers.
-   Theme packs (themes/<id>/theme.css) load after all of this and override the tokens. */
+   Theme packs (themes/<id>/theme.css) load after all of this and override the tokens;
+   packs.css (last) derives what a pack leaves out. */
 @import './arclight.css';
 @import './fonts.css';
 @import './layout.css';
 @import './components.css';
 @import './mobile.css';
+/* Theme-pack default layer: only matches <html data-theme>, never Tron. */
+@import './packs.css';

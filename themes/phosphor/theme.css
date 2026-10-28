@@ -1,0 +1,61 @@
+/* Terminal Phosphor: an Arclight theme pack (dark).
+   A green-screen CRT. Monospace everywhere, scanlines, block progress, zero radius.
+   Active when <html data-theme="phosphor">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "VT323"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/vt323-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-mono-latin-600-normal.woff2) format("woff2"); }
+
+[data-theme="phosphor"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #040804; --al-deep: #040804;
+  --al-backdrop: repeating-linear-gradient(0deg,rgba(0,255,100,.035) 0 1px,transparent 1px 3px),radial-gradient(1100px 800px at 50% 40%,rgba(60,255,120,.07),transparent);
+  --al-glass: #050b06; --al-glass-2: #050b06;
+  --al-glass-strong: #06100a; --al-glass-strong-2: #06100a;
+  --al-field: #06100a; --al-tile: #081a0e;
+  /* lines */
+  --al-line-1: #16401f; --al-line-2: #2a7a3e; --al-line-3: #2a7a3e; --al-line-4: #2a7a3e;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #8dffa8; --al-text-2: #62d982; --al-text-3: #47ad63; --al-text-4: #47ad63; --al-text-5: #47ad63;
+  /* accent */
+  --al-cyan: #7dff9b; --al-cyan-ink: #031006;
+  --al-cyan-a06: rgba(125,255,155,.12); --al-cyan-a12: rgba(125,255,155,.12); --al-accent-text: #9dffb4;
+  --al-nav-active-bg: #7dff9b; --al-nav-active-text: #031006;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(125,255,155,.12);  --al-tone-accent-ink: #9dffb4;
+  --al-tone-default: rgba(125,255,155,.08); --al-tone-default-ink: #8dffa8;
+  --al-tone-warn: rgba(255,204,77,.12);   --al-tone-warn-ink: #ffd76e;
+  --al-tone-people: rgba(125,255,155,.08);  --al-tone-people-ink: #8dffa8;
+  --al-warn: #ffcc4d; --al-warn-text: #ffd76e; --al-ok: #7dff9b;
+  /* progress */
+  --al-trail: repeating-linear-gradient(90deg,#7dff9b 0 8px,transparent 8px 10px); --al-track: #0c2414;
+  --al-bar-height: 10px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(200,255,215,.6);
+  /* light / depth */
+  --al-glow: 0 0 8px rgba(125,255,155,.6); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-focus: 0 0 0 2px #040804, 0 0 0 4px #7dff9b;
+  /* shape */
+  --al-radius-card: 0px; --al-radius-inner: 0px; --al-radius-control: 0px; --al-radius-avatar: 0px;
+  /* type */
+  --al-display: "VT323", sans-serif;
+  --al-font: "IBM Plex Mono", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: uppercase; --al-display-tracking: .04em;
+  --al-label-case: uppercase; --al-label-tracking: .12em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* VT323 runs small: lift the display sizes */
+[data-theme="phosphor"] .al-display { font-size: 60px; }
+[data-theme="phosphor"] .al-title-xl { font-size: 56px; }
+[data-theme="phosphor"] .al-title-l { font-size: 38px; line-height: 1; }
+[data-theme="phosphor"] .al-title-m, [data-theme="phosphor"] .al-modal__title, [data-theme="phosphor"] .al-drawer__title { font-size: 28px; }
+[data-theme="phosphor"] .al-rail__mark::after { font-size: 26px; }

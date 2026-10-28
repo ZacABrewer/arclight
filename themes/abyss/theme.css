@@ -1,0 +1,53 @@
+/* Abyssal: an Arclight theme pack (dark).
+   Deep ocean trench. Ink-teal water, bioluminescent cyan and jellyfish violet, glassy rounded panels.
+   Active when <html data-theme="abyss">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Outfit"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/outfit-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/outfit-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Outfit"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/outfit-latin-700-normal.woff2) format("woff2"); }
+
+[data-theme="abyss"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #03141c; --al-deep: #03141c;
+  --al-backdrop: radial-gradient(900px 600px at 80% -10%,rgba(40,220,210,.16),transparent),radial-gradient(600px 500px at 10% 110%,rgba(150,90,255,.18),transparent);
+  --al-glass: rgba(6,30,40,.7); --al-glass-2: rgba(6,30,40,.7);
+  --al-glass-strong: rgba(8,36,48,.78); --al-glass-strong-2: rgba(8,36,48,.78);
+  --al-field: rgba(255,255,255,.04); --al-tile: rgba(255,255,255,.03);
+  /* lines */
+  --al-line-1: rgba(80,240,230,.10); --al-line-2: rgba(80,240,230,.18); --al-line-3: rgba(80,240,230,.18); --al-line-4: rgba(80,240,230,.18);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #e6fbfa; --al-text-2: #b4d9dc; --al-text-3: #86b2b8; --al-text-4: #86b2b8; --al-text-5: #86b2b8;
+  /* accent */
+  --al-cyan: #3ff0e0; --al-cyan-ink: #02201e;
+  --al-cyan-a06: rgba(63,240,224,.14); --al-cyan-a12: rgba(63,240,224,.14); --al-accent-text: #8ff8ee;
+  --al-nav-active-bg: rgba(63,240,224,.14); --al-nav-active-text: #8ff8ee;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(120,255,170,.14);  --al-tone-accent-ink: #a5ffc6;
+  --al-tone-default: rgba(90,170,255,.16); --al-tone-default-ink: #aed2ff;
+  --al-tone-warn: rgba(255,180,90,.16);   --al-tone-warn-ink: #ffcb8f;
+  --al-tone-people: rgba(170,120,255,.18);  --al-tone-people-ink: #d2baff;
+  --al-warn: #ffb45a; --al-warn-text: #ffcb8f; --al-ok: #6fffaa;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#2ba7c9,#3ff0e0,#b08cff); --al-track: rgba(255,255,255,.07);
+  --al-bar-height: 6px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(220,255,252,.75);
+  /* light / depth */
+  --al-glow: 0 0 14px rgba(63,240,224,.55); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 20px 40px rgba(0,0,0,.4); --al-shadow-pop: 0 20px 40px rgba(0,0,0,.4);
+  --al-focus: 0 0 0 2px #03141c, 0 0 0 4px #3ff0e0;
+  /* shape */
+  --al-radius-card: 14px; --al-radius-inner: 10px; --al-radius-control: 10px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Outfit", system-ui, sans-serif;
+  --al-font: "Outfit", system-ui, sans-serif;
+  --al-mono: "JetBrains Mono", ui-monospace, monospace;
+  --al-display-weight: 600; --al-display-case: none; --al-display-tracking: -.01em;
+  --al-label-case: none; --al-label-tracking: .02em; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

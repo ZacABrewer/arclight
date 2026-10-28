@@ -1,0 +1,16 @@
+{
+  "id": "dune",
+  "name": "Desert Dune",
+  "version": "1.0.0",
+  "description": "High-noon sandstone. Warm sand, terracotta accent, sun-faded sage, softly arched corners.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#ecdfc8",
+    "#b5532b",
+    "#dde6d2",
+    "#f5e0bd",
+    "#eadbe2"
+  ]
+}

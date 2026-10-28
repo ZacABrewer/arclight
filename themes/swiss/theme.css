@@ -1,0 +1,61 @@
+/* Swiss Grid: an Arclight theme pack (light).
+   International Typographic Style. White, black, one signal red, strict grid, tight grotesk.
+   Active when <html data-theme="swiss">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/hanken-grotesk-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/hanken-grotesk-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/hanken-grotesk-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Hanken Grotesk"; font-style: normal; font-weight: 800; font-display: swap; src: url(fonts/hanken-grotesk-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="swiss"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #ffffff; --al-deep: #ffffff;
+  --al-backdrop: linear-gradient(90deg,rgba(0,0,0,.04) 1px,transparent 1px) 0 0/calc(100%/12) 100%;
+  --al-glass: #ffffff; --al-glass-2: #ffffff;
+  --al-glass-strong: #ffffff; --al-glass-strong-2: #ffffff;
+  --al-field: #f4f4f4; --al-tile: #f4f4f4;
+  /* lines */
+  --al-line-1: #e4e4e4; --al-line-2: transparent; --al-line-3: transparent; --al-line-4: transparent;
+  --al-border-width: 0px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #0d0d0d; --al-text-2: #333333; --al-text-3: #5c5c5c; --al-text-4: #5c5c5c; --al-text-5: #5c5c5c;
+  /* accent */
+  --al-cyan: #e30613; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #fde0e1; --al-cyan-a12: #fde0e1; --al-accent-text: #b0000c;
+  --al-nav-active-bg: #e30613; --al-nav-active-text: #ffffff;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #e6f2e8;  --al-tone-accent-ink: #1b5e2b;
+  --al-tone-default: #eeeeee; --al-tone-default-ink: #0d0d0d;
+  --al-tone-warn: #fdf0d6;   --al-tone-warn-ink: #7a4a00;
+  --al-tone-people: #eeeeee;  --al-tone-people-ink: #0d0d0d;
+  --al-warn: #e30613; --al-warn-text: #7a4a00; --al-ok: #0d0d0d;
+  /* progress */
+  --al-trail: #e30613; --al-track: #e8e8e8;
+  --al-bar-height: 4px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,255,255,.6);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: inset 0 3px 0 #111; --al-shadow-pop: inset 0 3px 0 #111;
+  --al-focus: 0 0 0 2px #ffffff, 0 0 0 4px #e30613;
+  /* shape */
+  --al-radius-card: 0px; --al-radius-inner: 0px; --al-radius-control: 0px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Hanken Grotesk", system-ui, sans-serif;
+  --al-font: "Hanken Grotesk", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 800; --al-display-case: none; --al-display-tracking: -.035em;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="swiss"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

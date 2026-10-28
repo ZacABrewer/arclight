@@ -1,0 +1,55 @@
+/* Graphite: an Arclight theme pack (dark).
+   Pro-tool neutral. Layered charcoal greys, one violet accent, 8px corners, crisp hairlines.
+   Active when <html data-theme="graphite">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/geist-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/geist-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/geist-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/geist-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Geist Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/geist-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="graphite"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #0e0f11; --al-deep: #0e0f11;
+  --al-backdrop: none;
+  --al-glass: #121316; --al-glass-2: #121316;
+  --al-glass-strong: #16181b; --al-glass-strong-2: #16181b;
+  --al-field: #1b1d21; --al-tile: #1b1d21;
+  /* lines */
+  --al-line-1: #222428; --al-line-2: #26282d; --al-line-3: #26282d; --al-line-4: #26282d;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #ededef; --al-text-2: #b4b6bc; --al-text-3: #8b8e96; --al-text-4: #8b8e96; --al-text-5: #8b8e96;
+  /* accent */
+  --al-cyan: #8b7cff; --al-cyan-ink: #0d0a24;
+  --al-cyan-a06: rgba(139,124,255,.16); --al-cyan-a12: rgba(139,124,255,.16); --al-accent-text: #bdb3ff;
+  --al-nav-active-bg: #22242a; --al-nav-active-text: #ededef;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(80,200,130,.14);  --al-tone-accent-ink: #86e0aa;
+  --al-tone-default: rgba(100,160,255,.14); --al-tone-default-ink: #a6c6ff;
+  --al-tone-warn: rgba(240,170,60,.14);   --al-tone-warn-ink: #f3c57a;
+  --al-tone-people: rgba(220,120,200,.14);  --al-tone-people-ink: #efb0e2;
+  --al-warn: #f0aa3c; --al-warn-text: #f3c57a; --al-ok: #4fc883;
+  /* progress */
+  --al-trail: #8b7cff; --al-track: #24262b;
+  --al-bar-height: 4px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,255,255,.35);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 1px 0 rgba(255,255,255,.03) inset; --al-shadow-pop: 0 1px 0 rgba(255,255,255,.03) inset;
+  --al-focus: 0 0 0 2px #0e0f11, 0 0 0 4px #8b7cff;
+  /* shape */
+  --al-radius-card: 8px; --al-radius-inner: 6px; --al-radius-control: 6px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Geist", system-ui, sans-serif;
+  --al-font: "Geist", system-ui, sans-serif;
+  --al-mono: "Geist Mono", ui-monospace, monospace;
+  --al-display-weight: 600; --al-display-case: none; --al-display-tracking: -.025em;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

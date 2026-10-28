@@ -40,7 +40,7 @@ function Section({ n, title, children }: { n: string; title: string; children: R
         <h2 className="al-title-m" style={{ margin: 0 }}>
           {title}
         </h2>
-        <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, rgba(110,246,255,.4), transparent)' }} />
+        <span style={{ flex: 1, height: 1, background: 'linear-gradient(90deg, var(--al-line-a40), transparent)' }} />
       </div>
       {children}
     </section>

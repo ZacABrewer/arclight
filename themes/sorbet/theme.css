@@ -46,7 +46,7 @@
   /* accent (strawberry): --al-cyan is the accent slot in every theme */
   --al-cyan: #ff8fa3; --al-cyan-hover: #ff7a92; --al-cyan-press: #f0647e; --al-cyan-ink: #4a1424;
   --al-cyan-a06: #fff0f3; --al-cyan-a12: #ffe3e8;
-  --al-cyan-text: #c2456a;
+  --al-cyan-text: #c2456a; --al-accent-text: #c2456a;
   /* signal */
   --al-warn: #ffb38a; --al-warn-text: #a44f1c; --al-warn-line: #ffc9a8;
   --al-danger: #c93f59; --al-danger-text: #a83552; --al-danger-line: #f4b7c3; --al-danger-ink: #fff;
@@ -179,7 +179,7 @@ html[data-theme="sorbet"], [data-theme="sorbet"] body { background: var(--al-voi
 [data-theme="sorbet"] .al-rail__item[aria-current="page"] { color: var(--al-text-1); font-weight: 700; background: #fff; box-shadow: 0 4px 14px rgba(150,90,100,.12); }
 [data-theme="sorbet"] .al-rail__bar, [data-theme="sorbet"] .al-rail__label { display: none; }
 [data-theme="sorbet"] .al-rail__code { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 22px; border-radius: 8px;
-  font: 500 11px/1 var(--al-mono); letter-spacing: 0; background: var(--sb-strawberry-tint); color: var(--sb-strawberry-ink); }
+  font: 500 11px/1 var(--al-mono); letter-spacing: 0; border: 0; opacity: 1; background: var(--sb-strawberry-tint); color: var(--sb-strawberry-ink); }
 [data-theme="sorbet"] .al-rail__list > li:nth-child(6n+2) .al-rail__code { background: var(--sb-peach-tint); color: var(--sb-peach-ink); }
 [data-theme="sorbet"] .al-rail__list > li:nth-child(6n+3) .al-rail__code { background: var(--sb-lemon-tint); color: var(--sb-lemon-ink); }
 [data-theme="sorbet"] .al-rail__list > li:nth-child(6n+4) .al-rail__code { background: var(--sb-lime-tint); color: var(--sb-lime-ink); }

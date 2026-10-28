@@ -1,0 +1,58 @@
+/* Nordic Frost: an Arclight theme pack (light).
+   Calm Scandinavian utility. Cool greys, one clear blue, 12px corners, hairline cards.
+   Active when <html data-theme="frost">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Manrope"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/manrope-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Manrope"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/manrope-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Manrope"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/manrope-latin-700-normal.woff2) format("woff2"); }
+
+[data-theme="frost"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #eef2f5; --al-deep: #eef2f5;
+  --al-backdrop: linear-gradient(180deg,#f5f8fa,#e8eef2);
+  --al-glass: #ffffff; --al-glass-2: #ffffff;
+  --al-glass-strong: #ffffff; --al-glass-strong-2: #ffffff;
+  --al-field: #ffffff; --al-tile: #f4f7f9;
+  /* lines */
+  --al-line-1: #e8edf1; --al-line-2: #dfe6ec; --al-line-3: #dfe6ec; --al-line-4: #dfe6ec;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #17222c; --al-text-2: #3d4b57; --al-text-3: #5a6874; --al-text-4: #5a6874; --al-text-5: #5a6874;
+  /* accent */
+  --al-cyan: #2f6fdf; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #e3ecfb; --al-cyan-a12: #e3ecfb; --al-accent-text: #1f4fa8;
+  --al-nav-active-bg: #e3ecfb; --al-nav-active-text: #1f4fa8;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #dff1e8;  --al-tone-accent-ink: #1d6b45;
+  --al-tone-default: #e3ecfb; --al-tone-default-ink: #1f4fa8;
+  --al-tone-warn: #fbecd9;   --al-tone-warn-ink: #8a4b0f;
+  --al-tone-people: #ece6f7;  --al-tone-people-ink: #563f8a;
+  --al-warn: #e08a2e; --al-warn-text: #8a4b0f; --al-ok: #2e9a68;
+  /* progress */
+  --al-trail: #2f6fdf; --al-track: #e6ecf0;
+  --al-bar-height: 6px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,255,255,.6);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 1px 2px rgba(20,40,60,.05); --al-shadow-pop: 0 1px 2px rgba(20,40,60,.05);
+  --al-focus: 0 0 0 2px #eef2f5, 0 0 0 4px #2f6fdf;
+  /* shape */
+  --al-radius-card: 12px; --al-radius-inner: 8px; --al-radius-control: 8px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Manrope", sans-serif;
+  --al-font: "Manrope", system-ui, sans-serif;
+  --al-mono: "JetBrains Mono", ui-monospace, monospace;
+  --al-display-weight: 700; --al-display-case: none; --al-display-tracking: -.02em;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="frost"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

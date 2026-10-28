@@ -1,0 +1,56 @@
+/* Midnight Velvet: an Arclight theme pack (dark).
+   Late-night cinema lounge. Deep indigo, brushed gold, serif titles, soft rounded cards.
+   Active when <html data-theme="velvet">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "DM Serif Display"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/dm-serif-display-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/figtree-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/figtree-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Figtree"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/figtree-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/dm-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/dm-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="velvet"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #14112a; --al-deep: #14112a;
+  --al-backdrop: radial-gradient(800px 500px at 85% -10%,rgba(216,178,106,.16),transparent),radial-gradient(700px 600px at 10% 110%,rgba(120,80,200,.24),transparent);
+  --al-glass: rgba(255,255,255,.04); --al-glass-2: rgba(255,255,255,.04);
+  --al-glass-strong: #1d1938; --al-glass-strong-2: #1d1938;
+  --al-field: rgba(255,255,255,.05); --al-tile: rgba(255,255,255,.04);
+  /* lines */
+  --al-line-1: rgba(255,255,255,.08); --al-line-2: rgba(216,178,106,.22); --al-line-3: rgba(216,178,106,.22); --al-line-4: rgba(216,178,106,.22);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #f3ecdf; --al-text-2: #c9c0d8; --al-text-3: #a198b8; --al-text-4: #a198b8; --al-text-5: #a198b8;
+  /* accent */
+  --al-cyan: #d8b26a; --al-cyan-ink: #1a1405;
+  --al-cyan-a06: rgba(216,178,106,.16); --al-cyan-a12: rgba(216,178,106,.16); --al-accent-text: #ecd29b;
+  --al-nav-active-bg: rgba(216,178,106,.16); --al-nav-active-text: #ecd29b;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(120,200,150,.16);  --al-tone-accent-ink: #9fe0b5;
+  --al-tone-default: rgba(140,160,255,.16); --al-tone-default-ink: #b8c3ff;
+  --al-tone-warn: rgba(240,150,90,.16);   --al-tone-warn-ink: #f6b68a;
+  --al-tone-people: rgba(200,150,240,.16);  --al-tone-people-ink: #dcbaf7;
+  --al-warn: #f0965a; --al-warn-text: #f6b68a; --al-ok: #78c896;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#a8843e,#d8b26a,#f2d79a); --al-track: rgba(255,255,255,.08);
+  --al-bar-height: 8px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,245,220,.7);
+  /* light / depth */
+  --al-glow: 0 0 12px rgba(216,178,106,.35); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 20px 40px rgba(0,0,0,.35); --al-shadow-pop: 0 20px 40px rgba(0,0,0,.35);
+  --al-focus: 0 0 0 2px #14112a, 0 0 0 4px #d8b26a;
+  /* shape */
+  --al-radius-card: 16px; --al-radius-inner: 10px; --al-radius-control: 999px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "DM Serif Display", serif;
+  --al-font: "Figtree", system-ui, sans-serif;
+  --al-mono: "DM Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: none; --al-display-tracking: 0;
+  --al-label-case: none; --al-label-tracking: .02em; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

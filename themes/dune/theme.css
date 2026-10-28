@@ -1,0 +1,61 @@
+/* Desert Dune: an Arclight theme pack (light).
+   High-noon sandstone. Warm sand, terracotta accent, sun-faded sage, softly arched corners.
+   Active when <html data-theme="dune">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Instrument Serif"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/instrument-serif-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Schibsted Grotesk"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/schibsted-grotesk-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Schibsted Grotesk"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/schibsted-grotesk-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Schibsted Grotesk"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/schibsted-grotesk-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/dm-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/dm-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="dune"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #ecdfc8; --al-deep: #ecdfc8;
+  --al-backdrop: radial-gradient(900px 400px at 50% 120%,rgba(200,110,60,.22),transparent),radial-gradient(500px 300px at 85% -5%,rgba(255,230,180,.7),transparent);
+  --al-glass: #f3e8d4; --al-glass-2: #f3e8d4;
+  --al-glass-strong: #f7eedf; --al-glass-strong-2: #f7eedf;
+  --al-field: #fbf5ea; --al-tile: #efe3cd;
+  /* lines */
+  --al-line-1: #e2d2b6; --al-line-2: #d8c4a2; --al-line-3: #d8c4a2; --al-line-4: #d8c4a2;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #2e1f14; --al-text-2: #54402f; --al-text-3: #6e5845; --al-text-4: #6e5845; --al-text-5: #6e5845;
+  /* accent */
+  --al-cyan: #b5532b; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #f3d6c6; --al-cyan-a12: #f3d6c6; --al-accent-text: #8c3814;
+  --al-nav-active-bg: #2e1f14; --al-nav-active-text: #f7eedf;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #dde6d2;  --al-tone-accent-ink: #3c5a2c;
+  --al-tone-default: #dce4e6; --al-tone-default-ink: #33545e;
+  --al-tone-warn: #f5e0bd;   --al-tone-warn-ink: #7a4800;
+  --al-tone-people: #eadbe2;  --al-tone-people-ink: #6a3d55;
+  --al-warn: #d9892c; --al-warn-text: #7a4800; --al-ok: #6b8a4e;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#d98a4e,#b5532b); --al-track: #e4d5bb;
+  --al-bar-height: 6px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,250,240,.6);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 10px 24px rgba(120,70,30,.08); --al-shadow-pop: 0 10px 24px rgba(120,70,30,.08);
+  --al-focus: 0 0 0 2px #ecdfc8, 0 0 0 4px #b5532b;
+  /* shape */
+  --al-radius-card: 14px; --al-radius-inner: 10px; --al-radius-control: 999px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Instrument Serif", serif;
+  --al-font: "Schibsted Grotesk", system-ui, sans-serif;
+  --al-mono: "DM Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: none; --al-display-tracking: 0;
+  --al-label-case: uppercase; --al-label-tracking: .12em; --al-label-size: 11px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="dune"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

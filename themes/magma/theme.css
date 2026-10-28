@@ -1,0 +1,54 @@
+/* Magma: an Arclight theme pack (dark).
+   Volcanic basalt. Charcoal rock, molten orange glow, cracked-ember gradients, chunky 10px corners.
+   Active when <html data-theme="magma">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Anton"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/anton-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/barlow-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/barlow-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Barlow"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/barlow-latin-700-normal.woff2) format("woff2"); }
+
+[data-theme="magma"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #120c0a; --al-deep: #120c0a;
+  --al-backdrop: radial-gradient(800px 400px at 50% 115%,rgba(255,90,20,.32),transparent),radial-gradient(500px 300px at 95% 0,rgba(255,60,20,.12),transparent);
+  --al-glass: #17100d; --al-glass-2: #17100d;
+  --al-glass-strong: #1d1411; --al-glass-strong-2: #1d1411;
+  --al-field: rgba(255,255,255,.04); --al-tile: rgba(255,255,255,.03);
+  /* lines */
+  --al-line-1: rgba(255,120,60,.12); --al-line-2: rgba(255,120,60,.2); --al-line-3: rgba(255,120,60,.2); --al-line-4: rgba(255,120,60,.2);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #fff0e6; --al-text-2: #e0c2b0; --al-text-3: #b8978a; --al-text-4: #b8978a; --al-text-5: #b8978a;
+  /* accent */
+  --al-cyan: #ff6a1f; --al-cyan-ink: #1f0800;
+  --al-cyan-a06: rgba(255,106,31,.16); --al-cyan-a12: rgba(255,106,31,.16); --al-accent-text: #ffb487;
+  --al-nav-active-bg: rgba(255,106,31,.16); --al-nav-active-text: #ffb487;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(160,220,110,.14);  --al-tone-accent-ink: #c2eb9a;
+  --al-tone-default: rgba(150,180,220,.14); --al-tone-default-ink: #c4d6ee;
+  --al-tone-warn: rgba(255,200,60,.16);   --al-tone-warn-ink: #ffd982;
+  --al-tone-people: rgba(230,120,160,.16);  --al-tone-people-ink: #f6b6cd;
+  --al-warn: #ffc83c; --al-warn-text: #ffd982; --al-ok: #a0dc6e;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#8a1a00,#ff3d00,#ff9a3c,#ffd27a); --al-track: rgba(255,255,255,.07);
+  --al-bar-height: 8px; --al-radius-bar: 2px;
+  --al-shimmer: rgba(255,230,200,.7);
+  /* light / depth */
+  --al-glow: 0 0 14px rgba(255,106,31,.6); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 16px 34px rgba(0,0,0,.45); --al-shadow-pop: 0 16px 34px rgba(0,0,0,.45);
+  --al-focus: 0 0 0 2px #120c0a, 0 0 0 4px #ff6a1f;
+  /* shape */
+  --al-radius-card: 10px; --al-radius-inner: 6px; --al-radius-control: 6px; --al-radius-avatar: 6px;
+  /* type */
+  --al-display: "Anton", system-ui, sans-serif;
+  --al-font: "Barlow", system-ui, sans-serif;
+  --al-mono: "JetBrains Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: uppercase; --al-display-tracking: .02em;
+  --al-label-case: uppercase; --al-label-tracking: .12em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

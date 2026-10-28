@@ -1,0 +1,16 @@
+{
+  "id": "graphite",
+  "name": "Graphite",
+  "version": "1.0.0",
+  "description": "Pro-tool neutral. Layered charcoal greys, one violet accent, 8px corners, crisp hairlines.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#0e0f11",
+    "#8b7cff",
+    "#86e0aa",
+    "#f3c57a",
+    "#efb0e2"
+  ]
+}

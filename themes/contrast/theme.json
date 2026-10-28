@@ -1,0 +1,16 @@
+{
+  "id": "contrast",
+  "name": "High Contrast",
+  "version": "1.0.0",
+  "description": "Accessibility first. Pure black and white, yellow focus, 2px outlines, Atkinson Hyperlegible.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#000000",
+    "#ffe600",
+    "#5cff8f",
+    "#ffb000",
+    "#ffffff"
+  ]
+}

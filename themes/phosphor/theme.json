@@ -1,0 +1,16 @@
+{
+  "id": "phosphor",
+  "name": "Terminal Phosphor",
+  "version": "1.0.0",
+  "description": "A green-screen CRT. Monospace everywhere, scanlines, block progress, zero radius.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#040804",
+    "#7dff9b",
+    "#9dffb4",
+    "#ffd76e",
+    "#8dffa8"
+  ]
+}

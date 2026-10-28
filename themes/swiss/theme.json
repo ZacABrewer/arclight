@@ -1,0 +1,16 @@
+{
+  "id": "swiss",
+  "name": "Swiss Grid",
+  "version": "1.0.0",
+  "description": "International Typographic Style. White, black, one signal red, strict grid, tight grotesk.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#ffffff",
+    "#e30613",
+    "#e6f2e8",
+    "#fdf0d6",
+    "#eeeeee"
+  ]
+}

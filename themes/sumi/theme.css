@@ -1,0 +1,61 @@
+/* Sumi Ink: an Arclight theme pack (light).
+   Brush and washi. Ink black on warm paper, vermilion seal accent, thin brushed rules.
+   Active when <html data-theme="sumi">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Shippori Mincho"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/shippori-mincho-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Zen Kaku Gothic New"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/zen-kaku-gothic-new-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Zen Kaku Gothic New"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/zen-kaku-gothic-new-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "Zen Kaku Gothic New"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/zen-kaku-gothic-new-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="sumi"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #f2ede3; --al-deep: #f2ede3;
+  --al-backdrop: radial-gradient(900px 600px at 105% -10%,rgba(20,20,20,.07),transparent 60%),radial-gradient(rgba(0,0,0,.04) .8px,transparent 1px) 0 0/5px 5px;
+  --al-glass: #f2ede3; --al-glass-2: #f2ede3;
+  --al-glass-strong: #f8f5ee; --al-glass-strong-2: #f8f5ee;
+  --al-field: #fbf9f4; --al-tile: #efe9dd;
+  /* lines */
+  --al-line-1: #ddd6c8; --al-line-2: #cfc7b7; --al-line-3: #cfc7b7; --al-line-4: #cfc7b7;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #141414; --al-text-2: #3c3a36; --al-text-3: #5f5b53; --al-text-4: #5f5b53; --al-text-5: #5f5b53;
+  /* accent */
+  --al-cyan: #c8321f; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #f5dbd5; --al-cyan-a12: #f5dbd5; --al-accent-text: #9a2414;
+  --al-nav-active-bg: #141414; --al-nav-active-text: #f8f5ee;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #e0e8dc;  --al-tone-accent-ink: #2d4d2a;
+  --al-tone-default: #e2e4e6; --al-tone-default-ink: #2e3b48;
+  --al-tone-warn: #f2e4c8;   --al-tone-warn-ink: #6e4300;
+  --al-tone-people: #e8e0e6;  --al-tone-people-ink: #563a4e;
+  --al-warn: #c8321f; --al-warn-text: #6e4300; --al-ok: #141414;
+  /* progress */
+  --al-trail: #141414; --al-track: #e2dbcd;
+  --al-bar-height: 3px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,255,255,.5);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-focus: 0 0 0 2px #f2ede3, 0 0 0 4px #c8321f;
+  /* shape */
+  --al-radius-card: 4px; --al-radius-inner: 2px; --al-radius-control: 2px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Shippori Mincho", serif;
+  --al-font: "Zen Kaku Gothic New", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 600; --al-display-case: none; --al-display-tracking: .02em;
+  --al-label-case: none; --al-label-tracking: .08em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="sumi"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

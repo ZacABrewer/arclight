@@ -76,7 +76,7 @@
   --al-warn-wash: rgba(40,16,4,.55); --al-warn-wash-2: rgba(40,16,4,.4); --al-danger-wash: rgba(40,6,4,.55);
   /* text extras */
   /* the accent used as text (links, counts); a light pack whose accent fill is too pale for text sets it darker */
-  --al-cyan-text: var(--al-cyan);
+  --al-cyan-text: var(--al-accent-text);
   --al-label: #8fb3bd; --al-placeholder: #6f939b; --al-rail-ink: #5d8790; --al-text-6: #3f5e66;
   /* focus and field rings */
   --al-focus-danger: 0 0 0 2px #000, 0 0 0 4px rgba(255,90,70,.7);
@@ -105,9 +105,29 @@
   --al-hero-shadow: 0 30px 60px rgba(0,0,0,.6);
   /* light effects and the Tron backdrop */
   --al-glint-a85: rgba(200,252,255,.85); --al-glint-a90: rgba(200,252,255,.9);
-  --al-packet-a00: rgba(233,253,255,0); --al-packet-a95: rgba(233,253,255,.95);
+  --al-packet-a00: rgba(233,253,255,0); --al-packet-a95: var(--al-shimmer);
   --al-scanline: rgba(255,255,255,.015); --al-vignette: rgba(0,0,0,.7);
   --al-spire-tip: rgba(220,253,255,.95); --al-reflection: rgba(150,250,255,.3); --al-core: #f2feff;
+  /* ---- shared pack vocabulary (v1.3), Tron values. Themes set these by name; see
+     styles/arclight/packs.css for what a pack gets when it leaves one out. Not defined here, so
+     each rule keeps its own Tron value as the var() fallback: --al-display-weight,
+     --al-display-case, --al-display-tracking, --al-label-case, --al-label-tracking,
+     --al-label-size, --al-label-font. ---- */
+  --al-backdrop: none; --al-tile: #03121a;
+  --al-border-width: 1px;
+  --al-accent-text: var(--al-cyan);
+  --al-nav-active-bg: rgba(110,246,255,.1); --al-nav-active-text: var(--al-text-1);
+  --al-ok: var(--al-cyan);
+  --al-track: rgba(110,246,255,.1); --al-bar-height: 2px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(233,253,255,.95);
+  --al-radius-avatar: 0px;
+  /* chip tones: fill / ink / outline / dot. Packs usually set only the fill and ink. */
+  --al-tone-accent: rgba(110,246,255,.12); --al-tone-accent-ink: var(--al-text-1); --al-tone-accent-line: var(--al-cyan); --al-tone-accent-dot: var(--al-cyan);
+  --al-tone-default: transparent; --al-tone-default-ink: var(--al-text-2); --al-tone-default-line: var(--al-line-3); --al-tone-default-dot: var(--al-cyan);
+  --al-tone-warn: transparent; --al-tone-warn-ink: var(--al-warn-text); --al-tone-warn-line: var(--al-warn-line); --al-tone-warn-dot: var(--al-warn);
+  --al-tone-danger: rgba(255,90,70,.06); --al-tone-danger-ink: var(--al-danger-text); --al-tone-danger-line: var(--al-danger-line); --al-tone-danger-dot: var(--al-danger);
+  --al-tone-neutral: transparent; --al-tone-neutral-ink: var(--al-text-3); --al-tone-neutral-line: var(--al-neutral-line); --al-tone-neutral-dot: var(--al-text-5);
+  --al-tone-people: rgba(110,246,255,.12); --al-tone-people-ink: var(--al-text-1);
 }
 
 /* ---------- base ---------- */
@@ -118,14 +138,14 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-num, .al-mono { font-family: var(--al-mono); font-variant-numeric: tabular-nums; }
 
 /* ---------- type ---------- */
-.al-display  { font-family: var(--al-display); font-size: 44px; font-weight: 600; font-stretch: 125%; letter-spacing: .06em; color: var(--al-text-1); }
-.al-title-xl { font-family: var(--al-display); font-size: 44px; font-weight: 600; font-stretch: 118%; line-height: 1; color: var(--al-text-1); }
-.al-title-l  { font-family: var(--al-display); font-size: 28px; font-weight: 500; font-stretch: 118%; color: var(--al-text-1); }
-.al-title-m  { font-family: var(--al-display); font-size: 22px; font-weight: 600; font-stretch: 112%; color: var(--al-text-1); }
+.al-display  { font-family: var(--al-display); font-size: 44px; font-weight: var(--al-display-weight, 600); font-stretch: 125%; letter-spacing: var(--al-display-tracking, .06em); text-transform: var(--al-display-case, none); color: var(--al-text-1); }
+.al-title-xl { font-family: var(--al-display); font-size: 44px; font-weight: var(--al-display-weight, 600); font-stretch: 118%; letter-spacing: var(--al-display-tracking, normal); text-transform: var(--al-display-case, none); line-height: 1; color: var(--al-text-1); }
+.al-title-l  { font-family: var(--al-display); font-size: 28px; font-weight: var(--al-display-weight, 500); font-stretch: 118%; letter-spacing: var(--al-display-tracking, normal); text-transform: var(--al-display-case, none); color: var(--al-text-1); }
+.al-title-m  { font-family: var(--al-display); font-size: 22px; font-weight: var(--al-display-weight, 600); font-stretch: 112%; letter-spacing: var(--al-display-tracking, normal); text-transform: var(--al-display-case, none); color: var(--al-text-1); }
 .al-body-l   { font-size: 16px; font-weight: 500; color: var(--al-text-1); }
 .al-body     { font-size: 14px; color: var(--al-text-2); }
 .al-caption  { font-size: 13px; color: var(--al-text-4); }
-.al-label    { font-family: var(--al-mono); font-size: 11px; font-weight: 500; letter-spacing: .24em; text-transform: uppercase; color: var(--al-label); }
+.al-label    { font-family: var(--al-label-font, var(--al-mono)); font-size: var(--al-label-size, 11px); font-weight: 500; letter-spacing: var(--al-label-tracking, .24em); text-transform: var(--al-label-case, uppercase); color: var(--al-label); }
 .al-index    { font-family: var(--al-mono); font-size: 12px; letter-spacing: .2em; color: var(--al-cyan-text); }
 
 /* ---------- backdrop (see Arclight Backdrop.dc.html for the generated floor) ---------- */
@@ -140,7 +160,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 /* ---------- glass ---------- */
 .al-pane { position: relative; background: linear-gradient(180deg, var(--al-glass), var(--al-glass-2));
   -webkit-backdrop-filter: blur(var(--al-blur)) saturate(150%); backdrop-filter: blur(var(--al-blur)) saturate(150%);
-  border: 1px solid var(--al-line-2); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-card); }
+  border: var(--al-border-width) solid var(--al-line-2); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-card); }
 .al-pane::before { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--al-sheen); pointer-events: none; }
 .al-pane > * { position: relative; }
 /* hero chamfer — max 2 per screen. Variants: tl (top-left), br (bottom-right), both */
@@ -156,7 +176,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 
 /* ---------- buttons ---------- */
 .al-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; height: 38px; padding: 0 16px;
-  font: 600 14px/1 var(--al-font); border: 1px solid transparent; border-radius: var(--al-radius-control); background: transparent; color: var(--al-text-2);
+  font: 600 14px/1 var(--al-font); border: var(--al-border-width) solid transparent; border-radius: var(--al-radius-control); background: transparent; color: var(--al-text-2);
   cursor: pointer; transition: background var(--t-fast) var(--ease-out), border-color var(--t-fast) var(--ease-out), color var(--t-fast); }
 .al-btn--sm { height: 32px; padding: 0 12px; font-size: 13px; } .al-btn--lg { height: 46px; padding: 0 22px; font-size: 15px; }
 .al-btn--primary { background: var(--al-cyan); border-color: var(--al-cyan); color: var(--al-cyan-ink); }
@@ -178,7 +198,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-field__label { font-size: 13px; color: var(--al-text-3); }
 .al-field__help { font-size: 12px; color: var(--al-text-4); }
 .al-input, .al-select { height: 40px; padding: 0 12px; width: 100%; font: 14px var(--al-font); color: var(--al-text-1);
-  background: var(--al-field); border: 1px solid var(--al-line-a22); border-radius: var(--al-radius-field); transition: border-color var(--t-fast); }
+  background: var(--al-field); border: var(--al-border-width) solid var(--al-line-a22); border-radius: var(--al-radius-field); transition: border-color var(--t-fast); }
 .al-input--mono { font-family: var(--al-mono); font-size: 13px; }
 .al-input::placeholder { color: var(--al-placeholder); }
 .al-input:hover { border-color: var(--al-line-3); }
@@ -188,7 +208,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-input:disabled { opacity: .45; }
 
 /* toggle: <button class="al-toggle" role="switch" aria-checked="true"></button> */
-.al-toggle { position: relative; width: 36px; height: 20px; padding: 0; border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); background: transparent; cursor: pointer; }
+.al-toggle { position: relative; width: 36px; height: 20px; padding: 0; border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-control); background: transparent; cursor: pointer; }
 .al-toggle::after { content: ""; position: absolute; left: 2px; top: 2px; width: 14px; height: 14px; border-radius: var(--al-radius-control); background: var(--al-text-5); transition: left var(--t-fast) var(--ease-out), background var(--t-fast); }
 .al-toggle[aria-checked="true"] { border-color: var(--al-cyan); background: var(--al-cyan-a20); }
 .al-toggle[aria-checked="true"]::after { left: 18px; background: var(--al-cyan); }
@@ -198,7 +218,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-check:indeterminate { border-color: var(--al-cyan); } .al-check:indeterminate::after { content: ""; width: 8px; height: 2px; background: var(--al-cyan); }
 
 /* segmented + tabs */
-.al-seg { display: inline-flex; border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); }
+.al-seg { display: inline-flex; border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-control); }
 .al-seg > button { padding: 7px 16px; border: 0; border-radius: var(--al-radius-control); background: transparent; font: 500 14px var(--al-font); color: var(--al-text-3); cursor: pointer; }
 .al-seg > button[aria-pressed="true"] { background: var(--al-cyan); color: var(--al-cyan-ink); }
 .al-seg--soft > button[aria-pressed="true"] { background: var(--al-cyan-a14); color: var(--al-text-1); }
@@ -208,7 +228,7 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 
 /* ---------- chips & tags ---------- */
 .al-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 24px; padding: 3px 8px; font: 500 12px var(--al-font); line-height: 1.35; white-space: normal; overflow-wrap: break-word;
-  border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control); color: var(--al-text-2); }
+  border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-control); color: var(--al-text-2); }
 .al-chip::before { content: ""; flex: none; width: 6px; height: 6px; background: var(--al-cyan); }
 .al-chip[data-status="downloading"], .al-chip[data-status="importing"], .al-chip[data-status="monitored"] { border-color: var(--al-cyan); color: var(--al-text-1); background: var(--al-cyan-a12); }
 .al-chip[data-status="unaired"] { border-color: var(--al-neutral-line); color: var(--al-label); } .al-chip[data-status="unaired"]::before { background: none; border: 1px solid var(--al-label); }
@@ -219,9 +239,9 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-chip[data-status="cutoff"]::before { background: none; border: 1px solid var(--al-warn); }
 .al-chip[data-status="stalled"] { background: var(--al-warn-a06); }
 .al-chip[data-status="failed"] { border-color: var(--al-danger-line); color: var(--al-danger-text); background: var(--al-danger-a06); } .al-chip[data-status="failed"]::before { background: var(--al-danger); }
-.al-tag { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; font-size: 13px; color: var(--al-text-3); border: 1px solid var(--al-line-2); border-radius: var(--al-radius-control); }
-.al-quality { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; font: 12px var(--al-mono); color: var(--al-text-2); border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-check); }
-.al-proto { display: inline-block; padding: 2px 6px; font: 10px var(--al-mono); color: var(--al-text-3); border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-check); }
+.al-tag { display: inline-flex; align-items: center; gap: 8px; height: 26px; padding: 0 10px; font-size: 13px; color: var(--al-text-3); border: var(--al-border-width) solid var(--al-line-2); border-radius: var(--al-radius-control); }
+.al-quality { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; font: 12px var(--al-mono); color: var(--al-text-2); border: var(--al-border-width) solid var(--al-line-a30); border-radius: var(--al-radius-check); }
+.al-proto { display: inline-block; padding: 2px 6px; font: 10px var(--al-mono); color: var(--al-text-3); border: var(--al-border-width) solid var(--al-line-a30); border-radius: var(--al-radius-check); }
 .al-score { display: inline-flex; align-items: center; height: 24px; padding: 0 8px; font: 12px var(--al-mono); border-radius: var(--al-radius-check); background: var(--al-cyan-a08); color: var(--al-text-2); }
 .al-score--high { background: var(--al-cyan-a14); color: var(--al-cyan-text); } .al-score--neg { background: var(--al-danger-a12); color: var(--al-danger-text); }
 
@@ -236,14 +256,14 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 .al-trail[data-state="paused"]::after { background: var(--al-cyan-a35); } .al-trail[data-state="paused"] > i { display: block; background: var(--al-text-5); }
 .al-trail[data-state="stalled"]::after { background: linear-gradient(90deg, var(--al-warn-a00), var(--al-warn)); } .al-trail[data-state="stalled"] > i { display: block; background: var(--al-warn); }
 .al-trail[data-state="failed"]::after { background: var(--al-danger); }
-.al-meter { height: 2px; background: var(--al-cyan-a10); } .al-meter > span { display: block; height: 100%; width: var(--p, 0%); background: var(--al-cyan); }
+.al-meter { height: var(--al-bar-height); border-radius: var(--al-radius-bar); background: var(--al-track); } .al-meter > span { display: block; height: 100%; width: var(--p, 0%); border-radius: var(--al-radius-bar); background: var(--al-cyan); }
 .al-meter--warn > span { background: var(--al-warn); }
 .al-ring { --p: 0; position: relative; width: 84px; height: 84px; border-radius: 50%;
-  background: conic-gradient(var(--al-cyan) calc(var(--p) * 1%), var(--al-cyan-a10) 0);
+  background: conic-gradient(var(--al-cyan) calc(var(--p) * 1%), var(--al-track) 0);
   -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); mask: radial-gradient(farthest-side, transparent calc(100% - 4px), #000 calc(100% - 3px)); }
 
 /* ---------- status dot ---------- */
-.al-live { width: 7px; height: 7px; border-radius: 50%; background: var(--al-cyan); box-shadow: 0 0 10px var(--al-cyan); animation: al-breathe 2.4s ease-in-out infinite; }
+.al-live { width: 7px; height: 7px; border-radius: 50%; background: var(--al-ok); box-shadow: 0 0 10px var(--al-ok); animation: al-breathe 2.4s ease-in-out infinite; }
 .al-live[data-state="down"] { background: var(--al-warn); box-shadow: none; animation: none; }
 
 /* ---------- table ---------- */
@@ -257,27 +277,27 @@ a { color: var(--al-cyan-text); text-decoration: none; } a:hover { color: var(--
 /* ---------- overlays ---------- */
 .al-floatbar { display: flex; align-items: center; gap: 4px; height: 58px; padding: 0 10px 0 20px;
   background: var(--al-floatbar-bg); -webkit-backdrop-filter: blur(24px); backdrop-filter: blur(24px);
-  border: 1px solid var(--al-line-a45); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
+  border: var(--al-border-width) solid var(--al-line-a45); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
   clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer-bar) 0, 100% 0, 100% calc(100% - var(--al-chamfer-bar)), calc(100% - var(--al-chamfer-bar)) 100%, 0 100%, 0 var(--al-chamfer-bar))); }
 .al-scrim { position: fixed; inset: 0; background: var(--al-scrim); z-index: 80; }
 .al-modal { position: relative; width: min(520px, calc(100vw - 32px)); background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
-  border: 1px solid var(--al-line-a30); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
+  border: var(--al-border-width) solid var(--al-line-a30); border-radius: var(--al-radius-card); box-shadow: var(--al-shadow-pop);
   clip-path: var(--al-chamfer-clip, polygon(var(--al-chamfer-modal) 0, 100% 0, 100% 100%, 0 100%, 0 var(--al-chamfer-modal))); z-index: 90; animation: al-rezz var(--t-base) var(--ease-out); }
 .al-modal__title { padding: 22px 24px 6px; font-family: var(--al-display); font-size: 19px; font-weight: 600; color: var(--al-text-1); }
 .al-modal__body { padding: 6px 24px 18px; font-size: 14px; line-height: 1.5; color: var(--al-text-3); }
 .al-modal__foot { display: flex; justify-content: flex-end; gap: 10px; padding: 14px 24px; border-top: 1px solid var(--al-line-a14); }
 .al-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(620px, 100vw); z-index: 85; background: linear-gradient(180deg, var(--al-glass-strong), var(--al-glass-strong-2));
-  -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-left: 1px solid var(--al-line-a30); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
+  -webkit-backdrop-filter: blur(28px); backdrop-filter: blur(28px); border-left: var(--al-border-width) solid var(--al-line-a30); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
 .al-toast { display: flex; align-items: flex-start; gap: 12px; width: 360px; padding: 12px 14px; background: var(--al-toast-bg);
-  border: 1px solid var(--al-line-a25); border-left: 2px solid var(--al-cyan); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
+  border: var(--al-border-width) solid var(--al-line-a25); border-left: 2px solid var(--al-cyan); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); animation: al-slide var(--t-base) var(--ease-out); }
 .al-toast[data-tone="warn"] { border-color: var(--al-warn-a35); border-left-color: var(--al-warn); }
 .al-toast[data-tone="danger"] { border-color: var(--al-danger-a35); border-left-color: var(--al-danger); }
-.al-tooltip { max-width: 320px; padding: 10px 12px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: 1px solid var(--al-line-3); border-radius: var(--al-radius-check); box-shadow: var(--al-shadow-pop); }
+.al-tooltip { max-width: 320px; padding: 10px 12px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-check); box-shadow: var(--al-shadow-pop); }
 
 /* ---------- states ---------- */
 .al-empty { display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 40px 20px; text-align: center; border: 1px dashed var(--al-line-a30); border-radius: var(--al-radius-card); }
 .al-skeleton { background: linear-gradient(90deg, var(--al-cyan-a06), var(--al-cyan-a16), var(--al-cyan-a06)); background-size: 200% 100%; animation: al-shimmer 1.4s linear infinite; }
-.al-error { padding: 16px; border: 1px solid var(--al-danger-a40); border-radius: var(--al-radius-inner); background: var(--al-danger-a05); }
+.al-error { padding: 16px; border: var(--al-border-width) solid var(--al-danger-a40); border-radius: var(--al-radius-inner); background: var(--al-danger-a05); }
 
 /* ---------- circuit trace (decorative, aria-hidden) ---------- */
 .al-trace { position: absolute; height: 1px; background: var(--al-trace); transform-origin: 0 50%; pointer-events: none; }

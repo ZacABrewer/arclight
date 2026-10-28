@@ -2,9 +2,932 @@
   "schema": 1,
   "themes": [
     {
+      "id": "abyss",
+      "name": "Abyssal",
+      "version": "1.0.0",
+      "description": "Deep ocean trench. Ink-teal water, bioluminescent cyan and jellyfish violet, glassy rounded panels.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#03141c",
+        "#3ff0e0",
+        "#a5ffc6",
+        "#ffcb8f",
+        "#d2baff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 349,
+          "sha256": "e83618ea03cb9e98f6b04168a332de7a4517155806f1af43ffc5bf008a25dccb"
+        },
+        {
+          "path": "theme.css",
+          "size": 3309,
+          "sha256": "b6d3e6760842f790fa30b002bac75811546c5c8586c76a6c870a82711b5a8cc9"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 4612,
+          "sha256": "92711d4cdfdc16921b04015a4728b0c3467820761f841a25de472f42efccc47d"
+        },
+        {
+          "path": "fonts/outfit-latin-400-normal.woff2",
+          "size": 14032,
+          "sha256": "71f028fd2349990b3f8aa643abe767e82e0f596be407ae66f0004ff164121bdb"
+        },
+        {
+          "path": "fonts/outfit-latin-600-normal.woff2",
+          "size": 14140,
+          "sha256": "8cfe15c2c6de6ef8efff3eedbd52a383ac9ef23d6c23f6cd9f9b838f5f37dc36"
+        },
+        {
+          "path": "fonts/outfit-latin-700-normal.woff2",
+          "size": 14060,
+          "sha256": "5d5e3734089a74707292ce8a3e186def34cd63e33879f9ac3689a8d8da9d0706"
+        }
+      ]
+    },
+    {
+      "id": "arcade",
+      "name": "Arcade Pixel",
+      "version": "1.0.0",
+      "description": "8-bit cabinet. Chunky 4px borders, pixel headings, primary colours, stepped shadows.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#0d0b1e",
+        "#ffde3b",
+        "#3bff8a",
+        "#ff8a3b",
+        "#ff5ec8"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 340,
+          "sha256": "fca8f207770607252e366352a34b5ef11c3ca3585d76d811eb3dbf0d665f3f92"
+        },
+        {
+          "path": "theme.css",
+          "size": 4218,
+          "sha256": "f66e2924bcc77cc5deff8297d7a651931c2d5830f7c88af56840a408f1699e75"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5343,
+          "sha256": "1a09bf2260d2aa400268846fcbd2b96bbff45dfb34eddb2ed1b82a3eec716b90"
+        },
+        {
+          "path": "fonts/press-start-2p-latin-400-normal.woff2",
+          "size": 12512,
+          "sha256": "afec86997fdaf54af1f59358fa2c1e2a0f1d04146edad18e5cd141d0384a7548"
+        },
+        {
+          "path": "fonts/rubik-latin-400-normal.woff2",
+          "size": 18936,
+          "sha256": "82ac0e78285c43d0cd203427c57ab30fb07b18f8e6166045f729442eb1abfa26"
+        },
+        {
+          "path": "fonts/rubik-latin-600-normal.woff2",
+          "size": 19060,
+          "sha256": "6182043a20faf3fe1a8f0e2c7c964009e11de5e09852617fef3517cbf3c35513"
+        },
+        {
+          "path": "fonts/rubik-latin-700-normal.woff2",
+          "size": 19112,
+          "sha256": "e423f8ae1668156addf5e32f1056d5b22b5b113a9a23afd364df84a6fa88602d"
+        },
+        {
+          "path": "fonts/space-mono-latin-400-normal.woff2",
+          "size": 16520,
+          "sha256": "fb4a81a2d0a893e5c38c394a7e716a1cef0b24610a0af49c96f6d529bd66bf2b"
+        }
+      ]
+    },
+    {
+      "id": "blueprint",
+      "name": "Blueprint",
+      "version": "1.0.0",
+      "description": "Drafting table. Prussian blue, white linework, grid paper, dimension-style labels.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#0f3a6b",
+        "#ffffff",
+        "#a8f5d4",
+        "#ffd98a",
+        "#dfccff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 338,
+          "sha256": "d41e83400e3d7e6a5310ba395fcce3472e43187d8d7db8343280377797e238f3"
+        },
+        {
+          "path": "theme.css",
+          "size": 4019,
+          "sha256": "fa45e74707feb15a2d3c9de11f01c6decbbba3932d1f5011ed2966f627e36c4b"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 6804,
+          "sha256": "f68719310e5149d7323f7a0e031352b88ef98702c609e9d59b0257499a767b36"
+        },
+        {
+          "path": "fonts/big-shoulders-display-latin-700-normal.woff2",
+          "size": 14424,
+          "sha256": "d2d55115d0d7047ce956d4eb8f2fbfe7915552cf4fabb294a5979705ec9687ac"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-condensed-latin-400-normal.woff2",
+          "size": 19796,
+          "sha256": "456bf5cda9c0b1f1ead43f01b80df5ba5af7cb41d7cbc0543091537c39fb4c89"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-condensed-latin-600-normal.woff2",
+          "size": 19816,
+          "sha256": "3d72a0923c5830358b0a8e25b258aecadbecbf542b6ee9a25f387803e37d56b9"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-condensed-latin-700-normal.woff2",
+          "size": 19352,
+          "sha256": "4768878c107d92c528a65bba206a87cdcf2c694514e75907fb91772cf8a388a5"
+        }
+      ]
+    },
+    {
+      "id": "canopy",
+      "name": "Forest Canopy",
+      "version": "1.0.0",
+      "description": "Under the trees at dusk. Moss greens, amber light, generous 18px corners.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#102219",
+        "#e3b35a",
+        "#bfe39a",
+        "#f4ab84",
+        "#dcc6ea"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 330,
+          "sha256": "e067c576c19830e6eef0e9bef5be045582719fe9d8e7bba3b595a8f187e6eac4"
+        },
+        {
+          "path": "theme.css",
+          "size": 3726,
+          "sha256": "c955a0dd47e519ce5b57117bc17b48549785239ed6605c3b88915a14d49c2d37"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5563,
+          "sha256": "0b36452d39a203b061b5ab72bc5d648993cff5dcb3d8e19eea2757a953106262"
+        },
+        {
+          "path": "fonts/bricolage-grotesque-latin-700-normal.woff2",
+          "size": 22384,
+          "sha256": "4c373ce3c1cca41c864eb3e27c059a59fc6310547ab9c9b6cd780d387ba24206"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/figtree-latin-400-normal.woff2",
+          "size": 11384,
+          "sha256": "8f98dd642986f1fa39c45b89665a57372897c235b36028e0e4a136e43dc5f8ab"
+        },
+        {
+          "path": "fonts/figtree-latin-600-normal.woff2",
+          "size": 11544,
+          "sha256": "367d713287918784702563518f59239989da815c80d3c7337686b9816635a08b"
+        },
+        {
+          "path": "fonts/figtree-latin-700-normal.woff2",
+          "size": 11376,
+          "sha256": "7ec4f08d09f91d349917dd6592f6aaae66d8fe1bbd58fa24707961e79236616e"
+        }
+      ]
+    },
+    {
+      "id": "chrome",
+      "name": "Y2K Chrome",
+      "version": "1.0.0",
+      "description": "Millennium gadget. Brushed silver, iridescent sheen, bubbly pill controls, electric blue.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#dfe3ea",
+        "#1f5bff",
+        "#d8f5ea",
+        "#fde8cf",
+        "#f3defb"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 344,
+          "sha256": "5dd7efa2d77add974dbba27a7af48f52518c6bda1097e1a412c4c1d2064ec0dc"
+        },
+        {
+          "path": "theme.css",
+          "size": 3673,
+          "sha256": "9d4989c53746b24447498944d6a1577d8fa50b9b98c5b3b1e4a0b4247ffa7016"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5205,
+          "sha256": "1fd72b60a7afd4152cf715609f264780cc75ff5d7d5b3a743ae877717e42e644"
+        },
+        {
+          "path": "fonts/sora-latin-400-normal.woff2",
+          "size": 14724,
+          "sha256": "98141d7eaa6e9ee35e0827d279018cd33c3e59c6650541ec7de1c692efd93942"
+        },
+        {
+          "path": "fonts/sora-latin-600-normal.woff2",
+          "size": 15000,
+          "sha256": "fa9ab76f30510ad92153c6d6d72d0508884b85e9f0148abdfa963231b2a4845a"
+        },
+        {
+          "path": "fonts/sora-latin-700-normal.woff2",
+          "size": 15128,
+          "sha256": "c3337a673c9bbbfe433091d3831714dd9a257951f16f41eb3fc650ec593cfac2"
+        },
+        {
+          "path": "fonts/space-mono-latin-400-normal.woff2",
+          "size": 16520,
+          "sha256": "fb4a81a2d0a893e5c38c394a7e716a1cef0b24610a0af49c96f6d529bd66bf2b"
+        },
+        {
+          "path": "fonts/unbounded-latin-700-normal.woff2",
+          "size": 21092,
+          "sha256": "477fa23002517a32f232316d859e7b672a044f20073babec8ed3dbcfdb8e041a"
+        }
+      ]
+    },
+    {
+      "id": "concrete",
+      "name": "Brutalist Concrete",
+      "version": "1.0.0",
+      "description": "Raw and loud. 3px black borders, hard offset shadows, safety-yellow accent, no curves.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#d9d6d0",
+        "#ffd400",
+        "#b9f5a0",
+        "#ff9b5e",
+        "#f2b5ff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 351,
+          "sha256": "3f82e7a383a1b79812519f765d55fecd81210a737d4df145dfba23be3573f1bd"
+        },
+        {
+          "path": "theme.css",
+          "size": 3397,
+          "sha256": "b9408191f5414028554362d7bb7f21902e917dcc55a92b4f959328c3ffbc545e"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5258,
+          "sha256": "04f10aeb3347f299c5e4ed3b82eaa7e3d19faf4f5be8c267aab234212c10f281"
+        },
+        {
+          "path": "fonts/archivo-black-latin-400-normal.woff2",
+          "size": 18604,
+          "sha256": "25f33e61cf995abd6be62931cf03bf427286259177b43618cc410ee0157cfd30"
+        },
+        {
+          "path": "fonts/space-grotesk-latin-400-normal.woff2",
+          "size": 13388,
+          "sha256": "65fd17fcbd2e2f522940b5f67ead3d23329e02891aa5495e74d11a499c0b0673"
+        },
+        {
+          "path": "fonts/space-grotesk-latin-600-normal.woff2",
+          "size": 13284,
+          "sha256": "685bbbf69fa616df1ef81847c85fc76be097ddfb3468ff2257be54511ab3130f"
+        },
+        {
+          "path": "fonts/space-grotesk-latin-700-normal.woff2",
+          "size": 12840,
+          "sha256": "35f8aec56cfd5cbfdb03cc68733a54a0b05bb3617ffcd5fd332badc0b045ca55"
+        },
+        {
+          "path": "fonts/space-mono-latin-400-normal.woff2",
+          "size": 16520,
+          "sha256": "fb4a81a2d0a893e5c38c394a7e716a1cef0b24610a0af49c96f6d529bd66bf2b"
+        }
+      ]
+    },
+    {
+      "id": "contrast",
+      "name": "High Contrast",
+      "version": "1.0.0",
+      "description": "Accessibility first. Pure black and white, yellow focus, 2px outlines, Atkinson Hyperlegible.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#000000",
+        "#ffe600",
+        "#5cff8f",
+        "#ffb000",
+        "#ffffff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 352,
+          "sha256": "03fd6a0bf9d7f44dd0a59a232cc099a299d01f875583f5136d10c1379abb5460"
+        },
+        {
+          "path": "theme.css",
+          "size": 3282,
+          "sha256": "702e216494d25049245d253137f10199d8269a1859a704d8ef235fcea5e8874d"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5907,
+          "sha256": "16781e06120cc2090e75a876ebf887fc85eae5f72fdd83892861724d15a1b1ec"
+        },
+        {
+          "path": "fonts/atkinson-hyperlegible-latin-400-normal.woff2",
+          "size": 17208,
+          "sha256": "d64ba838ef5472bba248620ec4fd8b5aa7cf0db2908e0bb230600caf279ba7bc"
+        },
+        {
+          "path": "fonts/atkinson-hyperlegible-latin-700-normal.woff2",
+          "size": 17524,
+          "sha256": "140e2bd25a7315c8a062508391426b0d8c3297400c947b8d847be28f73a199f0"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        }
+      ]
+    },
+    {
+      "id": "dune",
+      "name": "Desert Dune",
+      "version": "1.0.0",
+      "description": "High-noon sandstone. Warm sand, terracotta accent, sun-faded sage, softly arched corners.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#ecdfc8",
+        "#b5532b",
+        "#dde6d2",
+        "#f5e0bd",
+        "#eadbe2"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 343,
+          "sha256": "b9c7404b71b4fdcb99d93793a233ae924bbe4e1be24d6a7745a6a36667ead86b"
+        },
+        {
+          "path": "theme.css",
+          "size": 3709,
+          "sha256": "7d333a1af123ff9d035208f9da8ced3a4b4e00a22c6a69ea1148a249815acf76"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5751,
+          "sha256": "1523cd27640c3805c7c92d1985185f59f8f000fdecbe38ce1c25bf970dfb4337"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/instrument-serif-latin-400-normal.woff2",
+          "size": 21032,
+          "sha256": "5eb09b5ac0e28b67c2f041c8ba6d244604ca0c0980d65912ab2d47fed84ddc31"
+        },
+        {
+          "path": "fonts/schibsted-grotesk-latin-400-normal.woff2",
+          "size": 24344,
+          "sha256": "437cd97c802be9f10f60b4db8a723261e5c35dfe1529de0562981871028bd670"
+        },
+        {
+          "path": "fonts/schibsted-grotesk-latin-600-normal.woff2",
+          "size": 25180,
+          "sha256": "d00ac8735bf6b96cc4cfbfb22576c4168645547a264bd22d127c46519cab3250"
+        },
+        {
+          "path": "fonts/schibsted-grotesk-latin-700-normal.woff2",
+          "size": 25148,
+          "sha256": "d656a2dcc2bf850a9af5156f2de42f6051facfbaa8d5790cf31159de39bc2568"
+        }
+      ]
+    },
+    {
+      "id": "espresso",
+      "name": "Espresso",
+      "version": "1.0.0",
+      "description": "A warm café at closing time. Roasted browns, crema accent, round soft controls.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#1e1612",
+        "#d9a066",
+        "#c1dca5",
+        "#f2a582",
+        "#e7bfcd"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 338,
+          "sha256": "2f3a52b242e539441beec7dede9c9ca20c7c5e7d71f562d5c0618afe26b43932"
+        },
+        {
+          "path": "theme.css",
+          "size": 3658,
+          "sha256": "5b1364839257180645f6c800c716fab08dd56842fedfbf7b8c4c4cc839e1dffa"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5563,
+          "sha256": "1bcb456de84203b3ae4461708f85c5c010b0be40b7deb973506254b342157fc6"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/work-sans-latin-400-normal.woff2",
+          "size": 19900,
+          "sha256": "418b06936717d2e9b6c7a1fb61acb7e2f40030be4b230452f96505230e7b6b41"
+        },
+        {
+          "path": "fonts/work-sans-latin-600-normal.woff2",
+          "size": 20984,
+          "sha256": "c536b548fdcb2734cdc97e0ff0bf26e6719a8b067856d7021971f52ed53a874e"
+        },
+        {
+          "path": "fonts/work-sans-latin-700-normal.woff2",
+          "size": 20840,
+          "sha256": "c1e51267967030c3d8893931aa3b2e087b9caf44332cf7c384f4f4c22da0dadc"
+        },
+        {
+          "path": "fonts/young-serif-latin-400-normal.woff2",
+          "size": 26992,
+          "sha256": "6ba68b9927ad2a640d32cbea050ffc2b5d0ae6cbaa785afe470da9d6bf0ef39f"
+        }
+      ]
+    },
+    {
+      "id": "frost",
+      "name": "Nordic Frost",
+      "version": "1.0.0",
+      "description": "Calm Scandinavian utility. Cool greys, one clear blue, 12px corners, hairline cards.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#eef2f5",
+        "#2f6fdf",
+        "#dff1e8",
+        "#fbecd9",
+        "#ece6f7"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 340,
+          "sha256": "ca6daba9fb394e32a0188b25f78dfd86b2558825194888083b565d8e6b562b2b"
+        },
+        {
+          "path": "theme.css",
+          "size": 2989,
+          "sha256": "50937e39c60c4bd6d6828e039034f77761dc3e40745921f2d73c077fc49610ab"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 4610,
+          "sha256": "d15519500464d221ba19ac2f57798cb8fa9dd362e8dfed225e928f599be95dd7"
+        },
+        {
+          "path": "fonts/manrope-latin-400-normal.woff2",
+          "size": 14108,
+          "sha256": "849290ef12a2eeb9af5c11924120d11aa4ae8b435ed3347d7fc8bc240c293ca3"
+        },
+        {
+          "path": "fonts/manrope-latin-600-normal.woff2",
+          "size": 14172,
+          "sha256": "f7ac6258da20ab7541939b59851155753d1d24f1b30cbcb949077a3faa3d1593"
+        },
+        {
+          "path": "fonts/manrope-latin-700-normal.woff2",
+          "size": 14212,
+          "sha256": "d2a12c85a831e4b5db341767d0347fa3d1361d22a1fcb3e361a16b6c90080f71"
+        }
+      ]
+    },
+    {
+      "id": "graphite",
+      "name": "Graphite",
+      "version": "1.0.0",
+      "description": "Pro-tool neutral. Layered charcoal greys, one violet accent, 8px corners, crisp hairlines.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#0e0f11",
+        "#8b7cff",
+        "#86e0aa",
+        "#f3c57a",
+        "#efb0e2"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 344,
+          "sha256": "3a7a840b874bbbfcf3c021a7d74b66622d238d777c6ecc26783eb54a106c2084"
+        },
+        {
+          "path": "theme.css",
+          "size": 3291,
+          "sha256": "204cff81168860e93a00a46e302d45bc3a4979402e4b829f303cab77e660446a"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 4951,
+          "sha256": "ff0b4d2372a915b68dba4af8bea55023908b4df2febe6bf72ddff19a4f6af987"
+        },
+        {
+          "path": "fonts/geist-latin-400-normal.woff2",
+          "size": 12956,
+          "sha256": "ead637fd0b6b887d829b3ce3f25fdc242b1de0cfb69c0d97987933675d1315ba"
+        },
+        {
+          "path": "fonts/geist-latin-600-normal.woff2",
+          "size": 13372,
+          "sha256": "edde7cc4e2719898f981a6d970a756030fff75a8ed36dd6a457a60181b889ebf"
+        },
+        {
+          "path": "fonts/geist-latin-700-normal.woff2",
+          "size": 13364,
+          "sha256": "728e76ff0b76212419e83011f5202c2fd1144da9d7915a4fa787561f5a3f334d"
+        },
+        {
+          "path": "fonts/geist-mono-latin-400-normal.woff2",
+          "size": 9864,
+          "sha256": "3f98383b122fe015a48536cd4a1cda855a201718923ffe74931a01597107b9b5"
+        },
+        {
+          "path": "fonts/geist-mono-latin-500-normal.woff2",
+          "size": 10116,
+          "sha256": "72971bd4908d3984fa1b1426bb363730e4957e16a0f58bfbca76993095715488"
+        }
+      ]
+    },
+    {
+      "id": "magma",
+      "name": "Magma",
+      "version": "1.0.0",
+      "description": "Volcanic basalt. Charcoal rock, molten orange glow, cracked-ember gradients, chunky 10px corners.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#120c0a",
+        "#ff6a1f",
+        "#c2eb9a",
+        "#ffd982",
+        "#f6b6cd"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 345,
+          "sha256": "9f91d7797b362b5c88b41babdde542a45df8299059bd22bc12a16779d615f86e"
+        },
+        {
+          "path": "theme.css",
+          "size": 3427,
+          "sha256": "29e6f8ffa6645cbe2db63cb2f8809413ed22650313c6a8c84ae7a0708dfeb815"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 6363,
+          "sha256": "479ba114a9c45b510a89fb7d419839f377f58caa0dfd75db20a1bf97c7799cf0"
+        },
+        {
+          "path": "fonts/anton-latin-400-normal.woff2",
+          "size": 18612,
+          "sha256": "d0fa07ff63dd60cbc0e2f58e29c802dca2a5ae0276c999f59c6111ab7bbaec3b"
+        },
+        {
+          "path": "fonts/barlow-latin-400-normal.woff2",
+          "size": 22196,
+          "sha256": "b0a8ad37ac45f5fb22ced461576db72e44e295107aad7a9c8a7a4bad728fd03b"
+        },
+        {
+          "path": "fonts/barlow-latin-600-normal.woff2",
+          "size": 22772,
+          "sha256": "4b52ddd4836b592df0e4832b8286956883cdc651b015126bdd18f184b7f90cc3"
+        },
+        {
+          "path": "fonts/barlow-latin-700-normal.woff2",
+          "size": 22788,
+          "sha256": "2d797dd8b35dcb3413e1af9d7052b3f4f8c341a147cdcb01f4f06af80db53289"
+        }
+      ]
+    },
+    {
+      "id": "matcha",
+      "name": "Matcha",
+      "version": "1.0.0",
+      "description": "Tea-house calm. Whisked green on rice paper, pillowy 20px cards, soft shadows.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#f3f1e6",
+        "#4f7a28",
+        "#dcefd4",
+        "#f7e6c9",
+        "#ece3ee"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 329,
+          "sha256": "671e581a216a0b8239de2be2d4ff932b38982629cba1edbec1562af8f9299696"
+        },
+        {
+          "path": "theme.css",
+          "size": 3614,
+          "sha256": "6275f4c9dace6e5a05400c8db5a185c3f93a17f38bd7c49bf602c7a53e498418"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5551,
+          "sha256": "312ececb155192603727df9f04cb68e0b214ac11ca5e760f649e8b3c12310112"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/gloock-latin-400-normal.woff2",
+          "size": 26356,
+          "sha256": "9389ada8d35754635432c5565f03e8e3ce0f37f529207356426d1d9983b1bc29"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-400-normal.woff2",
+          "size": 13892,
+          "sha256": "d9976dd1dc9c0d65046b52810e7cc69cfc229ee9939628ffe637e17efe4ef1ed"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-600-normal.woff2",
+          "size": 14008,
+          "sha256": "e03e312b8b7abd8b69ecef4060ded626f80e45723becd13676ad8273cf568a6e"
+        },
+        {
+          "path": "fonts/nunito-sans-latin-700-normal.woff2",
+          "size": 13836,
+          "sha256": "cb84238e7b852f2d22b91a598289f13b31cbc7a2d618fd2c0628ecb69459fbeb"
+        }
+      ]
+    },
+    {
+      "id": "paper",
+      "name": "Paper Ledger",
+      "version": "1.0.0",
+      "description": "Editorial newsprint. Ink hairlines, ruled paper, a single oxblood accent. Square and quiet.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#f4efe4",
+        "#a3241c",
+        "#dde9d8",
+        "#f6e5c6",
+        "#e9e0ef"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 347,
+          "sha256": "ae069413f7b02c8d04553ae1bba6fd1a235d1f4746a20f7c1f46868b37e963fc"
+        },
+        {
+          "path": "theme.css",
+          "size": 3543,
+          "sha256": "859b2f276512560fe8ff250ee9967f054bf9c73bf06cfcde5a91f083fa04d3ff"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5981,
+          "sha256": "5a976d45088ef42dccb0dceb83f9e3828e6a6e4588b43e71d5697902ce50c70b"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-latin-400-normal.woff2",
+          "size": 22588,
+          "sha256": "3b646991d30055a93a4ecc499713d4347953a74a947ecab435ab72070cbdab0e"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-latin-600-normal.woff2",
+          "size": 24252,
+          "sha256": "8960851d691c054ed38e259bdcf1a6190d157b4203ed5bb32c632a863fb8ec2f"
+        },
+        {
+          "path": "fonts/ibm-plex-sans-latin-700-normal.woff2",
+          "size": 22832,
+          "sha256": "42e7b0c143c19df9d99fd896e76b48f846edf0902d200bc29796b34d12c33aa7"
+        },
+        {
+          "path": "fonts/newsreader-latin-500-normal.woff2",
+          "size": 23624,
+          "sha256": "5613e2fc8377392c02e8ac9d55014689fb5320a5f2a7be55e8088a314728ac2c"
+        }
+      ]
+    },
+    {
+      "id": "phosphor",
+      "name": "Terminal Phosphor",
+      "version": "1.0.0",
+      "description": "A green-screen CRT. Monospace everywhere, scanlines, block progress, zero radius.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#040804",
+        "#7dff9b",
+        "#9dffb4",
+        "#ffd76e",
+        "#8dffa8"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 344,
+          "sha256": "3f570d4bd71c83587bfe93e23925a44b804494a51edce1f2deb718334029728b"
+        },
+        {
+          "path": "theme.css",
+          "size": 3786,
+          "sha256": "11ae2b0115a4e77f8c0b3203ebd53ec6a9e5d48305f648ec7bfb1eebce7e95ea"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5639,
+          "sha256": "53d44f415500e6ee28155ea41ce366c6fef2ad026acc53965321fe0b67c00a3c"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-600-normal.woff2",
+          "size": 15620,
+          "sha256": "0d1f0b8d0722224e32e9f28261bdc86c79115be73444ae5eceb73976a1bcdf83"
+        },
+        {
+          "path": "fonts/vt323-latin-400-normal.woff2",
+          "size": 17936,
+          "sha256": "8ddbebcc1048154132e1d78eb9b1f7850bca1b7d857035ccf1cb4318ebc615b6"
+        }
+      ]
+    },
+    {
+      "id": "riso",
+      "name": "Riso Print",
+      "version": "1.0.0",
+      "description": "Zine-shop risograph. Fluoro pink and federal blue on off-white stock, grain, slight misregistration.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#f6f1e7",
+        "#e8288f",
+        "#d6f0e2",
+        "#fde6c8",
+        "#ece0f8"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 353,
+          "sha256": "6543efa47039863eb0dca59cd6150235828a7db27081bd58ede94f9992ebd55c"
+        },
+        {
+          "path": "theme.css",
+          "size": 3620,
+          "sha256": "4b2778ad72de3e065c986863047056701c06f5246b7ad9e76bc6652cd8d647c5"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5311,
+          "sha256": "ef1441f72190d136311530279fbed9b4dcaf51ce5d022f95da6450529b9095d6"
+        },
+        {
+          "path": "fonts/karla-latin-400-normal.woff2",
+          "size": 13140,
+          "sha256": "250bb48fdea5ba354fa85161f3877121ef679c6f7a1ef3d8f173fb8979628906"
+        },
+        {
+          "path": "fonts/karla-latin-600-normal.woff2",
+          "size": 13432,
+          "sha256": "2ca9205edf2d9bf34e433d00c966ee63b07c965c01290271df8fc1180d1dd99b"
+        },
+        {
+          "path": "fonts/karla-latin-700-normal.woff2",
+          "size": 13304,
+          "sha256": "b3613b987992f48294da8bce46723ef9683a16422318cd41712421084dd4c2c4"
+        },
+        {
+          "path": "fonts/space-mono-latin-400-normal.woff2",
+          "size": 16520,
+          "sha256": "fb4a81a2d0a893e5c38c394a7e716a1cef0b24610a0af49c96f6d529bd66bf2b"
+        },
+        {
+          "path": "fonts/syne-latin-800-normal.woff2",
+          "size": 13684,
+          "sha256": "1a340e84b78c7e1e7ed24306d682fdcd6dc8cc6cb52b158fbaf22c03f7f001c3"
+        }
+      ]
+    },
+    {
       "id": "sorbet",
       "name": "Sorbet",
-      "version": "1.0.0",
+      "version": "1.0.1",
       "description": "Light, pastel and rounded: strawberry actions, fruit-tinted status chips, soft shadows and drifting blobs.",
       "author": "Arclight",
       "colorScheme": "light",
@@ -20,12 +943,12 @@
         {
           "path": "theme.json",
           "size": 335,
-          "sha256": "cb58eef23f7f6156e6bbb902661d985697404690d8b071aef4e5358002c33de5"
+          "sha256": "9d5c1292206b8ba51f0948b3d03f8782d7ddf55c886d0f52462ba93a1fafffda"
         },
         {
           "path": "theme.css",
-          "size": 62927,
-          "sha256": "a6e3f4a9b82f692534f0f5f5447995b397047b7621970988281ab18fc0be8ce0"
+          "size": 62977,
+          "sha256": "b7ad5a1585e408876b9fc7326020d6de4d8840e027acd8e636747a7870f1f094"
         },
         {
           "path": "fonts/OFL.txt",
@@ -66,6 +989,248 @@
           "path": "fonts/nunito-sans-latin-700-normal.woff2",
           "size": 13836,
           "sha256": "cb84238e7b852f2d22b91a598289f13b31cbc7a2d618fd2c0628ecb69459fbeb"
+        }
+      ]
+    },
+    {
+      "id": "sumi",
+      "name": "Sumi Ink",
+      "version": "1.0.0",
+      "description": "Brush and washi. Ink black on warm paper, vermilion seal accent, thin brushed rules.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#f2ede3",
+        "#c8321f",
+        "#e0e8dc",
+        "#f2e4c8",
+        "#e8e0e6"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 335,
+          "sha256": "b8542eb30f59ddff63b91d007fb7c3de0c2d82ee84444d3161f715f62faf3013"
+        },
+        {
+          "path": "theme.css",
+          "size": 3646,
+          "sha256": "3886bcc15f6f324077de20befed4ccc5731217729c4749763c547f6c2358b2be"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 6798,
+          "sha256": "6d0667415f2145375f748658f7830006ac241a423da4529cbdae2cfea87c3a7c"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        },
+        {
+          "path": "fonts/shippori-mincho-latin-600-normal.woff2",
+          "size": 28520,
+          "sha256": "f9418b06c09cd545a7676e26779798fa4776d07f2be2eaf97983b240a1981fcb"
+        },
+        {
+          "path": "fonts/zen-kaku-gothic-new-latin-400-normal.woff2",
+          "size": 9752,
+          "sha256": "5b1bfc34d603aef66d247bd22b8344f19de165da7ea07d114d87fe7ff4cdc770"
+        },
+        {
+          "path": "fonts/zen-kaku-gothic-new-latin-500-normal.woff2",
+          "size": 9588,
+          "sha256": "e4ab8e9dc6984461551cf416f31f8e976cccee7359464ba4b86163c62d233251"
+        },
+        {
+          "path": "fonts/zen-kaku-gothic-new-latin-700-normal.woff2",
+          "size": 9680,
+          "sha256": "3be1f563567099c0b7350440246e5861621da99e68900890978d5824dead5f4c"
+        }
+      ]
+    },
+    {
+      "id": "swiss",
+      "name": "Swiss Grid",
+      "version": "1.0.0",
+      "description": "International Typographic Style. White, black, one signal red, strict grid, tight grotesk.",
+      "author": "Arclight",
+      "colorScheme": "light",
+      "backdrop": "none",
+      "swatches": [
+        "#ffffff",
+        "#e30613",
+        "#e6f2e8",
+        "#fdf0d6",
+        "#eeeeee"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 344,
+          "sha256": "33907cd052707535fd7c4cacad80dcd81a92328cada6ce4f9e8c24e7bf53e513"
+        },
+        {
+          "path": "theme.css",
+          "size": 3612,
+          "sha256": "fe7316cee6d8690526492236b002207fe5f44a3d59da05b38766ded41b56c647"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5820,
+          "sha256": "99c7e5625b1726cfa964dbe29e2d4763193589ff1f5386f6d1c9f91e8d8fe3b3"
+        },
+        {
+          "path": "fonts/hanken-grotesk-latin-400-normal.woff2",
+          "size": 13460,
+          "sha256": "787b3fdd0b7e6d59ae7ce14ce7a41d1a44616584b4c919b527da951972d5d87d"
+        },
+        {
+          "path": "fonts/hanken-grotesk-latin-600-normal.woff2",
+          "size": 13780,
+          "sha256": "58f23b7ae3e13b21a4dca4c05360be87b3531d60fc1cbff89732cac8fb3019ae"
+        },
+        {
+          "path": "fonts/hanken-grotesk-latin-700-normal.woff2",
+          "size": 13844,
+          "sha256": "d85de6e272296d06f8205ad11e27140274e0ef97050232777d146eabb71c312d"
+        },
+        {
+          "path": "fonts/hanken-grotesk-latin-800-normal.woff2",
+          "size": 13860,
+          "sha256": "999ca80394429ddd84f4df688b3ca8ca28cfcbf0a03e2dd75d57d800300a781d"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-400-normal.woff2",
+          "size": 14708,
+          "sha256": "08949f728dc52d528e69b1667d15c89a5686a4ee9a296ff90983985f99c380f7"
+        },
+        {
+          "path": "fonts/ibm-plex-mono-latin-500-normal.woff2",
+          "size": 14888,
+          "sha256": "01d285447409c8a588692162439a038b8cbd7871309ee20267b0d2d91c6e8e22"
+        }
+      ]
+    },
+    {
+      "id": "synthwave",
+      "name": "Synthwave Sunset",
+      "version": "1.0.0",
+      "description": "Retro-future drive-in. Magenta and sunset orange on violet, horizon grid, neon edges.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#1a0b2e",
+        "#ff3cac",
+        "#7cffe8",
+        "#ffc17a",
+        "#dcb4ff"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 348,
+          "sha256": "de50bfb35abd62e3e861d3fb9219c618a974559034c389bed7034b677523c27e"
+        },
+        {
+          "path": "theme.css",
+          "size": 3599,
+          "sha256": "bc4f7fa8659d83df2c35384ecddada4ff86cc6beb87ff792000783d49b3fcf70"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5891,
+          "sha256": "dbe7affa7c9d83fa1ea44490627cbaaf1669a1bf5eca22de7e480f489efed671"
+        },
+        {
+          "path": "fonts/chakra-petch-latin-400-normal.woff2",
+          "size": 9756,
+          "sha256": "7d75be85dd1627e27ec151e9a3701e661bc4f8c2a93611bdd92f3a05d6bbd942"
+        },
+        {
+          "path": "fonts/chakra-petch-latin-600-normal.woff2",
+          "size": 9968,
+          "sha256": "a5888696e9eb1b4bbbecc8eb3922b8369f49d4bddb72263e033cbd17f399be76"
+        },
+        {
+          "path": "fonts/chakra-petch-latin-700-normal.woff2",
+          "size": 9900,
+          "sha256": "ce5095dc1cb200aaa939e38067a0677018d10e9f26ec38cdcf1557ac524fc775"
+        },
+        {
+          "path": "fonts/share-tech-mono-latin-400-normal.woff2",
+          "size": 13500,
+          "sha256": "41e6b9f297f7d9a2df2aaa274092f76d2f72711a15ca455f7f4f4f92caf16b72"
+        }
+      ]
+    },
+    {
+      "id": "velvet",
+      "name": "Midnight Velvet",
+      "version": "1.0.0",
+      "description": "Late-night cinema lounge. Deep indigo, brushed gold, serif titles, soft rounded cards.",
+      "author": "Arclight",
+      "colorScheme": "dark",
+      "backdrop": "none",
+      "swatches": [
+        "#14112a",
+        "#d8b26a",
+        "#9fe0b5",
+        "#f6b68a",
+        "#dcbaf7"
+      ],
+      "files": [
+        {
+          "path": "theme.json",
+          "size": 345,
+          "sha256": "322f6ea329b2f6c3608f8c8f8058c4d141a71404e65a6272cde37ff13949d11a"
+        },
+        {
+          "path": "theme.css",
+          "size": 3798,
+          "sha256": "d773f109f9cbae9f401d263b0f1c7bb31db5992ff71525e0125159ac0546c242"
+        },
+        {
+          "path": "fonts/OFL.txt",
+          "size": 5755,
+          "sha256": "3d860e400281928b777ab69599db2812487259fbea9abc4024667731c3fe0733"
+        },
+        {
+          "path": "fonts/dm-mono-latin-400-normal.woff2",
+          "size": 14820,
+          "sha256": "e1896b13b2b1bb112fac2f9571bd6c40e118746e77a4511edbf43fbb41bf3e1e"
+        },
+        {
+          "path": "fonts/dm-mono-latin-500-normal.woff2",
+          "size": 14988,
+          "sha256": "9964608a849396bd00c4bfd7034afe03486469dcf20b4f6b8cbdfdd310369951"
+        },
+        {
+          "path": "fonts/dm-serif-display-latin-400-normal.woff2",
+          "size": 24744,
+          "sha256": "fdf61e20fd2c0108e0ea28da4daca0035205b4b7fc031a3974b865b704de160a"
+        },
+        {
+          "path": "fonts/figtree-latin-400-normal.woff2",
+          "size": 11384,
+          "sha256": "8f98dd642986f1fa39c45b89665a57372897c235b36028e0e4a136e43dc5f8ab"
+        },
+        {
+          "path": "fonts/figtree-latin-600-normal.woff2",
+          "size": 11544,
+          "sha256": "367d713287918784702563518f59239989da815c80d3c7337686b9816635a08b"
+        },
+        {
+          "path": "fonts/figtree-latin-700-normal.woff2",
+          "size": 11376,
+          "sha256": "7ec4f08d09f91d349917dd6592f6aaae66d8fe1bbd58fa24707961e79236616e"
         }
       ]
     }

@@ -1,0 +1,16 @@
+{
+  "id": "riso",
+  "name": "Riso Print",
+  "version": "1.0.0",
+  "description": "Zine-shop risograph. Fluoro pink and federal blue on off-white stock, grain, slight misregistration.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#f6f1e7",
+    "#e8288f",
+    "#d6f0e2",
+    "#fde6c8",
+    "#ece0f8"
+  ]
+}

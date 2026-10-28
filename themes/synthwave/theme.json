@@ -1,0 +1,16 @@
+{
+  "id": "synthwave",
+  "name": "Synthwave Sunset",
+  "version": "1.0.0",
+  "description": "Retro-future drive-in. Magenta and sunset orange on violet, horizon grid, neon edges.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#1a0b2e",
+    "#ff3cac",
+    "#7cffe8",
+    "#ffc17a",
+    "#dcb4ff"
+  ]
+}

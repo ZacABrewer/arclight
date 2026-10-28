@@ -1,0 +1,61 @@
+/* Matcha: an Arclight theme pack (light).
+   Tea-house calm. Whisked green on rice paper, pillowy 20px cards, soft shadows.
+   Active when <html data-theme="matcha">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Gloock"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/gloock-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/nunito-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/nunito-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Nunito Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/nunito-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/dm-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/dm-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="matcha"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #f3f1e6; --al-deep: #f3f1e6;
+  --al-backdrop: radial-gradient(700px 500px at 100% 0,rgba(140,170,90,.16),transparent),radial-gradient(600px 500px at 0 100%,rgba(220,200,150,.22),transparent);
+  --al-glass: #fbfaf3; --al-glass-2: #fbfaf3;
+  --al-glass-strong: #fdfcf6; --al-glass-strong-2: #fdfcf6;
+  --al-field: #ffffff; --al-tile: #f4f2e6;
+  /* lines */
+  --al-line-1: #ebe8d8; --al-line-2: #e4e2d2; --al-line-3: #e4e2d2; --al-line-4: #e4e2d2;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #232a1b; --al-text-2: #46503a; --al-text-3: #626b54; --al-text-4: #626b54; --al-text-5: #626b54;
+  /* accent */
+  --al-cyan: #4f7a28; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #e3ecd2; --al-cyan-a12: #e3ecd2; --al-accent-text: #35561a;
+  --al-nav-active-bg: #e3ecd2; --al-nav-active-text: #35561a;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #dcefd4;  --al-tone-accent-ink: #2a5a1c;
+  --al-tone-default: #dfe8ec; --al-tone-default-ink: #2b5466;
+  --al-tone-warn: #f7e6c9;   --al-tone-warn-ink: #7a4b08;
+  --al-tone-people: #ece3ee;  --al-tone-people-ink: #5c3c66;
+  --al-warn: #d6902c; --al-warn-text: #7a4b08; --al-ok: #5f9a34;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#8fb35a,#4f7a28); --al-track: #ebe8d8;
+  --al-bar-height: 8px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,255,255,.7);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 10px 28px rgba(70,80,40,.08); --al-shadow-pop: 0 10px 28px rgba(70,80,40,.08);
+  --al-focus: 0 0 0 2px #f3f1e6, 0 0 0 4px #4f7a28;
+  /* shape */
+  --al-radius-card: 20px; --al-radius-inner: 14px; --al-radius-control: 999px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Gloock", serif;
+  --al-font: "Nunito Sans", system-ui, sans-serif;
+  --al-mono: "DM Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: none; --al-display-tracking: 0;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="matcha"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

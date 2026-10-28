@@ -1,0 +1,60 @@
+/* Y2K Chrome: an Arclight theme pack (light).
+   Millennium gadget. Brushed silver, iridescent sheen, bubbly pill controls, electric blue.
+   Active when <html data-theme="chrome">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Unbounded"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/unbounded-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Sora"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/sora-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Sora"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/sora-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Sora"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/sora-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/space-mono-latin-400-normal.woff2) format("woff2"); }
+
+[data-theme="chrome"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #dfe3ea; --al-deep: #dfe3ea;
+  --al-backdrop: linear-gradient(135deg,rgba(180,220,255,.5),rgba(255,200,240,.35) 45%,rgba(200,255,230,.35) 75%,rgba(220,210,255,.5));
+  --al-glass: linear-gradient(180deg,#fbfcfe,#e4e8ef); --al-glass-2: linear-gradient(180deg,#fbfcfe,#e4e8ef);
+  --al-glass-strong: linear-gradient(180deg,#fdfdff,#eef1f6); --al-glass-strong-2: linear-gradient(180deg,#fdfdff,#eef1f6);
+  --al-field: #ffffff; --al-tile: #eef1f6;
+  /* lines */
+  --al-line-1: #dde2ea; --al-line-2: #ffffff; --al-line-3: #ffffff; --al-line-4: #ffffff;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #141a2c; --al-text-2: #364058; --al-text-3: #535d74; --al-text-4: #535d74; --al-text-5: #535d74;
+  /* accent */
+  --al-cyan: #1f5bff; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #dde7ff; --al-cyan-a12: #dde7ff; --al-accent-text: #1a46c4;
+  --al-nav-active-bg: linear-gradient(180deg,#4f82ff,#1f5bff); --al-nav-active-text: #ffffff;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #d8f5ea;  --al-tone-accent-ink: #11624a;
+  --al-tone-default: #e0f0ff; --al-tone-default-ink: #14548a;
+  --al-tone-warn: #fde8cf;   --al-tone-warn-ink: #81460a;
+  --al-tone-people: #f3defb;  --al-tone-people-ink: #6c2f8a;
+  --al-warn: #f2962a; --al-warn-text: #81460a; --al-ok: #1fb488;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#5ac8ff,#1f5bff,#b46bff); --al-track: #dde2ea;
+  --al-bar-height: 10px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,255,255,.9);
+  /* light / depth */
+  --al-glow: 0 0 12px rgba(31,91,255,.35); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 12px 30px rgba(40,60,110,.14),inset 0 1px 0 #fff; --al-shadow-pop: 0 12px 30px rgba(40,60,110,.14),inset 0 1px 0 #fff;
+  --al-focus: 0 0 0 2px #dfe3ea, 0 0 0 4px #1f5bff;
+  /* shape */
+  --al-radius-card: 24px; --al-radius-inner: 16px; --al-radius-control: 999px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Unbounded", system-ui, sans-serif;
+  --al-font: "Sora", system-ui, sans-serif;
+  --al-mono: "Space Mono", ui-monospace, monospace;
+  --al-display-weight: 700; --al-display-case: none; --al-display-tracking: -.02em;
+  --al-label-case: uppercase; --al-label-tracking: .12em; --al-label-size: 11px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="chrome"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

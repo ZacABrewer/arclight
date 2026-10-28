@@ -1,0 +1,16 @@
+{
+  "id": "magma",
+  "name": "Magma",
+  "version": "1.0.0",
+  "description": "Volcanic basalt. Charcoal rock, molten orange glow, cracked-ember gradients, chunky 10px corners.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#120c0a",
+    "#ff6a1f",
+    "#c2eb9a",
+    "#ffd982",
+    "#f6b6cd"
+  ]
+}

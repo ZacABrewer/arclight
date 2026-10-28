@@ -1,0 +1,16 @@
+{
+  "id": "espresso",
+  "name": "Espresso",
+  "version": "1.0.0",
+  "description": "A warm caf\u00e9 at closing time. Roasted browns, crema accent, round soft controls.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#1e1612",
+    "#d9a066",
+    "#c1dca5",
+    "#f2a582",
+    "#e7bfcd"
+  ]
+}

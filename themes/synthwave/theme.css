@@ -1,0 +1,54 @@
+/* Synthwave Sunset: an Arclight theme pack (dark).
+   Retro-future drive-in. Magenta and sunset orange on violet, horizon grid, neon edges.
+   Active when <html data-theme="synthwave">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/chakra-petch-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/chakra-petch-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Chakra Petch"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/chakra-petch-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Share Tech Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/share-tech-mono-latin-400-normal.woff2) format("woff2"); }
+
+[data-theme="synthwave"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #1a0b2e; --al-deep: #1a0b2e;
+  --al-backdrop: radial-gradient(300px 300px at 62% 104%,rgba(255,140,60,.45),transparent),linear-gradient(180deg,transparent 55%,rgba(255,60,172,.2)),repeating-linear-gradient(90deg,rgba(255,60,172,.10) 0 1px,transparent 1px 80px);
+  --al-glass: rgba(30,10,55,.82); --al-glass-2: rgba(30,10,55,.82);
+  --al-glass-strong: rgba(36,14,64,.85); --al-glass-strong-2: rgba(36,14,64,.85);
+  --al-field: rgba(255,255,255,.05); --al-tile: rgba(255,255,255,.04);
+  /* lines */
+  --al-line-1: rgba(255,255,255,.08); --al-line-2: rgba(255,60,172,.38); --al-line-3: rgba(255,60,172,.38); --al-line-4: rgba(255,60,172,.38);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #fff1fb; --al-text-2: #e0c6f0; --al-text-3: #bb9ecf; --al-text-4: #bb9ecf; --al-text-5: #bb9ecf;
+  /* accent */
+  --al-cyan: #ff3cac; --al-cyan-ink: #1a0011;
+  --al-cyan-a06: rgba(255,60,172,.18); --al-cyan-a12: rgba(255,60,172,.18); --al-accent-text: #ffa8da;
+  --al-nav-active-bg: rgba(255,60,172,.18); --al-nav-active-text: #ffb3de;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(60,255,220,.14);  --al-tone-accent-ink: #7cffe8;
+  --al-tone-default: rgba(120,140,255,.18); --al-tone-default-ink: #bcc4ff;
+  --al-tone-warn: rgba(255,170,60,.16);   --al-tone-warn-ink: #ffc17a;
+  --al-tone-people: rgba(190,120,255,.18);  --al-tone-people-ink: #dcb4ff;
+  --al-warn: #ffaa3c; --al-warn-text: #ffc17a; --al-ok: #3cffdc;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#ff3cac,#ff8a3c); --al-track: rgba(255,255,255,.08);
+  --al-bar-height: 6px; --al-radius-bar: 2px;
+  --al-shimmer: rgba(255,240,250,.8);
+  /* light / depth */
+  --al-glow: 0 0 12px rgba(255,60,172,.7); --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 0 30px rgba(255,60,172,.12); --al-shadow-pop: 0 0 30px rgba(255,60,172,.12);
+  --al-focus: 0 0 0 2px #1a0b2e, 0 0 0 4px #ff3cac;
+  /* shape */
+  --al-radius-card: 6px; --al-radius-inner: 4px; --al-radius-control: 4px; --al-radius-avatar: 4px;
+  /* type */
+  --al-display: "Chakra Petch", sans-serif;
+  --al-font: "Chakra Petch", system-ui, sans-serif;
+  --al-mono: "Share Tech Mono", ui-monospace, monospace;
+  --al-display-weight: 700; --al-display-case: uppercase; --al-display-tracking: .06em;
+  --al-label-case: uppercase; --al-label-tracking: .18em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

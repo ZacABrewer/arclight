@@ -1,0 +1,61 @@
+/* Paper Ledger: an Arclight theme pack (light).
+   Editorial newsprint. Ink hairlines, ruled paper, a single oxblood accent. Square and quiet.
+   Active when <html data-theme="paper">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Newsreader"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/newsreader-latin-500-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/ibm-plex-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="paper"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #f4efe4; --al-deep: #f4efe4;
+  --al-backdrop: repeating-linear-gradient(0deg,rgba(40,30,20,.05) 0 1px,transparent 1px 32px);
+  --al-glass: #efe8da; --al-glass-2: #efe8da;
+  --al-glass-strong: #fbf8f1; --al-glass-strong-2: #fbf8f1;
+  --al-field: #fbf8f1; --al-tile: #f3ede0;
+  /* lines */
+  --al-line-1: #ddd4c2; --al-line-2: #2b2620; --al-line-3: #2b2620; --al-line-4: #2b2620;
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #1f1b16; --al-text-2: #4a4238; --al-text-3: #655b4d; --al-text-4: #655b4d; --al-text-5: #655b4d;
+  /* accent */
+  --al-cyan: #a3241c; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #f3dcd6; --al-cyan-a12: #f3dcd6; --al-accent-text: #8a1c15;
+  --al-nav-active-bg: #1f1b16; --al-nav-active-text: #fbf8f1;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #dde9d8;  --al-tone-accent-ink: #24532d;
+  --al-tone-default: #e1e5ec; --al-tone-default-ink: #2c4a7a;
+  --al-tone-warn: #f6e5c6;   --al-tone-warn-ink: #7a4a00;
+  --al-tone-people: #e9e0ef;  --al-tone-people-ink: #5b3b72;
+  --al-warn: #b86e00; --al-warn-text: #7a4a00; --al-ok: #2f6b3a;
+  /* progress */
+  --al-trail: #1f1b16; --al-track: #e6dfcf;
+  --al-bar-height: 6px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,255,255,.55);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-focus: 0 0 0 2px #f4efe4, 0 0 0 4px #a3241c;
+  /* shape */
+  --al-radius-card: 2px; --al-radius-inner: 2px; --al-radius-control: 2px; --al-radius-avatar: 2px;
+  /* type */
+  --al-display: "Newsreader", serif;
+  --al-font: "IBM Plex Sans", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 500; --al-display-case: none; --al-display-tracking: -.01em;
+  --al-label-case: uppercase; --al-label-tracking: .14em; --al-label-size: 11px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="paper"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}

@@ -1,0 +1,56 @@
+/* Blueprint: an Arclight theme pack (dark).
+   Drafting table. Prussian blue, white linework, grid paper, dimension-style labels.
+   Active when <html data-theme="blueprint">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Big Shoulders Display"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/big-shoulders-display-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-sans-condensed-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/ibm-plex-sans-condensed-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Sans Condensed"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/ibm-plex-sans-condensed-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="blueprint"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #0f3a6b; --al-deep: #0f3a6b;
+  --al-backdrop: linear-gradient(rgba(255,255,255,.08) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(90deg,rgba(255,255,255,.08) 1px,transparent 1px) 0 0/40px 40px,linear-gradient(rgba(255,255,255,.035) 1px,transparent 1px) 0 0/8px 8px,linear-gradient(90deg,rgba(255,255,255,.035) 1px,transparent 1px) 0 0/8px 8px;
+  --al-glass: rgba(10,40,80,.75); --al-glass-2: rgba(10,40,80,.75);
+  --al-glass-strong: rgba(12,48,92,.82); --al-glass-strong-2: rgba(12,48,92,.82);
+  --al-field: rgba(255,255,255,.06); --al-tile: rgba(255,255,255,.05);
+  /* lines */
+  --al-line-1: rgba(255,255,255,.18); --al-line-2: rgba(255,255,255,.55); --al-line-3: rgba(255,255,255,.55); --al-line-4: rgba(255,255,255,.55);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #ffffff; --al-text-2: #d6e4f5; --al-text-3: #aac3e0; --al-text-4: #aac3e0; --al-text-5: #aac3e0;
+  /* accent */
+  --al-cyan: #ffffff; --al-cyan-ink: #0f3a6b;
+  --al-cyan-a06: rgba(255,255,255,.14); --al-cyan-a12: rgba(255,255,255,.14); --al-accent-text: #ffffff;
+  --al-nav-active-bg: #ffffff; --al-nav-active-text: #0f3a6b;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(140,240,200,.16);  --al-tone-accent-ink: #a8f5d4;
+  --al-tone-default: rgba(150,200,255,.16); --al-tone-default-ink: #c2dcff;
+  --al-tone-warn: rgba(255,200,90,.16);   --al-tone-warn-ink: #ffd98a;
+  --al-tone-people: rgba(210,180,255,.16);  --al-tone-people-ink: #dfccff;
+  --al-warn: #ffc85a; --al-warn-text: #ffd98a; --al-ok: #8cf0c8;
+  /* progress */
+  --al-trail: #ffffff; --al-track: rgba(255,255,255,.14);
+  --al-bar-height: 6px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,255,255,.7);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-focus: 0 0 0 2px #0f3a6b, 0 0 0 4px #ffffff;
+  /* shape */
+  --al-radius-card: 0px; --al-radius-inner: 0px; --al-radius-control: 0px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Big Shoulders Display", system-ui, sans-serif;
+  --al-font: "IBM Plex Sans Condensed", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 700; --al-display-case: uppercase; --al-display-tracking: .04em;
+  --al-label-case: uppercase; --al-label-tracking: .16em; --al-label-size: 11px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

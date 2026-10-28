@@ -1,0 +1,16 @@
+{
+  "id": "velvet",
+  "name": "Midnight Velvet",
+  "version": "1.0.0",
+  "description": "Late-night cinema lounge. Deep indigo, brushed gold, serif titles, soft rounded cards.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#14112a",
+    "#d8b26a",
+    "#9fe0b5",
+    "#f6b68a",
+    "#dcbaf7"
+  ]
+}

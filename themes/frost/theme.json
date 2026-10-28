@@ -1,0 +1,16 @@
+{
+  "id": "frost",
+  "name": "Nordic Frost",
+  "version": "1.0.0",
+  "description": "Calm Scandinavian utility. Cool greys, one clear blue, 12px corners, hairline cards.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#eef2f5",
+    "#2f6fdf",
+    "#dff1e8",
+    "#fbecd9",
+    "#ece6f7"
+  ]
+}

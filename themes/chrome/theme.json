@@ -1,0 +1,16 @@
+{
+  "id": "chrome",
+  "name": "Y2K Chrome",
+  "version": "1.0.0",
+  "description": "Millennium gadget. Brushed silver, iridescent sheen, bubbly pill controls, electric blue.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#dfe3ea",
+    "#1f5bff",
+    "#d8f5ea",
+    "#fde8cf",
+    "#f3defb"
+  ]
+}

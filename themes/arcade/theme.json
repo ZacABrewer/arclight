@@ -1,0 +1,16 @@
+{
+  "id": "arcade",
+  "name": "Arcade Pixel",
+  "version": "1.0.0",
+  "description": "8-bit cabinet. Chunky 4px borders, pixel headings, primary colours, stepped shadows.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#0d0b1e",
+    "#ffde3b",
+    "#3bff8a",
+    "#ff8a3b",
+    "#ff5ec8"
+  ]
+}

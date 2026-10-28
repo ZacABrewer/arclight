@@ -1,0 +1,16 @@
+{
+  "id": "blueprint",
+  "name": "Blueprint",
+  "version": "1.0.0",
+  "description": "Drafting table. Prussian blue, white linework, grid paper, dimension-style labels.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#0f3a6b",
+    "#ffffff",
+    "#a8f5d4",
+    "#ffd98a",
+    "#dfccff"
+  ]
+}

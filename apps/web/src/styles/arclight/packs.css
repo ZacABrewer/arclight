@@ -1,0 +1,302 @@
+/* Arclight — theme-pack default layer.
+   Applies only when a pack is active (<html data-theme="<id>">); Tron (no data-theme) never
+   matches anything here, so its rendering stays exactly as the :root values in arclight.css.
+
+   1. Derived tokens. A pack sets the shared vocabulary (surfaces, lines, text, accent, tones,
+      progress, shape, type). Everything Tron-specific (the cyan/line alpha ramps, chrome
+      gradients, scrims, wells, poster surfaces, light effects) is derived here from those core
+      tokens. The block is `:root:where([data-theme])`: specificity (0,1,0), so it beats the Tron
+      `:root` literals (this file loads later) and loses to the pack's own
+      `[data-theme="<id>"]` block (the pack loads after the app stylesheet). A pack can therefore
+      override any derived token by setting it.
+   2. Layout tokens per breakpoint, at (0,2,0) so a pack's unconditional `--al-rail: 228px`
+      cannot push the rail onto tablets and phones.
+   3. Structural rules for the pack look (wide labelled rail, flat chips, bar progress, opaque
+      overlays, dashboard grid). Written as `[data-theme] .x`: they beat the base rules and lose
+      to a pack's `[data-theme="<id>"] .x`, which loads later. */
+
+/* ------------------------------------------------------------------ 1. derived tokens */
+:root:where([data-theme]) {
+  /* core signal tokens the vocabulary leaves out */
+  --al-cyan-hover: color-mix(in srgb, var(--al-cyan) 86%, light-dark(#000, #fff));
+  --al-cyan-press: color-mix(in srgb, var(--al-cyan) 80%, #000);
+  --al-danger: light-dark(#c4314b, #ff6b6b); --al-danger-text: light-dark(#a3283e, #ff9e9e);
+  --al-danger-line: color-mix(in srgb, var(--al-danger) 45%, transparent); --al-danger-ink: light-dark(#fff, #1a0505);
+  --al-warn-line: color-mix(in srgb, var(--al-warn) 50%, transparent);
+  --al-neutral-line: var(--al-line-2);
+  --al-horizon: var(--al-deep);
+  --al-blur: 18px;
+  --al-ok: light-dark(#2f8a4a, #6fe39a);
+  --al-glow: none; --al-sheen: none; --al-trace: transparent; --al-edge: transparent;
+  --al-chamfer: 0px; --al-chamfer-modal: var(--al-chamfer); --al-chamfer-bar: var(--al-chamfer); --al-chamfer-clip: none;
+  --al-radius-check: min(var(--al-radius-control), 6px); --al-radius-field: var(--al-radius-control);
+  --al-radius-avatar: var(--al-radius-control);
+  --al-label-font: var(--al-font);
+  --al-rail: 228px;
+
+  /* accent tints */
+  --al-cyan-a00: color-mix(in srgb, var(--al-cyan) 0%, transparent);
+  --al-cyan-a02: color-mix(in srgb, var(--al-cyan) 2%, transparent); --al-cyan-a04: color-mix(in srgb, var(--al-cyan) 4%, transparent);
+  --al-cyan-a06: color-mix(in srgb, var(--al-cyan) 8%, transparent); --al-cyan-a07: color-mix(in srgb, var(--al-cyan) 8%, transparent);
+  --al-cyan-a08: color-mix(in srgb, var(--al-cyan) 9%, transparent); --al-cyan-a10: color-mix(in srgb, var(--al-cyan) 11%, transparent);
+  --al-cyan-a12: color-mix(in srgb, var(--al-cyan) 14%, transparent); --al-cyan-a14: color-mix(in srgb, var(--al-cyan) 16%, transparent);
+  --al-cyan-a15: color-mix(in srgb, var(--al-cyan) 16%, transparent); --al-cyan-a16: color-mix(in srgb, var(--al-cyan) 18%, transparent);
+  --al-cyan-a20: color-mix(in srgb, var(--al-cyan) 22%, transparent); --al-cyan-a22: color-mix(in srgb, var(--al-cyan) 24%, transparent);
+  --al-cyan-a35: color-mix(in srgb, var(--al-cyan) 35%, transparent); --al-cyan-a45: color-mix(in srgb, var(--al-cyan) 45%, transparent);
+  --al-cyan-a50: color-mix(in srgb, var(--al-cyan) 50%, transparent); --al-cyan-a55: color-mix(in srgb, var(--al-cyan) 55%, transparent);
+  --al-cyan-a60: color-mix(in srgb, var(--al-cyan) 60%, transparent); --al-cyan-a75: color-mix(in srgb, var(--al-cyan) 75%, transparent);
+  --al-cyan-a80: color-mix(in srgb, var(--al-cyan) 80%, transparent);
+  /* dividers: faint ones follow line-1, outlines line-2, strong edges line-3 */
+  --al-line-a06: var(--al-line-1); --al-line-a07: var(--al-line-1); --al-line-a10: var(--al-line-1); --al-line-a12: var(--al-line-1);
+  --al-line-a14: var(--al-line-1); --al-line-a16: var(--al-line-1); --al-line-a18: var(--al-line-1);
+  --al-line-a22: var(--al-line-2); --al-line-a25: var(--al-line-2); --al-line-a28: var(--al-line-2); --al-line-a30: var(--al-line-2);
+  --al-line-a40: var(--al-line-3); --al-line-a45: var(--al-line-3);
+  --al-check-line: var(--al-line-3); --al-neutral-a20: var(--al-line-2);
+  /* signal tints */
+  --al-warn-a00: color-mix(in srgb, var(--al-warn) 0%, transparent); --al-warn-a06: color-mix(in srgb, var(--al-warn) 10%, transparent);
+  --al-warn-a35: color-mix(in srgb, var(--al-warn) 35%, transparent); --al-warn-a45: color-mix(in srgb, var(--al-warn) 45%, transparent);
+  --al-danger-a05: color-mix(in srgb, var(--al-danger) 6%, transparent); --al-danger-a06: color-mix(in srgb, var(--al-danger) 8%, transparent);
+  --al-danger-a08: color-mix(in srgb, var(--al-danger) 10%, transparent); --al-danger-a12: color-mix(in srgb, var(--al-danger) 14%, transparent);
+  --al-danger-a35: color-mix(in srgb, var(--al-danger) 35%, transparent); --al-danger-a40: color-mix(in srgb, var(--al-danger) 40%, transparent);
+  --al-danger-a45: color-mix(in srgb, var(--al-danger) 45%, transparent); --al-danger-a70: color-mix(in srgb, var(--al-danger) 70%, transparent);
+  --al-danger-a80: color-mix(in srgb, var(--al-danger) 80%, transparent);
+  --al-warn-wash: color-mix(in srgb, var(--al-warn) 14%, transparent); --al-warn-wash-2: color-mix(in srgb, var(--al-warn) 10%, transparent);
+  --al-danger-wash: color-mix(in srgb, var(--al-danger) 14%, transparent);
+  /* text extras */
+  --al-label: var(--al-text-4); --al-placeholder: var(--al-text-5); --al-rail-ink: var(--al-text-3); --al-text-6: var(--al-text-5);
+  --al-accent-text: var(--al-cyan);
+  /* focus, field rings */
+  --al-focus: 0 0 0 2px var(--al-void), 0 0 0 4px var(--al-cyan);
+  --al-focus-danger: 0 0 0 2px var(--al-void), 0 0 0 4px var(--al-danger);
+  --al-field-focus: 0 0 0 3px color-mix(in srgb, var(--al-cyan) 25%, transparent);
+  --al-field-invalid: 0 0 0 3px color-mix(in srgb, var(--al-danger) 22%, transparent);
+  --al-knockout: var(--al-void);
+  /* surfaces: glass tokens may be gradients, so they are only ever used whole */
+  --al-scrim: light-dark(rgba(24,20,28,.36), rgba(0,0,0,.66)); --al-scrim-soft: light-dark(rgba(24,20,28,.16), rgba(0,0,0,.42));
+  --al-surface-solid: var(--al-glass-strong); --al-surface-pop: var(--al-glass-strong);
+  --al-well: color-mix(in srgb, var(--al-text-1) 4%, transparent); --al-well-2: color-mix(in srgb, var(--al-text-1) 5%, transparent);
+  --al-rail-bg: var(--al-glass); --al-topbar-bg: color-mix(in srgb, var(--al-void) 84%, transparent);
+  --al-tabbar-bg: var(--al-glass-strong);
+  --al-floatbar-bg: var(--al-glass-strong); --al-floatbar-save-bg: var(--al-glass-strong); --al-toast-bg: var(--al-glass-strong);
+  --al-acc-bg: var(--al-glass); --al-acc-bg-open: var(--al-glass-strong);
+  --al-portal-bar-bg: color-mix(in srgb, var(--al-void) 84%, transparent); --al-wizbar-bg: color-mix(in srgb, var(--al-void) 84%, transparent);
+  --al-login-glass: var(--al-glass-strong);
+  --al-chrome-btn-bg: var(--al-glass-strong); --al-sheet-bg: var(--al-glass-strong);
+  /* imagery */
+  --al-poster-bg: var(--al-tile); --al-poster-track: var(--al-track); --al-muted-fill: var(--al-text-5);
+  --al-poster-sheen: none;
+  --al-frame-fade: linear-gradient(90deg, color-mix(in srgb, var(--al-void) 95%, transparent) 0%, color-mix(in srgb, var(--al-void) 75%, transparent) 45%, color-mix(in srgb, var(--al-void) 30%, transparent) 100%), linear-gradient(180deg, transparent 40%, var(--al-void) 100%);
+  --al-tile-fade: linear-gradient(180deg, transparent 25%, color-mix(in srgb, var(--al-void) 92%, transparent));
+  --al-hero-shadow: var(--al-shadow-pop);
+  --al-logo-filter: grayscale(1) brightness(1.6);
+  /* Tron light effects: off */
+  --al-glint-a85: transparent; --al-glint-a90: transparent; --al-packet-a00: transparent; --al-packet-a95: var(--al-shimmer);
+  --al-scanline: transparent; --al-vignette: transparent; --al-spire-tip: transparent; --al-reflection: transparent; --al-core: transparent;
+  /* vocabulary defaults for packs that leave a token out */
+  --al-tile: var(--al-deep);
+  --al-border-width: 1px;
+  --al-nav-active-bg: var(--al-cyan-a12); --al-nav-active-text: var(--al-accent-text);
+  --al-track: color-mix(in srgb, var(--al-text-1) 10%, transparent); --al-bar-height: 6px; --al-radius-bar: var(--al-radius-control);
+  --al-shimmer: rgba(255,255,255,.6);
+  --al-tone-accent: color-mix(in srgb, var(--al-ok) 16%, transparent); --al-tone-accent-ink: var(--al-text-1);
+  --al-tone-default: color-mix(in srgb, var(--al-cyan) 14%, transparent); --al-tone-default-ink: var(--al-text-1);
+  --al-tone-warn: color-mix(in srgb, var(--al-warn) 16%, transparent); --al-tone-warn-ink: var(--al-warn-text);
+  --al-tone-people: color-mix(in srgb, #a77bff 18%, transparent); --al-tone-people-ink: var(--al-text-1);
+  --al-tone-danger: color-mix(in srgb, var(--al-danger) 14%, transparent); --al-tone-danger-ink: var(--al-danger-text);
+  --al-tone-neutral: var(--al-track); --al-tone-neutral-ink: var(--al-text-3);
+  /* chips are flat tints: no outline, the dot takes the ink colour */
+  --al-tone-accent-line: transparent; --al-tone-default-line: transparent; --al-tone-warn-line: transparent;
+  --al-tone-danger-line: transparent; --al-tone-neutral-line: transparent;
+  --al-tone-accent-dot: currentColor; --al-tone-default-dot: currentColor; --al-tone-warn-dot: currentColor;
+  --al-tone-danger-dot: currentColor; --al-tone-neutral-dot: currentColor;
+}
+
+/* ------------------------------------------------------------------ 2. layout per breakpoint */
+@media (min-width: 768px) and (max-width: 1279.98px) { :root[data-theme] { --al-rail: 96px; } }
+@media (max-width: 767.98px) { :root[data-theme] { --al-rail: 0px; --al-inset-x: 16px; --al-topbar: 68px; } }
+
+/* ------------------------------------------------------------------ 3. structure */
+[data-theme] body, html[data-theme] { background: var(--al-void); color: var(--al-text-2); }
+
+/* backdrop: the pack's gradient layers over the page colour; no Tron floor, spire or scanline */
+.al-backdrop--none, .al-backdrop--shapes { background: var(--al-backdrop), var(--al-void); }
+[data-theme] .al-backdrop::after, [data-theme] .al-backdrop__svg, [data-theme] .al-backdrop__motion, [data-theme] .al-backdrop__bloom,
+[data-theme] .al-backdrop__spire, [data-theme] .al-backdrop__reflection, [data-theme] .al-backdrop__core, [data-theme] .al-horizon,
+[data-theme] .al-runner, [data-theme] .al-rail__runner, [data-theme] .al-topbar__runner, [data-theme] .al-edge, [data-theme] .al-modal__edge,
+[data-theme] .al-trace-pulse, [data-theme] .dash-trace { display: none; }
+[data-theme] .al-backdrop__shape { position: absolute; display: block; border-radius: 50%; pointer-events: none; }
+[data-theme] .al-backdrop__shape[data-shape="1"] { right: -12vw; top: -18vh; width: 48vw; height: 56vh; min-width: 360px; min-height: 320px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--al-cyan) 22%, transparent), transparent); animation: al-pack-drift 18s ease-in-out infinite; }
+[data-theme] .al-backdrop__shape[data-shape="2"] { left: 6vw; bottom: -22vh; width: 42vw; height: 56vh; min-width: 320px; min-height: 320px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--al-ok) 20%, transparent), transparent); animation: al-pack-drift 22s ease-in-out -6s infinite; }
+[data-theme] .al-backdrop__shape[data-shape="3"] { left: 42vw; top: 30vh; width: 32vw; height: 42vh; min-width: 260px; min-height: 240px;
+  background: radial-gradient(closest-side, color-mix(in srgb, var(--al-warn) 16%, transparent), transparent); animation: al-pack-drift 26s ease-in-out -11s infinite reverse; }
+
+/* type */
+[data-theme] .al-display, [data-theme] .al-title-xl, [data-theme] .al-title-l, [data-theme] .al-title-m,
+[data-theme] .al-modal__title, [data-theme] .al-drawer__title, [data-theme] .wiz-head__title, [data-theme] .nf__title { font-stretch: normal; }
+[data-theme] .al-modal__title, [data-theme] .al-drawer__title, [data-theme] .wiz-head__title, [data-theme] .nf__title, [data-theme] .portal-title {
+  font-family: var(--al-display); font-weight: var(--al-display-weight, 600); text-transform: var(--al-display-case, none); letter-spacing: var(--al-display-tracking, normal); }
+[data-theme] .al-wordmark, [data-theme] .login-wordmark { font-stretch: normal; letter-spacing: var(--al-display-tracking, normal); font-weight: var(--al-display-weight, 600); }
+[data-theme] .al-label { font-weight: 600; }
+[data-theme] .al-table th, [data-theme] .al-datepicker__wd, [data-theme] .cal-weekday {
+  font-family: var(--al-label-font); font-size: var(--al-label-size, 12px); font-weight: 600; letter-spacing: var(--al-label-tracking, .04em); text-transform: var(--al-label-case, none); }
+
+/* rail: wide, labelled (code badge + the item's title), icon-only on tablets */
+[data-theme] .al-rail { align-items: stretch; gap: 4px; padding: 20px 14px; border-right: var(--al-border-width) solid var(--al-line-1);
+  background: var(--al-rail-bg); -webkit-backdrop-filter: blur(var(--al-blur)); backdrop-filter: blur(var(--al-blur)); }
+[data-theme] .al-rail__mark { display: flex; align-items: center; gap: 12px; margin: 0 0 18px; padding: 0 10px; color: var(--al-text-1); text-decoration: none; }
+[data-theme] .al-rail__mark::after { content: "Arclight"; font: var(--al-display-weight, 600) 20px/1 var(--al-display); text-transform: var(--al-display-case, none);
+  letter-spacing: var(--al-display-tracking, normal); color: var(--al-text-1); white-space: nowrap; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+[data-theme] .al-mark { flex: none; }
+[data-theme] .al-rail__list { align-items: stretch; gap: 2px; }
+[data-theme] .al-rail__item { width: 100%; height: 42px; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px;
+  border-radius: var(--al-radius-inner); color: var(--al-text-3); font-family: var(--al-font); font-size: 14px; font-weight: 600; }
+[data-theme] .al-rail__item::after { content: attr(title); min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-theme] .al-rail__item:hover { color: var(--al-text-1); background: var(--al-cyan-a06); }
+[data-theme] .al-rail__item[aria-current="page"] { color: var(--al-nav-active-text); background: var(--al-nav-active-bg); }
+[data-theme] .al-rail__bar, [data-theme] .al-rail__label { display: none; }
+[data-theme] .al-rail__code { flex: none; display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 22px;
+  border: 1px solid currentColor; border-radius: var(--al-radius-check); font: 500 11px/1 var(--al-mono); letter-spacing: 0; opacity: .85; }
+@media (min-width: 768px) and (max-width: 1279.98px) {
+  [data-theme] .al-rail { padding: 18px 10px; align-items: center; }
+  [data-theme] .al-rail__mark { padding: 0; justify-content: center; }
+  [data-theme] .al-rail__mark::after, [data-theme] .al-rail__item::after { display: none; }
+  [data-theme] .al-rail__item { width: 60px; padding: 0; justify-content: center; }
+  [data-theme] .al-rail__code { width: 34px; height: 26px; font-size: 12px; }
+}
+
+/* top bar */
+[data-theme] .al-topbar { gap: 16px; padding: 0 28px 0 24px; border-bottom: var(--al-border-width) solid var(--al-line-1); background: var(--al-topbar-bg);
+  -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); }
+[data-theme] .al-topbar > .al-wordmark { display: none; }
+[data-theme] .al-topbar__search { flex: 0 1 440px; height: 40px; padding: 0 14px; border: var(--al-border-width) solid var(--al-line-2);
+  border-radius: var(--al-radius-control); background: var(--al-field); color: var(--al-placeholder); }
+[data-theme] .al-topbar__search:hover { border-color: var(--al-line-3); }
+[data-theme] .al-topbar__search kbd { padding: 2px 7px; border-radius: var(--al-radius-check); background: var(--al-track); color: var(--al-text-3); }
+[data-theme] .al-topbar__status { gap: 18px; }
+[data-theme] .al-avatar { width: 38px; height: 38px; border-color: transparent; background: var(--al-tone-people); color: var(--al-tone-people-ink); font-stretch: normal; }
+[data-theme] .al-avatar:hover { border-color: var(--al-line-3); background: var(--al-tone-people); }
+@media (max-width: 767.98px) {
+  [data-theme] .al-topbar { padding: 0 16px; gap: 10px; }
+  [data-theme] .al-topbar > .al-wordmark { display: block; font-size: 18px; }
+  [data-theme] .al-avatar { width: 44px; height: 44px; }
+  [data-theme] .portal-title { font-size: 18px; }
+  [data-theme] .portal-head .al-btn { padding: 0 10px; white-space: nowrap; }
+}
+
+/* mobile tab bar */
+[data-theme] .al-tabbar { border-top: var(--al-border-width) solid var(--al-line-1); background: var(--al-tabbar-bg); }
+[data-theme] .al-tabbar__item { color: var(--al-text-3); font-family: var(--al-font); }
+[data-theme] .al-tabbar__item[aria-current="page"] { color: var(--al-accent-text); }
+[data-theme] .al-tabbar__bar { left: calc(50% - 14px); right: auto; width: 28px; height: 3px; border-radius: var(--al-radius-bar); }
+[data-theme] .al-tabbar__item[aria-current="page"] .al-tabbar__bar { background: var(--al-cyan); box-shadow: none; }
+
+/* panes and overlays: glass tokens are used whole (they may be gradients) */
+[data-theme] .al-pane { background: var(--al-glass); }
+[data-theme] .al-pane--strong, [data-theme] .al-modal, [data-theme] .al-drawer { background: var(--al-glass-strong); }
+[data-theme] .al-modal, [data-theme] .al-popover, [data-theme] .al-listbox, [data-theme] .al-datepicker, [data-theme] .al-tooltip, [data-theme] .al-toast,
+[data-theme] .al-floatbar { -webkit-backdrop-filter: blur(var(--al-blur)); backdrop-filter: blur(var(--al-blur)); }
+[data-theme] .al-modal { animation-name: al-pack-pop; }
+[data-theme] .al-pane::before { border-radius: inherit; }
+[data-theme] .al-listbox { top: calc(100% + 4px); border-top: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-inner); padding: 4px; }
+[data-theme] .al-listbox__option, [data-theme] .al-menu__item, [data-theme] .al-cmd__row, [data-theme] .al-browser__entry { border-radius: var(--al-radius-check); }
+[data-theme] .al-selectmenu[data-open="true"] .al-selectmenu__button { background: var(--al-field); border-bottom-color: var(--al-cyan); }
+[data-theme] .al-menu { margin: -10px -10px; }
+[data-theme] .al-tooltip { border-radius: var(--al-radius-inner); }
+[data-theme] .al-toast { border-left-width: 3px; }
+
+/* inputs */
+[data-theme] textarea.al-input { border-radius: min(var(--al-radius-field), 14px); }
+[data-theme] .al-select { background-image: linear-gradient(45deg, transparent 50%, var(--al-text-3) 50%), linear-gradient(135deg, var(--al-text-3) 50%, transparent 50%);
+  background-position: calc(100% - 19px) 50%, calc(100% - 14px) 50%; background-size: 5px 5px, 5px 5px; background-repeat: no-repeat; }
+[data-theme] .al-select option { background: var(--al-deep); }
+[data-theme] .al-selectmenu__caret { color: var(--al-text-3); }
+/* toggle: accent track, ink thumb */
+[data-theme] .al-toggle { border-width: min(var(--al-border-width), 2px); }
+[data-theme] .al-toggle::after { background: var(--al-text-4); }
+[data-theme] .al-toggle[aria-checked="true"], [data-theme] .al-switch__input:checked + .al-toggle { background: var(--al-cyan); border-color: var(--al-cyan); }
+[data-theme] .al-toggle[aria-checked="true"]::after, [data-theme] .al-switch__input:checked + .al-toggle::after { background: var(--al-cyan-ink); }
+[data-theme] .al-check:checked::after { font-family: var(--al-font); }
+[data-theme] .al-range::-webkit-slider-thumb { width: 14px; height: 14px; margin-top: -6px; transform: none; border-radius: var(--al-radius-control); background: var(--al-cyan); border-color: var(--al-cyan); }
+[data-theme] .al-range::-moz-range-thumb { transform: none; border-radius: var(--al-radius-control); background: var(--al-cyan); border-color: var(--al-cyan); }
+[data-theme] .al-range::-webkit-slider-runnable-track { height: 4px; border-radius: var(--al-radius-bar); background: linear-gradient(90deg, var(--al-cyan) var(--p, 0%), var(--al-track) var(--p, 0%)); }
+[data-theme] .al-range::-moz-range-track { height: 4px; border-radius: var(--al-radius-bar); background: var(--al-track); }
+[data-theme] .al-range::-moz-range-progress { height: 4px; border-radius: var(--al-radius-bar); }
+
+/* chips: round dots unless the pack is square; the status vocabulary maps onto the tones */
+[data-theme] .al-chip::before { border-radius: min(var(--al-radius-control), 50%); }
+[data-theme] .al-chip { border-color: transparent; background: var(--al-tone-default); color: var(--al-tone-default-ink); font-weight: 600; }
+[data-theme] .al-chip::before { background: currentColor; }
+[data-theme] .al-chip[data-status="monitored"], [data-theme] .al-chip[data-status="downloaded"], [data-theme] .al-chip[data-status="available"] { border-color: transparent; background: var(--al-tone-accent); color: var(--al-tone-accent-ink); }
+[data-theme] .al-chip[data-status="downloading"] { border-color: transparent; background: var(--al-cyan-a12); color: var(--al-accent-text); }
+[data-theme] .al-chip[data-status="importing"] { border-color: transparent; background: var(--al-tone-default); color: var(--al-tone-default-ink); }
+[data-theme] .al-chip[data-status="missing"], [data-theme] .al-chip[data-status="stalled"], [data-theme] .al-chip[data-status="cutoff"] { border-color: transparent; background: var(--al-tone-warn); color: var(--al-tone-warn-ink); }
+[data-theme] .al-chip[data-status="failed"] { border-color: transparent; background: var(--al-tone-danger); color: var(--al-tone-danger-ink); }
+[data-theme] .al-chip[data-status="queued"], [data-theme] .al-chip[data-status="paused"], [data-theme] .al-chip[data-status="unaired"], [data-theme] .al-chip[data-status="unmonitored"] {
+  border-color: transparent; background: var(--al-tone-neutral); color: var(--al-tone-neutral-ink); }
+[data-theme] .al-chip[data-status]::before { background: currentColor; }
+[data-theme] .al-chip[data-status="unaired"]::before, [data-theme] .al-chip[data-status="unmonitored"]::before, [data-theme] .al-chip[data-status="cutoff"]::before,
+[data-theme] .al-chip.al-chip--ring::before { background: none; border: 1.5px solid currentColor; }
+/* generic tones again, after the status rules, so a Chip's tone wins over the status it maps to */
+[data-theme] .al-chip[data-tone="accent"] { border-color: var(--al-tone-accent-line); background: var(--al-tone-accent); color: var(--al-tone-accent-ink); }
+[data-theme] .al-chip[data-tone="default"] { border-color: var(--al-tone-default-line); background: var(--al-tone-default); color: var(--al-tone-default-ink); }
+[data-theme] .al-chip[data-tone="warn"] { border-color: var(--al-tone-warn-line); background: var(--al-tone-warn); color: var(--al-tone-warn-ink); }
+[data-theme] .al-chip[data-tone="danger"] { border-color: var(--al-tone-danger-line); background: var(--al-tone-danger); color: var(--al-tone-danger-ink); }
+[data-theme] .al-chip[data-tone="neutral"], [data-theme] .al-chip[data-tone="muted"] { border-color: var(--al-tone-neutral-line); background: var(--al-tone-neutral); color: var(--al-tone-neutral-ink); }
+[data-theme] .al-tag, [data-theme] .al-quality, [data-theme] .al-proto { border-color: var(--al-line-2); }
+[data-theme] .al-score { background: var(--al-track); }
+[data-theme] .al-score--high { background: var(--al-tone-accent); color: var(--al-tone-accent-ink); }
+[data-theme] .al-score--neg { background: var(--al-tone-danger); color: var(--al-tone-danger-ink); }
+[data-theme] .al-count-badge { background: var(--al-tone-people); color: var(--al-tone-people-ink); }
+
+/* progress: a bar of --al-bar-height on --al-track. Only data-state="active" (live) moves:
+   a --al-shimmer glint runs over the fill. Static and complete bars stay flat. */
+[data-theme] .al-trail { height: var(--al-bar-height); border-radius: var(--al-radius-bar); background: var(--al-track); overflow: hidden; }
+[data-theme] .al-trail::before { display: none; }
+[data-theme] .al-trail::after { top: 0; height: 100%; border-radius: var(--al-radius-bar); background: var(--al-trail); box-shadow: none; animation: none; }
+[data-theme] .al-trail[data-state="active"]::after { background: var(--al-trail); box-shadow: var(--al-glow); animation: none; }
+[data-theme] .al-trail[data-state="paused"]::after { background: var(--al-text-5); }
+[data-theme] .al-trail[data-state="stalled"]::after { background: var(--al-warn); }
+[data-theme] .al-trail[data-state="failed"]::after { background: var(--al-danger); }
+[data-theme] .al-trail > i { display: none; }
+[data-theme] .al-trail[data-state="active"] > i { display: block; left: 0; top: 0; width: var(--p, 0%); height: 100%; margin: 0; border-radius: var(--al-radius-bar);
+  background: linear-gradient(90deg, transparent, var(--al-shimmer), transparent) no-repeat; background-size: 48px 100%; box-shadow: none;
+  animation: al-trail-flow var(--t-flow) linear infinite; }
+[data-theme] .al-trail-row__pct[data-state="active"] { color: var(--al-accent-text); }
+[data-theme] .al-meter--live > span { box-shadow: var(--al-glow); }
+[data-theme] .al-ring-wrap__inner { border-color: var(--al-line-1); }
+[data-theme] .al-live { box-shadow: none; animation: al-pack-blink 2.4s ease-in-out infinite; }
+[data-theme] .al-poster__progress { height: max(3px, calc(var(--al-bar-height) / 2)); background: var(--al-poster-track); }
+
+/* tables, lists */
+[data-theme] .al-table--sticky thead th { background: var(--al-deep); }
+
+/* imagery */
+[data-theme] .al-poster, [data-theme] .al-backdrop-frame { border-color: var(--al-line-1); }
+[data-theme] .al-frame-fallback { background: repeating-linear-gradient(135deg, var(--al-line-1) 0 1px, transparent 1px 9px), var(--al-tile); }
+[data-theme] .al-poster-card__title { font-weight: 600; }
+[data-theme] .dk-tile { border-color: var(--al-line-1); border-radius: var(--al-radius-inner); background: var(--al-tile); }
+[data-theme] .dk-tile--logo img { filter: var(--al-logo-filter); }
+[data-theme] .mk-chip-link { border-radius: var(--al-radius-control); }
+[data-theme] .mk-hero__poster { border-radius: var(--al-radius-card); }
+
+/* settings + portal navigation use the nav-active pair */
+[data-theme] .al-settings-nav__item { border-radius: var(--al-radius-inner); }
+[data-theme] .al-settings-nav__item.is-active { background: var(--al-nav-active-bg); color: var(--al-nav-active-text); }
+[data-theme] .al-settings-nav__item.is-active::before { display: none; }
+[data-theme] .portal-nav__link { border-bottom: 0; border-radius: var(--al-radius-control); }
+[data-theme] .portal-nav__link[aria-current="page"] { background: var(--al-nav-active-bg); color: var(--al-nav-active-text); }
+
+/* dashboard: no spire, so the hero row closes up into two cards */
+[data-theme] .dash-heroes { grid-template-columns: minmax(0, 1.65fr) minmax(0, 1fr); gap: 20px; min-height: 0; margin-bottom: 20px; align-items: stretch; }
+[data-theme] .dash-hero--next, [data-theme] .dash-hero--status { min-height: 0; }
+[data-theme] .dash-hero--status { grid-column: 2; }
+[data-theme] .dash-lower, [data-theme] .dash-side { gap: 20px; }
+@media (max-width: 1279.98px) { [data-theme] .dash-heroes { grid-template-columns: minmax(0, 1fr); } [data-theme] .dash-hero--status { grid-column: 1; } }
+@media (max-width: 767.98px) { [data-theme] .dash-heroes, [data-theme] .dash-lower, [data-theme] .dash-side { gap: 16px; } }
+
+/* motion (stops with prefers-reduced-motion and data-motion="off", like every animation) */
+@keyframes al-pack-drift { 0%, 100% { transform: translate(0, 0) scale(1); } 50% { transform: translate(18px, -14px) scale(1.04); } }
+@keyframes al-pack-blink { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+@keyframes al-pack-pop { from { opacity: 0; transform: translateY(8px) scale(.98); } to { opacity: 1; transform: none; } }

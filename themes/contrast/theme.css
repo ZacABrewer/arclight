@@ -1,0 +1,61 @@
+/* High Contrast: an Arclight theme pack (dark).
+   Accessibility first. Pure black and white, yellow focus, 2px outlines, Atkinson Hyperlegible.
+   Active when <html data-theme="contrast">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/atkinson-hyperlegible-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Atkinson Hyperlegible"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/atkinson-hyperlegible-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/ibm-plex-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "IBM Plex Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/ibm-plex-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="contrast"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #000000; --al-deep: #000000;
+  --al-backdrop: none;
+  --al-glass: #000000; --al-glass-2: #000000;
+  --al-glass-strong: #000000; --al-glass-strong-2: #000000;
+  --al-field: #000000; --al-tile: #141414;
+  /* lines */
+  --al-line-1: #5c5c5c; --al-line-2: #ffffff; --al-line-3: #ffffff; --al-line-4: #ffffff;
+  --al-border-width: 2px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #ffffff; --al-text-2: #ffffff; --al-text-3: #d9d9d9; --al-text-4: #d9d9d9; --al-text-5: #d9d9d9;
+  /* accent */
+  --al-cyan: #ffe600; --al-cyan-ink: #000000;
+  --al-cyan-a06: #ffe600; --al-cyan-a12: #ffe600; --al-accent-text: #ffe600;
+  --al-nav-active-bg: #ffe600; --al-nav-active-text: #000000;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #5cff8f;  --al-tone-accent-ink: #000000;
+  --al-tone-default: #7fd4ff; --al-tone-default-ink: #000000;
+  --al-tone-warn: #ffb000;   --al-tone-warn-ink: #000000;
+  --al-tone-people: #ffffff;  --al-tone-people-ink: #000000;
+  --al-warn: #ffb000; --al-warn-text: #000000; --al-ok: #5cff8f;
+  /* progress */
+  --al-trail: #ffe600; --al-track: #333333;
+  --al-bar-height: 10px; --al-radius-bar: 2px;
+  --al-shimmer: none;
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: none; --al-shadow-pop: none;
+  --al-focus: 0 0 0 2px #000000, 0 0 0 4px #ffe600;
+  /* shape */
+  --al-radius-card: 8px; --al-radius-inner: 6px; --al-radius-control: 6px; --al-radius-avatar: 6px;
+  /* type */
+  --al-display: "Atkinson Hyperlegible", sans-serif;
+  --al-font: "Atkinson Hyperlegible", system-ui, sans-serif;
+  --al-mono: "IBM Plex Mono", ui-monospace, monospace;
+  --al-display-weight: 700; --al-display-case: none; --al-display-tracking: 0;
+  --al-label-case: none; --al-label-tracking: 0; --al-label-size: 14px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="contrast"] {
+  /* hover and selection: the supplied solid yellow under white text was unreadable */
+  --al-cyan-a06: #1f1f1f; --al-cyan-a12: #333333;
+  --al-warn-text: #ffb000;
+}

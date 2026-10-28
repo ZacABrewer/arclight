@@ -1,0 +1,16 @@
+{
+  "id": "sumi",
+  "name": "Sumi Ink",
+  "version": "1.0.0",
+  "description": "Brush and washi. Ink black on warm paper, vermilion seal accent, thin brushed rules.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#f2ede3",
+    "#c8321f",
+    "#e0e8dc",
+    "#f2e4c8",
+    "#e8e0e6"
+  ]
+}

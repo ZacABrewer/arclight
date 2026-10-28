@@ -1,0 +1,16 @@
+{
+  "id": "abyss",
+  "name": "Abyssal",
+  "version": "1.0.0",
+  "description": "Deep ocean trench. Ink-teal water, bioluminescent cyan and jellyfish violet, glassy rounded panels.",
+  "author": "Arclight",
+  "colorScheme": "dark",
+  "backdrop": "none",
+  "swatches": [
+    "#03141c",
+    "#3ff0e0",
+    "#a5ffc6",
+    "#ffcb8f",
+    "#d2baff"
+  ]
+}

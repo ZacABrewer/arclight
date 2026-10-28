@@ -1,0 +1,16 @@
+{
+  "id": "paper",
+  "name": "Paper Ledger",
+  "version": "1.0.0",
+  "description": "Editorial newsprint. Ink hairlines, ruled paper, a single oxblood accent. Square and quiet.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#f4efe4",
+    "#a3241c",
+    "#dde9d8",
+    "#f6e5c6",
+    "#e9e0ef"
+  ]
+}

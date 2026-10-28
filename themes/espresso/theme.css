@@ -1,0 +1,56 @@
+/* Espresso: an Arclight theme pack (dark).
+   A warm café at closing time. Roasted browns, crema accent, round soft controls.
+   Active when <html data-theme="espresso">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Young Serif"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/young-serif-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Work Sans"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/work-sans-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Work Sans"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/work-sans-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Work Sans"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/work-sans-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/dm-mono-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "DM Mono"; font-style: normal; font-weight: 500; font-display: swap; src: url(fonts/dm-mono-latin-500-normal.woff2) format("woff2"); }
+
+[data-theme="espresso"] {
+  color-scheme: dark;
+  /* surfaces */
+  --al-void: #1e1612; --al-deep: #1e1612;
+  --al-backdrop: radial-gradient(700px 500px at 90% -10%,rgba(214,160,100,.14),transparent);
+  --al-glass: #18110d; --al-glass-2: #18110d;
+  --al-glass-strong: #2a1f19; --al-glass-strong-2: #2a1f19;
+  --al-field: rgba(255,255,255,.05); --al-tile: rgba(255,255,255,.04);
+  /* lines */
+  --al-line-1: rgba(240,200,160,.08); --al-line-2: rgba(240,200,160,.08); --al-line-3: rgba(240,200,160,.08); --al-line-4: rgba(240,200,160,.08);
+  --al-border-width: 1px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #f6ebdd; --al-text-2: #d8c4ad; --al-text-3: #ad967e; --al-text-4: #ad967e; --al-text-5: #ad967e;
+  /* accent */
+  --al-cyan: #d9a066; --al-cyan-ink: #24160b;
+  --al-cyan-a06: rgba(217,160,102,.16); --al-cyan-a12: rgba(217,160,102,.16); --al-accent-text: #ecc59a;
+  --al-nav-active-bg: rgba(217,160,102,.16); --al-nav-active-text: #ecc59a;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: rgba(150,190,120,.16);  --al-tone-accent-ink: #c1dca5;
+  --al-tone-default: rgba(160,180,200,.16); --al-tone-default-ink: #c9d6e3;
+  --al-tone-warn: rgba(230,120,80,.18);   --al-tone-warn-ink: #f2a582;
+  --al-tone-people: rgba(200,150,170,.18);  --al-tone-people-ink: #e7bfcd;
+  --al-warn: #e67850; --al-warn-text: #f2a582; --al-ok: #96be78;
+  /* progress */
+  --al-trail: linear-gradient(90deg,#8a5a32,#d9a066,#f0c896); --al-track: rgba(255,255,255,.07);
+  --al-bar-height: 8px; --al-radius-bar: 999px;
+  --al-shimmer: rgba(255,240,220,.6);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 0 14px 30px rgba(0,0,0,.3); --al-shadow-pop: 0 14px 30px rgba(0,0,0,.3);
+  --al-focus: 0 0 0 2px #1e1612, 0 0 0 4px #d9a066;
+  /* shape */
+  --al-radius-card: 16px; --al-radius-inner: 10px; --al-radius-control: 999px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Young Serif", serif;
+  --al-font: "Work Sans", system-ui, sans-serif;
+  --al-mono: "DM Mono", ui-monospace, monospace;
+  --al-display-weight: 400; --al-display-case: none; --al-display-tracking: 0;
+  --al-label-case: none; --al-label-tracking: .01em; --al-label-size: 13px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}

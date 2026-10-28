@@ -1,0 +1,16 @@
+{
+  "id": "matcha",
+  "name": "Matcha",
+  "version": "1.0.0",
+  "description": "Tea-house calm. Whisked green on rice paper, pillowy 20px cards, soft shadows.",
+  "author": "Arclight",
+  "colorScheme": "light",
+  "backdrop": "none",
+  "swatches": [
+    "#f3f1e6",
+    "#4f7a28",
+    "#dcefd4",
+    "#f7e6c9",
+    "#ece3ee"
+  ]
+}

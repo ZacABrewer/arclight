@@ -1,0 +1,63 @@
+/* Riso Print: an Arclight theme pack (light).
+   Zine-shop risograph. Fluoro pink and federal blue on off-white stock, grain, slight misregistration.
+   Active when <html data-theme="riso">; loads after the app stylesheet, whose pack default
+   layer (styles/arclight/packs.css) derives every token this file leaves out.
+   Fonts are self-hosted from fonts/ (SIL Open Font License, see fonts/OFL.txt). */
+
+@font-face { font-family: "Syne"; font-style: normal; font-weight: 800; font-display: swap; src: url(fonts/syne-latin-800-normal.woff2) format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/karla-latin-400-normal.woff2) format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 600; font-display: swap; src: url(fonts/karla-latin-600-normal.woff2) format("woff2"); }
+@font-face { font-family: "Karla"; font-style: normal; font-weight: 700; font-display: swap; src: url(fonts/karla-latin-700-normal.woff2) format("woff2"); }
+@font-face { font-family: "Space Mono"; font-style: normal; font-weight: 400; font-display: swap; src: url(fonts/space-mono-latin-400-normal.woff2) format("woff2"); }
+
+[data-theme="riso"] {
+  color-scheme: light;
+  /* surfaces */
+  --al-void: #f6f1e7; --al-deep: #f6f1e7;
+  --al-backdrop: radial-gradient(rgba(0,80,180,.07) 1px,transparent 1.4px) 0 0/6px 6px,radial-gradient(500px 400px at 90% 0,rgba(255,72,176,.14),transparent);
+  --al-glass: #f0e9dc; --al-glass-2: #f0e9dc;
+  --al-glass-strong: #fbf8f2; --al-glass-strong-2: #fbf8f2;
+  --al-field: #fffdf8; --al-tile: #f1ebdf;
+  /* lines */
+  --al-line-1: #d9d2c4; --al-line-2: #1d4fb8; --al-line-3: #1d4fb8; --al-line-4: #1d4fb8;
+  --al-border-width: 2px;
+  --al-trace: transparent; --al-edge: transparent;
+  /* text */
+  --al-text-1: #14233f; --al-text-2: #2f3f60; --al-text-3: #4f5d78; --al-text-4: #4f5d78; --al-text-5: #4f5d78;
+  /* accent */
+  --al-cyan: #e8288f; --al-cyan-ink: #ffffff;
+  --al-cyan-a06: #fcd8ec; --al-cyan-a12: #fcd8ec; --al-accent-text: #a3125f;
+  --al-nav-active-bg: #1d4fb8; --al-nav-active-text: #ffffff;
+  /* tones: tint / ink (ChipTone) */
+  --al-tone-accent: #d6f0e2;  --al-tone-accent-ink: #165a3a;
+  --al-tone-default: #dbe5fb; --al-tone-default-ink: #1d4fb8;
+  --al-tone-warn: #fde6c8;   --al-tone-warn-ink: #7f4600;
+  --al-tone-people: #ece0f8;  --al-tone-people-ink: #5a2f8c;
+  --al-warn: #f08a1c; --al-warn-text: #7f4600; --al-ok: #1f8a5a;
+  /* progress */
+  --al-trail: repeating-linear-gradient(90deg,#e8288f 0 6px,#1d4fb8 6px 12px); --al-track: #e9e1d2;
+  --al-bar-height: 10px; --al-radius-bar: 0px;
+  --al-shimmer: rgba(255,255,255,.6);
+  /* light / depth */
+  --al-glow: none; --al-sheen: none; --al-chamfer: 0px;
+  --al-shadow-card: 4px 4px 0 rgba(255,72,176,.55); --al-shadow-pop: 4px 4px 0 rgba(255,72,176,.55);
+  --al-focus: 0 0 0 2px #f6f1e7, 0 0 0 4px #e8288f;
+  /* shape */
+  --al-radius-card: 4px; --al-radius-inner: 2px; --al-radius-control: 4px; --al-radius-avatar: 999px;
+  /* type */
+  --al-display: "Syne", system-ui, sans-serif;
+  --al-font: "Karla", system-ui, sans-serif;
+  --al-mono: "Space Mono", ui-monospace, monospace;
+  --al-display-weight: 800; --al-display-case: uppercase; --al-display-tracking: -.01em;
+  --al-label-case: uppercase; --al-label-tracking: .1em; --al-label-size: 12px;
+  /* layout */
+  --al-rail: 228px; --al-topbar: 84px;
+}
+
+/* pack fixes */
+[data-theme="riso"] {
+  --al-logo-filter: grayscale(1) brightness(0);
+}
+
+/* Syne 800 in capitals is wide: keep the rail brand inside the rail */
+[data-theme="riso"] .al-rail__mark::after { font-size: 15px; }
