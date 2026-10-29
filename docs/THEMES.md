@@ -77,6 +77,8 @@ themes/
     theme.css
     fonts/            optional
       MyFont.woff2
+    images/           optional (backgrounds)
+      background.webp
 ```
 
 The folder name is the theme id: lowercase letters, digits and dashes, starting with a letter or
@@ -230,20 +232,32 @@ A pack that fails any rule is not offered, whether it is local, bundled or synce
 | Scoping | Every style rule names `[data-theme="<id>"]` |
 | Allowed at-rules | `@font-face`, `@keyframes`, and `@media` / `@supports` / `@container` groups (checked inside) |
 | Not allowed | `@import`, `@namespace`, `@charset`, any other at-rule |
-| URLs | `url()` only to the pack's own fonts (`url(fonts/x.woff2)`); no images, no `image-set()` or `src()` |
+| URLs | `url()` only to the pack's own fonts and images (`url(fonts/x.woff2)`, `url(images/bg.webp)`); nothing remote, no `image-set()` or `src()` |
+| Images | `images/*.webp`, `.png`, `.jpg`, `.jpeg` or `.avif`, and the file must really be that type (checked by its first bytes). No SVG, which can carry script |
 | Hooks and escapes | No `expression()`, `javascript:`, `behavior:`, `-moz-binding`, and no backslash anywhere in the CSS |
-| Files | Only `theme.json`, `theme.css` and `fonts/*.woff2` are used |
+| Files | Only `theme.json`, `theme.css`, `fonts/*.woff2` and `images/*` are used |
 
 | Limit | Value |
 |---|---|
 | `theme.css` | 256 KB |
 | One font | 512 KB |
-| Whole pack (CSS + fonts) | 2 MB |
+| One image | 1 MB |
+| Whole pack (CSS, fonts and images) | 2 MB |
 | Files per pack in the index | 2 to 40 |
 | Packs in an index | 100 |
 
-Because `url()` to images is blocked, draw backgrounds with gradients, `box-shadow` and the
-backdrop shapes.
+For a picture behind the app, ship it in `images/` and put it on a backdrop shape (with
+`backdrop: "shapes"`), with a gradient wash over it so text stays readable:
+
+```css
+[data-theme="my-theme"] .al-backdrop__shape[data-shape="1"] {
+  inset: 0; width: auto; height: auto; border-radius: 0; animation: none;
+  background: linear-gradient(rgba(0,0,0,.25), rgba(0,0,0,.55)), url(images/background.webp) 30% 100% / cover no-repeat;
+}
+```
+
+Keep images small (WebP at about 2000 px wide is usually under 200 KB). Otherwise draw
+backgrounds with gradients, `box-shadow` and the backdrop shapes.
 
 ## Testing locally
 
@@ -261,6 +275,14 @@ an equal or higher version than the bundled one is used.
 To find out why a pack is missing, look in the log for `theme pack skipped`: it carries the
 first problem found. If a theme's stylesheet fails to load in the browser, the app falls back
 to Tron.
+
+## Private packs
+
+A pack does not have to be published. Copy its folder into `<config>/themes/<id>/` and restart:
+it is offered like any other pack, to every user of that server, and never leaves it. Sync only
+replaces packs that are listed in the source's `index.json`, so give a private pack an id the
+public catalogue does not use (a prefix of your own, for example `home-winter`). Back up the
+folder with the rest of your config.
 
 ## Publishing
 

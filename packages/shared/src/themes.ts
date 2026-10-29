@@ -2,7 +2,8 @@ import { z } from 'zod';
 
 // Theme packs: a pack re-skins the web app by overriding the `--al-*` CSS variables (and any
 // `.al-*` rule) under `[data-theme="<id>"]`. "Tron" is the built-in base look and is not a pack.
-// Packs live in the repository under `themes/<id>/` (theme.json, theme.css, fonts/*.woff2) with a
+// Packs live in the repository under `themes/<id>/` (theme.json, theme.css, fonts/*.woff2 and
+// background images/*.webp|png|jpg|avif) with a
 // `themes/index.json` catalogue that `scripts/build-themes.mjs` generates. The image bundles them,
 // and the themes module syncs newer versions from the repository. Owned by the themes module
 // (routes under /theme and /settings/themes).
@@ -38,8 +39,13 @@ export const ThemeManifest = z.object({
 });
 export type ThemeManifest = z.infer<typeof ThemeManifest>;
 
-/** A pack file name: `theme.json`, `theme.css`, `fonts/<name>.woff2`, or a font licence `fonts/<name>.txt`. */
-export const ThemeFileName = z.string().regex(/^(theme\.json|theme\.css|fonts\/[A-Za-z0-9._-]{1,80}\.(woff2|txt))$/);
+/** Image types a pack may ship in `images/` (backgrounds); no SVG, which can carry script. */
+export const THEME_IMAGE_EXTENSIONS = ['webp', 'png', 'jpg', 'jpeg', 'avif'] as const;
+
+/** A pack file name: `theme.json`, `theme.css`, `fonts/<name>.woff2`, a font licence `fonts/<name>.txt`, or `images/<name>.<webp|png|jpg|jpeg|avif>`. */
+export const ThemeFileName = z
+  .string()
+  .regex(/^(theme\.json|theme\.css|fonts\/[A-Za-z0-9._-]{1,80}\.(woff2|txt)|images\/[A-Za-z0-9._-]{1,80}\.(webp|png|jpe?g|avif))$/);
 
 export const ThemeIndexFile = z.object({
   path: ThemeFileName,
@@ -59,7 +65,7 @@ export const ThemeIndex = z.object({
 export type ThemeIndex = z.infer<typeof ThemeIndex>;
 
 /** Limits the server enforces on a pack (bundled or synced). */
-export const THEME_LIMITS = Object.freeze({ cssBytes: 256 * 1024, fontBytes: 512 * 1024, packBytes: 2 * 1024 * 1024 });
+export const THEME_LIMITS = Object.freeze({ cssBytes: 256 * 1024, fontBytes: 512 * 1024, imageBytes: 1024 * 1024, packBytes: 2 * 1024 * 1024 });
 
 /** One theme the server can serve (GET /theme). */
 export const ThemeInfo = z.object({
@@ -135,12 +141,13 @@ export function compareThemeVersions(a: string, b: string): number {
 
 /**
  * Problems with a pack stylesheet, empty when it is acceptable: no `@import`, no `url()` other
- * than one of the pack's own fonts (`fonts/<name>.woff2`), no script hooks or escapes, and every
+ * than one of the pack's own files (`fonts/<name>.woff2`, `images/<name>.webp`, ...), no script
+ * hooks or escapes, and every
  * style rule must name the pack's `[data-theme="<id>"]`, so a pack only changes the page while it
  * is the active theme. `@font-face` and `@keyframes` may stand alone; `@media` / `@supports`
  * blocks are checked inside.
  */
-export function checkThemeCss(css: string, id: string, fonts: ReadonlySet<string>): string[] {
+export function checkThemeCss(css: string, id: string, assets: ReadonlySet<string>): string[] {
   const problems: string[] = [];
   const text = css.replace(/\/\*[\s\S]*?\*\//g, '');
   if (/@import\b/i.test(text)) problems.push('@import is not allowed');
@@ -150,7 +157,7 @@ export function checkThemeCss(css: string, id: string, fonts: ReadonlySet<string
   if (text.includes('\\')) problems.push('backslash escapes are not allowed');
   for (const m of text.matchAll(/url\(\s*(['"]?)(.*?)\1\s*\)/gi)) {
     const ref = m[2] ?? '';
-    if (!fonts.has(ref)) problems.push(`url(${ref}) is not one of the pack's fonts`);
+    if (!assets.has(ref)) problems.push(`url(${ref}) is not one of the pack's fonts or images`);
   }
   if (/\bimage-set\(|\bsrc\(/i.test(text)) problems.push('image-set() and src() are not allowed');
   const scope = `[data-theme="${id}"]`;

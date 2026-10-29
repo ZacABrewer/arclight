@@ -191,3 +191,41 @@ describe('theme routes', () => {
     await app.close();
   });
 });
+
+describe('pack images', () => {
+  const webp = Buffer.concat([Buffer.from('RIFF'), Buffer.from([4, 0, 0, 0]), Buffer.from('WEBPVP8 ')]);
+  const withImage = (id: string) => `${css(id)}[data-theme="${id}"] .al-backdrop { background-image: url(images/bg.webp); }\n`;
+
+  it('serves a background image, refuses a fake one and urls to images the pack lacks', async () => {
+    const t = await setup();
+    writePack(t.bundledDir, 'frost', '1.0.0', withImage('frost'));
+    mkdirSync(join(t.bundledDir, 'frost', 'images'));
+    writeFileSync(join(t.bundledDir, 'frost', 'images', 'bg.webp'), webp);
+    writePack(t.bundledDir, 'fake', '1.0.0', withImage('fake'));
+    mkdirSync(join(t.bundledDir, 'fake', 'images'));
+    writeFileSync(join(t.bundledDir, 'fake', 'images', 'bg.webp'), Buffer.from('<svg onload="x()"></svg>'));
+    writePack(t.bundledDir, 'missing', '1.0.0', withImage('missing'));
+    const service = t.make();
+    expect(service.themes().map((x) => x.id)).toEqual(['tron', 'frost']);
+    expect(service.filePath('frost', 'images/bg.webp')).toBe(join(t.bundledDir, 'frost', 'images', 'bg.webp'));
+    const app = Fastify().withTypeProvider<ZodTypeProvider>();
+    app.setValidatorCompiler(validatorCompiler);
+    app.setSerializerCompiler(serializerCompiler);
+    await app.register(themesRoutes(service));
+    const img = await app.inject({ url: '/theme/frost/images/bg.webp' });
+    expect(img.statusCode).toBe(200);
+    expect(img.headers['content-type']).toBe('image/webp');
+    expect(img.headers['x-content-type-options']).toBe('nosniff');
+    expect((await app.inject({ url: '/theme/frost/images/other.webp' })).statusCode).toBe(404);
+    await app.close();
+  });
+
+  it('syncs a pack with an image', async () => {
+    const p = packFiles('frost', '1.0.0', withImage('frost'));
+    const src = source({ frost: { ...p, files: { ...p.files, 'images/bg.webp': webp } } });
+    const t = await setup(src.fetch);
+    const service = t.make();
+    expect((await service.sync()).changed).toEqual(['frost']);
+    expect(service.filePath('frost', 'images/bg.webp')).toBe(join(t.syncedDir, 'frost', 'images', 'bg.webp'));
+  });
+});

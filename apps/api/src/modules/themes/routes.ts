@@ -5,6 +5,7 @@ import type { FastifyPluginAsync, FastifyReply, RawServerDefault } from 'fastify
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { SettingsError } from '../settings/service.js';
 import type { ThemesService } from './service.js';
+import { imageType } from './store.js';
 
 const ErrorBody = z.object({ error: z.string(), code: z.string().optional() });
 
@@ -47,6 +48,11 @@ export function themesRoutes(service: ThemesService, hooks: ThemesRouteHooks = {
     // Font URLs come from relative url()s in the stylesheet, so they carry no version: cached a day.
     app.get('/theme/:id/fonts/:file', { schema: { params: z.object({ id: z.string(), file: z.string() }) } }, async (req, reply) =>
       sendFile(req.params.id, `fonts/${req.params.file}`, 'font/woff2', 'public, max-age=86400', reply),
+    );
+
+    // Background images: relative url()s like fonts, cached a day.
+    app.get('/theme/:id/images/:file', { schema: { params: z.object({ id: z.string(), file: z.string() }) } }, async (req, reply) =>
+      sendFile(req.params.id, `images/${req.params.file}`, imageType(req.params.file), 'public, max-age=86400', reply),
     );
 
     // Admin only.

@@ -88,7 +88,7 @@ export class ThemesService {
   filePath(id: string, file: string): string | null {
     const pack = this.packs.get(id);
     if (!pack) return null;
-    if (file !== 'theme.css' && !pack.fonts.has(file)) return null;
+    if (file !== 'theme.css' && !pack.fonts.has(file) && !pack.images.has(file)) return null;
     return join(pack.dir, file);
   }
 
@@ -163,7 +163,14 @@ export class ThemesService {
     const tmp = join(this.opts.syncedDir, `.tmp-${entry.id}-${randomUUID()}`);
     try {
       for (const file of entry.files) {
-        const max = file.path === 'theme.css' ? THEME_LIMITS.cssBytes : file.path === 'theme.json' ? 64 * 1024 : THEME_LIMITS.fontBytes;
+        const max =
+          file.path === 'theme.css'
+            ? THEME_LIMITS.cssBytes
+            : file.path === 'theme.json'
+              ? 64 * 1024
+              : file.path.startsWith('images/')
+                ? THEME_LIMITS.imageBytes
+                : THEME_LIMITS.fontBytes;
         if (file.size > max) throw new Error(`${file.path} is larger than ${max} bytes`);
         const body = await this.download(`${base}${entry.id}/${file.path}`, max, signal);
         if (body.length !== file.size) throw new Error(`${file.path}: expected ${file.size} bytes, got ${body.length}`);
