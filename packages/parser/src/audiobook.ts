@@ -502,7 +502,8 @@ function peelTrailing(text: string, acc: Acc): string {
 
 const emptyTagFacts = (): TagFacts => ({ container: null, formatType: null, language: null, retail: false, chapterized: false, layout: null, year: null, tech: '' });
 
-const DASH_SPLIT = /\s+[-–—]+\s+|\s+[-–—](?=\S)|(?<=\S)[–—]\s+/;
+// Field separators: dashes, and " | " (common in archive listings: "Title | Author").
+const DASH_SPLIT = /\s+[-–—]+\s+|\s+[-–—](?=\S)|(?<=\S)[–—]\s+|\s+\|\s+/;
 
 // ---------------------------------------------------------------------------------------
 // Fields

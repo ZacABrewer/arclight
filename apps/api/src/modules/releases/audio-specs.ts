@@ -185,6 +185,23 @@ export const audioSpecifications: readonly Specification[] = [
     },
   },
   {
+    // The indexer says what a release is. Matched by name to an album or book, a release whose
+    // standard (Newznab) categories are all books, movies, TV or similar is not audio: archive
+    // listings carry the scanned ebook of a book under the same title as its audiobook. Audio
+    // (3xxx) and Other (8xxx) pass, and so do releases with no standard category.
+    id: 'audioCategory',
+    tier: 0,
+    type: 'permanent',
+    appliesTo: 'audio',
+    evaluate: (_ctx, c): SpecResult | null => {
+      if (c.match.mediaType !== 'music' && c.match.mediaType !== 'audiobook') return null;
+      const standard = (c.release.categories ?? []).filter((id) => id >= 1000 && id < 100_000);
+      if (standard.length === 0 || standard.some((id) => (id >= 3000 && id < 4000) || (id >= 8000 && id < 9000))) return null;
+      const kind = standard.some((id) => id >= 7000 && id < 8000) ? 'a book (ebook or comic)' : 'not audio';
+      return { reason: 'notAudioCategory', message: `The indexer files this release as ${kind} (categories ${standard.join(', ')})` };
+    },
+  },
+  {
     // A release far too small (or too large) for its codec and the running time (album
     // durations, book runtimes) is mislabelled or incomplete. Uses the built-in MB/min bands,
     // independent of the user's quality definition limits, with generous margins.

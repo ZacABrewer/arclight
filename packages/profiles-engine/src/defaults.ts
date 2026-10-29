@@ -119,7 +119,8 @@ export function defaultAudiobookProfiles(): QualityProfileInput[] {
     profile(
       'Any (audiobook)',
       'AB-AAC',
-      ['AB-MP3-Low', 'AB-AAC-Low', 'AB-MP3', 'AB-MP3-High', 'AB-Opus', 'AB-AAC', 'AB-Lossless'],
+      // Unknown too: many audiobook releases (archive and library listings) name no format.
+      ['Unknown', 'AB-MP3-Low', 'AB-AAC-Low', 'AB-MP3', 'AB-MP3-High', 'AB-Opus', 'AB-AAC', 'AB-Lossless'],
       'audiobook',
     ),
   ];

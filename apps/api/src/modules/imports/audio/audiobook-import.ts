@@ -238,6 +238,37 @@ function positionKey(p: string | number | null | undefined): string | null {
   return m ? String(Number(m[0])) : String(p).trim().toLowerCase() || null;
 }
 
+/** Container preference when the same part comes in several formats: audiobook-native first. */
+const FORMAT_RANK = ['m4b', 'm4a', 'mp3', 'opus', 'flac', 'aac', 'ogg', 'oga', 'wma', 'wav'];
+
+const extOf = (f: Pick<AudioScanFile, 'path'>) => extname(f.path).slice(1).toLowerCase();
+
+/**
+ * One format per part. Archive listings carry each part in several formats (`01.mp3` next to
+ * `01.ogg`); importing them all would double the book. When parts share a file stem across
+ * formats, the whole unit keeps the one format with the best measured quality (container rank
+ * breaks ties) and drops the others. Units with one format per stem are returned as they are.
+ */
+export function onePerPart<T extends Pick<AudioScanFile, 'path' | 'tags'>>(files: readonly T[]): T[] {
+  const stems = new Map<string, Set<string>>();
+  for (const f of files) {
+    const stem = join(dirname(f.path), basename(f.path, extname(f.path))).toLowerCase();
+    stems.set(stem, (stems.get(stem) ?? new Set()).add(extOf(f)));
+  }
+  if (![...stems.values()].some((exts) => exts.size > 1)) return [...files];
+  const formats = [...new Set(files.map(extOf))];
+  const score = (ext: string) => {
+    const of = files.filter((f) => extOf(f) === ext);
+    const weight = Math.min(...of.map((f) => audiobookQualityOf({ path: f.path, extension: ext, tags: f.tags }).quality.weight));
+    const rank = FORMAT_RANK.indexOf(ext);
+    return { count: of.length, weight, rank: rank < 0 ? FORMAT_RANK.length : rank };
+  };
+  const best = formats
+    .map((ext) => ({ ext, ...score(ext) }))
+    .sort((a, b) => b.count - a.count || b.weight - a.weight || a.rank - b.rank)[0]!.ext;
+  return files.filter((f) => extOf(f) === best);
+}
+
 /**
  * Splits a scan into book units: files group by book folder, and inside one folder by ASIN or
  * album tag when the files carry more than one (a pack of single-file books in one folder).
@@ -258,7 +289,7 @@ export function bookUnitsOf(scan: Pick<AudioScanResult, 'files' | 'extras'>): Bo
       identities.set(id, [...(identities.get(id) ?? []), f]);
     }
     for (const [id, group] of identities) {
-      const ordered = orderParts(group);
+      const ordered = orderParts(onePerPart(group));
       const extras = scan.extras.filter((e) => bookFolderOf(e.path) === folder || dirname(e.path) === folder);
       units.push({ key: `${folder}|${id}`, folder, files: ordered, extras: identities.size > 1 ? extras.filter((e) => e.kind !== 'cover') : extras, hint: hintOf(ordered, folder) });
     }

@@ -96,7 +96,7 @@ describe('music and feature sections', () => {
       preferredCountries: ['XW', 'US', 'GB'],
       preferredFormats: ['Digital Media', 'CD'],
     });
-    expect(getSection(db, 'audio')).toEqual({ trackMatchThreshold: 0.8, audiobookDurationTolerance: 5, renameAudiobookParts: true, writeAbsSidecars: false });
+    expect(getSection(db, 'audio')).toEqual({ trackMatchThreshold: 0.8, audiobookDurationTolerance: 15, renameAudiobookParts: true, writeAbsSidecars: false });
   });
 
   it('masks the Fanart.tv key and keeps it on a masked update', async () => {

@@ -1,150 +1,1423 @@
 {
   "description": "Audiobook release and file names for parseAudiobookRelease / parseAudioPath(path, 'audiobook') (design section 6). Author, narrator and series names are invented; titles are invented or well-known public titles. Only the fields listed in `expected` are checked; paths (inputs with / or \\) go through parseAudioPath. `skip` marks a known miss with the reason.",
   "cases": [
-    { "input": "Mara Quill - The Glass Orchard (Unabridged) [m4b]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "formatType": "unabridged", "container": "m4b", "codec": "AAC", "quality": "AB-AAC", "isPack": false, "series": null } },
-    { "input": "Mara Quill - The Glass Orchard (Abridged) [mp3]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "formatType": "abridged", "container": "mp3", "quality": "AB-MP3" } },
-    { "input": "Tobias Wren - Ember Road 03 - The Salt Gate", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Ember Road 01 - The Lantern Coast (2014) [m4b]", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "1", "title": "The Lantern Coast", "year": 2014, "container": "m4b" } },
-    { "input": "Tobias Wren - [Ember Road #3] - The Salt Gate (2015) 64kbps", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate", "year": 2015, "bitrateKbps": 64, "codec": "MP3", "quality": "AB-MP3" } },
-    { "input": "Helena Marsh - [Quiet Harbour #1] - Tidewater (2019) 32kbps", "expected": { "authors": ["Helena Marsh"], "series": "Quiet Harbour", "seriesPosition": "1", "title": "Tidewater", "year": 2019, "bitrateKbps": 32, "quality": "AB-MP3-Low" } },
-    { "input": "Helena Marsh - [Quiet Harbour #2] - Low Water (2020) 128kbps", "expected": { "series": "Quiet Harbour", "seriesPosition": "2", "title": "Low Water", "bitrateKbps": 128, "quality": "AB-MP3-High" } },
-    { "input": "The Hobbit - J. R. R. Tolkien - Elias Thorne", "expected": { "authors": ["J. R. R. Tolkien"], "title": "The Hobbit", "narrators": ["Elias Thorne"] } },
-    { "input": "The Lost World - Arthur Conan Doyle - Ruth P. Calder", "expected": { "authors": ["Arthur Conan Doyle"], "title": "The Lost World", "narrators": ["Ruth P. Calder"] } },
-    { "input": "Pride and Prejudice - Jane Austen - Imogen Hale", "expected": { "authors": ["Jane Austen"], "title": "Pride and Prejudice", "narrators": ["Imogen Hale"] } },
-    { "input": "Mara Quill - The Glass Orchard (read by Simon Vale) [mp3]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "narrators": ["Simon Vale"], "container": "mp3" } },
-    { "input": "Mara Quill - The Glass Orchard, read by Simon Vale", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "narrators": ["Simon Vale"] } },
-    { "input": "Mara Quill - The Glass Orchard - Read by Simon Vale", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "narrators": ["Simon Vale"] } },
-    { "input": "Mara Quill - The Glass Orchard narrated by Simon Vale & Nina Brook", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "narrators": ["Simon Vale", "Nina Brook"] } },
-    { "input": "Mara Quill - The Glass Orchard [Narrated by Simon Vale] [m4b]", "expected": { "title": "The Glass Orchard", "narrators": ["Simon Vale"], "container": "m4b" } },
-    { "input": "Mara Quill - The Glass Orchard (Narrator: Simon Vale)", "expected": { "title": "The Glass Orchard", "narrators": ["Simon Vale"] } },
-    { "input": "Mara Quill - The Glass Orchard [ASIN B0ABC12345]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "asin": "B0ABC12345" } },
-    { "input": "Mara Quill - The Glass Orchard [ASIN: B0XYZ98765] [m4b]", "expected": { "title": "The Glass Orchard", "asin": "B0XYZ98765", "container": "m4b" } },
-    { "input": "Mara Quill - The Glass Orchard [B07QWERTY1]", "expected": { "title": "The Glass Orchard", "asin": "B07QWERTY1" } },
-    { "input": "Mara Quill - The Glass Orchard (ISBN 9781234567897)", "expected": { "title": "The Glass Orchard", "isbn": "9781234567897" } },
-    { "input": "Mara Quill - The Glass Orchard [ISBN 978-1-23456-789-7] [mp3]", "expected": { "title": "The Glass Orchard", "isbn": "9781234567897", "container": "mp3" } },
-    { "input": "Mara Quill - The Glass Orchard {Simon Vale}", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "narrators": ["Simon Vale"] } },
-    { "input": "Mara Quill - The Glass Orchard {Simon Vale, Nina Brook} [m4b]", "expected": { "title": "The Glass Orchard", "narrators": ["Simon Vale", "Nina Brook"], "container": "m4b" } },
-    { "input": "Tobias Wren - Ember Road Books 1-5 [mp3]", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "1-5", "isPack": true, "title": null, "container": "mp3" } },
-    { "input": "Ember Road Books 1-5 [mp3]", "expected": { "authors": [], "series": "Ember Road", "seriesPosition": "1-5", "isPack": true, "container": "mp3" } },
-    { "input": "Tobias Wren - Ember Road (Books 1-3) [m4b]", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "1-3", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road - Complete Series [mp3]", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "isPack": true, "title": null } },
-    { "input": "Tobias Wren - The Complete Ember Road Series", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road (Complete Series) [m4b]", "expected": { "authors": ["Tobias Wren"], "isPack": true, "container": "m4b" } },
-    { "input": "Arthur Conan Doyle - The Sherlock Holmes Collection [mp3]", "expected": { "authors": ["Arthur Conan Doyle"], "title": "The Sherlock Holmes Collection", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road Omnibus (2021) [m4b]", "expected": { "title": "Ember Road Omnibus", "isPack": true, "year": 2021 } },
-    { "input": "Tobias Wren - Ember Road Box Set [mp3]", "expected": { "title": "Ember Road Box Set", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road Trilogy [m4b]", "expected": { "title": "Ember Road Trilogy", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road 01-05 [mp3]", "expected": { "series": "Ember Road", "seriesPosition": "1-5", "isPack": true } },
-    { "input": "Tobias Wren - Ember Road Book 2.5 - The Ferryman", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "2.5", "title": "The Ferryman" } },
-    { "input": "Tobias Wren - [Ember Road #2.5] - The Ferryman (2016)", "expected": { "series": "Ember Road", "seriesPosition": "2.5", "title": "The Ferryman", "year": 2016 } },
-    { "input": "Tobias Wren - The Ferryman (Ember Road, Book 2.5) [m4b]", "expected": { "title": "The Ferryman", "series": "Ember Road", "seriesPosition": "2.5" } },
-    { "input": "Corin Ashby - The Long Quiet: A Memoir of the Northern Sea (2018) [m4b]", "expected": { "authors": ["Corin Ashby"], "title": "The Long Quiet", "subtitle": "A Memoir of the Northern Sea", "year": 2018 } },
-    { "input": "Corin Ashby - Deep Work Habits: Rules for Focused Success in a Distracted World", "expected": { "title": "Deep Work Habits", "subtitle": "Rules for Focused Success in a Distracted World" } },
-    { "input": "Lena Ostrova & Pavel Mirsky - The Winter Ledger [mp3]", "expected": { "authors": ["Lena Ostrova", "Pavel Mirsky"], "title": "The Winter Ledger" } },
-    { "input": "Lena Ostrova and Pavel Mirsky - The Winter Ledger", "expected": { "authors": ["Lena Ostrova", "Pavel Mirsky"], "title": "The Winter Ledger" } },
-    { "input": "Lena Ostrova, Pavel Mirsky, Dana Holt - The Winter Ledger (2017)", "expected": { "authors": ["Lena Ostrova", "Pavel Mirsky", "Dana Holt"], "title": "The Winter Ledger", "year": 2017 } },
-    { "input": "Lena Ostrova with Pavel Mirsky - The Winter Ledger", "expected": { "authors": ["Lena Ostrova", "Pavel Mirsky"], "title": "The Winter Ledger" } },
-    { "input": "J. R. R. Tolkien - The Hobbit (Unabridged) [m4b]", "expected": { "authors": ["J. R. R. Tolkien"], "title": "The Hobbit", "formatType": "unabridged" } },
-    { "input": "J.R.R. Tolkien - The Fellowship of the Ring [mp3]", "expected": { "authors": ["J.R.R. Tolkien"], "title": "The Fellowship of the Ring" } },
-    { "input": "Tolkien, J. R. R. - The Hobbit", "expected": { "authors": ["J. R. R. Tolkien"], "title": "The Hobbit" } },
-    { "input": "Ursula K. Le Guin - A Wizard of Earthsea (1968) [m4b]", "expected": { "authors": ["Ursula K. Le Guin"], "title": "A Wizard of Earthsea", "year": 1968 } },
-    { "input": "H. G. Wells - The Time Machine [mp3 64kbps]", "expected": { "authors": ["H. G. Wells"], "title": "The Time Machine", "bitrateKbps": 64, "quality": "AB-MP3" } },
-    { "input": "Mara Quill - The Glass Orchard [Retail] [m4b]", "expected": { "title": "The Glass Orchard", "retail": true, "container": "m4b" } },
-    { "input": "Mara Quill - The Glass Orchard (Unabridged, Retail) [m4b]", "expected": { "title": "The Glass Orchard", "retail": true, "formatType": "unabridged" } },
-    { "input": "Mara Quill - The Glass Orchard [mp3]", "expected": { "retail": false, "formatType": "unknown" } },
-    { "input": "Mara Quill - The Glass Orchard (Dramatized) [mp3]", "expected": { "title": "The Glass Orchard", "formatType": "dramatized" } },
-    { "input": "Mara Quill - The Glass Orchard (Full Cast) [m4b]", "expected": { "title": "The Glass Orchard", "formatType": "dramatized" } },
-    { "input": "Mara Quill - The Glass Orchard [Radio Drama] [mp3]", "expected": { "title": "The Glass Orchard", "formatType": "dramatized" } },
-    { "input": "Mara Quill - The Glass Orchard [Dramatised Full-Cast]", "expected": { "title": "The Glass Orchard", "formatType": "dramatized" } },
-    { "input": "Mara Quill - Der Glasgarten (Ungekürzt) [German] [mp3]", "expected": { "authors": ["Mara Quill"], "title": "Der Glasgarten", "formatType": "unabridged", "language": "de" } },
-    { "input": "Mara Quill - Der Glasgarten [Hörbuch] [Deutsch] [m4b]", "expected": { "title": "Der Glasgarten", "language": "de", "container": "m4b" } },
-    { "input": "Mara Quill - Le Verger de Verre [FR] [mp3]", "expected": { "title": "Le Verger de Verre", "language": "fr" } },
-    { "input": "Mara Quill - El Huerto de Cristal (Spanish) [m4b]", "expected": { "title": "El Huerto de Cristal", "language": "es" } },
-    { "input": "Mara Quill - The Glass Orchard [ENG] [m4b]", "expected": { "title": "The Glass Orchard", "language": "en" } },
-    { "input": "Mara Quill - The Glass Orchard [mp3]", "expected": { "language": null } },
-    { "input": "Mara Quill - The Glass Orchard [MP3 VBR]", "expected": { "title": "The Glass Orchard", "codec": "MP3", "container": "mp3", "bitrateKbps": null, "quality": "AB-MP3" } },
-    { "input": "Mara Quill - The Glass Orchard [MP3 V0]", "expected": { "title": "The Glass Orchard", "codec": "MP3", "quality": "AB-MP3-High" } },
-    { "input": "Mara Quill - The Glass Orchard (2012) [MP3 128kbps VBR]", "expected": { "year": 2012, "bitrateKbps": 128, "quality": "AB-MP3-High" } },
-    { "input": "Mara Quill - The Glass Orchard [MP3 @ 64 kbps Mono]", "expected": { "title": "The Glass Orchard", "bitrateKbps": 64, "quality": "AB-MP3" } },
-    { "input": "Mara Quill - The Glass Orchard [m4b] [Chapterized]", "expected": { "title": "The Glass Orchard", "chapterized": true, "container": "m4b" } },
-    { "input": "Mara Quill - The Glass Orchard (Chaptered M4B 64kbps)", "expected": { "title": "The Glass Orchard", "chapterized": true, "container": "m4b", "bitrateKbps": 64, "quality": "AB-AAC" } },
-    { "input": "Mara Quill - The Glass Orchard [M4B 32kbps]", "expected": { "container": "m4b", "bitrateKbps": 32, "quality": "AB-AAC-Low" } },
-    { "input": "Mara Quill - The Glass Orchard [M4B w/ Chapters] [Single File]", "parser": "release", "expected": { "chapterized": true, "fileLayout": "single" } },
-    { "input": "Mara Quill - The Glass Orchard [AAC 128k]", "expected": { "codec": "AAC", "bitrateKbps": 128, "quality": "AB-AAC" } },
-    { "input": "Mara Quill - The Glass Orchard [m4a]", "expected": { "container": "m4a", "codec": "AAC", "quality": "AB-AAC" } },
-    { "input": "Mara Quill - The Glass Orchard [Opus 32kbps]", "expected": { "container": "opus", "codec": "Opus", "quality": "AB-Opus" } },
-    { "input": "Mara Quill - The Glass Orchard [FLAC]", "expected": { "container": "flac", "codec": "FLAC", "quality": "AB-Lossless" } },
-    { "input": "Mara Quill - The Glass Orchard", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "container": "unknown", "quality": "Unknown" } },
-    { "input": "Mara.Quill.-.The.Glass.Orchard.2013.Unabridged.MP3-ABGRP", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "year": 2013, "formatType": "unabridged", "container": "mp3", "releaseGroup": "ABGRP" } },
-    { "input": "Mara_Quill-The_Glass_Orchard-AUDIOBOOK-WEB-EN-2019-ABGRP", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "year": 2019, "language": "en", "scene": true, "releaseGroup": "ABGRP" } },
-    { "input": "Mara_Quill-The_Glass_Orchard-Unabridged-2019-MP3-ABGRP", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "year": 2019, "formatType": "unabridged", "container": "mp3", "scene": true, "releaseGroup": "ABGRP" } },
-    { "input": "Tobias_Wren-Ember_Road_03-The_Salt_Gate-AUDIOBOOK-2015-ABGRP", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate", "year": 2015, "scene": true } },
-    { "input": "Mara_Quill-Der_Glasgarten-DE-2018-M4B-HBGRP", "expected": { "authors": ["Mara Quill"], "title": "Der Glasgarten", "language": "de", "container": "m4b", "releaseGroup": "HBGRP" } },
-    { "input": "Mara_Quill-Der_Glasgarten-Ungekuerzt-HOERBUCH-2018-HBGRP", "expected": { "title": "Der Glasgarten", "formatType": "unabridged", "scene": true } },
-    { "input": "Mara.Quill.-.The.Glass.Orchard.(2013).[M4B]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "year": 2013, "container": "m4b" } },
-    { "input": "Mara_Quill_-_The_Glass_Orchard_(Unabridged)_[mp3]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "formatType": "unabridged", "container": "mp3" } },
-    { "input": "Mara Quill - The Glass Orchard (2013) [m4b]-ABGRP", "expected": { "title": "The Glass Orchard", "releaseGroup": "ABGRP" } },
-    { "input": "Mara Quill - The Glass Orchard 2013 Unabridged MP3-ABGRP", "expected": { "title": "The Glass Orchard", "year": 2013, "formatType": "unabridged", "releaseGroup": "ABGRP" } },
-    { "input": "Mara Quill - 2013 - The Glass Orchard [mp3]", "expected": { "authors": ["Mara Quill"], "title": "The Glass Orchard", "year": 2013 } },
-    { "input": "Mara Quill - The Glass Orchard - 2013 - Unabridged", "expected": { "title": "The Glass Orchard", "year": 2013, "formatType": "unabridged" } },
-    { "input": "George Orwell - 1984 [mp3]", "expected": { "authors": ["George Orwell"], "title": "1984", "year": null } },
-    { "input": "George Orwell - 1984 (2008) [m4b]", "expected": { "title": "1984", "year": 2008 } },
-    { "input": "Ray Bradbury - Fahrenheit 451 (Unabridged) [mp3]", "expected": { "authors": ["Ray Bradbury"], "title": "Fahrenheit 451", "series": null, "seriesPosition": null } },
-    { "input": "Joseph Heller - Catch-22 [m4b]", "expected": { "authors": ["Joseph Heller"], "title": "Catch-22" } },
-    { "input": "Stephen Kingsley - It [m4b]", "expected": { "title": "It", "language": null } },
-    { "input": "E. B. White - Charlotte's Web [mp3]", "expected": { "authors": ["E. B. White"], "title": "Charlotte's Web" } },
-    { "input": "Tobias Wren - Ember Road - Book 3 - The Salt Gate", "expected": { "authors": ["Tobias Wren"], "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Ember Road, Book 3 - The Salt Gate", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Ember Road #3 - The Salt Gate", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Ember Road Vol. 3 - The Salt Gate", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Ember Road - 03 - The Salt Gate", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - The Salt Gate (Ember Road #3)", "expected": { "title": "The Salt Gate", "series": "Ember Road", "seriesPosition": "3" } },
-    { "input": "Tobias Wren - The Salt Gate (Ember Road Book 3 of 7) [mp3]", "expected": { "title": "The Salt Gate", "series": "Ember Road", "seriesPosition": "3" } },
-    { "input": "Tobias Wren - The Salt Gate [Ember Road 03]", "expected": { "title": "The Salt Gate", "series": "Ember Road", "seriesPosition": "3" } },
-    { "input": "Tobias Wren - The Salt Gate (Book 3)", "expected": { "title": "The Salt Gate", "seriesPosition": "3", "series": null } },
-    { "input": "Tobias Wren - Ember Road Book 3: The Salt Gate", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "Tobias Wren - Book 3 - The Salt Gate", "expected": { "authors": ["Tobias Wren"], "seriesPosition": "3", "title": "The Salt Gate" } },
-    { "input": "The Salt Gate by Tobias Wren [mp3]", "expected": { "authors": ["Tobias Wren"], "title": "The Salt Gate" } },
-    { "input": "The Salt Gate", "expected": { "authors": [], "title": "The Salt Gate" } },
-    { "input": "Andrew Pell - The Iron Meridian - Kate Morrow", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "narrators": ["Kate Morrow"] } },
-    { "input": "Andrew Pell - The Iron Meridian - Kate Morrow & Leo Grant [m4b]", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "narrators": ["Kate Morrow", "Leo Grant"] } },
-    { "input": "Andrew Pell - The Iron Meridian - The Second Voyage", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "subtitle": "The Second Voyage", "narrators": [] } },
-    { "input": "Andrew Pell - The Iron Meridian (2011) (Unabridged) (read by Kate Morrow) [64kbps]", "expected": { "title": "The Iron Meridian", "year": 2011, "formatType": "unabridged", "narrators": ["Kate Morrow"], "bitrateKbps": 64 } },
-    { "input": "Andrew Pell - [Meridian #1] - The Iron Meridian (2011) {Kate Morrow} [ASIN B0MERID001] [m4b]", "expected": { "authors": ["Andrew Pell"], "series": "Meridian", "seriesPosition": "1", "title": "The Iron Meridian", "year": 2011, "narrators": ["Kate Morrow"], "asin": "B0MERID001", "container": "m4b" } },
-    { "input": "Andrew Pell - The Iron Meridian.m4b", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "container": "m4b", "quality": "AB-AAC" } },
-    { "input": "Andrew Pell - The Iron Meridian.mp3", "expected": { "title": "The Iron Meridian", "container": "mp3", "quality": "AB-MP3" } },
-    { "input": "Andrew Pell - The Iron Meridian [PROPER] [m4b]", "expected": { "title": "The Iron Meridian" } },
-    { "input": "www.example-books.org - Andrew Pell - The Iron Meridian [mp3]", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian" } },
-    { "input": "Various Authors - Tales of the Night Ferry (Anthology) [mp3]", "expected": { "authors": ["Various Authors"], "title": "Tales of the Night Ferry", "isPack": true } },
-    { "input": "Andrew Pell - The Iron Meridian (A Novel) [m4b]", "expected": { "title": "The Iron Meridian (A Novel)" } },
-    { "input": "Jean-Luc Moreau - Le Phare Oublié [Français] [mp3]", "expected": { "authors": ["Jean-Luc Moreau"], "title": "Le Phare Oublié", "language": "fr" } },
-    { "input": "Siobhan O'Reilly - The Harbour Lights [m4b]", "expected": { "authors": ["Siobhan O'Reilly"], "title": "The Harbour Lights" } },
-    { "input": "Andrew Pell - The Iron Meridian [MP3 192kbps 44.1kHz]", "expected": { "bitrateKbps": 192, "quality": "AB-MP3-High" } },
-    { "input": "Andrew Pell - The Iron Meridian [M4B ALAC]", "expected": { "codec": "ALAC", "quality": "AB-Lossless" } },
-    { "input": "Andrew Pell - The Iron Meridian (2011) [Unabridged] [MP3] [Multi-file]", "expected": { "fileLayout": "multi", "container": "mp3" } },
-    { "input": "Leviathan Wakes - Corin Ashby - Jefferson Vale", "skip": "Title - Author - Narrator where all three fields are name-shaped: the order cannot be told apart from Author - Title - Narrator without metadata", "expected": { "authors": ["Corin Ashby"], "title": "Leviathan Wakes", "narrators": ["Jefferson Vale"] } },
-    { "input": "Corin Ashby - The Deep Black (Nina Brook) [m4b]", "skip": "an unmarked parenthesised name could be a narrator or part of the title; only braces, 'read by' and 'narrated by' mark narrators", "expected": { "title": "The Deep Black", "narrators": ["Nina Brook"] } },
-    { "input": "Ashby, Corin - The Deep Black", "expected": { "authors": ["Corin Ashby"], "title": "The Deep Black" } },
-    { "input": "Le Guin, Ursula K. - The Left Hand of Darkness", "expected": { "authors": ["Ursula K. Le Guin"], "title": "The Left Hand of Darkness" } },
-    { "input": "[Corin Ashby] The Deep Black (2019)", "expected": { "authors": ["Corin Ashby"], "title": "The Deep Black", "year": 2019 } },
-    { "input": "Corin Ashby - The Deep Black (The Long Night Saga, #4) (Unabridged) [m4b] [64kbps]", "expected": { "title": "The Deep Black", "series": "The Long Night Saga", "seriesPosition": "4", "formatType": "unabridged", "bitrateKbps": 64, "quality": "AB-AAC" } },
-    { "input": "Corin Ashby - Ember Road 3 - The Salt Gate [Retail] {Nina Brook}", "expected": { "series": "Ember Road", "seriesPosition": "3", "title": "The Salt Gate", "retail": true, "narrators": ["Nina Brook"] } },
-    { "input": "Corin Ashby - The Deep Black [2019] [MP3 VBR] [Unabridged] [EN]", "expected": { "title": "The Deep Black", "year": 2019, "container": "mp3", "formatType": "unabridged", "language": "en" } },
-    { "input": "Corin Ashby - The Deep Black - 64k", "expected": { "title": "The Deep Black", "bitrateKbps": 64, "quality": "AB-MP3" } },
-    { "input": "Corin Ashby - The Deep Black Unabridged", "expected": { "title": "The Deep Black", "formatType": "unabridged" } },
-    { "input": "Corin.Ashby.-.Ember.Road.Book.2.5.-.The.Ferryman.MP3-ABGRP", "expected": { "authors": ["Corin Ashby"], "series": "Ember Road", "seriesPosition": "2.5", "title": "The Ferryman", "container": "mp3", "releaseGroup": "ABGRP" } },
-    { "input": "Andrew Pell/The Iron Meridian/The Iron Meridian.m4b", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "series": null, "container": "m4b", "quality": "AB-AAC" } },
-    { "input": "/audiobooks/Andrew Pell/The Iron Meridian/01 - Chapter One.mp3", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "container": "mp3" } },
-    { "input": "/audiobooks/Andrew Pell/Meridian/Book 1 - The Iron Meridian/01.mp3", "expected": { "authors": ["Andrew Pell"], "series": "Meridian", "seriesPosition": "1", "title": "The Iron Meridian" } },
-    { "input": "/audiobooks/Andrew Pell/Meridian/2 - The Copper Meridian/part01.m4b", "expected": { "authors": ["Andrew Pell"], "series": "Meridian", "seriesPosition": "2", "title": "The Copper Meridian" } },
-    { "input": "/audiobooks/Andrew Pell/Meridian/Vol 2.5 - The Brass Interlude/book.m4b", "expected": { "series": "Meridian", "seriesPosition": "2.5", "title": "The Brass Interlude" } },
-    { "input": "/audiobooks/Andrew Pell/Meridian/2011 - Book 1 - The Iron Meridian - A Voyage {Kate Morrow}/01.mp3", "expected": { "authors": ["Andrew Pell"], "series": "Meridian", "seriesPosition": "1", "title": "The Iron Meridian", "subtitle": "A Voyage", "year": 2011, "narrators": ["Kate Morrow"] } },
-    { "input": "D:\\Audiobooks\\Andrew Pell\\The Iron Meridian (2011)\\CD 1\\01 - Track 01.mp3", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "year": 2011, "container": "mp3" } },
-    { "input": "/downloads/Andrew Pell - The Iron Meridian (2011) [m4b]/Andrew Pell - The Iron Meridian.m4b", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "year": 2011, "container": "m4b" } },
-    { "input": "/downloads/Andrew Pell - The Iron Meridian (2011) [64kbps]/01.mp3", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "year": 2011, "bitrateKbps": 64, "quality": "AB-MP3" } },
-    { "input": "/audiobooks/Andrew Pell/The Iron Meridian - A Voyage/book.m4b", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "subtitle": "A Voyage" } },
-    { "input": "/audiobooks/Andrew Pell/The Iron Meridian {Kate Morrow}/Chapter 01.mp3", "expected": { "authors": ["Andrew Pell"], "title": "The Iron Meridian", "narrators": ["Kate Morrow"] } },
-    { "input": "/audiobooks/Lena Ostrova & Pavel Mirsky/The Winter Ledger/01.mp3", "expected": { "authors": ["Lena Ostrova", "Pavel Mirsky"], "title": "The Winter Ledger" } },
-    { "input": "/audiobooks/Andrew Pell/The Iron Meridian/The Iron Meridian.opus", "expected": { "container": "opus", "quality": "AB-Opus" } }
+    {
+      "input": "Mara Quill - The Glass Orchard (Unabridged) [m4b]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "formatType": "unabridged",
+        "container": "m4b",
+        "codec": "AAC",
+        "quality": "AB-AAC",
+        "isPack": false,
+        "series": null
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Abridged) [mp3]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "formatType": "abridged",
+        "container": "mp3",
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road 03 - The Salt Gate",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road 01 - The Lantern Coast (2014) [m4b]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "1",
+        "title": "The Lantern Coast",
+        "year": 2014,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Tobias Wren - [Ember Road #3] - The Salt Gate (2015) 64kbps",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate",
+        "year": 2015,
+        "bitrateKbps": 64,
+        "codec": "MP3",
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Helena Marsh - [Quiet Harbour #1] - Tidewater (2019) 32kbps",
+      "expected": {
+        "authors": [
+          "Helena Marsh"
+        ],
+        "series": "Quiet Harbour",
+        "seriesPosition": "1",
+        "title": "Tidewater",
+        "year": 2019,
+        "bitrateKbps": 32,
+        "quality": "AB-MP3-Low"
+      }
+    },
+    {
+      "input": "Helena Marsh - [Quiet Harbour #2] - Low Water (2020) 128kbps",
+      "expected": {
+        "series": "Quiet Harbour",
+        "seriesPosition": "2",
+        "title": "Low Water",
+        "bitrateKbps": 128,
+        "quality": "AB-MP3-High"
+      }
+    },
+    {
+      "input": "The Hobbit - J. R. R. Tolkien - Elias Thorne",
+      "expected": {
+        "authors": [
+          "J. R. R. Tolkien"
+        ],
+        "title": "The Hobbit",
+        "narrators": [
+          "Elias Thorne"
+        ]
+      }
+    },
+    {
+      "input": "The Lost World - Arthur Conan Doyle - Ruth P. Calder",
+      "expected": {
+        "authors": [
+          "Arthur Conan Doyle"
+        ],
+        "title": "The Lost World",
+        "narrators": [
+          "Ruth P. Calder"
+        ]
+      }
+    },
+    {
+      "input": "Pride and Prejudice - Jane Austen - Imogen Hale",
+      "expected": {
+        "authors": [
+          "Jane Austen"
+        ],
+        "title": "Pride and Prejudice",
+        "narrators": [
+          "Imogen Hale"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (read by Simon Vale) [mp3]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ],
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard, read by Simon Vale",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard - Read by Simon Vale",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard narrated by Simon Vale & Nina Brook",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale",
+          "Nina Brook"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [Narrated by Simon Vale] [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ],
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Narrator: Simon Vale)",
+      "expected": {
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [ASIN B0ABC12345]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "asin": "B0ABC12345"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [ASIN: B0XYZ98765] [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "asin": "B0XYZ98765",
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [B07QWERTY1]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "asin": "B07QWERTY1"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (ISBN 9781234567897)",
+      "expected": {
+        "title": "The Glass Orchard",
+        "isbn": "9781234567897"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [ISBN 978-1-23456-789-7] [mp3]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "isbn": "9781234567897",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard {Simon Vale}",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale"
+        ]
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard {Simon Vale, Nina Brook} [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "narrators": [
+          "Simon Vale",
+          "Nina Brook"
+        ],
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Books 1-5 [mp3]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "1-5",
+        "isPack": true,
+        "title": null,
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Ember Road Books 1-5 [mp3]",
+      "expected": {
+        "authors": [],
+        "series": "Ember Road",
+        "seriesPosition": "1-5",
+        "isPack": true,
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road (Books 1-3) [m4b]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "1-3",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road - Complete Series [mp3]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "isPack": true,
+        "title": null
+      }
+    },
+    {
+      "input": "Tobias Wren - The Complete Ember Road Series",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road (Complete Series) [m4b]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "isPack": true,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Arthur Conan Doyle - The Sherlock Holmes Collection [mp3]",
+      "expected": {
+        "authors": [
+          "Arthur Conan Doyle"
+        ],
+        "title": "The Sherlock Holmes Collection",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Omnibus (2021) [m4b]",
+      "expected": {
+        "title": "Ember Road Omnibus",
+        "isPack": true,
+        "year": 2021
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Box Set [mp3]",
+      "expected": {
+        "title": "Ember Road Box Set",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Trilogy [m4b]",
+      "expected": {
+        "title": "Ember Road Trilogy",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road 01-05 [mp3]",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "1-5",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Book 2.5 - The Ferryman",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "2.5",
+        "title": "The Ferryman"
+      }
+    },
+    {
+      "input": "Tobias Wren - [Ember Road #2.5] - The Ferryman (2016)",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "2.5",
+        "title": "The Ferryman",
+        "year": 2016
+      }
+    },
+    {
+      "input": "Tobias Wren - The Ferryman (Ember Road, Book 2.5) [m4b]",
+      "expected": {
+        "title": "The Ferryman",
+        "series": "Ember Road",
+        "seriesPosition": "2.5"
+      }
+    },
+    {
+      "input": "Corin Ashby - The Long Quiet: A Memoir of the Northern Sea (2018) [m4b]",
+      "expected": {
+        "authors": [
+          "Corin Ashby"
+        ],
+        "title": "The Long Quiet",
+        "subtitle": "A Memoir of the Northern Sea",
+        "year": 2018
+      }
+    },
+    {
+      "input": "Corin Ashby - Deep Work Habits: Rules for Focused Success in a Distracted World",
+      "expected": {
+        "title": "Deep Work Habits",
+        "subtitle": "Rules for Focused Success in a Distracted World"
+      }
+    },
+    {
+      "input": "Lena Ostrova & Pavel Mirsky - The Winter Ledger [mp3]",
+      "expected": {
+        "authors": [
+          "Lena Ostrova",
+          "Pavel Mirsky"
+        ],
+        "title": "The Winter Ledger"
+      }
+    },
+    {
+      "input": "Lena Ostrova and Pavel Mirsky - The Winter Ledger",
+      "expected": {
+        "authors": [
+          "Lena Ostrova",
+          "Pavel Mirsky"
+        ],
+        "title": "The Winter Ledger"
+      }
+    },
+    {
+      "input": "Lena Ostrova, Pavel Mirsky, Dana Holt - The Winter Ledger (2017)",
+      "expected": {
+        "authors": [
+          "Lena Ostrova",
+          "Pavel Mirsky",
+          "Dana Holt"
+        ],
+        "title": "The Winter Ledger",
+        "year": 2017
+      }
+    },
+    {
+      "input": "Lena Ostrova with Pavel Mirsky - The Winter Ledger",
+      "expected": {
+        "authors": [
+          "Lena Ostrova",
+          "Pavel Mirsky"
+        ],
+        "title": "The Winter Ledger"
+      }
+    },
+    {
+      "input": "J. R. R. Tolkien - The Hobbit (Unabridged) [m4b]",
+      "expected": {
+        "authors": [
+          "J. R. R. Tolkien"
+        ],
+        "title": "The Hobbit",
+        "formatType": "unabridged"
+      }
+    },
+    {
+      "input": "J.R.R. Tolkien - The Fellowship of the Ring [mp3]",
+      "expected": {
+        "authors": [
+          "J.R.R. Tolkien"
+        ],
+        "title": "The Fellowship of the Ring"
+      }
+    },
+    {
+      "input": "Tolkien, J. R. R. - The Hobbit",
+      "expected": {
+        "authors": [
+          "J. R. R. Tolkien"
+        ],
+        "title": "The Hobbit"
+      }
+    },
+    {
+      "input": "Ursula K. Le Guin - A Wizard of Earthsea (1968) [m4b]",
+      "expected": {
+        "authors": [
+          "Ursula K. Le Guin"
+        ],
+        "title": "A Wizard of Earthsea",
+        "year": 1968
+      }
+    },
+    {
+      "input": "H. G. Wells - The Time Machine [mp3 64kbps]",
+      "expected": {
+        "authors": [
+          "H. G. Wells"
+        ],
+        "title": "The Time Machine",
+        "bitrateKbps": 64,
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [Retail] [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "retail": true,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Unabridged, Retail) [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "retail": true,
+        "formatType": "unabridged"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [mp3]",
+      "expected": {
+        "retail": false,
+        "formatType": "unknown"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Dramatized) [mp3]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "formatType": "dramatized"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Full Cast) [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "formatType": "dramatized"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [Radio Drama] [mp3]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "formatType": "dramatized"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [Dramatised Full-Cast]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "formatType": "dramatized"
+      }
+    },
+    {
+      "input": "Mara Quill - Der Glasgarten (Ungekürzt) [German] [mp3]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "Der Glasgarten",
+        "formatType": "unabridged",
+        "language": "de"
+      }
+    },
+    {
+      "input": "Mara Quill - Der Glasgarten [Hörbuch] [Deutsch] [m4b]",
+      "expected": {
+        "title": "Der Glasgarten",
+        "language": "de",
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara Quill - Le Verger de Verre [FR] [mp3]",
+      "expected": {
+        "title": "Le Verger de Verre",
+        "language": "fr"
+      }
+    },
+    {
+      "input": "Mara Quill - El Huerto de Cristal (Spanish) [m4b]",
+      "expected": {
+        "title": "El Huerto de Cristal",
+        "language": "es"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [ENG] [m4b]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "language": "en"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [mp3]",
+      "expected": {
+        "language": null
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [MP3 VBR]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "codec": "MP3",
+        "container": "mp3",
+        "bitrateKbps": null,
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [MP3 V0]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "codec": "MP3",
+        "quality": "AB-MP3-High"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (2012) [MP3 128kbps VBR]",
+      "expected": {
+        "year": 2012,
+        "bitrateKbps": 128,
+        "quality": "AB-MP3-High"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [MP3 @ 64 kbps Mono]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "bitrateKbps": 64,
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [m4b] [Chapterized]",
+      "expected": {
+        "title": "The Glass Orchard",
+        "chapterized": true,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (Chaptered M4B 64kbps)",
+      "expected": {
+        "title": "The Glass Orchard",
+        "chapterized": true,
+        "container": "m4b",
+        "bitrateKbps": 64,
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [M4B 32kbps]",
+      "expected": {
+        "container": "m4b",
+        "bitrateKbps": 32,
+        "quality": "AB-AAC-Low"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [M4B w/ Chapters] [Single File]",
+      "parser": "release",
+      "expected": {
+        "chapterized": true,
+        "fileLayout": "single"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [AAC 128k]",
+      "expected": {
+        "codec": "AAC",
+        "bitrateKbps": 128,
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [m4a]",
+      "expected": {
+        "container": "m4a",
+        "codec": "AAC",
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [Opus 32kbps]",
+      "expected": {
+        "container": "opus",
+        "codec": "Opus",
+        "quality": "AB-Opus"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard [FLAC]",
+      "expected": {
+        "container": "flac",
+        "codec": "FLAC",
+        "quality": "AB-Lossless"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "container": "unknown",
+        "quality": "Unknown"
+      }
+    },
+    {
+      "input": "Mara.Quill.-.The.Glass.Orchard.2013.Unabridged.MP3-ABGRP",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "year": 2013,
+        "formatType": "unabridged",
+        "container": "mp3",
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Mara_Quill-The_Glass_Orchard-AUDIOBOOK-WEB-EN-2019-ABGRP",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "year": 2019,
+        "language": "en",
+        "scene": true,
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Mara_Quill-The_Glass_Orchard-Unabridged-2019-MP3-ABGRP",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "year": 2019,
+        "formatType": "unabridged",
+        "container": "mp3",
+        "scene": true,
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Tobias_Wren-Ember_Road_03-The_Salt_Gate-AUDIOBOOK-2015-ABGRP",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate",
+        "year": 2015,
+        "scene": true
+      }
+    },
+    {
+      "input": "Mara_Quill-Der_Glasgarten-DE-2018-M4B-HBGRP",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "Der Glasgarten",
+        "language": "de",
+        "container": "m4b",
+        "releaseGroup": "HBGRP"
+      }
+    },
+    {
+      "input": "Mara_Quill-Der_Glasgarten-Ungekuerzt-HOERBUCH-2018-HBGRP",
+      "expected": {
+        "title": "Der Glasgarten",
+        "formatType": "unabridged",
+        "scene": true
+      }
+    },
+    {
+      "input": "Mara.Quill.-.The.Glass.Orchard.(2013).[M4B]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "year": 2013,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Mara_Quill_-_The_Glass_Orchard_(Unabridged)_[mp3]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "formatType": "unabridged",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard (2013) [m4b]-ABGRP",
+      "expected": {
+        "title": "The Glass Orchard",
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard 2013 Unabridged MP3-ABGRP",
+      "expected": {
+        "title": "The Glass Orchard",
+        "year": 2013,
+        "formatType": "unabridged",
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Mara Quill - 2013 - The Glass Orchard [mp3]",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "year": 2013
+      }
+    },
+    {
+      "input": "Mara Quill - The Glass Orchard - 2013 - Unabridged",
+      "expected": {
+        "title": "The Glass Orchard",
+        "year": 2013,
+        "formatType": "unabridged"
+      }
+    },
+    {
+      "input": "George Orwell - 1984 [mp3]",
+      "expected": {
+        "authors": [
+          "George Orwell"
+        ],
+        "title": "1984",
+        "year": null
+      }
+    },
+    {
+      "input": "George Orwell - 1984 (2008) [m4b]",
+      "expected": {
+        "title": "1984",
+        "year": 2008
+      }
+    },
+    {
+      "input": "Ray Bradbury - Fahrenheit 451 (Unabridged) [mp3]",
+      "expected": {
+        "authors": [
+          "Ray Bradbury"
+        ],
+        "title": "Fahrenheit 451",
+        "series": null,
+        "seriesPosition": null
+      }
+    },
+    {
+      "input": "Joseph Heller - Catch-22 [m4b]",
+      "expected": {
+        "authors": [
+          "Joseph Heller"
+        ],
+        "title": "Catch-22"
+      }
+    },
+    {
+      "input": "Stephen Kingsley - It [m4b]",
+      "expected": {
+        "title": "It",
+        "language": null
+      }
+    },
+    {
+      "input": "E. B. White - Charlotte's Web [mp3]",
+      "expected": {
+        "authors": [
+          "E. B. White"
+        ],
+        "title": "Charlotte's Web"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road - Book 3 - The Salt Gate",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road, Book 3 - The Salt Gate",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road #3 - The Salt Gate",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Vol. 3 - The Salt Gate",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road - 03 - The Salt Gate",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - The Salt Gate (Ember Road #3)",
+      "expected": {
+        "title": "The Salt Gate",
+        "series": "Ember Road",
+        "seriesPosition": "3"
+      }
+    },
+    {
+      "input": "Tobias Wren - The Salt Gate (Ember Road Book 3 of 7) [mp3]",
+      "expected": {
+        "title": "The Salt Gate",
+        "series": "Ember Road",
+        "seriesPosition": "3"
+      }
+    },
+    {
+      "input": "Tobias Wren - The Salt Gate [Ember Road 03]",
+      "expected": {
+        "title": "The Salt Gate",
+        "series": "Ember Road",
+        "seriesPosition": "3"
+      }
+    },
+    {
+      "input": "Tobias Wren - The Salt Gate (Book 3)",
+      "expected": {
+        "title": "The Salt Gate",
+        "seriesPosition": "3",
+        "series": null
+      }
+    },
+    {
+      "input": "Tobias Wren - Ember Road Book 3: The Salt Gate",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Tobias Wren - Book 3 - The Salt Gate",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "seriesPosition": "3",
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "The Salt Gate by Tobias Wren [mp3]",
+      "expected": {
+        "authors": [
+          "Tobias Wren"
+        ],
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "The Salt Gate",
+      "expected": {
+        "authors": [],
+        "title": "The Salt Gate"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian - Kate Morrow",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "narrators": [
+          "Kate Morrow"
+        ]
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian - Kate Morrow & Leo Grant [m4b]",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "narrators": [
+          "Kate Morrow",
+          "Leo Grant"
+        ]
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian - The Second Voyage",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "subtitle": "The Second Voyage",
+        "narrators": []
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian (2011) (Unabridged) (read by Kate Morrow) [64kbps]",
+      "expected": {
+        "title": "The Iron Meridian",
+        "year": 2011,
+        "formatType": "unabridged",
+        "narrators": [
+          "Kate Morrow"
+        ],
+        "bitrateKbps": 64
+      }
+    },
+    {
+      "input": "Andrew Pell - [Meridian #1] - The Iron Meridian (2011) {Kate Morrow} [ASIN B0MERID001] [m4b]",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "series": "Meridian",
+        "seriesPosition": "1",
+        "title": "The Iron Meridian",
+        "year": 2011,
+        "narrators": [
+          "Kate Morrow"
+        ],
+        "asin": "B0MERID001",
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian.m4b",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "container": "m4b",
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian.mp3",
+      "expected": {
+        "title": "The Iron Meridian",
+        "container": "mp3",
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian [PROPER] [m4b]",
+      "expected": {
+        "title": "The Iron Meridian"
+      }
+    },
+    {
+      "input": "www.example-books.org - Andrew Pell - The Iron Meridian [mp3]",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian"
+      }
+    },
+    {
+      "input": "Various Authors - Tales of the Night Ferry (Anthology) [mp3]",
+      "expected": {
+        "authors": [
+          "Various Authors"
+        ],
+        "title": "Tales of the Night Ferry",
+        "isPack": true
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian (A Novel) [m4b]",
+      "expected": {
+        "title": "The Iron Meridian (A Novel)"
+      }
+    },
+    {
+      "input": "Jean-Luc Moreau - Le Phare Oublié [Français] [mp3]",
+      "expected": {
+        "authors": [
+          "Jean-Luc Moreau"
+        ],
+        "title": "Le Phare Oublié",
+        "language": "fr"
+      }
+    },
+    {
+      "input": "Siobhan O'Reilly - The Harbour Lights [m4b]",
+      "expected": {
+        "authors": [
+          "Siobhan O'Reilly"
+        ],
+        "title": "The Harbour Lights"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian [MP3 192kbps 44.1kHz]",
+      "expected": {
+        "bitrateKbps": 192,
+        "quality": "AB-MP3-High"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian [M4B ALAC]",
+      "expected": {
+        "codec": "ALAC",
+        "quality": "AB-Lossless"
+      }
+    },
+    {
+      "input": "Andrew Pell - The Iron Meridian (2011) [Unabridged] [MP3] [Multi-file]",
+      "expected": {
+        "fileLayout": "multi",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "Leviathan Wakes - Corin Ashby - Jefferson Vale",
+      "skip": "Title - Author - Narrator where all three fields are name-shaped: the order cannot be told apart from Author - Title - Narrator without metadata",
+      "expected": {
+        "authors": [
+          "Corin Ashby"
+        ],
+        "title": "Leviathan Wakes",
+        "narrators": [
+          "Jefferson Vale"
+        ]
+      }
+    },
+    {
+      "input": "Corin Ashby - The Deep Black (Nina Brook) [m4b]",
+      "skip": "an unmarked parenthesised name could be a narrator or part of the title; only braces, 'read by' and 'narrated by' mark narrators",
+      "expected": {
+        "title": "The Deep Black",
+        "narrators": [
+          "Nina Brook"
+        ]
+      }
+    },
+    {
+      "input": "Ashby, Corin - The Deep Black",
+      "expected": {
+        "authors": [
+          "Corin Ashby"
+        ],
+        "title": "The Deep Black"
+      }
+    },
+    {
+      "input": "Le Guin, Ursula K. - The Left Hand of Darkness",
+      "expected": {
+        "authors": [
+          "Ursula K. Le Guin"
+        ],
+        "title": "The Left Hand of Darkness"
+      }
+    },
+    {
+      "input": "[Corin Ashby] The Deep Black (2019)",
+      "expected": {
+        "authors": [
+          "Corin Ashby"
+        ],
+        "title": "The Deep Black",
+        "year": 2019
+      }
+    },
+    {
+      "input": "Corin Ashby - The Deep Black (The Long Night Saga, #4) (Unabridged) [m4b] [64kbps]",
+      "expected": {
+        "title": "The Deep Black",
+        "series": "The Long Night Saga",
+        "seriesPosition": "4",
+        "formatType": "unabridged",
+        "bitrateKbps": 64,
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "Corin Ashby - Ember Road 3 - The Salt Gate [Retail] {Nina Brook}",
+      "expected": {
+        "series": "Ember Road",
+        "seriesPosition": "3",
+        "title": "The Salt Gate",
+        "retail": true,
+        "narrators": [
+          "Nina Brook"
+        ]
+      }
+    },
+    {
+      "input": "Corin Ashby - The Deep Black [2019] [MP3 VBR] [Unabridged] [EN]",
+      "expected": {
+        "title": "The Deep Black",
+        "year": 2019,
+        "container": "mp3",
+        "formatType": "unabridged",
+        "language": "en"
+      }
+    },
+    {
+      "input": "Corin Ashby - The Deep Black - 64k",
+      "expected": {
+        "title": "The Deep Black",
+        "bitrateKbps": 64,
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "Corin Ashby - The Deep Black Unabridged",
+      "expected": {
+        "title": "The Deep Black",
+        "formatType": "unabridged"
+      }
+    },
+    {
+      "input": "Corin.Ashby.-.Ember.Road.Book.2.5.-.The.Ferryman.MP3-ABGRP",
+      "expected": {
+        "authors": [
+          "Corin Ashby"
+        ],
+        "series": "Ember Road",
+        "seriesPosition": "2.5",
+        "title": "The Ferryman",
+        "container": "mp3",
+        "releaseGroup": "ABGRP"
+      }
+    },
+    {
+      "input": "Andrew Pell/The Iron Meridian/The Iron Meridian.m4b",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "series": null,
+        "container": "m4b",
+        "quality": "AB-AAC"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian/01 - Chapter One.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/Meridian/Book 1 - The Iron Meridian/01.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "series": "Meridian",
+        "seriesPosition": "1",
+        "title": "The Iron Meridian"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/Meridian/2 - The Copper Meridian/part01.m4b",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "series": "Meridian",
+        "seriesPosition": "2",
+        "title": "The Copper Meridian"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/Meridian/Vol 2.5 - The Brass Interlude/book.m4b",
+      "expected": {
+        "series": "Meridian",
+        "seriesPosition": "2.5",
+        "title": "The Brass Interlude"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/Meridian/2011 - Book 1 - The Iron Meridian - A Voyage {Kate Morrow}/01.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "series": "Meridian",
+        "seriesPosition": "1",
+        "title": "The Iron Meridian",
+        "subtitle": "A Voyage",
+        "year": 2011,
+        "narrators": [
+          "Kate Morrow"
+        ]
+      }
+    },
+    {
+      "input": "D:\\Audiobooks\\Andrew Pell\\The Iron Meridian (2011)\\CD 1\\01 - Track 01.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "year": 2011,
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "/downloads/Andrew Pell - The Iron Meridian (2011) [m4b]/Andrew Pell - The Iron Meridian.m4b",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "year": 2011,
+        "container": "m4b"
+      }
+    },
+    {
+      "input": "/downloads/Andrew Pell - The Iron Meridian (2011) [64kbps]/01.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "year": 2011,
+        "bitrateKbps": 64,
+        "quality": "AB-MP3"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian - A Voyage/book.m4b",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "subtitle": "A Voyage"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian {Kate Morrow}/Chapter 01.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "narrators": [
+          "Kate Morrow"
+        ]
+      }
+    },
+    {
+      "input": "/audiobooks/Lena Ostrova & Pavel Mirsky/The Winter Ledger/01.mp3",
+      "expected": {
+        "authors": [
+          "Lena Ostrova",
+          "Pavel Mirsky"
+        ],
+        "title": "The Winter Ledger"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian/The Iron Meridian.opus",
+      "expected": {
+        "container": "opus",
+        "quality": "AB-Opus"
+      }
+    },
+    {
+      "input": "Mara Quill | The Glass Orchard",
+      "expected": {
+        "authors": [
+          "Mara Quill"
+        ],
+        "title": "The Glass Orchard",
+        "isPack": false,
+        "series": null
+      }
+    }
   ]
 }

@@ -543,7 +543,7 @@ track tag, then natural file-name sort; a chaptered m4b is one part.
 Specs per book (a book imports all its parts or none): `absolutePath`, `minimumFreeSpace`,
 `unpacking`, `sameFile`, `alreadyImported`, `notQualityUpgrade` (best new part against the best
 existing file) and `durationMismatch` (the parts' total must be within
-`audio.audiobookDurationTolerance` percent, default 5, of the book's runtime; books without a
+`audio.audiobookDurationTolerance` percent, default 15, of the book's runtime; books without a
 runtime pass). A tagged narrator that is none of the book's narrators is a warning.
 
 Files go to `<author folder>/<book folder>/` (`bookFolderFormat`, or `seriesBookFolderFormat`
@@ -567,7 +567,7 @@ folder (servers flagged for refresh with an audiobook library containing it: Aud
 | Field | Default | Meaning |
 |---|---|---|
 | `trackMatchThreshold` | 0.8 | Music: minimum release match |
-| `audiobookDurationTolerance` | 5 | Percent the parts' total may differ from the book's runtime |
+| `audiobookDurationTolerance` | 15 | Percent the parts' total may differ from the book's runtime |
 | `renameAudiobookParts` | `true` | Rename multi-part books with `bookPartFormat` even with `renameAudiobooks` off |
 | `writeAbsSidecars` | `false` | Write `desc.txt`, `reader.txt`, `cover.jpg` into the book folder |
 

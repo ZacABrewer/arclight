@@ -40,6 +40,17 @@ describe('audiobook specs', () => {
     expect(specApplies(byId.get('bookPack')!, 'music')).toBe(false);
   });
 
+  it('audioCategory: rejects a book-named release the indexer files as an ebook or video', () => {
+    const at = (categories: number[]) => {
+      const c = makeBookCandidate(makeRelease('James S. A. Corey - Leviathan Wakes', { size: 500 * MB, categories }), lib, profile);
+      return evaluate(ctxFor(), c, audiobookSpecifications).rejections.map((r) => r.reason);
+    };
+    expect(at([7000, 130440])).toContain('notAudioCategory'); // archive scans: Books
+    expect(at([7020])).toContain('notAudioCategory');
+    expect(at([2000, 5000])).toContain('notAudioCategory');
+    for (const ok of [[3030], [3000, 127296], [8000], [130440], []]) expect(at(ok), JSON.stringify(ok)).not.toContain('notAudioCategory');
+  });
+
   it('approves a plain unabridged m4b of a wanted book', () => {
     expect(reasons('James S. A. Corey - Leviathan Wakes (Unabridged) [m4b]', 500 * MB)).toEqual([]);
   });

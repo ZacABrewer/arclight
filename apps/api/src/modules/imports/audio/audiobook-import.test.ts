@@ -34,7 +34,7 @@ import type { TrackedDownload } from '../../download-clients/index.js';
 import type { AudiobookImportedEvent, ImportsDeps } from '../deps.js';
 import { importsRoutes } from '../routes.js';
 import { ImportsService, type DownloadClientsPort } from '../service.js';
-import { bookFolderOf, durationMismatchSpec, narratorWarning, orderParts } from './audiobook-import.js';
+import { bookFolderOf, durationMismatchSpec, narratorWarning, onePerPart, orderParts } from './audiobook-import.js';
 import { buildMp3, buildMp4, type FixtureChapter, type FixtureTags } from './fixtures/builders.js';
 
 // The audiobook importer end to end over temp folders of tiny silent tagged files (a minute of
@@ -275,6 +275,18 @@ afterEach(async () => {
 // ---------------------------------------------------------------------------------------
 
 describe('audiobook helpers', () => {
+  it('keeps one format per part when a book ships in several (archive mp3 + ogg)', () => {
+    const f = (name: string, codec: string | null = null) => ({ path: `/dl/Book/${name}`, tags: codec ? ({ codec, container: null, bitrateKbps: 64 } as never) : null });
+    const both = [f('01.mp3'), f('01.ogg'), f('02.mp3'), f('02.ogg')];
+    expect(onePerPart(both).map((x) => x.path)).toEqual(['/dl/Book/01.mp3', '/dl/Book/02.mp3']);
+    // Different stems are different parts, whatever their formats.
+    const mixed = [f('01.mp3'), f('02.ogg')];
+    expect(onePerPart(mixed)).toHaveLength(2);
+    // The format covering more parts wins over a better container with gaps.
+    expect(onePerPart([f('01.m4b'), f('01.mp3'), f('02.mp3')]).map((x) => x.path)).toEqual(['/dl/Book/01.mp3', '/dl/Book/02.mp3']);
+  });
+
+
   it('orders parts by disc tag, then track tag, then natural file name', () => {
     const f = (relativePath: string, discNo: number | null, trackNo: number | null) => ({
       path: `/d/${relativePath}`,
@@ -394,7 +406,7 @@ describe('audiobook import of a completed download', () => {
     const first = await service().importCompletedDownload(item);
     expect(first.verified).toBe(false);
     expect(first.outcomes[0]).toMatchObject({ status: 'rejected', rejections: [{ reason: 'durationMismatch', type: 'permanent' }] });
-    expect(first.messages[0]!.messages.join('\n')).toMatch(/Short One\.m4b: Total duration .* off the book's runtime of 1 min \(tolerance 5%\)/);
+    expect(first.messages[0]!.messages.join('\n')).toMatch(/Short One\.m4b: Total duration .* off the book's runtime of 1 min \(tolerance 15%\)/);
     expect(fake.items.get(5)!.trackedState).toBe('importPending');
     expect(bookFiles(book.id)).toEqual([]);
 
