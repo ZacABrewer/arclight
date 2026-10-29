@@ -12,6 +12,7 @@ import {
   type AudioManualImportItem,
   type AudioManualImportQuery,
   type AudioManualImportRequest,
+  type AudioManualImportRequestItem,
   type AudioManualImportResult,
   type ImportRejection,
   type ImportRejectionReason,
@@ -1205,7 +1206,7 @@ export class MusicImporter {
   }
 
   /** POST /manualimport/audio: imports the user's mapping; specs are bypassed (like video). */
-  async executeManualImport(request: AudioManualImportRequest): Promise<AudioManualImportResult> {
+  async executeManualImport(request: { items: readonly AudioManualImportRequestItem[]; importMode: AudioManualImportRequest['importMode'] }): Promise<AudioManualImportResult> {
     const result: AudioManualImportResult = { imported: [], failed: [] };
     const trackedById = new Map(this.o.downloads.listTracked().map((t) => [t.downloadId, t]));
     // Group by album and download: one import event per album.

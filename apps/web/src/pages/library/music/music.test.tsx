@@ -374,15 +374,14 @@ describe('calendar albums', () => {
 });
 
 describe('settings', () => {
-  it('turns music on from Settings → General; audiobooks is marked coming soon', async () => {
+  it('turns music on from Settings → General; audiobooks has its own working toggle', async () => {
     const api = musicApi({
       '/api/v1/settings/metadata': { tmdbApiKey: null, language: 'en-US', region: 'US' },
       'PUT /api/v1/settings/features': FEATURES_ON,
     }, FEATURES_OFF);
     renderAt('/settings/general');
     const music = await screen.findByRole('switch', { name: /^Music/ });
-    expect((screen.getByRole('switch', { name: /Audiobooks/ }) as HTMLInputElement).disabled).toBe(true);
-    expect(screen.getByText('Coming soon')).toBeTruthy();
+    expect((screen.getByRole('switch', { name: /Audiobooks/ }) as HTMLInputElement).disabled).toBe(false);
     fireEvent.click(music);
     await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/settings/features')?.body).toEqual(FEATURES_ON));
   });

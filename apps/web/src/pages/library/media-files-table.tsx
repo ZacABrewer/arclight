@@ -138,18 +138,28 @@ export function audioBadges(f: Pick<AudioFile, 'codec' | 'bitrateKbps' | 'sample
 }
 
 /** Audio variant of the files table (music and audiobooks): tags and stream details instead of ffprobe video info. */
-export function AudioFilesTable({ files, error, loading }: { files: AudioFile[] | undefined; error: unknown; loading: boolean }) {
+/** Audio files of an album (disc-track column) or an audiobook (`parts`: part number column, in part order). */
+export function AudioFilesTable({ files, error, loading, parts = false }: { files: AudioFile[] | undefined; error: unknown; loading: boolean; parts?: boolean }) {
   if (error) return <QueryError error={error} title={t('library.mediaFilesTable.couldNotLoadFiles')} />;
   const columns: Column<AudioFile>[] = [
     { key: 'path', header: t('library.mediaFilesTable.relativePath'), sortValue: (f) => f.relativePath, cell: (f) => f.relativePath, mono: true },
-    {
-      key: 'position',
-      header: t('music.discTrack'),
-      sortValue: (f) => (f.discNumber ?? 0) * 1000 + (f.trackNumber ?? 0),
-      cell: (f) => (f.trackNumber == null ? '—' : `${f.discNumber ?? 1}-${String(f.trackNumber).padStart(2, '0')}`),
-      mono: true,
-      width: '84px',
-    },
+    parts
+      ? {
+          key: 'position',
+          header: t('audiobooks.part'),
+          sortValue: (f) => f.partNumber ?? 0,
+          cell: (f) => (f.partNumber == null ? '—' : String(f.partNumber).padStart(2, '0')),
+          mono: true,
+          width: '64px',
+        }
+      : {
+          key: 'position',
+          header: t('music.discTrack'),
+          sortValue: (f) => (f.discNumber ?? 0) * 1000 + (f.trackNumber ?? 0),
+          cell: (f) => (f.trackNumber == null ? '—' : `${f.discNumber ?? 1}-${String(f.trackNumber).padStart(2, '0')}`),
+          mono: true,
+          width: '84px',
+        },
     { key: 'quality', header: t('common.quality'), sortValue: (f) => f.quality.quality.weight, cell: (f) => <QualityLabel quality={f.quality} /> },
     {
       key: 'audio',
@@ -175,7 +185,7 @@ export function AudioFilesTable({ files, error, loading }: { files: AudioFile[] 
       loading={loading}
       rowKey={(f) => f.id}
       density="dense"
-      defaultSort={{ key: 'path', direction: 'asc' }}
+      defaultSort={{ key: parts ? 'position' : 'path', direction: 'asc' }}
       empty={<EmptyState title={t('library.mediaFilesTable.noFilesOnDisk')}>{t('music.rescanToFindFiles')}</EmptyState>}
       caption={t('library.mediaFilesTable.mediaFiles')}
     />

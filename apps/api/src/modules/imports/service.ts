@@ -30,7 +30,10 @@ import {
   type AudioManualImportItem,
   type AudioManualImportQuery,
   type AudioManualImportRequest,
+  type AudioManualImportRequestItem,
   type AudioManualImportResult,
+  type AudiobookManualImportItem,
+  type AudiobookManualImportRequestItem,
   type MediaFile,
   type MediaType,
   type Movie,
@@ -87,6 +90,7 @@ import {
   type ScanResult,
   type ScannedFile,
 } from './scan.js';
+import { AudiobookImporter } from './audio/audiobook-import.js';
 import { MusicImporter } from './audio/music-import.js';
 import { ImportsError } from './errors.js';
 import { importedDownloads } from './schema.js';
@@ -206,6 +210,8 @@ export class ImportsService {
   private readonly retryable = new Set<number>();
   /** Music downloads and the audio manual import (imports/audio/music-import.ts). */
   private readonly music: MusicImporter;
+  /** Audiobook downloads and the audiobook manual import (imports/audio/audiobook-import.ts). */
+  private readonly audiobooks: AudiobookImporter;
 
   constructor(options: ImportsServiceOptions) {
     this.db = options.db;
@@ -217,7 +223,7 @@ export class ImportsService {
     this.now = options.now ?? (() => new Date());
     this.fsOps = options.fsOps;
     this.profiles = new ProfilesService({ db: options.db });
-    this.music = new MusicImporter({
+    const importerOptions = {
       db: this.db,
       bus: this.bus,
       log: this.log,
@@ -228,13 +234,17 @@ export class ImportsService {
       fsOps: this.fsOps,
       mediaManagement: () => this.getMediaManagement(),
       naming: () => this.getNaming(),
-      freeSpace: (path) => this.freeSpace(path),
+      freeSpace: (path: string) => this.freeSpace(path),
       downloads: {
         listTracked: () => this.downloads.listTracked(),
-        markImported: (id) => this.downloads.markImported(id),
-        setImportProgress: this.downloads.setImportProgress ? (id, p) => this.downloads.setImportProgress?.(id, p) : undefined,
+        markImported: (id: number) => this.downloads.markImported(id),
+        setImportProgress: this.downloads.setImportProgress
+          ? (id: string, p: { copiedBytes: number; totalBytes: number } | null) => this.downloads.setImportProgress?.(id, p)
+          : undefined,
       },
-    });
+    };
+    this.music = new MusicImporter(importerOptions);
+    this.audiobooks = new AudiobookImporter(importerOptions);
   }
 
   /** Wire (or replace) hooks after construction. */
@@ -290,8 +300,6 @@ export class ImportsService {
     const settings = this.getMediaManagement();
     const result: ImportRunResult = { trackedDownloadId: item.id, verified: false, outcomes: [], messages: [] };
     if (!settings.enableCompletedDownloadHandling) return result;
-    // Audiobook downloads wait for the audiobook importer (Wave 3).
-    if (item.mediaType === 'audiobook') return result;
     this.retryable.delete(item.id);
 
     const path = item.outputPath;
@@ -300,6 +308,7 @@ export class ImportsService {
       return this.block(item, result, [`Import failed, path is not a valid local path: ${path}. You may need a Remote Path Mapping.`]);
     }
     if (item.mediaType === 'music') return this.importMusicDownload(item, path, result);
+    if (item.mediaType === 'audiobook') return this.importAudiobookDownload(item, path, result);
 
     const grab = this.grabFor(item);
     const target = this.resolveTarget(item, grab);
@@ -405,16 +414,44 @@ export class ImportsService {
     return this.block(item, result, run.messages);
   }
 
+  private async importAudiobookDownload(item: TrackedDownload, path: string, result: ImportRunResult): Promise<ImportRunResult> {
+    this.downloads.setState(item.id, 'importing');
+    const run = await this.audiobooks.importCompletedDownload(item, path);
+    result.outcomes = run.outcomes.map(({ audioFileId, bookId: _bookId, partNumber: _part, ...o }) => ({ ...o, ...(audioFileId !== undefined ? { mediaFileId: audioFileId } : {}) }));
+    if (run.verified) {
+      result.verified = true;
+      if (run.warnings.length > 0) this.log?.info({ id: item.id, warnings: run.warnings }, 'audiobook import accepted with warnings');
+      await this.downloads.markImported(item.id);
+      return result;
+    }
+    if (run.retryable) this.retryable.add(item.id);
+    return this.block(item, result, run.messages);
+  }
+
   // ---- manual import, audio mode -------------------------------------------------------
 
-  /** GET /manualimport/audio. */
-  listAudioManualImport(query: AudioManualImportQuery): Promise<AudioManualImportItem[]> {
+  /** GET /manualimport/audio (music items; audiobook items with `mediaType: 'audiobook'`). */
+  listAudioManualImport(query: AudioManualImportQuery & { mediaType?: undefined | 'music' }): Promise<AudioManualImportItem[]>;
+  listAudioManualImport(query: AudioManualImportQuery): Promise<Array<AudioManualImportItem | AudiobookManualImportItem>>;
+  listAudioManualImport(query: AudioManualImportQuery): Promise<Array<AudioManualImportItem | AudiobookManualImportItem>> {
+    if (query.mediaType === 'audiobook') return this.audiobooks.listManualImport(query);
     return this.music.listManualImport(query);
   }
 
-  /** POST /manualimport/audio. */
-  executeAudioManualImport(request: AudioManualImportRequest): Promise<AudioManualImportResult> {
-    return this.music.executeManualImport(request);
+  /** POST /manualimport/audio: music items map to tracks, audiobook items to books (both may be mixed). */
+  async executeAudioManualImport(request: AudioManualImportRequest): Promise<AudioManualImportResult> {
+    const musicItems = request.items.filter((i): i is AudioManualImportRequestItem => i.mediaType !== 'audiobook');
+    const bookItems = request.items.filter((i): i is AudiobookManualImportRequestItem => i.mediaType === 'audiobook');
+    const result: AudioManualImportResult = { imported: [], failed: [] };
+    for (const part of [
+      musicItems.length ? await this.music.executeManualImport({ items: musicItems, importMode: request.importMode }) : null,
+      bookItems.length ? await this.audiobooks.executeManualImport({ items: bookItems, importMode: request.importMode }) : null,
+    ]) {
+      if (!part) continue;
+      result.imported.push(...part.imported);
+      result.failed.push(...part.failed);
+    }
+    return result;
   }
 
   /** Re-runs imports that failed only on temporary rejections (unpacking, sample undetermined). */
@@ -439,7 +476,9 @@ export class ImportsService {
       title: item.title,
       ...(item.mediaType === 'music'
         ? { mediaType: 'music' as const, ...(item.artistId !== undefined ? { mediaId: item.artistId } : {}), ...(item.albumIds?.length ? { albumIds: item.albumIds } : {}) }
-        : {
+        : item.mediaType === 'audiobook'
+          ? { mediaType: 'audiobook' as const, ...(item.authorId !== undefined ? { mediaId: item.authorId } : {}) }
+          : {
             ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
             ...(item.seriesId !== undefined ? { mediaId: item.seriesId } : item.movieId !== undefined ? { mediaId: item.movieId } : {}),
           }),

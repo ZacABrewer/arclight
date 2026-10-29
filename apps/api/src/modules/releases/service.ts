@@ -2,7 +2,18 @@ import { randomUUID } from 'node:crypto';
 import { and, eq, inArray, lte } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { domainFromCategories, type SearchRequest } from '@arclight/indexers';
-import { musicAudioEvaluation, musicReleaseKind, parseMusicRelease, parseRelease, type ParsedMusicRelease, type ParsedRelease } from '@arclight/parser';
+import {
+  audiobookAudioEvaluation,
+  audiobookReleaseKind,
+  musicAudioEvaluation,
+  musicReleaseKind,
+  parseAudiobookRelease,
+  parseMusicRelease,
+  parseRelease,
+  type ParsedAudiobookRelease,
+  type ParsedMusicRelease,
+  type ParsedRelease,
+} from '@arclight/parser';
 import {
   MovieListQuery,
   SeriesListQuery,
@@ -61,10 +72,19 @@ import { createCutoffChecker, isVersioned, libraryService, pickVersion, sameTag,
 import { ProfilesService } from '../profiles/index.js';
 import { loadSceneRules } from '../scene-mapping/service.js';
 import type { SceneRule } from '../scene-mapping/mapping.js';
-import { MusicLibrary } from './audio-library.js';
-import { hasAudioMarker, matchAlbum, type AlbumMatch, type AudioMatchResult } from './audio-matcher.js';
-import { albumSearchPlan, artistSearchPlan, type PlanAlbum, type SearchStep } from './audio-search.js';
-import { musicSpecifications } from './audio-specs.js';
+import { audiobooksEnabled, BookLibrary, MusicLibrary } from './audio-library.js';
+import {
+  hasAudioMarker,
+  hasAudiobookMarker,
+  matchAlbum,
+  matchBook,
+  type AlbumMatch,
+  type AudioMatchResult,
+  type BookMatch,
+  type BookMatchResult,
+} from './audio-matcher.js';
+import { albumSearchPlan, artistSearchPlan, authorSearchPlan, bookSearchPlan, type PlanAlbum, type PlanBook, type SearchStep } from './audio-search.js';
+import { audiobookSpecifications, musicSpecifications } from './audio-specs.js';
 import { DecisionLog, DecisionLogNotFound, toLogSource, type DecisionLogRow } from './decision-log.js';
 import {
   DEFAULT_RELEASE_SETTINGS,
@@ -80,6 +100,9 @@ import {
 import {
   albumMinutes,
   albumsGainedBy,
+  audiobookInfoOf,
+  bookMinutes,
+  booksGainedBy,
   buildDecision,
   evaluate,
   evaluateFormats,
@@ -105,6 +128,7 @@ import {
   CUTOFF_UNMET_AUDIO_SEARCH_JOB,
   CUTOFF_UNMET_SEARCH_JOB,
   MISSING_ALBUM_SEARCH_JOB,
+  MISSING_BOOK_SEARCH_JOB,
   MISSING_EPISODE_SEARCH_JOB,
   MISSING_MOVIE_SEARCH_JOB,
   SEARCH_JOB_CRONS,
@@ -180,13 +204,16 @@ export interface DownloadClientGrab {
 }
 
 export interface DownloadTracking {
-  mediaType?: 'series' | 'movie' | 'music';
+  mediaType?: 'series' | 'movie' | 'music' | 'audiobook';
   seriesId?: number;
   episodeIds?: number[];
   movieId?: number;
   /** Music grabs: the artist and the albums the release fills or upgrades. */
   artistId?: number;
   albumIds?: number[];
+  /** Audiobook grabs: the author and the books the release fills or upgrades. */
+  authorId?: number;
+  bookIds?: number[];
   grabbedRelease?: unknown;
   tags?: number[];
 }
@@ -202,6 +229,8 @@ export interface TrackedView {
   movieId?: number | undefined;
   artistId?: number | undefined;
   albumIds?: number[] | undefined;
+  authorId?: number | undefined;
+  bookIds?: number[] | undefined;
   sizeBytes: number;
 }
 
@@ -236,7 +265,9 @@ export type SearchTarget =
   /** Music: the artist's wanted albums (or only `albumIds`); with `albumIds` alone, their artist. */
   | { artistId: number; albumIds?: number[] }
   | { albumIds: number[] }
-  | { authorId: number; bookIds?: number[] };
+  /** Audiobooks: the author's wanted books (or only `bookIds`); with `bookIds` alone, their author. */
+  | { authorId: number; bookIds?: number[] }
+  | { bookIds: number[] };
 
 /** Pins the library mapping of a release (interactive grab, pending re-check). */
 export interface MatchOverride {
@@ -245,10 +276,16 @@ export interface MatchOverride {
   movieId?: number | undefined;
   artistId?: number | undefined;
   albumIds?: number[] | undefined;
+  authorId?: number | undefined;
+  bookIds?: number[] | undefined;
 }
 
 type VideoCandidate = Candidate & { match: SeriesMatch | MovieMatch };
 type MusicCandidate = Candidate & { match: AlbumMatch };
+type BookCandidate = Candidate & { match: BookMatch };
+type MusicMatched = { parsed: ParsedMusicRelease; match: AudioMatchResult };
+type BookMatched = { parsed: ParsedAudiobookRelease; match: BookMatchResult };
+type BookTarget = { authorId: number; bookIds?: number[] } | { bookIds: number[] };
 
 export interface SearchSummary {
   releases: number;
@@ -270,6 +307,7 @@ export const MISSING_MOVIE_SEARCH_LIMIT = 100;
 export const CUTOFF_UNMET_SEARCH_LIMIT = 100;
 export const MISSING_ALBUM_SEARCH_LIMIT = 50;
 export const CUTOFF_UNMET_AUDIO_SEARCH_LIMIT = 50;
+export const MISSING_BOOK_SEARCH_LIMIT = 50;
 
 /** The live schedule of a job (Scheduler.jobSchedule); null when it is not registered. */
 export type JobScheduleLookup = (name: string) => { cron: string | null; enabled: boolean } | null;
@@ -299,8 +337,12 @@ class Batch implements LibrarySnapshot {
   private audioRows?: AudioRequirementRow[];
   private musicLimits?: Map<number, QualityDefinitionItem>;
   private musicFormats?: CustomFormat[];
+  private audiobookLimits?: Map<number, QualityDefinitionItem>;
+  private audiobookFormats?: CustomFormat[];
   /** The music library (artists, albums, track files), read on first use. */
   readonly music: MusicLibrary;
+  /** The audiobook library (authors, books, series, files), read on first use. */
+  readonly books: BookLibrary;
 
   constructor(
     private readonly db: Db,
@@ -316,12 +358,29 @@ class Batch implements LibrarySnapshot {
     this.limits = new Map(profilesService.listQualityDefinitions().map((d) => [d.qualityId, d]));
     this.indexers = new Map(indexers.list().map((i) => [i.id, i]));
     this.queue = downloads.listTracked(ACTIVE_QUEUE_STATES).map((q) => {
-      // Music downloads are named like albums: their quality comes from the music parser.
-      const quality = q.albumIds?.length ? parseMusicRelease(q.title).audio : parseRelease(q.title).quality;
+      // Audio downloads are named like albums / books: their quality comes from the audio parsers.
+      const quality = q.albumIds?.length
+        ? parseMusicRelease(q.title).audio
+        : q.bookIds?.length
+          ? parseAudiobookRelease(q.title).audio
+          : parseRelease(q.title).quality;
       return { ...q, parsedQuality: qualityModelOf(quality) };
     });
     this.pending = db.select().from(pendingReleases).all();
     this.music = new MusicLibrary(db);
+    this.books = new BookLibrary(db);
+  }
+
+  /** Audiobook quality definitions (MB per minute), loaded for the first book decision of the batch. */
+  bookLimits(): Map<number, QualityDefinitionItem> {
+    this.audiobookLimits ??= new Map(this.profilesService.listQualityDefinitions('audiobook').map((d) => [d.qualityId, d]));
+    return this.audiobookLimits;
+  }
+
+  /** Custom formats that can apply to audiobook releases. */
+  bookFormats(): CustomFormat[] {
+    this.audiobookFormats ??= this.formats.filter((f) => customFormatFitsDomain(f, 'audiobook'));
+    return this.audiobookFormats;
   }
 
   /** Music quality definitions (MB per minute), loaded for the first audio decision of the batch. */
@@ -508,21 +567,26 @@ export class ReleasesService {
     // The indexer category picks the parser (design 8.3): music categories go to the audio path,
     // as do searches for albums and grabs pinned to an artist.
     const domain = domainFromCategories(release.categories);
+    const bookOverride = override?.authorId !== undefined || (override?.bookIds?.length ?? 0) > 0;
     const audioOverride = override?.artistId !== undefined || (override?.albumIds?.length ?? 0) > 0;
     const videoOverride = override !== undefined && (override.movieId !== undefined || override.seriesId !== undefined || (override.episodeIds?.length ?? 0) > 0);
-    if (audioOverride || (!videoOverride && (domain === 'music' || criteria?.mediaType === 'music'))) {
-      return this.decideAudio(release, source, batch, settings, propers, criteria, audioOverride ? override : undefined, null);
-    }
-    if (domain === 'audiobook' || criteria?.mediaType === 'audiobook') {
-      // Audiobook decisions arrive with Wave 3.
-      if (!criteria && (source === 'rss' || source === 'releasePush')) return null;
-      return {
-        decision: unmatchedDecision(source, release, null, null, {
-          reason: 'audiobooksNotSupported',
-          message: 'Audiobook releases are not supported yet',
-          type: 'permanent',
-        }),
-      };
+    if (bookOverride) return this.decideAudio(release, source, batch, settings, propers, criteria, override, null, 'audiobook');
+    if (audioOverride) return this.decideAudio(release, source, batch, settings, propers, criteria, override, null, 'music');
+    if (!videoOverride) {
+      // A search's item decides the parser; otherwise the categories do (3030 audiobook, other 3xxx music).
+      const wanted =
+        criteria?.mediaType === 'audiobook' || criteria?.mediaType === 'music'
+          ? criteria.mediaType
+          : domain === 'audiobook' || domain === 'music'
+            ? domain
+            : null;
+      if (wanted) return this.decideAudio(release, source, batch, settings, propers, criteria, undefined, null, wanted);
+      // Uncategorised releases that read like an audiobook (m4b, "Unabridged", "narrated by", an
+      // ASIN) go to the book matcher first; only a library hit counts.
+      if (domain === 'auto' && !criteria && hasAudiobookMarker(release.title) && batch.books.enabled()) {
+        const book = this.bookMatch(release, batch, criteria, undefined);
+        if (book.match.status === 'mapped') return this.decideAudio(release, source, batch, settings, propers, criteria, undefined, book, 'audiobook');
+      }
     }
 
     const ids = { tvdbId: release.tvdbId, tmdbId: release.tmdbId, imdbId: release.imdbId };
@@ -542,7 +606,7 @@ export class ReleasesService {
       if (domain === 'auto' && !videoOverride && hasAudioMarker(release.title) && batch.music.enabled()) {
         const audio = this.audioMatch(release, batch, criteria, undefined);
         if (audio.match.status === 'mapped') {
-          return this.decideAudio(release, source, batch, settings, propers, criteria, undefined, audio);
+          return this.decideAudio(release, source, batch, settings, propers, criteria, undefined, audio, 'music');
         }
       }
       // Plain RSS/push drops what it cannot parse (§1.2.1).
@@ -701,7 +765,10 @@ export class ReleasesService {
     };
   }
 
-  /** Decide on a music release (design 8.4): the shared specs plus the album specs. */
+  /**
+   * Decide on an audio release (design 8.4): the shared specs plus the album or book specs.
+   * `domain` (from the categories or the search's item) picks the music or audiobook path.
+   */
   private async decideAudio(
     release: ReleaseResource,
     source: ReleaseSource,
@@ -710,7 +777,26 @@ export class ReleasesService {
     propers: DownloadPropersAndRepacks,
     criteria: SearchCriteria | undefined,
     override: MatchOverride | undefined,
-    matched: { parsed: ParsedMusicRelease; match: AudioMatchResult } | null,
+    matched: MusicMatched | BookMatched | null,
+    domain: 'music' | 'audiobook',
+  ): Promise<Evaluated | null> {
+    if (domain === 'audiobook') {
+      const book = matched && matched.match.mediaType === 'audiobook' ? (matched as BookMatched) : null;
+      return this.decideBook(release, source, batch, settings, propers, criteria, override, book);
+    }
+    return this.decideMusic(release, source, batch, settings, propers, criteria, override, matched && matched.match.mediaType === 'music' ? (matched as MusicMatched) : null);
+  }
+
+  /** Decide on a music release: the shared specs plus the album specs. */
+  private async decideMusic(
+    release: ReleaseResource,
+    source: ReleaseSource,
+    batch: Batch,
+    settings: ReleaseSettings,
+    propers: DownloadPropersAndRepacks,
+    criteria: SearchCriteria | undefined,
+    override: MatchOverride | undefined,
+    matched: MusicMatched | null,
   ): Promise<Evaluated | null> {
     if (!batch.music.enabled() && !override) {
       if (!criteria && (source === 'rss' || source === 'releasePush')) return null;
@@ -894,6 +980,254 @@ export class ReleasesService {
       delayProfile: selectDelayProfile(batch.delayProfiles, artist.tags),
       releaseProfiles: batch.releaseProfiles,
       qualityLimits: (id) => batch.audioLimits().get(id) ?? batch.limits.get(id),
+      indexer,
+      indexerDisabledTill: indexer?.status?.disabledTill,
+      existingFiles: files,
+      queue,
+      pending,
+      latestHistory,
+      importedGrabs,
+      blocklisted,
+      criteria,
+      freeSpaceBytes,
+      minimumFreeSpaceMb: this.deps.minimumFreeSpaceMb ?? 100,
+      releaseFilter: this.deps.releaseFilter?.(c.release.indexerId, c.release) ?? null,
+      mismatchAction: this.deps.profileMigration?.mismatchActionFor(profile.id) ?? 'none',
+    };
+  }
+
+  // ---- audiobook decisions -----------------------------------------------------------
+
+  /** Parse an audiobook release and map it to the library (or to the pinned author / books). */
+  private bookMatch(release: ReleaseResource, batch: Batch, criteria: SearchCriteria | undefined, override: MatchOverride | undefined): BookMatched {
+    const parsed = parseAudiobookRelease(release.title);
+    const lib = batch.books;
+    const now = this.now();
+    if (!override) return { parsed, match: matchBook(parsed.audiobook, lib, { ...(criteria ? { criteria } : {}), now }) };
+
+    let authorId = override.authorId;
+    if (authorId === undefined && override.bookIds?.length) authorId = lib.book(override.bookIds[0]!)?.authorId;
+    const author = authorId !== undefined ? lib.author(authorId) : undefined;
+    if (!author) throw new ReleasesError('VALIDATION', 'override does not refer to an author in the library');
+    const own = lib.books(author.id);
+    let books = override.bookIds?.length ? own.filter((b) => override.bookIds!.includes(b.id)) : [];
+    if (override.bookIds?.length && books.length === 0) throw new ReleasesError('VALIDATION', 'override books do not belong to the author');
+    let owner = author;
+    if (books.length === 0) {
+      // Author pinned, books not: let the matcher find them under that author.
+      const found = matchBook(parsed.audiobook, { authors: () => [author], books: (id) => lib.books(id) }, { criteria: { mediaType: 'audiobook', authorId: author.id }, now });
+      if (found.status !== 'mapped') {
+        throw new ReleasesError('VALIDATION', `Cannot map release to a book of ${author.name} (${found.message}); pass bookIds`);
+      }
+      books = found.books;
+    }
+    // Co-authored books are filed (and profiled) under the author who owns them.
+    owner = lib.author(books[0]!.authorId) ?? author;
+    books = books.filter((b) => b.authorId === owner.id);
+    return {
+      parsed,
+      match: {
+        status: 'mapped',
+        mediaType: 'audiobook',
+        author: owner,
+        books: [...books],
+        isPack: parsed.audiobook?.isPack ?? books.length > 1,
+        matchType: 'override',
+      },
+    };
+  }
+
+  /** Decide on an audiobook release: the shared specs plus the book specs. */
+  private async decideBook(
+    release: ReleaseResource,
+    source: ReleaseSource,
+    batch: Batch,
+    settings: ReleaseSettings,
+    propers: DownloadPropersAndRepacks,
+    criteria: SearchCriteria | undefined,
+    override: MatchOverride | undefined,
+    matched: BookMatched | null,
+  ): Promise<Evaluated | null> {
+    if (!batch.books.enabled() && !override) {
+      if (!criteria && (source === 'rss' || source === 'releasePush')) return null;
+      return { decision: bookUnmatchedDecision(source, release, null, { reason: 'audiobooksDisabled', message: 'Audiobooks are not enabled', type: 'permanent' }) };
+    }
+    const { parsed, match } = matched ?? this.bookMatch(release, batch, criteria, override);
+    const info = parsed.audiobook;
+    if (match.status !== 'mapped') {
+      if (match.reason === 'unableToParse' && !criteria && (source === 'rss' || source === 'releasePush')) return null;
+      return { decision: bookUnmatchedDecision(source, release, parsed, { reason: match.reason, message: match.message, type: 'permanent' }, match.author) };
+    }
+    const author = match.author;
+    const profile = batch.profiles.get(author.qualityProfileId);
+    if (!profile) {
+      return {
+        decision: bookUnmatchedDecision(source, release, parsed, {
+          reason: 'decisionError',
+          message: `Quality profile ${author.qualityProfileId} does not exist`,
+          type: 'permanent',
+        }),
+      };
+    }
+
+    const quality: QualityModel = qualityModelOf(parsed.audio);
+    const releaseGroup = parsed.releaseGroup ?? undefined;
+    const languages = info?.language ? [info.language] : [];
+    const formats = evaluateFormats(profile, batch.bookFormats(), {
+      title: release.title,
+      quality,
+      mediaType: 'audiobook',
+      sizeBytes: release.size,
+      languages,
+      releaseGroup: releaseGroup ?? null,
+      ...(info?.year ? { year: info.year } : {}),
+      releaseKind: info ? audiobookReleaseKind(info) : releaseKindOf(match),
+      indexerFlags: releaseIndexerFlags(release),
+      ...(info ? { audio: audiobookAudioEvaluation(info) } : {}),
+    });
+    const now = this.now();
+    const ageMinutes = Math.max(0, (now.getTime() - Date.parse(release.publishDate)) / MINUTE) || 0;
+    const candidate: BookCandidate = {
+      release,
+      parsed: emptyVideoParse(parsed),
+      match,
+      ...(info ? { audiobook: info } : {}),
+      quality,
+      languages,
+      customFormats: formats.formats,
+      formatScore: formats.score,
+      releaseGroup,
+      ageMinutes,
+    };
+    const ctx = await this.buildBookContext(batch, candidate, profile, source, settings, propers, criteria, now);
+    const ev = evaluate(ctx, candidate, audiobookSpecifications);
+    // A pack is only worth the books it fills or upgrades: track and record just those.
+    let tracked: BookCandidate = candidate;
+    if (match.isPack) {
+      const gained = new Set(booksGainedBy(ctx, candidate));
+      const books = match.books.filter((b) => gained.has(b.id));
+      if (books.length > 0) tracked = { ...candidate, match: { ...match, books } };
+    }
+    const decision = buildDecision(source, tracked, ev);
+    const limits = batch.bookLimits().get(quality.quality.id);
+    return {
+      decision,
+      candidate: tracked,
+      rank: {
+        profile,
+        preferredProtocol: ctx.delayProfile?.preferredProtocol,
+        runtimeMinutes: bookMinutes(match),
+        preferredSizeMbPerMinute: limits?.preferredSize ?? null,
+        isAnime: false,
+        firstEpisodeNumber: 0,
+        preferIndexerFlags: settings.preferIndexerFlags,
+      },
+    };
+  }
+
+  private async buildBookContext(
+    batch: Batch,
+    c: BookCandidate,
+    profile: QualityProfile,
+    source: ReleaseSource,
+    settings: ReleaseSettings,
+    propers: DownloadPropersAndRepacks,
+    criteria: SearchCriteria | undefined,
+    now: Date,
+  ): Promise<DecisionContext> {
+    const { author, books } = c.match;
+    const bookIds = books.map((b) => b.id);
+    const indexer = batch.indexers.get(c.release.indexerId);
+    const scoreOf = (title: string, quality: QualityModel, sizeBytes?: number, releaseGroup?: string | null) =>
+      evaluateFormats(profile, batch.bookFormats(), {
+        title,
+        quality,
+        mediaType: 'audiobook',
+        ...(sizeBytes ? { sizeBytes } : {}),
+        releaseGroup: releaseGroup ?? null,
+      }).score;
+
+    // One "file" per book: a multi-part book is as good as its worst part.
+    const files: ExistingFile[] = [];
+    const bookFiles = batch.books.files(author.id);
+    for (const book of books) {
+      const own = bookFiles.filter((f) => f.bookId === book.id);
+      if (own.length === 0) continue;
+      const lowest = own.reduce((worst, f) => (qualityIndex(profile, f.quality) < qualityIndex(profile, worst.quality) ? f : worst));
+      files.push({
+        id: lowest.id,
+        quality: lowest.quality,
+        formatScore: scoreOf(lowest.sceneName ?? lowest.relativePath, lowest.quality, lowest.sizeBytes, lowest.releaseGroup),
+        releaseGroup: lowest.releaseGroup,
+        dateAdded: own.reduce((latest, f) => (f.dateAdded > latest ? f.dateAdded : latest), lowest.dateAdded),
+        episodeIds: [],
+        bookIds: [book.id],
+        sizeBytes: own.reduce((sum, f) => sum + f.sizeBytes, 0),
+      });
+    }
+
+    const overlaps = (ids: readonly number[] | null | undefined) => (ids ?? []).some((id) => bookIds.includes(id));
+    const queue: QueuedItem[] = batch.queue
+      .filter((q) => overlaps(q.bookIds))
+      .map((q) => ({
+        title: q.title,
+        quality: q.parsedQuality,
+        formatScore: scoreOf(q.title, q.parsedQuality, q.sizeBytes),
+        state: q.trackedState,
+        downloadId: q.downloadId,
+        bookIds: q.bookIds ?? [],
+      }));
+    const pending: PendingItem[] = batch.pending
+      .filter((p) => overlaps(p.bookIds))
+      .map((p) => ({ id: p.id, guid: p.guid, indexerId: p.indexerId, addedAt: p.addedAt, bookIds: p.bookIds ?? [] }));
+
+    const history = this.deps.history ?? noopHistory;
+    const latestHistory: HistoryItem[] = [];
+    const importedGrabs: Array<{ grab: HistoryEventSummary; imported: HistoryEventSummary }> = [];
+    if (history.latestFor) {
+      for (const book of books) {
+        const item: ItemRef = { bookId: book.id, authorId: author.id };
+        const event = await history.latestFor(item);
+        if (event) latestHistory.push({ event, formatScore: scoreOf(event.sourceTitle, event.quality, event.sizeBytes) });
+        if (files.some((f) => f.bookIds?.includes(book.id)) && history.findByDownloadId) {
+          const grab = await history.latestFor(item, 'grabbed');
+          if (grab?.downloadId) {
+            const imported = await history.findByDownloadId(grab.downloadId, 'downloadFolderImported');
+            if (imported && imported.quality.quality.id !== grab.quality.quality.id) importedGrabs.push({ grab, imported });
+          }
+        }
+      }
+    }
+
+    const blocklisted = await (this.deps.blocklist ?? noopBlocklist).isBlocklisted({
+      mediaType: 'audiobook',
+      authorId: author.id,
+      bookIds,
+      title: c.release.title,
+      protocol: c.release.protocol,
+      indexerId: c.release.indexerId,
+      ...(c.release.infoHash ? { infoHash: c.release.infoHash } : {}),
+      publishDate: c.release.publishDate,
+    });
+
+    let freeSpaceBytes: number | null = null;
+    if (this.deps.freeSpace) {
+      try {
+        freeSpaceBytes = await this.deps.freeSpace(author.path);
+      } catch {
+        freeSpaceBytes = null;
+      }
+    }
+
+    return {
+      source,
+      now,
+      settings,
+      propers,
+      profile,
+      delayProfile: selectDelayProfile(batch.delayProfiles, author.tags),
+      releaseProfiles: batch.releaseProfiles,
+      qualityLimits: (id) => batch.bookLimits().get(id) ?? batch.limits.get(id),
       indexer,
       indexerDisabledTill: indexer?.status?.disabledTill,
       existingFiles: files,
@@ -1119,12 +1453,14 @@ export class ReleasesService {
       movieId: request.movieId,
       artistId: request.artistId,
       albumIds: request.albumIds,
+      authorId: request.authorId,
+      bookIds: request.bookIds,
     };
     const [evaluated] = await this.decide([cached], 'interactiveSearch', { override });
     if (!evaluated?.candidate) {
       throw new ReleasesError(
         'VALIDATION',
-        `Cannot map release to a library item (${evaluated?.decision.rejections[0]?.message ?? 'unknown'}); pass seriesId/episodeIds, movieId or artistId/albumIds`,
+        `Cannot map release to a library item (${evaluated?.decision.rejections[0]?.message ?? 'unknown'}); pass seriesId/episodeIds, movieId, artistId/albumIds or authorId/bookIds`,
       );
     }
     const tracked = await this.grabEvaluated(evaluated, request.downloadClientId);
@@ -1363,6 +1699,8 @@ export class ReleasesService {
       movieId: d.movieId ?? null,
       artistId: d.artistId ?? null,
       albumIds: d.albumIds ?? null,
+      authorId: d.authorId ?? null,
+      bookIds: d.bookIds ?? null,
       reason,
       release,
       addedAt: now.toISOString(),
@@ -1381,6 +1719,8 @@ export class ReleasesService {
           movieId: values.movieId,
           artistId: values.artistId,
           albumIds: values.albumIds,
+          authorId: values.authorId,
+          bookIds: values.bookIds,
         },
       })
       .run();
@@ -1399,6 +1739,13 @@ export class ReleasesService {
       if (doomed.length > 0) this.db.delete(pendingReleases).where(inArray(pendingReleases.id, doomed)).run();
       return;
     }
+    if (d.authorId !== undefined && d.bookIds?.length) {
+      const books = new Set(d.bookIds);
+      const rows = this.db.select().from(pendingReleases).where(eq(pendingReleases.authorId, d.authorId)).all();
+      const doomed = rows.filter((r) => (r.bookIds ?? []).some((id) => books.has(id))).map((r) => r.id);
+      if (doomed.length > 0) this.db.delete(pendingReleases).where(inArray(pendingReleases.id, doomed)).run();
+      return;
+    }
     if (d.seriesId === undefined) return;
     const ids = new Set(d.episodeIds ?? []);
     const rows = this.db.select().from(pendingReleases).where(eq(pendingReleases.seriesId, d.seriesId)).all();
@@ -1413,7 +1760,11 @@ export class ReleasesService {
       .from(pendingReleases)
       .all()
       .map((row) => {
-        const quality = row.albumIds?.length ? parseMusicRelease(row.title).audio : parseRelease(row.title).quality;
+        const quality = row.albumIds?.length
+          ? parseMusicRelease(row.title).audio
+          : row.bookIds?.length
+            ? parseAudiobookRelease(row.title).audio
+            : parseRelease(row.title).quality;
         return {
           id: row.id,
           guid: row.guid,
@@ -1429,6 +1780,8 @@ export class ReleasesService {
           ...(row.movieId !== null ? { movieId: row.movieId } : {}),
           ...(row.artistId !== null ? { artistId: row.artistId } : {}),
           ...(row.albumIds ? { albumIds: row.albumIds } : {}),
+          ...(row.authorId !== null ? { authorId: row.authorId } : {}),
+          ...(row.bookIds ? { bookIds: row.bookIds } : {}),
           quality: qualityModelOf(quality),
           customFormatScore: 0,
           reason: row.reason,
@@ -1472,6 +1825,8 @@ export class ReleasesService {
             movieId: row.movieId ?? undefined,
             artistId: row.artistId ?? undefined,
             albumIds: row.albumIds ?? undefined,
+            authorId: row.authorId ?? undefined,
+            bookIds: row.bookIds ?? undefined,
           },
         });
         if (e) evaluated.push({ ...e, row });
@@ -1532,9 +1887,9 @@ export class ReleasesService {
       const plan = this.buildAudioSearch(target, userInvoked);
       return { requests: plan.steps.flatMap((s) => s.requests), criteria: plan.criteria, items: { kind: 'album', ids: plan.albumIds } };
     }
-    // Audiobook searches arrive with Wave 3: nothing to ask yet.
-    if ('authorId' in target) {
-      return { requests: [], criteria: { mediaType: 'audiobook', authorId: target.authorId, userInvoked }, items: { kind: 'episode', ids: [] } };
+    if (isBookTarget(target)) {
+      const plan = this.buildBookSearch(target, userInvoked);
+      return { requests: plan.steps.flatMap((s) => s.requests), criteria: plan.criteria, items: { kind: 'book', ids: plan.bookIds } };
     }
     const series = libraryService.getSeries(this.db, target.seriesId, { includeStatistics: false });
     const episodes = libraryService.listEpisodes(this.db, { seriesId: series.id });
@@ -1604,6 +1959,7 @@ export class ReleasesService {
   async searchFor(target: SearchTarget, opts: { userInvoked?: boolean; signal?: AbortSignal } = {}): Promise<SearchSummary> {
     const userInvoked = opts.userInvoked ?? false;
     if (isMusicTarget(target)) return this.searchAudio(target, { userInvoked, ...(opts.signal ? { signal: opts.signal } : {}) });
+    if (isBookTarget(target)) return this.searchBooks(target, { userInvoked, ...(opts.signal ? { signal: opts.signal } : {}) });
     const { requests, criteria, items } = this.buildSearch(target, userInvoked);
     if (requests.length === 0) return { releases: 0, approved: 0, grabbed: [], pending: 0 };
     const source: SearchRunSource = userInvoked ? 'manual' : 'automatic';
@@ -1636,6 +1992,11 @@ export class ReleasesService {
       const sorted = prioritize(evaluated, this.propers()).map((e) => e.decision);
       return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
     }
+    if (isBookTarget(target)) {
+      const { evaluated } = await this.runBookSearch(target, { userInvoked: true, interactive: true, ...(signal ? { signal } : {}) });
+      const sorted = prioritize(evaluated, this.propers()).map((e) => e.decision);
+      return [...sorted.filter((d) => d.approved), ...sorted.filter((d) => !d.approved)];
+    }
     const { requests, criteria, items } = this.buildSearch(target, true);
     let evaluated: Evaluated[];
     try {
@@ -1655,6 +2016,8 @@ export class ReleasesService {
     if (query.movieId !== undefined) return { movieId: query.movieId };
     if (query.albumId !== undefined) return { albumIds: [query.albumId] };
     if (query.artistId !== undefined) return { artistId: query.artistId };
+    if (query.bookId !== undefined) return { bookIds: [query.bookId] };
+    if (query.authorId !== undefined) return { authorId: query.authorId };
     if (query.episodeId !== undefined) {
       const episode = libraryService.getEpisode(this.db, query.episodeId);
       return { seriesId: episode.seriesId, episodeIds: [episode.id] };
@@ -1662,7 +2025,7 @@ export class ReleasesService {
     if (query.seriesId !== undefined) {
       return { seriesId: query.seriesId, ...(query.seasonNumber !== undefined ? { seasonNumber: query.seasonNumber } : {}) };
     }
-    throw new ReleasesError('VALIDATION', 'seriesId, episodeId, movieId, albumId or artistId is required');
+    throw new ReleasesError('VALIDATION', 'seriesId, episodeId, movieId, albumId, artistId, bookId or authorId is required');
   }
 
   seriesIdForEpisode(episodeId: number): number {
@@ -1674,6 +2037,13 @@ export class ReleasesService {
     const row = this.db.select({ artistId: albumTable.artistId }).from(albumTable).where(eq(albumTable.id, albumId)).get();
     if (!row) throw new ReleasesError('NOT_FOUND', `Album ${albumId} not found`);
     return row.artistId;
+  }
+
+  /** The owning author of a book; NOT_FOUND when the book does not exist. */
+  authorIdForBook(bookId: number): number {
+    const book = new BookLibrary(this.db).book(bookId);
+    if (!book) throw new ReleasesError('NOT_FOUND', `Book ${bookId} not found`);
+    return book.authorId;
   }
 
   /** Lets GET /search?seriesId= on the indexers module resolve library ids. */
@@ -1752,11 +2122,34 @@ export class ReleasesService {
     target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
     opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
   ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
+    const plan = this.buildAudioSearch(target, opts.userInvoked);
+    return this.runSteps(
+      'album',
+      { steps: plan.steps.map((s) => ({ ids: s.albumIds, requests: s.requests })), criteria: plan.criteria, ids: plan.albumIds },
+      opts,
+    );
+  }
+
+  /** Run a book search plan, like runAudioSearch. */
+  private async runBookSearch(
+    target: BookTarget,
+    opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
+  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
+    const plan = this.buildBookSearch(target, opts.userInvoked);
+    return this.runSteps('book', { steps: plan.steps.map((s) => ({ ids: s.bookIds, requests: s.requests })), criteria: plan.criteria, ids: plan.bookIds }, opts);
+  }
+
+  /** The step runner behind album and book searches. */
+  private async runSteps(
+    kind: 'album' | 'book',
+    plan: { steps: Array<{ ids: number[]; requests: SearchRequest[] }>; criteria: SearchCriteria; ids: number[] },
+    opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
+  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
     const interactive = opts.interactive ?? false;
     const runSource: SearchRunSource = interactive ? 'interactive' : opts.userInvoked ? 'manual' : 'automatic';
     const releaseSource: ReleaseSource = interactive ? 'interactiveSearch' : opts.userInvoked ? 'userInvokedSearch' : 'search';
-    const plan = this.buildAudioSearch(target, opts.userInvoked);
-    const items = { kind: 'album' as const, ids: plan.albumIds };
+    const items = { kind, ids: plan.ids };
+    const idsOf = (d: ReleaseDecision) => (kind === 'album' ? d.albumIds : d.bookIds) ?? [];
     const evaluated: Evaluated[] = [];
     const result: ProcessResult = { grabbed: [], pending: 0, pendingDecisions: [] };
     const seen = new Set<string>();
@@ -1764,9 +2157,9 @@ export class ReleasesService {
     let releases = 0;
     try {
       for (const step of plan.steps) {
-        const open = step.albumIds.filter((id) => !settled.has(id));
+        const open = step.ids.filter((id) => !settled.has(id));
         if (open.length === 0) continue;
-        const criteria: SearchCriteria = { ...plan.criteria, albumIds: open };
+        const criteria: SearchCriteria = kind === 'album' ? { ...plan.criteria, albumIds: open } : { ...plan.criteria, bookIds: open };
         for (const request of step.requests) {
           if (opts.signal?.aborted) break;
           const found = (await this.indexers.search(request, { mode: interactive ? 'interactive' : 'automatic', ...(opts.signal ? { signal: opts.signal } : {}) })).filter(
@@ -1791,7 +2184,7 @@ export class ReleasesService {
           }
           for (const e of batch) {
             if (!e.rank || !(e.decision.approved || e.decision.temporarilyRejected)) continue;
-            for (const id of e.decision.albumIds ?? []) settled.add(id);
+            for (const id of idsOf(e.decision)) settled.add(id);
           }
           if (open.every((id) => settled.has(id))) break;
         }
@@ -1858,11 +2251,151 @@ export class ReleasesService {
     return `missing albums: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
-  /** CutoffUnmetAudioSearch: albums whose lowest track quality is below the profile cutoff. */
+  /**
+   * CutoffUnmetAudioSearch: albums whose lowest track quality, and books whose lowest file
+   * quality, is below the profile cutoff. Each domain runs only while it is enabled.
+   */
   async cutoffUnmetAudioSearch(signal?: AbortSignal, limit = CUTOFF_UNMET_AUDIO_SEARCH_LIMIT): Promise<string> {
-    if (!musicService.musicEnabled(this.db)) return 'skipped: music is not enabled';
-    const r = await this.searchAlbumSet(this.cutoffUnmetAlbums(), signal, limit);
-    return `cutoff unmet albums: searched ${r.searched}, grabbed ${r.grabbed}`;
+    const music = musicService.musicEnabled(this.db);
+    const books = audiobooksEnabled(this.db);
+    if (!music && !books) return 'skipped: music is not enabled';
+    const parts: string[] = [];
+    if (music) {
+      const r = await this.searchAlbumSet(this.cutoffUnmetAlbums(), signal, limit);
+      parts.push(`cutoff unmet albums: searched ${r.searched}, grabbed ${r.grabbed}`);
+    }
+    if (books && !signal?.aborted) {
+      const r = await this.searchBookSet(this.cutoffUnmetBooks(), signal, limit);
+      parts.push(`cutoff unmet books: searched ${r.searched}, grabbed ${r.grabbed}`);
+    }
+    return parts.join('; ');
+  }
+
+  // ---- audiobook searches -----------------------------------------------------------
+
+  /** Books of the author a search should look for: released, monitored and without a file or below cutoff. */
+  private wantedBooks(authorId: number, lib: BookLibrary, profile: QualityProfile | undefined): number[] {
+    const now = this.now().getTime() + DAY;
+    const files = lib.files(authorId);
+    return lib
+      .ownBooks(authorId)
+      .filter((b) => b.monitored)
+      .filter((b) => {
+        const ms = releaseDateMs(b.releaseDate);
+        return ms === null || ms <= now;
+      })
+      .filter((b) => {
+        const own = files.filter((f) => f.bookId === b.id);
+        if (own.length === 0) return true;
+        return profile !== undefined && own.some((f) => !isQualityCutoffMet(profile, f.quality));
+      })
+      .map((b) => b.id);
+  }
+
+  /** Steps, criteria and books of an audiobook search target (design 8.2). */
+  buildBookSearch(
+    target: BookTarget,
+    userInvoked: boolean,
+  ): { steps: Array<{ bookIds: number[]; requests: SearchRequest[] }>; criteria: SearchCriteria; bookIds: number[]; authorId: number } {
+    const lib = new BookLibrary(this.db);
+    const explicit = target.bookIds?.length ? [...new Set(target.bookIds)] : null;
+    const authorId = 'authorId' in target ? target.authorId : explicit ? (lib.book(explicit[0]!)?.authorId ?? null) : null;
+    if (authorId === null) throw new ReleasesError('NOT_FOUND', `Book ${explicit?.[0] ?? ''} not found`);
+    const author = lib.author(authorId);
+    if (!author) throw new ReleasesError('NOT_FOUND', `Author ${authorId} not found`);
+    const own = lib.books(author.id);
+    if (explicit) {
+      const missing = explicit.filter((id) => !own.some((b) => b.id === id));
+      if (missing.length > 0) throw new ReleasesError('NOT_FOUND', `Book ${missing.join(', ')} not found for author ${author.name}`);
+    }
+    const ids = explicit ?? this.wantedBooks(author.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === author.qualityProfileId));
+    const books: PlanBook[] = own.filter((b) => ids.includes(b.id)).map((b) => ({ id: b.id, title: b.title, asin: b.asin }));
+    const planAuthor = { id: author.id, name: author.name };
+    // A book search asks per book; an author search asks for the author once first.
+    const steps = 'authorId' in target ? authorSearchPlan(planAuthor, books) : bookSearchPlan(planAuthor, books);
+    return {
+      steps,
+      criteria: { mediaType: 'audiobook', authorId: author.id, bookIds: books.map((b) => b.id), userInvoked },
+      bookIds: books.map((b) => b.id),
+      authorId: author.id,
+    };
+  }
+
+  private async searchBooks(target: BookTarget, opts: { userInvoked: boolean; signal?: AbortSignal }): Promise<SearchSummary> {
+    const { evaluated, result, releases } = await this.runBookSearch(target, opts);
+    return {
+      releases,
+      approved: evaluated.filter((e) => e.decision.approved).length,
+      grabbed: result.grabbed.map((e) => e.decision.title),
+      pending: result.pending,
+    };
+  }
+
+  /** Wanted books in job order, grouped per author, at most `limit` due ones. */
+  private async searchBookSet(
+    list: ReadonlyArray<{ id: number; authorId: number }>,
+    signal: AbortSignal | undefined,
+    limit: number,
+  ): Promise<{ searched: number; grabbed: number }> {
+    const due = list.filter((b) => this.shouldSearch('book', b.id)).slice(0, limit);
+    const byAuthor = new Map<number, number[]>();
+    for (const b of due) byAuthor.set(b.authorId, [...(byAuthor.get(b.authorId) ?? []), b.id]);
+    let grabbed = 0;
+    for (const [authorId, ids] of byAuthor) {
+      if (signal?.aborted) break;
+      this.markSearched('book', ids);
+      try {
+        const target: BookTarget = ids.length > 1 ? { authorId, bookIds: ids } : { bookIds: ids };
+        grabbed += (await this.searchFor(target, signal ? { signal } : {})).grabbed.length;
+      } catch (err) {
+        this.log?.warn({ err, authorId }, 'book search failed');
+      }
+    }
+    return { searched: due.length, grabbed };
+  }
+
+  /** Monitored, released books of monitored authors without a file, newest release first. */
+  private missingBooks(): Array<{ id: number; authorId: number }> {
+    const lib = new BookLibrary(this.db);
+    const now = this.now().getTime() + DAY;
+    const out: Array<{ id: number; authorId: number; ms: number }> = [];
+    for (const author of lib.authors()) {
+      if (!author.monitored) continue;
+      const files = new Set(lib.files(author.id).map((f) => f.bookId));
+      for (const b of lib.ownBooks(author.id)) {
+        if (!b.monitored || b.hasFile || files.has(b.id)) continue;
+        const ms = releaseDateMs(b.releaseDate);
+        if (ms !== null && ms > now) continue;
+        out.push({ id: b.id, authorId: author.id, ms: ms ?? 0 });
+      }
+    }
+    return out.sort((a, b) => b.ms - a.ms || a.id - b.id).map(({ id, authorId }) => ({ id, authorId }));
+  }
+
+  /** Monitored books whose lowest file quality is below their author's profile cutoff. */
+  private cutoffUnmetBooks(): Array<{ id: number; authorId: number }> {
+    const lib = new BookLibrary(this.db);
+    const profiles = new Map(this.profilesService.listQualityProfiles('audiobook').map((p) => [p.id, p]));
+    const out: Array<{ id: number; authorId: number }> = [];
+    for (const author of lib.authors()) {
+      if (!author.monitored) continue;
+      const profile = profiles.get(author.qualityProfileId);
+      if (!profile) continue;
+      const files = lib.files(author.id);
+      for (const b of lib.ownBooks(author.id)) {
+        if (!b.monitored) continue;
+        const own = files.filter((f) => f.bookId === b.id);
+        if (own.length > 0 && own.some((f) => !isQualityCutoffMet(profile, f.quality))) out.push({ id: b.id, authorId: author.id });
+      }
+    }
+    return out;
+  }
+
+  /** MissingBookSearch: monitored released books without a file, with the per-book back-off. */
+  async missingBookSearch(signal?: AbortSignal, limit = MISSING_BOOK_SEARCH_LIMIT): Promise<string> {
+    if (!audiobooksEnabled(this.db)) return 'skipped: audiobooks are not enabled';
+    const r = await this.searchBookSet(this.missingBooks(), signal, limit);
+    return `missing books: searched ${r.searched}, grabbed ${r.grabbed}`;
   }
 
   // ---- push -------------------------------------------------------------------------
@@ -1932,7 +2465,9 @@ export class ReleasesService {
             ? `m${e.decision.movieId}`
             : e.decision.artistId !== undefined
               ? `a${e.decision.artistId}`
-              : `s${e.decision.seriesId ?? 0}`;
+              : e.decision.authorId !== undefined
+                ? `w${e.decision.authorId}`
+                : `s${e.decision.seriesId ?? 0}`;
         byItem.set(key, [...(byItem.get(key) ?? []), e]);
       }
       for (const group of byItem.values()) {
@@ -1942,16 +2477,21 @@ export class ReleasesService {
       const rows: DecisionLogRow[] = evaluated.map((e) => {
         const d = e.decision;
         const fallback =
-          !e.candidate && d.seriesId === undefined && d.movieId === undefined && d.artistId === undefined ? criteria : undefined;
+          !e.candidate && d.seriesId === undefined && d.movieId === undefined && d.artistId === undefined && d.authorId === undefined
+            ? criteria
+            : undefined;
         const mediaType = d.mediaType ?? fallback?.mediaType ?? null;
         const music = mediaType === 'music';
+        const book = mediaType === 'audiobook';
         return {
-          mediaType: mediaType === 'audiobook' ? null : mediaType,
+          mediaType,
           seriesId: d.seriesId ?? (fallback?.mediaType === 'series' ? (fallback.seriesId ?? null) : null),
           episodeIds: d.episodeIds ?? (fallback?.episodeIds ? [...fallback.episodeIds] : []),
           movieId: d.movieId ?? (fallback?.mediaType === 'movie' ? (fallback.movieId ?? null) : null),
           artistId: d.artistId ?? (music ? (fallback?.artistId ?? null) : null),
           albumIds: d.albumIds ?? (music && fallback?.albumIds ? [...fallback.albumIds] : music ? [] : null),
+          authorId: d.authorId ?? (book ? (fallback?.authorId ?? null) : null),
+          bookIds: d.bookIds ?? (book && fallback?.bookIds ? [...fallback.bookIds] : book ? [] : null),
           guid: d.guid,
           indexerId: d.indexerId,
           title: d.title,
@@ -1973,7 +2513,12 @@ export class ReleasesService {
 
   /** GET /release/decisions. */
   listDecisionBatches(query: DecisionLogQuery): DecisionLogPage {
-    return this.decisionLog.list(query, (episodeId) => this.seriesIdForEpisode(episodeId), (albumId) => this.artistIdForAlbum(albumId));
+    return this.decisionLog.list(
+      query,
+      (episodeId) => this.seriesIdForEpisode(episodeId),
+      (albumId) => this.artistIdForAlbum(albumId),
+      (bookId) => this.authorIdForBook(bookId),
+    );
   }
 
   /** GET /release/decisions/:batchId. */
@@ -1994,7 +2539,7 @@ export class ReleasesService {
 
   // ---- scheduled searches -----------------------------------------------------------
 
-  private shouldSearch(kind: 'episode' | 'movie' | 'album', itemId: number): boolean {
+  private shouldSearch(kind: SearchItemType, itemId: number): boolean {
     const row = this.db
       .select()
       .from(releaseSearchState)
@@ -2003,7 +2548,7 @@ export class ReleasesService {
     return isSearchDue(row, this.now().getTime());
   }
 
-  private markSearched(kind: 'episode' | 'movie' | 'album', itemIds: readonly number[]): void {
+  private markSearched(kind: SearchItemType, itemIds: readonly number[]): void {
     const nowIso = this.now().toISOString();
     for (const itemId of itemIds) {
       const row = this.db
@@ -2033,6 +2578,11 @@ export class ReleasesService {
       this.db
         .delete(releaseSearchState)
         .where(and(eq(releaseSearchState.mediaType, 'album'), inArray(releaseSearchState.itemId, d.albumIds)))
+        .run();
+    } else if (d.bookIds?.length) {
+      this.db
+        .delete(releaseSearchState)
+        .where(and(eq(releaseSearchState.mediaType, 'book'), inArray(releaseSearchState.itemId, d.bookIds)))
         .run();
     } else if (d.episodeIds?.length) {
       this.db
@@ -2200,7 +2750,8 @@ export class ReleasesService {
   searchStatus(query: SearchStatusQuery): ItemSearchStatus[] {
     const kind = query.mediaType;
     const ids = [...new Set(query.ids)];
-    const facts = kind === 'episode' ? this.episodeFacts(ids) : kind === 'album' ? this.albumFacts(ids) : this.movieFacts(ids);
+    const facts =
+      kind === 'episode' ? this.episodeFacts(ids) : kind === 'album' ? this.albumFacts(ids) : kind === 'book' ? this.bookFacts(ids) : this.movieFacts(ids);
     const last = new Map<number, LastSearch>();
     for (const r of this.db
       .select()
@@ -2219,11 +2770,23 @@ export class ReleasesService {
     );
 
     const album = kind === 'album';
-    const musicOn = !album || musicService.musicEnabled(this.db);
-    const missingJob = kind === 'episode' ? MISSING_EPISODE_SEARCH_JOB : album ? MISSING_ALBUM_SEARCH_JOB : MISSING_MOVIE_SEARCH_JOB;
-    const cutoffJob = album ? CUTOFF_UNMET_AUDIO_SEARCH_JOB : CUTOFF_UNMET_SEARCH_JOB;
+    const book = kind === 'book';
+    const musicOn = album ? musicService.musicEnabled(this.db) : book ? audiobooksEnabled(this.db) : true;
+    const missingJob =
+      kind === 'episode' ? MISSING_EPISODE_SEARCH_JOB : album ? MISSING_ALBUM_SEARCH_JOB : book ? MISSING_BOOK_SEARCH_JOB : MISSING_MOVIE_SEARCH_JOB;
+    const cutoffJob = album || book ? CUTOFF_UNMET_AUDIO_SEARCH_JOB : CUTOFF_UNMET_SEARCH_JOB;
     const missing: ReadonlyArray<{ id: number }> =
-      kind === 'episode' ? this.missingEpisodes() : album ? (musicOn ? this.missingAlbums() : []) : this.missingMovies();
+      kind === 'episode'
+        ? this.missingEpisodes()
+        : album
+          ? musicOn
+            ? this.missingAlbums()
+            : []
+          : book
+            ? musicOn
+              ? this.missingBooks()
+              : []
+            : this.missingMovies();
     const missingIds = new Set(missing.map((m) => m.id));
     // The cutoff list costs a pass over every file; only build it when an asked item may be on it.
     const needCutoff = musicOn && ids.some((id) => !missingIds.has(id) && facts.get(id)?.monitored && facts.get(id)?.hasFile);
@@ -2232,14 +2795,17 @@ export class ReleasesService {
         ? this.cutoffUnmetEpisodes()
         : album
           ? this.cutoffUnmetAlbums()
-          : this.cutoffUnmetMovies()
+          : book
+            ? this.cutoffUnmetBooks()
+            : this.cutoffUnmetMovies()
       : [];
     const cutoffIds = new Set(cutoff.map((c) => c.id));
-    const missingLimit = kind === 'episode' ? MISSING_EPISODE_SEARCH_LIMIT : album ? MISSING_ALBUM_SEARCH_LIMIT : MISSING_MOVIE_SEARCH_LIMIT;
+    const missingLimit =
+      kind === 'episode' ? MISSING_EPISODE_SEARCH_LIMIT : album ? MISSING_ALBUM_SEARCH_LIMIT : book ? MISSING_BOOK_SEARCH_LIMIT : MISSING_MOVIE_SEARCH_LIMIT;
     const plans = new Map<string, Map<number, { at: Date | null; runsAhead: number }> | null>([
       [missingJob, this.planJob(missingJob, missing, states, missingLimit)],
     ]);
-    if (needCutoff) plans.set(cutoffJob, this.planJob(cutoffJob, cutoff, states, album ? CUTOFF_UNMET_AUDIO_SEARCH_LIMIT : CUTOFF_UNMET_SEARCH_LIMIT));
+    if (needCutoff) plans.set(cutoffJob, this.planJob(cutoffJob, cutoff, states, album || book ? CUTOFF_UNMET_AUDIO_SEARCH_LIMIT : CUTOFF_UNMET_SEARCH_LIMIT));
 
     const out: ItemSearchStatus[] = [];
     for (const id of ids) {
@@ -2317,6 +2883,19 @@ export class ReleasesService {
     return new Map(rows.map((r) => [r.id, { monitored: r.monitored && r.artistMonitored, hasFile: (stats.get(r.id)?.sizeOnDisk ?? 0) > 0 }]));
   }
 
+  /** Monitored (book and author) and has-a-file flags of the asked books. */
+  private bookFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
+    const lib = new BookLibrary(this.db);
+    const out = new Map<number, { monitored: boolean; hasFile: boolean }>();
+    for (const id of ids) {
+      const b = lib.book(id);
+      if (!b) continue;
+      const author = lib.author(b.authorId);
+      out.set(id, { monitored: b.monitored && (author?.monitored ?? false), hasFile: b.hasFile || lib.files(b.authorId).some((f) => f.bookId === id) });
+    }
+    return out;
+  }
+
   private movieFacts(ids: readonly number[]): Map<number, { monitored: boolean; hasFile: boolean; special?: boolean }> {
     const rows = this.db
       .select({ id: movieTable.id, monitored: movieTable.monitored, hasFile: movieTable.hasFile })
@@ -2335,11 +2914,26 @@ export interface SearchQueryIds {
   movieId?: number | undefined;
   albumId?: number | undefined;
   artistId?: number | undefined;
+  bookId?: number | undefined;
+  authorId?: number | undefined;
+}
+
+/** Audiobook search targets: an author (optionally some of their books) or books by id. */
+export function isBookTarget(target: SearchTarget): target is BookTarget {
+  return 'authorId' in target || ('bookIds' in target && !('seriesId' in target) && !('movieId' in target) && !('artistId' in target) && !('albumIds' in target));
+}
+
+/** Epoch ms of a `YYYY`, `YYYY-MM` or `YYYY-MM-DD` date; null when absent or unreadable. */
+function releaseDateMs(date: string | null): number | null {
+  if (!date) return null;
+  const iso = /^\d{4}$/.test(date) ? `${date}-01-01` : /^\d{4}-\d{2}$/.test(date) ? `${date}-01` : date;
+  const ms = Date.parse(iso);
+  return Number.isFinite(ms) ? ms : null;
 }
 
 /** Music search targets: an artist (optionally some of its albums) or albums by id. */
 export function isMusicTarget(target: SearchTarget): target is { artistId: number; albumIds?: number[] } | { albumIds: number[] } {
-  return 'artistId' in target || ('albumIds' in target && !('seriesId' in target) && !('movieId' in target) && !('authorId' in target));
+  return 'artistId' in target || ('albumIds' in target && !('seriesId' in target) && !('movieId' in target) && !('authorId' in target) && !('bookIds' in target));
 }
 
 /** The fields of a wanted episode the scheduled searches use. */
@@ -2349,15 +2943,20 @@ type WantedEpisodeRef = { id: number; seriesId: number; seasonNumber: number };
 
 /** The library ids a grab is tracked and recorded under. */
 function targetIdsOf(
-  match: SeriesMatch | MovieMatch | AlbumMatch,
-): { seriesId: number; episodeIds: number[] } | { movieId: number } | { artistId: number; albumIds: number[] } {
+  match: SeriesMatch | MovieMatch | AlbumMatch | BookMatch,
+):
+  | { seriesId: number; episodeIds: number[] }
+  | { movieId: number }
+  | { artistId: number; albumIds: number[] }
+  | { authorId: number; bookIds: number[] } {
   if (match.mediaType === 'music') return { artistId: match.artist.id, albumIds: match.albums.map((a) => a.id) };
+  if (match.mediaType === 'audiobook') return { authorId: match.author.id, bookIds: match.books.map((b) => b.id) };
   if (match.mediaType === 'series') return { seriesId: match.series.id, episodeIds: match.episodes.map((ep) => ep.id) };
   return { movieId: match.movie.id };
 }
 
-/** A video parse with nothing in it, carried by music candidates (their name is in `Candidate.music`). */
-function emptyVideoParse(parsed: ParsedMusicRelease): ParsedRelease {
+/** A video parse with nothing in it, carried by audio candidates (their name is in `Candidate.music` / `.audiobook`). */
+function emptyVideoParse(parsed: Pick<ParsedMusicRelease, 'releaseTitle' | 'audio' | 'releaseGroup' | 'releaseHash'>): ParsedRelease {
   return {
     releaseTitle: parsed.releaseTitle,
     quality: { quality: parsed.audio.quality, revision: parsed.audio.revision, detectionSource: parsed.audio.detectionSource },
@@ -2388,11 +2987,31 @@ function audioUnmatchedDecision(
   };
 }
 
+/** Decision for an audiobook release that did not reach the specs (unparseable, unknown author / book). */
+function bookUnmatchedDecision(
+  source: ReleaseSource,
+  release: ReleaseResource,
+  parsed: ParsedAudiobookRelease | null,
+  rejection: { reason: string; message: string; type: 'permanent' | 'temporary' },
+  author?: { id: number; name: string },
+): ReleaseDecision {
+  const base = unmatchedDecision(source, release, null, null, rejection);
+  return {
+    ...base,
+    mediaType: 'audiobook',
+    ...(parsed ? { quality: qualityModelOf(parsed.audio) } : {}),
+    ...(parsed?.releaseGroup ? { releaseGroup: parsed.releaseGroup } : {}),
+    ...(parsed?.audiobook ? { audiobook: audiobookInfoOf(parsed.audiobook) } : {}),
+    ...(author ? { authorId: author.id, authorName: author.name } : {}),
+  };
+}
+
 /** Keys a decision covers, for "one release per episode set" bookkeeping. */
 function coverageKeys(d: ReleaseDecision): string[] {
   const v = d.versionTag ? `:${d.versionTag}` : '';
   if (d.movieId !== undefined) return [`m${d.movieId}${v}`];
   if (d.albumIds?.length) return d.albumIds.map((id) => `al${id}`);
+  if (d.bookIds?.length) return d.bookIds.map((id) => `bk${id}`);
   return (d.episodeIds ?? []).map((id) => `e${id}${v}`);
 }
 
@@ -2452,7 +3071,13 @@ function decisionToRelease(d: ReleaseDecision): ReleaseResource {
 function groupPending(rows: PendingRow[], due: Set<number>): PendingRow[][] {
   const groups: PendingRow[][] = [];
   const keysOf = (r: PendingRow) =>
-    r.movieId !== null ? [`m${r.movieId}`] : r.albumIds?.length ? r.albumIds.map((id) => `al${id}`) : (r.episodeIds ?? []).map((id) => `e${id}`);
+    r.movieId !== null
+      ? [`m${r.movieId}`]
+      : r.albumIds?.length
+        ? r.albumIds.map((id) => `al${id}`)
+        : r.bookIds?.length
+          ? r.bookIds.map((id) => `bk${id}`)
+          : (r.episodeIds ?? []).map((id) => `e${id}`);
   for (const row of rows) {
     const keys = keysOf(row);
     const group = groups.find((g) => g.some((r) => keysOf(r).some((k) => keys.includes(k))));

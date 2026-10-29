@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Permission, type MediaServerResource, type MediaServerUser } from '@arclight/shared';
 import { authRoutes, renderAt, stubApi, user } from '../../../features/requests/test-utils.js';
-import { importSummary, importableIds, probeOutcome, serverUses, validateServer } from './media-servers-page.js';
+import { flagRowsFor, importSummary, importableIds, probeOutcome, serverUses, validateServer, withKind } from './media-servers-page.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -184,5 +184,67 @@ describe('Settings → Media servers', () => {
     expect(await within(section).findByText(/No server is set up for sign-in/)).toBeTruthy();
     expect((within(section).getByRole('button', { name: 'Import users' }) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole('button', { name: /Add media server/ })).toBeTruthy();
+  });
+
+  it('adds an Audiobookshelf server: masked token, no sign-in options, libraries after the test, refresh flag', async () => {
+    const calls = stubApi(routes(), (url, method, body) => {
+      if (method === 'POST' && url === '/api/v1/mediaserver/test')
+        return { body: { ok: true, serverName: 'Shelf', version: '2.17.0', libraries: [{ id: 'lib1', name: 'Audiobooks', type: 'audiobook' }, { id: 'lib2', name: 'Podcasts', type: 'other' }] } };
+      if (method === 'POST' && url === '/api/v1/mediaserver') return { status: 201, body: { ...server({ id: 'abs' }), ...(body as object), apiKey: '********' } };
+      return undefined;
+    });
+    renderAt('/settings/mediaservers');
+    fireEvent.click(await screen.findByRole('button', { name: 'Add server' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Add media server' });
+    fireEvent.change(within(dialog).getByLabelText('Kind'), { target: { value: 'audiobookshelf' } });
+    const token = within(dialog).getByLabelText('API token') as HTMLInputElement;
+    expect(token.type).toBe('password');
+    expect((within(dialog).getByLabelText('URL') as HTMLInputElement).placeholder).toBe('http://audiobookshelf.lan:13378');
+    expect(within(dialog).queryByRole('switch', { name: 'Sign-in' })).toBeNull();
+    expect(within(dialog).queryByRole('switch', { name: 'Create users on sign-in' })).toBeNull();
+    expect(within(dialog).queryByRole('switch', { name: 'Availability' })).toBeNull();
+    expect((within(dialog).getByRole('switch', { name: 'Refresh after imports' }) as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Shelf' } });
+    fireEvent.change(within(dialog).getByLabelText('URL'), { target: { value: 'http://audiobookshelf.lan:13378' } });
+    fireEvent.change(token, { target: { value: 'token-123' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Test' }));
+    const libraries = await within(dialog).findByRole('list', { name: 'Libraries' });
+    expect(within(libraries).getByText('Audiobooks', { selector: '.al-ms-libraries__name' })).toBeTruthy();
+    expect(within(libraries).getByText('Podcasts')).toBeTruthy();
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url === '/api/v1/mediaserver')).toBeTruthy());
+    expect(calls.find((c) => c.method === 'POST' && c.url === '/api/v1/mediaserver')?.body).toMatchObject({
+      kind: 'audiobookshelf',
+      apiKey: 'token-123',
+      usedForRefresh: true,
+      usedForAvailability: false,
+      loginEnabled: false,
+      createUsersOnLogin: false,
+    });
+  });
+
+  it('shows Audiobookshelf cards without an accounts button', async () => {
+    stubApi(routes({ '/api/v1/mediaserver': [server({ id: 'abs', kind: 'audiobookshelf', name: 'Shelf', usedForAvailability: false, usedForRetention: false, usedForRefresh: true, loginEnabled: false, createUsersOnLogin: false })] }));
+    renderAt('/settings/mediaservers');
+    const card = (await screen.findByRole('button', { name: 'Shelf' })).closest('.al-item-card') as HTMLElement;
+    expect(within(card).getByText('Audiobookshelf')).toBeTruthy();
+    expect(within(card).queryByRole('button', { name: 'Accounts on Shelf' })).toBeNull();
+  });
+});
+
+describe('Audiobookshelf helpers', () => {
+  it('limits the flags and resets video-only uses', () => {
+    expect(flagRowsFor('audiobookshelf').map((f) => f.key)).toEqual(['enabled', 'usedForRefresh']);
+    expect(flagRowsFor('jellyfin')).toHaveLength(6);
+    expect(withKind({ kind: 'jellyfin', name: 'A', url: 'x', loginEnabled: true, usedForAvailability: true }, 'audiobookshelf')).toMatchObject({
+      kind: 'audiobookshelf',
+      loginEnabled: false,
+      usedForAvailability: false,
+      usedForRefresh: true,
+    });
+    expect(validateServer({ kind: 'audiobookshelf', name: 'A', url: 'http://x', apiKey: '' }, true).apiKey).toBe('Enter an API token.');
+    expect(probeOutcome({ ok: true, libraries: [] }, 'audiobookshelf').warnings).toEqual(['The server reports no book libraries.']);
   });
 });

@@ -16,14 +16,10 @@ import {
   ArtistLookupQuery,
   ArtistSearchResponse,
   ArtistType,
-  AudioFile,
-  AudioFileListQuery,
   BulkAlbumMonitorRequest,
   BulkArtistUpdateRequest,
   DeleteArtistQuery,
   ErrorResponse,
-  Job,
-  MusicCommand,
   UpdateAlbumRequest,
   UpdateArtistRequest,
   WantedAlbumsPage,
@@ -204,9 +200,7 @@ export const musicRoutes = (ctx: AppContext): FastifyPluginAsync<Record<never, n
       },
     );
 
-    app.get('/audiofile', { ...library, schema: { querystring: AudioFileListQuery, response: { 200: z.array(AudioFile) } } }, async (req) =>
-      svc.listAudioFiles(db, req.query),
-    );
+    // GET /audiofile and POST /command are shared with audiobooks: audiobooks/audio-routes.ts.
 
     // ----------------------------------------------------------------------------- album-type profiles
     app.get('/albumtypeprofile', { schema: { response: { 200: z.array(AlbumTypeProfile) } } }, async () => svc.listAlbumTypeProfiles(db));
@@ -230,13 +224,6 @@ export const musicRoutes = (ctx: AppContext): FastifyPluginAsync<Record<never, n
         svc.deleteAlbumTypeProfile(db, req.params.id);
         return reply.code(204).send(null);
       },
-    );
-
-    // ----------------------------------------------------------------------------- commands
-    app.post(
-      '/command',
-      { schema: { body: MusicCommand, response: { 202: Job, 400: ErrorResponse, 404: ErrorResponse } } },
-      async (req, reply) => reply.code(202).send(refresher().command(req.body).job),
     );
 
     // ----------------------------------------------------------------------------- wanted

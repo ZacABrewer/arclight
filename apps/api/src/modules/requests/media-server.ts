@@ -6,7 +6,7 @@ import {
   type FetchLike,
   type SeasonPresence,
 } from '@arclight/notifications';
-import type { MediaServerConfig, MediaServerKind, MediaServerSettings, MediaType } from '@arclight/shared';
+import { isLoginCapableKind, type MediaServerConfig, type MediaServerKind, type MediaServerSettings, type MediaType } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { notifications } from '../../db/schema.js';
 import { mediaServerView } from '../media-servers/index.js';
@@ -103,7 +103,7 @@ export function configuredServer(db: Db): ServerConn | null {
   return { kind: s.kind, baseUrl: s.url.replace(/\/+$/, ''), apiKey: s.apiKey, name: s.name || DEFAULT_SERVER_NAMES[s.kind] };
 }
 
-export function toServerConn(config: Pick<MediaServerConfig, 'kind' | 'url' | 'apiKey' | 'name'>): ServerConn {
+export function toServerConn(config: Pick<MediaServerConfig, 'url' | 'apiKey' | 'name'> & { kind: MediaServerKind }): ServerConn {
   return { kind: config.kind, baseUrl: config.url.replace(/\/+$/, ''), apiKey: config.apiKey, name: config.name || DEFAULT_SERVER_NAMES[config.kind] };
 }
 
@@ -111,7 +111,8 @@ export function toServerConn(config: Pick<MediaServerConfig, 'kind' | 'url' | 'a
 export function listedAvailabilityServers(db: Db): ServerConn[] {
   return getSection(db, 'mediaServers')
     .servers.filter((s) => s.enabled && s.usedForAvailability && s.url && s.apiKey)
-    .map(toServerConn);
+    // Audiobookshelf answers audiobook availability (Wave 4), not these video lookups.
+    .flatMap((s) => (isLoginCapableKind(s.kind) ? [toServerConn({ ...s, kind: s.kind })] : []));
 }
 
 /** Servers to ask: the listed ones, else the Jellyfin/Emby notification connections. */

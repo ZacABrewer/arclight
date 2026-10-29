@@ -10,6 +10,8 @@ import { metadataRoutes } from './routes.js';
 import { MetadataService } from './service.js';
 import { MusicRefresher, registerMusicJobs, type MusicSearchPort } from './music-jobs.js';
 import { MusicMetadataService, type MusicProviderOverrides } from './music-service.js';
+import { AudiobookRefresher, registerAudiobookJobs, type AudiobookSearchPort } from './audiobook-jobs.js';
+import { AudiobookMetadataService, type AudiobookProviderOverrides } from './audiobook-service.js';
 
 export { MetadataService, MetadataNotConfiguredError } from './service.js';
 export { createMetadataLookup } from './lookup.js';
@@ -38,6 +40,24 @@ export {
   SEARCH_NOT_AVAILABLE,
   type MusicSearchPort,
 } from './music-jobs.js';
+export {
+  AudiobookMetadataService,
+  AUDIOBOOK_CACHE_PROVIDER,
+  AUDIOBOOK_CACHE_TTLS,
+  audiobookUserAgent,
+  type AudiobookProviderOverrides,
+} from './audiobook-service.js';
+export {
+  AUDIOBOOK_SEARCH_NOT_AVAILABLE,
+  AUTHOR_ADD_JOB,
+  AUTHOR_SEARCH_JOB,
+  AudiobookRefresher,
+  BOOK_SEARCH_JOB,
+  REFRESH_AUTHOR_JOB,
+  REFRESH_AUTHORS_JOB,
+  RESCAN_AUTHOR_JOB,
+  type AudiobookSearchPort,
+} from './audiobook-jobs.js';
 export { createMetadataCacheStore, withPersistentCache, CACHE_RETENTION_MS, type MetadataCacheStore } from './cache.js';
 
 const refreshers = new WeakMap<AppContext, MetadataRefresher>();
@@ -45,6 +65,31 @@ const musicRefreshers = new WeakMap<AppContext, MusicRefresher>();
 const musicServices = new WeakMap<AppContext, MusicMetadataService>();
 const musicOverrides = new WeakMap<AppContext, MusicProviderOverrides>();
 const musicSearchPorts = new WeakMap<AppContext, MusicSearchPort>();
+const audiobookRefreshers = new WeakMap<AppContext, AudiobookRefresher>();
+const audiobookServices = new WeakMap<AppContext, AudiobookMetadataService>();
+const audiobookOverrides = new WeakMap<AppContext, AudiobookProviderOverrides>();
+const audiobookSearchPorts = new WeakMap<AppContext, AudiobookSearchPort>();
+
+/** Where AuthorSearch / BookSearch run their searches (wiring.ts sets the release pipeline). */
+export function setAudiobookSearchPort(ctx: AppContext, port: AudiobookSearchPort | undefined): void {
+  if (port) audiobookSearchPorts.set(ctx, port);
+  else audiobookSearchPorts.delete(ctx);
+}
+
+/** Test seam: Audible/Audnexus/OpenLibrary fetch (or a whole catalog), limiter and clock. Call from `onContext`. */
+export function setAudiobookProviders(ctx: AppContext, overrides: AudiobookProviderOverrides): void {
+  audiobookOverrides.set(ctx, overrides);
+}
+
+/** The running app's audiobook refresher (null before the metadata module registered). */
+export function audiobookRefresherFor(ctx: AppContext): AudiobookRefresher | null {
+  return audiobookRefreshers.get(ctx) ?? null;
+}
+
+/** The running app's audiobook metadata clients (null before the metadata module registered). */
+export function audiobookMetadataFor(ctx: AppContext): AudiobookMetadataService | null {
+  return audiobookServices.get(ctx) ?? null;
+}
 
 /** Where ArtistSearch / AlbumSearch run their searches (wiring.ts sets the release pipeline). */
 export function setMusicSearchPort(ctx: AppContext, port: MusicSearchPort | undefined): void {
@@ -120,6 +165,22 @@ export const metadataModule: AppModule = (ctx) => async (app) => {
   musicServices.set(ctx, musicService);
   musicRefreshers.set(ctx, musicRefresher);
   registerMusicJobs(ctx.scheduler, musicRefresher);
+
+  const abOverrides = audiobookOverrides.get(ctx);
+  const abLog = ctx.log.child({ module: 'audiobook-metadata' });
+  const audiobookService = new AudiobookMetadataService({ db: ctx.db, log: abLog, ...(abOverrides ? { overrides: abOverrides } : {}) });
+  const audiobookRefresher = new AudiobookRefresher({
+    db: ctx.db,
+    scheduler: ctx.scheduler,
+    service: audiobookService,
+    log: abLog,
+    tagReader: () => createCombinedTagReader({ ffprobe: createFfprobeTagReader({ runner: ffprobeRunnerFor(ctx) }) }),
+    search: () => audiobookSearchPorts.get(ctx) ?? null,
+    ...(abOverrides?.now ? { now: abOverrides.now } : {}),
+  });
+  audiobookServices.set(ctx, audiobookService);
+  audiobookRefreshers.set(ctx, audiobookRefresher);
+  registerAudiobookJobs(ctx.scheduler, audiobookRefresher);
 
   await app.register(metadataRoutes(service, refresher));
 };

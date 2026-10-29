@@ -51,6 +51,7 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('common.tv'); }, to: '/library/tv' },
       { get label() { return t('common.movies'); }, to: '/library/movies' },
       { get label() { return t('common.music'); }, to: '/library/music', feature: 'music' },
+      { get label() { return t('common.audiobooks'); }, to: '/library/audiobooks', feature: 'audiobooks' },
       { get label() { return t('common.collections'); }, to: '/library/collections' },
       { get label() { return t('nav.addNew'); }, to: '/library/add' },
       { get label() { return t('common.retention'); }, to: '/library/retention', adminOnly: true },

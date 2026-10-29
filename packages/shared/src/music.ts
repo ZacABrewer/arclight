@@ -678,6 +678,12 @@ export function applyMusicMetadataUpdate(current: MusicMetadataSettings, update:
 export const AudioImportSettings = z.object({
   /** A file group maps to a release when its match score (0-1) reaches this. Below it: manual import. */
   trackMatchThreshold: z.number().min(0).max(1).default(0.8),
+  /** Audiobooks: the files' total duration may differ from the book's runtime by this many percent. */
+  audiobookDurationTolerance: z.number().min(0).max(100).default(5),
+  /** Audiobooks: multi-file books are renamed with `bookPartFormat` even when `renameAudiobooks` is off. */
+  renameAudiobookParts: z.boolean().default(true),
+  /** Audiobooks: write `desc.txt`, `reader.txt` and `cover.jpg` (Audiobookshelf sidecars) into the book folder. */
+  writeAbsSidecars: z.boolean().default(false),
 });
 export type AudioImportSettings = z.infer<typeof AudioImportSettings>;
 export type AudioImportSettingsInput = z.input<typeof AudioImportSettings>;

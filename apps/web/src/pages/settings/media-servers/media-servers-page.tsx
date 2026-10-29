@@ -2,10 +2,11 @@ import { useId, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import {
   REQUEST_SECRET_MASK,
+  isLoginCapableKind,
   type MediaServerAccountResource,
+  type MediaServerConnectionKind,
   type MediaServerImportResult,
   type MediaServerInputRaw,
-  type MediaServerKind,
   type MediaServerProbeResult,
   type MediaServerResource,
   type MediaServerUser,
@@ -24,13 +25,34 @@ import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection }
 import './media-servers.css';
 import { t } from '../../../i18n/index.js';
 
-// Settings → Media servers (/settings/mediaservers): the list of Jellyfin/Emby/Plex
-// connections (GET/POST/PUT/DELETE /mediaserver) with what each is used for, a Test per
+// Settings → Media servers (/settings/mediaservers): the list of Jellyfin/Emby/Plex and
+// Audiobookshelf connections (GET/POST/PUT/DELETE /mediaserver) with what each is used for, a Test per
 // server, its accounts, and the sign-in server (GET /settings/mediaserver, a view over the
 // first server flagged for sign-in) with user import (/user/import/mediaserver).
 
-export const KIND_LABELS: Record<MediaServerKind, string> = { get jellyfin() { return t('common.jellyfin'); }, get emby() { return t('common.emby'); }, get plex() { return t('common.plex'); } };
-const KIND_OPTIONS = (Object.keys(KIND_LABELS) as MediaServerKind[]).map((k) => ({ value: k, label: KIND_LABELS[k] }));
+export const KIND_LABELS: Record<MediaServerConnectionKind, string> = {
+  get jellyfin() {
+    return t('common.jellyfin');
+  },
+  get emby() {
+    return t('common.emby');
+  },
+  get plex() {
+    return t('common.plex');
+  },
+  get audiobookshelf() {
+    return t('settings.mediaServers.audiobookshelf');
+  },
+};
+const KIND_OPTIONS = (Object.keys(KIND_LABELS) as MediaServerConnectionKind[]).map((k) => ({ value: k, label: KIND_LABELS[k] }));
+
+/** Example address per kind (placeholders only). */
+const URL_PLACEHOLDERS: Record<MediaServerConnectionKind, string> = {
+  jellyfin: 'http://jellyfin.lan:8096',
+  emby: 'http://emby.lan:8096',
+  plex: 'http://plex.lan:32400',
+  audiobookshelf: 'http://audiobookshelf.lan:13378',
+};
 
 type Flag = 'enabled' | 'usedForAvailability' | 'usedForRetention' | 'usedForRefresh' | 'loginEnabled' | 'createUsersOnLogin';
 
@@ -43,6 +65,23 @@ export const FLAG_ROWS: ReadonlyArray<{ key: Flag; label: string; caption: strin
   { key: 'createUsersOnLogin', get label() { return t('settings.mediaServers.createUsersOnSignIn'); }, get caption() { return t('settings.mediaServers.aFirstSignInCreates'); } },
 ];
 
+/**
+ * The flags a kind can use. Audiobookshelf is a library server only: no availability,
+ * retention or sign-in, just "enabled" and the refresh after audiobook imports.
+ */
+export function flagRowsFor(kind: MediaServerConnectionKind): ReadonlyArray<{ key: Flag; label: string; caption: string }> {
+  if (isLoginCapableKind(kind)) return FLAG_ROWS;
+  return FLAG_ROWS.filter((f) => f.key === 'enabled' || f.key === 'usedForRefresh').map((f) =>
+    f.key === 'usedForRefresh' ? { key: f.key, label: t('settings.mediaServers.refreshAfterImports'), caption: t('settings.mediaServers.absRefreshCaption') } : f,
+  );
+}
+
+/** Switching kinds: Audiobookshelf drops the video-only uses and is refreshed after imports by default. */
+export function withKind(v: MediaServerInputRaw, kind: MediaServerConnectionKind): MediaServerInputRaw {
+  if (isLoginCapableKind(kind)) return { ...v, kind };
+  return { ...v, kind, usedForAvailability: false, usedForRetention: false, loginEnabled: false, createUsersOnLogin: false, usedForRefresh: true };
+}
+
 /** Chips naming what a server is used for: "Availability", "Retention", "Refresh", "Sign-in". */
 export function serverUses(s: Pick<MediaServerResource, 'usedForAvailability' | 'usedForRetention' | 'usedForRefresh' | 'loginEnabled'>): string[] {
   const uses: string[] = [];
@@ -54,11 +93,12 @@ export function serverUses(s: Pick<MediaServerResource, 'usedForAvailability' | 
 }
 
 /** Test result → the shared Test outcome: "Living room · 10.9.1 · 3 libraries" or the cause. */
-export function probeOutcome(r: MediaServerProbeResult): TestOutcome {
+export function probeOutcome(r: MediaServerProbeResult, kind?: MediaServerConnectionKind): TestOutcome {
   if (r.ok) {
     const libs = r.libraries?.length;
     const parts = [r.serverName, r.version, libs === undefined ? undefined : t('settings.mediaServers.libraryCount', { count: libs })].filter(Boolean);
-    return { ok: true, message: parts.join(' · ') || undefined, warnings: libs === 0 ? [t('settings.mediaServers.theServerReportsNoMovie')] : [], errors: [] };
+    const empty = kind === 'audiobookshelf' ? t('settings.mediaServers.absNoLibraries') : t('settings.mediaServers.theServerReportsNoMovie');
+    return { ok: true, message: parts.join(' · ') || undefined, warnings: libs === 0 ? [empty] : [], errors: [] };
   }
   return { ok: false, warnings: [], errors: [`${r.message ?? t('settings.mediaServers.serverDidNotAnswer')}${r.code ? ` (${r.code})` : ''}`] };
 }
@@ -72,7 +112,13 @@ export function validateServer(v: MediaServerInputRaw, isNew: boolean): ServerEr
   const url = v.url.trim();
   if (!url) errors.url = t('settings.mediaServers.enterTheServerAddress');
   else if (/^[a-z][a-z0-9+.-]*:\/\//i.test(url) && !/^https?:\/\//i.test(url)) errors.url = t('common.useHttpAddress');
-  if (isNew && !v.apiKey?.trim()) errors.apiKey = v.kind === 'plex' ? t('settings.mediaServers.enterTheOwnersXPlex') : t('settings.mediaServers.enterAnApiKey');
+  if (isNew && !v.apiKey?.trim())
+    errors.apiKey =
+      v.kind === 'plex'
+        ? t('settings.mediaServers.enterTheOwnersXPlex')
+        : v.kind === 'audiobookshelf'
+          ? t('settings.mediaServers.enterAnApiToken')
+          : t('settings.mediaServers.enterAnApiKey');
   return errors;
 }
 
@@ -102,6 +148,7 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
   const [value, setValue] = useState<MediaServerInputRaw>(server ? toInput(server) : blankServer());
   const [errors, setErrors] = useState<ServerErrors>({});
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [libraries, setLibraries] = useState<MediaServerProbeResult['libraries'] | null>(null);
   const save = useSaveMediaServer();
   const remove = useDeleteMediaServer();
   const ids = { kind: useId(), name: useId(), url: useId(), key: useId() };
@@ -113,9 +160,17 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
   };
   const submit = () => {
     if (!check()) return;
-    save.mutate({ id: server?.id, body: value }, { onSuccess: onClose });
+    // Audiobookshelf is never a sign-in provider (the api rejects it).
+    const body = isLoginCapableKind(value.kind) ? value : { ...value, loginEnabled: false, createUsersOnLogin: false };
+    save.mutate({ id: server?.id, body }, { onSuccess: onClose });
   };
-  const keyLabel = value.kind === 'plex' ? t('settings.mediaServers.xPlexToken') : t('common.apiKey');
+  const keyLabel =
+    value.kind === 'plex' ? t('settings.mediaServers.xPlexToken') : value.kind === 'audiobookshelf' ? t('settings.mediaServers.apiToken') : t('common.apiKey');
+  const test = async () => {
+    const r = await mediaServersApi.test({ ...value, ...(server ? { id: server.id } : {}) });
+    setLibraries(r.ok ? (r.libraries ?? null) : null);
+    return probeOutcome(r, value.kind);
+  };
 
   return (
     <>
@@ -130,13 +185,19 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
             onSave={submit}
             saving={save.isPending}
             onDelete={server ? () => setConfirmDelete(true) : undefined}
-            extra={<TestButton beforeTest={check} onTest={async () => probeOutcome(await mediaServersApi.test({ ...value, ...(server ? { id: server.id } : {}) }))} />}
+            extra={<TestButton beforeTest={check} onTest={test} />}
           />
         }
       >
         <div className="al-ms-editor">
           <FormRow label={t('settings.mediaServers.kind')} htmlFor={ids.kind}>
-            <Select id={ids.kind} value={value.kind} options={KIND_OPTIONS} onChange={(e) => set('kind', e.currentTarget.value as MediaServerKind)} />
+            <Select id={ids.kind} value={value.kind} options={KIND_OPTIONS} onChange={(e) => {
+                const next = e.currentTarget.value;
+                const kind = KIND_OPTIONS.find((o) => o.value === next)?.value ?? 'jellyfin';
+                setValue((d) => withKind(d, kind));
+                setLibraries(null);
+              }}
+            />
           </FormRow>
           <FormRow label={t('common.name')} htmlFor={ids.name} error={errors.name} caption={t('settings.mediaServers.shownAsAvailableOnName')}>
             <Input id={ids.name} invalid={!!errors.name} value={value.name} onChange={(e) => set('name', e.currentTarget.value)} placeholder={KIND_LABELS[value.kind]} />
@@ -149,7 +210,7 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
               invalid={!!errors.url}
               value={value.url}
               onChange={(e) => set('url', e.currentTarget.value)}
-              placeholder={value.kind === 'plex' ? 'http://plex.lan:32400' : 'http://jellyfin.lan:8096'}
+              placeholder={URL_PLACEHOLDERS[value.kind]}
             />
           </FormRow>
           <FormRow label={keyLabel} htmlFor={ids.key} error={errors.apiKey} caption={server ? t('settings.mediaServers.leaveTheMaskToKeep') : undefined}>
@@ -164,8 +225,9 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
               onChange={(e) => set('apiKey', e.currentTarget.value)}
             />
           </FormRow>
+          {libraries ? <LibraryList libraries={libraries} /> : null}
           <div className="al-ms-flags" role="group" aria-label={t('settings.mediaServers.useThisServerFor')}>
-            {FLAG_ROWS.map((f) => (
+            {flagRowsFor(value.kind).map((f) => (
               <FormRow key={f.key} label={f.label} caption={f.caption} captionInline>
                 <Toggle
                   aria-label={f.label}
@@ -194,6 +256,24 @@ function ServerEditor({ server, onClose }: { server: MediaServerResource | null;
         </ConfirmDialog>
       ) : null}
     </>
+  );
+}
+
+/** The libraries a successful test reported, with what each holds. */
+function LibraryList({ libraries }: { libraries: NonNullable<MediaServerProbeResult['libraries']> }) {
+  return (
+    <FormRow label={t('settings.mediaServers.libraries')} caption={libraries.length === 0 ? t('settings.mediaServers.noLibrariesReported') : undefined}>
+      <ul className="al-ms-libraries" aria-label={t('settings.mediaServers.libraries')}>
+        {libraries.map((l) => (
+          <li key={l.id}>
+            <span className="al-ms-libraries__name">{l.name}</span>
+            <Chip tone={l.type === 'other' ? 'muted' : 'neutral'} dot="none">
+              {t('settings.mediaServers.libraryType', { type: l.type })}
+            </Chip>
+          </li>
+        ))}
+      </ul>
+    </FormRow>
   );
 }
 
@@ -414,10 +494,12 @@ function ServerCard({ server, onEdit, onUsers }: { server: MediaServerResource; 
       status={server.enabled ? <Chip tone="neutral">{KIND_LABELS[server.kind]}</Chip> : <Chip tone="muted">{t('common.disabled')}</Chip>}
       actions={
         <>
-          <TestButton size="sm" onTest={async () => probeOutcome(await mediaServersApi.testSaved(server.id))} />
-          <Button size="sm" variant="secondary" onClick={onUsers} aria-label={t('settings.mediaServers.accountsOnName', { name: server.name })}>
-            {t('common.users')}
-          </Button>
+          <TestButton size="sm" onTest={async () => probeOutcome(await mediaServersApi.testSaved(server.id), server.kind)} />
+          {isLoginCapableKind(server.kind) ? (
+            <Button size="sm" variant="secondary" onClick={onUsers} aria-label={t('settings.mediaServers.accountsOnName', { name: server.name })}>
+              {t('common.users')}
+            </Button>
+          ) : null}
           <Button size="sm" variant="secondary" onClick={onEdit} aria-label={t('settings.mediaServers.editName', { name: server.name })}>
             {t('common.edit')}
           </Button>

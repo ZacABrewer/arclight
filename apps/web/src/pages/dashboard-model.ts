@@ -11,7 +11,7 @@ export interface UpcomingRow {
   time: string;
   title: string;
   detail: string;
-  href: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id'; params: { id: string } };
+  href: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id'; params: { id: string } };
 }
 
 const RELEASE_LABEL = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('dashboard.digitalRelease'); }, get physical() { return t('dashboard.physicalRelease'); } } as const;
@@ -22,8 +22,6 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
   const start = from.getTime();
   const end = start + hours * 3_600_000;
   return items
-    // Audiobook release dates are not shown here yet (the Audiobooks web work adds them).
-    .filter((it): it is Exclude<CalendarItem, { type: 'book' }> => it.type !== 'book')
     .map((it) => {
       const when = it.type === 'episode' ? (it.episode.airDateUtc ?? it.date) : it.date;
       return { it, at: new Date(when).getTime(), when };
@@ -50,6 +48,15 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
           title: it.artistName,
           detail: [it.album.title, t('common.music')].join(' · '),
           href: { to: '/library/music/album/$id', params: { id: String(it.album.id) } },
+        };
+      }
+      if (it.type === 'book') {
+        return {
+          key: `b-${it.book.id}`,
+          time: formatClock(when),
+          title: it.authorName,
+          detail: [it.book.title, t('audiobooks.audiobook')].join(' · '),
+          href: { to: '/library/audiobooks/book/$id', params: { id: String(it.book.id) } },
         };
       }
       return {

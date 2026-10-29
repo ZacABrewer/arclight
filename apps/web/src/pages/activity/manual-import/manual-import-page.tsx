@@ -49,8 +49,10 @@ import {
 import { VersionPicker } from '../../library/versions/versions-editor.js';
 import type { AudioManualImportQueryInput } from '@arclight/shared';
 import { useFeatures } from '../../../hooks/music.js';
-import { isMusicRecord } from '../music-media.js';
+import { audioImportMode } from '../audiobook-media.js';
 import { AudioImportWizard } from './audio-import.js';
+import { AudiobookImportWizard } from './audiobook-import.js';
+import type { AudiobookManualImportQuery } from '../../../api/audiobook-acquisition.js';
 import { t } from '../../../i18n/index.js';
 
 const route = getRouteApi('/activity/manual-import');
@@ -60,8 +62,8 @@ export interface ManualImportSearch {
   downloadId?: string;
   seriesId?: number;
   movieId?: number;
-  /** Audio mode (music files: artist / album / track mapping). */
-  mediaType?: 'music';
+  /** Audio mode: music (artist / album / track mapping) or audiobooks (author / book / part order). */
+  mediaType?: 'music' | 'audiobook';
 }
 
 /** Route search parsing: unknown or malformed params are dropped. */
@@ -74,13 +76,21 @@ export function parseManualImportSearch(search: Record<string, unknown>): Manual
   const movieId = num(search['movieId']);
   if (seriesId !== undefined) out.seriesId = seriesId;
   if (movieId !== undefined) out.movieId = movieId;
-  if (search['mediaType'] === 'music') out.mediaType = 'music';
+  if (search['mediaType'] === 'music' || search['mediaType'] === 'audiobook') out.mediaType = search['mediaType'];
   return out;
 }
 
 /** The audio scan query for a music source, or null when none is chosen. */
 export function toAudioImportQuery(s: ManualImportSearch): AudioManualImportQueryInput | null {
   if (s.mediaType !== 'music') return null;
+  if (s.downloadId) return { downloadId: s.downloadId };
+  if (s.folder) return { folder: s.folder };
+  return null;
+}
+
+/** The audio scan query for an audiobook source, or null when none is chosen. */
+export function toAudiobookImportQuery(s: ManualImportSearch): AudiobookManualImportQuery | null {
+  if (s.mediaType !== 'audiobook') return null;
   if (s.downloadId) return { downloadId: s.downloadId };
   if (s.folder) return { folder: s.folder };
   return null;
@@ -115,7 +125,7 @@ export const MODE_OPTIONS: ReadonlyArray<{ value: ImportMode; label: string; hin
 
 // ---- Path ---------------------------------------------------------------------------------
 
-type SourceKind = 'video' | 'music';
+type SourceKind = 'video' | 'music' | 'audiobook';
 
 function PathStep({
   folder,
@@ -135,15 +145,19 @@ function PathStep({
   const candidates = (queue.data?.records ?? []).filter((q) => q.outputPath !== undefined);
   return (
     <div className="al-mi-step">
-      {features.music ? (
-        <Field label={t('activity.manualImport.audio.filesAre')} hint={kind === 'music' ? t('activity.manualImport.audio.musicHint') : undefined}>
+      {features.music || features.audiobooks ? (
+        <Field
+          label={t('activity.manualImport.audio.filesAre')}
+          hint={kind === 'music' ? t('activity.manualImport.audio.musicHint') : kind === 'audiobook' ? t('activity.manualImport.audiobook.hint') : undefined}
+        >
           <Segmented
             aria-label={t('activity.manualImport.audio.filesAre')}
             value={kind}
             onChange={onKind}
             options={[
-              { value: 'video', label: t('activity.manualImport.audio.video') },
-              { value: 'music', label: t('common.music') },
+              { value: 'video' as const, label: t('activity.manualImport.audio.video') },
+              ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
+              ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
             ]}
           />
         </Field>
@@ -163,7 +177,10 @@ function PathStep({
               const chip = queueChip(q);
               return (
                 <li key={q.id}>
-                  <button type="button" className="al-mi-list__row" onClick={() => onChoose(isMusicRecord(q) ? { downloadId: q.downloadId, mediaType: 'music' } : { downloadId: q.downloadId })}>
+                  <button type="button" className="al-mi-list__row" onClick={() => {
+                      const audio = audioImportMode(q);
+                      onChoose(audio ? { downloadId: q.downloadId, mediaType: audio } : { downloadId: q.downloadId });
+                    }}>
                     <span className="al-mi-list__title">{q.title}</span>
                     {needsManualImport(q) ? <Chip tone="warn">{t('activity.manualImport.needsImport')}</Chip> : <StatusChip status={chip.status} cause={chip.cause} />}
                   </button>
@@ -504,6 +521,11 @@ export function ResultsView({ result }: { result: ManualImportResult }) {
 export function ManualImportPage() {
   const search = route.useSearch();
   const navigate = route.useNavigate();
+  const books = toAudiobookImportQuery(search);
+  if (books) {
+    const label = search.folder ?? t('activity.manualImport.downloadDownloadid', { downloadId: search.downloadId ?? '' });
+    return <AudiobookImportWizard key={JSON.stringify(books)} query={books} sourceLabel={label} onStartOver={() => void navigate({ search: {} })} />;
+  }
   const audio = toAudioImportQuery(search);
   if (audio) {
     const label = search.folder ?? t('activity.manualImport.downloadDownloadid', { downloadId: search.downloadId ?? '' });
@@ -574,7 +596,7 @@ function VideoManualImport() {
   if (step === 'path') {
     body = <PathStep folder={folder} onFolder={setFolder} onChoose={(s) => void navigate({ search: s })} kind={kind} onKind={setKind} />;
     canContinue = folder.trim() !== '';
-    onContinue = () => void navigate({ search: kind === 'music' ? { folder: folder.trim(), mediaType: 'music' } : { folder: folder.trim() } });
+    onContinue = () => void navigate({ search: kind === 'video' ? { folder: folder.trim() } : { folder: folder.trim(), mediaType: kind } });
   } else if (step === 'files' || step === 'mapping') {
     if (files.isPending) body = <Skeleton lines={5} />;
     else if (files.isError)

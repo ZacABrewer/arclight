@@ -678,6 +678,13 @@ export const LibraryStatistics = z.object({
   monitoredAlbumCount: z.number().int().optional(),
   trackCount: z.number().int().optional(),
   trackFileCount: z.number().int().optional(),
+  // Audiobooks (only while `features.audiobooks` is on).
+  authorCount: z.number().int().optional(),
+  monitoredAuthorCount: z.number().int().optional(),
+  bookCount: z.number().int().optional(),
+  monitoredBookCount: z.number().int().optional(),
+  /** Books with at least one file. */
+  bookFileCount: z.number().int().optional(),
   /** Bytes of audio files (music and audiobooks); `sizeOnDisk` stays video-only. */
   audioSizeOnDisk: z.number().int().optional(),
 });

@@ -26,9 +26,12 @@ import {
   type ImportsDeps,
 } from './modules/imports/index.js';
 import { mediaServersServiceFor } from './modules/media-servers/index.js';
+import { buildAudiobookImportNotification, recordAudiobookImportInHistory } from './wiring-audiobooks.js';
+export { audiobookNotificationContext, buildAudiobookImportNotification, recordAudiobookImportInHistory } from './wiring-audiobooks.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
 import type { LibraryCommands, LibraryCommandTarget } from './modules/library/index.js';
 import { ARTIST_SEARCH_JOB, metadataRefresherFor, musicMetadataFor, musicRefresherFor, setMusicSearchPort } from './modules/metadata/index.js';
+import { audiobookRefresherFor, AUTHOR_SEARCH_JOB, setAudiobookSearchPort } from './modules/metadata/index.js';
 import { profileMigrationServiceFor } from './modules/profile-migration/index.js';
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
@@ -68,6 +71,9 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 //   report once per album: deps.history.recordAudioImport (a music history target),
 //   deps.notifications.onAudioImported (an "Artist – Album" import/upgrade notification from
 //   musicNotificationContext) and deps.mediaServers.refreshPath for the album folder.
+//   Audiobook imports report once per book the same way (wiring-audiobooks.ts):
+//   recordAudiobookImport (target { authorId, bookIds }), onAudiobookImported ("Author – Title
+//   (narrated by X)" from audiobookNotificationContext) and refreshPath for the book folder.
 //   deps.musicReleases loads other editions when the importer switches an album's edition.
 //
 // * Failed download: download-clients onItemFailed -> imports.handleFailedDownload ->
@@ -97,7 +103,8 @@ import { trackerStatsServiceFor } from './modules/tracker-stats/index.js';
 // * Library commands: the bulk editor's `refresh` / `search` flags and "search on add" call
 //   libraryCommands below: refresh -> the metadata module's MetadataRefresher, search ->
 //   releases.searchFor per item inside a `SeriesSearch` / `MovieSearch` / `ArtistSearch` job.
-//   `artistIds` refresh through the metadata module's MusicRefresher (RefreshArtist). The music
+//   `artistIds` refresh through the metadata module's MusicRefresher (RefreshArtist), `authorIds`
+//   through its AudiobookRefresher (RefreshAuthor). The music
 //   commands (ArtistSearch, AlbumSearch, search on add) reach the release pipeline through the
 //   music search port registered in wireModules (runMusicSearch).
 //
@@ -155,6 +162,11 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   setMusicSearchPort(ctx, {
     artists: (ids, signal) => runMusicSearch(ctx, { artistIds: ids }, signal),
     albums: (ids, signal) => runMusicSearch(ctx, { albumIds: ids }, signal),
+  });
+  // Audiobook commands (AuthorSearch, BookSearch, search on add) likewise.
+  setAudiobookSearchPort(ctx, {
+    authors: (ids, signal) => runAudiobookSearch(ctx, { authorIds: ids }, signal),
+    books: (ids, signal) => runAudiobookSearch(ctx, { bookIds: ids }, signal),
   });
 
   // Manual redownload of a history record: one search, run as a job so the UI can follow it.
@@ -240,6 +252,7 @@ export function libraryCommands(ctx: AppContext): LibraryCommands {
       if (target.seriesIds?.length) refresher.series(target.seriesIds);
       if (target.movieIds?.length) refresher.movies(target.movieIds);
       if (target.artistIds?.length) musicRefresherFor(ctx)?.refresh(target.artistIds);
+      if (target.authorIds?.length) audiobookRefresherFor(ctx)?.refresh(target.authorIds);
     },
     search: (target) => {
       startLibrarySearch(ctx, target);
@@ -252,7 +265,39 @@ function searchTargetKey(t: SearchTarget): string {
   if ('seriesId' in t) return String(t.seriesId);
   if ('artistId' in t) return `a${t.artistId}`;
   if ('authorId' in t) return `w${t.authorId}`;
+  if ('bookIds' in t) return `bk${t.bookIds.join('+')}`;
   return `al${t.albumIds.join('+')}`;
+}
+
+/**
+ * Author / book searches for the audiobook module's AuthorSearch and BookSearch commands (and
+ * search on add): each author, or each book, in turn. Returns a one-line summary.
+ */
+export async function runAudiobookSearch(
+  ctx: AppContext,
+  target: { authorIds: readonly number[] } | { bookIds: readonly number[] },
+  signal: AbortSignal,
+): Promise<string> {
+  const releases = releasesServiceFor(ctx);
+  const targets: SearchTarget[] =
+    'authorIds' in target ? target.authorIds.map((authorId) => ({ authorId })) : target.bookIds.map((id) => ({ bookIds: [id] }));
+  let grabbed = 0;
+  let found = 0;
+  let failed = 0;
+  for (const t of targets) {
+    if (signal.aborted) break;
+    try {
+      const summary = await releases.searchFor(t, { userInvoked: true, signal });
+      grabbed += summary.grabbed.length;
+      found += summary.releases;
+    } catch (err) {
+      failed++;
+      ctx.log.warn({ err, target: t }, 'audiobook search failed');
+    }
+  }
+  const n = targets.length;
+  const what = 'authorIds' in target ? `${n} author${n === 1 ? '' : 's'}` : `${n} book${n === 1 ? '' : 's'}`;
+  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}`;
 }
 
 /**
@@ -307,6 +352,7 @@ export function startLibrarySearch(ctx: AppContext, target: LibraryCommandTarget
   if (target.seriesIds?.length) started.push(run(SERIES_SEARCH_JOB, target.seriesIds.map((seriesId) => ({ seriesId }))));
   if (target.movieIds?.length) started.push(run(MOVIE_SEARCH_JOB, target.movieIds.map((movieId) => ({ movieId }))));
   if (target.artistIds?.length) started.push(run(ARTIST_SEARCH_JOB, target.artistIds.map((artistId) => ({ artistId }))));
+  if (target.authorIds?.length) started.push(run(AUTHOR_SEARCH_JOB, target.authorIds.map((authorId) => ({ authorId }))));
   return started;
 }
 
@@ -328,7 +374,7 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
         if ('movieId' in item) row = history.mostRecentForMovie(item.movieId, type);
         else if ('episodeId' in item) row = history.mostRecentForEpisode(item.episodeId, type);
         else if ('albumId' in item) row = history.mostRecentForAlbum(item.albumId, type);
-        else return null; // audiobooks: Wave 3
+        else row = history.mostRecentForBook(item.bookId, type);
         return row ? toEventSummary(row) : null;
       },
       findByDownloadId: (downloadId, eventType) => {
@@ -381,6 +427,8 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
           preferIndexerFlags: i.preferIndexerFlags,
           allowDiscographyPacks: r.allowDiscographyPacks,
           minPackWanted: r.minPackWanted,
+          allowBookPacks: r.allowBookPacks,
+          allowAbridged: r.allowAbridged,
         };
       },
     },
@@ -442,11 +490,15 @@ export function historyTarget(input: {
   movieId?: number;
   artistId?: number;
   albumIds?: number[];
+  authorId?: number;
+  bookIds?: number[];
 }): HistoryTarget | null {
   if (input.mediaType === 'music') {
     return input.artistId === undefined ? null : { mediaType: 'music', artistId: input.artistId, albumIds: input.albumIds ?? [] };
   }
-  if (input.mediaType === 'audiobook') return null; // Wave 3
+  if (input.mediaType === 'audiobook') {
+    return input.authorId === undefined ? null : { mediaType: 'audiobook', authorId: input.authorId, bookIds: input.bookIds ?? [] };
+  }
   if (input.mediaType === 'movie') return input.movieId === undefined ? null : { mediaType: 'movie', movieId: input.movieId };
   return input.seriesId === undefined ? null : { mediaType: 'series', seriesId: input.seriesId, episodeIds: input.episodeIds ?? [] };
 }
@@ -485,7 +537,10 @@ export function searchTargetFor(target: HistoryTarget): SearchTarget | null {
     // A failed album download searches those albums again (never the whole artist).
     return target.albumIds.length > 0 ? { artistId: target.artistId, albumIds: [...target.albumIds] } : null;
   }
-  if (target.mediaType === 'audiobook') return null; // Wave 3
+  if (target.mediaType === 'audiobook') {
+    // A failed book download searches those books again (never the whole author).
+    return target.bookIds.length > 0 ? { authorId: target.authorId, bookIds: [...target.bookIds] } : null;
+  }
   if (target.mediaType === 'movie') return { movieId: target.movieId };
   // A failed download without known episodes would turn into a whole-series search; skip it.
   if (target.episodeIds.length === 0) return null;
@@ -496,6 +551,7 @@ export function searchTargetFor(target: HistoryTarget): SearchTarget | null {
 function searchTargetForTracked(item: TrackedDownload): SearchTarget | null {
   if (item.movieId !== undefined) return { movieId: item.movieId };
   if (item.artistId !== undefined) return item.albumIds?.length ? { artistId: item.artistId, albumIds: [...item.albumIds] } : null;
+  if (item.authorId !== undefined) return item.bookIds?.length ? { authorId: item.authorId, bookIds: [...item.bookIds] } : null;
   if (item.seriesId === undefined || !item.episodeIds?.length) return null;
   return { seriesId: item.seriesId, episodeIds: [...item.episodeIds] };
 }
@@ -528,10 +584,17 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
       recordAudioImport: (event) => {
         recordAudioImportInHistory(ctx, event);
       },
+      recordAudiobookImport: (event) => {
+        recordAudiobookImportInHistory(ctx, event);
+      },
     },
     notifications: {
       onAudioImported: async (event) => {
         const built = buildAudioImportNotification(ctx, event);
+        if (built) await notificationsServiceFor(ctx).dispatch(built);
+      },
+      onAudiobookImported: async (event) => {
+        const built = buildAudiobookImportNotification(ctx, event);
         if (built) await notificationsServiceFor(ctx).dispatch(built);
       },
       onImported: async (event) => {
@@ -554,7 +617,8 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
     },
     // Same rule on the import side: a file the profile no longer allows gives way under `replace`.
     profileMigration: { mismatchActionFor: (id) => profileMigrationServiceFor(ctx).mismatchActionFor(id) },
-    // Music imports: media servers with a music library holding the album folder rescan it.
+    // Music and audiobook imports: media servers (Audiobookshelf included) with a library of the
+    // matching kind holding the album/book folder rescan it.
     mediaServers: {
       refreshPath: async (input) => {
         const results = await mediaServersServiceFor(ctx).refreshPath(input);
@@ -881,6 +945,8 @@ export async function failTrackedDownload(
         ...(item.movieId !== undefined ? { movieId: item.movieId } : {}),
         ...(item.artistId !== undefined ? { artistId: item.artistId } : {}),
         ...(item.albumIds ? { albumIds: item.albumIds } : {}),
+        ...(item.authorId !== undefined ? { authorId: item.authorId } : {}),
+        ...(item.bookIds ? { bookIds: item.bookIds } : {}),
       },
       message ?? 'Manually marked as failed',
     );

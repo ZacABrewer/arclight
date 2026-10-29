@@ -19,6 +19,10 @@ import { AddNewPage, parseAddNewSearch } from './pages/library/add-new.js';
 import { ArtistIndexPage } from './pages/library/music/artist-index.js';
 import { ArtistDetailsPage } from './pages/library/music/artist-details.js';
 import { AlbumDetailsPage } from './pages/library/music/album-details.js';
+import { AuthorIndexPage } from './pages/library/audiobooks/author-index.js';
+import { AuthorDetailsPage } from './pages/library/audiobooks/author-details.js';
+import { BookDetailsPage } from './pages/library/audiobooks/book-details.js';
+import { SeriesDetailsPage as BookSeriesDetailsPage } from './pages/library/audiobooks/series-details.js';
 import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
 import { MovieDetailsPage } from './pages/library/movie-details.js';
 import { SeriesDetailsPage } from './pages/library/series-details.js';
@@ -191,7 +195,7 @@ const historyRoute = createRoute({
   component: HistoryPage,
 });
 
-// ?type=music opens the Music tab (Library → Music "Add artist").
+// ?type=music / ?type=audiobook opens the Music or Audiobooks tab ("Add artist", "Add author").
 const addNewRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/library/add',
@@ -240,6 +244,11 @@ export const routeTree = rootRoute.addChildren([
   page('/library/music', ArtistIndexPage),
   page('/library/music/artist/$id', ArtistDetailsPage),
   page('/library/music/album/$id', AlbumDetailsPage),
+  // Audiobooks (feature flag `audiobooks`; the pages answer 404 while it is off).
+  page('/library/audiobooks', AuthorIndexPage),
+  page('/library/audiobooks/author/$id', AuthorDetailsPage),
+  page('/library/audiobooks/book/$id', BookDetailsPage),
+  page('/library/audiobooks/series/$id', BookSeriesDetailsPage),
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
   page('/library/collections', CollectionsPage),

@@ -19,6 +19,7 @@ import { useFeatures } from '../../../hooks/music.js';
 import { rootKindLabel } from '../../../components/media/root-kind.js';
 import { AudioImportSection } from './audio-import-section.js';
 import { MusicReleasesSection } from './music-releases-section.js';
+import { AudiobookReleasesSection } from './audiobook-releases-section.js';
 import {
   useAddRootFolder,
   useDeleteRootFolder,
@@ -33,6 +34,7 @@ import { PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
 import { previewCaption, type PreviewKind } from './naming-preview.js';
 import { VersionNamingSection } from './version-naming.js';
 import { MusicNamingSection } from './music-naming.js';
+import { AudiobookNamingSection } from './audiobook-naming.js';
 import './media-management.css';
 import { t } from '../../../i18n/index.js';
 
@@ -282,6 +284,7 @@ function NamingSections({
         </div>
       </SettingsSection>
       <MusicNamingSection value={value} set={set} disabled={disabled} />
+      <AudiobookNamingSection value={value} set={set} disabled={disabled} />
       <VersionNamingSection value={value} set={set} disabled={disabled} />
     </>
   );
@@ -319,6 +322,11 @@ export function RootFolderRow({ folder, maxFree, onRemove }: { folder: RootFolde
   );
 }
 
+/** Root folder types on offer: music and audiobook roots while their flags are on. */
+export function rootFolderKinds(features: { music: boolean; audiobooks: boolean }): AnyMediaType[] {
+  return ['series', 'movie', ...(features.music ? (['music'] as const) : []), ...(features.audiobooks ? (['audiobook'] as const) : [])];
+}
+
 function RootFoldersSection() {
   const folders = useRootFolders();
   const add = useAddRootFolder();
@@ -326,8 +334,7 @@ function RootFoldersSection() {
   const [picking, setPicking] = useState(false);
   const [pending, setPending] = useState<{ path: string; mediaType: AnyMediaType } | null>(null);
   const features = useFeatures();
-  // Music roots while the music flag is on; audiobook roots arrive with the audiobooks feature.
-  const kinds: AnyMediaType[] = ['series', 'movie', ...(features.music ? (['music'] as const) : [])];
+  const kinds = rootFolderKinds(features);
   const [removing, setRemoving] = useState<RootFolder | null>(null);
   const kindId = useId();
 
@@ -474,6 +481,7 @@ export function MediaManagementPage() {
       <RootFoldersSection />
       <AudioImportSection />
       <MusicReleasesSection />
+      <AudiobookReleasesSection />
 
       {settings.isPending ? <Skeleton lines={4} /> : null}
       {settingsMissing ? (

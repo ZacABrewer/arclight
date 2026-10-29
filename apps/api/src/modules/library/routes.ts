@@ -57,6 +57,8 @@ export interface LibraryCommandTarget {
   movieIds?: number[];
   /** Music artists (the music module's bulk editor). */
   artistIds?: number[];
+  /** Audiobook authors (refresh through the metadata module's AudiobookRefresher). */
+  authorIds?: number[];
 }
 
 /**

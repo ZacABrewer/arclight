@@ -3,35 +3,43 @@ import { Link, useSearch } from '@tanstack/react-router';
 import type { MetadataSearchResult, MetadataSearchType } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { isMissingTmdbKey } from '../../api/metadata.js';
-import { Button, Chip, EmptyState, ErrorBlock, Input, PageHeader, Poster, Segmented, buttonClass } from '../../arclight/index.js';
+import { Button, Chip, EmptyState, ErrorBlock, Input, PageHeader, Poster, Segmented, Select, buttonClass } from '../../arclight/index.js';
 import { Loading } from '../../components/media/media-kit.js';
 import { useMovieList, useQualityProfiles, useRootFolders, useSeriesList } from '../../hooks/library.js';
 import { useDebouncedValue, useMetadataSearch } from '../../hooks/metadata.js';
 import { useFeatures } from '../../hooks/music.js';
 import { AddArtistResults } from './music/add-artist.js';
+import { AddAuthorResults } from './audiobooks/add-author.js';
+import { AddBookResults, BOOK_SEARCH_FIELDS, bookSearchFieldLabel, type BookSearchField } from './audiobooks/add-book.js';
 import { AddDialog } from './add-dialog.js';
 import { resultMeta } from './add-form.js';
 import './library.css';
 import { t } from '../../i18n/index.js';
 
-/** Add New tabs: the TMDB kinds, plus Music (MusicBrainz) while the music flag is on. */
-export type AddNewType = MetadataSearchType | 'music';
+/** Add New tabs: the TMDB kinds, plus Music (MusicBrainz) and Audiobooks (Audible catalogue) while their flags are on. */
+export type AddNewType = MetadataSearchType | 'music' | 'audiobook';
 
-/** `/library/add?type=music` opens the Music tab (the artist index's "Add artist"). */
-export function parseAddNewSearch(search: Record<string, unknown>): { type?: 'music' } {
-  return search.type === 'music' ? { type: 'music' } : {};
+/** `/library/add?type=music` / `?type=audiobook` opens the Music or Audiobooks tab ("Add artist", "Add author"). */
+export function parseAddNewSearch(search: Record<string, unknown>): { type?: 'music' | 'audiobook' } {
+  return search.type === 'music' || search.type === 'audiobook' ? { type: search.type } : {};
 }
+
+type AudiobookTarget = 'author' | 'book';
 
 export function AddNewPage() {
   const params = useSearch({ strict: false }) as { type?: string };
   const features = useFeatures();
   const [term, setTerm] = useState('');
-  const [picked, setType] = useState<AddNewType>(params.type === 'music' ? 'music' : 'all');
-  // Music falls back to "All" while the flag is off (or still loading).
-  const type: AddNewType = picked === 'music' && !features.music ? 'all' : picked;
+  const [picked, setType] = useState<AddNewType>(params.type === 'music' || params.type === 'audiobook' ? params.type : 'all');
+  const [abTarget, setAbTarget] = useState<AudiobookTarget>('author');
+  const [bookField, setBookField] = useState<BookSearchField>('any');
+  // Music and Audiobooks fall back to "All" while their flag is off (or still loading).
+  const type: AddNewType = (picked === 'music' && !features.music) || (picked === 'audiobook' && !features.audiobooks) ? 'all' : picked;
   const music = type === 'music';
+  const audiobook = type === 'audiobook';
+  const tmdb = !music && !audiobook;
   const debounced = useDebouncedValue(term, 400);
-  const search = useMetadataSearch(music ? '' : debounced, music ? 'all' : type);
+  const search = useMetadataSearch(tmdb ? debounced : '', tmdb ? (type as MetadataSearchType) : 'all');
   const [adding, setAdding] = useState<MetadataSearchResult | null>(null);
 
   const series = useSeriesList();
@@ -50,13 +58,19 @@ export function AddNewPage() {
 
   return (
     <div>
-      <PageHeader index="01" title={t('library.addNew.addNew')} subtitle={music ? t('music.add.subtitle') : t('library.addNew.searchTmdbForASeries')} />
+      <PageHeader
+        index="01"
+        title={t('library.addNew.addNew')}
+        subtitle={music ? t('music.add.subtitle') : audiobook ? t('audiobooks.add.subtitle') : t('library.addNew.searchTmdbForASeries')}
+      />
       <div className="lib-add-search" role="search">
         <Input
           type="search"
           size="lg"
-          aria-label={music ? t('music.add.searchMusicBrainz') : t('library.addNew.searchTmdb')}
-          placeholder={music ? t('music.add.artistPlaceholder') : t('library.addNew.titleEGTheExpanse')}
+          aria-label={music ? t('music.add.searchMusicBrainz') : audiobook ? t('audiobooks.add.searchCatalogue') : t('library.addNew.searchTmdb')}
+          placeholder={
+            music ? t('music.add.artistPlaceholder') : audiobook ? (abTarget === 'author' ? t('audiobooks.add.authorPlaceholder') : t('audiobooks.add.bookPlaceholder')) : t('library.addNew.titleEGTheExpanse')
+          }
           autoFocus
           value={term}
           onChange={(e) => setTerm(e.target.value)}
@@ -72,8 +86,29 @@ export function AddNewPage() {
             { value: 'series', label: t('common.series') },
             { value: 'movie', label: t('common.movies') },
             ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
+            ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
           ]}
         />
+        {audiobook ? (
+          <Segmented
+            aria-label={t('audiobooks.add.searchFor')}
+            variant="soft"
+            value={abTarget}
+            onChange={setAbTarget}
+            options={[
+              { value: 'author' as const, label: t('audiobooks.authors') },
+              { value: 'book' as const, label: t('audiobooks.books') },
+            ]}
+          />
+        ) : null}
+        {audiobook && abTarget === 'book' ? (
+          <Select
+            aria-label={t('audiobooks.add.searchBy')}
+            value={bookField}
+            onChange={(e) => setBookField(e.target.value as BookSearchField)}
+            options={BOOK_SEARCH_FIELDS.map((f) => ({ value: f, label: bookSearchFieldLabel(f) }))}
+          />
+        ) : null}
         <Link to="/activity/manual-import" className={buttonClass({ variant: 'ghost' })}>
           {t('library.addNew.importFolder')}
         </Link>
@@ -81,6 +116,12 @@ export function AddNewPage() {
 
       {music ? (
         <AddArtistResults term={debounced} />
+      ) : audiobook ? (
+        abTarget === 'author' ? (
+          <AddAuthorResults term={debounced} />
+        ) : (
+          <AddBookResults term={debounced} field={bookField} />
+        )
       ) : !active ? (
         <EmptyState title={t('library.addNew.typeATitleToSearch')}>{t('library.addNew.resultsComeFromTmdbTitles')}</EmptyState>
       ) : search.isError ? (

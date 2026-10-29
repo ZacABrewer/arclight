@@ -57,6 +57,38 @@ export interface AudioImportedEvent {
   incomplete: boolean;
 }
 
+/**
+ * One book imported by the audiobook importer (one event per book, however many parts), as
+ * reported to history, notifications and the media-server refresh.
+ */
+export interface AudiobookImportedEvent {
+  mediaType: 'audiobook';
+  authorId: number;
+  bookId: number;
+  /** `[bookId]`, the shape history targets use. */
+  bookIds: number[];
+  /** The book's files in part order. */
+  files: AudioFile[];
+  /** Files that were replaced (already recycled/deleted). */
+  replacedFiles: AudioFile[];
+  /** Best quality among the imported files. */
+  quality: QualityModel;
+  /** The book folder in the library (what media servers rescan). */
+  bookFolder: string;
+  /** The source book folder (or file) in the download. */
+  sourcePath: string;
+  /** Null for manual imports of untracked folders. */
+  downloadId: string | null;
+  sourceTitle: string;
+  isUpgrade: boolean;
+  importMode: 'move' | 'copy' | 'hardlink';
+  manual: boolean;
+  /** Total duration of the imported files (null when a file's duration was unknown). */
+  durationMs: number | null;
+  /** Book-level notes (e.g. the tagged narrator differs from the catalogue). */
+  warnings: string[];
+}
+
 export interface ImportFailedEvent {
   downloadId: string | null;
   sourceTitle: string;
@@ -70,6 +102,7 @@ export interface ImportFailedEvent {
 export interface HistoryHook {
   recordImport(event: ImportedEvent): void | Promise<void>;
   recordAudioImport?(event: AudioImportedEvent): void | Promise<void>;
+  recordAudiobookImport?(event: AudiobookImportedEvent): void | Promise<void>;
   recordImportFailed?(event: ImportFailedEvent): void | Promise<void>;
   recordDownloadFailed?(item: TrackedDownload, message: string): void | Promise<void>;
 }
@@ -77,6 +110,7 @@ export interface HistoryHook {
 export interface NotificationsHook {
   onImported(event: ImportedEvent): void | Promise<void>;
   onAudioImported?(event: AudioImportedEvent): void | Promise<void>;
+  onAudiobookImported?(event: AudiobookImportedEvent): void | Promise<void>;
   onManualInteractionRequired?(item: TrackedDownload, messages: string[]): void | Promise<void>;
   onDownloadFailed?(item: TrackedDownload, message: string): void | Promise<void>;
 }
@@ -120,7 +154,7 @@ export type Probe = (path: string) => Promise<ProbeResult | null>;
 /** Free bytes on the volume holding `path`; null when unknown. */
 export type FreeSpace = (path: string) => Promise<number | null>;
 
-/** Post-import media-server refresh (audio imports; video refresh runs through notifications). */
+/** Post-import media-server refresh (music and audiobook imports; video refresh runs through notifications). */
 export interface MediaServersHook {
   refreshPath(input: { path: string; mediaType: 'music' | 'audiobook'; updateType?: 'Created' | 'Modified' | 'Deleted' }): unknown;
 }
@@ -146,6 +180,11 @@ export interface ImportsDeps {
   musicReleases?: MusicReleasesHook;
   /** Audio tag reader; the combined music-metadata + ffprobe reader when absent. */
   tagReader?: TagReader;
+  /**
+   * Fetches a book's cover image for the `cover.jpg` sidecar (only with `audio.writeAbsSidecars`).
+   * Global fetch when absent. The URL is the book's public catalogue image, never a tracker.
+   */
+  fetchImage?: (url: string) => Promise<Uint8Array | null>;
   /** Profile-migration rule per quality profile (see DecisionContext.mismatchAction). Omitted = `none`. */
   profileMigration?: { mismatchActionFor(qualityProfileId: number): ProfileMismatchAction };
 }

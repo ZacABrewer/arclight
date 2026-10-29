@@ -2,6 +2,7 @@ import { randomBytes } from 'node:crypto';
 import { and, eq, gte, inArray, isNotNull, isNull, lte, or } from 'drizzle-orm';
 import {
   type CalendarAlbumItem,
+  type CalendarBookItem,
   type CalendarEpisodeItem,
   type CalendarItem,
   type CalendarMovieItem,
@@ -13,12 +14,14 @@ import {
   type MediaFile,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { albums, artists, episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
+import { albums, artists, authors, books, episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
+import { booksFromRows } from '../audiobooks/service.js';
 import { albumStatistics } from '../music/statistics.js';
 import { getSection } from '../settings/service.js';
 
 // Calendar over the library tables: episodes by air date, movies by each of their release
-// dates and, while `features.music` is on, albums by release date. Ranges are inclusive at both
+// dates, while `features.music` is on albums by release date and, while `features.audiobooks`
+// is on, books by release date. Ranges are inclusive at both
 // ends. A date-only value (YYYY-MM-DD) counts as midnight UTC of that day.
 
 type SeriesRow = typeof series.$inferSelect;
@@ -78,6 +81,7 @@ export class CalendarService {
       ...(mediaType === 'all' || mediaType === 'series' ? this.episodeItems(range, query) : []),
       ...(mediaType === 'all' || mediaType === 'movie' ? this.movieItems(range, query) : []),
       ...((mediaType === 'all' || mediaType === 'music') && getSection(this.db, 'features').music ? this.albumItems(range, query) : []),
+      ...((mediaType === 'all' || mediaType === 'audiobook') && getSection(this.db, 'features').audiobooks ? this.bookItems(range, query) : []),
     ];
     return items.sort(
       (a, b) => instant(a.date) - instant(b.date) || titleOf(a).localeCompare(titleOf(b)) || orderOf(a) - orderOf(b),
@@ -208,6 +212,51 @@ export class CalendarService {
         tags: artist.tags,
         path: artist.path,
         qualityProfileId: artist.qualityProfileId,
+      },
+    }));
+  }
+
+  // ---- books ---------------------------------------------------------------------------------
+
+  private bookItems(range: CalendarRange, query: Omit<CalendarQuery, 'mediaType'>): CalendarBookItem[] {
+    const lo = isoDay(range.start.getTime() - DAY_MS);
+    const hi = isoDay(range.end.getTime() + DAY_MS) + '~';
+    const rows = this.db
+      .select({ book: books, author: authors })
+      .from(books)
+      .innerJoin(authors, eq(books.authorId, authors.id))
+      .where(
+        and(
+          isNotNull(books.releaseDate),
+          gte(books.releaseDate, lo),
+          lte(books.releaseDate, hi),
+          query.unmonitored ? undefined : and(eq(books.monitored, true), eq(authors.monitored, true)),
+        ),
+      )
+      .all()
+      // Books dated only to the year name no day.
+      .filter((r) => /^\d{4}-\d{2}-\d{2}$/.test(r.book.releaseDate ?? '') && inRange(r.book.releaseDate!, range))
+      .filter((r) => matchesTags(r.author.tags, query.tags));
+    const list = booksFromRows(
+      this.db,
+      rows.map((r) => r.book),
+    );
+    return rows.map(({ author }, i) => ({
+      type: 'book' as const,
+      date: list[i]!.releaseDate!,
+      authorId: author.id,
+      authorName: author.name,
+      book: list[i]!,
+      author: {
+        id: author.id,
+        asin: author.asin,
+        name: author.name,
+        sortName: author.sortName,
+        monitored: author.monitored,
+        images: author.images,
+        tags: author.tags,
+        path: author.path,
+        qualityProfileId: author.qualityProfileId,
       },
     }));
   }

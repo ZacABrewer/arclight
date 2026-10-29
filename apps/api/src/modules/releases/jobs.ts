@@ -9,6 +9,8 @@ export const CUTOFF_UNMET_SEARCH_JOB = 'CutoffUnmetSearch';
 export const MISSING_ALBUM_SEARCH_JOB = 'MissingAlbumSearch';
 /** Music: albums whose lowest track quality is below the artist's profile cutoff. No-op while music is off. */
 export const CUTOFF_UNMET_AUDIO_SEARCH_JOB = 'CutoffUnmetAudioSearch';
+/** Audiobooks: monitored, released books without a file. No-op while audiobooks are off. */
+export const MISSING_BOOK_SEARCH_JOB = 'MissingBookSearch';
 export const DECISION_LOG_CLEANUP_JOB = 'DecisionLogCleanup';
 const DEFAULT_DECISION_LOG_DAYS = 14;
 
@@ -19,6 +21,7 @@ export const SEARCH_JOB_CRONS = {
   [CUTOFF_UNMET_SEARCH_JOB]: '40 3 * * *',
   [MISSING_ALBUM_SEARCH_JOB]: '10 4 * * *',
   [CUTOFF_UNMET_AUDIO_SEARCH_JOB]: '30 4 * * *',
+  [MISSING_BOOK_SEARCH_JOB]: '20 4 * * *',
 } as const;
 
 export function registerReleaseJobs(
@@ -46,6 +49,11 @@ export function registerReleaseJobs(
     name: MISSING_ALBUM_SEARCH_JOB,
     cron: SEARCH_JOB_CRONS[MISSING_ALBUM_SEARCH_JOB],
     handler: async ({ signal }) => service.missingAlbumSearch(signal),
+  });
+  scheduler.register({
+    name: MISSING_BOOK_SEARCH_JOB,
+    cron: SEARCH_JOB_CRONS[MISSING_BOOK_SEARCH_JOB],
+    handler: async ({ signal }) => service.missingBookSearch(signal),
   });
   scheduler.register({
     name: CUTOFF_UNMET_AUDIO_SEARCH_JOB,

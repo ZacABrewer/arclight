@@ -4,6 +4,7 @@ import type { Job, ServerEvent } from '@arclight/shared';
 import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 import { isMusicJob, musicKeys } from './hooks/music-keys.js';
+import { audiobookKeys, isAudiobookJob } from './hooks/audiobook-keys.js';
 import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
 import { searchStatusKeys } from './hooks/search-status.js';
@@ -36,6 +37,12 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
         // RescanArtist, RefreshArtists) is what says albums, tracks or files changed.
         if (isMusicJob(event.job.name)) {
           void qc.invalidateQueries({ queryKey: musicKeys.all });
+          void qc.invalidateQueries({ queryKey: ['wanted'] });
+          void qc.invalidateQueries({ queryKey: ['calendar'] });
+        }
+        // Same for audiobooks: AuthorAdd, RefreshAuthor(s), RescanAuthor, BookAdd.
+        if (isAudiobookJob(event.job.name)) {
+          void qc.invalidateQueries({ queryKey: audiobookKeys.all });
           void qc.invalidateQueries({ queryKey: ['wanted'] });
           void qc.invalidateQueries({ queryKey: ['calendar'] });
         }

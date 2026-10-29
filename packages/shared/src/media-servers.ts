@@ -10,10 +10,27 @@ import { MediaServerKind } from './requests.js';
 // `loginEnabled` (else the first enabled server), and a stored legacy value is moved into the
 // list once at boot.
 
-/** One stored connection. `apiKey` is a Jellyfin/Emby API key or the Plex owner's X-Plex-Token. */
+/**
+ * Kinds a stored connection may have: the sign-in capable video servers (`MediaServerKind`,
+ * shared with the requests module) plus Audiobookshelf, which is a library server only (library
+ * refresh after audiobook imports; never a sign-in provider, so `loginEnabled` and
+ * `createUsersOnLogin` are always false for it).
+ */
+export const MediaServerConnectionKind = z.enum([...MediaServerKind.options, 'audiobookshelf']);
+export type MediaServerConnectionKind = z.infer<typeof MediaServerConnectionKind>;
+
+/** Kinds that can be a sign-in provider (`loginEnabled`). */
+export function isLoginCapableKind(kind: MediaServerConnectionKind): kind is MediaServerKind {
+  return kind !== 'audiobookshelf';
+}
+
+/**
+ * One stored connection. `apiKey` is a Jellyfin/Emby API key, the Plex owner's X-Plex-Token or
+ * an Audiobookshelf API token (sent as `Authorization: Bearer`).
+ */
 export const MediaServerConfig = z.object({
   id: z.string().min(1).max(64),
-  kind: MediaServerKind,
+  kind: MediaServerConnectionKind,
   name: z.string().trim().min(1).max(100),
   /** Base URL including any URL base, e.g. http://jellyfin.lan:8096. */
   url: z.string().trim().min(1).max(2048),
@@ -47,7 +64,7 @@ export type MediaServerResource = MediaServerConfig;
  * the stored key.
  */
 export const MediaServerInput = z.object({
-  kind: MediaServerKind,
+  kind: MediaServerConnectionKind,
   name: z.string().trim().min(1).max(100),
   url: z.string().trim().min(1).max(2048),
   apiKey: z.string().max(512).optional(),

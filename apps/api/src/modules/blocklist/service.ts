@@ -14,7 +14,7 @@ import {
   type ReleaseProtocol,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { artists, movies, series } from '../../db/schema.js';
+import { artists, authors, movies, series } from '../../db/schema.js';
 import { dataValue, parseProtocol, type DownloadFailedEvent, type HistoryTarget } from '../history/service.js';
 import { blocklist, type BlocklistRow, type NewBlocklistRow } from './schema.js';
 
@@ -195,9 +195,24 @@ export class BlocklistService {
     });
   }
 
-  /** Video goes through the validated request; music has its own columns. */
+  /** Audiobook entries: scoped to the author, remembering the books of the blocked grab. */
+  private addAudiobook(scope: { authorId: number; bookIds: readonly number[] }, fields: BlocklistFields): BlocklistRecord {
+    return this.insertRow({
+      mediaType: 'audiobook',
+      seriesId: null,
+      episodeIds: [],
+      movieId: null,
+      authorId: scope.authorId,
+      bookIds: [...new Set(scope.bookIds)],
+      ...this.fieldColumns({ ...fields, languages: fields.languages ?? [], indexerFlags: fields.indexerFlags ?? [] }),
+      releaseType: null,
+    });
+  }
+
+  /** Video goes through the validated request; music and audiobooks have their own columns. */
   private addFor(target: HistoryTarget, fields: BlocklistFields): BlocklistRecord {
     if (target.mediaType === 'music') return this.addMusic(target, fields);
+    if (target.mediaType === 'audiobook') return this.addAudiobook(target, fields);
     return this.add({ ...scopeOf(target), ...fields });
   }
 
@@ -260,7 +275,7 @@ export class BlocklistService {
    */
   addFromTracked(item: TrackedBlocklistItem, message: string, grabbedData: Record<string, string> = {}): BlocklistRecord {
     const target = trackedTarget(item);
-    if (!target) throw new BlocklistError('VALIDATION', `download ${item.downloadId} is not linked to a series, movie or artist`);
+    if (!target) throw new BlocklistError('VALIDATION', `download ${item.downloadId} is not linked to a series, movie, artist or author`);
     const published = timeOf(dataValue(grabbedData, 'publishedDate'));
     return this.addFor(target, {
       sourceTitle: item.title,
@@ -353,6 +368,10 @@ export class BlocklistService {
     return this.byScope({ artistId });
   }
 
+  forAuthor(authorId: number): BlocklistRecord[] {
+    return this.byScope({ authorId });
+  }
+
   list(query: BlocklistListQuery): BlocklistPage {
     const conds: SQL[] = [];
     if (query.mediaType) conds.push(eq(blocklist.mediaType, query.mediaType));
@@ -360,6 +379,7 @@ export class BlocklistService {
     if (query.seriesId && query.seriesId.length > 0) parentConds.push(inArray(blocklist.seriesId, query.seriesId));
     if (query.movieId && query.movieId.length > 0) parentConds.push(inArray(blocklist.movieId, query.movieId));
     if (query.artistId && query.artistId.length > 0) parentConds.push(inArray(blocklist.artistId, query.artistId));
+    if (query.authorId && query.authorId.length > 0) parentConds.push(inArray(blocklist.authorId, query.authorId));
     if (parentConds.length > 0) conds.push(or(...parentConds)!);
     if (query.protocol && query.protocol.length > 0) conds.push(inArray(blocklist.protocol, query.protocol));
     const where = conds.length > 0 ? and(...conds) : undefined;
@@ -378,7 +398,7 @@ export class BlocklistService {
         case 'sourceTitle':
           return sql`lower(${blocklist.sourceTitle})`;
         case 'title':
-          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName})`;
+          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName}, ${authors.sortName})`;
         case 'quality':
           return sql`json_extract(${blocklist.quality}, '$.quality.weight')`;
         case 'date':
@@ -392,6 +412,7 @@ export class BlocklistService {
       .leftJoin(series, eq(blocklist.seriesId, series.id))
       .leftJoin(movies, eq(blocklist.movieId, movies.id))
       .leftJoin(artists, eq(blocklist.artistId, artists.id))
+      .leftJoin(authors, eq(blocklist.authorId, authors.id))
       .where(where)
       .orderBy(dir(sortExpr), dir(blocklist.id))
       .limit(query.pageSize)
@@ -467,6 +488,15 @@ export class BlocklistService {
         ),
       )
       .run().changes;
+    removed += this.db
+      .delete(blocklist)
+      .where(
+        and(
+          eq(blocklist.mediaType, 'audiobook'),
+          or(sql`${blocklist.authorId} is null`, notInArray(blocklist.authorId, this.db.select({ id: authors.id }).from(authors))),
+        ),
+      )
+      .run().changes;
     return removed;
   }
 
@@ -503,6 +533,7 @@ export class BlocklistService {
       source: row.source,
       releaseType: row.releaseType,
       ...(row.artistId !== null ? { artistId: row.artistId, albumIds: row.albumIds ?? [] } : {}),
+      ...(row.authorId !== null ? { authorId: row.authorId, bookIds: row.bookIds ?? [] } : {}),
     };
     return { ...base, customFormats: this.resolveFormats ? this.resolveFormats(base) : [] };
   }
@@ -518,12 +549,8 @@ function scopeCond(scope: BlocklistScope): SQL {
 type BlocklistFields = Omit<BlocklistAddRequestInput, 'mediaType' | 'seriesId' | 'episodeIds' | 'movieId' | 'quality'> & { quality: QualityModel };
 
 function scopeOf(
-  target: Exclude<HistoryTarget, { mediaType: 'music' }>,
+  target: Exclude<HistoryTarget, { mediaType: 'music' | 'audiobook' }>,
 ): { mediaType: 'series'; seriesId: number; episodeIds: number[] } | { mediaType: 'movie'; movieId: number } {
-  // Audiobook blocklisting arrives with Wave 3.
-  if (target.mediaType === 'audiobook') {
-    throw new BlocklistError('VALIDATION', 'blocklisting audiobook releases is not supported yet');
-  }
   return target.mediaType === 'series'
     ? { mediaType: 'series', seriesId: target.seriesId, episodeIds: [...target.episodeIds] }
     : { mediaType: 'movie', movieId: target.movieId };
@@ -532,6 +559,9 @@ function scopeOf(
 function trackedTarget(item: TrackedBlocklistItem): HistoryTarget | null {
   if (item.artistId !== undefined && (item.mediaType === undefined || item.mediaType === 'music')) {
     return { mediaType: 'music', artistId: item.artistId, albumIds: [...(item.albumIds ?? [])] };
+  }
+  if (item.authorId !== undefined && (item.mediaType === undefined || item.mediaType === 'audiobook')) {
+    return { mediaType: 'audiobook', authorId: item.authorId, bookIds: [...(item.bookIds ?? [])] };
   }
   if (item.movieId !== undefined && item.mediaType !== 'series') return { mediaType: 'movie', movieId: item.movieId };
   if (item.seriesId !== undefined) {

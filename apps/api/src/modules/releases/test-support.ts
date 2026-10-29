@@ -1,5 +1,5 @@
 import { buildItems, findItem, itemId } from '@arclight/profiles-engine';
-import { parseMusicRelease, parseRelease } from '@arclight/parser';
+import { parseAudiobookRelease, parseMusicRelease, parseRelease } from '@arclight/parser';
 import { eq } from 'drizzle-orm';
 import pino from 'pino';
 import {
@@ -29,7 +29,17 @@ import {
   type Candidate,
   type DecisionContext,
 } from './engine.js';
-import { matchAlbum, type AlbumTypeFilter, type AudioAlbum, type AudioArtist, type AudioLibrarySnapshot } from './audio-matcher.js';
+import {
+  matchAlbum,
+  matchBook,
+  type AlbumTypeFilter,
+  type AudioAlbum,
+  type AudioArtist,
+  type AudioAuthor,
+  type AudioBook,
+  type AudioLibrarySnapshot,
+  type BookLibrarySnapshot,
+} from './audio-matcher.js';
 import { matchRelease, type LibrarySnapshot } from './matcher.js';
 import * as tables from './schema.js';
 import { ReleasesService, type DownloadClientGrab, type DownloadTracking, type TrackedView } from './service.js';
@@ -619,4 +629,204 @@ export function musicFixtures(db: Awaited<ReturnType<typeof createTestDb>>, prof
     });
   }
   return { profile, typeProfile, addArtist, addAlbum, addFiles };
+}
+
+// ---- audiobooks ---------------------------------------------------------------------
+
+export const AUDIOBOOK_ALLOWED: QualityName[] = ['AB-MP3', 'AB-MP3-High', 'AB-AAC', 'AB-Lossless'];
+
+export function makeAudiobookProfile(
+  allowed: QualityName[] = AUDIOBOOK_ALLOWED,
+  overrides: Partial<QualityProfile> = {},
+  cutoffName: QualityName = 'AB-AAC',
+): QualityProfile {
+  const items = buildItems(allowed, 'audiobook');
+  const draft: QualityProfile = {
+    id: 1,
+    name: 'Standard',
+    upgradeAllowed: true,
+    cutoff: 0,
+    items,
+    minFormatScore: 0,
+    cutoffFormatScore: 0,
+    minUpgradeFormatScore: 1,
+    formatItems: [],
+    languages: [],
+    ...overrides,
+  };
+  const cutoffItem = findItem(draft, QUALITIES[cutoffName].id);
+  return { ...draft, cutoff: overrides.cutoff ?? (cutoffItem ? itemId(cutoffItem) : 0) };
+}
+
+export function makeAuthor(overrides: Partial<AudioAuthor> = {}): AudioAuthor {
+  const id = overrides.id ?? nextId++;
+  const name = overrides.name ?? 'Brandon Sanderson';
+  const words = name.split(' ');
+  return {
+    id,
+    name,
+    sortName: words.length > 1 ? `${words[words.length - 1]}, ${words.slice(0, -1).join(' ')}` : name,
+    aliases: [],
+    monitored: true,
+    qualityProfileId: 1,
+    tags: [],
+    path: `/audiobooks/author-${id}`,
+    languages: [],
+    ...overrides,
+  };
+}
+
+export function makeBook(
+  authorId: number,
+  title: string,
+  overrides: Partial<AudioBook> & { seriesName?: string; position?: string } = {},
+): AudioBook {
+  const { seriesName, position, ...rest } = overrides;
+  const id = rest.id ?? nextId++;
+  return {
+    id,
+    authorId,
+    asin: null,
+    title,
+    subtitle: null,
+    language: null,
+    releaseDate: '2015-06-01',
+    year: 2015,
+    runtimeMinutes: 600,
+    formatType: 'unabridged',
+    monitored: true,
+    hasFile: false,
+    credits: [],
+    series: seriesName
+      ? [{ seriesId: 1, name: seriesName, position: position ?? null, positionSort: position ? Number(position) : null, isPrimary: true }]
+      : [],
+    ...rest,
+  };
+}
+
+/** A book snapshot; `links` adds co-authored books (author id → book ids it is credited on). */
+export function bookSnapshot(authorList: AudioAuthor[], bookList: AudioBook[], links: Record<number, number[]> = {}): BookLibrarySnapshot {
+  return {
+    authors: () => authorList,
+    books: (id) => bookList.filter((b) => b.authorId === id || (links[id] ?? []).includes(b.id)),
+  };
+}
+
+/** Parse + match an audiobook release against a book snapshot and build an engine candidate. */
+export function makeBookCandidate(
+  release: ReleaseResource,
+  lib: BookLibrarySnapshot,
+  profile: QualityProfile = makeAudiobookProfile(),
+  now: Date = NOW,
+): Candidate {
+  const parsed = parseAudiobookRelease(release.title);
+  const match = matchBook(parsed.audiobook, lib, { now });
+  if (match.status !== 'mapped') throw new Error(`test release did not map: ${release.title} (${match.reason})`);
+  const q = qualityModelOf(parsed.audio);
+  const f = evaluateFormats(profile, [], { title: release.title, quality: q, mediaType: 'audiobook', releaseKind: releaseKindOf(match) });
+  return {
+    release,
+    parsed: {
+      releaseTitle: parsed.releaseTitle,
+      quality: { quality: parsed.audio.quality, revision: parsed.audio.revision, detectionSource: parsed.audio.detectionSource },
+      languages: [],
+      releaseGroup: parsed.releaseGroup,
+      releaseHash: parsed.releaseHash,
+      series: null,
+      movie: null,
+    },
+    match,
+    ...(parsed.audiobook ? { audiobook: parsed.audiobook } : {}),
+    quality: q,
+    languages: parsed.audiobook?.language ? [parsed.audiobook.language] : [],
+    customFormats: f.formats,
+    formatScore: f.score,
+    releaseGroup: parsed.releaseGroup ?? undefined,
+    ageMinutes: (now.getTime() - Date.parse(release.publishDate)) / MINUTE,
+  };
+}
+
+/** Audiobook rows for a DB harness: turn audiobooks on, add authors / books / series entries / files. */
+export function bookFixtures(db: Awaited<ReturnType<typeof createTestDb>>, profiles: ProfilesService) {
+  setSection(db, 'features', { music: false, audiobooks: true });
+  const { id: _id, ...input } = makeAudiobookProfile();
+  const profile = profiles.createQualityProfile(QualityProfileInput.parse({ ...input, name: 'Test Audiobooks', mediaDomain: 'audiobook' }));
+  function addAuthor(values: Partial<typeof schema.authors.$inferInsert> = {}) {
+    const name = values.name ?? 'Brandon Sanderson';
+    return db
+      .insert(schema.authors)
+      .values({
+        name,
+        sortName: name,
+        cleanName: name.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        images: [],
+        genres: [],
+        aliases: [],
+        path: `/audiobooks/${name}-${Math.random()}`,
+        rootFolderPath: '/audiobooks',
+        qualityProfileId: profile.id,
+        languages: [],
+        tags: [],
+        added: NOW.toISOString(),
+        ...values,
+      })
+      .returning()
+      .get();
+  }
+  function addBook(authorId: number, title: string, values: Partial<typeof schema.books.$inferInsert> = {}) {
+    return db
+      .insert(schema.books)
+      .values({
+        authorId,
+        title,
+        sortTitle: title.toLowerCase(),
+        cleanTitle: title.toLowerCase().replace(/[^a-z0-9]/g, ''),
+        authorCredits: [],
+        narrators: [],
+        releaseDate: '2015-06-01',
+        year: 2015,
+        runtimeMinutes: 600,
+        formatType: 'unabridged',
+        genres: [],
+        images: [],
+        chapters: [],
+        ratings: {},
+        added: NOW.toISOString(),
+        ...values,
+      })
+      .returning()
+      .get();
+  }
+  function addSeries(name: string, entries: Array<{ bookId: number; position: string }>) {
+    const series = db
+      .insert(schema.bookSeries)
+      .values({ name, cleanName: name.toLowerCase().replace(/[^a-z0-9]/g, '') })
+      .returning()
+      .get();
+    for (const e of entries) {
+      db.insert(schema.bookSeriesEntries)
+        .values({ seriesId: series.id, bookId: e.bookId, position: e.position, positionSort: Number(e.position), isPrimary: true })
+        .run();
+    }
+    return series;
+  }
+  function addFile(book: { id: number; authorId: number }, qualityName: QualityName) {
+    const file = db
+      .insert(schema.audioFiles)
+      .values({
+        mediaType: 'audiobook',
+        authorId: book.authorId,
+        bookId: book.id,
+        path: `/audiobooks/${book.id}/${Math.random()}.m4b`,
+        relativePath: `${book.id}/book.m4b`,
+        sizeBytes: 300 * 1024 * 1024,
+        dateAdded: NOW.toISOString(),
+        quality: quality(qualityName),
+      })
+      .returning()
+      .get();
+    db.update(schema.books).set({ hasFile: true }).where(eq(schema.books.id, book.id)).run();
+    return file;
+  }
+  return { profile, addAuthor, addBook, addSeries, addFile };
 }

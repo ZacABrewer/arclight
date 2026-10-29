@@ -55,6 +55,11 @@ export const ImportRejectionReason = z.enum([
   'cueImage',
   /** Files of more than one edition of the album in one folder. */
   'mixedReleases',
+  // Audiobook import (docs/design/music-audiobooks.md 9.3).
+  'unknownAuthor',
+  'unknownBook',
+  /** The files' total duration is outside the tolerance around the book's runtime. */
+  'durationMismatch',
 ]);
 export type ImportRejectionReason = z.infer<typeof ImportRejectionReason>;
 
@@ -162,15 +167,21 @@ const flag = z
  */
 export const AudioManualImportQuery = z
   .object({
+    /** `music` (when omitted) proposes tracks; `audiobook` proposes books and part order. */
+    mediaType: z.enum(['music', 'audiobook']).optional(),
     folder: z.string().min(1).optional(),
     downloadId: z.string().min(1).optional(),
     artistId: z.coerce.number().int().optional(),
     /** Match every group against this album only. */
     albumId: z.coerce.number().int().optional(),
+    /** Audiobooks: pin the author (like `artistId`). */
+    authorId: z.coerce.number().int().optional(),
+    /** Audiobooks: match every group against this book only. */
+    bookId: z.coerce.number().int().optional(),
     filterExistingFiles: flag.default(true),
   })
-  .refine((q) => q.folder !== undefined || q.downloadId !== undefined || q.artistId !== undefined, {
-    message: 'folder, downloadId or artistId is required',
+  .refine((q) => q.folder !== undefined || q.downloadId !== undefined || q.artistId !== undefined || q.authorId !== undefined, {
+    message: 'folder, downloadId, artistId or authorId is required',
   });
 export type AudioManualImportQuery = z.infer<typeof AudioManualImportQuery>;
 export type AudioManualImportQueryInput = z.input<typeof AudioManualImportQuery>;
@@ -225,6 +236,61 @@ export const AudioManualImportItem = z.object({
 });
 export type AudioManualImportItem = z.infer<typeof AudioManualImportItem>;
 
+/** What an audiobook file's own tags say. */
+export const AudiobookManualImportFileTags = z.object({
+  title: z.string().nullable(),
+  /** Artist / album artist tag (usually the author). */
+  author: z.string().nullable(),
+  album: z.string().nullable(),
+  narrator: z.string().nullable(),
+  series: z.string().nullable(),
+  seriesPart: z.string().nullable(),
+  asin: z.string().nullable(),
+  isbn: z.string().nullable(),
+  trackNo: z.number().int().nullable(),
+  discNo: z.number().int().nullable(),
+  durationMs: z.number().int().nullable(),
+  chapterCount: z.number().int().nullable(),
+  codec: z.string().nullable(),
+  bitrateKbps: z.number().int().nullable(),
+});
+export type AudiobookManualImportFileTags = z.infer<typeof AudiobookManualImportFileTags>;
+
+/**
+ * One audiobook file with the book and part Arclight proposes (GET /manualimport/audio with
+ * `mediaType=audiobook`). Files of one book share `groupKey`; `partNumber` is the proposed
+ * order (disc tag, then track tag, then natural file-name sort); `confidence` is the group's
+ * book match (0-1). `groupDurationMs` sums the group, `runtimeMs` is the book's catalogue runtime.
+ */
+export const AudiobookManualImportItem = z.object({
+  path: z.string(),
+  relativePath: z.string(),
+  name: z.string(),
+  sizeBytes: z.number().int(),
+  quality: QualityModel,
+  mediaType: z.literal('audiobook'),
+  groupKey: z.string(),
+  groupFolder: z.string(),
+  authorId: z.number().int().optional(),
+  bookId: z.number().int().optional(),
+  bookTitle: z.string().optional(),
+  partNumber: z.number().int().min(1),
+  partCount: z.number().int().min(1),
+  confidence: z.number().min(0).max(1),
+  groupDurationMs: z.number().int().nullable(),
+  runtimeMs: z.number().int().nullable(),
+  tags: AudiobookManualImportFileTags,
+  rejections: z.array(ImportRejection),
+  /** Accepted with a note (e.g. a narrator mismatch). */
+  warnings: z.array(z.string()),
+  downloadId: z.string().optional(),
+});
+export type AudiobookManualImportItem = z.infer<typeof AudiobookManualImportItem>;
+
+/** GET /manualimport/audio answers music or audiobook items, as `mediaType` asked. */
+export const AnyAudioManualImportItem = z.union([AudioManualImportItem, AudiobookManualImportItem]);
+export type AnyAudioManualImportItem = z.infer<typeof AnyAudioManualImportItem>;
+
 /** One audio file to import with the user's mapping. Specs are bypassed, like video manual import. */
 export const AudioManualImportRequestItem = z.object({
   path: z.string().min(1),
@@ -240,15 +306,42 @@ export const AudioManualImportRequestItem = z.object({
 });
 export type AudioManualImportRequestItem = z.infer<typeof AudioManualImportRequestItem>;
 
+/**
+ * One audiobook file to import into a book. Files with the same book (and download) import
+ * together as one book; `partNumber` orders them (omitted: the proposed order). Specs are
+ * bypassed, like video manual import.
+ */
+export const AudiobookManualImportRequestItem = z.object({
+  path: z.string().min(1),
+  mediaType: z.literal('audiobook'),
+  authorId: z.number().int(),
+  bookId: z.number().int(),
+  partNumber: z.number().int().min(1).optional(),
+  quality: QualityModel.optional(),
+  downloadId: z.string().optional(),
+});
+export type AudiobookManualImportRequestItem = z.infer<typeof AudiobookManualImportRequestItem>;
+
 export const AudioManualImportRequest = z.object({
-  items: z.array(AudioManualImportRequestItem).min(1),
+  items: z.array(z.union([AudioManualImportRequestItem, AudiobookManualImportRequestItem])).min(1),
   importMode: ImportMode.default('auto'),
 });
 export type AudioManualImportRequest = z.infer<typeof AudioManualImportRequest>;
 export type AudioManualImportRequestInput = z.input<typeof AudioManualImportRequest>;
 
 export const AudioManualImportResult = z.object({
-  imported: z.array(z.object({ path: z.string(), audioFileId: z.number().int(), trackId: z.number().int(), destination: z.string() })),
+  imported: z.array(
+    z.object({
+      path: z.string(),
+      audioFileId: z.number().int(),
+      /** Music: the track the file was linked to. */
+      trackId: z.number().int().optional(),
+      /** Audiobooks: the book and the file's part number. */
+      bookId: z.number().int().optional(),
+      partNumber: z.number().int().optional(),
+      destination: z.string(),
+    }),
+  ),
   failed: z.array(z.object({ path: z.string(), error: z.string() })),
 });
 export type AudioManualImportResult = z.infer<typeof AudioManualImportResult>;

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { eq } from 'drizzle-orm';
 import { normaliseBaseUrl } from '@arclight/media-servers';
-import { MediaServerSettings, type MediaServerConfig, type MediaServerKind } from '@arclight/shared';
+import { isLoginCapableKind, MediaServerSettings, type MediaServerConfig, type MediaServerKind } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { settings } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
@@ -19,12 +19,18 @@ function list(db: Db): MediaServerConfig[] {
   return getSection(db, 'mediaServers').servers;
 }
 
-/** The list entry the legacy view points at, if any. */
-export function primaryMediaServer(servers: readonly MediaServerConfig[]): MediaServerConfig | undefined {
-  return servers.find((s) => s.enabled && s.loginEnabled) ?? servers.find((s) => s.enabled);
+type LoginServerConfig = MediaServerConfig & { kind: MediaServerKind };
+
+/**
+ * The list entry the legacy view points at, if any. Audiobookshelf connections are never it:
+ * the view is the sign-in server, and Audiobookshelf is not a sign-in provider.
+ */
+export function primaryMediaServer(servers: readonly MediaServerConfig[]): LoginServerConfig | undefined {
+  const candidates = servers.filter((s): s is LoginServerConfig => isLoginCapableKind(s.kind));
+  return candidates.find((s) => s.enabled && s.loginEnabled) ?? candidates.find((s) => s.enabled);
 }
 
-function toView(config: MediaServerConfig | undefined): MediaServerSettings {
+function toView(config: LoginServerConfig | undefined): MediaServerSettings {
   if (!config) return MediaServerSettings.parse({ loginEnabled: false, createUsersOnLogin: false });
   return {
     kind: config.kind,

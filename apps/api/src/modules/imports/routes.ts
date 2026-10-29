@@ -1,5 +1,5 @@
 import {
-  AudioManualImportItem,
+  AnyAudioManualImportItem,
   AudioManualImportQuery,
   AudioManualImportRequest,
   AudioManualImportResult,
@@ -56,10 +56,11 @@ export function importsRoutes(service: ImportsService): FastifyPluginAsync<Recor
       async (req) => service.executeManualImport(req.body),
     );
 
-    // Audio mode (music): same flow, per-file items carry artist/album/edition/track ids.
+    // Audio mode: same flow. Music items carry artist/album/edition/track ids; with
+    // `mediaType=audiobook` items carry author/book ids and the proposed part order.
     app.get(
       '/manualimport/audio',
-      { schema: { querystring: AudioManualImportQuery, response: { 200: z.array(AudioManualImportItem), ...errors } } },
+      { schema: { querystring: AudioManualImportQuery, response: { 200: z.array(AnyAudioManualImportItem), ...errors } } },
       async (req) => service.listAudioManualImport(req.query),
     );
     app.post(

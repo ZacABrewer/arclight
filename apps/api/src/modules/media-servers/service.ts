@@ -11,9 +11,11 @@ import {
   type MediaServerClientOptions,
 } from '@arclight/media-servers';
 import {
+  isLoginCapableKind,
   MediaServerInput,
   MediaServerTestRequest,
   SECRET_MASK,
+  type MediaServerKind,
   type MediaServerAccountResource,
   type MediaServerConfig,
   type MediaServerInputRaw,
@@ -24,12 +26,15 @@ import {
 import type { Db } from '../../db/index.js';
 import { getSection, setSection } from '../settings/service.js';
 
-// The list of Jellyfin/Emby/Plex connections (settings section `mediaServers`) and the one
-// place that turns them into read clients. Other modules ask for clients by purpose:
+// The list of Jellyfin/Emby/Plex/Audiobookshelf connections (settings section `mediaServers`)
+// and the one place that turns them into read clients. Other modules ask for clients by purpose:
 //
 //   service.clients('retention')   // enabled servers flagged usedForRetention
 //
 // so availability (requests), retention sweeps and post-import refreshes share one list.
+// Audiobookshelf is a library server only: it takes part in post-import refreshes, never in
+// sign-in (its login flags are forced off) and not yet in the video availability/retention
+// purposes, whose callers speak the Jellyfin/Emby/Plex kinds.
 
 export type MediaServerPurpose = 'availability' | 'retention' | 'refresh';
 
@@ -64,7 +69,7 @@ export interface MediaServersServiceOptions {
 
 /** What changed on disk, for `refreshPath`. */
 export interface RefreshPathInput {
-  /** Absolute folder (or file) that changed: an album/artist folder after a music import. */
+  /** Absolute folder (or file) that changed: an album folder after a music import, a book folder after an audiobook import. */
   path: string;
   /** Library kind the path belongs to; decides which libraries may contain it. */
   mediaType: MediaKind;
@@ -80,9 +85,17 @@ export function libraryKindsFor(mediaType: MediaKind): readonly MediaKind[] {
   return mediaType === 'audiobook' ? ['audiobook', 'music'] : [mediaType];
 }
 
-export interface ConfiguredClient {
-  config: MediaServerConfig;
+export interface ConfiguredClient<C extends MediaServerConfig = MediaServerConfig> {
+  config: C;
   client: MediaServerClient;
+}
+
+/** A stored connection to a Jellyfin, Emby or Plex server (not Audiobookshelf). */
+export type VideoServerConfig = MediaServerConfig & { kind: MediaServerKind };
+
+/** Login flags only apply to sign-in capable kinds; Audiobookshelf never signs users in. */
+function withLoginRules<T extends Pick<MediaServerConfig, 'kind' | 'loginEnabled' | 'createUsersOnLogin'>>(config: T): T {
+  return isLoginCapableKind(config.kind) ? config : { ...config, loginEnabled: false, createUsersOnLogin: false };
 }
 
 export class MediaServersService {
@@ -122,7 +135,7 @@ export class MediaServersService {
     assertUniqueName(servers, input.name, null);
     if (!input.apiKey || input.apiKey === SECRET_MASK) throw new MediaServersError('VALIDATION', 'apiKey is required');
     const url = cleanUrl(input.url);
-    const config: MediaServerConfig = { ...input, id: this.newId(), url, apiKey: input.apiKey.trim() };
+    const config: MediaServerConfig = withLoginRules({ ...input, id: this.newId(), url, apiKey: input.apiKey.trim() });
     this.save([...servers, config]);
     return mask(config);
   }
@@ -133,7 +146,7 @@ export class MediaServersService {
     const current = servers.find((s) => s.id === id);
     if (!current) throw notFound(id);
     assertUniqueName(servers, input.name, id);
-    const next: MediaServerConfig = { ...input, id, url: cleanUrl(input.url), apiKey: mergeKey(current, input) };
+    const next: MediaServerConfig = withLoginRules({ ...input, id, url: cleanUrl(input.url), apiKey: mergeKey(current, input) });
     if (!next.apiKey) throw new MediaServersError('VALIDATION', 'apiKey is required');
     this.save(servers.map((s) => (s.id === id ? next : s)));
     return mask(next);
@@ -151,11 +164,16 @@ export class MediaServersService {
     return this.factory({ kind: config.kind, url: config.url, apiKey: config.apiKey });
   }
 
-  /** Enabled servers flagged for `purpose`, each with a fresh client (fresh caches). */
+  /**
+   * Enabled servers flagged for `purpose`, each with a fresh client (fresh caches). Availability
+   * and retention are video purposes: Audiobookshelf servers are left out of them.
+   */
+  clients(purpose: 'availability' | 'retention'): ConfiguredClient<VideoServerConfig>[];
+  clients(purpose: MediaServerPurpose): ConfiguredClient[];
   clients(purpose: MediaServerPurpose): ConfiguredClient[] {
     const flag = PURPOSE_FLAG[purpose];
     return this.stored()
-      .filter((s) => s.enabled && s[flag])
+      .filter((s) => s.enabled && s[flag] && (purpose === 'refresh' || isLoginCapableKind(s.kind)))
       .flatMap((config) => {
         try {
           return [{ config, client: this.clientFor(config) }];

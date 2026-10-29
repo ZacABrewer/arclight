@@ -116,8 +116,12 @@ export interface ReleaseSettings {
   preferIndexerFlags: boolean;
   /** Music: automatic grabs of discography / multi-album packs (interactive grabs always may). */
   allowDiscographyPacks: boolean;
-  /** Music: a pack must fill or upgrade at least this many wanted albums to be grabbed automatically. */
+  /** Music: a pack must fill or upgrade at least this many wanted albums to be grabbed automatically. Audiobooks: the same for books. */
   minPackWanted: number;
+  /** Audiobooks: automatic grabs of series packs ("Books 1-5", "Complete Series"; interactive grabs always may). */
+  allowBookPacks: boolean;
+  /** Audiobooks: accept abridged releases of books the catalogue lists as unabridged. */
+  allowAbridged: boolean;
 }
 
 export interface ReleaseSettingsReader {
@@ -185,6 +189,8 @@ export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {
   preferIndexerFlags: false,
   allowDiscographyPacks: false,
   minPackWanted: 2,
+  allowBookPacks: false,
+  allowAbridged: false,
 };
 
 export const noopHistory: HistoryWriter = { recordGrab: () => undefined };

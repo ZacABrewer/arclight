@@ -21,6 +21,7 @@ import { settingsModule } from './modules/settings/index.js';
 import { metadataModule, metadata } from './modules/metadata/index.js';
 import { libraryModuleWith, type MetadataLookup } from './modules/library/index.js';
 import { musicModule } from './modules/music/index.js';
+import { audiobooksModule } from './modules/audiobooks/index.js';
 import { indexersModule } from './modules/indexers/index.js';
 import { solverModule } from './modules/solver/index.js';
 import { downloadClientsModule } from './modules/download-clients/index.js';
@@ -132,6 +133,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     libraryModuleWith({ metadata: opts.metadata ?? metadata, commands: wiring.library }),
     // Artists, albums, tracks and audio files (features.music); refresh jobs live in metadata.
     musicModule,
+    // Authors, books, series (features.audiobooks), plus the shared audio routes (POST /command, GET /audiofile).
+    audiobooksModule,
     profilesModule,
     guidesModule,
     // Theme packs: catalogue, pack files and the sync from the repository.

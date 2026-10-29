@@ -151,6 +151,9 @@ export interface TrackingInfo {
   /** Music grabs: the artist and the albums the release covers. */
   artistId?: number;
   albumIds?: number[];
+  /** Audiobook grabs: the author and the books the release covers. */
+  authorId?: number;
+  bookIds?: number[];
   /** Opaque release snapshot, handed back to blocklist hooks. */
   grabbedRelease?: unknown;
   /** Tags of the series/movie; used by `pickClient` when no client is given. */
@@ -2373,6 +2376,8 @@ function trackingColumns(t: TrackingInfo) {
     movieId: t.movieId ?? null,
     artistId: t.artistId ?? null,
     albumIds: t.albumIds ?? null,
+    authorId: t.authorId ?? null,
+    bookIds: t.bookIds ?? null,
     grabbedRelease: t.grabbedRelease ?? null,
   };
 }
@@ -2385,15 +2390,30 @@ function trackingFromRow(row: TrackedDownloadRow) {
     ...(row.movieId !== null ? { movieId: row.movieId } : {}),
     ...(row.artistId !== null ? { artistId: row.artistId } : {}),
     ...(row.albumIds !== null ? { albumIds: row.albumIds } : {}),
+    ...(row.authorId !== null ? { authorId: row.authorId } : {}),
+    ...(row.bookIds !== null ? { bookIds: row.bookIds } : {}),
   };
 }
 
 function isGrabbed(row: TrackedDownloadRow): boolean {
-  return row.grabbedRelease !== null || row.mediaType !== null || row.seriesId !== null || row.movieId !== null || row.artistId !== null;
+  return (
+    row.grabbedRelease !== null ||
+    row.mediaType !== null ||
+    row.seriesId !== null ||
+    row.movieId !== null ||
+    row.artistId !== null ||
+    row.authorId !== null
+  );
 }
 
 function isUnknownMedia(item: QueueItem): boolean {
-  return item.mediaType === undefined && item.seriesId === undefined && item.movieId === undefined && item.artistId === undefined;
+  return (
+    item.mediaType === undefined &&
+    item.seriesId === undefined &&
+    item.movieId === undefined &&
+    item.artistId === undefined &&
+    item.authorId === undefined
+  );
 }
 
 function stripTracked(item: TrackedDownload): QueueItem {

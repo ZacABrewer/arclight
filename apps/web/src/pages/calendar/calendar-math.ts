@@ -3,6 +3,7 @@ import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../component
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
 import { albumCover, albumState, albumTypeLabel, artistImage } from '../library/music/music-model.js';
+import { authorImage, bookCover, bookState, positionLabel, primarySeries } from '../library/audiobooks/audiobook-model.js';
 import { t, intlLocale } from '../../i18n/index.js';
 
 // Pure calendar math: month grids, request ranges, grouping items by local day.
@@ -98,7 +99,7 @@ export interface CalendarEntry {
   sortTime: number;
   /** Local time label when the item has a time component. */
   time: string | null;
-  kind: 'episode' | 'movie' | 'album';
+  kind: 'episode' | 'movie' | 'album' | 'book';
   title: string;
   detail: string;
   status: EpisodeStatus;
@@ -106,14 +107,14 @@ export interface CalendarEntry {
   monitored: boolean;
   /** Local hour as a fraction (21.5 = 21:30); null for date-only items. */
   hour: number | null;
-  /** "S02E03" for episodes, the release label for movies, the album type for albums. */
+  /** "S02E03" for episodes, the release label for movies, the album type for albums, the series position for books. */
   code: string;
   /** Episode title (episodes), album title (albums). */
   subtitle: string | null;
   posterUrl: string | undefined;
-  /** Automatic search body (POST /command/search) for videos; null for albums, which search through AlbumSearch. */
+  /** Automatic search body (POST /command/search) for videos; null for albums and books (AlbumSearch / BookSearch). */
   search: { episodeIds: number[] } | { movieId: number } | null;
-  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id'; params: { id: string } };
+  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id'; params: { id: string } };
 }
 
 const RELEASE_LABELS = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('calendar.math.digitalRelease'); }, get physical() { return t('calendar.math.physicalRelease'); } } as const;
@@ -174,8 +175,30 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
       link: { to: '/library/music/album/$id', params: { id: String(album.id) } },
     };
   }
-  // Audiobook release dates: the API does not send them yet; the Audiobooks web work renders them.
-  if (item.type === 'book') return null;
+  if (item.type === 'book') {
+    const book = item.book;
+    const status: EpisodeStatus = bookState(book, now);
+    const series = primarySeries(book);
+    const position = series ? positionLabel(series.position) : null;
+    return {
+      key: `b${book.id}`,
+      day,
+      sortTime,
+      time,
+      kind: 'book',
+      title: item.authorName,
+      detail: book.title,
+      status,
+      tone: barTone(status),
+      monitored: book.monitored && item.author.monitored,
+      hour,
+      code: position ? `${series!.name} · ${position}` : (series?.name ?? t('audiobooks.audiobook')),
+      subtitle: book.title,
+      posterUrl: bookCover(book) ?? authorImage(item.author),
+      search: null,
+      link: { to: '/library/audiobooks/book/$id', params: { id: String(book.id) } },
+    };
+  }
   const m = item.movie;
   const released = parsed.getTime() <= now.getTime();
   const status: EpisodeStatus = m.hasFile ? 'downloaded' : !released ? 'unaired' : m.monitored ? 'wanted' : 'missing';

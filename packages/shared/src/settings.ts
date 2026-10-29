@@ -139,6 +139,10 @@ export const ReleasesSettings = z.object({
   allowDiscographyPacks: z.boolean().default(false),
   /** Music: a pack is grabbed automatically only when it fills or upgrades at least this many wanted albums. */
   minPackWanted: z.number().int().min(1).max(100).default(2),
+  /** Audiobooks: automatic searches and RSS may grab series packs ("Books 1-5"; interactive grabs always may). Uses `minPackWanted`. */
+  allowBookPacks: z.boolean().default(false),
+  /** Audiobooks: accept abridged releases of books the catalogue lists as unabridged. */
+  allowAbridged: z.boolean().default(false),
 });
 export type ReleasesSettings = z.infer<typeof ReleasesSettings>;
 export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;

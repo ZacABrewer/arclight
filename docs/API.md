@@ -307,13 +307,13 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | GET | `/album/:id` | `AlbumDetails`: the album with `artist` (`ArtistSummary`), every edition in `releases`, the selected edition's `tracks` and the album's `files` (`AudioFile`) |
 | PUT | `/album/monitor` | `BulkAlbumMonitorRequest` (`albumIds`, `monitored`) → `Album[]` |
 | PUT | `/album/:id` | `UpdateAlbumRequest` → `AlbumDetails`: `monitored`, `anyReleaseOk`, `selectedReleaseId` (an `album_releases.id` of this album; anything else is 400). Switching the edition fetches its tracks from MusicBrainz, replaces the stored tracks and re-links the album's files by MusicBrainz recording id, then by disc/track position |
-| GET | `/audiofile` | `AudioFileListQuery` (`artistId` and/or `albumId`) → `AudioFile[]` |
+| GET | `/audiofile` | `artistId` and/or `albumId` → the music `AudioFile[]`. Shared with audiobooks (`authorId` / `bookId`, see "audiobooks"); one kind per request, gated by that kind's flag |
 | GET | `/albumtypeprofile` | `AlbumTypeProfile[]` ("Studio albums", the default, and "Everything" on a fresh install) |
 | GET | `/albumtypeprofile/:id` | One profile |
 | POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
 | PUT | `/albumtypeprofile/:id` | `AlbumTypeProfileInput` → `AlbumTypeProfile`. The default cannot be un-defaulted directly; mark another one instead |
 | DELETE | `/albumtypeprofile/:id` | **204**; 400 for the default profile, 409 while an artist uses it |
-| POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands search through the release pipeline (see "releases: music"): `ArtistSearch` looks for each artist's wanted albums, `AlbumSearch` for each album; the job message is `searched N artists: R releases, G grabbed`. Unknown ids 404 (no job starts), unknown names 400 |
+| POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands search through the release pipeline (see "releases: music"): `ArtistSearch` looks for each artist's wanted albums, `AlbumSearch` for each album; the job message is `searched N artists: R releases, G grabbed`. Unknown ids 404 (no job starts), unknown names 400. The route is shared with the audiobook commands (see "audiobooks"); a music command answers 404 `MUSIC_DISABLED` while music is off |
 | GET | `/wanted/missing/albums` | `WantedAlbumsQuery` (`page`, `pageSize`) → `WantedAlbumsPage`: monitored albums of monitored artists, released (a partial date counts from the start of its year or month), with fewer track files than tracks (or no tracks loaded and nothing on disk). Newest first. Read-only in Wave 1 |
 | GET | `/wanted/cutoff/albums` | `WantedAlbumsPage`: monitored albums with files where any track file's quality is below the artist's profile cutoff (custom-format scores for audio arrive in Wave 2) |
 
@@ -362,6 +362,86 @@ Wikidata image.
 `library` WebSocket events are published for music yet; the `job` events of these jobs say when
 to refetch.
 
+## audiobooks
+
+Contract: `packages/shared/src/audiobooks.ts`. Authors, their books (one audiobook edition each,
+keyed by ASIN when known), series and series entries, co-author links (`book_authors`) and the
+audio files on disk (`audio_files`, `mediaType: "audiobook"`). Metadata comes from the Audible
+catalogue (search, bibliographies), Audnexus (canonical author, book and chapter records by
+ASIN) and OpenLibrary (fallback, ISBNs), configured in the `audiobookMetadata` settings section.
+Every route answers **404** `{code: "AUDIOBOOKS_DISABLED"}` while `features.audiobooks` is off,
+and the audiobook jobs do nothing. Reads open to app-area users like the music reads (`library`:
+author, book, series, audio file; `wanted`: the wanted lists); everything else is admin-only.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/author` | `AuthorListQuery` → `Author[]` with `statistics` (`AuthorStatistics`). Filters `monitored`, `qualityProfileId`, `rootFolderPath`, `tag`, `asin`, `olAuthorId`, `search` (name and aliases); `sortKey` (`sortName` default, `added`, `qualityProfileId`, `path`, `sizeOnDisk`, `bookCount`), `sortOrder`; `includeStatistics=false` skips the counts |
+| GET | `/author/lookup` | `?term=&region=` → `AuthorSearchResult[]`: Audnexus author search (OpenLibrary when it finds nothing), interactive priority; `authorId` set for authors already in the library. An author ASIN (`asin:` prefix optional) or an OpenLibrary id (`OL…A`) looks one author up |
+| GET | `/author/:id` | `AuthorDetails`: the author with statistics, `books` (owned and co-authored, each with its `series` links: name, `position`, `positionSort`, `isPrimary`) and `series` (`BookSeriesSummary` of every series those books are in). The UI groups the books by series (ordered by `positionSort`) and lists the rest as standalone |
+| POST | `/author` | `AddAuthorRequest` → **201** `Author`. Checks the root folder (type `audiobook`), the quality profile (domain `audiobook`), tags and the exclusion list, reads the author record (Audnexus by `asin`, else OpenLibrary by `olAuthorId`; one interactive call), inserts it at `<root>/<Author Name>` and starts the `AuthorAdd` job; books arrive while the job runs. `searchOnAdd: true` starts an `AuthorSearch` job once the books are loaded (and the folder rescanned). 409 when the author is already added or excluded; 404/502/503 when the catalogue fails |
+| PUT | `/author/editor` | `BulkAuthorUpdateRequest` → `Author[]`: `ids` plus any of `monitored`, `monitorOption` (re-applied to every book), `monitorNewBooks`, `qualityProfileId`, `rootFolderPath`, `tags: {add?, remove?}`; `refresh: true` starts `RefreshAuthor` for the ids |
+| PUT | `/author/:id` | `UpdateAuthorRequest` → `Author`: `monitored`, `monitorNewBooks`, `monitorOption`, `qualityProfileId`, `rootFolderPath` (path becomes `<root>/<Author Name>` unless `path` is given), `path`, `languages` (lower-cased; applies from the next refresh), `tags`. Files are not moved |
+| DELETE | `/author/:id` | `DeleteAuthorQuery`: `deleteFiles` (removes the author folder, only inside its root folder), `addExclusion` (never re-add this ASIN, or OpenLibrary id). Deletes the author's books, series entries, co-author links and `audio_files` rows in one transaction and prunes series no book is in any more. **204** |
+| GET | `/book` | `BookListQuery` (`authorId`: owned or linked through `book_authors`; `seriesId`, `monitored`, `hasFile`, `asin`, `isbn`, `includeStatistics`) → `Book[]` with `series` and `BookStatistics` (`fileCount`, `sizeOnDisk`, `durationMs`) |
+| GET | `/book/lookup` | `BookLookupQuery` → `BookSearchResult[]`: `asin` / `isbn` look one book up (Audnexus, OpenLibrary by ISBN; `[]` when no source knows it); `term`, or `title` + `author`, search the Audible catalogue (OpenLibrary when it finds nothing). `bookId` / `authorId` are set for books and authors already in the library. 400 without any of `term`, `title`, `asin`, `isbn` |
+| GET | `/book/:id` | `BookDetails`: the book with `author` (`AuthorSummary`), `contributors` (library authors linked through `book_authors`, with `role`), narrators, chapters and `files` (`AudioFile`, part order) |
+| POST | `/book` | `AddBookRequest` → **201** `Book`: one book by `asin` or `isbn` (`region` defaults to `audiobookMetadata.audibleRegion`). The book's primary author is found in the library by ASIN, OpenLibrary id or name; when they are not there, `author` (`AddBookAuthorOptions`: `rootFolderPath`, `qualityProfileId`, `monitored`, `monitorNewBooks` default `none`, `tags`) creates them and an `AuthorAdd` job loads the rest of their bibliography **unmonitored** (the requested book keeps `monitored`). **400** when the author is unknown and no `author` block is sent; 409 when the book is already in the library or excluded |
+| PUT | `/book/monitor` | `BulkBookMonitorRequest` (`bookIds`, `monitored`) → `Book[]`; 404 for unknown ids |
+| PUT | `/book/:id` | `UpdateBookRequest` (`monitored`) → `Book` |
+| DELETE | `/book/:id` | `DeleteBookQuery`: `deleteFiles` (the book folder when it is a folder of its own inside the author folder, else each file), `addExclusion` (the ASIN, else the ISBN: refreshes skip the book and `POST /book` refuses it). Deletes the `audio_files` rows in the same transaction and prunes orphaned series. **204** |
+| GET | `/bookseries` | `BookSeriesListQuery` (`authorId`, `search`) → `BookSeriesSummary[]` (`bookCount`, `availableBookCount`) |
+| GET | `/bookseries/:id` | `BookSeriesDetails`: the series with its `books` in position order (`positionSort`, unnumbered last, then release date) and the `authors` owning them |
+| GET | `/audiofile` | `authorId` and/or `bookId` → the audiobook `AudioFile[]` (shared route with music; mixing music and audiobook ids is 400) |
+| POST | `/command` | `AudiobookCommand` → **202** `Job`: `{name: "RefreshAuthor", authorIds}`, `{name: "RescanAuthor", authorIds}`, `{name: "AuthorSearch", authorIds}`, `{name: "BookSearch", bookIds}`. Same route as the music commands (the name picks the module; each kind is gated by its own flag). The search commands go through the release pipeline's audiobook search port; until it is wired the job message is `not available: the release pipeline is not running`. Unknown ids 404 (no job starts), unknown names 400 |
+| GET | `/wanted/missing/books` | `WantedBooksQuery` (`page`, `pageSize`) → `WantedBooksPage` (`Book` + `authorName`, `qualityProfileId`): monitored books of monitored authors, released (a year-only date counts from the start of the year), without a file. Newest first |
+| GET | `/wanted/cutoff/books` | `WantedBooksPage`: monitored books with files where any file's quality is below the author's profile cutoff (the lowest file wins) |
+
+**Bibliographies and languages.** `AuthorAdd` / `RefreshAuthor` read the author's Audible
+bibliography (OpenLibrary works when Audible has none). Audible lists every language an author is
+published in, so books are kept to the author's `languages`, else the `audiobookMetadata.languages`
+setting (empty keeps every language; names as the catalogue writes them, e.g. `english`). The same
+title in two languages has two ASINs and stays two books. Each book is upserted by ASIN (else
+OpenLibrary work, ISBN, or the author's title); a book another library author already owns gets a
+`book_authors` link instead of a copy, and every credited library author but the owner is linked
+(`role` from the credit: `author`, `translator`, `editor`, `foreword`, `contributor`). Series are
+matched by ASIN, else by name; `position` is kept as written (`3`, `2.5`, `1-6`) with a numeric
+`positionSort`. Books gone from the bibliography without a file are removed when unmonitored or in
+a language the author no longer keeps; excluded ASINs/ISBNs are skipped. Chapters of up to 10
+monitored books per refresh are read from Audnexus.
+
+**Monitoring.** `monitorOption` (`AudiobookMonitorOption`): `all`, `none` (also unmonitors the
+author on add), `future`, `missing` / `existing` (by files), `latest` / `first` (by release date
+among the released books), `inSeries` (books in any series). On refresh, new books follow
+`monitorNewBooks`: `all`, `none`, or `inSeries`.
+
+**Statistics.** `AuthorStatistics` over the books the author owns: `bookCount`,
+`monitoredBookCount`, `availableBookCount` (with a file), `missingBookCount` (monitored, released,
+no file), `fileCount`, `sizeOnDisk`, `seriesCount`, `percentOfBooks` (available monitored books /
+monitored books). `GET /library/statistics` gains `authorCount`, `monitoredAuthorCount`,
+`bookCount`, `monitoredBookCount` and `bookFileCount` while audiobooks are on, and
+`audioSizeOnDisk` (music and audiobook files) while either audio type is on.
+
+**Rescans.** `RescanAuthor` (also run at the end of `AuthorAdd` when the author folder exists)
+scans the author folder with the tag reader. One book is one folder (`CD 1` / `Part 2` subfolders
+fold into it) or a single file directly in the author folder. Each group is matched to one of the
+author's books by the ASIN tag (or `[ASIN …]` in the path), then series + position
+(`Author/Series/Book 3 - Title`), then title (with or without the subtitle; among same-titled
+books the kept languages win). Every file of a matched book gets an `audio_files` row (`partNumber`
+for multi-file books, quality `AB-*` from codec and bitrate, chapters from the file);
+`books.has_file` and `path` follow, a chaptered file fills `chapters` when the catalogue had none,
+and rows of files that are gone are removed. Unmatched folders are counted in the job message.
+
+**Caching.** The catalogue clients keep their in-memory caches; the calls the jobs repeat are
+also stored in `metadata_cache` (provider `audiobook-catalog`): author records 7 days,
+bibliographies 1 day (keyed by region and language filter), books 7 days, chapters 30 days.
+Manual refreshes skip the stored bibliography. Searches are not stored. `MetadataCacheCleanup`
+prunes these rows with the music ones.
+
+**Jobs.** Ad hoc: `AuthorAdd` (one per author), `RefreshAuthor`, `RescanAuthor`,
+`AuthorSearch`, `BookSearch`. Scheduled: `RefreshAuthors` (see Scheduler jobs). `GET /calendar`
+lists book release dates as `book` items (`mediaType=audiobook`; books dated only to the year are
+left out) and the iCal feed carries them.
+
 ## imports: music import and manual import (audio mode)
 
 Contract: `packages/shared/src/imports.ts` (`AudioManualImport*`). Code:
@@ -407,7 +487,7 @@ flagged for refresh whose music library contains it).
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/manualimport/audio` | `AudioManualImportQuery` → `AudioManualImportItem[]` (one per audio file) |
+| GET | `/manualimport/audio` | `AudioManualImportQuery` → `AudioManualImportItem[]` (one per audio file); `mediaType=audiobook` → `AudiobookManualImportItem[]` (see below) |
 | POST | `/manualimport/audio` | `AudioManualImportRequest` → `AudioManualImportResult` |
 
 `GET` query (one of `folder`, `downloadId`, `artistId` is required):
@@ -448,6 +528,88 @@ registered in place. Result: `{ imported: [{path, audioFileId, trackId, destinat
 [{path, error}] }`. Each album imported gets the same events, history, notification and refresh
 as an automatic import (`manual: true`), and a tracked download becomes `imported` once all its
 albums have files from it.
+
+### Audiobook import
+
+Completed downloads with `mediaType: "audiobook"` go to the audiobook importer
+(`imports/audio/audiobook-import.ts`). The target is the download's `authorId` / `bookIds` (from
+the grab); without an author the release title's author is looked up. The download is split into
+books: one book is one folder (`CD2`, `Disc 1`, `Part 3` sub-folders fold into it) or, inside
+one folder, one group of files sharing an ASIN or album tag (a pack of single-file books). Each
+book matches a target book (all the author's books when the grab named none) by ASIN/ISBN tag,
+title (tags, file and folder names) and series position. Parts are ordered by disc tag, then
+track tag, then natural file-name sort; a chaptered m4b is one part.
+
+Specs per book (a book imports all its parts or none): `absolutePath`, `minimumFreeSpace`,
+`unpacking`, `sameFile`, `alreadyImported`, `notQualityUpgrade` (best new part against the best
+existing file) and `durationMismatch` (the parts' total must be within
+`audio.audiobookDurationTolerance` percent, default 5, of the book's runtime; books without a
+runtime pass). A tagged narrator that is none of the book's narrators is a warning.
+
+Files go to `<author folder>/<book folder>/` (`bookFolderFormat`, or `seriesBookFolderFormat`
+when the book is in a series) with `transferFile` (hard link, copy or move; replaced files go to
+the recycle bin). A single file keeps its name unless `renameAudiobooks`; multi-part books are
+renamed with `bookPartFormat` (`{Part:00} - {Book Title}`) when `audio.renameAudiobookParts`
+(default on) or `renameAudiobooks` is on. Files are never retagged. With `audio.writeAbsSidecars`
+(default off) the book folder also gets `desc.txt` (overview), `reader.txt` (narrators) and
+`cover.jpg` (fetched from the book's catalogue cover URL, only then). Every file gets an
+`audio_files` row (`mediaType: "audiobook"`, `authorId`, `bookId`, `partNumber`, `chapterCount`)
+and the book gets `hasFile: true` and `path`.
+
+Per imported book: one `import imported` event (`mediaType: "audiobook"`, `mediaId` the author
+id), one history record (target `{mediaType: "audiobook", authorId, bookIds}`), one `import` (or
+`upgrade`) notification ("Author – Title (narrated by X)"), and a media-server refresh of the book
+folder (servers flagged for refresh with an audiobook library containing it: Audiobookshelf
+`book` libraries, Jellyfin/Emby `books`, Plex `artist` sections by path).
+
+`audio` settings (`GET/PUT /settings/audio`, `AudioImportSettings`):
+
+| Field | Default | Meaning |
+|---|---|---|
+| `trackMatchThreshold` | 0.8 | Music: minimum release match |
+| `audiobookDurationTolerance` | 5 | Percent the parts' total may differ from the book's runtime |
+| `renameAudiobookParts` | `true` | Rename multi-part books with `bookPartFormat` even with `renameAudiobooks` off |
+| `writeAbsSidecars` | `false` | Write `desc.txt`, `reader.txt`, `cover.jpg` into the book folder |
+
+`PUT` replaces the section: send every field.
+
+### Manual import, audiobook mode
+
+The same routes with `mediaType: "audiobook"`:
+
+`GET /manualimport/audio?mediaType=audiobook` (one of `folder`, `downloadId`, `authorId` is
+required) returns `AudiobookManualImportItem[]`, one per audio file:
+
+| Query field | Meaning |
+|---|---|
+| `folder` | Folder (or file) to scan |
+| `downloadId` | A tracked download: its output folder, author and books |
+| `authorId` | Pin the author (else the download's, else the tags' artist, the path, the release title); alone it scans the author folder |
+| `bookId` | Match every group against this book only |
+| `filterExistingFiles` | Default `true` |
+
+| Item field | Meaning |
+|---|---|
+| `path`, `relativePath`, `name`, `sizeBytes`, `quality` | The file and the quality the import would record (`AB-*`) |
+| `mediaType` | Always `audiobook` |
+| `groupKey`, `groupFolder` | Files of one book share the key |
+| `authorId`, `bookId`, `bookTitle` | The proposal (book ids absent when nothing fits) |
+| `partNumber`, `partCount` | Proposed part order within the group (1-based) |
+| `confidence` | 0-1, the group's book match |
+| `groupDurationMs` | Sum of the group's durations (null when one is unknown) |
+| `runtimeMs` | The proposed book's catalogue runtime (null when unknown) |
+| `tags` | `title`, `author`, `album`, `narrator`, `series`, `seriesPart`, `asin`, `isbn`, `trackNo`, `discNo`, `durationMs`, `chapterCount`, `codec`, `bitrateKbps` |
+| `rejections` | `unknownAuthor`, `unknownBook`, `durationMismatch`, `notQualityUpgrade`, `sameFile` ... |
+| `warnings` | E.g. a narrator mismatch |
+| `downloadId` | When listed for a tracked download |
+
+`POST /manualimport/audio` items with `mediaType: "audiobook"`: `{path, mediaType, authorId,
+bookId, partNumber?, quality?, downloadId?}` (music and audiobook items may be mixed in one
+request). Items with the same book and download import together as that book, ordered by
+`partNumber` (the proposed order when omitted; duplicate numbers fail the book). Specs are
+bypassed. Result items carry `bookId` and `partNumber` instead of `trackId`:
+`{ imported: [{path, audioFileId, bookId, partNumber, destination}], failed: [{path, error}] }`.
+A tracked download becomes `imported` once all its books have files from it.
 
 ## profiles
 
@@ -977,11 +1139,11 @@ connections with `onRequestCreated` or `onIssueCreated`.
 ## media-servers
 
 Module `apps/api/src/modules/media-servers`; contract `packages/shared/src/media-servers.ts`;
-clients `@arclight/media-servers`. A **list** of Jellyfin/Emby/Plex connections stored in the
+clients `@arclight/media-servers`. A **list** of Jellyfin/Emby/Plex/Audiobookshelf connections stored in the
 `mediaServers` settings section (`MediaServersSettings {servers: MediaServerConfig[]}`), each
-`{id, kind: 'jellyfin'|'emby'|'plex', name, url, apiKey, enabled, usedForAvailability,
-usedForRetention, usedForRefresh, loginEnabled, createUsersOnLogin}`. `apiKey` is a Jellyfin/Emby API key or the Plex owner's
-X-Plex-Token and reads back as `********`; sending the mask (or omitting the key) on update keeps
+`{id, kind: 'jellyfin'|'emby'|'plex'|'audiobookshelf', name, url, apiKey, enabled, usedForAvailability,
+usedForRetention, usedForRefresh, loginEnabled, createUsersOnLogin}`. `apiKey` is a Jellyfin/Emby API key, the Plex owner's
+X-Plex-Token or an Audiobookshelf API token (sent as `Authorization: Bearer`) and reads back as `********`; sending the mask (or omitting the key) on update keeps
 the stored key. Names are unique (case-insensitive); URLs are normalised (`host:port` gets
 `http://`, trailing slash dropped) and must be http(s).
 
@@ -993,6 +1155,14 @@ source of truth: the requests module's single-server `mediaServer` shape (sign-i
 requests availability asks `clients('availability')`, and a stored legacy `mediaServer` value is
 moved into the list once at boot (the legacy row is then deleted).
 
+**Audiobookshelf** (`kind: 'audiobookshelf'`) is a library server, not a sign-in provider:
+`loginEnabled` and `createUsersOnLogin` are always stored `false` (the settings form hides them),
+it is never the legacy `mediaServer` view, and `clients('availability' | 'retention')` leave it
+out (those purposes are video). With `usedForRefresh` it is rescanned after audiobook imports:
+`POST /api/libraries/{id}/scan` on each `book` library whose folder (`fullPath`) contains the
+book folder. The connection test reads `GET /status` (version) and `GET /api/libraries`
+(`mediaType: 'book'` → `audiobook`, podcasts → `other`).
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/mediaserver` | `MediaServerResource[]` (keys masked) |
@@ -1001,7 +1171,7 @@ moved into the list once at boot (the legacy row is then deleted).
 | PUT | `/mediaserver/:id` | Replace a server (mask keeps the key) |
 | DELETE | `/mediaserver/:id` | 204 |
 | POST | `/mediaserver/test` | `MediaServerTestRequest` (unsaved form; `id` + masked key reuses the stored key) → `MediaServerProbeResult` |
-| POST | `/mediaserver/:id/test` | `MediaServerProbeResult`: `{ok, serverName, version, libraries[]}` or `{ok: false, message, code}` (`System/Info` + `Library/VirtualFolders`, Plex `/` + `library/sections`) |
+| POST | `/mediaserver/:id/test` | `MediaServerProbeResult`: `{ok, serverName, version, libraries[]}` or `{ok: false, message, code}` (`System/Info` + `Library/VirtualFolders`, Plex `/` + `library/sections`, Audiobookshelf `/status` + `/api/libraries`) |
 | GET | `/mediaserver/:id/users` | `MediaServerAccountResource[]` `{id, name, isAdmin, isDisabled, lastActivityAt}` (Jellyfin/Emby `Users`, Plex server `accounts`); 502 when the server fails |
 
 **Clients** (`@arclight/media-servers`, native fetch, no db): `createMediaServerClient({kind,
@@ -1012,7 +1182,10 @@ Jellyfin/Emby: per-user `UserData` (Played, PlayCount, LastPlayedDate, PlaybackP
 a series is played when every present episode is; provider-id filters are verified and fall
 back to a library index. Plex: items found through a guid index of the movie/show sections;
 the owner's state is on the items (viewCount, lastViewedAt, viewOffset, viewedLeafCount), other
-accounts' state comes from `status/sessions/history/all?accountID=`. Errors are
+accounts' state comes from `status/sessions/history/all?accountID=`. Audiobookshelf: books of
+the `book` libraries (paged `GET /api/libraries/{id}/items`), `findItems({mediaType:
+'audiobook', asin?, isbn?})` matched client-side, progress from `GET /api/users/{id}`
+(`mediaProgress`); video and music kinds list nothing. Errors are
 `MediaServerError` with a `code` (`unauthorized`, `network`, `timeout`, `notFound`, ...).
 
 ## retention
@@ -1227,6 +1400,114 @@ again. Delay profiles (selected by the artist's tags) park music releases as pen
 back-off as the video searches (`release_search_state`, `media_type = 'album'`, a day per search
 without a grab, at most 7; a grab resets it). Several albums of one artist are searched together
 (artist query first). Both are no-ops while `features.music` is off.
+
+## releases: audiobooks (book search, decisions, grabs)
+
+Audiobook releases go through the same pipeline as video and music (`/release`, `/release/push`,
+`/command/search`, RSS, pending releases, decision log) when `features.audiobooks` is on. The
+indexer category picks the parser: 3030 Audio/Audiobook (alone or with the bare 3000 parent) uses
+the audiobook parser, and so does any search for a book or an author. An uncategorised release is
+tried as an audiobook only when its title carries an audiobook marker (`m4b`, `Unabridged` /
+`Abridged`, `narrated by` / `read by`, `audiobook`, an ASIN) and the book matcher finds it in the
+library; otherwise it goes on to the video and music matchers.
+
+Matching: an ASIN in the name maps straight to the book with that ASIN. Otherwise the matcher
+looks for an author (any credited author: name, sort name "Last, First" or alias, with accents
+and punctuation ignored; initials match full given names, so "J.R.R. Tolkien", "JRR Tolkien" and
+"John Ronald Reuel Tolkien" all agree). Then it looks for a book among that author's own and
+co-authored books: by title (a leading article is ignored and the subtitle is optional), else by
+series + position. Names in the form "Title - Author - Narrator" are tried with title and author
+swapped. Packs ("Series Books 1-5", "Series - Complete Series") map to the series' books inside
+the range, counting whole positions only, so a novella at 2.5 is left out. A pack named without
+an author is looked up by series across the library. A book's current quality is its lowest
+file quality. A pack only counts (and is tracked) for the books it fills or strictly upgrades.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/release?bookId=` | Interactive search for one book (its author implied). `?authorId=` searches the author: an author query, then each wanted book. It runs the book plan (below) and stops after the first query with an approved release. Nothing is grabbed. Returns `ReleaseDecision[]`, approved first, then by rank |
+| POST | `/release` | `ReleaseGrabRequest`: `guid`, `indexerId`, plus optional `authorId` and/or `bookIds` to pin the mapping of an ambiguous release (`bookIds` alone implies their author). The user may grab a rejected release |
+| POST | `/command/search` | `{authorId, bookIds?}` searches the author's wanted books (monitored, released, no file or below cutoff), or only `bookIds`. `{bookIds}` alone searches those books. Returns `SearchCommandResponse` |
+| GET | `/release/pending` | `PendingRelease` gains `mediaType: "audiobook"`, `authorId`, `bookIds` |
+| GET | `/release/decisions` | `DecisionLogQuery` also takes `authorId` or `bookId` (rows covering the book). Audiobook rows carry `mediaType: "audiobook"`, `authorId`, `bookIds` |
+| GET | `/release/searchstatus` | `mediaType` also takes `book`; the jobs are `MissingBookSearch` / `CutoffUnmetAudioSearch` |
+
+**Audiobook fields of `ReleaseDecision`** (contract `packages/shared/src/releases.ts`; absent on
+other decisions):
+
+```ts
+{
+  mediaType: 'audiobook',
+  authorId: number,                 // the books' owner (also set when only the book failed to match)
+  authorName: string,
+  bookIds: number[],                // books the release fills or upgrades (a pack: only the wanted ones)
+  books: {                          // ReleaseBookRef, same order as bookIds
+    id: number, title: string,
+    series: string | null, seriesPosition: string | null,   // the primary series entry
+    year: number | null,
+  }[],
+  audiobook: {                      // ReleaseAudiobookInfo: what the parser read from the name
+    authors: string[], title: string | null, subtitle: string | null,
+    series: string | null, seriesPosition: string | null,   // "3", "2.5", a range "1-5" for packs
+    narrators: string[], year: number | null,
+    formatType: string,             // unabridged, abridged, dramatized, unknown
+    container: string,              // m4b, m4a, mp3, flac, opus, unknown
+    codec: string, bitrateKbps: number | null,
+    asin: string | null, isbn: string | null,
+    isPack: boolean,
+    language: string | null,        // ISO 639-1 when the name states one
+  },
+  quality: QualityModel,            // an audiobook quality (AB-AAC, AB-MP3, AB-MP3-High, ...)
+  languages: string[],              // [audiobook.language] when stated
+  fullSeason: false,
+}
+```
+
+An unmatched audiobook release comes back with `approved: false`, `mediaType: "audiobook"`,
+`audiobook` (when parsed) and one rejection: `unknownAuthor`, `unknownBook` (this covers
+ambiguous titles too, with `authorId` set), `emptyPack`, `unableToParse` or `audiobooksDisabled`.
+
+**Audiobook rejection reasons**, besides the shared ones such as `qualityNotWanted`,
+`blocklisted`, `alreadyInQueue`, `diskCutoffMet` and `minimumAgeDelay`:
+
+- `authorNotMonitored`, `bookNotMonitored`, `wrongAuthor`, `wrongBook`.
+- `bookNotReleased`: automatic grabs only.
+- `bookPackNotAllowed` and `packTooFewWanted`: automatic grabs only; see the settings below.
+- `abridgedNotWanted`: an abridged release of a book the catalogue lists as unabridged.
+- `wrongBookLanguage`: the language in the name is neither one of the author's languages (or the
+  `audiobookMetadata.languages` default) nor the book's language. A release that states no
+  language passes.
+- `audioSizeImplausible`: too small, or (for single books) too large, for the codec and the
+  catalogue runtime.
+- `belowMinimumSize` / `aboveMaximumSize`: the quality definition's MB/min × the book runtime.
+  Packs have no upper bound, and books without a runtime are not size-checked.
+- `diskNotUpgrade`: a pack that upgrades none of its books.
+
+**Settings** (`/settings/releases`): `allowBookPacks` (default `false`) lets automatic searches
+and RSS grab series packs, and `minPackWanted` (shared with music, default 2) is how many wanted
+books such a pack must bring. `allowAbridged` (default `false`) accepts abridged releases of
+unabridged books. Interactive grabs ignore all three.
+
+**Search plans.** Book: `t=book` with author + title, then `q="{author} {title}"`, then
+`q="{title}"` when the title has three or more significant words, then `q="{asin}"` when the
+book has one. Author: one `q="{author}"` query first (packs and several books come back on it),
+then each book it did not settle. Indexers without `t=book` fall back to `t=search` with the
+same words. Each query is decided (and, for automatic searches, grabbed) before the next runs.
+
+**Grabs and failures.** An audiobook grab records one `grabbed` history row with `authorId` and
+`bookIds`. History lists filter by `authorId` / `bookId`, and history and blocklist records carry
+`authorId` / `bookIds`. The tracked download and the queue item (`QueueItem.authorId` /
+`bookIds`, `mediaType: "audiobook"`) carry the same ids. A failed download writes
+`downloadFailed` and blocklists the release under the author. With
+`mediaManagement.autoRedownloadFailed` it then searches those books again; history "redownload"
+does the same. Delay profiles, selected by the author's tags, park audiobook releases as pending.
+The `AuthorSearch` / `BookSearch` commands and search-on-add run through the same searches.
+
+**Scheduled jobs.** `MissingBookSearch` runs at 04:20 daily and searches up to 50 books per run:
+monitored, released books of monitored authors that have no file, newest first.
+`CutoffUnmetAudioSearch` (04:30) also covers books whose lowest file quality is below the
+author's profile cutoff. Both use the per-item back-off (`release_search_state`,
+`media_type = 'book'`), group several books of one author into one search, and do nothing while
+`features.audiobooks` is off.
 
 ## scene-mapping
 
@@ -1687,12 +1968,14 @@ of them with `POST /jobs/run`.
 | `RefreshSeries` | `0 3 * * *` | metadata | Refresh all series from TMDB |
 | `RefreshMovie` | `30 4 * * *` | metadata | Refresh all movies from TMDB |
 | `RefreshArtists` | `20 */6 * * *` | metadata | Music: refreshes artists due by `next_refresh_at` (oldest first) for at most 20 minutes; the next refresh is 1 day out after a release in the last 90 days or an upcoming one, else 7 days (continuing) or 30 days (ended). New release groups follow the album-type profile and `monitorNewAlbums`. Nothing while music is off |
+| `RefreshAuthors` | `40 3,15 * * *` | metadata | Audiobooks: refreshes authors due by `next_refresh_at` (oldest first) for at most 20 minutes; the next refresh is 1 day out while a monitored book is still to be released, else 7 days. New books follow `monitorNewBooks`. Nothing while audiobooks are off |
 | `MetadataCacheCleanup` | `50 5 * * *` | metadata | Deletes `metadata_cache` rows that expired more than 30 days ago |
 | `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |
 | `MissingMovieSearch` | `20 3 * * *` | releases | The same for `GET /wanted/missing/movies`, up to 100 a run |
 | `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), in list order, items past their back-off only, up to 100 episodes and 100 movies a run; `GET /release/searchstatus` estimates the next run per item |
 | `MissingAlbumSearch` | `10 4 * * *` | releases | Music: searches the albums `GET /wanted/missing/albums` lists, in list order, past their back-off only, up to 50 a run, grouped per artist. Nothing while music is off |
-| `CutoffUnmetAudioSearch` | `30 4 * * *` | releases | Music: the same for albums whose lowest track quality is below the artist's profile cutoff, up to 50 a run |
+| `MissingBookSearch` | `20 4 * * *` | releases | Audiobooks: searches monitored, released books of monitored authors without a file, newest first, past their back-off only, up to 50 a run, grouped per author. Nothing while audiobooks are off |
+| `CutoffUnmetAudioSearch` | `30 4 * * *` | releases | Music and audiobooks: the same for albums whose lowest track quality, and books whose lowest file quality, is below the profile cutoff, up to 50 of each a run, each only while its feature is on |
 | `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library, or from the media server when `useMediaServerAvailability` is on (Jellyfin/Emby provider ids, Plex guids, per-season episode counts), completes requests, sends available notifications |
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists (users with a token) and Jellyfin/Emby favourites (linked users); auto-requests when `autoRequestFromWatchlist`, `AUTO_REQUEST*` and the per-type sync flag allow |
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |

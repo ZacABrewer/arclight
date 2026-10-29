@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedAlbum, WantedEpisode } from '@arclight/shared';
+import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedAlbum, WantedBook, WantedEpisode } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { libraryApi } from '../../api/library.js';
 import {
@@ -26,6 +26,11 @@ import { useFeatures, useMusicQualityProfiles, useWantedAlbums } from '../../hoo
 import { useMusicSearch } from '../../hooks/music-acquisition.js';
 import { musicApi } from '../../api/music.js';
 import { albumTypeLabel, progressText, trackProgress } from '../library/music/music-model.js';
+import { useAudiobookQualityProfiles, useWantedBooks } from '../../hooks/audiobooks.js';
+import { useAudiobookSearch } from '../../hooks/audiobook-acquisition.js';
+import { audiobooksApi } from '../../api/audiobooks.js';
+import { AudiobookChip } from '../library/audiobooks/audiobook-kit.js';
+import { positionLabel, primarySeries } from '../library/audiobooks/audiobook-model.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
 import { ProfileMismatchList } from './profile-mismatch.js';
@@ -39,9 +44,9 @@ const MAX_PAGE = 500;
 type Mode = 'missing' | 'cutoff' | 'mismatch';
 /** The lists backed by the library's wanted queries (the mismatch list has its own). */
 type ListMode = Exclude<Mode, 'mismatch'>;
-type Kind = 'episodes' | 'movies' | 'albums';
+type Kind = 'episodes' | 'movies' | 'albums' | 'books';
 /** The kinds the video lists (and the profile-mismatch list) know. */
-type VideoKind = Exclude<Kind, 'albums'>;
+type VideoKind = Exclude<Kind, 'albums' | 'books'>;
 
 const MODE_TITLES: Record<Mode, string> = { missing: 'Missing', cutoff: 'Cutoff unmet', mismatch: 'Profile mismatch' };
 
@@ -50,6 +55,7 @@ const KIND_OPTIONS: ReadonlyArray<{ value: Kind; label: string }> = [
   { value: 'movies', get label() { return t('common.movies'); } },
 ];
 const ALBUM_OPTION: { value: Kind; label: string } = { value: 'albums', get label() { return t('music.albums'); } };
+const BOOK_OPTION: { value: Kind; label: string } = { value: 'books', get label() { return t('audiobooks.books'); } };
 
 export function WantedMissingPage() {
   return <WantedPage mode="missing" />;
@@ -73,8 +79,10 @@ function WantedPage({ mode }: { mode: Mode }) {
   const features = useFeatures();
   // Albums: missing and cutoff unmet only, and only while music is on.
   const albums = features.music && mode !== 'mismatch';
-  const kind: Kind = picked === 'albums' && !albums ? 'episodes' : picked;
-  const options = albums ? [...KIND_OPTIONS, ALBUM_OPTION] : KIND_OPTIONS;
+  // Books: the same, while audiobooks are on.
+  const books = features.audiobooks && mode !== 'mismatch';
+  const kind: Kind = (picked === 'albums' && !albums) || (picked === 'books' && !books) ? 'episodes' : picked;
+  const options = [...KIND_OPTIONS, ...(albums ? [ALBUM_OPTION] : []), ...(books ? [BOOK_OPTION] : [])];
   useEffect(() => {
     document.title = t('wanted.valueArclight', { value: MODE_TITLES[mode] });
   }, [mode]);
@@ -84,9 +92,11 @@ function WantedPage({ mode }: { mode: Mode }) {
         <Segmented aria-label={t('common.mediaType')} options={options} value={kind} onChange={setKind} />
       </PageHeader>
       {mode === 'mismatch' ? (
-        <ProfileMismatchList key={`p-${kind}`} kind={kind === 'albums' ? 'episodes' : kind} />
+        <ProfileMismatchList key={`p-${kind}`} kind={kind === 'albums' || kind === 'books' ? 'episodes' : kind} />
       ) : kind === 'albums' ? (
         <AlbumsList key={`a-${mode}`} mode={mode} />
+      ) : kind === 'books' ? (
+        <BooksList key={`b-${mode}`} mode={mode} />
       ) : kind === 'episodes' ? (
         <EpisodesList key={`e-${mode}`} mode={mode} />
       ) : (
@@ -505,6 +515,104 @@ function AlbumsList({ mode }: { mode: ListMode }) {
       onSelect={setSelected}
       running={search.isPending}
       onSearchRows={searchAlbums}
+      onSearchAll={() => void searchAll()}
+    />
+  );
+}
+
+/** "Book 3 · Series" for a wanted row, or null outside a series. */
+function seriesText(r: WantedBook): string | null {
+  const s = primarySeries(r);
+  if (!s) return null;
+  const pos = positionLabel(s.position);
+  return pos ? `${s.name} · ${pos}` : s.name;
+}
+
+/** Books missing / below cutoff: BookSearch for the selected rows, one row, or all of them. */
+function BooksList({ mode }: { mode: ListMode }) {
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
+  const list = useWantedBooks(mode, page, PAGE_SIZE);
+  const profiles = useAudiobookQualityProfiles();
+  const search = useAudiobookSearch();
+  const toast = useToast();
+  if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('audiobooks.wanted.couldNotLoad')} />;
+  const rows = list.data?.records;
+  const total = list.data?.totalRecords;
+  const label = (r: WantedBook) => `${r.authorName} – ${r.title}`;
+  const searchBooks = (bookIds: number[]) => {
+    if (bookIds.length) search.mutate({ name: 'BookSearch', bookIds });
+  };
+  const searchAll = async () => {
+    try {
+      const all =
+        mode === 'missing' ? await audiobooksApi.wanted.missing({ page: 1, pageSize: MAX_PAGE }) : await audiobooksApi.wanted.cutoff({ page: 1, pageSize: MAX_PAGE });
+      searchBooks(all.records.map((r) => r.id));
+    } catch (err) {
+      toast.error(t('common.searchFailed'), errorMessage(err));
+    }
+  };
+  const columns: Column<WantedBook>[] = [
+    {
+      key: 'author',
+      header: t('audiobooks.author'),
+      cell: (r) => (
+        <Link className="mk-link" to="/library/audiobooks/author/$id" params={{ id: String(r.authorId) }}>
+          {r.authorName}
+        </Link>
+      ),
+    },
+    {
+      key: 'book',
+      header: t('audiobooks.book'),
+      cell: (r) => (
+        <span className="mk-row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          <Link className="mk-link" to="/library/audiobooks/book/$id" params={{ id: String(r.id) }}>
+            {r.title}
+          </Link>
+          <AudiobookChip />
+        </span>
+      ),
+    },
+    { key: 'series', header: t('audiobooks.series'), muted: true, cell: (r) => seriesText(r) ?? '—' },
+    { key: 'released', header: t('common.released'), mono: true, cell: (r) => shortDate(r.releaseDate), width: '130px' },
+    { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
+    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    {
+      key: 'search',
+      header: <span className="al-sr-only">{t('common.actions')}</span>,
+      align: 'right',
+      width: '96px',
+      cell: (r) => (
+        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => searchBooks([r.id])}>
+          {t('common.search')}
+        </Button>
+      ),
+    },
+  ];
+  return (
+    <ListShell
+      mode={mode}
+      noun={t('audiobooks.bookNoun', { count: 2 })}
+      total={total}
+      page={page}
+      onPage={(p) => {
+        setPage(p);
+        setSelected(new Set());
+      }}
+      rows={rows}
+      loading={list.isPending}
+      columns={columns}
+      rowKey={(r) => r.id}
+      rowLabel={label}
+      mobileRow={(r) => ({
+        title: r.title,
+        sub: [r.authorName, seriesText(r), shortDate(r.releaseDate)].filter(Boolean).join(' · '),
+      })}
+      selected={selected}
+      onSelect={setSelected}
+      running={search.isPending}
+      onSearchRows={searchBooks}
       onSearchAll={() => void searchAll()}
     />
   );

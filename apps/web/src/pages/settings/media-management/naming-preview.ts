@@ -15,7 +15,12 @@ export type PreviewKind =
   | 'artistFolder'
   | 'albumFolder'
   | 'track'
-  | 'multiDiscTrack';
+  | 'multiDiscTrack'
+  | 'authorFolder'
+  | 'bookFolder'
+  | 'seriesBookFolder'
+  | 'bookFile'
+  | 'bookPart';
 
 /** Sample values keyed by the normalised token name (lower case, no separators). */
 export const SAMPLE_TOKENS: Readonly<Record<string, string | number>> = {
@@ -82,9 +87,34 @@ const MUSIC_TOKENS: Readonly<Record<string, string | number>> = {
 
 const MUSIC_KINDS: ReadonlySet<PreviewKind> = new Set(['artistFolder', 'albumFolder', 'track', 'multiDiscTrack']);
 
-const FILE_KINDS: ReadonlySet<PreviewKind> = new Set(['episode', 'daily', 'anime', 'movie', 'track', 'multiDiscTrack']);
+/** Audiobook sample (invented): book 3 of a series, part 1 of a multi-file copy. */
+const AUDIOBOOK_TOKENS: Readonly<Record<string, string | number>> = {
+  authorname: 'Mara Quill',
+  authorcleanname: 'Mara Quill',
+  authornamethe: 'Mara Quill',
+  authornamefirstcharacter: 'M',
+  booktitle: 'The Glass Orchard',
+  bookcleantitle: 'The Glass Orchard',
+  booktitlethe: 'Glass Orchard, The',
+  booksubtitle: 'A Lantern Tale',
+  seriestitle: 'Lantern Tales',
+  seriescleantitle: 'Lantern Tales',
+  seriesposition: 3,
+  narrator: 'Owen Hart',
+  narrators: 'Owen Hart',
+  releaseyear: 2019,
+  year: 2019,
+  part: 1,
+  qualitytitle: 'AB-AAC',
+  qualityfull: 'AB-AAC',
+};
 
-const extensionOf = (kind: PreviewKind): string => (MUSIC_KINDS.has(kind) ? '.flac' : '.mkv');
+const AUDIOBOOK_KINDS: ReadonlySet<PreviewKind> = new Set(['authorFolder', 'bookFolder', 'seriesBookFolder', 'bookFile', 'bookPart']);
+
+const FILE_KINDS: ReadonlySet<PreviewKind> = new Set(['episode', 'daily', 'anime', 'movie', 'track', 'multiDiscTrack', 'bookFile', 'bookPart']);
+
+const extensionOf = (kind: PreviewKind): string =>
+  kind === 'bookFile' ? '.m4b' : kind === 'bookPart' ? '.mp3' : MUSIC_KINDS.has(kind) ? '.flac' : '.mkv';
 
 export interface PreviewOptions {
   /** Version tag `{Version}` renders as; unversioned (empty) by default. */
@@ -95,6 +125,7 @@ function lookup(rawName: string, kind: PreviewKind, opts: PreviewOptions = {}): 
   const name = rawName.trim().toLowerCase();
   const key = name.replace(/[\s._-]+/g, '');
   if (key === 'version') return opts.version ?? '';
+  if (AUDIOBOOK_KINDS.has(kind)) return AUDIOBOOK_TOKENS[key];
   if (MUSIC_KINDS.has(kind)) {
     if (key === 'medium' && kind === 'multiDiscTrack') return 2;
     return MUSIC_TOKENS[key];
@@ -132,6 +163,20 @@ export function renderPreview(format: string, kind: PreviewKind, opts: PreviewOp
     .trim();
   if (!tidy) return '';
   return FILE_KINDS.has(kind) ? `${tidy}${extensionOf(kind)}` : tidy;
+}
+
+/**
+ * Sample audiobook paths: `Author/Series/Book 3 - Title/Title.m4b` for a book in a series,
+ * `Author/Title/01 - Title.mp3` for a part of a standalone multi-file book.
+ */
+export function audiobookPreview(
+  formats: { authorFolderFormat: string; seriesBookFolderFormat: string; bookFolderFormat: string; bookFileFormat: string; bookPartFormat: string },
+  layout: 'series' | 'parts',
+): string {
+  const author = renderPreview(formats.authorFolderFormat, 'authorFolder');
+  const folder = layout === 'series' ? renderPreview(formats.seriesBookFolderFormat, 'seriesBookFolder') : renderPreview(formats.bookFolderFormat, 'bookFolder');
+  const file = layout === 'series' ? renderPreview(formats.bookFileFormat, 'bookFile') : renderPreview(formats.bookPartFormat, 'bookPart');
+  return [author, folder, file].filter(Boolean).join('/');
 }
 
 /** The FormRow caption: "→ <name>", or a plain hint when the format is empty. */

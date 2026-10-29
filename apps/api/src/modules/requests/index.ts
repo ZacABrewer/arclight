@@ -1,4 +1,5 @@
 import type { NotificationEvent } from '@arclight/notifications';
+import { isLoginCapableKind } from '@arclight/shared';
 import type { AppContext, AppModule } from '../../app.js';
 import { metadata, activeMetadataService, MetadataNotConfiguredError } from '../metadata/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
@@ -112,8 +113,8 @@ export function interactiveSearchEstimator(ctx: AppContext): SizeEstimator {
 export function mediaServerLoginOf(ctx: AppContext): MediaServerLoginOption {
   const server = mediaServersServiceFor(ctx)
     .stored()
-    .find((s) => s.enabled && s.loginEnabled);
-  return server ? { kind: server.kind, name: server.name } : null;
+    .find((s) => s.enabled && s.loginEnabled && isLoginCapableKind(s.kind));
+  return server && isLoginCapableKind(server.kind) ? { kind: server.kind, name: server.name } : null;
 }
 
 /** TMDB through the running metadata module, resolved per call so a saved key applies at once. */

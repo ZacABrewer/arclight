@@ -18,7 +18,7 @@ import type {
   ReleaseProtocol,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
-import { artists, episodes, movies, series } from '../../db/schema.js';
+import { artists, authors, episodes, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import { history, type HistoryRow, type NewHistoryRow } from './schema.js';
 
@@ -386,7 +386,8 @@ export class HistoryService {
       if (row.artistId == null || !row.albumIds?.length) throw new HistoryError('VALIDATION', `history item ${id} has no albums to search for`);
       target = { mediaType: 'music', artistId: row.artistId, albumIds: [...row.albumIds] };
     } else if (row.mediaType === 'audiobook') {
-      throw new HistoryError('VALIDATION', `history item ${id} is an audiobook; searching for audiobooks is not supported yet`);
+      if (row.authorId == null || !row.bookIds?.length) throw new HistoryError('VALIDATION', `history item ${id} has no books to search for`);
+      target = { mediaType: 'audiobook', authorId: row.authorId, bookIds: [...row.bookIds] };
     } else if (row.mediaType === 'movie') {
       if (row.movieId === null) throw new HistoryError('VALIDATION', `history item ${id} has no movie`);
       target = { mediaType: 'movie', movieId: row.movieId };
@@ -598,6 +599,12 @@ export class HistoryService {
             artistId: template.artistId ?? 0,
             albumIds: [...new Set(grabbed.flatMap((r) => r.albumIds ?? []))].sort((a, b) => a - b),
           }
+        : template.mediaType === 'audiobook'
+          ? {
+              mediaType: 'audiobook',
+              authorId: template.authorId ?? 0,
+              bookIds: [...new Set(grabbed.flatMap((r) => r.bookIds ?? []))].sort((a, b) => a - b),
+            }
         : template.mediaType === 'series'
           ? {
               mediaType: 'series',
@@ -733,6 +740,28 @@ export class HistoryService {
       .limit(1)
       .get();
     return row ? this.toRecord(row) : null;
+  }
+
+  /** Newest audiobook row that covers the book (optionally of one event type). */
+  mostRecentForBook(bookId: number, eventType?: HistoryEventType): HistoryRecord | null {
+    const conds: SQL[] = [eq(history.mediaType, 'audiobook'), coversBook(bookId)];
+    if (eventType) conds.push(eq(history.eventType, eventType));
+    const row = this.db
+      .select()
+      .from(history)
+      .where(and(...conds))
+      .orderBy(desc(history.date), desc(history.id))
+      .limit(1)
+      .get();
+    return row ? this.toRecord(row) : null;
+  }
+
+  /** Audiobook rows of an author (optionally only those covering one book), newest first. */
+  forAuthor(authorId: number, opts: { bookId?: number; eventType?: HistoryEventType } = {}): HistoryRecord[] {
+    const conds: SQL[] = [eq(history.authorId, authorId), eq(history.mediaType, 'audiobook')];
+    if (opts.bookId !== undefined) conds.push(coversBook(opts.bookId));
+    if (opts.eventType) conds.push(eq(history.eventType, opts.eventType));
+    return this.select(and(...conds), 'newest');
   }
 
   /** Music rows of an artist (optionally only those covering one album), newest first. */
@@ -903,6 +932,8 @@ export class HistoryService {
     if (query.movieId && query.movieId.length > 0) conds.push(inArray(history.movieId, query.movieId));
     if (query.artistId && query.artistId.length > 0) conds.push(inArray(history.artistId, query.artistId));
     if (query.albumId !== undefined) conds.push(coversAlbum(query.albumId));
+    if (query.authorId && query.authorId.length > 0) conds.push(inArray(history.authorId, query.authorId));
+    if (query.bookId !== undefined) conds.push(coversBook(query.bookId));
     if (query.downloadId) conds.push(eq(history.downloadId, query.downloadId));
     if (query.quality && query.quality.length > 0) {
       conds.push(
@@ -934,7 +965,7 @@ export class HistoryService {
         case 'sourceTitle':
           return sql`lower(${history.sourceTitle})`;
         case 'title':
-          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName})`;
+          return sql`coalesce(${series.sortTitle}, ${movies.sortTitle}, ${artists.sortName}, ${authors.sortName})`;
         case 'quality':
           return sql`json_extract(${history.quality}, '$.quality.weight')`;
         case 'eventType':
@@ -950,6 +981,7 @@ export class HistoryService {
       .leftJoin(series, eq(history.seriesId, series.id))
       .leftJoin(movies, eq(history.movieId, movies.id))
       .leftJoin(artists, eq(history.artistId, artists.id))
+      .leftJoin(authors, eq(history.authorId, authors.id))
       .where(where)
       .orderBy(dir(sortExpr), dir(history.id))
       .limit(query.pageSize)
@@ -1025,6 +1057,15 @@ export class HistoryService {
         ),
       )
       .run().changes;
+    orphaned += this.db
+      .delete(history)
+      .where(
+        and(
+          eq(history.mediaType, 'audiobook'),
+          or(sql`${history.authorId} is null`, notInArray(history.authorId, this.db.select({ id: authors.id }).from(authors))),
+        ),
+      )
+      .run().changes;
 
     let expired = 0;
     if (retentionDays !== null && retentionDays > 0) {
@@ -1040,9 +1081,28 @@ export class HistoryService {
     target: HistoryTarget,
     base: Omit<NewHistoryRow, 'id' | 'date' | 'mediaType' | 'seriesId' | 'episodeId' | 'movieId'>,
   ): HistoryRecord[] {
-    // Audiobook history arrives with Wave 3.
-    if (target.mediaType === 'audiobook') return [];
     const date = this.now().toISOString();
+    if (target.mediaType === 'audiobook') {
+      // One row per event for the whole release; `book_ids` lists the books it covers.
+      const languages = [...new Set(base.languages.map((l) => l.toLowerCase()))].filter((l) => l !== 'unknown');
+      const rows = this.db
+        .insert(history)
+        .values({
+          ...base,
+          languages,
+          date,
+          mediaType: 'audiobook',
+          seriesId: null,
+          episodeId: null,
+          movieId: null,
+          authorId: target.authorId,
+          bookIds: [...new Set(target.bookIds)],
+        })
+        .returning()
+        .all();
+      if (rows.length > 0) this.bus?.publish({ type: 'history', action: 'added' });
+      return rows.map((r) => this.toRecord(r));
+    }
     if (target.mediaType === 'music') {
       // One row per event for the whole release; `album_ids` lists the albums it covers.
       const languages = [...new Set(base.languages.map((l) => l.toLowerCase()))].filter((l) => l !== 'unknown');
@@ -1125,6 +1185,7 @@ export class HistoryService {
       downloadId: row.downloadId,
       data: row.data,
       ...(row.artistId !== null ? { artistId: row.artistId, albumIds: row.albumIds ?? [] } : {}),
+      ...(row.authorId !== null ? { authorId: row.authorId, bookIds: row.bookIds ?? [] } : {}),
     };
     return { ...base, customFormats: this.resolveFormats ? this.resolveFormats(base) : [] };
   }
@@ -1201,6 +1262,11 @@ export class HistoryService {
       return out;
     });
   }
+}
+
+/** The row's `book_ids` JSON list holds the book. */
+function coversBook(bookId: number): SQL {
+  return sql`exists (select 1 from json_each(${history.bookIds}) where json_each.value = ${bookId})`;
 }
 
 /** The row's `album_ids` JSON list holds the album. */

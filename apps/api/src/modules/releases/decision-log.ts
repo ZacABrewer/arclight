@@ -33,16 +33,24 @@ export function toLogSource(source: ReleaseSource): DecisionLogSource {
   }
 }
 
-function itemKeyOf(row: { seriesId?: number | null | undefined; movieId?: number | null | undefined; artistId?: number | null | undefined }): string | null {
+function itemKeyOf(row: {
+  seriesId?: number | null | undefined;
+  movieId?: number | null | undefined;
+  artistId?: number | null | undefined;
+  authorId?: number | null | undefined;
+}): string | null {
   if (row.movieId != null) return `m${row.movieId}`;
   if (row.seriesId != null) return `s${row.seriesId}`;
   if (row.artistId != null) return `a${row.artistId}`;
+  if (row.authorId != null) return `w${row.authorId}`;
   return null;
 }
 
 function toEntry(row: Row): DecisionLogEntry {
-  const { itemKey: _key, artistId, albumIds, authorId: _author, bookIds: _books, ...rest } = row;
-  return artistId !== null ? { ...rest, artistId, albumIds: albumIds ?? [] } : rest;
+  const { itemKey: _key, artistId, albumIds, authorId, bookIds, ...rest } = row;
+  if (artistId !== null) return { ...rest, artistId, albumIds: albumIds ?? [] };
+  if (authorId !== null) return { ...rest, authorId, bookIds: bookIds ?? [] };
+  return rest;
 }
 
 function compareRows(a: Row, b: Row): number {
@@ -110,9 +118,20 @@ export class DecisionLog {
     query: DecisionLogQuery,
     seriesIdForEpisode: (episodeId: number) => number,
     artistIdForAlbum: (albumId: number) => number = () => 0,
+    authorIdForBook: (bookId: number) => number = () => 0,
   ): DecisionLogPage {
     let rows: Row[];
-    if (query.artistId !== undefined) {
+    if (query.authorId !== undefined) {
+      rows = this.db.select().from(releaseDecisions).where(eq(releaseDecisions.itemKey, `w${query.authorId}`)).all();
+    } else if (query.bookId !== undefined) {
+      const bookId = query.bookId;
+      rows = this.db
+        .select()
+        .from(releaseDecisions)
+        .where(eq(releaseDecisions.itemKey, `w${authorIdForBook(bookId)}`))
+        .all()
+        .filter((r) => (r.bookIds ?? []).includes(bookId));
+    } else if (query.artistId !== undefined) {
       rows = this.db.select().from(releaseDecisions).where(eq(releaseDecisions.itemKey, `a${query.artistId}`)).all();
     } else if (query.albumId !== undefined) {
       const albumId = query.albumId;

@@ -17,6 +17,7 @@ import { ThemesSection } from './themes-section.js';
 import { ConfigAsCodeSection } from './config-as-code.js';
 import { FeaturesSection } from './features-section.js';
 import { MusicMetadataSection } from './music-metadata-section.js';
+import { AudiobookMetadataSection } from './audiobook-metadata-section.js';
 import { isSectionManaged, managedSectionKeys, useManagedKeys } from '../../../hooks/config.js';
 import { t } from '../../../i18n/index.js';
 
@@ -114,6 +115,7 @@ export function GeneralPage() {
       <FeaturesSection />
 
       <MusicMetadataSection />
+      <AudiobookMetadataSection />
 
       <SettingsSection label={t('common.host')}>
         <KeyValue

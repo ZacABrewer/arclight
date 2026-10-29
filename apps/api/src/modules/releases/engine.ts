@@ -14,7 +14,7 @@ import {
   qualityIndex,
   scoreRelease,
 } from '@arclight/profiles-engine';
-import type { ParsedMusicInfo, ParsedRelease } from '@arclight/parser';
+import type { ParsedAudiobookInfo, ParsedMusicInfo, ParsedRelease } from '@arclight/parser';
 import {
   indexerFlagsFromVolumeFactors,
   type AnyMediaType,
@@ -32,6 +32,8 @@ import {
   type ReleaseDecision,
   type ReleaseIndexerFlag,
   type ReleaseKind,
+  type ReleaseAudiobookInfo,
+  type ReleaseBookRef,
   type ReleaseMusicInfo,
   type ReleaseProfile,
   type ReleaseRejection,
@@ -42,7 +44,7 @@ import {
 import { displayLanguage, missingLanguages, releaseAudioLanguages, type RequiredAudio } from '../additional-languages/audio.js';
 import type { DownloadPropersAndRepacks, HistoryEventSummary, ReleaseSettings } from './deps.js';
 import { detectHardcodedSubs, isWhitelistedHardcodedSubs } from './hardcoded-subs.js';
-import type { AlbumMatch } from './audio-matcher.js';
+import type { AlbumMatch, BookMatch } from './audio-matcher.js';
 import type { MatchCriteria, MatchResult, MovieMatch, SeriesMatch, Unmatched } from './matcher.js';
 
 // The decision engine (decision-engine spec §4–§11). Every specification is a pure
@@ -66,6 +68,8 @@ export interface ExistingFile {
   episodeIds: number[];
   /** Music: the album this (per-album) file stands for; its quality is the album's lowest track quality. */
   albumIds?: number[];
+  /** Audiobooks: the book this (per-book) file stands for; its quality is the book's lowest file quality. */
+  bookIds?: number[];
   sizeBytes: number;
   /** Multi-version library: the version slot the file fills (null = unversioned). */
   versionTag?: string | null;
@@ -82,6 +86,7 @@ export interface QueuedItem {
   episodeIds?: number[];
   movieId?: number;
   albumIds?: number[];
+  bookIds?: number[];
 }
 
 export interface PendingItem {
@@ -91,6 +96,7 @@ export interface PendingItem {
   episodeIds?: number[];
   movieId?: number;
   albumIds?: number[];
+  bookIds?: number[];
   /** ISO-8601. */
   addedAt: string;
 }
@@ -141,7 +147,7 @@ export interface DecisionContext {
   requiredAudio?: RequiredAudio | null;
 }
 
-export type MappedMatch = SeriesMatch | MovieMatch | AlbumMatch;
+export type MappedMatch = SeriesMatch | MovieMatch | AlbumMatch | BookMatch;
 
 export interface Candidate {
   release: ReleaseResource;
@@ -150,6 +156,8 @@ export interface Candidate {
   match: MappedMatch;
   /** Music only: the parsed release name. */
   music?: ParsedMusicInfo;
+  /** Audiobooks only: the parsed release name. */
+  audiobook?: ParsedAudiobookInfo;
   quality: QualityModel;
   languages: string[];
   customFormats: CustomFormat[];
@@ -221,6 +229,7 @@ export function indexerFlagScore(flags: readonly ReleaseIndexerFlag[]): number {
 
 export function releaseKindOf(match: MappedMatch): ReleaseKind {
   if (match.mediaType === 'music') return match.pack ?? 'single';
+  if (match.mediaType === 'audiobook') return match.isPack ? 'bookPack' : 'single';
   if (match.mediaType === 'movie') return 'single';
   if (match.fullSeason) return 'seasonPack';
   return match.episodes.length > 1 ? 'multi' : 'single';
@@ -358,6 +367,10 @@ export function filesFor(ctx: Pick<DecisionContext, 'existingFiles'>, c: Candida
     const albums = new Set(c.match.albums.map((a) => a.id));
     return ctx.existingFiles.filter((f) => (f.albumIds ?? []).some((id) => albums.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
   }
+  if (c.match.mediaType === 'audiobook') {
+    const books = new Set(c.match.books.map((b) => b.id));
+    return ctx.existingFiles.filter((f) => (f.bookIds ?? []).some((id) => books.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
+  }
   const ids = new Set(c.match.episodes.map((e) => e.id));
   return ctx.existingFiles.filter((f) => f.episodeIds.some((id) => ids.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
 }
@@ -388,6 +401,7 @@ export function replacesDisallowedFile(
 
 export function itemTags(c: Candidate): number[] {
   if (c.match.mediaType === 'music') return c.match.artist.tags;
+  if (c.match.mediaType === 'audiobook') return c.match.author.tags;
   return c.match.mediaType === 'series' ? c.match.series.tags : c.match.movie.tags;
 }
 
@@ -401,9 +415,20 @@ export function albumMinutes(match: AlbumMatch): number {
   return ms / MINUTE;
 }
 
+/** Running time of the matched books in minutes (catalogue runtime); 0 when any book's is unknown. */
+export function bookMinutes(match: BookMatch): number {
+  let minutes = 0;
+  for (const b of match.books) {
+    if (!b.runtimeMinutes || b.runtimeMinutes <= 0) return 0;
+    minutes += b.runtimeMinutes;
+  }
+  return minutes;
+}
+
 /** Runtime in minutes used for size checks; 0 = unknown. */
 export function runtimeMinutes(c: Candidate, now: Date): number {
   if (c.match.mediaType === 'music') return albumMinutes(c.match);
+  if (c.match.mediaType === 'audiobook') return bookMinutes(c.match);
   if (c.match.mediaType === 'movie') return c.match.movie.runtimeMinutes || 110;
   const series = c.match.series;
   const seriesRuntime = series.runtimeMinutes ?? 0;
@@ -419,8 +444,15 @@ export function runtimeMinutes(c: Candidate, now: Date): number {
   return 0;
 }
 
-function sameItem(c: Candidate, item: { episodeIds?: number[] | undefined; movieId?: number | undefined; albumIds?: number[] | undefined }): boolean {
+function sameItem(
+  c: Candidate,
+  item: { episodeIds?: number[] | undefined; movieId?: number | undefined; albumIds?: number[] | undefined; bookIds?: number[] | undefined },
+): boolean {
   if (c.match.mediaType === 'movie') return item.movieId === c.match.movie.id;
+  if (c.match.mediaType === 'audiobook') {
+    const books = new Set(c.match.books.map((b) => b.id));
+    return (item.bookIds ?? []).some((id) => books.has(id));
+  }
   if (c.match.mediaType === 'music') {
     const albums = new Set(c.match.albums.map((a) => a.id));
     return (item.albumIds ?? []).some((id) => albums.has(id));
@@ -546,8 +578,9 @@ export const specifications: readonly Specification[] = [
       if (c.release.size <= 0) return null;
       if (c.match.mediaType === 'series' && c.match.special) return null;
       const runtime = runtimeMinutes(c, ctx.now);
-      // Albums whose tracks are not loaded yet have no duration: audioSizePlausible still checks them.
-      if (runtime <= 0 && c.match.mediaType === 'music') return null;
+      // Albums whose tracks are not loaded yet (books without a catalogue runtime) have no
+      // duration: audioSizePlausible still checks albums by track count.
+      if (runtime <= 0 && (c.match.mediaType === 'music' || c.match.mediaType === 'audiobook')) return null;
       if (runtime <= 0) {
         return { reason: 'unknownRuntime', message: 'Runtime of all episodes is 0, unable to validate size until it is available' };
       }
@@ -560,7 +593,7 @@ export const specifications: readonly Specification[] = [
         }
       }
       // Packs often hold more than the library knows of (other albums, bonus discs): no upper bound.
-      const pack = c.match.mediaType === 'music' && c.match.pack !== null;
+      const pack = (c.match.mediaType === 'music' && c.match.pack !== null) || (c.match.mediaType === 'audiobook' && c.match.isPack);
       if (limits.maxSize && limits.maxSize > 0 && !pack) {
         const max = limits.maxSize * runtime * MB;
         if (c.release.size > max) {
@@ -808,6 +841,13 @@ export const specifications: readonly Specification[] = [
           ? null
           : { reason: 'albumNotMonitored', message: albums.length === 1 ? 'Album is not monitored' : 'None of the albums is monitored' };
       }
+      if (c.match.mediaType === 'audiobook') {
+        if (!c.match.author.monitored) return { reason: 'authorNotMonitored', message: 'Author is not monitored' };
+        const books = c.match.books;
+        // A pack is wanted for its monitored books; a single book must be monitored itself.
+        const ok = c.match.isPack ? books.some((b) => b.monitored) : books.every((b) => b.monitored);
+        return ok ? null : { reason: 'bookNotMonitored', message: books.length === 1 ? 'Book is not monitored' : 'None of the books is monitored' };
+      }
       if (!c.match.series.monitored) return { reason: 'seriesNotMonitored', message: 'Series is not monitored' };
       const unmonitored = c.match.episodes.filter((e) => !e.monitored);
       if (unmonitored.length === 0) return null;
@@ -913,6 +953,10 @@ export const specifications: readonly Specification[] = [
         return gained.length > 0
           ? null
           : { reason: 'diskNotUpgrade', message: `Pack upgrades none of its ${c.match.albums.length} albums` };
+      }
+      if (c.match.mediaType === 'audiobook' && c.match.isPack) {
+        const gained = booksGainedBy(ctx, c);
+        return gained.length > 0 ? null : { reason: 'diskNotUpgrade', message: `Pack upgrades none of its ${c.match.books.length} books` };
       }
       if (c.match.mediaType === 'series' && c.match.fullSeason) {
         const total = c.match.episodes.length;
@@ -1070,6 +1114,14 @@ export const specifications: readonly Specification[] = [
         }
         return null;
       }
+      if (c.match.mediaType === 'audiobook') {
+        const wanted = cr.bookIds ?? [];
+        const hitsWanted = wanted.length > 0 && c.match.books.some((b) => wanted.includes(b.id));
+        // A co-authored book searched from its co-author is still the requested book.
+        if (cr.authorId !== undefined && cr.authorId !== c.match.author.id && !hitsWanted) return { reason: 'wrongAuthor', message: 'Wrong author' };
+        if (wanted.length > 0 && !hitsWanted) return { reason: 'wrongBook', message: "Book wasn't requested" };
+        return null;
+      }
       if (cr.seriesId !== undefined && cr.seriesId !== c.match.series.id) return { reason: 'wrongSeries', message: 'Wrong series' };
       const parsedSeasons = c.parsed.series?.seasons.length ? c.parsed.series.seasons : [c.match.seasonNumber ?? -1];
       const requested = cr.episodeIds ?? [];
@@ -1129,6 +1181,26 @@ export function albumsGainedBy(ctx: Pick<DecisionContext, 'existingFiles' | 'pro
     }
     if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
     if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') out.push(album.id);
+  }
+  return out;
+}
+
+/**
+ * Audiobooks: the matched books the release would fill (no files yet) or upgrade (strictly
+ * better than the book's lowest file quality and still below cutoff). A pack is only worth these.
+ */
+export function booksGainedBy(ctx: Pick<DecisionContext, 'existingFiles' | 'profile' | 'propers' | 'mismatchAction'>, c: Candidate): number[] {
+  if (c.match.mediaType !== 'audiobook') return [];
+  const next = { quality: c.quality, formatScore: c.formatScore };
+  const out: number[] = [];
+  for (const book of c.match.books) {
+    const file = ctx.existingFiles.find((f) => (f.bookIds ?? []).includes(book.id));
+    if (!file || replacesDisallowedFile(ctx, file, next)) {
+      out.push(book.id);
+      continue;
+    }
+    if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
+    if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') out.push(book.id);
   }
   return out;
 }
@@ -1227,6 +1299,17 @@ export function buildDecision(
       ...(c.music ? { music: musicInfoOf(c.music) } : {}),
     };
   }
+  if (c.match.mediaType === 'audiobook') {
+    const books = c.match.books;
+    return {
+      ...base,
+      authorId: c.match.author.id,
+      authorName: c.match.author.name,
+      bookIds: books.map((b) => b.id),
+      books: books.map(bookRefOf),
+      ...(c.audiobook ? { audiobook: audiobookInfoOf(c.audiobook) } : {}),
+    };
+  }
   if (c.match.mediaType === 'series') {
     return {
       ...base,
@@ -1263,6 +1346,33 @@ export function musicInfoOf(info: ParsedMusicInfo): ReleaseMusicInfo {
     hasLog: info.hasLog,
     logScore: info.logScore,
     hasCue: info.hasCue,
+  };
+}
+
+/** A matched book as the decision lists it: title, primary series and position, year. */
+export function bookRefOf(b: BookMatch['books'][number]): ReleaseBookRef {
+  const s = b.series.find((e) => e.isPrimary) ?? b.series[0];
+  return { id: b.id, title: b.title, series: s?.name ?? null, seriesPosition: s?.position ?? null, year: b.year };
+}
+
+/** The contract view of a parsed audiobook release name. */
+export function audiobookInfoOf(info: ParsedAudiobookInfo): ReleaseAudiobookInfo {
+  return {
+    authors: [...info.authors],
+    title: info.title,
+    subtitle: info.subtitle,
+    series: info.series,
+    seriesPosition: info.seriesPosition,
+    narrators: [...info.narrators],
+    year: info.year,
+    formatType: info.formatType,
+    container: info.container,
+    codec: info.audio.codec,
+    bitrateKbps: info.bitrateKbps ?? info.audio.bitrateKbps,
+    asin: info.asin,
+    isbn: info.isbn,
+    isPack: info.isPack,
+    language: info.language,
   };
 }
 
@@ -1327,6 +1437,7 @@ export function itemKey(d: ReleaseDecision): string | undefined {
   const v = d.versionTag ? `:${d.versionTag}` : '';
   if (d.mediaType === 'movie' && d.movieId !== undefined) return `movie:${d.movieId}${v}`;
   if (d.mediaType === 'music' && d.artistId !== undefined && d.albumIds?.length) return `artist:${d.artistId}`;
+  if (d.mediaType === 'audiobook' && d.authorId !== undefined && d.bookIds?.length) return `author:${d.authorId}`;
   if (d.mediaType === 'series' && d.seriesId !== undefined && d.episodeIds?.length) return `series:${d.seriesId}${v}`;
   return undefined;
 }

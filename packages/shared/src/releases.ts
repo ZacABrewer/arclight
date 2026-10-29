@@ -61,6 +61,47 @@ export const ReleaseAlbumRef = z.object({
 });
 export type ReleaseAlbumRef = z.infer<typeof ReleaseAlbumRef>;
 
+/**
+ * What the audiobook parser read from a release name (audiobook decisions only). The
+ * interactive book search shows it next to the matched books.
+ */
+export const ReleaseAudiobookInfo = z.object({
+  /** Credited authors as written ("Last, First" turned around). */
+  authors: z.array(z.string()),
+  /** Null for packs named only by series and range. */
+  title: z.string().nullable(),
+  subtitle: z.string().nullable(),
+  series: z.string().nullable(),
+  /** `3`, `2.5`, or a range for packs (`1-5`). */
+  seriesPosition: z.string().nullable(),
+  narrators: z.array(z.string()),
+  year: z.number().int().nullable(),
+  /** `unabridged`, `abridged`, `dramatized` or `unknown`. */
+  formatType: z.string(),
+  /** `m4b`, `m4a`, `mp3`, `flac`, `opus` or `unknown`. */
+  container: z.string(),
+  codec: z.string(),
+  bitrateKbps: z.number().int().nullable(),
+  asin: z.string().nullable(),
+  isbn: z.string().nullable(),
+  /** A series pack ("Books 1-5", "Complete Series"). */
+  isPack: z.boolean(),
+  /** ISO 639-1 code when the name states a language. */
+  language: z.string().nullable(),
+});
+export type ReleaseAudiobookInfo = z.infer<typeof ReleaseAudiobookInfo>;
+
+/** A book an audiobook decision maps to. */
+export const ReleaseBookRef = z.object({
+  id: z.number().int(),
+  title: z.string(),
+  /** The book's primary series and position, when it has one. */
+  series: z.string().nullable(),
+  seriesPosition: z.string().nullable(),
+  year: z.number().int().nullable(),
+});
+export type ReleaseBookRef = z.infer<typeof ReleaseBookRef>;
+
 /** The verdict on one release. Extends the indexer's resource so the UI can show both at once. */
 export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved: true }).extend({
   rejections: z.array(ReleaseRejection),
@@ -84,6 +125,15 @@ export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved
   albums: z.array(ReleaseAlbumRef).optional(),
   /** Music: what the parser read from the release name. */
   music: ReleaseMusicInfo.optional(),
+  /** Audiobooks: the matched author (the books' owner). */
+  authorId: z.number().int().optional(),
+  authorName: z.string().optional(),
+  /** Audiobooks: the books the release would fill or upgrade (for a pack, only the wanted ones). */
+  bookIds: z.array(z.number().int()).optional(),
+  /** Audiobooks: `bookIds` with titles and series positions, same order. */
+  books: z.array(ReleaseBookRef).optional(),
+  /** Audiobooks: what the parser read from the release name. */
+  audiobook: ReleaseAudiobookInfo.optional(),
   /** Multi-version items: the version slot the release was evaluated for (best-fitting profile). */
   versionTag: z.string().optional(),
   quality: QualityModel,
@@ -113,6 +163,9 @@ export const ReleaseGrabRequest = z.object({
   /** Music: pin the artist (and optionally the albums) of an ambiguous release. */
   artistId: z.number().int().optional(),
   albumIds: z.array(z.number().int()).optional(),
+  /** Audiobooks: pin the author (and optionally the books) of an ambiguous release. */
+  authorId: z.number().int().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   downloadClientId: z.number().int().optional(),
 });
 export type ReleaseGrabRequest = z.infer<typeof ReleaseGrabRequest>;
@@ -147,6 +200,8 @@ export const PendingRelease = z.object({
   movieId: z.number().int().optional(),
   artistId: z.number().int().optional(),
   albumIds: z.array(z.number().int()).optional(),
+  authorId: z.number().int().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   quality: QualityModel,
   customFormatScore: z.number().int(),
   reason: PendingReason,
@@ -171,10 +226,21 @@ export const ReleaseSearchQuery = z
     albumId: OptionalInt,
     /** Music: interactive search for an artist (discographies plus every wanted album). */
     artistId: OptionalInt,
+    /** Audiobooks: interactive search for one book (its author is implied). */
+    bookId: OptionalInt,
+    /** Audiobooks: interactive search for an author (series packs plus every wanted book). */
+    authorId: OptionalInt,
   })
   .refine(
-    (q) => q.seriesId !== undefined || q.episodeId !== undefined || q.movieId !== undefined || q.albumId !== undefined || q.artistId !== undefined,
-    { message: 'seriesId, episodeId, movieId, albumId or artistId is required' },
+    (q) =>
+      q.seriesId !== undefined ||
+      q.episodeId !== undefined ||
+      q.movieId !== undefined ||
+      q.albumId !== undefined ||
+      q.artistId !== undefined ||
+      q.bookId !== undefined ||
+      q.authorId !== undefined,
+    { message: 'seriesId, episodeId, movieId, albumId, artistId, bookId or authorId is required' },
   );
 export type ReleaseSearchQuery = z.infer<typeof ReleaseSearchQuery>;
 
@@ -220,10 +286,20 @@ export const SearchCommandRequest = z
     /** Music: search the artist's wanted albums (or only `albumIds`). */
     artistId: z.number().int().optional(),
     albumIds: z.array(z.number().int()).optional(),
+    /** Audiobooks: search the author's wanted books (or only `bookIds`). */
+    authorId: z.number().int().optional(),
+    bookIds: z.array(z.number().int()).optional(),
   })
   .refine(
-    (q) => q.seriesId !== undefined || q.movieId !== undefined || (q.episodeIds?.length ?? 0) > 0 || q.artistId !== undefined || (q.albumIds?.length ?? 0) > 0,
-    { message: 'seriesId, episodeIds, movieId, artistId or albumIds is required' },
+    (q) =>
+      q.seriesId !== undefined ||
+      q.movieId !== undefined ||
+      (q.episodeIds?.length ?? 0) > 0 ||
+      q.artistId !== undefined ||
+      (q.albumIds?.length ?? 0) > 0 ||
+      q.authorId !== undefined ||
+      (q.bookIds?.length ?? 0) > 0,
+    { message: 'seriesId, episodeIds, movieId, artistId, albumIds, authorId or bookIds is required' },
   );
 export type SearchCommandRequest = z.infer<typeof SearchCommandRequest>;
 
@@ -258,6 +334,9 @@ export const DecisionLogEntry = z.object({
   /** Music rows: the artist and the albums the release mapped to (absent on video rows). */
   artistId: z.number().int().nullable().optional(),
   albumIds: z.array(z.number().int()).optional(),
+  /** Audiobook rows: the author and the books the release mapped to (absent on other rows). */
+  authorId: z.number().int().nullable().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   guid: z.string(),
   indexerId: z.number().int(),
   title: z.string(),
@@ -289,7 +368,7 @@ export const DecisionLogBatch = z.object({
 });
 export type DecisionLogBatch = z.infer<typeof DecisionLogBatch>;
 
-/** GET /release/decisions: exactly one of seriesId, episodeId, movieId, artistId, albumId. */
+/** GET /release/decisions: exactly one of seriesId, episodeId, movieId, artistId, albumId, authorId, bookId. */
 export const DecisionLogQuery = z
   .object({
     seriesId: z.coerce.number().int().min(1).optional(),
@@ -297,11 +376,13 @@ export const DecisionLogQuery = z
     movieId: z.coerce.number().int().min(1).optional(),
     artistId: z.coerce.number().int().min(1).optional(),
     albumId: z.coerce.number().int().min(1).optional(),
+    authorId: z.coerce.number().int().min(1).optional(),
+    bookId: z.coerce.number().int().min(1).optional(),
     page: z.coerce.number().int().min(1).default(1),
     pageSize: z.coerce.number().int().min(1).max(100).default(10),
   })
-  .refine((q) => [q.seriesId, q.episodeId, q.movieId, q.artistId, q.albumId].filter((v) => v !== undefined).length === 1, {
-    message: 'exactly one of seriesId, episodeId, movieId, artistId or albumId is required',
+  .refine((q) => [q.seriesId, q.episodeId, q.movieId, q.artistId, q.albumId, q.authorId, q.bookId].filter((v) => v !== undefined).length === 1, {
+    message: 'exactly one of seriesId, episodeId, movieId, artistId, albumId, authorId or bookId is required',
   });
 export type DecisionLogQuery = z.infer<typeof DecisionLogQuery>;
 
@@ -318,8 +399,8 @@ export type DecisionLogPage = z.infer<typeof DecisionLogPage>;
 // came of it, and when the scheduled searches will look for it next.
 // ---------------------------------------------------------------------------------------
 
-/** Episode, movie or album: the units the scheduled searches track. */
-export const SearchItemType = z.enum(['episode', 'movie', 'album']);
+/** Episode, movie, album or book: the units the scheduled searches track. */
+export const SearchItemType = z.enum(['episode', 'movie', 'album', 'book']);
 export type SearchItemType = z.infer<typeof SearchItemType>;
 
 /** `automatic`: a scheduled job (Missing, Cutoff unmet, profile migration); `manual`: a user's "Search". */

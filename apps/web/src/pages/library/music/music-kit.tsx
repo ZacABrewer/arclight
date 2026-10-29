@@ -12,7 +12,8 @@ import { t } from '../../../i18n/index.js';
 
 /**
  * Square artwork on the shared poster frame (border, sheen, progress bar); without an image
- * (or when it fails) the artist's or album's initial stands in.
+ * (or when it fails) the artist's or album's initial stands in. Audiobooks use it too
+ * (covers are square; author headshots fall back to two initials).
  */
 export function SquareArt({
   src,
@@ -22,6 +23,7 @@ export function SquareArt({
   progressTone = 'default',
   className,
   loading = 'lazy',
+  fallback,
   children,
 }: {
   src: string | null | undefined;
@@ -31,6 +33,8 @@ export function SquareArt({
   progressTone?: 'default' | 'warn' | 'muted' | undefined;
   className?: string | undefined;
   loading?: 'lazy' | 'eager' | undefined;
+  /** Text shown without an image (default: the title's first letter). */
+  fallback?: string | undefined;
   children?: ReactNode;
 }) {
   const [failed, setFailed] = useState(false);
@@ -41,7 +45,7 @@ export function SquareArt({
         <img src={src} alt={title} loading={loading} decoding="async" onError={() => setFailed(true)} />
       ) : (
         <div className="music-art__initial" role="img" aria-label={title} data-testid="music-initial">
-          <span>{initialOf(title)}</span>
+          <span>{fallback ?? initialOf(title)}</span>
         </div>
       )}
       {children}

@@ -115,6 +115,9 @@ export const HistoryRecord = z.object({
   /** Music rows: the artist and the albums of the event (absent on video rows). */
   artistId: z.number().int().nullable().optional(),
   albumIds: z.array(z.number().int()).optional(),
+  /** Audiobook rows: the author and the books of the event (absent on other rows). */
+  authorId: z.number().int().nullable().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   sourceTitle: z.string(),
   quality: QualityModel,
   languages: z.array(LanguageCode),
@@ -148,6 +151,10 @@ export const HistoryListQuery = z.object({
   artistId: intList,
   /** Music: rows that cover this album. */
   albumId: z.coerce.number().int().optional(),
+  /** Audiobooks: rows of these authors. */
+  authorId: intList,
+  /** Audiobooks: rows that cover this book. */
+  bookId: z.coerce.number().int().optional(),
   episodeId: z.coerce.number().int().optional(),
   movieId: intList,
   downloadId: z.string().min(1).optional(),
@@ -222,6 +229,9 @@ export const BlocklistRecord = z.object({
   /** Music: the artist the entry is scoped to and the albums of the blocked grab. */
   artistId: z.number().int().nullable().optional(),
   albumIds: z.array(z.number().int()).optional(),
+  /** Audiobooks: the author the entry is scoped to and the books of the blocked grab. */
+  authorId: z.number().int().nullable().optional(),
+  bookIds: z.array(z.number().int()).optional(),
   sourceTitle: z.string(),
   quality: QualityModel,
   languages: z.array(LanguageCode),
@@ -282,6 +292,7 @@ export const BlocklistListQuery = z.object({
   seriesId: intList,
   movieId: intList,
   artistId: intList,
+  authorId: intList,
   protocol: listOf(ReleaseProtocol),
 });
 export type BlocklistListQuery = z.infer<typeof BlocklistListQuery>;

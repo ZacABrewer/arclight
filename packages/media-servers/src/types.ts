@@ -1,10 +1,10 @@
 /**
  * The read model shared by every media-server client: libraries, users, items matched by
- * provider id, and per-user play state. Jellyfin, Emby and Plex are mapped onto these shapes
+ * provider id, and per-user play state. Jellyfin, Emby, Plex and Audiobookshelf are mapped onto these shapes
  * so callers (availability, retention, library refresh) never branch on the server kind.
  */
 
-export const MEDIA_SERVER_KINDS = ['jellyfin', 'emby', 'plex'] as const;
+export const MEDIA_SERVER_KINDS = ['jellyfin', 'emby', 'plex', 'audiobookshelf'] as const;
 export type MediaServerKind = (typeof MEDIA_SERVER_KINDS)[number];
 
 /**
@@ -170,7 +170,7 @@ export interface MediaServerClientOptions {
   kind: MediaServerKind;
   /** Base URL including any URL base, e.g. http://jellyfin.lan:8096/jf. */
   url: string;
-  /** Jellyfin/Emby API key, or the Plex owner's X-Plex-Token. */
+  /** Jellyfin/Emby API key, the Plex owner's X-Plex-Token, or an Audiobookshelf API token. */
   apiKey: string;
   fetch?: FetchLike;
   /** Per-request timeout. Default 30 s. */

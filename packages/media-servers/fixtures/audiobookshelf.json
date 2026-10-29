@@ -1,0 +1,79 @@
+{
+  "status": { "app": "audiobookshelf", "serverVersion": "2.17.2", "isInit": true, "language": "en-us" },
+  "libraries": {
+    "libraries": [
+      {
+        "id": "lib-books",
+        "name": "Audiobooks",
+        "mediaType": "book",
+        "folders": [{ "id": "fol-1", "fullPath": "/data/audiobooks", "libraryId": "lib-books" }]
+      },
+      {
+        "id": "lib-kids",
+        "name": "Kids",
+        "mediaType": "book",
+        "folders": [{ "id": "fol-2", "fullPath": "/data/kids-books", "libraryId": "lib-kids" }]
+      },
+      {
+        "id": "lib-pods",
+        "name": "Podcasts",
+        "mediaType": "podcast",
+        "folders": [{ "id": "fol-3", "fullPath": "/data/podcasts", "libraryId": "lib-pods" }]
+      }
+    ]
+  },
+  "itemsPage0": {
+    "results": [
+      {
+        "id": "li-1",
+        "libraryId": "lib-books",
+        "path": "/data/audiobooks/Fixture Author/Lantern Road",
+        "relPath": "Fixture Author/Lantern Road",
+        "mediaType": "book",
+        "media": { "metadata": { "title": "Lantern Road", "authorName": "Fixture Author", "publishedYear": "2019", "asin": "B0FIXTURE1", "isbn": null } }
+      },
+      {
+        "id": "li-2",
+        "libraryId": "lib-books",
+        "path": "/data/audiobooks/Fixture Author/Quiet Harbour",
+        "relPath": "Fixture Author/Quiet Harbour",
+        "mediaType": "book",
+        "media": { "metadata": { "title": "Quiet Harbour", "authorName": "Fixture Author", "publishedYear": "2021", "asin": null, "isbn": "978-0-00-000000-2" } }
+      }
+    ],
+    "total": 3,
+    "limit": 2,
+    "page": 0
+  },
+  "itemsPage1": {
+    "results": [
+      {
+        "id": "li-3",
+        "libraryId": "lib-books",
+        "path": "/data/audiobooks/Other Writer/Paper Moons",
+        "mediaType": "book",
+        "media": { "metadata": { "title": "Paper Moons", "publishedYear": null, "asin": "b0fixture3" } }
+      }
+    ],
+    "total": 3,
+    "limit": 2,
+    "page": 1
+  },
+  "kidsItems": { "results": [], "total": 0, "limit": 2, "page": 0 },
+  "users": {
+    "users": [
+      { "id": "root", "username": "admin", "type": "root", "isActive": true, "lastSeen": 1767225600000 },
+      { "id": "usr-2", "username": "reader", "type": "user", "isActive": true, "lastSeen": null },
+      { "id": "usr-3", "username": "old", "type": "guest", "isActive": false }
+    ]
+  },
+  "reader": {
+    "id": "usr-2",
+    "username": "reader",
+    "mediaProgress": [
+      { "libraryItemId": "li-1", "duration": 36000, "currentTime": 36000, "isFinished": true, "lastUpdate": 1767225600000, "finishedAt": 1767225600000 },
+      { "libraryItemId": "li-2", "duration": 18000, "currentTime": 4500.5, "isFinished": false, "lastUpdate": 1767139200000 },
+      { "libraryItemId": "pod-1", "episodeId": "ep-1", "duration": 100, "currentTime": 50, "isFinished": false }
+    ]
+  }
+}

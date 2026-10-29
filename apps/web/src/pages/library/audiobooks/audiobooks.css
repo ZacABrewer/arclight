@@ -1,0 +1,13 @@
+/* Audiobook pages (Library → Audiobooks). Builds on music.css (square art, groups, cards); tokens only. */
+.ab-author-art .music-art__initial > span { font-size: 30cqw; letter-spacing: .02em; }
+
+.ab-book__position { font-family: var(--al-mono); font-size: 11px; color: var(--al-cyan-text); letter-spacing: .04em; text-transform: uppercase; }
+.ab-book__byline { font-size: 12px; color: var(--al-text-3); overflow-wrap: anywhere; }
+
+.ab-narrators { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 0 0 12px; font-size: 13px; color: var(--al-text-3); }
+.ab-narrators strong { color: var(--al-text-2); font-weight: 500; }
+.ab-series-links { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 0 0 12px; padding: 0; list-style: none; font-size: 13px; }
+.ab-series-links a { color: var(--al-cyan-text); }
+
+.ab-chapters { counter-reset: none; }
+.ab-release__meta { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; color: var(--al-text-3); }
