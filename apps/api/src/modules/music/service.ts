@@ -890,6 +890,21 @@ export function selectRelease(db: Db, albumId: number, release: MbRelease, artis
 // Audio files and rescans
 // ---------------------------------------------------------------------------------------
 
+/**
+ * "Allow upgrades again" for an audio file grabbed with "Grab anyway". Upgrades are decided per
+ * album (music) or per book (audiobooks), so the override is cleared on every file of the same
+ * album / book. Returns the files that changed (empty when none carried an override).
+ */
+export function clearAudioGrabOverride(db: MusicDb, id: number): AudioFile[] {
+  const file = db.select().from(audioFiles).where(eq(audioFiles.id, id)).get();
+  if (!file) throw LibraryError.notFound('audio file', id);
+  const scope =
+    file.albumId !== null ? eq(audioFiles.albumId, file.albumId) : file.bookId !== null ? eq(audioFiles.bookId, file.bookId) : eq(audioFiles.id, file.id);
+  const where = and(eq(audioFiles.mediaType, file.mediaType), scope, isNotNull(audioFiles.grabOverride));
+  const rows = db.update(audioFiles).set({ grabOverride: null }).where(where).returning().all();
+  return rows.map(toAudioFile);
+}
+
 export function listAudioFiles(db: MusicDb, query: AudioFileListQuery): AudioFile[] {
   const where: SQL[] = [eq(audioFiles.mediaType, 'music')];
   if (query.artistId !== undefined) where.push(eq(audioFiles.artistId, query.artistId));
@@ -1211,7 +1226,7 @@ export function listCutoffUnmetAlbums(db: MusicDb, q: WantedAlbumsQuery, profile
   const rows = monitoredAlbumsOfMonitoredArtists(db);
   if (rows.length === 0) return paginate([], q);
   const files = db
-    .select({ albumId: audioFiles.albumId, quality: audioFiles.quality })
+    .select({ albumId: audioFiles.albumId, quality: audioFiles.quality, grabOverride: audioFiles.grabOverride })
     .from(audioFiles)
     .where(inArray(audioFiles.albumId, rows.map((r) => r.album.id)))
     .all();
@@ -1221,6 +1236,8 @@ export function listCutoffUnmetAlbums(db: MusicDb, q: WantedAlbumsQuery, profile
     const own = byAlbum.get(r.album.id);
     const profile = byId.get(r.artist.qualityProfileId);
     if (!own || own.length === 0 || !profile) return false;
+    // Kept by the user's choice ("Grab anyway"): upgrades are paused until they allow them again.
+    if (own.some((f) => f.grabOverride != null)) return false;
     return own.some((f) => !isQualityCutoffMet(profile, f.quality));
   });
   const stats = albumStatistics(

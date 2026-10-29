@@ -36,6 +36,10 @@ On first start Arclight adds a "Built-in" client for you if no client exists (se
 3. Fill in the form, press **Test**, then save. Test checks the connection, the login, the version, and warns about things like a missing category. **Test all** on the main page tests every client.
 4. Change nothing else if the test is green. Press **Show advanced** only for the extra options listed below.
 
+### Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection: **Enable**, **Disable**, **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu. Remote path mappings have checkboxes too, for deleting several.
+
 ### Settings every client has
 
 | Setting | Default | What it does |

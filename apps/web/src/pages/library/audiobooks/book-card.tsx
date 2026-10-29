@@ -1,24 +1,62 @@
 import { Link } from '@tanstack/react-router';
 import type { Book } from '@arclight/shared';
-import { StatusChip } from '../../../arclight/index.js';
+import { Checkbox, StatusChip } from '../../../arclight/index.js';
 import { MonitorSwitch } from '../../../components/media/media-kit.js';
 import { BookCoverArt, bookLink } from './audiobook-kit.js';
 import { bookYear, formatRuntime, positionLabel } from './audiobook-model.js';
 import { t } from '../../../i18n/index.js';
 
 /** One book on the author and series pages: cover, "Book 3", title, year, runtime, on-disk state. */
-export function BookCard({ book, position, byline, onMonitor }: { book: Book; position?: string | null | undefined; byline?: string | undefined; onMonitor: (m: boolean) => void }) {
+export function BookCard({
+  book,
+  position,
+  byline,
+  onMonitor,
+  selecting = false,
+  selected = false,
+  onToggle,
+}: {
+  book: Book;
+  position?: string | null | undefined;
+  byline?: string | undefined;
+  onMonitor: (m: boolean) => void;
+  /** Select mode (author page bulk bar): a checkbox instead of the monitor switch, the card toggles. */
+  selecting?: boolean | undefined;
+  selected?: boolean | undefined;
+  onToggle?: (() => void) | undefined;
+}) {
   const pos = positionLabel(position);
+  const art = (
+    <>
+      <BookCoverArt book={book} progress={book.hasFile ? 100 : 0} progressTone={!book.monitored ? 'muted' : book.hasFile ? 'default' : 'warn'} />
+      {pos ? <span className="ab-book__position">{pos}</span> : null}
+      <span className="music-album__title">{book.title}</span>
+    </>
+  );
   return (
-    <article className="music-album" aria-label={book.title} data-unmonitored={!book.monitored || undefined}>
+    <article
+      className="music-album"
+      aria-label={book.title}
+      data-unmonitored={!book.monitored || undefined}
+      data-select={selecting || undefined}
+      data-selected={(selecting && selected) || undefined}
+    >
       <span className="music-album__monitor">
-        <MonitorSwitch monitored={book.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: book.monitored, title: book.title })} />
+        {selecting ? (
+          <Checkbox aria-label={t('library.selectTitle', { title: book.title })} checked={selected} onChange={() => onToggle?.()} />
+        ) : (
+          <MonitorSwitch monitored={book.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: book.monitored, title: book.title })} />
+        )}
       </span>
-      <Link {...bookLink(book)} className="music-card">
-        <BookCoverArt book={book} progress={book.hasFile ? 100 : 0} progressTone={!book.monitored ? 'muted' : book.hasFile ? 'default' : 'warn'} />
-        {pos ? <span className="ab-book__position">{pos}</span> : null}
-        <span className="music-album__title">{book.title}</span>
-      </Link>
+      {selecting ? (
+        <div className="music-card" onClick={onToggle}>
+          {art}
+        </div>
+      ) : (
+        <Link {...bookLink(book)} className="music-card">
+          {art}
+        </Link>
+      )}
       {byline ? <span className="ab-book__byline">{byline}</span> : null}
       <div className="music-album__meta">
         <span className="al-num">{bookYear(book) ?? '—'}</span>

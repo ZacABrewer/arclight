@@ -31,6 +31,8 @@ An empty Missing list says "Every monitored item that has aired is on disk."
 
 An item is on Cutoff unmet when it has a file, but the file's quality (or custom format score) has not reached the cutoff of the quality profile that item uses. Arclight will keep looking for upgrades until the cutoff is met. An empty list says "Every file meets its profile cutoff." See [Quality profiles](quality-profiles.md) for how cutoffs work.
 
+A file marked **Kept by choice** (grabbed with **Grab anyway**) is not on this list and is not searched for, even below the cutoff, until you allow upgrades again. See [Interactive search](interactive-search.md#kept-by-choice).
+
 If an item has several versions (for example a 1080p and a 4K copy, see [Library](library.md)), a **Versions** column shows each version's state.
 
 ## The lists
@@ -42,8 +44,8 @@ Episodes list columns: Series, Episode, Title, Air date, Status, Versions, and a
 | Button | What it does |
 | --- | --- |
 | Search (on a row) | Searches indexers for that one episode or movie right now. |
-| Search selected | Tick rows, then search just those. |
-| Search all | Searches every item on the list (not just the current page). A toast reports how many searches were queued. |
+| Search selected | Tick rows, then search just those. On Cutoff unmet the button is **Search for upgrades**. **Select all N** in the bar takes every item on the list, on every page. The bar also has **Unmonitor**. See [Bulk actions](library.md#bulk-actions). |
+| Search all | Searches every item on the list (not just the current page) in one background job. A toast says how many items were queued. |
 
 A search asks your enabled indexers for matching releases, runs them through your quality profile and other rules, and grabs the best one if it passes. Grabbed releases appear in [Activity > Queue](activity.md). If nothing is grabbed, open the item and use [interactive search](interactive-search.md) to see every release and the reason each was rejected. For a general "nothing found" checklist, see [Nothing found](../TROUBLESHOOTING.md#nothing-found).
 

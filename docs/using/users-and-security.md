@@ -149,6 +149,10 @@ Checklist before you expose anything:
 
 Note: Cloudflare in front of Arclight is a different thing from Cloudflare protecting an indexer. If your indexers are blocked by Cloudflare challenges, see [Cloudflare and other browser challenges](../CLOUDFLARE.md).
 
+## Bulk actions
+
+On Settings > Users, tick users to delete several at once (it asks first, with the count). Your own account and the last admin cannot be deleted; they are listed as failed in the result message.
+
 ## Related
 
 - [Exposing Arclight outside your home](../getting-started/exposing-outside-home.md)

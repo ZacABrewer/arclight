@@ -5,6 +5,8 @@ import { AudioMediaLabel, isAudioRecord } from './audiobook-media.js';
 import { errorMessage } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, Pane, ProtocolBadge, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
+import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
+import { useSelection } from '../../components/bulk-actions.js';
 import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { useGrabPending, usePendingReleases, useRemovePending } from '../../hooks/releases.js';
 import { formatDateTime } from '../../lib/format.js';
@@ -93,6 +95,8 @@ export function DelayCountdown({ eligibleAt, now }: { eligibleAt: string; now: n
 
 export function PendingReleasesPage() {
   const pending = usePendingReleases();
+  const pendingKeys = (pending.data ?? []).map((p) => p.id);
+  const selection = useSelection(pendingKeys);
   const grab = useGrabPending();
   const remove = useRemovePending();
   const series = useSeriesList();
@@ -173,10 +177,13 @@ export function PendingReleasesPage() {
             rowKey={(p) => p.id}
             loading={pending.isPending}
             defaultSort={{ key: 'eligible', direction: 'asc' }}
+            {...tableSelection(selection)}
+            rowLabel={(p) => t('components.bulkActions.selectName', { name: p.title })}
             empty={<EmptyState title={t('activity.pending.nothingPending')}>{t('activity.pending.releasesHeldBackByA')}</EmptyState>}
           />
         )}
       </Pane>
+      <ResourceBulkBar resource="pending" selection={selection} allKeys={pendingKeys} nameOf={(id) => pending.data?.find((p) => p.id === id)?.title} />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import {
   IndexerDefinitionReloadResult,
   IndexerDefinitionSummary,
   IndexerGlobalSettings,
+  IndexerHealth,
   IndexerProxy,
   IndexerProxyTestResult,
   IndexerStats,
@@ -62,6 +63,8 @@ export const indexersApi = {
   /** Grab a search result by guid; 409 NO_MATCH unless `force`. */
   searchGrab: (body: SearchGrabRequest) => request('/search/grab', SearchGrabResponse, { method: 'POST', json: body }),
   stats: (days = 30) => request('/indexer/stats', IndexerStats, { query: { days } }),
+  /** Per-indexer health summary for 1, 7 or 30 days. */
+  health: (days = 7) => request('/indexer/health', IndexerHealth, { query: { days } }),
 
   definitions: {
     list: (query: Partial<IndexerDefinitionListQuery> = {}) =>

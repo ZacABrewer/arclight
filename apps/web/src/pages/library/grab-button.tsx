@@ -46,6 +46,7 @@ export function GrabButton({
         >
           <p>{t('library.grabButton.overrideExplanation', { title: release.title })}</p>
           <RejectionList reasons={release.rejections.map((x) => x.message)} />
+          <p>{t('library.grabButton.overrideKeeps')}</p>
         </ConfirmDialog>
       ) : null}
     </>

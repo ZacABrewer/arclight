@@ -1,6 +1,11 @@
 import { useId, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { QueueItem, QueueMove, TorrentSpeedMode } from '@arclight/shared';
 import { Button, ButtonGroup, Chip, FormRow, Input, SectionLabel, Select, Toggle, Tooltip } from '../../arclight/index.js';
+import { errorMessage } from '../../api/client.js';
+import { queueApi } from '../../api/queue.js';
+import { useBulkResultToast } from '../../components/bulk-actions.js';
+import type { BulkAction } from '../../components/media/bulk-bar.js';
 import { useForceStartQueueItem, useMoveQueueItem, useQueueItemLimits } from '../../hooks/activity.js';
 import { useSetSlowMode, useTorrentStatus } from '../../hooks/torrent.js';
 import { formatDateTime, formatRate } from '../../lib/format.js';
@@ -200,4 +205,52 @@ export function QueueRowControls({ item }: { item: QueueItem }) {
       ) : null}
     </section>
   );
+}
+
+// ---- bulk ----------------------------------------------------------------------------------
+
+type QueueBulkVerb = 'top' | 'bottom' | 'reannounce';
+
+/**
+ * Bulk-bar actions for the selected downloads that report engine controls: move to the top or
+ * bottom of the client's queue, and ask for fresh peers. Each item goes through its own route;
+ * the toast says how many worked.
+ */
+export function useQueueEngineBulk(items: readonly QueueItem[]): BulkAction[] {
+  const qc = useQueryClient();
+  const report = useBulkResultToast();
+  const [busy, setBusy] = useState<QueueBulkVerb | null>(null);
+  const movable = items.filter((i) => i.live?.queuePosition !== undefined);
+  const torrents = items.filter((i) => i.protocol === 'torrent' && !isPendingItem(i) && i.live !== undefined);
+  const run = async (verb: QueueBulkVerb, targets: readonly QueueItem[], label: string) => {
+    setBusy(verb);
+    // One at a time, so "top" keeps the selection's relative order (last moved ends first).
+    const ordered = verb === 'top' ? [...targets].reverse() : targets;
+    const result: { ok: number[]; failed: { id: number; error: string }[] } = { ok: [], failed: [] };
+    for (const item of ordered) {
+      try {
+        if (verb === 'reannounce') await queueApi.reannounce(item.id);
+        else await queueApi.move(item.id, verb);
+        result.ok.push(item.id);
+      } catch (err) {
+        result.failed.push({ id: item.id, error: errorMessage(err) });
+      }
+    }
+    setBusy(null);
+    await qc.invalidateQueries({ queryKey: ['queue'] });
+    report(label, result, (id) => targets.find((i) => i.id === id)?.title);
+  };
+  const action = (verb: QueueBulkVerb, targets: readonly QueueItem[], label: string): BulkAction => ({
+    id: verb,
+    label,
+    loading: busy === verb,
+    disabled: busy !== null,
+    onSelect: () => void run(verb, targets, label),
+  });
+  return [
+    ...(movable.length
+      ? [action('top', movable, t('activity.queueControls.moveToTop')), action('bottom', movable, t('activity.queueControls.moveToBottom'))]
+      : []),
+    ...(torrents.length ? [action('reannounce', torrents, t('activity.queueRecovery.reannounce'))] : []),
+  ];
 }

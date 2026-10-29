@@ -2,7 +2,10 @@ import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { AudiobookMonitorOption, AuthorDetails, Book, MonitorNewBooks } from '@arclight/shared';
 import { Banner, Button, EmptyState, FormRow, Input, KeyValue, Meter, Modal, QualityTag, Select, StatusChip, Toggle } from '../../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../../components/media/bulk-bar.js';
 import { DeleteMediaDialog } from '../../../components/media/delete-media-dialog.js';
+import { useToast } from '../../../components/toast.js';
+import { useBulkSelection } from '../../../hooks/bulk.js';
 import { formatBytes } from '../../../components/media/format.js';
 import { Loading, MonitorSwitch, QueryError, TagChips } from '../../../components/media/media-kit.js';
 import { TagPicker } from '../../../components/media/tag-picker.js';
@@ -13,6 +16,7 @@ import {
   useAudiobookQualityProfiles,
   useAuthor,
   useDeleteAuthor,
+  useDeleteBook,
   useSetAuthorMonitored,
   useSetBooksMonitored,
   useUpdateAuthor,
@@ -154,8 +158,16 @@ function AuthorDetailsView() {
   );
 }
 
+/** Book selection shared by the series groups (one bulk bar for the author). */
+interface BookSelect {
+  active: boolean;
+  selected: ReadonlySet<number>;
+  toggle: (id: number) => void;
+}
+
 function BookGroups({ author }: { author: AuthorDetails }) {
   const groups = useMemo(() => groupBooks(author.books, author.series), [author.books, author.series]);
+  const sel = useBulkSelection();
   if (isLoadingBooks(author)) {
     return (
       <Banner tone="info">
@@ -164,22 +176,79 @@ function BookGroups({ author }: { author: AuthorDetails }) {
     );
   }
   if (author.books.length === 0) return <EmptyState title={t('audiobooks.noBooks')}>{t('audiobooks.noBooksBody')}</EmptyState>;
+  const select: BookSelect = { active: sel.selectMode, selected: sel.selected, toggle: sel.toggle };
   return (
-    <div className="music-groups">
-      {groups.series.map((g) => (
-        <BookGroupSection
-          key={g.seriesId}
-          authorId={author.id}
-          label={g.name}
-          testId={`series-group-${g.seriesId}`}
-          seriesId={g.seriesId}
-          entries={g.entries.map((e) => ({ book: e.book, position: e.position }))}
-        />
-      ))}
-      {groups.standalone.length ? (
-        <BookGroupSection authorId={author.id} label={t('audiobooks.standalone')} testId="series-group-standalone" entries={groups.standalone.map((book) => ({ book, position: null }))} />
+    <>
+      <div className="mk-bulk-toolbar">
+        <Button size="sm" variant={sel.selectMode ? 'secondary' : 'ghost'} aria-pressed={sel.selectMode} onClick={() => (sel.selectMode ? sel.clear() : sel.setSelectMode(true))}>
+          {sel.selectMode ? t('library.done') : t('bulk.selectBooks')}
+        </Button>
+      </div>
+      <div className="music-groups">
+        {groups.series.map((g) => (
+          <BookGroupSection
+            key={g.seriesId}
+            authorId={author.id}
+            label={g.name}
+            testId={`series-group-${g.seriesId}`}
+            seriesId={g.seriesId}
+            entries={g.entries.map((e) => ({ book: e.book, position: e.position }))}
+            select={select}
+          />
+        ))}
+        {groups.standalone.length ? (
+          <BookGroupSection
+            authorId={author.id}
+            label={t('audiobooks.standalone')}
+            testId="series-group-standalone"
+            entries={groups.standalone.map((book) => ({ book, position: null }))}
+            select={select}
+          />
+        ) : null}
+      </div>
+      {sel.selectMode || sel.selected.size > 0 ? (
+        <BookBulkBar authorId={author.id} ids={sel.ids} total={author.books.length} open={sel.selectMode} onSelectAll={() => sel.selectAll(author.books.map((b) => b.id))} onClear={sel.clear} />
       ) : null}
-    </div>
+    </>
+  );
+}
+
+/** Bulk bar for selected books: search, monitor, unmonitor, delete. */
+function BookBulkBar({ authorId, ids, total, open, onSelectAll, onClear }: { authorId: number; ids: number[]; total: number; open: boolean; onSelectAll: () => void; onClear: () => void }) {
+  const search = useAudiobookSearch();
+  const setBooks = useSetBooksMonitored();
+  const del = useDeleteBook();
+  const toast = useToast();
+  const [deleting, setDeleting] = useState(false);
+  const subject = `${ids.length} ${t('audiobooks.bookNoun', { count: ids.length })}`;
+  const actions: BulkAction[] = [
+    { id: 'search', label: t('common.search'), loading: search.isPending, onSelect: () => search.mutate({ name: 'BookSearch', bookIds: ids }) },
+    { id: 'monitor', label: t('common.monitor'), disabled: setBooks.isPending, onSelect: () => setBooks.mutate({ authorId, bookIds: ids, monitored: true }) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: setBooks.isPending, onSelect: () => setBooks.mutate({ authorId, bookIds: ids, monitored: false }) },
+    { id: 'delete', label: t('common.delete'), danger: true, onSelect: () => setDeleting(true) },
+  ];
+  return (
+    <BulkBar count={ids.length} total={total} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear}>
+      <DeleteMediaDialog
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        subject={subject}
+        noun={t('audiobooks.bookNoun', { count: ids.length })}
+        loading={del.isPending}
+        onConfirm={(opts) => {
+          void (async () => {
+            try {
+              for (const id of ids) await del.mutateAsync({ id, ...opts });
+              toast.push({ tone: 'ok', title: t('bulk.toast.deleted', { count: ids.length }) });
+              setDeleting(false);
+              onClear();
+            } catch {
+              // The mutation raised its own error toast; keep the dialog open.
+            }
+          })();
+        }}
+      />
+    </BulkBar>
   );
 }
 
@@ -189,12 +258,14 @@ function BookGroupSection({
   testId,
   seriesId,
   entries,
+  select,
 }: {
   authorId: number;
   label: string;
   testId: string;
   seriesId?: number | undefined;
   entries: Array<{ book: Book; position: string | null }>;
+  select?: BookSelect | undefined;
 }) {
   const setBooks = useSetBooksMonitored();
   const allMonitored = entries.every((e) => e.book.monitored);
@@ -224,7 +295,15 @@ function BookGroupSection({
       </div>
       <div className="music-album-grid">
         {entries.map((e) => (
-          <BookCard key={e.book.id} book={e.book} position={e.position} onMonitor={(m) => setBooks.mutate({ authorId, bookIds: [e.book.id], monitored: m })} />
+          <BookCard
+            key={e.book.id}
+            book={e.book}
+            position={e.position}
+            onMonitor={(m) => setBooks.mutate({ authorId, bookIds: [e.book.id], monitored: m })}
+            selecting={select?.active ?? false}
+            selected={select?.selected.has(e.book.id) ?? false}
+            onToggle={() => select?.toggle(e.book.id)}
+          />
         ))}
       </div>
     </section>

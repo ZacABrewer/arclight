@@ -51,6 +51,8 @@ export interface GrabHistoryInput {
   source: string;
   /** Decision-log batch the grab was chosen from (GET /release/decisions/:batchId). */
   batchId?: string;
+  /** "Grab anyway": the permanent rejections the user overrode (absent for approved grabs). */
+  overriddenRejections?: string[];
 }
 
 export interface HistoryWriter {

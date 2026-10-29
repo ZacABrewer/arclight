@@ -15,3 +15,17 @@
 .mt-tracker__head { margin: 0 0 8px; }
 .mt-tracker__warnings { margin: 0; padding: 10px 14px; list-style: none; display: flex; flex-direction: column; gap: 4px; border-left: 2px solid var(--al-warn); color: var(--al-text-2); font-size: 14px; }
 .mt-tracker__hosts { font-family: var(--al-mono); overflow-wrap: anywhere; }
+
+/* Indexer health (health-table.tsx). The table scrolls sideways inside its pane on phones. */
+.mt-health__pad { padding: 16px; margin: 0; }
+.mt-health__summary { margin: 0; padding: 12px 16px; font-size: 14px; color: var(--al-text-2); border-bottom: 1px solid var(--al-line-1); }
+.mt-health__muted { color: var(--al-text-4); }
+.mt-health__name { all: unset; cursor: pointer; color: var(--al-cyan); text-decoration: underline; text-decoration-color: transparent; text-underline-offset: 3px; }
+.mt-health__name:hover { text-decoration-color: currentColor; }
+.mt-health__name:focus-visible { outline: 1px solid var(--al-cyan); outline-offset: 2px; }
+.mt-health__failure { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.mt-health__message { max-width: 28ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+.mt-health__actions { display: flex; align-items: flex-start; gap: 6px; flex-wrap: wrap; }
+@media (max-width: 767px) {
+  .mt-health__message { max-width: 18ch; }
+}

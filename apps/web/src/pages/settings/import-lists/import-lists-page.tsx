@@ -8,7 +8,8 @@ import { useAllImportListItems, useImportListSchema, useImportLists, useSyncImpo
 import { useQualityProfiles, useRootFolders } from '../../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
+import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { ExclusionsCard } from './exclusions-card.js';
 import { MEDIA_TYPE_LABELS } from './fields.js';
 import { ImportListEditor, type Editing } from './import-list-editor.js';
@@ -24,7 +25,9 @@ function ListCard({
   intervalHours,
   onEdit,
   onPreview,
+  select,
 }: {
+  select?: ItemCardSelect | undefined;
   list: ImportList;
   schema: ImportListSchema | undefined;
   itemCount: number | undefined;
@@ -43,6 +46,7 @@ function ListCard({
     <ItemCard
       title={list.name}
       onClick={onEdit}
+      select={select}
       muted={!list.enabled}
       status={status}
       actions={
@@ -108,6 +112,7 @@ export function ImportListsPage() {
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [preview, setPreview] = useState<ImportList | null>(null);
+  const bulk = useResourceBulk('importlist', lists.data, (l) => l.id, (l) => l.name);
 
   const counts = new Map<number, number>();
   for (const i of items.data ?? []) counts.set(i.importListId, (counts.get(i.importListId) ?? 0) + 1);
@@ -148,6 +153,7 @@ export function ImportListsPage() {
             {errorMessage(lists.error)}
           </ErrorBlock>
         ) : (
+          <>
           <CardGrid label={t('settings.importLists.importLists')}>
             {lists.data.map((l) => {
               const schema = schemas.data?.find((s) => s.implementation === l.implementation);
@@ -160,11 +166,14 @@ export function ImportListsPage() {
                   intervalHours={options.saved?.syncIntervalHours}
                   onEdit={() => setEditing({ list: l, schema })}
                   onPreview={() => setPreview(l)}
+                  select={bulk.cardProps(l)}
                 />
               );
             })}
             <AddCard label={t('settings.importLists.addImportList')} onClick={() => setPicking(true)} />
           </CardGrid>
+          {bulk.bar}
+          </>
         )}
       </SettingsSection>
       <OptionsCard form={options} />

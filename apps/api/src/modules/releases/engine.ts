@@ -75,6 +75,8 @@ export interface ExistingFile {
   versionTag?: string | null;
   /** Audio languages (base tags) from media analysis, else the release name; null = unknown. */
   audioLanguages?: string[] | null;
+  /** Grabbed with "Grab anyway" (a grab override is recorded on the file): automatic upgrades skip it. */
+  keptByChoice?: boolean;
 }
 
 export interface QueuedItem {
@@ -342,6 +344,9 @@ const UPGRADE_MESSAGE: Record<Exclude<UpgradableResult, 'none'>, string> = {
   minCustomFormatScore: 'is not improved upon by the minimum custom format score increment',
   upgradesNotAllowed: 'cannot be upgraded: profile does not allow upgrades',
 };
+
+/** Rejection message of the keptByChoice spec (a file grabbed with "Grab anyway"). */
+export const KEPT_BY_CHOICE_MESSAGE = 'Kept by your choice (grabbed anyway); upgrades are paused for this file';
 
 function upgradeRejection(prefix: 'disk' | 'queue' | 'history', what: string, result: Exclude<UpgradableResult, 'none'>): SpecResult {
   return { reason: `${prefix}${UPGRADE_SUFFIX[result]}`, message: `${what} ${UPGRADE_MESSAGE[result]}` };
@@ -920,6 +925,18 @@ export const specifications: readonly Specification[] = [
         }
       }
       return null;
+    },
+  },
+  {
+    // "Grab anyway" made the file the user's choice: automatic decisions (RSS, searches) never
+    // replace it. Interactive search skips this spec so the user can still replace it by hand.
+    id: 'keptByChoice',
+    tier: 0,
+    type: 'permanent',
+    appliesTo: 'all',
+    evaluate: (ctx, c) => {
+      if (ctx.source === 'interactiveSearch') return null;
+      return filesFor(ctx, c).some((f) => f.keptByChoice === true) ? { reason: 'keptByChoice', message: KEPT_BY_CHOICE_MESSAGE } : null;
     },
   },
   {

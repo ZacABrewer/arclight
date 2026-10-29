@@ -1,4 +1,5 @@
 import {
+  AudioFile,
   CalendarFeedInfo,
   CalendarItem,
   Episode,
@@ -100,6 +101,12 @@ export const libraryApi = {
       request('/mediafile', MediaFile.array(), { query: q(query) }),
     remove: (id: number, deleteFromDisk = true) =>
       request(`/mediafile/${id}`, null, { method: 'DELETE', query: { deleteFromDisk } }),
+    /** "Allow upgrades again": clears the "Grab anyway" override of a video file. */
+    clearGrabOverride: (id: number) => request(`/mediafile/${id}/grab-override`, MediaFile, { method: 'DELETE' }),
+  },
+  audioFiles: {
+    /** "Allow upgrades again" for a music / audiobook file: clears its whole album / book. */
+    clearGrabOverride: (id: number) => request(`/audiofile/${id}/grab-override`, AudioFile.array(), { method: 'DELETE' }),
   },
   rootFolders: {
     list: () => request('/rootfolder', RootFolder.array()),

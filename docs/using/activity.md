@@ -23,7 +23,7 @@ The sub-pages are **Queue**, **History**, **Blocklist**, **Pending**, **Cross-se
 | ETA | Estimated time left. |
 | Status | A colored chip that says why the item is or is not moving (see below). |
 
-Click a column header to sort. Tick the boxes on the left to select several rows, then use **Remove...**, **Retry import**, or **Send now** (shown when some selected items have not been sent to a client yet).
+Click a column header to sort. Tick the boxes on the left to select several rows (the header box selects the whole page), then use the bar at the bottom: **Remove...**, **Retry import**, **Send now** (shown when some selected items have not been sent to a client yet), and, for clients that report a queue order, **Move to top**, **Move to bottom** and **Re-announce** (torrents).
 
 By default the queue shows only downloads Arclight grabbed. Switch on **Show unknown** to also list downloads in your client that are not linked to a series or movie.
 
@@ -142,25 +142,27 @@ Click a row to open its details: source title, date, quality, languages and down
 - **Redownload**: searches again for the episode or movie. Disabled if the event is not linked to one.
 - **Why this release**: shows the reasoning behind the grab. See [Interactive search](interactive-search.md#why-this-release).
 
+Tick rows to act on several at once: **Mark failed** (asks first, with the count) and **Search again**. Events that do not allow it, such as marking an import as failed, are listed as failed in the result message; the others still go through. History records cannot be deleted.
+
 ## Blocklist
 
 **Activity > Blocklist** holds releases that failed or were rejected manually. Arclight will not grab a blocked release again. The list shows the reason. You can:
 
 - **Add to blocklist** by hand: choose a series or movie, type the release name exactly as the indexer lists it, and give a reason.
-- Select entries and remove them. Removed releases can be grabbed again by the next search.
+- Select entries and remove them (it asks first, with the count). Removed releases can be grabbed again by the next search.
 - **Clear all** empties the whole blocklist (it asks first).
 
 ## Pending
 
-**Activity > Pending** holds releases that are waiting instead of being downloaded, either because a delay profile says to wait ("Waiting for preferred protocol") or because the download client is unavailable. Columns include Reason, Delay profile and "Grabs in". **Grab now** skips the wait. The remove button discards the release. See [Quality profiles](quality-profiles.md) for delay profiles.
+**Activity > Pending** holds releases that are waiting instead of being downloaded, either because a delay profile says to wait ("Waiting for preferred protocol") or because the download client is unavailable. Columns include Reason, Delay profile and "Grabs in". **Grab now** skips the wait. The remove button discards the release. Tick several rows to **Grab now** or **Delete** them together. See [Quality profiles](quality-profiles.md) for delay profiles.
 
 ## Cross-seeds
 
-**Activity > Cross-seeds** lists releases the cross-seed feature found on other trackers and is seeding: client, info-hash, save path, state and any message. It stays empty ("No cross-seeds yet") until a search finds the same release on another tracker. Configure it under **Settings > Cross-seed**.
+**Activity > Cross-seeds** lists releases the cross-seed feature found on other trackers and is seeding: client, info-hash, save path, state and any message. It stays empty ("No cross-seeds yet") until a search finds the same release on another tracker. The list is read-only, so it has no bulk actions. Configure it under **Settings > Cross-seed**.
 
 ## Transcode jobs
 
-**Activity > Transcode jobs** lists remux and transcode work: the file path, trigger (a rule or Manual), status, progress, when it was queued and any message. Cancel a job with the cancel button on its row. Configure rules under **Settings > Transcode**.
+**Activity > Transcode jobs** lists remux and transcode work: the file path, trigger (a rule or Manual), status, progress, when it was queued and any message. Cancel a job with the cancel button on its row, or tick several and press **Stop** (it asks first). Jobs that already finished are reported as not stopped. Configure rules under **Settings > Transcode**.
 
 ## Manual import
 

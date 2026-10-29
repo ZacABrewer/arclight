@@ -477,6 +477,7 @@ export function recordGrabInHistory(ctx: AppContext, grab: GrabHistoryInput): vo
       releaseSource: toReleaseSource(grab.source),
       ...(grab.releaseGroup ? { releaseGroup: grab.releaseGroup } : {}),
       ...(grab.batchId ? { decisionBatchId: grab.batchId } : {}),
+      ...(grab.overriddenRejections?.length ? { overriddenRejections: grab.overriddenRejections } : {}),
     },
     grab.downloadId,
     client ? { name, implementation: client.implementation } : name,

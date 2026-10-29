@@ -22,7 +22,13 @@ const stats: IndexerStats = {
 beforeEach(() => {
   vi.stubGlobal(
     'fetch',
-    vi.fn(async () => new Response(JSON.stringify(stats), { status: 200 })),
+    vi.fn(async (input: string) =>
+      String(input).includes('/indexer/health')
+        ? new Response(JSON.stringify({ days: 7, since: stats.since, thresholds: { failureRate: 0.25, slowAvgMs: 5000, slowP95Ms: 10000, zeroResultRate: 0.9, minQueriesForNoResults: 10 }, indexers: [] }), { status: 200 })
+        : String(input).includes('/indexer/stats')
+          ? new Response(JSON.stringify(stats), { status: 200 })
+          : new Response('[]', { status: 200 }),
+    ),
   );
 });
 afterEach(() => vi.unstubAllGlobals());

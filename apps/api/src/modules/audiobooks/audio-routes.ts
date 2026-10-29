@@ -5,7 +5,7 @@ import { AudioFile, AudiobookCommand, ErrorResponse, Job, MusicCommand } from '@
 import type { AppContext } from '../../app.js';
 import { LibraryError } from '../library/index.js';
 import { audiobookRefresherFor, musicRefresherFor } from '../metadata/index.js';
-import { musicEnabled, listAudioFiles } from '../music/service.js';
+import { clearAudioGrabOverride, musicEnabled, listAudioFiles } from '../music/service.js';
 import { AudiobooksDisabled, audioErrorHandler } from './routes.js';
 import { audiobooksEnabled, listAudiobookFiles } from './service.js';
 
@@ -17,6 +17,8 @@ import { audiobooksEnabled, listAudiobookFiles } from './service.js';
 //   AUDIOBOOKS_DISABLED).
 // * GET /audiofile lists music files by `artistId` / `albumId` or audiobook files by `authorId` /
 //   `bookId` (one kind per request), gated the same way.
+// * DELETE /audiofile/:id/grab-override ("Allow upgrades again") clears the "Grab anyway"
+//   override of the file's whole album / book and answers with the files it changed.
 
 const AUDIOBOOK_COMMANDS = new Set<string>(AudiobookCommand.options.map((o) => o.shape.name.value));
 
@@ -81,6 +83,12 @@ export const audioRoutes = (ctx: AppContext): FastifyPluginAsync<Record<never, n
         if (!musicEnabled(db)) throw new MusicDisabled();
         return listAudioFiles(db, q as { artistId?: number; albumId?: number });
       },
+    );
+
+    app.delete(
+      '/audiofile/:id/grab-override',
+      { schema: { params: z.object({ id: z.coerce.number().int() }), response: { 200: z.array(AudioFile), 404: ErrorResponse } } },
+      async (req) => clearAudioGrabOverride(db, req.params.id),
     );
   };
 };

@@ -17,17 +17,32 @@ In the left menu the **Library** group has **TV**, **Movies**, **Collections**, 
 
 A new install shows "No series yet" or "No movies yet" with a button to **Add series** or **Add movie**, or to **Import folder** if you already have files on disk.
 
-### Changing several titles at once
+### Bulk actions
 
-Tick the box on two or more posters or rows. A bar appears with:
+Every library list can act on many items at once: the TV and Movies pages (all views), a series' episodes, the Music and Audiobooks pages, an artist's albums, an author's books, Collections, **Wanted** (Missing and Cutoff unmet), **Hygiene** and **Subtitles > Wanted**.
 
-| Button | What it does |
-| --- | --- |
-| Monitor / Unmonitor | Turns monitoring on or off for all selected titles. |
-| Profile | Sets the quality profile. |
-| Root folder | Moves the titles to another root folder. |
-| Tags | Adds or removes one tag. |
-| Delete | Opens the delete dialog (see below). |
+1. Press **Select** in the page header (on a series page **Select episodes**, on an artist page **Select albums**, on an author page **Select books**). Tables also have a checkbox on every row and a select-all box in the header.
+2. Tick what you want. **Select all N** in the bar takes every item the list shows with its current filter. On paged lists (Wanted, Subtitles > Wanted) it takes every item on the list, not just the current page. On a series page, **Select season** next to a season ticks all of its episodes.
+3. Pick an action in the bar at the bottom. At phone width the actions are folded into one **Actions** menu.
+
+| Action | Where | What it does |
+| --- | --- | --- |
+| Search | TV, Movies, episodes, Music, Audiobooks, albums, books | Searches every selected item, like the Search button on its page. |
+| Search missing | TV, Movies, episodes, Collections | Searches only the selected items that are monitored and have no file yet (the Wanted > Missing rules). |
+| Search for upgrades | TV, Movies, episodes, Collections, Wanted > Cutoff unmet | Searches only the selected items whose file is below the quality profile's cutoff (the Wanted > Cutoff unmet rules). Items whose profile does not allow upgrades are skipped. |
+| Search selected | Wanted > Missing, Subtitles > Wanted | Searches the selected items (or subtitles for the selected files). |
+| Monitor / Unmonitor | everywhere except Hygiene and Subtitles | Turns monitoring on or off. Wanted only offers Unmonitor. |
+| Profile | TV, Movies, Music, Audiobooks | Sets the quality profile. For TV and Movies this opens the profile change preview first. |
+| Root folder | TV, Movies, Music, Audiobooks | Moves the items to another root folder. |
+| Tags | TV, Movies, Music, Audiobooks | Adds or removes one tag. |
+| Refresh | TV, Movies, Music, Audiobooks, Collections | Refreshes the metadata of every selected item. |
+| Rename files | TV, Movies, episodes | Opens a preview of every file that does not match your naming settings. Untick the ones to leave alone, then **Rename**. |
+| Add additional… | TV, Movies | Adds an audio or subtitle language (see below). |
+| Map to best match | Hygiene > Orphans | Imports each selected orphan file into its best suggested match. Files without a usable match are skipped. |
+| Delete | TV, Movies, Music, Audiobooks, books, Hygiene | Opens the delete dialog. It has the same **Delete files** option as deleting one item. |
+| Delete files | episodes | Deletes the selected episodes' files from disk. The episodes stay in the library. |
+
+Searches, refreshes and subtitle searches run in the background as one job, so you can leave the page. A toast tells you how many items went into the job and how many were skipped (for example, items already at cutoff when you asked for upgrades). The job appears in **System > Tasks**.
 
 ## Add new
 

@@ -148,6 +148,20 @@
       "when": 1793248863184,
       "tag": "0020_polite_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793298901175,
+      "tag": "0021_rare_lorna_dane",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1793298961910,
+      "tag": "0022_chemical_iron_man",
+      "breakpoints": true
     }
   ]
 }

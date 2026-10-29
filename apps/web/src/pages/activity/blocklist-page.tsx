@@ -21,6 +21,8 @@ import {
 import { EntityPicker, type EntityOption } from '../../components/entity-picker.js';
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { useToast } from '../../components/toast.js';
+import { BulkConfirmDialog } from '../../components/bulk-actions.js';
+import { BulkBar } from '../../components/media/bulk-bar.js';
 import { useAddBlocklist, useBlocklist, useClearBlocklist, useRemoveBlocklist } from '../../hooks/activity.js';
 import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
@@ -39,6 +41,9 @@ export function BlocklistPage() {
   const toast = useToast();
   const [adding, setAdding] = useState(false);
   const [clearing, setClearing] = useState(false);
+  const [confirmRemove, setConfirmRemove] = useState(false);
+  const pageIds = (list.data?.records ?? []).map((r) => r.id);
+  const selectedIds = pageIds.filter((id) => selected.has(id));
   const pending = list.error instanceof ApiError && list.error.status === 404;
   const total = list.data?.totalRecords ?? 0;
 
@@ -129,15 +134,6 @@ export function BlocklistPage() {
               selectable
               selected={selected}
               onSelectionChange={setSelected}
-              bulkActions={(keys, clearSelection) => (
-                <Button
-                  variant="danger"
-                  loading={remove.isPending}
-                  onClick={() => remove.mutate([...keys].map(Number), { onSuccess: clearSelection })}
-                >
-                  {keys.size === 1 ? t('activity.blocklist.remove1Release') : t('activity.blocklist.removeKeyscountReleases', { keysCount: keys.size })}
-                </Button>
-              )}
               empty={<EmptyState title={t('activity.blocklist.blocklistIsEmpty')}>{t('activity.blocklist.releasesThatFailedOrWere')}</EmptyState>}
             />
             {list.data && list.data.totalRecords > pageSize ? (
@@ -149,6 +145,37 @@ export function BlocklistPage() {
           </>
         )}
       </Pane>
+      <BulkBar
+        count={selectedIds.length}
+        total={pageIds.length}
+        onSelectAll={() => setSelected(new Set(pageIds))}
+        onClear={() => setSelected(new Set())}
+        actions={[
+          {
+            id: 'remove',
+            label: selectedIds.length === 1 ? t('activity.blocklist.remove1Release') : t('activity.blocklist.removeKeyscountReleases', { keysCount: selectedIds.length }),
+            danger: true,
+            loading: remove.isPending,
+            onSelect: () => setConfirmRemove(true),
+          },
+        ]}
+      >
+        {confirmRemove ? (
+          <BulkConfirmDialog
+            open
+            count={selectedIds.length}
+            title={t('activity.blocklist.removeKeyscountReleases', { keysCount: selectedIds.length })}
+            confirmLabel={t('common.remove')}
+            onCancel={() => setConfirmRemove(false)}
+            onConfirm={async () => {
+              await remove.mutateAsync(selectedIds);
+              toast.push({ tone: 'ok', title: t('activity.blocklist.removedReleases', { deleted: selectedIds.length }), durationMs: 4_000 });
+              setSelected(new Set());
+              setConfirmRemove(false);
+            }}
+          />
+        ) : null}
+      </BulkBar>
       {adding ? <AddBlocklistModal onClose={() => setAdding(false)} /> : null}
       <ConfirmDialog
         open={clearing}

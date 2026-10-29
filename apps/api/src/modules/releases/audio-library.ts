@@ -39,6 +39,8 @@ export interface AlbumFileRow {
   relativePath: string;
   sizeBytes: number;
   dateAdded: string;
+  /** Grabbed with "Grab anyway": upgrades of the album / book are paused. */
+  keptByChoice: boolean;
 }
 
 export class MusicLibrary implements AudioLibrarySnapshot {
@@ -158,6 +160,7 @@ export class MusicLibrary implements AudioLibrarySnapshot {
                         relativePath: f.relativePath,
                         sizeBytes: f.sizeBytes,
                         dateAdded: f.dateAdded,
+                        keptByChoice: f.grabOverride != null,
                       },
                     ],
               );
@@ -183,6 +186,8 @@ export interface BookFileRow {
   relativePath: string;
   sizeBytes: number;
   dateAdded: string;
+  /** Grabbed with "Grab anyway": upgrades of the album / book are paused. */
+  keptByChoice: boolean;
 }
 
 /**
@@ -313,6 +318,7 @@ export class BookLibrary implements BookLibrarySnapshot {
                         relativePath: f.relativePath,
                         sizeBytes: f.sizeBytes,
                         dateAdded: f.dateAdded,
+                        keptByChoice: f.grabOverride != null,
                       },
                     ],
               );

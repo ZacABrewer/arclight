@@ -210,8 +210,10 @@ describe('queue torrent drawer', () => {
     fireEvent.click(check);
     const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
     expect(within(bar).getByText('1 selected')).toBeTruthy();
-    expect(within(bar).getByRole('button', { name: 'Retry import' }).className).toContain('al-btn--secondary');
-    fireEvent.click(within(bar).getByRole('button', { name: 'Remove…' }));
+    expect(within(bar).getByRole('button', { name: 'Retry import' })).toBeTruthy();
+    const remove = within(bar).getByRole('button', { name: 'Remove…' });
+    expect(remove.className).toContain('al-btn--danger');
+    fireEvent.click(remove);
     const dialog = screen.getByRole('dialog', { name: 'Remove Remote.Release?' });
     fireEvent.click(within(dialog).getByRole('checkbox', { name: /^Add to blocklist/ }));
     fireEvent.click(within(dialog).getByRole('button', { name: 'Remove 1 item' }));

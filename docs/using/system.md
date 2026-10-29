@@ -28,7 +28,7 @@ System > Tasks shows everything Arclight does on a timer.
 - **Task history**: every run with its Status, Trigger (scheduled or manual), when it was queued, Duration and Message. Failed runs show the reason.
 - **Media analysis queue**: how many files are waiting for `ffprobe` to read their resolution and codecs. If ffprobe is missing the files stay in the queue and a hint explains how to fix it.
 
-Examples of tasks you will see: the hourly health check, the queue refresh, RSS sync, missing-episode searches, metadata refresh, the backup job, update checks, the audit cleanup and the VPN status check. Tasks you never need to touch; "Run now" is for when you want a result sooner.
+Examples of tasks you will see: the hourly health check, the queue refresh, RSS sync, missing-episode searches, metadata refresh, the backup job, update checks, the audit cleanup and the VPN status check. Tasks you never need to touch; "Run now" is for when you want a result sooner. Tick several scheduled tasks and press **Run now** in the bar to start them together; the bar returns at once and the runs show up in Task history.
 
 ## Logs
 
@@ -36,6 +36,8 @@ System > Logs has two parts.
 
 - **Log entries**: a live view. Filter by level ("{level} and above"), search messages, "Live tail" (Pause or Resume), and "Clear logs" (clears the on-screen buffer, not the files).
 - **Log files**: the files on disk, each with a download link.
+
+Tick log entries and press **Copy** to put them on the clipboard as text (time, level, component, message, details), for example to paste into a bug report.
 
 ### Log locations and levels
 
@@ -80,7 +82,7 @@ At most 20 commands and 1 MB of output per run. Commands are not case sensitive.
 
 ## Backups
 
-System > Backups creates, downloads and restores backups and sets the schedule. All of it is explained in [backup-restore.md](../getting-started/backup-restore.md).
+System > Backups creates, downloads and restores backups and sets the schedule. Tick several backups to delete them together (it asks first, with the count). All of it is explained in [backup-restore.md](../getting-started/backup-restore.md).
 
 ## Health
 

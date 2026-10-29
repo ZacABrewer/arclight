@@ -117,6 +117,8 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/request/:id/retry': 'portal',
   'POST /api/v1/request/bulk/approve': 'portal',
   'POST /api/v1/request/bulk/decline': 'portal',
+  'POST /api/v1/request/bulk/retry': 'portal',
+  'POST /api/v1/request/bulk/delete': 'portal',
   'GET /api/v1/settings/requests': 'portal',
 
   // ---- music and audiobook requests (service checks the permission bits; settings need MANAGE_SETTINGS)
@@ -136,6 +138,7 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/audiorequest/:id/decline': 'portal',
   'POST /api/v1/audiorequest/:id/retry': 'portal',
   'DELETE /api/v1/audiorequest/:id': 'portal',
+  'POST /api/v1/audiorequest/bulk/:action': 'portal',
   'GET /api/v1/settings/audiorequests': 'portal',
   'PUT /api/v1/settings/audiorequests': 'portal',
 
@@ -146,6 +149,8 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/issue': 'portal',
   'POST /api/v1/issue/:id/comment': 'portal',
   'POST /api/v1/issue/:id/status': 'portal',
+  'POST /api/v1/issue/bulk/status': 'portal',
+  'POST /api/v1/issue/bulk/delete': 'portal',
   'DELETE /api/v1/issue/:id': 'portal',
   'PUT /api/v1/issuecomment/:id': 'portal',
   'DELETE /api/v1/issuecomment/:id': 'portal',

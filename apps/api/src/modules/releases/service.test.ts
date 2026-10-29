@@ -6,7 +6,9 @@ import * as schema from '../../db/schema.js';
 import type { GrabHistoryInput } from './deps.js';
 import { releasesRoutes } from './routes.js';
 import { pendingReleases } from './schema.js';
-import { GB, harness, makeIndexer, makeRelease } from './test-support.js';
+import { libraryService } from '../library/index.js';
+import { KEPT_BY_CHOICE_MESSAGE } from './engine.js';
+import { GB, harness, makeIndexer, makeRelease, quality } from './test-support.js';
 
 const MINUTE = 60_000;
 
@@ -360,5 +362,54 @@ describe('search-page grabs and indexer downloads', () => {
     expect(calls).toEqual(['http://site/dl/2.torrent']);
     expect(h.fetchImpl.calls).toHaveLength(0);
     expect(h.downloads.grabs[0]!.request.torrentFile).toBeInstanceOf(Uint8Array);
+  });
+});
+
+describe('"Grab anyway" overrides', () => {
+  it('records the overridden rejections with the download and in history; an approved grab records none', async () => {
+    const recorded: GrabHistoryInput[] = [];
+    const h = await tvSetup({ deps: { history: { recordGrab: (g) => void recorded.push(g) } } });
+    h.indexers.results = [
+      makeRelease('Show.Name.S01E02.480p.WEB-DL-GRP', { guid: 'low', size: 300 * 1024 * 1024 }),
+      makeRelease('Show.Name.S01E02.1080p.WEB-DL-GRP', { guid: 'ok' }),
+    ];
+    const decisions = await h.service.interactiveSearch({ episodeId: h.eps[1]!.id });
+    const low = decisions.find((d) => d.guid === 'low')!;
+    expect(low).toMatchObject({ approved: false, downloadAllowed: true });
+
+    await h.service.grab({ guid: 'low', indexerId: 1 });
+    const snapshot = h.downloads.grabs[0]!.tracking.grabbedRelease as { grabOverride?: { rejections: string[]; grabbedAt: string; sourceTitle: string } };
+    expect(snapshot.grabOverride).toEqual({ rejections: low.rejections.map((r) => r.message), grabbedAt: h.now().toISOString(), sourceTitle: low.title });
+    expect(recorded[0]!.overriddenRejections).toEqual(low.rejections.map((r) => r.message));
+
+    await h.service.grab({ guid: 'ok', indexerId: 1 });
+    expect((h.downloads.grabs[1]!.tracking.grabbedRelease as Record<string, unknown>)['grabOverride']).toBeUndefined();
+    expect(recorded[1]!.overriddenRejections).toBeUndefined();
+  });
+
+  it('pauses automatic upgrades of a file kept by choice; interactive search still offers them', async () => {
+    const h = await tvSetup();
+    libraryService.addMediaFile(h.db, {
+      mediaType: 'series',
+      seriesId: h.series.id,
+      seasonNumber: 1,
+      episodeIds: [h.eps[0]!.id],
+      relativePath: 'S01E01.mkv',
+      path: '/tv/show/S01E01.mkv',
+      sizeBytes: GB,
+      quality: quality('HDTV-720p'),
+      languages: ['en'],
+      grabOverride: { rejections: ['Quality not wanted in profile'], grabbedAt: h.now().toISOString(), sourceTitle: 'Show.Name.S01E01.720p.HDTV-GRP' },
+    });
+    const upgrade = makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP', { guid: 'up' });
+    const [rss] = await h.service.processReleases([upgrade], 'rss');
+    expect(rss).toMatchObject({ approved: false, rejections: [{ reason: 'keptByChoice', message: KEPT_BY_CHOICE_MESSAGE }] });
+    expect(h.downloads.grabs).toHaveLength(0);
+    // The cutoff-unmet lists skip it too.
+    expect(h.service.isFileCutoffMet()(libraryService.listMediaFiles(h.db, { seriesId: h.series.id })[0]!)).toBe(true);
+
+    h.indexers.results = [upgrade];
+    const [interactive] = await h.service.interactiveSearch({ episodeId: h.eps[0]!.id });
+    expect(interactive).toMatchObject({ approved: true });
   });
 });

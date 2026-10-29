@@ -75,6 +75,9 @@ beforeEach(() => {
       if (method === 'POST' && path === '/api/v1/command/search') {
         return new Response(JSON.stringify({ releases: 3, approved: 1, pending: 0, grabbed: [] }), { status: 200 });
       }
+      if (method === 'POST' && path === '/api/v1/command/bulksearch') {
+        return new Response(JSON.stringify({ queued: 2, skipped: 0, job: null }), { status: 202 });
+      }
       if (path === '/api/v1/release/searchstatus') {
         const params = new URL(url, 'http://localhost').searchParams;
         const ids = (params.get('ids') ?? '').split(',').map(Number);
@@ -115,6 +118,7 @@ function renderAt(path: string) {
 }
 
 const searchPosts = () => calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/command/search').map((c) => c.body);
+const bulkPosts = () => calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/command/bulksearch').map((c) => c.body);
 
 describe('wanted page', () => {
   it('lists missing episodes in a rich table with Missing chips and mono codes', async () => {
@@ -142,22 +146,31 @@ describe('wanted page', () => {
     expect(calls.find((c) => c.url.startsWith('/api/v1/release/searchstatus?'))?.url).toContain('ids=1%2C2');
   });
 
-  it('selecting rows shows the bulk bar; Search selected posts the episode ids', async () => {
+  it('selecting rows shows the bulk bar; Search selected queues one bulk search for the episode ids', async () => {
     renderAt('/wanted/missing');
     fireEvent.click(await screen.findByLabelText('Select Severance S02E08'));
     fireEvent.click(screen.getByLabelText('Select Andor S02E03'));
     const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
     expect(within(bar).getByText('2 selected')).toBeTruthy();
     fireEvent.click(within(bar).getByRole('button', { name: 'Search selected' }));
-    await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [1, 2] }]));
+    await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', episodeIds: [1, 2] }]));
+    expect(searchPosts()).toEqual([]);
+    expect(await screen.findByText('Search queued for 2 items')).toBeTruthy();
   });
 
-  it('Search all collects every id with one large page', async () => {
+  it('Unmonitor in the bulk bar unmonitors the selected episodes', async () => {
+    renderAt('/wanted/missing');
+    fireEvent.click(await screen.findByLabelText('Select Andor S02E03'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Unmonitor' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT')).toMatchObject({ url: '/api/v1/episode/monitor', body: { episodeIds: [2], monitored: false } }));
+  });
+
+  it('Search all queues the whole missing list on the server (no id paging)', async () => {
     renderAt('/wanted/missing');
     await screen.findByLabelText('Select Severance S02E08');
     fireEvent.click(screen.getByRole('button', { name: 'Search all' }));
-    await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [1, 2] }]));
-    expect(calls.some((c) => c.url.startsWith('/api/v1/wanted/missing/episodes?') && c.url.includes('pageSize=500'))).toBe(true);
+    await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', allEpisodes: true }]));
+    expect(calls.some((c) => c.url.includes('pageSize=500'))).toBe(false);
   });
 
   it('row Search searches one episode', async () => {
@@ -188,8 +201,9 @@ describe('wanted page', () => {
     expect(screen.queryByText(/not available yet/)).toBeNull();
     fireEvent.click(screen.getByLabelText('Select Silo S02E10'));
     fireEvent.click(screen.getByLabelText('Select Foundation S02E02'));
-    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Search selected' }));
-    await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [3, 4] }]));
+    // Cutoff unmet: an upgrade search, the server applies each profile's cutoff.
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Search for upgrades' }));
+    await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'upgrade', episodeIds: [3, 4] }]));
     expect(calls.some((c) => c.url.startsWith('/api/v1/wanted/cutoff/episodes?'))).toBe(true);
   });
 

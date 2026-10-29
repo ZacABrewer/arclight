@@ -125,6 +125,9 @@ beforeEach(() => {
       calls.push({ url, method, body: init?.body ? JSON.parse(String(init.body)) : undefined });
       const path = url.split('?')[0];
       if (method === 'POST' && path === '/api/v1/command/refresh') return new Response(JSON.stringify(refreshJob), { status: 202 });
+      if (method === 'POST' && path === '/api/v1/command/bulksearch') return new Response(JSON.stringify({ queued: 2, skipped: 0, job: null }), { status: 202 });
+      if (method === 'PUT' && path === '/api/v1/episode/monitor') return new Response(JSON.stringify([]), { status: 200 });
+      if (method === 'DELETE' && path?.startsWith('/api/v1/mediafile/')) return new Response(null, { status: 204 });
       if (path === '/api/v1/release/searchstatus') {
         const params = new URL(url, 'http://localhost').searchParams;
         const ids = (params.get('ids') ?? '').split(',').map(Number);
@@ -195,6 +198,35 @@ describe('series details (Page 03)', () => {
     const chips = within(table).getAllByText(/^(Downloaded|Missing|Unaired)$/).map((c) => c.textContent);
     expect(chips.sort()).toEqual(['Downloaded', 'Missing', 'Unaired']);
     expect(within(table).getByText('Missing').getAttribute('data-status')).toBe('missing');
+  });
+
+  it('selects episodes for the bulk bar: upgrade search, unmonitor and file deletion', async () => {
+    renderAt('/library/series/1');
+    await screen.findByRole('table', { name: 'Season 1 episodes' });
+    fireEvent.click(screen.getByRole('button', { name: 'Select episodes' }));
+    fireEvent.click(screen.getByLabelText('Select S01E01'));
+    fireEvent.click(screen.getByLabelText('Select S01E02'));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    expect(within(bar).getByText('2 selected')).toBeTruthy();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Search for upgrades' }));
+    await waitFor(() =>
+      expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/command/bulksearch').map((c) => c.body)).toEqual([{ mode: 'upgrade', episodeIds: [1, 2] }]),
+    );
+    fireEvent.click(within(bar).getByRole('button', { name: 'Unmonitor' }));
+    await waitFor(() => expect(calls.find((c) => c.method === 'PUT' && c.url === '/api/v1/episode/monitor')?.body).toEqual({ episodeIds: [1, 2], monitored: false }));
+    // Only episode 1 has a file.
+    fireEvent.click(within(bar).getByRole('button', { name: 'Delete files' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Delete 1 file?' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete files' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE' && c.url.startsWith('/api/v1/mediafile/10'))).toBe(true));
+  });
+
+  it('Select season picks every episode of the season', async () => {
+    renderAt('/library/series/1');
+    await screen.findByRole('table', { name: 'Season 1 episodes' });
+    fireEvent.click(screen.getByRole('button', { name: 'Select episodes' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Select season' }));
+    expect(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByText('3 selected')).toBeTruthy();
   });
 
   it('says when missing episodes are searched next, and shows queued ones as such', async () => {

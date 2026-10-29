@@ -7,13 +7,9 @@ import {
   CountBadge,
   EmptyState,
   FilterBar,
-  FloatBar,
-  FloatBarDivider,
   Input,
-  Menu,
   Meter,
   PageHeader,
-  Popover,
   PosterCard,
   Poster,
   SectionHead,
@@ -26,11 +22,15 @@ import {
   type Column,
   type SortState,
 } from '../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
+import { BulkRenameDialog } from '../../components/media/bulk-rename-dialog.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
 import { ProfileMigrationDialog } from '../../components/media/profile-migration-dialog.js';
 import { buildQueueIndex, QueueStateChip } from '../../components/media/pipeline-status.js';
 import { ProfileMismatchBadge } from '../../components/media/profile-fit.js';
 import { useQueueSummary } from '../../hooks/activity.js';
+import { useBulkSearch } from '../../hooks/bulk.js';
+import { useToast } from '../../components/toast.js';
 import { useProfileItemStatuses } from '../../hooks/profile-migration.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { formatBytes, formatDate } from '../../components/media/format.js';
@@ -355,10 +355,13 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
         </div>
       )}
 
-      {selected.size > 0 ? (
-        <BulkBar
+      {selectMode || selected.size > 0 ? (
+        <LibraryBulkBar
           kind={kind}
           ids={[...selected]}
+          total={rows.length}
+          open={selectMode}
+          onSelectAll={() => setSelected(new Set(rows.map((r) => r.id)))}
           profiles={profiles.data}
           rootFolders={rootFolders.data?.filter((r) => r.mediaType === kind)}
           tags={tags.data}
@@ -695,9 +698,12 @@ function LibraryFilterBar({
   );
 }
 
-function BulkBar({
+function LibraryBulkBar({
   kind,
   ids,
+  total,
+  open,
+  onSelectAll,
   profiles,
   rootFolders,
   tags,
@@ -705,6 +711,10 @@ function BulkBar({
 }: {
   kind: LibraryKind;
   ids: number[];
+  /** Rows the current filter shows ("Select all N"). */
+  total: number;
+  open: boolean;
+  onSelectAll: () => void;
   profiles: QualityProfile[] | undefined;
   rootFolders: RootFolder[] | undefined;
   tags: Tag[] | undefined;
@@ -714,90 +724,80 @@ function BulkBar({
   const bulkMovies = useBulkUpdateMovies();
   const deleteSeries = useDeleteSeries();
   const deleteMovies = useDeleteMovies();
+  const search = useBulkSearch();
+  const toast = useToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [renaming, setRenaming] = useState(false);
   // Profile changes go through the migration dialog (preview of what the new profile means).
   const [migrateTo, setMigrateTo] = useState<number | null>(null);
   const [addingLanguage, setAddingLanguage] = useState(false);
   const pending = bulkSeries.isPending || bulkMovies.isPending;
   const languageTargets = useMemo(() => ids.map((id) => (kind === 'series' ? { seriesId: id } : { movieId: id })), [ids, kind]);
+  const subject = `${ids.length} ${noun(kind, ids.length)}`;
+  const updated = t('bulk.toast.updated', { count: ids.length });
 
-  const apply = (patch: { monitored?: boolean; qualityProfileId?: number; rootFolderPath?: string; tags?: { add?: number[]; remove?: number[] } }) => {
-    if (kind === 'series') bulkSeries.mutate({ ids, ...patch });
-    else bulkMovies.mutate({ ids, ...patch });
+  const apply = (
+    patch: { monitored?: boolean; qualityProfileId?: number; rootFolderPath?: string; tags?: { add?: number[]; remove?: number[] }; refresh?: boolean },
+    done: string,
+  ) => {
+    const onSuccess = () => toast.push({ tone: 'ok', title: done, durationMs: 4_000 });
+    if (kind === 'series') bulkSeries.mutate({ ids, ...patch }, { onSuccess });
+    else bulkMovies.mutate({ ids, ...patch }, { onSuccess });
   };
+  const runSearch = (mode: 'all' | 'missing' | 'upgrade') => search.mutate(kind === 'series' ? { mode, seriesIds: ids } : { mode, movieIds: ids });
 
-  const menuTrigger = (label: string) => (props: Parameters<Parameters<typeof Popover>[0]['trigger']>[0]) => (
-    <Button variant="ghost" disabled={pending} {...props}>
-      {label}
-    </Button>
-  );
+  const actions: BulkAction[] = [
+    { id: 'search', label: t('common.search'), loading: search.isPending, onSelect: () => runSearch('all') },
+    { id: 'search-missing', label: t('bulk.searchMissing'), disabled: search.isPending, onSelect: () => runSearch('missing') },
+    { id: 'search-upgrades', label: t('bulk.searchUpgrades'), disabled: search.isPending, onSelect: () => runSearch('upgrade') },
+    { id: 'monitor', label: t('common.monitor'), disabled: pending, onSelect: () => apply({ monitored: true }, updated) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: pending, onSelect: () => apply({ monitored: false }, updated) },
+    {
+      id: 'profile',
+      label: t('common.profile'),
+      optionsHeader: t('library.setQualityProfile'),
+      disabled: pending,
+      options: (profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => setMigrateTo(p.id) })),
+    },
+    {
+      id: 'root',
+      label: t('common.rootFolder'),
+      optionsHeader: t('library.moveToRootFolder'),
+      disabled: pending,
+      options: (rootFolders ?? []).map((r) => ({ id: r.path, label: <span className="al-num">{r.path}</span>, onSelect: () => apply({ rootFolderPath: r.path }, updated) })),
+    },
+    {
+      id: 'tags',
+      label: t('common.tags'),
+      optionsHeader: t('library.addOrRemoveATag'),
+      disabled: pending,
+      options: (tags ?? []).flatMap((entry) => [
+        { id: `add-${entry.id}`, label: t('library.addLabel', { label: entry.label }), onSelect: () => apply({ tags: { add: [entry.id] } }, updated) },
+        { id: `remove-${entry.id}`, label: t('library.removeLabel', { label: entry.label }), onSelect: () => apply({ tags: { remove: [entry.id] } }, updated) },
+      ]),
+    },
+    { id: 'refresh', label: t('common.refresh'), disabled: pending, onSelect: () => apply({ refresh: true }, t('bulk.toast.refreshQueued', { count: ids.length })) },
+    { id: 'rename', label: t('bulk.renameFiles'), onSelect: () => setRenaming(true) },
+    { id: 'language', label: t('features.additionalLanguages.addAdditional'), disabled: pending, onSelect: () => setAddingLanguage(true) },
+    { id: 'delete', label: t('common.delete'), danger: true, onSelect: () => setConfirmDelete(true) },
+  ];
 
   return (
-    <FloatBar count={ids.length}>
-      <Button variant="ghost" disabled={pending} onClick={() => apply({ monitored: true })}>
-        {t('common.monitor')}
-      </Button>
-      <Button variant="ghost" disabled={pending} onClick={() => apply({ monitored: false })}>
-        {t('common.unmonitor')}
-      </Button>
-      <Popover trigger={menuTrigger(t('common.profile'))} placement="top-start" width={240} label={t('library.setQualityProfile')}>
-        {(close) => (
-          <Menu
-            header={t('library.setQualityProfile')}
-            onDone={close}
-            items={(profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => setMigrateTo(p.id) }))}
-          />
-        )}
-      </Popover>
-      <Popover trigger={menuTrigger(t('common.rootFolder'))} placement="top-start" width={280} label={t('library.moveToRootFolder')}>
-        {(close) => (
-          <Menu
-            header={t('library.moveToRootFolder')}
-            onDone={close}
-            items={(rootFolders ?? []).map((r) => ({ id: r.path, label: <span className="al-num">{r.path}</span>, onSelect: () => apply({ rootFolderPath: r.path }) }))}
-          />
-        )}
-      </Popover>
-      <Popover trigger={menuTrigger(t('common.tags'))} placement="top-start" width={240} label={t('library.changeTags')}>
-        {(close) => (
-          <Menu
-            header={t('library.addOrRemoveATag')}
-            onDone={close}
-            items={(tags ?? []).flatMap((entry) => [
-              { id: `add-${entry.id}`, label: t('library.addLabel', { label: entry.label }), onSelect: () => apply({ tags: { add: [entry.id] } }) },
-              { id: `remove-${entry.id}`, label: t('library.removeLabel', { label: entry.label }), onSelect: () => apply({ tags: { remove: [entry.id] } }) },
-            ])}
-          />
-        )}
-      </Popover>
-      <Button variant="ghost" disabled={pending} onClick={() => setAddingLanguage(true)}>
-        {t('features.additionalLanguages.addAdditional')}
-      </Button>
-      <FloatBarDivider />
-      <Button variant="danger" onClick={() => setConfirmDelete(true)}>
-        {t('common.delete')}
-      </Button>
-      <Button variant="ghost" className="al-floatbar__cancel" onClick={onClear}>
-        {t('common.cancel')}
-      </Button>
+    <BulkBar count={ids.length} total={total} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear}>
       <ProfileMigrationDialog
         open={migrateTo !== null}
         onClose={() => setMigrateTo(null)}
         initialToProfileId={migrateTo}
         selection={kind === 'series' ? { seriesIds: ids } : { movieIds: ids }}
         profiles={profiles}
-        subject={`${ids.length} ${noun(kind, ids.length)}`}
+        subject={subject}
       />
-      <AddAdditionalDialog
-        open={addingLanguage}
-        onClose={() => setAddingLanguage(false)}
-        targets={languageTargets}
-        title={`${ids.length} ${noun(kind, ids.length)}`}
-      />
+      <AddAdditionalDialog open={addingLanguage} onClose={() => setAddingLanguage(false)} targets={languageTargets} title={subject} />
+      <BulkRenameDialog target={renaming ? (kind === 'series' ? { seriesIds: ids } : { movieIds: ids }) : null} subject={subject} onClose={() => setRenaming(false)} />
       <DeleteMediaDialog
         open={confirmDelete}
         onClose={() => setConfirmDelete(false)}
-        subject={`${ids.length} ${noun(kind, ids.length)}`}
+        subject={subject}
         noun={noun(kind, ids.length)}
         loading={deleteSeries.isPending || deleteMovies.isPending}
         onConfirm={(opts) => {
@@ -807,12 +807,13 @@ function BulkBar({
             {
               onSuccess: () => {
                 setConfirmDelete(false);
+                toast.push({ tone: 'ok', title: t('bulk.toast.deleted', { count: ids.length }) });
                 onClear();
               },
             },
           );
         }}
       />
-    </FloatBar>
+    </BulkBar>
   );
 }

@@ -1,15 +1,16 @@
 import { languageNames } from '../../lib/format.js';
-import { useState } from 'react';
-import type { AudioFile, MediaFile } from '@arclight/shared';
+import { useState, type ReactNode } from 'react';
+import type { AudioFile, GrabOverride, MediaFile } from '@arclight/shared';
 import { Button, EmptyState, Modal, Table, Tag, type Column } from '../../arclight/index.js';
 import { formatBytes, formatDate, seasonLabel } from '../../components/media/format.js';
 import { QualityLabel, QueryError } from '../../components/media/media-kit.js';
-import { useDeleteMediaFile } from '../../hooks/library.js';
+import { useAllowUpgrades, useDeleteMediaFile } from '../../hooks/library.js';
 import { useAnalyzeMedia } from '../../hooks/media-analysis.js';
 import { MediaFileRowActions } from '../../features/transcode/file-row-actions.js';
 import { mediaBadges, mediaInfoSummary } from './media-info.js';
 import { versionColumn } from './versions/versions-editor.js';
 import { formatDuration } from './music/music-model.js';
+import { KeptByChoice } from './kept-by-choice.js';
 import './media-files.css';
 import { t } from '../../i18n/index.js';
 
@@ -42,6 +43,7 @@ export function MediaFilesTable({
   ownerId: number;
 }) {
   const del = useDeleteMediaFile();
+  const allow = useAllowUpgrades();
   const analyze = useAnalyzeMedia();
   const [confirm, setConfirm] = useState<MediaFile | null>(null);
 
@@ -59,6 +61,13 @@ export function MediaFilesTable({
     { key: 'group', header: t('common.group'), cell: (f) => f.releaseGroup ?? '—', muted: true },
     { key: 'size', header: t('common.size'), sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
     { key: 'added', header: t('common.added'), sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },
+    ...keptColumn(files, (f) => (
+      <KeptByChoice
+        override={f.grabOverride!}
+        allowing={allow.isPending && allow.variables?.fileId === f.id}
+        onAllow={() => allow.mutate({ kind: 'video', fileId: f.id, mediaType, ownerId })}
+      />
+    )),
     {
       key: 'actions',
       header: <span className="al-sr-only">{t('common.actions')}</span>,
@@ -126,6 +135,12 @@ export function MediaFilesTable({
   );
 }
 
+/** The "Kept by choice" column, only while some file carries a "Grab anyway" override. */
+function keptColumn<F extends { grabOverride?: GrabOverride | null | undefined }>(files: readonly F[] | undefined, cell: (f: F) => ReactNode): Column<F>[] {
+  if (!files?.some((f) => f.grabOverride)) return [];
+  return [{ key: 'kept', header: t('library.keptByChoice.column'), sortValue: (f) => (f.grabOverride ? 0 : 1), cell: (f) => (f.grabOverride ? cell(f) : null) }];
+}
+
 /** "FLAC · 24-bit · 96 kHz · 2 ch" / "MP3 · 320 kbps" badges for one audio file. */
 export function audioBadges(f: Pick<AudioFile, 'codec' | 'bitrateKbps' | 'sampleRateHz' | 'bitDepth' | 'channels'>): Array<{ kind: string; label: string }> {
   const out: Array<{ kind: string; label: string }> = [];
@@ -140,6 +155,7 @@ export function audioBadges(f: Pick<AudioFile, 'codec' | 'bitrateKbps' | 'sample
 /** Audio variant of the files table (music and audiobooks): tags and stream details instead of ffprobe video info. */
 /** Audio files of an album (disc-track column) or an audiobook (`parts`: part number column, in part order). */
 export function AudioFilesTable({ files, error, loading, parts = false }: { files: AudioFile[] | undefined; error: unknown; loading: boolean; parts?: boolean }) {
+  const allow = useAllowUpgrades();
   if (error) return <QueryError error={error} title={t('library.mediaFilesTable.couldNotLoadFiles')} />;
   const columns: Column<AudioFile>[] = [
     { key: 'path', header: t('library.mediaFilesTable.relativePath'), sortValue: (f) => f.relativePath, cell: (f) => f.relativePath, mono: true },
@@ -177,6 +193,9 @@ export function AudioFilesTable({ files, error, loading, parts = false }: { file
     { key: 'duration', header: t('music.duration'), sortValue: (f) => f.durationMs ?? 0, cell: (f) => formatDuration(f.durationMs), mono: true, align: 'right' },
     { key: 'size', header: t('common.size'), sortValue: (f) => f.sizeBytes, cell: (f) => formatBytes(f.sizeBytes), align: 'right', mono: true },
     { key: 'added', header: t('common.added'), sortValue: (f) => f.dateAdded, cell: (f) => formatDate(f.dateAdded), mono: true },
+    ...keptColumn(files, (f) => (
+      <KeptByChoice override={f.grabOverride!} allowing={allow.isPending} onAllow={() => allow.mutate({ kind: 'audio', fileId: f.id })} />
+    )),
   ];
   return (
     <Table

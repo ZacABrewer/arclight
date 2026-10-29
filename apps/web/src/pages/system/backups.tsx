@@ -3,6 +3,8 @@ import type { Backup, BackupSettings, BackupType } from '@arclight/shared';
 import { backupApi } from '../../api/backup.js';
 import { Button, Chip, EmptyState, ErrorBlock, Field, FormSection, Input, LinkButton, Pane, Skeleton, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
+import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
+import { useSelection } from '../../components/bulk-actions.js';
 import { useBackups, useBackupSettings, useCreateBackup, useDeleteBackup, useRestoreBackup, useSaveBackupSettings } from '../../hooks/backup.js';
 import { relativeTime } from '../../lib/format.js';
 import { ConfirmModal } from './confirm-modal.js';
@@ -24,6 +26,8 @@ export function SystemBackupsPage() {
   const toast = useToast();
   const [pending, setPending] = useState<Pending | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  const backupKeys = (backups.data ?? []).map((b) => b.id);
+  const selection = useSelection(backupKeys);
 
   const restored = () => {
     setPending(null);
@@ -125,11 +129,14 @@ export function SystemBackupsPage() {
               loading={backups.isLoading}
               caption={t('common.backups')}
               defaultSort={{ key: 'time', direction: 'desc' }}
+              {...tableSelection(selection)}
+              rowLabel={(b) => t('components.bulkActions.selectName', { name: b.name })}
               empty={<EmptyState title={t('system.backups.noBackupsYet')}>{t('system.backups.scheduledBackupsAppearHereCreate')}</EmptyState>}
             />
           )}
         </Pane>
         <BackupSettingsPane />
+        <ResourceBulkBar resource="backup" selection={selection} allKeys={backupKeys} nameOf={(id) => backups.data?.find((b) => b.id === id)?.name} />
       </div>
 
       <ConfirmModal

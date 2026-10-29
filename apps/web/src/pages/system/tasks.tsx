@@ -1,6 +1,8 @@
 import type { Job, JobStatus, MediaAnalysisQueueSummary, ScheduledJob } from '@arclight/shared';
 import { Link } from '@tanstack/react-router';
 import { Button, Chip, EmptyState, ErrorBlock, LiveDot, Pane, Table, type ChipTone, type Column } from '../../arclight/index.js';
+import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
+import { useSelection } from '../../components/bulk-actions.js';
 import { useAnalysisQueue } from '../../hooks/media-analysis.js';
 import { useJobs, useRunJob, useScheduledJobs } from '../../hooks/jobs.js';
 import { relativeTime } from '../../lib/format.js';
@@ -29,6 +31,8 @@ function When({ iso }: { iso: string | null }) {
 function ScheduledTable() {
   const scheduled = useScheduledJobs();
   const run = useRunJob();
+  const jobKeys = (scheduled.data ?? []).map((s) => s.name);
+  const selection = useSelection(jobKeys);
   const columns: Column<ScheduledJob>[] = [
     { key: 'name', header: t('system.tasks.task'), cell: (s) => s.name, sortValue: (s) => s.name },
     { key: 'interval', header: t('common.interval'), mono: true, cell: (s) => s.interval },
@@ -48,15 +52,20 @@ function ScheduledTable() {
   ];
   if (scheduled.isError) return <ErrorBlock title={t('system.tasks.couldntLoadScheduledTasks')} onRetry={() => void scheduled.refetch()} />;
   return (
-    <Table
+    <>
+      <Table
       caption={t('system.tasks.scheduledTasks')}
       columns={columns}
       rows={scheduled.data}
       rowKey={(s) => s.name}
       loading={scheduled.isPending}
       defaultSort={{ key: 'name', direction: 'asc' }}
+      {...tableSelection(selection)}
+      rowLabel={(s) => t('components.bulkActions.selectName', { name: s.name })}
       empty={<EmptyState title={t('system.tasks.noScheduledTasks')} />}
     />
+      <ResourceBulkBar resource="job" selection={selection} allKeys={jobKeys} />
+    </>
   );
 }
 

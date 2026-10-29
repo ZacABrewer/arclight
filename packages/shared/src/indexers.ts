@@ -568,6 +568,84 @@ export const IndexerStatsQuery = z.object({
 });
 export type IndexerStatsQuery = z.infer<typeof IndexerStatsQuery>;
 
+// ---- health summary -----------------------------------------------------------------
+
+/**
+ * Per-indexer verdict, first match wins: `unused` (no queries in the period) → `failing`
+ * (backing off now, or failure rate at/above the threshold) → `noResults` (enough successful
+ * queries, nearly all empty) → `slow` (average or p95 response time at/above the threshold)
+ * → `healthy`.
+ */
+export const IndexerHealthVerdict = z.enum(['healthy', 'slow', 'failing', 'unused', 'noResults']);
+export type IndexerHealthVerdict = z.infer<typeof IndexerHealthVerdict>;
+
+/** Periods the health summary offers, in days. */
+export const INDEXER_HEALTH_PERIODS = [1, 7, 30] as const;
+export const INDEXER_HEALTH_DEFAULT_DAYS = 7;
+
+export const IndexerHealthThresholds = z.object({
+  /** Failure share (0–1) of queries + RSS fetches at or above which an indexer is failing. */
+  failureRate: z.number().min(0).max(1),
+  /** Average response time (ms) at or above which an indexer is slow. */
+  slowAvgMs: NonNegativeInt,
+  /** p95 response time (ms) at or above which an indexer is slow. */
+  slowP95Ms: NonNegativeInt,
+  /** Share (0–1) of successful queries returning nothing at or above which it is `noResults`. */
+  zeroResultRate: z.number().min(0).max(1),
+  /** Successful queries with a result count needed before `noResults` applies. */
+  minQueriesForNoResults: NonNegativeInt,
+});
+export type IndexerHealthThresholds = z.infer<typeof IndexerHealthThresholds>;
+
+export const IndexerHealthEntry = z.object({
+  indexerId: z.number().int(),
+  indexerName: z.string(),
+  /** False when RSS, automatic and interactive search are all switched off. */
+  enabled: z.boolean(),
+  /** Searches + RSS fetches in the period. */
+  queries: NonNegativeInt,
+  failures: NonNegativeInt,
+  /** failures / queries (0–1); null without queries. */
+  failureRate: z.number().min(0).max(1).nullable(),
+  /** Mean / 95th percentile duration of successful queries; null without any. */
+  avgResponseMs: NonNegativeInt.nullable(),
+  p95ResponseMs: NonNegativeInt.nullable(),
+  /** Mean releases per successful query that recorded a count; null without any. */
+  avgResults: z.number().min(0).nullable(),
+  /** Share (0–1) of those queries that returned nothing; null without any. */
+  zeroResultRate: z.number().min(0).max(1).nullable(),
+  /** Successful grabs in the period. */
+  grabs: NonNegativeInt,
+  /** ISO-8601 newest successful / failed query over the retained log (90 days). */
+  lastSuccessAt: z.string().nullable(),
+  lastFailureAt: z.string().nullable(),
+  lastFailureMessage: z.string().nullable(),
+  /** Consecutive failures behind the current backoff (0 when healthy). */
+  failureCount: NonNegativeInt,
+  /** ISO-8601 end of the current backoff; null when the indexer is not backing off. */
+  disabledTill: z.string().nullable(),
+  verdict: IndexerHealthVerdict,
+});
+export type IndexerHealthEntry = z.infer<typeof IndexerHealthEntry>;
+
+export const IndexerHealth = z.object({
+  days: z.number().int(),
+  /** ISO-8601 start of the period (a rolling window ending now). */
+  since: z.string(),
+  thresholds: IndexerHealthThresholds,
+  indexers: z.array(IndexerHealthEntry),
+});
+export type IndexerHealth = z.infer<typeof IndexerHealth>;
+
+export const IndexerHealthQuery = z.object({
+  days: z.coerce
+    .number()
+    .int()
+    .refine((d) => (INDEXER_HEALTH_PERIODS as readonly number[]).includes(d), { message: 'days must be 1, 7 or 30' })
+    .default(INDEXER_HEALTH_DEFAULT_DAYS),
+});
+export type IndexerHealthQuery = z.infer<typeof IndexerHealthQuery>;
+
 // ---- global indexer options ---------------------------------------------------------
 
 // ---- definition feed settings (rest of the feed contract at the end of the file) ----

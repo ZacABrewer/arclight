@@ -92,6 +92,10 @@ Switch on the same events as for any connection: On download (import), On upgrad
 | Request never shows "Available" | Availability is off for that server, the server has no matching library, or the title has no external id Arclight can match |
 | Nobody can sign in | No enabled server has Sign-in on. See [Users and security](users-and-security.md) |
 
+## Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection: **Enable**, **Disable**, **Test** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
+
 ## Related
 
 - [Notifications](notifications.md)

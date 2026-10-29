@@ -554,6 +554,10 @@ export type IssueCommentInput = z.infer<typeof IssueCommentInput>;
 export const IssueStatusUpdate = z.object({ status: IssueStatus });
 export type IssueStatusUpdate = z.infer<typeof IssueStatusUpdate>;
 
+/** POST /issue/bulk/status: resolve or reopen several issues. */
+export const BulkIssueStatus = z.object({ ids: z.array(z.number().int().positive()).min(1).max(500), status: IssueStatus });
+export type BulkIssueStatus = z.infer<typeof BulkIssueStatus>;
+
 export const IssueListQuery = z.object({
   take: z.coerce.number().int().min(1).max(500).default(20),
   skip: z.coerce.number().int().min(0).default(0),

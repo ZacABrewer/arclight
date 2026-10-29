@@ -5,7 +5,8 @@ import { Button, Chip, ErrorBlock, QualityTag, SectionLabel, Skeleton } from '..
 import { useFeatures } from '../../../hooks/music.js';
 import { useCustomFormatList, useQualityProfileList, useQualityProfileSchema } from '../../../hooks/profiles.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
+import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { useProfileMigrationProgressList } from '../../../hooks/profile-migration.js';
 import { DelayProfilesSection } from './delay-profiles.js';
 import { MismatchCount, ProfileMigrationSection } from './profile-migration-section.js';
@@ -17,13 +18,24 @@ import './profiles.css';
 import { t } from '../../../i18n/index.js';
 
 /** One quality profile card: cutoff + the allowed qualities (best first) as mono quality tags. */
-export function QualityProfileCard({ profile, onEdit, migration }: { profile: QualityProfile; onEdit: () => void; migration?: ProfileMigrationProgress | undefined }) {
+export function QualityProfileCard({
+  profile,
+  onEdit,
+  migration,
+  select,
+}: {
+  profile: QualityProfile;
+  onEdit: () => void;
+  migration?: ProfileMigrationProgress | undefined;
+  select?: ItemCardSelect | undefined;
+}) {
   const cutoff = profile.items.find((i) => itemId(i) === profile.cutoff);
   const allowed = toDisplay(profile.items).filter((i) => i.allowed);
   return (
     <ItemCard
       title={profile.name}
       onClick={onEdit}
+      select={select}
       status={
         profile.upgradeAllowed ? null : (
           <Chip tone="muted" dot="none">
@@ -55,6 +67,7 @@ function QualityProfilesSection() {
   const migration = useProfileMigrationProgressList();
   const features = useFeatures();
   const [editing, setEditing] = useState<Editing>(null);
+  const bulk = useResourceBulk('qualityprofile', list.data, (p) => p.id, (p) => p.name);
 
   // One grid per domain once audio is in play: video always, music / audiobooks while their
   // flag is on or a profile of theirs exists.
@@ -64,7 +77,13 @@ function QualityProfilesSection() {
   );
   const grouped = shown.length > 1;
   const card = (p: QualityProfile) => (
-    <QualityProfileCard key={p.id} profile={p} onEdit={() => setEditing({ profile: p })} migration={migration.data?.find((m) => m.qualityProfileId === p.id)} />
+    <QualityProfileCard
+      key={p.id}
+      profile={p}
+      onEdit={() => setEditing({ profile: p })}
+      migration={migration.data?.find((m) => m.qualityProfileId === p.id)}
+      select={bulk.cardProps(p)}
+    />
   );
 
   return (
@@ -84,7 +103,8 @@ function QualityProfilesSection() {
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : grouped ? (
-        shown.map((domain) => {
+        <>
+        {shown.map((domain) => {
           const profiles = groups.find((g) => g.domain === domain)?.profiles ?? [];
           const label = t('settings.profiles.domain.profilesOf', { domain: domainLabel(domain) });
           return (
@@ -98,13 +118,17 @@ function QualityProfilesSection() {
               </CardGrid>
             </section>
           );
-        })
+        })}
+        </>
       ) : (
-        <CardGrid label={t('settings.profiles.qualityProfiles')}>
-          {list.data.map(card)}
-          <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing({ domain: 'video' })} />
-        </CardGrid>
+        <>
+          <CardGrid label={t('settings.profiles.qualityProfiles')}>
+            {list.data.map(card)}
+            <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing({ domain: 'video' })} />
+          </CardGrid>
+        </>
       )}
+      {bulk.bar}
       {editing && schema.data ? (
         <QualityProfileEditor
           key={'profile' in editing ? editing.profile.id : `new-${editing.domain}`}

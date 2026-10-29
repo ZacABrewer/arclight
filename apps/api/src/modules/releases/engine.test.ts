@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DelayProfile, ReleaseProfile } from '@arclight/shared';
 import {
+  KEPT_BY_CHOICE_MESSAGE,
   buildDecision,
   evaluate,
   isUpgradable,
@@ -274,6 +275,23 @@ describe('upgrades, queue, history, propers', () => {
     expect(reasons(makeContext({ existingFiles: files, propers: 'doNotUpgrade' }), tv('Show.Name.S01E01.PROPER.1080p.WEB-DL-GRP'))).toContain('propersDisabled');
     expect(reasons(makeContext({ existingFiles: files }), tv('Show.Name.S01E01.PROPER.1080p.WEB-DL-GRP'))).toEqual([]);
     expect(reasons(makeContext({ existingFiles: files }), tv('Show.Name.S01E01.REPACK.1080p.WEB-DL-OTHER'))).toContain('repackReleaseGroupDoesNotMatch');
+  });
+
+  it('never lets an automatic decision replace a file kept by choice ("Grab anyway")', () => {
+    const kept = [file(quality('HDTV-720p'), [s1[0]!.id], { keptByChoice: true })];
+    const upgrade = tv('Show.Name.S01E01.1080p.WEB-DL-GRP');
+    const rss = evaluate(makeContext({ existingFiles: kept }), upgrade);
+    expect(rss.rejections).toEqual([{ reason: 'keptByChoice', message: KEPT_BY_CHOICE_MESSAGE, type: 'permanent' }]);
+    const search = makeContext({ existingFiles: kept, source: 'search', criteria: { mediaType: 'series', seriesId: show.id, userInvoked: false } });
+    expect(reasons(search, upgrade)).toContain('keptByChoice');
+    expect(reasons({ ...search, source: 'userInvokedSearch' }, upgrade)).toContain('keptByChoice');
+    // A season pack covering the kept episode would replace it too.
+    expect(reasons(makeContext({ existingFiles: kept }), tv('Show.Name.S01.1080p.WEB-DL-GRP', { size: 6 * GB }))).toContain('keptByChoice');
+    // Interactive search: the user may still replace it by hand; the normal upgrade rules apply.
+    expect(reasons({ ...search, source: 'interactiveSearch' }, upgrade)).toEqual([]);
+    // Other episodes, and the same file once upgrades are allowed again, upgrade as usual.
+    expect(reasons(makeContext({ existingFiles: kept }), tv('Show.Name.S01E02.1080p.WEB-DL-GRP'))).toEqual([]);
+    expect(reasons(makeContext({ existingFiles: [{ ...kept[0]!, keptByChoice: false }] }), upgrade)).toEqual([]);
   });
 
   it('rejects blocklisted releases', () => {

@@ -319,6 +319,17 @@ export const libraryRoutes = (
         return reply.code(204).send(null);
       },
     );
+    // "Allow upgrades again": clears the "Grab anyway" override so automatic searches may replace the file.
+    app.delete(
+      '/mediafile/:id/grab-override',
+      { schema: { params: IdParams, response: { 200: MediaFile, 404: ErrorResponse } } },
+      async (req) => {
+        const file = svc.clearMediaFileGrabOverride(db, req.params.id);
+        const parentId = file.mediaType === 'series' ? file.seriesId : file.movieId;
+        if (parentId !== null && parentId !== undefined) announce('updated', file.mediaType, parentId);
+        return file;
+      },
+    );
 
     // ----------------------------------------------------------------------------- wanted
     app.get('/wanted/missing/episodes', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>

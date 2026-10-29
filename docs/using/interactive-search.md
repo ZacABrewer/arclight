@@ -37,6 +37,22 @@ Arclight asks every indexer that has interactive search enabled. This can take s
 
 Click a column header to sort. The default order puts approved releases first, then temporarily rejected, then rejected.
 
+### Filtering the results
+
+A search can return hundreds of releases (a popular movie often brings back 300 or more). The row of filters above the table narrows down what was already found, without searching the indexers again:
+
+| Filter | What it does |
+| --- | --- |
+| Title contains | Every word you type must appear in the release name. Case and the dots, dashes and underscores in release names are ignored, so `part two 1080p` finds `Dune.Part.Two.2024.1080p.WEB-DL`. |
+| Quality | Pick one or more qualities. Only the qualities in the results are listed, best first. |
+| Indexers | Pick one or more indexers. |
+| Protocol | Any protocol, Torrent or Usenet. Shown when the results hold both. |
+| Decision | All decisions, Approved only, or Rejected only (rejected includes temporarily rejected). |
+| Min size / Max size | Bounds in GB, decimals allowed (`0.5` for 500 MB). |
+| Min seeders | Hides torrents with fewer seeders, or with an unknown count. Usenet releases have no seeders and are not affected. Shown when the results hold torrents. |
+
+The right end of the row says how many releases are shown, for example "42 of 318 releases". **Clear** resets every filter. If the filters hide everything, the table says "No releases match these filters" with a **Clear filters** button. The filters start empty each time you open interactive search for another item. They work the same for music albums and audiobooks. On a phone each filter takes its own line.
+
 ### Rejections
 
 Hover (or focus) the rejections chip to see every reason. Each rejection is one of two kinds:
@@ -69,7 +85,19 @@ The wording comes from Arclight's decision engine, so you may see other messages
 
 Click **Grab**. The release is sent to your download client and appears in [Activity > Queue](activity.md). The grab is attached to the series, episodes or movie you searched for.
 
-A rejected release shows **Grab anyway** instead. Clicking it lists the rejections and asks you to confirm; the release is then grabbed and tracked like an approved one. This overrides the rejections for that one download only, and your profiles and rules are not changed. A release Arclight cannot match to the series, movie, album or book you searched for stays disabled: use the Search page below to force grab it.
+A rejected release shows **Grab anyway** instead. Clicking it lists the rejections and asks you to confirm; the release is then grabbed and tracked like an approved one. Your profiles and rules are not changed. A release Arclight cannot match to the series, movie, album or book you searched for stays disabled: use the Search page below to force grab it.
+
+#### Kept by choice
+
+Arclight remembers that you overrode the rules. The grab is recorded in [Activity > History](activity.md) with a **Grabbed anyway** line listing the rules you overrode, and the file it brings in is marked **Kept by choice** in the item's **Files** tab (for an album or a book, on each of its files). Hover the marker to see the rules you overrode.
+
+While a file is kept by choice, automatic searches (RSS sync, the missing and cutoff unmet searches, and the **Search** buttons) never replace it. Their releases are rejected with "Kept by your choice (grabbed anyway); upgrades are paused for this file", and the item is left off [Wanted > Cutoff unmet](wanted.md#cutoff-unmet). For music the whole album is paused, for audiobooks the whole book. Interactive search is not paused: you can still pick a better release by hand, and the new file replaces the kept one as usual.
+
+To go back to normal upgrades, click **Allow upgrades again** next to the marker. For an album or a book this clears the marker on all its files.
+
+Only permanent rejections count as an override. A release that only had temporary rejections (a delay or the minimum age, for example) would have been grabbed later anyway, so its file is not marked.
+
+The import respects the override too: a release you grabbed anyway replaces the file it was grabbed for even when it is not better than that file (for example a smaller encode you chose on purpose), instead of being refused as "Not an upgrade for existing file".
 
 ## Why this release
 

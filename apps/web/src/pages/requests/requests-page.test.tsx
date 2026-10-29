@@ -29,13 +29,31 @@ describe('requests page', () => {
     );
     const { toasts } = renderAt('/requests');
     await screen.findByRole('link', { name: 'Heat' });
-    fireEvent.click(screen.getByLabelText('Select all pending'));
+    fireEvent.click(screen.getByLabelText('Select all rows'));
     const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
     expect(within(bar).getByText('2 selected')).toBeTruthy();
-    fireEvent.click(within(bar).getByRole('button', { name: 'Approve selected' }));
+    fireEvent.click(within(bar).getByRole('button', { name: 'Approve' }));
     await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/request/bulk/approve')).toBe(true));
     expect(calls.find((c) => c.url === '/api/v1/request/bulk/approve')?.body).toEqual({ ids: [1, 2] });
-    await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Approved 2 requests'));
+    await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Approve · 2 done'));
+  });
+
+  it('bulk-deletes after a confirm that states the count, and reports per-id failures', async () => {
+    const calls = stubApi(
+      { '/api/v1/request': page([makeRequest({ id: 1 }), makeRequest({ id: 2, mediaTitle: 'Heat', mediaTmdbId: 949 })]) },
+      (url, method) => (method === 'POST' && url === '/api/v1/request/bulk/delete' ? { body: { ok: [1], failed: [{ id: 2, error: 'not yours' }] } } : undefined),
+    );
+    const { toasts } = renderAt('/requests');
+    await screen.findByRole('link', { name: 'Heat' });
+    fireEvent.click(screen.getByLabelText('Select all rows'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Delete' }));
+    const dialog = screen.getByRole('dialog', { name: 'Delete 2 requests?' });
+    expect(within(dialog).getByText(/2 selected items/)).toBeTruthy();
+    expect(calls.some((c) => c.url === '/api/v1/request/bulk/delete')).toBe(false);
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Delete 2' }));
+    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/request/bulk/delete')?.body).toEqual({ ids: [1, 2] }));
+    await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Delete · 1 done, 1 failed'));
+    expect(toasts.list().find((t) => t.title.startsWith('Delete'))?.message).toContain('Heat: not yours');
   });
 
   it('shows no admin actions to a user who may only view all requests', async () => {
@@ -43,7 +61,11 @@ describe('requests page', () => {
     renderAt('/requests');
     expect(await screen.findByRole('link', { name: 'The Matrix' })).toBeTruthy();
     expect(screen.queryByRole('button', { name: 'Approve' })).toBeNull();
-    expect(screen.queryByLabelText('Select all pending')).toBeNull();
+    fireEvent.click(screen.getByLabelText('Select all rows'));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    expect(within(bar).queryByRole('button', { name: 'Approve' })).toBeNull();
+    expect(within(bar).getByRole('button', { name: 'Delete' })).toBeTruthy();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Cancel' }));
     // Owner of a pending request may still delete it.
     expect(screen.getByRole('button', { name: 'Delete' })).toBeTruthy();
   });

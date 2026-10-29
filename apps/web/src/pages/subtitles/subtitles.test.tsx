@@ -69,7 +69,7 @@ describe('wanted subtitles page', () => {
         c.url.includes('mediaType=movie')
           ? page([wanted({ mediaFileId: 9, mediaType: 'movie', seriesId: null, movieId: 1, episodeIds: [], title: 'Dune', episodeLabel: null, episodeTitle: null })])
           : page([wanted({ mediaFileId: 8 }), wanted({ mediaFileId: 10, episodeLabel: 'S01E03', episodeTitle: 'Remember the Cant' })]),
-      'POST /command/subtitlesearch': { files: 1, searched: 1, downloaded: 0, message: 'No subtitles found' },
+      'POST /command/subtitlesearch/bulk': { queued: 2, skipped: 0, job: null },
     });
     renderAt('/subtitles/wanted');
     expect(await screen.findByRole('heading', { level: 1, name: 'Subtitles' })).toBeTruthy();
@@ -87,7 +87,8 @@ describe('wanted subtitles page', () => {
     const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
     expect(bar.textContent).toContain('2 selected');
     fireEvent.click(within(bar).getByRole('button', { name: 'Search selected' }));
-    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').map((c) => c.body)).toEqual([{ mediaFileId: 8 }, { mediaFileId: 10 }]));
+    // One server job for the whole selection.
+    await waitFor(() => expect(calls.filter((c) => c.method === 'POST').map((c) => [c.path, c.body])).toEqual([['/command/subtitlesearch/bulk', { mediaFileIds: [8, 10] }]]));
 
     fireEvent.click(movies);
     expect(movies.getAttribute('aria-selected')).toBe('true');

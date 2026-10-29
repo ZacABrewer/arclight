@@ -411,6 +411,20 @@ describe('rescan, statistics and wanted', () => {
     h = await harness({ languages: ['english'] });
   });
 
+  it('"Allow upgrades again" clears a "Grab anyway" override on every part of the book', async () => {
+    writeLibrary(join(h.root, AUTHOR_NAME));
+    const martian = book(await addWeir(), 'The Martian');
+    h.db.update(audioFiles).set({ grabOverride: { rejections: ['Size limit exceeded'], grabbedAt: '2026-10-01T00:00:00.000Z' } }).where(eq(audioFiles.bookId, martian.id)).run();
+    const parts = (await h.api('GET', `/audiofile?bookId=${martian.id}`)).json<Array<{ id: number; grabOverride: unknown }>>();
+    expect(parts).toHaveLength(2);
+    expect(parts.every((p) => p.grabOverride !== null)).toBe(true);
+    const cleared = await h.api('DELETE', `/audiofile/${parts[0]!.id}/grab-override`);
+    expect(cleared.statusCode).toBe(200);
+    expect(cleared.json<Array<{ id: number; grabOverride: unknown }>>().map((f) => [f.id, f.grabOverride])).toEqual(parts.map((p) => [p.id, null]));
+    expect((await h.api('DELETE', `/audiofile/${parts[0]!.id}/grab-override`)).json()).toEqual([]);
+    expect((await h.api('DELETE', '/audiofile/999999/grab-override')).statusCode).toBe(404);
+  });
+
   it('rescans an existing folder on add: audio_files, has_file, path, parts and file chapters', async () => {
     const folders = writeLibrary(join(h.root, AUTHOR_NAME));
     const added = await addWeir();

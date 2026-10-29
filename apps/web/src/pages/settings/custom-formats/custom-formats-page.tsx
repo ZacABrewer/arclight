@@ -8,7 +8,8 @@ import { useToast } from '../../../components/toast.js';
 import { useCustomFormatList, useCustomFormatSchema, useQualityProfileList } from '../../../hooks/profiles.js';
 import { settingsKeys } from '../../../hooks/settings-keys.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, ItemCard, SettingsSection } from '../shared.js';
+import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { CustomFormatEditor } from './custom-format-editor.js';
 import { exportCustomFormat, parseCustomFormatJson, type ImportResult, type SourceApp } from './custom-format-json.js';
 import { useFeatures } from '../../../hooks/music.js';
@@ -167,7 +168,9 @@ export function CustomFormatCard({
   profiles,
   onEdit,
   showDomain = false,
+  select,
 }: {
+  select?: ItemCardSelect | undefined;
   format: CustomFormat;
   profiles: readonly QualityProfile[];
   onEdit: () => void;
@@ -180,6 +183,7 @@ export function CustomFormatCard({
     <ItemCard
       title={format.name}
       onClick={onEdit}
+      select={select}
       status={
         format.includeWhenRenaming || showDomain ? (
           <span className="al-chip-row">
@@ -228,6 +232,9 @@ export function CustomFormatsPage() {
   const [editing, setEditing] = useState<CustomFormat | 'new' | null>(null);
   const [prefill, setPrefill] = useState<CustomFormatInput | undefined>();
   const [importing, setImporting] = useState(false);
+  const bulk = useResourceBulk('customformat', list.data, (cf) => cf.id, (cf) => cf.name, {
+    extra: (selected) => [{ id: 'export', label: t('components.bulkActions.export'), onSelect: () => download('custom-formats.json', selected.map(exportCustomFormat)) }],
+  });
 
   const addNew = () => {
     setPrefill(undefined);
@@ -265,12 +272,22 @@ export function CustomFormatsPage() {
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label={t('settings.customFormats.customFormats')}>
-            {list.data.map((cf) => (
-              <CustomFormatCard key={cf.id} format={cf} profiles={profiles.data ?? []} onEdit={() => setEditing(cf)} showDomain={features.music || features.audiobooks} />
-            ))}
-            <AddCard label={t('settings.customFormats.addCustomFormat')} onClick={addNew} />
-          </CardGrid>
+          <>
+            <CardGrid label={t('settings.customFormats.customFormats')}>
+              {list.data.map((cf) => (
+                <CustomFormatCard
+                  key={cf.id}
+                  format={cf}
+                  profiles={profiles.data ?? []}
+                  onEdit={() => setEditing(cf)}
+                  showDomain={features.music || features.audiobooks}
+                  select={bulk.cardProps(cf)}
+                />
+              ))}
+              <AddCard label={t('settings.customFormats.addCustomFormat')} onClick={addNew} />
+            </CardGrid>
+            {bulk.bar}
+          </>
         )}
       </SettingsSection>
       {editing && schema.data ? (

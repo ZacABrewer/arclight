@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AudioMediaType, Paged, Ratings, SortOrder } from './library.js';
+import { AudioMediaType, GrabOverride, Paged, Ratings, SortOrder } from './library.js';
 import { QualityModel } from './quality.js';
 import { SECRET_MASK } from './settings.js';
 
@@ -358,6 +358,8 @@ export const AudioFile = z.object({
   chapterCount: z.number().int().nullish(),
   tags: AudioFileTags.nullish(),
   mediaInfo: AudioMediaInfo.nullish(),
+  /** Set when the file came from a "Grab anyway" grab; upgrades of its album / book are paused. */
+  grabOverride: GrabOverride.nullish(),
 });
 export type AudioFile = z.infer<typeof AudioFile>;
 

@@ -29,7 +29,9 @@ import {
   useTestAllDownloadClients,
 } from '../../../hooks/download-clients.js';
 import { SettingsPage } from '../settings-layout.js';
-import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { ResourceBulkBar, tableSelection, useResourceBulk } from '../../../components/resource-bulk-actions.js';
+import { useSelection } from '../../../components/bulk-actions.js';
 import { categoriesRenderer, cleanCategories } from './categories-field.js';
 import { EngineAgentSection } from './engine-agent-section.js';
 import '../indexers/indexers.css';
@@ -238,6 +240,8 @@ function RemotePathMappingsSection() {
   const remove = useDeleteRemotePathMapping();
   const [editing, setEditing] = useState<RemotePathMapping | 'new' | null>(null);
   const [deleting, setDeleting] = useState<RemotePathMapping | null>(null);
+  const mappingKeys = (list.data ?? []).map((m) => m.id);
+  const mappingSelection = useSelection(mappingKeys);
 
   const columns: Column<RemotePathMapping>[] = [
     { key: 'host', header: t('common.host'), cell: (m) => m.host, mono: true },
@@ -278,8 +282,22 @@ function RemotePathMappingsSection() {
       ) : list.data.length === 0 ? (
         <EmptyState title={t('settings.downloadClients.noMappings')}>{t('settings.downloadClients.onlyNeededWhenTheDownload')}</EmptyState>
       ) : (
-        <Table columns={columns} rows={list.data} rowKey={(m) => m.id} caption={t('settings.downloadClients.remotePathMappings')} stickyHeader={false} />
+        <Table
+          columns={columns}
+          rows={list.data}
+          rowKey={(m) => m.id}
+          caption={t('settings.downloadClients.remotePathMappings')}
+          stickyHeader={false}
+          {...tableSelection(mappingSelection)}
+          rowLabel={(m) => t('components.bulkActions.selectName', { name: m.remotePath })}
+        />
       )}
+      <ResourceBulkBar
+        resource="remotepathmapping"
+        selection={mappingSelection}
+        allKeys={mappingKeys}
+        nameOf={(id) => list.data?.find((m) => m.id === id)?.remotePath}
+      />
       {editing ? <MappingEditor key={editing === 'new' ? 'new' : editing.id} mapping={editing === 'new' ? null : editing} onClose={() => setEditing(null)} /> : null}
       <ConfirmDialog
         open={deleting !== null}
@@ -307,11 +325,14 @@ export function DownloadClientCard({
   schema,
   onEdit,
   result,
+  select,
 }: {
   client: DownloadClientResource;
   schema: DownloadClientImplementationSchema | undefined;
   onEdit: (() => void) | undefined;
   result?: TestOutcome | undefined;
+  /** Bulk selection checkbox. */
+  select?: ItemCardSelect | undefined;
 }) {
   const builtin = client.implementation === 'builtin';
   return (
@@ -319,6 +340,7 @@ export function DownloadClientCard({
       title={client.name}
       muted={!client.enable}
       onClick={onEdit}
+      select={select}
       status={client.enable ? <Chip tone="accent">{t('common.enabled')}</Chip> : <Chip tone="muted">{t('common.disabled')}</Chip>}
       actions={
         <>
@@ -360,6 +382,7 @@ export function DownloadClientsPage() {
   const [results, setResults] = useState<Record<number, TestOutcome>>({});
 
   const schemaFor = (impl: string) => schemas.data?.find((s) => s.implementation === impl);
+  const bulk = useResourceBulk('downloadclient', list.data, (c) => c.id, (c) => c.name);
 
   return (
     <SettingsPage
@@ -393,20 +416,24 @@ export function DownloadClientsPage() {
       ) : list.data.length === 0 ? (
         <EmptyState title={t('settings.downloadClients.noDownloadClientsYet')}>{t('settings.downloadClients.addTheBuiltInEngine')}</EmptyState>
       ) : (
-        <CardGrid label={t('common.downloadClients')}>
-          {list.data.map((c) => {
-            const schema = schemaFor(c.implementation);
-            return (
-              <DownloadClientCard
-                key={c.id}
-                client={c}
-                schema={schema}
-                onEdit={schema ? () => setEditing({ client: c, schema }) : undefined}
-                result={results[c.id]}
-              />
-            );
-          })}
-        </CardGrid>
+        <>
+          <CardGrid label={t('common.downloadClients')}>
+            {list.data.map((c) => {
+              const schema = schemaFor(c.implementation);
+              return (
+                <DownloadClientCard
+                  key={c.id}
+                  client={c}
+                  schema={schema}
+                  onEdit={schema ? () => setEditing({ client: c, schema }) : undefined}
+                  result={results[c.id]}
+                  select={bulk.cardProps(c)}
+                />
+              );
+            })}
+          </CardGrid>
+          {bulk.bar}
+        </>
       )}
       <RemotePathMappingsSection />
       <EngineAgentSection />

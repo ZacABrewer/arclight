@@ -4,9 +4,11 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import type { MetadataCollection, MetadataCollectionPart, MetadataSearchResult, MinimumAvailability } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { isMissingTmdbKey, metadataApi } from '../../api/metadata.js';
-import { BackdropFrame, Button, Chip, EmptyState, ErrorBlock, FormRow, Meter, Modal, PageHeader, Pane, Poster, PosterCard, Select, Skeleton, Toggle } from '../../arclight/index.js';
+import { BackdropFrame, Button, Checkbox, Chip, EmptyState, ErrorBlock, FormRow, Meter, Modal, PageHeader, Pane, Poster, PosterCard, Select, Skeleton, Toggle } from '../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
+import { useBulkSearch, useBulkSelection } from '../../hooks/bulk.js';
 import { useToast } from '../../components/toast.js';
-import { useAddMovie, useMovieList, useQualityProfiles, useRootFolders } from '../../hooks/library.js';
+import { useAddMovie, useBulkUpdateMovies, useMovieList, useQualityProfiles, useRootFolders } from '../../hooks/library.js';
 import { libraryKeys } from '../../hooks/library-keys.js';
 import { AddDialog, loadDefaults, saveDefaults } from './add-dialog.js';
 import { initialAddForm, MINIMUM_AVAILABILITY_LABELS } from './add-form.js';
@@ -42,13 +44,27 @@ export function CollectionsPage() {
   const navigate = useNavigate();
   const groups = useMemo(() => groupCollections((movies.data ?? []).map(movieRow)), [movies.data]);
   const details = useQueries({ queries: groups.map((g) => collectionQuery(g.tmdbId)) });
+  const sel = useBulkSelection();
   useEffect(() => {
     document.title = t('library.collections.collectionsArclight');
   }, []);
+  // The bulk bar acts on the library movies of the selected collections.
+  const movieIds = useMemo(() => groups.filter((g) => sel.selected.has(g.tmdbId)).flatMap((g) => g.movies.map((m) => m.id)), [groups, sel.selected]);
 
   return (
     <>
-      <PageHeader index="02" title={t('common.collections')} subtitle={movies.data ? t('library.collections.collections', { groupsCount: groups.length }) : undefined} />
+      <PageHeader
+        index="02"
+        title={t('common.collections')}
+        subtitle={movies.data ? t('library.collections.collections', { groupsCount: groups.length }) : undefined}
+        actions={
+          groups.length > 0 ? (
+            <Button variant={sel.selectMode ? 'secondary' : 'ghost'} aria-pressed={sel.selectMode} onClick={() => (sel.selectMode ? sel.clear() : sel.setSelectMode(true))}>
+              {sel.selectMode ? t('library.done') : t('common.select')}
+            </Button>
+          ) : undefined
+        }
+      />
       {movies.isPending ? (
         <Skeleton lines={4} />
       ) : movies.isError ? (
@@ -70,15 +86,68 @@ export function CollectionsPage() {
                   count={`${g.owned}/${total}`}
                   countTone={g.owned < total ? 'warn' : 'default'}
                   meta={<CollectionMeter title={g.title} owned={g.owned} total={total} />}
-                  onClick={() => void navigate({ to: '/library/collections/$tmdbId', params: { tmdbId: String(g.tmdbId) } })}
+                  selected={sel.selectMode && sel.selected.has(g.tmdbId)}
+                  overlay={
+                    sel.selectMode ? (
+                      <Checkbox
+                        aria-label={t('library.selectTitle', { title: detail?.name ?? g.title })}
+                        checked={sel.selected.has(g.tmdbId)}
+                        onChange={() => sel.toggle(g.tmdbId)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                    ) : undefined
+                  }
+                  onClick={() => (sel.selectMode ? sel.toggle(g.tmdbId) : void navigate({ to: '/library/collections/$tmdbId', params: { tmdbId: String(g.tmdbId) } }))}
                 />
               </div>
             );
           })}
         </div>
       )}
+      {sel.selectMode || sel.selected.size > 0 ? (
+        <CollectionsBulkBar
+          collections={sel.selected.size}
+          movieIds={movieIds}
+          total={groups.length}
+          open={sel.selectMode}
+          onSelectAll={() => sel.selectAll(groups.map((g) => g.tmdbId))}
+          onClear={sel.clear}
+        />
+      ) : null}
     </>
   );
+}
+
+/** Bulk bar of the Collections page: searches and monitoring over the selected collections' movies. */
+function CollectionsBulkBar({
+  collections,
+  movieIds,
+  total,
+  open,
+  onSelectAll,
+  onClear,
+}: {
+  collections: number;
+  movieIds: number[];
+  total: number;
+  open: boolean;
+  onSelectAll: () => void;
+  onClear: () => void;
+}) {
+  const search = useBulkSearch();
+  const update = useBulkUpdateMovies();
+  const toast = useToast();
+  const none = movieIds.length === 0;
+  const apply = (patch: { monitored?: boolean; refresh?: boolean }, done: string) =>
+    update.mutate({ ids: movieIds, ...patch }, { onSuccess: () => toast.push({ tone: 'ok', title: done, durationMs: 4_000 }) });
+  const actions: BulkAction[] = [
+    { id: 'search-missing', label: t('bulk.searchMissing'), disabled: none || search.isPending, loading: search.isPending, onSelect: () => search.mutate({ mode: 'missing', movieIds }) },
+    { id: 'search-upgrades', label: t('bulk.searchUpgrades'), disabled: none || search.isPending, onSelect: () => search.mutate({ mode: 'upgrade', movieIds }) },
+    { id: 'monitor', label: t('common.monitor'), disabled: none || update.isPending, onSelect: () => apply({ monitored: true }, t('bulk.toast.updated', { count: movieIds.length })) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: none || update.isPending, onSelect: () => apply({ monitored: false }, t('bulk.toast.updated', { count: movieIds.length })) },
+    { id: 'refresh', label: t('common.refresh'), disabled: none || update.isPending, onSelect: () => apply({ refresh: true }, t('bulk.toast.refreshQueued', { count: movieIds.length })) },
+  ];
+  return <BulkBar count={collections} total={total} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear} />;
 }
 
 const route = getRouteApi('/library/collections/$tmdbId');

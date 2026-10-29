@@ -10,6 +10,7 @@ import { FormatTypeChip } from './audiobook-kit.js';
 import { bitrateText, matchedBookTitles, narratorsText, seriesText } from './audiobook-release-model.js';
 import '../library.css';
 import { GrabButton } from '../grab-button.js';
+import { useReleaseFilters } from '../release-filter-bar.js';
 import { t } from '../../../i18n/index.js';
 
 const dash = <span className="mk-dim">—</span>;
@@ -22,6 +23,7 @@ const dash = <span className="mk-dim">—</span>;
 export function AudiobookReleaseTable({ target, bookTitles }: { target: AudiobookReleaseTarget | null; bookTitles?: ReadonlyMap<number, string> | undefined }) {
   const releases = useAudiobookInteractiveSearch(target);
   const grab = useGrabAudiobookRelease();
+  const filters = useReleaseFilters(releases.data, target);
   const titles = useMemo(() => bookTitles ?? new Map<number, string>(), [bookTitles]);
 
   const columns: Column<ReleaseDecision>[] = [
@@ -125,16 +127,21 @@ export function AudiobookReleaseTable({ target, bookTitles }: { target: Audioboo
   if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label={t('library.interactiveSearch.searchingIndexers')} />;
   if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title={t('common.searchFailed')} />;
   return (
-    <Table
-      columns={columns}
-      rows={releases.data}
-      rowKey={(r) => `${r.indexerId}-${r.guid}`}
-      density="dense"
-      defaultSort={{ key: 'decision', direction: 'asc' }}
-      maxHeight="62vh"
-      empty={<EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>}
-      caption={t('library.interactiveSearch.releases')}
-    />
+    <>
+      {filters.bar}
+      <Table
+        columns={columns}
+        rows={filters.rows}
+        rowKey={(r) => `${r.indexerId}-${r.guid}`}
+        density="dense"
+        defaultSort={{ key: 'decision', direction: 'asc' }}
+        maxHeight="62vh"
+        empty={
+          filters.empty ?? <EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>
+        }
+        caption={t('library.interactiveSearch.releases')}
+      />
+    </>
   );
 }
 

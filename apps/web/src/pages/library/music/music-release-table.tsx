@@ -23,6 +23,7 @@ import { audioSortValue, audioSpecText, discographyText, logCueText, matchedAlbu
 import '../library.css';
 import './music.css';
 import { GrabButton } from '../grab-button.js';
+import { useReleaseFilters } from '../release-filter-bar.js';
 import { t } from '../../../i18n/index.js';
 
 /**
@@ -33,6 +34,7 @@ import { t } from '../../../i18n/index.js';
 export function MusicReleaseTable({ target, albumTitles }: { target: MusicReleaseTarget | null; albumTitles?: ReadonlyMap<number, string> | undefined }) {
   const releases = useMusicInteractiveSearch(target);
   const grab = useGrabMusicRelease();
+  const filters = useReleaseFilters(releases.data, target);
   const titles = useMemo(() => albumTitles ?? new Map<number, string>(), [albumTitles]);
 
   const columns: Column<ReleaseDecision>[] = [
@@ -159,16 +161,21 @@ export function MusicReleaseTable({ target, albumTitles }: { target: MusicReleas
   if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label={t('library.interactiveSearch.searchingIndexers')} />;
   if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title={t('common.searchFailed')} />;
   return (
-    <Table
-      columns={columns}
-      rows={releases.data}
-      rowKey={(r) => `${r.indexerId}-${r.guid}`}
-      density="dense"
-      defaultSort={{ key: 'decision', direction: 'asc' }}
-      maxHeight="62vh"
-      empty={<EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>}
-      caption={t('library.interactiveSearch.releases')}
-    />
+    <>
+      {filters.bar}
+      <Table
+        columns={columns}
+        rows={filters.rows}
+        rowKey={(r) => `${r.indexerId}-${r.guid}`}
+        density="dense"
+        defaultSort={{ key: 'decision', direction: 'asc' }}
+        maxHeight="62vh"
+        empty={
+          filters.empty ?? <EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>
+        }
+        caption={t('library.interactiveSearch.releases')}
+      />
+    </>
   );
 }
 

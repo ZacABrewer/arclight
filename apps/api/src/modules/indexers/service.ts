@@ -31,6 +31,7 @@ import {
   IndexerCreate,
   IndexerSettings,
   IndexerUpdate,
+  INDEXER_HEALTH_DEFAULT_DAYS,
   INDEXER_PRIORITY_DEFAULT,
   indexerFlagsFromVolumeFactors,
   protocolForImplementation,
@@ -40,6 +41,7 @@ import {
   type IndexerCapabilitiesResource,
   type IndexerCategory,
   type IndexerErrorCode,
+  type IndexerHealth,
   type IndexerImplementation,
   type IndexerStatKind,
   type IndexerStatus,
@@ -58,6 +60,7 @@ import { DefinitionStore } from './definitions.js';
 import { IndexersError, parseOrThrow } from './errors.js';
 import { ProxiesService, type TunnelOpener } from './proxies.js';
 import { indexerCapsCache, indexerRssState, indexers, indexerStatus } from './schema.js';
+import { summarizeHealth } from './health.js';
 import { IndexerStatsRecorder } from './stats.js';
 
 export { IndexersError, type IndexersErrorCode } from './errors.js';
@@ -404,6 +407,29 @@ export class IndexersService {
       .map(({ id }) => toStatus(id, statusMap.get(id), rssMap.get(id)?.lastSyncAt));
   }
 
+  /** Per-indexer health summary for the last `days` days (see ./health.ts for the verdicts). */
+  health(days: number = INDEXER_HEALTH_DEFAULT_DAYS): IndexerHealth {
+    const now = this.now();
+    const rows = this.db
+      .select({
+        id: indexers.id,
+        name: indexers.name,
+        enableRss: indexers.enableRss,
+        enableAutomaticSearch: indexers.enableAutomaticSearch,
+        enableInteractiveSearch: indexers.enableInteractiveSearch,
+      })
+      .from(indexers)
+      .all();
+    return summarizeHealth({
+      days,
+      now,
+      indexers: rows.map((r) => ({ id: r.id, name: r.name, enabled: r.enableRss || r.enableAutomaticSearch || r.enableInteractiveSearch })),
+      samples: this.stats.samplesSince(new Date(now - days * DAY).toISOString()),
+      latest: this.stats.latestOutcomes(),
+      statuses: new Map(this.db.select().from(indexerStatus).all().map((s) => [s.indexerId, s])),
+    });
+  }
+
   /** True while an indexer is inside its failure backoff window. */
   isDisabled(id: number): boolean {
     return isDisabledRow(this.statusRow(id), this.now());
@@ -501,6 +527,7 @@ export class IndexersService {
             const def = toDefinition(row, { kind: request.kind, domains, ...(opts.categories ? { override: opts.categories } : {}) });
             return protocolOf(row.implementation).search(def, request, toPackageCaps(caps), this.clientOptions(row, signal));
           }),
+          (infos) => infos.length,
         ),
       ),
     );
@@ -600,7 +627,7 @@ export class IndexersService {
       this.stats.record(row.id, 'grab', this.now() - started, true);
       return result;
     } catch (err) {
-      this.stats.record(row.id, 'grab', this.now() - started, false);
+      this.stats.record(row.id, 'grab', this.now() - started, false, { error: statsErrorMessage(err) });
       if (err instanceof IndexersError) throw err;
       const status = err instanceof IndexerError ? err.status : undefined;
       const message = err instanceof Error ? err.message : String(err);
@@ -671,26 +698,34 @@ export class IndexersService {
     const started = this.now();
     const domains = rows.length > 0 ? this.audioDomainsOf() : NO_AUDIO_DOMAINS;
     const results = await Promise.allSettled(
-      rows.map((row) =>
-        this.timed(row, 'rss', opts.signal, () =>
-          this.guarded(row, opts.signal, async (signal) => {
-            let infos: ReleaseInfo[];
-            if (row.implementation === 'definition') {
-              // Site definitions list their whole RSS page (already a superset of every domain).
-              infos = await (await this.definitionClient(row)).rss();
-            } else {
-              const caps = await this.loadCaps(row, signal, false);
-              infos = await protocolOf(row.implementation).search(
-                toDefinition(row, { kind: 'rss', domains }),
-                { kind: 'rss' },
-                toPackageCaps(caps),
-                this.clientOptions(row, signal),
-              );
-            }
-            return this.advanceRssMarker(row.id, infos);
-          }),
-        ),
-      ),
+      rows.map((row) => {
+        // Results are counted before the RSS marker drops releases seen by earlier syncs.
+        let fetched = 0;
+        return this.timed(
+          row,
+          'rss',
+          opts.signal,
+          () =>
+            this.guarded(row, opts.signal, async (signal) => {
+              let infos: ReleaseInfo[];
+              if (row.implementation === 'definition') {
+                // Site definitions list their whole RSS page (already a superset of every domain).
+                infos = await (await this.definitionClient(row)).rss();
+              } else {
+                const caps = await this.loadCaps(row, signal, false);
+                infos = await protocolOf(row.implementation).search(
+                  toDefinition(row, { kind: 'rss', domains }),
+                  { kind: 'rss' },
+                  toPackageCaps(caps),
+                  this.clientOptions(row, signal),
+                );
+              }
+              fetched = infos.length;
+              return this.advanceRssMarker(row.id, infos);
+            }),
+          () => fetched,
+        );
+      }),
     );
     const merged: ReleaseResource[] = [];
     results.forEach((result, i) => {
@@ -810,16 +845,25 @@ export class IndexersService {
     return hosts.has(host);
   }
 
-  /** Run an indexer operation and append a stats row (requests the indexer cannot serve are not counted). */
-  private async timed<T>(row: IndexerRow, kind: IndexerStatKind, parent: AbortSignal | undefined, op: () => Promise<T>): Promise<T> {
+  /**
+   * Run an indexer operation and append a stats row (requests the indexer cannot serve are not
+   * counted). `count` gives the number of releases the operation returned.
+   */
+  private async timed<T>(
+    row: IndexerRow,
+    kind: IndexerStatKind,
+    parent: AbortSignal | undefined,
+    op: () => Promise<T>,
+    count?: (value: T) => number,
+  ): Promise<T> {
     const started = this.now();
     try {
       const value = await op();
-      this.stats.record(row.id, kind, this.now() - started, true);
+      this.stats.record(row.id, kind, this.now() - started, true, count ? { results: count(value) } : {});
       return value;
     } catch (err) {
       const unsupported = err instanceof IndexerError && err.code === 'unsupported-search';
-      if (!parent?.aborted && !unsupported) this.stats.record(row.id, kind, this.now() - started, false);
+      if (!parent?.aborted && !unsupported) this.stats.record(row.id, kind, this.now() - started, false, { error: statsErrorMessage(err) });
       throw err;
     }
   }
@@ -1531,6 +1575,12 @@ function toPackageCaps(caps: IndexerCapabilitiesResource): IndexerCapabilities {
     },
     categories: caps.categories,
   };
+}
+
+/** `code: message` for indexer errors, the plain message otherwise. */
+function statsErrorMessage(err: unknown): string {
+  if (err instanceof IndexerError) return `${err.code}: ${err.message}`;
+  return err instanceof Error ? err.message : String(err);
 }
 
 function isDisabledRow(status: StatusRow | undefined, now: number): boolean {

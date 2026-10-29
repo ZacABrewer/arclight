@@ -101,6 +101,8 @@ export interface GrabMapping {
   releaseHash?: string;
   /** Release decision-log batch the grab came from (GET /release/decisions/:batchId). */
   decisionBatchId?: string;
+  /** "Grab anyway": the rejections the user overrode (data `grabbedAnyway` + `overriddenRejections`, a JSON array). */
+  overriddenRejections?: readonly string[];
 }
 
 /** A download client name, or name + implementation type. */
@@ -443,6 +445,8 @@ export class HistoryService {
       seriesMatchType: mapping.target.mediaType === 'series' ? mapping.matchType : undefined,
       movieMatchType: mapping.target.mediaType === 'movie' ? mapping.matchType : undefined,
       decisionBatchId: mapping.decisionBatchId,
+      grabbedAnyway: mapping.overriddenRejections?.length ? 'true' : undefined,
+      overriddenRejections: mapping.overriddenRejections?.length ? JSON.stringify(mapping.overriddenRejections) : undefined,
     });
     return this.insert(mapping.target, {
       eventType: 'grabbed',

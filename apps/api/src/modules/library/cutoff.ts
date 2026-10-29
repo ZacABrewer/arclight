@@ -23,6 +23,9 @@ export interface CutoffProfiles {
  * A file that lacks an audio language its item requires ("Add additional…" → audio) does not
  * meet cutoff either, so the cutoff-unmet search keeps looking for a release that has it.
  *
+ * A file kept by the user's choice ("Grab anyway", `grabOverride` set) counts as met: its
+ * upgrades are paused until the user allows them again.
+ *
  * Profiles, formats and each item's profile id are read once when the checker is built; build
  * one per query (or per job run), not per file.
  */
@@ -39,6 +42,7 @@ export function createCutoffChecker(db: LibraryDb, profiles: CutoffProfiles): Is
   const audioRows = db.select().from(additionalLanguages).all().filter((r) => r.kind === 'audio');
 
   return (file: MediaFile) => {
+    if (file.grabOverride != null) return true;
     const item = file.seriesId != null ? seriesItems.get(file.seriesId) : file.movieId != null ? movieItems.get(file.movieId) : undefined;
     const slot = item ? slotOf(file.versionTag ?? null, item.versions) : null;
     const profileId = item ? profileIdForSlot(item, slot) : undefined;

@@ -1,6 +1,6 @@
 import { useQuery, type QueryKey } from '@tanstack/react-query';
 import type { AudibleRegion, AudioRequestDefaults, AudioRequestListQuery, CreateAudioRequest } from '@arclight/shared';
-import { audioDiscoverApi, audioRequestDefaultsApi, audioRequestsApi, type AudioDomain } from '../api/audio-requests.js';
+import { audioDiscoverApi, audioRequestDefaultsApi, audioRequestsApi, type AudioBulkAction, type AudioDomain } from '../api/audio-requests.js';
 import { useFeatures } from './music.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
@@ -91,6 +91,13 @@ export function useRetryAudioRequest() {
 
 export function useDeleteAudioRequest() {
   return useInvalidatingMutation((id: number) => audioRequestsApi.remove(id), AUDIO_AFFECTS, { errorTitle: t('hooks.requests.couldNotDeleteTheRequest') });
+}
+
+/** Approve, decline, retry or delete several music / audiobook requests; answers per id. */
+export function useBulkAudioRequestAction() {
+  return useInvalidatingMutation(({ ids, action }: { ids: number[]; action: AudioBulkAction }) => audioRequestsApi.bulk(action, ids), AUDIO_AFFECTS, {
+    errorTitle: t('hooks.requests.bulkActionFailed', { action: t('components.bulkActions.title') }),
+  });
 }
 
 /** Default root folder and quality profile for new music and audiobook requests. */

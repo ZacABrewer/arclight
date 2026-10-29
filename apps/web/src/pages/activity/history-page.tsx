@@ -10,9 +10,11 @@ import {
   type HistoryFilter,
   type HistoryRecord,
 } from '../../api/history.js';
-import { Button, Chip, Drawer, EmptyState, ErrorBlock, FilterBar, KeyValue, Pane, Select, Table, type ChipTone, type Column, type KeyValueItem } from '../../arclight/index.js';
+import { Button, Chip, Drawer, EmptyState, ErrorBlock, FilterBar, KeyValue, Pane, RejectionList, Select, Table, type ChipTone, type Column, type KeyValueItem } from '../../arclight/index.js';
 import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { useToast } from '../../components/toast.js';
+import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
+import { useSelection } from '../../components/bulk-actions.js';
 import { useHistory, useMarkHistoryFailed, useRedownloadHistory } from '../../hooks/activity.js';
 import { formatDateTime, languageNames, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
@@ -101,6 +103,18 @@ export function redownloadTarget(record: HistoryRecord): { episodeIds: number[] 
   return null;
 }
 
+/** "Grab anyway": the rejections a grab overrode (history data `overriddenRejections`), else null. */
+export function overriddenRejectionsOf(record: Pick<HistoryRecord, 'data'>): string[] | null {
+  if (record.data?.['grabbedAnyway'] !== 'true') return null;
+  try {
+    const raw = record.data['overriddenRejections'];
+    const list: unknown = JSON.parse(typeof raw === 'string' ? raw : '[]');
+    return Array.isArray(list) ? list.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
 /** The decision-log batch a grab came from (history data `decisionBatchId`), if recorded. */
 export function decisionBatchIdOf(record: Pick<HistoryRecord, 'data'>): string | null {
   const v = record.data?.['decisionBatchId'];
@@ -129,8 +143,11 @@ export function HistoryDetails({ record, onClose }: { record: HistoryRecord; onC
     items.push({ label: t('common.languages'), value: assumed ? t('activity.history.languageAssumed', { names }) : names, mono: false });
   }
   if (record.downloadId) items.push({ label: t('activity.history.downloadId'), value: <span className="al-activity-break">{record.downloadId}</span> });
+  const overridden = overriddenRejectionsOf(record);
+  if (overridden) items.push({ label: t('activity.history.grabbedAnyway'), value: <RejectionList reasons={overridden} />, mono: false });
   for (const [k, v] of Object.entries(record.data ?? {})) {
     if (k === 'languageAssumed') continue;
+    if (overridden && (k === 'grabbedAnyway' || k === 'overriddenRejections')) continue;
     items.push({ key: `data-${k}`, label: k, value: <span className="al-activity-break">{typeof v === 'string' ? v : JSON.stringify(v)}</span> });
   }
   return (
@@ -249,6 +266,8 @@ export function HistoryPage() {
   const [open, setOpen] = useState<HistoryRecord | null>(null);
   const history = useHistory(filter);
   const pending = history.error instanceof ApiError && history.error.status === 404;
+  const recordKeys = (history.data?.records ?? []).map((r) => r.id);
+  const selection = useSelection(recordKeys);
 
   return (
     <div className="al-activity">
@@ -277,6 +296,8 @@ export function HistoryPage() {
               loading={history.isPending}
               sortable={false}
               onRowClick={setOpen}
+              {...tableSelection(selection)}
+              rowLabel={(r) => t('components.bulkActions.selectName', { name: r.sourceTitle })}
               empty={<EmptyState title={t('activity.history.noHistoryYet')}>{t('activity.history.grabsImportsAndFailuresAre')}</EmptyState>}
             />
             {history.data && history.data.totalRecords > filter.pageSize ? (
@@ -288,6 +309,7 @@ export function HistoryPage() {
           </>
         )}
       </Pane>
+      <ResourceBulkBar resource="history" selection={selection} allKeys={recordKeys} nameOf={(id) => history.data?.records.find((r) => r.id === id)?.sourceTitle} />
       {open ? <HistoryDetails record={open} onClose={() => setOpen(null)} /> : null}
     </div>
   );

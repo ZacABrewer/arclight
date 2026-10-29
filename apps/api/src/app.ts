@@ -35,12 +35,14 @@ import { calendarModule } from './modules/calendar/index.js';
 import { importListsModule } from './modules/import-lists/index.js';
 import { logsModule } from './modules/logs/index.js';
 import { debugModule } from './modules/debug/index.js';
+import { bulkActionsModule } from './modules/bulk-actions/index.js';
 import { backupModule } from './modules/backup/index.js';
 import { compatApi, compatModule, type CompatMetadata } from './modules/compat/index.js';
 import { migrateModule } from './modules/migrate/index.js';
 import { vpnModule } from './modules/vpn/index.js';
 import { torrentModule } from './modules/torrent/index.js';
 import { subtitlesModule } from './modules/subtitles/index.js';
+import { bulkModule } from './modules/bulk/index.js';
 import { requestsModule } from './modules/requests/index.js';
 import { authModule, installAuth } from './modules/auth/index.js';
 import { guidesModule } from './modules/guides/index.js';
@@ -166,6 +168,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // Requests do not send their own pushes yet, so the bus listener stays on.
     pushModule,
     subtitlesModule,
+    // Bulk search / rename / subtitle search over many selected items (library and Wanted lists).
+    bulkModule,
     // "Add additional…" languages, over subtitles, releases and the library.
     additionalLanguagesModule,
     requestsModule,
@@ -187,6 +191,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     engineAgentModule,
     authModule,
     auditModule,
+    // POST /bulk: one action over many rows of a settings / activity / system list.
+    bulkActionsModule,
     metricsModule,
   ];
   await app.register(

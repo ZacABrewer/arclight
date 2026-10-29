@@ -20,3 +20,16 @@
 .lib-collection-card { min-width: 0; }
 .lib-collection-card .al-meter { margin-top: 6px; }
 .lib-collection-add { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+/* Release table filters (interactive search). One wrapping row on desktop; a two-column grid on
+   phones with the title and the size range on full rows. */
+.rel-filters { margin-bottom: 12px; gap: 8px; }
+.rel-filters .mk-search { min-width: 200px; }
+.rel-filters__range { display: inline-flex; gap: 8px; }
+.al-filterbar .rel-filters__num { width: 140px; }
+@media (max-width: 767.98px) {
+  .al-filterbar.rel-filters { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .rel-filters > *, .rel-filters .mt-multi, .al-filterbar .rel-filters__num { width: 100%; max-width: none; min-width: 0; }
+  .rel-filters > .mk-search, .rel-filters > .rel-filters__range { grid-column: 1 / -1; }
+  .rel-filters > .al-filterbar__spacer { display: none; }
+  .rel-filters__range > * { flex: 1; min-width: 0; }
+}

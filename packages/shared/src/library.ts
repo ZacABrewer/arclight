@@ -578,6 +578,21 @@ export const MediaInfo = z.object({
 });
 export type MediaInfo = z.infer<typeof MediaInfo>;
 
+/**
+ * A file kept by the user's choice: its release was grabbed with "Grab anyway" although the
+ * rules rejected it. Automatic searches (RSS, upgrade, cutoff) do not replace such a file until
+ * the user allows upgrades again; interactive search still can. Video and audio files alike.
+ */
+export const GrabOverride = z.object({
+  /** The rejection messages the user overrode when grabbing. */
+  rejections: z.array(z.string()),
+  /** When the override was recorded (the grab). */
+  grabbedAt: isoDate(),
+  /** The grabbed release title. */
+  sourceTitle: z.string().nullish(),
+});
+export type GrabOverride = z.infer<typeof GrabOverride>;
+
 export const MediaFile = z.object({
   id: z.number().int(),
   mediaType: MediaType,
@@ -598,6 +613,8 @@ export const MediaFile = z.object({
   mediaInfo: MediaInfo.nullish(),
   /** Version slot the file fills (`4K`, `HDR`, ...); null = unversioned. */
   versionTag: z.string().nullish(),
+  /** Set when the file came from a "Grab anyway" grab; upgrades are paused while it is set. */
+  grabOverride: GrabOverride.nullish(),
 });
 export type MediaFile = z.infer<typeof MediaFile>;
 

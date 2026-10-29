@@ -116,6 +116,17 @@ describe('recording events', () => {
     expect(rows[0]!.data.releaseType).toBeUndefined();
   });
 
+  it('marks a "Grab anyway" grab with the rejections it overrode', () => {
+    const [row] = f.history.recordGrab(
+      torrent(),
+      { target: movie(), quality: quality('WEBDL-1080p'), languages: ['en'], overriddenRejections: ['Size limit exceeded', 'Not an upgrade'] },
+      'HASH9',
+      'qBit',
+    );
+    expect(row!.data).toMatchObject({ grabbedAnyway: 'true', overriddenRejections: JSON.stringify(['Size limit exceeded', 'Not an upgrade']) });
+    expect(grab(movie(), 'HASH10')[0]!.data['grabbedAnyway']).toBeUndefined();
+  });
+
   it('stores a null download id when the client returns none', () => {
     const [row] = grab(movie(), '  ');
     expect(row!.downloadId).toBeNull();

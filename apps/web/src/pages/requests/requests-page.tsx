@@ -8,8 +8,6 @@ import {
   Chip,
   EmptyState,
   Field,
-  FloatBar,
-  FloatBarDivider,
   FormRow,
   Modal,
   PageHeader,
@@ -24,7 +22,9 @@ import {
 } from '../../arclight/index.js';
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
-import { useToast } from '../../components/toast.js';
+import { useSelection } from '../../components/bulk-actions.js';
+import { BulkBar } from '../../components/media/bulk-bar.js';
+import { useRequestBulkActions, type RequestBulkVerb } from './request-bulk.js';
 import { titleLink } from '../../features/requests/title-link.js';
 import { HeldChip } from '../../features/requests/policy-drawer.js';
 import { MEDIA_STATUS_META, REQUEST_STATUS_META, seasonsLabel, usePermissions } from '../../features/requests/status.js';
@@ -113,55 +113,34 @@ export function RequestsPage() {
 
 function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: VideoFilter; manage: boolean }) {
   const [page, setPage] = useState(0);
-  const [selected, setSelected] = useState<number[]>([]);
   const query: RequestListQuery = { filter, mediaType, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'added', sortDirection: 'desc' };
   const list = useRequests(query);
-  const bulkApprove = useBulkRequestAction('approve');
-  const bulkDecline = useBulkRequestAction('decline');
-  const toast = useToast();
+  const bulk = {
+    approve: useBulkRequestAction('approve'),
+    decline: useBulkRequestAction('decline'),
+    retry: useBulkRequestAction('retry'),
+    delete: useBulkRequestAction('delete'),
+  };
   const mobile = useIsMobile();
+  const results = list.data?.results ?? [];
+  const keys = results.map((r) => r.id);
+  const selection = useSelection(keys);
+  const busy = (Object.keys(bulk) as RequestBulkVerb[]).find((v) => bulk[v].isPending) ?? null;
+  const bulkBar = useRequestBulkActions({
+    ids: selection.selected,
+    manage,
+    busy,
+    run: (verb, ids) => bulk[verb].mutateAsync(ids),
+    nameOf: (id) => results.find((r) => r.id === id)?.mediaTitle,
+    onDone: selection.drop,
+  });
 
   if (list.isPending) return <Loading />;
   if (list.isError) return <QueryError error={list.error} title={t('requests.couldNotLoadRequests')} onRetry={() => void list.refetch()} />;
-  const { results, pageInfo } = list.data;
-  const pending = results.filter((r) => r.status === 'pending');
+  const { pageInfo } = list.data;
   const pages = Math.max(1, Math.ceil(pageInfo.total / PAGE_SIZE));
-  const toggle = (id: number, on: boolean) => setSelected((prev) => (on ? [...prev, id] : prev.filter((x) => x !== id)));
-
-  const runBulk = (action: 'approve' | 'decline') => {
-    const m = action === 'approve' ? bulkApprove : bulkDecline;
-    m.mutate(selected, {
-      onSuccess: (res) => {
-        setSelected([]);
-        toast.push({
-          tone: res.failed.length ? 'warning' : 'ok',
-          title: t('requests.valueRequests', { value: action === 'approve' ? 'Approved' : 'Declined', okCount: res.ok.length }),
-          message: res.failed.length ? res.failed.map((f) => `#${f.id}: ${f.error}`).join('; ') : undefined,
-        });
-      },
-    });
-  };
 
   const columns: Column<MediaRequest>[] = [
-    ...(manage
-      ? [
-          {
-            key: 'select',
-            width: '44px',
-            header: (
-              <Checkbox
-                aria-label={t('requests.selectAllPending')}
-                disabled={pending.length === 0}
-                checked={pending.length > 0 && pending.every((r) => selected.includes(r.id))}
-                onChange={(e) => setSelected(e.currentTarget.checked ? pending.map((r) => r.id) : [])}
-              />
-            ),
-            cell: (r: MediaRequest) => (
-              <Checkbox aria-label={t('requests.selectMediatitle', { mediaTitle: r.mediaTitle })} disabled={r.status !== 'pending'} checked={selected.includes(r.id)} onChange={(e) => toggle(r.id, e.currentTarget.checked)} />
-            ),
-          },
-        ]
-      : []),
     { key: 'title', header: t('common.title'), cell: (r) => <RequestTitle r={r} /> },
     { key: 'by', header: t('common.requestedBy'), cell: (r) => r.requestedBy.displayName ?? r.requestedBy.username },
     { key: 'seasons', header: t('common.seasons'), mono: true, cell: (r) => seasonsLabel(r.seasons) || '—' },
@@ -189,32 +168,32 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
       ) : mobile ? (
         <div className="mk-mlist">
           {results.map((r) => (
-            <MobileRequestRow key={r.id} r={r} manage={manage} />
+            <MobileRequestRow key={r.id} r={r} manage={manage} select={selection.cardProps(r.id, r.mediaTitle)} />
           ))}
         </div>
       ) : (
         <Pane flush bare>
-          <Table columns={columns} rows={results} rowKey={(r) => r.id} density="rich" sortable={false} caption={t('common.requests')} />
+          <Table
+            columns={columns}
+            rows={results}
+            rowKey={(r) => r.id}
+            density="rich"
+            sortable={false}
+            caption={t('common.requests')}
+            selectable
+            selected={selection.selected}
+            onSelectionChange={selection.set}
+            rowLabel={(r) => t('requests.selectMediatitle', { mediaTitle: r.mediaTitle })}
+          />
         </Pane>
       )}
+      <BulkBar count={selection.count} total={keys.length} onSelectAll={() => selection.set(keys)} actions={bulkBar.actions} onClear={selection.clear}>
+        {bulkBar.dialogs}
+      </BulkBar>
       {pages > 1 ? (
         <div className="mk-row mk-row--end" style={{ marginTop: 16 }}>
           <Paginator page={page + 1} pageCount={pages} onPageChange={(p) => setPage(p - 1)} />
         </div>
-      ) : null}
-      {manage && selected.length > 0 ? (
-        <FloatBar count={selected.length}>
-          <Button variant="secondary" loading={bulkApprove.isPending} onClick={() => runBulk('approve')}>
-            {t('requests.approveSelected')}
-          </Button>
-          <FloatBarDivider />
-          <Button variant="danger" loading={bulkDecline.isPending} onClick={() => runBulk('decline')}>
-            {t('requests.declineSelected')}
-          </Button>
-          <Button variant="ghost" className="al-floatbar__cancel" onClick={() => setSelected([])}>
-            {t('common.cancel')}
-          </Button>
-        </FloatBar>
       ) : null}
     </>
   );
@@ -315,11 +294,12 @@ function RowDialogs({ r, approving, setApproving, declining, setDeclining, editi
 }
 
 /** Mobile row: swipe right reveals Delete; approve/decline stay visible for admins. */
-function MobileRequestRow({ r, manage }: { r: MediaRequest; manage: boolean }) {
+function MobileRequestRow({ r, manage, select }: { r: MediaRequest; manage: boolean; select?: { checked: boolean; onChange: () => void; label: string } }) {
   const d = useRowDialogs();
   return (
     <SwipeRow onDelete={r.canRemove ? () => d.setDeleting(true) : undefined} deleteLabel={t('common.delete')}>
-      <div className="mk-mrow">
+      <div className={select ? 'mk-mrow mk-mrow--check' : 'mk-mrow'}>
+        {select ? <Checkbox aria-label={select.label} checked={select.checked} onChange={select.onChange} /> : null}
         <div style={{ minWidth: 0 }}>
           <RequestTitle r={r} />
           <div className="mk-row" style={{ marginTop: 6, gap: 6, flexWrap: 'wrap' }}>

@@ -1,7 +1,9 @@
 import { useState, type DragEvent } from 'react';
 import { DelayProfileInput, type DelayProfile } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
-import { Button, Chip, ErrorBlock, Field, Input, Modal, Select, Skeleton, Tag, Toggle, cx } from '../../../arclight/index.js';
+import { Button, Checkbox, Chip, ErrorBlock, Field, Input, Modal, Select, Skeleton, Tag, Toggle, cx } from '../../../arclight/index.js';
+import { useSelection } from '../../../components/bulk-actions.js';
+import { ResourceBulkBar } from '../../../components/resource-bulk-actions.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { TagPicker, useTagLabels } from '../../../components/forms/tag-picker.js';
 import { useDelayProfileList, useDeleteDelayProfile, useReorderDelayProfile, useSaveDelayProfile } from '../../../hooks/profiles.js';
@@ -120,6 +122,9 @@ export function DelayProfilesSection() {
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [dragOver, setDragOver] = useState<number | null>(null);
   const sorted = [...(list.data ?? [])].sort((a, b) => a.order - b.order);
+  // The default (untagged) profile cannot be deleted, so it is not selectable.
+  const deletable = sorted.filter((p) => !isDefaultDelayProfile(p));
+  const selection = useSelection(deletable.map((p) => p.id));
 
   const move = (index: number, direction: 'up' | 'down') => {
     const req = delayReorderRequest(sorted, index, direction);
@@ -158,6 +163,15 @@ export function DelayProfilesSection() {
             <caption className="al-sr-only">{t('settings.profiles.delayProfiles.delayProfiles')}</caption>
             <thead>
               <tr>
+                <th scope="col" className="al-table__check">
+                  <Checkbox
+                    aria-label={t('arclight.table.selectAllRows')}
+                    checked={selection.all}
+                    indeterminate={selection.some}
+                    disabled={deletable.length === 0}
+                    onChange={selection.toggleAll}
+                  />
+                </th>
                 <th scope="col" style={{ width: 28 }}>
                   <span className="al-sr-only">{t('settings.profiles.delayProfiles.order')}</span>
                 </th>
@@ -196,6 +210,15 @@ export function DelayProfilesSection() {
                       setDragOver(null);
                     }}
                   >
+                    <td className="al-table__check">
+                      {pinned ? null : (
+                        <Checkbox
+                          aria-label={t('components.bulkActions.selectName', { name: tagLabels(p.tags).join(', ') || String(p.id) })}
+                          checked={selection.has(p.id)}
+                          onChange={() => selection.toggle(p.id)}
+                        />
+                      )}
+                    </td>
                     <td>
                       <span className="al-qlist__handle" aria-hidden="true">
                         {pinned ? '' : '⋮⋮'}
@@ -259,6 +282,7 @@ export function DelayProfilesSection() {
           </table>
         </div>
       )}
+      <ResourceBulkBar resource="delayprofile" selection={selection} allKeys={deletable.map((p) => p.id)} />
       {editing ? (
         <DelayProfileEditor key={editing === 'new' ? 'new' : editing.id} profile={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />
       ) : null}

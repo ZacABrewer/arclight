@@ -246,6 +246,7 @@ set; a single-item refresh that fails is a `failed` job carrying the reason), `R
 | GET | `/mediafile` | List media files |
 | GET | `/mediafile/:id` | One media file |
 | DELETE | `/mediafile/:id` | Delete a media file record |
+| DELETE | `/mediafile/:id/grab-override` | "Allow upgrades again": clear the file's `grabOverride` (set by a "Grab anyway" grab, pauses automatic upgrades) → the `MediaFile` |
 | GET | `/wanted/missing/episodes` | Paged monitored episodes without a file |
 | GET | `/wanted/missing/movies` | Paged monitored movies without a file |
 | GET | `/wanted/cutoff/episodes` | Paged (`page`, `pageSize`, `includeSpecials`) monitored episodes of monitored series whose file has not met cutoff, as `WantedEpisodesPage` |
@@ -308,6 +309,7 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | PUT | `/album/monitor` | `BulkAlbumMonitorRequest` (`albumIds`, `monitored`) → `Album[]` |
 | PUT | `/album/:id` | `UpdateAlbumRequest` → `AlbumDetails`: `monitored`, `anyReleaseOk`, `selectedReleaseId` (an `album_releases.id` of this album; anything else is 400). Switching the edition fetches its tracks from MusicBrainz, replaces the stored tracks and re-links the album's files by MusicBrainz recording id, then by disc/track position |
 | GET | `/audiofile` | `artistId` and/or `albumId` → the music `AudioFile[]`. Shared with audiobooks (`authorId` / `bookId`, see "audiobooks"); one kind per request, gated by that kind's flag |
+| DELETE | `/audiofile/:id/grab-override` | "Allow upgrades again" for a music or audiobook file: clears `grabOverride` on every file of its album / book → the `AudioFile[]` that changed |
 | GET | `/albumtypeprofile` | `AlbumTypeProfile[]` ("Studio albums", the default, and "Everything" on a fresh install) |
 | GET | `/albumtypeprofile/:id` | One profile |
 | POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
@@ -804,6 +806,7 @@ Changes are announced as an `applicationUpdate` notification (`previousVersion`/
 | GET | `/indexer/categories` | Standard category list |
 | GET | `/indexer/status` | Failure/backoff status per indexer |
 | GET | `/indexer/stats` | `?days=1..90` (default 30): `IndexerStats`, queries / grabs / failures / mean response ms per indexer and per UTC day, plus totals |
+| GET | `/indexer/health` | `?days=1\|7\|30` (default 7): `IndexerHealth`, per indexer queries, failure rate, mean / p95 response ms, mean results, zero-result share, grabs, last success / failure (with message), backoff state and a verdict (`healthy`, `slow`, `failing`, `unused`, `noResults`); the thresholds are in the response |
 | POST | `/indexer/test` | Test unsaved indexer settings (any implementation) |
 | POST | `/indexer/testall` | Test every saved indexer |
 | GET | `/indexer/:id` | One indexer |
@@ -1867,6 +1870,19 @@ Health check `OrphanFilesFound` (warning) from 25 orphans; the health contract h
 | POST | `/library/hygiene/scan` | Start an `OrphanScan` job; **202** with the `Job` |
 | POST | `/library/hygiene/:id/map` | Import an orphan via manual import (`HygieneMapRequest`: `seriesId` + `episodeIds` or `movieId`, `importMode` default `move`; omitted fields use the best suggestion). Files already inside the item's folder are registered in place. 400 without a usable target, 409 when the import fails |
 | DELETE | `/library/hygiene/:id` | Delete the file (through the recycle bin, keeping its path below the root folder) or the empty folder (409 when it is no longer empty). A library duplicate also loses its media file row (`library fileDeleted`). Answers `{recycledTo, removedMediaFileId}` |
+
+## bulk (library and Wanted bulk bar)
+
+Contract: `packages/shared/src/bulk.ts`; module `apps/api/src/modules/bulk`. Admin only. Each
+search command answers at once with `BulkCommandResponse` `{queued, skipped, job}` (`job` is null
+when nothing matched); the job reports through `GET /jobs` and `job` events.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/command/bulksearch` | `BulkSearchCommand`: `movieIds`, `seriesIds`, `episodeIds`, or `allMovies` / `allEpisodes` (everything on the matching Wanted list), and `mode`: `all` (default, a user-invoked search per item), `missing` (Wanted → Missing rules) or `upgrade` (Wanted → Cutoff unmet rules: profile quality and custom-format cutoff, version slots; profiles with `upgradeAllowed: false` are skipped). `all*` needs `missing` or `upgrade`. Episodes are searched per series and season. **202**, one `BulkSearch` job |
+| POST | `/rename/bulk` | `BulkRenameRequest` (`seriesIds`, `movieIds`): the rename preview of every item, `{items, failed}` |
+| POST | `/command/bulkrename` | Same body plus `files` (media file ids to limit to): renames through the per-item rename; answers `RenameResult` |
+| POST | `/command/subtitlesearch/bulk` | `mediaFileIds`, or `wanted: series \| movie` (every file on Subtitles → Wanted): **202**, one `BulkSubtitleSearch` job |
 
 ## stats
 

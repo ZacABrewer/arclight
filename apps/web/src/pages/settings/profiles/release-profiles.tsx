@@ -8,6 +8,7 @@ import { TermList } from '../../../components/forms/term-list.js';
 import { useIndexerList } from '../../../hooks/indexers.js';
 import { useDeleteReleaseProfile, useReleaseProfileList, useSaveReleaseProfile } from '../../../hooks/profiles.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import './profiles.css';
 import { t } from '../../../i18n/index.js';
 
@@ -119,6 +120,7 @@ export function ReleaseProfilesSection() {
   const indexers = useIndexerList();
   const tagLabels = useTagLabels();
   const [editing, setEditing] = useState<ReleaseProfile | 'new' | null>(null);
+  const bulk = useResourceBulk('releaseprofile', list.data, (p) => p.id, (p) => p.name);
 
   return (
     <SettingsSection
@@ -137,11 +139,13 @@ export function ReleaseProfilesSection() {
           {errorMessage(list.error)}
         </ErrorBlock>
       ) : (
+        <>
         <CardGrid label={t('settings.profiles.releaseProfiles.releaseProfiles')}>
           {list.data.map((p) => (
             <ItemCard
               key={p.id}
               title={p.name}
+              select={bulk.cardProps(p)}
               muted={!p.enabled}
               onClick={() => setEditing(p)}
               status={
@@ -172,6 +176,8 @@ export function ReleaseProfilesSection() {
           ))}
           <AddCard label={t('settings.profiles.releaseProfiles.addReleaseProfile')} onClick={() => setEditing('new')} />
         </CardGrid>
+        {bulk.bar}
+        </>
       )}
       {editing ? (
         <ReleaseProfileEditor key={editing === 'new' ? 'new' : editing.id} profile={editing === 'new' ? null : editing} onClose={() => setEditing(null)} />

@@ -20,7 +20,8 @@ import {
 import { useFeatures } from '../../../hooks/music.js';
 import { formatDateTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
-import { CardGrid, EditorFooter, ItemCard, SaveError } from '../shared.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { CatalogueChooser, SourceBadge } from './catalogue.js';
 import { presetTemplate } from './catalogue-model.js';
 import { DefinitionEditor, type DefinitionEditing } from './definition-editor.js';
@@ -137,6 +138,15 @@ function IndexerEditor({ editing, onClose }: { editing: Editing; onClose: () => 
   );
 }
 
+/** Edit dialog for a saved indexer: site-definition indexers get the definition editor. */
+export function EditIndexerDialog({ indexer, onClose }: { indexer: Indexer; onClose: () => void }) {
+  return indexer.implementation === 'definition' ? (
+    <DefinitionEditor key={indexer.id} editing={{ indexer }} onClose={onClose} />
+  ) : (
+    <IndexerEditor key={indexer.id} editing={{ indexer }} onClose={onClose} />
+  );
+}
+
 /** "Preset · altHUB": base URL and categories are filled in, the user adds the API key. */
 function PresetNote({ entry }: { entry: IndexerCatalogueEntry }) {
   return (
@@ -188,12 +198,15 @@ export function IndexerCard({
   onEdit,
   result,
   needsSolver = false,
+  select,
 }: {
   indexer: Indexer;
   onEdit: () => void;
   result?: IndexerTestAllItem | undefined;
   /** Its definition needs a challenge solver and none is configured. */
   needsSolver?: boolean;
+  /** Bulk selection checkbox. */
+  select?: ItemCardSelect | undefined;
 }) {
   const health = indexerHealth(indexer);
   const source = indexerSourceLine(indexer);
@@ -202,6 +215,7 @@ export function IndexerCard({
       title={indexer.name}
       muted={health.tone === 'muted'}
       onClick={onEdit}
+      select={select}
       status={
         <Chip tone={health.tone} title={health.title}>
           {health.label}
@@ -269,6 +283,7 @@ export function IndexersPage() {
   const openIndexer = (indexer: Indexer) => (indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer }));
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
   const needsSolverIds = useSolverHints(list.data);
+  const bulk = useResourceBulk('indexer', list.data, (i) => i.id, (i) => i.name);
 
   return (
     <SettingsPage
@@ -299,11 +314,21 @@ export function IndexersPage() {
       ) : list.data.length === 0 ? (
         <EmptyState title={t('settings.indexers.noIndexersYet')}>{t('settings.indexers.addATorznabOrNewznab')}</EmptyState>
       ) : (
-        <CardGrid label={t('common.indexers')}>
-          {list.data.map((indexer) => (
-            <IndexerCard key={indexer.id} indexer={indexer} onEdit={() => openIndexer(indexer)} result={results[indexer.id]} needsSolver={needsSolverIds.has(indexer.id)} />
-          ))}
-        </CardGrid>
+        <>
+          <CardGrid label={t('common.indexers')}>
+            {list.data.map((indexer) => (
+              <IndexerCard
+                key={indexer.id}
+                indexer={indexer}
+                onEdit={() => openIndexer(indexer)}
+                result={results[indexer.id]}
+                needsSolver={needsSolverIds.has(indexer.id)}
+                select={bulk.cardProps(indexer)}
+              />
+            ))}
+          </CardGrid>
+          {bulk.bar}
+        </>
       )}
       {picking ? (
         <IndexerChooser

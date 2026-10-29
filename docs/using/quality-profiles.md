@@ -36,6 +36,7 @@ Settings > Profiles > **Quality profiles**. Each series and movie uses one profi
 Notes:
 
 - With **Upgrades allowed** off, Arclight grabs the first acceptable release and never replaces it, except that a PROPER or REPACK of the same quality is still accepted unless Settings > Media Management > Propers and repacks says otherwise.
+- A file you grabbed with **Grab anyway** in interactive search is **Kept by choice**: automatic searches do not upgrade it, whatever the profile says, until you click **Allow upgrades again** on the item's Files tab. See [Interactive search](interactive-search.md#kept-by-choice).
 - A **group** treats several qualities as equal (for example WEBDL-1080p and WEBRip-1080p), so the custom format score decides between them.
 - Qualities that exist: SDTV, DVD, WEBDL/WEBRip/Bluray at 480p, 576p, 720p, 1080p and 2160p, HDTV at 720p, 1080p, 2160p, Remux-1080p, Remux-2160p, Raw-HD (series) and BR-DISK, DVD-R, CAM, TELESYNC, TELECINE, WORKPRINT, DVDSCR, REGIONAL (movies).
 - The profile's score thresholds also drive the Wanted > **Cutoff unmet** list: an item is done only when both the quality cutoff and the score cutoff are met. See [Wanted](wanted.md).
@@ -168,6 +169,12 @@ Settings:
 The status panel shows last sync, last success, last applied, the number of pending changes, and any error. Syncing needs internet access to GitHub; if you route Arclight through a locked-down network, allow `raw.githubusercontent.com` and `api.github.com`.
 
 Your own tweaks to a synced profile can be overwritten on the next apply, so keep personal preferences in a separate custom format or use **Exclude formats**.
+
+## Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
+
+What each list offers: quality profiles and custom formats **Delete** (custom formats also **Export** the selection as JSON); delay profiles **Delete** (the default profile has no checkbox, it cannot be deleted); release profiles **Enable**, **Disable**, **Add tag**, **Remove tag** and **Delete**.
 
 ## Related
 

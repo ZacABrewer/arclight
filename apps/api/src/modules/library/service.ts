@@ -9,6 +9,7 @@ import type {
   BulkSeriesUpdateRequest,
   Episode,
   EpisodeListQuery,
+  GrabOverride,
   ImportExclusion,
   LibraryStatistics,
   MediaFile,
@@ -142,6 +143,8 @@ export interface AddMediaFileInput {
    * configured slot of a versioned item.
    */
   versionTag?: string | null;
+  /** "Grab anyway": the rejections the user overrode; automatic upgrades skip the file while set. */
+  grabOverride?: GrabOverride | null;
 }
 
 export interface EpisodeRefreshResult {
@@ -1289,6 +1292,17 @@ export function getMediaFile(db: LibraryDb, id: number): MediaFile {
 }
 
 /**
+ * "Allow upgrades again": forget that the file was grabbed with "Grab anyway", so automatic
+ * searches may replace it again. A file without an override is returned unchanged.
+ */
+export function clearMediaFileGrabOverride(db: LibraryDb, id: number): MediaFile {
+  const file = getMediaFile(db, id);
+  if (file.grabOverride == null) return file;
+  db.update(t.mediaFiles).set({ grabOverride: null }).where(eq(t.mediaFiles.id, id)).run();
+  return { ...file, grabOverride: null };
+}
+
+/**
  * Record an imported file and link it to its episodes or movie, in its version slot. Files
  * those episodes (or that movie) had in the same slot are unlinked; when nothing references
  * one any more its row is deleted (the caller, the import pipeline, is responsible for the
@@ -1338,6 +1352,7 @@ export function addMediaFile(db: Db, input: AddMediaFileInput, now: string = now
       edition: input.edition ?? null,
       mediaInfo: input.mediaInfo ?? null,
       versionTag: slot,
+      grabOverride: input.grabOverride ?? null,
     };
 
     if (input.mediaType === 'series' && input.episodeIds) {

@@ -179,6 +179,11 @@ Settings > Import Lists adds series and movies to your library automatically fro
 
 Be careful with the Remove choices. Start with **Log only** to see what would be affected.
 
+
+### Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection on Settings > Import Lists: **Enable**, **Disable**, **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
+
 ## Related
 
 - [Folders and hardlinks](../getting-started/folders-and-hardlinks.md)

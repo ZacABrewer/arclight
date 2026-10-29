@@ -34,6 +34,7 @@ import {
   type AudioManualImportResult,
   type AudiobookManualImportItem,
   type AudiobookManualImportRequestItem,
+  type GrabOverride,
   type MediaFile,
   type MediaType,
   type Movie,
@@ -62,6 +63,7 @@ import {
   namingEpisode,
   orderForImport,
   readGrabbedRelease,
+  readGrabOverride,
   type DecisionContext,
   type GrabbedInfo,
   type ImportDecision,
@@ -350,6 +352,7 @@ export class ImportsService {
       manual: false,
       folderImport: !scan.isFile,
       nonSampleVideos: scan.videos.filter((v) => !isSampleByName(v.path)).length,
+      grabOverride: grab?.grabOverride ?? null,
     });
 
     // Verification (spec 3.4.1).
@@ -966,6 +969,7 @@ export class ImportsService {
       manual: boolean;
       folderImport: boolean;
       nonSampleVideos: number;
+      grabOverride?: GrabOverride | null;
     },
   ): Promise<ImportOutcome[]> {
     const outcomes: ImportOutcome[] = [];
@@ -1064,7 +1068,16 @@ export class ImportsService {
 
   private async importOne(
     item: LocalItem,
-    opts: { mode: 'move' | 'copy'; downloadId: string | null; sourceTitle: string | null; manual: boolean; folderImport: boolean; nonSampleVideos: number },
+    opts: {
+      mode: 'move' | 'copy';
+      downloadId: string | null;
+      sourceTitle: string | null;
+      manual: boolean;
+      folderImport: boolean;
+      nonSampleVideos: number;
+      /** "Grab anyway" override of the grab, stored on the new file (pauses its upgrades). */
+      grabOverride?: GrabOverride | null;
+    },
   ): Promise<{ file: MediaFile; replacedFileIds: number[] }> {
     const settings = this.getMediaManagement();
     const series = item.series;
@@ -1173,6 +1186,7 @@ export class ImportsService {
       sceneName,
       edition: item.parsed?.movie?.edition ?? null,
       versionTag: item.versionTag ?? null,
+      grabOverride: opts.grabOverride ?? null,
     });
     const allReplaced = [...new Set([...replacedFiles.map((f) => f.id), ...replacedFileIds])];
 
@@ -1410,6 +1424,7 @@ export class ImportsService {
           manual: true,
           folderImport: false,
           nonSampleVideos: 0,
+          grabOverride: tracked ? readGrabOverride(tracked.grabbedRelease) : null,
         });
         result.imported.push({ path: req.path, mediaFileId: placed.file.id, destination: placed.file.path });
         if (req.downloadId) {

@@ -1,12 +1,27 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { HygieneFinding } from '@arclight/shared';
-import { Button, Chip, EmptyState, ErrorBlock, PageHeader, Pane, Radio, Skeleton, Table, Tabs, type Column } from '../../../arclight/index.js';
+import { Button, Chip, EmptyState, ErrorBlock, PageHeader, Pane, Radio, Skeleton, Table, Tabs, type Column, type RowKey } from '../../../arclight/index.js';
+import { BulkBar } from '../../../components/media/bulk-bar.js';
 import { formatBytes } from '../../../components/media/format.js';
 import { useToast } from '../../../components/toast.js';
-import { useHygieneBulkDelete, useHygieneDelete, useHygieneFindings, useHygieneScan } from '../../../hooks/hygiene.js';
+import { useHygieneBulkDelete, useHygieneDelete, useHygieneFindings, useHygieneMap, useHygieneScan } from '../../../hooks/hygiene.js';
 import { relativeTime } from '../../../lib/format.js';
 import { ConfirmModal } from '../../system/confirm-modal.js';
-import { DUPLICATE_REASON_LABEL, bestSuggestion, bulkDuplicateDeletion, defaultKeep, deletableExcept, fileName, folderOf, groupDuplicates, guessLabel, suggestionLabel, type DuplicateGroup } from './hygiene-model.js';
+import {
+  DUPLICATE_REASON_LABEL,
+  bestSuggestion,
+  buildMapRequest,
+  bulkDuplicateDeletion,
+  defaultKeep,
+  deletableExcept,
+  fileName,
+  folderOf,
+  groupDuplicates,
+  guessLabel,
+  initialMapDraft,
+  suggestionLabel,
+  type DuplicateGroup,
+} from './hygiene-model.js';
 import { MapDialog } from './map-dialog.js';
 import './hygiene.css';
 import { t } from '../../../i18n/index.js';
@@ -30,7 +45,12 @@ function PathCell({ path }: { path: string }) {
   );
 }
 
-function OrphansTable({ rows, onMap, onDelete }: { rows: HygieneFinding[]; onMap: (f: HygieneFinding) => void; onDelete: (deleteTarget: DeleteTarget) => void }) {
+interface Selection {
+  selected: Set<RowKey>;
+  onChange: (s: Set<RowKey>) => void;
+}
+
+function OrphansTable({ rows, onMap, onDelete, selection }: { rows: HygieneFinding[]; onMap: (f: HygieneFinding) => void; onDelete: (deleteTarget: DeleteTarget) => void; selection: Selection }) {
   const columns: Column<HygieneFinding>[] = [
     { key: 'path', header: t('common.file'), cell: (f) => <PathCell path={f.path} />, sortValue: (f) => f.path },
     { key: 'size', header: t('common.size'), mono: true, align: 'right', cell: (f) => formatBytes(f.sizeBytes), sortValue: (f) => f.sizeBytes },
@@ -73,6 +93,10 @@ function OrphansTable({ rows, onMap, onDelete }: { rows: HygieneFinding[]; onMap
       rows={rows}
       rowKey={(f) => f.id}
       defaultSort={{ key: 'path', direction: 'asc' }}
+      selectable
+      selected={selection.selected}
+      onSelectionChange={selection.onChange}
+      rowLabel={(f) => t('library.selectTitle', { title: fileName(f.path) })}
       empty={<EmptyState title={t('library.hygiene.noOrphanFiles')}>{t('library.hygiene.everyVideoFileUnderThe')}</EmptyState>}
     />
   );
@@ -128,7 +152,7 @@ function DuplicateGroupPane({ group, onDelete }: { group: DuplicateGroup; onDele
   );
 }
 
-function EmptyFoldersTable({ rows, onDelete }: { rows: HygieneFinding[]; onDelete: (entry: DeleteTarget) => void }) {
+function EmptyFoldersTable({ rows, onDelete, selection }: { rows: HygieneFinding[]; onDelete: (entry: DeleteTarget) => void; selection: Selection }) {
   const columns: Column<HygieneFinding>[] = [
     { key: 'path', header: t('library.hygiene.folder'), mono: true, cell: (f) => <span className="hyg-path">{f.path}</span>, sortValue: (f) => f.path },
     { key: 'root', header: t('common.rootFolder'), mono: true, muted: true, cell: (f) => f.rootFolderPath },
@@ -150,6 +174,10 @@ function EmptyFoldersTable({ rows, onDelete }: { rows: HygieneFinding[]; onDelet
       rows={rows}
       rowKey={(f) => f.id}
       defaultSort={{ key: 'path', direction: 'asc' }}
+      selectable
+      selected={selection.selected}
+      onSelectionChange={selection.onChange}
+      rowLabel={(f) => t('library.selectTitle', { title: f.path })}
       empty={<EmptyState title={t('library.hygiene.noEmptyFolders')} />}
     />
   );
@@ -165,9 +193,15 @@ export function HygienePage() {
   const [tab, setTab] = useState<TabId>('orphan');
   const [mapping, setMapping] = useState<HygieneFinding | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
+  const [mappingMany, setMappingMany] = useState(false);
+  const map = useHygieneMap();
   useEffect(() => {
     document.title = t('library.hygiene.hygieneArclight');
   }, []);
+  // The selection belongs to one tab.
+  useEffect(() => setSelected(new Set()), [tab]);
+  const selection: Selection = { selected, onChange: setSelected };
 
   const records = findings.data?.records ?? [];
   const orphans = useMemo(() => records.filter((r) => r.type === 'orphan'), [records]);
@@ -177,13 +211,45 @@ export function HygienePage() {
   const counts = findings.data?.counts;
   const lastScan = findings.data?.lastScan ?? null;
 
+  const selectedFindings = records.filter((r) => selected.has(r.id));
+  /** Each selected orphan goes to its best match (the Map dialog's default); ones without a usable match are skipped. */
+  const mapSelected = async () => {
+    setMappingMany(true);
+    let mapped = 0;
+    let skipped = 0;
+    let failed = 0;
+    try {
+      for (const f of selectedFindings) {
+        const built = buildMapRequest(initialMapDraft(f));
+        if (!bestSuggestion(f) || !built.ok) {
+          skipped++;
+          continue;
+        }
+        try {
+          await map.mutateAsync({ id: f.id, body: built.body });
+          mapped++;
+        } catch {
+          failed++;
+        }
+      }
+    } finally {
+      setMappingMany(false);
+    }
+    setSelected(new Set());
+    toast.push({
+      tone: failed || skipped ? 'warning' : 'ok',
+      title: t('bulk.hygiene.mapped', { count: mapped }),
+      message: failed || skipped ? t('bulk.hygiene.mapSkipped', { skipped, failed }) : undefined,
+    });
+  };
+
   const body = findings.isError ? (
     <ErrorBlock title={t('library.hygiene.couldntLoadTheHygieneFindings')} onRetry={() => void findings.refetch()} />
   ) : findings.isPending ? (
     <Skeleton lines={5} />
   ) : tab === 'orphan' ? (
     <Pane flush bare>
-      <OrphansTable rows={orphans} onMap={setMapping} onDelete={setDeleting} />
+      <OrphansTable rows={orphans} onMap={setMapping} onDelete={setDeleting} selection={selection} />
     </Pane>
   ) : tab === 'duplicate' ? (
     groups.length ? (
@@ -214,7 +280,7 @@ export function HygienePage() {
     )
   ) : (
     <Pane flush bare>
-      <EmptyFoldersTable rows={empties} onDelete={setDeleting} />
+      <EmptyFoldersTable rows={empties} onDelete={setDeleting} selection={selection} />
     </Pane>
   );
 
@@ -256,6 +322,29 @@ export function HygienePage() {
         {body}
       </div>
       <MapDialog finding={mapping} onClose={() => setMapping(null)} />
+      {tab !== 'duplicate' ? (
+        <BulkBar
+          count={selectedFindings.length}
+          actions={[
+            ...(tab === 'orphan'
+              ? [{ id: 'map', label: t('bulk.hygiene.mapToBestMatch'), loading: mappingMany, onSelect: () => void mapSelected() }]
+              : []),
+            {
+              id: 'delete',
+              label: t('common.delete'),
+              danger: true,
+              onSelect: () =>
+                setDeleting({
+                  bulk: true,
+                  findings: selectedFindings,
+                  title: t('bulk.hygiene.deleteSelectedTitle', { count: selectedFindings.length }),
+                  label: t('common.delete'),
+                }),
+            },
+          ]}
+          onClear={() => setSelected(new Set())}
+        />
+      ) : null}
       <ConfirmModal
         open={deleting !== null}
         title={deleting?.title ?? ''}
@@ -266,6 +355,7 @@ export function HygienePage() {
           if (deleting.bulk) {
             const res = await bulkDel.mutateAsync(deleting.findings.map((f) => f.id));
             setDeleting(null);
+            setSelected(new Set());
             toast.push(
               res.failed === 0
                 ? { tone: 'ok', title: t('library.hygiene.deletedNItems', { n: res.deleted }) }

@@ -15,6 +15,7 @@ import {
   type AudiobookManualImportFileTags,
   type AudiobookManualImportItem,
   type AudiobookManualImportRequestItem,
+  type GrabOverride,
   type ImportRejection,
   type ImportRejectionReason,
   type MediaManagementSettings,
@@ -31,7 +32,7 @@ import { libraryService } from '../../library/index.js';
 import { audioCodecOf } from '../../music/quality.js';
 import type { ProfilesService } from '../../profiles/index.js';
 import { getSection } from '../../settings/service.js';
-import { absolutePathSpec, compareQ, freeSpaceSpec, notUnpackingSpec, sameFileSpec } from '../decisions.js';
+import { absolutePathSpec, compareQ, freeSpaceSpec, notUnpackingSpec, readGrabOverride, sameFileSpec } from '../decisions.js';
 import type { AudiobookImportedEvent, ImportsDeps } from '../deps.js';
 import { ImportsError } from '../errors.js';
 import { ImportFileError, RecycleBin, setPermissions, transferFile, type FsOps, type TransferMode, type TransferResult } from '../mover.js';
@@ -174,6 +175,8 @@ interface ExecuteOptions {
   downloadId: string | null;
   sourceTitle: string | null;
   manual: boolean;
+  /** "Grab anyway" override of the grab, stored on the new book files (pauses book upgrades). */
+  grabOverride?: GrabOverride | null;
 }
 
 export { bookFolderOf, naturalCompare, orderParts } from './book-layout.js';
@@ -557,12 +560,13 @@ export class AudiobookImporter {
 
     const candidates = this.candidates(author.id, target.bookIds.length > 0 ? target.bookIds : null);
     const plan = this.plan(scan, author, candidates, { releaseTitle: item.title, forceSingle: target.bookIds.length === 1 });
-    await this.applySpecs(plan, author, { downloadId: item.downloadId, addedAt: item.added, settings });
+    const grabOverride = readGrabOverride(item.grabbedRelease);
+    await this.applySpecs(plan, author, { downloadId: item.downloadId, addedAt: item.added, settings, forced: grabOverride !== null });
 
     run.outcomes = plan.rejected.map((r) => ({ path: r.file.path, status: 'rejected' as const, rejections: r.rejections, ...(r.bookId !== undefined ? { bookId: r.bookId } : {}) }));
     const mode: 'move' | 'copy' = item.canMoveFiles ? 'move' : 'copy';
     for (const book of plan.books) {
-      const outcomes = await this.executeBook(author, book, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false });
+      const outcomes = await this.executeBook(author, book, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false, grabOverride });
       run.outcomes.push(...outcomes);
       if (outcomes.some((o) => o.status === 'imported')) {
         run.importedBookIds.push(book.candidate.book.id);
@@ -795,7 +799,11 @@ export class AudiobookImporter {
    * freeSpace, notUnpacking, sameFile, alreadyImported, upgrade (strictly better only, best part
    * against best existing file) and durationMismatch. Rejected books move to `plan.rejected`.
    */
-  private async applySpecs(plan: ScanPlan, author: AuthorRow, opts: { downloadId: string | null; addedAt?: string | undefined; settings: MediaManagementSettings }): Promise<void> {
+  private async applySpecs(
+    plan: ScanPlan,
+    author: AuthorRow,
+    opts: { downloadId: string | null; addedAt?: string | undefined; settings: MediaManagementSettings; forced?: boolean },
+  ): Promise<void> {
     const { settings } = opts;
     const tolerance = this.audioSettings().audiobookDurationTolerance;
     const profile = this.profileOf(author);
@@ -818,7 +826,8 @@ export class AudiobookImporter {
       }
       const replacing = book.existing.filter((e) => !book.parts.some((p) => resolve(p.file.path) === resolve(e.path)));
       if (alreadyImported && book.existing.length > 0) push(permanent('alreadyImported', 'Book file already imported'));
-      if (replacing.length > 0 && !book.parts.every((p) => p.inPlace)) {
+      // "Grab anyway": the user chose this release, so it replaces the book's current files.
+      if (replacing.length > 0 && !book.parts.every((p) => p.inPlace) && !opts.forced) {
         const incoming = this.bestQuality(profile, book.parts.map((p) => p.quality));
         const current = this.bestQuality(profile, replacing.map((e) => e.quality));
         if (compareQ(profile, incoming, current) <= 0) {
@@ -995,7 +1004,7 @@ export class AudiobookImporter {
 
     const at = this.o.now().toISOString();
     const rows: AudioFileRow[] = [];
-    for (const p of placed) rows.push(await this.rowValues(author, book, p.part, p.destination, partCount));
+    for (const p of placed) rows.push(await this.rowValues(author, book, p.part, p.destination, partCount, opts.grabOverride ?? null));
     const saved = this.db.transaction((tx) => {
       for (const e of replaced) tx.delete(audioFiles).where(eq(audioFiles.id, e.id)).run();
       const out: AudioFileRow[] = [];
@@ -1073,7 +1082,14 @@ export class AudiobookImporter {
     }));
   }
 
-  private async rowValues(author: AuthorRow, book: BookRow, p: PlannedPart, destination: string, partCount: number): Promise<AudioFileRow> {
+  private async rowValues(
+    author: AuthorRow,
+    book: BookRow,
+    p: PlannedPart,
+    destination: string,
+    partCount: number,
+    grabOverride: GrabOverride | null,
+  ): Promise<AudioFileRow> {
     const size = (await stat(destination)).size;
     const t = p.file.tags;
     return {
@@ -1104,6 +1120,7 @@ export class AudiobookImporter {
       chapterCount: t?.chapters ? t.chapters.length : null,
       tags: t ? fileTags(t) : null,
       mediaInfo: t ? { source: t.source, lossless: t.lossless } : null,
+      grabOverride,
     };
   }
 
@@ -1387,7 +1404,13 @@ export class AudiobookImporter {
       };
       const narrator = narratorWarning(unit.hint.narrator, batch.candidate.book.narrators, batch.candidate.book.title);
       if (narrator) plan.warnings.push(narrator);
-      const outcomes = await this.executeBook(batch.author, plan, { mode, downloadId: batch.downloadId, sourceTitle: tracked?.title ?? null, manual: true });
+      const outcomes = await this.executeBook(batch.author, plan, {
+        mode,
+        downloadId: batch.downloadId,
+        sourceTitle: tracked?.title ?? null,
+        manual: true,
+        grabOverride: tracked ? readGrabOverride(tracked.grabbedRelease) : null,
+      });
       for (const o of outcomes) {
         if (o.status === 'imported') {
           result.imported.push({ path: o.path, audioFileId: o.audioFileId!, bookId: o.bookId!, partNumber: o.partNumber!, destination: o.destination! });

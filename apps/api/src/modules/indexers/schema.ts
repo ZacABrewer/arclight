@@ -81,6 +81,10 @@ export const indexerStats = sqliteTable(
     kind: text('kind').$type<IndexerStatKind>().notNull(),
     durationMs: integer('duration_ms').notNull(),
     success: integer('success', { mode: 'boolean' }).notNull(),
+    /** Releases the query / RSS fetch returned (before RSS de-duplication); null for grabs, failures and older rows. */
+    results: integer('results'),
+    /** Short failure message (`code: message`, truncated); null on success. */
+    error: text('error'),
     /** ISO-8601. */
     at: text('at').notNull(),
   },

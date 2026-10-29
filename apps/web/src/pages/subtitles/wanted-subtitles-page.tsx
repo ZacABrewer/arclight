@@ -4,6 +4,8 @@ import type { SubtitleMediaType, WantedSubtitleItem } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, EmptyState, ErrorBlock, Icon, Paginator, Pane, Table, Tabs, type Column, type RowKey } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
+import { BulkBar } from '../../components/media/bulk-bar.js';
+import { useBulkSubtitleSearch } from '../../hooks/bulk.js';
 import { useSubtitleSearchCommand, useWantedSubtitles } from '../../hooks/subtitles.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
@@ -36,34 +38,20 @@ function itemLabel(r: WantedSubtitleItem): string {
 function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const [bulkRunning, setBulkRunning] = useState(false);
+  // "Select all N": every file on the wanted list (all pages), searched by one server job.
+  const [allMatching, setAllMatching] = useState(false);
   const list = useWantedSubtitles(mediaType, page, PAGE_SIZE);
   const search = useSubtitleSearchCommand();
+  const bulk = useBulkSubtitleSearch();
   const toast = useToast();
   const pending = list.error instanceof ApiError && list.error.status === 404;
-
-  const searchSelected = async (keys: Set<RowKey>, clear: () => void) => {
-    setBulkRunning(true);
-    let downloaded = 0;
-    let searched = 0;
-    try {
-      for (const key of keys) {
-        const res = await search.mutateAsync({ mediaFileId: Number(key) });
-        downloaded += res.downloaded;
-        searched += res.searched;
-      }
-      toast.push({
-        tone: downloaded > 0 ? 'ok' : 'info',
-        title: t('subtitles.wantedSubtitles.subtitleSearchFinished'),
-        message: t('subtitles.wantedSubtitles.searchedFilesDownloadedSubtitles', { searched, downloaded }),
-      });
-      clear();
-    } catch {
-      // The mutation's own error toast explains the failure.
-    } finally {
-      setBulkRunning(false);
-    }
+  const select = (next: Set<RowKey>) => {
+    setAllMatching(false);
+    setSelected(next);
   };
+  const clear = () => select(new Set());
+  const searchSelected = () =>
+    bulk.mutate(allMatching ? { wanted: mediaType } : { mediaFileIds: [...selected].map(Number) }, { onSuccess: clear });
 
   const columns: Column<WantedSubtitleItem>[] = [
     {
@@ -155,20 +143,33 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
         sortable={false}
         selectable
         selected={selected}
-        onSelectionChange={setSelected}
+        onSelectionChange={select}
         rowLabel={(r) => t('subtitles.wantedSubtitles.selectItemlabel', { itemLabel: itemLabel(r) })}
-        bulkActions={(keys, clear) => (
-          <Button variant="secondary" size="sm" icon={<Icon name="search" />} loading={bulkRunning} onClick={() => void searchSelected(keys, clear)}>
-            {t('subtitles.wantedSubtitles.searchSelected')}
-          </Button>
-        )}
         empty={<EmptyState title={t('subtitles.wantedSubtitles.nothingWanted')}>{t('subtitles.wantedSubtitles.everyFileHasTheSubtitles')}</EmptyState>}
       />
       {pageCount > 1 ? (
         <div className="sub-pager">
-          <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
+          <Paginator
+            page={page}
+            pageCount={pageCount}
+            onPageChange={(n) => {
+              setPage(n);
+              clear();
+            }}
+          />
         </div>
       ) : null}
+      <BulkBar
+        count={selected.size}
+        total={list.data?.totalRecords}
+        allMatching={allMatching}
+        onSelectAll={() => {
+          setSelected(new Set((list.data?.records ?? []).map((r) => r.mediaFileId)));
+          setAllMatching(true);
+        }}
+        actions={[{ id: 'search', label: t('subtitles.wantedSubtitles.searchSelected'), loading: bulk.isPending, onSelect: searchSelected }]}
+        onClear={clear}
+      />
     </Pane>
   );
 }

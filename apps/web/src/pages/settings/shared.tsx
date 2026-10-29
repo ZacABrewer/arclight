@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { errorMessage } from '../../api/client.js';
-import { Button, Chip, Pane, SectionLabel, Tooltip } from '../../arclight/index.js';
+import { Button, Checkbox, Chip, Pane, SectionLabel, Tooltip } from '../../arclight/index.js';
 import './settings.css';
 import './managed.css';
 import { t } from '../../i18n/index.js';
@@ -56,6 +56,13 @@ export function CardGrid({ children, label }: { children: ReactNode; label?: str
   );
 }
 
+/** ItemCard's bulk selection checkbox. */
+export interface ItemCardSelect {
+  checked: boolean;
+  onChange: () => void;
+  label: string;
+}
+
 export function ItemCard({
   title,
   onClick,
@@ -63,6 +70,7 @@ export function ItemCard({
   muted = false,
   status,
   actions,
+  select,
 }: {
   title: ReactNode;
   onClick?: (() => void) | undefined;
@@ -72,11 +80,14 @@ export function ItemCard({
   status?: ReactNode;
   /** Buttons at the bottom of the card (Test / Edit). */
   actions?: ReactNode;
+  /** Bulk selection checkbox before the title (components/bulk-actions.tsx). */
+  select?: ItemCardSelect | undefined;
 }) {
   return (
     <div role="listitem" className="al-item-card-wrap">
-      <Pane className="al-item-card" data-muted={muted || undefined}>
+      <Pane className="al-item-card" data-muted={muted || undefined} data-selected={select?.checked || undefined}>
         <div className="al-item-card__head">
+          {select ? <Checkbox className="al-item-card__select" aria-label={select.label} checked={select.checked} onChange={select.onChange} /> : null}
           {onClick ? (
             <button type="button" className="al-item-card__title" onClick={onClick}>
               {title}

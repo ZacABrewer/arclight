@@ -18,6 +18,8 @@ import {
   IndexerDefinitionSummary,
   IndexerDefinitionUpload,
   IndexerGlobalSettings,
+  IndexerHealth,
+  IndexerHealthQuery,
   IndexerProxy,
   IndexerProxyCreate,
   IndexerProxyTestRequest,
@@ -166,6 +168,12 @@ export function indexersRoutes(
       '/indexer/stats',
       { schema: { querystring: IndexerStatsQuery, response: { 200: IndexerStats, ...errors } } },
       async (req) => service.stats.query(req.query.days),
+    );
+
+    app.get(
+      '/indexer/health',
+      { schema: { querystring: IndexerHealthQuery, response: { 200: IndexerHealth, ...errors } } },
+      async (req) => service.health(req.query.days),
     );
 
     // ---- definition catalogue -------------------------------------------------------

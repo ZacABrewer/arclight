@@ -24,6 +24,7 @@ import {
   type DecisionLogSource,
   type DelayProfile,
   type Episode,
+  type GrabOverride,
   type Indexer,
   type ItemSearchStatus,
   type LastSearch,
@@ -913,6 +914,7 @@ export class ReleasesService {
         episodeIds: [],
         albumIds: [album.id],
         sizeBytes: own.reduce((sum, f) => sum + f.sizeBytes, 0),
+        keptByChoice: own.some((f) => f.keptByChoice),
       });
     }
 
@@ -1163,6 +1165,7 @@ export class ReleasesService {
         episodeIds: [],
         bookIds: [book.id],
         sizeBytes: own.reduce((sum, f) => sum + f.sizeBytes, 0),
+        keptByChoice: own.some((f) => f.keptByChoice),
       });
     }
 
@@ -1277,6 +1280,7 @@ export class ReleasesService {
       sizeBytes: f.sizeBytes,
       versionTag: f.versionTag ?? null,
       audioLanguages: fileAudioLanguages(f, { fallback: true }),
+      keptByChoice: f.grabOverride != null,
     });
     const files = batch
       .files(match)
@@ -1497,6 +1501,7 @@ export class ReleasesService {
     const match = c.match;
     const tags = itemTags(c);
     const target = targetIdsOf(match);
+    const override = grabOverrideOf(d, this.now());
     const tracking: DownloadTracking = {
       mediaType: match.mediaType,
       tags,
@@ -1514,6 +1519,8 @@ export class ReleasesService {
         customFormatScore: d.customFormatScore,
         languages: d.languages,
         releaseGroup: d.releaseGroup,
+        // Read back by the import, which records it on the imported files (upgrades pause).
+        ...(override ? { grabOverride: override } : {}),
       },
     };
 
@@ -1563,6 +1570,7 @@ export class ReleasesService {
         downloadId: tracked.downloadId,
         source: d.source,
         ...(e.batchId ? { batchId: e.batchId } : {}),
+        ...(override ? { overriddenRejections: override.rejections } : {}),
       });
     } catch (err) {
       this.log?.warn({ err }, 'history hook failed after grab');
@@ -2080,6 +2088,7 @@ export class ReleasesService {
         const own = files.filter((f) => f.albumId === a.id);
         if (own.length === 0) return true;
         if (a.trackCount > 0 && a.trackFileCount < a.trackCount) return true;
+        if (own.some((f) => f.keptByChoice)) return false;
         return profile !== undefined && own.some((f) => !isQualityCutoffMet(profile, f.quality));
       })
       .map((a) => a.id);
@@ -2287,6 +2296,7 @@ export class ReleasesService {
       .filter((b) => {
         const own = files.filter((f) => f.bookId === b.id);
         if (own.length === 0) return true;
+        if (own.some((f) => f.keptByChoice)) return false;
         return profile !== undefined && own.some((f) => !isQualityCutoffMet(profile, f.quality));
       })
       .map((b) => b.id);
@@ -2385,7 +2395,7 @@ export class ReleasesService {
       for (const b of lib.ownBooks(author.id)) {
         if (!b.monitored) continue;
         const own = files.filter((f) => f.bookId === b.id);
-        if (own.length > 0 && own.some((f) => !isQualityCutoffMet(profile, f.quality))) out.push({ id: b.id, authorId: author.id });
+        if (own.length > 0 && !own.some((f) => f.keptByChoice) && own.some((f) => !isQualityCutoffMet(profile, f.quality))) out.push({ id: b.id, authorId: author.id });
       }
     }
     return out;
@@ -3085,6 +3095,17 @@ function groupPending(rows: PendingRow[], due: Set<number>): PendingRow[][] {
     else groups.push([row]);
   }
   return groups.filter((g) => g.some((r) => due.has(r.id)));
+}
+
+/**
+ * "Grab anyway": a grab of a release with permanent rejections overrides the rules. The override
+ * (the rejection messages) travels with the download to the imported files, where it pauses
+ * automatic upgrades. Temporary rejections alone (delay, queue) are no override.
+ */
+export function grabOverrideOf(d: Pick<ReleaseDecision, 'approved' | 'rejections' | 'title'>, now: Date): GrabOverride | null {
+  if (d.approved) return null;
+  const rejections = [...new Set(d.rejections.filter((r) => r.type === 'permanent').map((r) => r.message))];
+  return rejections.length > 0 ? { rejections, grabbedAt: now.toISOString(), sourceTitle: d.title } : null;
 }
 
 function grabResponse(tracked: TrackedView): { title: string; queueItemId: number; downloadId: string; downloadClientId: number | null } {

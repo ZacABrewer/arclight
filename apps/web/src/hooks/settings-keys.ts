@@ -24,6 +24,7 @@ export const settingsKeys = {
   communityCatalogue: ['indexers', 'definitions', 'community'] as const,
   indexerProxies: ['indexers', 'proxies'] as const,
   indexerStats: (days: number) => ['indexers', 'stats', days] as const,
+  indexerHealth: (days: number) => ['indexers', 'health', days] as const,
   indexerOptions: ['settings', 'indexers'] as const,
   downloadClients: ['settings', 'downloadclients'] as const,
   downloadClientSchema: ['settings', 'downloadclients', 'schema'] as const,

@@ -109,7 +109,8 @@
 }
 
 /* ---------- release table cells ---------- */
-.mk-release-title { display: block; color: var(--al-text-1); overflow-wrap: anywhere; }
+/* min-width keeps a narrow table from squeezing the title into one word per line. */
+.mk-release-title { display: block; min-width: min(22ch, 40vw); color: var(--al-text-1); overflow-wrap: anywhere; }
 .mk-scores { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------- drawer content ---------- */

@@ -1,6 +1,6 @@
 import { useMemo, useState, type CSSProperties } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { Artist, ArtistStatus, QualityProfile } from '@arclight/shared';
+import type { Artist, ArtistStatus, BulkArtistUpdateRequest, QualityProfile } from '@arclight/shared';
 import { ArtistStatus as ArtistStatuses } from '@arclight/shared';
 import {
   Button,
@@ -8,23 +8,24 @@ import {
   CountBadge,
   EmptyState,
   FilterBar,
-  FloatBar,
-  FloatBarDivider,
   Input,
-  Menu,
   Meter,
   PageHeader,
-  Popover,
   Segmented,
   Select,
   Table,
   buttonClass,
   type Column,
 } from '../../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../../components/media/bulk-bar.js';
+import { DeleteMediaDialog } from '../../../components/media/delete-media-dialog.js';
 import { formatBytes, formatDate } from '../../../components/media/format.js';
+import { useToast } from '../../../components/toast.js';
+import { useRootFolders, useTags } from '../../../hooks/library.js';
+import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { Loading, MonitorSwitch, Num, PosterSkeletons, QueryError } from '../../../components/media/media-kit.js';
 import { useUiPreferences } from '../../../hooks/ui-preferences.js';
-import { useArtistList, useBulkUpdateArtists, useMusicQualityProfiles, useSetArtistMonitored } from '../../../hooks/music.js';
+import { useArtistList, useBulkUpdateArtists, useDeleteArtist, useMusicQualityProfiles, useSetArtistMonitored } from '../../../hooks/music.js';
 import { clampColumns } from '../library-index.js';
 import { MusicGate, SquareArt } from './music-kit.js';
 import {
@@ -205,7 +206,9 @@ function ArtistIndex() {
         </div>
       )}
 
-      {selected.size > 0 ? <ArtistBulkBar ids={[...selected]} profiles={profiles.data} onClear={clear} /> : null}
+      {selectMode || selected.size > 0 ? (
+        <ArtistBulkBar ids={[...selected]} total={rows.length} open={selectMode} onSelectAll={() => setSelected(new Set(rows.map((a) => a.id)))} profiles={profiles.data} onClear={clear} />
+      ) : null}
     </div>
   );
 }
@@ -368,42 +371,86 @@ function ArtistFilterBar({ filters, onChange, profiles }: { filters: ArtistFilte
   );
 }
 
-function ArtistBulkBar({ ids, profiles, onClear }: { ids: number[]; profiles: QualityProfile[] | undefined; onClear: () => void }) {
+function ArtistBulkBar({
+  ids,
+  total,
+  open,
+  onSelectAll,
+  profiles,
+  onClear,
+}: {
+  ids: number[];
+  total: number;
+  open: boolean;
+  onSelectAll: () => void;
+  profiles: QualityProfile[] | undefined;
+  onClear: () => void;
+}) {
   const bulk = useBulkUpdateArtists();
-  const apply = (patch: { monitored?: boolean; qualityProfileId?: number; refresh?: boolean }) => bulk.mutate({ ids, ...patch });
+  const search = useMusicSearch();
+  const del = useDeleteArtist();
+  const rootFolders = useRootFolders();
+  const tags = useTags();
+  const toast = useToast();
+  const [deleting, setDeleting] = useState(false);
+  const subject = `${ids.length} ${t('music.artistNoun', { count: ids.length })}`;
+  const apply = (patch: Omit<BulkArtistUpdateRequest, 'ids'>, done: string) =>
+    bulk.mutate({ ids, ...patch }, { onSuccess: () => toast.push({ tone: 'ok', title: done, durationMs: 4_000 }) });
+  const updated = t('bulk.toast.updated', { count: ids.length });
+  const actions: BulkAction[] = [
+    { id: 'search', label: t('common.search'), loading: search.isPending, onSelect: () => search.mutate({ name: 'ArtistSearch', artistIds: ids }) },
+    { id: 'monitor', label: t('common.monitor'), disabled: bulk.isPending, onSelect: () => apply({ monitored: true }, updated) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: bulk.isPending, onSelect: () => apply({ monitored: false }, updated) },
+    {
+      id: 'profile',
+      label: t('common.profile'),
+      optionsHeader: t('library.setQualityProfile'),
+      disabled: bulk.isPending,
+      options: (profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => apply({ qualityProfileId: p.id }, updated) })),
+    },
+    {
+      id: 'root',
+      label: t('common.rootFolder'),
+      optionsHeader: t('library.moveToRootFolder'),
+      disabled: bulk.isPending,
+      options: (rootFolders.data ?? [])
+        .filter((r) => r.mediaType === 'music')
+        .map((r) => ({ id: r.path, label: <span className="al-num">{r.path}</span>, onSelect: () => apply({ rootFolderPath: r.path }, updated) })),
+    },
+    {
+      id: 'tags',
+      label: t('common.tags'),
+      optionsHeader: t('library.addOrRemoveATag'),
+      disabled: bulk.isPending,
+      options: (tags.data ?? []).flatMap((entry) => [
+        { id: `add-${entry.id}`, label: t('library.addLabel', { label: entry.label }), onSelect: () => apply({ tags: { add: [entry.id] } }, updated) },
+        { id: `remove-${entry.id}`, label: t('library.removeLabel', { label: entry.label }), onSelect: () => apply({ tags: { remove: [entry.id] } }, updated) },
+      ]),
+    },
+    { id: 'refresh', label: t('common.refresh'), disabled: bulk.isPending, onSelect: () => apply({ refresh: true }, t('bulk.toast.refreshQueued', { count: ids.length })) },
+    { id: 'delete', label: t('common.delete'), danger: true, onSelect: () => setDeleting(true) },
+  ];
   return (
-    <FloatBar count={ids.length}>
-      <Button variant="ghost" disabled={bulk.isPending} onClick={() => apply({ monitored: true })}>
-        {t('common.monitor')}
-      </Button>
-      <Button variant="ghost" disabled={bulk.isPending} onClick={() => apply({ monitored: false })}>
-        {t('common.unmonitor')}
-      </Button>
-      <Popover
-        trigger={(props) => (
-          <Button variant="ghost" disabled={bulk.isPending} {...props}>
-            {t('common.profile')}
-          </Button>
-        )}
-        placement="top-start"
-        width={240}
-        label={t('library.setQualityProfile')}
-      >
-        {(close) => (
-          <Menu
-            header={t('library.setQualityProfile')}
-            onDone={close}
-            items={(profiles ?? []).map((p) => ({ id: String(p.id), label: p.name, onSelect: () => apply({ qualityProfileId: p.id }) }))}
-          />
-        )}
-      </Popover>
-      <Button variant="ghost" disabled={bulk.isPending} onClick={() => apply({ refresh: true })}>
-        {t('common.refresh')}
-      </Button>
-      <FloatBarDivider />
-      <Button variant="ghost" className="al-floatbar__cancel" onClick={onClear}>
-        {t('common.cancel')}
-      </Button>
-    </FloatBar>
+    <BulkBar count={ids.length} total={total} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear}>
+      <DeleteMediaDialog
+        open={deleting}
+        onClose={() => setDeleting(false)}
+        subject={subject}
+        noun={t('music.artistNoun', { count: ids.length })}
+        loading={del.isPending}
+        onConfirm={(opts) => {
+          void (async () => {
+            try {
+              for (const id of ids) await del.mutateAsync({ id, ...opts });
+              toast.push({ tone: 'ok', title: t('bulk.toast.deleted', { count: ids.length }) });
+              setDeleting(false);
+              onClear();
+            } catch {
+              // The mutation raised its own error toast; keep the dialog open.
+            }
+          })();
+        }}
+      />
+    </BulkBar>
   );
 }

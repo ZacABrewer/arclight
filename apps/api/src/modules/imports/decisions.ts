@@ -3,6 +3,7 @@ import type { ParsedRelease } from '@arclight/parser';
 import { requiresAbsoluteNumber, requiresEpisodeTitle } from '@arclight/organizer';
 import { compareQuality, compareRevision, violatesProfile } from '@arclight/profiles-engine';
 import {
+  GrabOverride,
   qualityById,
   type Episode,
   type ImportRejection,
@@ -65,6 +66,8 @@ export interface GrabbedInfo {
   episodeIds?: number[];
   movieId?: number;
   quality?: QualityModel;
+  /** "Grab anyway": the rejections the user overrode; recorded on the imported file. */
+  grabOverride?: GrabOverride;
 }
 
 export interface DecisionContext {
@@ -316,6 +319,8 @@ export function compareQ(profile: QualityProfile | null, a: QualityModel, b: Qua
 
 export const upgradeSpec: ImportSpec = (item, ctx) => {
   if (item.existingFile) return null;
+  // "Grab anyway": the user chose this release over the rules, so it replaces the file it targets.
+  if (ctx.grab?.grabOverride) return null;
   const rejections: ImportRejection[] = [];
   const profile = ctx.profile;
   for (const existing of item.existingFiles) {
@@ -448,5 +453,14 @@ export function readGrabbedRelease(raw: unknown): GrabbedInfo | null {
       };
     }
   }
+  const override = readGrabOverride(r);
+  if (override) out.grabOverride = override;
   return out;
+}
+
+/** The "Grab anyway" override a grab snapshot (tracked download `grabbedRelease`) carries, if any. */
+export function readGrabOverride(raw: unknown): GrabOverride | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const parsed = GrabOverride.safeParse((raw as Record<string, unknown>)['grabOverride']);
+  return parsed.success && parsed.data.rejections.length > 0 ? parsed.data : null;
 }

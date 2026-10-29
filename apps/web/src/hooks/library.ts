@@ -19,7 +19,9 @@ import { libraryApi, type DeleteMediaOptions } from '../api/library.js';
 import { profilesApi } from '../api/profiles.js';
 import { useToast as useToastStore } from '../components/toast.js';
 import { upsertJob } from '../live.js';
+import { audiobookKeys } from './audiobook-keys.js';
 import { libraryKeys } from './library-keys.js';
+import { musicKeys } from './music-keys.js';
 import { searchStatusKeys } from './search-status.js';
 import { t } from '../i18n/index.js';
 
@@ -343,6 +345,31 @@ export function useDeleteMediaFile() {
       void qc.invalidateQueries({
         queryKey: mediaType === 'series' ? libraryKeys.series.detail(ownerId) : libraryKeys.movie.detail(ownerId),
       });
+      void qc.invalidateQueries({ queryKey: libraryKeys.wanted.all });
+    },
+  });
+}
+
+/**
+ * "Allow upgrades again" on a file kept by choice ("Grab anyway"): video files by id, audio files
+ * by id (the server clears the whole album / book). Refetches the owner, the wanted lists and the
+ * audio pages.
+ */
+export function useAllowUpgrades() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: { kind: 'video'; fileId: number; mediaType: 'series' | 'movie'; ownerId: number } | { kind: 'audio'; fileId: number }): Promise<void> => {
+      if (input.kind === 'video') await libraryApi.mediaFiles.clearGrabOverride(input.fileId);
+      else await libraryApi.audioFiles.clearGrabOverride(input.fileId);
+    },
+    meta: { errorTitle: t('hooks.library.couldNotAllowUpgrades') },
+    onSettled: (_r, _e, input) => {
+      if (input.kind === 'video') {
+        void qc.invalidateQueries({ queryKey: input.mediaType === 'series' ? libraryKeys.series.detail(input.ownerId) : libraryKeys.movie.detail(input.ownerId) });
+      } else {
+        void qc.invalidateQueries({ queryKey: musicKeys.all });
+        void qc.invalidateQueries({ queryKey: audiobookKeys.all });
+      }
       void qc.invalidateQueries({ queryKey: libraryKeys.wanted.all });
     },
   });

@@ -1,0 +1,31 @@
+/* Shared bulk bar (bulk-bar.tsx) and the select-mode bits the library lists add. */
+/* The bar folds its actions into a menu instead of overflowing, so it need not scroll; a
+   scrolling bar would clip the Actions and picker menus that open above it. */
+.mk-bulk.al-floatbar { overflow: visible; }
+.mk-bulk__all { color: var(--al-cyan-text); white-space: nowrap; }
+.mk-bulk__empty { margin: 0; font-size: 13px; color: var(--al-text-3); }
+@media (max-width: 767.98px) {
+  .mk-bulk.al-floatbar--fixed { left: 50%; max-width: calc(100vw - 32px); padding: 0 6px 0 14px; }
+}
+
+/* A small toolbar above a list (episode seasons, album groups) holding its Select toggle. */
+.mk-bulk-toolbar { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; margin: 0 0 12px; }
+
+/* Episode rows in select mode: the monitor cell holds the row's checkbox, also on phones. */
+.mk-ep[data-select] { cursor: pointer; }
+.mk-ep[data-selected] { background: var(--al-cyan-a06); }
+@media (max-width: 767.98px) {
+  .mk-ep[data-select] { grid-template-columns: 36px 36px minmax(0, 1fr) auto; }
+  .mk-ep[data-select] > .mk-ep__monitor { display: flex; }
+}
+
+/* Album / book cards in select mode: the monitor corner holds the checkbox. */
+.music-album[data-selected] .music-card { outline: 2px solid var(--al-cyan); outline-offset: 2px; }
+.music-album[data-select] .music-card { cursor: pointer; }
+
+/* Bulk rename preview: old path over new path, one ticked row per file. */
+.mk-rename-list { list-style: none; margin: 0; padding: 0; max-height: 52vh; overflow-y: auto; display: grid; gap: 10px; }
+.mk-rename-row { display: grid; gap: 2px; min-width: 0; font-size: 12px; word-break: break-all; }
+
+/* Mobile wanted rows: a checkbox before the text. */
+.mk-mrow--check { grid-template-columns: 28px minmax(0, 1fr) auto; }

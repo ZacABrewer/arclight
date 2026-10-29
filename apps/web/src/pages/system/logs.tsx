@@ -19,6 +19,10 @@ import {
   Toggle,
   type Column,
 } from '../../arclight/index.js';
+import { useToast } from '../../components/toast.js';
+import { useSelection } from '../../components/bulk-actions.js';
+import { BulkBar } from '../../components/media/bulk-bar.js';
+import { tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSystemStatus } from '../../hooks/system.js';
 import { relativeTime } from '../../lib/format.js';
 import { formatBytes, formatStamp } from './format.js';
@@ -78,6 +82,7 @@ export function TailStatus({ tailing, connected, paused, fresh }: { tailing: boo
 
 function EventsTab() {
   const qc = useQueryClient();
+  const toast = useToast();
   const [level, setLevel] = useState<LogLevel | ''>('');
   const [searchText, setSearchText] = useState('');
   const search = useDebounced(searchText.trim());
@@ -129,6 +134,21 @@ function EventsTab() {
   const rows = follow && page === 1 ? visibleRecords(fetched, live, filter, PAGE_SIZE) : fetched;
   const fresh = rows.length > 0 && follow && page === 1 ? rows.filter((r) => r.id > (fetched[0]?.id ?? 0)).length : 0;
   const pageCount = logs.data ? Math.ceil(logs.data.totalRecords / PAGE_SIZE) : 1;
+  const rowKeys = rows.map((r) => r.id);
+  const selection = useSelection(rowKeys);
+  const copySelected = () => {
+    const picked = rows.filter((r) => selection.has(r.id));
+    const text = picked
+      .map((r) => [r.time, r.level.toUpperCase(), r.component ? `[${r.component}]` : '', r.message, r.context ? JSON.stringify(r.context) : ''].filter(Boolean).join(' '))
+      .join('\n');
+    void navigator.clipboard.writeText(text).then(
+      () => {
+        toast.push({ tone: 'ok', title: t('system.logs.copiedCount', { count: picked.length }), durationMs: 3_000 });
+        selection.clear();
+      },
+      () => toast.push({ tone: 'error', title: t('system.logs.copyFailed') }),
+    );
+  };
 
   const columns: Column<LogRecord>[] = [
     {
@@ -216,6 +236,8 @@ function EventsTab() {
             loading={logs.isPending}
             sortable={false}
             manualSort
+            {...tableSelection(selection)}
+            rowLabel={(r) => t('components.bulkActions.selectName', { name: r.message })}
             empty={<EmptyState title={t('system.logs.noLogEntries')}>{level || search ? t('system.logs.nothingMatchesTheseFilters') : t('system.logs.theInMemoryLogIs')}</EmptyState>}
           />
           {pageCount > 1 ? (
@@ -223,6 +245,13 @@ function EventsTab() {
               <Paginator page={page} pageCount={pageCount} onPageChange={setPage} />
             </div>
           ) : null}
+          <BulkBar
+            count={selection.count}
+            total={rowKeys.length}
+            onSelectAll={() => selection.set(rowKeys)}
+            onClear={selection.clear}
+            actions={[{ id: 'copy', label: t('system.logs.copySelected'), onSelect: copySelected }]}
+          />
         </>
       )}
     </Pane>

@@ -13,6 +13,8 @@ import {
   AudioRequestDefaults,
   AudioRequestListQuery,
   AudioRequestPage,
+  BulkRequestAction,
+  BulkRequestResult,
   CreateAudioRequest,
   DeclineRequest,
   ErrorResponse,
@@ -25,6 +27,7 @@ import { AudioDisabledError, REQUESTS_ERROR_STATUS, RequestsError } from './erro
 import type { TokenBuckets } from './portal.js';
 import { actorOf, portalRateLimit } from './routes.js';
 import type { RequestsService } from './service.js';
+import { eachId } from './bulk.js';
 
 // Music and audiobook requests and their Discover catalogue (docs/API.md "Music and audiobook
 // requests"). Same conventions as routes.ts: discover routes are public while the portal allows
@@ -34,6 +37,7 @@ import type { RequestsService } from './service.js';
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
 
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
+const AudioBulkParams = z.object({ action: z.enum(['approve', 'decline', 'retry', 'delete']) });
 const MbidParams = z.object({ mbid: z.string().trim().min(1).max(64) });
 const AsinParams = z.object({ asin: z.string().trim().min(1).max(32) });
 const Empty = z.null();
@@ -120,6 +124,11 @@ export function audioRequestsRoutes(s: AudioRequestsRouteServices): Plugin {
     app.post('/audiorequest/:id/retry', { config: user, schema: { params: IdParams, response: { 200: AudioRequest, ...errors } } }, async (req) =>
       audio.retry(actorOf(req), req.params.id),
     );
+    app.post('/audiorequest/bulk/:action', { config: user, schema: { params: AudioBulkParams, body: BulkRequestAction, response: { 200: BulkRequestResult, ...errors } } }, async (req) => {
+      const actor = actorOf(req);
+      const run = { approve: (id: number) => audio.approve(actor, id), decline: (id: number) => audio.decline(actor, id), retry: (id: number) => audio.retry(actor, id), delete: (id: number) => audio.remove(actor, id) }[req.params.action];
+      return eachId(req.body.ids, run);
+    });
     app.delete('/audiorequest/:id', { config: user, schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       audio.remove(actorOf(req), req.params.id);
       return reply.code(204).send(null);

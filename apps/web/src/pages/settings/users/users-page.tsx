@@ -13,6 +13,8 @@ import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
 import { SettingsSection } from '../shared.js';
 import { useToast } from '../../../components/toast.js';
+import { ResourceBulkBar, tableSelection } from '../../../components/resource-bulk-actions.js';
+import { useSelection } from '../../../components/bulk-actions.js';
 import '../security/security.css';
 import { t } from '../../../i18n/index.js';
 
@@ -49,6 +51,8 @@ export function UsersPage() {
   const { user: me } = useAuth();
   const users = useQuery({ queryKey: authKeys.users, queryFn: usersApi.list });
   const [open, setOpen] = useState<User | null>(null);
+  const userKeys = (users.data ?? []).map((u) => u.id);
+  const selection = useSelection(userKeys);
 
   const columns: Array<Column<User>> = [
     {
@@ -99,9 +103,21 @@ export function UsersPage() {
             {errorMessage(users.error)}
           </ErrorBlock>
         ) : (
-          <Table caption={t('common.users')} density="dense" columns={columns} rows={users.data} loading={users.isPending} rowKey={(u) => u.id} sortable empty={t('settings.users.noUsers')} />
+          <Table
+            caption={t('common.users')}
+            density="dense"
+            columns={columns}
+            rows={users.data}
+            loading={users.isPending}
+            rowKey={(u) => u.id}
+            sortable
+            empty={t('settings.users.noUsers')}
+            {...tableSelection(selection)}
+            rowLabel={(u) => t('components.bulkActions.selectName', { name: u.displayName ?? u.username })}
+          />
         )}
       </SettingsSection>
+      <ResourceBulkBar resource="user" selection={selection} allKeys={userKeys} nameOf={(id) => users.data?.find((u) => u.id === id)?.username} />
       <UserDefaultsSection />
       {open ? (
         <Modal open size={640} onClose={() => setOpen(null)} title={t('settings.users.manageValue', { value: open.displayName ?? open.username })}>

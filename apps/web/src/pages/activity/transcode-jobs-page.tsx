@@ -3,6 +3,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { TranscodeJob, TranscodeJobStatus, TranscodeJobTrigger } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, Meter, PageHeader, Pane, Segmented, Table, Tooltip, type ChipTone, type Column } from '../../arclight/index.js';
+import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
+import { useSelection } from '../../components/bulk-actions.js';
 import { transcodeKeys, useCancelTranscodeJob, useTranscodeJobs } from '../../hooks/transcode.js';
 import { formatDateTime, formatSize, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
@@ -79,6 +81,8 @@ export function TranscodeJobsPage() {
   useDocumentTitle(t('nav.transcodeJobs'));
   const [filter, setFilter] = useState<JobFilter>('all');
   const jobs = useTranscodeJobs(filter === 'all' ? undefined : filter);
+  const jobKeys = (jobs.data ?? []).map((j) => j.id);
+  const selection = useSelection(jobKeys);
   const cancel = useCancelTranscodeJob();
   const qc = useQueryClient();
   const pending = jobs.error instanceof ApiError && jobs.error.status === 404;
@@ -180,10 +184,13 @@ export function TranscodeJobsPage() {
             loading={jobs.isPending}
             density="rich"
             sortable={false}
+            {...tableSelection(selection)}
+            rowLabel={(j) => t('components.bulkActions.selectName', { name: j.path })}
             empty={<EmptyState title={t('activity.transcode.empty')}>{t('activity.transcode.emptyBody')}</EmptyState>}
           />
         )}
       </Pane>
+      <ResourceBulkBar resource="transcodejob" selection={selection} allKeys={jobKeys} nameOf={(id) => jobs.data?.find((j) => j.id === id)?.path} />
     </div>
   );
 }

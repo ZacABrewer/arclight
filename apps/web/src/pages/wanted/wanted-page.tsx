@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchCommandRequest, SearchItemType, WantedAlbum, WantedBook, WantedEpisode } from '@arclight/shared';
+import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchItemType, WantedAlbum, WantedBook, WantedEpisode } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
-import { libraryApi } from '../../api/library.js';
 import {
   Button,
+  Checkbox,
   EmptyState,
   PageHeader,
   Paginator,
@@ -19,14 +19,16 @@ import { episodeCode, formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { buildQueueIndex, QueueStateChip, SearchStatusLines } from '../../components/media/pipeline-status.js';
 import { useToast } from '../../components/toast.js';
+import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
+import { useBulkSearch, useSetEpisodesMonitored } from '../../hooks/bulk.js';
 import { useQueueSummary } from '../../hooks/activity.js';
-import { useAutomaticSearch, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
+import { useAutomaticSearch, useBulkUpdateMovies, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
-import { useFeatures, useMusicQualityProfiles, useWantedAlbums } from '../../hooks/music.js';
+import { useFeatures, useMusicQualityProfiles, useSetAlbumsMonitored, useWantedAlbums } from '../../hooks/music.js';
 import { useMusicSearch } from '../../hooks/music-acquisition.js';
 import { musicApi } from '../../api/music.js';
 import { albumTypeLabel, progressText, trackProgress } from '../library/music/music-model.js';
-import { useAudiobookQualityProfiles, useWantedBooks } from '../../hooks/audiobooks.js';
+import { useAudiobookQualityProfiles, useSetBooksMonitored, useWantedBooks } from '../../hooks/audiobooks.js';
 import { useAudiobookSearch } from '../../hooks/audiobook-acquisition.js';
 import { audiobooksApi } from '../../api/audiobooks.js';
 import { AudiobookChip } from '../library/audiobooks/audiobook-kit.js';
@@ -38,7 +40,7 @@ import './wanted.css';
 import { t } from '../../i18n/index.js';
 
 const PAGE_SIZE = 50;
-/** Largest page the api allows; "Search all" collects ids with one request of this size. */
+/** Largest page the api allows; "Search all" on albums / books collects ids with one request of this size (episodes and movies are queued server-side). */
 const MAX_PAGE = 500;
 
 type Mode = 'missing' | 'cutoff' | 'mismatch';
@@ -113,25 +115,6 @@ function useWantedList(mode: ListMode, kind: VideoKind, page: number) {
   return mode === 'missing' ? missing : cutoff;
 }
 
-/** Runs searches one at a time and reports a summary toast. */
-function useBatchSearch() {
-  const search = useAutomaticSearch();
-  const toast = useToast();
-  const [running, setRunning] = useState(false);
-  const run = async (requests: SearchCommandRequest[]) => {
-    setRunning(true);
-    try {
-      for (const r of requests) await search.mutateAsync(r);
-    } catch {
-      // The mutation already raised an error toast; stop the batch.
-    } finally {
-      setRunning(false);
-    }
-    if (requests.length > 1) toast.push({ tone: 'info', title: t('wanted.queuedRequestscountSearches', { requestsCount: requests.length }) });
-  };
-  return { run, running, search };
-}
-
 function statusChip(mode: ListMode, queued?: QueueSummaryItem) {
   if (queued) return <QueueStateChip item={queued} />;
   return mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
@@ -177,12 +160,36 @@ interface ListShellProps<T> {
   running: boolean;
   onSearchRows: (ids: number[]) => void;
   onSearchAll: () => void;
+  /**
+   * The bulk bar's actions for the selection. `all` = "Select all N" was chosen: the action
+   * applies to everything the list holds (every page), not just `ids`.
+   */
+  bulkActions: (sel: { ids: number[]; all: boolean }, done: () => void) => BulkAction[];
+}
+
+/** The search verb of a list: missing items are searched, cutoff-unmet items upgraded. */
+export function bulkSearchLabel(mode: ListMode): string {
+  return mode === 'missing' ? t('wanted.searchSelected') : t('bulk.searchUpgrades');
 }
 
 /** Shared frame: header actions, rich selectable table (desktop) or swipe rows (mobile), paginator. */
 function ListShell<T>(p: ListShellProps<T>) {
   const mobile = useIsMobile();
   const pages = Math.max(1, Math.ceil((p.total ?? 0) / PAGE_SIZE));
+  // "Select all N" across pages; any change to the row selection drops back to the rows.
+  const [allMatching, setAllMatching] = useState(false);
+  const select = (next: Set<RowKey>) => {
+    setAllMatching(false);
+    p.onSelect(next);
+  };
+  const clear = () => select(new Set());
+  const toggle = (key: number) => {
+    const next = new Set(p.selected);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    select(next);
+  };
+  const ids = [...p.selected].map(Number);
   const empty = (
     <EmptyState title={p.mode === 'missing' ? t('wanted.noMissingNoun', { noun: p.noun }) : t('wanted.noNounBelowCutoff', { noun: p.noun })}>
       {p.mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
@@ -207,9 +214,11 @@ function ListShell<T>(p: ListShellProps<T>) {
           <div className="mk-mlist" role="list" aria-label={t('wanted.wantedNoun', { noun: p.noun })}>
             {(p.rows ?? []).map((r) => {
               const m = p.mobileRow(r);
+              const key = p.rowKey(r);
               return (
-                <SwipeRow key={p.rowKey(r)} onSearch={() => p.onSearchRows([p.rowKey(r)])} searchLabel={t('wanted.searchRowlabel', { rowLabel: p.rowLabel(r) })}>
-                  <div className="mk-mrow" role="listitem">
+                <SwipeRow key={key} onSearch={() => p.onSearchRows([key])} searchLabel={t('wanted.searchRowlabel', { rowLabel: p.rowLabel(r) })}>
+                  <div className="mk-mrow mk-mrow--check" role="listitem">
+                    <Checkbox aria-label={t('wanted.selectRowlabel', { rowLabel: p.rowLabel(r) })} checked={p.selected.has(key)} onChange={() => toggle(key)} />
                     <div style={{ minWidth: 0 }}>
                       <div className="mk-mrow__title">{m.title}</div>
                       <div className="mk-mrow__sub al-num">{m.sub}</div>
@@ -232,29 +241,23 @@ function ListShell<T>(p: ListShellProps<T>) {
           sortable={false}
           selectable
           selected={p.selected}
-          onSelectionChange={p.onSelect}
+          onSelectionChange={select}
           rowLabel={(r) => t('wanted.selectRowlabel', { rowLabel: p.rowLabel(r) })}
           empty={empty}
           caption={t('wanted.wantedNoun', { noun: p.noun })}
-          bulkActions={(keys, clear) => (
-            <>
-              <Button
-                variant="ghost"
-                loading={p.running}
-                onClick={() => {
-                  p.onSearchRows([...keys].map(Number));
-                  clear();
-                }}
-              >
-                {t('wanted.searchSelected')}
-              </Button>
-              <Button variant="ghost" loading={p.running} onClick={p.onSearchAll}>
-                {t('wanted.searchAll')}
-              </Button>
-            </>
-          )}
         />
       )}
+      <BulkBar
+        count={ids.length}
+        total={p.total}
+        allMatching={allMatching}
+        onSelectAll={() => {
+          p.onSelect(new Set((p.rows ?? []).map(p.rowKey)));
+          setAllMatching(true);
+        }}
+        actions={p.bulkActions({ ids, all: allMatching }, clear)}
+        onClear={clear}
+      />
       {pages > 1 ? (
         <div className="wanted-foot">
           <Paginator page={p.page} pageCount={pages} onPageChange={p.onPage} />
@@ -268,25 +271,17 @@ function EpisodesList({ mode }: { mode: ListMode }) {
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'episodes', page);
-  const batch = useBatchSearch();
-  const toast = useToast();
+  const one = useAutomaticSearch();
+  const bulk = useBulkSearch();
+  const monitor = useSetEpisodesMonitored();
   const records = list.data ? (list.data.records as WantedEpisode[]) : undefined;
   const pipeline = usePipeline('episode', records?.map((r) => r.id) ?? []);
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedEpisodes')} />;
 
-  const searchAll = async () => {
-    try {
-      const all =
-        mode === 'missing'
-          ? await libraryApi.wanted.missingEpisodes({ page: 1, pageSize: MAX_PAGE })
-          : await libraryApi.wanted.cutoffEpisodes({ page: 1, pageSize: MAX_PAGE });
-      const ids = all.records.map((r) => r.id);
-      if (ids.length) await batch.run([{ episodeIds: ids }]);
-    } catch (err) {
-      toast.error(t('common.searchFailed'), errorMessage(err));
-    }
-  };
+  // Missing → the missing rules, cutoff unmet → an upgrade search (profile cutoff honoured server-side).
+  const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
+  const searchAll = () => bulk.mutate({ mode: searchMode, allEpisodes: true });
 
   const label = (r: WantedEpisode) => `${r.seriesTitle} ${episodeCode(r.seasonNumber, r.episodeNumber)}`;
   const columns: Column<WantedEpisode>[] = [
@@ -311,7 +306,7 @@ function EpisodesList({ mode }: { mode: ListMode }) {
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => batch.search.mutate({ episodeIds: [r.id] })}>
+        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => one.mutate({ episodeIds: [r.id] })}>
           {t('common.search')}
         </Button>
       ),
@@ -341,9 +336,23 @@ function EpisodesList({ mode }: { mode: ListMode }) {
       })}
       selected={selected}
       onSelect={setSelected}
-      running={batch.running}
-      onSearchRows={(ids) => void batch.run([{ episodeIds: ids }])}
-      onSearchAll={() => void searchAll()}
+      running={bulk.isPending}
+      onSearchRows={(ids) => one.mutate({ episodeIds: ids })}
+      onSearchAll={searchAll}
+      bulkActions={(sel, done) => [
+        {
+          id: 'search',
+          label: bulkSearchLabel(mode),
+          loading: bulk.isPending,
+          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allEpisodes: true } : { mode: searchMode, episodeIds: sel.ids }, { onSuccess: done }),
+        },
+        {
+          id: 'unmonitor',
+          label: t('common.unmonitor'),
+          disabled: sel.all || monitor.isPending,
+          onSelect: () => monitor.mutate({ episodeIds: sel.ids, monitored: false }, { onSuccess: done }),
+        },
+      ]}
     />
   );
 }
@@ -353,24 +362,16 @@ function MoviesList({ mode }: { mode: ListMode }) {
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   const list = useWantedList(mode, 'movies', page);
   const profiles = useQualityProfiles();
-  const batch = useBatchSearch();
-  const toast = useToast();
+  const one = useAutomaticSearch();
+  const bulk = useBulkSearch();
+  const update = useBulkUpdateMovies();
   const records = list.data ? (list.data.records as Movie[]) : undefined;
   const pipeline = usePipeline('movie', records?.map((r) => r.id) ?? []);
 
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedMovies')} />;
 
-  const searchAll = async () => {
-    try {
-      const all =
-        mode === 'missing'
-          ? await libraryApi.wanted.missingMovies({ page: 1, pageSize: MAX_PAGE })
-          : await libraryApi.wanted.cutoffMovies({ page: 1, pageSize: MAX_PAGE });
-      await batch.run(all.records.map((m) => ({ movieId: m.id })));
-    } catch (err) {
-      toast.error(t('common.searchFailed'), errorMessage(err));
-    }
-  };
+  const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
+  const searchAll = () => bulk.mutate({ mode: searchMode, allMovies: true });
 
   const columns: Column<Movie>[] = [
     {
@@ -396,7 +397,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchTitle', { title: r.title })} onClick={() => batch.search.mutate({ movieId: r.id })}>
+        <Button size="sm" aria-label={t('wanted.searchTitle', { title: r.title })} onClick={() => one.mutate({ movieId: r.id })}>
           {t('common.search')}
         </Button>
       ),
@@ -426,9 +427,23 @@ function MoviesList({ mode }: { mode: ListMode }) {
       })}
       selected={selected}
       onSelect={setSelected}
-      running={batch.running}
-      onSearchRows={(ids) => void batch.run(ids.map((movieId) => ({ movieId })))}
-      onSearchAll={() => void searchAll()}
+      running={bulk.isPending}
+      onSearchRows={(ids) => (ids.length === 1 ? one.mutate({ movieId: ids[0]! }) : bulk.mutate({ mode: searchMode, movieIds: ids }))}
+      onSearchAll={searchAll}
+      bulkActions={(sel, done) => [
+        {
+          id: 'search',
+          label: bulkSearchLabel(mode),
+          loading: bulk.isPending,
+          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allMovies: true } : { mode: searchMode, movieIds: sel.ids }, { onSuccess: done }),
+        },
+        {
+          id: 'unmonitor',
+          label: t('common.unmonitor'),
+          disabled: sel.all || update.isPending,
+          onSelect: () => update.mutate({ ids: sel.ids, monitored: false }, { onSuccess: done }),
+        },
+      ]}
     />
   );
 }
@@ -440,6 +455,7 @@ function AlbumsList({ mode }: { mode: ListMode }) {
   const list = useWantedAlbums(mode, page, PAGE_SIZE);
   const profiles = useMusicQualityProfiles();
   const search = useMusicSearch();
+  const setAlbums = useSetAlbumsMonitored();
   const toast = useToast();
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('music.wanted.couldNotLoad')} />;
   const rows = list.data?.records;
@@ -516,6 +532,25 @@ function AlbumsList({ mode }: { mode: ListMode }) {
       running={search.isPending}
       onSearchRows={searchAlbums}
       onSearchAll={() => void searchAll()}
+      bulkActions={(sel, done) => [
+        {
+          id: 'search',
+          label: bulkSearchLabel(mode),
+          loading: search.isPending,
+          onSelect: () => {
+            if (sel.all) void searchAll();
+            else searchAlbums(sel.ids);
+            done();
+          },
+        },
+        {
+          id: 'unmonitor',
+          label: t('common.unmonitor'),
+          disabled: sel.all || setAlbums.isPending,
+          // artistId 0: the selection spans artists, so no single artist page is patched.
+          onSelect: () => setAlbums.mutate({ artistId: 0, albumIds: sel.ids, monitored: false }, { onSuccess: done }),
+        },
+      ]}
     />
   );
 }
@@ -535,6 +570,7 @@ function BooksList({ mode }: { mode: ListMode }) {
   const list = useWantedBooks(mode, page, PAGE_SIZE);
   const profiles = useAudiobookQualityProfiles();
   const search = useAudiobookSearch();
+  const setBooks = useSetBooksMonitored();
   const toast = useToast();
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('audiobooks.wanted.couldNotLoad')} />;
   const rows = list.data?.records;
@@ -614,6 +650,24 @@ function BooksList({ mode }: { mode: ListMode }) {
       running={search.isPending}
       onSearchRows={searchBooks}
       onSearchAll={() => void searchAll()}
+      bulkActions={(sel, done) => [
+        {
+          id: 'search',
+          label: bulkSearchLabel(mode),
+          loading: search.isPending,
+          onSelect: () => {
+            if (sel.all) void searchAll();
+            else searchBooks(sel.ids);
+            done();
+          },
+        },
+        {
+          id: 'unmonitor',
+          label: t('common.unmonitor'),
+          disabled: sel.all || setBooks.isPending,
+          onSelect: () => setBooks.mutate({ bookIds: sel.ids, monitored: false }, { onSuccess: done }),
+        },
+      ]}
     />
   );
 }

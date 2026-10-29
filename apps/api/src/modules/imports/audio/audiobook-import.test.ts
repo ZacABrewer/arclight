@@ -461,6 +461,26 @@ describe('audiobook import of a completed download', () => {
     await vi.waitFor(() => expect(h.refreshed[0]).toMatchObject({ updateType: 'Modified' }));
   });
 
+  it('"Grab anyway": the override reaches every part and lets the grab replace the book', async () => {
+    const book = addBook('Long Road');
+    const mp3Src = join(downloads, 'Long Road MP3');
+    for (const n of [1, 2, 3]) await put(join(mp3Src, `${n}.mp3`), buildMp3({ durationMs: 20_000, tags: bookTags('Long Road', { trackNo: n }) }));
+    await service().importCompletedDownload(tracked({ id: 17, title: 'Long Road', outputPath: mp3Src, bookIds: [book.id] }));
+    expect(bookFiles(book.id).every((r) => r.grabOverride === null)).toBe(true);
+
+    // The same quality is normally no upgrade; grabbed anyway, it replaces the book.
+    const override = { rejections: ['Existing file AB-MP3-Low meets cutoff'], grabbedAt: NOW };
+    const again = join(downloads, 'Long Road again');
+    for (const n of [1, 2, 3]) await put(join(again, `${n}.mp3`), buildMp3({ durationMs: 20_000, tags: bookTags('Long Road', { trackNo: n }) }));
+    const forced = await service().importCompletedDownload(
+      tracked({ id: 18, title: 'Long Road', outputPath: again, bookIds: [book.id], grabbedRelease: { bookIds: [book.id], grabOverride: override } }),
+    );
+    expect(forced.verified).toBe(true);
+    const rows = bookFiles(book.id);
+    expect(rows).toHaveLength(3);
+    expect(rows.every((r) => JSON.stringify(r.grabOverride) === JSON.stringify(override))).toBe(true);
+  });
+
   it('splits a two-book pack by folder names and imports each book', async () => {
     const first = addBook('Lantern Road');
     const second = addBook('Quiet Harbour');

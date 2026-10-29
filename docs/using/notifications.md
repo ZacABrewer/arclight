@@ -109,6 +109,10 @@ Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first
 | Test works but nothing arrives for real events | The event switch is off, the tag filter excludes the item, or health warnings are off while the issue is only a warning |
 | Email sends nothing | Check port and Security together: 587 with STARTTLS, 465 with TLS, 25 with None |
 
+## Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection: **Enable**, **Disable**, **Test** (sends a test message from each), **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
+
 ## Related
 
 - [Media servers](media-servers.md)

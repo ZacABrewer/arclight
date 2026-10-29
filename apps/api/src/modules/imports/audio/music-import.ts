@@ -14,6 +14,7 @@ import {
   type AudioManualImportRequest,
   type AudioManualImportRequestItem,
   type AudioManualImportResult,
+  type GrabOverride,
   type ImportRejection,
   type ImportRejectionReason,
   type MediaManagementSettings,
@@ -31,7 +32,7 @@ import * as music from '../../music/service.js';
 import { musicQualityFor } from '../../music/quality.js';
 import type { ProfilesService } from '../../profiles/index.js';
 import { getSection } from '../../settings/service.js';
-import { absolutePathSpec, compareQ, freeSpaceSpec, notUnpackingSpec, sameFileSpec } from '../decisions.js';
+import { absolutePathSpec, compareQ, freeSpaceSpec, notUnpackingSpec, readGrabOverride, sameFileSpec } from '../decisions.js';
 import type { AudioImportedEvent, ImportsDeps } from '../deps.js';
 import { ImportsError } from '../errors.js';
 import { ImportFileError, RecycleBin, setPermissions, transferFile, type FsOps, type TransferMode, type TransferResult } from '../mover.js';
@@ -148,6 +149,8 @@ interface ExecuteOptions {
   downloadId: string | null;
   sourceTitle: string | null;
   manual: boolean;
+  /** "Grab anyway" override of the grab, stored on the new track files (pauses album upgrades). */
+  grabOverride?: GrabOverride | null;
 }
 
 const permanent = (reason: ImportRejectionReason, message: string): ImportRejection => ({ reason, message, type: 'permanent' });
@@ -340,12 +343,13 @@ export class MusicImporter {
 
     const candidates = target.albumIds.length > 0 ? target.albumIds : this.albumIdsOf(artist.id);
     const plan = await this.plan(scan, artist, candidates, { switchReleases: true, releaseTitle: item.title });
-    await this.applySpecs(plan, artist, { downloadId: item.downloadId, addedAt: item.added, settings });
+    const grabOverride = readGrabOverride(item.grabbedRelease);
+    await this.applySpecs(plan, artist, { downloadId: item.downloadId, addedAt: item.added, settings, forced: grabOverride !== null });
 
     run.outcomes = plan.rejected.map((r) => ({ path: r.file.path, status: 'rejected' as const, rejections: r.rejections, ...(r.albumId !== undefined ? { albumId: r.albumId } : {}) }));
     const mode: 'move' | 'copy' = item.canMoveFiles ? 'move' : 'copy';
     for (const album of plan.albums) {
-      const outcomes = await this.executeAlbum(artist, album, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false });
+      const outcomes = await this.executeAlbum(artist, album, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false, grabOverride });
       run.outcomes.push(...outcomes);
       if (outcomes.some((o) => o.status === 'imported')) {
         run.importedAlbumIds.push(album.album.id);
@@ -694,7 +698,11 @@ export class MusicImporter {
    * sameFile, alreadyImported, upgrade (strictly better only) and trackMapping (one file per
    * track); mixedReleases was decided while planning. Rejected files move to `plan.rejected`.
    */
-  private async applySpecs(plan: ScanPlan, artist: ArtistRow, opts: { downloadId: string | null; addedAt?: string | undefined; settings: MediaManagementSettings }): Promise<void> {
+  private async applySpecs(
+    plan: ScanPlan,
+    artist: ArtistRow,
+    opts: { downloadId: string | null; addedAt?: string | undefined; settings: MediaManagementSettings; forced?: boolean },
+  ): Promise<void> {
     const { settings } = opts;
     const profile = this.profileOf(artist);
     const libraryPaths = new Set(this.db.select({ path: audioFiles.path }).from(audioFiles).all().map((r) => r.path));
@@ -718,7 +726,8 @@ export class MusicImporter {
         if (alreadyImported && f.existing) push(permanent('alreadyImported', 'Track file already imported'));
         if (seenTracks.has(f.track.id)) push(permanent('trackMapping', 'Another file maps to the same track'));
         seenTracks.add(f.track.id);
-        if (f.existing && !f.inPlace) {
+        // "Grab anyway": the user chose this release, so it replaces the tracks it covers.
+        if (f.existing && !f.inPlace && !opts.forced) {
           const cmp = compareQ(profile, f.quality, f.existing.quality);
           if (cmp <= 0) {
             push(permanent('notQualityUpgrade', `Not an upgrade for existing track file. Existing quality: ${f.existing.quality.quality.name}`));
@@ -802,7 +811,7 @@ export class MusicImporter {
 
     for (const f of plan.files) {
       try {
-        const done = await this.placeFile(artist, plan, f, albumFolder, { mode, bin, settings, naming, downloadId: opts.downloadId });
+        const done = await this.placeFile(artist, plan, f, albumFolder, { mode, bin, settings, naming, downloadId: opts.downloadId, grabOverride: opts.grabOverride ?? null });
         placed.push({ f, ...done });
         outcomes.push({
           path: f.file.path,
@@ -894,7 +903,7 @@ export class MusicImporter {
     plan: AlbumPlan,
     f: PlannedFile,
     albumFolder: string,
-    o: { mode: TransferMode; bin: RecycleBin; settings: MediaManagementSettings; naming: NamingConfig; downloadId: string | null },
+    o: { mode: TransferMode; bin: RecycleBin; settings: MediaManagementSettings; naming: NamingConfig; downloadId: string | null; grabOverride: GrabOverride | null },
   ): Promise<{ row: AudioFileRow; destination: string; replaced: AudioFileRow | null; transfer: TransferResult | 'none' }> {
     let destination: string;
     let transfer: TransferResult | 'none' = 'none';
@@ -971,6 +980,7 @@ export class MusicImporter {
       chapterCount: t?.chapters ? t.chapters.length : null,
       tags: t ? fileTags(t) : null,
       mediaInfo: t ? { source: t.source, lossless: t.lossless } : null,
+      grabOverride: o.grabOverride,
     };
     const row = this.db.transaction((tx) => {
       // A replaced file's row goes; tracks that pointed at it lose their file.
@@ -1288,7 +1298,13 @@ export class MusicImporter {
         releaseChanged: false,
         warnings: [],
       };
-      const outcomes = await this.executeAlbum(batch.artist, plan, { mode, downloadId: batch.downloadId, sourceTitle: tracked?.title ?? null, manual: true });
+      const outcomes = await this.executeAlbum(batch.artist, plan, {
+        mode,
+        downloadId: batch.downloadId,
+        sourceTitle: tracked?.title ?? null,
+        manual: true,
+        grabOverride: tracked ? readGrabOverride(tracked.grabbedRelease) : null,
+      });
       for (const o of outcomes) {
         if (o.status === 'imported') {
           result.imported.push({ path: o.path, audioFileId: o.audioFileId!, trackId: o.trackId!, destination: o.destination! });

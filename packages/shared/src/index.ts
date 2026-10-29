@@ -57,3 +57,5 @@ export * from './cross-seed.js';
 export * from './transfer-metrics.js';
 export * from './additional-languages.js';
 export * from './themes.js';
+export * from './bulk.js';
+export * from './bulk-actions.js';

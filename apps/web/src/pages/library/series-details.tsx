@@ -7,6 +7,7 @@ import {
   AccordionItem,
   BackdropFrame,
   Button,
+  Checkbox,
   Drawer,
   EmptyState,
   FormRow,
@@ -21,6 +22,8 @@ import {
   Toggle,
   buttonClass,
 } from '../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
+import { BulkRenameDialog } from '../../components/media/bulk-rename-dialog.js';
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
 import { countStatuses, episodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, formatBytes, formatDate, imageUrl, seasonLabel } from '../../components/media/format.js';
@@ -29,6 +32,8 @@ import { EpisodeChip, Loading, MonitorSwitch, Num, QueryError, SwipeRow, TagChip
 import { groupSearchText, QueueStateChip, SearchStatusLines, searchStatusTitle } from '../../components/media/pipeline-status.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useQueueSummary } from '../../hooks/activity.js';
+import { useBulkSearch, useBulkSelection, useDeleteMediaFiles, useSetEpisodesMonitored } from '../../hooks/bulk.js';
+import { ConfirmModal } from '../system/confirm-modal.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
 import {
   useAutomaticSearch,
@@ -305,12 +310,26 @@ function SeasonList({
   const seasons = orderSeasons(series.seasons);
   const [drawer, setDrawer] = useState<Episode | null>(null);
   const latest = seasons.find((x) => x.seasonNumber > 0)?.seasonNumber;
+  const sel = useBulkSelection();
+  const select: EpisodeSelect = {
+    active: sel.selectMode,
+    selected: sel.selected,
+    toggle: sel.toggle,
+    selectMany: (ids) => sel.setSelected((prev) => new Set([...prev, ...ids])),
+  };
 
   if (error) return <QueryError error={error} title={t('library.seriesDetails.couldNotLoadEpisodes')} />;
   if (seasons.length === 0) return <EmptyState title={t('library.seriesDetails.noSeasonsYet')}>{t('library.seriesDetails.tmdbHasNotListedAny')}</EmptyState>;
 
   return (
     <>
+      {episodes && episodes.length > 0 ? (
+        <div className="mk-bulk-toolbar">
+          <Button size="sm" variant={sel.selectMode ? 'secondary' : 'ghost'} aria-pressed={sel.selectMode} onClick={() => (sel.selectMode ? sel.clear() : sel.setSelectMode(true))}>
+            {sel.selectMode ? t('library.done') : t('bulk.selectEpisodes')}
+          </Button>
+        </div>
+      ) : null}
       <Accordion>
         {seasons.map((season) => (
           <SeasonPanel
@@ -326,9 +345,20 @@ function SeasonList({
             onInteractive={onInteractive}
             onAddLanguage={onAddLanguage}
             onOpenEpisode={setDrawer}
+            select={select}
           />
         ))}
       </Accordion>
+      {sel.selectMode || sel.selected.size > 0 ? (
+        <EpisodeBulkBar
+          series={series}
+          episodes={episodes ?? []}
+          selected={sel.selected}
+          open={sel.selectMode}
+          onSelectAll={() => sel.selectAll((episodes ?? []).map((e) => e.id))}
+          onClear={sel.clear}
+        />
+      ) : null}
       <EpisodeDrawer
         series={series}
         episode={drawer}
@@ -354,6 +384,7 @@ function SeasonPanel({
   onInteractive,
   onAddLanguage,
   onOpenEpisode,
+  select,
 }: {
   series: Series;
   season: Season;
@@ -367,6 +398,7 @@ function SeasonPanel({
   onInteractive: (s: InteractiveState) => void;
   onAddLanguage: (s: AddLanguageState) => void;
   onOpenEpisode: (ep: Episode) => void;
+  select?: EpisodeSelect | undefined;
 }) {
   const search = useAutomaticSearch();
   const setSeason = useSetSeasonMonitored();
@@ -404,6 +436,11 @@ function SeasonPanel({
             valueText={`${have}/${want}${stats ? ` · ${formatBytes(stats.sizeOnDisk)}` : ''}`}
           />
           <span className="mk-spacer" />
+          {select?.active && episodes?.length ? (
+            <button type="button" className="mk-action-link" onClick={() => select.selectMany(episodes.map((e) => e.id))}>
+              {t('bulk.selectSeason')}
+            </button>
+          ) : null}
           <button
             type="button"
             className="mk-action-link"
@@ -467,6 +504,9 @@ function SeasonPanel({
               onOpen={() => onOpenEpisode(ep)}
               onInteractive={onInteractive}
               onAddLanguage={onAddLanguage}
+              selecting={select?.active ?? false}
+              checked={select?.selected.has(ep.id) ?? false}
+              onToggle={() => select?.toggle(ep.id)}
             />
           ))}
         </div>
@@ -485,6 +525,9 @@ function EpisodeRow({
   onOpen,
   onInteractive,
   onAddLanguage,
+  selecting = false,
+  checked = false,
+  onToggle,
 }: {
   series: Series;
   episode: Episode;
@@ -496,6 +539,10 @@ function EpisodeRow({
   onOpen: () => void;
   onInteractive: (s: InteractiveState) => void;
   onAddLanguage: (s: AddLanguageState) => void;
+  /** Select mode: the monitor cell holds the row's checkbox. */
+  selecting?: boolean | undefined;
+  checked?: boolean | undefined;
+  onToggle?: (() => void) | undefined;
 }) {
   const search = useAutomaticSearch();
   const setEpisode = useSetEpisodeMonitored();
@@ -504,13 +551,24 @@ function EpisodeRow({
   const code = episodeCode(ep.seasonNumber, ep.episodeNumber);
   const runSearch = () => search.mutate({ episodeIds: [ep.id] });
   const row = (
-    <div className="mk-ep" role="row" data-live={queued?.trackedState === 'downloading' || undefined}>
+    <div
+      className="mk-ep"
+      role="row"
+      data-live={queued?.trackedState === 'downloading' || undefined}
+      data-select={selecting || undefined}
+      data-selected={(selecting && checked) || undefined}
+      aria-selected={selecting ? checked : undefined}
+    >
       <span className="mk-ep__monitor" role="cell">
-        <MonitorSwitch
-          monitored={ep.monitored}
-          label={t('library.seriesDetails.valueEpisodeEpisodenumber', { value: ep.monitored ? 'Unmonitor' : 'Monitor', episodeNumber: ep.episodeNumber })}
-          onChange={(m) => setEpisode.mutate({ seriesId: series.id, episodeId: ep.id, monitored: m })}
-        />
+        {selecting ? (
+          <Checkbox aria-label={t('bulk.selectEpisode', { code })} checked={checked} onChange={() => onToggle?.()} />
+        ) : (
+          <MonitorSwitch
+            monitored={ep.monitored}
+            label={t('library.seriesDetails.valueEpisodeEpisodenumber', { value: ep.monitored ? 'Unmonitor' : 'Monitor', episodeNumber: ep.episodeNumber })}
+            onChange={(m) => setEpisode.mutate({ seriesId: series.id, episodeId: ep.id, monitored: m })}
+          />
+        )}
       </span>
       <span className="mk-ep__num" role="cell">
         {String(ep.episodeNumber).padStart(2, '0')}
@@ -552,7 +610,7 @@ function EpisodeRow({
       </span>
     </div>
   );
-  if (!isMobile) return row;
+  if (!isMobile || selecting) return row;
   return (
     <SwipeRow
       onSearch={runSearch}
@@ -562,6 +620,68 @@ function EpisodeRow({
     >
       {row}
     </SwipeRow>
+  );
+}
+
+/** Episode selection shared by the season panels (one bulk bar for the whole series). */
+interface EpisodeSelect {
+  active: boolean;
+  selected: ReadonlySet<number>;
+  toggle: (id: number) => void;
+  selectMany: (ids: number[]) => void;
+}
+
+/** Bulk bar for selected episodes: searches, monitoring, rename and file deletion. */
+function EpisodeBulkBar({
+  series,
+  episodes,
+  selected,
+  open,
+  onSelectAll,
+  onClear,
+}: {
+  series: Series;
+  episodes: readonly Episode[];
+  selected: ReadonlySet<number>;
+  open: boolean;
+  onSelectAll: () => void;
+  onClear: () => void;
+}) {
+  const search = useBulkSearch();
+  const monitor = useSetEpisodesMonitored();
+  const delFiles = useDeleteMediaFiles();
+  const [renaming, setRenaming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const ids = [...selected];
+  const fileIds = [...new Set(episodes.filter((e) => selected.has(e.id) && e.episodeFileId != null).map((e) => e.episodeFileId as number))];
+  const subject = t('bulk.episodeCount', { count: ids.length });
+  const runSearch = (mode: 'all' | 'missing' | 'upgrade') => search.mutate({ mode, episodeIds: ids });
+  const actions: BulkAction[] = [
+    { id: 'search', label: t('common.search'), loading: search.isPending, onSelect: () => runSearch('all') },
+    { id: 'search-missing', label: t('bulk.searchMissing'), disabled: search.isPending, onSelect: () => runSearch('missing') },
+    { id: 'search-upgrades', label: t('bulk.searchUpgrades'), disabled: search.isPending, onSelect: () => runSearch('upgrade') },
+    { id: 'monitor', label: t('common.monitor'), disabled: monitor.isPending, onSelect: () => monitor.mutate({ seriesId: series.id, episodeIds: ids, monitored: true }) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: monitor.isPending, onSelect: () => monitor.mutate({ seriesId: series.id, episodeIds: ids, monitored: false }) },
+    { id: 'rename', label: t('bulk.renameFiles'), disabled: fileIds.length === 0, onSelect: () => setRenaming(true) },
+    { id: 'delete', label: t('bulk.deleteFiles'), danger: true, disabled: fileIds.length === 0, onSelect: () => setDeleting(true) },
+  ];
+  return (
+    <BulkBar count={ids.length} total={episodes.length} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear}>
+      <BulkRenameDialog target={renaming ? { seriesIds: [series.id] } : null} fileIds={new Set(fileIds)} subject={`${series.title} · ${subject}`} onClose={() => setRenaming(false)} />
+      <ConfirmModal
+        open={deleting}
+        title={t('bulk.deleteFilesTitle', { count: fileIds.length })}
+        confirmLabel={t('bulk.deleteFiles')}
+        onCancel={() => setDeleting(false)}
+        onConfirm={async () => {
+          await delFiles.mutateAsync({ fileIds, mediaType: 'series', ownerId: series.id });
+          setDeleting(false);
+          onClear();
+        }}
+      >
+        <p style={{ margin: 0 }}>{t('bulk.deleteFilesBody', { count: fileIds.length, title: series.title })}</p>
+      </ConfirmModal>
+    </BulkBar>
   );
 }
 

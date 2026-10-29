@@ -567,6 +567,31 @@ describe('music import of a completed download', () => {
     expect(rejected.outcomes.every((o) => o.status === 'rejected' && o.rejections[0]!.reason === 'notQualityUpgrade')).toBe(true);
   });
 
+  it('"Grab anyway": the override reaches every track file and lets the grab replace the album', async () => {
+    const std = release('First Record', FIRST);
+    const album = addAlbum('First Record', [std]);
+    const flac = join(downloads, 'First Record [FLAC]');
+    await writeAlbum(flac, 'First Record', std);
+    expect((await service().importCompletedDownload(tracked({ id: 13, title: 'First Record [FLAC]', outputPath: flac, albumIds: [album.id] }))).verified).toBe(true);
+    expect(db.select().from(audioFiles).all().every((r) => r.grabOverride === null)).toBe(true);
+
+    // A lower-quality release the user grabbed anyway replaces the FLAC files.
+    const override = { rejections: ['Existing file FLAC meets cutoff'], grabbedAt: NOW, sourceTitle: 'First Record [MP3]' };
+    const mp3 = join(downloads, 'First Record [MP3]');
+    await writeAlbum(mp3, 'First Record', std, { format: 'mp3' });
+    const forced = await service().importCompletedDownload(
+      tracked({ id: 14, title: 'First Record [MP3]', outputPath: mp3, albumIds: [album.id], grabbedRelease: { albumIds: [album.id], grabOverride: override } }),
+    );
+    expect(forced.verified).toBe(true);
+    const rows = db.select().from(audioFiles).all();
+    expect(rows.map((r) => extnameOf(r.path))).toEqual(['.mp3', '.mp3', '.mp3']);
+    expect(rows.every((r) => JSON.stringify(r.grabOverride) === JSON.stringify(override))).toBe(true);
+
+    // "Allow upgrades again" clears the whole album.
+    expect(music.clearAudioGrabOverride(db, rows[0]!.id).map((f) => f.id).sort()).toEqual(rows.map((r) => r.id).sort());
+    expect(db.select().from(audioFiles).all().every((r) => r.grabOverride === null)).toBe(true);
+  });
+
   it('imports every album a discography pack matches, and only those', async () => {
     const r1 = release('First Record', FIRST);
     const r2 = release('Second Record', tracksOf(['Alpha', 'Beta', 'Gamma'], 2000));

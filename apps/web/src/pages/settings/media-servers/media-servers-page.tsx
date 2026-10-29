@@ -21,7 +21,8 @@ import { useToast } from '../../../components/toast.js';
 import { mediaServerKeys, useDeleteMediaServer, useImportableUsers, useMediaServerAccounts, useMediaServers, useSaveMediaServer, useSignInServer } from '../../../hooks/media-servers.js';
 import { formatDateTime } from '../../../lib/ui-preferences.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
+import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import './media-servers.css';
 import { t } from '../../../i18n/index.js';
 
@@ -484,12 +485,13 @@ function SignInSection({ servers }: { servers: readonly MediaServerResource[] })
 
 // ---- page ---------------------------------------------------------------------------------
 
-function ServerCard({ server, onEdit, onUsers }: { server: MediaServerResource; onEdit: () => void; onUsers: () => void }) {
+function ServerCard({ server, onEdit, onUsers, select }: { server: MediaServerResource; onEdit: () => void; onUsers: () => void; select?: ItemCardSelect | undefined }) {
   const uses = serverUses(server);
   return (
     <ItemCard
       title={server.name}
       onClick={onEdit}
+      select={select}
       muted={!server.enabled}
       status={server.enabled ? <Chip tone="neutral">{KIND_LABELS[server.kind]}</Chip> : <Chip tone="muted">{t('common.disabled')}</Chip>}
       actions={
@@ -527,6 +529,7 @@ export function MediaServersPage() {
   const list = useMediaServers();
   const [editing, setEditing] = useState<MediaServerResource | 'new' | null>(null);
   const [accounts, setAccounts] = useState<MediaServerResource | null>(null);
+  const bulk = useResourceBulk('mediaserver', list.data, (s) => s.id, (s) => s.name);
   return (
     <SettingsPage
       title={t('settings.mediaServers.mediaServers')}
@@ -545,12 +548,15 @@ export function MediaServersPage() {
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label={t('settings.mediaServers.mediaServers')}>
-            {list.data.map((s) => (
-              <ServerCard key={s.id} server={s} onEdit={() => setEditing(s)} onUsers={() => setAccounts(s)} />
-            ))}
-            <AddCard label={t('settings.mediaServers.addMediaServer')} onClick={() => setEditing('new')} />
-          </CardGrid>
+          <>
+            <CardGrid label={t('settings.mediaServers.mediaServers')}>
+              {list.data.map((s) => (
+                <ServerCard key={s.id} server={s} onEdit={() => setEditing(s)} onUsers={() => setAccounts(s)} select={bulk.cardProps(s)} />
+              ))}
+              <AddCard label={t('settings.mediaServers.addMediaServer')} onClick={() => setEditing('new')} />
+            </CardGrid>
+            {bulk.bar}
+          </>
         )}
       </SettingsSection>
       <SignInSection servers={list.data ?? []} />

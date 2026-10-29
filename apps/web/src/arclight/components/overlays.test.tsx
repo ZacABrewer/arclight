@@ -182,6 +182,20 @@ describe('Tooltip / Popover', () => {
     expect(screen.getByRole('button').getAttribute('aria-describedby')).toBe(tip.id);
   });
 
+  it('renders the tooltip on the body so a clipping container cannot hide it', () => {
+    render(
+      <div data-testid="clip" style={{ overflow: 'hidden' }}>
+        <Tooltip content="2 rejections">
+          <button type="button">Rejected</button>
+        </Tooltip>
+      </div>,
+    );
+    act(() => screen.getByRole('button').focus());
+    const tip = screen.getByRole('tooltip');
+    expect(screen.getByTestId('clip').contains(tip)).toBe(false);
+    expect(tip.parentElement).toBe(document.body);
+  });
+
   it('popover toggles on click and closes on Escape', async () => {
     render(
       <Popover label="Episode" trigger={(p) => <button type="button" {...p}>Details</button>}>

@@ -21,7 +21,8 @@ import { TestButton, type TestOutcome } from '../../../components/forms/test-res
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { useDeleteNotification, useNotificationList, useNotificationSchema, useSaveNotification } from '../../../hooks/settings.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection } from '../shared.js';
+import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { AlertSettingsSection } from './alert-settings-section.js';
 import './notifications.css';
 import { t } from '../../../i18n/index.js';
@@ -293,13 +294,25 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
   );
 }
 
-function NotificationCard({ notification: n, schema, onEdit }: { notification: Notification; schema: NotificationSchema | undefined; onEdit: () => void }) {
+function NotificationCard({
+  notification: n,
+  schema,
+  onEdit,
+  select,
+}: {
+  notification: Notification;
+  schema: NotificationSchema | undefined;
+  onEdit: () => void;
+  select?: ItemCardSelect | undefined;
+}) {
   const on = eventFlags(n).filter((f) => n[f] === true);
   return (
     <ItemCard
       title={n.name}
       onClick={onEdit}
-      status={on.length ? null : <Chip tone="warn">{t('settings.notifications.noEvents')}</Chip>}
+      select={select}
+      muted={!n.enabled}
+      status={!n.enabled ? <Chip tone="muted">{t('common.disabled')}</Chip> : on.length ? null : <Chip tone="warn">{t('settings.notifications.noEvents')}</Chip>}
       actions={
         <>
           <TestButton
@@ -328,6 +341,7 @@ export function NotificationsPage() {
   const schemas = useNotificationSchema();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
+  const bulk = useResourceBulk('notification', list.data, (n) => n.id, (n) => n.name);
   const pending = list.error instanceof ApiError && list.error.status === 404;
 
   return (
@@ -350,13 +364,16 @@ export function NotificationsPage() {
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <CardGrid label={t('settings.notifications.connections')}>
-            {list.data.map((n) => {
-              const schema = schemas.data?.find((s) => s.implementation === n.implementation);
-              return <NotificationCard key={n.id} notification={n} schema={schema} onEdit={() => setEditing({ notification: n, schema })} />;
-            })}
-            <AddCard label={t('settings.notifications.addNotification')} onClick={() => setPicking(true)} />
-          </CardGrid>
+          <>
+            <CardGrid label={t('settings.notifications.connections')}>
+              {list.data.map((n) => {
+                const schema = schemas.data?.find((s) => s.implementation === n.implementation);
+                return <NotificationCard key={n.id} notification={n} schema={schema} onEdit={() => setEditing({ notification: n, schema })} select={bulk.cardProps(n)} />;
+              })}
+              <AddCard label={t('settings.notifications.addNotification')} onClick={() => setPicking(true)} />
+            </CardGrid>
+            {bulk.bar}
+          </>
         )}
       </SettingsSection>
       <AlertSettingsSection />

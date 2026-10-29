@@ -1,11 +1,14 @@
-import { and, gte, lt, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lt, ne, sql } from 'drizzle-orm';
 import type { IndexerStatKind, IndexerStats, IndexerStatsDay } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import type { HealthSample, LatestOutcome } from './health.js';
 import { indexers, indexerStats } from './schema.js';
 
 // Append-only indexer usage log: one row per query / RSS fetch / grab. Aggregated on read.
 
 export const STATS_RETENTION_DAYS = 90;
+/** Longest failure message kept on a stats row. */
+export const STATS_ERROR_MAX = 300;
 const DAY = 24 * 60 * 60 * 1000;
 
 export class IndexerStatsRecorder {
@@ -14,8 +17,20 @@ export class IndexerStatsRecorder {
     private readonly now: () => number = Date.now,
   ) {}
 
-  record(indexerId: number, kind: IndexerStatKind, durationMs: number, success: boolean): void {
+  /**
+   * Append one row. `detail.results` is the number of releases a query / RSS fetch returned;
+   * `detail.error` a short failure message (truncated to {@link STATS_ERROR_MAX} characters).
+   */
+  record(
+    indexerId: number,
+    kind: IndexerStatKind,
+    durationMs: number,
+    success: boolean,
+    detail: { results?: number | undefined; error?: string | undefined } = {},
+  ): void {
     if (indexerId <= 0) return;
+    const error = !success && detail.error ? truncate(detail.error, STATS_ERROR_MAX) : null;
+    const results = detail.results !== undefined && Number.isFinite(detail.results) ? Math.max(0, Math.round(detail.results)) : null;
     try {
       this.db
         .insert(indexerStats)
@@ -24,6 +39,8 @@ export class IndexerStatsRecorder {
           kind,
           durationMs: Math.max(0, Math.round(durationMs)),
           success,
+          results,
+          error,
           at: new Date(this.now()).toISOString(),
         })
         .run();
@@ -36,6 +53,52 @@ export class IndexerStatsRecorder {
   prune(retentionDays = STATS_RETENTION_DAYS): number {
     const cutoff = new Date(this.now() - retentionDays * DAY).toISOString();
     return this.db.delete(indexerStats).where(lt(indexerStats.at, cutoff)).run().changes;
+  }
+
+  /** Every row since `since` (ISO-8601), for the health summary. */
+  samplesSince(since: string): HealthSample[] {
+    return this.db
+      .select({
+        indexerId: indexerStats.indexerId,
+        kind: indexerStats.kind,
+        success: indexerStats.success,
+        durationMs: indexerStats.durationMs,
+        results: indexerStats.results,
+      })
+      .from(indexerStats)
+      .where(gte(indexerStats.at, since))
+      .all();
+  }
+
+  /**
+   * Newest successful and failed query / RSS fetch per indexer over the whole retained log,
+   * with the failure's message.
+   */
+  latestOutcomes(): Map<number, LatestOutcome> {
+    const out = new Map<number, LatestOutcome>();
+    const get = (id: number) => out.get(id) ?? out.set(id, { lastSuccessAt: null, lastFailureAt: null, lastFailureMessage: null }).get(id)!;
+    const latest = this.db
+      .select({ indexerId: indexerStats.indexerId, success: indexerStats.success, at: sql<string>`max(${indexerStats.at})` })
+      .from(indexerStats)
+      .where(ne(indexerStats.kind, 'grab'))
+      .groupBy(indexerStats.indexerId, indexerStats.success)
+      .all();
+    for (const row of latest) {
+      const entry = get(row.indexerId);
+      if (row.success) {
+        entry.lastSuccessAt = row.at;
+      } else {
+        entry.lastFailureAt = row.at;
+        const failed = this.db
+          .select({ error: indexerStats.error })
+          .from(indexerStats)
+          .where(and(eq(indexerStats.indexerId, row.indexerId), eq(indexerStats.success, false), eq(indexerStats.at, row.at), ne(indexerStats.kind, 'grab')))
+          .orderBy(desc(indexerStats.id))
+          .get();
+        entry.lastFailureMessage = failed?.error ?? null;
+      }
+    }
+    return out;
   }
 
   /** Per-indexer and total counts for the last `days` days (today included), by UTC day. */
@@ -128,6 +191,11 @@ export class IndexerStatsRecorder {
       },
     };
   }
+}
+
+function truncate(text: string, max: number): string {
+  const flat = text.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
 }
 
 function startOfUtcDay(ms: number): number {

@@ -24,12 +24,14 @@ const initialSeries = [
 const series = [...initialSeries];
 
 let puts: Array<{ url: string; body: unknown }> = [];
+let posts: Array<{ url: string; body: unknown }> = [];
 let failPut = false;
 /** When set, PUTs wait for this promise so a test can observe the optimistic state. */
 let holdPut: Promise<void> | null = null;
 
 beforeEach(() => {
   puts = [];
+  posts = [];
   failPut = false;
   holdPut = null;
   localStorage.clear();
@@ -39,6 +41,21 @@ beforeEach(() => {
     'fetch',
     vi.fn(async (url: string, init?: RequestInit) => {
       const path = url.split('?')[0];
+      if (init?.method === 'POST') {
+        const body = JSON.parse(String(init.body)) as unknown;
+        posts.push({ url, body });
+        if (path === '/api/v1/command/bulksearch') return new Response(JSON.stringify({ queued: 1, skipped: 1, job: null }), { status: 202 });
+        if (path === '/api/v1/rename/bulk') {
+          return new Response(
+            JSON.stringify({
+              items: [{ mediaFileId: 70, mediaType: 'series', seriesId: 1, seasonNumber: 1, episodeNumbers: [1], existingPath: 'old.mkv', newPath: 'Season 01/The Expanse - S01E01.mkv' }],
+              failed: [],
+            }),
+            { status: 200 },
+          );
+        }
+        if (path === '/api/v1/command/bulkrename') return new Response(JSON.stringify({ renamed: [], failed: [] }), { status: 200 });
+      }
       if (init?.method === 'PUT') {
         const body = JSON.parse(String(init.body)) as { monitored: boolean };
         puts.push({ url, body });
@@ -167,6 +184,44 @@ describe('library index', () => {
     });
     await waitFor(() => expect(puts[0]?.url).toBe('/api/v1/series/bulk'));
     expect(puts[0]?.body).toEqual({ ids: [1, 2], monitored: false });
+  });
+
+  it('Select all takes every row the filter shows and Search for upgrades queues one bulk search', async () => {
+    renderAt('/library/tv');
+    await screen.findByTestId('library-grid');
+    enterSelectMode();
+    // Select mode opens the bar before anything is picked, so "Select all" is one click away.
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Select all 2' }));
+    expect(within(bar).getByText('2 selected')).toBeTruthy();
+    expect(within(bar).queryByRole('button', { name: 'Select all 2' })).toBeNull();
+    fireEvent.click(within(bar).getByRole('button', { name: 'Search for upgrades' }));
+    await waitFor(() => expect(posts).toEqual([{ url: '/api/v1/command/bulksearch', body: { mode: 'upgrade', seriesIds: [2, 1] } }]));
+    expect(await screen.findByText('Search queued for 1 item')).toBeTruthy();
+  });
+
+  it('Select all honours the filter', async () => {
+    renderAt('/library/tv');
+    await screen.findByTestId('library-grid');
+    fireEvent.change(screen.getByLabelText('Monitored filter'), { target: { value: 'unmonitored' } });
+    enterSelectMode();
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Select all 1' }));
+    fireEvent.click(within(bar).getByRole('button', { name: 'Search missing' }));
+    await waitFor(() => expect(posts[0]?.body).toEqual({ mode: 'missing', seriesIds: [2] }));
+  });
+
+  it('bulk rename previews the files and renames the ticked ones', async () => {
+    renderAt('/library/tv');
+    await screen.findByTestId('library-grid');
+    enterSelectMode();
+    fireEvent.click(screen.getByLabelText('Select The Expanse'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Rename files' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Rename files · 1 series' });
+    expect(await within(dialog).findByText('Season 01/The Expanse - S01E01.mkv')).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Rename 1 file' }));
+    await waitFor(() => expect(posts.map((p) => p.url)).toEqual(['/api/v1/rename/bulk', '/api/v1/command/bulkrename']));
+    expect(posts[1]?.body).toEqual({ seriesIds: [1], files: [70] });
   });
 
   it('bulk delete names the object in the confirm dialog', async () => {

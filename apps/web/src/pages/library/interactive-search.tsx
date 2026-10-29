@@ -18,6 +18,7 @@ import { useGrabRelease, useInteractiveSearch, type ReleaseSearchTarget } from '
 import './library.css';
 import { versionColumn } from './versions/versions-editor.js';
 import { GrabButton } from './grab-button.js';
+import { useReleaseFilters } from './release-filter-bar.js';
 import { t } from '../../i18n/index.js';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
@@ -35,6 +36,7 @@ export function decisionRank(r: Pick<ReleaseDecision, 'approved' | 'temporarilyR
 export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null }) {
   const releases = useInteractiveSearch(target);
   const grab = useGrabRelease();
+  const filters = useReleaseFilters(releases.data, target);
 
   const columns: Column<ReleaseDecision>[] = [
     { key: 'protocol', header: t('common.source'), sortValue: (r) => r.protocol, cell: (r) => <ProtocolBadge protocol={r.protocol} />, width: '64px' },
@@ -123,16 +125,21 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
   if (releases.isPending && releases.fetchStatus !== 'idle') return <Loading label={t('library.interactiveSearch.searchingIndexers')} />;
   if (releases.isError) return <QueryError error={releases.error} onRetry={() => void releases.refetch()} title={t('common.searchFailed')} />;
   return (
-    <Table
-      columns={columns}
-      rows={releases.data}
-      rowKey={(r) => `${r.indexerId}-${r.guid}`}
-      density="dense"
-      defaultSort={{ key: 'decision', direction: 'asc' }}
-      maxHeight="62vh"
-      empty={<EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>}
-      caption={t('library.interactiveSearch.releases')}
-    />
+    <>
+      {filters.bar}
+      <Table
+        columns={columns}
+        rows={filters.rows}
+        rowKey={(r) => `${r.indexerId}-${r.guid}`}
+        density="dense"
+        defaultSort={{ key: 'decision', direction: 'asc' }}
+        maxHeight="62vh"
+        empty={
+          filters.empty ?? <EmptyState title={t('library.interactiveSearch.noReleasesFound')}>{t('library.interactiveSearch.everyEnabledIndexerWasSearched')}</EmptyState>
+        }
+        caption={t('library.interactiveSearch.releases')}
+      />
+    </>
   );
 }
 

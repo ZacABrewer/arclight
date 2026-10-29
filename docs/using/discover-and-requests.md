@@ -164,7 +164,7 @@ Users with **Manage requests** (and admins) can act on requests:
 
 - **Approve** opens a dialog where you can keep or change the requested seasons, and set the root folder, quality profile, tags and which episodes are monitored. For movies you can override the minimum availability.
 - **Decline** takes an optional reason ("Shown to the requester.").
-- **Select all pending**, **Approve selected** and **Decline selected** work on many at once.
+- Tick requests (the header box selects the page) to act on many at once from the bar at the bottom: **Approve**, **Decline**, **Retry** and **Delete** (asks first, with the count). Each request is checked on its own: one that is not pending, or that you may not change, is listed as failed and the rest still go through. Users without Manage requests only get **Delete**, for their own requests. Music and audiobook requests work the same way.
 - **Edit** changes a request. **Delete** removes it; the title stays in the library if it was already added.
 - **Retry** tries a failed request again.
 
@@ -274,7 +274,7 @@ Issues let people report that something is wrong with a title you already have, 
 2. Under **What is wrong?** pick the Problem type: Video, Audio, Subtitles or Other. For a series, choose the season or episode.
 3. Describe it. The description becomes the first comment.
 
-Open **Issues** in the left menu (or in the portal header) to see them. Users see their own issues; View issues or Manage issues shows everyone's. Filter by status (open or resolved) and type. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues.
+Open **Issues** in the left menu (or in the portal header) to see them. Users see their own issues; View issues or Manage issues shows everyone's. Filter by status (open or resolved) and type. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues. Tick issues in the list to **Resolve**, **Reopen** or **Delete** several at once; deleting asks first and says how many.
 
 ## Watchlist
 

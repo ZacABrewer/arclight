@@ -9,6 +9,7 @@ import { HistoryService } from '../history/service.js';
 import { setSection } from '../settings/service.js';
 import { albumRequests, albumSearchPlan, artistSearchPlan } from './audio-search.js';
 import type { ReleasesDeps } from './deps.js';
+import { audioFiles } from '../../db/schema.js';
 import { releaseDecisions, releaseSearchState } from './schema.js';
 import { harness, makeRelease, musicFixtures, NOW } from './test-support.js';
 
@@ -247,6 +248,18 @@ describe('music grabs, failures and scheduled searches', () => {
     expect(await h.service.cutoffUnmetAudioSearch()).toBe('cutoff unmet albums: searched 1, grabbed 1');
     setSection(h.db, 'features', { music: false, audiobooks: false });
     expect(await h.service.cutoffUnmetAudioSearch()).toBe('skipped: music is not enabled');
+  });
+
+  it('an album kept by choice ("Grab anyway") is left out of cutoff searches and not upgraded automatically', async () => {
+    const h = await musicHarness();
+    h.m.addFiles(h.okc, 'FLAC', 'MP3-320');
+    h.db.update(audioFiles).set({ grabOverride: { rejections: ['Size limit exceeded'], grabbedAt: NOW.toISOString() } }).where(eq(audioFiles.albumId, h.okc.id)).run();
+    h.indexers.results = [flac('Radiohead - OK Computer (1997) [FLAC]')];
+    expect(await h.service.cutoffUnmetAudioSearch()).toBe('cutoff unmet albums: searched 0, grabbed 0');
+    const [rss] = await h.service.processReleases([flac('Radiohead - OK Computer (1997) [FLAC]')], 'rss');
+    expect(rss!.rejections.map((r) => r.reason)).toEqual(['keptByChoice']);
+    const [interactive] = await h.service.interactiveSearch({ albumId: h.okc.id });
+    expect(interactive!.rejections.map((r) => r.reason)).not.toContain('keptByChoice');
   });
 
   it('interactive album search returns every decision with the parsed music info and the matched album', async () => {

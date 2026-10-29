@@ -344,6 +344,46 @@ describe('completed download import (series)', () => {
     expect(await exists(src)).toBe(true);
   });
 
+  it('"Grab anyway": the override reaches the imported file and lets it replace a better one', async () => {
+    const series = addSeries();
+    const [e1] = episodesOf(series.id);
+    const oldPath = join(series.path, 'Season 1', 'existing.mkv');
+    await mkdir(join(series.path, 'Season 1'), { recursive: true });
+    await writeFile(oldPath, 'old');
+    libraryService.addMediaFile(db, {
+      mediaType: 'series',
+      seriesId: series.id,
+      seasonNumber: 1,
+      episodeIds: [e1!.id],
+      relativePath: join('Season 1', 'existing.mkv'),
+      path: oldPath,
+      sizeBytes: 3,
+      quality: { quality: { ...QUALITIES['Bluray-1080p'], mediaTypes: ['series', 'movie'] }, revision: { version: 1, real: 0, isRepack: false } },
+      languages: ['en'],
+    });
+    const override = { rejections: ['Existing file Bluray-1080p meets cutoff'], grabbedAt: '2024-06-01T00:00:00.000Z', sourceTitle: 'Show.Name.S01E01.720p.HDTV.x264-GRP' };
+    const src = await put('Show.Name.S01E01.720p.HDTV.x264-GRP.mkv');
+    const r = await service().importCompletedDownload(
+      tracked({
+        id: 6,
+        title: 'Show.Name.S01E01.720p.HDTV.x264-GRP',
+        outputPath: src,
+        mediaType: 'series',
+        seriesId: series.id,
+        episodeIds: [e1!.id],
+        grabbedRelease: { title: 'Show.Name.S01E01.720p.HDTV.x264-GRP', grabOverride: override },
+      }),
+    );
+    expect(r.verified).toBe(true);
+    const files = libraryService.listMediaFiles(db, { seriesId: series.id });
+    expect(files).toHaveLength(1);
+    expect(files[0]).toMatchObject({ grabOverride: override });
+    expect(files[0]!.quality.quality.name).toBe('HDTV-720p');
+    // "Allow upgrades again" clears it.
+    expect(libraryService.clearMediaFileGrabOverride(db, files[0]!.id).grabOverride).toBeNull();
+    expect(libraryService.getMediaFile(db, files[0]!.id).grabOverride).toBeNull();
+  });
+
   it('matches by parsed title when the tracked download carries no ids', async () => {
     const series = addSeries();
     const src = await put('Show.Name.S01E03.1080p.WEB-DL-GRP.mkv');
@@ -399,6 +439,17 @@ describe('completed download import (movie)', () => {
     expect(libraryService.getMovie(db, movie.id).hasFile).toBe(true);
     // Only a sample folder remained: deleted with the source folder.
     expect(await exists(join(downloads, 'Great.Movie.2021.1080p.BluRay.x264-GRP'))).toBe(false);
+  });
+
+  it('records the "Grab anyway" override on the movie file', async () => {
+    const movie = addMovie();
+    const override = { rejections: ['Size limit exceeded'], grabbedAt: '2024-06-01T00:00:00.000Z' };
+    const src = await put('Great.Movie.2021.1080p.BluRay.x264-GRP.mkv');
+    const r = await service().importCompletedDownload(
+      tracked({ id: 21, title: 'Great.Movie.2021.1080p.BluRay.x264-GRP', outputPath: src, mediaType: 'movie', movieId: movie.id, grabbedRelease: { grabOverride: override } }),
+    );
+    expect(r.verified).toBe(true);
+    expect(libraryService.listMediaFiles(db, { movieId: movie.id })[0]).toMatchObject({ grabOverride: override });
   });
 
   it('imports extra files alongside when enabled', async () => {

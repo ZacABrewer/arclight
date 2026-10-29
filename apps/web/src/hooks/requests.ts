@@ -80,9 +80,18 @@ export function useRetryRequest() {
   return useInvalidatingMutation((id: number) => requestsApi.retry(id), REQUEST_AFFECTS, { errorTitle: t('hooks.requests.retryFailed') });
 }
 
-export function useBulkRequestAction(action: 'approve' | 'decline') {
+export type BulkRequestVerb = 'approve' | 'decline' | 'retry' | 'delete';
+
+const BULK_REQUEST_CALLS: Record<BulkRequestVerb, (ids: number[]) => ReturnType<typeof requestsApi.bulkApprove>> = {
+  approve: (ids) => requestsApi.bulkApprove(ids),
+  decline: (ids) => requestsApi.bulkDecline(ids),
+  retry: (ids) => requestsApi.bulkRetry(ids),
+  delete: (ids) => requestsApi.bulkDelete(ids),
+};
+
+export function useBulkRequestAction(action: BulkRequestVerb) {
   return useInvalidatingMutation(
-    (ids: number[]) => (action === 'approve' ? requestsApi.bulkApprove(ids) : requestsApi.bulkDecline(ids)),
+    (ids: number[]) => BULK_REQUEST_CALLS[action](ids),
     REQUEST_AFFECTS,
     { errorTitle: t('hooks.requests.bulkActionFailed', { action }) },
   );
@@ -220,6 +229,15 @@ export function useDeleteIssueComment() {
   return useInvalidatingMutation((commentId: number) => issuesApi.deleteComment(commentId), ISSUE_AFFECTS, {
     errorTitle: t('hooks.requests.couldNotDeleteTheComment'),
   });
+}
+
+/** Resolve, reopen or delete several issues; answers per id. */
+export function useBulkIssueAction() {
+  return useInvalidatingMutation(
+    ({ ids, action }: { ids: number[]; action: IssueStatus | 'delete' }) => (action === 'delete' ? issuesApi.bulkDelete(ids) : issuesApi.bulkStatus(ids, action)),
+    ISSUE_AFFECTS,
+    { errorTitle: t('hooks.requests.bulkActionFailed', { action: t('components.bulkActions.title') }) },
+  );
 }
 
 export function useSetIssueStatus() {

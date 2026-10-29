@@ -9,6 +9,7 @@ import {
   AudioRequestCount,
   AudioRequestDefaults,
   AudioRequestPage,
+  BulkRequestResult,
   type AudibleRegion,
   type AudioRequestListQuery,
   type CreateAudioRequest,
@@ -48,7 +49,11 @@ export const audioRequestsApi = {
   decline: (id: number, reason?: string) => request(`/audiorequest/${id}/decline`, AudioRequest, { method: 'POST', json: reason ? { reason } : {} }),
   retry: (id: number) => request(`/audiorequest/${id}/retry`, AudioRequest, { method: 'POST', json: {} }),
   remove: (id: number) => request(`/audiorequest/${id}`, null, { method: 'DELETE' }),
+  /** Approve, decline, retry or delete several requests; answers per id. */
+  bulk: (action: AudioBulkAction, ids: number[]) => request(`/audiorequest/bulk/${action}`, BulkRequestResult, { method: 'POST', json: { ids } }),
 };
+
+export type AudioBulkAction = 'approve' | 'decline' | 'retry' | 'delete';
 
 /** Default root folder and quality profile per audio domain (GET/PUT /settings/audiorequests). */
 export const audioRequestDefaultsApi = {

@@ -3,6 +3,7 @@ import type { IndexerStatsDay, IndexerStatsEntry } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import { EmptyState, ErrorBlock, KeyValue, PageHeader, Pane, Select, Skeleton, Table, type Column } from '../../arclight/index.js';
 import { useIndexerStats } from '../../hooks/indexers.js';
+import { IndexerHealthPane } from './health-table.js';
 import { areaPath, axisTicks, barLayout, failureRate, linePath, seriesMax, type DayMetric } from './stats-model.js';
 import './stats.css';
 import { t } from '../../i18n/index.js';
@@ -157,7 +158,7 @@ const columns: Column<IndexerStatsEntry>[] = [
   { key: 'avg', get header() { return t('indexers.stats.avgResponse'); }, align: 'right', mono: true, sortValue: (e) => e.avgResponseMs ?? -1, cell: (e) => ms(e.avgResponseMs) },
 ];
 
-/** Indexers → Stats: queries, grabs, failures and response times per indexer. */
+/** Indexers → Stats: the health table, then queries, grabs, failures and response times per indexer. */
 export function IndexerStatsPage() {
   const [days, setDays] = useState(30);
   const stats = useIndexerStats(days);
@@ -180,44 +181,47 @@ export function IndexerStatsPage() {
           ]}
         />
       </PageHeader>
-      {stats.isPending ? (
-        <Pane>
-          <Skeleton lines={4} />
-        </Pane>
-      ) : stats.isError ? (
-        <ErrorBlock title={t('indexers.stats.indexerStatsDidNotLoad')} onRetry={() => void stats.refetch()}>
-          {errorMessage(stats.error)}
-        </ErrorBlock>
-      ) : stats.data.indexers.length === 0 ? (
-        <EmptyState title={t('indexers.stats.noIndexerActivityYet')}>{t('indexers.stats.statsAppearOnceIndexersHave')}</EmptyState>
-      ) : (
-        <div className="mt-stats">
-          <Pane title={t('indexers.stats.totals')} aria-label={t('indexers.stats.totals')}>
-            <KeyValue
-              layout="grid"
-              columns={4}
-              className="mt-stats__totals"
-              items={[
-                { label: t('indexers.stats.queries'), value: stats.data.totals.queries },
-                { label: t('indexers.stats.grabs'), value: stats.data.totals.grabs },
-                { label: t('indexers.stats.failures'), value: `${stats.data.totals.failures} · ${failureRate(stats.data.totals)}` },
-                { label: t('indexers.stats.avgResponse'), value: ms(stats.data.totals.avgResponseMs) },
-              ]}
-            />
+      <div className="mt-stats">
+        <IndexerHealthPane />
+        {stats.isPending ? (
+          <Pane>
+            <Skeleton lines={4} />
           </Pane>
-          <div className="mt-stats__charts">
-            <Pane title={t('indexers.stats.queriesPerIndexer')}>
-              <QueriesBarChart entries={stats.data.indexers} />
+        ) : stats.isError ? (
+          <ErrorBlock title={t('indexers.stats.indexerStatsDidNotLoad')} onRetry={() => void stats.refetch()}>
+            {errorMessage(stats.error)}
+          </ErrorBlock>
+        ) : stats.data.indexers.length === 0 ? (
+          <EmptyState title={t('indexers.stats.noIndexerActivityYet')}>{t('indexers.stats.statsAppearOnceIndexersHave')}</EmptyState>
+        ) : (
+          <div className="mt-stats">
+            <Pane title={t('indexers.stats.totals')} aria-label={t('indexers.stats.totals')}>
+              <KeyValue
+                layout="grid"
+                columns={4}
+                className="mt-stats__totals"
+                items={[
+                  { label: t('indexers.stats.queries'), value: stats.data.totals.queries },
+                  { label: t('indexers.stats.grabs'), value: stats.data.totals.grabs },
+                  { label: t('indexers.stats.failures'), value: `${stats.data.totals.failures} · ${failureRate(stats.data.totals)}` },
+                  { label: t('indexers.stats.avgResponse'), value: ms(stats.data.totals.avgResponseMs) },
+                ]}
+              />
             </Pane>
-            <Pane title={t('indexers.stats.dailyActivity')}>
-              <DailyLineChart days={stats.data.totals.byDay} />
+            <div className="mt-stats__charts">
+              <Pane title={t('indexers.stats.queriesPerIndexer')}>
+                <QueriesBarChart entries={stats.data.indexers} />
+              </Pane>
+              <Pane title={t('indexers.stats.dailyActivity')}>
+                <DailyLineChart days={stats.data.totals.byDay} />
+              </Pane>
+            </div>
+            <Pane flush title={t('indexers.stats.perIndexer')}>
+              <Table caption={t('indexers.stats.indexerStats')} columns={columns} rows={stats.data.indexers} rowKey={(e) => String(e.indexerId)} defaultSort={{ key: 'queries', direction: 'desc' }} />
             </Pane>
           </div>
-          <Pane flush title={t('indexers.stats.perIndexer')}>
-            <Table caption={t('indexers.stats.indexerStats')} columns={columns} rows={stats.data.indexers} rowKey={(e) => String(e.indexerId)} defaultSort={{ key: 'queries', direction: 'desc' }} />
-          </Pane>
-        </div>
-      )}
+        )}
+      </div>
     </>
   );
 }

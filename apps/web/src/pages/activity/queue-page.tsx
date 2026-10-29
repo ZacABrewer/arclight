@@ -31,7 +31,8 @@ import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
 import { ActivityHeader, formatBytes, formatEta } from './activity-shared.js';
 import { needsManualImport } from './manual-import/mapping.js';
-import { QueueRowControls, SlowModeControl } from './queue-controls.js';
+import { QueueRowControls, SlowModeControl, useQueueEngineBulk } from './queue-controls.js';
+import { BulkBar } from '../../components/media/bulk-bar.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
 import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
@@ -169,6 +170,10 @@ export function QueuePage() {
 
   const records = queue.data?.records ?? [];
   const pageCount = queue.data ? Math.max(1, Math.ceil(queue.data.totalRecords / pageSize)) : 1;
+  // Only rows on this page count (the Table drops off-page keys the same way).
+  const selectedItems = records.filter((r) => selected.has(r.id));
+  const selectedPending = selectedItems.filter(isPendingItem);
+  const engineBulk = useQueueEngineBulk(selectedItems);
 
   const mediaTitle = (r: QueueItem) =>
     r.seriesId !== undefined ? seriesTitles.get(r.seriesId) : r.movieId !== undefined ? movieTitles.get(r.movieId) : undefined;
@@ -315,28 +320,21 @@ export function QueuePage() {
                 <QueueRowControls item={r} />
               </>
             )}
-            bulkActions={(keys) => {
-              const items = records.filter((r) => keys.has(r.id));
-              const pendingItems = items.filter(isPendingItem);
-              return (
-                <>
-                  <Button variant="danger" onClick={() => setRemoving(items)}>
-                    {t('activity.queue.remove')}
-                  </Button>
-                  <Button variant="secondary" loading={runJob.isPending} onClick={() => runJob.mutate(RETRY_IMPORT_JOB)}>
-                    {t('activity.queue.retryImport')}
-                  </Button>
-                  {pendingItems.length ? (
-                    <Button variant="secondary" onClick={() => pendingItems.forEach((r) => grab.mutate(r.id))}>
-                      {t('activity.queue.sendNow')}
-                    </Button>
-                  ) : null}
-                </>
-              );
-            }}
             empty={<EmptyState title={t('activity.queue.queueIsEmpty')}>{t('activity.queue.grabbedReleasesShowUpHere')}</EmptyState>}
           />
         )}
+        <BulkBar
+          count={selectedItems.length}
+          total={records.length}
+          onSelectAll={() => setSelected(new Set(records.map((r) => r.id)))}
+          onClear={() => setSelected(new Set())}
+          actions={[
+            { id: 'remove', label: t('activity.queue.remove'), danger: true, onSelect: () => setRemoving(selectedItems) },
+            { id: 'retryImport', label: t('activity.queue.retryImport'), loading: runJob.isPending, onSelect: () => runJob.mutate(RETRY_IMPORT_JOB) },
+            ...(selectedPending.length ? [{ id: 'sendNow', label: t('activity.queue.sendNow'), onSelect: () => selectedPending.forEach((r) => grab.mutate(r.id)) }] : []),
+            ...engineBulk,
+          ]}
+        />
         <footer className="al-activity-foot">
           <Toggle size="sm" label={t('activity.queue.showUnknown')} checked={includeUnknown} onChange={(e) => setIncludeUnknown(e.currentTarget.checked)} />
           {summary.length ? <span className="al-activity-muted al-num">{summary.join(' · ')}</span> : null}

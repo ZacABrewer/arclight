@@ -86,6 +86,10 @@ export function useIndexerStats(days: number) {
   return useQuery({ queryKey: settingsKeys.indexerStats(days), queryFn: () => indexersApi.stats(days) });
 }
 
+export function useIndexerHealth(days: number) {
+  return useQuery({ queryKey: settingsKeys.indexerHealth(days), queryFn: () => indexersApi.health(days) });
+}
+
 export function useIndexerOptions() {
   return useQuery({ queryKey: settingsKeys.indexerOptions, queryFn: indexersApi.settings.get });
 }

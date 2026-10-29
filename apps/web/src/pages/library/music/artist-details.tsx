@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
 import { getRouteApi, Link, useNavigate } from '@tanstack/react-router';
 import type { Album, ArtistDetails, MonitorNewAlbums, MusicMonitorOption } from '@arclight/shared';
-import { Banner, Button, EmptyState, FormRow, Input, KeyValue, Meter, Modal, QualityTag, Select, StatusChip, Toggle } from '../../../arclight/index.js';
+import { Banner, Button, Checkbox, EmptyState, FormRow, Input, KeyValue, Meter, Modal, QualityTag, Select, StatusChip, Toggle } from '../../../arclight/index.js';
+import { BulkBar, type BulkAction } from '../../../components/media/bulk-bar.js';
+import { useBulkSelection } from '../../../hooks/bulk.js';
 import { DeleteMediaDialog } from '../../../components/media/delete-media-dialog.js';
 import { formatBytes } from '../../../components/media/format.js';
 import { Loading, MonitorSwitch, QueryError, TagChips } from '../../../components/media/media-kit.js';
@@ -177,8 +179,16 @@ function ArtistDetailsView() {
   );
 }
 
+/** Album selection shared by the type groups (one bulk bar for the artist). */
+interface AlbumSelect {
+  active: boolean;
+  selected: ReadonlySet<number>;
+  toggle: (id: number) => void;
+}
+
 function AlbumGroups({ artist }: { artist: ArtistDetails }) {
   const groups = useMemo(() => groupAlbums(artist.albums), [artist.albums]);
+  const sel = useBulkSelection();
   if (isLoadingAlbums(artist)) {
     return (
       <Banner tone="info">
@@ -187,16 +197,39 @@ function AlbumGroups({ artist }: { artist: ArtistDetails }) {
     );
   }
   if (groups.length === 0) return <EmptyState title={t('music.noAlbums')}>{t('music.noAlbumsBody')}</EmptyState>;
+  const select: AlbumSelect = { active: sel.selectMode, selected: sel.selected, toggle: sel.toggle };
   return (
-    <div className="music-groups">
-      {groups.map((g) => (
-        <AlbumGroupSection key={g.type} artistId={artist.id} group={g} />
-      ))}
-    </div>
+    <>
+      <div className="mk-bulk-toolbar">
+        <Button size="sm" variant={sel.selectMode ? 'secondary' : 'ghost'} aria-pressed={sel.selectMode} onClick={() => (sel.selectMode ? sel.clear() : sel.setSelectMode(true))}>
+          {sel.selectMode ? t('library.done') : t('bulk.selectAlbums')}
+        </Button>
+      </div>
+      <div className="music-groups">
+        {groups.map((g) => (
+          <AlbumGroupSection key={g.type} artistId={artist.id} group={g} select={select} />
+        ))}
+      </div>
+      {sel.selectMode || sel.selected.size > 0 ? (
+        <AlbumBulkBar artistId={artist.id} ids={sel.ids} total={artist.albums.length} open={sel.selectMode} onSelectAll={() => sel.selectAll(artist.albums.map((a) => a.id))} onClear={sel.clear} />
+      ) : null}
+    </>
   );
 }
 
-function AlbumGroupSection({ artistId, group }: { artistId: number; group: AlbumGroup }) {
+/** Bulk bar for selected albums: search, monitor, unmonitor. */
+function AlbumBulkBar({ artistId, ids, total, open, onSelectAll, onClear }: { artistId: number; ids: number[]; total: number; open: boolean; onSelectAll: () => void; onClear: () => void }) {
+  const search = useMusicSearch();
+  const setAlbums = useSetAlbumsMonitored();
+  const actions: BulkAction[] = [
+    { id: 'search', label: t('common.search'), loading: search.isPending, onSelect: () => search.mutate({ name: 'AlbumSearch', albumIds: ids }) },
+    { id: 'monitor', label: t('common.monitor'), disabled: setAlbums.isPending, onSelect: () => setAlbums.mutate({ artistId, albumIds: ids, monitored: true }) },
+    { id: 'unmonitor', label: t('common.unmonitor'), disabled: setAlbums.isPending, onSelect: () => setAlbums.mutate({ artistId, albumIds: ids, monitored: false }) },
+  ];
+  return <BulkBar count={ids.length} total={total} onSelectAll={onSelectAll} open={open} actions={actions} onClear={onClear} />;
+}
+
+function AlbumGroupSection({ artistId, group, select }: { artistId: number; group: AlbumGroup; select?: AlbumSelect | undefined }) {
   const setAlbums = useSetAlbumsMonitored();
   const label = albumTypeGroupLabel(group.type);
   const allMonitored = group.albums.every((a) => a.monitored);
@@ -220,25 +253,67 @@ function AlbumGroupSection({ artistId, group }: { artistId: number; group: Album
       </div>
       <div className="music-album-grid">
         {group.albums.map((album) => (
-          <AlbumCard key={album.id} artistId={artistId} album={album} onMonitor={(m) => setAlbums.mutate({ artistId, albumIds: [album.id], monitored: m })} />
+          <AlbumCard
+            key={album.id}
+            artistId={artistId}
+            album={album}
+            onMonitor={(m) => setAlbums.mutate({ artistId, albumIds: [album.id], monitored: m })}
+            selecting={select?.active ?? false}
+            selected={select?.selected.has(album.id) ?? false}
+            onToggle={() => select?.toggle(album.id)}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function AlbumCard({ album, onMonitor }: { artistId: number; album: Album; onMonitor: (m: boolean) => void }) {
+function AlbumCard({
+  album,
+  onMonitor,
+  selecting = false,
+  selected = false,
+  onToggle,
+}: {
+  artistId: number;
+  album: Album;
+  onMonitor: (m: boolean) => void;
+  selecting?: boolean | undefined;
+  selected?: boolean | undefined;
+  onToggle?: (() => void) | undefined;
+}) {
   const p = trackProgress(album.statistics);
   const year = albumYear(album);
+  const art = (
+    <>
+      <SquareArt src={albumCover(album)} title={album.title} progress={p.percent} progressTone={!album.monitored ? 'muted' : p.have < p.total ? 'warn' : 'default'} />
+      <span className="music-album__title">{album.title}</span>
+    </>
+  );
   return (
-    <article className="music-album" aria-label={album.title} data-unmonitored={!album.monitored || undefined}>
+    <article
+      className="music-album"
+      aria-label={album.title}
+      data-unmonitored={!album.monitored || undefined}
+      data-select={selecting || undefined}
+      data-selected={(selecting && selected) || undefined}
+    >
       <span className="music-album__monitor">
-        <MonitorSwitch monitored={album.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: album.monitored, title: album.title })} />
+        {selecting ? (
+          <Checkbox aria-label={t('library.selectTitle', { title: album.title })} checked={selected} onChange={() => onToggle?.()} />
+        ) : (
+          <MonitorSwitch monitored={album.monitored} onChange={onMonitor} label={t('common.monitorTitle', { monitored: album.monitored, title: album.title })} />
+        )}
       </span>
-      <Link to="/library/music/album/$id" params={{ id: String(album.id) }} className="music-card">
-        <SquareArt src={albumCover(album)} title={album.title} progress={p.percent} progressTone={!album.monitored ? 'muted' : p.have < p.total ? 'warn' : 'default'} />
-        <span className="music-album__title">{album.title}</span>
-      </Link>
+      {selecting ? (
+        <div className="music-card" onClick={onToggle}>
+          {art}
+        </div>
+      ) : (
+        <Link to="/library/music/album/$id" params={{ id: String(album.id) }} className="music-card">
+          {art}
+        </Link>
+      )}
       <div className="music-album__meta">
         <span className="al-num">{year ?? '—'}</span>
         {album.secondaryTypes.length ? <span>· {album.secondaryTypes.join(', ')}</span> : null}

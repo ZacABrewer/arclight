@@ -18,9 +18,12 @@ import {
   type Column,
 } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
+import { BulkConfirmDialog, useBulkResultToast, useSelection } from '../../components/bulk-actions.js';
+import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
 import { DLink, titleTarget, useInPortal } from '../../features/discover/base.js';
 import { ISSUE_TYPE_LABELS, formatDateTime, usePermissions } from '../../features/requests/status.js';
 import {
+  useBulkIssueAction,
   useDeleteIssue,
   useDeleteIssueComment,
   useEditIssueComment,
@@ -90,6 +93,23 @@ export function IssuesPage() {
   // The api filters by status; the type filter applies to the page client-side (no type param in IssueListQuery).
   const rows = (list.data?.results ?? []).filter((i) => type === 'all' || i.type === type);
   const pages = list.data ? Math.max(1, Math.ceil(list.data.pageInfo.total / PAGE_SIZE)) : 1;
+  const keys = rows.map((i) => i.id);
+  const selection = useSelection(keys);
+  const bulk = useBulkIssueAction();
+  const report = useBulkResultToast();
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const selectedIds = [...selection.selected].filter((id): id is number => typeof id === 'number');
+  const runBulk = async (action: 'open' | 'resolved' | 'delete', label: string) => {
+    const res = await bulk.mutateAsync({ ids: selectedIds, action });
+    report(label, res, (id) => rows.find((i) => i.id === id)?.mediaTitle);
+    selection.drop(res.ok);
+  };
+  const busy = bulk.isPending ? bulk.variables?.action : undefined;
+  const bulkActions: BulkAction[] = [
+    { id: 'resolve', label: t('issues.bulk.resolve'), loading: busy === 'resolved', disabled: bulk.isPending, onSelect: () => void runBulk('resolved', t('issues.bulk.resolve')).catch(() => undefined) },
+    { id: 'reopen', label: t('issues.bulk.reopen'), loading: busy === 'open', disabled: bulk.isPending, onSelect: () => void runBulk('open', t('issues.bulk.reopen')).catch(() => undefined) },
+    { id: 'delete', label: t('common.delete'), danger: true, loading: busy === 'delete', disabled: bulk.isPending, onSelect: () => setConfirmDelete(true) },
+  ];
 
   return (
     <>
@@ -133,9 +153,27 @@ export function IssuesPage() {
               sortable={false}
               caption={t('common.issues')}
               onRowClick={(i) => void navigate(issueTarget(inPortal, i.id))}
+              selectable
+              selected={selection.selected}
+              onSelectionChange={selection.set}
+              rowLabel={(i) => t('components.bulkActions.selectName', { name: i.mediaTitle })}
             />
           </Pane>
         )}
+        <BulkBar count={selection.count} total={keys.length} onSelectAll={() => selection.set(keys)} actions={bulkActions} onClear={selection.clear}>
+          {confirmDelete ? (
+            <BulkConfirmDialog
+              open
+              count={selectedIds.length}
+              title={t('issues.bulk.deleteTitle', { count: selectedIds.length })}
+              onCancel={() => setConfirmDelete(false)}
+              onConfirm={async () => {
+                await runBulk('delete', t('common.delete'));
+                setConfirmDelete(false);
+              }}
+            />
+          ) : null}
+        </BulkBar>
         {pages > 1 ? (
           <div className="mk-row mk-row--end" style={{ marginTop: 16 }}>
             <Paginator page={page + 1} pageCount={pages} onPageChange={(p) => setPage(p - 1)} />

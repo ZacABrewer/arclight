@@ -3,11 +3,13 @@ import {
   isValidElement,
   useEffect,
   useId,
+  useLayoutEffect,
   useRef,
   useState,
   type ReactElement,
   type ReactNode,
 } from 'react';
+import { createPortal } from 'react-dom';
 import { cx } from '../cx.js';
 import { t } from '../../i18n/index.js';
 
@@ -28,6 +30,7 @@ export interface TooltipProps {
 export function Tooltip({ content, children, placement = 'top', delay = 300 }: TooltipProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
+  const anchorRef = useRef<HTMLSpanElement>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const show = (immediate: boolean) => {
     clearTimeout(timer.current);
@@ -50,13 +53,60 @@ export function Tooltip({ content, children, placement = 'top', delay = 300 }: T
 
   const trigger = isValidElement(children) ? cloneElement(children, { 'aria-describedby': open ? id : undefined } as { 'aria-describedby'?: string }) : children;
   return (
-    <span className="al-anchor" onMouseEnter={() => show(false)} onMouseLeave={hide} onFocus={() => show(true)} onBlur={hide}>
+    <span ref={anchorRef} className="al-anchor" onMouseEnter={() => show(false)} onMouseLeave={hide} onFocus={() => show(true)} onBlur={hide}>
       {trigger}
-      {open ? (
-        <span role="tooltip" id={id} className={cx('al-tooltip', 'al-tooltip--float', `al-tooltip--${placement}`)}>
-          {content}
-        </span>
-      ) : null}
+      {open ? createPortal(<FloatingTip id={id} anchor={anchorRef} placement={placement} content={content} />, document.body) : null}
+    </span>
+  );
+}
+
+const GAP = 8;
+const EDGE = 8;
+
+/**
+ * The tooltip box, rendered on <body> with fixed positioning so a modal, drawer or scrolling
+ * table never clips it. Placed above (or below) the anchor, flipped when there is no room,
+ * and kept inside the viewport.
+ */
+function FloatingTip({ id, anchor, placement, content }: { id: string; anchor: { current: HTMLSpanElement | null }; placement: 'top' | 'bottom'; content: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; side: 'top' | 'bottom' } | null>(null);
+  useLayoutEffect(() => {
+    const place = () => {
+      const a = anchor.current?.getBoundingClientRect();
+      const tip = ref.current;
+      if (!a || !tip) return;
+      const w = tip.offsetWidth;
+      const h = tip.offsetHeight;
+      const vw = window.innerWidth;
+      const vh = window.innerHeight;
+      const roomAbove = a.top - GAP - EDGE;
+      const roomBelow = vh - a.bottom - GAP - EDGE;
+      let side = placement;
+      if (side === 'top' && h > roomAbove && roomBelow > roomAbove) side = 'bottom';
+      else if (side === 'bottom' && h > roomBelow && roomAbove > roomBelow) side = 'top';
+      const rawTop = side === 'top' ? a.top - GAP - h : a.bottom + GAP;
+      const top = Math.max(EDGE, Math.min(rawTop, vh - h - EDGE));
+      const left = Math.max(EDGE, Math.min(a.left + a.width / 2 - w / 2, vw - w - EDGE));
+      setPos({ left, top, side });
+    };
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [anchor, placement]);
+  return (
+    <span
+      ref={ref}
+      role="tooltip"
+      id={id}
+      className={cx('al-tooltip', 'al-tooltip--float', `al-tooltip--${pos?.side ?? placement}`)}
+      style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' }}
+    >
+      {content}
     </span>
   );
 }

@@ -14,7 +14,7 @@ Arclight does the job Prowlarr does, so you do not need Prowlarr (it works fine 
 | Community catalogue on/off, source URL, sync status | Settings > Indexer catalogue |
 | Built-in Cloudflare solver | Settings > Challenge Solver |
 | Cross-seed settings | Settings > Cross-seed |
-| Usage charts | Indexers > Stats |
+| Indexer health table and usage charts | Indexers > Stats |
 | Private tracker ratio and buffer | Indexers > Tracker stats |
 | Cross-seeds found | Activity > Cross-seeds |
 
@@ -178,7 +178,37 @@ The hit-and-run protection only works for torrents in the built-in engine; see [
 
 ## Indexer statistics
 
-**Indexers > Stats** shows queries, grabs and failures per indexer over the last 7, 30 or 90 days, with a daily activity chart, average response time and failure rate. "Queries" counts both searches and RSS fetches. Use it to spot an indexer that never delivers or fails a lot. Stats appear once indexers have been queried.
+**Indexers > Stats** shows queries, grabs and failures per indexer over the last 7, 30 or 90 days, with a daily activity chart, average response time and failure rate. "Queries" counts both searches and RSS fetches. Stats appear once indexers have been queried.
+
+### Indexer health
+
+The **Indexer health** table at the top of **Indexers > Stats** makes slow, failing and useless indexers easy to spot. Pick a period of the last 24 hours, 7 days (the default) or 30 days. Each indexer gets one row, with the worst problems listed first:
+
+| Column | Meaning |
+|---|---|
+| Health | The verdict (see below). Hover over it to see why. |
+| Queries | Searches and RSS fetches in the period. |
+| Failure rate | Share of those queries that failed. |
+| Avg response, p95 response | Mean and 95th-percentile time of successful queries. With a p95 of 4 s, 95 out of 100 queries answered within 4 s. |
+| Avg results | Mean number of releases a successful query returned. For RSS this counts everything in the feed, including releases seen before. |
+| Zero results | Share of successful queries that returned nothing. |
+| Grabs | Releases successfully downloaded from the indexer. |
+| Last success, Last failure | When the newest successful and failed query happened, from up to 90 days of history. The last failure shows its error message. |
+| Status | Enabled, Disabled, or Backing off (with the retry time). |
+
+Click an indexer's name to open its edit dialog. **Test** runs the same test as in Settings > Indexers. **Disable** turns off RSS, automatic search and interactive search at once. **Enable** turns all three back on. To switch them one at a time, use the edit dialog.
+
+The verdict is the first rule that matches, in this order:
+
+| Verdict | Rule |
+|---|---|
+| Unused | No queries in the period, for example because the indexer is disabled or nothing searched it. |
+| Failing | The indexer is backing off right now, or 25 percent or more of its queries failed. |
+| No results | At least 10 successful queries recorded a result count, and 90 percent or more of them returned nothing. This often points to wrong categories, a broken site definition, or a site that does not carry what you search for. |
+| Slow | Average response time is 5 s or more, or p95 is 10 s or more. |
+| Healthy | None of the above. |
+
+Result counts are recorded from this version on. Older queries count towards the failure rate and response times, but not towards Avg results, Zero results or the No results verdict.
 
 ## Cross-seeding
 
@@ -201,6 +231,10 @@ Settings > Cross-seed:
 | Link folder | empty | Hard links go here when a torrent names the file differently. Empty uses a `cross-seed` folder inside the engine downloads folder |
 
 Cross-seeds are listed under **Activity > Cross-seeds** with their state (Seeding or Failed), indexer, info-hash and save path. Hard links need the link folder on the same volume as the library.
+
+## Bulk actions
+
+Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection on Settings > Indexers: **Enable** and **Disable** (all three of RSS, automatic and interactive search), **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
 
 ## Related
 

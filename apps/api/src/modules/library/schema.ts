@@ -2,6 +2,7 @@ import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqli
 import type {
   AudioFileTags,
   AudioMediaInfo,
+  GrabOverride,
   MediaImage,
   MediaInfo,
   MediaVersion,
@@ -195,6 +196,8 @@ export const mediaFiles = sqliteTable(
     mediaInfo: text('media_info', { mode: 'json' }).$type<MediaInfo>(),
     // Version slot the file fills ('4K', 'HDR', 'Remux', ...); null = unversioned (classic).
     versionTag: text('version_tag'),
+    // "Grab anyway": the rejections the user overrode; automatic upgrades skip the file while set.
+    grabOverride: text('grab_override', { mode: 'json' }).$type<GrabOverride>(),
   },
   (t) => [
     uniqueIndex('media_files_path_idx').on(t.path),
@@ -275,6 +278,8 @@ export const audioFiles = sqliteTable(
     chapterCount: integer('chapter_count'),
     tags: text('tags', { mode: 'json' }).$type<AudioFileTags>(),
     mediaInfo: text('media_info', { mode: 'json' }).$type<AudioMediaInfo>(),
+    // "Grab anyway": the rejections the user overrode; automatic upgrades skip the album / book.
+    grabOverride: text('grab_override', { mode: 'json' }).$type<GrabOverride>(),
   },
   (t) => [
     uniqueIndex('audio_files_path_idx').on(t.path),

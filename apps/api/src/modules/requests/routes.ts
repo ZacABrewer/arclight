@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   ApproveRequest,
+  BulkIssueStatus,
   BulkRequestAction,
   CollectionDetail,
   CollectionRequestInput,
@@ -70,6 +71,7 @@ import { ANONYMOUS_ACTOR, SYSTEM_ACTOR, canManageUsers, type Actor } from './per
 import { publicPortal, type MediaServerLoginOption, type TokenBuckets } from './portal.js';
 import type { RequestsService } from './service.js';
 import type { WatchlistService } from './watchlist.js';
+import { eachId } from './bulk.js';
 
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
 
@@ -173,6 +175,12 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     );
     app.post('/request/bulk/decline', { config: user, schema: { body: BulkRequestAction, response: { 200: BulkRequestResult, ...errors } } }, async (req) =>
       requests.bulk(actorOf(req), req.body.ids, 'decline'),
+    );
+    app.post('/request/bulk/retry', { config: user, schema: { body: BulkRequestAction, response: { 200: BulkRequestResult, ...errors } } }, async (req) =>
+      eachId(req.body.ids, (id) => requests.retry(actorOf(req), id)),
+    );
+    app.post('/request/bulk/delete', { config: user, schema: { body: BulkRequestAction, response: { 200: BulkRequestResult, ...errors } } }, async (req) =>
+      eachId(req.body.ids, (id) => requests.remove(actorOf(req), id)),
     );
     app.put('/request/:id', { config: user, schema: { params: IdParams, body: UpdateRequest, response: { 200: MediaRequest, ...errors } } }, async (req) =>
       requests.update(actorOf(req), req.params.id, req.body),
@@ -338,6 +346,12 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
       '/issue/:id/status',
       { config: user, schema: { params: IdParams, body: IssueStatusUpdate, response: { 200: Issue, ...errors } } },
       async (req) => issues.setStatus(actorOf(req), req.params.id, req.body.status),
+    );
+    app.post('/issue/bulk/status', { config: user, schema: { body: BulkIssueStatus, response: { 200: BulkRequestResult, ...errors } } }, async (req) =>
+      eachId(req.body.ids, (id) => issues.setStatus(actorOf(req), id, req.body.status)),
+    );
+    app.post('/issue/bulk/delete', { config: user, schema: { body: BulkRequestAction, response: { 200: BulkRequestResult, ...errors } } }, async (req) =>
+      eachId(req.body.ids, (id) => issues.remove(actorOf(req), id)),
     );
     app.delete('/issue/:id', { config: user, schema: { params: IdParams, response: { 204: Empty, ...errors } } }, async (req, reply) => {
       issues.remove(actorOf(req), req.params.id);

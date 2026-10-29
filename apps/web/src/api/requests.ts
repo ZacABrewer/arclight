@@ -86,6 +86,8 @@ export const requestsApi = {
   policy: (id: number) => request(`/request/${id}/policy`, RequestPolicyExplanation),
   bulkApprove: (ids: number[]) => request('/request/bulk/approve', BulkRequestResult, { method: 'POST', json: { ids } }),
   bulkDecline: (ids: number[]) => request('/request/bulk/decline', BulkRequestResult, { method: 'POST', json: { ids } }),
+  bulkRetry: (ids: number[]) => request('/request/bulk/retry', BulkRequestResult, { method: 'POST', json: { ids } }),
+  bulkDelete: (ids: number[]) => request('/request/bulk/delete', BulkRequestResult, { method: 'POST', json: { ids } }),
   /** Send the admin digest of pending requests and open issues now. */
   digest: () => request('/request/digest', RequestsDigestResult, { method: 'POST', json: {} }),
 };
@@ -134,6 +136,8 @@ export const issuesApi = {
   comment: (id: number, message: string) => request(`/issue/${id}/comment`, Issue, { method: 'POST', json: { message } }),
   setStatus: (id: number, status: IssueStatus) => request(`/issue/${id}/status`, Issue, { method: 'POST', json: { status } }),
   remove: (id: number) => request(`/issue/${id}`, null, { method: 'DELETE' }),
+  bulkStatus: (ids: number[], status: IssueStatus) => request('/issue/bulk/status', BulkRequestResult, { method: 'POST', json: { ids, status } }),
+  bulkDelete: (ids: number[]) => request('/issue/bulk/delete', BulkRequestResult, { method: 'POST', json: { ids } }),
   editComment: (commentId: number, message: string) => request(`/issuecomment/${commentId}`, Issue, { method: 'PUT', json: { message } }),
   deleteComment: (commentId: number) => request(`/issuecomment/${commentId}`, null, { method: 'DELETE' }),
 };
