@@ -27,3 +27,14 @@ export const REQUESTS_ERROR_STATUS: Record<RequestsErrorCode, number> = {
   NOT_CONFIGURED: 503,
   UPSTREAM: 502,
 };
+
+/** Music or audiobook routes while the feature flag is off: 404 with the module's own code. */
+export class AudioDisabledError extends Error {
+  readonly code: 'MUSIC_DISABLED' | 'AUDIOBOOKS_DISABLED';
+
+  constructor(domain: 'music' | 'audiobook') {
+    super(domain === 'music' ? 'music is not enabled (Settings → Features)' : 'audiobooks are not enabled (Settings → Features)');
+    this.name = 'AudioDisabledError';
+    this.code = domain === 'music' ? 'MUSIC_DISABLED' : 'AUDIOBOOKS_DISABLED';
+  }
+}

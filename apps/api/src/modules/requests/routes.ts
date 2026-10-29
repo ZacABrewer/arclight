@@ -101,6 +101,8 @@ export interface RequestsRouteServices {
   portalLimiter?: TokenBuckets;
   /** Media-server sign-in offered on the login page. */
   mediaServerLogin?: () => MediaServerLoginOption;
+  /** Feature flags shown to anonymous portal visitors. */
+  features?: () => PublicPortal['features'];
 }
 
 /** Who is calling, in permission terms. API-key and bypass callers act as admin. */
@@ -117,6 +119,17 @@ export function discoverActorOf(req: FastifyRequest): Actor {
   return req.auth ? actorOf(req) : ANONYMOUS_ACTOR;
 }
 
+/** preHandler: anonymous portal visitors are rate-limited per IP; signed-in callers are not. */
+export function portalRateLimit(limiter: TokenBuckets | undefined) {
+  return async (req: FastifyRequest, reply: FastifyReply) => {
+    if (req.auth || !limiter) return;
+    if (!limiter.take(req.ip)) {
+      reply.header('retry-after', String(Math.max(1, limiter.retryAfter(req.ip))));
+      return reply.code(429).send({ error: 'too many requests; sign in or slow down', code: 'RATE_LIMITED' });
+    }
+  };
+}
+
 export function requestsRoutes(s: RequestsRouteServices): Plugin {
   const { requests, issues, discover, watchlist } = s;
   const guard = requests.certifications;
@@ -127,13 +140,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
   };
   /** Discover routes: public while the portal allows anonymous discover; anonymous callers are rate-limited. */
   const pub = { access: { portal: true }, publicWhen: anonymousDiscover } as const;
-  const limit = async (req: FastifyRequest, reply: FastifyReply) => {
-    if (req.auth || !s.portalLimiter) return;
-    if (!s.portalLimiter.take(req.ip)) {
-      reply.header('retry-after', String(Math.max(1, s.portalLimiter.retryAfter(req.ip))));
-      return reply.code(429).send({ error: 'too many requests; sign in or slow down', code: 'RATE_LIMITED' });
-    }
-  };
+  const limit = portalRateLimit(s.portalLimiter);
   const page = async (req: FastifyRequest, p: DiscoverPage): Promise<DiscoverPage> => ({ ...p, results: await guard.filter(discoverActorOf(req), p.results) });
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
@@ -287,7 +294,7 @@ export function requestsRoutes(s: RequestsRouteServices): Plugin {
     app.get(
       '/public/portal',
       { config: { access: { portal: true }, publicWhen: portalOn }, preHandler: limit, schema: { response: { 200: PublicPortal, ...errors } } },
-      async () => publicPortal(requests, s.mediaServerLogin ?? (() => null)),
+      async () => publicPortal(requests, s.mediaServerLogin ?? (() => null), s.features),
     );
 
     // ------------------------------------------------------------------------- sliders

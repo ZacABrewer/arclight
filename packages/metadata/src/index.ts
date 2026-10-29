@@ -87,6 +87,7 @@ export {
 export { type RequestOptions } from './http.js';
 
 export * from './musicbrainz/index.js';
+export * from './listenbrainz/index.js';
 
 export {
   COVER_ART_ARCHIVE_BASE_URL,

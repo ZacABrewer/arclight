@@ -15,7 +15,15 @@ export function SectionNav({ pathname, access, nav = NAV }: { pathname: string; 
     <nav className="al-section-nav" aria-label={t('layout.sectionNav.section')}>
       <div className="al-tabs al-tabs--compact">
         {tabs.map((navLeaf) => (
-          <Link key={navLeaf.to} to={navLeaf.to} aria-current={navLeaf === current ? 'page' : undefined}>
+          // The router's own fuzzy matching would also mark an index tab (Discover → Home at
+          // /discover) aria-current on every sub-page, so it matches exactly here and
+          // `activeTab` (longest prefix) decides which tab is lit.
+          <Link
+            key={navLeaf.to}
+            to={navLeaf.to}
+            activeOptions={{ exact: true, includeSearch: false }}
+            aria-current={navLeaf === current ? 'page' : undefined}
+          >
             {navLeaf.label}
           </Link>
         ))}

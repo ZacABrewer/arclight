@@ -6,6 +6,7 @@ import {
   applyMusicMetadataUpdate,
   AudiobookMetadataSettings,
   AudioImportSettings,
+  AudioRequestDefaults,
   BackupSettings,
   CompatSettings,
   CrossSeedSettings,
@@ -88,6 +89,9 @@ const sections = {
   indexers: IndexerOptionsSection,
   // Owned by the requests module (routes under /settings/requests).
   requests: RequestsSettings,
+  // Owned by the requests module: where approved music/audiobook requests land (routes under
+  // /settings/audiorequests).
+  audioRequests: AudioRequestDefaults,
   // Owned by the requests module (Jellyfin/Emby/Plex for sign-in, watchlists, availability;
   // routes under /settings/mediaserver, apiKey masked there).
   mediaServer: MediaServerSettings,

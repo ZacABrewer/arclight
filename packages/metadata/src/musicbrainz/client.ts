@@ -13,6 +13,7 @@ import {
   mapArtistSearchResult,
   mapRelease,
   mapReleaseGroup,
+  mapReleaseGroupDetail,
   mapReleaseSummary,
 } from './map.js';
 import {
@@ -20,6 +21,7 @@ import {
   mbArtistSearchSchema,
   mbReleaseBrowseSchema,
   mbReleaseGroupBrowseSchema,
+  mbReleaseGroupSchema,
   mbReleaseGroupSearchSchema,
   mbReleaseSchema,
 } from './schemas.js';
@@ -28,6 +30,7 @@ import type {
   MbArtistSearchResult,
   MbRelease,
   MbReleaseGroup,
+  MbReleaseGroupDetail,
   MbReleaseSummary,
   MbSearchPage,
 } from './types.js';
@@ -106,10 +109,16 @@ export interface MusicBrainzClient {
   browseReleases(releaseGroupMbid: string, options?: RequestOptions): Promise<MbReleaseSummary[]>;
   /** One release with media, tracks, artist credits and labels. */
   getRelease(mbid: string, options?: RequestOptions): Promise<MbRelease>;
+  /**
+   * Release-group search. An object searches the title (and artist) as quoted phrases; a plain
+   * string is free text over every indexed field (what a user types into a search box).
+   */
   searchReleaseGroups(
-    query: { artist?: string; title: string },
+    query: string | { artist?: string; title: string },
     options?: MbSearchOptions,
   ): Promise<MbSearchPage<MbReleaseGroup>>;
+  /** One release group with its artist credits and genres. */
+  getReleaseGroup(mbid: string, options?: RequestOptions): Promise<MbReleaseGroupDetail>;
   clearCache(): void;
 }
 
@@ -282,15 +291,22 @@ export function createMusicBrainzClient(options: MusicBrainzClientOptions): Musi
   }
 
   async function searchReleaseGroups(
-    query: { artist?: string; title: string },
+    query: string | { artist?: string; title: string },
     options: MbSearchOptions = {},
   ): Promise<MbSearchPage<MbReleaseGroup>> {
-    const title = query.title.trim();
-    const artist = query.artist?.trim();
-    if (title.length === 0) return { count: 0, offset: 0, results: [] };
-    const lucene = artist
-      ? `releasegroup:${quotePhrase(title)} AND artist:${quotePhrase(artist)}`
-      : `releasegroup:${quotePhrase(title)}`;
+    let lucene: string;
+    if (typeof query === 'string') {
+      const trimmed = query.trim();
+      if (trimmed.length === 0) return { count: 0, offset: 0, results: [] };
+      lucene = escapeLucene(trimmed);
+    } else {
+      const title = query.title.trim();
+      const artist = query.artist?.trim();
+      if (title.length === 0) return { count: 0, offset: 0, results: [] };
+      lucene = artist
+        ? `releasegroup:${quotePhrase(title)} AND artist:${quotePhrase(artist)}`
+        : `releasegroup:${quotePhrase(title)}`;
+    }
     const { limit, offset, ...rest } = options;
     const body = await transport.get(
       url('release-group', { query: lucene, limit: clampLimit(limit), offset: offset ?? 0 }),
@@ -304,6 +320,16 @@ export function createMusicBrainzClient(options: MusicBrainzClientOptions): Musi
     };
   }
 
+  async function getReleaseGroup(mbid: string, options?: RequestOptions): Promise<MbReleaseGroupDetail> {
+    const id = requireMbid(mbid, 'Release group');
+    const body = await transport.get(
+      url(`release-group/${id}`, { inc: 'artist-credits+genres' }),
+      mbReleaseGroupSchema,
+      req(options, ttls.releaseGroups),
+    );
+    return mapReleaseGroupDetail(body);
+  }
+
   return {
     providerKey,
     searchArtists,
@@ -312,6 +338,7 @@ export function createMusicBrainzClient(options: MusicBrainzClientOptions): Musi
     browseReleases,
     getRelease,
     searchReleaseGroups,
+    getReleaseGroup,
     clearCache: () => transport.clearCache(),
   };
 }

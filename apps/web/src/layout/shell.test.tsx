@@ -14,6 +14,7 @@ import { buildCommandGroups, buildSearchGroups, buildTaskGroups, settingsPages, 
 import { Palette } from './shell-overlays.js';
 import { healthIssueCount, statusCluster, vpnLocationOf } from './status-cluster.js';
 import { initialsOf } from './user-menu.js';
+import { SectionNav } from './section-nav.js';
 
 const vpn = (over: Partial<VpnStatus> = {}): VpnStatus => ({ enabled: true, connected: true, lastChecked: null, lastChanged: null, ...over });
 const health = (statuses: Array<'ok' | 'warning' | 'error'>): HealthResponse => ({
@@ -68,6 +69,25 @@ describe('rail and navigation', () => {
     expect(activeTab('/discover/movies', tabs)?.label).toBe('Movies');
     expect(activeTab('/discover', tabs)?.label).toBe('Home');
     expect(activeTab('/discover/person/3', tabs)?.label).toBe('Home');
+  });
+
+  it('lights only the matching section tab, not the index tab on its sub-pages', async () => {
+    const renderNav = async (path: string) => {
+      const root = createRootRoute({ component: () => <SectionNav pathname={path} access /> });
+      const router = createRouter({ routeTree: root, history: createMemoryHistory({ initialEntries: [path] }) });
+      const view = render(<RouterProvider router={router} />);
+      const nav = await screen.findByRole('navigation', { name: 'Section' });
+      const lit = within(nav)
+        .getAllByRole('link')
+        .filter((a) => a.getAttribute('aria-current') === 'page')
+        .map((a) => a.textContent);
+      view.unmount();
+      return lit;
+    };
+    expect(await renderNav('/discover/movies')).toEqual(['Movies']);
+    expect(await renderNav('/discover')).toEqual(['Home']);
+    expect(await renderNav('/discover/person/3')).toEqual(['Home']);
+    expect(await renderNav('/requests/mine')).toEqual(['My requests']);
   });
 
   it('gives non-admins the portal (and Library when granted) on the mobile bar', () => {

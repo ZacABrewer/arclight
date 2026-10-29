@@ -141,6 +141,13 @@
       "when": 1793230154213,
       "tag": "0019_certain_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793248863184,
+      "tag": "0020_polite_sabra",
+      "breakpoints": true
     }
   ]
 }

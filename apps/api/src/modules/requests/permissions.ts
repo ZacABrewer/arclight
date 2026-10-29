@@ -40,6 +40,14 @@ export function canAutoApprove(held: number, type: MediaType, is4k: boolean): bo
   return can(held, Permission.AUTO_APPROVE, type === 'movie' ? Permission.AUTO_APPROVE_MOVIE : Permission.AUTO_APPROVE_TV, Permission.MANAGE_REQUESTS);
 }
 
+/** Music and audiobook requests: the general REQUEST flag covers both domains. */
+export function canRequestAudio(held: number, domain: 'music' | 'audiobook'): boolean {
+  return can(held, Permission.REQUEST, domain === 'music' ? Permission.REQUEST_MUSIC : Permission.REQUEST_AUDIOBOOK);
+}
+
+/** Audio requests have no per-domain auto-approve flags: AUTO_APPROVE or MANAGE_REQUESTS. */
+export const canAutoApproveAudio = (held: number): boolean => can(held, Permission.AUTO_APPROVE, Permission.MANAGE_REQUESTS);
+
 export function canAutoRequest(held: number, type: MediaType): boolean {
   return can(held, Permission.AUTO_REQUEST, type === 'movie' ? Permission.AUTO_REQUEST_MOVIE : Permission.AUTO_REQUEST_TV);
 }

@@ -408,3 +408,50 @@ describe('escapeLucene', () => {
     expect(escapeLucene('Simon && Garfunkel')).toBe('Simon \\&& Garfunkel');
   });
 });
+
+describe('MusicBrainz release-group search and lookup', () => {
+  it('searches release groups by free text with Lucene syntax escaped', async () => {
+    const { client, fake } = makeClient();
+    const page = await client.searchReleaseGroups('radiohead: ok computer', { limit: 10 });
+    const q = fake.calls[0]?.url.searchParams;
+    expect(fake.calls[0]?.url.pathname).toBe('/ws/2/release-group');
+    expect(q?.get('query')).toBe('radiohead\\: ok computer');
+    expect(q?.get('limit')).toBe('10');
+    expect(page.results[0]?.mbid).toBe(MB_IDS.releaseGroup);
+  });
+
+  it('skips the request for empty free text', async () => {
+    const { client, fake } = makeClient();
+    expect((await client.searchReleaseGroups('   ')).results).toEqual([]);
+    expect(fake.calls).toHaveLength(0);
+  });
+
+  it('looks up one release group with artist credits and genres', async () => {
+    const wire = {
+      id: MB_IDS.releaseGroup,
+      title: 'OK Computer',
+      'primary-type': 'Album',
+      'secondary-types': [],
+      'first-release-date': '1997-05-21',
+      'artist-credit': [{ name: 'Radiohead', joinphrase: '', artist: { id: MB_IDS.artist, name: 'Radiohead' } }],
+      genres: [
+        { name: 'rock', count: 3 },
+        { name: 'alternative rock', count: 9 },
+      ],
+    };
+    const { client, fake } = makeClient((url) =>
+      url.pathname === `/ws/2/release-group/${MB_IDS.releaseGroup}` ? jsonResponse(wire) : jsonResponse(mbFixtures.error404, 404),
+    );
+    const group = await client.getReleaseGroup(MB_IDS.releaseGroup.toUpperCase());
+    expect(fake.calls[0]?.url.searchParams.get('inc')).toBe('artist-credits+genres');
+    expect(group).toMatchObject({
+      mbid: MB_IDS.releaseGroup,
+      title: 'OK Computer',
+      primaryType: 'Album',
+      year: 1997,
+      genres: ['alternative rock', 'rock'],
+    });
+    expect(group.artistCredits[0]?.artistMbid).toBe(MB_IDS.artist);
+    await expect(client.getReleaseGroup('not-an-id')).rejects.toMatchObject({ code: 'not-found' });
+  });
+});

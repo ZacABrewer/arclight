@@ -8,6 +8,7 @@ import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Pane, Popover, Sk
 import { ThemeChoice } from '../../features/themes/theme-choice.js';
 import { useThemeCatalog } from '../../features/themes/use-themes.js';
 import { useAuth } from '../../auth/auth-context.js';
+import { useFeatures } from '../../hooks/music.js';
 import { DLink, DiscoverBaseProvider, type DiscoverPath } from '../../features/discover/base.js';
 import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
 import { DiscoverSliders, BrowseLinks } from '../discover/discover-home.js';
@@ -22,9 +23,10 @@ import './portal.css';
 import { t } from '../../i18n/index.js';
 
 // Public request portal: the full Discover catalogue (home sliders, browse, search, title,
-// person and collection pages) and "My requests" in the portal's own chrome, without the app
-// shell. It answers at /portal, at every extra portal path and at the root of portal
-// hostnames (Settings > Requests > Public request portal; features/discover/portal-location.ts).
+// person and collection pages; music and audiobooks while their feature flags are on) and "My
+// requests" in the portal's own chrome, without the app shell. It answers at /portal, at every
+// extra portal path and at the root of portal hostnames (Settings > Requests > Public request
+// portal; features/discover/portal-location.ts).
 // Anonymous visitors browse when the admin allows it; requesting always needs sign-in.
 
 export const portalKeys = {
@@ -99,10 +101,23 @@ function SignInLink({ variant = 'primary', block, children }: { variant?: 'prima
   );
 }
 
-const NAV: ReadonlyArray<{ to: DiscoverPath; label: () => string; icon: IconName; signedIn?: boolean }> = [
+interface PortalNavItem {
+  to: DiscoverPath;
+  label: () => string;
+  icon: IconName;
+  signedIn?: boolean;
+  /** Shown only while this feature flag is on. */
+  feature?: 'music' | 'audiobooks';
+  /** Header nav only: the phone tab bar has no room for it (the home page links it). */
+  headerOnly?: boolean;
+}
+
+const NAV: readonly PortalNavItem[] = [
   { to: '', label: () => t('portal.navHome'), icon: 'home' },
   { to: '/movies', label: () => t('common.movies'), icon: 'film' },
   { to: '/tv', label: () => t('common.series'), icon: 'tv' },
+  { to: '/music', label: () => t('common.music'), icon: 'play', feature: 'music', headerOnly: true },
+  { to: '/audiobooks', label: () => t('common.audiobooks'), icon: 'library', feature: 'audiobooks', headerOnly: true },
   { to: '/search', label: () => t('common.search'), icon: 'search' },
   { to: '/requests', label: () => t('common.myRequests'), icon: 'inbox', signedIn: true },
   { to: '/issues', label: () => t('common.issues'), icon: 'alert', signedIn: true },
@@ -116,6 +131,8 @@ export function portalSection(pathname: string): DiscoverPath {
   if (rest.startsWith('/movies')) return '/movies';
   if (rest === '/tv' || rest.startsWith('/tv?')) return '/tv';
   if (rest.startsWith('/search')) return '/search';
+  if (rest === '/music' || rest.startsWith('/music/') || rest.startsWith('/music?')) return '/music';
+  if (rest === '/audiobooks' || rest.startsWith('/audiobooks/') || rest.startsWith('/audiobooks?')) return '/audiobooks';
   if (rest.startsWith('/requests')) return '/requests';
   if (rest.startsWith('/profile')) return '/profile';
   if (rest.startsWith('/issues')) return '/issues';
@@ -141,7 +158,8 @@ export function PortalLayout() {
   const isHome = pathname === PORTAL_ROOT || pathname === `${PORTAL_ROOT}/`;
   const gated = portal.data && !signedIn && !portal.data.allowAnonymousDiscover && !isHome;
   const section = portalSection(pathname);
-  const nav = NAV.filter((n) => !n.signedIn || signedIn);
+  const features = useFeatures();
+  const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]));
 
   return (
     <DiscoverBaseProvider base="/portal">
@@ -201,13 +219,15 @@ export function PortalLayout() {
         </main>
         {!off ? (
           <nav className="al-tabbar portal-tabbar" aria-label={t('portal.tabs')}>
-            {nav.map((n) => (
-              <DLink key={n.to} to={n.to} className="al-tabbar__item" aria-current={section === n.to ? 'page' : undefined}>
-                <span className="al-tabbar__bar" aria-hidden="true" />
-                <Icon name={n.icon} size={20} />
-                <span>{n.label()}</span>
-              </DLink>
-            ))}
+            {nav
+              .filter((n) => !n.headerOnly)
+              .map((n) => (
+                <DLink key={n.to} to={n.to} className="al-tabbar__item" aria-current={section === n.to ? 'page' : undefined}>
+                  <span className="al-tabbar__bar" aria-hidden="true" />
+                  <Icon name={n.icon} size={20} />
+                  <span>{n.label()}</span>
+                </DLink>
+              ))}
           </nav>
         ) : null}
       </div>

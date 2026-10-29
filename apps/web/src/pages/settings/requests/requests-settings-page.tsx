@@ -17,6 +17,7 @@ import { useRequestsSettings, useSaveRequestsSettings, useSendDigest } from '../
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
 import { SettingsPage, useDraft, type Draft } from '../settings-layout.js';
 import { SaveError, SettingsSection } from '../shared.js';
+import { AudioDefaultsCard } from './audio-defaults-card.js';
 import { OverrideRulesCard } from './override-rules-card.js';
 import { SlidersCard } from './sliders-card.js';
 import { ApprovalPolicySections, PublicPortalSection, policyErrors } from './approval-policies.js';
@@ -53,6 +54,7 @@ export function RequestsSettingsPage() {
       }}
     >
       <RequestsSettingsForm form={form} />
+      <AudioDefaultsCard />
       <SlidersCard />
       <OverrideRulesCard />
     </SettingsPage>

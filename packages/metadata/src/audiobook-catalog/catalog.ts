@@ -66,7 +66,10 @@ export interface CatalogSearchOptions extends CatalogRequestOptions {
   pageSize?: number;
 }
 
-export type CatalogBookQuery = string | { title?: string; author?: string; keywords?: string };
+/** Orders `browseBooks` offers. */
+export type CatalogBrowseSort = 'bestsellers' | 'newest';
+
+export type CatalogBookQuery =string | { title?: string; author?: string; keywords?: string };
 
 export interface CatalogAuthorRef {
   asin?: string;
@@ -83,6 +86,8 @@ export interface CatalogBookRef {
 export interface AudiobookCatalog {
   /** Audible search; OpenLibrary when Audible finds nothing (or fails). */
   searchBooks(query: CatalogBookQuery, options?: CatalogSearchOptions): Promise<CatalogBook[]>;
+  /** The Audible catalogue in one order, without search terms (Discover); no OpenLibrary fallback. */
+  browseBooks(sort: CatalogBrowseSort, options?: CatalogSearchOptions): Promise<CatalogBook[]>;
   /** Audnexus author search; OpenLibrary when it finds nothing (or fails). */
   searchAuthors(name: string, options?: CatalogRequestOptions): Promise<CatalogAuthor[]>;
   /** The author (Audnexus) and their books (Audible bibliography, else OpenLibrary works). */
@@ -414,9 +419,19 @@ export function createAudiobookCatalog(deps: AudiobookCatalogDeps): AudiobookCat
     throw failure(errors, `No source knows the book ${r.asin ?? r.isbn ?? r.olWorkId ?? ''}`.trim());
   }
 
+  async function browseBooks(sort: CatalogBrowseSort, options: CatalogSearchOptions = {}): Promise<CatalogBook[]> {
+    const { region, languages, request } = settings(options);
+    const page = await audible(region).browseProducts(
+      { sort, ...maybe('page', options.page), ...maybe('pageSize', options.pageSize) },
+      request,
+    );
+    return dedupeBooks(page.results.map(bookFromAudible).filter(languageFilter(languages)));
+  }
+
   return {
     searchBooks,
     searchAuthors,
+    browseBooks,
     getAuthorWithBooks,
     getBook,
     getChapters(asin, options = {}) {

@@ -1,4 +1,5 @@
 import type { Scheduler } from '../../scheduler.js';
+import type { AudioRequestsService } from './audio-requests.js';
 import type { RequestsService } from './service.js';
 import type { WatchlistService } from './watchlist.js';
 
@@ -7,11 +8,15 @@ export const WATCHLIST_SYNC_JOB = 'WatchlistSync';
 export const REQUESTS_DIGEST_JOB = 'RequestsDigest';
 export const REQUESTS_POLICY_SWEEP_JOB = 'RequestsPolicySweep';
 
-export function registerRequestsJobs(scheduler: Scheduler, requests: RequestsService, watchlist: WatchlistService): void {
+export function registerRequestsJobs(scheduler: Scheduler, requests: RequestsService, watchlist: WatchlistService, audio?: AudioRequestsService): void {
   scheduler.register({
     name: REQUESTS_STATUS_SYNC_JOB,
     cron: '*/5 * * * *',
-    handler: ({ signal }) => requests.syncStatuses(signal),
+    handler: async ({ signal }) => {
+      const video = await requests.syncStatuses(signal);
+      // Music and audiobook requests complete in the same pass.
+      return audio ? `${video}; ${await audio.syncStatuses(signal)}` : video;
+    },
   });
   scheduler.register({
     name: WATCHLIST_SYNC_JOB,

@@ -16,7 +16,7 @@ import type { Db } from '../../db/index.js';
 import { movies, notifications, series, tags as tagTable } from '../../db/schema.js';
 import { toMediaInfo } from '../notifications/index.js';
 import { can } from './permissions.js';
-import type { issues, mediaRequests } from './schema.js';
+import type { audioRequests, issues, mediaRequests } from './schema.js';
 import { allUserRows, findUserRow, requestSettingsOf, userPermissions, type UserRow } from './users.js';
 
 // Request and issue notifications (docs/spec/requests.md sections 12-13).
@@ -29,6 +29,7 @@ import { allUserRows, findUserRow, requestSettingsOf, userPermissions, type User
 // notifications). The daily digest goes to system connections only.
 
 type RequestRow = typeof mediaRequests.$inferSelect;
+type AudioRequestRow = typeof audioRequests.$inferSelect;
 type IssueRow = typeof issues.$inferSelect;
 
 export type RequestNoticeKind = 'created' | 'approved' | 'declined' | 'available';
@@ -123,6 +124,73 @@ export class RequestNotifier {
         break;
       case 'declined':
         event = { ...base, type: 'requestDeclined', request: info, ...(extra.reason ? { reason: extra.reason } : {}) };
+        break;
+    }
+    const audience =
+      kind === 'created'
+        ? this.admins(Permission.MANAGE_REQUESTS).filter((u) => u.id !== req.requestedById)
+        : requester
+          ? [requester]
+          : [];
+    await this.fanOut(audience, event, TYPE_KEY[kind]);
+  }
+
+  /**
+   * Music and audiobook requests: the same four events and audiences as video requests. They carry
+   * no deep links (the web's `/requests/:id` pages are video requests), so `applicationUrl` is left out.
+   */
+  async audioRequest(kind: RequestNoticeKind, req: AudioRequestRow, extra: { reason?: string } = {}): Promise<void> {
+    const requester = findUserRow(this.db, req.requestedById);
+    const info: RequestInfo = {
+      id: req.id,
+      requestedBy: {
+        id: req.requestedById,
+        username: requester?.displayName ?? requester?.username ?? `user ${req.requestedById}`,
+        ...(requester?.avatar ? { avatar: requester.avatar } : {}),
+        ...(requester?.email ? { email: requester.email } : {}),
+      },
+      status: kind === 'created' ? (req.status === 'approved' ? 'approved' : 'pending') : kind === 'declined' ? 'declined' : kind === 'available' ? 'available' : 'approved',
+    };
+    const { applicationUrl: _url, ...base } = this.base();
+    const music = req.kind === 'album' || req.kind === 'artist';
+    // MediaInfo.title is the artist / author; the album or book rides alongside.
+    const person = req.kind === 'album' || req.kind === 'book' ? (req.subtitle ?? req.title) : req.title;
+    const media: MediaInfo = {
+      id: 0,
+      mediaType: music ? 'music' : 'audiobook',
+      title: person,
+      year: req.year ?? 0,
+      tmdbId: 0,
+      path: '',
+      genres: [],
+      tags: [],
+      images: req.coverUrl ? [{ coverType: 'poster', url: req.coverUrl }] : [],
+    };
+    const parts =
+      req.kind === 'album'
+        ? { artist: { id: 0, name: person, ...(req.parentForeignId ? { mbArtistId: req.parentForeignId } : {}) }, album: { id: req.libraryId ?? 0, title: req.title, mbReleaseGroupId: req.foreignId } }
+        : req.kind === 'artist'
+          ? { artist: { id: req.libraryId ?? 0, name: req.title, mbArtistId: req.foreignId } }
+          : req.kind === 'book'
+            ? {
+                author: { id: 0, name: person, ...(req.parentForeignId ? { asin: req.parentForeignId } : {}) },
+                book: { id: req.libraryId ?? 0, title: req.title, narrators: [], asin: req.foreignId },
+              }
+            : { author: { id: req.libraryId ?? 0, name: req.title, asin: req.foreignId } };
+    const common = { ...base, media, ...parts };
+    let event: NotificationEvent;
+    switch (kind) {
+      case 'created':
+        event = { ...common, type: 'requestCreated', request: info };
+        break;
+      case 'approved':
+        event = { ...common, type: 'requestApproved', request: info };
+        break;
+      case 'available':
+        event = { ...common, type: 'requestAvailable', request: info };
+        break;
+      case 'declined':
+        event = { ...common, type: 'requestDeclined', request: info, ...(extra.reason ? { reason: extra.reason } : {}) };
         break;
     }
     const audience =

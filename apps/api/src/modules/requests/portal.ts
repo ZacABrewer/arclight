@@ -63,7 +63,11 @@ export class TokenBuckets {
 export type MediaServerLoginOption = PublicPortal['loginMethods']['mediaServer'];
 
 /** GET /public/portal. */
-export function publicPortal(requests: RequestsService, mediaServerLogin: () => MediaServerLoginOption): PublicPortal {
+export function publicPortal(
+  requests: RequestsService,
+  mediaServerLogin: () => MediaServerLoginOption,
+  features: () => PublicPortal['features'] = () => undefined,
+): PublicPortal {
   const s = requests.settings();
   const server = mediaServerLogin();
   return {
@@ -73,5 +77,6 @@ export function publicPortal(requests: RequestsService, mediaServerLogin: () => 
     message: s.publicPortal.message,
     allowAnonymousDiscover: s.publicPortal.enabled && s.publicPortal.allowAnonymousDiscover,
     loginMethods: { local: true, mediaServer: server, plex: server?.kind === 'plex' },
+    features: features(),
   };
 }

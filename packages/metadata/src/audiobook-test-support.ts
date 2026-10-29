@@ -109,6 +109,10 @@ export function audibleRoute(url: URL): Response {
   }
   if (/project hail mary/i.test(all) && q.get('page') === '0') return jsonResponse(audSearch);
   if (/legion|bobiverse/i.test(all) && q.get('page') === '0') return jsonResponse(audSearchSeries);
+  // Browse (Discover): no search terms, only an order.
+  if (!q.get('author') && !all.trim() && q.get('products_sort_by') && q.get('page') === '0') {
+    return jsonResponse(q.get('products_sort_by') === 'BestSellers' ? audSearch : audSearchSeries);
+  }
   return jsonResponse(audEmpty);
 }
 

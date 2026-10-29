@@ -15,7 +15,9 @@ import type {
   UpdateArtistRequest,
 } from '@arclight/shared';
 import type { DeleteMediaOptions } from '../api/library.js';
+import { ApiError } from '../api/client.js';
 import { musicApi } from '../api/music.js';
+import { publicPortalApi } from '../api/requests.js';
 import { profilesApi } from '../api/profiles.js';
 import { useToast } from '../components/toast.js';
 import { upsertJob } from '../live.js';
@@ -36,7 +38,17 @@ export const FEATURES_OFF: FeatureSettings = { music: false, audiobooks: false }
  * or a person who may not read settings), so music never shows by accident.
  */
 export function useFeatureSettings() {
-  return useQuery({ queryKey: musicKeys.features, queryFn: musicApi.settings.features.get, retry: false, staleTime: 60_000 });
+  return useQuery({ queryKey: musicKeys.features, queryFn: loadFeatures, retry: false, staleTime: 60_000 });
+}
+
+/** Signed out (portal visitors), the flags come from the public portal answer instead. */
+async function loadFeatures(): Promise<FeatureSettings> {
+  try {
+    return await musicApi.settings.features.get();
+  } catch (err) {
+    if (!(err instanceof ApiError) || err.status !== 401) throw err;
+    return (await publicPortalApi.get()).features ?? FEATURES_OFF;
+  }
 }
 
 /** The flags as plain values (`FEATURES_OFF` while loading or on error). */

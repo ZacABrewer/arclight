@@ -29,6 +29,7 @@ export * from './logs.js';
 export * from './debug.js';
 export * from './redact.js';
 export * from './requests.js';
+export * from './audio-requests.js';
 export * from './compat.js';
 export * from './migrate.js';
 export * from './subtitles.js';

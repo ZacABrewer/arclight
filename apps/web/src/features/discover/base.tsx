@@ -40,6 +40,12 @@ export type DiscoverPath =
   | '/studio/$id'
   | '/network/$id'
   | '/provider/$id'
+  | '/music'
+  | '/music/album/$mbid'
+  | '/music/artist/$mbid'
+  | '/audiobooks'
+  | '/audiobooks/book/$asin'
+  | '/audiobooks/author/$asin'
   | '/requests'
   | '/issues'
   | '/profile';

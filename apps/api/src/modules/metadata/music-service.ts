@@ -2,11 +2,13 @@ import {
   buildMusicBrainzUserAgent,
   coverArtReleaseGroupFrontUrl,
   createFanartClient,
+  createListenBrainzClient,
   createMusicBrainzClient,
   createWikidataClient,
   defaultRateLimiter,
   type FanartClient,
   type FetchLike,
+  type ListenBrainzClient,
   type MbLink,
   type RateLimiter,
   type RequestPriority,
@@ -21,8 +23,9 @@ import { createMetadataCacheStore, withPersistentCache, type CachedMusicBrainzCl
 
 // Music metadata clients built from the `musicMetadata` settings section: MusicBrainz behind
 // the persistent cache, artist images from Fanart.tv (when a key is set) or Wikidata/Commons,
-// album covers as Cover Art Archive URLs. Clients are rebuilt when the settings they depend on
-// change; the process-wide rate limiter keeps the 1 req/s budget across rebuilds.
+// album covers as Cover Art Archive URLs, ListenBrainz charts for music Discover. Clients are
+// rebuilt when the settings they depend on change; the process-wide rate limiter keeps the
+// 1 req/s budget across rebuilds.
 
 export const PROJECT_URL = 'https://github.com/ZacABrewer/arclight';
 
@@ -53,6 +56,7 @@ export class MusicMetadataService {
   private client: { key: string; value: CachedMusicBrainzClient } | null = null;
   private wikidata: { key: string; value: WikidataClient } | null = null;
   private fanart: { key: string; value: FanartClient } | null = null;
+  private listen: { key: string; value: ListenBrainzClient } | null = null;
 
   constructor(
     private readonly deps: { db: Db; log: Logger; overrides?: MusicProviderOverrides },
@@ -82,6 +86,21 @@ export class MusicMetadataService {
     });
     const value = withPersistentCache(inner, this.store);
     this.client = { key, value };
+    return value;
+  }
+
+  /** ListenBrainz (keyless) for music Discover: fresh releases and sitewide charts. */
+  listenBrainz(): ListenBrainzClient {
+    const ua = musicUserAgent(this.settings().contactEmail);
+    if (this.listen?.key === ua) return this.listen.value;
+    const o = this.deps.overrides ?? {};
+    const value = createListenBrainzClient({
+      userAgent: ua,
+      rateLimiter: o.rateLimiter ?? defaultRateLimiter,
+      ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}),
+      ...(o.now ? { now: o.now } : {}),
+    });
+    this.listen = { key: ua, value };
     return value;
   }
 

@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import type { MediaRequest } from '@arclight/shared';
-import { Button, EmptyState, Modal, PageHeader, Pane, Timeline, type TimelineItem } from '../../arclight/index.js';
+import { Button, EmptyState, Modal, PageHeader, Pane, Segmented, Timeline, type TimelineItem } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
 import { DLink, titleTarget } from '../../features/discover/base.js';
 import { HeldChip } from '../../features/requests/policy-drawer.js';
 import { REQUEST_STATUS_META, formatDateTime, seasonsLabel, usePermissions } from '../../features/requests/status.js';
+import { useFeatures } from '../../hooks/music.js';
 import { useDeleteRequest, useRequests } from '../../hooks/requests.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
+import { AudioMyRequests } from './audio-request-list.js';
 import '../../components/media/media-kit.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -16,8 +18,8 @@ export interface TimelineStep {
   at?: string;
 }
 
-/** Requested → decided (approved/declined/failed) → available. */
-export function requestTimeline(r: MediaRequest): TimelineStep[] {
+/** Requested → decided (approved/declined/failed) → available. Also used for music and audiobook requests. */
+export function requestTimeline(r: Pick<MediaRequest, 'status' | 'mediaStatus' | 'createdAt' | 'updatedAt'>): TimelineStep[] {
   const steps: TimelineStep[] = [{ label: t('common.requested'), done: true, at: r.createdAt }];
   if (r.status === 'declined') return [...steps, { label: t('common.declined'), done: true, at: r.updatedAt }];
   if (r.status === 'failed') return [...steps, { label: t('common.approved'), done: true }, { label: t('requests.myRequests.failedToAdd'), done: true, at: r.updatedAt }];
@@ -67,10 +69,24 @@ export function requestTimelineItem(r: MediaRequest, aside?: React.ReactNode): T
   };
 }
 
+export type MyRequestsMedia = 'video' | 'music' | 'audiobook';
+
+/** The media switch of My requests: Movies & TV, then Music / Audiobooks while their flag is on. */
+export function myRequestsMediaOptions(features: { music: boolean; audiobooks: boolean }): Array<{ value: MyRequestsMedia; label: string }> {
+  return [
+    { value: 'video', label: t('requests.moviesAndTv') },
+    ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
+    ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+  ];
+}
+
 export function MyRequestsPage() {
   const { userId } = usePermissions();
-  const list = useRequests({ requestedBy: userId ?? undefined, take: 100, sort: 'added', sortDirection: 'desc' }, userId !== null);
-  const [cancelling, setCancelling] = useState<MediaRequest | null>(null);
+  const features = useFeatures();
+  const [picked, setPicked] = useState<MyRequestsMedia>('video');
+  const options = myRequestsMediaOptions(features);
+  // A flag turned off while its tab was open falls back to Movies & TV.
+  const media = options.some((o) => o.value === picked) ? picked : 'video';
 
   return (
     <>
@@ -82,10 +98,28 @@ export function MyRequestsPage() {
             {t('requests.myRequests.discoverTitles')}
           </DLink>
         }
-      />
+      >
+        {options.length > 1 ? <Segmented aria-label={t('common.mediaType')} value={media} onChange={setPicked} options={options} /> : null}
+      </PageHeader>
       {userId === null ? (
         <EmptyState title={t('requests.myRequests.noUserAccount')}>{t('requests.myRequests.myRequestsListsTheRequests')}</EmptyState>
-      ) : list.isPending ? (
+      ) : media === 'video' ? (
+        <VideoRequests userId={userId} />
+      ) : (
+        <AudioMyRequests key={media} domain={media} userId={userId} />
+      )}
+    </>
+  );
+}
+
+/** The caller's movie and series requests as a timeline. */
+function VideoRequests({ userId }: { userId: number }) {
+  const list = useRequests({ requestedBy: userId, take: 100, sort: 'added', sortDirection: 'desc' });
+  const [cancelling, setCancelling] = useState<MediaRequest | null>(null);
+
+  return (
+    <>
+      {list.isPending ? (
         <Loading />
       ) : list.isError ? (
         <QueryError error={list.error} title={t('requests.myRequests.couldNotLoadYourRequests')} onRetry={() => void list.refetch()} />

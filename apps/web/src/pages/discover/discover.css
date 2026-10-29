@@ -113,3 +113,19 @@
 @media (max-width: 767.98px) {
   .mk-hero__actions .al-btn, .dk-filters .al-btn, .dk-filters .al-select, .dk-filters .al-input { min-height: 44px; }
 }
+
+/* ---------- music and audiobooks: square covers, card Request, search form ---------- */
+.dk-card--square .al-poster, .dk-audio-hero__cover.al-poster { aspect-ratio: 1 / 1; }
+.dk-card__actions { margin-top: 8px; }
+.dk-card__actions .al-btn { max-width: 100%; }
+.dk-audio-hero { margin-bottom: 40px; }
+.dk-audio-hero__actions { align-items: center; }
+.dk-audio-reason { flex-basis: 100%; }
+.dk-audio-search { display: flex; gap: 8px; }
+.dk-audio-search .al-input { flex: 1; min-width: 0; }
+.dk-names a { color: inherit; }
+@media (max-width: 767.98px) {
+  .dk-audio-hero { margin-bottom: 24px; }
+  .dk-audio-search { width: 100%; }
+  .dk-card__actions .al-btn, .dk-audio-search .al-btn, .dk-audio-search .al-input { min-height: 44px; }
+}

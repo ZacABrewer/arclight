@@ -60,6 +60,7 @@ describe('public request portal', () => {
       message: 'Ask for anything family friendly',
       allowAnonymousDiscover: false,
       loginMethods: { local: true, mediaServer: null, plex: false },
+      features: { music: false, audiobooks: false },
     });
     expect((await h.get('/discover/movies')).statusCode).toBe(401);
     configureServer(h.db, h.servers, 'plex');

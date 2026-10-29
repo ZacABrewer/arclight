@@ -67,7 +67,7 @@ import {
 import { CertificationGuard, restrictionsOfSettings } from './certification.js';
 import { evaluatePolicy, needsSizeEstimate, type BudgetUsage, type PolicyDecision, type PolicyResult } from './policy.js';
 import { quotaFor } from './quota.js';
-import { mediaRequests, overrideRules, requestMediaStatus, seasonRequests, issues, issueComments, watchlistItems } from './schema.js';
+import { audioRequests, mediaRequests, overrideRules, requestMediaStatus, seasonRequests, issues, issueComments, watchlistItems } from './schema.js';
 import {
   libraryAvailability,
   overlayRequests,
@@ -1029,6 +1029,7 @@ export class RequestsService {
     removed += this.db.delete(mediaRequests).where(sql`${mediaRequests.requestedById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(issues).where(sql`${issues.createdById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(issueComments).where(sql`${issueComments.userId} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
+    removed += this.db.delete(audioRequests).where(sql`${audioRequests.requestedById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(watchlistItems).where(sql`${watchlistItems.userId} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     return removed;
   }

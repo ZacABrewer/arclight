@@ -412,3 +412,12 @@ describe('groupSeries', () => {
     expect(series[0]?.books.map((e) => e.book.title)).toEqual(['One', 'Two', 'Three', 'Extra']);
   });
 });
+
+describe('AudiobookCatalog.browseBooks', () => {
+  it('maps the Audible listing to catalog books and never asks OpenLibrary', async () => {
+    const { catalog, hosts } = makeCatalog();
+    const books = await catalog.browseBooks('bestsellers', { pageSize: 20 });
+    expect(books.map((b) => b.asin)).toContain(AUDIOBOOK_IDS.bookAsin);
+    expect(hosts().every((h) => h.startsWith('api.audible.'))).toBe(true);
+  });
+});

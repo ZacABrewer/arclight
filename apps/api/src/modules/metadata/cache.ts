@@ -5,6 +5,7 @@ import {
   type MbBrowseReleaseGroupsOptions,
   type MbRelease,
   type MbReleaseGroup,
+  type MbReleaseGroupDetail,
   type MbReleaseSummary,
   type MusicBrainzCacheTtls,
   type MusicBrainzClient,
@@ -88,6 +89,7 @@ export interface CachedMusicBrainzClient extends MusicBrainzClient {
   browseReleaseGroups(artistMbid: string, options?: MbBrowseReleaseGroupsOptions & { fresh?: boolean }): Promise<MbReleaseGroup[]>;
   browseReleases(releaseGroupMbid: string, options?: CachedRequestOptions): Promise<MbReleaseSummary[]>;
   getRelease(mbid: string, options?: CachedRequestOptions): Promise<MbRelease>;
+  getReleaseGroup(mbid: string, options?: CachedRequestOptions): Promise<MbReleaseGroupDetail>;
 }
 
 /**
@@ -137,5 +139,7 @@ export function withPersistentCache(
       cached(`releases/${mbid.toLowerCase()}`, ttl.releases, options?.fresh, () => client.browseReleases(mbid, strip(options))),
     getRelease: (mbid, options) =>
       cached(`release/${mbid.toLowerCase()}`, ttl.release, options?.fresh, () => client.getRelease(mbid, strip(options))),
+    getReleaseGroup: (mbid, options) =>
+      cached(`release-group/${mbid.toLowerCase()}`, ttl.releaseGroups, options?.fresh, () => client.getReleaseGroup(mbid, strip(options))),
   };
 }

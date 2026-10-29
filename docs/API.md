@@ -1136,6 +1136,64 @@ links; email/Pushover in the body (Pushover's URL = the request); webhooks get a
 array next to the raw event. The `requestsDigest` event (job `RequestsDigest`) goes to
 connections with `onRequestCreated` or `onIssueCreated`.
 
+### Music and audiobook requests
+
+Implemented in `apps/api/src/modules/requests/audio-*.ts` (contract:
+`packages/shared/src/audio-requests.ts`). Kept apart from video requests: rows live in
+`audio_requests`, keyed on MusicBrainz ids (album = release group, artist) or Audible ASINs
+(book, author). Every route answers `404 MUSIC_DISABLED` / `AUDIOBOOKS_DISABLED` while the
+domain's feature flag is off. Discover routes follow the movie/TV discover access rules (public
+while the portal allows anonymous discover, rate-limited per IP); the rest need sign-in.
+
+Catalogue sources: music home from ListenBrainz (fresh releases of the last 14 days, albums and
+EPs only; the sitewide release-group chart of the week), with Cover Art Archive
+`release-group/<mbid>/front-250` URLs and no MusicBrainz call; music search, album and artist
+pages from MusicBrainz; audiobooks from the anonymous Audible catalogue (`BestSellers` and
+`-ReleaseDate` listings, search) and Audnexus, in `audiobookMetadata.audibleRegion` unless
+`?region` names another marketplace. Answers are cached in the api (home 1 hour, search
+15 minutes, details 1 hour); a failing home source leaves its section empty. `mediaStatus`,
+`requestId`, `requestStatus` and `libraryId` are computed fresh per answer: album = every
+track has a file → `available`, some → `partiallyAvailable`, monitored without files →
+`processing`; artist/author likewise over their monitored albums/books; book = file →
+`available`, monitored → `processing`; an open request without library files → `pending`
+(awaiting approval) or `processing` (approved).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/discover/music` | `AudioDiscoverHome`: sections `music-fresh` "Fresh releases", `music-top` "Popular this week" |
+| GET | `/discover/music/search` | `?query` → `AudioDiscoverSearchResult` (`people` = artists, `titles` = albums) |
+| GET | `/discover/music/album/:mbid` | `AudioAlbumDetail` (release group, artist, genres, track list of the preferred edition, more by the artist) |
+| GET | `/discover/music/artist/:mbid` | `AudioArtistDetail` (studio albums and EPs first, newest first) |
+| GET | `/discover/audiobooks` | `?region` → sections `book-bestsellers` "Best sellers", `book-new` "New releases" |
+| GET | `/discover/audiobooks/search` | `?query&region` → `people` = authors, `titles` = books |
+| GET | `/discover/audiobooks/book/:asin` | `?region` → `AudioBookDetail` (more by the primary author) |
+| GET | `/discover/audiobooks/author/:asin` | `?region` → `AudioAuthorDetail` |
+| GET | `/audiorequest` | `AudioRequestListQuery` (`take`, `skip`, `filter`, `domain` all/music/audiobook, `requestedBy`, `sortDirection`) → `AudioRequestPage`; own requests only without `MANAGE_REQUESTS`/`REQUEST_VIEW` |
+| GET | `/audiorequest/count` | `AudioRequestCount` (`total`, `music`, `audiobook`, `pending`) over the visible requests |
+| GET | `/audiorequest/:id` | One `AudioRequest` (owner, `MANAGE_REQUESTS` or `REQUEST_VIEW`) |
+| POST | `/audiorequest` | `CreateAudioRequest` → 201 `AudioRequest`. Needs `REQUEST` or `REQUEST_MUSIC` / `REQUEST_AUDIOBOOK`; 400 for an id that is not an MBID/ASIN, 409 when an active (pending/approved) request exists or the item is available. Title, artist/author, year, cover and parent come from the discover lookups. Auto-approved when the requester (or the calling manager) holds `AUTO_APPROVE` or `MANAGE_REQUESTS` |
+| POST | `/audiorequest/:id/approve` | `MANAGE_REQUESTS`: adds the item to the library and searches (below) |
+| POST | `/audiorequest/:id/decline` | `MANAGE_REQUESTS`; optional `{ reason }` |
+| POST | `/audiorequest/:id/retry` | `MANAGE_REQUESTS`; re-runs a failed approval |
+| DELETE | `/audiorequest/:id` | `MANAGE_REQUESTS`, or the owner while pending |
+| GET | `/settings/audiorequests` | `MANAGE_SETTINGS`: `AudioRequestDefaults` (settings section `audioRequests`) |
+| PUT | `/settings/audiorequests` | `MANAGE_SETTINGS`: replace it; root folders must be registered for the media type, profiles must be of the domain (400 otherwise) |
+
+Approval: album → the artist is added (monitor `none`, new albums `none`) unless present; once
+its release groups are synced (ArtistAdd, or RefreshArtist for an artist already in the library
+without the album row) the album and artist are monitored and an `AlbumSearch` runs, so the
+request answers `approved` before `libraryId` is set. Artist → added with every album monitored
+and search on add (an existing artist is monitored + `ArtistSearch`). Book → `POST /book` logic
+with an author block and search on add (an existing book is monitored + `BookSearch`). Author →
+added with every book monitored and search on add (existing: monitored + `AuthorSearch`).
+Root folder and quality profile come from `audioRequests`, else the first root folder of the
+media type and the first quality profile of the domain. Any failure (no root folder, album
+filtered out by the artist's album-type profile, MusicBrainz down) marks the request `failed`
+with `failureReason`. `RequestsStatusSync` completes approved requests once the item is
+`available`. Notifications use the same four request events and audiences as video requests,
+with `media.mediaType` `music`/`audiobook` and `album`/`artist`/`book`/`author` blocks, and no
+deep links. WebSocket `request` events of audio requests carry `audio: true`.
+
 ## media-servers
 
 Module `apps/api/src/modules/media-servers`; contract `packages/shared/src/media-servers.ts`;
@@ -1976,7 +2034,7 @@ of them with `POST /jobs/run`.
 | `MissingAlbumSearch` | `10 4 * * *` | releases | Music: searches the albums `GET /wanted/missing/albums` lists, in list order, past their back-off only, up to 50 a run, grouped per artist. Nothing while music is off |
 | `MissingBookSearch` | `20 4 * * *` | releases | Audiobooks: searches monitored, released books of monitored authors without a file, newest first, past their back-off only, up to 50 a run, grouped per author. Nothing while audiobooks are off |
 | `CutoffUnmetAudioSearch` | `30 4 * * *` | releases | Music and audiobooks: the same for albums whose lowest track quality, and books whose lowest file quality, is below the profile cutoff, up to 50 of each a run, each only while its feature is on |
-| `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library, or from the media server when `useMediaServerAvailability` is on (Jellyfin/Emby provider ids, Plex guids, per-season episode counts), completes requests, sends available notifications |
+| `RequestsStatusSync` | `*/5 * * * *` | requests | Recomputes media status from the library, or from the media server when `useMediaServerAvailability` is on (Jellyfin/Emby provider ids, Plex guids, per-season episode counts), completes requests (music and audiobook requests too), sends available notifications |
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists (users with a token) and Jellyfin/Emby favourites (linked users); auto-requests when `autoRequestFromWatchlist`, `AUTO_REQUEST*` and the per-type sync flag allow |
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |
 | `RequestsDigest` | `0 * * * *` | requests | Hourly tick; once a day at `digestHour` (when `digestEnabled`) sends one notification summarising pending requests and open issues (nothing when both are empty) |

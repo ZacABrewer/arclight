@@ -1,5 +1,5 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { DiscoverSliderType, IssueStatus, IssueType, MediaStatus, MediaType, RequestStatus, WatchlistSource } from '@arclight/shared';
+import type { AudibleRegion, AudioRequestKind, DiscoverSliderType, IssueStatus, IssueType, MediaStatus, MediaType, RequestStatus, WatchlistSource } from '@arclight/shared';
 
 // Requests module tables. User ids are plain integers, not foreign keys: modules do not
 // reference each other's tables, so rows of deleted users are removed by the service
@@ -165,4 +165,39 @@ export const watchlistItems = sqliteTable(
     createdAt: text('created_at').notNull(),
   },
   (t) => [uniqueIndex('watchlist_items_user_media_idx').on(t.userId, t.mediaType, t.tmdbId)],
+);
+
+/**
+ * Music and audiobook requests, keyed on MusicBrainz ids (album = release group, artist) or
+ * Audible ASINs (book, author) instead of TMDB ids. `library_id` is the artist/album/book/author
+ * row once the approval added it.
+ */
+export const audioRequests = sqliteTable(
+  'audio_requests',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    kind: text('kind').$type<AudioRequestKind>().notNull(),
+    status: text('status').$type<RequestStatus>().notNull(),
+    foreignId: text('foreign_id').notNull(),
+    /** Album: the artist MBID. Book: the primary author ASIN, when known. */
+    parentForeignId: text('parent_foreign_id'),
+    /** Audible marketplace (books, authors). */
+    region: text('region').$type<AudibleRegion>(),
+    title: text('title').notNull(),
+    subtitle: text('subtitle'),
+    year: integer('year'),
+    coverUrl: text('cover_url'),
+    requestedById: integer('requested_by_id').notNull(),
+    modifiedById: integer('modified_by_id'),
+    declineReason: text('decline_reason'),
+    failureReason: text('failure_reason'),
+    libraryId: integer('library_id'),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [
+    index('audio_requests_item_idx').on(t.kind, t.foreignId),
+    index('audio_requests_user_idx').on(t.requestedById),
+    index('audio_requests_status_idx').on(t.status),
+  ],
 );

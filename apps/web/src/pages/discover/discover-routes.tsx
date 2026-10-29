@@ -2,8 +2,11 @@ import type { ReactNode } from 'react';
 import { createRoute, type AnyRoute } from '@tanstack/react-router';
 import { DiscoverGenrePage, DiscoverKeywordPage, DiscoverMoviesPage, DiscoverNetworkPage, DiscoverProviderPage, DiscoverStudioPage, DiscoverTvPage, parseBrowseRouteSearch } from './discover-browse.js';
 import { CollectionPage } from './collection-page.js';
+import { parseAudioHomeSearch } from './audio-kit.js';
+import { AudiobookAuthorPage, AudiobookBookPage, AudiobooksHomePage, parseRegionSearch } from './audiobook-pages.js';
 import { DiscoverListPage, DiscoverTrendingPage, DiscoverUpcomingPage, parseKindSearch, parseTrendingSearch } from './discover-lists.js';
 import { DiscoverSearchPage, parseSearchParams } from './discover-search.js';
+import { MusicAlbumPage, MusicArtistPage, MusicHomePage } from './music-pages.js';
 import { PersonPage } from './person-page.js';
 import { MovieTitlePage, TvTitlePage } from './title-page.js';
 
@@ -29,5 +32,12 @@ export function discoverChildren<TParent extends AnyRoute>(getParentRoute: () =>
     createRoute({ getParentRoute, path: 'studio/$id', validateSearch: parseBrowseRouteSearch, component: DiscoverStudioPage }),
     createRoute({ getParentRoute, path: 'network/$id', validateSearch: parseBrowseRouteSearch, component: DiscoverNetworkPage }),
     createRoute({ getParentRoute, path: 'provider/$id', validateSearch: parseBrowseRouteSearch, component: DiscoverProviderPage }),
+    // Music and audiobooks (feature-flagged: the pages show "turned off" while the flag is off).
+    createRoute({ getParentRoute, path: 'music', validateSearch: parseAudioHomeSearch, component: MusicHomePage }),
+    createRoute({ getParentRoute, path: 'music/album/$mbid', component: MusicAlbumPage }),
+    createRoute({ getParentRoute, path: 'music/artist/$mbid', component: MusicArtistPage }),
+    createRoute({ getParentRoute, path: 'audiobooks', validateSearch: parseAudioHomeSearch, component: AudiobooksHomePage }),
+    createRoute({ getParentRoute, path: 'audiobooks/book/$asin', validateSearch: parseRegionSearch, component: AudiobookBookPage }),
+    createRoute({ getParentRoute, path: 'audiobooks/author/$asin', validateSearch: parseRegionSearch, component: AudiobookAuthorPage }),
   ] as const;
 }

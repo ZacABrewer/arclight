@@ -4,6 +4,7 @@ export {
   AUDIBLE_RESPONSE_GROUPS,
   createAudibleClient,
   type AudibleAuthorRef,
+  type AudibleBrowseQuery,
   type AudibleBibliographyOptions,
   type AudibleCacheTtls,
   type AudibleCatalogClient,

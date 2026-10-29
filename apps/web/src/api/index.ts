@@ -32,6 +32,7 @@ export {
   type CreateRequestOutcome,
   type DiscoverKind,
 } from './requests.js';
+export { audioDiscoverApi, audioRequestsApi, type AudioDomain } from './audio-requests.js';
 export { subtitlesApi, languageProfilesApi, uploadFormData } from './subtitles.js';
 export { torrentApi, type TorrentAction } from './torrent.js';
 export { solverApi } from './solver.js';

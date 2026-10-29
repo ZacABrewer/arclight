@@ -289,3 +289,23 @@ describe('Audible errors', () => {
     });
   });
 });
+
+describe('Audible browse', () => {
+  it('lists the catalogue by best sellers without search terms', async () => {
+    const { client, fake } = makeClient();
+    const page = await client.browseProducts({ sort: 'bestsellers', pageSize: 10 });
+    const q = fake.calls[0]!.url.searchParams;
+    expect(q.get('products_sort_by')).toBe('BestSellers');
+    expect(q.get('num_results')).toBe('10');
+    expect(q.get('page')).toBe('0');
+    expect(q.has('keywords')).toBe(false);
+    expect(q.has('title')).toBe(false);
+    expect(page.results.map((r) => r.asin)).toContain(AUDIOBOOK_IDS.bookAsin);
+  });
+
+  it('lists the newest releases with -ReleaseDate', async () => {
+    const { client, fake } = makeClient();
+    await client.browseProducts({ sort: 'newest' });
+    expect(fake.calls[0]!.url.searchParams.get('products_sort_by')).toBe('-ReleaseDate');
+  });
+});

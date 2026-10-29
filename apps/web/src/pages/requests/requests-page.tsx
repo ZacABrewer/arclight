@@ -39,8 +39,10 @@ import {
   useTitle,
   useUpdateRequest,
 } from '../../hooks/requests.js';
+import { useFeatures } from '../../hooks/music.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { ApproveDialog } from './approve-dialog.js';
+import { AudioRequestTable } from './audio-request-list.js';
 import '../../components/media/media-kit.css';
 import { t } from '../../i18n/index.js';
 
@@ -54,13 +56,29 @@ export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> =
 
 const PAGE_SIZE = 20;
 
-type MediaFilter = 'all' | 'movie' | 'series';
+type VideoFilter = 'all' | 'movie' | 'series';
+type MediaFilter = VideoFilter | 'music' | 'audiobook';
+
+/** The media filter: movies and series, then music and audiobooks while their flag is on. */
+export function requestMediaOptions(features: { music: boolean; audiobooks: boolean }): Array<{ value: MediaFilter; label: string }> {
+  return [
+    { value: 'all', label: t('requests.moviesAndSeries') },
+    { value: 'movie', label: t('common.movies') },
+    { value: 'series', label: t('common.series') },
+    ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
+    ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+  ];
+}
 
 export function RequestsPage() {
   const { can } = usePermissions();
   const manage = can(Permission.MANAGE_REQUESTS);
+  const features = useFeatures();
   const [tab, setTab] = useState<RequestFilter>(manage ? 'pending' : 'all');
-  const [mediaType, setMediaType] = useState<MediaFilter>('all');
+  const [picked, setPicked] = useState<MediaFilter>('all');
+  const mediaOptions = requestMediaOptions(features);
+  // A flag turned off while its list was open falls back to movies and series.
+  const mediaType = mediaOptions.some((o) => o.value === picked) ? picked : 'all';
 
   return (
     <>
@@ -73,12 +91,8 @@ export function RequestsPage() {
             <Select
               aria-label={t('requests.mediaTypeFilter')}
               value={mediaType}
-              onChange={(e) => setMediaType(e.currentTarget.value as MediaFilter)}
-              options={[
-                { value: 'all', label: t('requests.moviesAndSeries') },
-                { value: 'movie', label: t('common.movies') },
-                { value: 'series', label: t('common.series') },
-              ]}
+              onChange={(e) => setPicked(e.currentTarget.value as MediaFilter)}
+              options={mediaOptions}
             />
             <Link className="al-btn al-btn--secondary" to="/requests/mine">
               {t('common.myRequests')}
@@ -88,12 +102,16 @@ export function RequestsPage() {
       >
         <Tabs compact aria-label={t('requests.requestStatus')} value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((item) => ({ id: item.id, label: item.label }))} />
       </PageHeader>
-      <RequestList key={`${tab}-${mediaType}`} filter={tab} mediaType={mediaType} manage={manage} />
+      {mediaType === 'music' || mediaType === 'audiobook' ? (
+        <AudioRequestTable key={`${tab}-${mediaType}`} filter={tab} domain={mediaType} manage={manage} />
+      ) : (
+        <RequestList key={`${tab}-${mediaType}`} filter={tab} mediaType={mediaType} manage={manage} />
+      )}
     </>
   );
 }
 
-function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: MediaFilter; manage: boolean }) {
+function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: VideoFilter; manage: boolean }) {
   const [page, setPage] = useState(0);
   const [selected, setSelected] = useState<number[]>([]);
   const query: RequestListQuery = { filter, mediaType, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'added', sortDirection: 'desc' };

@@ -119,6 +119,26 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/request/bulk/decline': 'portal',
   'GET /api/v1/settings/requests': 'portal',
 
+  // ---- music and audiobook requests (service checks the permission bits; settings need MANAGE_SETTINGS)
+  'GET /api/v1/discover/music': 'portal publicWhen',
+  'GET /api/v1/discover/music/search': 'portal publicWhen',
+  'GET /api/v1/discover/music/album/:mbid': 'portal publicWhen',
+  'GET /api/v1/discover/music/artist/:mbid': 'portal publicWhen',
+  'GET /api/v1/discover/audiobooks': 'portal publicWhen',
+  'GET /api/v1/discover/audiobooks/search': 'portal publicWhen',
+  'GET /api/v1/discover/audiobooks/book/:asin': 'portal publicWhen',
+  'GET /api/v1/discover/audiobooks/author/:asin': 'portal publicWhen',
+  'GET /api/v1/audiorequest': 'portal',
+  'GET /api/v1/audiorequest/count': 'portal',
+  'GET /api/v1/audiorequest/:id': 'portal',
+  'POST /api/v1/audiorequest': 'portal',
+  'POST /api/v1/audiorequest/:id/approve': 'portal',
+  'POST /api/v1/audiorequest/:id/decline': 'portal',
+  'POST /api/v1/audiorequest/:id/retry': 'portal',
+  'DELETE /api/v1/audiorequest/:id': 'portal',
+  'GET /api/v1/settings/audiorequests': 'portal',
+  'PUT /api/v1/settings/audiorequests': 'portal',
+
   // ---- issues and watchlist (own; others' with the matching permissions)
   'GET /api/v1/issue': 'portal',
   'GET /api/v1/issue/count': 'portal',

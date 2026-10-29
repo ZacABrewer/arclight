@@ -68,6 +68,9 @@ describe('portal helpers', () => {
     expect(portalSection('/portal/tv')).toBe('/tv');
     expect(portalSection('/portal/tv/1399')).toBe('/movies');
     expect(portalSection('/portal/requests')).toBe('/requests');
+    expect(portalSection('/portal/music')).toBe('/music');
+    expect(portalSection('/portal/music/album/rg-1')).toBe('/music');
+    expect(portalSection('/portal/audiobooks/book/B000TEST01')).toBe('/audiobooks');
   });
 });
 
@@ -144,6 +147,32 @@ describe('/portal', () => {
     const option = await screen.findByRole('option', { name: /Dune/ }, { timeout: 4000 });
     fireEvent.click(option);
     await waitFor(() => expect(router.state.location.pathname).toBe('/portal/movie/438631'));
+  });
+});
+
+describe('portal music and audiobooks', () => {
+  it('shows Music in the portal nav only while the music flag is on', async () => {
+    stubApi({
+      ...authRoutes(user()),
+      '/api/v1/public/portal': portal(),
+      '/api/v1/discoverslider': [],
+      '/api/v1/settings/features': { music: true, audiobooks: false },
+    });
+    renderAt('/portal');
+    const nav = await screen.findByRole('navigation', { name: 'Portal' });
+    expect((await within(nav).findByRole('link', { name: 'Music' })).getAttribute('href')).toBe('/portal/music');
+    expect(within(nav).queryByRole('link', { name: 'Audiobooks' })).toBeNull();
+    // The phone tab bar has no room: the home page links it instead.
+    expect(within(screen.getByRole('navigation', { name: 'Portal sections' })).queryByRole('link', { name: 'Music' })).toBeNull();
+    expect(within(screen.getByRole('navigation', { name: 'Browse' })).getByRole('link', { name: 'Music' }).getAttribute('href')).toBe('/portal/music');
+
+    cleanup();
+    vi.unstubAllGlobals();
+    stubApi({ ...authRoutes(user()), '/api/v1/public/portal': portal(), '/api/v1/discoverslider': [], '/api/v1/settings/features': { music: false, audiobooks: false } });
+    renderAt('/portal');
+    const off = await screen.findByRole('navigation', { name: 'Portal' });
+    expect(await within(off).findByRole('link', { name: 'My requests' })).toBeTruthy();
+    expect(within(off).queryByRole('link', { name: 'Music' })).toBeNull();
   });
 });
 

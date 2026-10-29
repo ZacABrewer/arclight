@@ -11,6 +11,7 @@ import type {
   MbMediumSummary,
   MbRelease,
   MbReleaseGroup,
+  MbReleaseGroupDetail,
   MbReleaseSummary,
   MbTrack,
 } from './types.js';
@@ -83,10 +84,15 @@ export function mapArtistSearchResult(wire: MbArtistWire): MbArtistSearchResult 
   return { ...artistCore(wire), score: wire.score ?? 0 };
 }
 
-export function mapArtist(wire: MbArtistWire): MbArtist {
-  const genres = [...(wire.genres ?? [])]
+/** Genre names, most-voted first. */
+function genreNames(genres: readonly { name: string; count?: number | null | undefined }[] | null | undefined): string[] {
+  return [...(genres ?? [])]
     .sort((a, b) => (b.count ?? 0) - (a.count ?? 0) || a.name.localeCompare(b.name))
     .map((g) => g.name);
+}
+
+export function mapArtist(wire: MbArtistWire): MbArtist {
+  const genres = genreNames(wire.genres);
   const aliases: MbAlias[] = (wire.aliases ?? []).map((alias) => ({
     name: alias.name,
     sortName: text(alias['sort-name']) ?? alias.name,
@@ -115,6 +121,10 @@ export function mapReleaseGroup(wire: MbReleaseGroupWire): MbReleaseGroup {
     artistCredits: mapArtistCredits(wire['artist-credit']),
     ...maybe('score', wire.score ?? undefined),
   };
+}
+
+export function mapReleaseGroupDetail(wire: MbReleaseGroupWire): MbReleaseGroupDetail {
+  return { ...mapReleaseGroup(wire), genres: genreNames(wire.genres) };
 }
 
 function mediumSummary(wire: MbMediumWire, index: number): MbMediumSummary {

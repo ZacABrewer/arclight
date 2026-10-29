@@ -32,6 +32,7 @@ export type {
   MbMediumSummary,
   MbRelease,
   MbReleaseGroup,
+  MbReleaseGroupDetail,
   MbReleaseSummary,
   MbSearchPage,
   MbTrack,

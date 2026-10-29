@@ -6,6 +6,7 @@ export {
   type CatalogAuthorRef,
   type CatalogBookQuery,
   type CatalogBookRef,
+  type CatalogBrowseSort,
   type CatalogRequestOptions,
   type CatalogSearchOptions,
   type DefaultAudiobookCatalogOptions,

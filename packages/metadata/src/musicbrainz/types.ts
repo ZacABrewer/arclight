@@ -86,6 +86,12 @@ export interface MbReleaseGroup {
   score?: number;
 }
 
+/** One release group by id (lookup with artist credits and genres). */
+export interface MbReleaseGroupDetail extends MbReleaseGroup {
+  /** Genre names, most-voted first. */
+  genres: string[];
+}
+
 export interface MbMediumSummary {
   /** 1-based disc position. */
   position: number;

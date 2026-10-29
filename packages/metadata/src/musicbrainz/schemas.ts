@@ -74,6 +74,8 @@ export const mbReleaseGroupSchema = z
     'first-release-date': optString,
     score: optNumber,
     'artist-credit': z.array(mbArtistCreditSchema).nullable().optional(),
+    /** Only with `inc=genres` (release-group lookup). */
+    genres: z.array(mbGenreSchema).nullable().optional(),
   })
   .loose();
 export type MbReleaseGroupWire = z.infer<typeof mbReleaseGroupSchema>;

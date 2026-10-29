@@ -69,7 +69,17 @@ export interface AudibleClientOptions {
   now?: () => Date;
 }
 
-export type AudibleSort = 'relevance' | 'newest' | 'oldest' | 'title';
+export type AudibleSort = 'relevance' | 'newest' | 'oldest' | 'title' | 'bestsellers';
+
+/** A catalogue listing without search terms (Discover sliders). */
+export interface AudibleBrowseQuery {
+  /** `bestsellers` or `newest`; the other sorts work too. */
+  sort: AudibleSort;
+  /** 1-based. Defaults to 1. */
+  page?: number;
+  /** 1–50, default 20. */
+  pageSize?: number;
+}
 
 export interface AudibleSearchQuery {
   title?: string;
@@ -110,6 +120,8 @@ export interface AudibleCatalogClient {
     query: AudibleSearchQuery,
     options?: AudibleSearchOptions,
   ): Promise<AudiblePage<AudibleProduct>>;
+  /** The whole catalogue in one order (best sellers, newest), without search terms. */
+  browseProducts(query: AudibleBrowseQuery, options?: AudibleSearchOptions): Promise<AudiblePage<AudibleProduct>>;
   /** Every audiobook credited to the author (all pages), newest first. */
   authorBibliography(
     author: string | AudibleAuthorRef,
@@ -123,6 +135,7 @@ const SORTS: Record<AudibleSort, string> = {
   newest: '-ReleaseDate',
   oldest: 'ReleaseDate',
   title: 'Title',
+  bestsellers: 'BestSellers',
 };
 
 export function createAudibleClient(options: AudibleClientOptions = {}): AudibleCatalogClient {
@@ -215,6 +228,13 @@ export function createAudibleClient(options: AudibleClientOptions = {}): Audible
     return { total, page, pageSize, results };
   }
 
+  async function browseProducts(query: AudibleBrowseQuery, opts: AudibleSearchOptions = {}): Promise<AudiblePage<AudibleProduct>> {
+    const page = Math.max(1, Math.floor(query.page ?? 1));
+    const pageSize = Math.min(MAX_PAGE_SIZE, Math.max(1, Math.floor(query.pageSize ?? DEFAULT_PAGE_SIZE)));
+    const { total, results } = await fetchPage({}, page, pageSize, query.sort, opts, ttls.search);
+    return { total, page, pageSize, results };
+  }
+
   async function authorBibliography(
     author: string | AudibleAuthorRef,
     options: AudibleBibliographyOptions = {},
@@ -256,6 +276,7 @@ export function createAudibleClient(options: AudibleClientOptions = {}): Audible
     region,
     baseUrl,
     searchProducts,
+    browseProducts,
     authorBibliography,
     clearCache: () => transport.clearCache(),
   };

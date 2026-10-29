@@ -42,6 +42,8 @@ export const Permission = {
   AUTO_REQUEST_TV: 33554432,
   RECENT_VIEW: 67108864,
   WATCHLIST_VIEW: 134217728,
+  REQUEST_MUSIC: 268435456,
+  REQUEST_AUDIOBOOK: 536870912,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
@@ -72,6 +74,8 @@ export const PERMISSION_INFO: readonly PermissionInfo[] = [
   { name: 'REQUEST_4K', value: Permission.REQUEST_4K, group: 'request', label: 'Request 4K', description: 'Request 4K movies and series.' },
   { name: 'REQUEST_4K_MOVIE', value: Permission.REQUEST_4K_MOVIE, group: 'request', label: 'Request 4K movies', description: 'Request 4K movies only.' },
   { name: 'REQUEST_4K_TV', value: Permission.REQUEST_4K_TV, group: 'request', label: 'Request 4K series', description: 'Request 4K series only.' },
+  { name: 'REQUEST_MUSIC', value: Permission.REQUEST_MUSIC, group: 'request', label: 'Request music', description: 'Request albums and artists (also granted by Request).' },
+  { name: 'REQUEST_AUDIOBOOK', value: Permission.REQUEST_AUDIOBOOK, group: 'request', label: 'Request audiobooks', description: 'Request audiobooks and authors (also granted by Request).' },
   { name: 'REQUEST_ADVANCED', value: Permission.REQUEST_ADVANCED, group: 'request', label: 'Advanced requests', description: 'Choose root folder, quality profile and tags on a request.' },
   { name: 'AUTO_APPROVE', value: Permission.AUTO_APPROVE, group: 'autoApprove', label: 'Auto-approve', description: 'Own movie and series requests are approved automatically.' },
   { name: 'AUTO_APPROVE_MOVIE', value: Permission.AUTO_APPROVE_MOVIE, group: 'autoApprove', label: 'Auto-approve movies', description: 'Own movie requests are approved automatically.' },
@@ -1229,7 +1233,7 @@ export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
  */
 export const PORTAL_ROUTE_SEGMENTS: readonly string[] = [
   'movies', 'tv', 'movie', 'person', 'search', 'trending', 'upcoming', 'list', 'collection',
-  'genre', 'keyword', 'studio', 'network', 'provider', 'requests', 'issues', 'profile',
+  'genre', 'keyword', 'studio', 'network', 'provider', 'requests', 'issues', 'profile', 'music', 'audiobooks',
 ];
 
 /** "/watch", "watch" or "/Watch/" → "/watch". */
@@ -1351,6 +1355,8 @@ export const PublicPortal = z.object({
     mediaServer: z.object({ kind: MediaServerKind, name: z.string().optional() }).nullable(),
     plex: z.boolean(),
   }),
+  /** Which extra media types the catalogue offers, so anonymous visitors see Music/Audiobooks. */
+  features: z.object({ music: z.boolean(), audiobooks: z.boolean() }).optional(),
 });
 export type PublicPortal = z.infer<typeof PublicPortal>;
 

@@ -5,6 +5,7 @@ import { EmptyState, PageHeader, Segmented, Skeleton } from '../../arclight/inde
 import { QueryError } from '../../components/media/media-kit.js';
 import { DLink, useInPortal, type DiscoverTarget } from '../../features/discover/base.js';
 import { SLIDER_LABELS } from '../../features/requests/status.js';
+import { useFeatures } from '../../hooks/music.js';
 import { useDiscoverOptions, useDiscoverTiles, useSliderItems, useSliders } from '../../hooks/requests.js';
 import type { DiscoverKind } from '../../api/requests.js';
 import { DiscoverRow, TileRow } from './discover-kit.js';
@@ -19,9 +20,10 @@ export function sliderTitle(slider: Pick<DiscoverSlider, 'title' | 'type'>): str
   return slider.title ?? SLIDER_LABELS[slider.type];
 }
 
-/** Quick links under the page title. */
+/** Quick links under the page title (Music and Audiobooks while their feature flag is on). */
 export function BrowseLinks() {
   const inPortal = useInPortal();
+  const features = useFeatures();
   return (
     <nav className="mk-row" aria-label={t('discover.home.browse')}>
       <DLink className="mk-chip-link" to="/movies">
@@ -30,6 +32,16 @@ export function BrowseLinks() {
       <DLink className="mk-chip-link" to="/tv">
         {t('common.series')}
       </DLink>
+      {features.music ? (
+        <DLink className="mk-chip-link" to="/music">
+          {t('common.music')}
+        </DLink>
+      ) : null}
+      {features.audiobooks ? (
+        <DLink className="mk-chip-link" to="/audiobooks">
+          {t('common.audiobooks')}
+        </DLink>
+      ) : null}
       <DLink className="mk-chip-link" to="/trending">
         {t('common.trending')}
       </DLink>
