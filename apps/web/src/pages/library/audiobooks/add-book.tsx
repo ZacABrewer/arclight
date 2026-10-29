@@ -230,7 +230,7 @@ function AddBookForm({ result, onClose, roots, profiles }: { result: BookSearchR
         <Button variant="ghost" onClick={onClose}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" variant="primary" loading={add.isPending} disabled={touched && newAuthor && !valid}>
+        <Button type="submit" variant="primary" loading={add.isPending} disabled={newAuthor && (target.qualityProfileId === null || (touched && !valid))}>
           {t('audiobooks.addBook')}
         </Button>
       </div>

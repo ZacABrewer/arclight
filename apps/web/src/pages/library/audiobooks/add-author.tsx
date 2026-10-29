@@ -199,7 +199,7 @@ function AddAuthorForm({ result, onClose, roots, profiles }: { result: AuthorSea
         <Button variant="ghost" onClick={onClose}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" variant="primary" loading={add.isPending} disabled={touched && !valid}>
+        <Button type="submit" variant="primary" loading={add.isPending} disabled={target.qualityProfileId === null || (touched && !valid)}>
           {t('audiobooks.addAuthor')}
         </Button>
       </div>

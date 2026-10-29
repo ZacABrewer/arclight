@@ -317,7 +317,7 @@ function AddArtistForm({
         <Button variant="ghost" onClick={onClose}>
           {t('common.cancel')}
         </Button>
-        <Button type="submit" variant="primary" loading={add.isPending} disabled={touched && !valid}>
+        <Button type="submit" variant="primary" loading={add.isPending} disabled={form.qualityProfileId === null || (touched && !valid)}>
           {t('music.addArtist')}
         </Button>
       </div>

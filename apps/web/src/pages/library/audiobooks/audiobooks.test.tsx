@@ -235,7 +235,10 @@ describe('add author and book', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add Salt Crown' });
     expect(within(dialog).getByTestId('new-author-options')).toBeTruthy();
     await waitFor(() => expect((within(dialog).getByLabelText('Root folder') as HTMLSelectElement).value).toBe('/data/audiobooks'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Add book' }));
+    // The button waits for the profiles to load (a new author needs one).
+    const addButton = within(dialog).getByRole('button', { name: 'Add book' }) as HTMLButtonElement;
+    await waitFor(() => expect(addButton.disabled).toBe(false), { timeout: 5000 });
+    fireEvent.click(addButton);
     await waitFor(() => expect(api.calls.some((c) => c.method === 'POST' && c.path === '/api/v1/book')).toBe(true));
     expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/book')!.body).toEqual({
       asin: 'B0BOOK0001',
