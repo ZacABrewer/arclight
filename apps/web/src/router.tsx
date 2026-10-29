@@ -23,6 +23,7 @@ import { AuthorIndexPage } from './pages/library/audiobooks/author-index.js';
 import { AuthorDetailsPage } from './pages/library/audiobooks/author-details.js';
 import { BookDetailsPage } from './pages/library/audiobooks/book-details.js';
 import { SeriesDetailsPage as BookSeriesDetailsPage } from './pages/library/audiobooks/series-details.js';
+import { AudiobookLibraryImportPage, MusicLibraryImportPage } from './pages/library/library-import/library-import-page.js';
 import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
 import { MovieDetailsPage } from './pages/library/movie-details.js';
 import { SeriesDetailsPage } from './pages/library/series-details.js';
@@ -242,10 +243,12 @@ export const routeTree = rootRoute.addChildren([
   addNewRoute,
   // Music (feature flag `music`; the pages answer 404 while it is off).
   page('/library/music', ArtistIndexPage),
+  page('/library/music/import', MusicLibraryImportPage),
   page('/library/music/artist/$id', ArtistDetailsPage),
   page('/library/music/album/$id', AlbumDetailsPage),
   // Audiobooks (feature flag `audiobooks`; the pages answer 404 while it is off).
   page('/library/audiobooks', AuthorIndexPage),
+  page('/library/audiobooks/import', AudiobookLibraryImportPage),
   page('/library/audiobooks/author/$id', AuthorDetailsPage),
   page('/library/audiobooks/book/$id', BookDetailsPage),
   page('/library/audiobooks/series/$id', BookSeriesDetailsPage),

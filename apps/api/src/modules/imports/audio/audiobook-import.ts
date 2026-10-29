@@ -37,7 +37,8 @@ import { ImportsError } from '../errors.js';
 import { ImportFileError, RecycleBin, setPermissions, transferFile, type FsOps, type TransferMode, type TransferResult } from '../mover.js';
 import { ScanError, isUnder } from '../scan.js';
 import { importedDownloads } from '../schema.js';
-import { isAudioExtension, scanAudioPath, type AudioExtraFile, type AudioScanFile, type AudioScanResult } from './scan-audio.js';
+import { bookFolderOf, naturalCompare, orderParts } from './book-layout.js';
+import { discNumberFromFolder, isAudioExtension, scanAudioPath, type AudioExtraFile, type AudioScanFile, type AudioScanResult } from './scan-audio.js';
 import { createCombinedTagReader, type AudioTags, type TagReader } from './tags.js';
 
 // The audiobook importer (docs/design/music-audiobooks.md 9.3). A completed download (or a
@@ -115,7 +116,7 @@ export interface BookUnit {
   hint: UnitHint;
 }
 
-interface UnitHint {
+export interface UnitHint {
   titles: string[];
   asin: string | null;
   isbn: string | null;
@@ -175,13 +176,12 @@ interface ExecuteOptions {
   manual: boolean;
 }
 
+export { bookFolderOf, naturalCompare, orderParts } from './book-layout.js';
+
 const permanent = (reason: ImportRejectionReason, message: string): ImportRejection => ({ reason, message, type: 'permanent' });
 
 /** A unit maps to a book when its best score reaches this (ASIN/ISBN 1, exact title 1, contained title 0.9). */
 const MATCH_THRESHOLD = 0.6;
-
-/** `CD1`, `Disc 02`, `Part 3`, `Pt.4`: sub-folders that fold into the book folder. */
-const PART_FOLDER = /^(?:cd|disc|disk|part|pt\.?|teil|side)\s*[-_.]?\s*\d{1,3}\b/i;
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -198,29 +198,6 @@ function safe<T>(fn: () => T): T | null {
 const round = (n: number | null | undefined) => (n == null ? null : Math.round(n));
 
 const clean = (s: string | null | undefined): string => (s ? libraryService.toCleanTitle(s) : '');
-
-/** Natural order: "Part 2" before "Part 10". */
-export function naturalCompare(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-}
-
-/** Part order of a book's files: disc tag, then track tag, then natural file-name sort. */
-export function orderParts<T extends Pick<AudioScanFile, 'path' | 'relativePath' | 'tags' | 'discFromFolder'>>(files: readonly T[]): T[] {
-  return [...files].sort(
-    (a, b) =>
-      (a.tags?.discNo ?? a.discFromFolder ?? 0) - (b.tags?.discNo ?? b.discFromFolder ?? 0) ||
-      (a.tags?.trackNo ?? 0) - (b.tags?.trackNo ?? 0) ||
-      naturalCompare(a.relativePath, b.relativePath) ||
-      naturalCompare(a.path, b.path),
-  );
-}
-
-/** The book folder of a file: its folder, or the folder above `CD2` / `Part 3` style sub-folders. */
-export function bookFolderOf(filePath: string): string {
-  let dir = dirname(filePath);
-  while (PART_FOLDER.test(basename(dir).trim()) && dirname(dir) !== dir) dir = dirname(dir);
-  return dir;
-}
 
 function mostCommon(values: ReadonlyArray<string | null | undefined>): string | null {
   const counts = new Map<string, number>();
@@ -297,7 +274,7 @@ export function bookUnitsOf(scan: Pick<AudioScanResult, 'files' | 'extras'>): Bo
   return units.sort((a, b) => naturalCompare(a.key, b.key));
 }
 
-function hintOf(files: readonly AudioScanFile[], folder: string): UnitHint {
+export function hintOf(files: readonly AudioScanFile[], folder: string): UnitHint {
   const tags = files.map((f) => f.tags).filter((t): t is AudioTags => t !== null);
   const parsed: ParsedAudiobookInfo | null = files[0] ? (safe(() => parseAudiobookPath(files[0]!.path).audiobook) ?? null) : null;
   const titles = [
@@ -318,7 +295,7 @@ function hintOf(files: readonly AudioScanFile[], folder: string): UnitHint {
   };
 }
 
-function titleSimilarity(a: string, b: string): number {
+export function titleSimilarity(a: string, b: string): number {
   const x = clean(a);
   const y = clean(b);
   if (!x || !y) return 0;
@@ -425,7 +402,7 @@ function hm(ms: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m} min`;
 }
 
-function totalDuration(files: ReadonlyArray<Pick<AudioScanFile, 'tags'>>): number | null {
+export function totalDuration(files: ReadonlyArray<Pick<AudioScanFile, 'tags'>>): number | null {
   let total = 0;
   for (const f of files) {
     const d = f.tags?.durationMs;
@@ -1347,16 +1324,18 @@ export class AudiobookImporter {
         if (other !== undefined) throw new ImportsError('VALIDATION', `${basename(req.path)} is listed twice`);
         claimed.set(resolve(req.path), book.id);
         const tags = await this.tagReader().read(req.path).catch(() => null);
+        // Relative to the book folder and with the disc folder's number, so `CD1/02.mp3` still
+        // orders before `CD2/01.mp3` when the files carry no disc tags.
         const file: AudioScanFile = {
           path: req.path,
-          relativePath: basename(req.path),
+          relativePath: relative(bookFolderOf(req.path), req.path),
           name: basename(req.path),
           extension: extname(req.path).toLowerCase(),
           sizeBytes: info.size,
           mtimeMs: info.mtimeMs,
           tags,
           error: null,
-          discFromFolder: null,
+          discFromFolder: discNumberFromFolder(basename(dirname(req.path))),
         };
         let batch = batches.get(key);
         if (!batch) {

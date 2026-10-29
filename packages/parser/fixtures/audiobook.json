@@ -1418,6 +1418,34 @@
         "isPack": false,
         "series": null
       }
+    },
+    {
+      "input": "/audiobooks/The Glass Orchard/The Glass Orchard - 05.mp3",
+      "expected": {
+        "authors": [],
+        "title": "The Glass Orchard",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian/Disc 02 (Bonus)/03.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "container": "mp3"
+      }
+    },
+    {
+      "input": "/audiobooks/Andrew Pell/The Iron Meridian/Pt 2/03.mp3",
+      "expected": {
+        "authors": [
+          "Andrew Pell"
+        ],
+        "title": "The Iron Meridian",
+        "container": "mp3"
+      }
     }
   ]
 }

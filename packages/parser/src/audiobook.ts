@@ -886,8 +886,8 @@ export function parseAudiobookRelease(raw: string): ParsedAudiobookRelease {
 // ---------------------------------------------------------------------------------------
 // Paths (Audiobookshelf layouts)
 
-/** "CD1", "Disc 2", "Part 03": a folder that only splits one book. */
-const PART_FOLDER = /^(?:CD|Disc|Disk|Part|Teil|Side)[-_. ]?\d{1,3}(?:\s*[-:]\s*.*)?$/i;
+/** "CD1", "Disc 02 (Bonus)", "Part 3 - Title", "Pt.4": a folder that only splits one book. */
+const PART_FOLDER = /^(?:cd|disc|disk|part|pt\.?|teil|side)\s*[-_.]?\s*\d{1,3}\b/i;
 /** "01 - Chapter One", "Chapter 05", "Track 3", "Part 1", "001": one file of a multi-file book. */
 const CHAPTER_FILE = /^(?:\d{1,4}(?:[\s._-]|$)|(?:Chapter|Chap|Ch|Track|Part|Disc|CD|Kapitel|Teil)[\s._-]*\d)/i;
 /** Folders above the library: never an author. */
@@ -967,7 +967,8 @@ export function parseAudiobookPath(path: string): ParsedAudiobookRelease {
   while (i >= 0 && PART_FOLDER.test(folders[i]!.trim())) i--;
   const bookFolder = i >= 0 ? folders[i]! : null;
   const file = parseAudiobookRelease(fileName);
-  const isChapterFile = CHAPTER_FILE.test(base.trim());
+  // "Title - 05.mp3" next to its siblings parses as author "Title", title "05": a chapter file too.
+  const isChapterFile = CHAPTER_FILE.test(base.trim()) || /^(?:\d{1,4}|(?:chapter|ch|track|part|pt|cd|disc)[\s._-]*\d{1,4})$/i.test(file.audiobook?.title?.trim() ?? '');
 
   // A release-named file ("Author - Title.m4b") stands on its own.
   if (!bookFolder || (!isChapterFile && file.audiobook && file.audiobook.authors.length > 0)) {

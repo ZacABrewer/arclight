@@ -277,6 +277,25 @@ Click **Add rule**, fill in the fields (hints appear under each), and save. You 
 
 After changing rules, **Apply to existing files** matches the series' existing files again under the current rules. Files that now map to other episodes are re-linked (the files themselves are not touched) and the folder is rescanned. A summary shows files checked, re-linked, unchanged and skipped. **Rescan** only re-reads the folder.
 
+## Import existing music and audiobooks
+
+If you already have a music or audiobook collection on disk, bring it in from **Library > Music** or **Library > Audiobooks** with **Import existing** (administrators; the feature must be turned on).
+
+1. Pick the **Root folder**. Optionally pick a **Folder** inside it to scan only part of it. Click **Scan**. Large collections take a while; a progress bar shows how far it got.
+2. Review the list. Each audiobook folder (or album folder) is one row, with its files, what Arclight read from the folder names and tags, the proposed match and a confidence. Folders already in the library are left out.
+3. Click **Change** on a row to pick another match or search for one. A search accepts a title and author, an Audible ASIN or a MusicBrainz id.
+4. Choose the **Quality profile** for any authors or artists the import adds, and **Keep in place** (the default: files stay where they are, with their names) or **Move and rename** (your naming settings apply).
+5. Click **Import**. Each row then shows **Imported** or why it failed. You can fix the match and import a failed row again.
+
+What the import does:
+
+- It adds the author or artist when they are not in the library yet, with only the imported books or albums monitored. The rest of their catalogue is listed but not wanted, and nothing is searched.
+- It understands the common layouts: `Author/Book`, `Author/Series/01 - Book`, `Author - Title`, a single `.m4b` or `.m4a` file, and books split over many `.mp3` files or `CD 1` / `Part 2` / `Disc 02` folders. For music it understands `Artist/Album (Year)` and `Artist - Album` with disc folders.
+- Tags win over folder names. An ASIN tag (or `[ASIN]` in the path) or MusicBrainz ids in the tags give an exact match. Otherwise it searches by title and author or artist.
+- Problems that would block a download, such as a total length that differs from the catalogue's, are shown as warnings here and do not stop the import.
+
+Scans are kept until Arclight restarts.
+
 ## Related
 
 - [Wanted](wanted.md) - what is missing and how it is searched

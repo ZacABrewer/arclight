@@ -964,15 +964,67 @@ export interface RescanWriteResult {
   unmatchedFiles: number;
 }
 
+type TrackAssignmentRow = RescanArtistResult['assignments'][number];
+
+/** The `audio_files` columns of one matched track file. */
+function trackFileValues(artistId: number, albumId: number, a: TrackAssignmentRow) {
+  const t = a.tags;
+  return {
+    mediaType: 'music' as const,
+    artistId,
+    albumId,
+    authorId: null,
+    bookId: null,
+    path: a.path,
+    relativePath: a.relativePath,
+    sizeBytes: a.sizeBytes,
+    mtime: new Date(a.mtimeMs).toISOString(),
+    quality: musicQualityFor({ codec: t.codec, container: t.container, bitrateKbps: t.bitrateKbps, bitDepth: t.bitDepth }),
+    codec: t.codec,
+    container: t.container,
+    bitrateKbps: t.bitrateKbps !== null ? Math.round(t.bitrateKbps) : null,
+    sampleRateHz: t.sampleRateHz,
+    bitDepth: t.bitDepth,
+    channels: t.channels,
+    durationMs: t.durationMs !== null ? Math.round(t.durationMs) : null,
+    discNumber: t.discNo ?? a.mediumNumber,
+    trackNumber: t.trackNo ?? a.trackPosition,
+    partNumber: null,
+    chapterCount: t.chapters ? t.chapters.length : null,
+    tags: fileTags(t),
+    mediaInfo: {
+      source: t.source,
+      lossless: t.lossless,
+      ...(t.chapters && t.chapters.length > 0 ? { chapters: t.chapters.map((c) => ({ title: c.title, startMs: Math.round(c.startMs) })) } : {}),
+    },
+  };
+}
+
+/** Inserts or refreshes the file row of one assignment and links its track. Returns the row id and whether it was new. */
+function writeTrackFile(tx: MusicDb, artistId: number, albumId: number, a: TrackAssignmentRow, prior: AudioFileRow | undefined, now: string): { id: number; added: boolean } {
+  const values = trackFileValues(artistId, albumId, a);
+  const row = prior ?? tx.select().from(audioFiles).where(eq(audioFiles.path, a.path)).get();
+  let id: number;
+  if (row) {
+    tx.update(audioFiles).set(values).where(eq(audioFiles.id, row.id)).run();
+    id = row.id;
+  } else {
+    id = tx.insert(audioFiles).values({ ...values, dateAdded: now }).returning({ id: audioFiles.id }).get().id;
+  }
+  tx.update(tracks).set({ hasFile: true, audioFileId: id }).where(eq(tracks.id, a.trackRef as number)).run();
+  return { id, added: !row };
+}
+
 /**
  * Writes a rescan of the artist folder: one `audio_files` row per matched file (inserted or
  * refreshed by path), `tracks.has_file` / `audio_file_id` set from the assignments, and rows of
- * files that are gone or no longer match removed. The scan is the source of truth for the
- * artist's files.
+ * files that are gone or now match another track removed. Rows the scan cannot speak for keep
+ * their track: files outside the artist folder (linked in place by a library import) and files
+ * it found but could not match (linked by hand), so a rescan never undoes a manual decision.
  */
 export function applyRescan(db: Db, artistId: number, result: RescanArtistResult, now: string = nowIso()): RescanWriteResult {
   return db.transaction((tx) => {
-    artistRow(tx, artistId);
+    const artist = artistRow(tx, artistId);
     const existing = new Map(
       tx
         .select()
@@ -990,55 +1042,32 @@ export function applyRescan(db: Db, artistId: number, result: RescanArtistResult
       unmatchedGroups: result.unmatchedGroups.length,
       unmatchedFiles: result.unmatchedFiles.length,
     };
+    // Rows the scan cannot speak for (see above) keep their tracks through the reset.
+    const assigned = new Set(result.assignments.map((a) => a.path));
+    const unmatched = new Set([...result.unmatchedGroups.flatMap((g) => g.group.files.map((f) => f.path)), ...result.unmatchedFiles.map((f) => f.path)]);
+    const kept = [...existing.values()].filter(
+      (r) => !assigned.has(r.path) && r.albumId !== null && albumIds.includes(r.albumId) && (unmatched.has(r.path) || !isPathInside(artist.path, r.path)),
+    );
+    const keptTracks =
+      kept.length === 0
+        ? []
+        : tx
+            .select({ id: tracks.id, audioFileId: tracks.audioFileId })
+            .from(tracks)
+            .where(inArray(tracks.audioFileId, kept.map((r) => r.id)))
+            .all();
     if (albumIds.length > 0) {
       tx.update(tracks).set({ hasFile: false, audioFileId: null }).where(inArray(tracks.albumId, albumIds)).run();
     }
-    const seen = new Set<string>();
+    for (const t of keptTracks) tx.update(tracks).set({ hasFile: true, audioFileId: t.audioFileId }).where(eq(tracks.id, t.id)).run();
+    const seen = new Set<string>(kept.map((r) => r.path));
     for (const a of result.assignments) {
       const albumId = Number(a.albumId);
       if (!albumIds.includes(albumId) || typeof a.trackRef !== 'number') continue;
-      const t = a.tags;
-      const values = {
-        mediaType: 'music' as const,
-        artistId,
-        albumId,
-        authorId: null,
-        bookId: null,
-        path: a.path,
-        relativePath: a.relativePath,
-        sizeBytes: a.sizeBytes,
-        mtime: new Date(a.mtimeMs).toISOString(),
-        quality: musicQualityFor({ codec: t.codec, container: t.container, bitrateKbps: t.bitrateKbps, bitDepth: t.bitDepth }),
-        codec: t.codec,
-        container: t.container,
-        bitrateKbps: t.bitrateKbps !== null ? Math.round(t.bitrateKbps) : null,
-        sampleRateHz: t.sampleRateHz,
-        bitDepth: t.bitDepth,
-        channels: t.channels,
-        durationMs: t.durationMs !== null ? Math.round(t.durationMs) : null,
-        discNumber: t.discNo ?? a.mediumNumber,
-        trackNumber: t.trackNo ?? a.trackPosition,
-        partNumber: null,
-        chapterCount: t.chapters ? t.chapters.length : null,
-        tags: fileTags(t),
-        mediaInfo: {
-          source: t.source,
-          lossless: t.lossless,
-          ...(t.chapters && t.chapters.length > 0 ? { chapters: t.chapters.map((c) => ({ title: c.title, startMs: Math.round(c.startMs) })) } : {}),
-        },
-      };
-      let fileId: number;
-      const prior = existing.get(a.path) ?? tx.select().from(audioFiles).where(eq(audioFiles.path, a.path)).get();
-      if (prior) {
-        tx.update(audioFiles).set(values).where(eq(audioFiles.id, prior.id)).run();
-        fileId = prior.id;
-        out.updated++;
-      } else {
-        fileId = tx.insert(audioFiles).values({ ...values, dateAdded: now }).returning({ id: audioFiles.id }).get().id;
-        out.added++;
-      }
+      const w = writeTrackFile(tx, artistId, albumId, a, existing.get(a.path), now);
+      if (w.added) out.added++;
+      else out.updated++;
       seen.add(a.path);
-      tx.update(tracks).set({ hasFile: true, audioFileId: fileId }).where(eq(tracks.id, a.trackRef)).run();
       out.linked++;
     }
     for (const [path, row] of existing) {
@@ -1049,6 +1078,67 @@ export function applyRescan(db: Db, artistId: number, result: RescanArtistResult
     return out;
   });
 }
+
+/**
+ * Links matched files to their tracks where they are (library import, in place): like a rescan
+ * for the given assignments only. Nothing else of the artist changes; a track that had another
+ * file keeps that row (unlinked from the track).
+ */
+export function linkTrackFiles(db: Db, artistId: number, assignments: readonly TrackAssignmentRow[], now: string = nowIso()): { added: number; updated: number; linked: number } {
+  return db.transaction((tx) => {
+    artistRow(tx, artistId);
+    const albumIds = new Set(tx.select({ id: albums.id }).from(albums).where(eq(albums.artistId, artistId)).all().map((r) => r.id));
+    const out = { added: 0, updated: 0, linked: 0 };
+    for (const a of assignments) {
+      const albumId = Number(a.albumId);
+      if (!albumIds.has(albumId) || typeof a.trackRef !== 'number') continue;
+      const w = writeTrackFile(tx, artistId, albumId, a, undefined, now);
+      if (w.added) out.added++;
+      else out.updated++;
+      out.linked++;
+    }
+    return out;
+  });
+}
+
+/**
+ * Adds one release group as an album of the artist (library import of an album the artist's
+ * album-type profile would not list, or before the artist's albums are loaded). Returns the
+ * album id; an album that already exists is returned as it is.
+ */
+export function addReleaseGroupAlbum(db: Db, artistId: number, group: MbReleaseGroup, covers: (mbReleaseGroupId: string) => MusicImage[], monitored: boolean, now: string = nowIso()): number {
+  return db.transaction((tx) => {
+    artistRow(tx, artistId);
+    const g = releaseGroupFrom(group);
+    const hit = tx.select({ id: albums.id }).from(albums).where(eq(albums.mbReleaseGroupId, g.mbReleaseGroupId)).get();
+    if (hit) return hit.id;
+    return tx
+      .insert(albums)
+      .values({
+        title: g.title,
+        cleanTitle: libraryService.toCleanTitle(g.title),
+        disambiguation: g.disambiguation,
+        primaryType: g.primaryType,
+        secondaryTypes: g.secondaryTypes,
+        releaseDate: g.releaseDate,
+        year: g.year,
+        lastRefreshed: now,
+        artistId,
+        mbReleaseGroupId: g.mbReleaseGroupId,
+        overview: '',
+        genres: [],
+        images: covers(g.mbReleaseGroupId),
+        ratings: {},
+        monitored,
+        anyReleaseOk: true,
+        selectedReleaseId: null,
+        added: now,
+      })
+      .returning({ id: albums.id })
+      .get().id;
+  });
+}
+
 
 function fileTags(t: RescanArtistResult['assignments'][number]['tags']): AudioFileTags {
   return {

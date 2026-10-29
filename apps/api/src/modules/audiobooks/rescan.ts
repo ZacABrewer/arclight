@@ -1,5 +1,6 @@
 import { basename, dirname, relative, sep } from 'node:path';
 import { parseAudiobookPath } from '@arclight/parser';
+import { isBookPartFolder, naturalCompare, orderParts } from '../imports/audio/book-layout.js';
 import { scanAudioPath, type AudioScanFile, type TagReader } from '../imports/audio/index.js';
 import { libraryService } from '../library/index.js';
 
@@ -47,35 +48,23 @@ export interface AuthorRescanResult {
   unreadable: number;
 }
 
-const PART_FOLDER = /^(?:cd|disc|disk|part|teil|side)[-_. ]?\d{1,3}(?:\s*[-:]\s*.*)?$/i;
 const ASIN = /^[0-9A-Z]{10}$/;
 
 const clean = (s: string | null | undefined): string => (s ? libraryService.toCleanTitle(s) : '');
-
-function naturalCompare(a: string, b: string): number {
-  return a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' });
-}
-
-function orderFiles(files: AudioScanFile[]): AudioScanFile[] {
-  return [...files].sort(
-    (a, b) =>
-      (a.tags?.discNo ?? a.discFromFolder ?? 0) - (b.tags?.discNo ?? b.discFromFolder ?? 0) ||
-      (a.tags?.trackNo ?? 0) - (b.tags?.trackNo ?? 0) ||
-      naturalCompare(a.relativePath, b.relativePath),
-  );
-}
 
 function normalizeAsin(value: string | null | undefined): string | null {
   const v = value?.trim().toUpperCase();
   return v && ASIN.test(v) ? v : null;
 }
 
+const stemOf = (name: string): string => name.replace(/\.[^.]+$/, '');
+
 /** Groups the scanned files into book candidates. */
 export function groupBookFiles(authorFolder: string, files: readonly AudioScanFile[]): BookFileGroup[] {
   const byFolder = new Map<string, AudioScanFile[]>();
   for (const f of files) {
     let dir = dirname(f.path);
-    while (dir !== authorFolder && dir.length > authorFolder.length && PART_FOLDER.test(basename(dir).trim())) dir = dirname(dir);
+    while (dir !== authorFolder && dir.length > authorFolder.length && isBookPartFolder(basename(dir))) dir = dirname(dir);
     // A file directly in the author folder is a book of its own.
     const key = dir === authorFolder || dir.length <= authorFolder.length ? f.path : dir;
     byFolder.set(key, [...(byFolder.get(key) ?? []), f]);
@@ -83,10 +72,14 @@ export function groupBookFiles(authorFolder: string, files: readonly AudioScanFi
   const authorName = basename(authorFolder);
   const groups: BookFileGroup[] = [];
   for (const [folder, list] of byFolder) {
-    const ordered = orderFiles(list);
+    const ordered = orderParts(list);
     const first = ordered[0]!;
     // The parser reads `Author/Series/Book 3 - Title/file` shapes: give it the author folder too.
-    const parsed = parseAudiobookPath([authorName, ...relative(authorFolder, first.path).split(sep)].join('/')).audiobook;
+    // A loose `Author/Title.m4b` is read as `Author/Title/Title.m4b` (else the author folder
+    // would be taken for the book folder and its name for the title).
+    const segments = relative(authorFolder, first.path).split(sep);
+    if (folder === first.path) segments.splice(segments.length - 1, 0, stemOf(first.name));
+    const parsed = parseAudiobookPath([authorName, ...segments].join('/')).audiobook;
     const tagged = ordered.find((f) => normalizeAsin(f.tags?.asin));
     const tagTitles = [...new Set(ordered.flatMap((f) => [f.tags?.album ?? null, ordered.length === 1 ? (f.tags?.title ?? null) : null]).filter((t): t is string => !!t))];
     const seriesTag = ordered.find((f) => f.tags?.series)?.tags;
@@ -171,7 +164,7 @@ export async function scanAuthorFolder(input: ScanAuthorInput): Promise<AuthorRe
     }
     const folder = g.files.length === 1 && g.folder === g.files[0]!.path ? dirname(g.folder) : g.folder;
     const prior = byBook.get(m.bookId);
-    if (prior) prior.files = orderFiles([...prior.files, ...g.files]);
+    if (prior) prior.files = orderParts([...prior.files, ...g.files]);
     else byBook.set(m.bookId, { bookId: m.bookId, folder, files: g.files, matchedBy: m.matchedBy });
   }
   return { assignments: [...byBook.values()], unmatched, unreadable: scan.unreadable.length };

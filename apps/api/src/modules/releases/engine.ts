@@ -1277,7 +1277,8 @@ export function buildDecision(
     rejections: ev.rejections,
     approved,
     temporarilyRejected,
-    downloadAllowed: approved,
+    // Mapped to a library item: the user may grab it from interactive search even when rejected.
+    downloadAllowed: true,
     source,
     mediaType: c.match.mediaType,
     quality: c.quality,

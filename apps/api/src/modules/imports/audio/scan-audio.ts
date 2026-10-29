@@ -9,7 +9,7 @@ import { createCombinedTagReader, type AudioTags, type TagReader } from './tags.
 // candidates. Filesystem and tag reads only; no database.
 
 export const AUDIO_EXTENSIONS: ReadonlySet<string> = new Set([
-  '.flac', '.mp3', '.m4a', '.m4b', '.aac', '.ogg', '.oga', '.opus', '.wav', '.aiff', '.aif', '.ape', '.wv', '.dsf', '.dff',
+  '.flac', '.mp3', '.m4a', '.m4b', '.aac', '.ogg', '.oga', '.opus', '.wav', '.aiff', '.aif', '.ape', '.wv', '.dsf', '.dff', '.wma',
 ]);
 export const IMAGE_EXTENSIONS: ReadonlySet<string> = new Set(['.jpg', '.jpeg', '.png', '.webp', '.gif', '.bmp']);
 
@@ -136,6 +136,8 @@ export interface AudioScanOptions {
   /** Parallel tag reads. Default 4. */
   concurrency?: number;
   workingFolders?: readonly string[];
+  /** Called after each tag read with the files read so far and the total (big library scans). */
+  onProgress?: (read: number, total: number) => void;
 }
 
 const DEFAULT_WORKING_FOLDERS = ['_UNPACK_', '_FAILED_'];
@@ -222,14 +224,19 @@ export async function scanAudioPath(path: string, options: AudioScanOptions = {}
 
   const reader = options.tagReader ?? createCombinedTagReader();
   const started = performance.now();
+  let read = 0;
+  options.onProgress?.(0, audio.length);
   const files = await mapLimit(audio, options.concurrency ?? 4, async (f): Promise<AudioScanFile> => {
     const discFromFolder = discNumberFromFolder(basename(dirname(f.path)));
     try {
       return { ...f, tags: await reader.read(f.path), error: null, discFromFolder };
     } catch (err) {
       return { ...f, tags: null, error: err instanceof Error ? err.message : String(err), discFromFolder };
+    } finally {
+      options.onProgress?.(++read, audio.length);
     }
   });
+
   const tagReadMs = Math.round(performance.now() - started);
 
   // Lyrics belong to the audio file with the same stem.

@@ -1,0 +1,89 @@
+/* Library import (Library → Audiobooks / Music → Import existing). Tokens only; one column on phones. */
+.li-page { display: flex; flex-direction: column; gap: 16px; }
+.li-muted { font-size: 13px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.li-break { overflow-wrap: anywhere; }
+
+.li-form { max-width: 880px; }
+.li-form__fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin: 12px 0; }
+.li-form__actions { display: flex; justify-content: flex-end; }
+.li-progress { display: flex; flex-direction: column; gap: 8px; }
+
+.li-summary { margin: 0; font-size: 14px; color: var(--al-text-2); }
+.li-toolbar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.li-toolbar__search { flex: 1 1 220px; min-width: 0; }
+
+.li-list { list-style: none; margin: 0; padding: 0; border-top: 1px solid var(--al-line-a12); }
+.li-row {
+  display: grid;
+  grid-template-columns: 32px 56px minmax(0, 1.1fr) minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 12px 4px;
+  border-bottom: 1px solid var(--al-line-a06);
+}
+.li-row[data-status="imported"] { opacity: .7; }
+.li-row__check { padding-top: 16px; }
+.li-row__source, .li-row__match { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.li-row__folder { font-size: 13px; color: var(--al-text-1); overflow-wrap: anywhere; }
+.li-row__title { font-size: 14px; color: var(--al-text-1); overflow-wrap: anywhere; }
+.li-row__files summary { cursor: pointer; }
+.li-row__files ul { margin: 6px 0 0; padding-left: 16px; font-size: 12px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.li-row__actions { padding-top: 12px; }
+.li-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.li-warnings { margin: 2px 0 0; padding-left: 16px; font-size: 12px; color: var(--al-warn-text); overflow-wrap: anywhere; }
+.li-status { font-size: 12px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.li-status[data-status="imported"] { color: var(--al-cyan-text); }
+.li-status[data-status="failed"] { color: var(--al-danger-text); }
+
+.li-cover { display: block; width: 56px; aspect-ratio: 1; overflow: hidden; background: var(--al-poster-bg); border: 1px solid var(--al-line-a12); }
+.li-cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.li-cover__blank { display: grid; place-items: center; height: 100%; font-family: var(--al-mono); color: var(--al-text-4); }
+
+.li-footer {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 16px;
+  align-items: flex-end;
+  padding: 12px 0;
+  background: var(--al-surface-solid);
+  border-top: 1px solid var(--al-line-a12);
+}
+.li-footer .al-field { min-width: 200px; flex: 0 1 260px; }
+.li-footer__go { margin-left: auto; }
+
+.li-picker__search { display: flex; gap: 8px; margin-bottom: 12px; }
+.li-picker__search .al-input { flex: 1 1 auto; min-width: 0; }
+.li-picker__head { margin: 12px 0 6px; font: 500 11px var(--al-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4); }
+.li-options { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.li-option {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 6px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: 1px solid transparent;
+  cursor: pointer;
+}
+.li-option:hover, .li-option:focus-visible { background: var(--al-cyan-a04); border-color: var(--al-line-a12); }
+.li-option[aria-pressed="true"] { background: var(--al-cyan-a08); border-color: var(--al-cyan-a35); }
+.li-option__text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+
+@media (max-width: 767.98px) {
+  .li-form__fields { grid-template-columns: minmax(0, 1fr); }
+  .li-row { grid-template-columns: 28px 48px minmax(0, 1fr); gap: 8px 10px; }
+  .li-row .li-cover { width: 48px; }
+  .li-row__check { padding-top: 12px; }
+  .li-row__match { grid-column: 2 / -1; }
+  .li-row__actions { grid-column: 2 / -1; padding-top: 0; }
+  /* Too tall to stay pinned over the list (and the tab bar) on a phone: it ends the list instead. */
+  .li-footer { position: static; }
+  .li-footer .al-field { flex: 1 1 100%; }
+  .li-footer__go { width: 100%; margin-left: 0; }
+}

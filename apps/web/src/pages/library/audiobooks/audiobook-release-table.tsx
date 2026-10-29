@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ReleaseDecision } from '@arclight/shared';
-import { Button, Chip, EmptyState, Modal, ProtocolBadge, RejectionList, ScoreTag, StatusChip, Table, Tag, Tooltip, type Column } from '../../../arclight/index.js';
+import { Chip, EmptyState, Modal, ProtocolBadge, RejectionList, ScoreTag, StatusChip, Table, Tag, Tooltip, type Column } from '../../../arclight/index.js';
 import { audiobookFacts, audiobookGrabRequest, type AudiobookReleaseTarget } from '../../../api/audiobook-acquisition.js';
 import { formatBytes } from '../../../components/media/format.js';
 import { Loading, QualityLabel, QueryError } from '../../../components/media/media-kit.js';
@@ -9,6 +9,7 @@ import { decisionRank, formatAge } from '../interactive-search.js';
 import { FormatTypeChip } from './audiobook-kit.js';
 import { bitrateText, matchedBookTitles, narratorsText, seriesText } from './audiobook-release-model.js';
 import '../library.css';
+import { GrabButton } from '../grab-button.js';
 import { t } from '../../../i18n/index.js';
 
 const dash = <span className="mk-dim">—</span>;
@@ -115,16 +116,7 @@ export function AudiobookReleaseTable({ target, bookTitles }: { target: Audioboo
       header: <span className="al-sr-only">{t('library.interactiveSearch.grab')}</span>,
       align: 'right',
       cell: (r) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          aria-label={t('library.interactiveSearch.grabTitle', { title: r.title })}
-          disabled={!r.downloadAllowed}
-          loading={grab.isPending && grab.variables?.guid === r.guid}
-          onClick={() => grab.mutate(audiobookGrabRequest(r))}
-        >
-          {t('library.interactiveSearch.grab')}
-        </Button>
+        <GrabButton release={r} loading={grab.isPending && grab.variables?.guid === r.guid} onGrab={() => grab.mutateAsync(audiobookGrabRequest(r))} />
       ),
     },
   ];

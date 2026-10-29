@@ -89,7 +89,6 @@ export const STATE_SEVERITY: Readonly<Record<QueueItemStateCode, QueueSeverity>>
 /** Codes under which a download is not expected to receive data (the stall clock stands still). */
 export const NOT_TRANSFERRING: ReadonlySet<QueueItemStateCode> = new Set<QueueItemStateCode>([
   'pendingGrab',
-  'metadata',
   'checking',
   'moving',
   'queued',
@@ -171,7 +170,13 @@ export function deriveState(input: StateInput): StateReason {
   if (input.phase === 'checking') return r('checking', 'Checking existing data on disk.');
   if (input.phase === 'metadata') {
     const peers = input.live?.connectedPeers;
-    return r('metadata', `Waiting for the torrent metadata from peers${peers !== undefined ? ` (${plural(peers, 'peer')} connected)` : ''}.`);
+    const waiting = `Waiting for the torrent metadata from peers${peers !== undefined ? ` (${plural(peers, 'peer')} connected)` : ''}.`;
+    if (!input.stalledSince) return r('metadata', waiting);
+    const minutes = input.stallMinutes ? ` for ${input.stallMinutes}+ minutes` : '';
+    return r(
+      'stalled',
+      `${waiting} None has sent it${minutes}; peers never share the metadata of a private torrent, so it may need the .torrent file.${recoverySentence(input.stallRecovery)}`,
+    );
   }
   if (input.phase === 'moving') return r('moving', `${client} is moving the files.`);
   if (input.clientStatus === 'queued') {

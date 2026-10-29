@@ -1,7 +1,6 @@
 import { useMemo } from 'react';
 import type { ReleaseDecision } from '@arclight/shared';
 import {
-  Button,
   Chip,
   EmptyState,
   Modal,
@@ -23,6 +22,7 @@ import { decisionRank, formatAge } from '../interactive-search.js';
 import { audioSortValue, audioSpecText, discographyText, logCueText, matchedAlbumTitles } from './music-release-model.js';
 import '../library.css';
 import './music.css';
+import { GrabButton } from '../grab-button.js';
 import { t } from '../../../i18n/index.js';
 
 /**
@@ -150,16 +150,7 @@ export function MusicReleaseTable({ target, albumTitles }: { target: MusicReleas
       header: <span className="al-sr-only">{t('library.interactiveSearch.grab')}</span>,
       align: 'right',
       cell: (r) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          aria-label={t('library.interactiveSearch.grabTitle', { title: r.title })}
-          disabled={!r.downloadAllowed}
-          loading={grab.isPending && grab.variables?.guid === r.guid}
-          onClick={() => grab.mutate(musicGrabRequest(r))}
-        >
-          {t('library.interactiveSearch.grab')}
-        </Button>
+        <GrabButton release={r} loading={grab.isPending && grab.variables?.guid === r.guid} onGrab={() => grab.mutateAsync(musicGrabRequest(r))} />
       ),
     },
   ];

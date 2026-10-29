@@ -118,6 +118,9 @@ function AuthorIndex() {
             <Button variant={selectMode ? 'secondary' : 'ghost'} aria-pressed={selectMode} onClick={() => (selectMode ? clear() : setSelectMode(true))}>
               {selectMode ? t('library.done') : t('common.select')}
             </Button>
+            <Link to="/library/audiobooks/import" className={buttonClass({ variant: 'secondary' })}>
+              {t('libraryImport.importExisting')}
+            </Link>
             {addLink}
           </>
         }
@@ -171,7 +174,18 @@ function AuthorIndex() {
       ) : authors.isError ? (
         <QueryError error={authors.error} onRetry={() => void authors.refetch()} title={t('audiobooks.couldNotLoadAuthors')} />
       ) : all.length === 0 ? (
-        <EmptyState size="lg" title={t('audiobooks.noAuthorsYet')} action={addLink}>
+        <EmptyState
+          size="lg"
+          title={t('audiobooks.noAuthorsYet')}
+          action={
+            <>
+              {addLink}
+              <Link to="/library/audiobooks/import" className={buttonClass({ variant: 'secondary' })}>
+                {t('libraryImport.importExisting')}
+              </Link>
+            </>
+          }
+        >
           {t('audiobooks.addAnAuthorFromTheCatalogue')}
         </EmptyState>
       ) : rows.length === 0 ? (

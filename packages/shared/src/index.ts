@@ -18,6 +18,7 @@ export * from './metadata.js';
 export * from './releases.js';
 export * from './scene-mapping.js';
 export * from './imports.js';
+export * from './library-import.js';
 export * from './history.js';
 export * from './notifications.js';
 export * from './alerts.js';

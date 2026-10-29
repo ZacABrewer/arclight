@@ -33,7 +33,7 @@ Arclight asks every indexer that has interactive search enabled. This can take s
 | Version | Only for items with several versions (for example 1080p and 4K). Shows which version slot the release would fill. |
 | Formats | Custom formats that matched, and the total custom format score. |
 | Decision | **Approved**, or a count of rejections such as "2 rejections". |
-| Grab | The grab button. |
+| Grab | **Grab**, or **Grab anyway** for a rejected release. |
 
 Click a column header to sort. The default order puts approved releases first, then temporarily rejected, then rejected.
 
@@ -69,7 +69,7 @@ The wording comes from Arclight's decision engine, so you may see other messages
 
 Click **Grab**. The release is sent to your download client and appears in [Activity > Queue](activity.md). The grab is attached to the series, episodes or movie you searched for.
 
-The **Grab** button is only enabled for approved releases. A rejected release shows a disabled button. If you want a rejected release anyway, use the Search page below (it has no such lock), or change the profile or rule that rejected it and search again.
+A rejected release shows **Grab anyway** instead. Clicking it lists the rejections and asks you to confirm; the release is then grabbed and tracked like an approved one. This overrides the rejections for that one download only, and your profiles and rules are not changed. A release Arclight cannot match to the series, movie, album or book you searched for stays disabled: use the Search page below to force grab it.
 
 ## Why this release
 

@@ -163,6 +163,16 @@ describe('album searches', () => {
     await waitFor(() =>
       expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/release')?.body).toEqual({ guid: 'g1', indexerId: 2, artistId: 1, albumIds: [4] }),
     );
+
+    // A rejected release that maps to the library is grabbed anyway after a confirmation.
+    const anyway = within(table).getByRole('button', { name: `Grab ${releases[1]!.title} anyway` });
+    fireEvent.click(anyway);
+    const confirm = await screen.findByRole('dialog', { name: 'Grab a rejected release?' });
+    expect(within(confirm).getByText(/Discography packs are off/)).toBeTruthy();
+    fireEvent.click(within(confirm).getByRole('button', { name: 'Grab anyway' }));
+    await waitFor(() =>
+      expect(api.calls.filter((c) => c.method === 'POST' && c.path === '/api/v1/release').map((c) => (c.body as { guid: string }).guid)).toEqual(['g1', 'g2']),
+    );
   });
 
   it('the release search query names the album and the artist', async () => {

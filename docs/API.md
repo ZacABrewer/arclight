@@ -344,8 +344,10 @@ plus any track with a file. `GET /library/statistics` gains `artistCount`,
 scans the folder with the tag reader (music-metadata, ffprobe as fallback), groups the files into
 albums and matches each group to the album's selected edition (`audio.trackMatchThreshold`). Every
 matched file gets one `audio_files` row (quality from the measured codec, bitrate and bit depth);
-`tracks.has_file` / `audio_file_id` follow the matches, and rows of files that are gone or no
-longer match are removed. Unmatched folders are reported in the job message.
+`tracks.has_file` / `audio_file_id` follow the matches, and rows of files that are gone or now
+match another track are removed. Files outside the artist folder (linked in place by a library
+import) and files the scan found but could not match keep their row and track. Unmatched folders
+are reported in the job message.
 
 **MusicBrainz.** Base URL and rate from `musicMetadata` (the public host is locked at 1 request
 per second), User-Agent `Arclight/<version> ( https://github.com/ZacABrewer/arclight [contact
@@ -422,14 +424,18 @@ monitored books). `GET /library/statistics` gains `authorCount`, `monitoredAutho
 `audioSizeOnDisk` (music and audiobook files) while either audio type is on.
 
 **Rescans.** `RescanAuthor` (also run at the end of `AuthorAdd` when the author folder exists)
-scans the author folder with the tag reader. One book is one folder (`CD 1` / `Part 2` subfolders
-fold into it) or a single file directly in the author folder. Each group is matched to one of the
+scans the author folder with the tag reader. One book is one folder (`CD 1`, `Disc 02 (Bonus)`,
+`Part 2`, `Pt.3` subfolders fold into it) or a single file directly in the author folder (titled by
+its file name). Each group is matched to one of the
 author's books by the ASIN tag (or `[ASIN …]` in the path), then series + position
 (`Author/Series/Book 3 - Title`), then title (with or without the subtitle; among same-titled
 books the kept languages win). Every file of a matched book gets an `audio_files` row (`partNumber`
 for multi-file books, quality `AB-*` from codec and bitrate, chapters from the file);
 `books.has_file` and `path` follow, a chaptered file fills `chapters` when the catalogue had none,
-and rows of files that are gone are removed. Unmatched folders are counted in the job message.
+and rows of files that are gone are removed. Files outside the author folder (linked in place by
+a library import) and files the scan found but could not match keep their link. Unmatched folders
+are counted in the job message.
+
 
 **Caching.** The catalogue clients keep their in-memory caches; the calls the jobs repeat are
 also stored in `metadata_cache` (provider `audiobook-catalog`): author records 7 days,
@@ -610,6 +616,99 @@ request). Items with the same book and download import together as that book, or
 bypassed. Result items carry `bookId` and `partNumber` instead of `trackId`:
 `{ imported: [{path, audioFileId, bookId, partNumber, destination}], failed: [{path, error}] }`.
 A tracked download becomes `imported` once all its books have files from it.
+
+### Library import (existing music and audiobook folders)
+
+Contract: `packages/shared/src/library-import.ts` (`LibraryImport*`). Code:
+`apps/api/src/modules/imports/audio/library-import.ts` (routes in `library-import-routes.ts`).
+Brings a collection that is already on disk into the library: folders whose files are not in
+`audio_files` yet become candidates, each with a proposed catalogue book or MusicBrainz release
+group. Every route is gated by the flag of the media type it names (404 `MUSIC_DISABLED` /
+`AUDIOBOOKS_DISABLED`). Scans are kept in memory (the last six); a restart forgets them.
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/libraryimport/scan` | `LibraryImportScanRequest` → 202 `LibraryImportScan` (starts the `LibraryImportScan` job) |
+| GET | `/libraryimport/scan` | `LibraryImportScanSummary[]`, newest first (no candidates) |
+| GET | `/libraryimport/scan/:id` | `LibraryImportScan`: the summary plus `candidates` (poll while `status` is `scanning`, `matching` or `importing`) |
+| DELETE | `/libraryimport/scan/:id` | 204; 409 while its job runs |
+| GET | `/libraryimport/lookup` | `?mediaType=&term=` → `LibraryImportMatch[]`: free text, an ASIN, or a release-group / release MBID (to change a match) |
+| POST | `/libraryimport/import` | `LibraryImportRequest` → 202 `LibraryImportScan` (starts the `LibraryImport` job) |
+
+`POST /libraryimport/scan` body: `{ mediaType: "music" | "audiobook", path, rootFolderPath? }`.
+`path` is an absolute folder (404 when it cannot be read). `rootFolderPath` is the registered root
+folder of that media type new artists / authors go under; it defaults to the root folder holding
+`path` (400 when `path` is outside every root and none is given). Scanning the same path while a
+scan of it runs answers the running scan.
+
+Scan summary: `id`, `mediaType`, `path`, `rootFolderPath`, `status` (`scanning` → `matching` →
+`ready`; `importing` while an import runs; `failed` with `error`), `progress` `{done, total}`
+(files read while scanning, folders while matching, items while importing), `jobId`, `startedAt`,
+`finishedAt`, `stats` `{files, alreadyInLibrary, unreadable, candidates, imported, failed}`.
+
+**Grouping.** Audiobooks: one book is one folder; `CD 1`, `Disc 02 (Bonus)`, `Part 3`, `Pt.4`
+sub-folders fold into it. In a folder that also holds other book folders (an author folder) or the
+scanned folder itself, every loose file is a book of its own unless its ASIN / album tag or its name
+ties it to others ("Title.m4b" and "Title - Part 2.m4b"; "Title - 01.mp3", "Title - 02.mp3"). A
+plain book folder splits only when its files carry different ASIN or album tags, or when it holds
+several distinct single-file books (`.m4b` / `.m4a`). Parts are ordered by disc tag (else the disc
+or part folder's number), then track tag, then natural file-name order. Music: the album grouping
+of the importer (release-group id, release id, album + album-artist tags, then the folder; disc
+folders fold in). Extensions are matched case-insensitively; `.wma` counts as audio.
+
+**What the files say** (`detected`): tags first (album, album artist / artist, narrator or a
+composer that is not the author, series and series part, date, ASIN including Audible's `CDEK`
+atom, ISBN, MusicBrainz ids), then the path relative to the root folder: `Author/Book`,
+`Author/Series/01 - Book`, `Author - Title (Year)`, `Title (Year)`, `{Narrator}`, `[ASIN]`, a loose
+`Author/Title.m4b`; music `Artist/Album (Year)` and `Artist - Album [Year]`. Titles are searched
+without "(Unabridged)", bracketed parts and "Book 3 -" prefixes.
+
+**Matching.** Audiobooks: an ASIN (tag or path) is looked up directly (`matchedBy: "asin"`,
+confidence 1), then an ISBN (`isbn`); otherwise the catalogue is searched by title and author (then
+the other title spelling, then the title alone) and each result scored: title 65 %, author 25 %,
+series position, narrator and runtime 10 % (`matchedBy: "search"`). Music: a release-group id tag,
+else the release id's group (`mbid`, confidence 1), else a MusicBrainz release-group search by
+album artist and album (then free text), scored title 60 %, artist 30 %, year 10 %. The best result
+scoring at least 0.35 is the proposal (`match`, `confidence`); up to five others are
+`alternatives`. A failed lookup leaves the candidate without a match and adds a warning.
+
+Candidate: `id`, `mediaType`, `folder`, `relativeFolder`, `files[]` (`path`, `relativePath`,
+`sizeBytes`, `durationMs`, `readable`), `sizeBytes`, `durationMs`, `detected` (`author`, `title`,
+`series`, `seriesPosition`, `narrator`, `year`, `asin`, `isbn`, `mbReleaseGroupId`, `mbReleaseId`,
+`mbArtistId`), `match` / `alternatives` (`LibraryImportMatch`: `foreignId` = book ASIN (or
+`isbn:<isbn>`) or release-group MBID, `title`, `subtitle`, `creditName`, `creditForeignId` (author
+ASIN / artist MBID), `year`, `coverUrl`, `narrators`, `runtimeMinutes`, `series`, `seriesPosition`,
+`albumType`, `inLibrary`, `score`), `confidence`, `matchedBy`, `warnings`, `status` (`pending`,
+`importing`, `imported`, `failed`) and `message` (the import's result).
+
+**Warnings, not blockers.** The automatic import's `durationMismatch` check (the parts' total
+against the book's runtime) is only a warning here, as are unreadable files (imported by folder
+and name, quality from the extension), mixed MusicBrainz release ids and a match that is already
+in the library (the files are added to it).
+
+`POST /libraryimport/import` body: `{ scanId, items: [{candidateId, foreignId?}], mode?,
+qualityProfileId, albumTypeProfileId?, tags? }`. `foreignId` overrides the proposal (400 when a
+candidate has neither). The scan must be `ready` (409 otherwise). Per candidate, in order:
+
+* Audiobooks: a book with that ASIN in the library is used; otherwise it is added like
+  `POST /book` with an `author` block (`monitorNewBooks: none`, no search): a new author's other
+  books arrive unmonitored through `AuthorAdd`, and the author's folder becomes the item's nearest
+  ancestor named like the author (a flat `Author - Title` layout keeps `<root>/<Author>`).
+* Music: an album with that release group is used; otherwise the credited artist is added like
+  `POST /artist` with `monitorOption: none`, `monitorNewAlbums: none` and no search (then marked
+  monitored), the artist folder taken over the same way; a release group the album-type profile
+  leaves out is added on its own. The edition is the one the files are tagged with, else the
+  selected one when its track count equals the file count, else the preferred edition with that
+  many tracks; its tracks are loaded and the files matched to them (threshold 0.3: the user picked
+  the album).
+* The imported book / album is monitored, nothing else is. `mode: "inPlace"` (default) links the
+  files where they are (no move, no rename); `mode: "move"` hands them to the manual-import mover
+  (`POST /manualimport/audio` with `importMode: move`: naming settings, author / artist folder).
+
+The candidate ends `imported` with a message ("Linked 12 files to OK Computer (1 file fits no
+track)") or `failed` with the reason. Author and artist rescans keep files they cannot speak for:
+files outside the author / artist folder and files the rescan found but could not match keep their
+link (files that are gone are still removed).
 
 ## profiles
 
@@ -2028,6 +2127,8 @@ of them with `POST /jobs/run`.
 | `RefreshArtists` | `20 */6 * * *` | metadata | Music: refreshes artists due by `next_refresh_at` (oldest first) for at most 20 minutes; the next refresh is 1 day out after a release in the last 90 days or an upcoming one, else 7 days (continuing) or 30 days (ended). New release groups follow the album-type profile and `monitorNewAlbums`. Nothing while music is off |
 | `RefreshAuthors` | `40 3,15 * * *` | metadata | Audiobooks: refreshes authors due by `next_refresh_at` (oldest first) for at most 20 minutes; the next refresh is 1 day out while a monitored book is still to be released, else 7 days. New books follow `monitorNewBooks`. Nothing while audiobooks are off |
 | `MetadataCacheCleanup` | `50 5 * * *` | metadata | Deletes `metadata_cache` rows that expired more than 30 days ago |
+| `LibraryImportScan`, `LibraryImport` | ad hoc | imports | Library import of existing music / audiobook folders: the scan (read tags, group, propose matches) and the import of chosen candidates (see Library import) |
+
 | `MissingEpisodeSearch` | `0 3 * * *` | releases | Searches the episodes `GET /wanted/missing/episodes` lists (no specials), in list order, items past their back-off only (a day per search without a grab, at most 7), up to 200 a run, grouped per season |
 | `MissingMovieSearch` | `20 3 * * *` | releases | The same for `GET /wanted/missing/movies`, up to 100 a run |
 | `CutoffUnmetSearch` | `40 3 * * *` | releases | Searches the items `GET /wanted/cutoff/*` lists (same cutoff checker), in list order, items past their back-off only, up to 100 episodes and 100 movies a run; `GET /release/searchstatus` estimates the next run per item |

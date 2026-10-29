@@ -1,6 +1,5 @@
 import type { ReleaseDecision } from '@arclight/shared';
 import {
-  Button,
   Chip,
   EmptyState,
   Modal,
@@ -18,6 +17,7 @@ import { Loading, QualityLabel, QueryError } from '../../components/media/media-
 import { useGrabRelease, useInteractiveSearch, type ReleaseSearchTarget } from '../../hooks/library.js';
 import './library.css';
 import { versionColumn } from './versions/versions-editor.js';
+import { GrabButton } from './grab-button.js';
 import { t } from '../../i18n/index.js';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
@@ -102,14 +102,11 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
       header: <span className="al-sr-only">{t('library.interactiveSearch.grab')}</span>,
       align: 'right',
       cell: (r) => (
-        <Button
-          size="sm"
-          variant="secondary"
-          aria-label={t('library.interactiveSearch.grabTitle', { title: r.title })}
-          disabled={!r.downloadAllowed}
+        <GrabButton
+          release={r}
           loading={grab.isPending && grab.variables?.guid === r.guid}
-          onClick={() =>
-            grab.mutate({
+          onGrab={() =>
+            grab.mutateAsync({
               guid: r.guid,
               indexerId: r.indexerId,
               ...(r.seriesId !== undefined ? { seriesId: r.seriesId } : {}),
@@ -117,9 +114,7 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
               ...(r.movieId !== undefined ? { movieId: r.movieId } : {}),
             })
           }
-        >
-          {t('library.interactiveSearch.grab')}
-        </Button>
+        />
       ),
     },
   ];

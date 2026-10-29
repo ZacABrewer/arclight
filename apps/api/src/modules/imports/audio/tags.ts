@@ -39,6 +39,8 @@ export interface AudioTags {
   asin: string | null;
   isbn: string | null;
   narrator: string | null;
+  /** Composer / writer tag; audiobook rippers often put the narrator here. */
+  composer: string | null;
   series: string | null;
   seriesPart: string | null;
   codec: string | null;
@@ -92,6 +94,7 @@ export function emptyAudioTags(source: AudioTags['source'] = 'music-metadata'): 
     asin: null,
     isbn: null,
     narrator: null,
+    composer: null,
     series: null,
     seriesPart: null,
     codec: null,
@@ -134,6 +137,7 @@ export type TagField =
   | 'asin'
   | 'isbn'
   | 'narrator'
+  | 'composer'
   | 'series'
   | 'seriesPart';
 
@@ -159,9 +163,11 @@ const KEY_TABLE: ReadonlyArray<[TagField, readonly string[]]> = [
   ['mbReleaseGroupId', ['musicbrainzreleasegroupid']],
   ['mbArtistId', ['musicbrainzartistid']],
   ['mbAlbumArtistId', ['musicbrainzalbumartistid']],
-  ['asin', ['asin', 'audibleasin']],
+  // `CDEK` is the MP4 atom Audible downloads carry the ASIN in.
+  ['asin', ['asin', 'audibleasin', 'cdek']],
   ['isbn', ['isbn']],
   ['narrator', ['narrator', 'narratedby', 'reader', '©nrt']],
+  ['composer', ['composer', 'tcom', 'tcm', '©wrt', 'wrt']],
   ['series', ['series', 'seriesname', 'mvnm', '©mvn', 'movementname']],
   ['seriesPart', ['seriespart', 'seriesposition', 'mvin', '©mvi', 'movement']],
 ];
@@ -246,6 +252,7 @@ export type NormalizedTags = Pick<
   | 'asin'
   | 'isbn'
   | 'narrator'
+  | 'composer'
   | 'series'
   | 'seriesPart'
 >;
@@ -289,6 +296,7 @@ export function normalizeTagEntries(entries: Iterable<readonly [string, unknown]
     asin: get('asin'),
     isbn: get('isbn'),
     narrator: get('narrator'),
+    composer: get('composer'),
     series: get('series'),
     seriesPart: get('seriesPart'),
   };
@@ -353,6 +361,7 @@ export function audioTagsFromMusicMetadata(meta: IAudioMetadata): AudioTags {
     mbAlbumArtistId: c.musicbrainz_albumartistid?.[0] ?? fromNative.mbAlbumArtistId,
     asin: c.asin ?? fromNative.asin,
     isbn: fromNative.isbn,
+    composer: c.composer?.[0] ?? fromNative.composer,
     series: fromNative.series ?? c.movement ?? null,
     seriesPart: fromNative.seriesPart ?? (c.movementIndex?.no != null ? String(c.movementIndex.no) : null),
     codec: f.codec ?? null,

@@ -885,7 +885,9 @@ export class DownloadClientsService {
   /**
    * Advances the stall clock of a download: `progressAt` moves whenever downloaded bytes grow
    * (and while the download is not expected to transfer: paused, queued, checking, ...); it
-   * counts as stalled once `stallMs` passed without growth.
+   * counts as stalled once `stallMs` passed without growth. Waiting for magnet metadata counts
+   * as transferring: peers of a private torrent never share it (BEP 27), so the wait would
+   * otherwise never end and stall recovery could never replace the release.
    */
   private progressClock(
     existing: TrackedDownloadRow | undefined,
@@ -901,7 +903,6 @@ export class DownloadClientsService {
     const transferring =
       (existing?.state ?? 'downloading') === 'downloading' &&
       (item.status === 'downloading' || item.status === 'warning') &&
-      item.phase !== 'metadata' &&
       item.phase !== 'checking' &&
       item.phase !== 'moving' &&
       !killSwitch &&

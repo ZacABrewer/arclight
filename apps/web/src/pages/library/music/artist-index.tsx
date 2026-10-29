@@ -119,6 +119,9 @@ function ArtistIndex() {
             <Button variant={selectMode ? 'secondary' : 'ghost'} aria-pressed={selectMode} onClick={() => (selectMode ? clear() : setSelectMode(true))}>
               {selectMode ? t('library.done') : t('common.select')}
             </Button>
+            <Link to="/library/music/import" className={buttonClass({ variant: 'secondary' })}>
+              {t('libraryImport.importExisting')}
+            </Link>
             <Link to="/library/add" search={{ type: 'music' }} className={buttonClass({ variant: 'primary' })}>
               {t('music.addArtist')}
             </Link>
@@ -178,9 +181,14 @@ function ArtistIndex() {
           size="lg"
           title={t('music.noArtistsYet')}
           action={
-            <Link to="/library/add" search={{ type: 'music' }} className={buttonClass({ variant: 'primary' })}>
-              {t('music.addArtist')}
-            </Link>
+            <>
+              <Link to="/library/add" search={{ type: 'music' }} className={buttonClass({ variant: 'primary' })}>
+                {t('music.addArtist')}
+              </Link>
+              <Link to="/library/music/import" className={buttonClass({ variant: 'secondary' })}>
+                {t('libraryImport.importExisting')}
+              </Link>
+            </>
           }
         >
           {t('music.addAnArtistFromMusicBrainz')}

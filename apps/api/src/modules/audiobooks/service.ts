@@ -1009,11 +1009,60 @@ function fileTags(t: NonNullable<AuthorRescanResult['assignments'][number]['file
   };
 }
 
+type ScannedBookFile = AuthorRescanResult['assignments'][number]['files'][number];
+
+/** The `audio_files` columns of one book part (`index` of `partCount`), read from its scan. */
+function bookFileValues(author: Pick<AuthorRow, 'id' | 'path'>, bookId: number, f: ScannedBookFile, index: number, partCount: number) {
+  const t = f.tags;
+  return {
+    mediaType: 'audiobook' as const,
+    artistId: null,
+    albumId: null,
+    authorId: author.id,
+    bookId,
+    path: f.path,
+    relativePath: relative(author.path, f.path),
+    sizeBytes: f.sizeBytes,
+    mtime: new Date(f.mtimeMs).toISOString(),
+    quality: audiobookFileQuality({ codec: t?.codec ?? null, container: t?.container ?? f.extension.replace(/^\./, ''), bitrateKbps: t?.bitrateKbps ?? null }),
+    codec: t?.codec ?? null,
+    container: t?.container ?? null,
+    bitrateKbps: t?.bitrateKbps != null ? Math.round(t.bitrateKbps) : null,
+    sampleRateHz: t?.sampleRateHz ?? null,
+    bitDepth: t?.bitDepth ?? null,
+    channels: t?.channels ?? null,
+    durationMs: t?.durationMs != null ? Math.round(t.durationMs) : null,
+    discNumber: t?.discNo ?? f.discFromFolder,
+    trackNumber: t?.trackNo ?? null,
+    partNumber: partCount > 1 ? index + 1 : null,
+    chapterCount: t?.chapters ? t.chapters.length : null,
+    tags: t ? fileTags(t) : null,
+    mediaInfo: {
+      source: t?.source ?? null,
+      lossless: t?.lossless ?? null,
+      ...(t?.chapters && t.chapters.length > 0 ? { chapters: t.chapters.map((c) => ({ title: c.title, startMs: Math.round(c.startMs) })) } : {}),
+    },
+  };
+}
+
+/** Chapters of a single chaptered file, for a book whose catalogue entry has none. */
+function chaptersOfSingleFile(parts: readonly ScannedBookFile[]): BookChapter[] | null {
+  const t = parts.length === 1 ? parts[0]!.tags : null;
+  if (!t?.chapters || t.chapters.length === 0) return null;
+  return t.chapters.map((c) => ({
+    title: c.title,
+    startMs: Math.round(c.startMs),
+    lengthMs: c.endMs !== null ? Math.max(0, Math.round(c.endMs - c.startMs)) : null,
+  }));
+}
+
 /**
  * Writes a rescan of the author folder: one `audio_files` row per matched file (inserted or
  * refreshed by path, `media_type = 'audiobook'`), `books.has_file` / `path` from the assignments,
  * chapters from a chaptered file when the catalogue had none, and rows of files that are gone or
- * no longer match removed. The scan is the source of truth for the author's files.
+ * now match another book removed. Rows the scan cannot speak for stay: files outside the author
+ * folder (linked in place by a library import) and files it found but could not match (linked
+ * by hand), so a rescan never undoes a manual decision.
  */
 export function applyAuthorRescan(db: Db, authorId: number, result: AuthorRescanResult, now: string = nowIso()): AuthorRescanWriteResult {
   return db.transaction((tx) => {
@@ -1036,45 +1085,8 @@ export function applyAuthorRescan(db: Db, authorId: number, result: AuthorRescan
       const parts = a.files.filter((f) => f.tags !== null || f.error === null);
       if (parts.length === 0) continue;
       withFiles.add(book.id);
-      let fileChapters: BookChapter[] | null = null;
       parts.forEach((f, index) => {
-        const t = f.tags;
-        const values = {
-          mediaType: 'audiobook' as const,
-          artistId: null,
-          albumId: null,
-          authorId,
-          bookId: book.id,
-          path: f.path,
-          relativePath: relative(author.path, f.path),
-          sizeBytes: f.sizeBytes,
-          mtime: new Date(f.mtimeMs).toISOString(),
-          quality: audiobookFileQuality({ codec: t?.codec ?? null, container: t?.container ?? f.extension.replace(/^\./, ''), bitrateKbps: t?.bitrateKbps ?? null }),
-          codec: t?.codec ?? null,
-          container: t?.container ?? null,
-          bitrateKbps: t?.bitrateKbps != null ? Math.round(t.bitrateKbps) : null,
-          sampleRateHz: t?.sampleRateHz ?? null,
-          bitDepth: t?.bitDepth ?? null,
-          channels: t?.channels ?? null,
-          durationMs: t?.durationMs != null ? Math.round(t.durationMs) : null,
-          discNumber: t?.discNo ?? f.discFromFolder,
-          trackNumber: t?.trackNo ?? null,
-          partNumber: parts.length > 1 ? index + 1 : null,
-          chapterCount: t?.chapters ? t.chapters.length : null,
-          tags: t ? fileTags(t) : null,
-          mediaInfo: {
-            source: t?.source ?? null,
-            lossless: t?.lossless ?? null,
-            ...(t?.chapters && t.chapters.length > 0 ? { chapters: t.chapters.map((c) => ({ title: c.title, startMs: Math.round(c.startMs) })) } : {}),
-          },
-        };
-        if (parts.length === 1 && t?.chapters && t.chapters.length > 0) {
-          fileChapters = t.chapters.map((c) => ({
-            title: c.title,
-            startMs: Math.round(c.startMs),
-            lengthMs: c.endMs !== null ? Math.max(0, Math.round(c.endMs - c.startMs)) : null,
-          }));
-        }
+        const values = bookFileValues(author, book.id, f, index, parts.length);
         const prior = existing.get(f.path) ?? tx.select().from(audioFiles).where(eq(audioFiles.path, f.path)).get();
         if (prior) {
           tx.update(audioFiles).set(values).where(eq(audioFiles.id, prior.id)).run();
@@ -1087,11 +1099,17 @@ export function applyAuthorRescan(db: Db, authorId: number, result: AuthorRescan
         out.files++;
       });
       const patch: Partial<typeof books.$inferInsert> = { hasFile: true, path: a.folder };
+      const fileChapters = chaptersOfSingleFile(parts);
       if (book.chapters.length === 0 && fileChapters) patch.chapters = fileChapters;
       tx.update(books).set(patch).where(eq(books.id, book.id)).run();
     }
+    const unmatched = new Set(result.unmatched.flatMap((g) => g.files.map((f) => f.path)));
     for (const [path, row] of existing) {
       if (seen.has(path)) continue;
+      if (row.bookId !== null && owned.has(row.bookId) && (unmatched.has(path) || !isPathInside(author.path, path))) {
+        withFiles.add(row.bookId);
+        continue;
+      }
       tx.delete(audioFiles).where(eq(audioFiles.id, row.id)).run();
       out.removed++;
     }
@@ -1102,6 +1120,52 @@ export function applyAuthorRescan(db: Db, authorId: number, result: AuthorRescan
     return out;
   });
 }
+
+export interface LinkBookFilesResult {
+  /** `audio_files` ids, in part order. */
+  fileIds: number[];
+  added: number;
+  updated: number;
+}
+
+/**
+ * Links files to a book where they are (library import, in place): one `audio_files` row per
+ * file in the given (part) order, inserted or refreshed by path. The book gets `has_file`, its
+ * folder as `path`, `monitored`, and chapters from a single chaptered file when it has none.
+ * Files without readable tags are linked too (quality from the extension). Other files of the
+ * book stay.
+ */
+export function linkBookFiles(db: Db, bookId: number, folder: string, files: readonly ScannedBookFile[], now: string = nowIso()): LinkBookFilesResult {
+  return db.transaction((tx) => {
+    const book = bookRow(tx, bookId);
+    const author = authorRow(tx, book.authorId);
+    const out: LinkBookFilesResult = { fileIds: [], added: 0, updated: 0 };
+    const takenFrom = new Set<number>();
+    files.forEach((f, index) => {
+      const values = bookFileValues(author, book.id, f, index, files.length);
+      const prior = tx.select().from(audioFiles).where(eq(audioFiles.path, f.path)).get();
+      if (prior?.bookId != null && prior.bookId !== book.id) takenFrom.add(prior.bookId);
+      if (prior) {
+        tx.update(audioFiles).set(values).where(eq(audioFiles.id, prior.id)).run();
+        out.fileIds.push(prior.id);
+        out.updated++;
+      } else {
+        out.fileIds.push(tx.insert(audioFiles).values({ ...values, dateAdded: now }).returning({ id: audioFiles.id }).get().id);
+        out.added++;
+      }
+    });
+    const patch: Partial<typeof books.$inferInsert> = { hasFile: files.length > 0 || book.hasFile, path: folder, monitored: true };
+    const fileChapters = chaptersOfSingleFile(files);
+    if (book.chapters.length === 0 && fileChapters) patch.chapters = fileChapters;
+    tx.update(books).set(patch).where(eq(books.id, book.id)).run();
+    // A book a rescan had (wrongly) given these files keeps `has_file` only with files left.
+    for (const id of takenFrom) {
+      if (!tx.select({ id: audioFiles.id }).from(audioFiles).where(eq(audioFiles.bookId, id)).get()) tx.update(books).set({ hasFile: false }).where(eq(books.id, id)).run();
+    }
+    return out;
+  });
+}
+
 
 // ---------------------------------------------------------------------------------------
 // Wanted

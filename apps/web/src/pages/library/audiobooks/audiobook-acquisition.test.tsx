@@ -141,7 +141,9 @@ describe('audiobook interactive search', () => {
     expect(within(pack).getByText('Tess Arden, Rowan Pike')).toBeTruthy();
     expect(within(pack).getByText('The Tidewright Cycle · Books 1–3')).toBeTruthy();
 
-    fireEvent.click(within(pack).getByRole('button', { name: /^Grab / }));
+    // Rejected (book packs are off) but mapped: Grab anyway, after a confirmation.
+    fireEvent.click(within(pack).getByRole('button', { name: /^Grab .* anyway$/ }));
+    fireEvent.click(within(await screen.findByRole('dialog', { name: 'Grab a rejected release?' })).getByRole('button', { name: 'Grab anyway' }));
     await waitFor(() =>
       expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/release')?.body).toEqual({ guid: 'g2', indexerId: 2, authorId: 1, bookIds: [12, 13] }),
     );

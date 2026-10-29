@@ -153,6 +153,21 @@ describe('stall recovery', () => {
     );
   });
 
+  it('replaces a magnet whose metadata never arrives (private torrents never share it)', async () => {
+    const h = await grabbed();
+    h.set({ phase: 'metadata', downloadedBytes: 0, remainingBytes: 0, progress: 0 });
+    await stall(h);
+    expect(h.types()).toEqual(['grabbed', 'stalled', 'reannounced']);
+    const waiting = h.service.getQueueItem(h.tracked.id);
+    expect(waiting.stateCode).toBe('stalled');
+    expect(waiting.stateReason).toContain('Waiting for the torrent metadata from peers');
+    expect(waiting.stateReason).toContain('private torrent');
+    h.advance(30 * MIN);
+    await h.service.refreshQueue();
+    expect(h.fake.removed).toEqual([{ id: 'abc123', deleteData: true }]);
+    expect(h.searches.map((s) => s.episodeIds)).toEqual([[1]]);
+  });
+
   it('starts over with a new stall after data arrived', async () => {
     const h = await grabbed();
     await stall(h);
