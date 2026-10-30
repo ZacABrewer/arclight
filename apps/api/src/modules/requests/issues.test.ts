@@ -42,6 +42,14 @@ describe('issues', () => {
     expect(h.services.issues.list(viewer.actor, { type: 'subtitles' }).results.map((i) => i.createdBy.id)).toEqual([other.id]);
     expect(() => h.services.issues.list(h.reporter.actor, { createdBy: other.id })).toThrow(RequestsError);
     expect(h.services.issues.count(h.admin.actor)).toEqual({ total: 2, video: 1, audio: 0, subtitles: 1, other: 0, open: 2, resolved: 0 });
+    // Text search: comment text, issue type, reporter name and title; scope still applies.
+    const ids = (q: string, actor = viewer.actor) => h.services.issues.list(actor, { q }).results.map((i) => i.createdBy.id);
+    expect(ids('subtitles')).toEqual([other.id]);
+    expect(ids('a video')).toEqual([h.reporter.id]); // first comment "a" + type
+    const otherName = h.services.issues.list(viewer.actor, { createdBy: other.id }).results[0]!.createdBy.username;
+    expect(ids(otherName)).toEqual([other.id]);
+    expect(ids('subtitles', h.reporter.actor)).toEqual([]);
+    expect(h.services.issues.list(viewer.actor, { q: 'open movie' }).pageInfo.total).toBe(2);
   });
 
   it('comments notify admins and the creator, but never the commenter', async () => {

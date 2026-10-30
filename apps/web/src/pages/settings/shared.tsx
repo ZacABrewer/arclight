@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react';
+import { useCallback, useMemo, type ReactNode } from 'react';
 import { errorMessage } from '../../api/client.js';
 import { Button, Checkbox, Chip, Pane, SectionLabel, Tooltip } from '../../arclight/index.js';
+import { ListSearchBar, ListSearchEmpty } from '../../components/list-search.js';
+import { useTags } from '../../hooks/library.js';
 import './settings.css';
 import './managed.css';
+import './list-search.css';
 import { t } from '../../i18n/index.js';
 
 // Small building blocks shared by the settings pages (Arclight).
@@ -192,4 +195,38 @@ export function minutesLabel(minutes: number): string {
   if (minutes % 1440 === 0) return t('settings.shared.valueD', { value: minutes / 1440 });
   if (minutes % 60 === 0) return t('settings.shared.valueH', { value: minutes / 60 });
   return t('settings.shared.minutesMin', { minutes });
+}
+
+/** What `useClientListSearch` returns, as far as the settings search block needs it. */
+export interface SettingsListSearchState {
+  q: string;
+  setQ: (q: string) => void;
+  clear: () => void;
+  active: boolean;
+  shown: number;
+  total: number;
+}
+
+/**
+ * A settings list (card grid or table) with the page search above it: the compact search row
+ * ("N of M"), then the list, or "Nothing matches" with Clear search when the search hides
+ * everything. The row is hidden while the list is empty (the page shows its own empty state).
+ * Pass the filtered rows from `useClientListSearch` to the list and to `useResourceBulk`, so
+ * Select all only picks the matches.
+ */
+export function SettingsListSearch({ search, placeholder, children }: { search: SettingsListSearchState; placeholder?: string | undefined; children: ReactNode }) {
+  if (search.total === 0) return <>{children}</>;
+  return (
+    <div className="al-settings-search">
+      <ListSearchBar value={search.q} onChange={search.setQ} placeholder={placeholder ?? t('listSearch.ph.names')} shown={search.shown} total={search.total} />
+      {search.active && search.shown === 0 ? <ListSearchEmpty query={search.q} onClear={search.clear} /> : children}
+    </div>
+  );
+}
+
+/** Tag ids → labels, for searching settings lists by tag name (unknown ids are skipped). */
+export function useTagNames(): (ids: readonly number[] | undefined) => string[] {
+  const tags = useTags();
+  const byId = useMemo(() => new Map((tags.data ?? []).map((tag) => [tag.id, tag.label] as const)), [tags.data]);
+  return useCallback((ids) => (ids ?? []).flatMap((id) => byId.get(id) ?? []), [byId]);
 }

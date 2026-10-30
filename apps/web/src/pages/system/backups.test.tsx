@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
+import { RouterProvider, createMemoryHistory, createRootRoute, createRouter } from '@tanstack/react-router';
 import type { Backup, BackupSettings, SystemStatus } from '@arclight/shared';
 import { ToastProvider } from '../../components/toast.js';
 import { RestartBanner } from '../../layout/restart-banner.js';
@@ -81,11 +82,15 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderWith(node: React.ReactNode): ToastStore {
+// The page reads its search from the URL, so it renders inside a one-route memory router.
+function renderWith(node: React.ReactNode, path = '/'): ToastStore {
   const toasts = createToastStore();
+  const router = createRouter({ routeTree: createRootRoute({ component: () => <>{node}</> }), history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <QueryClientProvider client={createQueryClient(toasts)}>
-      <ToastProvider store={toasts}>{node}</ToastProvider>
+      <ToastProvider store={toasts}>
+        <RouterProvider router={router} />
+      </ToastProvider>
     </QueryClientProvider>,
   );
   return toasts;
@@ -108,6 +113,24 @@ describe('System → Backups', () => {
     list = [];
     renderWith(<SystemBackupsPage />);
     expect(await screen.findByText('No backups yet')).toBeTruthy();
+  });
+
+  it('filters by file name, type and date with an "N of M" count', async () => {
+    renderWith(<SystemBackupsPage />, '/?q=scheduled%2010-24');
+    expect(await screen.findByText(backups[1]!.name)).toBeTruthy();
+    expect(screen.queryByText(backups[0]!.name)).toBeNull();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+  });
+
+  it('types a search and clears it from the empty state', async () => {
+    renderWith(<SystemBackupsPage />);
+    await rowOf(backups[0]!.name);
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'nothing-like-this' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await rowOf(backups[0]!.name)).toBeTruthy();
+    expect(await rowOf(backups[1]!.name)).toBeTruthy();
   });
 
   it('creates a backup now and refreshes the list', async () => {

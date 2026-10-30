@@ -163,6 +163,7 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('common.profiles'); }, to: '/settings/profiles' },
       { get label() { return t('common.quality'); }, to: '/settings/quality' },
       { get label() { return t('nav.customFormats'); }, to: '/settings/customformats' },
+      { get label() { return t('common.tags'); }, to: '/settings/tags' },
       { get label() { return t('common.guides'); }, to: '/settings/guides' },
       { get label() { return t('common.indexers'); }, to: '/settings/indexers' },
       { get label() { return t('nav.indexerProxies'); }, to: '/settings/indexerproxies' },

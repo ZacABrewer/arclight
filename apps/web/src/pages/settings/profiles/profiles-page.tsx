@@ -7,6 +7,8 @@ import { useCustomFormatList, useQualityProfileList, useQualityProfileSchema } f
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
+import { ListSearchBar, ListSearchCount, ListSearchEmpty, useClientListSearch, useListSearch } from '../../../components/list-search.js';
+import { useReleaseProfileList } from '../../../hooks/profiles.js';
 import { useProfileMigrationProgressList } from '../../../hooks/profile-migration.js';
 import { DelayProfilesSection } from './delay-profiles.js';
 import { MismatchCount, ProfileMigrationSection } from './profile-migration-section.js';
@@ -67,15 +69,19 @@ function QualityProfilesSection() {
   const migration = useProfileMigrationProgressList();
   const features = useFeatures();
   const [editing, setEditing] = useState<Editing>(null);
-  const bulk = useResourceBulk('qualityprofile', list.data, (p) => p.id, (p) => p.name);
+  // The page search (ProfilesSearch) filters the cards by name; Select all picks the matches.
+  const search = useClientListSearch(list.data, (p) => [p.name]);
+  const bulk = useResourceBulk('qualityprofile', search.rows, (p) => p.id, (p) => p.name);
 
   // One grid per domain once audio is in play: video always, music / audiobooks while their
-  // flag is on or a profile of theirs exists.
-  const groups = groupByDomain(list.data ?? []);
-  const shown = DOMAIN_ORDER.filter(
-    (d) => d === 'video' || groups.some((g) => g.domain === d) || (d === 'music' ? features.music : features.audiobooks),
+  // flag is on or a profile of theirs exists. While searching, domains without a match hide.
+  const allGroups = groupByDomain(list.data ?? []);
+  const groups = groupByDomain(search.rows ?? []);
+  const domains = DOMAIN_ORDER.filter(
+    (d) => d === 'video' || allGroups.some((g) => g.domain === d) || (d === 'music' ? features.music : features.audiobooks),
   );
-  const grouped = shown.length > 1;
+  const shown = search.active ? domains.filter((d) => groups.some((g) => g.domain === d)) : domains;
+  const grouped = domains.length > 1;
   const card = (p: QualityProfile) => (
     <QualityProfileCard
       key={p.id}
@@ -91,9 +97,12 @@ function QualityProfilesSection() {
       label={t('settings.profiles.qualityProfiles')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
-        <Button size="sm" variant="secondary" onClick={() => setEditing({ domain: 'video' })} disabled={!schema.data}>
-          {t('settings.profiles.addQualityProfile')}
-        </Button>
+        <>
+          <ListSearchCount active={search.active} shown={list.data ? search.shown : undefined} total={search.total} />
+          <Button size="sm" variant="secondary" onClick={() => setEditing({ domain: 'video' })} disabled={!schema.data}>
+            {t('settings.profiles.addQualityProfile')}
+          </Button>
+        </>
       }
     >
       {list.isPending ? (
@@ -102,6 +111,8 @@ function QualityProfilesSection() {
         <ErrorBlock title={t('settings.profiles.couldntLoadQualityProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
+      ) : search.active && search.shown === 0 && search.total > 0 ? (
+        <ListSearchEmpty query={search.q} onClear={search.clear} />
       ) : grouped ? (
         <>
         {shown.map((domain) => {
@@ -123,7 +134,7 @@ function QualityProfilesSection() {
       ) : (
         <>
           <CardGrid label={t('settings.profiles.qualityProfiles')}>
-            {list.data.map(card)}
+            {(search.rows ?? []).map(card)}
             <AddCard label={t('settings.profiles.addQualityProfile')} onClick={() => setEditing({ domain: 'video' })} />
           </CardGrid>
         </>
@@ -148,9 +159,23 @@ function ProfileMigrationPanel() {
   return <ProfileMigrationSection profiles={list.data} />;
 }
 
+/**
+ * One search box for the profile cards of every section (quality, release and album type
+ * profiles, by name; release profiles also by their terms). The query is kept in the URL.
+ * Each section shows its own "N of M". Delay profiles are an ordered table and stay whole.
+ */
+function ProfilesSearch() {
+  const { q, setQ, active } = useListSearch();
+  const quality = useQualityProfileList();
+  const release = useReleaseProfileList();
+  if (!active && !quality.data?.length && !release.data?.length) return null;
+  return <ListSearchBar value={q} onChange={setQ} placeholder={t('listSearch.ph.names')} />;
+}
+
 export function ProfilesPage() {
   return (
     <SettingsPage title={t('common.profiles')} description={t('settings.profiles.whichReleasesToGrabHow')}>
+      <ProfilesSearch />
       <QualityProfilesSection />
       <ProfileMigrationPanel />
       <DelayProfilesSection />

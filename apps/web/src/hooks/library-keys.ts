@@ -27,10 +27,10 @@ export const libraryKeys = {
   },
   wanted: {
     all: ['wanted'] as const,
-    missing: (kind: 'episodes' | 'movies', page: number, pageSize: number) =>
-      ['wanted', 'missing', kind, page, pageSize] as const,
-    cutoff: (kind: 'episodes' | 'movies', page: number, pageSize: number) =>
-      ['wanted', 'cutoff', kind, page, pageSize] as const,
+    missing: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '') =>
+      ['wanted', 'missing', kind, page, pageSize, q] as const,
+    cutoff: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '') =>
+      ['wanted', 'cutoff', kind, page, pageSize, q] as const,
   },
   calendar: {
     all: ['calendar'] as const,

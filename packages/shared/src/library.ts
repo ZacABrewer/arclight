@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ListSearchParam } from './list-search.js';
 import { QualityModel } from './quality.js';
 
 // The library contract: root folders, series/seasons/episodes, movies, media files, tags.
@@ -646,8 +647,17 @@ export type PageQuery = z.infer<typeof PageQuery>;
 
 export const WantedEpisodesQuery = PageQuery.extend({
   includeSpecials: queryFlag().default(false),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type WantedEpisodesQuery = z.infer<typeof WantedEpisodesQuery>;
+
+/** GET /wanted/missing/movies and /wanted/cutoff/movies. */
+export const WantedMoviesQuery = PageQuery.extend({
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
+});
+export type WantedMoviesQuery = z.infer<typeof WantedMoviesQuery>;
 
 export const WantedEpisode = Episode.extend({
   seriesTitle: z.string(),

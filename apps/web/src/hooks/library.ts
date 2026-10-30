@@ -85,27 +85,28 @@ export function useQualityProfiles() {
 
 export type WantedPage = WantedEpisodesPage | WantedMoviesPage;
 
-export function useMissing(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true) {
+/** `q`: the page's text search (blank = every row). */
+export function useMissing(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '') {
   return useQuery({
     enabled,
-    queryKey: libraryKeys.wanted.missing(kind, page, pageSize),
+    queryKey: libraryKeys.wanted.missing(kind, page, pageSize, q),
     queryFn: (): Promise<WantedPage> =>
       kind === 'episodes'
-        ? libraryApi.wanted.missingEpisodes({ page, pageSize })
-        : libraryApi.wanted.missingMovies({ page, pageSize }),
+        ? libraryApi.wanted.missingEpisodes({ page, pageSize, q: q || undefined })
+        : libraryApi.wanted.missingMovies({ page, pageSize, q: q || undefined }),
     placeholderData: keepPreviousData,
   });
 }
 
 /** Cutoff-unmet lists: items with a file below their profile's cutoff (GET /wanted/cutoff/*). */
-export function useCutoffUnmet(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true) {
+export function useCutoffUnmet(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '') {
   return useQuery({
     enabled,
-    queryKey: libraryKeys.wanted.cutoff(kind, page, pageSize),
+    queryKey: libraryKeys.wanted.cutoff(kind, page, pageSize, q),
     queryFn: (): Promise<WantedPage> =>
       kind === 'episodes'
-        ? libraryApi.wanted.cutoffEpisodes({ page, pageSize })
-        : libraryApi.wanted.cutoffMovies({ page, pageSize }),
+        ? libraryApi.wanted.cutoffEpisodes({ page, pageSize, q: q || undefined })
+        : libraryApi.wanted.cutoffMovies({ page, pageSize, q: q || undefined }),
     placeholderData: keepPreviousData,
   });
 }

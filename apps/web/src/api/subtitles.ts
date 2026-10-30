@@ -83,8 +83,8 @@ export const subtitlesApi = {
   resetProviders: (onlyAuthOrConfig = false) =>
     request('/subtitle/providers/reset', SubtitleProvidersResponse, { method: 'POST', json: { onlyAuthOrConfig } }),
 
-  wanted: (mediaType: SubtitleMediaType, page: number, pageSize: number) =>
-    request('/subtitle/wanted', WantedSubtitlesPage, { query: { mediaType, page, pageSize } }),
+  wanted: (mediaType: SubtitleMediaType, page: number, pageSize: number, q?: string) =>
+    request('/subtitle/wanted', WantedSubtitlesPage, { query: { mediaType, page, pageSize, q: q || undefined } }),
   history: (filter: SubtitleHistoryFilter) => request('/subtitle/history', SubtitleHistoryPage, { query: { ...filter } }),
 
   blacklist: (page: number, pageSize: number) => request('/subtitle/blacklist', SubtitleBlacklistPage, { query: { page, pageSize } }),

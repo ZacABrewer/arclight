@@ -50,10 +50,10 @@ export function useResetProviderThrottles() {
   });
 }
 
-export function useWantedSubtitles(mediaType: SubtitleMediaType, page: number, pageSize: number) {
+export function useWantedSubtitles(mediaType: SubtitleMediaType, page: number, pageSize: number, q = '') {
   return useQuery({
-    queryKey: subtitleKeys.wanted(mediaType, page, pageSize),
-    queryFn: () => subtitlesApi.wanted(mediaType, page, pageSize),
+    queryKey: subtitleKeys.wanted(mediaType, page, pageSize, q),
+    queryFn: () => subtitlesApi.wanted(mediaType, page, pageSize, q),
     placeholderData: keepPreviousData,
     retry: false,
   });

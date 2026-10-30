@@ -24,6 +24,8 @@ Use the buttons at the top right to change the view:
 
 Use the arrows to move to the previous or next month, week or day, and **Today** to jump back to the present. The title shows the range you are looking at.
 
+The search box under the header filters every view to the matching events: series, movie, album or book title, episode title, or an episode code such as `s01e02`. The count says how many of the events in the range match; every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces. The search is kept in the address bar, so a reload or a shared link keeps it.
+
 ## Colors
 
 A legend under the title explains the colors of the event bars:

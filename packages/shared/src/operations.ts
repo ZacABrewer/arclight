@@ -3,6 +3,7 @@ import { CustomFormatSpec, LanguageCode, QualityProfileItem, ReleaseProtocol } f
 import { IndexerImplementation, IndexerProxyType, IndexerSettings } from './indexers.js';
 import { DownloadClientImplementation } from './download-clients.js';
 import { NotificationImplementation } from './notifications.js';
+import { ListSearchParam } from './list-search.js';
 import { ImportListImplementation, ImportListMediaType } from './import-lists.js';
 import { MinimumAvailability, MonitorOption, SeriesType } from './library.js';
 import { LanguageProfileItem } from './subtitles.js';
@@ -331,6 +332,8 @@ export const AuditQuery = z.object({
   from: z.string().optional(),
   /** ISO-8601, exclusive. */
   to: z.string().optional(),
+  /** Text search (list-search.ts) over user, action, target and details: every word must match. */
+  q: ListSearchParam,
 });
 export type AuditQuery = z.infer<typeof AuditQuery>;
 

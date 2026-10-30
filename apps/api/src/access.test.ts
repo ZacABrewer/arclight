@@ -75,6 +75,8 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'PUT /api/v1/push/preferences': 'portal',
   'POST /api/v1/push/test': 'portal',
   'GET /api/v1/events': 'portal',
+  // Universal search: kinds scoped in the service (own requests/issues; library, activity, settings by access).
+  'GET /api/v1/search/universal': 'portal',
 
   // ---- discover (public portal: anonymous too while allowed)
   'GET /api/v1/public/portal': 'portal publicWhen',
@@ -179,6 +181,7 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/book/:id': 'areas:library',
   'GET /api/v1/bookseries': 'areas:library',
   'GET /api/v1/bookseries/:id': 'areas:library',
+  'GET /api/v1/tagrule/applied': 'areas:library',
   'GET /api/v1/metadata/collection/:tmdbId': 'areas:library',
   'GET /api/v1/rootfolder': 'areas:library perms:REQUEST_ADVANCED+MANAGE_REQUESTS',
   'GET /api/v1/rootfolder/:id': 'areas:library',

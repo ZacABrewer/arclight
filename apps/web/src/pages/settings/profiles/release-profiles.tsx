@@ -9,6 +9,7 @@ import { useIndexerList } from '../../../hooks/indexers.js';
 import { useDeleteReleaseProfile, useReleaseProfileList, useSaveReleaseProfile } from '../../../hooks/profiles.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
+import { ListSearchCount, ListSearchEmpty, useClientListSearch } from '../../../components/list-search.js';
 import './profiles.css';
 import { t } from '../../../i18n/index.js';
 
@@ -120,16 +121,21 @@ export function ReleaseProfilesSection() {
   const indexers = useIndexerList();
   const tagLabels = useTagLabels();
   const [editing, setEditing] = useState<ReleaseProfile | 'new' | null>(null);
-  const bulk = useResourceBulk('releaseprofile', list.data, (p) => p.id, (p) => p.name);
+  // The profiles page search: name, must / must-not terms and tag names. Select all picks the matches.
+  const search = useClientListSearch(list.data, (p) => [p.name, p.required, p.ignored, tagLabels(p.tags)]);
+  const bulk = useResourceBulk('releaseprofile', search.rows, (p) => p.id, (p) => p.name);
 
   return (
     <SettingsSection
       label={t('settings.profiles.releaseProfiles.releaseProfiles')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
-        <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
-          {t('settings.profiles.releaseProfiles.addReleaseProfile')}
-        </Button>
+        <>
+          <ListSearchCount active={search.active} shown={list.data ? search.shown : undefined} total={search.total} />
+          <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+            {t('settings.profiles.releaseProfiles.addReleaseProfile')}
+          </Button>
+        </>
       }
     >
       {list.isPending ? (
@@ -138,10 +144,12 @@ export function ReleaseProfilesSection() {
         <ErrorBlock title={t('settings.profiles.releaseProfiles.couldntLoadReleaseProfiles')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
+      ) : search.active && search.shown === 0 && search.total > 0 ? (
+        <ListSearchEmpty query={search.q} onClear={search.clear} />
       ) : (
         <>
         <CardGrid label={t('settings.profiles.releaseProfiles.releaseProfiles')}>
-          {list.data.map((p) => (
+          {(search.rows ?? []).map((p) => (
             <ItemCard
               key={p.id}
               title={p.name}

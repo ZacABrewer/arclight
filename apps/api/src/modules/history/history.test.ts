@@ -2,7 +2,7 @@ import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { HistoryListQuery, type HistoryListQueryInput, type ServerEvent } from '@arclight/shared';
-import { episodes } from '../../db/schema.js';
+import { albumTypeProfiles, artists, episodes } from '../../db/schema.js';
 import { eq } from 'drizzle-orm';
 import { historyRoutes } from './routes.js';
 import { dataValue, HistoryError, normalizeData, type GrabbedRelease, type HistoryTarget } from './service.js';
@@ -453,6 +453,40 @@ describe('paged list', () => {
     expect(count({ language: 'de' })).toBe(0);
   });
 
+  it('text search (q) matches source title, parent title, episode, indexer, client and event type', () => {
+    const titles = (q: HistoryListQueryInput) => f.history.list(query(q)).records.map((r) => r.sourceTitle);
+    const count = (q: HistoryListQueryInput) => f.history.list(query(q)).totalRecords;
+    expect(count({ q: 'TITLE' })).toBe(4); // source title, case-insensitive
+    expect(titles({ q: 'zeta' })).toEqual(['b-title']); // series title
+    expect(titles({ q: 'beta movie' })).toEqual(['d-title']); // movie title, both words
+    expect(titles({ q: 'alpha show' })).toEqual(['c-title']);
+    expect(titles({ q: 's01e01' })).toEqual(['b-title']); // episode code
+    expect(count({ q: 'tracker1' })).toBe(3); // data.indexer
+    expect(count({ q: 'my qbit' })).toBe(3); // data.downloadClientName
+    expect(count({ q: 'qbittorrent' })).toBe(3); // data.downloadClient
+    expect(titles({ q: 'imported' })).toEqual(['d-title']); // downloadFolderImported
+    expect(count({ q: 'zeta tracker1' })).toBe(1);
+    expect(count({ q: 'zeta beta' })).toBe(0); // every word must match
+    expect(count({ q: '%' })).toBe(0); // LIKE wildcards are literal
+    expect(count({ q: '  ' })).toBe(4); // blank = no search
+    // Combined with a filter.
+    expect(count({ q: 'title', mediaType: 'movie' })).toBe(2);
+  });
+
+  it('text search (q) keeps the count and paging consistent, also with the joined title sort', () => {
+    const page1 = f.history.list(query({ q: 'tracker1', pageSize: 2 }));
+    expect(page1.totalRecords).toBe(3);
+    expect(page1.records).toHaveLength(2);
+    expect(f.history.list(query({ q: 'tracker1', pageSize: 2, page: 2 })).records).toHaveLength(1);
+    const sorted = f.history.list(query({ q: 'show', sortKey: 'title', sortDirection: 'asc' }));
+    expect(sorted.records.map((r) => r.sourceTitle)).toEqual(['c-title', 'b-title']);
+    expect(sorted.totalRecords).toBe(2);
+  });
+
+  it('rejects a q over 200 characters', () => {
+    expect(() => query({ q: 'x'.repeat(201) })).toThrow();
+  });
+
   it('embeds parent and episode summaries on request', () => {
     const page = f.history.list(query({ includeSeries: true, includeEpisode: true, includeMovie: true }));
     const tvRow = page.records.find((r) => r.downloadId === 'T1')!;
@@ -518,6 +552,18 @@ describe('routes', () => {
     expect(mov.json()[0].downloadId).toBe('B');
   });
 
+  it('GET /history?q= searches, including the failure message', async () => {
+    const a = await app();
+    const [g] = grab(movie(), 'B');
+    grab(tv(f.ep.s1e1), 'A');
+    await f.history.markFailed(g!.id, { message: 'Corrupt archive' });
+    const res = await a.inject({ method: 'GET', url: '/api/v1/history?q=corrupt.archive' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ totalRecords: 1, records: [{ eventType: 'downloadFailed' }] });
+    const tooLong = await a.inject({ method: 'GET', url: `/api/v1/history?q=${'x'.repeat(201)}` });
+    expect(tooLong.statusCode).toBe(400);
+  });
+
   it('POST /history/failed/:id marks failed and maps errors', async () => {
     const a = await app();
     const [g] = grab(movie(), 'B');
@@ -553,6 +599,37 @@ describe('music targets', () => {
     expect(f.history.mostRecentForAlbum(420)?.eventType).toBe('downloadFolderImported');
     expect(f.history.list(HistoryListQuery.parse({ albumId: 421 })).records.map((r) => r.eventType)).toEqual(['grabbed']);
     expect(f.history.list(HistoryListQuery.parse({ artistId: '42', mediaType: 'music' })).totalRecords).toBe(2);
+  });
+
+  it('text search (q) finds music rows by artist name', () => {
+    const profile = f.db
+      .insert(albumTypeProfiles)
+      .values({ name: 'Standard', primaryTypes: ['Album'], secondaryTypes: [], releaseStatuses: ['Official'] })
+      .returning()
+      .get();
+    f.db
+      .insert(artists)
+      .values({
+        id: 42,
+        mbArtistId: 'mb-42',
+        name: 'The Night Owls',
+        sortName: 'Night Owls, The',
+        cleanName: 'nightowls',
+        genres: [],
+        images: [],
+        links: [],
+        aliases: [],
+        path: '/music/The Night Owls',
+        rootFolderPath: '/music',
+        qualityProfileId: 1,
+        albumTypeProfileId: profile.id,
+        tags: [],
+        added: '2024-01-01T00:00:00.000Z',
+      })
+      .run();
+    f.history.recordGrab(release, { target: music, quality: quality('FLAC'), languages: [] }, 'musichash', 'qBit');
+    expect(f.history.list(HistoryListQuery.parse({ q: 'night owls' })).totalRecords).toBe(1);
+    expect(f.history.list(HistoryListQuery.parse({ q: 'night larks' })).totalRecords).toBe(0);
   });
 
   it('a failed music download blocklists under the artist', async () => {

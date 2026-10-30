@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { AudioManualImportResult, ImportMode } from '@arclight/shared';
+import { matchesListSearch, type AudioManualImportResult, type ImportMode } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import type { AudiobookManualImportQuery } from '../../../api/audiobook-acquisition.js';
 import {
@@ -22,6 +22,8 @@ import {
   type Column,
 } from '../../../arclight/index.js';
 import { EntityPicker } from '../../../components/entity-picker.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../../components/list-search.js';
+import { useAudioNames } from '../audio-names.js';
 import { useAuthorBooks, useAuthorList } from '../../../hooks/audiobooks.js';
 import { useAudiobookImport, useAudiobookImportScan } from '../../../hooks/audiobook-acquisition.js';
 import { formatDuration } from '../../library/music/music-model.js';
@@ -96,17 +98,22 @@ function GroupSummary({ group }: { group: BookGroupState }) {
   );
 }
 
-function FilesStep({ groups }: { groups: BookGroupState[] }) {
+function FilesStep({ groups, shown, toolbar, empty }: { groups: BookGroupState[]; shown: BookGroupState[]; toolbar?: ReactNode; empty?: ReactNode }) {
   const files = groups.reduce((n, g) => n + g.files.length, 0);
   const matched = groups.filter((g) => g.bookId !== null).length;
   return (
     <div className="al-mi-step">
       <p className="al-activity-muted">{t('activity.manualImport.audiobook.foundSummary', { files, books: groups.length, matched })}</p>
-      <ul className="al-mi-list" aria-label={t('activity.manualImport.audiobook.booksFound')}>
-        {groups.map((g) => (
-          <GroupSummary key={g.key} group={g} />
-        ))}
-      </ul>
+      {toolbar}
+      {shown.length ? (
+        <ul className="al-mi-list" aria-label={t('activity.manualImport.audiobook.booksFound')}>
+          {shown.map((g) => (
+            <GroupSummary key={g.key} group={g} />
+          ))}
+        </ul>
+      ) : (
+        empty
+      )}
     </div>
   );
 }
@@ -264,6 +271,26 @@ export function AudiobookImportWizard({ query, sourceLabel, onStartOver }: { que
 
   const count = bookImportableCount(state);
   const index = STEPS.findIndex((s) => s.id === step);
+  // Book search: a book shows whole (its parts keep their order) when its folder, author, title
+  // or any part's path, title tag, narrator, quality or rejection matches.
+  const listSearch = useListSearch();
+  const names = useAudioNames(
+    [],
+    state.groups.map((g) => g.authorId),
+  );
+  const shownGroups = listSearch.active
+    ? state.groups.filter((g) =>
+        matchesListSearch(listSearch.q, [
+          g.folder,
+          names.author(g.authorId),
+          g.bookTitle,
+          names.book(g.authorId, g.bookId),
+          g.files.flatMap((f) => [f.relativePath, f.tagTitle, f.narrator, f.qualityName, ...f.rejections, ...f.warnings]),
+        ]),
+      )
+    : state.groups;
+  const toolbar = <ListSearchBar value={listSearch.q} onChange={listSearch.setQ} placeholder={t('listSearch.ph.files')} shown={shownGroups.length} total={state.groups.length} />;
+  const noMatch = listSearch.active ? <ListSearchEmpty query={listSearch.q} onClear={listSearch.clear} /> : undefined;
   const goTo = (s: Step) => (s === 'path' ? onStartOver() : setStep(s));
 
   let body: ReactNode;
@@ -283,12 +310,11 @@ export function AudiobookImportWizard({ query, sourceLabel, onStartOver }: { que
     else
       body =
         step === 'files' ? (
-          <FilesStep groups={state.groups} />
+          <FilesStep groups={state.groups} shown={shownGroups} toolbar={toolbar} empty={noMatch} />
         ) : (
           <div className="al-mi-step">
-            {state.groups.map((g) => (
-              <GroupMapping key={g.key} group={g} dispatch={dispatch} />
-            ))}
+            {toolbar}
+            {shownGroups.length ? shownGroups.map((g) => <GroupMapping key={g.key} group={g} dispatch={dispatch} />) : noMatch}
           </div>
         );
     if (step === 'files') {

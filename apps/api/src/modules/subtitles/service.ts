@@ -6,6 +6,7 @@ import type { Logger } from 'pino';
 import type { NotificationEvent } from '@arclight/notifications';
 import {
   LANGUAGE_PROFILE_CUTOFF_ANY,
+  filterListSearch,
   SubtitleSettings as SubtitleSettingsSchema,
   type LanguageProfile,
   type LanguageProfileInput,
@@ -125,6 +126,7 @@ import {
 } from './schema.js';
 import {
   desiredForUpgrade,
+  languageDisplayName,
   languageKey,
   missingEntries,
   normalizeTag,
@@ -1012,7 +1014,16 @@ export class SubtitlesService {
       };
     });
     items.sort((a, b) => a.title.localeCompare(b.title) || (a.episodeLabel ?? '').localeCompare(b.episodeLabel ?? ''));
-    return paginate(items, q.page, q.pageSize);
+    // The wanted set is computed in memory (profiles x present subtitles), so the `q` search
+    // runs here, before paging: title, episode label/title and the missing languages.
+    const matched = filterListSearch(items, q.q, (i) => [
+      i.title,
+      i.episodeLabel,
+      i.episodeTitle,
+      i.missing.map((m) => languageKey(m)),
+      i.missing.map((m) => languageDisplayName(m.language)),
+    ]);
+    return paginate([...matched], q.page, q.pageSize);
   }
 
   /** R3.11 eligibility for automatic runs. */

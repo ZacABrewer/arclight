@@ -1,6 +1,7 @@
 import { and, count, desc, eq, gte, lt, or, sql, type SQL } from 'drizzle-orm';
 import type { AuditEvent, AuditPage, AuditQuery } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import { getSection } from '../settings/service.js';
 import { auditEvents, type AuditEventRow } from './schema.js';
 
@@ -41,6 +42,17 @@ function where(f: AuditFilter): SQL | undefined {
   }
   if (f.from) parts.push(gte(auditEvents.time, new Date(f.from).toISOString()));
   if (f.to) parts.push(lt(auditEvents.time, new Date(f.to).toISOString()));
+  const search = listSearchCondition(f.q, [
+    auditEvents.username,
+    auditEvents.action,
+    auditEvents.target,
+    auditEvents.method,
+    auditEvents.route,
+    auditEvents.ip,
+    auditEvents.statusCode,
+    auditEvents.details,
+  ]);
+  if (search) parts.push(search);
   return parts.length ? and(...parts) : undefined;
 }
 

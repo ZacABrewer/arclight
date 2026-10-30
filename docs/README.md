@@ -49,7 +49,10 @@ These pages follow the app's navigation.
 
 | Area | Page |
 |---|---|
+| Universal search and the command palette (/ and Ctrl+K) | [search-and-commands.md](using/search-and-commands.md) |
 | Library (TV, Movies, Collections, Add New, Retention, Hygiene) | [library.md](using/library.md) |
+| Library health scan (Hygiene > Health) | [health-scan.md](using/health-scan.md) |
+| Tags and tag rules (Settings > Tags) | [tags.md](using/tags.md) |
 | Discover, Requests, Issues, Watchlist, Discord bot | [discover-and-requests.md](using/discover-and-requests.md) |
 | Calendar | [calendar.md](using/calendar.md) |
 | Activity (Queue, History, Blocklist, Pending, Manual import) | [activity.md](using/activity.md) |

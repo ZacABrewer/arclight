@@ -48,6 +48,9 @@ describe('requests routes', () => {
     expect(all.pageInfo.total).toBe(2);
     const mine = (await h.app.inject({ method: 'GET', url: '/api/v1/request', headers: { cookie: h.userCookie } })).json();
     expect(mine.results.map((r: { mediaTitle: string }) => r.mediaTitle)).toEqual(['The Matrix']);
+    const searched = (await h.app.inject({ method: 'GET', url: '/api/v1/request?q=the.matrix', headers: { cookie: h.adminCookie } })).json();
+    expect(searched.results.map((r: { mediaTitle: string }) => r.mediaTitle)).toEqual(['The Matrix']);
+    expect(searched.pageInfo.total).toBe(1);
     const [series, movie] = all.results as { id: number }[];
     const approved = await h.app.inject({ method: 'POST', url: `/api/v1/request/${movie!.id}/approve`, headers: { cookie: h.adminCookie } });
     expect(approved.json()).toMatchObject({ status: 'approved' });

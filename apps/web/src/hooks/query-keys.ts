@@ -20,7 +20,7 @@ export const subtitleKeys = {
   languages: ['subtitles', 'languages'] as const,
   settings: ['subtitles', 'settings'] as const,
   providers: ['subtitles', 'providers'] as const,
-  wanted: (mediaType: string, page: number, pageSize: number) => ['subtitles', 'wanted', mediaType, page, pageSize] as const,
+  wanted: (mediaType: string, page: number, pageSize: number, q = '') => ['subtitles', 'wanted', mediaType, page, pageSize, q] as const,
   history: (filter: unknown) => ['subtitles', 'history', filter] as const,
   blacklist: (page: number, pageSize: number) => ['subtitles', 'blacklist', page, pageSize] as const,
   files: (scope: unknown) => ['subtitles', 'files', scope] as const,

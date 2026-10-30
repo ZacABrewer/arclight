@@ -219,6 +219,22 @@ describe('listing and removal', () => {
     expect(total({ mediaType: 'series' })).toBe(2);
   });
 
+  it('text search (q) matches source title, indexer, message, parent and episode', () => {
+    const titles = (input: BlocklistListQueryInput) => f.blocklist.list(q(input)).records.map((r) => r.sourceTitle);
+    expect(titles({ q: 'zeta' })).toEqual(['b']); // series title
+    expect(titles({ q: 'ALPHA' })).toEqual(['c', 'a']); // series title / indexer
+    expect(titles({ q: 'alpha show' })).toEqual(['c']);
+    expect(titles({ q: 'movie' })).toEqual(['a']); // movie title
+    expect(titles({ q: 'mid' })).toEqual(['c']); // indexer
+    expect(titles({ q: 'failed' })).toEqual(['c', 'b']); // message
+    expect(titles({ q: 's02e01' })).toEqual(['b']); // episode code
+    expect(titles({ q: 'zeta mid' })).toEqual([]); // every word must match
+    expect(titles({ q: '_' })).toEqual(['c', 'a', 'b']); // separators only = no search
+    const page = f.blocklist.list(q({ q: 'failed', pageSize: 1, sortKey: 'title', sortDirection: 'asc' }));
+    expect(page.totalRecords).toBe(2);
+    expect(page.records.map((r) => r.sourceTitle)).toEqual(['c']);
+  });
+
   it('removes one, many, a parent, orphans and everything', () => {
     const [first, second, third] = f.blocklist.list(q({ sortDirection: 'asc' })).records;
     f.blocklist.remove(first!.id);
@@ -260,6 +276,9 @@ describe('routes', () => {
     const del = await a.inject({ method: 'DELETE', url: `/api/v1/blocklist/${s.id}` });
     expect(del.statusCode).toBe(204);
     expect((await a.inject({ method: 'DELETE', url: `/api/v1/blocklist/${s.id}` })).statusCode).toBe(404);
+
+    const searched = await a.inject({ method: 'GET', url: '/api/v1/blocklist?q=other' });
+    expect(searched.json()).toMatchObject({ totalRecords: 1, records: [{ id: extra.id }] });
 
     const bulk = await a.inject({ method: 'DELETE', url: '/api/v1/blocklist/bulk', payload: { ids: [m.id, extra.id] } });
     expect(bulk.json()).toEqual({ deleted: 2 });

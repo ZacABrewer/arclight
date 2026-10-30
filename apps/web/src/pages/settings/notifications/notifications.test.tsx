@@ -71,12 +71,12 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderPage() {
+function renderPage(path = '/settings/notifications') {
   const toasts = createToastStore();
   const queryClient = createQueryClient(toasts);
   const root = createRootRoute();
   const route = createRoute({ getParentRoute: () => root, path: '/settings/notifications', component: NotificationsPage });
-  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: ['/settings/notifications'] }) });
+  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider store={toasts}>
@@ -102,6 +102,27 @@ describe('Settings -> Notifications', () => {
     fireEvent.click(within(card).getByRole('button', { name: 'Test' }));
     expect(await within(card).findByText('Test passed')).toBeTruthy();
     expect(calls.find((c) => c.url === '/api/v1/notification/test')!.body).toMatchObject({ id: 1, name: 'Discord', onGrab: true });
+  });
+
+  it('searches connections by name, implementation and trigger', async () => {
+    notifications.push({ id: 2, name: 'Pager', implementation: 'email', tags: [], settings: { webhookUrl: '', mentions: [] }, onGrab: false, onDownload: false, onHealthIssue: true });
+    try {
+      renderPage('/settings/notifications?q=health%20issue');
+      const grid = await screen.findByRole('list', { name: 'Connections' });
+      expect(await within(grid).findByRole('button', { name: 'Pager' })).toBeTruthy();
+      expect(within(grid).queryByRole('button', { name: 'Discord' })).toBeNull();
+      expect(screen.getByText('1 of 2')).toBeTruthy();
+      const box = screen.getByRole('searchbox', { name: 'Search this list' });
+      fireEvent.change(box, { target: { value: 'discord grab' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      expect(await within(screen.getByRole('list', { name: 'Connections' })).findByRole('button', { name: 'Discord' })).toBeTruthy();
+      fireEvent.change(box, { target: { value: 'slack' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+      await waitFor(() => expect(screen.getByText('Pager')).toBeTruthy());
+    } finally {
+      notifications.pop();
+    }
   });
 
   it('toggles event flag checkboxes in the editor and sends them on save', async () => {

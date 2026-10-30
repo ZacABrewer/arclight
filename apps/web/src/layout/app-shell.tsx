@@ -9,7 +9,7 @@ import { useNav } from './use-nav.js';
 import { RestartBanner } from './restart-banner.js';
 import { SectionNav } from './section-nav.js';
 import { ShellOptionsProvider, useResolvedBackdrop } from './shell-options.js';
-import { ShellOverlays } from './shell-overlays.js';
+import { ShellOverlays, type PaletteState } from './shell-overlays.js';
 import { useStatusCluster } from './status-cluster.js';
 import { useUserMenu } from './user-menu.js';
 import { t } from '../i18n/index.js';
@@ -48,6 +48,7 @@ function Shell() {
   const { isAdmin, access } = useAuth();
   const cluster = useStatusCluster(isAdmin);
   const [search, setSearch] = useState(false);
+  const [palette, setPalette] = useState<PaletteState>({ open: false, query: '' });
   const [more, setMore] = useState(false);
   const [sheet, setSheet] = useState(false);
   const user = useUserMenu(() => setSheet(true));
@@ -88,6 +89,17 @@ function Shell() {
         userMenu={user.menu}
       >
         <Button variant="ghost" size="sm" className="al-topbar__search-icon" icon={<Icon name="search" size={20} />} aria-label={t('common.search')} onClick={() => setSearch(true)} />
+        <Button
+          variant="ghost"
+          size="sm"
+          className="al-topbar__command-icon"
+          icon={<Icon name="keyboard" size={20} />}
+          aria-label={t('common.commandPalette')}
+          onClick={() => {
+            setSearch(false);
+            setPalette({ open: true, query: '' });
+          }}
+        />
       </TopBar>
       <ContentInset id="main">
         <RestartBanner />
@@ -107,7 +119,7 @@ function Shell() {
         }}
       />
       <MoreDrawer open={more} onClose={() => setMore(false)} access={access} nav={nav} />
-      <ShellOverlays isAdmin={isAdmin} search={search} setSearch={setSearch} sheet={sheet} setSheet={setSheet} />
+      <ShellOverlays isAdmin={isAdmin} search={search} setSearch={setSearch} sheet={sheet} setSheet={setSheet} palette={palette} setPalette={setPalette} />
     </div>
   );
 }

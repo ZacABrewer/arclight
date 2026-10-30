@@ -5,6 +5,7 @@ import { Button, Checkbox, EmptyState, Field, Modal, Pane, Paginator, Poster, Ta
 import { useSelection } from '../../components/bulk-actions.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
 import { useRequestBulkActions } from './request-bulk.js';
+import { ListSearchCount, ListSearchEmpty } from '../../components/list-search.js';
 import { Loading, QueryError, useIsMobile } from '../../components/media/media-kit.js';
 import { DLink } from '../../features/discover/base.js';
 import { MEDIA_STATUS_META, REQUEST_STATUS_META, formatDateTime } from '../../features/requests/status.js';
@@ -106,11 +107,41 @@ function AudioRequestActions({ r, manage }: { r: AudioRequest; manage: boolean }
   );
 }
 
+/** "N results" over a searched request list (the server's total); nothing without a search. */
+export function RequestSearchCount({ q, total }: { q: string; total: number }) {
+  if (!q) return null;
+  return (
+    <div className="mk-row mk-row--end" style={{ marginBottom: 8 }}>
+      <ListSearchCount active shown={total} />
+    </div>
+  );
+}
+
 /** Everyone's (or the caller's) audio requests of one domain, by status tab, paged. */
-export function AudioRequestTable({ filter, domain, manage }: { filter: RequestFilter; domain: AudioDomain; manage: boolean }) {
+export function AudioRequestTable({
+  filter,
+  domain,
+  manage,
+  q = '',
+  onClearSearch,
+}: {
+  filter: RequestFilter;
+  domain: AudioDomain;
+  manage: boolean;
+  /** The page's text search (title, requester, status; server-side). */
+  q?: string | undefined;
+  onClearSearch?: (() => void) | undefined;
+}) {
   const [page, setPage] = useState(0);
   // The audio list has no "unavailable" filter (the status tabs never pick it).
-  const list = useAudioRequests({ filter: filter === 'unavailable' ? 'all' : filter, domain, take: PAGE_SIZE, skip: page * PAGE_SIZE, sortDirection: 'desc' });
+  const list = useAudioRequests({
+    filter: filter === 'unavailable' ? 'all' : filter,
+    domain,
+    take: PAGE_SIZE,
+    skip: page * PAGE_SIZE,
+    sortDirection: 'desc',
+    q: q || undefined,
+  });
   const mobile = useIsMobile();
   const bulk = useBulkAudioRequestAction();
   const rows = list.data?.results ?? [];
@@ -154,8 +185,13 @@ export function AudioRequestTable({ filter, domain, manage }: { filter: RequestF
 
   return (
     <>
+      <RequestSearchCount q={q} total={pageInfo.total} />
       {results.length === 0 ? (
-        <EmptyState title={t('requests.noRequests')}>{t('requests.requestsMadeFromDiscoverShow')}</EmptyState>
+        q ? (
+          <ListSearchEmpty query={q} onClear={() => onClearSearch?.()} />
+        ) : (
+          <EmptyState title={t('requests.noRequests')}>{t('requests.requestsMadeFromDiscoverShow')}</EmptyState>
+        )
       ) : mobile ? (
         <div className="mk-mlist">
           {results.map((r) => (

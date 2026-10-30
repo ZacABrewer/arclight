@@ -8,7 +8,6 @@ import {
   EmptyState,
   ErrorBlock,
   FilterBar,
-  Input,
   LinkButton,
   LiveDot,
   Pane,
@@ -20,6 +19,7 @@ import {
   type Column,
 } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
+import { ListSearchCount, ListSearchEmpty, ListSearchInput, useListSearch } from '../../components/list-search.js';
 import { useSelection } from '../../components/bulk-actions.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
 import { tableSelection } from '../../components/resource-bulk-actions.js';
@@ -36,15 +36,6 @@ export const logKeys = {
   page: (page: number, filter: LogFilter) => ['logs', 'page', page, filter] as const,
   files: ['logs', 'files'] as const,
 };
-
-function useDebounced<T>(value: T, ms = 300): T {
-  const [v, setV] = useState(value);
-  useEffect(() => {
-    const item = setTimeout(() => setV(value), ms);
-    return () => clearTimeout(item);
-  }, [value, ms]);
-  return v;
-}
 
 function useRefValue<T>(value: T): { readonly current: T } {
   const [ref] = useState(() => ({ current: value }));
@@ -84,9 +75,16 @@ function EventsTab() {
   const qc = useQueryClient();
   const toast = useToast();
   const [level, setLevel] = useState<LogLevel | ''>('');
-  const [searchText, setSearchText] = useState('');
-  const search = useDebounced(searchText.trim());
+  // The search lives in the URL (`?q=`) and is sent to GET /log as `search`; the live tail
+  // applies the same rule client side (logs-model matchesLogFilter).
+  const { q: search, setQ: setSearch, active: searching } = useListSearch();
   const [page, setPage] = useState(1);
+  // A new search starts on page 1.
+  const [searched, setSearched] = useState(search);
+  if (searched !== search) {
+    setSearched(search);
+    setPage(1);
+  }
   const [follow, setFollow] = useState(true);
   const [paused, setPaused] = useState(false);
   const [live, setLive] = useState<LogRecord[]>([]);
@@ -136,6 +134,11 @@ function EventsTab() {
   const pageCount = logs.data ? Math.ceil(logs.data.totalRecords / PAGE_SIZE) : 1;
   const rowKeys = rows.map((r) => r.id);
   const selection = useSelection(rowKeys);
+  // A new search clears the selection (rows the search hides are not copied).
+  const selectionRef = useRefValue(selection);
+  useEffect(() => {
+    selectionRef.current.clear();
+  }, [search, selectionRef]);
   const copySelected = () => {
     const picked = rows.filter((r) => selection.has(r.id));
     const text = picked
@@ -170,10 +173,11 @@ function EventsTab() {
   return (
     <Pane flush>
       <FilterBar
-        onClear={level || searchText ? () => (setLevel(''), setSearchText(''), setPage(1)) : undefined}
-        activeCount={(level ? 1 : 0) + (searchText ? 1 : 0)}
+        onClear={level || search ? () => (setLevel(''), setSearch(''), setPage(1)) : undefined}
+        activeCount={(level ? 1 : 0) + (search ? 1 : 0)}
         end={
           <>
+            <ListSearchCount active={searching} shown={logs.data?.totalRecords} />
             <TailStatus tailing={follow} connected={connected} paused={paused} fresh={fresh} />
             {follow ? (
               <Button
@@ -208,16 +212,7 @@ function EventsTab() {
           }}
           options={[{ value: '', label: t('system.logs.allLevels') }, ...LogLevel.options.map((l) => ({ value: l, label: t('system.logs.valueAndAbove', { value: LEVEL_LABELS[l] }) }))]}
         />
-        <Input
-          aria-label={t('system.logs.searchLogs')}
-          type="search"
-          placeholder={t('system.logs.searchMessages')}
-          value={searchText}
-          onChange={(e) => {
-            setSearchText(e.currentTarget.value);
-            setPage(1);
-          }}
-        />
+        <ListSearchInput value={search} onChange={setSearch} label={t('system.logs.searchLogs')} placeholder={t('listSearch.ph.logs')} />
         <Toggle label={t('system.logs.liveTail')} checked={follow} onChange={(e) => setFollow(e.currentTarget.checked)} />
       </FilterBar>
       {logs.isError ? (
@@ -238,7 +233,13 @@ function EventsTab() {
             manualSort
             {...tableSelection(selection)}
             rowLabel={(r) => t('components.bulkActions.selectName', { name: r.message })}
-            empty={<EmptyState title={t('system.logs.noLogEntries')}>{level || search ? t('system.logs.nothingMatchesTheseFilters') : t('system.logs.theInMemoryLogIs')}</EmptyState>}
+            empty={
+              searching ? (
+                <ListSearchEmpty query={search} onClear={() => setSearch('')} />
+              ) : (
+                <EmptyState title={t('system.logs.noLogEntries')}>{level ? t('system.logs.nothingMatchesTheseFilters') : t('system.logs.theInMemoryLogIs')}</EmptyState>
+              )
+            }
           />
           {pageCount > 1 ? (
             <div className="sys-foot">

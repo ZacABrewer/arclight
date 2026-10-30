@@ -4,6 +4,7 @@ import { errorMessage } from '../../../api/client.js';
 import { auditApi, type AuditFilter } from '../../../api/audit.js';
 import { Chip, EmptyState, ErrorBlock, FilterBar, Input, LinkButton, Pane, Paginator, Select, Table, Toggle, type ChipTone, type Column } from '../../../arclight/index.js';
 import { useAuditActions, useAuditPage, useAuditSettings, useSaveAuditSettings } from '../../../hooks/audit.js';
+import { ListSearchCount, ListSearchEmpty, ListSearchInput, useListSearch } from '../../../components/list-search.js';
 import { relativeTime } from '../../../lib/format.js';
 import { formatStamp } from '../format.js';
 import { SystemHeader } from '../system-header.js';
@@ -81,8 +82,16 @@ function RetentionLine() {
 export function SystemAuditPage() {
   const [draft, setDraft] = useState<AuditFilterDraft>(EMPTY_AUDIT_FILTER);
   const [page, setPage] = useState(1);
+  // The text search (user, action, target, details) lives in the URL as `?q=` and goes to the
+  // server; a new search starts on page 1.
+  const { q, setQ, active: searching } = useListSearch();
+  const [searched, setSearched] = useState(q);
+  if (searched !== q) {
+    setSearched(q);
+    setPage(1);
+  }
   const debouncedUser = useDebounced(draft.user);
-  const filter = toAuditFilter({ ...draft, user: debouncedUser });
+  const filter: AuditFilter = { ...toAuditFilter({ ...draft, user: debouncedUser }), ...(q ? { q } : {}) };
   const audit = useAuditPage(filter, page, AUDIT_PAGE_SIZE);
   const actions = useAuditActions();
   const set = (k: keyof AuditFilterDraft, v: string) => {
@@ -123,7 +132,18 @@ export function SystemAuditPage() {
         }
       />
       <div className="sys-stack">
-        <FilterBar onClear={() => (setDraft(EMPTY_AUDIT_FILTER), setPage(1))} activeCount={activeAuditFilters(draft)} end={<RetentionLine />} className="al-audit__filters">
+        <FilterBar
+          onClear={() => (setDraft(EMPTY_AUDIT_FILTER), setQ(''), setPage(1))}
+          activeCount={activeAuditFilters(draft) + (searching ? 1 : 0)}
+          end={
+            <>
+              <ListSearchCount active={searching} shown={audit.data?.totalRecords} />
+              <RetentionLine />
+            </>
+          }
+          className="al-audit__filters"
+        >
+          <ListSearchInput value={q} onChange={setQ} placeholder={t('listSearch.ph.events')} />
           <Input aria-label={t('common.user')} placeholder={t('system.audit.userNameOrId')} value={draft.user} onChange={(e) => set('user', e.currentTarget.value)} className="al-audit__user" />
           <Select
             aria-label={t('common.action')}
@@ -153,7 +173,13 @@ export function SystemAuditPage() {
                 rows={audit.data?.records}
                 rowKey={(e) => e.id}
                 loading={audit.isPending}
-                empty={<EmptyState title={activeAuditFilters(draft) ? t('system.audit.noEventsMatchTheseFilters') : t('system.audit.noEventsRecordedYet')} />}
+                empty={
+                  searching ? (
+                    <ListSearchEmpty query={q} onClear={() => setQ('')} />
+                  ) : (
+                    <EmptyState title={activeAuditFilters(draft) ? t('system.audit.noEventsMatchTheseFilters') : t('system.audit.noEventsRecordedYet')} />
+                  )
+                }
               />
             </div>
           )}

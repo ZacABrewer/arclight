@@ -1,4 +1,4 @@
-import { LOG_LEVEL_VALUES, type LogLevel, type LogRecord } from '@arclight/shared';
+import { LOG_LEVEL_VALUES, matchesListSearch, type LogLevel, type LogRecord } from '@arclight/shared';
 import type { ChipTone } from '../../arclight/index.js';
 import { t } from '../../i18n/index.js';
 
@@ -42,13 +42,15 @@ export const LEVEL_LABELS: Record<LogLevel, string> = {
   },
 };
 
+/**
+ * The shared forgiving list-search rule (every word must appear; case, dots, dashes and
+ * underscores ignored) over the message, component, level and context, so live-tail records
+ * are filtered like the server-side paged ones.
+ */
 export function matchesLogFilter(r: LogRecord, f: LogFilter): boolean {
   if (f.level && LOG_LEVEL_VALUES[r.level] < LOG_LEVEL_VALUES[f.level]) return false;
-  const needle = f.search?.trim().toLowerCase() ?? '';
-  if (!needle) return true;
-  if (r.message.toLowerCase().includes(needle)) return true;
-  if (r.component?.toLowerCase().includes(needle)) return true;
-  return r.context !== undefined && JSON.stringify(r.context).toLowerCase().includes(needle);
+  if (!f.search?.trim()) return true;
+  return matchesListSearch(f.search, [r.message, r.component, r.level, r.context === undefined ? null : JSON.stringify(r.context)]);
 }
 
 /** Add streamed records (newest first), dropping duplicates by id and keeping at most `cap`. */

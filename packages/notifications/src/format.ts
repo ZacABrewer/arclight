@@ -259,6 +259,8 @@ export function eventSubject(event: NotificationEvent): string {
       return 'Requests Digest';
     case 'retention':
       return 'Retention Summary';
+    case 'healthScan':
+      return 'Health Scan Found Problems';
     case 'fileTranscoded':
       return `${noun(event.media, event.episodes)} File Transcoded`;
     case 'downloadStalled':
@@ -325,6 +327,8 @@ export function eventSeverity(event: NotificationEvent): Severity {
       return event.health.status === 'error' ? 'error' : 'warning';
     case 'retention':
       return event.totalFailed > 0 ? 'warning' : 'info';
+    case 'healthScan':
+      return event.findings.some((f) => f.severity === 'error') ? 'error' : 'warning';
     case 'killSwitchResumed':
       return 'success';
     case 'importProblem':
@@ -379,6 +383,7 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   issueUpdated: 'On Issue Updated',
   requestsDigest: 'Requests Digest',
   retention: 'Retention Summary',
+  healthScan: 'On Health Scan Problems',
   fileTranscoded: 'On File Transcoded',
   downloadStalled: 'On Download Stalled',
   killSwitch: 'On Kill Switch',
@@ -597,6 +602,18 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       if (base) {
         link = `${base}/retention`;
         actions.push({ label: 'Review candidates', url: link });
+      }
+      break;
+    }
+    case 'healthScan': {
+      title = `${event.totalNew} new problem${event.totalNew === 1 ? '' : 's'} in ${event.filesChecked} checked file${event.filesChecked === 1 ? '' : 's'}`;
+      const out = event.findings.map((f) => `${f.title}: ${truncate(f.details, 160)}`);
+      if (event.totalNew > out.length) out.push(`...and ${event.totalNew - out.length} more`);
+      if (out.length > 0) fields.push({ name: 'Problems', value: out.join('\n') });
+      fields.push({ name: 'Open', value: String(event.totalOpen), inline: true });
+      if (base) {
+        link = `${base}/library/hygiene?tab=health`;
+        actions.push({ label: 'Review problems', url: link });
       }
       break;
     }

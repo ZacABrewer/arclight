@@ -25,7 +25,7 @@ export const audiobookKeys = {
   /** Catalogue search results: snapshots, kept out of ['audiobook'] so library events leave them alone. */
   authorLookup: (term: string) => ['audiobookLookup', 'author', term] as const,
   bookLookup: (input: BookLookupInput) => ['audiobookLookup', 'book', input] as const,
-  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number) => ['wanted', mode, 'books', page, pageSize] as const,
+  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '') => ['wanted', mode, 'books', page, pageSize, q] as const,
   metadata: ['settings', 'audiobookmetadata'] as const,
   qualityProfiles: ['settings', 'qualityprofiles', 'domain', 'audiobook'] as const,
 };

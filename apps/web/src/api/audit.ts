@@ -11,12 +11,14 @@ export interface AuditFilter {
   from?: string | undefined;
   /** ISO-8601, exclusive. */
   to?: string | undefined;
+  /** Text search over user, action, target and details (every word must match). */
+  q?: string | undefined;
 }
 
 /** Drop empty filters so the query string only carries what is set. */
 export function auditQuery(filter: AuditFilter): QueryParams {
   const q: QueryParams = {};
-  for (const k of ['user', 'action', 'from', 'to'] as const) {
+  for (const k of ['user', 'action', 'from', 'to', 'q'] as const) {
     const v = filter[k]?.trim();
     if (v) q[k] = v;
   }

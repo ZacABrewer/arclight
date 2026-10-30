@@ -39,6 +39,10 @@ If an item has several versions (for example a 1080p and a 4K copy, see [Library
 
 Episodes list columns: Series, Episode, Title, Air date, Status, Versions, and a **Search** button. Movies list columns: Title, Year, Profile, In cinemas, Digital, Physical, Status, Versions, and a **Search** button. Lists show 50 rows per page.
 
+## Finding an item on the list
+
+The search box at the top of the list narrows it down. It matches the series title, the episode title or an episode code such as `s01e02` (episodes), the title (movies), the album or artist (albums), and the book, author or series (books); every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces. The search is kept in the address bar, so a reload or a shared link keeps it. The box is shared by the media-type switch, so switching from Episodes to Movies keeps the same search. While a search is active the count says how many items match, and **Search all** becomes **Search all matching**: it searches only the matching items. **Select all N** in the bulk bar also means "all matching items". On **Profile mismatch** the same box matches the title, the episode code, the profile, the quality and the version.
+
 ## Searching
 
 | Button | What it does |

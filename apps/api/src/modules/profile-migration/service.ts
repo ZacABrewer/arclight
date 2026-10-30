@@ -29,6 +29,8 @@ import {
   type QualityDefinitionItem,
   type QualityModel,
   type QualityProfile,
+  listSearchTokens,
+  matchesListSearch,
 } from '@arclight/shared';
 import { effectiveCutoff, fileFit, findItem, itemQualityIds } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
@@ -707,9 +709,25 @@ export class ProfileMigrationService {
     });
     const byFile = new Map(view.files.map((f) => [f.file.id, f]));
     const profileNames = new Map(this.profiles.listQualityProfiles().map((p) => [p.id, p.name]));
+    const words = listSearchTokens(query.q);
     const rows = fits
       .map((fit) => ({ fit, info: byFile.get(fit.mediaFileId) }))
       .filter((r): r is { fit: ProfileFileFitRow; info: FileInfo } => r.info !== undefined)
+      .filter(
+        ({ fit, info }) =>
+          words.length === 0 ||
+          matchesListSearch(words, [
+            info.item.title,
+            info.item.year || null,
+            info.file.episodeIds.flatMap((id) => {
+              const e = view.episodes.get(id);
+              return e ? [`S${pad(e.seasonNumber)}E${pad(e.episodeNumber)}`] : [];
+            }),
+            profileNames.get(fit.qualityProfileId),
+            fit.qualityName,
+            fit.slot,
+          ]),
+      )
       .map((r) => ({ ...r, firstEpisode: r.info.file.episodeIds.map((id) => view.episodes.get(id)).find((e) => e !== undefined) }))
       .sort(
         (a, b) =>

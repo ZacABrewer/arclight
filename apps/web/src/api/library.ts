@@ -31,6 +31,7 @@ import {
   type UpdateMovieRequest,
   type UpdateSeriesRequest,
   type WantedEpisodesQuery,
+  type WantedMoviesQuery,
 } from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 
@@ -120,10 +121,10 @@ export const libraryApi = {
   wanted: {
     missingEpisodes: (query?: Partial<WantedEpisodesQuery>) =>
       request('/wanted/missing/episodes', WantedEpisodesPage, { query: q(query) }),
-    missingMovies: (query?: Partial<PageQuery>) => request('/wanted/missing/movies', WantedMoviesPage, { query: q(query) }),
+    missingMovies: (query?: Partial<WantedMoviesQuery>) => request('/wanted/missing/movies', WantedMoviesPage, { query: q(query) }),
     cutoffEpisodes: (query?: Partial<WantedEpisodesQuery>) =>
       request('/wanted/cutoff/episodes', WantedEpisodesPage, { query: q(query) }),
-    cutoffMovies: (query?: Partial<PageQuery>) => request('/wanted/cutoff/movies', WantedMoviesPage, { query: q(query) }),
+    cutoffMovies: (query?: Partial<WantedMoviesQuery>) => request('/wanted/cutoff/movies', WantedMoviesPage, { query: q(query) }),
   },
   // Contract: packages/shared/src/calendar.ts (routes built by the calendar module).
   calendar: {

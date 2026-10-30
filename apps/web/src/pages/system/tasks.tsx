@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import { Button, Chip, EmptyState, ErrorBlock, LiveDot, Pane, Table, type ChipTone, type Column } from '../../arclight/index.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSelection } from '../../components/bulk-actions.js';
+import { ListSearchBar, ListSearchCount, ListSearchEmpty, useClientListSearch, useListSearch } from '../../components/list-search.js';
 import { useAnalysisQueue } from '../../hooks/media-analysis.js';
 import { useJobs, useRunJob, useScheduledJobs } from '../../hooks/jobs.js';
 import { relativeTime } from '../../lib/format.js';
@@ -28,10 +29,22 @@ function When({ iso }: { iso: string | null }) {
   );
 }
 
+/** What the page search matches on a scheduled task: name, interval and state. */
+function scheduledFields(s: ScheduledJob) {
+  return [s.name, s.interval, s.enabled ? t('common.enabled') : t('common.disabled')];
+}
+
+/** What the page search matches on a run: task name, status text (with the cause), trigger, message. */
+function jobFields(j: Job) {
+  return [j.name, jobStatusLabel(j), j.trigger, j.message];
+}
+
 function ScheduledTable() {
   const scheduled = useScheduledJobs();
   const run = useRunJob();
-  const jobKeys = (scheduled.data ?? []).map((s) => s.name);
+  const search = useClientListSearch(scheduled.data, scheduledFields);
+  // Select all picks the matching tasks only.
+  const jobKeys = (search.rows ?? []).map((s) => s.name);
   const selection = useSelection(jobKeys);
   const columns: Column<ScheduledJob>[] = [
     { key: 'name', header: t('system.tasks.task'), cell: (s) => s.name, sortValue: (s) => s.name },
@@ -56,13 +69,13 @@ function ScheduledTable() {
       <Table
       caption={t('system.tasks.scheduledTasks')}
       columns={columns}
-      rows={scheduled.data}
+      rows={search.rows}
       rowKey={(s) => s.name}
       loading={scheduled.isPending}
       defaultSort={{ key: 'name', direction: 'asc' }}
       {...tableSelection(selection)}
       rowLabel={(s) => t('components.bulkActions.selectName', { name: s.name })}
-      empty={<EmptyState title={t('system.tasks.noScheduledTasks')} />}
+      empty={search.active ? <ListSearchEmpty query={search.q} onClear={search.clear} /> : <EmptyState title={t('system.tasks.noScheduledTasks')} />}
     />
       <ResourceBulkBar resource="job" selection={selection} allKeys={jobKeys} />
     </>
@@ -71,6 +84,7 @@ function ScheduledTable() {
 
 function HistoryTable() {
   const jobs = useJobs();
+  const search = useClientListSearch(jobs.data, jobFields);
   const columns: Column<Job>[] = [
     { key: 'name', header: t('system.tasks.task'), cell: (j) => j.name, sortValue: (j) => j.name },
     { key: 'status', header: t('common.status'), cell: (j) => <Chip tone={JOB_TONE[j.status]}>{jobStatusLabel(j)}</Chip>, sortValue: (j) => j.status },
@@ -80,7 +94,39 @@ function HistoryTable() {
     { key: 'message', header: t('system.tasks.message'), muted: true, cell: (j) => (j.status === 'failed' ? '' : (j.message ?? '')) },
   ];
   if (jobs.isError) return <ErrorBlock title={t('system.tasks.couldntLoadTaskHistory')} onRetry={() => void jobs.refetch()} />;
-  return <Table caption={t('system.tasks.taskHistory')} columns={columns} rows={jobs.data} rowKey={(j) => j.id} loading={jobs.isPending} empty={<EmptyState title={t('system.tasks.noRunsYet')} />} />;
+  return (
+    <Table
+      caption={t('system.tasks.taskHistory')}
+      columns={columns}
+      rows={search.rows}
+      rowKey={(j) => j.id}
+      loading={jobs.isPending}
+      empty={search.active ? <ListSearchEmpty query={search.q} onClear={search.clear} /> : <EmptyState title={t('system.tasks.noRunsYet')} />}
+    />
+  );
+}
+
+/** One search box for both tables (the query is kept in the URL as `?q=`). */
+function TasksSearch() {
+  const { q, setQ, active } = useListSearch();
+  const scheduled = useScheduledJobs();
+  const jobs = useJobs();
+  if (!active && !scheduled.data?.length && !jobs.data?.length) return null;
+  return <ListSearchBar value={q} onChange={setQ} placeholder={t('listSearch.ph.tasks')} />;
+}
+
+/** "N of M" for the scheduled table, in its pane header. */
+function ScheduledCount() {
+  const scheduled = useScheduledJobs();
+  const search = useClientListSearch(scheduled.data, scheduledFields);
+  return <ListSearchCount active={search.active} shown={scheduled.data ? search.shown : undefined} total={search.total} />;
+}
+
+/** "N of M" for the history table, in its pane header. */
+function HistoryCount() {
+  const jobs = useJobs();
+  const search = useClientListSearch(jobs.data, jobFields);
+  return <ListSearchCount active={search.active} shown={jobs.data ? search.shown : undefined} total={search.total} />;
 }
 
 /** "3 pending · 2 running · 1 failed", or "Idle" when nothing waits. */
@@ -129,10 +175,11 @@ export function SystemTasksPage() {
       <SystemHeader title={t('common.tasks')} />
       <div className="sys-stack">
         <AnalysisQueueLine />
-        <Pane title={t('system.tasks.scheduled')} flush>
+        <TasksSearch />
+        <Pane title={t('system.tasks.scheduled')} actions={<ScheduledCount />} flush>
           <ScheduledTable />
         </Pane>
-        <Pane title={t('common.history')} flush>
+        <Pane title={t('common.history')} actions={<HistoryCount />} flush>
           <HistoryTable />
         </Pane>
       </div>

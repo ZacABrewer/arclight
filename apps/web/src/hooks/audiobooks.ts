@@ -113,11 +113,14 @@ export function useAudiobookQualityProfiles(enabled = true) {
   return useQuery({ queryKey: audiobookKeys.qualityProfiles, queryFn: () => profilesApi.quality.list('audiobook'), staleTime: 60_000, enabled });
 }
 
-export function useWantedBooks(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true) {
+export function useWantedBooks(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '') {
   return useQuery({
     enabled,
-    queryKey: audiobookKeys.wanted(mode, page, pageSize),
-    queryFn: () => (mode === 'missing' ? audiobooksApi.wanted.missing({ page, pageSize }) : audiobooksApi.wanted.cutoff({ page, pageSize })),
+    queryKey: audiobookKeys.wanted(mode, page, pageSize, q),
+    queryFn: () => {
+      const query = { page, pageSize, q: q || undefined };
+      return mode === 'missing' ? audiobooksApi.wanted.missing(query) : audiobooksApi.wanted.cutoff(query);
+    },
     placeholderData: keepPreviousData,
   });
 }

@@ -11,7 +11,8 @@ import { UserPermissionsEditor, UserPolicyEditor, UserQuotaEditor, UserRequestSe
 import { UserDefaultsFields, useUserDefaults } from '../../../features/users/user-defaults.js';
 import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
-import { SettingsSection } from '../shared.js';
+import { SettingsListSearch, SettingsSection } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { useToast } from '../../../components/toast.js';
 import { ResourceBulkBar, tableSelection } from '../../../components/resource-bulk-actions.js';
 import { useSelection } from '../../../components/bulk-actions.js';
@@ -51,7 +52,17 @@ export function UsersPage() {
   const { user: me } = useAuth();
   const users = useQuery({ queryKey: authKeys.users, queryFn: usersApi.list });
   const [open, setOpen] = useState<User | null>(null);
-  const userKeys = (users.data ?? []).map((u) => u.id);
+  // Search: username, display name, role and permission / app-access text (emails are not shown, so not searched).
+  const search = useClientListSearch(users.data, (u) => [
+    u.username,
+    u.displayName,
+    u.role,
+    u.role === 'admin' ? t('common.admin') : t('common.user'),
+    PERMISSION_INFO.filter((p) => (u.permissions & p.value) === p.value).map((p) => p.label),
+    appAccessSummary(u),
+  ]);
+  // Select all picks the matching users only.
+  const userKeys = (search.rows ?? []).map((u) => u.id);
   const selection = useSelection(userKeys);
 
   const columns: Array<Column<User>> = [
@@ -103,11 +114,12 @@ export function UsersPage() {
             {errorMessage(users.error)}
           </ErrorBlock>
         ) : (
+          <SettingsListSearch search={search} placeholder={t('settings.users.searchUsers')}>
           <Table
             caption={t('common.users')}
             density="dense"
             columns={columns}
-            rows={users.data}
+            rows={search.rows}
             loading={users.isPending}
             rowKey={(u) => u.id}
             sortable
@@ -115,6 +127,7 @@ export function UsersPage() {
             {...tableSelection(selection)}
             rowLabel={(u) => t('components.bulkActions.selectName', { name: u.displayName ?? u.username })}
           />
+          </SettingsListSearch>
         )}
       </SettingsSection>
       <ResourceBulkBar resource="user" selection={selection} allKeys={userKeys} nameOf={(id) => users.data?.find((u) => u.id === id)?.username} />

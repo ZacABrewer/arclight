@@ -29,7 +29,8 @@ import {
   useTestAllDownloadClients,
 } from '../../../hooks/download-clients.js';
 import { SettingsPage } from '../settings-layout.js';
-import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsListSearch, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { ResourceBulkBar, tableSelection, useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { useSelection } from '../../../components/bulk-actions.js';
 import { categoriesRenderer, cleanCategories } from './categories-field.js';
@@ -382,7 +383,10 @@ export function DownloadClientsPage() {
   const [results, setResults] = useState<Record<number, TestOutcome>>({});
 
   const schemaFor = (impl: string) => schemas.data?.find((s) => s.implementation === impl);
-  const bulk = useResourceBulk('downloadclient', list.data, (c) => c.id, (c) => c.name);
+  // Search: name, implementation, protocol and where it lives (host / URL / save path).
+  const search = useClientListSearch(list.data, (c) => [c.name, c.implementation, schemaFor(c.implementation)?.implementationName, c.protocol, clientLocation(c)]);
+  // Select all picks the matching clients only.
+  const bulk = useResourceBulk('downloadclient', search.rows, (c) => c.id, (c) => c.name);
 
   return (
     <SettingsPage
@@ -416,9 +420,9 @@ export function DownloadClientsPage() {
       ) : list.data.length === 0 ? (
         <EmptyState title={t('settings.downloadClients.noDownloadClientsYet')}>{t('settings.downloadClients.addTheBuiltInEngine')}</EmptyState>
       ) : (
-        <>
+        <SettingsListSearch search={search}>
           <CardGrid label={t('common.downloadClients')}>
-            {list.data.map((c) => {
+            {(search.rows ?? []).map((c) => {
               const schema = schemaFor(c.implementation);
               return (
                 <DownloadClientCard
@@ -433,7 +437,7 @@ export function DownloadClientsPage() {
             })}
           </CardGrid>
           {bulk.bar}
-        </>
+        </SettingsListSearch>
       )}
       <RemotePathMappingsSection />
       <EngineAgentSection />

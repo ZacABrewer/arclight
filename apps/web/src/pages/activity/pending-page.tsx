@@ -7,6 +7,8 @@ import { Button, Chip, EmptyState, ErrorBlock, Pane, ProtocolBadge, Table, type 
 import { useToast } from '../../components/toast.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSelection } from '../../components/bulk-actions.js';
+import { ListSearchBar, ListSearchEmpty, useClientListSearch } from '../../components/list-search.js';
+import { useAudioNames } from './audio-names.js';
 import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { useGrabPending, usePendingReleases, useRemovePending } from '../../hooks/releases.js';
 import { formatDateTime } from '../../lib/format.js';
@@ -95,8 +97,6 @@ export function DelayCountdown({ eligibleAt, now }: { eligibleAt: string; now: n
 
 export function PendingReleasesPage() {
   const pending = usePendingReleases();
-  const pendingKeys = (pending.data ?? []).map((p) => p.id);
-  const selection = useSelection(pendingKeys);
   const grab = useGrabPending();
   const remove = useRemovePending();
   const series = useSeriesList();
@@ -106,6 +106,24 @@ export function PendingReleasesPage() {
 
   const seriesTitles = new Map((series.data ?? []).map((s) => [s.id, s.title]));
   const movieTitles = new Map((movies.data ?? []).map((m) => [m.id, m.title]));
+  const audioNames = useAudioNames(
+    (pending.data ?? []).map((p) => p.artistId),
+    (pending.data ?? []).map((p) => p.authorId),
+  );
+  // Search: release name, the series / movie / artist / book it is for, indexer, protocol, reason.
+  const search = useClientListSearch(pending.data, (p) => [
+    p.title,
+    p.seriesId !== undefined ? seriesTitles.get(p.seriesId) : undefined,
+    p.movieId !== undefined ? movieTitles.get(p.movieId) : undefined,
+    audioNames.of(p),
+    p.indexerName,
+    p.protocol,
+    p.quality.quality.name,
+    REASON_LABELS[p.reason],
+  ]);
+  // Bulk selection covers the matching rows only.
+  const pendingKeys = (search.rows ?? []).map((p) => p.id);
+  const selection = useSelection(pendingKeys);
 
   const columns: Column<PendingRelease>[] = [
     {
@@ -162,6 +180,9 @@ export function PendingReleasesPage() {
     <div className="al-activity">
       <ActivityHeader active="pending" />
       <Pane flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <ListSearchBar value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.releases')} shown={search.shown} total={search.total} />
+        </div>
         {pending.isError ? (
           <div className="al-activity-pad">
             <ErrorBlock title={t('activity.pending.couldntLoadPendingReleases')} onRetry={() => void pending.refetch()}>
@@ -173,13 +194,19 @@ export function PendingReleasesPage() {
             caption={t('activity.pending.pendingReleases')}
             density="rich"
             columns={columns}
-            rows={pending.data}
+            rows={search.rows}
             rowKey={(p) => p.id}
             loading={pending.isPending}
             defaultSort={{ key: 'eligible', direction: 'asc' }}
             {...tableSelection(selection)}
             rowLabel={(p) => t('components.bulkActions.selectName', { name: p.title })}
-            empty={<EmptyState title={t('activity.pending.nothingPending')}>{t('activity.pending.releasesHeldBackByA')}</EmptyState>}
+            empty={
+              search.active ? (
+                <ListSearchEmpty query={search.q} onClear={search.clear} />
+              ) : (
+                <EmptyState title={t('activity.pending.nothingPending')}>{t('activity.pending.releasesHeldBackByA')}</EmptyState>
+              )
+            }
           />
         )}
       </Pane>

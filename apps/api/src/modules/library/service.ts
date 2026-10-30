@@ -39,11 +39,14 @@ import type {
   UpdateSeriesRequest,
   WantedEpisode,
   WantedEpisodesQuery,
+  WantedMoviesQuery,
 } from '@arclight/shared';
 import { episodeAiredMs } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import { LibraryError } from './errors.js';
+import { rewriteTagReferences } from '../tag-rules/references.js';
 import { albums, artists, audioFiles, authors, books, qualityProfiles, tracks } from '../../db/schema.js';
 import * as t from './schema.js';
 import { enabledVersions, isVersioned, primaryOf, sameTag, slotOf } from './versions.js';
@@ -337,31 +340,15 @@ export function updateTag(db: LibraryDb, id: number, label: string): Tag {
   return row;
 }
 
-/** Deletes the tag and removes its id from every series, movie, artist and author that carried it. */
+/**
+ * Deletes the tag and removes its id everywhere it is stored: library items, requests, indexers,
+ * download clients, notifications, profiles, rule scopes and settings (tag-rules/references.ts).
+ */
 export function deleteTag(db: Db, id: number): void {
   db.transaction((tx) => {
-    const deleted = tx.delete(t.tags).where(eq(t.tags.id, id)).returning().get();
-    if (!deleted) throw LibraryError.notFound('tag', id);
-    for (const s of tx.select({ id: t.series.id, tags: t.series.tags }).from(t.series).all()) {
-      if (s.tags.includes(id)) {
-        tx.update(t.series).set({ tags: s.tags.filter((x) => x !== id) }).where(eq(t.series.id, s.id)).run();
-      }
-    }
-    for (const m of tx.select({ id: t.movies.id, tags: t.movies.tags }).from(t.movies).all()) {
-      if (m.tags.includes(id)) {
-        tx.update(t.movies).set({ tags: m.tags.filter((x) => x !== id) }).where(eq(t.movies.id, m.id)).run();
-      }
-    }
-    for (const a of tx.select({ id: artists.id, tags: artists.tags }).from(artists).all()) {
-      if (a.tags.includes(id)) {
-        tx.update(artists).set({ tags: a.tags.filter((x) => x !== id) }).where(eq(artists.id, a.id)).run();
-      }
-    }
-    for (const a of tx.select({ id: authors.id, tags: authors.tags }).from(authors).all()) {
-      if (a.tags.includes(id)) {
-        tx.update(authors).set({ tags: a.tags.filter((x) => x !== id) }).where(eq(authors.id, a.id)).run();
-      }
-    }
+    if (!tx.select({ id: t.tags.id }).from(t.tags).where(eq(t.tags.id, id)).get()) throw LibraryError.notFound('tag', id);
+    rewriteTagReferences(tx, { remove: [id] });
+    tx.delete(t.tags).where(eq(t.tags.id, id)).run();
   });
 }
 
@@ -1538,9 +1525,28 @@ function paginate<T>(items: T[], q: PageQuery): Page<T> {
   return { page: q.page, pageSize: q.pageSize, totalRecords: items.length, records: items.slice(start, start + q.pageSize) };
 }
 
-function monitoredEpisodesWithSeries(db: LibraryDb, hasFile: boolean | undefined, includeSpecials: boolean) {
+/**
+ * The `q` text search of the Wanted episode lists: series title, episode title and the
+ * `s01e02` code. Exported so bulk search over "all wanted" applies the very same filter.
+ */
+export function wantedEpisodeSearchCondition(q: string | null | undefined): SQL | undefined {
+  return listSearchCondition(q, [
+    t.series.title,
+    t.episodes.title,
+    sql`printf('s%02de%02d', ${t.episodes.seasonNumber}, ${t.episodes.episodeNumber})`,
+  ]);
+}
+
+/** The `q` text search of the Wanted movie lists: title, original title and year. */
+export function wantedMovieSearchCondition(q: string | null | undefined): SQL | undefined {
+  return listSearchCondition(q, [t.movies.title, t.movies.originalTitle, t.movies.year]);
+}
+
+function monitoredEpisodesWithSeries(db: LibraryDb, hasFile: boolean | undefined, includeSpecials: boolean, search?: string) {
   const where: SQL[] = [eq(t.episodes.monitored, true), eq(t.series.monitored, true)];
   if (hasFile !== undefined) where.push(eq(t.episodes.hasFile, hasFile));
+  const searchCond = wantedEpisodeSearchCondition(search);
+  if (searchCond) where.push(searchCond);
   return db
     .select({ episode: t.episodes, series: t.series })
     .from(t.episodes)
@@ -1576,7 +1582,7 @@ function anyVersioned(db: LibraryDb, table: typeof t.series | typeof t.movies): 
 export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: string = nowIso()): Page<WantedEpisode> {
   const nowMs = Date.parse(now);
   const versioned = anyVersioned(db, t.series);
-  const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials).filter((r) => {
+  const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials, q.q).filter((r) => {
     const aired = episodeAiredMs(r.episode);
     return aired !== null && aired <= nowMs;
   });
@@ -1602,7 +1608,7 @@ export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: 
  * to the profiles module; it is injected so this module stays ignorant of profile shapes.
  */
 export function listCutoffUnmetEpisodes(db: LibraryDb, q: WantedEpisodesQuery, isCutoffMet: IsCutoffMet): Page<WantedEpisode> {
-  const all = monitoredEpisodesWithSeries(db, true, q.includeSpecials);
+  const all = monitoredEpisodesWithSeries(db, true, q.includeSpecials, q.q);
   const versionedRows = all.filter((r) => isVersioned(r.series.versions));
   if (versionedRows.length > 0) return paginate(cutoffUnmetVersioned(db, all, isCutoffMet), q);
   const rows = all;
@@ -1660,12 +1666,18 @@ function unmetSlots(versions: readonly MediaVersion[] | null, files: readonly Me
  * Monitored movies without a file that are available under their minimum availability. A
  * versioned movie is missing while any enabled version slot is empty (`wantedVersions`).
  */
-export function listMissingMovies(db: LibraryDb, q: PageQuery, now: string = nowIso()): Page<Movie> {
+export function listMissingMovies(db: LibraryDb, q: WantedMoviesQuery, now: string = nowIso()): Page<Movie> {
   const versioned = anyVersioned(db, t.movies);
   const rows = db
     .select()
     .from(t.movies)
-    .where(versioned ? eq(t.movies.monitored, true) : and(eq(t.movies.monitored, true), eq(t.movies.hasFile, false)))
+    .where(
+      and(
+        eq(t.movies.monitored, true),
+        versioned ? undefined : eq(t.movies.hasFile, false),
+        wantedMovieSearchCondition(q.q),
+      ),
+    )
     .orderBy(asc(t.movies.sortTitle))
     .all()
     .filter((m) => isMovieAvailable(m, now));
@@ -1690,11 +1702,11 @@ export function listMissingMovies(db: LibraryDb, q: PageQuery, now: string = now
   return paginate(out, q);
 }
 
-export function listCutoffUnmetMovies(db: LibraryDb, q: PageQuery, isCutoffMet: IsCutoffMet, now: string = nowIso()): Page<Movie> {
+export function listCutoffUnmetMovies(db: LibraryDb, q: WantedMoviesQuery, isCutoffMet: IsCutoffMet, now: string = nowIso()): Page<Movie> {
   const rows = db
     .select()
     .from(t.movies)
-    .where(and(eq(t.movies.monitored, true), eq(t.movies.hasFile, true)))
+    .where(and(eq(t.movies.monitored, true), eq(t.movies.hasFile, true), wantedMovieSearchCondition(q.q)))
     .orderBy(asc(t.movies.sortTitle))
     .all();
   const ids = rows.map((m) => m.id);

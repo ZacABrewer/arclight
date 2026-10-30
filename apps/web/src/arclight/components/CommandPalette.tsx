@@ -14,6 +14,12 @@ export interface ResultItem {
   hint?: string | undefined;
   /** Leading visual (small poster, icon). */
   leading?: ReactNode | undefined;
+  /** Running it keeps the overlay open (next step, "see all", confirm). */
+  keepOpen?: boolean | undefined;
+  /** Destructive row (confirm step). */
+  tone?: 'danger' | undefined;
+  /** Accessible name when the label is not plain text. */
+  ariaLabel?: string | undefined;
   onSelect: () => void;
 }
 
@@ -33,24 +39,36 @@ interface ResultListProps {
   loading?: boolean | undefined;
   footer?: ReactNode | undefined;
   inputLabel: string;
+  /** Chip before the input (the chosen verb while picking its target). */
+  prefix?: ReactNode | undefined;
+  /** Backspace in an empty input (leave the current step). */
+  onBackspaceEmpty?: (() => void) | undefined;
+  /** Polite live-region text (result counts, the confirm question). */
+  status?: string | undefined;
 }
 
 /** Shared engine: input + grouped 44px rows, ↑/↓ to move, Enter to run, Esc to close. */
-function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyText, loading, footer, inputLabel }: ResultListProps) {
+function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyText, loading, footer, inputLabel, prefix, onBackspaceEmpty, status }: ResultListProps) {
   const listId = useId();
   const flat = useMemo(() => groups.flatMap((g) => g.items), [groups]);
   const [active, setActive] = useState(0);
-  useEffect(() => setActive(0), [query, flat.length]);
+  const firstId = flat[0]?.id;
+  useEffect(() => setActive(0), [query, flat.length, firstId]);
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.getElementById(`${listId}-${active}`)?.scrollIntoView?.({ block: 'nearest' });
+  }, [active, listId]);
 
   const run = (item: ResultItem | undefined) => {
     if (!item) return;
     item.onSelect();
-    onClose();
+    if (!item.keepOpen) onClose();
   };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'ArrowDown') setActive((a) => (flat.length ? (a + 1) % flat.length : 0));
     else if (e.key === 'ArrowUp') setActive((a) => (flat.length ? (a - 1 + flat.length) % flat.length : 0));
     else if (e.key === 'Enter') run(flat[active]);
+    else if (e.key === 'Backspace' && query === '' && onBackspaceEmpty) onBackspaceEmpty();
     else return;
     e.preventDefault();
   };
@@ -60,6 +78,7 @@ function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyT
     <>
       <div className="al-cmd__input-row">
         <Icon name="search" size={20} />
+        {prefix ? <span className="al-cmd__prefix">{prefix}</span> : null}
         <input
           className="al-cmd__input"
           role="combobox"
@@ -95,7 +114,8 @@ function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyT
                       id={`${listId}-${i}`}
                       role="option"
                       aria-selected={i === active}
-                      className="al-cmd__row"
+                      aria-label={item.ariaLabel}
+                      className={item.tone === 'danger' ? 'al-cmd__row al-cmd__row--danger' : 'al-cmd__row'}
                       onMouseMove={() => setActive(i)}
                       onMouseDown={(e) => e.preventDefault()}
                       onClick={() => run(item)}
@@ -110,6 +130,9 @@ function ResultList({ groups, query, onQueryChange, onClose, placeholder, emptyT
               </div>
             ))
         )}
+      </div>
+      <div className="al-sr-only" role="status" aria-live="polite">
+        {status ?? ''}
       </div>
       <div className="al-cmd__foot" aria-hidden="true">
         {footer ?? (
@@ -134,10 +157,14 @@ export interface CommandPaletteProps {
   placeholder?: string | undefined;
   loading?: boolean | undefined;
   emptyText?: ReactNode | undefined;
+  prefix?: ReactNode | undefined;
+  onBackspaceEmpty?: (() => void) | undefined;
+  status?: string | undefined;
+  footer?: ReactNode | undefined;
 }
 
 /** Command palette: centred 640px pane, chamfer top-left, scrim. */
-export function CommandPalette({ open, onClose, query, onQueryChange, groups, placeholder = t('arclight.commandPalette.typeACommandOrSearch'), loading, emptyText = t('arclight.commandPalette.noMatches') }: CommandPaletteProps) {
+export function CommandPalette({ open, onClose, query, onQueryChange, groups, placeholder = t('arclight.commandPalette.typeACommandOrSearch'), loading, emptyText = t('arclight.commandPalette.noMatches'), prefix, onBackspaceEmpty, status, footer }: CommandPaletteProps) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, { active: open, onEscape: onClose });
   if (!open || typeof document === 'undefined') return null;
@@ -146,7 +173,20 @@ export function CommandPalette({ open, onClose, query, onQueryChange, groups, pl
       <div className="al-scrim" aria-hidden="true" onClick={onClose} />
       <div ref={ref} role="dialog" aria-modal="true" aria-label={t('common.commandPalette')} className="al-cmd al-pane al-pane--chamfer-tl al-pane--strong">
         <i className="al-edge al-edge--tl" aria-hidden="true" />
-        <ResultList groups={groups} query={query} onQueryChange={onQueryChange} onClose={onClose} placeholder={placeholder} emptyText={emptyText} loading={loading} inputLabel={t('arclight.commandPalette.command')} />
+        <ResultList
+          groups={groups}
+          query={query}
+          onQueryChange={onQueryChange}
+          onClose={onClose}
+          placeholder={placeholder}
+          emptyText={emptyText}
+          loading={loading}
+          inputLabel={t('arclight.commandPalette.command')}
+          prefix={prefix}
+          onBackspaceEmpty={onBackspaceEmpty}
+          status={status}
+          footer={footer}
+        />
       </div>
     </div>,
     document.body,
@@ -162,7 +202,7 @@ export interface GlobalSearchOverlayProps extends CommandPaletteProps {
  * Global search overlay: full-width pane dropping from the top bar, grouped results
  * (Series / Movies / People / Settings) as 44px rows with mono keyboard hints. Opened by "/".
  */
-export function GlobalSearchOverlay({ open, onClose, query, onQueryChange, groups, placeholder = t('common.search'), loading, emptyText, hint = t('arclight.commandPalette.searchSeriesMoviesPeopleAnd') }: GlobalSearchOverlayProps) {
+export function GlobalSearchOverlay({ open, onClose, query, onQueryChange, groups, placeholder = t('common.search'), loading, emptyText, hint = t('arclight.commandPalette.searchSeriesMoviesPeopleAnd'), status, footer }: GlobalSearchOverlayProps) {
   const ref = useRef<HTMLDivElement>(null);
   useFocusTrap(ref, { active: open, onEscape: onClose });
   if (!open || typeof document === 'undefined') return null;
@@ -179,6 +219,8 @@ export function GlobalSearchOverlay({ open, onClose, query, onQueryChange, group
           emptyText={query.trim() ? (emptyText ?? t('arclight.commandPalette.nothingMatchesQuery', { query: query.trim() })) : hint}
           loading={loading}
           inputLabel={t('common.search')}
+          status={status}
+          footer={footer}
         />
       </div>
     </div>,

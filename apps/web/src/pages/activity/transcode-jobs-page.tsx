@@ -5,6 +5,7 @@ import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, Meter, PageHeader, Pane, Segmented, Table, Tooltip, type ChipTone, type Column } from '../../arclight/index.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSelection } from '../../components/bulk-actions.js';
+import { ListSearchBar, ListSearchEmpty, useClientListSearch } from '../../components/list-search.js';
 import { transcodeKeys, useCancelTranscodeJob, useTranscodeJobs } from '../../hooks/transcode.js';
 import { formatDateTime, formatSize, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
@@ -81,7 +82,10 @@ export function TranscodeJobsPage() {
   useDocumentTitle(t('nav.transcodeJobs'));
   const [filter, setFilter] = useState<JobFilter>('all');
   const jobs = useTranscodeJobs(filter === 'all' ? undefined : filter);
-  const jobKeys = (jobs.data ?? []).map((j) => j.id);
+  // Search: file path, rule, trigger, status and the job's message (errors).
+  const search = useClientListSearch(jobs.data, (j) => [j.path, j.ruleName, triggerLabel(j.trigger), jobStatusLabel(j.status), j.status, j.message]);
+  // Bulk selection covers the matching rows only.
+  const jobKeys = (search.rows ?? []).map((j) => j.id);
   const selection = useSelection(jobKeys);
   const cancel = useCancelTranscodeJob();
   const qc = useQueryClient();
@@ -165,6 +169,9 @@ export function TranscodeJobsPage() {
         />
       </PageHeader>
       <Pane flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <ListSearchBar value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.jobs')} shown={search.shown} total={search.total} />
+        </div>
         {pending ? (
           <div className="al-activity-pad">
             <PendingApiNotice what={t('nav.transcodeJobs')} />
@@ -179,14 +186,20 @@ export function TranscodeJobsPage() {
           <Table
             caption={t('nav.transcodeJobs')}
             columns={columns}
-            rows={jobs.data}
+            rows={search.rows}
             rowKey={(j) => j.id}
             loading={jobs.isPending}
             density="rich"
             sortable={false}
             {...tableSelection(selection)}
             rowLabel={(j) => t('components.bulkActions.selectName', { name: j.path })}
-            empty={<EmptyState title={t('activity.transcode.empty')}>{t('activity.transcode.emptyBody')}</EmptyState>}
+            empty={
+              search.active ? (
+                <ListSearchEmpty query={search.q} onClear={search.clear} />
+              ) : (
+                <EmptyState title={t('activity.transcode.empty')}>{t('activity.transcode.emptyBody')}</EmptyState>
+              )
+            }
           />
         )}
       </Pane>

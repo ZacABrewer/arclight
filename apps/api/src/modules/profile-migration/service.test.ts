@@ -127,6 +127,25 @@ describe('file fit', () => {
     expect(page.records[0]).toMatchObject({ title: 'Alpha', status: 'notAllowed', quality: 'HDTV-720p', qualityProfileName: 'Test HD', migration: null });
     expect(t.migration.mismatchPage({ page: 1, pageSize: 50, status: ['upgradeAllowed'] }).totalRecords).toBe(0);
   });
+
+  it('mismatch list: q searches title, profile and quality; every word must match', async () => {
+    const t = await setup();
+    t.movieWithFile('Alpha.Movie', 'HDTV-720p');
+    t.movieWithFile('Beta', 'HDTV-720p');
+    const { id, ...rest } = t.profiles.getQualityProfile(t.hd.id);
+    const items = rest.items.map((i) => (i.kind === 'quality' && i.qualityId === quality('HDTV-720p').quality.id ? { ...i, allowed: false } : i));
+    t.profiles.updateQualityProfile(id, { ...rest, items });
+    t.migration.reevaluate('all');
+
+    expect(t.migration.mismatchPage({ page: 1, pageSize: 50 }).totalRecords).toBe(2);
+    const alpha = t.migration.mismatchPage({ page: 1, pageSize: 50, q: 'alpha movie' });
+    expect(alpha.totalRecords).toBe(1);
+    expect(alpha.records.map((r) => r.title)).toEqual(['Alpha.Movie']);
+    expect(t.migration.mismatchPage({ page: 1, pageSize: 50, q: 'hdtv 720p test hd' }).totalRecords).toBe(2);
+    expect(t.migration.mismatchPage({ page: 1, pageSize: 50, q: 'beta 1080p' }).totalRecords).toBe(0);
+    // Paging counts the matches only.
+    expect(t.migration.mismatchPage({ page: 2, pageSize: 1, q: 'hdtv' })).toMatchObject({ totalRecords: 2, records: [{ title: 'Beta' }] });
+  });
 });
 
 describe('profile change detection', () => {

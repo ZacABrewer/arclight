@@ -47,6 +47,7 @@ import { QueuePage } from './pages/activity/queue-page.js';
 import { PendingReleasesPage } from './pages/activity/pending-page.js';
 import { ManualImportPage, parseManualImportSearch } from './pages/activity/manual-import/manual-import-page.js';
 import { CustomFormatsPage } from './pages/settings/custom-formats/custom-formats-page.js';
+import { TagsSettingsPage } from './pages/settings/tags/tags-page.js';
 import { DownloadClientsPage } from './pages/settings/download-clients/download-clients-page.js';
 import { GeneralPage } from './pages/settings/general/general-page.js';
 import { IndexersPage } from './pages/settings/indexers/indexers-page.js';
@@ -302,6 +303,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/profiles', ProfilesPage),
   page('/settings/quality', QualityPage),
   page('/settings/customformats', CustomFormatsPage),
+  page('/settings/tags', TagsSettingsPage),
   page('/settings/guides', GuidesSettingsPage),
   page('/settings/mediaservers', MediaServersPage),
   page('/settings/indexers', IndexersPage),

@@ -8,7 +8,8 @@ import { useToast } from '../../../components/toast.js';
 import { useCustomFormatList, useCustomFormatSchema, useQualityProfileList } from '../../../hooks/profiles.js';
 import { settingsKeys } from '../../../hooks/settings-keys.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { AddCard, CardGrid, ItemCard, SettingsListSearch, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { CustomFormatEditor } from './custom-format-editor.js';
 import { exportCustomFormat, parseCustomFormatJson, type ImportResult, type SourceApp } from './custom-format-json.js';
@@ -232,7 +233,10 @@ export function CustomFormatsPage() {
   const [editing, setEditing] = useState<CustomFormat | 'new' | null>(null);
   const [prefill, setPrefill] = useState<CustomFormatInput | undefined>();
   const [importing, setImporting] = useState(false);
-  const bulk = useResourceBulk('customformat', list.data, (cf) => cf.id, (cf) => cf.name, {
+  // Search: format name and its condition (spec) names.
+  const search = useClientListSearch(list.data, (cf) => [cf.name, cf.specifications.map((s) => s.name)]);
+  // Select all (and the bulk export) pick the matching formats only.
+  const bulk = useResourceBulk('customformat', search.rows, (cf) => cf.id, (cf) => cf.name, {
     extra: (selected) => [{ id: 'export', label: t('components.bulkActions.export'), onSelect: () => download('custom-formats.json', selected.map(exportCustomFormat)) }],
   });
 
@@ -272,9 +276,9 @@ export function CustomFormatsPage() {
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <>
+          <SettingsListSearch search={search}>
             <CardGrid label={t('settings.customFormats.customFormats')}>
-              {list.data.map((cf) => (
+              {(search.rows ?? []).map((cf) => (
                 <CustomFormatCard
                   key={cf.id}
                   format={cf}
@@ -287,7 +291,7 @@ export function CustomFormatsPage() {
               <AddCard label={t('settings.customFormats.addCustomFormat')} onClick={addNew} />
             </CardGrid>
             {bulk.bar}
-          </>
+          </SettingsListSearch>
         )}
       </SettingsSection>
       {editing && schema.data ? (

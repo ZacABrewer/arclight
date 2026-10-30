@@ -49,7 +49,8 @@ function episodeTargets(rows: ReadonlyArray<Pick<WantedEpisode, 'id' | 'seriesId
  * Turns a bulk search command into search targets. `missing` and `upgrade` use the same lists
  * as Wanted → Missing / Cutoff unmet (so a bulk upgrade search honours each item's profile
  * cutoff, custom-format cutoff and version slots), narrowed to the selection; `upgrade` also
- * drops items whose profile does not allow upgrades.
+ * drops items whose profile does not allow upgrades. With `allMovies` / `allEpisodes`, `q` narrows
+ * the list exactly as the Wanted page's search does.
  */
 export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: PlanDeps): BulkSearchPlan {
   const movieIds = [...new Set(cmd.movieIds ?? [])];
@@ -81,8 +82,11 @@ export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: Plan
 
   let movieRows: Movie[] = [];
   if (wantMovies) {
+    // "All" acts on the Wanted list as the page shows it, so its text search (`q`) applies too;
+    // the list functions run the very same condition as GET /wanted/*/movies.
+    const mq = (page: number) => ({ page, pageSize: PAGE, ...(cmd.allMovies && cmd.q ? { q: cmd.q } : {}) });
     movieRows = allPages((page) =>
-      isMet ? libraryService.listCutoffUnmetMovies(db, { page, pageSize: PAGE }, isMet, now) : libraryService.listMissingMovies(db, { page, pageSize: PAGE }, now),
+      isMet ? libraryService.listCutoffUnmetMovies(db, mq(page), isMet, now) : libraryService.listMissingMovies(db, mq(page), now),
     ).filter((m) => !noUpgrades.has(m.qualityProfileId));
     if (!cmd.allMovies) {
       const picked = new Set(movieIds);
@@ -93,7 +97,7 @@ export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: Plan
   let episodeRows: WantedEpisode[] = [];
   let seriesWithMatches = 0;
   if (wantEpisodes) {
-    const q = (page: number) => ({ page, pageSize: PAGE, includeSpecials: false });
+    const q = (page: number) => ({ page, pageSize: PAGE, includeSpecials: false, ...(cmd.allEpisodes && cmd.q ? { q: cmd.q } : {}) });
     episodeRows = allPages((page) =>
       isMet ? libraryService.listCutoffUnmetEpisodes(db, q(page), isMet) : libraryService.listMissingEpisodes(db, q(page), now),
     ).filter((e) => !noUpgrades.has(e.qualityProfileId));

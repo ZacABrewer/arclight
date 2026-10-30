@@ -13,6 +13,7 @@ import { MusicInteractiveSearchModal } from './music-release-table.js';
 import { albumCover, albumTypeLabel, albumYear, artistBackdrop, formatDuration, groupTracks, releaseLabel, trackProgress, type DiscGroup } from './music-model.js';
 import '../library.css';
 import './music.css';
+import { ItemHealthPanel, useCanSeeHealth } from '../item-health.js';
 import { t } from '../../../i18n/index.js';
 
 const route = getRouteApi('/library/music/album/$id');
@@ -26,6 +27,7 @@ export function AlbumDetailsPage() {
 }
 
 function AlbumDetailsView() {
+  const canSeeHealth = useCanSeeHealth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const album = useAlbum(id);
@@ -103,6 +105,7 @@ function AlbumDetailsView() {
         tabs={[
           { id: 'tracks', label: t('music.tracks'), count: a.tracks.length, content: <TrackList album={a} /> },
           { id: 'files', label: t('common.files'), count: a.files.length, content: <AudioFilesTable files={a.files} error={null} loading={false} /> },
+          ...(canSeeHealth ? [{ id: 'health', label: t('library.health.tab'), content: <ItemHealthPanel scope={{ albumId: a.id }} /> }] : []),
         ]}
       />
       <MusicInteractiveSearchModal

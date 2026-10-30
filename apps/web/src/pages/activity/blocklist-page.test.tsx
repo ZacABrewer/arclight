@@ -119,6 +119,23 @@ describe('blocklist page', () => {
     expect(await screen.findByText('Blocklist cleared')).toBeTruthy();
   });
 
+  it('sends q to GET /blocklist, resets to page 1 and clears the selection on a new search', async () => {
+    renderAt('/activity/blocklist?q=bad');
+    const table = await screen.findByRole('table', { name: 'Blocklist' });
+    await within(table).findByText('Bad.Release.S01E01');
+    const lists = () => calls.filter((c) => c.method === 'GET' && c.url.startsWith('/api/v1/blocklist')).map((c) => new URL(c.url, 'http://x').searchParams);
+    expect(lists().some((p) => p.get('q') === 'bad' && p.get('pageSize') === '25')).toBe(true);
+    expect(document.querySelector('.al-listsearch__count')?.textContent).toBe('2 results');
+
+    fireEvent.click(within(table).getByRole('checkbox', { name: 'Select Bad.Release.S01E01' }));
+    expect(await screen.findByText(/1 selected/)).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: 'bad s01e02' } });
+    await waitFor(() => expect(lists().at(-1)!.get('q')).toBe('bad s01e02'));
+    expect(lists().at(-1)!.get('page')).toBe('1');
+    await waitFor(() => expect(screen.queryByText(/1 selected/)).toBeNull());
+  });
+
   it('builds a movie body with a movieId and the default reason', () => {
     const body = blocklistBody({ kind: 'movie', mediaId: 7, sourceTitle: ' Heat.1995.mkv ', indexer: '', protocol: 'torrent', qualityId: 0, message: '' });
     expect(body).toMatchObject({ mediaType: 'movie', movieId: 7, sourceTitle: 'Heat.1995.mkv', indexer: null, message: 'Added manually' });

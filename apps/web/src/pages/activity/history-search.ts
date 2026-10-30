@@ -9,6 +9,8 @@ export interface HistorySearch {
   seriesId?: number;
   episodeId?: number;
   movieId?: number;
+  /** The list search (kept in the URL like the other list pages). */
+  q?: string;
 }
 
 const positiveInt = (v: unknown): number | undefined => {
@@ -24,6 +26,9 @@ export function parseHistorySearch(search: Record<string, unknown>): HistorySear
     const id = positiveInt(search[key]);
     if (id !== undefined) out[key] = id;
   }
+  const q = search['q'];
+  if (typeof q === 'string' && q.trim()) out.q = q.trim();
+  else if (typeof q === 'number') out.q = String(q);
   return out;
 }
 
@@ -35,5 +40,6 @@ export function historyFilterFromSearch(search: HistorySearch): HistoryFilter {
     ...(search.seriesId !== undefined ? { seriesId: search.seriesId } : {}),
     ...(search.episodeId !== undefined ? { episodeId: search.episodeId } : {}),
     ...(search.movieId !== undefined ? { movieId: search.movieId } : {}),
+    ...(search.q ? { q: search.q } : {}),
   };
 }

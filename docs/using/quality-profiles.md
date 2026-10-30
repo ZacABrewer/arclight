@@ -170,6 +170,12 @@ The status panel shows last sync, last success, last applied, the number of pend
 
 Your own tweaks to a synced profile can be overwritten on the next apply, so keep personal preferences in a separate custom format or use **Exclude formats**.
 
+## Searching profiles and formats
+
+Settings > Profiles has one search box at the top that filters the cards of every section: quality profiles and album type profiles by name, release profiles by name, terms (must / must not contain) and tag names. Each section shows its own count ("2 of 9"). Delay profiles are an ordered table and are not filtered. Settings > Custom formats has its own box, matching the format name and the names of its conditions.
+
+Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`).
+
 ## Bulk actions
 
 Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
@@ -178,6 +184,7 @@ What each list offers: quality profiles and custom formats **Delete** (custom fo
 
 ## Related
 
+- [Tags and tag rules](tags.md) (tags limit which items this applies to; rules can add them automatically)
 - [Media management](media-management.md) (propers and repacks, file naming)
 - [Interactive search](interactive-search.md) (see why a release was rejected)
 - [Wanted](wanted.md) (cutoff unmet)

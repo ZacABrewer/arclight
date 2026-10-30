@@ -184,6 +184,39 @@ describe('POST /command/bulksearch', () => {
     );
   });
 
+  it('allEpisodes / allMovies with q: only the Wanted rows the search matches', async () => {
+    const office = insertSeries(h.db, { qualityProfileId: h.profileId, title: 'The Office', sortTitle: 'office', cleanTitle: 'office' });
+    const other = insertSeries(h.db, { qualityProfileId: h.profileId, title: 'Parks', sortTitle: 'parks', cleanTitle: 'parks' });
+    const o1 = insertEpisode(h.db, office.id, { episodeNumber: 1, title: 'Pilot', airDateUtc: '2024-01-01T00:00:00Z' });
+    const o2 = insertEpisode(h.db, office.id, { episodeNumber: 2, title: 'Diversity Day', airDateUtc: '2024-01-08T00:00:00Z' });
+    insertEpisode(h.db, other.id, { episodeNumber: 1, title: 'Pilot', airDateUtc: '2024-01-01T00:00:00Z' });
+
+    const eps = await h.api('POST', '/command/bulksearch', { mode: 'missing', allEpisodes: true, q: 'the.office' });
+    expect(eps.json()).toMatchObject({ queued: 2, skipped: 0 });
+    await finished(BULK_SEARCH_JOB);
+    expect(h.searches).toEqual([{ seriesId: office.id, episodeIds: expect.arrayContaining([o1.id, o2.id]) }]);
+
+    // The bulk "all" and GET /wanted/missing/episodes use the same condition.
+    const listed = (await h.api('GET', '/wanted/missing/episodes?q=office%20s01e02')).json<{ records: Array<{ id: number }> }>();
+    expect(listed.records.map((r) => r.id)).toEqual([o2.id]);
+    h.searches.length = 0;
+    await h.api('POST', '/command/bulksearch', { mode: 'missing', allEpisodes: true, q: 'office s01e02' });
+    await finished(BULK_SEARCH_JOB);
+    expect(h.searches).toEqual([{ seriesId: office.id, episodeIds: [o2.id] }]);
+
+    const alpha = insertMovie(h.db, { qualityProfileId: h.profileId, title: 'Alpha Run', originalTitle: 'Alpha Run', sortTitle: 'alpha run', hasFile: false, status: 'released', inCinemas: '2020-01-01', digitalRelease: '2020-02-01' });
+    insertMovie(h.db, { qualityProfileId: h.profileId, title: 'Bravo', originalTitle: 'Bravo', sortTitle: 'bravo', hasFile: false, status: 'released', inCinemas: '2020-01-01', digitalRelease: '2020-02-01' });
+    h.searches.length = 0;
+    const mv = await h.api('POST', '/command/bulksearch', { mode: 'missing', allMovies: true, q: 'alpha' });
+    expect(mv.json()).toMatchObject({ queued: 1, skipped: 0 });
+    await finished(BULK_SEARCH_JOB);
+    expect(h.searches).toEqual([{ movieId: alpha.id }]);
+
+    const none = await h.api('POST', '/command/bulksearch', { mode: 'missing', allMovies: true, q: 'nothing like this' });
+    expect(none.json()).toEqual({ queued: 0, skipped: 0, job: null });
+    expect((await h.api('POST', '/command/bulksearch', { mode: 'missing', allMovies: true, q: 'x'.repeat(201) })).statusCode).toBe(400);
+  });
+
   it('mode missing with episode ids: narrows the list to the selection', async () => {
     const s = insertSeries(h.db, { qualityProfileId: h.profileId });
     const e1 = insertEpisode(h.db, s.id, { episodeNumber: 1, airDateUtc: '2024-01-01T00:00:00Z' });

@@ -28,6 +28,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       { get label() { return t('common.profiles'); }, to: '/settings/profiles' },
       { get label() { return t('common.quality'); }, to: '/settings/quality' },
       { get label() { return t('settings.layout.customFormats'); }, to: '/settings/customformats' },
+      { get label() { return t('common.tags'); }, to: '/settings/tags' },
       { get label() { return t('common.guides'); }, to: '/settings/guides' },
     ],
   },

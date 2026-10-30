@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNotNull, like, or, type SQL } from 'drizzle-orm';
+import { listSearchCondition } from '../../db/list-search.js';
 import { rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
@@ -1182,12 +1183,17 @@ function paginate<T>(items: T[], q: WantedAlbumsQuery): { page: number; pageSize
   return { page: q.page, pageSize: q.pageSize, totalRecords: items.length, records: items.slice(start, start + q.pageSize) };
 }
 
-function monitoredAlbumsOfMonitoredArtists(db: MusicDb) {
+/** The `q` text search of the Wanted album lists: album title, disambiguation, artist name. */
+export function wantedAlbumSearchCondition(q: string | null | undefined): SQL | undefined {
+  return listSearchCondition(q, [albums.title, albums.disambiguation, artists.name]);
+}
+
+function monitoredAlbumsOfMonitoredArtists(db: MusicDb, search?: string) {
   return db
     .select({ album: albums, artist: artists })
     .from(albums)
     .innerJoin(artists, eq(albums.artistId, artists.id))
-    .where(and(eq(albums.monitored, true), eq(artists.monitored, true)))
+    .where(and(eq(albums.monitored, true), eq(artists.monitored, true), wantedAlbumSearchCondition(search)))
     .orderBy(desc(albums.releaseDate), asc(artists.sortName), asc(albums.title), asc(albums.id))
     .all();
 }
@@ -1201,7 +1207,7 @@ function toWanted(album: AlbumRow, artist: ArtistRow, stats: AlbumStatistics | u
  * than stored tracks, or no tracks loaded yet and nothing on disk. Newest first.
  */
 export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date = new Date()): WantedAlbumsPage {
-  const rows = monitoredAlbumsOfMonitoredArtists(db).filter((r) => isReleased(r.album.releaseDate, now));
+  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q).filter((r) => isReleased(r.album.releaseDate, now));
   const stats = albumStatistics(
     db,
     rows.map((r) => r.album.id),
@@ -1223,7 +1229,7 @@ export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date =
  */
 export function listCutoffUnmetAlbums(db: MusicDb, q: WantedAlbumsQuery, profiles: readonly QualityProfile[]): WantedAlbumsPage {
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const rows = monitoredAlbumsOfMonitoredArtists(db);
+  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q);
   if (rows.length === 0) return paginate([], q);
   const files = db
     .select({ albumId: audioFiles.albumId, quality: audioFiles.quality, grabOverride: audioFiles.grabOverride })

@@ -36,6 +36,10 @@ On first start Arclight adds a "Built-in" client for you if no client exists (se
 3. Fill in the form, press **Test**, then save. Test checks the connection, the login, the version, and warns about things like a missing category. **Test all** on the main page tests every client.
 4. Change nothing else if the test is green. Press **Show advanced** only for the extra options listed below.
 
+### Searching your clients
+
+A search box sits above the client cards once there is at least one. Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. The count next to the box shows how many match ("2 of 9"), **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`). It matches the name, the kind (qBittorrent, SABnzbd, Built-in…), the protocol and where the client lives (host and port, Remote Engine URL or the built-in save path). Remote path mappings are not filtered.
+
 ### Bulk actions
 
 Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection: **Enable**, **Disable**, **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu. Remote path mappings have checkboxes too, for deleting several.
@@ -206,6 +210,7 @@ With Bind to VPN on and the VPN enabled, the engine enters **Lockdown** when the
 
 ## Related
 
+- [Tags and tag rules](tags.md) (tags limit which items this applies to; rules can add them automatically)
 - [Indexers](indexers.md)
 - [VPN](vpn.md)
 - [Activity](activity.md)

@@ -4,6 +4,7 @@ import type { SubtitleMediaType, WantedSubtitleItem } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, EmptyState, ErrorBlock, Icon, Paginator, Pane, Table, Tabs, type Column, type RowKey } from '../../arclight/index.js';
 import { useToast } from '../../components/toast.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
 import { useBulkSubtitleSearch } from '../../hooks/bulk.js';
 import { useSubtitleSearchCommand, useWantedSubtitles } from '../../hooks/subtitles.js';
@@ -40,7 +41,16 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
   // "Select all N": every file on the wanted list (all pages), searched by one server job.
   const [allMatching, setAllMatching] = useState(false);
-  const list = useWantedSubtitles(mediaType, page, PAGE_SIZE);
+  // Text search (`?q=`, title / episode): server-side, so a new query starts over at page 1.
+  const listSearch = useListSearch();
+  const [seenQ, setSeenQ] = useState(listSearch.q);
+  if (seenQ !== listSearch.q) {
+    setSeenQ(listSearch.q);
+    setPage(1);
+    setSelected(new Set());
+    setAllMatching(false);
+  }
+  const list = useWantedSubtitles(mediaType, page, PAGE_SIZE, listSearch.q);
   const search = useSubtitleSearchCommand();
   const bulk = useBulkSubtitleSearch();
   const toast = useToast();
@@ -133,6 +143,13 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
 
   return (
     <Pane flush bare>
+      <ListSearchBar
+        className="sub-toolbar"
+        value={listSearch.q}
+        onChange={listSearch.setQ}
+        placeholder={t('listSearch.ph.titles')}
+        shown={list.isPending ? undefined : list.data?.totalRecords}
+      />
       <Table
         caption={mediaType === 'series' ? t('subtitles.wantedSubtitles.wantedEpisodeSubtitles') : t('subtitles.wantedSubtitles.wantedMovieSubtitles')}
         columns={columns}
@@ -145,7 +162,13 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
         selected={selected}
         onSelectionChange={select}
         rowLabel={(r) => t('subtitles.wantedSubtitles.selectItemlabel', { itemLabel: itemLabel(r) })}
-        empty={<EmptyState title={t('subtitles.wantedSubtitles.nothingWanted')}>{t('subtitles.wantedSubtitles.everyFileHasTheSubtitles')}</EmptyState>}
+        empty={
+          listSearch.active ? (
+            <ListSearchEmpty query={listSearch.q} onClear={listSearch.clear} />
+          ) : (
+            <EmptyState title={t('subtitles.wantedSubtitles.nothingWanted')}>{t('subtitles.wantedSubtitles.everyFileHasTheSubtitles')}</EmptyState>
+          )
+        }
       />
       {pageCount > 1 ? (
         <div className="sub-pager">
@@ -163,10 +186,16 @@ function WantedTab({ mediaType }: { mediaType: SubtitleMediaType }) {
         count={selected.size}
         total={list.data?.totalRecords}
         allMatching={allMatching}
-        onSelectAll={() => {
-          setSelected(new Set((list.data?.records ?? []).map((r) => r.mediaFileId)));
-          setAllMatching(true);
-        }}
+        // The bulk "whole wanted list" job cannot take the search, so while searching there is
+        // no "Select all N": the header checkbox selects the matching rows on this page.
+        onSelectAll={
+          listSearch.active
+            ? undefined
+            : () => {
+                setSelected(new Set((list.data?.records ?? []).map((r) => r.mediaFileId)));
+                setAllMatching(true);
+              }
+        }
         actions={[{ id: 'search', label: t('subtitles.wantedSubtitles.searchSelected'), loading: bulk.isPending, onSelect: searchSelected }]}
         onClear={clear}
       />

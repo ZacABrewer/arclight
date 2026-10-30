@@ -96,6 +96,19 @@ describe('Settings -> Custom formats', () => {
     expect(neg.getAttribute('data-tier')).toBe('neg');
   });
 
+  it('searches formats by name and condition name with "N of M", then clears', async () => {
+    renderAt('/settings/customformats?q=dolby%20vision');
+    const grid = await screen.findByRole('list', { name: 'Custom formats' });
+    expect(await within(grid).findByRole('button', { name: 'DV' })).toBeTruthy();
+    expect(within(grid).queryByRole('button', { name: 'x265 HD' })).toBeNull();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'no-such-format' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByRole('button', { name: 'x265 HD' })).toBeTruthy();
+  });
+
   it('rejects bad JSON in the import modal and accepts a valid format', async () => {
     renderAt('/settings/customformats');
     fireEvent.click(await screen.findByRole('button', { name: 'Import' }));

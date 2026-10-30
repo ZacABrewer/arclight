@@ -1,4 +1,4 @@
-import { asc, eq, inArray } from 'drizzle-orm';
+import { asc, eq, inArray, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
 import { MediaServerLink, UserApprovalPolicy, UserRequestSettings, type RequestUser } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
@@ -43,6 +43,17 @@ export function toRequestUser(row: UserRow | undefined, fallbackId: number): Req
     ...(row.displayName ? { displayName: row.displayName } : {}),
     ...(row.avatar ? { avatar: row.avatar } : {}),
   };
+}
+
+/**
+ * Searchable name of the user an id column points at (`q` on request/issue lists): username and
+ * display name only. Emails and other private fields are never searched.
+ */
+export function userNameSearchColumns(userId: SQLWrapper): SQL[] {
+  return [
+    sql`(select q_u.username from users q_u where q_u.id = ${userId})`,
+    sql`(select q_u.display_name from users q_u where q_u.id = ${userId})`,
+  ];
 }
 
 /** Batch lookup for list responses. */

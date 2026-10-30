@@ -99,6 +99,34 @@ describe('wanted subtitles page', () => {
   });
 });
 
+describe('wanted subtitles search', () => {
+  it('sends q, resets to page 1, has no Select all N while searching, and clears', async () => {
+    const many = { page: 1, pageSize: 50, totalRecords: 120, records: [wanted({ mediaFileId: 8 })] };
+    const calls = mockApi({
+      ...base,
+      'GET /subtitle/wanted': (c: Call) => (c.url.includes('q=nothing') ? page([]) : many),
+    });
+    renderAt('/subtitles/wanted?q=expanse');
+    await screen.findByRole('button', { name: 'Search subtitles for The Expanse S01E02' }, { timeout: 5000 });
+    const urls = () => calls.filter((c) => c.path === '/subtitle/wanted').map((c) => c.url);
+    expect(urls()[0]).toContain('q=expanse');
+    expect(screen.getByText('120 results')).toBeTruthy();
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Select The Expanse S01E02' }));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    expect(within(bar).queryByRole('button', { name: /Select all/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(urls().some((u) => u.includes('page=2'))).toBe(true));
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'nothing' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(urls().some((u) => u.includes('q=nothing'))).toBe(true));
+    expect(urls().find((u) => u.includes('q=nothing'))).toContain('page=1');
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    await waitFor(() => expect(urls().at(-1)).not.toContain('q='));
+    expect(await screen.findByRole('button', { name: 'Search subtitles for The Expanse S01E02' })).toBeTruthy();
+  }, 20_000);
+});
+
 describe('subtitle history page', () => {
   const record: SubtitleHistoryRecord = {
     id: 1,

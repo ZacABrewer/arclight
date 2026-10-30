@@ -15,8 +15,8 @@ settings, config (applies `ARCLIGHT_CONFIG_FILE` / `ARCLIGHT_SETTING__*` while r
 before any `onReady`), backup, metadata, library, profiles, guides, indexers, solver,
 download-clients, history, blocklist, releases, import-lists, imports, scene-mapping,
 notifications, media-servers (moves a legacy `mediaServer` value into the list once),
-retention, media-analysis, transcode, library-hygiene, stats, updates, push (bus listener on),
-subtitles, requests, discord-bot, calendar, compat, migrate, vpn, torrent, tracker-stats,
+retention, media-analysis, transcode, library-hygiene, health-scan, stats, updates, push (bus listener on),
+subtitles, tag-rules, requests, discord-bot, calendar, compat, migrate, vpn, torrent, tracker-stats,
 cross-seed, engine-agent, auth, audit, metrics. The Sonarr/Radarr-shaped compat API mounts at
 the root afterwards. Cross-module hooks resolve their target lazily, so the order only matters
 for readability: the releases engine asks tracker-stats for its freeleech-only filter through
@@ -25,6 +25,22 @@ for readability: the releases engine asks tracker-stats for its freeleech-only f
 
 Errors: modules map typed service errors to JSON `{ "error": "..." }` bodies (400, 404,
 409, 5xx). Deletes answer `204` with a null body unless noted.
+
+### List text search (`q`)
+
+The list endpoints behind the UI's search boxes take an optional `q` query parameter
+(`ListSearchParam` in `packages/shared/src/list-search.ts`; SQL side
+`apps/api/src/db/list-search.ts`). One rule everywhere: the search is case-insensitive; dots,
+dashes and underscores count as spaces (`the.office` = `the office`, `web-dl` = `web dl`);
+the text is split into words and **every word** must appear in at least one of the endpoint's
+searched fields, in any order; `%`, `_` and `\` are matched literally (LIKE wildcards are
+escaped). A blank `q` (or one of separators only) means no search; more than 200 characters
+is 400. The search narrows the other filters, never the caller's permission scope, and
+paging and `totalRecords` count the matching rows only. Each endpoint lists its searched
+fields: `/history`, `/blocklist`, `/wanted/*` (episodes, movies, albums, books),
+`/subtitle/wanted`, `/profilemigration/mismatch`, `/request`, `/audiorequest`, `/issue`, `/audit` (and `/audit/export`),
+`/log` (`search`, alias `q`), and `POST /command/bulksearch` (`q` with `allMovies` /
+`allEpisodes`).
 
 ## Authentication
 
@@ -146,6 +162,16 @@ hashed with scrypt (N=16384, r=8, p=1, 16-byte salt) from `node:crypto`.
 Feeds are stale after 3 intervals without a success (a feed that never succeeded counts from
 when it was registered); the `FeedStale` health check reports stale feeds as warnings.
 
+## logs
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/log` | `LogQuery` (`page`, `pageSize`, `level` minimum, `search`, `q`) → `LogPage` from the in-memory ring buffer, newest first. `search` and its alias `q` follow the list text search rule over message, component, level and the context fields (max 200 characters each); given both, the words of both must match |
+| DELETE | `/log` | Clear the ring buffer |
+| GET | `/log/file` | The active log file and its rotations (`LogFile[]`) |
+| GET | `/log/file/:name` | Download one of them |
+| GET | `/log/stream` | WebSocket: one `LogRecord` JSON per message |
+
 ## health
 
 | Method | Path | Purpose |
@@ -225,7 +251,7 @@ set; a single-item refresh that fails is a `failed` job carrying the reason), `R
 | GET | `/tag/:id` | One tag |
 | POST | `/tag` | Create a tag |
 | PUT | `/tag/:id` | Rename a tag |
-| DELETE | `/tag/:id` | Delete a tag |
+| DELETE | `/tag/:id` | Delete a tag and remove its id from everything that stores tag ids (see tag-rules) |
 | GET | `/series` | List series (filterable) |
 | GET | `/series/:id` | One series with seasons |
 | POST | `/series` | Add a series (looks up by `tmdbId` through metadata); `searchOnAdd: true` queues a `SeriesSearch` job for it |
@@ -247,10 +273,10 @@ set; a single-item refresh that fails is a `failed` job carrying the reason), `R
 | GET | `/mediafile/:id` | One media file |
 | DELETE | `/mediafile/:id` | Delete a media file record |
 | DELETE | `/mediafile/:id/grab-override` | "Allow upgrades again": clear the file's `grabOverride` (set by a "Grab anyway" grab, pauses automatic upgrades) → the `MediaFile` |
-| GET | `/wanted/missing/episodes` | Paged monitored episodes without a file |
-| GET | `/wanted/missing/movies` | Paged monitored movies without a file |
-| GET | `/wanted/cutoff/episodes` | Paged (`page`, `pageSize`, `includeSpecials`) monitored episodes of monitored series whose file has not met cutoff, as `WantedEpisodesPage` |
-| GET | `/wanted/cutoff/movies` | Paged (`page`, `pageSize`) monitored movies whose file has not met cutoff, as `WantedMoviesPage` |
+| GET | `/wanted/missing/episodes` | Paged (`WantedEpisodesQuery`: `page`, `pageSize`, `includeSpecials`, `q`) monitored episodes without a file. `q` matches series title, episode title and the `s01e02` code |
+| GET | `/wanted/missing/movies` | Paged (`WantedMoviesQuery`: `page`, `pageSize`, `q`) monitored movies without a file. `q` matches title, original title and year |
+| GET | `/wanted/cutoff/episodes` | Paged (`page`, `pageSize`, `includeSpecials`, `q` as for missing) monitored episodes of monitored series whose file has not met cutoff, as `WantedEpisodesPage` |
+| GET | `/wanted/cutoff/movies` | Paged (`page`, `pageSize`, `q` as for missing) monitored movies whose file has not met cutoff, as `WantedMoviesPage` |
 
 **Cutoff.** A file meets cutoff when, under its series' or movie's *current* quality profile,
 its quality reaches the profile cutoff **and** its custom-format score reaches the format cutoff
@@ -316,8 +342,8 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | PUT | `/albumtypeprofile/:id` | `AlbumTypeProfileInput` → `AlbumTypeProfile`. The default cannot be un-defaulted directly; mark another one instead |
 | DELETE | `/albumtypeprofile/:id` | **204**; 400 for the default profile, 409 while an artist uses it |
 | POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands search through the release pipeline (see "releases: music"): `ArtistSearch` looks for each artist's wanted albums, `AlbumSearch` for each album; the job message is `searched N artists: R releases, G grabbed`. Unknown ids 404 (no job starts), unknown names 400. The route is shared with the audiobook commands (see "audiobooks"); a music command answers 404 `MUSIC_DISABLED` while music is off |
-| GET | `/wanted/missing/albums` | `WantedAlbumsQuery` (`page`, `pageSize`) → `WantedAlbumsPage`: monitored albums of monitored artists, released (a partial date counts from the start of its year or month), with fewer track files than tracks (or no tracks loaded and nothing on disk). Newest first. Read-only in Wave 1 |
-| GET | `/wanted/cutoff/albums` | `WantedAlbumsPage`: monitored albums with files where any track file's quality is below the artist's profile cutoff (custom-format scores for audio arrive in Wave 2) |
+| GET | `/wanted/missing/albums` | `WantedAlbumsQuery` (`page`, `pageSize`, `q`: album title, disambiguation, artist name) → `WantedAlbumsPage`: monitored albums of monitored artists, released (a partial date counts from the start of its year or month), with fewer track files than tracks (or no tracks loaded and nothing on disk). Newest first. Read-only in Wave 1 |
+| GET | `/wanted/cutoff/albums` | `WantedAlbumsQuery` (same `q`) → `WantedAlbumsPage`: monitored albums with files where any track file's quality is below the artist's profile cutoff (custom-format scores for audio arrive in Wave 2) |
 
 **Album-type profiles.** A release group becomes an album row when its primary type is listed,
 every one of its secondary types is listed, and (once its editions are known) at least one
@@ -397,8 +423,8 @@ author, book, series, audio file; `wanted`: the wanted lists); everything else i
 | GET | `/bookseries/:id` | `BookSeriesDetails`: the series with its `books` in position order (`positionSort`, unnumbered last, then release date) and the `authors` owning them |
 | GET | `/audiofile` | `authorId` and/or `bookId` → the audiobook `AudioFile[]` (shared route with music; mixing music and audiobook ids is 400) |
 | POST | `/command` | `AudiobookCommand` → **202** `Job`: `{name: "RefreshAuthor", authorIds}`, `{name: "RescanAuthor", authorIds}`, `{name: "AuthorSearch", authorIds}`, `{name: "BookSearch", bookIds}`. Same route as the music commands (the name picks the module; each kind is gated by its own flag). The search commands go through the release pipeline's audiobook search port; until it is wired the job message is `not available: the release pipeline is not running`. Unknown ids 404 (no job starts), unknown names 400 |
-| GET | `/wanted/missing/books` | `WantedBooksQuery` (`page`, `pageSize`) → `WantedBooksPage` (`Book` + `authorName`, `qualityProfileId`): monitored books of monitored authors, released (a year-only date counts from the start of the year), without a file. Newest first |
-| GET | `/wanted/cutoff/books` | `WantedBooksPage`: monitored books with files where any file's quality is below the author's profile cutoff (the lowest file wins) |
+| GET | `/wanted/missing/books` | `WantedBooksQuery` (`page`, `pageSize`, `q`: title, subtitle, author and credited authors' names, book series names) → `WantedBooksPage` (`Book` + `authorName`, `qualityProfileId`): monitored books of monitored authors, released (a year-only date counts from the start of the year), without a file. Newest first |
+| GET | `/wanted/cutoff/books` | `WantedBooksQuery` (same `q`) → `WantedBooksPage`: monitored books with files where any file's quality is below the author's profile cutoff (the lowest file wins) |
 
 **Bibliographies and languages.** `AuthorAdd` / `RefreshAuthor` read the author's Audible
 bibliography (OpenLibrary works when Audible has none). Audible lists every language an author is
@@ -762,7 +788,7 @@ replacement work list. Contract: `packages/shared/src/profile-migration.ts`.
 | POST | `/profilemigration/profiles/:id/retry` | Failed items back to queued |
 | POST | `/profilemigration/preview` | `{ selection, toProfileId }` -> `ProfileMigrationPreview` (no changes) |
 | POST | `/profilemigration/apply` | Same body; changes the profiles, records `profileChanged` history, returns the preview and the changed ids |
-| GET | `/profilemigration/mismatch` | Paged files that do not meet their profile; `status` (`notAllowed` by default, `upgradeAllowed`; comma list), `mediaType`, `qualityProfileId`, `page`, `pageSize`. Each record carries its work-list row (`migration`: state, attempts, `lastSearchedAt`, `nextSearchAt` retry time, message) and `replacement` `{state, nextSearchAt, maxAttempts}`: whether the file will be replaced (`scheduled`, `downloading`, `failed`, `manualOnly`, `paused`, `globalOff`, `noRule`, `cutoffSearch`, `unmonitored`) and an estimate of the `ProfileMigration` run that searches it (queue order, `searchesPerRun`, the rolling `maxSearchesPerDay`, `retryAfterHours`) |
+| GET | `/profilemigration/mismatch` | Paged files that do not meet their profile; `status` (`notAllowed` by default, `upgradeAllowed`; comma list), `mediaType`, `qualityProfileId`, `q` (text search over title, year, episode code, profile name, quality and version slot; see [List text search](#list-text-search-q)), `page`, `pageSize`. Each record carries its work-list row (`migration`: state, attempts, `lastSearchedAt`, `nextSearchAt` retry time, message) and `replacement` `{state, nextSearchAt, maxAttempts}`: whether the file will be replaced (`scheduled`, `downloading`, `failed`, `manualOnly`, `paused`, `globalOff`, `noRule`, `cutoffSearch`, `unmonitored`) and an estimate of the `ProfileMigration` run that searches it (queue order, `searchesPerRun`, the rolling `maxSearchesPerDay`, `retryAfterHours`) |
 | GET | `/profilemigration/items` | Items with at least one file that does not meet its profile (library badges) |
 | POST | `/profilemigration/reevaluate` | Full re-evaluation as a `ProfileFitRefresh` job (202) |
 
@@ -992,7 +1018,7 @@ create a request without `userId` it is owned by the oldest admin account. Error
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/request` | `RequestListQuery` (`take`, `skip`, `filter`, `mediaType`, `requestedBy`, `sort`, `sortDirection`) → `RequestPage`. Without `MANAGE_REQUESTS`/`REQUEST_VIEW` only the caller's own; asking for another user's is 403 |
+| GET | `/request` | `RequestListQuery` (`take`, `skip`, `filter`, `mediaType`, `requestedBy`, `sort`, `sortDirection`, `q`) → `RequestPage`. `q` matches title, year, media type, status, decline/failure reason and the requester's username and display name (never emails). Without `MANAGE_REQUESTS`/`REQUEST_VIEW` only the caller's own; asking for another user's is 403 |
 | GET | `/request/count` | `RequestCount` over the requests the caller may see |
 | GET | `/request/:id` | One `MediaRequest` (owner, `MANAGE_REQUESTS` or `REQUEST_VIEW`) |
 | POST | `/request` | `CreateRequest` → 201 `MediaRequest`, or 202 `{ message }` when every season is already requested/available. Checks permission (`REQUEST`/`REQUEST_MOVIE`/`REQUEST_TV`, 4K variants), quota, duplicates, import exclusions; applies override rules; auto-approves when permitted, globally enabled or a matching rule says so |
@@ -1132,7 +1158,7 @@ region from Settings > Metadata unless the call names one.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/issue` | `IssueListQuery` → `IssuePage` (own only without `MANAGE_ISSUES`/`VIEW_ISSUES`) |
+| GET | `/issue` | `IssueListQuery` → `IssuePage` (own only without `MANAGE_ISSUES`/`VIEW_ISSUES`). `q` matches title, year, media type, issue type, status, the reporter's username and display name, and the comment text (the first comment is the report's message) |
 | GET | `/issue/count` | `IssueCount` |
 | GET | `/issue/:id` | One `Issue` with comments |
 | POST | `/issue` | `CreateIssue` (`MANAGE_ISSUES` or `CREATE_ISSUES`); the message becomes the first comment; admins notified |
@@ -1270,7 +1296,7 @@ track has a file → `available`, some → `partiallyAvailable`, monitored witho
 | GET | `/discover/audiobooks/search` | `?query&region` → `people` = authors, `titles` = books |
 | GET | `/discover/audiobooks/book/:asin` | `?region` → `AudioBookDetail` (more by the primary author) |
 | GET | `/discover/audiobooks/author/:asin` | `?region` → `AudioAuthorDetail` |
-| GET | `/audiorequest` | `AudioRequestListQuery` (`take`, `skip`, `filter`, `domain` all/music/audiobook, `requestedBy`, `sortDirection`) → `AudioRequestPage`; own requests only without `MANAGE_REQUESTS`/`REQUEST_VIEW` |
+| GET | `/audiorequest` | `AudioRequestListQuery` (`take`, `skip`, `filter`, `domain` all/music/audiobook, `requestedBy`, `sortDirection`, `q`: title, subtitle, year, kind, status, decline/failure reason, requester username and display name) → `AudioRequestPage`; own requests only without `MANAGE_REQUESTS`/`REQUEST_VIEW` |
 | GET | `/audiorequest/count` | `AudioRequestCount` (`total`, `music`, `audiobook`, `pending`) over the visible requests |
 | GET | `/audiorequest/:id` | One `AudioRequest` (owner, `MANAGE_REQUESTS` or `REQUEST_VIEW`) |
 | POST | `/audiorequest` | `CreateAudioRequest` → 201 `AudioRequest`. Needs `REQUEST` or `REQUEST_MUSIC` / `REQUEST_AUDIOBOOK`; 400 for an id that is not an MBID/ASIN, 409 when an active (pending/approved) request exists or the item is available. Title, artist/author, year, cover and parent come from the discover lookups. Auto-approved when the requester (or the calling manager) holds `AUTO_APPROVE` or `MANAGE_REQUESTS` |
@@ -1390,6 +1416,78 @@ link to `/retention`) is dispatched to the notification connections.
 | POST | `/retention/candidate/:id/keep` | Pin: status `kept`; 409 when already applied |
 | DELETE | `/retention/candidate/:id` | Remove (unpins; a later sweep may stage it again) |
 
+## tag-rules (tag management and tag rules)
+
+Module `apps/api/src/modules/tag-rules`; contract `packages/shared/src/tag-rules.ts`; tables
+`tag_rules`, `tag_rule_applications` (migration `0023`). User guide: [using/tags.md](using/tags.md).
+
+Tag ids are stored in the `tags` JSON column of `movies`, `series`, `artists`, `authors`,
+`media_requests`, `indexers`, `indexer_proxies`, `download_clients`, `import_lists`,
+`notifications`, `delay_profiles`, `release_profiles` and `override_rules`; in the tag scopes of
+`retention_rules` and `transcode_rules`; in tag rules (`removeTagIds`, `tag` conditions); and in
+the settings `requests.<movie|series|movie4k|series4k>.tags` and `importLists.cleanLibraryTags`
+(`references.ts`). Usage counts, merge and delete (including `DELETE /tag/:id`) walk that list.
+A retention or transcode rule whose tag scope becomes empty is disabled.
+
+A rule `TagRuleInput` is `{name, enabled, appliesTo: ('movie'|'series'|'artist'|'author')[],
+match: 'all'|'any', conditions[], addTags: string[], removeTagIds: number[],
+removeWhenUnmatched}`. Conditions are Zod-validated JSON, discriminated on `kind`:
+
+- `{kind:'set', field, op, values}`: `op` `any` `all` `none` `present` `absent`, values compared
+  case-insensitively. Fields: `genre resolution quality source hdr videoCodec audioCodec
+  audioLanguage originalLanguage certification network studio status seriesType rootFolder
+  collection releaseGroup albumType artistType author narrator bookSeries`.
+- `{kind:'range', field, min, max}` (inclusive, at least one bound; unknown values never match):
+  `year rating audioChannels sizeGb addedDays runtime`.
+- `{kind:'bool', field, value}`: `monitored hasFile`.
+- `{kind:'ids', field, op, ids}`: `qualityProfile requestedBy tag`.
+
+`TAG_RULE_FIELDS` lists which item types each field has values for. `addTags` entries are labels
+or templates with `{variable}` (`TAG_TEMPLATE_VARIABLES`: `genre resolution quality source hdr
+codec audiocodec language originallanguage certification network studio status seriestype
+rootfolder collection releasegroup albumtype artisttype author narrator bookseries requester
+qualityprofile year decade channels`); one tag per value (per combination, at most 25), each
+passed through `sanitizeTagLabel` (lower case, whitespace to `-`, letters, digits and `-_.:+&`,
+100 characters). Unknown variables are a 400.
+
+Evaluation (`engine.ts`, pure) runs the rules in `sortOrder` per item over the item's facts
+(`facts.ts`, loaded 500 items at a time). A matched rule adds its rendered labels and records
+itself in `tag_rule_applications` as an owner, except on a label the item already carries
+without an owner (added by hand: left alone, never removed). A rule that no longer produces a
+label it owns drops ownership when `removeWhenUnmatched`; the tag comes off once no rule owns it.
+`removeTagIds` of a matched rule come off whoever added them. Later rules see earlier rules' tags
+(`tag` conditions). Only the net difference per item is written, re-applied to the item's
+current tags inside a transaction; missing tags are created.
+
+Rules run for single items on `library` events (`added`, `updated`, `fileAdded`, `refreshed`;
+media analysis publishes `updated`), `import` `imported` (music: the artist, audiobooks: the
+author) and `request` `created` / `approved` / `completed` (when the item is in the library),
+debounced 2 s; and daily as `ApplyTagRules`. Five starter rules (`starterKey` `genre`,
+`resolution`, `requested-by`, `4k-hdr`, `kids`) are inserted disabled the first time the module
+starts (settings row `tagRules.starters` remembers it). After a run that changed items, a
+`settings` event with `section: 'tags'` is published (plus `library updated` per item when at
+most 50 movies/series changed).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/tagrule` | `TagRule[]` in run order, each with `appliedCount` (items it owns a tag on) and `lastRun` |
+| GET | `/tagrule/:id` | One rule |
+| POST | `/tagrule` | `TagRuleInput` → 201 (appended last); 400 invalid or unknown tag ids |
+| PUT | `/tagrule/:id` | Replace |
+| PUT | `/tagrule/order` | `{ids}` → `TagRule[]`; listed rules first in that order, others keep theirs after |
+| DELETE | `/tagrule/:id` | `?removeTags=true` also takes off the tags only this rule added → 204 |
+| POST | `/tagrule/preview` | `{rule: TagRuleInput, id?}` → `TagRuleRunResult` for that rule alone, never written; `id` uses that saved rule's ownership for removals |
+| POST | `/tagrule/run` | `{ruleIds?, dryRun?}` → `TagRuleRunResult`. No ids: every enabled rule; ids: those rules even when disabled |
+| GET | `/tagrule/options` | `TagRuleOptions`: picker values per set field from the library, users, quality profiles |
+| GET | `/tagrule/applied` | `?entityType=&entityId=` → `TagApplication[]` `{tagId, ruleId, ruleName}`; also for users with the library app area |
+| GET | `/tag/usage` | `TagUsage[]` `{id, label, counts: {kind: n}, total, behaviourUses, autoApplied, rules[]}` |
+| POST | `/tag/:id/merge` | `{intoId}` → the target `Tag`; every reference moves, fixed rule labels follow, the source is deleted |
+| POST | `/tag/delete` | `{ids, force?}` → `{deleted}`; 409 when one is in use and `force` is false |
+
+`TagRuleRunResult`: `{dryRun, itemsEvaluated, itemsMatched, itemsChanged, matchedByType,
+add: [{label, count, isNew}], remove: [...], samples: [{entityType, id, title, add, remove}] (≤ 25),
+behaviour: [{label, uses: {kind: n}}] (tags that profiles, indexers, clients ... use), durationMs}`.
+
 ## subtitles
 
 Module `apps/api/src/modules/subtitles` (spec: `docs/spec/subtitles.md`); contract in
@@ -1425,7 +1523,7 @@ score.
 | GET | `/subtitle/providers` | Provider form schemas plus status (enabled, configured, throttle with retry time) |
 | POST | `/subtitle/providers/test` | `{id, settings}` → `{ok, message}` |
 | POST | `/subtitle/providers/reset` | `{onlyAuthOrConfig}` clears throttles |
-| GET | `/subtitle/wanted` | `?mediaType=series\|movie&page&pageSize`: files missing profile languages, with last search and attempts |
+| GET | `/subtitle/wanted` | `?mediaType=series\|movie&page&pageSize&q`: files missing profile languages, with last search and attempts. `q` matches series/movie title, episode label (`S01E02`) and title, and the missing languages (code, `en:forced`-style key, English name) |
 | GET | `/subtitle/history` | Paged history (`action`, `provider`, `mediaType`, `seriesId`, `movieId`, `mediaFileId` filters) |
 | GET | `/subtitle/blacklist` | Paged blacklist |
 | POST | `/subtitle/blacklist` | `{subtitleId, search}`: blacklist a downloaded subtitle, delete it, optionally search again |
@@ -1703,7 +1801,7 @@ Contract: `packages/shared/src/history.ts`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/history` | Paged, sortable, filterable history (`eventType`, `mediaType` (`series`, `movie`, `music`), `seriesId`, `episodeId`, `movieId`, `artistId`, `albumId`, `downloadId`, `quality`, `language`, `include*`). Music rows: one row per event for the whole release, `mediaType: "music"`, `artistId` and `albumIds` set (absent on video rows), `seriesId`/`episodeId`/`movieId` null |
+| GET | `/history` | Paged, sortable, filterable history (`eventType`, `mediaType` (`series`, `movie`, `music`), `seriesId`, `episodeId`, `movieId`, `artistId`, `albumId`, `downloadId`, `quality`, `language`, `include*`, `q`). `q` matches source title, event type, download id, the series / movie (and original) title, artist and author name, album and book titles, the episode title and `s01e02` code, and from `data` the indexer, download client (`downloadClient`, `downloadClientName`), `message`, `reason` and `releaseGroup`. Music rows: one row per event for the whole release, `mediaType: "music"`, `artistId` and `albumIds` set (absent on video rows), `seriesId`/`episodeId`/`movieId` null |
 | GET | `/history/since` | Records since `date` (optional `eventType`) |
 | GET | `/history/series` | Records of a series (`seriesId`, `seasonNumber?`, `eventType?`) |
 | GET | `/history/movie` | Records of a movie (`movieId`, `eventType?`) |
@@ -1716,7 +1814,7 @@ Contract: `packages/shared/src/history.ts`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/blocklist` | Paged, sortable list (`mediaType`, `seriesId`, `movieId`, `artistId`, `protocol` filters). Music entries are scoped to the artist (a release blocked for one artist is fine for another) and list the blocked grab's `albumIds` |
+| GET | `/blocklist` | Paged, sortable list (`mediaType`, `seriesId`, `movieId`, `artistId`, `protocol` filters; `q`: source title, indexer, message, source, the series / movie / artist / author name, album and book titles, the blocked episodes' titles and `s01e02` codes). Music entries are scoped to the artist (a release blocked for one artist is fine for another) and list the blocked grab's `albumIds` |
 | GET | `/blocklist/series` | Entries of a series (`seriesId`) |
 | GET | `/blocklist/movie` | Entries of a movie (`movieId`) |
 | POST | `/blocklist` | Add an entry by hand (`BlocklistAddRequest`: `mediaType`, `seriesId` + `episodeIds` or `movieId`, `sourceTitle`, `quality`, `protocol`, optional indexer, hash, size, message), 201 |
@@ -1871,6 +1969,33 @@ Health check `OrphanFilesFound` (warning) from 25 orphans; the health contract h
 | POST | `/library/hygiene/:id/map` | Import an orphan via manual import (`HygieneMapRequest`: `seriesId` + `episodeIds` or `movieId`, `importMode` default `move`; omitted fields use the best suggestion). Files already inside the item's folder are registered in place. 400 without a usable target, 409 when the import fails |
 | DELETE | `/library/hygiene/:id` | Delete the file (through the recycle bin, keeping its path below the root folder) or the empty folder (409 when it is no longer empty). A library duplicate also loses its media file row (`library fileDeleted`). Answers `{recycledTo, removedMediaFileId}` |
 
+## Library health scan
+
+Contract: `packages/shared/src/health-scan.ts`; module `apps/api/src/modules/health-scan`. Admin
+only. Checks every library file (`media_files` and `audio_files`): stat (missing, empty,
+unreadable), ffprobe (won't parse, no audio / video stream, duration against the metadata runtime
+for truncated files and samples, audio languages against the quality profile and "Add
+additional..." audio languages), ffmpeg decode to null (`quick`: 10 s at start, middle and end;
+`deep`: the whole file), plus album track-number gaps, audiobook part order and book length from
+the database. ffmpeg / ffprobe run through `nice -n 19` / `ionice -c 3` when `lowPriority` is on
+and those exist (Linux). Tables `health_scan_files` (per file: size, mtime, mode, checked at) and
+`health_findings` (one row per problem: `type`, `severity`, `status` open / ignored / fixed,
+`details`, `data`, `firstSeen`, `lastChecked`).
+
+Jobs: `HealthScan` (whole library; weekly, Sunday 03:00 by default, or the window start; the cron
+follows the settings, `off` leaves it on demand only) and `HealthCheck` (chosen items or files).
+Whole-library runs skip files whose size and mtime are unchanged since a check in the same or a
+deeper mode (unless `force`), and scheduled runs stop at the end of the time window. After a run
+with new findings a `healthScan` notification goes to connections with **On Health Issue**.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/library/health` | `HealthListQuery`: `status` (`open` default, `ignored`, `fixed`, `all`), `type`, `severity`, `mediaType` (`series`, `movie`, `music`, `audiobook`), `seriesId`, `movieId`, `artistId`, `albumId`, `authorId`, `bookId`, `ids`. Answers `HealthListResponse` `{lastScan, running, filesChecked, filesTotal, ffprobe, ffmpeg, counts: {open, ignored, fixed, byType, bySeverity}, records}`; `byType` / `bySeverity` count open findings |
+| POST | `/library/health/scan` | `HealthScanRequest`: `all: true` (whole library, resumable; `force` checks every file), or any of `seriesIds`, `movieIds`, `artistIds`, `albumIds`, `authorIds`, `bookIds`, `files` (`[{source: media \| audio, id}]`), always checked now. `mode` overrides the configured one. **202** with the `HealthScan` / `HealthCheck` `Job`; 400 without a scope |
+| POST | `/library/health/action` | `HealthActionRequest` `{action, ids}` (1-2000 finding ids). `replace`: blocklist the release from the file's import history (video), recycle or delete the file per the recycle-bin setting, remove it from the library, then one `HealthReplaceSearch` job for every affected movie, series (episodes merged), album and book. `recheck`: a `HealthCheck` job over the findings' files (album / book findings: all their files). `ignore`: hidden until the file's size or mtime changes; `unignore`. `delete`: recycle or delete the file and remove it from the library, no search. Album / book findings (`source: null`) cannot be replaced or deleted. Answers `HealthActionResult` `{action, succeeded, failed, results: [{id, ok, error?, blocklisted?, recycledTo?}], jobId}` |
+| GET | `/settings/healthscan` | `HealthScanSettings`: `schedule` (`weekly` default, `daily`, `off`), `mode` (`quick` default, `deep`), `concurrency` (1-4, default 1), `lowPriority` (default true), `window` `{enabled (false), start, end}` (`HH:MM`; may cross midnight), `truncatedPercent` (10-99, default 75), `checkLanguages` (default true), `notify` (default true) |
+| PUT | `/settings/healthscan` | Replace the settings (validated as above); reschedules `HealthScan` |
+
 ## bulk (library and Wanted bulk bar)
 
 Contract: `packages/shared/src/bulk.ts`; module `apps/api/src/modules/bulk`. Admin only. Each
@@ -1879,7 +2004,7 @@ when nothing matched); the job reports through `GET /jobs` and `job` events.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/command/bulksearch` | `BulkSearchCommand`: `movieIds`, `seriesIds`, `episodeIds`, or `allMovies` / `allEpisodes` (everything on the matching Wanted list), and `mode`: `all` (default, a user-invoked search per item), `missing` (Wanted → Missing rules) or `upgrade` (Wanted → Cutoff unmet rules: profile quality and custom-format cutoff, version slots; profiles with `upgradeAllowed: false` are skipped). `all*` needs `missing` or `upgrade`. Episodes are searched per series and season. **202**, one `BulkSearch` job |
+| POST | `/command/bulksearch` | `BulkSearchCommand`: `movieIds`, `seriesIds`, `episodeIds`, or `allMovies` / `allEpisodes` (everything on the matching Wanted list), and `mode`: `all` (default, a user-invoked search per item), `missing` (Wanted → Missing rules) or `upgrade` (Wanted → Cutoff unmet rules: profile quality and custom-format cutoff, version slots; profiles with `upgradeAllowed: false` are skipped). `all*` needs `missing` or `upgrade`. `q` (with `allMovies` / `allEpisodes` only) narrows "everything" to the Wanted rows matching the list's text search, with the same condition as `GET /wanted/*/episodes` and `/movies` (so "select all" on a searched Wanted page searches what the page shows); explicit ids ignore it. Episodes are searched per series and season. **202**, one `BulkSearch` job |
 | POST | `/rename/bulk` | `BulkRenameRequest` (`seriesIds`, `movieIds`): the rename preview of every item, `{items, failed}` |
 | POST | `/command/bulkrename` | Same body plus `files` (media file ids to limit to): renames through the per-item rename; answers `RenameResult` |
 | POST | `/command/subtitlesearch/bulk` | `mediaFileIds`, or `wanted: series \| movie` (every file on Subtitles → Wanted): **202**, one `BulkSubtitleSearch` job |
@@ -1894,6 +2019,45 @@ Contract: `packages/shared/src/stats.ts`.
 | GET | `/stats/library` | Series (monitored, continuing, ended), episodes (downloaded, missing = monitored + aired, unaired, unmonitored, cutoff unmet), movies (monitored, downloaded, missing as in `/wanted/missing/movies`, cutoff unmet), files and size |
 | GET | `/stats/activity` | Grabs, imports and failures per UTC day for `days` (default 30, max 365) from history; season packs count once (per download id / imported path) |
 | GET | `/stats/indexers` | Proxy of `GET /indexer/stats` (`days`, default 30) |
+
+## search (universal search)
+
+Contract: `packages/shared/src/search.ts`; module `apps/api/src/modules/search`. The topbar
+search's server-side lookups in one round trip. Open to every signed-in user; what comes back
+is scoped to the caller (below).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/search/universal?q=&limit=20` | `UniversalSearchQuery`: `q` (1–200 characters after trimming; empty is 400), `limit` hits per kind (1–50, default 20). Answers `UniversalSearchResponse` `{query, results: [{kind, total, hits}]}` |
+
+Each hit is `UniversalSearchHit` `{kind, id, title, subtitle, poster, status, parentId, score}`.
+Kinds, in the order `results` lists them (a kind with no match is left out):
+
+| Kind | Searched | subtitle / status / parentId |
+|---|---|---|
+| `series`, `movie` | title | year; `monitored`/`unmonitored` (series), `downloaded`/`missing`/`unmonitored` (movie); poster image |
+| `episode` | title (`TBA` skipped) | `Series · S01E02`; file status; `parentId` = series id |
+| `artist`, `album` | name, title | disambiguation / artist name; monitored status; poster or cover; album `parentId` = artist id |
+| `author`, `book` | name, title | – / author name; monitored or file status; headshot / cover; book `parentId` = author id |
+| `indexer`, `downloadClient`, `notification`, `importList` | name | implementation; `enabled`/`disabled` |
+| `qualityProfile`, `customFormat`, `tag` | name, label | media domain (profiles) |
+| `user` | display name and username | username or role; role |
+| `task` | scheduled job name (`id` is the name) | interval; `enabled`/`disabled` |
+| `queue` | download title (imported/failed/ignored rows left out) | state (the client status while downloading, e.g. `paused`) |
+| `history` | source title, newest first | `eventType · YYYY-MM-DD`; event type |
+| `request`, `issue` | title | `type · year` / issue type; request or issue status; poster |
+
+Ranking uses the shared matcher (`rankMatches`): exact title, then prefix, then word-prefix,
+substring and loose (in-order letters, e.g. `dn prt` finds "Dune: Part Two"); shorter titles
+break ties. Per kind at most `UNIVERSAL_SEARCH_SCAN` (200) candidates are read with an SQL
+prefilter on the longest query word: first rows containing it, then, while room is left, rows
+holding its letters in order. `total` counts the matches among those candidates. The prefilter
+is ASCII case-insensitive and not accent-folded, so `amelie` does not find "Amélie".
+
+Scoping: admins and the API key see every kind. Others see the library kinds (series through
+book) with the `library` app area, `queue` and `history` with `activity`; every request with
+Manage requests or View requests (else their own), every issue with Manage issues or View
+issues (else their own). Settings entities, users, tags and tasks are admin only.
 
 ## summary (daily summary, quiet hours)
 
@@ -1963,9 +2127,9 @@ Implemented in `apps/api/src/modules/audit`. Every mutating `/api/v1` request is
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/audit?page&pageSize&user&action&from&to` | `AuditPage`, newest first. `user`: username (case-insensitive) or user id; `action`: exact or prefix (`settings` matches `settings.update`); `from` inclusive, `to` exclusive (ISO-8601; 400 when not a date) |
+| GET | `/audit?page&pageSize&user&action&from&to&q` | `AuditPage`, newest first. `user`: username (case-insensitive) or user id; `action`: exact or prefix (`settings` matches `settings.update`); `from` inclusive, `to` exclusive (ISO-8601; 400 when not a date); `q`: text search over username, action, target, method, route, ip, status code and the details JSON |
 | GET | `/audit/actions` | Distinct action names (filter list) |
-| GET | `/audit/export?user&action&from&to` | Same filters as CSV (`time,username,userId,ip,action,target,method,route,statusCode,details`) |
+| GET | `/audit/export?user&action&from&to&q` | Same filters (and `q`) as CSV (`time,username,userId,ip,action,target,method,route,statusCode,details`) |
 | GET/PUT | `/settings/audit` | `{enabled, retentionDays}` (default `true`, `90`; 0 keeps events forever) |
 
 ## metrics
@@ -2155,6 +2319,7 @@ of them with `POST /jobs/run`.
 | `WatchlistSync` | `*/15 * * * *` | requests | Pulls Plex watchlists (users with a token) and Jellyfin/Emby favourites (linked users); auto-requests when `autoRequestFromWatchlist`, `AUTO_REQUEST*` and the per-type sync flag allow |
 | `RequestsPolicySweep` | `0 * * * *` | requests | Re-evaluates requests held by approval windows: approves those the policies now approve, releases the rest to pending when no window holds them |
 | `RequestsDigest` | `0 * * * *` | requests | Hourly tick; once a day at `digestHour` (when `digestEnabled`) sends one notification summarising pending requests and open issues (nothing when both are empty) |
+| `ApplyTagRules` | `15 4 * * *` | tag-rules | Forgets ownership of deleted items, then runs every enabled tag rule over the library |
 | `RetentionSweep` | `30 3 * * *` | retention | Pulls play state from servers flagged `usedForRetention`, stages rule matches, applies candidates past their grace period, sends the `retention` summary |
 | `SubtitleSearchWanted` | `*/15 * * * *` | subtitles | Searches wanted subtitles, least recently searched first, up to `search.batchSize` items; adaptive backoff per language; stops when every provider is throttled |
 | `SubtitleUpgrade` | `30 3 * * *` | subtitles | Re-searches recent downloads (upgrade window) scoring below perfect; needs old score + 2 |

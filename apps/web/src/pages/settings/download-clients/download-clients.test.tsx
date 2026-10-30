@@ -339,6 +339,39 @@ describe('download client cards and remote path mappings', () => {
       responses['/api/v1/remotepathmapping'] = [];
     }
   });
+
+  it('searches clients by name, implementation and host, and clears an empty search', async () => {
+    const client = (id: number, name: string, implementation: string, host: string) => ({
+      id,
+      name,
+      implementation,
+      enable: true,
+      protocol: implementation === 'sabnzbd' ? 'usenet' : 'torrent',
+      priority: 1,
+      removeCompletedDownloads: true,
+      removeFailedDownloads: true,
+      tags: [],
+      settings: { host, port: 8080 },
+    });
+    responses['/api/v1/downloadclient'] = [client(1, 'Main', 'qbittorrent', 'seedbox.lan'), client(2, 'News', 'sabnzbd', 'nas'), client(3, 'Backup', 'qbittorrent', 'nas')];
+    try {
+      renderAt('/settings/downloadclients?q=nas');
+      const grid = await screen.findByRole('list', { name: 'Download clients' });
+      await waitFor(() => expect(within(grid).getAllByRole('listitem')).toHaveLength(2));
+      expect(screen.getByText('2 of 3')).toBeTruthy();
+      const box = screen.getByRole('searchbox', { name: 'Search this list' });
+      fireEvent.change(box, { target: { value: 'sabnzbd' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      await waitFor(() => expect(screen.getByText('1 of 3')).toBeTruthy());
+      expect(within(screen.getByRole('list', { name: 'Download clients' })).getByText('News')).toBeTruthy();
+      fireEvent.change(box, { target: { value: 'nothing-here' } });
+      fireEvent.keyDown(box, { key: 'Enter' });
+      fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+      await waitFor(() => expect(within(screen.getByRole('list', { name: 'Download clients' })).getAllByRole('listitem')).toHaveLength(3));
+    } finally {
+      responses['/api/v1/downloadclient'] = [];
+    }
+  });
 });
 
 describe('protocol badges', () => {

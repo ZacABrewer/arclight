@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link, useSearch } from '@tanstack/react-router';
 import type { MetadataSearchResult, MetadataSearchType } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
@@ -19,18 +19,32 @@ import { t } from '../../i18n/index.js';
 /** Add New tabs: the TMDB kinds, plus Music (MusicBrainz) and Audiobooks (Audible catalogue) while their flags are on. */
 export type AddNewType = MetadataSearchType | 'music' | 'audiobook';
 
-/** `/library/add?type=music` / `?type=audiobook` opens the Music or Audiobooks tab ("Add artist", "Add author"). */
-export function parseAddNewSearch(search: Record<string, unknown>): { type?: 'music' | 'audiobook' } {
-  return search.type === 'music' || search.type === 'audiobook' ? { type: search.type } : {};
+/**
+ * `/library/add?type=music` / `?type=audiobook` opens the Music or Audiobooks tab ("Add artist",
+ * "Add author"); `?type=movie` / `?type=series` the TMDB kind, and `?term=` fills the search box
+ * (the command palette's "Add movie Dune").
+ */
+export function parseAddNewSearch(search: Record<string, unknown>): { type?: 'movie' | 'series' | 'music' | 'audiobook'; term?: string } {
+  const type = search.type === 'music' || search.type === 'audiobook' || search.type === 'movie' || search.type === 'series' ? search.type : undefined;
+  const term = typeof search.term === 'string' && search.term.trim() ? search.term.trim().slice(0, 200) : undefined;
+  return { ...(type ? { type } : {}), ...(term ? { term } : {}) };
 }
+
+const ADD_TYPES: readonly AddNewType[] = ['movie', 'series', 'music', 'audiobook'];
 
 type AudiobookTarget = 'author' | 'book';
 
 export function AddNewPage() {
-  const params = useSearch({ strict: false }) as { type?: string };
+  const params = useSearch({ strict: false }) as { type?: string; term?: string };
   const features = useFeatures();
-  const [term, setTerm] = useState('');
-  const [picked, setType] = useState<AddNewType>(params.type === 'music' || params.type === 'audiobook' ? params.type : 'all');
+  const [term, setTerm] = useState(params.term ?? '');
+  const [picked, setType] = useState<AddNewType>(ADD_TYPES.find((x) => x === params.type) ?? 'all');
+  // A new deep link while the page is open (the command palette) replaces the search.
+  useEffect(() => {
+    if (params.term !== undefined) setTerm(params.term);
+    const linked = ADD_TYPES.find((x) => x === params.type);
+    if (linked) setType(linked);
+  }, [params.term, params.type]);
   const [abTarget, setAbTarget] = useState<AudiobookTarget>('author');
   const [bookField, setBookField] = useState<BookSearchField>('any');
   // Music and Audiobooks fall back to "All" while their flag is off (or still loading).

@@ -14,7 +14,9 @@ import { AudiobookInteractiveSearchModal } from './audiobook-release-table.js';
 import { audibleUrl, authorBackdrop, bookYear, chapterRows, formatOffset, formatRuntime, positionLabel } from './audiobook-model.js';
 import { formatDuration } from '../music/music-model.js';
 import '../library.css';
+import { ItemHealthPanel, useCanSeeHealth } from '../item-health.js';
 import { t } from '../../../i18n/index.js';
+import { usePaletteContext } from '../../../features/command-palette/registry.js';
 
 const route = getRouteApi('/library/audiobooks/book/$id');
 
@@ -27,6 +29,7 @@ export function BookDetailsPage() {
 }
 
 function BookDetailsView() {
+  const canSeeHealth = useCanSeeHealth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const book = useBook(id);
@@ -38,6 +41,7 @@ function BookDetailsView() {
   const [interactive, setInteractive] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
+  usePaletteContext(book.data ? { subject: { kind: 'book', id: book.data.id, title: book.data.title } } : null);
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('audiobooks.invalidBookId', { rawId }))} title={t('audiobooks.bookNotFound')} />;
   if (book.isPending) return <Loading />;
   if (book.isError) return <QueryError error={book.error} onRetry={() => void book.refetch()} title={t('audiobooks.couldNotLoadThisBook')} />;
@@ -122,6 +126,7 @@ function BookDetailsView() {
         tabs={[
           { id: 'chapters', label: t('audiobooks.chapters'), count: b.chapters.length, content: <ChapterList book={b} /> },
           { id: 'files', label: t('common.files'), count: b.files.length, content: <AudioFilesTable files={b.files} error={null} loading={false} parts /> },
+          ...(canSeeHealth ? [{ id: 'health', label: t('library.health.tab'), content: <ItemHealthPanel scope={{ bookId: b.id }} /> }] : []),
         ]}
       />
       <AudiobookInteractiveSearchModal

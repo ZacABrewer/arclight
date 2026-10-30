@@ -94,3 +94,35 @@ describe('Activity -> Transcode jobs', () => {
     expect(sizeChange({ sizeBefore: 4_000, sizeAfter: 1_000 })).toMatch(/\(-75%\)$/);
   });
 });
+
+describe('Activity -> Cross-seeds and Transcode jobs search', () => {
+  const count = () => document.querySelector('.al-listsearch__count')?.textContent;
+
+  it('filters cross-seeds by failure message and clears the search', async () => {
+    stubApi({
+      '/api/v1/crossseed': [seed({}), seed({ id: 2, infoHash: 'f'.repeat(40), state: 'failed', title: 'Other.Release', message: 'piece hash mismatch', savePath: null })],
+      '/api/v1/downloadclient': [],
+    });
+    renderAt('/activity/crossseed?q=hash%20mismatch');
+    const table = await screen.findByRole('table', { name: 'Cross-seeds' });
+    await within(table).findByText('Other.Release');
+    expect(within(table).queryByText('Show.S01E01.1080p.WEB-DL-GRP')).toBeNull();
+    expect(count()).toBe('1 of 2');
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: 'no-such-release' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }, { timeout: 5000 }));
+    await within(table).findByText('Show.S01E01.1080p.WEB-DL-GRP');
+  });
+
+  it('filters transcode jobs by file path, and select all takes the matches only', async () => {
+    stubApi({
+      '/api/v1/transcode/jobs': [job({}), job({ id: 2, status: 'completed', progress: 100, sizeAfter: 2_000_000_000, trigger: 'manual', path: '/movies/Heat.mkv' })],
+    });
+    renderAt('/activity/transcode?q=movies%20heat');
+    const table = await screen.findByRole('table', { name: 'Transcode jobs' });
+    await within(table).findByText('/movies/Heat.mkv');
+    expect(within(table).queryByText('/tv/Show/Season 01/Show.S01E01.mkv')).toBeNull();
+    expect(count()).toBe('1 of 2');
+    fireEvent.click(within(table).getAllByRole('checkbox')[0]!);
+    expect(await screen.findByText(/1 selected/)).toBeTruthy();
+  });
+});

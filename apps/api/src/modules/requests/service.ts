@@ -36,6 +36,7 @@ import {
 import type { RequestsDigestEvent } from '@arclight/notifications';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import { qualityProfiles, rootFolders } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import {
@@ -89,6 +90,7 @@ import {
   userPermissions,
   userRow,
   type UserRow,
+  userNameSearchColumns,
 } from './users.js';
 
 // Requests (docs/spec/requests.md sections 4-10): permissions, quotas, creation with
@@ -401,6 +403,16 @@ export class RequestsService {
     };
     const statuses = statusFilter[q.filter];
     if (statuses) where.push(inArray(mediaRequests.status, statuses));
+    const search = listSearchCondition(q.q, [
+      mediaRequests.title,
+      mediaRequests.year,
+      mediaRequests.type,
+      mediaRequests.status,
+      mediaRequests.declineReason,
+      mediaRequests.failureReason,
+      ...userNameSearchColumns(mediaRequests.requestedById),
+    ]);
+    if (search) where.push(search);
     const order = q.sort === 'modified' ? mediaRequests.updatedAt : mediaRequests.id;
     let rows = this.db
       .select()

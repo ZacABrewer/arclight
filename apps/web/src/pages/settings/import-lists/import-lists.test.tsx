@@ -158,13 +158,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function renderPage(node = <ImportListsPage />): ToastStore {
+function renderPage(node = <ImportListsPage />, path = '/settings/importlists'): ToastStore {
   const toasts = createToastStore();
   const queryClient = createQueryClient(toasts);
   // SettingsPage reads the router location, so the page renders inside a one-route router.
   const root = createRootRoute();
   const route = createRoute({ getParentRoute: () => root, path: '/settings/importlists', component: () => node });
-  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: ['/settings/importlists'] }) });
+  const router = createRouter({ routeTree: root.addChildren([route]), history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <QueryClientProvider client={queryClient}>
       <ToastProvider store={toasts}>
@@ -217,6 +217,22 @@ describe('Settings -> Import Lists', () => {
     expect(await screen.findByRole('dialog', { name: 'Edit Marvel' })).toBeTruthy();
     // The Add tile closes the grid.
     expect(within(grid).getByRole('button', { name: /Add import list/ })).toBeTruthy();
+  });
+
+  it('searches lists by name, list type and sync error, then clears', async () => {
+    renderPage(<ImportListsPage />, '/settings/importlists?q=steven%20popular');
+    const grid = await screen.findByRole('list', { name: 'Import lists' });
+    expect(await within(grid).findByRole('button', { name: 'Broken feed' })).toBeTruthy();
+    expect(within(grid).queryByRole('button', { name: 'Marvel' })).toBeNull();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'http 500' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText('1 of 2')).toBeTruthy());
+    fireEvent.change(box, { target: { value: 'nothing at all' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByRole('button', { name: 'Marvel' })).toBeTruthy();
   });
 
   it('offers every implementation from the schema with a description', async () => {

@@ -55,7 +55,7 @@ Which events each type can receive: Discord, Telegram, ntfy, Gotify, Pushover an
 | On series delete | A series was deleted | Also used for retention sweep summaries |
 | On movie delete | A movie was deleted | Also used for retention sweep summaries |
 | On file delete | A file was deleted (including replaced by an upgrade) | |
-| On health issue | A health check started failing | Errors only, unless "Include health warnings" is on |
+| On health issue | A health check started failing | Errors only, unless "Include health warnings" is on. Also carries **Health scan found problems**: a library [health scan](health-scan.md) found new broken or wrong files (sent whatever their severity) |
 | On health restored | A failing health check recovered | Same rule for warnings |
 | On application update | Arclight was updated | |
 | On manual interaction required | An import needs you (unknown series, unmatched file, and so on) | See [Activity](activity.md) |
@@ -109,12 +109,17 @@ Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first
 | Test works but nothing arrives for real events | The event switch is off, the tag filter excludes the item, or health warnings are off while the issue is only a warning |
 | Email sends nothing | Check port and Security together: 587 with STARTTLS, 465 with TLS, 25 with None |
 
+## Searching your connections
+
+A search box sits above the connection cards once there is at least one. Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. The count next to the box shows how many match ("2 of 9"), **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`). It matches the name, the connection type and the events that are switched on (for example `on grab`).
+
 ## Bulk actions
 
 Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection: **Enable**, **Disable**, **Test** (sends a test message from each), **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
 
 ## Related
 
+- [Tags and tag rules](tags.md) (tags limit which items this applies to; rules can add them automatically)
 - [Media servers](media-servers.md)
 - [Activity](activity.md)
 - [Discover and requests](discover-and-requests.md)

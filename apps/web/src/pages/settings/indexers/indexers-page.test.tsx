@@ -356,6 +356,37 @@ describe('indexer cards', () => {
     await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/indexer/test')?.body).toMatchObject({ name: 'Jackett', implementation: 'torznab' }));
   });
 
+  it('searches the cards by name, implementation, protocol, tag and status with "N of M"', async () => {
+    responses['/api/v1/tag'] = [{ id: 7, label: 'anime-only' }];
+    (responses['/api/v1/indexer'] as Indexer[])[0]!.tags = [7];
+    renderPage('/settings/indexers?q=newznab');
+    const grid = await screen.findByRole('list', { name: 'Indexers' });
+    expect(within(grid).getAllByRole('listitem').map((c) => within(c).getAllByRole('button')[0]!.textContent)).toEqual(['Geek', 'Geek main']);
+    expect(screen.getByText('2 of 5')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'anime only' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(within(screen.getByRole('list', { name: 'Indexers' })).getAllByRole('listitem')).toHaveLength(1));
+    fireEvent.change(box, { target: { value: 'failed usenet' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(screen.getByText('1 of 5')).toBeTruthy());
+    expect(within(screen.getByRole('list', { name: 'Indexers' })).getByText('Geek')).toBeTruthy();
+  });
+
+  it('selects only the matching indexers and clears an empty search', async () => {
+    renderPage('/settings/indexers?q=geek');
+    const grid = await screen.findByRole('list', { name: 'Indexers' });
+    fireEvent.click(within(grid).getAllByRole('checkbox')[0]!);
+    fireEvent.click(await screen.findByRole('button', { name: /select all/i }));
+    expect(await screen.findByText(/2 selected/i)).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'zzz' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByRole('list', { name: 'Indexers' })).toBeTruthy();
+    expect(within(screen.getByRole('list', { name: 'Indexers' })).getAllByRole('listitem')).toHaveLength(5);
+  });
+
   it('maps status to chip tones with a cause', () => {
     const now = Date.parse('2026-10-26T12:00:00Z');
     expect(indexerHealth({ status: undefined }, now)).toEqual({ tone: 'accent', label: 'Enabled' });

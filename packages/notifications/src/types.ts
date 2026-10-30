@@ -247,6 +247,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'issueUpdated',
   'requestsDigest',
   'retention',
+  'healthScan',
   'fileTranscoded',
   'downloadStalled',
   'killSwitch',
@@ -455,6 +456,28 @@ export interface RetentionEvent extends EventBase {
   freedBytes: number;
 }
 
+/** One problem in a health scan summary. */
+export interface HealthScanLine {
+  /** Item and file, e.g. "Severance S01E03". */
+  title: string;
+  /** Finding type (`decodeErrors`, `truncated`, ...). */
+  type: string;
+  severity: 'error' | 'warning' | 'info';
+  /** Plain-language explanation. */
+  details: string;
+}
+
+/** A library health scan found new problems (broken, truncated or wrong files). */
+export interface HealthScanEvent extends EventBase {
+  type: 'healthScan';
+  /** At most a screenful; `totalNew` counts everything. */
+  findings: HealthScanLine[];
+  totalNew: number;
+  /** Open problems in the library after the scan. */
+  totalOpen: number;
+  filesChecked: number;
+}
+
 /** A library file was remuxed/transcoded in place by a transcode rule. */
 export interface FileTranscodedEvent extends MediaEventBase {
   type: 'fileTranscoded';
@@ -581,6 +604,7 @@ export type NotificationEvent =
   | IssueUpdatedEvent
   | RequestsDigestEvent
   | RetentionEvent
+  | HealthScanEvent
   | FileTranscodedEvent;
 
 export type NotificationEventOf<T extends NotificationEventType> = Extract<

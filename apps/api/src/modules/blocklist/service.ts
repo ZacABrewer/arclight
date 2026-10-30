@@ -16,6 +16,8 @@ import {
 import type { Db } from '../../db/index.js';
 import { artists, authors, movies, series } from '../../db/schema.js';
 import { dataValue, parseProtocol, type DownloadFailedEvent, type HistoryTarget } from '../history/service.js';
+import { episodeListSearchColumns, parentTitleSearchColumns } from '../history/search.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import { blocklist, type BlocklistRow, type NewBlocklistRow } from './schema.js';
 
 // ---- errors -------------------------------------------------------------------------
@@ -382,6 +384,15 @@ export class BlocklistService {
     if (query.authorId && query.authorId.length > 0) parentConds.push(inArray(blocklist.authorId, query.authorId));
     if (parentConds.length > 0) conds.push(or(...parentConds)!);
     if (query.protocol && query.protocol.length > 0) conds.push(inArray(blocklist.protocol, query.protocol));
+    const search = listSearchCondition(query.q, [
+      blocklist.sourceTitle,
+      blocklist.indexer,
+      blocklist.message,
+      blocklist.source,
+      ...parentTitleSearchColumns(blocklist),
+      ...episodeListSearchColumns(blocklist.episodeIds),
+    ]);
+    if (search) conds.push(search);
     const where = conds.length > 0 ? and(...conds) : undefined;
 
     const total = this.db

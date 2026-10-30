@@ -68,6 +68,8 @@ export const audiobooksApi = {
   },
   books: {
     list: (authorId: number) => request('/book', BookListResponse, { query: { authorId } }),
+    /** Every book in the library (command palette targets). */
+    listAll: () => request('/book', BookListResponse),
     get: (id: number) => request(`/book/${id}`, BookDetails),
     /** POST /book: one book by ASIN or ISBN (its author is created when needed). */
     add: (body: AddBookRequestInput) => request('/book', Book, { method: 'POST', json: body }),

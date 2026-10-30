@@ -43,6 +43,7 @@ import { vpnModule } from './modules/vpn/index.js';
 import { torrentModule } from './modules/torrent/index.js';
 import { subtitlesModule } from './modules/subtitles/index.js';
 import { bulkModule } from './modules/bulk/index.js';
+import { tagRulesModule } from './modules/tag-rules/index.js';
 import { requestsModule } from './modules/requests/index.js';
 import { authModule, installAuth } from './modules/auth/index.js';
 import { guidesModule } from './modules/guides/index.js';
@@ -50,6 +51,7 @@ import { mediaServersModule } from './modules/media-servers/index.js';
 import { retentionModule } from './modules/retention/index.js';
 import { mediaAnalysisModule } from './modules/media-analysis/index.js';
 import { libraryHygieneModule } from './modules/library-hygiene/index.js';
+import { healthScanModule } from './modules/health-scan/index.js';
 import { statsModule } from './modules/stats/index.js';
 import { updatesModule } from './modules/updates/index.js';
 import { pushModule } from './modules/push/index.js';
@@ -66,6 +68,7 @@ import { transferMetricsModule } from './modules/transfer-metrics/index.js';
 import { profileMigrationModule } from './modules/profile-migration/index.js';
 import { additionalLanguagesModule } from './modules/additional-languages/index.js';
 import { themesModule } from './modules/themes/index.js';
+import { searchModule } from './modules/search/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -163,6 +166,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // Transcode / remux rules; re-analysis after a transcode goes through media-analysis.
     transcodeModule,
     libraryHygieneModule,
+    // Library health scan: broken / wrong files and their fix actions (blocklist, search via releases).
+    healthScanModule,
     statsModule,
     updatesModule,
     // Requests do not send their own pushes yet, so the bus listener stays on.
@@ -170,6 +175,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     subtitlesModule,
     // Bulk search / rename / subtitle search over many selected items (library and Wanted lists).
     bulkModule,
+    // Tag management and tag rules (auto-tagging on library events and a daily pass).
+    tagRulesModule,
     // "Add additional…" languages, over subtitles, releases and the library.
     additionalLanguagesModule,
     requestsModule,
@@ -193,6 +200,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     auditModule,
     // POST /bulk: one action over many rows of a settings / activity / system list.
     bulkActionsModule,
+    // GET /search/universal: the topbar search over everything above, scoped to the caller.
+    searchModule,
     metricsModule,
   ];
   await app.register(

@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import type { MediaAnalysisQueueSummary } from '@arclight/shared';
 import { renderAt, stubApi } from '../../test/route-harness.js';
 import { analysisQueueText } from './tasks.js';
@@ -38,5 +38,38 @@ describe('analysis queue indicator', () => {
     const line = await screen.findByRole('region', { name: 'Media analysis queue' });
     expect(within(line).getByText(/ffprobe not found/)).toBeTruthy();
     expect(within(line).getByRole('link', { name: 'Fix' }).getAttribute('href')).toBe('/docs/system/health#ffprobe-missing');
+  });
+});
+
+describe('System → Tasks search', () => {
+  const scheduled = [
+    { name: 'RefreshMonitoredDownloads', interval: 'PT1M', lastRun: null, nextRun: null, enabled: true },
+    { name: 'Backup', interval: 'P1D', lastRun: null, nextRun: null, enabled: true },
+    { name: 'RssSync', interval: 'PT15M', lastRun: null, nextRun: null, enabled: false },
+  ];
+  const jobs = [
+    { id: 1, name: 'RssSync', status: 'failed', trigger: 'scheduled', message: 'Indexer timed out', queuedAt: '2026-10-25T10:00:00.000Z', startedAt: null, endedAt: null, durationMs: 10 },
+    { id: 2, name: 'Backup', status: 'completed', trigger: 'manual', message: null, queuedAt: '2026-10-25T09:00:00.000Z', startedAt: null, endedAt: null, durationMs: 10 },
+  ];
+  const routes = { '/api/v1/mediaanalysis/queue': queue, '/api/v1/jobs': jobs, '/api/v1/jobs/scheduled': scheduled };
+
+  it('filters both tables by name, state, status and message with "N of M" counts', async () => {
+    stubApi(routes);
+    renderAt('/system/tasks?q=rss');
+    const tables = await screen.findAllByRole('table');
+    expect(await within(tables[0]!).findByText('RssSync')).toBeTruthy();
+    expect(within(tables[0]!).queryByText('Backup')).toBeNull();
+    expect(screen.getByText('1 of 3')).toBeTruthy();
+    expect(screen.getByText('1 of 2')).toBeTruthy();
+  });
+
+  it('matches the failure cause and clears from the empty state', async () => {
+    stubApi(routes);
+    renderAt('/system/tasks?q=indexer%20timed');
+    const history = await screen.findByRole('table', { name: 'Task history' });
+    expect(await within(history).findByText('RssSync')).toBeTruthy();
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await within(await screen.findByRole('table', { name: 'Scheduled tasks' })).findByText('Backup')).toBeTruthy();
+    expect((screen.getByRole('searchbox', { name: 'Search this list' }) as HTMLInputElement).value).toBe('');
   });
 });

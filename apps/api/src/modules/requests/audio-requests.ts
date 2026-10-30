@@ -17,6 +17,7 @@ import {
 } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import { albums, qualityProfiles, rootFolders } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import * as ab from '../audiobooks/service.js';
@@ -28,7 +29,7 @@ import { RequestsError } from './errors.js';
 import type { RequestNotifier } from './notify.js';
 import { type Actor, canAutoApproveAudio, canManageRequests, canManageSettings, canManageUsers, canRequestAudio, canViewAllRequests } from './permissions.js';
 import { audioRequests } from './schema.js';
-import { ownerUser, requestUsers, userPermissions, userRow, type UserRow } from './users.js';
+import { ownerUser, requestUsers, userNameSearchColumns, userPermissions, userRow, type UserRow } from './users.js';
 
 // Music and audiobook requests (design music-audiobooks.md section 11; the video flow is in
 // service.ts). Same lifecycle as video requests: pending → approved → completed, or declined /
@@ -231,6 +232,17 @@ export class AudioRequestsService {
     };
     const statuses = statusFilter[q.filter];
     if (statuses) where.push(inArray(audioRequests.status, statuses));
+    const search = listSearchCondition(q.q, [
+      audioRequests.title,
+      audioRequests.subtitle,
+      audioRequests.year,
+      audioRequests.kind,
+      audioRequests.status,
+      audioRequests.declineReason,
+      audioRequests.failureReason,
+      ...userNameSearchColumns(audioRequests.requestedById),
+    ]);
+    if (search) where.push(search);
     let rows = this.db
       .select()
       .from(audioRequests)

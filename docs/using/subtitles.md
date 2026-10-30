@@ -93,6 +93,8 @@ Manual search ignores the minimum, so you can pick a lower-scoring subtitle your
 
 Files that are still missing a subtitle their profile asks for, split into **TV** and **Movies** tabs. Columns: the episode or movie, **Missing** languages (forced and HI flags are shown), **Last search**, **Attempts**, and a **Search** button. Select rows and use **Search selected** to search several (**Select all N** takes every file on the list, on every page). The search runs in the background as one job, and a toast says how many files were queued. An empty list says "Every file has the subtitles its language profile asks for."
 
+The search box above the list matches the series or movie title and the episode; every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces. The search is kept in the address bar, so a reload or a shared link keeps it. While a search is active, **Select all N** is not offered (the background job always takes the whole list); the header checkbox selects the matching rows on the page.
+
 ### Subtitles > History
 
 Every subtitle action: downloads, manual downloads, upgrades, uploads, syncs, extractions and deletions. Filter by **Media**, **Action** and **Provider**. Columns include item, language, provider, score (percent), sync result, offset and drift, description and date.

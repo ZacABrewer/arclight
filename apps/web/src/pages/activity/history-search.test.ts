@@ -9,6 +9,15 @@ describe('history deep links', () => {
     expect(parseHistorySearch({})).toEqual({});
   });
 
+  it('keeps the list search (q) next to the deep-link params', () => {
+    expect(parseHistorySearch({ q: '  show s01 ', eventType: 'grabbed' })).toEqual({ q: 'show s01', eventType: 'grabbed' });
+    expect(parseHistorySearch({ q: '   ' })).toEqual({});
+    const filter = historyFilterFromSearch({ q: 'heat', movieId: 4 });
+    expect(filter).toEqual({ ...DEFAULT_HISTORY_FILTER, movieId: 4, q: 'heat' });
+    expect(historyQuery(filter)).toMatchObject({ q: 'heat', movieId: 4, page: 1 });
+    expect(historyQuery(DEFAULT_HISTORY_FILTER)).not.toHaveProperty('q');
+  });
+
   it('turns a deep link into the page filter and the GET /history query', () => {
     const filter = historyFilterFromSearch({ eventType: 'grabbed', episodeId: 12 });
     expect(filter).toEqual({ ...DEFAULT_HISTORY_FILTER, eventTypes: ['grabbed'], episodeId: 12 });

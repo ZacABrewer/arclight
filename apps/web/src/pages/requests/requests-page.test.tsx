@@ -137,6 +137,56 @@ describe('requests page', () => {
     expect(screen.getByRole('button', { name: 'Cancel request' })).toBeTruthy();
   });
 
+  it('search: sends q, shows the server count, starts over at the first page and clears', async () => {
+    const many = { pageInfo: { total: 45, take: 20, skip: 0 }, results: [makeRequest()] };
+    const calls = stubApi({ '/api/v1/request': many }, (url, method) =>
+      method === 'GET' && url.startsWith('/api/v1/request?') && url.includes('q=nothing') ? { body: page([]) } : undefined,
+    );
+    renderAt('/requests?q=matrix');
+    expect(await screen.findByRole('link', { name: 'The Matrix' })).toBeTruthy();
+    const listUrls = () => calls.filter((c) => c.url.startsWith('/api/v1/request?')).map((c) => c.url);
+    expect(listUrls()[0]).toContain('q=matrix');
+    expect(screen.getByText('45 results')).toBeTruthy();
+    // Page 2, then a new search: back to skip 0.
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await waitFor(() => expect(listUrls().some((u) => u.includes('skip=20') && u.includes('q=matrix'))).toBe(true));
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'nothing' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(listUrls().some((u) => u.includes('q=nothing'))).toBe(true));
+    expect(listUrls().find((u) => u.includes('q=nothing'))).toContain('skip=0');
+    expect(await screen.findByText('Nothing matches “nothing”')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    await waitFor(() => expect(listUrls().at(-1)).not.toContain('q='));
+    expect(await screen.findByRole('link', { name: 'The Matrix' })).toBeTruthy();
+  });
+
+  it('search: Select all on a searched page selects only the matching rows shown', async () => {
+    const calls = stubApi(
+      { '/api/v1/request': page([makeRequest({ id: 1 }), makeRequest({ id: 2, mediaTitle: 'Heat', mediaTmdbId: 949 })]) },
+      (url, method) => {
+        if (method === 'GET' && url.startsWith('/api/v1/request?') && url.includes('q=heat')) return { body: page([makeRequest({ id: 2, mediaTitle: 'Heat', mediaTmdbId: 949 })]) };
+        return method === 'POST' && url === '/api/v1/request/bulk/approve' ? { body: { ok: [2], failed: [] } } : undefined;
+      },
+    );
+    renderAt('/requests?q=heat');
+    await screen.findByRole('link', { name: 'Heat' });
+    expect(screen.queryByRole('link', { name: 'The Matrix' })).toBeNull();
+    fireEvent.click(screen.getByLabelText('Select all rows'));
+    fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Approve' }));
+    await waitFor(() => expect(calls.find((c) => c.url === '/api/v1/request/bulk/approve')?.body).toEqual({ ids: [2] }));
+  });
+
+  it('search: the audio request list sends q too', async () => {
+    const calls = stubApi({ '/api/v1/request': page([makeRequest()]), '/api/v1/audiorequest': page([]), '/api/v1/settings/features': { music: true, audiobooks: false } });
+    renderAt('/requests?q=blue');
+    await screen.findByRole('link', { name: 'The Matrix' });
+    const filter = screen.getByLabelText('Media type filter') as HTMLSelectElement;
+    await waitFor(() => expect([...filter.options].map((o) => o.value)).toContain('music'));
+    fireEvent.change(filter, { target: { value: 'music' } });
+    await waitFor(() => expect(calls.find((c) => c.url.startsWith('/api/v1/audiorequest?'))?.url).toContain('q=blue'));
+  });
+
   it('builds the my-requests timeline', () => {
     expect(requestTimeline(makeRequest()).map((s) => [s.label, s.done])).toEqual([
       ['Requested', true],

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Job } from './jobs.js';
 import { MediaType, Paged } from './library.js';
+import { ListSearchParam } from './list-search.js';
 
 // Profile migration: moving library items from one quality profile to another, judging the
 // files they already have against their (new) profile, and replacing the ones that no longer
@@ -222,6 +223,8 @@ export const ProfileMismatchQuery = z.object({
   /** Statuses to list; default `notAllowed`. */
   status: queryList,
   qualityProfileId: z.coerce.number().int().positive().optional(),
+  /** Text search (list-search.ts) over title, year, episode code, profile, quality and version: every word must match. */
+  q: ListSearchParam,
 });
 export type ProfileMismatchQuery = z.infer<typeof ProfileMismatchQuery>;
 

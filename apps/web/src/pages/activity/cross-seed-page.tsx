@@ -3,6 +3,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import type { CrossSeedResource, CrossSeedState } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { Button, Chip, EmptyState, ErrorBlock, PageHeader, Pane, Segmented, Table, type Column } from '../../arclight/index.js';
+import { ListSearchBar, ListSearchEmpty, useClientListSearch } from '../../components/list-search.js';
 import { crossSeedKeys, useCrossSeeds } from '../../hooks/cross-seed.js';
 import { useDownloadClientList } from '../../hooks/download-clients.js';
 import { formatDateTime, formatSize, relativeTime } from '../../lib/format.js';
@@ -33,6 +34,16 @@ export function CrossSeedActivityPage() {
   const qc = useQueryClient();
   const clientName = (id: number | null) => (id === null ? '—' : (clients.data?.find((c) => c.id === id)?.name ?? `#${id}`));
   const pending = list.error instanceof ApiError && list.error.status === 404;
+  // Search: release title, info-hash, indexer, client, save path, state and the failure message.
+  const search = useClientListSearch(list.data, (r) => [
+    r.title,
+    r.infoHash,
+    r.indexerName,
+    clientName(r.downloadClientId),
+    r.savePath,
+    crossSeedStateLabel(r.state),
+    r.message,
+  ]);
 
   const columns: Column<CrossSeedResource>[] = [
     { key: 'title', header: t('common.title'), sortValue: (r) => r.title, cell: (r) => <span className="al-activity-break">{r.title}</span> },
@@ -81,6 +92,9 @@ export function CrossSeedActivityPage() {
         />
       </PageHeader>
       <Pane flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <ListSearchBar value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.releases')} shown={search.shown} total={search.total} />
+        </div>
         {pending ? (
           <div className="al-activity-pad">
             <PendingApiNotice what={t('nav.crossSeeds')} />
@@ -95,12 +109,18 @@ export function CrossSeedActivityPage() {
           <Table
             caption={t('nav.crossSeeds')}
             columns={columns}
-            rows={list.data}
+            rows={search.rows}
             rowKey={(r) => r.id}
             loading={list.isPending}
             density="rich"
             defaultSort={{ key: 'added', direction: 'desc' }}
-            empty={<EmptyState title={t('activity.crossSeed.empty')}>{t('activity.crossSeed.emptyBody')}</EmptyState>}
+            empty={
+              search.active ? (
+                <ListSearchEmpty query={search.q} onClear={search.clear} />
+              ) : (
+                <EmptyState title={t('activity.crossSeed.empty')}>{t('activity.crossSeed.emptyBody')}</EmptyState>
+              )
+            }
           />
         )}
       </Pane>

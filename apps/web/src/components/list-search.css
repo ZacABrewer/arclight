@@ -1,0 +1,8 @@
+/* List-page search (components/list-search.tsx). The box also carries the shared `.mk-search`. */
+.al-listsearch { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; min-width: 0; }
+.al-listsearch__input { min-width: 220px; flex: 1 1 260px; max-width: 420px; }
+.al-listsearch__count { white-space: nowrap; }
+@media (max-width: 767.98px) {
+  .al-listsearch { gap: 8px; }
+  .al-listsearch__input { min-width: 0; width: 100%; max-width: none; flex: 1 1 100%; }
+}

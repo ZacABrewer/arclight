@@ -1,4 +1,5 @@
 import { useReducer, useState } from 'react';
+import { filterListSearch, type ListSearchField } from '@arclight/shared';
 import { Link } from '@tanstack/react-router';
 import type { QueueItem, QueueRemoveOptions, QueueSortKey } from '@arclight/shared';
 import {
@@ -20,6 +21,7 @@ import {
   type RowKey,
   type SortState,
 } from '../../arclight/index.js';
+import { resolveStatus, statusLabel } from '../../arclight/tokens.js';
 import { errorMessage } from '../../api/client.js';
 import { useToast } from '../../components/toast.js';
 import { useGrabQueueItem, useQueue, useQueueStatus, useRemoveQueueItems } from '../../hooks/activity.js';
@@ -33,6 +35,8 @@ import { ActivityHeader, formatBytes, formatEta } from './activity-shared.js';
 import { needsManualImport } from './manual-import/mapping.js';
 import { QueueRowControls, SlowModeControl, useQueueEngineBulk } from './queue-controls.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
+import { useAudioNames } from './audio-names.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
 import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
@@ -122,6 +126,39 @@ export function RemoveQueueDialog({
   );
 }
 
+/**
+ * GET /queue has no text search, so a search loads the whole queue in one request (the
+ * contract's largest page) and filters and pages it here. Queues are live downloads, far
+ * below this in practice.
+ */
+export const QUEUE_SEARCH_PAGE_SIZE = 1000;
+
+/** The row's status chip: key ("stalled") and its visible label. */
+function queueChipStatus(r: QueueItem): string[] {
+  const chip = queueChip(r);
+  const key = resolveStatus(chip.status);
+  return key ? [chip.status, statusLabel(key)] : [chip.status];
+}
+
+/** What a queue row is searched by: release name, media title, client, state and messages. */
+export function queueSearchFields(r: QueueItem, mediaTitle: string | undefined, audioNames: readonly string[]): ListSearchField[] {
+  return [
+    r.title,
+    mediaTitle,
+    audioNames,
+    r.downloadClientName,
+    r.protocol,
+    r.status,
+    r.trackedState,
+    r.trackedStatus,
+    r.stateReason,
+    // The chip as shown ("Stalled", "Importing", "No peers"): its status key, label and cause.
+    queueChipStatus(r),
+    queueChip(r).cause,
+    r.statusMessages.flatMap((m) => [m.title, ...m.messages]),
+  ];
+}
+
 /** Id of a row's expanded detail panel (the Info button's aria-controls). */
 const detailId = (id: number) => `queue-detail-${id}`;
 
@@ -150,9 +187,18 @@ export function QueuePage() {
       else next.add(id);
       return next;
     });
+  const search = useListSearch();
+  // A new search starts on page 1 with nothing selected.
+  const [seenQ, setSeenQ] = useState(search.q);
+  if (seenQ !== search.q) {
+    setSeenQ(search.q);
+    setPage(1);
+    setSelected(new Set());
+  }
   const engine = useTorrentStatus();
   const vpn = useVpnStatus();
-  const query = { page, pageSize, sortKey: sort.key as QueueSortKey, sortDirection: sort.direction, includeUnknownMediaItems: includeUnknown };
+  const sortQuery = { sortKey: sort.key as QueueSortKey, sortDirection: sort.direction, includeUnknownMediaItems: includeUnknown };
+  const query = search.active ? { page: 1, pageSize: QUEUE_SEARCH_PAGE_SIZE, ...sortQuery } : { page, pageSize, ...sortQuery };
   const queue = useQueue(query);
   const status = useQueueStatus();
   const remove = useRemoveQueueItems();
@@ -168,15 +214,22 @@ export function QueuePage() {
   /** Rows downloaded by the built-in engine get a detail drawer. */
   const isBuiltin = (r: QueueItem) => r.downloadClientId !== null && builtinIds.has(r.downloadClientId) && !isPendingItem(r);
 
-  const records = queue.data?.records ?? [];
-  const pageCount = queue.data ? Math.max(1, Math.ceil(queue.data.totalRecords / pageSize)) : 1;
+  const fetched = queue.data?.records ?? [];
+  const audioNames = useAudioNames(
+    fetched.map((r) => r.artistId),
+    fetched.map((r) => r.authorId),
+  );
+  const mediaTitle = (r: QueueItem) =>
+    r.seriesId !== undefined ? seriesTitles.get(r.seriesId) : r.movieId !== undefined ? movieTitles.get(r.movieId) : undefined;
+  const matched = search.active ? filterListSearch(fetched, search.q, (r) => queueSearchFields(r, mediaTitle(r), audioNames.of(r))) : fetched;
+  // Searching: the matching rows of the whole queue, paged here. Else the server's page.
+  const records = search.active ? matched.slice((page - 1) * pageSize, page * pageSize) : fetched;
+  const total = search.active ? matched.length : (queue.data?.totalRecords ?? 0);
+  const pageCount = queue.data ? Math.max(1, Math.ceil(total / pageSize)) : 1;
   // Only rows on this page count (the Table drops off-page keys the same way).
   const selectedItems = records.filter((r) => selected.has(r.id));
   const selectedPending = selectedItems.filter(isPendingItem);
   const engineBulk = useQueueEngineBulk(selectedItems);
-
-  const mediaTitle = (r: QueueItem) =>
-    r.seriesId !== undefined ? seriesTitles.get(r.seriesId) : r.movieId !== undefined ? movieTitles.get(r.movieId) : undefined;
 
   const columns: Column<QueueItem>[] = [
     {
@@ -289,6 +342,15 @@ export function QueuePage() {
       <EngineTransferSection engine={engine.data ?? undefined} />
       <DiskGuardBanner guard={status.data?.diskGuard} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <ListSearchBar
+            value={search.q}
+            onChange={search.setQ}
+            placeholder={t('listSearch.ph.releases')}
+            shown={queue.data ? matched.length : undefined}
+            total={queue.data?.totalRecords}
+          />
+        </div>
         {queue.isError ? (
           <div className="al-activity-pad">
             <ErrorBlock title={t('activity.queue.couldntLoadTheQueue')} onRetry={() => void queue.refetch()}>
@@ -300,7 +362,7 @@ export function QueuePage() {
             caption={t('activity.queue.downloadQueue')}
             density="rich"
             columns={columns}
-            rows={queue.data?.records}
+            rows={queue.data ? records : undefined}
             rowKey={(r) => r.id}
             rowLabel={(r) => t('activity.queue.selectTitle', { title: r.title })}
             loading={queue.isPending}
@@ -320,7 +382,13 @@ export function QueuePage() {
                 <QueueRowControls item={r} />
               </>
             )}
-            empty={<EmptyState title={t('activity.queue.queueIsEmpty')}>{t('activity.queue.grabbedReleasesShowUpHere')}</EmptyState>}
+            empty={
+              search.active ? (
+                <ListSearchEmpty query={search.q} onClear={search.clear} />
+              ) : (
+                <EmptyState title={t('activity.queue.queueIsEmpty')}>{t('activity.queue.grabbedReleasesShowUpHere')}</EmptyState>
+              )
+            }
           />
         )}
         <BulkBar

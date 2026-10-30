@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { useState } from 'react';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
-import type { QueueItem } from '@arclight/shared';
+import { QUALITIES, matchesListSearch, type QueueItem } from '@arclight/shared';
 import { DEFAULT_HISTORY_FILTER, historyQuery, type HistoryFilter, type HistoryRecord } from '../../api/history.js';
 import { Trail } from '../../arclight/index.js';
 import { ToastProvider } from '../../components/toast.js';
@@ -11,9 +11,10 @@ import { createQueryClient } from '../../query-client.js';
 import { formatEta } from './activity-shared.js';
 import { HistoryDetails, HistoryFilterBar, redownloadTarget, toggleEventType } from './history-page.js';
 import { DelayCountdown, formatDelay } from './pending-page.js';
-import { QueueChipCell, RemoveQueueDialog } from './queue-page.js';
+import { QueueChipCell, RemoveQueueDialog, queueSearchFields } from './queue-page.js';
 import { initialRemoveState, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { causeFromMessage, qualityFromTitle, queueChip, queueTrailState, trailState } from './queue-status.js';
+import { renderAt, stubApi } from '../../test/route-harness.js';
 
 const item = (over: Partial<QueueItem> = {}): QueueItem => ({
   id: 1,
@@ -46,6 +47,14 @@ describe('queue chip', () => {
     // A failure without messages still says why.
     expect(queueChip(item({ status: 'failed', trackedStatus: 'error' }))).toMatchObject({ status: 'failed', cause: 'client error' });
     expect(queueChip(item({ trackedState: 'failedPending', trackedStatus: 'error' }))).toMatchObject({ status: 'failed', cause: 'import failed' });
+  });
+
+  it('queue search matches the status chip ("stalled", "no peers") as well as the row text', () => {
+    const stalled = item({ trackedStatus: 'warning', statusMessages: msg('Download', 'No connected peers.') });
+    const fields = queueSearchFields(stalled, undefined, []);
+    expect(matchesListSearch('stalled', fields)).toBe(true);
+    expect(matchesListSearch('no peers', fields)).toBe(true);
+    expect(matchesListSearch('stalled', queueSearchFields(item({}), undefined, []))).toBe(false);
   });
 
   it('labels stalled downloads and blocked imports with their cause', () => {
@@ -304,5 +313,133 @@ describe('formatEta', () => {
   it('formats milliseconds as h:mm:ss', () => {
     expect(formatEta(3_725_000)).toBe('1:02:05');
     expect(formatEta(undefined)).toBe('—');
+  });
+});
+
+// ---------------------------------------------------------------------------------------
+// List search (Queue, History, Pending) over the stubbed api
+// ---------------------------------------------------------------------------------------
+
+const searchCount = () => document.querySelector('.al-listsearch__count')?.textContent ?? undefined;
+const searchBox = () => screen.findByRole('searchbox', { name: 'Search this list' }, { timeout: 5000 });
+
+describe('queue search', () => {
+  const rows = [
+    item({ id: 1, title: 'Show.S01E01.1080p.WEB-DL', downloadClientName: 'qBit' }),
+    item({ id: 2, title: 'Heat.1995.2160p.BluRay', downloadClientName: 'SABnzbd', protocol: 'usenet' }),
+    item({ id: 3, title: 'Other.S02E05.720p', downloadClientName: 'qBit', trackedStatus: 'warning', statusMessages: msg('Import', 'Sample file detected') }),
+  ];
+  const queueUrls: URL[] = [];
+
+  function stubQueue() {
+    queueUrls.length = 0;
+    return stubApi({
+      '/api/v1/queue': (_init: RequestInit | undefined, url: URL) => {
+        queueUrls.push(url);
+        return { page: 1, pageSize: Number(url.searchParams.get('pageSize')), sortKey: 'added', sortDirection: 'desc', totalRecords: rows.length, records: rows };
+      },
+      '/api/v1/queue/status': { totalCount: 3, errors: 0, warnings: 1, unknownCount: 0 },
+      '/api/v1/downloadclient': [],
+      '/api/v1/series': [],
+      '/api/v1/movie': [],
+    });
+  }
+
+  it('filters by release name, client and status message, shows "N of M" and clears', async () => {
+    stubQueue();
+    renderAt('/activity/queue');
+    const table = await screen.findByRole('table', { name: 'Download queue' }, { timeout: 5000 });
+    await within(table).findByText('Heat.1995.2160p.BluRay');
+
+    fireEvent.change(await searchBox(), { target: { value: 'sabnzbd' } });
+    await waitFor(() => expect(within(table).queryByText('Show.S01E01.1080p.WEB-DL')).toBeNull());
+    expect(within(table).getByText('Heat.1995.2160p.BluRay')).toBeTruthy();
+    expect(searchCount()).toBe('1 of 3');
+    // A search loads the whole queue (one large page) and pages the matches itself.
+    await waitFor(() => expect(queueUrls.at(-1)?.searchParams.get('pageSize')).toBe('1000'));
+
+    // Words match across fields; dots count as spaces; status messages are searched.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: 'other sample' } });
+    await within(table).findByText('Other.S02E05.720p');
+    await waitFor(() => expect(within(table).queryByText('Heat.1995.2160p.BluRay')).toBeNull());
+
+    // Select all picks the matching rows only.
+    fireEvent.click(within(table).getAllByRole('checkbox')[0]!);
+    expect(await screen.findByText(/1 selected/)).toBeTruthy();
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: 'nothing-like-this' } });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }, { timeout: 5000 }));
+    await within(table).findByText('Show.S01E01.1080p.WEB-DL');
+    expect(within(table).getByText('Heat.1995.2160p.BluRay')).toBeTruthy();
+    expect(searchCount()).toBeUndefined();
+  });
+});
+
+describe('history search', () => {
+  it('sends q with the other filters, keeps them on a new search and resets to page 1', async () => {
+    const urls: URL[] = [];
+    stubApi({
+      '/api/v1/history': (_init: RequestInit | undefined, url: URL) => {
+        urls.push(url);
+        const page = Number(url.searchParams.get('page'));
+        return {
+          page,
+          pageSize: 25,
+          totalRecords: 60,
+          records: [{ id: page, eventType: 'grabbed', sourceTitle: `Show.S01E0${page}.1080p`, date: '2026-10-25T10:00:00.000Z' }],
+        };
+      },
+    });
+    renderAt('/activity/history?q=show');
+    await screen.findByText('Show.S01E01.1080p', {}, { timeout: 5000 });
+    expect(urls.at(-1)!.searchParams.get('q')).toBe('show');
+    expect((await searchBox() as HTMLInputElement).value).toBe('show');
+    expect(searchCount()).toBe('60 results');
+
+    fireEvent.change(screen.getByRole('combobox', { name: 'Event type' }), { target: { value: 'grabbed' } });
+    await waitFor(() => expect(urls.at(-1)!.searchParams.get('eventType')).toBe('grabbed'));
+    expect(urls.at(-1)!.searchParams.get('q')).toBe('show');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    await screen.findByText('Show.S01E02.1080p');
+
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: 'show s01' } });
+    await waitFor(() => expect(urls.at(-1)!.searchParams.get('q')).toBe('show s01'));
+    const last = urls.at(-1)!;
+    expect(last.searchParams.get('page')).toBe('1');
+    expect(last.searchParams.get('eventType')).toBe('grabbed');
+    expect((screen.getByRole('combobox', { name: 'Event type' }) as HTMLSelectElement).value).toBe('grabbed');
+  });
+});
+
+describe('pending search', () => {
+  it('filters the held releases by indexer and title', async () => {
+    const pendingRow = (id: number, title: string, indexerName: string) => ({
+      id,
+      guid: `g${id}`,
+      indexerId: 1,
+      indexerName,
+      title,
+      protocol: 'torrent',
+      size: 1000,
+      publishDate: '2026-10-25T10:00:00.000Z',
+      mediaType: 'series',
+      seriesId: 1,
+      quality: { quality: { ...QUALITIES['WEBDL-1080p'], mediaTypes: [...QUALITIES['WEBDL-1080p'].mediaTypes] }, revision: { version: 1, real: 0, isRepack: false } },
+      customFormatScore: 0,
+      reason: 'delay',
+      added: '2026-10-25T10:00:00.000Z',
+      eligibleAt: '2099-10-25T10:00:00.000Z',
+      remainingMinutes: 60,
+    });
+    stubApi({
+      '/api/v1/release/pending': [pendingRow(1, 'Show.S01E01.1080p', 'TrackerA'), pendingRow(2, 'Show.S01E02.1080p', 'TrackerB')],
+      '/api/v1/series': [],
+      '/api/v1/movie': [],
+    });
+    renderAt('/activity/pending?q=trackerb');
+    await screen.findByText('Show.S01E02.1080p', {}, { timeout: 5000 });
+    expect(screen.queryByText('Show.S01E01.1080p')).toBeNull();
+    expect(searchCount()).toBe('1 of 2');
   });
 });

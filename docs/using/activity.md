@@ -4,6 +4,22 @@ Activity is where you watch Arclight work: what is downloading right now, what h
 
 The sub-pages are **Queue**, **History**, **Blocklist**, **Pending**, **Cross-seeds**, **Transcode jobs** and **Manual import**.
 
+### Searching a list
+
+Every Activity list has a search box at the top of the list. Type a few words: every word has to match somewhere in the row (in any order), case does not matter, and dots, dashes and underscores count as spaces, so `show s01e02` finds `Show.S01E02.1080p-GRP`. The count next to the box shows how many rows match ("3 of 40", or "12 results" on History and Blocklist, which search on the server across all pages). A new search goes back to page 1 and clears the selection, and **Select all** only selects the matching rows. Press Escape in the box or **Clear search** to see everything again. The search is kept in the address (`?q=`), so a reload or a shared link shows the same results.
+
+What each list searches:
+
+| List | Matches |
+| --- | --- |
+| Queue | release name, series / movie / artist / album / author / book, download client, protocol, status, and the status and error messages |
+| History | release name, the series / movie / artist / album / author / book it is for, episode, indexer, download client, release group, download id, event type and message (combined with the Event type filter) |
+| Blocklist | release name, the series / movie / artist / album / author / book it is for, episode, indexer and reason |
+| Pending | release name, series / movie / artist / book, indexer, protocol, quality and reason |
+| Cross-seeds | release name, info-hash, indexer, client, save path, state and message |
+| Transcode jobs | file path, rule, trigger, status and message |
+| Manual import | in the Files and Mapping steps: file path, the matched series / movie, quality, release group and rejection or mapping problems (music: also track tags, artist and album; audiobooks: whole books by author, title or any part) |
+
 ## Queue
 
 **Activity > Queue** lists everything that has been sent to a download client and has not finished importing. Releases you grab show up here while they download and then import. When nothing is there it says "Queue is empty".

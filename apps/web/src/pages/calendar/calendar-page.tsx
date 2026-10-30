@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { listSearchTokens, matchesListSearch } from '@arclight/shared';
 import { API_BASE } from '../../api/client.js';
 import {
   Banner,
@@ -26,6 +27,7 @@ import { useAutomaticSearch } from '../../hooks/library.js';
 import { useCalendar, useCalendarFeed, useRegenerateCalendarFeed } from '../../hooks/library-calendar.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { useAuth } from '../../auth/auth-context.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { formatDate as formatPreferredDate, hourLabel, type TimeFormat, type WeekStartDay } from '../../lib/ui-preferences.js';
 import {
   gridRange,
@@ -82,7 +84,12 @@ export function CalendarPage() {
   const days = useMemo(() => viewDays(view === 'agenda' ? 'month' : view, anchor, weekStart), [view, anchor, weekStart]);
   const range = useMemo(() => gridRange(days), [days]);
   const calendar = useCalendar(range.start, range.end, unmonitored);
-  const byDay = useMemo(() => groupByDay(calendar.data ?? [], new Date(), prefs.timeFormat), [calendar.data, prefs.timeFormat]);
+  const allByDay = useMemo(() => groupByDay(calendar.data ?? [], new Date(), prefs.timeFormat), [calendar.data, prefs.timeFormat]);
+  // Text search (`?q=`) over the loaded range: series / movie / album / book title, episode or
+  // album title, episode code. Client-side, every view shows only the matching entries.
+  const search = useListSearch();
+  const found = useMemo(() => filterByDay(allByDay, search.q), [allByDay, search.q]);
+  const byDay = found.byDay;
   const today = new Date();
   const title = viewTitle(view, anchor, days);
   const popover = { openKey, setOpenKey };
@@ -112,10 +119,21 @@ export function CalendarPage() {
 
       {calendar.data === null ? <Banner tone="warn">{t('calendar.theCalendarEndpointIsNot')}</Banner> : null}
 
+      <ListSearchBar
+        className="cal-search"
+        value={search.q}
+        onChange={search.setQ}
+        placeholder={t('listSearch.ph.titles')}
+        shown={found.shown}
+        total={found.total}
+      />
+
       {calendar.isError ? (
         <QueryError error={calendar.error} onRetry={() => void calendar.refetch()} title={t('calendar.couldNotLoadTheCalendar')} />
       ) : calendar.isPending ? (
         <Loading />
+      ) : search.active && found.shown === 0 ? (
+        <ListSearchEmpty query={search.q} onClear={search.clear} />
       ) : view === 'month' && !mobile ? (
         <MonthGrid days={days} anchor={anchor} today={today} byDay={byDay} popover={popover} weekStart={weekStart} />
       ) : view === 'week' || view === 'day' ? (
@@ -127,6 +145,22 @@ export function CalendarPage() {
       <ICalDialog open={icalOpen} onClose={() => setIcalOpen(false)} />
     </div>
   );
+}
+
+/** The entries of each day that match the search; the map itself when the search is blank. */
+export function filterByDay(byDay: Map<string, CalendarEntry[]>, q: string): { byDay: Map<string, CalendarEntry[]>; shown: number; total: number } {
+  let total = 0;
+  for (const list of byDay.values()) total += list.length;
+  const words = listSearchTokens(q);
+  if (words.length === 0) return { byDay, shown: total, total };
+  const out = new Map<string, CalendarEntry[]>();
+  let shown = 0;
+  for (const [day, list] of byDay) {
+    const kept = list.filter((e) => matchesListSearch(words, [e.title, e.subtitle, e.code]));
+    if (kept.length) out.set(day, kept);
+    shown += kept.length;
+  }
+  return { byDay: out, shown, total };
 }
 
 function Legend() {

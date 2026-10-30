@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ListSearchParam } from './list-search.js';
 import { AudioMediaType, GrabOverride, Paged, Ratings, SortOrder } from './library.js';
 import { QualityModel } from './quality.js';
 import { SECRET_MASK } from './settings.js';
@@ -502,6 +503,8 @@ export type AlbumDetails = z.infer<typeof AlbumDetails>;
 export const WantedAlbumsQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type WantedAlbumsQuery = z.infer<typeof WantedAlbumsQuery>;
 

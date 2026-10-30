@@ -30,6 +30,7 @@ let calls: Array<{ url: string; method: string; body: unknown }>;
 
 beforeEach(() => {
   calls = [];
+  scan = [file];
   vi.stubGlobal(
     'fetch',
     vi.fn(async (input: string, init?: RequestInit) => {
@@ -39,7 +40,7 @@ beforeEach(() => {
       const path = url.split('?')[0]!;
       const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200 });
       if (path === '/api/v1/queue') return json({ page: 1, pageSize: 100, sortKey: 'added', sortDirection: 'desc', totalRecords: 0, records: [] });
-      if (path === '/api/v1/manualimport' && method === 'GET') return json([file]);
+      if (path === '/api/v1/manualimport' && method === 'GET') return json(scan);
       if (path === '/api/v1/manualimport' && method === 'POST') {
         return json({ imported: [{ path: file.path, mediaFileId: 5, destination: '/tv/Show/Season 01/Show - S01E01.mkv' }], failed: [] });
       }
@@ -50,16 +51,19 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllGlobals());
 
-function renderWizard() {
+let scan: ManualImportItem[] = [file];
+
+function renderWizard(path = '/activity/manual-import') {
   const root = createRootRoute();
   const wizard = createRoute({ getParentRoute: () => root, path: '/activity/manual-import', validateSearch: parseManualImportSearch, component: ManualImportPage });
   const queue = createRoute({ getParentRoute: () => root, path: '/activity/queue', component: () => <p>Queue page</p> });
-  const router = createRouter({ routeTree: root.addChildren([wizard, queue]), history: createMemoryHistory({ initialEntries: ['/activity/manual-import'] }) });
+  const router = createRouter({ routeTree: root.addChildren([wizard, queue]), history: createMemoryHistory({ initialEntries: [path] }) });
   render(
     <QueryClientProvider client={createQueryClient()}>
       <RouterProvider router={router} />
     </QueryClientProvider>,
   );
+  return router;
 }
 
 function currentStep(): string {
@@ -122,5 +126,41 @@ describe('manual import wizard', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Back' }));
     await waitFor(() => expect(currentStep()).toBe('Path'));
     expect((screen.getByRole('textbox', { name: 'Folder' }) as HTMLInputElement).value).toBe('');
+  });
+});
+
+describe('manual import file search', () => {
+  const second: ManualImportItem = { ...file, path: '/dl/Show.S01E02.mkv', relativePath: 'Show.S01E02.mkv', name: 'Show.S01E02.mkv', episodeIds: [11] };
+
+  it('filters the file list, keeps the wizard source in the URL, and select all takes the matches only', async () => {
+    scan = [file, second];
+    const router = renderWizard('/activity/manual-import?folder=%2Fdl&q=s01e02');
+    const found = await screen.findByRole('table', { name: 'Files found' }, { timeout: 5000 });
+    expect(within(found).getByText('Show.S01E02.mkv')).toBeTruthy();
+    expect(within(found).queryByText('Show.S01E01.mkv')).toBeNull();
+    expect(document.querySelector('.al-listsearch__count')?.textContent).toBe('1 of 2');
+    expect(router.state.location.search).toMatchObject({ folder: '/dl', q: 's01e02' });
+
+    // Mapping: unselect all (the visible match only), the hidden file stays selected.
+    fireEvent.click(cont());
+    const table = screen.getByRole('table', { name: 'Files to import' });
+    fireEvent.click(within(table).getAllByRole('checkbox')[0]!);
+    expect((within(table).getByRole('checkbox', { name: 'Import Show.S01E02.mkv' }) as HTMLInputElement).checked).toBe(false);
+
+    // Clearing the search keeps the source and the step.
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search this list' }), { target: { value: '' } });
+    expect(await within(table).findByText('Show.S01E01.mkv', {}, { timeout: 5000 })).toBeTruthy();
+    expect((within(table).getByRole('checkbox', { name: 'Import Show.S01E01.mkv' }) as HTMLInputElement).checked).toBe(true);
+    expect(router.state.location.search).toEqual({ folder: '/dl' });
+    expect(currentStep()).toBe('Mapping');
+    expect(calls.filter((c) => c.method === 'GET' && c.url.startsWith('/api/v1/manualimport'))).toHaveLength(1);
+  });
+
+  it('start over drops the search with the source', async () => {
+    const router = renderWizard('/activity/manual-import?folder=%2Fdl&q=show');
+    await screen.findByRole('table', { name: 'Files found' }, { timeout: 5000 });
+    fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+    await waitFor(() => expect(currentStep()).toBe('Path'));
+    expect(router.state.location.search).toEqual({});
   });
 });

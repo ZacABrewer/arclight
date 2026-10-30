@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { AudioManualImportQueryInput, AudioManualImportResult, ImportMode } from '@arclight/shared';
+import { matchesListSearch, type AudioManualImportQueryInput, type AudioManualImportResult, type ImportMode } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import {
   Button,
@@ -21,6 +21,8 @@ import {
   type Column,
 } from '../../../arclight/index.js';
 import { EntityPicker } from '../../../components/entity-picker.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../../components/list-search.js';
+import { useAudioNames } from '../audio-names.js';
 import { formatDuration } from '../../library/music/music-model.js';
 import { useAlbum, useArtistAlbums, useArtistList, useUpdateAlbum } from '../../../hooks/music.js';
 import { useAudioImport, useAudioImportScan } from '../../../hooks/music-acquisition.js';
@@ -109,29 +111,43 @@ function UnmatchedList({ files }: { files: AudioFileRow[] }) {
   );
 }
 
-function AudioFilesStep({ groups }: { groups: AudioGroupState[] }) {
+/** A search's view of the groups: the matching files of each group with any (all when blank). */
+export interface AudioSearchView {
+  toolbar?: ReactNode;
+  /** Matching files per group key; groups without an entry are hidden. */
+  visible: Map<string, AudioFileRow[]>;
+  empty?: ReactNode;
+}
+
+function AudioFilesStep({ groups, view }: { groups: AudioGroupState[]; view?: AudioSearchView | undefined }) {
   const files = groups.reduce((n, g) => n + g.files.length, 0);
   const mapped = groups.reduce((n, g) => n + g.files.filter(isMapped).length, 0);
+  const shown = view ? groups.filter((g) => view.visible.has(g.key)) : groups;
+  const unmatched = view ? shown.flatMap((g) => unmatchedFiles({ ...g, files: view.visible.get(g.key) ?? [] })) : groups.flatMap(unmatchedFiles);
   return (
     <div className="al-mi-step">
       <p className="al-activity-muted">
         {t('activity.manualImport.audio.foundSummary', { files, albums: groups.length, mapped })}
       </p>
-      {groups.length ? (
+      {view?.toolbar}
+      {shown.length ? (
         <ul className="al-mi-list" aria-label={t('activity.manualImport.audio.albumsFound')}>
-          {groups.map((g) => (
+          {shown.map((g) => (
             <GroupSummary key={g.key} group={g} />
           ))}
         </ul>
-      ) : null}
-      <UnmatchedList files={groups.flatMap(unmatchedFiles)} />
+      ) : (
+        view?.empty
+      )}
+      <UnmatchedList files={unmatched} />
     </div>
   );
 }
 
 // ---- Mapping: artist / album / release pickers and the track table ------------------------
 
-function GroupMapping({ group, dispatch }: { group: AudioGroupState; dispatch: (a: AudioAction) => void }) {
+/** `files`: the rows the track table shows (a search's matches); the whole group otherwise. */
+function GroupMapping({ group, dispatch, files }: { group: AudioGroupState; dispatch: (a: AudioAction) => void; files?: AudioFileRow[] | undefined }) {
   const artists = useArtistList();
   const albums = useArtistAlbums(group.artistId);
   const album = useAlbum(group.albumId ?? 0);
@@ -270,7 +286,7 @@ function GroupMapping({ group, dispatch }: { group: AudioGroupState; dispatch: (
       <Table
         caption={t('activity.manualImport.audio.trackMapping', { name })}
         columns={columns}
-        rows={group.files}
+        rows={files ?? group.files}
         rowKey={(f) => f.path}
         sortable={false}
         density="dense"
@@ -279,12 +295,14 @@ function GroupMapping({ group, dispatch }: { group: AudioGroupState; dispatch: (
   );
 }
 
-function AudioMappingStep({ groups, dispatch }: { groups: AudioGroupState[]; dispatch: (a: AudioAction) => void }) {
+function AudioMappingStep({ groups, dispatch, view }: { groups: AudioGroupState[]; dispatch: (a: AudioAction) => void; view?: AudioSearchView | undefined }) {
+  const shown = view ? groups.filter((g) => view.visible.has(g.key)) : groups;
   return (
     <div className="al-mi-step">
-      {groups.map((g) => (
-        <GroupMapping key={g.key} group={g} dispatch={dispatch} />
-      ))}
+      {view?.toolbar}
+      {shown.length
+        ? shown.map((g) => <GroupMapping key={g.key} group={g} dispatch={dispatch} files={view?.visible.get(g.key)} />)
+        : view?.empty}
     </div>
   );
 }
@@ -337,6 +355,29 @@ export function AudioImportWizard({ query, sourceLabel, onStartOver }: { query: 
 
   const count = importableCount(state);
   const index = AUDIO_STEPS.findIndex((s) => s.id === step);
+  // File search: path, title tag, quality, rejections and the group's folder, artist and album.
+  const listSearch = useListSearch();
+  const names = useAudioNames(
+    state.groups.map((g) => g.artistId),
+    [],
+  );
+  const totalFiles = state.groups.reduce((n, g) => n + g.files.length, 0);
+  let view: AudioSearchView | undefined;
+  if (state.groups.length) {
+    const visible = new Map<string, AudioFileRow[]>();
+    let shown = 0;
+    for (const g of state.groups) {
+      const groupFields = [g.folder, names.artist(g.artistId), names.album(g.artistId, g.albumId)];
+      const files = listSearch.active ? g.files.filter((f) => matchesListSearch(listSearch.q, [...groupFields, f.relativePath, f.tagTitle, f.qualityName, f.rejections, f.warnings])) : g.files;
+      if (files.length || (!listSearch.active && g.files.length === 0)) visible.set(g.key, files);
+      shown += files.length;
+    }
+    view = {
+      visible,
+      toolbar: <ListSearchBar value={listSearch.q} onChange={listSearch.setQ} placeholder={t('listSearch.ph.files')} shown={shown} total={totalFiles} />,
+      empty: listSearch.active ? <ListSearchEmpty query={listSearch.q} onClear={listSearch.clear} /> : undefined,
+    };
+  }
   const goTo = (s: AudioStep) => (s === 'path' ? onStartOver() : setStep(s));
 
   let body: ReactNode;
@@ -353,7 +394,7 @@ export function AudioImportWizard({ query, sourceLabel, onStartOver }: { query: 
       );
     else if (state.groups.length === 0)
       body = <EmptyState title={t('activity.manualImport.audio.noAudioFound')}>{t('activity.manualImport.audio.noAudioFoundHint')}</EmptyState>;
-    else body = step === 'files' ? <AudioFilesStep groups={state.groups} /> : <AudioMappingStep groups={state.groups} dispatch={dispatch} />;
+    else body = step === 'files' ? <AudioFilesStep groups={state.groups} view={view} /> : <AudioMappingStep groups={state.groups} dispatch={dispatch} view={view} />;
     if (step === 'files') {
       canContinue = state.groups.length > 0;
       onContinue = () => setStep('mapping');

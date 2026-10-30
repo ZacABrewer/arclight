@@ -23,10 +23,14 @@ import {
   type DuplicateGroup,
 } from './hygiene-model.js';
 import { MapDialog } from './map-dialog.js';
+import { HealthPanel, HealthScanButton } from './health-panel.js';
+import { useHealthFindings } from '../../../hooks/health-scan.js';
 import './hygiene.css';
 import { t } from '../../../i18n/index.js';
 
-type TabId = 'orphan' | 'duplicate' | 'empty';
+type TabId = 'orphan' | 'duplicate' | 'empty' | 'health';
+
+const TAB_IDS: readonly TabId[] = ['orphan', 'duplicate', 'empty', 'health'];
 
 interface DeleteTarget {
   /** Bulk: delete through the batch hook (one refresh at the end). */
@@ -190,7 +194,12 @@ export function HygienePage() {
   const del = useHygieneDelete();
   const bulkDel = useHygieneBulkDelete();
   const toast = useToast();
-  const [tab, setTab] = useState<TabId>('orphan');
+  // ?tab=health opens the Health tab (links from notifications).
+  const [tab, setTab] = useState<TabId>(() => {
+    const wanted = typeof window === 'undefined' ? null : new URLSearchParams(window.location.search).get('tab');
+    return TAB_IDS.find((id) => id === wanted) ?? 'orphan';
+  });
+  const health = useHealthFindings({ status: 'open' });
   const [mapping, setMapping] = useState<HygieneFinding | null>(null);
   const [deleting, setDeleting] = useState<DeleteTarget | null>(null);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
@@ -243,7 +252,9 @@ export function HygienePage() {
     });
   };
 
-  const body = findings.isError ? (
+  const body = tab === 'health' ? (
+    <HealthPanel />
+  ) : findings.isError ? (
     <ErrorBlock title={t('library.hygiene.couldntLoadTheHygieneFindings')} onRetry={() => void findings.refetch()} />
   ) : findings.isPending ? (
     <Skeleton lines={5} />
@@ -290,7 +301,9 @@ export function HygienePage() {
         index="02"
         title={t('common.hygiene')}
         subtitle={
-          lastScan ? (
+          tab === 'health' ? (
+            t('library.health.subtitle')
+          ) : lastScan ? (
             <>
               {t('library.hygiene.lastScan')} <time dateTime={lastScan}>{relativeTime(lastScan)}</time>
             </>
@@ -299,13 +312,17 @@ export function HygienePage() {
           )
         }
         actions={
-          <Button
-            variant="primary"
-            loading={scan.isPending}
-            onClick={() => scan.mutate(undefined, { onSuccess: () => toast.push({ tone: 'info', title: t('library.hygiene.scanStarted'), message: t('library.hygiene.findingsRefreshWhenTheScan') }) })}
-          >
-            {t('library.hygiene.scanNow')}
-          </Button>
+          tab === 'health' ? (
+            <HealthScanButton />
+          ) : (
+            <Button
+              variant="primary"
+              loading={scan.isPending}
+              onClick={() => scan.mutate(undefined, { onSuccess: () => toast.push({ tone: 'info', title: t('library.hygiene.scanStarted'), message: t('library.hygiene.findingsRefreshWhenTheScan') }) })}
+            >
+              {t('library.hygiene.scanNow')}
+            </Button>
+          )
         }
       />
       <div className="hyg-stack">
@@ -317,12 +334,13 @@ export function HygienePage() {
             { id: 'orphan', label: t('library.hygiene.orphans'), count: counts?.orphan },
             { id: 'duplicate', label: t('library.hygiene.duplicates'), count: counts?.duplicate },
             { id: 'empty', label: t('library.hygiene.emptyFolders'), count: counts?.empty },
+            { id: 'health', label: t('library.health.tab'), count: health.data?.counts.open },
           ]}
         />
         {body}
       </div>
       <MapDialog finding={mapping} onClose={() => setMapping(null)} />
-      {tab !== 'duplicate' ? (
+      {tab === 'orphan' || tab === 'empty' ? (
         <BulkBar
           count={selectedFindings.length}
           actions={[

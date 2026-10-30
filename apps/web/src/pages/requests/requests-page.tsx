@@ -24,6 +24,7 @@ import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/med
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useSelection } from '../../components/bulk-actions.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
+import { ListSearchEmpty, ListSearchInput, useListSearch } from '../../components/list-search.js';
 import { useRequestBulkActions, type RequestBulkVerb } from './request-bulk.js';
 import { titleLink } from '../../features/requests/title-link.js';
 import { HeldChip } from '../../features/requests/policy-drawer.js';
@@ -42,7 +43,7 @@ import {
 import { useFeatures } from '../../hooks/music.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { ApproveDialog } from './approve-dialog.js';
-import { AudioRequestTable } from './audio-request-list.js';
+import { AudioRequestTable, RequestSearchCount } from './audio-request-list.js';
 import '../../components/media/media-kit.css';
 import { t } from '../../i18n/index.js';
 
@@ -79,6 +80,10 @@ export function RequestsPage() {
   const mediaOptions = requestMediaOptions(features);
   // A flag turned off while its list was open falls back to movies and series.
   const mediaType = mediaOptions.some((o) => o.value === picked) ? picked : 'all';
+  // Text search (`?q=`): title, requester, status, matched by the server. The lists are keyed by
+  // it, so a new query starts over at the first page with nothing selected.
+  const search = useListSearch();
+  const listKey = `${tab}-${mediaType}-${search.q}`;
 
   return (
     <>
@@ -88,6 +93,7 @@ export function RequestsPage() {
         subtitle={can(Permission.MANAGE_REQUESTS, Permission.REQUEST_VIEW) ? t('requests.everyonesRequests') : t('requests.yourRequests')}
         actions={
           <>
+            <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.requests')} />
             <Select
               aria-label={t('requests.mediaTypeFilter')}
               value={mediaType}
@@ -103,17 +109,26 @@ export function RequestsPage() {
         <Tabs compact aria-label={t('requests.requestStatus')} value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((item) => ({ id: item.id, label: item.label }))} />
       </PageHeader>
       {mediaType === 'music' || mediaType === 'audiobook' ? (
-        <AudioRequestTable key={`${tab}-${mediaType}`} filter={tab} domain={mediaType} manage={manage} />
+        <AudioRequestTable key={listKey} filter={tab} domain={mediaType} manage={manage} q={search.q} onClearSearch={search.clear} />
       ) : (
-        <RequestList key={`${tab}-${mediaType}`} filter={tab} mediaType={mediaType} manage={manage} />
+        <RequestList key={listKey} filter={tab} mediaType={mediaType} manage={manage} q={search.q} onClearSearch={search.clear} />
       )}
     </>
   );
 }
 
-function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; mediaType: VideoFilter; manage: boolean }) {
+interface RequestListProps {
+  filter: RequestFilter;
+  mediaType: VideoFilter;
+  manage: boolean;
+  /** The page's text search (blank = every request). */
+  q?: string | undefined;
+  onClearSearch?: (() => void) | undefined;
+}
+
+function RequestList({ filter, mediaType, manage, q = '', onClearSearch }: RequestListProps) {
   const [page, setPage] = useState(0);
-  const query: RequestListQuery = { filter, mediaType, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'added', sortDirection: 'desc' };
+  const query: RequestListQuery = { filter, mediaType, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'added', sortDirection: 'desc', q: q || undefined };
   const list = useRequests(query);
   const bulk = {
     approve: useBulkRequestAction('approve'),
@@ -163,8 +178,13 @@ function RequestList({ filter, mediaType, manage }: { filter: RequestFilter; med
 
   return (
     <>
+      <RequestSearchCount q={q} total={pageInfo.total} />
       {results.length === 0 ? (
-        <EmptyState title={t('requests.noRequests')}>{t('requests.requestsMadeFromDiscoverShow')}</EmptyState>
+        q ? (
+          <ListSearchEmpty query={q} onClear={() => onClearSearch?.()} />
+        ) : (
+          <EmptyState title={t('requests.noRequests')}>{t('requests.requestsMadeFromDiscoverShow')}</EmptyState>
+        )
       ) : mobile ? (
         <div className="mk-mlist">
           {results.map((r) => (

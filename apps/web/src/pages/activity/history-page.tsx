@@ -15,6 +15,7 @@ import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { useToast } from '../../components/toast.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSelection } from '../../components/bulk-actions.js';
+import { ListSearchCount, ListSearchEmpty, ListSearchInput, useListSearch } from '../../components/list-search.js';
 import { useHistory, useMarkHistoryFailed, useRedownloadHistory } from '../../hooks/activity.js';
 import { formatDateTime, languageNames, relativeTime } from '../../lib/format.js';
 import { PendingApiNotice } from '../settings/shared.js';
@@ -52,14 +53,28 @@ export function activeHistoryFilters(filter: HistoryFilter): number {
   );
 }
 
-export function HistoryFilterBar({ filter, onChange }: { filter: HistoryFilter; onChange: (f: HistoryFilter) => void }) {
+/** The list search inside the filter bar: the URL query, its setter and the server's match count. */
+export interface HistorySearchBox {
+  q: string;
+  setQ: (q: string) => void;
+  /** Matching records (the server total) once loaded. */
+  results?: number | undefined;
+}
+
+export function HistoryFilterBar({ filter, onChange, search }: { filter: HistoryFilter; onChange: (f: HistoryFilter) => void; search?: HistorySearchBox }) {
   // One event type at a time from the select; a multi-type filter (set elsewhere) shows as "Several".
   const eventValue = filter.eventTypes.length === 0 ? '' : filter.eventTypes.length === 1 ? filter.eventTypes[0]! : '__many';
+  const searching = Boolean(search?.q);
   return (
     <FilterBar
-      activeCount={activeHistoryFilters(filter)}
-      onClear={() => onChange({ ...DEFAULT_HISTORY_FILTER, pageSize: filter.pageSize })}
+      activeCount={activeHistoryFilters(filter) + (searching ? 1 : 0)}
+      onClear={() => {
+        onChange({ ...DEFAULT_HISTORY_FILTER, pageSize: filter.pageSize });
+        if (searching) search?.setQ('');
+      }}
+      end={search ? <ListSearchCount active={searching} shown={search.results} /> : undefined}
     >
+      {search ? <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.releases')} /> : null}
       <Select
         aria-label={t('activity.history.eventType')}
         value={eventValue}
@@ -255,13 +270,21 @@ const historyColumns = (onOpen: (r: HistoryRecord) => void): Column<HistoryRecor
 
 export function HistoryPage() {
   const search = historyRoute.useSearch();
-  const searchKey = JSON.stringify(search);
+  const listSearch = useListSearch();
+  // The list search lives in the URL too, but typing must not count as a new deep link.
+  const { q: _q, ...deepLink } = search;
+  const searchKey = JSON.stringify(deepLink);
   const [filter, setFilter] = useState<HistoryFilter>(() => historyFilterFromSearch(search));
   // A new deep link while the page is open replaces the filter.
   const [seenSearch, setSeenSearch] = useState(searchKey);
   if (seenSearch !== searchKey) {
     setSeenSearch(searchKey);
     setFilter(historyFilterFromSearch(search));
+  }
+  // A new search keeps the other filters and goes back to page 1.
+  if ((filter.q ?? '') !== listSearch.q) {
+    const { q: _old, ...rest } = filter;
+    setFilter({ ...rest, page: 1, ...(listSearch.q ? { q: listSearch.q } : {}) });
   }
   const [open, setOpen] = useState<HistoryRecord | null>(null);
   const history = useHistory(filter);
@@ -274,7 +297,11 @@ export function HistoryPage() {
       <ActivityHeader active="history" />
       <Pane flush bare className="al-activity-pane">
         <div className="al-activity-filters">
-          <HistoryFilterBar filter={filter} onChange={setFilter} />
+          <HistoryFilterBar
+            filter={filter}
+            onChange={(f) => setFilter({ ...f, ...(listSearch.q ? { q: listSearch.q } : {}) })}
+            search={{ q: listSearch.q, setQ: listSearch.setQ, results: history.data?.totalRecords }}
+          />
         </div>
         {pending ? (
           <div className="al-activity-pad">
@@ -298,7 +325,13 @@ export function HistoryPage() {
               onRowClick={setOpen}
               {...tableSelection(selection)}
               rowLabel={(r) => t('components.bulkActions.selectName', { name: r.sourceTitle })}
-              empty={<EmptyState title={t('activity.history.noHistoryYet')}>{t('activity.history.grabsImportsAndFailuresAre')}</EmptyState>}
+              empty={
+                listSearch.active ? (
+                  <ListSearchEmpty query={listSearch.q} onClear={listSearch.clear} />
+                ) : (
+                  <EmptyState title={t('activity.history.noHistoryYet')}>{t('activity.history.grabsImportsAndFailuresAre')}</EmptyState>
+                )
+              }
             />
             {history.data && history.data.totalRecords > filter.pageSize ? (
               <footer className="al-activity-foot">

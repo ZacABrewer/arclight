@@ -343,6 +343,15 @@ describe('audio requests: reading, sync and cleanup', () => {
     expect(h.audio.count(h.user.actor)).toEqual({ total: 1, music: 1, audiobook: 0, pending: 1 });
     const theirs = h.audio.list(h.admin.actor, { domain: 'audiobook' }).results[0]!;
     expect(() => h.audio.get(h.user.actor, theirs.id)).toThrow(RequestsError);
+    // Text search: title, kind, status and the requester's names (not emails); scope applies.
+    h.db.update(users).set({ displayName: 'Book Lover', email: 'private@example.invalid' }).where(eq(users.id, other.id)).run();
+    const titles = (q: string, actor = h.admin.actor) => h.audio.list(actor, { q }).results.map((r) => r.title);
+    expect(titles('ok.computer')).toEqual(['OK Computer']);
+    expect(titles('book lover')).toEqual([theirs.title]);
+    expect(titles('album pending')).toEqual(['OK Computer']);
+    expect(titles('private')).toEqual([]);
+    expect(titles(theirs.title, h.user.actor)).toEqual([]);
+    expect(h.audio.list(h.admin.actor, { q: 'pending', take: 1 }).pageInfo.total).toBe(2);
   });
 
   it('owners delete their pending requests; managers delete any', async () => {

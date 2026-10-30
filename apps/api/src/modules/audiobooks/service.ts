@@ -34,6 +34,7 @@ import {
 import { toIsbn13 as isbn13Of, type CatalogAuthor, type CatalogAuthorWithBooks, type CatalogBook } from '@arclight/metadata';
 import { isQualityCutoffMet } from '@arclight/profiles-engine';
 import type { Db } from '../../db/index.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import {
   audioFiles,
   audioImportExclusions,
@@ -1176,12 +1177,26 @@ function paginate<T>(items: T[], q: WantedBooksQuery): { page: number; pageSize:
   return { page: q.page, pageSize: q.pageSize, totalRecords: items.length, records: items.slice(start, start + q.pageSize) };
 }
 
-function monitoredBooksOfMonitoredAuthors(db: AudiobookDb) {
+/**
+ * The `q` text search of the Wanted book lists: title, subtitle, the owning author's name, every
+ * credited author and the series the book belongs to.
+ */
+export function wantedBookSearchCondition(q: string | null | undefined): SQL | undefined {
+  return listSearchCondition(q, [
+    books.title,
+    books.subtitle,
+    authors.name,
+    sql`(select group_concat(q_a.name, ' | ') from book_authors q_ba join authors q_a on q_a.id = q_ba.author_id where q_ba.book_id = ${books.id})`,
+    sql`(select group_concat(q_s.name, ' | ') from book_series_entries q_e join book_series q_s on q_s.id = q_e.series_id where q_e.book_id = ${books.id})`,
+  ]);
+}
+
+function monitoredBooksOfMonitoredAuthors(db: AudiobookDb, search?: string) {
   return db
     .select({ book: books, author: authors })
     .from(books)
     .innerJoin(authors, eq(books.authorId, authors.id))
-    .where(and(eq(books.monitored, true), eq(authors.monitored, true)))
+    .where(and(eq(books.monitored, true), eq(authors.monitored, true), wantedBookSearchCondition(search)))
     .orderBy(desc(books.releaseDate), asc(authors.sortName), asc(books.sortTitle), asc(books.id))
     .all();
 }
@@ -1196,7 +1211,7 @@ function toWanted(db: AudiobookDb, rows: ReadonlyArray<{ book: BookRow; author: 
 
 /** Monitored books (of monitored authors) that are released and have no file. Newest first. */
 export function listMissingBooks(db: AudiobookDb, q: WantedBooksQuery, now: Date = new Date()): WantedBooksPage {
-  const rows = monitoredBooksOfMonitoredAuthors(db).filter((r) => !r.book.hasFile && isReleased(r.book.releaseDate, now));
+  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => !r.book.hasFile && isReleased(r.book.releaseDate, now));
   const page = paginate(rows, q);
   return { ...page, records: toWanted(db, page.records) };
 }
@@ -1204,7 +1219,7 @@ export function listMissingBooks(db: AudiobookDb, q: WantedBooksQuery, now: Date
 /** Monitored books with files whose lowest file quality is below the author's profile cutoff. */
 export function listCutoffUnmetBooks(db: AudiobookDb, q: WantedBooksQuery, profiles: readonly QualityProfile[]): WantedBooksPage {
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const rows = monitoredBooksOfMonitoredAuthors(db).filter((r) => r.book.hasFile);
+  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => r.book.hasFile);
   if (rows.length === 0) return paginate([], q);
   const files = db
     .select({ bookId: audioFiles.bookId, quality: audioFiles.quality })

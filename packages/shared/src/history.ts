@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { AnyMediaType, MediaType, SortOrder } from './library.js';
 import { LanguageCode, ReleaseProtocol } from './profiles.js';
 import { QualityModel } from './quality.js';
+import { ListSearchParam } from './list-search.js';
 
 // History (the user-visible activity log) and the blocklist (releases that must not be
 // grabbed again). See docs/spec/history-and-blocklist.md.
@@ -165,8 +166,10 @@ export const HistoryListQuery = z.object({
   includeSeries: queryBool.default(false),
   includeEpisode: queryBool.default(false),
   includeMovie: queryBool.default(false),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
-export type HistoryListQuery = z.infer<typeof HistoryListQuery>;
+export type HistoryListQuery =z.infer<typeof HistoryListQuery>;
 export type HistoryListQueryInput = z.input<typeof HistoryListQuery>;
 
 export const HistoryPage = z.object({
@@ -294,6 +297,8 @@ export const BlocklistListQuery = z.object({
   artistId: intList,
   authorId: intList,
   protocol: listOf(ReleaseProtocol),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type BlocklistListQuery = z.infer<typeof BlocklistListQuery>;
 export type BlocklistListQueryInput = z.input<typeof BlocklistListQuery>;

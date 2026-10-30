@@ -106,9 +106,9 @@ describe('app shell', () => {
     fireEvent.keyDown(document.body, { key: '/' });
     const dialog = await screen.findByRole('dialog', { name: 'Search' });
     fireEvent.change(within(dialog).getByRole('combobox', { name: 'Search' }), { target: { value: 'tasks' } });
-    const settings = await within(dialog).findByRole('group', { name: 'Settings' });
-    expect(within(settings).getByRole('option', { name: /Tasks/ })).toBeTruthy();
-    expect(within(dialog).getByRole('group', { name: 'People' })).toBeTruthy();
+    const system = await within(dialog).findByRole('group', { name: 'System' });
+    expect(within(system).getByRole('option', { name: /Tasks/ })).toBeTruthy();
+    expect(within(dialog).getByRole('option', { name: /Find people named "tasks"/ })).toBeTruthy();
     expect(within(dialog).getByRole('option', { name: /Search indexers for "tasks"/ })).toBeTruthy();
   });
 

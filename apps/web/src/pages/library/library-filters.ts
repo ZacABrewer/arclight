@@ -99,6 +99,13 @@ export function movieRow(m: Movie): LibraryRow {
 
 export type MonitoredFilter = 'all' | 'monitored' | 'unmonitored';
 
+/** The `?tag=ID` search param as a tag id, or null. */
+export function tagFromSearch(search: unknown): number | null {
+  const raw = search && typeof search === 'object' ? (search as Record<string, unknown>)['tag'] : undefined;
+  const n = typeof raw === 'number' ? raw : typeof raw === 'string' ? Number(raw) : NaN;
+  return Number.isInteger(n) && n > 0 ? n : null;
+}
+
 export interface LibraryFilters {
   search: string;
   monitored: MonitoredFilter;

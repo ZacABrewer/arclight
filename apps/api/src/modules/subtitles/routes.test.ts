@@ -95,6 +95,22 @@ describe('subtitles routes', () => {
     expect(movies.json().records[0]).toMatchObject({ title: 'Test Movie', episodeLabel: null });
   });
 
+  it('wanted takes a q text search over title, episode and missing languages', async () => {
+    const { app } = await build();
+    const get = async (q: string, mediaType = 'series') =>
+      (await app.inject({ method: 'GET', url: `/api/v1/subtitle/wanted?mediaType=${mediaType}&q=${encodeURIComponent(q)}` })).json();
+    expect(await get('test show')).toMatchObject({ totalRecords: 3 });
+    expect((await get('S01E02')).records.map((r: { episodeLabel: string }) => r.episodeLabel)).toEqual(['S01E02']);
+    expect((await get('show s01e02')).totalRecords).toBe(1);
+    expect((await get('english')).totalRecords).toBe(3); // missing language name
+    expect((await get('french')).totalRecords).toBe(0);
+    expect((await get('test.movie', 'movie')).totalRecords).toBe(1);
+    expect((await get('test show', 'movie')).totalRecords).toBe(0);
+    const paged = await app.inject({ method: 'GET', url: '/api/v1/subtitle/wanted?mediaType=series&pageSize=2&page=2&q=show' });
+    expect(paged.json()).toMatchObject({ totalRecords: 3, page: 2 });
+    expect(paged.json().records).toHaveLength(1);
+  });
+
   it('upload takes multipart form data and writes the file', async () => {
     const { app, files, videos } = await build();
     const body = multipart({ mediaFileId: String(files.movie), language: 'en', forced: 'false', hi: 'false' }, { name: 'mine.srt', content: SRT });

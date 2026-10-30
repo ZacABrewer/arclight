@@ -28,7 +28,8 @@ import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js
 import { countStatuses, episodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, formatBytes, formatDate, imageUrl, seasonLabel } from '../../components/media/format.js';
 import { FoundInLists } from '../../components/media/found-in-lists.js';
-import { EpisodeChip, Loading, MonitorSwitch, Num, QueryError, SwipeRow, TagChips, qualityName, useIsMobile } from '../../components/media/media-kit.js';
+import { EpisodeChip, Loading, MonitorSwitch, Num, QueryError, SwipeRow, qualityName, useIsMobile } from '../../components/media/media-kit.js';
+import { AutoTagChips } from '../../components/media/auto-tag-chips.js';
 import { groupSearchText, QueueStateChip, SearchStatusLines, searchStatusTitle } from '../../components/media/pipeline-status.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useQueueSummary } from '../../hooks/activity.js';
@@ -70,11 +71,13 @@ import { InteractiveSearchModal, ReleaseTable } from './interactive-search.js';
 import { SceneMappingPanel } from './scene-mapping/scene-mapping-panel.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
+import { ItemHealthPanel, useCanSeeHealth } from './item-health.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { EpisodeVersionFiles, VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
 import { t } from '../../i18n/index.js';
+import { usePaletteContext } from '../../features/command-palette/registry.js';
 
 const route = getRouteApi('/library/series/$id');
 
@@ -101,6 +104,7 @@ export function seasonSummary(season: Season, episodes: readonly Episode[] | und
 }
 
 export function SeriesDetailsPage() {
+  const canSeeHealth = useCanSeeHealth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const series = useSeries(id);
@@ -119,6 +123,7 @@ export function SeriesDetailsPage() {
   const navigate = useNavigate();
   const queue = useQueueSummary();
 
+  usePaletteContext(series.data ? { subject: { kind: 'series', id: series.data.id, title: series.data.title, year: series.data.year } } : null);
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.seriesDetails.invalidSeriesIdRawid', { rawId }))} title={t('library.seriesDetails.seriesNotFound')} />;
   if (series.isPending) return <Loading />;
   if (series.isError) return <QueryError error={series.error} onRetry={() => void series.refetch()} title={t('library.seriesDetails.couldNotLoadThisSeries')} />;
@@ -152,7 +157,7 @@ export function SeriesDetailsPage() {
             <QueueStateChip items={(queue.data ?? []).filter((i) => i.seriesId === s.id)} large />
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
             <span className="al-chip al-chip--nodot al-chip--lg">{SERIES_TYPE_LABELS[s.seriesType]}</span>
-            <TagChips ids={s.tags} tags={tags.data} />
+            <AutoTagChips entityType="series" entityId={s.id} ids={s.tags} tags={tags.data} />
           </>
         }
         facts={
@@ -209,6 +214,7 @@ export function SeriesDetailsPage() {
             count: files.data?.length,
             content: <MediaFilesTable files={files.data} error={files.error} loading={files.isPending} mediaType="series" ownerId={s.id} />,
           },
+          ...(canSeeHealth ? [{ id: 'health', label: t('library.health.tab'), content: <ItemHealthPanel scope={{ seriesId: s.id }} /> }] : []),
           { id: 'history', label: t('common.history'), content: <HistoryTable scope={{ seriesId: s.id }} /> },
           { id: 'decisions', label: t('library.decisions.tab'), content: <DecisionsPanel scope={{ seriesId: s.id }} /> },
           { id: 'search', label: t('common.search'), content: <SearchTab target={{ seriesId: s.id }} /> },

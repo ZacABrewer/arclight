@@ -3,6 +3,7 @@ import { Link } from '@tanstack/react-router';
 import type { ProfileFileStatus, ProfileMismatchRecord } from '@arclight/shared';
 import { Button, EmptyState, Pane, Paginator, Segmented, Table, type Column } from '../../arclight/index.js';
 import { Loading, QueryError, useIsMobile } from '../../components/media/media-kit.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { replacementText } from '../../components/media/pipeline-status.js';
 import { fitReasonLabel, ProfileFitChip, queueStateLabel } from '../../components/media/profile-fit.js';
 import { useAutomaticSearch } from '../../hooks/library.js';
@@ -52,7 +53,20 @@ const STATUS_FILTERS: Record<StatusFilter, ProfileFileStatus[]> = {
 export function ProfileMismatchList({ kind }: { kind: 'episodes' | 'movies' }) {
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<StatusFilter>('notAllowed');
-  const query = { page, pageSize: PAGE_SIZE, mediaType: kind === 'episodes' ? ('series' as const) : ('movie' as const), status: STATUS_FILTERS[filter] };
+  // Server-side text search (`?q=`, shared with the other Wanted lists): a new query starts at page 1.
+  const searchState = useListSearch();
+  const [seenQ, setSeenQ] = useState(searchState.q);
+  if (seenQ !== searchState.q) {
+    setSeenQ(searchState.q);
+    setPage(1);
+  }
+  const query = {
+    page,
+    pageSize: PAGE_SIZE,
+    mediaType: kind === 'episodes' ? ('series' as const) : ('movie' as const),
+    status: STATUS_FILTERS[filter],
+    ...(searchState.q ? { q: searchState.q } : {}),
+  };
   const list = useProfileMismatch(query);
   const search = useAutomaticSearch();
   const mobile = useIsMobile();
@@ -112,7 +126,9 @@ export function ProfileMismatchList({ kind }: { kind: 'episodes' | 'movies' }) {
   ];
 
   const noun = kind === 'episodes' ? t('common.episodes') : t('common.movies');
-  const empty = (
+  const empty = searchState.active ? (
+    <ListSearchEmpty query={searchState.q} onClear={searchState.clear} />
+  ) : (
     <EmptyState title={t('profileMigration.wanted.emptyTitle')}>{t('profileMigration.wanted.emptyBody')}</EmptyState>
   );
 
@@ -136,6 +152,13 @@ export function ProfileMismatchList({ kind }: { kind: 'episodes' | 'movies' }) {
         />
       }
     >
+      <ListSearchBar
+        className="wanted-search"
+        value={searchState.q}
+        onChange={searchState.setQ}
+        placeholder={t('listSearch.ph.mismatch')}
+        shown={list.isPending ? undefined : list.data?.totalRecords}
+      />
       {mobile ? (
         list.isPending ? (
           <Loading />

@@ -6,7 +6,8 @@ import { BulkBar, type BulkAction } from '../../../components/media/bulk-bar.js'
 import { useBulkSelection } from '../../../hooks/bulk.js';
 import { DeleteMediaDialog } from '../../../components/media/delete-media-dialog.js';
 import { formatBytes } from '../../../components/media/format.js';
-import { Loading, MonitorSwitch, QueryError, TagChips } from '../../../components/media/media-kit.js';
+import { Loading, MonitorSwitch, QueryError } from '../../../components/media/media-kit.js';
+import { AutoTagChips } from '../../../components/media/auto-tag-chips.js';
 import { TagPicker } from '../../../components/media/tag-picker.js';
 import { useRootFolders, useTags } from '../../../hooks/library.js';
 import {
@@ -44,6 +45,7 @@ import {
 import '../library.css';
 import './music.css';
 import { t } from '../../../i18n/index.js';
+import { usePaletteContext } from '../../../features/command-palette/registry.js';
 
 const route = getRouteApi('/library/music/artist/$id');
 
@@ -71,6 +73,7 @@ function ArtistDetailsView() {
   const [interactive, setInteractive] = useState(false);
   const search = useMusicSearch();
 
+  usePaletteContext(artist.data ? { subject: { kind: 'artist', id: artist.data.id, title: artist.data.name } } : null);
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('music.invalidArtistId', { rawId }))} title={t('music.artistNotFound')} />;
   if (artist.isPending) return <Loading />;
   if (artist.isError) return <QueryError error={artist.error} onRetry={() => void artist.refetch()} title={t('music.couldNotLoadThisArtist')} />;
@@ -99,7 +102,7 @@ function ArtistDetailsView() {
             <StatusChip status={a.monitored ? 'monitored' : 'unmonitored'} large />
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
             {typeProfile ? <span className="al-chip al-chip--nodot al-chip--lg">{typeProfile.name}</span> : null}
-            <TagChips ids={a.tags} tags={tags.data} />
+            <AutoTagChips entityType="artist" entityId={a.id} ids={a.tags} tags={tags.data} />
           </>
         }
         facts={

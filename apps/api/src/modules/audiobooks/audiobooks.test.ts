@@ -487,6 +487,25 @@ describe('rescan, statistics and wanted', () => {
     expect((await h.api('GET', '/wanted/missing/books')).json().totalRecords).toBe(0);
   });
 
+  it('wanted books: q matches title, author name and series name', async () => {
+    const added = await addWeir();
+    type Page = { totalRecords: number; records: Array<{ id: number; title: string; series: Array<{ name: string }> }> };
+    const get = async (url: string) => (await h.api('GET', url)).json() as Page;
+    const all = await get('/wanted/missing/books?pageSize=100');
+    const phm = book(added, 'Project Hail Mary');
+    expect((await get('/wanted/missing/books?q=hail.mary')).records.map((r) => r.id)).toEqual([phm.id]);
+    expect((await get('/wanted/missing/books?pageSize=100&q=andy%20WEIR')).totalRecords).toBe(all.totalRecords);
+    const inSeries = all.records.filter((r) => r.series.some((s) => s.name === 'Forward Collection')).map((r) => r.id);
+    expect(inSeries.length).toBeGreaterThan(0);
+    expect((await get('/wanted/missing/books?pageSize=100&q=forward%20collection')).records.map((r) => r.id)).toEqual(inSeries);
+    expect((await get('/wanted/missing/books?q=weir%20nonexistent')).totalRecords).toBe(0);
+
+    writeLibrary(added.path);
+    await h.api('POST', '/command', { name: 'RescanAuthor', authorIds: [added.id] });
+    await h.idle();
+    expect((await get('/wanted/cutoff/books?q=martian')).records.map((r) => r.title)).toEqual(['The Martian']);
+  });
+
   it('matches folders by ASIN, then series and position, then title, preferring the kept language', () => {
     const books: KnownBook[] = [
       { id: 1, title: 'Artemis', subtitle: null, asin: 'B079LSG4Q9', language: 'german', monitored: true, series: [] },

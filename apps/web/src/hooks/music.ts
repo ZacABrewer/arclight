@@ -140,11 +140,14 @@ export function useAlbumTypeProfiles(enabled = true) {
   return useQuery({ queryKey: musicKeys.albumTypeProfiles, queryFn: musicApi.albumTypeProfiles.list, staleTime: 60_000, enabled });
 }
 
-export function useWantedAlbums(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true) {
+export function useWantedAlbums(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '') {
   return useQuery({
     enabled,
-    queryKey: musicKeys.wanted(mode, page, pageSize),
-    queryFn: () => (mode === 'missing' ? musicApi.wanted.missing({ page, pageSize }) : musicApi.wanted.cutoff({ page, pageSize })),
+    queryKey: musicKeys.wanted(mode, page, pageSize, q),
+    queryFn: () => {
+      const query = { page, pageSize, q: q || undefined };
+      return mode === 'missing' ? musicApi.wanted.missing(query) : musicApi.wanted.cutoff(query);
+    },
     placeholderData: keepPreviousData,
   });
 }

@@ -5,7 +5,8 @@ import { Button, Chip, FormRow, Input, KeyValue, Modal, QualityTag, Select, Stat
 import { DeleteMediaDialog } from '../../components/media/delete-media-dialog.js';
 import { formatBytes, imageUrl } from '../../components/media/format.js';
 import { FoundInLists } from '../../components/media/found-in-lists.js';
-import { Loading, MonitorSwitch, QueryError, TagChips, movieChip, qualityName } from '../../components/media/media-kit.js';
+import { Loading, MonitorSwitch, QueryError, movieChip, qualityName } from '../../components/media/media-kit.js';
+import { AutoTagChips } from '../../components/media/auto-tag-chips.js';
 import { QueueStateChip, SearchStatusLines } from '../../components/media/pipeline-status.js';
 import { TagPicker } from '../../components/media/tag-picker.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
@@ -27,12 +28,14 @@ import { DecisionsPanel } from './decisions/decisions-panel.js';
 import { InteractiveSearchModal } from './interactive-search.js';
 import { STATUS_LABELS } from './library-filters.js';
 import { MediaFilesTable } from './media-files-table.js';
+import { ItemHealthPanel, useCanSeeHealth } from './item-health.js';
 import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-search.js';
 import { SearchTab } from './series-details.js';
 import { VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
 import { t } from '../../i18n/index.js';
+import { usePaletteContext } from '../../features/command-palette/registry.js';
 
 const route = getRouteApi('/library/movie/$id');
 
@@ -58,6 +61,7 @@ export function releaseDates(m: Pick<Movie, 'inCinemas' | 'digitalRelease' | 'ph
 }
 
 export function MovieDetailsPage() {
+  const canSeeHealth = useCanSeeHealth();
   const { id: rawId } = route.useParams();
   const id = Number(rawId);
   const movie = useMovie(id);
@@ -76,6 +80,7 @@ export function MovieDetailsPage() {
   const progress = useQueueProgress(useMemo(() => ({ movieId: id }), [id]));
   const searchStatus = useSearchStatus('movie', Number.isInteger(id) && id > 0 ? [id] : []);
 
+  usePaletteContext(movie.data ? { subject: { kind: 'movie', id: movie.data.id, title: movie.data.title, year: movie.data.year } } : null);
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('library.movieDetails.invalidMovieIdRawid', { rawId }))} title={t('library.movieDetails.movieNotFound')} />;
   if (movie.isPending) return <Loading />;
   if (movie.isError) return <QueryError error={movie.error} onRetry={() => void movie.refetch()} title={t('library.movieDetails.couldNotLoadThisMovie')} />;
@@ -106,7 +111,7 @@ export function MovieDetailsPage() {
               {avail.label}
             </Chip>
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
-            <TagChips ids={m.tags} tags={tags.data} />
+            <AutoTagChips entityType="movie" entityId={m.id} ids={m.tags} tags={tags.data} />
           </>
         }
         facts={
@@ -179,6 +184,7 @@ export function MovieDetailsPage() {
             count: files.data?.length,
             content: <MediaFilesTable files={files.data} error={files.error} loading={files.isPending} mediaType="movie" ownerId={m.id} />,
           },
+          ...(canSeeHealth ? [{ id: 'health', label: t('library.health.tab'), content: <ItemHealthPanel scope={{ movieId: m.id }} /> }] : []),
           { id: 'history', label: t('common.history'), content: <HistoryTable scope={{ movieId: m.id }} /> },
           { id: 'decisions', label: t('library.decisions.tab'), content: <DecisionsPanel scope={{ movieId: m.id }} /> },
           { id: 'search', label: t('common.search'), content: <SearchTab target={{ movieId: m.id }} /> },

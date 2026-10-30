@@ -760,4 +760,48 @@ describe('wanted', () => {
     expect(unmet.records[0]!.statistics).toEqual({ sizeOnDisk: 5, movieFileCount: 1 });
     expect(svc.listCutoffUnmetMovies(db, { page: 1, pageSize: 10 }, () => true, NOW).totalRecords).toBe(0);
   });
+
+  it('missing / cutoff-unmet episodes: q matches series title, episode title and the s01e02 code', () => {
+    const s = addSeriesWith('all');
+    svc.addSeries(db, seriesMeta({ tmdbId: 2, tvdbId: null, title: 'Other Thing' }), addReq({ tmdbId: 2 }), NOW);
+    const s1 = svc.listEpisodes(db, { seriesId: s.id, seasonNumber: 1 });
+    giveFile(s.id, [s1[0]!.id], 1, 10);
+    giveFile(s.id, [s1[1]!.id], 1, 10);
+    const missing = (q: string | undefined, page = 1, pageSize = 50) =>
+      svc.listMissingEpisodes(db, { page, pageSize, includeSpecials: false, ...(q === undefined ? {} : { q }) }, NOW);
+    const keys = (p: ReturnType<typeof missing>) => p.records.map((e) => `${e.seriesTitle} ${e.seasonNumber}x${e.episodeNumber}`);
+    const all = missing(undefined).totalRecords;
+    expect(missing('example').totalRecords).toBe(4); // 2x1, 2x2, 3x1, 3x2 of The Example: Show
+    expect(missing('OTHER thing').totalRecords).toBe(all - 4);
+    expect(keys(missing('example s03e02'))).toEqual(['The Example: Show 3x2']);
+    expect(missing('s3e1').totalRecords).toBe(2); // episode title "S3E1" in both series
+    expect(missing('example nope').totalRecords).toBe(0);
+    expect(missing('%').totalRecords).toBe(0);
+    const paged = missing('example', 2, 3);
+    expect(paged.totalRecords).toBe(4);
+    expect(paged.records).toHaveLength(1);
+
+    const unmet = (q: string) =>
+      svc.listCutoffUnmetEpisodes(db, { page: 1, pageSize: 50, includeSpecials: false, q }, (f) => f.quality.quality.resolution >= 2160);
+    expect(unmet('example').records.map((e) => `${e.seasonNumber}x${e.episodeNumber}`).sort()).toEqual(['1x1', '1x2']);
+    expect(unmet('s01e02').records.map((e) => `${e.seasonNumber}x${e.episodeNumber}`)).toEqual(['1x2']);
+    expect(unmet('other').totalRecords).toBe(0);
+  });
+
+  it('missing / cutoff-unmet movies: q matches title, original title and year', () => {
+    const a = svc.addMovie(db, movieMeta({ originalTitle: 'Exemple: Deuxième partie' }), movieReq(), NOW);
+    const b = svc.addMovie(db, movieMeta({ tmdbId: 2002, title: 'Another Film', originalTitle: 'Another Film', year: 2019 }), movieReq({ tmdbId: 2002 }), NOW);
+    const ids = (q: string) => svc.listMissingMovies(db, { page: 1, pageSize: 10, q }, NOW).records.map((m) => m.id);
+    expect(ids('part ii')).toEqual([a.id]);
+    expect(ids('deuxième')).toEqual([a.id]);
+    expect(ids('2019')).toEqual([b.id]);
+    expect(ids('example.movie')).toEqual([a.id]);
+    expect(ids('part iii')).toEqual([]);
+    expect(ids('')).toEqual([b.id, a.id]);
+
+    svc.addMediaFile(db, { mediaType: 'movie', movieId: b.id, relativePath: 'b.mkv', path: join(movieRoot, 'b.mkv'), sizeBytes: 5, quality, languages: [] }, NOW);
+    const unmet = (q: string) => svc.listCutoffUnmetMovies(db, { page: 1, pageSize: 10, q }, () => false, NOW);
+    expect(unmet('another').records.map((m) => m.id)).toEqual([b.id]);
+    expect(unmet('example').totalRecords).toBe(0);
+  });
 });

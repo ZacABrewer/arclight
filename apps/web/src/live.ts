@@ -5,6 +5,7 @@ import { connectEvents } from './api/events.js';
 import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.js';
 import { isMusicJob, musicKeys } from './hooks/music-keys.js';
 import { audiobookKeys, isAudiobookJob } from './hooks/audiobook-keys.js';
+import { healthScanKeys, isHealthJob } from './hooks/health-scan.js';
 import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
 import { searchStatusKeys } from './hooks/search-status.js';
@@ -41,6 +42,8 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
           void qc.invalidateQueries({ queryKey: ['calendar'] });
         }
         // Same for audiobooks: AuthorAdd, RefreshAuthor(s), RescanAuthor, BookAdd.
+        // A finished health scan or item check changed the findings.
+        if (isHealthJob(event.job.name)) void qc.invalidateQueries({ queryKey: healthScanKeys.all });
         if (isAudiobookJob(event.job.name)) {
           void qc.invalidateQueries({ queryKey: audiobookKeys.all });
           void qc.invalidateQueries({ queryKey: ['wanted'] });

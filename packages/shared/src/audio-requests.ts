@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { AudibleRegion } from './audiobooks.js';
 import { MediaStatus, PageInfo, RequestStatus, RequestUser } from './requests.js';
+import { ListSearchParam } from './list-search.js';
 
 // Music and audiobook requests and their Discover catalogue (design music-audiobooks.md
 // section 11). Kept apart from `media_requests`, which is keyed on TMDB ids: audio requests live
@@ -184,6 +185,8 @@ export const AudioRequestListQuery = z.object({
   domain: z.enum(['all', 'music', 'audiobook']).default('all'),
   requestedBy: z.coerce.number().int().positive().optional(),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type AudioRequestListQuery = z.input<typeof AudioRequestListQuery>;
 

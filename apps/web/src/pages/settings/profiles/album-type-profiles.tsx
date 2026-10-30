@@ -9,6 +9,7 @@ import {
 import { errorMessage } from '../../../api/client.js';
 import { Button, Checkbox, Chip, ErrorBlock, Field, Input, Modal, Skeleton, Tag, Toggle } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
+import { ListSearchCount, ListSearchEmpty, useClientListSearch } from '../../../components/list-search.js';
 import { useAlbumTypeProfiles, useDeleteAlbumTypeProfile, useFeatures, useSaveAlbumTypeProfile } from '../../../hooks/music.js';
 import { albumTypeLabel } from '../../library/music/music-model.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, SaveError, SettingsSection } from '../shared.js';
@@ -138,15 +139,20 @@ export function AlbumTypeProfilesSection() {
 
 function AlbumTypeProfilesList() {
   const list = useAlbumTypeProfiles();
+  // The profiles page search: name and primary types.
+  const search = useClientListSearch(list.data, (p) => [p.name, p.primaryTypes.map(albumTypeLabel)]);
   const [editing, setEditing] = useState<AlbumTypeProfile | 'new' | null>(null);
   return (
     <SettingsSection
       label={t('music.typeProfiles.title')}
       {...(list.data ? { count: list.data.length } : {})}
       action={
-        <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
-          {t('music.typeProfiles.add')}
-        </Button>
+        <>
+          <ListSearchCount active={search.active} shown={list.data ? search.shown : undefined} total={search.total} />
+          <Button size="sm" variant="secondary" onClick={() => setEditing('new')}>
+            {t('music.typeProfiles.add')}
+          </Button>
+        </>
       }
     >
       {list.isPending ? (
@@ -155,9 +161,11 @@ function AlbumTypeProfilesList() {
         <ErrorBlock title={t('music.typeProfiles.couldNotLoad')} onRetry={() => void list.refetch()}>
           {errorMessage(list.error)}
         </ErrorBlock>
+      ) : search.active && search.shown === 0 && search.total > 0 ? (
+        <ListSearchEmpty query={search.q} onClear={search.clear} />
       ) : (
         <CardGrid label={t('music.typeProfiles.title')}>
-          {list.data.map((p) => (
+          {(search.rows ?? []).map((p) => (
             <ItemCard
               key={p.id}
               title={p.name}

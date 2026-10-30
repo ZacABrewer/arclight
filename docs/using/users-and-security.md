@@ -149,6 +149,10 @@ Checklist before you expose anything:
 
 Note: Cloudflare in front of Arclight is a different thing from Cloudflare protecting an indexer. If your indexers are blocked by Cloudflare challenges, see [Cloudflare and other browser challenges](../CLOUDFLARE.md).
 
+## Searching users
+
+A search box sits above the users table on Settings > Users once there is at least one. Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. The count next to the box shows how many match ("2 of 9"), **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`). It matches the user name, the display name, the role and the permission and app-access text. Email addresses are not searched.
+
 ## Bulk actions
 
 On Settings > Users, tick users to delete several at once (it asks first, with the count). Your own account and the last admin cannot be deleted; they are listed as failed in the result message.

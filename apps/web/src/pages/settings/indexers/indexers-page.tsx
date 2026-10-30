@@ -20,7 +20,8 @@ import {
 import { useFeatures } from '../../../hooks/music.js';
 import { formatDateTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
-import { CardGrid, EditorFooter, ItemCard, SaveError, type ItemCardSelect } from '../shared.js';
+import { CardGrid, EditorFooter, ItemCard, SaveError, SettingsListSearch, useTagNames, type ItemCardSelect } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { CatalogueChooser, SourceBadge } from './catalogue.js';
 import { presetTemplate } from './catalogue-model.js';
@@ -283,7 +284,21 @@ export function IndexersPage() {
   const openIndexer = (indexer: Indexer) => (indexer.implementation === 'definition' ? setDefinitionEditing({ indexer }) : setEditing({ indexer }));
   const [results, setResults] = useState<Record<number, IndexerTestAllItem>>({});
   const needsSolverIds = useSolverHints(list.data);
-  const bulk = useResourceBulk('indexer', list.data, (i) => i.id, (i) => i.name);
+  // Search: name, implementation / definition, protocol, tag names and the status text.
+  const tagNames = useTagNames();
+  const search = useClientListSearch(list.data, (i) => [
+    i.name,
+    i.implementation,
+    IMPLEMENTATION_LABELS[i.implementation],
+    i.definitionName,
+    i.settings.definitionId,
+    i.protocol,
+    tagNames(i.tags),
+    i.proxyNames,
+    indexerHealth(i).label,
+  ]);
+  // Select all picks the matching indexers only.
+  const bulk = useResourceBulk('indexer', search.rows, (i) => i.id, (i) => i.name);
 
   return (
     <SettingsPage
@@ -314,9 +329,9 @@ export function IndexersPage() {
       ) : list.data.length === 0 ? (
         <EmptyState title={t('settings.indexers.noIndexersYet')}>{t('settings.indexers.addATorznabOrNewznab')}</EmptyState>
       ) : (
-        <>
+        <SettingsListSearch search={search}>
           <CardGrid label={t('common.indexers')}>
-            {list.data.map((indexer) => (
+            {(search.rows ?? []).map((indexer) => (
               <IndexerCard
                 key={indexer.id}
                 indexer={indexer}
@@ -328,7 +343,7 @@ export function IndexersPage() {
             ))}
           </CardGrid>
           {bulk.bar}
-        </>
+        </SettingsListSearch>
       )}
       {picking ? (
         <IndexerChooser

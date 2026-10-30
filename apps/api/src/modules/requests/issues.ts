@@ -1,7 +1,8 @@
-import { and, asc, desc, eq, inArray, type SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, sql, type SQL } from 'drizzle-orm';
 import { CreateIssue, IssueListQuery, type Issue, type IssueCount, type IssuePage, type IssueStatus } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
+import { listSearchCondition } from '../../db/list-search.js';
 import type { EventBus } from '../../events.js';
 import { RequestsError } from './errors.js';
 import type { RequestNotifier } from './notify.js';
@@ -9,7 +10,7 @@ import { type Actor, canCreateIssues, canManageIssues, canViewAllIssues } from '
 import { issueComments, issues } from './schema.js';
 import type { TitleSource } from './service.js';
 import { libraryAvailability } from './status.js';
-import { ownerUser, requestUsers, userRow } from './users.js';
+import { ownerUser, requestUsers, userNameSearchColumns, userRow } from './users.js';
 
 // Issues (docs/spec/requests.md section 13): reports against a title with a comment thread,
 // open/resolved status and admin notifications.
@@ -129,6 +130,16 @@ export class IssuesService {
     if (q.tmdbId !== undefined) where.push(eq(issues.tmdbId, q.tmdbId));
     if (q.mediaType !== undefined) where.push(eq(issues.mediaType, q.mediaType));
     if (q.type !== undefined) where.push(eq(issues.type, q.type));
+    const search = listSearchCondition(q.q, [
+      issues.title,
+      issues.year,
+      issues.mediaType,
+      issues.type,
+      issues.status,
+      ...userNameSearchColumns(issues.createdById),
+      sql`(select group_concat(q_c.message, ' | ') from issue_comments q_c where q_c.issue_id = ${issues.id})`,
+    ]);
+    if (search) where.push(search);
     const rows = this.db
       .select()
       .from(issues)

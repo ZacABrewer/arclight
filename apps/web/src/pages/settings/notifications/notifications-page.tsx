@@ -21,7 +21,8 @@ import { TestButton, type TestOutcome } from '../../../components/forms/test-res
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { useDeleteNotification, useNotificationList, useNotificationSchema, useSaveNotification } from '../../../hooks/settings.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsListSearch, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { AlertSettingsSection } from './alert-settings-section.js';
 import './notifications.css';
@@ -341,7 +342,17 @@ export function NotificationsPage() {
   const schemas = useNotificationSchema();
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
-  const bulk = useResourceBulk('notification', list.data, (n) => n.id, (n) => n.name);
+  // Search: name, implementation and the triggers that are on.
+  const search = useClientListSearch(list.data, (n) => [
+    n.name,
+    n.implementation,
+    schemas.data?.find((s) => s.implementation === n.implementation)?.implementationName,
+    eventFlags(n)
+      .filter((f) => n[f] === true)
+      .map(flagTag),
+  ]);
+  // Select all picks the matching connections only.
+  const bulk = useResourceBulk('notification', search.rows, (n) => n.id, (n) => n.name);
   const pending = list.error instanceof ApiError && list.error.status === 404;
 
   return (
@@ -364,16 +375,16 @@ export function NotificationsPage() {
             {errorMessage(list.error)}
           </ErrorBlock>
         ) : (
-          <>
+          <SettingsListSearch search={search}>
             <CardGrid label={t('settings.notifications.connections')}>
-              {list.data.map((n) => {
+              {(search.rows ?? []).map((n) => {
                 const schema = schemas.data?.find((s) => s.implementation === n.implementation);
                 return <NotificationCard key={n.id} notification={n} schema={schema} onEdit={() => setEditing({ notification: n, schema })} select={bulk.cardProps(n)} />;
               })}
               <AddCard label={t('settings.notifications.addNotification')} onClick={() => setPicking(true)} />
             </CardGrid>
             {bulk.bar}
-          </>
+          </SettingsListSearch>
         )}
       </SettingsSection>
       <AlertSettingsSection />

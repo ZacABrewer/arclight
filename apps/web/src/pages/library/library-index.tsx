@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type CSSProperties } from 'react';
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import type { QualityProfile, QueueSummaryItem, RootFolder, Tag } from '@arclight/shared';
 import {
   Button,
@@ -64,6 +64,7 @@ import {
   seriesRow,
   sortLibraryRows,
   type LibraryFilters,
+  tagFromSearch,
   type LibraryKind,
   type LibraryRow,
   type LibrarySort,
@@ -153,7 +154,12 @@ export function LibraryIndexPage({ kind }: { kind: LibraryKind }) {
   const [columnsOverride, setColumns] = useSessionNumber('library.columns');
   const columns = columnsOverride ?? prefs.posterColumns;
   const [showFilters, setShowFilters] = usePersistent<boolean>('library.filters', true);
-  const [filters, setFilters] = useState<LibraryFilters>(DEFAULT_FILTERS);
+  // ?tag=ID (Settings → Tags "Show items") preselects the tag filter.
+  const searchTag = useRouterState({ select: (s) => tagFromSearch(s.location.search) });
+  const [filters, setFilters] = useState<LibraryFilters>(() => ({ ...DEFAULT_FILTERS, tagId: searchTag }));
+  useEffect(() => {
+    if (searchTag !== null) setFilters((f) => ({ ...f, tagId: searchTag }));
+  }, [searchTag]);
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<number>>(new Set());
 

@@ -45,7 +45,7 @@ export const activityKeys = {
   /** Library queue badges (GET /queue/summary). */
   queueSummary: ['queue', 'summary'] as const,
   history: (filter: unknown) => ['history', 'list', filter] as const,
-  blocklist: (page: number, pageSize: number) => ['history', 'blocklist', page, pageSize] as const,
+  blocklist: (page: number, pageSize: number, q = '') => ['history', 'blocklist', page, pageSize, q] as const,
 };
 
 export interface MutationOptions {

@@ -232,12 +232,17 @@ Settings > Cross-seed:
 
 Cross-seeds are listed under **Activity > Cross-seeds** with their state (Seeding or Failed), indexer, info-hash and save path. Hard links need the link folder on the same volume as the library.
 
+## Searching your indexers
+
+A search box sits above the indexer cards on Settings > Indexers (and /indexers) once there is at least one. Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. The count next to the box shows how many match ("2 of 9"), **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`). It matches the name, the kind (Torznab, Newznab, catalogue), the site definition, the protocol, tag names, proxy names and the status text (for example `failed` or `backing off`).
+
 ## Bulk actions
 
 Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection on Settings > Indexers: **Enable** and **Disable** (all three of RSS, automatic and interactive search), **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.
 
 ## Related
 
+- [Tags and tag rules](tags.md) (tags limit which items this applies to; rules can add them automatically)
 - [Download clients](download-clients.md)
 - [Quality profiles](quality-profiles.md)
 - [Interactive search](interactive-search.md)

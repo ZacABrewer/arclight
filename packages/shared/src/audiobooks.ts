@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ListSearchParam } from './list-search.js';
 import { Paged, Ratings, SortOrder } from './library.js';
 import { AudioFile } from './music.js';
 
@@ -470,6 +471,8 @@ export type BookSeriesDetails = z.infer<typeof BookSeriesDetails>;
 export const WantedBooksQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type WantedBooksQuery = z.infer<typeof WantedBooksQuery>;
 

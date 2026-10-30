@@ -429,6 +429,9 @@ export function wantsEvent(row: Pick<NotificationRow, NotificationTrigger | 'inc
     case 'retention':
       // Retention removes movies and series, so it follows the delete flags.
       return row.onMovieDelete || row.onSeriesDelete;
+    case 'healthScan':
+      // Broken library files are a health matter: they follow the health issue flag.
+      return row.onHealthIssue;
     case 'fileTranscoded':
       // The file on disk changed name/format in place, like a rename.
       return row.onRename;

@@ -84,6 +84,24 @@ export function languageKey(ref: { language: string; forced: boolean; hi: boolea
   return ref.language;
 }
 
+let englishNames: Intl.DisplayNames | null | undefined;
+
+/** English name of a language tag ("pt-BR" -> "Brazilian Portuguese"), the tag itself when unknown. */
+export function languageDisplayName(tag: string): string {
+  if (englishNames === undefined) {
+    try {
+      englishNames = new Intl.DisplayNames(['en'], { type: 'language' });
+    } catch {
+      englishNames = null;
+    }
+  }
+  try {
+    return englishNames?.of(tag) ?? tag;
+  } catch {
+    return tag;
+  }
+}
+
 /**
  * Entries still missing for a file. Cutoff (R3.8): when the cutoff item (or, with `*`, any
  * item) is satisfied nothing is wanted; null cutoff wants every entry.

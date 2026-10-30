@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ListSearchParam } from './list-search.js';
 
 // Logs contract: the in-memory ring buffer of recent log records, the rotating log files and
 // the live stream (GET /log/stream, one LogRecord JSON per WebSocket message).
@@ -35,7 +36,12 @@ export const LogQuery = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(1000).default(50),
   level: LogLevel.optional(),
-  search: z.string().trim().optional(),
+  /**
+   * Text search (list-search.ts) over message, component, level and context: every word must
+   * match. `q` is an alias; when both are given, the words of both must match.
+   */
+  search: ListSearchParam,
+  q: ListSearchParam,
 });
 export type LogQuery = z.infer<typeof LogQuery>;
 export type LogQueryInput = z.input<typeof LogQuery>;

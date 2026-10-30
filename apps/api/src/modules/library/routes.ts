@@ -20,7 +20,6 @@ import {
   MediaFileListQuery,
   Movie,
   MovieListQuery,
-  PageQuery,
   RootFolder,
   SeasonMonitorUpdate,
   Series,
@@ -32,6 +31,7 @@ import {
   WantedEpisodesPage,
   WantedEpisodesQuery,
   WantedMoviesPage,
+  WantedMoviesQuery,
 } from '@arclight/shared';
 import type { AppContext } from '../../app.js';
 import { httpStatusFor, LibraryError } from './errors.js';
@@ -335,7 +335,7 @@ export const libraryRoutes = (
     app.get('/wanted/missing/episodes', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
       svc.listMissingEpisodes(db, req.query),
     );
-    app.get('/wanted/missing/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
+    app.get('/wanted/missing/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedMoviesQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
       svc.listMissingMovies(db, req.query),
     );
     // Cutoff unmet: monitored items with a file below their profile's quality or format-score
@@ -343,7 +343,7 @@ export const libraryRoutes = (
     app.get('/wanted/cutoff/episodes', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedEpisodesQuery, response: { 200: WantedEpisodesPage } } }, async (req) =>
       svc.listCutoffUnmetEpisodes(db, req.query, createCutoffChecker(db, profiles)),
     );
-    app.get('/wanted/cutoff/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: PageQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
+    app.get('/wanted/cutoff/movies', { config: { access: { areas: ['wanted'] } }, schema: { querystring: WantedMoviesQuery, response: { 200: WantedMoviesPage } } }, async (req) =>
       svc.listCutoffUnmetMovies(db, req.query, createCutoffChecker(db, profiles)),
     );
 

@@ -4,6 +4,17 @@ The System section is where you look after Arclight itself: is it healthy, what 
 
 The System menu has these items: Status, Tasks, Logs, Debugging, Backups, Health, Import, Updates, Stats, Feeds and Audit.
 
+### Searching a list
+
+Tasks, Logs, Backups and Audit have a search box. Every word you type has to match somewhere in the row (in any order), case does not matter, and dots, dashes and underscores count as spaces, so `grab show s01e02` finds `Grab failed for Show.S01E02`. The count next to the box shows how many rows match ("3 of 40" on Tasks and Backups, "12 results" on Logs and Audit, which search on the server across all pages). A new search goes back to page 1 and clears the selection, and **Select all** only selects the matching rows. Press Escape or **Clear search** to see everything again. The search is kept in the address (`?q=`), so a reload or a shared link shows the same results.
+
+| Page | Matches |
+| --- | --- |
+| Tasks | one box for both tables: task name, interval, enabled or disabled, run status (with the failure reason), trigger and message |
+| Logs | message, component, level and the details of each entry, on the server and in the live tail alike (combined with the level filter) |
+| Backups | file name, type (scheduled, manual, before update) and date |
+| Audit | user, action, target and details (combined with the user, action and date filters, and carried into "Export CSV") |
+
 ## Status
 
 System > Status is the "what am I running" page.
@@ -34,7 +45,7 @@ Examples of tasks you will see: the hourly health check, the queue refresh, RSS 
 
 System > Logs has two parts.
 
-- **Log entries**: a live view. Filter by level ("{level} and above"), search messages, "Live tail" (Pause or Resume), and "Clear logs" (clears the on-screen buffer, not the files).
+- **Log entries**: a live view. Filter by level ("{level} and above"), search (see [Searching a list](#searching-a-list)), "Live tail" (Pause or Resume), and "Clear logs" (clears the on-screen buffer, not the files).
 - **Log files**: the files on disk, each with a download link.
 
 Tick log entries and press **Copy** to put them on the clipboard as text (time, level, component, message, details), for example to paste into a bug report.
@@ -120,7 +131,7 @@ A feed turns "Stale" when it has not synced for three intervals. The "Fix" link 
 
 ## Audit
 
-System > Audit lists who changed what ("Every change made through the api, and every sign-in"). Filter by user name or id, action and date range, and use "Export CSV" to save the list. Two settings on the page: "Record changes" and "Kept for" (days; 0 keeps everything, default 90). Only administrators can see it. More in [users-and-security.md](users-and-security.md#audit-log).
+System > Audit lists who changed what ("Every change made through the api, and every sign-in"). Search (user, action, target, details), filter by user name or id, action and date range, and use "Export CSV" to save the list with the same search and filters. Two settings on the page: "Record changes" and "Kept for" (days; 0 keeps everything, default 90). Only administrators can see it. More in [users-and-security.md](users-and-security.md#audit-log).
 
 ## Metrics endpoint and Grafana
 

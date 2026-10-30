@@ -158,6 +158,8 @@ The title itself also has an availability: Unknown, Pending, Processing, Partial
 
 Filter by status (All, Pending, Approved, Processing, Unavailable, Declined, Failed, Completed, Available), by type (Movies, Series) and sort by date added or modified. Clicking a request opens its details page.
 
+The search box next to the media type filter matches the title, the requester and the status; every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces. The search is kept in the address bar, so a reload or a shared link keeps it. A new search starts at the first page, and selecting all rows takes only the matching rows shown.
+
 ## Approving and declining
 
 Users with **Manage requests** (and admins) can act on requests:
@@ -274,7 +276,7 @@ Issues let people report that something is wrong with a title you already have, 
 2. Under **What is wrong?** pick the Problem type: Video, Audio, Subtitles or Other. For a series, choose the season or episode.
 3. Describe it. The description becomes the first comment.
 
-Open **Issues** in the left menu (or in the portal header) to see them. Users see their own issues; View issues or Manage issues shows everyone's. Filter by status (open or resolved) and type. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues. Tick issues in the list to **Resolve**, **Reopen** or **Delete** several at once; deleting asks first and says how many.
+Open **Issues** in the left menu (or in the portal header) to see them. Users see their own issues; View issues or Manage issues shows everyone's. Filter by status (open or resolved) and type, or use the search box: it matches the title, the reporter, the problem type and the message (every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces; the search is kept in the address bar, so a reload or a shared link keeps it). **Clear** in the filter row also clears the search. Open an issue to read the comments, add your own, **Resolve** or **Reopen** it, or **Delete issue** (its comments go too). Reporting needs the Report issues permission, seeing them needs View issues, and managing needs Manage issues. Tick issues in the list to **Resolve**, **Reopen** or **Delete** several at once; deleting asks first and says how many.
 
 ## Watchlist
 

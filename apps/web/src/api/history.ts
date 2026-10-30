@@ -101,6 +101,8 @@ export interface HistoryFilter {
   seriesId?: number;
   episodeId?: number;
   movieId?: number;
+  /** Text search (release name, titles, indexer, client, message); blank = none. */
+  q?: string;
 }
 
 export const DEFAULT_HISTORY_FILTER: HistoryFilter = { page: 1, pageSize: 25, eventTypes: [], sortDirection: 'desc' };
@@ -117,6 +119,7 @@ export function historyQuery(filter: HistoryFilter): Record<string, string | num
   if (filter.seriesId !== undefined) q.seriesId = filter.seriesId;
   if (filter.episodeId !== undefined) q.episodeId = filter.episodeId;
   if (filter.movieId !== undefined) q.movieId = filter.movieId;
+  if (filter.q?.trim()) q.q = filter.q.trim();
   return q;
 }
 

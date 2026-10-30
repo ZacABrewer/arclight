@@ -420,6 +420,25 @@ describe('rescan, statistics and editions', () => {
     expect((await h.api('GET', '/wanted/missing/albums')).json().totalRecords).toBe(0);
   });
 
+  it('wanted albums: q matches album title and artist name, cutoff list included', async () => {
+    const added = await addRadiohead();
+    const ids = async (url: string) => (await h.api('GET', url)).json() as { totalRecords: number; records: Array<{ id: number; title: string }> };
+    const ok = album(added, 'OK Computer');
+    const byTitle = await ids('/wanted/missing/albums?pageSize=100&q=ok.computer');
+    expect(byTitle.records.map((r) => r.id)).toContain(ok.id);
+    expect(byTitle.records.every((r) => /ok computer/i.test(r.title))).toBe(true);
+    expect((await ids('/wanted/missing/albums?pageSize=100&q=RADIOHEAD')).totalRecords).toBe(added.albums.length);
+    expect((await ids('/wanted/missing/albums?q=radiohead%20computer')).records.map((r) => r.id)).toContain(ok.id);
+    expect((await ids('/wanted/missing/albums?q=nothing%20matches%20this')).totalRecords).toBe(0);
+    expect((await h.api('GET', `/wanted/missing/albums?q=${'x'.repeat(201)}`)).statusCode).toBe(400);
+
+    writeOkComputer(added.path);
+    await h.api('POST', '/command', { name: 'RescanArtist', artistIds: [added.id] });
+    await h.idle();
+    expect((await ids('/wanted/cutoff/albums?q=computer')).records.map((r) => r.title)).toEqual(['OK Computer']);
+    expect((await ids('/wanted/cutoff/albums?q=kid')).totalRecords).toBe(0);
+  });
+
   it('deleteFiles=false keeps the folder; deleteFiles=true removes it', async () => {
     const folder = writeOkComputer(join(h.root, 'Radiohead'));
     const added = await addRadiohead();

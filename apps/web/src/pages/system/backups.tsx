@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorBlock, Field, FormSection, Input, LinkBu
 import { useToast } from '../../components/toast.js';
 import { ResourceBulkBar, tableSelection } from '../../components/resource-bulk-actions.js';
 import { useSelection } from '../../components/bulk-actions.js';
+import { ListSearchBar, ListSearchEmpty, useClientListSearch } from '../../components/list-search.js';
 import { useBackups, useBackupSettings, useCreateBackup, useDeleteBackup, useRestoreBackup, useSaveBackupSettings } from '../../hooks/backup.js';
 import { relativeTime } from '../../lib/format.js';
 import { ConfirmModal } from './confirm-modal.js';
@@ -26,7 +27,9 @@ export function SystemBackupsPage() {
   const toast = useToast();
   const [pending, setPending] = useState<Pending | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
-  const backupKeys = (backups.data ?? []).map((b) => b.id);
+  // Search: file name, type and the shown date (`?q=` in the URL). Select all picks the matches only.
+  const search = useClientListSearch(backups.data, (b) => [b.name, b.type, TYPE_LABELS[b.type], formatStamp(b.time)]);
+  const backupKeys = (search.rows ?? []).map((b) => b.id);
   const selection = useSelection(backupKeys);
 
   const restored = () => {
@@ -122,17 +125,30 @@ export function SystemBackupsPage() {
               <ErrorBlock title={t('system.backups.couldntListBackups')} onRetry={() => void backups.refetch()} />
             </div>
           ) : (
+            <>
+            {backups.data?.length || search.active ? (
+              <div className="sys-pad">
+                <ListSearchBar value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.backups')} shown={search.shown} total={search.total} />
+              </div>
+            ) : null}
             <Table
               columns={columns}
-              rows={backups.data}
+              rows={search.rows}
               rowKey={(b) => b.id}
               loading={backups.isLoading}
               caption={t('common.backups')}
               defaultSort={{ key: 'time', direction: 'desc' }}
               {...tableSelection(selection)}
               rowLabel={(b) => t('components.bulkActions.selectName', { name: b.name })}
-              empty={<EmptyState title={t('system.backups.noBackupsYet')}>{t('system.backups.scheduledBackupsAppearHereCreate')}</EmptyState>}
+              empty={
+                search.active ? (
+                  <ListSearchEmpty query={search.q} onClear={search.clear} />
+                ) : (
+                  <EmptyState title={t('system.backups.noBackupsYet')}>{t('system.backups.scheduledBackupsAppearHereCreate')}</EmptyState>
+                )
+              }
             />
+            </>
           )}
         </Pane>
         <BackupSettingsPane />

@@ -1,0 +1,25 @@
+/* Library → Hygiene → Health, and the Health tab of item pages */
+.hl-summary { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.hl-progress { margin: 0; color: var(--al-text-3); }
+.hl-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 8px; }
+.hl-tile {
+  display: flex; flex-direction: column; gap: 2px; align-items: flex-start; min-width: 0;
+  padding: 10px 12px; border: 1px solid var(--al-line-2); background: transparent; color: var(--al-text-2);
+  font: inherit; text-align: left; cursor: pointer;
+}
+.hl-tile--total { cursor: default; border-color: var(--al-line-1); }
+.hl-tile[aria-pressed='true'] { border-color: var(--al-cyan); background: var(--al-cyan-a06); color: var(--al-text-1); }
+.hl-tile:focus-visible { outline: 2px solid var(--al-focus); outline-offset: 2px; }
+.hl-tile__count { font-size: 20px; color: var(--al-text-1); }
+.hl-tile__label { font-size: 12px; overflow-wrap: anywhere; }
+.hl-problem { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; min-width: 0; }
+.hl-explain { color: var(--al-text-2); overflow-wrap: anywhere; }
+.hl-settings { display: flex; flex-direction: column; gap: 14px; max-width: 640px; }
+.hl-window { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.hl-item { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.hl-item__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px; }
+.hl-item__head p { margin: 0; color: var(--al-text-3); min-width: 0; flex: 1 1 220px; }
+@media (max-width: 600px) {
+  .hl-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hl-window { grid-template-columns: minmax(0, 1fr); }
+}

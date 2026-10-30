@@ -34,12 +34,13 @@ Every library list can act on many items at once: the TV and Movies pages (all v
 | Monitor / Unmonitor | everywhere except Hygiene and Subtitles | Turns monitoring on or off. Wanted only offers Unmonitor. |
 | Profile | TV, Movies, Music, Audiobooks | Sets the quality profile. For TV and Movies this opens the profile change preview first. |
 | Root folder | TV, Movies, Music, Audiobooks | Moves the items to another root folder. |
-| Tags | TV, Movies, Music, Audiobooks | Adds or removes one tag. |
+| Tags | TV, Movies, Music, Audiobooks | Adds or removes one tag. To tag items automatically, use [tag rules](tags.md). |
 | Refresh | TV, Movies, Music, Audiobooks, Collections | Refreshes the metadata of every selected item. |
 | Rename files | TV, Movies, episodes | Opens a preview of every file that does not match your naming settings. Untick the ones to leave alone, then **Rename**. |
 | Add additional… | TV, Movies | Adds an audio or subtitle language (see below). |
 | Map to best match | Hygiene > Orphans | Imports each selected orphan file into its best suggested match. Files without a usable match are skipped. |
 | Delete | TV, Movies, Music, Audiobooks, books, Hygiene | Opens the delete dialog. It has the same **Delete files** option as deleting one item. |
+| Replace / Re-check / Ignore / Delete file | Hygiene > Health | The health scan's fix actions on the selected problems. See [Library health scan](health-scan.md#fixing-problems). |
 | Delete files | episodes | Deletes the selected episodes' files from disk. The episodes stay in the library. |
 
 Searches, refreshes and subtitle searches run in the background as one job, so you can leave the page. A toast tells you how many items went into the job and how many were skipped (for example, items already at cutoff when you asked for upgrades). The job appears in **System > Tasks**.
@@ -276,6 +277,10 @@ For orphans, **Map...** opens a dialog to pick the movie or series and episodes 
 
 Files go to the recycle bin when one is set. If a library copy is deleted, its media file entry is removed with it.
 
+### Health
+
+The **Health** tab lists library files that are broken or wrong: missing, empty or unreadable files, files ffprobe cannot read, decode errors, truncated files and samples, missing audio or video tracks, the wrong audio language, and album or audiobook structure problems. Fix them one at a time or in bulk: **Replace** (blocklist the release, delete the file and search again), **Re-check**, **Ignore** (until the file changes) or **Delete file**. The scan runs weekly by default and only re-checks changed files. Each movie, series, album and book page has its own **Health** tab with **Check now**. See [Library health scan](health-scan.md) for every check and setting.
+
 ## Scene mapping
 
 Some releases number a series differently than TMDB does (for example a long anime split into seasons, or a title with another name). On a series page, the **Scene mapping** tab lets you teach Arclight how to translate. Without it these releases may be rejected or matched to the wrong episode.
@@ -317,6 +322,8 @@ Scans are kept until Arclight restarts.
 - [Interactive search](interactive-search.md) - pick a release yourself
 - [Quality profiles](quality-profiles.md) - what "good enough" means
 - [Media management](media-management.md) - naming, root folders, recycle bin and versions layout
+- [Library health scan](health-scan.md) - broken, truncated and wrong files, and how to fix them
+- [Tags and tag rules](tags.md) - manage tags and tag items automatically by genre, resolution, requester and more
 - [Subtitles](subtitles.md)
 - [Discover and requests](discover-and-requests.md)
 - [Calendar](calendar.md)

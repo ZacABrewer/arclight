@@ -8,7 +8,8 @@ import { useAllImportListItems, useImportListSchema, useImportLists, useSyncImpo
 import { useQualityProfiles, useRootFolders } from '../../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../../lib/format.js';
 import { SettingsPage } from '../settings-layout.js';
-import { AddCard, CardGrid, ItemCard, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { AddCard, CardGrid, ItemCard, SettingsListSearch, SettingsSection, type ItemCardSelect } from '../shared.js';
+import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { ExclusionsCard } from './exclusions-card.js';
 import { MEDIA_TYPE_LABELS } from './fields.js';
@@ -112,7 +113,16 @@ export function ImportListsPage() {
   const [picking, setPicking] = useState(false);
   const [editing, setEditing] = useState<Editing | null>(null);
   const [preview, setPreview] = useState<ImportList | null>(null);
-  const bulk = useResourceBulk('importlist', lists.data, (l) => l.id, (l) => l.name);
+  // Search: name, list type (implementation), media type and the last sync error.
+  const search = useClientListSearch(lists.data, (l) => [
+    l.name,
+    l.implementation,
+    schemas.data?.find((s) => s.implementation === l.implementation)?.implementationName,
+    MEDIA_TYPE_LABELS[l.mediaType],
+    l.lastSyncError,
+  ]);
+  // Select all picks the matching lists only.
+  const bulk = useResourceBulk('importlist', search.rows, (l) => l.id, (l) => l.name);
 
   const counts = new Map<number, number>();
   for (const i of items.data ?? []) counts.set(i.importListId, (counts.get(i.importListId) ?? 0) + 1);
@@ -153,9 +163,9 @@ export function ImportListsPage() {
             {errorMessage(lists.error)}
           </ErrorBlock>
         ) : (
-          <>
+          <SettingsListSearch search={search}>
           <CardGrid label={t('settings.importLists.importLists')}>
-            {lists.data.map((l) => {
+            {(search.rows ?? []).map((l) => {
               const schema = schemas.data?.find((s) => s.implementation === l.implementation);
               return (
                 <ListCard
@@ -173,7 +183,7 @@ export function ImportListsPage() {
             <AddCard label={t('settings.importLists.addImportList')} onClick={() => setPicking(true)} />
           </CardGrid>
           {bulk.bar}
-          </>
+          </SettingsListSearch>
         )}
       </SettingsSection>
       <OptionsCard form={options} />

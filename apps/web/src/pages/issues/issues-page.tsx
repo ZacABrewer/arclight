@@ -20,6 +20,7 @@ import {
 import { Loading, QueryError } from '../../components/media/media-kit.js';
 import { BulkConfirmDialog, useBulkResultToast, useSelection } from '../../components/bulk-actions.js';
 import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
+import { ListSearchCount, ListSearchEmpty, ListSearchInput, useListSearch } from '../../components/list-search.js';
 import { DLink, titleTarget, useInPortal } from '../../features/discover/base.js';
 import { ISSUE_TYPE_LABELS, formatDateTime, usePermissions } from '../../features/requests/status.js';
 import {
@@ -89,12 +90,21 @@ export function IssuesPage() {
   const [page, setPage] = useState(0);
   const navigate = useNavigate();
   const inPortal = useInPortal();
-  const list = useIssues({ filter, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'modified' });
+  // Text search (`?q=`): title, reporter, type, message, matched by the server.
+  const search = useListSearch();
+  const list = useIssues({ filter, take: PAGE_SIZE, skip: page * PAGE_SIZE, sort: 'modified', q: search.q || undefined });
   // The api filters by status; the type filter applies to the page client-side (no type param in IssueListQuery).
   const rows = (list.data?.results ?? []).filter((i) => type === 'all' || i.type === type);
   const pages = list.data ? Math.max(1, Math.ceil(list.data.pageInfo.total / PAGE_SIZE)) : 1;
   const keys = rows.map((i) => i.id);
   const selection = useSelection(keys);
+  // A new query is a new list: back to the first page, nothing selected.
+  const [seenQ, setSeenQ] = useState(search.q);
+  if (seenQ !== search.q) {
+    setSeenQ(search.q);
+    setPage(0);
+    selection.clear();
+  }
   const bulk = useBulkIssueAction();
   const report = useBulkResultToast();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -114,7 +124,17 @@ export function IssuesPage() {
   return (
     <>
       <PageHeader index="03" title={t('common.issues')} subtitle={list.data ? <><span className="al-num">{list.data.pageInfo.total}</span> {filter === 'all' ? t('issues.issues') : filter}</> : undefined} />
-      <FilterBar onClear={() => { setType('all'); setFilter('open'); setPage(0); }} activeCount={(type !== 'all' ? 1 : 0) + (filter !== 'open' ? 1 : 0)}>
+      <FilterBar
+        onClear={() => {
+          setType('all');
+          setFilter('open');
+          setPage(0);
+          search.clear();
+        }}
+        activeCount={(type !== 'all' ? 1 : 0) + (filter !== 'open' ? 1 : 0) + (search.active ? 1 : 0)}
+        end={<ListSearchCount active={search.active} shown={list.data?.pageInfo.total} />}
+      >
+        <ListSearchInput value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.issues')} />
         <Segmented
           aria-label={t('issues.statusFilter')}
           variant="soft"
@@ -142,7 +162,11 @@ export function IssuesPage() {
         ) : list.isError ? (
           <QueryError error={list.error} title={t('issues.couldNotLoadIssues')} onRetry={() => void list.refetch()} />
         ) : rows.length === 0 ? (
-          <EmptyState title={t('issues.noIssues')}>{t('issues.reportAProblemFromA')}</EmptyState>
+          search.active ? (
+            <ListSearchEmpty query={search.q} onClear={search.clear} />
+          ) : (
+            <EmptyState title={t('issues.noIssues')}>{t('issues.reportAProblemFromA')}</EmptyState>
+          )
         ) : (
           <Pane flush bare>
             <Table

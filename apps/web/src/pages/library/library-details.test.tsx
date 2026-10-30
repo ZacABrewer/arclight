@@ -185,7 +185,7 @@ describe('series details (Page 03)', () => {
     renderAt('/library/series/1');
     await screen.findByRole('region', { name: 'Series overview' });
     await waitFor(() =>
-      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Seasons & episodes', 'Files1', 'History', 'Decisions', 'Search', 'Scene mapping', 'Subtitles', 'Requests']),
+      expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Seasons & episodes', 'Files1', 'Health', 'History', 'Decisions', 'Search', 'Scene mapping', 'Subtitles', 'Requests']),
     );
   });
 
@@ -341,7 +341,7 @@ describe('movie details', () => {
     expect(within(hero).getByTestId('availability').textContent).toBe('Available');
     expect(within(hero).getByRole('link', { name: 'Dune Collection' })).toBeTruthy();
     expect(within(hero).getByText('Missing').getAttribute('data-status')).toBe('missing');
-    await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Files0', 'History', 'Decisions', 'Search', 'Subtitles', 'Requests']));
+    await waitFor(() => expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual(['Files0', 'Health', 'History', 'Decisions', 'Search', 'Subtitles', 'Requests']));
   });
 
   it('shows the last and next automatic search, and the download once it is queued', async () => {

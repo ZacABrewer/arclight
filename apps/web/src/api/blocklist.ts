@@ -32,8 +32,9 @@ export const BlocklistPage = z.looseObject({
 export type BlocklistPage = z.infer<typeof BlocklistPage>;
 
 export const blocklistApi = {
-  list: (page: number, pageSize: number) =>
-    request('/blocklist', BlocklistPage, { query: { page, pageSize, sortKey: 'date', sortDirection: 'desc' } }),
+  /** `q`: text search (release name, titles, indexer, reason); blank = none. */
+  list: (page: number, pageSize: number, q = '') =>
+    request('/blocklist', BlocklistPage, { query: { page, pageSize, sortKey: 'date', sortDirection: 'desc', ...(q.trim() ? { q: q.trim() } : {}) } }),
   remove: (id: number) => request(`/blocklist/${id}`, null, { method: 'DELETE' }),
   removeBulk: (ids: number[]) => request('/blocklist/bulk', null, { method: 'DELETE', json: { ids } }),
   /** Block a release by hand. 201 with the new record. */

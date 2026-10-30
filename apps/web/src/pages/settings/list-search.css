@@ -1,0 +1,2 @@
+/* Settings list search (shared.tsx SettingsListSearch): the search row sits close to its list. */
+.al-settings-search { display: flex; flex-direction: column; gap: 16px; min-width: 0; }

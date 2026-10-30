@@ -7,7 +7,8 @@ import { DeleteMediaDialog } from '../../../components/media/delete-media-dialog
 import { useToast } from '../../../components/toast.js';
 import { useBulkSelection } from '../../../hooks/bulk.js';
 import { formatBytes } from '../../../components/media/format.js';
-import { Loading, MonitorSwitch, QueryError, TagChips } from '../../../components/media/media-kit.js';
+import { Loading, MonitorSwitch, QueryError } from '../../../components/media/media-kit.js';
+import { AutoTagChips } from '../../../components/media/auto-tag-chips.js';
 import { TagPicker } from '../../../components/media/tag-picker.js';
 import { useRootFolders, useTags } from '../../../hooks/library.js';
 import {
@@ -29,6 +30,7 @@ import { BookCard } from './book-card.js';
 import { MONITOR_OPTIONS, NEW_BOOK_OPTIONS, audibleUrl, authorBackdrop, authorProgress, groupBooks, monitorNewBooksLabel, monitorOptionLabel } from './audiobook-model.js';
 import '../library.css';
 import { t } from '../../../i18n/index.js';
+import { usePaletteContext } from '../../../features/command-palette/registry.js';
 
 const route = getRouteApi('/library/audiobooks/author/$id');
 
@@ -55,6 +57,7 @@ function AuthorDetailsView() {
   const [deleting, setDeleting] = useState(false);
   const [interactive, setInteractive] = useState(false);
 
+  usePaletteContext(author.data ? { subject: { kind: 'author', id: author.data.id, title: author.data.name } } : null);
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('audiobooks.invalidAuthorId', { rawId }))} title={t('audiobooks.authorNotFound')} />;
   if (author.isPending) return <Loading />;
   if (author.isError) return <QueryError error={author.error} onRetry={() => void author.refetch()} title={t('audiobooks.couldNotLoadThisAuthor')} />;
@@ -80,7 +83,7 @@ function AuthorDetailsView() {
             <MonitorSwitch monitored={a.monitored} onChange={(m) => setMonitored.mutate({ id: a.id, monitored: m })} label={t('common.monitorTitle', { monitored: a.monitored, title: a.name })} />
             <StatusChip status={a.monitored ? 'monitored' : 'unmonitored'} large />
             {profile ? <QualityTag>{profile.name}</QualityTag> : null}
-            <TagChips ids={a.tags} tags={tags.data} />
+            <AutoTagChips entityType="author" entityId={a.id} ids={a.tags} tags={tags.data} />
           </>
         }
         facts={

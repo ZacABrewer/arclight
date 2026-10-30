@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { ImportMode, ManualImportQueryInput, ManualImportResult, MediaType, Movie, Series } from '@arclight/shared';
+import { filterListSearch, type ImportMode, type ListSearchField, type ManualImportQueryInput, type ManualImportResult, type MediaType, type Movie, type Series } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
 import { manualImportApi } from '../../../api/manual-import.js';
 import { queueApi } from '../../../api/queue.js';
@@ -29,6 +29,7 @@ import {
   type Column,
 } from '../../../arclight/index.js';
 import { EntityPicker, type EntityOption } from '../../../components/entity-picker.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../../components/list-search.js';
 import { PathInput } from '../../../components/path-picker/index.js';
 import { useEpisodes, useMovieList, useSeriesList } from '../../../hooks/library.js';
 import { formatBytes, useDocumentTitle } from '../activity-shared.js';
@@ -64,6 +65,8 @@ export interface ManualImportSearch {
   movieId?: number;
   /** Audio mode: music (artist / album / track mapping) or audiobooks (author / book / part order). */
   mediaType?: 'music' | 'audiobook';
+  /** The file-list search of the files / mapping steps (not part of the source). */
+  q?: string;
 }
 
 /** Route search parsing: unknown or malformed params are dropped. */
@@ -77,7 +80,21 @@ export function parseManualImportSearch(search: Record<string, unknown>): Manual
   if (seriesId !== undefined) out.seriesId = seriesId;
   if (movieId !== undefined) out.movieId = movieId;
   if (search['mediaType'] === 'music' || search['mediaType'] === 'audiobook') out.mediaType = search['mediaType'];
+  if (typeof search['q'] === 'string' && search['q'].trim()) out.q = search['q'].trim();
   return out;
+}
+
+/** What a file row of the video wizard is searched by: path, matched title, quality, problems. */
+export function importRowSearchFields(row: ImportRow, seriesTitle: string | undefined, movieTitle: string | undefined): ListSearchField[] {
+  return [
+    row.relativePath,
+    row.name,
+    row.mediaType === 'series' ? seriesTitle : movieTitle,
+    row.quality.quality.name,
+    row.releaseGroup,
+    row.rejections.map((r) => r.message),
+    rowProblems(row),
+  ];
 }
 
 /** The audio scan query for a music source, or null when none is chosen. */
@@ -224,14 +241,15 @@ const FILE_COLUMNS: Column<ImportRow>[] = [
   { key: 'state', get header() { return t('activity.manualImport.mapping'); }, cell: (r) => <MappingChip row={r} /> },
 ];
 
-function FilesStep({ rows }: { rows: ImportRow[] }) {
+function FilesStep({ rows, shown, toolbar, empty }: { rows: ImportRow[]; shown?: readonly ImportRow[]; toolbar?: ReactNode; empty?: ReactNode }) {
   const mapped = rows.filter((r) => rowProblems(r).length === 0).length;
   return (
     <div className="al-mi-step">
       <p className="al-activity-muted">
         <span className="al-num">{rows.length}</span> {t('activity.manualImport.filesFound')} <span className="al-num">{mapped}</span> {t('activity.manualImport.alreadyMappedMapTheRest')}
       </p>
-      <Table caption={t('activity.manualImport.filesFound2')} columns={FILE_COLUMNS} rows={rows} rowKey={(r) => r.path} sortable={false} />
+      {toolbar}
+      <Table caption={t('activity.manualImport.filesFound2')} columns={FILE_COLUMNS} rows={shown ?? rows} rowKey={(r) => r.path} sortable={false} empty={empty} />
     </div>
   );
 }
@@ -421,8 +439,11 @@ function mappingColumns({ dispatch, seriesList, movieList, seriesOptions, movieO
   ];
 }
 
-/** Mapping table: select files and map each one to a series episode or movie. */
-export function FilesTable({ rows, dispatch }: { rows: ImportRow[]; dispatch: (a: RowAction) => void }) {
+/**
+ * Mapping table: select files and map each one to a series episode or movie. `filtered`: the
+ * rows are a search's matches, so "select all" toggles them one by one (never the hidden rows).
+ */
+export function FilesTable({ rows, dispatch, filtered = false, empty }: { rows: readonly ImportRow[]; dispatch: (a: RowAction) => void; filtered?: boolean; empty?: ReactNode }) {
   const series = useSeriesList();
   const movies = useMovieList();
   const seriesOptions = useMemo(
@@ -445,10 +466,11 @@ export function FilesTable({ rows, dispatch }: { rows: ImportRow[]; dispatch: (a
       sortable={false}
       selectable
       selected={selected}
+      empty={empty}
       onSelectionChange={(next) => {
         const all = rows.every((r) => next.has(r.path));
         const none = next.size === 0;
-        if (all || none) {
+        if (!filtered && (all || none)) {
           dispatch({ type: 'toggleAll', selected: all });
           return;
         }
@@ -546,6 +568,17 @@ function VideoManualImport() {
   const [rows, dispatch] = useReducer(rowsReducer, []);
   const [mode, setMode] = useState<ImportMode>('auto');
   const fallbackType: MediaType = search.movieId !== undefined ? 'movie' : 'series';
+  const listSearch = useListSearch();
+  const seriesList = useSeriesList();
+  const movieList = useMovieList();
+  const shownRows = useMemo(() => {
+    if (!listSearch.active) return rows;
+    const seriesTitles = new Map((seriesList.data ?? []).map((s) => [s.id, s.title]));
+    const movieTitles = new Map((movieList.data ?? []).map((m) => [m.id, m.title]));
+    return filterListSearch(rows, listSearch.q, (r) =>
+      importRowSearchFields(r, r.seriesId !== null ? seriesTitles.get(r.seriesId) : undefined, r.movieId !== null ? movieTitles.get(r.movieId) : undefined),
+    );
+  }, [rows, listSearch.active, listSearch.q, seriesList.data, movieList.data]);
 
   useEffect(() => {
     setStep(query ? 'files' : 'path');
@@ -607,7 +640,21 @@ function VideoManualImport() {
       );
     else if (rows.length === 0)
       body = <EmptyState title={t('activity.manualImport.noImportableFilesFound')}>{t('activity.manualImport.nothingUnderThisSourceLooks')}</EmptyState>;
-    else body = step === 'files' ? <FilesStep rows={rows} /> : <FilesTable rows={rows} dispatch={dispatch} />;
+    else {
+      const toolbar = (
+        <ListSearchBar value={listSearch.q} onChange={listSearch.setQ} placeholder={t('listSearch.ph.files')} shown={shownRows.length} total={rows.length} />
+      );
+      const noMatch = listSearch.active ? <ListSearchEmpty query={listSearch.q} onClear={listSearch.clear} /> : undefined;
+      body =
+        step === 'files' ? (
+          <FilesStep rows={rows} shown={shownRows} toolbar={toolbar} empty={noMatch} />
+        ) : (
+          <div className="al-mi-step">
+            {toolbar}
+            <FilesTable rows={shownRows} dispatch={dispatch} filtered={listSearch.active} empty={noMatch} />
+          </div>
+        );
+    }
     if (step === 'files') {
       canContinue = rows.length > 0;
       onContinue = () => setStep('mapping');

@@ -185,3 +185,4 @@
 @media (max-width: 767.98px) { .mk-search { min-width: 0; max-width: none; width: 100%; } .mk-hide-mobile { display: none !important; } }
 @media (min-width: 768px) { .mk-only-mobile { display: none !important; } }
 .mk-switch { display: inline-flex; align-items: center; }
+.mk-tag-auto { margin-left: 4px; font-size: 9px; color: var(--al-cyan-text); }

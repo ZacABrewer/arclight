@@ -21,6 +21,14 @@ describe('log filtering', () => {
     expect(matchesLogFilter(rec(1), {})).toBe(true);
   });
 
+  it('applies the forgiving list-search rule to live records', () => {
+    const r = rec(7, { level: 'warn', component: 'download_client', message: 'Grab failed for Show.Name.S01E02' });
+    expect(matchesLogFilter(r, { search: 'show name s01e02' })).toBe(true);
+    expect(matchesLogFilter(r, { search: 'download-client grab' })).toBe(true);
+    expect(matchesLogFilter(r, { search: 'warn failed' })).toBe(true);
+    expect(matchesLogFilter(r, { search: 'grab missing' })).toBe(false);
+  });
+
   it('merges streamed records newest first without duplicates, capped', () => {
     const merged = mergeLive([rec(3), rec(2)], [rec(4), rec(5), rec(3)], 4);
     expect(merged.map((r) => r.id)).toEqual([5, 4, 3, 2]);

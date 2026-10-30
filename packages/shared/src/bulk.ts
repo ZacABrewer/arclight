@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { Job } from './jobs.js';
 import { RenamePreviewItem } from './imports.js';
+import { ListSearchParam } from './list-search.js';
 
 // Bulk commands for the library and Wanted lists: one request acts on many selected items
 // (or on everything a Wanted list matches) and queues a single job. Per-item routes stay as
@@ -34,6 +35,11 @@ export const BulkSearchCommand = z
     episodeIds: ids().optional(),
     allMovies: z.literal(true).optional(),
     allEpisodes: z.literal(true).optional(),
+    /**
+     * With `allEpisodes` / `allMovies`: only the Wanted rows matching this text search (the
+     * list's `q`), so "Select all" on a searched Wanted list acts on what the search shows.
+     */
+    q: ListSearchParam,
   })
   .refine(
     (c) => (c.movieIds?.length ?? 0) + (c.seriesIds?.length ?? 0) + (c.episodeIds?.length ?? 0) > 0 || c.allMovies === true || c.allEpisodes === true,

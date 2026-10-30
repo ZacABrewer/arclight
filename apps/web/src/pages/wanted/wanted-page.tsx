@@ -19,6 +19,7 @@ import { episodeCode, formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, SwipeRow, useIsMobile } from '../../components/media/media-kit.js';
 import { buildQueueIndex, QueueStateChip, SearchStatusLines } from '../../components/media/pipeline-status.js';
 import { useToast } from '../../components/toast.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { BulkBar, type BulkAction } from '../../components/media/bulk-bar.js';
 import { useBulkSearch, useSetEpisodesMonitored } from '../../hooks/bulk.js';
 import { useQueueSummary } from '../../hooks/activity.js';
@@ -108,11 +109,48 @@ function WantedPage({ mode }: { mode: Mode }) {
   );
 }
 
-function useWantedList(mode: ListMode, kind: VideoKind, page: number) {
+function useWantedList(mode: ListMode, kind: VideoKind, page: number, q: string) {
   // Both hooks are always called (rules of hooks); only the one for this mode is enabled.
-  const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing');
-  const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff');
+  const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing', q);
+  const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff', q);
   return mode === 'missing' ? missing : cutoff;
+}
+
+type ListSearch = ReturnType<typeof useListSearch>;
+
+/**
+ * Page, selection and the text search (`?q=`, shared by every media type) of one wanted list.
+ * The lists are server-paged: a new query goes back to page 1 and drops the selection.
+ */
+function useListState() {
+  const search = useListSearch();
+  const [page, setPage] = useState(1);
+  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
+  const [seenQ, setSeenQ] = useState(search.q);
+  if (seenQ !== search.q) {
+    setSeenQ(search.q);
+    setPage(1);
+    setSelected(new Set());
+  }
+  const onPage = (p: number) => {
+    setPage(p);
+    setSelected(new Set());
+  };
+  return { search, page, onPage, selected, setSelected };
+}
+
+/** The search box placeholder per media type: what the server matches. */
+function searchPlaceholder(kind: Kind): string {
+  switch (kind) {
+    case 'episodes':
+      return t('wanted.search.episodes');
+    case 'movies':
+      return t('listSearch.ph.titles');
+    case 'albums':
+      return t('wanted.search.albums');
+    case 'books':
+      return t('wanted.search.books');
+  }
 }
 
 function statusChip(mode: ListMode, queued?: QueueSummaryItem) {
@@ -145,7 +183,10 @@ function searchColumn<T extends { id: number }>(pipeline: ReturnType<typeof useP
 
 interface ListShellProps<T> {
   mode: ListMode;
+  kind: Kind;
   noun: string;
+  /** The list's text search; the rows and `total` are already the server's answer to it. */
+  search: ListSearch;
   total: number | undefined;
   page: number;
   onPage: (p: number) => void;
@@ -178,6 +219,12 @@ function ListShell<T>(p: ListShellProps<T>) {
   const pages = Math.max(1, Math.ceil((p.total ?? 0) / PAGE_SIZE));
   // "Select all N" across pages; any change to the row selection drops back to the rows.
   const [allMatching, setAllMatching] = useState(false);
+  // A new search is a new list: "all matching" meant the old one.
+  const [seenQ, setSeenQ] = useState(p.search.q);
+  if (seenQ !== p.search.q) {
+    setSeenQ(p.search.q);
+    setAllMatching(false);
+  }
   const select = (next: Set<RowKey>) => {
     setAllMatching(false);
     p.onSelect(next);
@@ -190,7 +237,9 @@ function ListShell<T>(p: ListShellProps<T>) {
     select(next);
   };
   const ids = [...p.selected].map(Number);
-  const empty = (
+  const empty = p.search.active ? (
+    <ListSearchEmpty query={p.search.q} onClear={p.search.clear} />
+  ) : (
     <EmptyState title={p.mode === 'missing' ? t('wanted.noMissingNoun', { noun: p.noun }) : t('wanted.noNounBelowCutoff', { noun: p.noun })}>
       {p.mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
     </EmptyState>
@@ -201,10 +250,18 @@ function ListShell<T>(p: ListShellProps<T>) {
       title={p.total === undefined ? p.noun.toUpperCase() : `${p.total} ${p.noun}`}
       actions={
         <Button variant="primary" size="sm" disabled={!p.total} loading={p.running} onClick={p.onSearchAll}>
-          {t('wanted.searchAll')}
+          {/* With a search, "Search all" queues only the matching rows (the query goes along). */}
+          {p.search.active ? t('wanted.searchAllMatching') : t('wanted.searchAll')}
         </Button>
       }
     >
+      <ListSearchBar
+        className="wanted-search"
+        value={p.search.q}
+        onChange={p.search.setQ}
+        placeholder={searchPlaceholder(p.kind)}
+        shown={p.loading ? undefined : p.total}
+      />
       {mobile ? (
         p.loading ? (
           <Loading />
@@ -268,9 +325,9 @@ function ListShell<T>(p: ListShellProps<T>) {
 }
 
 function EpisodesList({ mode }: { mode: ListMode }) {
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const list = useWantedList(mode, 'episodes', page);
+  const { search, page, onPage, selected, setSelected } = useListState();
+  const q = search.q || undefined;
+  const list = useWantedList(mode, 'episodes', page, search.q);
   const one = useAutomaticSearch();
   const bulk = useBulkSearch();
   const monitor = useSetEpisodesMonitored();
@@ -281,7 +338,8 @@ function EpisodesList({ mode }: { mode: ListMode }) {
 
   // Missing → the missing rules, cutoff unmet → an upgrade search (profile cutoff honoured server-side).
   const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
-  const searchAll = () => bulk.mutate({ mode: searchMode, allEpisodes: true });
+  // "All" is every row the (searched) list holds: the server applies the same `q`.
+  const searchAll = () => bulk.mutate({ mode: searchMode, allEpisodes: true, q });
 
   const label = (r: WantedEpisode) => `${r.seriesTitle} ${episodeCode(r.seasonNumber, r.episodeNumber)}`;
   const columns: Column<WantedEpisode>[] = [
@@ -316,13 +374,12 @@ function EpisodesList({ mode }: { mode: ListMode }) {
   return (
     <ListShell
       mode={mode}
+      kind="episodes"
+      search={search}
       noun="episodes"
       total={list.data?.totalRecords}
       page={page}
-      onPage={(p) => {
-        setPage(p);
-        setSelected(new Set());
-      }}
+      onPage={onPage}
       rows={records}
       loading={list.isPending}
       columns={columns}
@@ -344,7 +401,7 @@ function EpisodesList({ mode }: { mode: ListMode }) {
           id: 'search',
           label: bulkSearchLabel(mode),
           loading: bulk.isPending,
-          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allEpisodes: true } : { mode: searchMode, episodeIds: sel.ids }, { onSuccess: done }),
+          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allEpisodes: true, q } : { mode: searchMode, episodeIds: sel.ids }, { onSuccess: done }),
         },
         {
           id: 'unmonitor',
@@ -358,9 +415,9 @@ function EpisodesList({ mode }: { mode: ListMode }) {
 }
 
 function MoviesList({ mode }: { mode: ListMode }) {
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const list = useWantedList(mode, 'movies', page);
+  const { search, page, onPage, selected, setSelected } = useListState();
+  const q = search.q || undefined;
+  const list = useWantedList(mode, 'movies', page, search.q);
   const profiles = useQualityProfiles();
   const one = useAutomaticSearch();
   const bulk = useBulkSearch();
@@ -371,7 +428,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedMovies')} />;
 
   const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
-  const searchAll = () => bulk.mutate({ mode: searchMode, allMovies: true });
+  const searchAll = () => bulk.mutate({ mode: searchMode, allMovies: true, q });
 
   const columns: Column<Movie>[] = [
     {
@@ -407,13 +464,12 @@ function MoviesList({ mode }: { mode: ListMode }) {
   return (
     <ListShell
       mode={mode}
+      kind="movies"
+      search={search}
       noun="movies"
       total={list.data?.totalRecords}
       page={page}
-      onPage={(p) => {
-        setPage(p);
-        setSelected(new Set());
-      }}
+      onPage={onPage}
       rows={records}
       loading={list.isPending}
       columns={columns}
@@ -435,7 +491,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
           id: 'search',
           label: bulkSearchLabel(mode),
           loading: bulk.isPending,
-          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allMovies: true } : { mode: searchMode, movieIds: sel.ids }, { onSuccess: done }),
+          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allMovies: true, q } : { mode: searchMode, movieIds: sel.ids }, { onSuccess: done }),
         },
         {
           id: 'unmonitor',
@@ -450,9 +506,8 @@ function MoviesList({ mode }: { mode: ListMode }) {
 
 /** Albums missing tracks / below cutoff: AlbumSearch for the selected rows, one row, or all of them. */
 function AlbumsList({ mode }: { mode: ListMode }) {
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const list = useWantedAlbums(mode, page, PAGE_SIZE);
+  const { search: listSearch, page, onPage, selected, setSelected } = useListState();
+  const list = useWantedAlbums(mode, page, PAGE_SIZE, true, listSearch.q);
   const profiles = useMusicQualityProfiles();
   const search = useMusicSearch();
   const setAlbums = useSetAlbumsMonitored();
@@ -466,7 +521,9 @@ function AlbumsList({ mode }: { mode: ListMode }) {
   };
   const searchAll = async () => {
     try {
-      const all = mode === 'missing' ? await musicApi.wanted.missing({ page: 1, pageSize: MAX_PAGE }) : await musicApi.wanted.cutoff({ page: 1, pageSize: MAX_PAGE });
+      // The same search as the list, so "all" is what the search shows.
+      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined };
+      const all = mode === 'missing' ? await musicApi.wanted.missing(query) : await musicApi.wanted.cutoff(query);
       searchAlbums(all.records.map((r) => r.id));
     } catch (err) {
       toast.error(t('common.searchFailed'), errorMessage(err));
@@ -511,13 +568,12 @@ function AlbumsList({ mode }: { mode: ListMode }) {
   return (
     <ListShell
       mode={mode}
+      kind="albums"
+      search={listSearch}
       noun={t('music.albumNoun', { count: 2 })}
       total={total}
       page={page}
-      onPage={(p) => {
-        setPage(p);
-        setSelected(new Set());
-      }}
+      onPage={onPage}
       rows={rows}
       loading={list.isPending}
       columns={columns}
@@ -565,9 +621,8 @@ function seriesText(r: WantedBook): string | null {
 
 /** Books missing / below cutoff: BookSearch for the selected rows, one row, or all of them. */
 function BooksList({ mode }: { mode: ListMode }) {
-  const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const list = useWantedBooks(mode, page, PAGE_SIZE);
+  const { search: listSearch, page, onPage, selected, setSelected } = useListState();
+  const list = useWantedBooks(mode, page, PAGE_SIZE, true, listSearch.q);
   const profiles = useAudiobookQualityProfiles();
   const search = useAudiobookSearch();
   const setBooks = useSetBooksMonitored();
@@ -581,8 +636,8 @@ function BooksList({ mode }: { mode: ListMode }) {
   };
   const searchAll = async () => {
     try {
-      const all =
-        mode === 'missing' ? await audiobooksApi.wanted.missing({ page: 1, pageSize: MAX_PAGE }) : await audiobooksApi.wanted.cutoff({ page: 1, pageSize: MAX_PAGE });
+      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined };
+      const all = mode === 'missing' ? await audiobooksApi.wanted.missing(query) : await audiobooksApi.wanted.cutoff(query);
       searchBooks(all.records.map((r) => r.id));
     } catch (err) {
       toast.error(t('common.searchFailed'), errorMessage(err));
@@ -629,13 +684,12 @@ function BooksList({ mode }: { mode: ListMode }) {
   return (
     <ListShell
       mode={mode}
+      kind="books"
+      search={listSearch}
       noun={t('audiobooks.bookNoun', { count: 2 })}
       total={total}
       page={page}
-      onPage={(p) => {
-        setPage(p);
-        setSelected(new Set());
-      }}
+      onPage={onPage}
       rows={rows}
       loading={list.isPending}
       columns={columns}

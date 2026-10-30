@@ -17,7 +17,7 @@ export const musicKeys = {
   },
   /** MusicBrainz search results: a snapshot, kept out of ['music'] so library events leave them alone. */
   lookup: (term: string) => ['musicLookup', term] as const,
-  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number) => ['wanted', mode, 'albums', page, pageSize] as const,
+  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '') => ['wanted', mode, 'albums', page, pageSize, q] as const,
   features: ['settings', 'features'] as const,
   metadata: ['settings', 'musicmetadata'] as const,
   audio: ['settings', 'audio'] as const,

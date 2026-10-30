@@ -1,7 +1,7 @@
 import { closeSync, existsSync, fstatSync, openSync, readdirSync, renameSync, statSync, unlinkSync, writeSync } from 'node:fs';
 import { join } from 'node:path';
 import pino, { type DestinationStream, type Logger } from 'pino';
-import { LOG_LEVEL_VALUES, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@arclight/shared';
+import { LOG_LEVEL_VALUES, listSearchTokens, matchesListSearch, type LogFile, type LogLevel, type LogPage, type LogQuery, type LogRecord } from '@arclight/shared';
 import type { AppConfig } from './config.js';
 
 // Logger construction. Every record goes to three places through a pino multistream:
@@ -126,16 +126,18 @@ export class LogBuffer implements DestinationStream {
   }
 }
 
-/** Predicate for a level minimum + case-insensitive text search over message, component and context. */
-export function recordFilter(q: Pick<Partial<LogQuery>, 'level' | 'search'>): (r: LogRecord) => boolean {
+/**
+ * Predicate for a level minimum + the list-page text search (`search`, alias `q`; see
+ * list-search.ts) over message, component, level and context: every word must appear,
+ * case-insensitively, with dots, dashes and underscores counting as spaces.
+ */
+export function recordFilter(q: Pick<Partial<LogQuery>, 'level' | 'search' | 'q'>): (r: LogRecord) => boolean {
   const min = q.level ? LOG_LEVEL_VALUES[q.level] : 0;
-  const needle = q.search?.trim().toLowerCase() ?? '';
+  const words = [...listSearchTokens(q.search), ...listSearchTokens(q.q)];
   return (r) => {
     if (LOG_LEVEL_VALUES[r.level] < min) return false;
-    if (!needle) return true;
-    if (r.message.toLowerCase().includes(needle)) return true;
-    if (r.component?.toLowerCase().includes(needle)) return true;
-    return r.context !== undefined && JSON.stringify(r.context).toLowerCase().includes(needle);
+    if (words.length === 0) return true;
+    return matchesListSearch(words, [r.message, r.component, r.level, r.context === undefined ? null : JSON.stringify(r.context)]);
   };
 }
 

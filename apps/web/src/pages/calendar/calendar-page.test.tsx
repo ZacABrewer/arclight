@@ -112,6 +112,31 @@ describe('calendar page', () => {
     await waitFor(() => expect(screen.getByRole('heading', { level: 1 }).textContent).toMatch(/October/));
   });
 
+  it('search filters the entries by title, episode title or code; Clear search brings them back', async () => {
+    renderAt('/calendar?q=andor');
+    expect(await screen.findByRole('button', { name: /^Andor, S02E03/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Severance/ })).toBeNull();
+    expect(screen.getByText('1 of 3')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'after hours' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(await screen.findByRole('button', { name: /^Severance, S02E09/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /^Andor/ })).toBeNull();
+    fireEvent.change(box, { target: { value: 'nothing here' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByRole('button', { name: /^Fallout, S01E04/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /^Andor, S02E03/ })).toBeTruthy();
+  });
+
+  it('search applies to the agenda view', async () => {
+    renderAt('/calendar?q=s01e04');
+    await screen.findByRole('button', { name: /^Fallout, S01E04/ });
+    fireEvent.click(screen.getByRole('button', { name: 'Agenda' }));
+    expect(await screen.findByRole('region', { name: /October 27, 2026/ })).toBeTruthy();
+    expect(screen.queryByRole('region', { name: /October 6, 2026/ })).toBeNull();
+  });
+
   it('shows the iCal URL in mono with a Copy button', async () => {
     const writeText = vi.fn(async () => {});
     vi.stubGlobal('navigator', { ...navigator, clipboard: { writeText } });

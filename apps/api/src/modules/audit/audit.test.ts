@@ -112,6 +112,25 @@ describe('audit service', () => {
     ).toEqual(['settings.updated_by_hand', 'series.delete']);
   });
 
+  it('q searches user, action, target, ip and details; every word must match; CSV follows it', async () => {
+    const { db, service } = await seeded();
+    new AuditRecorder(db).record({ action: 'series.delete', username: 'Admin', target: 'Breaking Bad', details: { note: 'Weekly cleanup' }, time: '2026-01-04T12:00:00.000Z' });
+    const actions = (q: string) => service.list({ page: 1, pageSize: 50, q }).records.map((r) => `${r.username} ${r.action}`);
+    expect(actions('BOB')).toEqual(['bob settings.updated_by_hand', 'bob series.delete']);
+    expect(actions('series delete')).toEqual(['Admin series.delete', 'bob series.delete']);
+    expect(actions('settings.updated_by_hand')).toEqual(['bob settings.updated_by_hand']); // dots/underscores as spaces
+    expect(actions('breaking.bad')).toEqual(['Admin series.delete']); // target
+    expect(actions('weekly')).toEqual(['Admin series.delete']); // details JSON
+    expect(actions('10.0.0.9')).toEqual(['mallory login.failed']); // ip
+    expect(actions('bob login')).toEqual([]);
+    expect(actions('%')).toEqual([]);
+    const paged = service.list({ page: 2, pageSize: 1, q: 'series' });
+    expect(paged.totalRecords).toBe(2);
+    expect(paged.records.map((r) => r.username)).toEqual(['bob']);
+    expect(service.list({ page: 1, pageSize: 50, user: 'bob', q: 'delete' }).totalRecords).toBe(1);
+    expect(service.csv({ q: 'mallory' }).trim().split('\r\n')).toHaveLength(2);
+  });
+
   it('exports CSV with quoting and a formula guard', async () => {
     const { db, service } = await seeded();
     new AuditRecorder(db).record({ action: 'x.create', target: '=HYPERLINK("evil")', details: { a: 'b,c' }, time: '2026-01-04T11:00:00.000Z' });

@@ -80,3 +80,4 @@
 /* Album (music) items: a mono kind label in the bar, a Music chip in the popover and agenda. */
 .cal-event__kind { flex: none; font-family: var(--al-mono); font-size: 9px; letter-spacing: .08em; text-transform: uppercase; color: var(--al-text-4); border: 1px solid var(--al-line-2); padding: 0 3px; line-height: 14px; }
 .cal-agenda__code .al-chip { margin-right: 8px; vertical-align: middle; }
+.cal-search { margin-bottom: 16px; }

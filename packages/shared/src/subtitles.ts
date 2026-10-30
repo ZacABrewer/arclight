@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ListSearchParam } from './list-search.js';
 
 // Subtitles contract (Phase 3; behaviour: docs/spec/subtitles.md). Language codes are the
 // IETF-style tags the subtitles package uses ("en", "pt-BR", "zh-Hant"). Scores are integers
@@ -385,6 +386,8 @@ export const WantedSubtitlesQuery = z.object({
   mediaType: SubtitleMediaType.default('series'),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type WantedSubtitlesQuery = z.infer<typeof WantedSubtitlesQuery>;
 

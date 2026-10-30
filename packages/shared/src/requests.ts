@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { MediaType, MinimumAvailability, MonitorOption, SeriesType } from './library.js';
 import { PushPreferences } from './push.js';
+import { ListSearchParam } from './list-search.js';
 
 // Requests, discover, issues, watchlists, override rules and per-user request settings.
 // Behaviour: docs/spec/requests.md (Seerr parity) and docs/API.md "Requests".
@@ -473,6 +474,8 @@ export const RequestListQuery = z.object({
   requestedBy: z.coerce.number().int().positive().optional(),
   sort: z.enum(['added', 'modified']).default('added'),
   sortDirection: z.enum(['asc', 'desc']).default('desc'),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type RequestListQuery = z.input<typeof RequestListQuery>;
 
@@ -567,6 +570,8 @@ export const IssueListQuery = z.object({
   tmdbId: z.coerce.number().int().positive().optional(),
   mediaType: MediaType.optional(),
   type: IssueType.optional(),
+  /** Text search (list-search.ts): every word must match. */
+  q: ListSearchParam,
 });
 export type IssueListQuery = z.input<typeof IssueListQuery>;
 

@@ -160,10 +160,11 @@ export function useItemHistory(scope: { seriesId: number } | { movieId: number }
   });
 }
 
-export function useBlocklist(page: number, pageSize: number) {
+export function useBlocklist(page: number, pageSize: number, q = '', enabled = true) {
   return useQuery({
-    queryKey: activityKeys.blocklist(page, pageSize),
-    queryFn: () => blocklistApi.list(page, pageSize),
+    enabled,
+    queryKey: activityKeys.blocklist(page, pageSize, q),
+    queryFn: () => blocklistApi.list(page, pageSize, q),
     placeholderData: keepPreviousData,
     retry: false,
   });

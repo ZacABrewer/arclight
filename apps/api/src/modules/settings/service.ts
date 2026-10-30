@@ -18,6 +18,7 @@ import {
   CommunityCatalogueSettings,
   DefinitionFeedSettings,
   GuidesSettings,
+  HealthScanSettings,
   ThemeSettings,
   ImportListSettings,
   IndexerGlobalSettings,
@@ -128,6 +129,8 @@ const sections = {
   audiobookMetadata: AudiobookMetadataSettings,
   // Owned by the audio importer (imports/audio): track matching (routes under /settings/audio).
   audio: AudioImportSettings,
+  // Owned by the health-scan module: schedule, mode and throttling (routes under /settings/healthscan).
+  healthScan: HealthScanSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

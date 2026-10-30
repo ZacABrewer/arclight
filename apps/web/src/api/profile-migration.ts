@@ -23,6 +23,8 @@ export interface MismatchListQuery {
   mediaType?: MediaType | undefined;
   status?: readonly ProfileFileStatus[] | undefined;
   qualityProfileId?: number | undefined;
+  /** Text search (title, episode code, profile, quality, version). */
+  q?: string | undefined;
 }
 
 export const profileMigrationApi = {
@@ -45,6 +47,7 @@ export const profileMigrationApi = {
         mediaType: query.mediaType,
         status: query.status && query.status.length > 0 ? query.status.join(',') : undefined,
         qualityProfileId: query.qualityProfileId,
+        q: query.q || undefined,
       },
     }),
   items: () => request('/profilemigration/items', z.array(ProfileItemStatus)),

@@ -1,0 +1,39 @@
+/* Settings → Tags (tags, usage, tag rules and their editor) */
+.tg-toolbar { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+.tg-toolbar .al-caption { margin: 0; flex: 1 1 280px; }
+.tg-scroll { overflow-x: auto; min-width: 0; }
+.tg-label { display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tg-usage { display: inline-flex; flex-wrap: wrap; gap: 4px 12px; }
+.tg-usage__item[data-behaviour] { color: var(--al-warn-text); }
+.tg-actions { display: inline-flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; align-items: center; }
+.tg-strong { color: var(--al-text-1); font-weight: 500; }
+.tg-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tg-warning ul { margin: 8px 0 0; padding-left: 18px; }
+.tg-rules { list-style: none; margin: 12px 0 0; padding: 0; display: flex; flex-direction: column; }
+.tg-rule { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 12px; align-items: start; padding: 12px 0; border-top: 1px solid var(--al-line-2); }
+.tg-rule__order { display: flex; flex-direction: column; gap: 4px; }
+.tg-rule__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.tg-rule__title { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.tg-rule__side { display: flex; flex-direction: column; gap: 8px; align-items: flex-end; }
+.tg-editor { display: flex; flex-direction: column; gap: 18px; }
+.tg-fieldset { border: 0; border-top: 1px solid var(--al-line-2); margin: 0; padding: 12px 0 0; display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.tg-fieldset > legend { padding: 0 8px 0 0; }
+.tg-checks { display: flex; flex-wrap: wrap; gap: 8px 20px; }
+.tg-cond { display: flex; flex-direction: column; gap: 8px; padding: 10px; border: 1px solid var(--al-line-2); min-width: 0; }
+.tg-cond__head { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.tg-cond__range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.tg-values { display: flex; flex-direction: column; gap: 8px; }
+.tg-values__entry { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.tg-addtag { display: flex; flex-direction: column; gap: 4px; }
+.tg-addtag__row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px; align-items: center; }
+.tg-vars { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.tg-preview { display: flex; flex-direction: column; gap: 8px; padding: 12px; border: 1px solid var(--al-line-2); }
+.tg-run { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.tg-run__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere; }
+.tg-run__behaviour { display: flex; flex-direction: column; gap: 6px; }
+.tg-errors { margin: 0; padding: 10px 14px 10px 28px; border: 1px solid var(--al-danger-line); color: var(--al-danger-text); }
+@media (max-width: 767px) {
+  .tg-rule { grid-template-columns: auto minmax(0, 1fr); }
+  .tg-rule__side { grid-column: 1 / -1; flex-direction: row; flex-wrap: wrap; justify-content: space-between; align-items: center; }
+  .tg-cond__head { grid-template-columns: minmax(0, 1fr); }
+}

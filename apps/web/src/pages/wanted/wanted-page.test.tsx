@@ -232,6 +232,73 @@ describe('wanted page', () => {
     await waitFor(() => expect(searchPosts()).toEqual([{ episodeIds: [51] }]));
   });
 
+  it('search: the profile mismatch list sends q and shows the server count', async () => {
+    renderAt('/wanted/mismatch?q=bluray%202160p');
+    await screen.findByRole('link', { name: 'Severance' });
+    const req = calls.find((c) => c.url.startsWith('/api/v1/profilemigration/mismatch?'));
+    expect(new URL(req!.url, 'http://x').searchParams.get('q')).toBe('bluray 2160p');
+    expect(screen.getByText('1 result')).toBeTruthy();
+  });
+
+  it('search: sends q to the wanted list and shows the server count', async () => {
+    renderAt('/wanted/missing?q=severance');
+    await screen.findByLabelText('Select Severance S02E08');
+    const url = calls.find((c) => c.url.startsWith('/api/v1/wanted/missing/episodes?'))?.url ?? '';
+    expect(url).toContain('q=severance');
+    expect(url).toContain('page=1');
+    expect(screen.getByText('2 results')).toBeTruthy();
+    // The same query follows the media-type switch.
+    fireEvent.click(screen.getByRole('button', { name: 'Movies' }));
+    await screen.findByRole('link', { name: 'Arrival' });
+    expect(calls.find((c) => c.url.startsWith('/api/v1/wanted/missing/movies?'))?.url).toContain('q=severance');
+  });
+
+  it('search: Select all N + Search selected queues the searched list (allEpisodes with q)', async () => {
+    renderAt('/wanted/missing?q=sev');
+    fireEvent.click(await screen.findByLabelText('Select Severance S02E08'));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    fireEvent.click(within(bar).getByRole('button', { name: /Select all 2/ }));
+    fireEvent.click(within(bar).getByRole('button', { name: 'Search selected' }));
+    await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', allEpisodes: true, q: 'sev' }]));
+  });
+
+  it('search: Search all matching carries q', async () => {
+    renderAt('/wanted/missing?q=sev');
+    await screen.findByLabelText('Select Severance S02E08');
+    fireEvent.click(screen.getByRole('button', { name: 'Search all matching' }));
+    await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', allEpisodes: true, q: 'sev' }]));
+  });
+
+  it('search: a new query goes back to page 1; no match shows Clear search', async () => {
+    const records = Array.from({ length: 50 }, (_, i) => wantedEp(100 + i, `Show ${i}`, 1));
+    const base = vi.mocked(fetch).getMockImplementation()!;
+    vi.mocked(fetch).mockImplementation(async (input, init) => {
+      const url = String(input);
+      if (url.startsWith('/api/v1/wanted/missing/episodes?')) {
+        calls.push({ url, method: 'GET' });
+        const empty = url.includes('q=zzz');
+        return new Response(JSON.stringify({ page: 1, pageSize: 50, totalRecords: empty ? 0 : 120, records: empty ? [] : records }), { status: 200 });
+      }
+      return base(input, init);
+    });
+    renderAt('/wanted/missing');
+    await screen.findByLabelText('Select Show 0 S02E01');
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    const urls = () => calls.filter((c) => c.url.startsWith('/api/v1/wanted/missing/episodes?')).map((c) => c.url);
+    await waitFor(() => expect(urls().some((u) => u.includes('page=2'))).toBe(true));
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'zzz' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(urls().some((u) => u.includes('q=zzz'))).toBe(true));
+    expect(urls().find((u) => u.includes('q=zzz'))).toContain('page=1');
+    expect(await screen.findByText('Nothing matches “zzz”')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Clear search' }));
+    // Back on the unsearched list, page 1 (served from the cache, so no new request is needed).
+    expect(await screen.findByLabelText('Select Show 0 S02E01')).toBeTruthy();
+    expect(screen.queryByText('Nothing matches “zzz”')).toBeNull();
+    expect(screen.getByRole('searchbox', { name: 'Search this list' })).toHaveProperty('value', '');
+  });
+
   it('formats dates short', () => {
     expect(shortDate('2025-03-07')).toMatch(/2025/);
     expect(shortDate(null)).toBe('—');

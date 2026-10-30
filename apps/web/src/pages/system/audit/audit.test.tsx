@@ -67,6 +67,7 @@ describe('audit helpers', () => {
     expect(auditQuery({ user: '', action: 'login', from: undefined })).toEqual({ action: 'login' });
     expect(auditApi.exportUrl({ user: 'admin', action: '' })).toBe('/api/v1/audit/export?user=admin');
     expect(auditApi.exportUrl({})).toBe('/api/v1/audit/export');
+    expect(auditQuery({ q: '  sonarr key ' })).toEqual({ q: 'sonarr key' });
   });
 });
 
@@ -109,6 +110,42 @@ describe('System → Audit', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
     expect((screen.getByRole('textbox', { name: 'User' }) as HTMLInputElement).value).toBe('');
     await waitFor(() => expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toBe('/api/v1/audit/export'));
+  });
+
+  it('sends ?q= to the server and the export link, with "N results"', async () => {
+    stubApi(baseRoutes());
+    renderAt('/system/audit?q=settings%20metadata');
+    await screen.findByText('mallory');
+    const fetchMock = vi.mocked(fetch);
+    expect(fetchMock.mock.calls.some(([u]) => String(u).startsWith('/api/v1/audit?') && String(u).includes('q=settings+metadata'))).toBe(true);
+    expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toBe('/api/v1/audit/export?q=settings+metadata');
+    expect(screen.getByText('51 results')).toBeTruthy();
+    expect((screen.getByRole('searchbox', { name: 'Search this list' }) as HTMLInputElement).value).toBe('settings metadata');
+  });
+
+  it('goes back to page 1 when the search changes', async () => {
+    stubApi(baseRoutes());
+    renderAt('/system/audit');
+    await screen.findByText('mallory');
+    fireEvent.click(screen.getByRole('button', { name: 'Next page' }));
+    expect(await screen.findByText('Severance')).toBeTruthy();
+    const box = screen.getByRole('searchbox', { name: 'Search this list' });
+    fireEvent.change(box, { target: { value: 'login' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    const fetchMock = vi.mocked(fetch);
+    await waitFor(() => {
+      const last = String(fetchMock.mock.calls.filter(([u]) => String(u).startsWith('/api/v1/audit?')).at(-1)?.[0]);
+      expect(last).toContain('q=login');
+      expect(last).toContain('page=1');
+    });
+  });
+
+  it('offers Clear search when nothing matches', async () => {
+    stubApi(baseRoutes({ '/api/v1/audit': (_: RequestInit | undefined, url: URL) => (url.searchParams.get('q') ? page([], 0) : page([event()], 1)) }));
+    renderAt('/system/audit?q=zzz');
+    fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
+    expect(await screen.findByText('settings.update')).toBeTruthy();
+    expect(screen.getByRole('link', { name: 'Export CSV' }).getAttribute('href')).toBe('/api/v1/audit/export');
   });
 
   it('pages through the log', async () => {

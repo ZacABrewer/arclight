@@ -180,6 +180,10 @@ Settings > Import Lists adds series and movies to your library automatically fro
 Be careful with the Remove choices. Start with **Log only** to see what would be affected.
 
 
+### Searching your import lists
+
+A search box sits above the import list cards once there is at least one. Every word you type has to match somewhere (in any order), case does not matter, and dots, dashes and underscores count as spaces. The count next to the box shows how many match ("2 of 9"), **Select all** then selects only the matching items, and Escape or **Clear search** shows everything again. The search is kept in the address (`?q=`). It matches the name, the list type (TMDB List, Trakt List…), the media type and the last sync error.
+
 ### Bulk actions
 
 Every card has a checkbox. Tick one or more and a bar appears at the bottom of the screen with "N selected", **Select all N** and the actions for the selection on Settings > Import Lists: **Enable**, **Disable**, **Test**, **Add tag**, **Remove tag** and **Delete**. Deleting asks first and says how many items it removes. Each item is handled on its own, so one that fails (for example a test that does not connect, or a profile still in use) does not stop the rest; a message lists what worked and why the others did not, and the failed items stay selected. On a phone the actions sit in one **Actions** menu.

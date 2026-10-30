@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { Permission as P, RequestsSettings } from '@arclight/shared';
-import { episodes, movies, rootFolders, seasons, series } from '../../db/schema.js';
+import { episodes, movies, rootFolders, seasons, series, users } from '../../db/schema.js';
 import { setSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
 import { mediaRequests, overrideRules } from './schema.js';
@@ -448,6 +448,19 @@ describe('listing and counting', () => {
     expect(h.services.requests.list(admin.actor, { filter: 'pending' }).results.map((r) => r.requestedBy.id)).toEqual([b.id]);
     expect(h.services.requests.list(admin.actor, { filter: 'processing' }).results.map((r) => r.id)).toEqual([ra.id]);
     expect(() => h.services.requests.get(b.actor, ra.id)).toThrow(RequestsError);
+
+    // Text search: title, status, requester username / display name; never the email.
+    h.db.update(users).set({ displayName: 'Night Owl', email: 'secret-mail@example.invalid' }).where(eq(users.id, b.id)).run();
+    const ids = (q: string, actor = admin.actor) => h.services.requests.list(actor, { q }).results.map((r) => r.id);
+    const rb = h.services.requests.list(admin.actor, { requestedBy: b.id }).results[0]!;
+    expect(ids(rb.mediaTitle)).toEqual([rb.id]);
+    expect(ids('TWO 2002')).toEqual([rb.id]); // title + year
+    expect(ids('night owl')).toEqual([rb.id]); // display name
+    expect(ids(h.services.requests.list(admin.actor, { requestedBy: a.id }).results[0]!.requestedBy.username)).toEqual([ra.id]);
+    expect(ids('approved')).toEqual([ra.id]); // status
+    expect(ids('secret mail')).toEqual([]); // emails are not searched
+    expect(ids('two', a.actor)).toEqual([]); // the search never widens the caller's scope
+    expect(h.services.requests.list(admin.actor, { q: 'movie', take: 1 }).pageInfo.total).toBe(2);
 
     const count = h.services.requests.count(admin.actor);
     expect(count).toMatchObject({ total: 2, movie: 2, pending: 1, approved: 1, processing: 1, available: 0 });

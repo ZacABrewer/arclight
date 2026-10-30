@@ -84,6 +84,21 @@ describe('LogBuffer', () => {
     expect(buffer.query({ search: 'series', level: 'error' }).totalRecords).toBe(0);
   });
 
+  it('search follows the list-search rule (every word, separators as spaces); q is an alias', () => {
+    const buffer = new LogBuffer(100);
+    buffer.write(line({ msg: 'Release grabbed: The.Office.S01E01', component: 'Releases' }));
+    buffer.write(line({ msg: 'tick', component: 'Scheduler', level: 40 }));
+    buffer.write(line({ msg: 'web_dl import done' }));
+    const messages = (q: Parameters<LogBuffer['query']>[0]) => buffer.query(q).records.map((r) => r.message);
+    expect(messages({ search: 'the office grabbed' })).toEqual(['Release grabbed: The.Office.S01E01']);
+    expect(messages({ q: 'office releases' })).toEqual(['Release grabbed: The.Office.S01E01']); // message + component
+    expect(messages({ q: 'web-dl' })).toEqual(['web_dl import done']);
+    expect(messages({ q: 'warn scheduler' })).toEqual(['tick']); // level text
+    expect(messages({ q: 'office scheduler' })).toEqual([]);
+    expect(messages({ search: 'office', q: 'tick' })).toEqual([]); // both given: all words must match
+    expect(buffer.query({ q: ' ' }).totalRecords).toBe(3);
+  });
+
   it('clears and notifies subscribers of new records', () => {
     const buffer = new LogBuffer(10);
     fill(buffer, 3);
@@ -171,6 +186,9 @@ describe('log routes', () => {
     expect(body.totalRecords).toBe(10);
     expect(body.records.map((r: LogRecord) => r.message)).toEqual(['message 18', 'message 15', 'message 12', 'message 9']);
     expect((await a.inject({ method: 'GET', url: '/api/v1/log?level=loud' })).statusCode).toBe(400);
+    expect((await a.inject({ method: 'GET', url: '/api/v1/log?q=message.18' })).json().records.map((r: LogRecord) => r.message)).toEqual(['message 18']);
+    expect((await a.inject({ method: 'GET', url: '/api/v1/log?search=message%2018&level=error' })).json().totalRecords).toBe(1);
+    expect((await a.inject({ method: 'GET', url: `/api/v1/log?q=${'x'.repeat(201)}` })).statusCode).toBe(400);
     expect((await a.inject({ method: 'DELETE', url: '/api/v1/log' })).statusCode).toBe(204);
     expect((await a.inject({ method: 'GET', url: '/api/v1/log' })).json().totalRecords).toBe(0);
     await a.close();

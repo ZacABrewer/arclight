@@ -23,6 +23,7 @@ import { ConfirmDialog } from '../../components/forms/confirm-dialog.js';
 import { useToast } from '../../components/toast.js';
 import { BulkConfirmDialog } from '../../components/bulk-actions.js';
 import { BulkBar } from '../../components/media/bulk-bar.js';
+import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { useAddBlocklist, useBlocklist, useClearBlocklist, useRemoveBlocklist } from '../../hooks/activity.js';
 import { useMovieList, useSeriesList } from '../../hooks/library.js';
 import { formatDateTime, relativeTime } from '../../lib/format.js';
@@ -35,7 +36,15 @@ export function BlocklistPage() {
   const [page, setPage] = useState(1);
   const pageSize = 25;
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const list = useBlocklist(page, pageSize);
+  const search = useListSearch();
+  // A new search starts on page 1 with nothing selected.
+  const [seenQ, setSeenQ] = useState(search.q);
+  if (seenQ !== search.q) {
+    setSeenQ(search.q);
+    setPage(1);
+    setSelected(new Set());
+  }
+  const list = useBlocklist(page, pageSize, search.q);
   const remove = useRemoveBlocklist();
   const clear = useClearBlocklist();
   const toast = useToast();
@@ -45,7 +54,9 @@ export function BlocklistPage() {
   const pageIds = (list.data?.records ?? []).map((r) => r.id);
   const selectedIds = pageIds.filter((id) => selected.has(id));
   const pending = list.error instanceof ApiError && list.error.status === 404;
-  const total = list.data?.totalRecords ?? 0;
+  // "Clear all" empties the whole blocklist, so it counts every entry, not just the matches.
+  const unfiltered = useBlocklist(1, 1, '', search.active);
+  const total = (search.active ? unfiltered.data?.totalRecords : list.data?.totalRecords) ?? 0;
 
   const columns: Column<BlocklistItem>[] = [
     {
@@ -111,6 +122,9 @@ export function BlocklistPage() {
         }
       />
       <Pane flush bare className="al-activity-pane">
+        <div className="al-activity-filters">
+          <ListSearchBar value={search.q} onChange={search.setQ} placeholder={t('listSearch.ph.releases')} shown={list.data?.totalRecords} />
+        </div>
         {pending ? (
           <div className="al-activity-pad">
             <PendingApiNotice what={t('activity.blocklist.blocklist')} />
@@ -134,7 +148,13 @@ export function BlocklistPage() {
               selectable
               selected={selected}
               onSelectionChange={setSelected}
-              empty={<EmptyState title={t('activity.blocklist.blocklistIsEmpty')}>{t('activity.blocklist.releasesThatFailedOrWere')}</EmptyState>}
+              empty={
+                search.active ? (
+                  <ListSearchEmpty query={search.q} onClear={search.clear} />
+                ) : (
+                  <EmptyState title={t('activity.blocklist.blocklistIsEmpty')}>{t('activity.blocklist.releasesThatFailedOrWere')}</EmptyState>
+                )
+              }
             />
             {list.data && list.data.totalRecords > pageSize ? (
               <footer className="al-activity-foot">

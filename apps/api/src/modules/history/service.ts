@@ -21,6 +21,8 @@ import type { Db } from '../../db/index.js';
 import { artists, authors, episodes, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import { history, type HistoryRow, type NewHistoryRow } from './schema.js';
+import { listSearchCondition } from '../../db/list-search.js';
+import { episodeSearchColumns, parentTitleSearchColumns } from './search.js';
 
 // ---- errors -------------------------------------------------------------------------
 
@@ -955,6 +957,20 @@ export class HistoryService {
         )}))`,
       );
     }
+    const search = listSearchCondition(query.q, [
+      history.sourceTitle,
+      history.eventType,
+      history.downloadId,
+      sql`json_extract(${history.data}, '$.indexer')`,
+      sql`json_extract(${history.data}, '$.downloadClient')`,
+      sql`json_extract(${history.data}, '$.downloadClientName')`,
+      sql`json_extract(${history.data}, '$.message')`,
+      sql`json_extract(${history.data}, '$.reason')`,
+      sql`json_extract(${history.data}, '$.releaseGroup')`,
+      ...parentTitleSearchColumns(history),
+      ...episodeSearchColumns(history.episodeId),
+    ]);
+    if (search) conds.push(search);
     const where = conds.length > 0 ? and(...conds) : undefined;
 
     const total = this.db
