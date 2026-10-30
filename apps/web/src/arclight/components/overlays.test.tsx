@@ -196,6 +196,22 @@ describe('Tooltip / Popover', () => {
     expect(tip.parentElement).toBe(document.body);
   });
 
+  it('renders the popover on the body so a clipped bar cannot hide it', async () => {
+    render(
+      <div data-testid="clip" style={{ clipPath: 'inset(0)', overflow: 'auto' }}>
+        <Popover label="Actions" trigger={(p) => <button type="button" {...p}>Actions</button>}>
+          <button type="button">Search</button>
+        </Popover>
+      </div>,
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Actions' }));
+    const dialog = screen.getByRole('dialog', { name: 'Actions' });
+    expect(screen.getByTestId('clip').contains(dialog)).toBe(false);
+    // A click inside the popover is not an outside click.
+    await userEvent.click(screen.getByRole('button', { name: 'Search' }));
+    expect(screen.getByRole('dialog', { name: 'Actions' })).toBeTruthy();
+  });
+
   it('popover toggles on click and closes on Escape', async () => {
     render(
       <Popover label="Episode" trigger={(p) => <button type="button" {...p}>Details</button>}>

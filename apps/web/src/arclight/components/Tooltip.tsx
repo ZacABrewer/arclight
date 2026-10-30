@@ -63,49 +63,65 @@ export function Tooltip({ content, children, placement = 'top', delay = 300 }: T
 const GAP = 8;
 const EDGE = 8;
 
+type Side = 'top' | 'bottom';
+type Align = 'center' | 'start' | 'end';
+type FloatPos = { left: number; top: number; side: Side } | null;
+
 /**
- * The tooltip box, rendered on <body> with fixed positioning so a modal, drawer or scrolling
- * table never clips it. Placed above (or below) the anchor, flipped when there is no room,
- * and kept inside the viewport.
+ * Fixed position for a box floating next to an anchor: on `side` (flipped when the other side
+ * has more room), aligned to the anchor's centre, start or end, and kept inside the viewport.
+ * Follows the anchor on scroll and resize.
  */
-function FloatingTip({ id, anchor, placement, content }: { id: string; anchor: { current: HTMLSpanElement | null }; placement: 'top' | 'bottom'; content: ReactNode }) {
-  const ref = useRef<HTMLSpanElement>(null);
-  const [pos, setPos] = useState<{ left: number; top: number; side: 'top' | 'bottom' } | null>(null);
+function useFloatingPosition(anchor: { current: HTMLElement | null }, box: { current: HTMLElement | null }, side: Side, align: Align): FloatPos {
+  const [pos, setPos] = useState<FloatPos>(null);
   useLayoutEffect(() => {
     const place = () => {
       const a = anchor.current?.getBoundingClientRect();
-      const tip = ref.current;
-      if (!a || !tip) return;
-      const w = tip.offsetWidth;
-      const h = tip.offsetHeight;
+      const el = box.current;
+      if (!a || !el) return;
+      const w = el.offsetWidth;
+      const h = el.offsetHeight;
       const vw = window.innerWidth;
       const vh = window.innerHeight;
       const roomAbove = a.top - GAP - EDGE;
       const roomBelow = vh - a.bottom - GAP - EDGE;
-      let side = placement;
-      if (side === 'top' && h > roomAbove && roomBelow > roomAbove) side = 'bottom';
-      else if (side === 'bottom' && h > roomBelow && roomAbove > roomBelow) side = 'top';
-      const rawTop = side === 'top' ? a.top - GAP - h : a.bottom + GAP;
-      const top = Math.max(EDGE, Math.min(rawTop, vh - h - EDGE));
-      const left = Math.max(EDGE, Math.min(a.left + a.width / 2 - w / 2, vw - w - EDGE));
-      setPos({ left, top, side });
+      let s = side;
+      if (s === 'top' && h > roomAbove && roomBelow > roomAbove) s = 'bottom';
+      else if (s === 'bottom' && h > roomBelow && roomAbove > roomBelow) s = 'top';
+      const rawTop = s === 'top' ? a.top - GAP - h : a.bottom + GAP;
+      const rawLeft = align === 'start' ? a.left : align === 'end' ? a.right - w : a.left + a.width / 2 - w / 2;
+      setPos({
+        top: Math.max(EDGE, Math.min(rawTop, vh - h - EDGE)),
+        left: Math.max(EDGE, Math.min(rawLeft, vw - w - EDGE)),
+        side: s,
+      });
     };
     place();
+    // Content can change size while open (a menu swapping to a submenu).
+    const ro = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(place);
+    if (box.current) ro?.observe(box.current);
     window.addEventListener('scroll', place, true);
     window.addEventListener('resize', place);
     return () => {
+      ro?.disconnect();
       window.removeEventListener('scroll', place, true);
       window.removeEventListener('resize', place);
     };
-  }, [anchor, placement]);
+  }, [anchor, box, side, align]);
+  return pos;
+}
+
+const floatStyle = (pos: FloatPos) => (pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' as const });
+
+/**
+ * The tooltip box, rendered on <body> with fixed positioning so a modal, drawer, clipped bar
+ * or scrolling table never cuts it off.
+ */
+function FloatingTip({ id, anchor, placement, content }: { id: string; anchor: { current: HTMLSpanElement | null }; placement: Side; content: ReactNode }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const pos = useFloatingPosition(anchor, ref, placement, 'center');
   return (
-    <span
-      ref={ref}
-      role="tooltip"
-      id={id}
-      className={cx('al-tooltip', 'al-tooltip--float', `al-tooltip--${pos?.side ?? placement}`)}
-      style={pos ? { left: pos.left, top: pos.top } : { left: 0, top: 0, visibility: 'hidden' }}
-    >
+    <span ref={ref} role="tooltip" id={id} className={cx('al-tooltip', 'al-tooltip--float', `al-tooltip--${pos?.side ?? placement}`)} style={floatStyle(pos)}>
       {content}
     </span>
   );
@@ -148,6 +164,7 @@ export function Popover({ trigger, children, placement = 'bottom-start', width, 
   const [internal, setInternal] = useState(false);
   const open = controlled ?? internal;
   const rootRef = useRef<HTMLSpanElement>(null);
+  const boxRef = useRef<HTMLDivElement>(null);
   const setOpen = (v: boolean) => {
     if (controlled === undefined) setInternal(v);
     onOpenChange?.(v);
@@ -157,7 +174,9 @@ export function Popover({ trigger, children, placement = 'bottom-start', width, 
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (rootRef.current && !rootRef.current.contains(e.target as Node)) close();
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || boxRef.current?.contains(target)) return;
+      close();
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
@@ -177,12 +196,47 @@ export function Popover({ trigger, children, placement = 'bottom-start', width, 
   return (
     <span ref={rootRef} className="al-anchor">
       {trigger({ 'aria-expanded': open, 'aria-controls': id, 'aria-haspopup': 'dialog', onClick: () => setOpen(!open) })}
-      {open ? (
-        <div id={id} role="dialog" aria-label={label} className={cx('al-popover', `al-popover--${placement}`, className)} style={width ? { width } : undefined}>
-          {typeof children === 'function' ? children(close) : children}
-        </div>
-      ) : null}
+      {open
+        ? createPortal(
+            <FloatingPopover id={id} anchor={rootRef} box={boxRef} placement={placement} label={label} className={className} width={width}>
+              {typeof children === 'function' ? children(close) : children}
+            </FloatingPopover>,
+            document.body,
+          )
+        : null}
     </span>
+  );
+}
+
+/**
+ * The popover box, on <body> like the tooltip so a clipped or scrolling parent (the chamfered
+ * bulk bar, a table, a modal) cannot hide it.
+ */
+function FloatingPopover({
+  id,
+  anchor,
+  box,
+  placement,
+  label,
+  className,
+  width,
+  children,
+}: {
+  id: string;
+  anchor: { current: HTMLSpanElement | null };
+  box: { current: HTMLDivElement | null };
+  placement: NonNullable<PopoverProps['placement']>;
+  label: string | undefined;
+  className: string | undefined;
+  width: number | undefined;
+  children: ReactNode;
+}) {
+  const [side, align] = placement.split('-') as [Side, 'start' | 'end'];
+  const pos = useFloatingPosition(anchor, box, side, align);
+  return (
+    <div ref={box} id={id} role="dialog" aria-label={label} className={cx('al-popover', 'al-popover--float', className)} style={{ ...floatStyle(pos), ...(width ? { width } : {}) }}>
+      {children}
+    </div>
   );
 }
 

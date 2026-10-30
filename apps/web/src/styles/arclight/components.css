@@ -201,9 +201,7 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-anchor { position: relative; display: inline-flex; }
 .al-tooltip--float { position: fixed; z-index: 100; width: max-content; max-width: min(320px, calc(100vw - 16px)); pointer-events: none; }
 .al-popover { position: absolute; z-index: 70; width: 320px; max-width: calc(100vw - 32px); padding: 16px; font-size: 13px; color: var(--al-text-2); background: var(--al-surface-pop); border: var(--al-border-width) solid var(--al-line-3); border-radius: var(--al-radius-inner); box-shadow: var(--al-shadow-pop); }
-.al-popover--bottom-start { left: 0; top: calc(100% + 8px); }
-.al-popover--bottom-end { right: 0; top: calc(100% + 8px); }
-.al-popover--top-start { left: 0; bottom: calc(100% + 8px); }
+.al-popover--float { position: fixed; z-index: 100; max-height: calc(100vh - 16px); overflow-y: auto; }
 .al-menu { display: flex; flex-direction: column; margin: -8px -16px; }
 .al-menu__item { display: flex; align-items: center; gap: 10px; height: 38px; padding: 0 16px; border: 0; background: none; font: 14px var(--al-font); color: var(--al-text-2); text-align: left; cursor: pointer; text-decoration: none; }
 .al-menu__item:hover, .al-menu__item:focus-visible { background: var(--al-cyan-a06); color: var(--al-text-1); text-decoration: none; }
