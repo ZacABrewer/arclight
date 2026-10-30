@@ -11,7 +11,8 @@ import { TranscodeService, type TranscodedNotice, type TranscodeServiceOptions }
 
 export { TranscodeService, TranscodeError, formatSize, toRule, type TranscodedNotice, type WorkerResult, type TranscodeServiceOptions } from './service.js';
 export { FfmpegRunner, FfmpegError, locateFfmpeg, parseHwaccels, backendsFor, type TranscodeRunner, type RunningProcess, type ProcessResult } from './runner.js';
-export { buildFfmpegArgs, formatCommand, planStreams, videoEncoder, qualityArgs, presetArgs, TranscodeBuildError, VAAPI_DEVICE } from './ffmpeg.js';
+export { buildFfmpegArgs, capabilityTestArgs, formatCommand, planStreams, softwareOptions, videoEncoder, qualityArgs, presetArgs, TranscodeBuildError, VAAPI_DEVICE } from './ffmpeg.js';
+export { hwInitFailure, failureReason, testBackends, hwFailureMessage, hwFallbackNote, HWACCEL_NAMES } from './hwaccel.js';
 export { FfmpegProgressParser, parseProgressOutput, progressFromBlock, durationMsOf } from './progress.js';
 export { ruleMatches, whenMatches, inWindow } from './match.js';
 export { TRANSCODE_WORKER_JOB, TRANSCODE_WORKER_CRON } from './jobs.js';

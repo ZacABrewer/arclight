@@ -49,6 +49,17 @@ export interface FormattedEvent {
   person?: { name: string; avatarUrl?: string };
 }
 
+/**
+ * A health check's docs link as something a chat client can open: absolute links stay, links
+ * into Arclight ("/docs/system/health#…") get the instance URL; without one there is no link.
+ */
+export function healthDocsLink(wikiUrl: string | undefined, applicationUrl: string | undefined): string | undefined {
+  if (!wikiUrl) return undefined;
+  if (/^https?:\/\//i.test(wikiUrl)) return wikiUrl;
+  if (!applicationUrl) return undefined;
+  return `${applicationUrl.replace(/\/+$/, '')}/${wikiUrl.replace(/^\/+/, '')}`;
+}
+
 /** Arclight's request/issue pages for an event, when the instance URL is known. */
 export function requestLinks(applicationUrl: string | undefined, requestId: number): { view: string; approve: string; decline: string } | undefined {
   if (!applicationUrl) return undefined;
@@ -525,7 +536,10 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Source', value: event.health.source, inline: true });
       fields.push({ name: 'Level', value: event.health.status, inline: true });
       fields.push({ name: 'Message', value: event.health.message });
-      if (event.health.wikiUrl) fields.push({ name: 'More Info', value: event.health.wikiUrl });
+      {
+        const docs = healthDocsLink(event.health.wikiUrl, event.applicationUrl);
+        if (docs) fields.push({ name: 'More Info', value: docs });
+      }
       break;
     case 'applicationUpdate':
       fields.push({ name: 'Previous Version', value: event.previousVersion, inline: true });
@@ -659,7 +673,10 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Source', value: event.health.source, inline: true });
       fields.push({ name: 'Level', value: event.health.status, inline: true });
       fields.push({ name: 'Message', value: event.health.message });
-      if (event.health.wikiUrl) fields.push({ name: 'More Info', value: event.health.wikiUrl });
+      {
+        const docs = healthDocsLink(event.health.wikiUrl, event.applicationUrl);
+        if (docs) fields.push({ name: 'More Info', value: docs });
+      }
       break;
     case 'dailySummary': {
       const s = event.summary;

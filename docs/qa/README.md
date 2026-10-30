@@ -44,6 +44,7 @@ Row IDs are stable (`SET-01`, `LIB-12`, `FAIL-07`), so quote them in bug reports
 | [14-compat-api.md](14-compat-api.md) | Sonarr/Radarr-compatible API for Overseerr, Prowlarr, mobile apps | CMP |
 | [15-mobile-pwa-performance.md](15-mobile-pwa-performance.md) | Phone layout, PWA, performance smoke | MOB, PRF |
 | [16-security.md](16-security.md) | Authentication, roles, API key, local bypass | SEC |
+| [17-hardware-transcoding.md](17-hardware-transcoding.md) | Hardware acceleration pane, software fallback, GPU device access | HWT |
 | [99-known-limitations.md](99-known-limitations.md) | Things that are known not to work; do not file bugs for these | n/a |
 
 Read [99-known-limitations.md](99-known-limitations.md) before you start. A row that exercises
@@ -123,7 +124,7 @@ hardlinks across the downloads and media shares, and long-running soak checks ar
 | Subtitle provider account (OpenSubtitles.com, Subdl) | Optional | Optional | Optional | Only for file 08 |
 | Trakt account, Plex token | Optional | Optional | Optional | Only for the Trakt and Plex rows in files 09 and 10 |
 | A second browser or private window | Required | Required | Required | For login, role and permission checks |
-| ffmpeg and ffprobe on PATH | Optional | Not in the Docker image (rows that need it are skipped) | Not in the image | Media-info and embedded-subtitle rows; without ffprobe, imports skip media-info |
+| ffmpeg and ffprobe on PATH | Optional | Included in the Docker image (Jellyfin's build) | Included in the image | Media-info and embedded-subtitle rows; without ffprobe, imports skip media-info. A GPU is optional and only needed for file 17 |
 
 Copyright note: use titles you are legally allowed to download (public-domain or
 Creative-Commons releases, your own media) for the end-to-end checks.

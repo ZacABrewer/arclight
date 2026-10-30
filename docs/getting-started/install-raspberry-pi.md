@@ -92,3 +92,4 @@ Run `id` as the user who owns the folders. The default Raspberry Pi OS first use
 - [first-run-wizard.md](first-run-wizard.md)
 - [updating.md](updating.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

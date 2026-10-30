@@ -34,26 +34,41 @@ if ! gosu "$PUID:$PGID" sh -c 'touch /config/.arclight-write-test && rm -f /conf
   exit 1
 fi
 
+# Give the app user the group that owns a device or socket so it can open it without running as
+# root. $1 is the path, $2 the name for a group created when the GID has none in the container.
+# Logs one line per group added.
+ADDED_GROUPS=" "
+add_owner_group() {
+  owner_gid="$(stat -c '%g' "$1")"
+  [ "$owner_gid" = "$PGID" ] && return 0
+  case "$ADDED_GROUPS" in *" $owner_gid "*) return 0 ;; esac
+  if ! getent group "$owner_gid" >/dev/null; then
+    if getent group "$2" >/dev/null; then groupadd -g "$owner_gid" "$2-$owner_gid"; else groupadd -g "$owner_gid" "$2"; fi
+  fi
+  owner_group="$(getent group "$owner_gid" | cut -d: -f1)"
+  usermod -aG "$owner_group" "$USER_NAME"
+  ADDED_GROUPS="$ADDED_GROUPS$owner_gid "
+  echo "$1 found: $USER_NAME added to group $owner_group ($owner_gid)"
+}
+
 # Self-update (Settings > Updates) talks to the Docker API through the socket when it is mounted
-# (-v /var/run/docker.sock:/var/run/docker.sock). Give the app user the socket's group so it can
-# open it without running as root. ARCLIGHT_DOCKER_SOCKET overrides the path.
+# (-v /var/run/docker.sock:/var/run/docker.sock). ARCLIGHT_DOCKER_SOCKET overrides the path.
 SOCKET="${ARCLIGHT_DOCKER_SOCKET:-/var/run/docker.sock}"
 if [ -S "$SOCKET" ]; then
-  SOCK_GID="$(stat -c '%g' "$SOCKET")"
-  if [ "$SOCK_GID" != "$PGID" ]; then
-    if ! getent group "$SOCK_GID" >/dev/null; then
-      groupadd -g "$SOCK_GID" docker-sock
-    fi
-    SOCK_GROUP="$(getent group "$SOCK_GID" | cut -d: -f1)"
-    usermod -aG "$SOCK_GROUP" "$USER_NAME"
-    echo "Docker socket $SOCKET found: $USER_NAME added to group $SOCK_GROUP ($SOCK_GID)"
-  fi
-  # gosu sets supplementary groups only when given a user name without a group, so make PGID the
-  # primary group and switch by name.
-  usermod -g "$PGID" "$USER_NAME" >/dev/null 2>&1 || true
-  echo "Arclight starting as $USER_NAME:$GROUP_NAME ($PUID:$PGID)"
-  exec gosu "$USER_NAME" "$@"
+  add_owner_group "$SOCKET" docker-sock
 fi
 
+# Hardware transcoding: /dev/dri (Intel/AMD VA-API, Quick Sync) and /dev/nvidia* nodes passed
+# through with `devices:` are owned by the host's render/video group, which the app user is not in.
+# Nodes anyone may already read and write (the NVIDIA ones usually are) need no group.
+for dev in /dev/dri/* /dev/nvidia*; do
+  [ -c "$dev" ] || continue
+  case "$(stat -c '%A' "$dev")" in ???????rw?) continue ;; esac
+  add_owner_group "$dev" render
+done
+
+# gosu sets supplementary groups only when given a user name without a group, so make PGID the
+# primary group and switch by name.
+usermod -g "$PGID" "$USER_NAME" >/dev/null 2>&1 || true
 echo "Arclight starting as $USER_NAME:$GROUP_NAME ($PUID:$PGID)"
-exec gosu "$PUID:$PGID" "$@"
+exec gosu "$USER_NAME" "$@"

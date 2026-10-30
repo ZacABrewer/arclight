@@ -94,3 +94,4 @@ If Gluetun does not work, run your VPN app on the Mac and use a no-VPN layout. B
 - [first-run-wizard.md](first-run-wizard.md)
 - [../using/vpn.md](../using/vpn.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

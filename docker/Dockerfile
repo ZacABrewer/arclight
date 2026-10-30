@@ -39,15 +39,28 @@ ENV NODE_ENV=production \
     ARCLIGHT_THEMES_DIR=/app/themes \
     ARCLIGHT_ASSET_ROOT=/app/dist \
     ARCLIGHT_VERSION=${VERSION} \
-    ARCLIGHT_FFPROBE=/usr/local/bin/ffprobe \
+    ARCLIGHT_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg \
+    ARCLIGHT_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe \
     PUID=1000 \
     PGID=1000
-# gosu/tini for the entrypoint. ffmpeg/ffprobe (media analysis, sample detection, transcode)
-# come as static binaries: Debian's ffmpeg package drags ~470 MB of shared libraries.
-# npm, corepack and yarn are not needed at runtime.
-RUN apt-get update && apt-get install -y --no-install-recommends gosu tini && rm -rf /var/lib/apt/lists/* \
+# gosu/tini for the entrypoint. npm, corepack and yarn are not needed at runtime.
+RUN apt-get update && apt-get install -y --no-install-recommends gosu tini ca-certificates && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg
-COPY --from=mwader/static-ffmpeg:7.1 /ffmpeg /ffprobe /usr/local/bin/
+# ffmpeg/ffprobe (media analysis, sample detection, transcode) come from Jellyfin's ffmpeg build.
+# A static ffmpeg cannot do hardware transcoding on Linux: Quick Sync needs a VA-API child device
+# (libva + a VA driver) and NVENC needs the CUDA loader, which static builds leave out even
+# though `ffmpeg -hwaccels` still lists them. jellyfin-ffmpeg7 links libva/libvpl/ffnvcodec and,
+# on amd64, ships the Intel iHD VA driver and the oneVPL GPU runtime under
+# /usr/lib/jellyfin-ffmpeg/lib, so VA-API, Quick Sync and NVENC work once the GPU is passed in
+# (docs/using/hardware-transcoding.md). Debian's own ffmpeg package drags ~470 MB of libraries.
+ADD https://repo.jellyfin.org/jellyfin_team.gpg.key /etc/apt/keyrings/jellyfin.asc
+RUN chmod 644 /etc/apt/keyrings/jellyfin.asc \
+ && printf '%s\n' 'Types: deb' 'URIs: https://repo.jellyfin.org/debian' 'Suites: bookworm' 'Components: main' \
+      'Architectures: amd64 arm64' 'Signed-By: /etc/apt/keyrings/jellyfin.asc' > /etc/apt/sources.list.d/jellyfin.sources \
+ && apt-get update && apt-get install -y --no-install-recommends jellyfin-ffmpeg7 && rm -rf /var/lib/apt/lists/* \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffmpeg /usr/local/bin/ffmpeg \
+ && ln -s /usr/lib/jellyfin-ffmpeg/ffprobe /usr/local/bin/ffprobe \
+ && ffmpeg -hide_banner -version | head -n 1
 WORKDIR /app
 COPY --from=externals /ext/node_modules /app/node_modules
 COPY --from=build /src/apps/api/dist /app/dist

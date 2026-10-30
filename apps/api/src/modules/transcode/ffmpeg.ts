@@ -212,6 +212,45 @@ function videoArgs(options: TranscodeOptions, codec: EncodedCodec, info: MediaIn
   return out;
 }
 
+/** x264/x265 preset names (the software encoders reject the NVENC/QSV-native ones). */
+const SOFTWARE_PRESETS = new Set(['ultrafast', 'superfast', 'veryfast', 'faster', 'fast', 'medium', 'slow', 'slower', 'veryslow', 'placebo']);
+
+/**
+ * The same options on software encoders (hardware fallback). A backend-native preset (`p5`)
+ * would make libx264 fail, so only presets the software encoders take are kept.
+ */
+export function softwareOptions(options: TranscodeOptions): TranscodeOptions {
+  const { preset, ...rest } = options;
+  const keep = preset !== undefined && (SOFTWARE_PRESETS.has(preset) || (options.videoCodec === 'av1' && /^\d+$/.test(preset)));
+  return { ...rest, hwaccel: 'none', ...(keep ? { preset } : {}) };
+}
+
+/**
+ * Capability test for a backend: one 256x256 lavfi frame through the backend's init args and
+ * H.264 encoder, built by the same helpers as a job so the test fails where a job would.
+ */
+export function capabilityTestArgs(hwaccel: TranscodeHwaccel): string[] {
+  const options: TranscodeOptions = { container: 'mkv', videoCodec: 'h264', audio: 'copy', keepLanguages: [], dropSubtitles: false, hwaccel };
+  return [
+    '-hide_banner',
+    '-nostdin',
+    '-loglevel',
+    'error',
+    ...hwInputArgs(hwaccel),
+    '-f',
+    'lavfi',
+    '-i',
+    'testsrc2=size=256x256:rate=1',
+    '-frames:v',
+    '1',
+    ...videoArgs(options, 'h264', null),
+    '-an',
+    '-f',
+    'null',
+    '-',
+  ];
+}
+
 function audioBitrate(codec: 'aac' | 'eac3', channels: number): string {
   if (codec === 'eac3') return channels <= 2 ? '224k' : '640k';
   return `${Math.min(512, channels * 64)}k`;

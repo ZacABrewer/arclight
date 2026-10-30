@@ -28,6 +28,11 @@ export class FakeRunner implements TranscodeRunner {
   /** Progress text written to stdout before finishing. */
   progress: string[] = [];
   hwaccelsOutput = 'Hardware acceleration methods:\nvdpau\ncuda\nvaapi\nqsv\ndrm\n';
+  /**
+   * Per-call override of the result (exit code / stderr) by argv; undefined uses `exitCode`.
+   * Capability tests (output `-`) succeed unless this says otherwise.
+   */
+  respond: ((args: readonly string[]) => { exitCode: number | null; stderr?: string } | undefined) | null = null;
   private readonly waiting: Array<() => void> = [];
 
   async locate(): Promise<string | null> {
@@ -41,18 +46,24 @@ export class FakeRunner implements TranscodeRunner {
     let settle!: (r: ProcessResult) => void;
     const done = new Promise<ProcessResult>((r) => (settle = r));
     let settled = false;
+    const scripted = this.respond?.(args);
+    const toNull = args.at(-1) === '-';
     const finish = async (code: number | null) => {
       if (settled) return;
       settled = true;
-      if (code === 0) await writeFile(args.at(-1)!, this.output);
-      else await writeFile(args.at(-1)!, 'partial').catch(() => undefined);
+      if (!toNull) {
+        if (code === 0) await writeFile(args.at(-1)!, this.output);
+        else await writeFile(args.at(-1)!, 'partial').catch(() => undefined);
+      }
       this.inFlight--;
-      settle({ exitCode: code, stderrTail: code === 0 ? '' : 'Conversion failed!' });
+      const stderr = scripted?.stderr ?? (code === 0 ? '' : 'Conversion failed!');
+      settle({ exitCode: code, stderrTail: stderr.trim().split(/\r?\n/).slice(-5).join('\n'), stderr });
     };
+    const exitCode = scripted ? scripted.exitCode : toNull ? 0 : this.exitCode;
     setTimeout(() => {
       for (const p of this.progress) onStdout(p);
-      if (this.hold) this.waiting.push(() => void finish(this.exitCode));
-      else void finish(this.exitCode);
+      if (this.hold && !toNull) this.waiting.push(() => void finish(exitCode));
+      else void finish(exitCode);
     }, 1);
     return {
       done,

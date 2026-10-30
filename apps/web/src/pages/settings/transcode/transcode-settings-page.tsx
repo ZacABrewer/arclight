@@ -3,6 +3,7 @@ import {
   TranscodeAction as TranscodeActionEnum,
   TranscodeHwaccel as TranscodeHwaccelEnum,
   type TranscodeAudioCodec,
+  type TranscodeBackendStatus,
   type TranscodeContainer,
   type TranscodeHwaccel,
   type TranscodeMediaType,
@@ -18,6 +19,7 @@ import { useToast } from '../../../components/toast.js';
 import { useQualityProfiles } from '../../../hooks/library.js';
 import { useDeleteTranscodeRule, useRunTranscode, useSaveTranscodeRule, useTranscodeHwaccel, useTranscodeRules } from '../../../hooks/transcode.js';
 import { transcodeQueuedText } from '../../../features/transcode/transcode-now.js';
+import { HardwarePane } from './hardware-pane.js';
 import { SettingsPage } from '../settings-layout.js';
 import { EditorFooter, SaveError } from '../shared.js';
 import {
@@ -38,8 +40,9 @@ import { t } from '../../../i18n/index.js';
 
 // Settings -> Transcode rules: the rule list (GET /transcoderule) and a 640px editor with the
 // scope, `when` conditions, action and the options that action uses. The hwaccel select is fed
-// by GET /transcode/hwaccel: backends this ffmpeg does not report stay selectable only when the
-// rule already uses them.
+// by GET /transcode/hwaccel's capability tests: backends that failed theirs stay selectable only
+// when the rule already uses them (with a warning). The Hardware acceleration pane below the
+// rules shows every test result.
 
 function mediaTypeLabel(m: TranscodeMediaType): string {
   return m === 'series' ? t('common.series') : m === 'movie' ? t('common.movies') : t('common.all');
@@ -86,10 +89,10 @@ function ToggleRow({ label, caption, checked, onChange }: { label: string; capti
   );
 }
 
-/** Hwaccel options: available backends from ffmpeg; others disabled unless already chosen. */
-export function hwaccelOptions(backends: readonly TranscodeHwaccel[] | undefined, current: TranscodeHwaccel) {
+/** Hwaccel options: backends whose test passed; others disabled unless already chosen. */
+export function hwaccelOptions(results: readonly TranscodeBackendStatus[] | undefined, current: TranscodeHwaccel) {
   return TranscodeHwaccelEnum.options.map((h) => {
-    const available = h === 'none' || backends === undefined || backends.includes(h);
+    const available = h === 'none' || results === undefined || results.some((r) => r.backend === h && r.available);
     return {
       value: h,
       label: available ? hwaccelLabel(h) : t('settings.transcode.hwUnavailable', { name: hwaccelLabel(h) }),
@@ -109,6 +112,7 @@ export function RuleEditor({ rule, onClose }: { rule: TranscodeRule | null; onCl
   const set = (patch: Partial<RuleDraft>) => setDraft((prev) => ({ ...prev, ...patch }));
   const shown = new Set(visibleOptions(d.action, d.videoCodec, d.audio));
   const tagsId = useId();
+  const selectedHw = shown.has('hwaccel') && d.hwaccel !== 'none' ? hw.data?.results.find((r) => r.backend === d.hwaccel && !r.available) : undefined;
 
   const submit = () => {
     const result = toRuleBody(d);
@@ -242,8 +246,11 @@ export function RuleEditor({ rule, onClose }: { rule: TranscodeRule | null; onCl
                 }
                 value={d.hwaccel}
                 onChange={(hwaccel) => set({ hwaccel })}
-                options={hwaccelOptions(hw.data?.backends, d.hwaccel)}
+                options={hwaccelOptions(hw.data?.results, d.hwaccel)}
               />
+            ) : null}
+            {selectedHw ? (
+              <Banner tone="warn">{t('settings.transcode.hwSelectedBroken', { name: hwaccelLabel(selectedHw.backend), reason: selectedHw.reason ?? '' })}</Banner>
             ) : null}
             {shown.has('crf') ? (
               <TextRow label={t('settings.transcode.quality')} caption={t('settings.transcode.qualityCaption')} type="number" placeholder="22" value={d.crf} onChange={(crf) => set({ crf })} />
@@ -379,6 +386,7 @@ export function TranscodeSettingsPage() {
     <SettingsPage
       title={t('settings.transcode.title')}
       description={t('settings.transcode.description')}
+      after={<HardwarePane rules={rules.data} />}
       actions={
         <Button variant="primary" onClick={() => setEditing('new')}>
           {t('settings.transcode.addRule')}

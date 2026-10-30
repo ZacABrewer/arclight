@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import {
   TranscodeErrorResponse,
+  TranscodeHwaccelQuery,
   TranscodeHwaccelResponse,
   TranscodeJob,
   TranscodeJobsQuery,
@@ -8,6 +9,7 @@ import {
   TranscodeRuleInput,
   TranscodeRunRequest,
   TranscodeRunResult,
+  TranscodeSettings,
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -65,6 +67,17 @@ export function transcodeRoutes(service: TranscodeService): FastifyPluginAsync<R
       service.cancel(req.params.id),
     );
 
-    app.get('/transcode/hwaccel', { schema: { response: { 200: TranscodeHwaccelResponse } } }, async () => service.hwaccels());
+    // Capability test per backend (a 1-frame encode), cached; ?refresh=true tests again.
+    app.get('/transcode/hwaccel', { schema: { querystring: TranscodeHwaccelQuery, response: { 200: TranscodeHwaccelResponse, ...errors } } }, async (req) =>
+      service.hwaccels({ refresh: req.query.refresh }),
+    );
+
+    // ---- settings ----------------------------------------------------------------------
+
+    app.get('/settings/transcode', { schema: { response: { 200: TranscodeSettings } } }, async () => service.settings());
+
+    app.put('/settings/transcode', { schema: { body: TranscodeSettings, response: { 200: TranscodeSettings, ...errors } } }, async (req) =>
+      service.saveSettings(req.body),
+    );
   };
 }

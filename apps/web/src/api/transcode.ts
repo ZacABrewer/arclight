@@ -3,6 +3,7 @@ import {
   TranscodeJob,
   TranscodeRule,
   TranscodeRunResult,
+  TranscodeSettings,
   type TranscodeJobsQuery,
   type TranscodeRuleInputRaw,
   type TranscodeRunRequest,
@@ -21,5 +22,10 @@ export const transcodeApi = {
   jobs: (query: TranscodeJobsQuery = {}) => request('/transcode/jobs', TranscodeJob.array(), { query: { status: query.status } }),
   run: (body: TranscodeRunRequest) => request('/transcode/run', TranscodeRunResult, { method: 'POST', json: body }),
   cancel: (id: number) => request(`/transcode/jobs/${id}/cancel`, TranscodeJob, { method: 'POST' }),
-  hwaccel: () => request('/transcode/hwaccel', TranscodeHwaccelResponse),
+  /** Capability test results (cached by the server); `refresh` runs the tests again. */
+  hwaccel: (refresh = false) => request('/transcode/hwaccel', TranscodeHwaccelResponse, refresh ? { query: { refresh: 'true' } } : {}),
+  settings: {
+    get: () => request('/settings/transcode', TranscodeSettings),
+    save: (body: TranscodeSettings) => request('/settings/transcode', TranscodeSettings, { method: 'PUT', json: body }),
+  },
 };

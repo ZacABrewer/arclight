@@ -170,11 +170,11 @@ Settings > Transcode holds rules that tidy or convert library files with ffmpeg.
 | Action | What it does |
 |---|---|
 | Remux | Copy every kept stream into an MKV or MP4 container, with no re-encoding |
-| Transcode | Re-encode video (H.264, HEVC or AV1) and/or audio (AAC or E-AC-3), with a quality (CRF) and preset, and optional hardware encoding (VAAPI, QSV, NVENC or VideoToolbox) |
+| Transcode | Re-encode video (H.264, HEVC or AV1) and/or audio (AAC or E-AC-3), with a quality (CRF) and preset, and optional hardware encoding (VAAPI, QSV, NVENC or VideoToolbox; see [hardware-transcoding.md](hardware-transcoding.md)) |
 | Strip tracks | Keep only the audio and subtitle languages you list (untagged tracks are always kept) |
 | Add audio track | Keep everything and add one compatibility audio track made from the first kept audio track |
 
-Each rule can **Keep original** (keep the old file next to the result instead of sending it to the recycle bin), **Run after import** (queue matching files after every import), and have a **Time window** (server time) in which queued jobs may start. A job that has started inside the window runs to the end. Manual runs ignore the window. Jobs show up under Activity > Transcode jobs. ffmpeg must be installed, or its path set in `ARCLIGHT_FFMPEG`; the page warns if it cannot be found.
+Each rule can **Keep original** (keep the old file next to the result instead of sending it to the recycle bin), **Run after import** (queue matching files after every import), and have a **Time window** (server time) in which queued jobs may start. A job that has started inside the window runs to the end. Manual runs ignore the window. Jobs show up under Activity > Transcode jobs. ffmpeg must be installed, or its path set in `ARCLIGHT_FFMPEG`; the page warns if it cannot be found (the Docker image includes it). The **Hardware acceleration** pane on the same page tests each GPU backend and holds the **Fall back to software** switch. Passing a GPU into the container is covered in [hardware-transcoding.md](hardware-transcoding.md).
 
 ## Import lists
 

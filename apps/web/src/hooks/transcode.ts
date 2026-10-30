@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { TranscodeJob, TranscodeJobStatus, TranscodeRuleInputRaw, TranscodeRunRequest } from '@arclight/shared';
+import type { TranscodeJob, TranscodeJobStatus, TranscodeRuleInputRaw, TranscodeRunRequest, TranscodeSettings } from '@arclight/shared';
 import { transcodeApi } from '../api/transcode.js';
 import { useInvalidatingMutation } from './settings-keys.js';
 import { t } from '../i18n/index.js';
@@ -10,6 +10,7 @@ export const transcodeKeys = {
   jobsAll: ['transcode', 'jobs'] as const,
   jobs: (status: TranscodeJobStatus | undefined) => ['transcode', 'jobs', status ?? 'all'] as const,
   hwaccel: ['transcode', 'hwaccel'] as const,
+  settings: ['transcode', 'settings'] as const,
 };
 
 export function useTranscodeRules() {
@@ -32,7 +33,25 @@ export function useDeleteTranscodeRule() {
 }
 
 export function useTranscodeHwaccel() {
-  return useQuery({ queryKey: transcodeKeys.hwaccel, queryFn: transcodeApi.hwaccel, retry: false, staleTime: 5 * 60_000 });
+  return useQuery({ queryKey: transcodeKeys.hwaccel, queryFn: () => transcodeApi.hwaccel(), retry: false, staleTime: 5 * 60_000 });
+}
+
+/** "Test again": the server re-runs every backend's test encode; the result replaces the cache. */
+export function useRetestTranscodeHwaccel() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: () => transcodeApi.hwaccel(true),
+    meta: { errorTitle: t('hooks.transcode.couldNotTestHardware') },
+    onSuccess: (data) => qc.setQueryData(transcodeKeys.hwaccel, data),
+  });
+}
+
+export function useTranscodeSettings() {
+  return useQuery({ queryKey: transcodeKeys.settings, queryFn: transcodeApi.settings.get, retry: false });
+}
+
+export function useSaveTranscodeSettings() {
+  return useInvalidatingMutation((body: TranscodeSettings) => transcodeApi.settings.save(body), [transcodeKeys.settings]);
 }
 
 /** True while any job may still change (polls faster then). */

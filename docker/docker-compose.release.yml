@@ -107,6 +107,20 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+    # Hardware transcoding (Intel Quick Sync / VA-API): pass the GPU through.
+    # Devices go on this service even though it shares gluetun's network.
+    # The entrypoint gives the app user the device's group, so PUID/PGID need not change.
+    # Check Settings > Transcode > Hardware acceleration afterwards (docs/using/hardware-transcoding.md).
+    # devices:
+    #   - /dev/dri:/dev/dri
+    # NVIDIA instead (needs the NVIDIA Container Toolkit on the host):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu, video]
     restart: unless-stopped
     depends_on:
       gluetun:

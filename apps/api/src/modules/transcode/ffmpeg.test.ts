@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { TranscodeOptions, type MediaInfo, type TranscodeAction, type TranscodeOptionsInput } from '@arclight/shared';
-import { buildFfmpegArgs, formatCommand, planStreams, presetArgs, qualityArgs, TranscodeBuildError, VAAPI_DEVICE, videoEncoder } from './ffmpeg.js';
+import { buildFfmpegArgs, capabilityTestArgs, formatCommand, planStreams, presetArgs, qualityArgs, softwareOptions, TranscodeBuildError, VAAPI_DEVICE, videoEncoder } from './ffmpeg.js';
 import { H264_INFO, HEVC_INFO } from './test-support.js';
 
 const build = (action: TranscodeAction, raw: TranscodeOptionsInput = {}, info: MediaInfo | null = H264_INFO) =>
@@ -206,5 +206,26 @@ describe('planStreams / formatCommand', () => {
     expect(formatCommand('/usr/bin/ffmpeg', ['-i', '/m/My Film (2020).mkv', '-metadata:s:a:1', 'title=Stereo (AAC)'])).toBe(
       '/usr/bin/ffmpeg -i "/m/My Film (2020).mkv" -metadata:s:a:1 "title=Stereo (AAC)"',
     );
+  });
+});
+
+describe('hardware fallback and capability test args', () => {
+  it('softwareOptions switches to software and keeps only presets the software encoders take', () => {
+    const o = (raw: TranscodeOptionsInput) => TranscodeOptions.parse(raw);
+    expect(softwareOptions(o({ videoCodec: 'hevc', hwaccel: 'qsv', preset: 'slow', crf: 20 }))).toMatchObject({ hwaccel: 'none', preset: 'slow', crf: 20 });
+    expect(softwareOptions(o({ videoCodec: 'hevc', hwaccel: 'nvenc', preset: 'p5' }))).not.toHaveProperty('preset');
+    expect(softwareOptions(o({ videoCodec: 'av1', hwaccel: 'qsv', preset: '6' }))).toMatchObject({ hwaccel: 'none', preset: '6' });
+    expect(softwareOptions(o({ videoCodec: 'h264', hwaccel: 'vaapi', preset: '6' }))).not.toHaveProperty('preset');
+  });
+
+  it('capabilityTestArgs uses the job flags for each backend on a 1-frame lavfi source', () => {
+    const qsv = capabilityTestArgs('qsv');
+    expect(qsv).toEqual(expect.arrayContaining(['-init_hw_device', 'qsv=hw', '-c:v', 'h264_qsv', '-frames:v', '1']));
+    expect(after(qsv, '-vf')).toBe('format=nv12,hwupload=extra_hw_frames=64,format=qsv');
+    expect(after(capabilityTestArgs('vaapi'), '-vaapi_device')).toBe(VAAPI_DEVICE);
+    expect(after(capabilityTestArgs('nvenc'), '-hwaccel')).toBe('cuda');
+    expect(after(capabilityTestArgs('none'), '-c:v')).toBe('libx264');
+    expect(after(capabilityTestArgs('none'), '-i')).toBe('testsrc2=size=256x256:rate=1');
+    expect(capabilityTestArgs('none').slice(-3)).toEqual(['-f', 'null', '-']);
   });
 });

@@ -172,6 +172,10 @@ The 4K auto-approve rule does not accept the non-4K flags and vice versa.
 2. VIEW_ISSUES: read all issues. VIEW_BLOCKLIST: read the blocklist.
 3. RECENT_VIEW shows the recently added slider. WATCHLIST_VIEW lets the user view other users' Plex watchlists; users without it see only their own.
 
+### 3.6 Arclight additions
+
+Arclight adds REQUEST_LANGUAGE (1073741824, the last usable bit): request subtitles or an additional audio language for a title already in the library. REQUEST also grants it. These language requests are a separate kind of request beside the video requests above (kind subtitle or audio, one language, optional season, optional forced and hearing-impaired flags, note up to 500 characters); they use the same status values and manager actions, are not counted in quotas, and are described in the user documentation under "Subtitle and language requests". Arclight also uses 268435456 and 536870912 for REQUEST_MUSIC and REQUEST_AUDIOBOOK rather than the blocklist flags in the table.
+
 ---
 
 ## 4. Quotas

@@ -84,6 +84,8 @@ Features without a screen are marked "via API" and use the API key from Settings
 | NOT-22 | Tick Download and Upgrade, import an episode, then import an upgrade of it. | A message for each; the upgrade message says it replaced a file. | |
 | NOT-23 | Tick Series delete, delete a test series. | A message arrives naming the series. | |
 | NOT-24 | Tick Health issue and Health restored. Cause a warning (for example disable the only indexer) and wait a few minutes. Re-enable it. | A health message arrives when the warning appears, and a "restored" message when it clears. System -> Health matches. | |
+| NOT-24a | With Settings -> Requests -> Application URL empty, trigger a health issue notification (as NOT-24) on a connection that shows links (for example Discord). | The message has no "More Info" link. | |
+| NOT-24b | Set Application URL to the address you use to open Arclight, save, and trigger a health issue again. | The message has a "More Info" link that is an absolute address. Opening it lands on the matching entry in System -> Health docs. | |
 | NOT-25 | Tick Manual interaction required and make an import need manual action (see file 06, FAIL-09). | A message arrives saying manual import is needed. | |
 | NOT-26 | Via API toggle health warnings: `curl -s -X PUT BASE/api/v1/notification/ID ...` with `includeHealthWarnings` true (read the current body from `GET BASE/api/v1/notification/ID` first). | Warning-level health messages are also sent. There is no screen for `enabled` or `includeHealthWarnings`. | |
 | NOT-27 | Via API: `curl -s -X POST BASE/api/v1/notification/testall -H "X-Api-Key: KEY"`. | A result per connection (sent or error). | |

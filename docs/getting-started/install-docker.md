@@ -196,6 +196,10 @@ docker compose -f docker-compose.release.yml --profile whisper up -d
 
 Arclight finds it through `ARCLIGHT_WHISPER_URL` (`http://whisper:9000`, already set), checks on boot and hourly, and adds Whisper as the lowest-priority subtitle provider when it answers. The default model is `base` on the CPU; a GPU variant is included as commented lines in the file. On a VPN stack created before the fixed subnet existed, run `docker compose down` once so the network is recreated. See [subtitles.md](../using/subtitles.md).
 
+## Hardware transcoding (optional)
+
+Transcode rules can encode on an Intel or AMD GPU (Quick Sync, VA-API) or an NVIDIA GPU (NVENC). Each compose file has a commented `devices:` block under the `arclight` service: uncomment `- /dev/dri:/dev/dri` for Intel/AMD, or the `deploy:` block for NVIDIA (which also needs the NVIDIA Container Toolkit on the host). In the VPN layouts the block still goes on the `arclight` service. The container gives the app user access to the device on start. If your NAS has no integrated GPU, skip this: rules encode on the CPU. Check the result under Settings > Transcode > Hardware acceleration. Full steps: [hardware-transcoding.md](../using/hardware-transcoding.md).
+
 ## Self-update (optional)
 
 The release files label their containers `arclight.autoupdate=true`. To let Arclight pull a new image and recreate those containers from Settings > Updates, uncomment this line in the Arclight service's `volumes:` list:
@@ -237,3 +241,4 @@ Earlier versions mounted three separate folders: `/tv`, `/movies` and `/download
 - [backup-restore.md](backup-restore.md)
 - [../using/vpn.md](../using/vpn.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

@@ -190,3 +190,4 @@ Arclight can also update its own containers from Settings > Updates, but that ne
 - [backup-restore.md](backup-restore.md)
 - [../using/vpn.md](../using/vpn.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

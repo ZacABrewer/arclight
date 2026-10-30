@@ -394,6 +394,48 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     link: { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
   },
   {
+    anchor: 'discord-bot-disconnected',
+    sources: ['DiscordBotDisconnected'],
+    get title() {
+      return t('docs.healthDocs.discordBotIsDisconnected');
+    },
+    get cause() {
+      return t('docs.healthDocs.discordBotDisconnectedCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.discordBotFixToken'), t('docs.healthDocs.discordBotFixIntents'), t('docs.healthDocs.discordBotFixNetwork')];
+    },
+    link: { get label() { return t('docs.healthDocs.discordBotLabel'); }, to: '/settings/discordbot' },
+  },
+  {
+    anchor: 'whisper-unreachable',
+    sources: ['WhisperUnreachable'],
+    get title() {
+      return t('docs.healthDocs.whisperIsUnreachable');
+    },
+    get cause() {
+      return t('docs.healthDocs.whisperUnreachableCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.whisperFixContainer'), t('docs.healthDocs.whisperFixUrl'), t('docs.healthDocs.whisperFixDisable')];
+    },
+    link: { get label() { return t('docs.healthDocs.subtitlesLabel'); }, to: '/settings/subtitles' },
+  },
+  {
+    anchor: 'tracker-ratio-low',
+    sources: ['TrackerRatioLow'],
+    get title() {
+      return t('docs.healthDocs.trackerRatioIsLow');
+    },
+    get cause() {
+      return t('docs.healthDocs.trackerRatioLowCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.trackerRatioFixSeed'), t('docs.healthDocs.trackerRatioFixHnr'), t('docs.healthDocs.trackerRatioFixThresholds')];
+    },
+    link: { get label() { return t('docs.healthDocs.trackerStatsLabel'); }, to: '/indexers/trackers' },
+  },
+  {
     anchor: 'no-indexers-enabled',
     sources: ['IndexerCheck'],
     get title() {

@@ -32,3 +32,4 @@ Not sure? Read [requirements.md](requirements.md) first, then use [install-docke
 - [first-run-wizard.md](first-run-wizard.md)
 - [updating.md](updating.md)
 - [backup-restore.md](backup-restore.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

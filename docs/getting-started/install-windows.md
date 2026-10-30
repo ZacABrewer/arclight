@@ -181,3 +181,4 @@ Native installs have no login protection until you set it up. Arclight asks you 
 - [../using/vpn.md](../using/vpn.md)
 - [../CLOUDFLARE.md](../CLOUDFLARE.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

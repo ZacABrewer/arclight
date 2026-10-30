@@ -3,23 +3,26 @@ import { basename, dirname, extname, join, relative, resolve } from 'node:path';
 import { and, asc, desc, eq, inArray } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import type {
+  TranscodeHwaccelResponse,
   TranscodeJob,
   TranscodeJobStatus,
   TranscodeJobTrigger,
   TranscodeRule,
   TranscodeRuleInput,
   TranscodeRunResult,
+  TranscodeSettings,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { episodes, history, mediaFiles, movies, series } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
 import { normalizeData } from '../history/index.js';
 import { RecycleBin } from '../imports/mover.js';
-import { getSection } from '../settings/service.js';
-import { buildFfmpegArgs, containerExtension, formatCommand, validateOptions, TranscodeBuildError } from './ffmpeg.js';
+import { getSection, setSection } from '../settings/service.js';
+import { buildFfmpegArgs, containerExtension, formatCommand, softwareOptions, validateOptions, TranscodeBuildError } from './ffmpeg.js';
+import { HWACCEL_NAMES, hwFailureMessage, hwFallbackNote, hwInitFailure, testBackends } from './hwaccel.js';
 import { inWindow, ruleMatches, type MatchableParent } from './match.js';
 import { durationMsOf, FfmpegProgressParser } from './progress.js';
-import { backendsFor, parseHwaccels, type RunningProcess, type TranscodeRunner } from './runner.js';
+import { parseHwaccels, type RunningProcess, type TranscodeRunner } from './runner.js';
 import { transcodeJobs, transcodeRules, type TranscodeJobRow, type TranscodeRuleRow } from './schema.js';
 
 // Transcode rules, the persisted job queue and the worker that drains it (one ffmpeg at a
@@ -66,6 +69,8 @@ export interface TranscodeServiceOptions {
   notify?: (notice: TranscodedNotice) => Promise<void> | void;
   /** How long an imported file without media info waits for analysis (runAfterImport). Default 6 h. */
   importWaitMs?: number;
+  /** Per-backend limit of the hardware capability test. Default 20 s. */
+  hwTestTimeoutMs?: number;
 }
 
 export interface WorkerResult {
@@ -124,6 +129,8 @@ export class TranscodeService {
   private kicker: (() => void) | null = null;
   /** runAfterImport: imported file id -> give-up time (ms) while waiting for media info. */
   private readonly pendingImports = new Map<number, number>();
+  /** Cached hardware capability test (GET /transcode/hwaccel; `refresh` runs it again). */
+  private hwResult: Promise<TranscodeHwaccelResponse> | null = null;
 
   constructor(private readonly opts: TranscodeServiceOptions) {
     this.db = opts.db;
@@ -424,16 +431,45 @@ export class TranscodeService {
       .run().changes;
   }
 
-  async hwaccels(): Promise<{ ffmpegPath: string | null; methods: string[]; backends: ReturnType<typeof backendsFor> }> {
+  /**
+   * Which backends work: each one runs a 1-frame test encode (cached until `refresh`). Tests
+   * run one at a time; concurrent callers share a run.
+   */
+  hwaccels(opts: { refresh?: boolean } = {}): Promise<TranscodeHwaccelResponse> {
+    if (opts.refresh || !this.hwResult) {
+      const run = this.testHwaccels();
+      this.hwResult = run;
+      // A failed run is not cached.
+      run.catch(() => {
+        if (this.hwResult === run) this.hwResult = null;
+      });
+    }
+    return this.hwResult;
+  }
+
+  private async testHwaccels(): Promise<TranscodeHwaccelResponse> {
     const bin = await this.runner.locate();
-    if (!bin) return { ffmpegPath: null, methods: [], backends: [] };
+    if (!bin) return { ffmpegPath: null, methods: [], backends: [], results: [], testedAt: null };
     let methods: string[] = [];
     try {
       methods = parseHwaccels(await this.runner.exec(bin, ['-hide_banner', '-hwaccels']));
     } catch (err) {
       this.log?.warn({ err }, 'ffmpeg -hwaccels failed');
     }
-    return { ffmpegPath: bin, methods, backends: backendsFor(methods) };
+    const results = await testBackends(this.runner, bin, methods, this.opts.hwTestTimeoutMs ? { timeoutMs: this.opts.hwTestTimeoutMs } : {});
+    for (const r of results) {
+      if (!r.available && methods.length > 0) this.log?.info({ backend: r.backend, reason: r.reason }, 'transcode backend unavailable');
+    }
+    const backends = results.filter((r) => r.available || r.backend === 'none').map((r) => r.backend);
+    return { ffmpegPath: bin, methods, backends, results, testedAt: this.now().toISOString() };
+  }
+
+  settings(): TranscodeSettings {
+    return getSection(this.db, 'transcode');
+  }
+
+  saveSettings(value: TranscodeSettings): TranscodeSettings {
+    return setSection(this.db, 'transcode', value, this.now().toISOString());
   }
 
   // -------------------------------------------------------------------------------------
@@ -536,26 +572,29 @@ export class TranscodeService {
     const stem = basename(file.path, extname(file.path));
     const temp = join(dir, `.${stem}.arclight-transcode${ext}`);
 
-    let args: string[];
-    try {
-      args = buildFfmpegArgs(file.path, temp, rule, file.mediaInfo ?? null);
-    } catch (err) {
-      this.finish(job.id, 'failed', err instanceof Error ? err.message : String(err));
-      return 'failed';
-    }
-    this.db
-      .update(transcodeJobs)
-      .set({ command: formatCommand(bin, args), sizeBefore: source.size, path: file.path })
-      .where(eq(transcodeJobs.id, job.id))
-      .run();
+    let spec: TranscodeRule = rule;
+    /** Set once a hardware backend failed and the job was retried in software. */
+    let fallbackNote: string | null = null;
+    for (;;) {
+      let args: string[];
+      try {
+        args = buildFfmpegArgs(file.path, temp, spec, file.mediaInfo ?? null);
+      } catch (err) {
+        this.finish(job.id, 'failed', err instanceof Error ? err.message : String(err));
+        return 'failed';
+      }
+      this.db
+        .update(transcodeJobs)
+        .set({ command: formatCommand(bin, args), sizeBefore: source.size, path: file.path })
+        .where(eq(transcodeJobs.id, job.id))
+        .run();
 
-    const parser = new FfmpegProgressParser(durationMsOf(file.mediaInfo));
-    let lastPercent = -1;
-    if (current.cancelled) {
-      this.finish(job.id, 'cancelled', 'cancelled');
-      return 'cancelled';
-    }
-    {
+      const parser = new FfmpegProgressParser(durationMsOf(file.mediaInfo));
+      let lastPercent = -1;
+      if (current.cancelled) {
+        this.finish(job.id, 'cancelled', 'cancelled');
+        return 'cancelled';
+      }
       let proc: RunningProcess;
       try {
         proc = this.runner.start(bin, args, (chunk) => {
@@ -596,13 +635,29 @@ export class TranscodeService {
       }
       if (res.exitCode !== 0) {
         await rm(temp, { force: true });
-        this.finish(job.id, 'failed', `ffmpeg exited with ${res.exitCode === null ? 'a signal' : `code ${res.exitCode}`}${res.stderrTail ? `: ${res.stderrTail}` : ''}`);
+        const hwaccel = spec.options.hwaccel;
+        const usesHardware = spec.action === 'transcode' && spec.options.videoCodec !== 'copy' && hwaccel !== 'none';
+        const hwReason = usesHardware ? hwInitFailure(res.stderr ?? res.stderrTail) : null;
+        if (hwReason) {
+          if (!this.settings().fallbackToSoftware) {
+            this.finish(job.id, 'failed', hwFailureMessage(hwaccel, hwReason));
+            return 'failed';
+          }
+          // Retry once on the software encoders (`spec` is software now, so this runs once).
+          fallbackNote = hwFallbackNote(hwaccel, hwReason);
+          this.log?.warn({ jobId: job.id, hwaccel, reason: hwReason }, `${HWACCEL_NAMES[hwaccel]} unavailable; retrying the transcode in software`);
+          spec = { ...spec, options: softwareOptions(spec.options) };
+          this.db.update(transcodeJobs).set({ progress: 0 }).where(eq(transcodeJobs.id, job.id)).run();
+          continue;
+        }
+        const failed = `ffmpeg exited with ${res.exitCode === null ? 'a signal' : `code ${res.exitCode}`}${res.stderrTail ? `: ${res.stderrTail}` : ''}`;
+        this.finish(job.id, 'failed', fallbackNote ? `${failed} (${fallbackNote})` : failed);
         return 'failed';
       }
 
       current.phase = 'replacing';
       try {
-        await this.replace(job, file, rule, temp, ext, source.size);
+        await this.replace(job, file, rule, temp, ext, source.size, fallbackNote);
         return 'completed';
       } catch (err) {
         await rm(temp, { force: true });
@@ -619,7 +674,15 @@ export class TranscodeService {
    * is, no longer tracked by the library. Otherwise the original goes to the recycle bin (or is
    * deleted when no bin is configured, like imports do).
    */
-  private async replace(job: TranscodeJobRow, file: MediaFileRow, rule: TranscodeRule, temp: string, ext: string, sizeBefore: number): Promise<void> {
+  private async replace(
+    job: TranscodeJobRow,
+    file: MediaFileRow,
+    rule: TranscodeRule,
+    temp: string,
+    ext: string,
+    sizeBefore: number,
+    fallbackNote: string | null,
+  ): Promise<void> {
     const out = await stat(temp).catch(() => null);
     if (!out || out.size === 0) throw new Error('ffmpeg produced no output');
     const sizeAfter = out.size;
@@ -658,10 +721,11 @@ export class TranscodeService {
     // media_info is cleared: it describes the old file until media analysis runs again.
     this.db.update(mediaFiles).set({ path: finalPath, relativePath, sizeBytes: sizeAfter, mediaInfo: null }).where(eq(mediaFiles.id, file.id)).run();
     const note = keptAt ? `original kept at ${keptAt}` : recycledTo ? `original recycled to ${recycledTo}` : 'original deleted';
-    this.finish(job.id, 'completed', `${formatSize(sizeBefore)} -> ${formatSize(sizeAfter)}; ${note}`, { progress: 100, sizeAfter, sizeBefore });
+    const message = `${formatSize(sizeBefore)} -> ${formatSize(sizeAfter)}; ${note}${fallbackNote ? `; ${fallbackNote}` : ''}`;
+    this.finish(job.id, 'completed', message, { progress: 100, sizeAfter, sizeBefore });
 
     const updated = { ...file, path: finalPath, relativePath, sizeBytes: sizeAfter, mediaInfo: null };
-    this.recordHistory(file, updated, rule, { sizeBefore, sizeAfter, keptAt, recycledTo });
+    this.recordHistory(file, updated, rule, { sizeBefore, sizeAfter, keptAt, recycledTo, fallbackNote });
     if (parent) this.bus?.publish({ type: 'library', action: 'updated', mediaType: file.mediaType, id: parent.id });
     try {
       this.opts.reanalyze?.(file.id);
@@ -680,7 +744,7 @@ export class TranscodeService {
     before: MediaFileRow,
     after: MediaFileRow,
     rule: TranscodeRule,
-    info: { sizeBefore: number; sizeAfter: number; keptAt: string | null; recycledTo: string | null },
+    info: { sizeBefore: number; sizeAfter: number; keptAt: string | null; recycledTo: string | null; fallbackNote: string | null },
   ): void {
     const data = normalizeData({
       sourcePath: before.path,
@@ -694,6 +758,7 @@ export class TranscodeService {
       size: info.sizeAfter,
       originalPath: info.keptAt,
       recycleBinPath: info.recycledTo,
+      hardwareFallback: info.fallbackNote,
     });
     const base = {
       eventType: 'fileTranscoded' as const,

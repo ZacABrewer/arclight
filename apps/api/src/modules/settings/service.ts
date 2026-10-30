@@ -42,6 +42,7 @@ import {
   TorrentSettings,
   TorrentSlowModeState,
   TorrentSpeedSettings,
+  TranscodeSettings,
   VpnSettings,
   type MetadataSettingsResponse,
   type MetadataSettingsUpdate,
@@ -131,6 +132,8 @@ const sections = {
   audio: AudioImportSettings,
   // Owned by the health-scan module: schedule, mode and throttling (routes under /settings/healthscan).
   healthScan: HealthScanSettings,
+  // Owned by the transcode module: software fallback (routes under /settings/transcode).
+  transcode: TranscodeSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

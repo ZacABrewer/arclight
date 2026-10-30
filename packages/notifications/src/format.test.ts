@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { GRAB, HEALTH_ISSUE, HEALTH_RESTORED, IMPORT, MANUAL_INTERACTION, UPGRADE } from '../fixtures/events.js';
-import { episodeLabel, formatBytes, formatEvent, mediaLink } from './format.js';
+import { episodeLabel, formatBytes, formatEvent, healthDocsLink, mediaLink } from './format.js';
 
 describe('formatBytes', () => {
   it('picks a sensible unit and precision', () => {
@@ -81,5 +81,14 @@ describe('formatEvent', () => {
   it('falls back to TMDB links without an application URL', () => {
     expect(mediaLink(GRAB.media)).toBe('https://www.themoviedb.org/tv/123456');
     expect(mediaLink({ ...GRAB.media, tmdbId: 0 })).toBe('https://www.imdb.com/title/tt1234567/');
+  });
+});
+
+describe('healthDocsLink', () => {
+  it('makes in-app docs links absolute with the instance URL, and drops them without one', () => {
+    expect(healthDocsLink('/docs/system/health#vpn-leak', 'https://arclight.example.com/')).toBe('https://arclight.example.com/docs/system/health#vpn-leak');
+    expect(healthDocsLink('/docs/system/health#vpn-leak', undefined)).toBeUndefined();
+    expect(healthDocsLink('https://docs.example.com/x', undefined)).toBe('https://docs.example.com/x');
+    expect(healthDocsLink(undefined, 'https://arclight.example.com')).toBeUndefined();
   });
 });

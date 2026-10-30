@@ -77,6 +77,10 @@ A small VPN client container. Arclight and the download clients share its networ
 
 ## H
 
+<a id="hardware-encoding"></a>
+**Hardware encoding**
+Re-encoding video on a GPU instead of the CPU, chosen per transcode rule. The backends are [NVENC](#nvenc), [QSV](#qsv) and [VA-API](#va-api); each needs the GPU passed into the container. See [Hardware transcoding](using/hardware-transcoding.md).
+
 **Hardlink**
 A second name for the same file on disk. After import, the file in your downloads folder and the file in your library are the same data using space once, so you can keep seeding. Works only within one filesystem and, on Linux, only within one mount: this is why the Docker stacks mount a single `/data` share that holds both downloads and media. Setting: Media Management > "Use hardlinks instead of copy". See [Folders and hardlinks](getting-started/folders-and-hardlinks.md) and [Hardlinks not working](TROUBLESHOOTING.md#hardlinks-not-working).
 
@@ -112,6 +116,9 @@ A safety stop that blocks your traffic when the VPN fails, so nothing leaks thro
 
 ## L
 
+**Language request**
+A request for subtitles or an extra audio language on a title already in the library, made from its page. Counted separately from video requests and not against quotas. See [Subtitle and language requests](using/discover-and-requests.md#subtitle-and-language-requests).
+
 **Leech / leecher**
 A peer that is still downloading (it has not got the whole file yet). In the queue details "seeds / leechers" is the swarm size the tracker reports. See [Seed](#seed) and [Swarm](#swarm).
 
@@ -133,6 +140,10 @@ Activity > Manual import: choose a title and episode for files Arclight could no
 A flag on a series, season, episode or movie. Arclight searches for and upgrades only what is monitored. Unmonitored items are kept in the library but ignored. See [Library](using/library.md) and [Wanted](using/wanted.md).
 
 ## N
+
+<a id="nvenc"></a>
+**NVENC**
+NVIDIA's hardware video encoder. Needs the NVIDIA driver and the NVIDIA Container Toolkit on the host. See [Hardware transcoding](using/hardware-transcoding.md).
 
 <a id="nat-pmp"></a>
 **NAT-PMP**
@@ -172,6 +183,10 @@ Re-releases that fix a faulty release. A *proper* replaces a release by another 
 User and group ids the Docker container runs as (set in `.env`, defaults 1000 and 1000). They decide who owns the files Arclight writes, so they must match the owner of your media and download folders. Find yours with `id -u` and `id -g`. See [Permission denied](TROUBLESHOOTING.md#permission-denied) and [Install with Docker](getting-started/install-docker.md).
 
 ## Q
+
+<a id="qsv"></a>
+**QSV (Quick Sync Video)**
+Intel's hardware video encoder, built into Intel integrated GPUs and Arc cards. Runs on top of [VA-API](#va-api), so it needs `/dev/dri` passed into the container. Not available in the arm64 image. See [Hardware transcoding](using/hardware-transcoding.md).
 
 **Quality definition**
 The table of qualities (for example WEBDL-1080p, Bluray-2160p) with the minimum, preferred and maximum file size per minute of video. Settings > Quality. See [Quality profiles](using/quality-profiles.md).
@@ -266,6 +281,9 @@ TheTVDB, a series database used by other tools for episode numbering. Arclight t
 
 ## U
 
+**Upcoming**
+A Wanted item that is not released yet (or has no known release date). Automatic searches skip it. See [Wanted](using/wanted.md#release-filter-released-and-upcoming-items).
+
 **Upgrade**
 Replacing a file with a better one when a better release appears, until the [cutoff](#cutoff) is met (and, with custom formats, by score). Needs "upgrades allowed" in the profile. See [Quality profiles](using/quality-profiles.md) and [Wanted](using/wanted.md).
 
@@ -273,6 +291,10 @@ Replacing a file with a better one when a better release appears, until the [cut
 A UDP-based transport for torrents, an alternative to TCP. Settings > Torrent Engine > Transport has TCP and uTP switches; if both are off, no peer can connect.
 
 ## V
+
+<a id="va-api"></a>
+**VA-API (VAAPI)**
+The Linux interface for hardware video encoding on Intel and AMD GPUs. The container reaches the GPU through the `/dev/dri` device. Not available in the arm64 image. See [Hardware transcoding](using/hardware-transcoding.md).
 
 **VPN**
 A tunnel that sends your traffic through another provider's address. Arclight supports Gluetun (Docker), WireGuard for Windows (native) and interface binding. Settings > VPN. See [VPN](using/vpn.md).

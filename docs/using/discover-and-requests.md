@@ -289,7 +289,7 @@ New users get the permissions in **Default permissions for new users**, which st
 | Group | Permissions |
 | --- | --- |
 | Admin | Admin (bypasses every check), Manage settings, Manage users (also exempt from quotas, and can request on behalf of others), Manage requests. |
-| Request | Request, Request movies, Request series, Request 4K (plus 4K movies and 4K series), Advanced requests. |
+| Request | Request, Request movies, Request series, Request 4K (plus 4K movies and 4K series), Advanced requests, Request subtitles & languages (also included in Request). |
 | Auto-approve | Auto-approve, plus movies, series, 4K, 4K movies and 4K series. |
 | Auto-request | Auto-request, plus movies and series. Needed for watchlist requests. |
 | Issues | Manage issues, Report issues, View issues. |

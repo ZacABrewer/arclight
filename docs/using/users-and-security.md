@@ -51,7 +51,7 @@ Add a user with "Add user". Usernames are 2 to 64 characters: letters, digits an
 
 You can edit a user, reset their password ("Reset password": signs the user out everywhere) and delete them (their sessions end immediately). Rules: the last administrator cannot be demoted or deleted, you cannot delete yourself, and changing someone's role signs them out everywhere.
 
-Request permissions, quotas and notification options for each user are separate: Settings > Users ("User settings"). See [discover-and-requests.md](discover-and-requests.md).
+Request permissions, quotas and notification options for each user are separate: Settings > Users ("User settings"). The **Request subtitles & languages** permission lets someone ask for subtitles or an extra audio language on a title in the library; **Request** includes it. See [discover-and-requests.md](discover-and-requests.md#subtitle-and-language-requests).
 
 ### App access
 

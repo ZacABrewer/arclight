@@ -217,10 +217,15 @@ If you add the Whisper provider by hand, give it the **Endpoint** of your own Wh
 
 The provider setting **Only when no other result** (default on) makes Arclight transcribe only for languages where no other provider found a subtitle reaching the minimum score. Keep Whisper last in the provider list.
 
+## Letting users request subtitles
+
+People with the **Request subtitles & languages** permission can ask for a subtitle language (or an extra audio language) from a title's page, in the app or in the request portal. A manager approves it, or it is approved automatically (on by default for subtitles), and Arclight searches the providers for that language. A language no provider answers for stays "not found" and is searched again on the normal schedule. See [Subtitle and language requests](discover-and-requests.md#subtitle-and-language-requests).
+
 ## Related
 
 - [Library](library.md) - assign a language profile when adding or editing
 - [Wanted](wanted.md) - the video side of "missing"
+- [Discover and requests](discover-and-requests.md#subtitle-and-language-requests) - users asking for a subtitle language
 - [Notifications](notifications.md)
 - [Media servers](media-servers.md) - your player reads the subtitle files Arclight saves next to the video
 - [System](system.md) - run the subtitle jobs from Tasks

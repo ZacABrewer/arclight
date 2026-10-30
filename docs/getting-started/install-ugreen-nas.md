@@ -130,3 +130,4 @@ If you started with separate `/tv`, `/movies` and `/downloads` mounts, follow [M
 - [folders-and-hardlinks.md](folders-and-hardlinks.md)
 - [first-run-wizard.md](first-run-wizard.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

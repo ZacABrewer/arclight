@@ -1,10 +1,28 @@
 import type { HealthCheck } from '@arclight/shared';
+import { Link } from '@tanstack/react-router';
 import { Button, Chip, EmptyState, ErrorBlock, Pane, Skeleton } from '../../arclight/index.js';
 import { useHealth } from '../../hooks/system.js';
 import { SystemHeader } from './system-header.js';
 import { t } from '../../i18n/index.js';
 
 const ORDER = { error: 0, warning: 1, ok: 2 } as const;
+
+/** In-app docs (/docs/system/health#…) navigate inside the app; external links open a new tab. */
+function FixLink({ url }: { url: string }) {
+  if (!url.startsWith('/')) {
+    return (
+      <a className="al-link sys-issue__fix" href={url} target="_blank" rel="noreferrer">
+        {t('system.health.howToFix')}
+      </a>
+    );
+  }
+  const [to = url, hash] = url.split('#');
+  return (
+    <Link className="al-link sys-issue__fix" to={to as '/docs/system/health'} {...(hash ? { hash } : {})}>
+      {t('system.health.howToFix')}
+    </Link>
+  );
+}
 
 /** One issue row: tone chip, the cause (the check's message), its source and a fix link. */
 function IssueRow({ check }: { check: HealthCheck }) {
@@ -15,12 +33,7 @@ function IssueRow({ check }: { check: HealthCheck }) {
         <span className="sys-issue__cause">{check.message}</span>
         <span className="sys-muted">{check.source}</span>
       </div>
-      {check.wikiUrl ? (
-        // In-app docs (/docs/system/health#…) open in place; external links in a new tab.
-        <a className="al-link sys-issue__fix" href={check.wikiUrl} {...(check.wikiUrl.startsWith('/') ? {} : { target: '_blank', rel: 'noreferrer' })}>
-          {t('system.health.howToFix')}
-        </a>
-      ) : null}
+      {check.wikiUrl ? <FixLink url={check.wikiUrl} /> : null}
     </li>
   );
 }

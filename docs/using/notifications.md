@@ -62,7 +62,7 @@ Which events each type can receive: Discord, Telegram, ntfy, Gotify, Pushover an
 | On request created | A new request needs attention | Sitewide: admins hear about every user's requests |
 | On request approved | A request was approved | |
 | On request declined | A request was declined | |
-| On request available | A requested title is now available | |
+| On request available | A requested title is now available | Subtitle and audio language requests use the request events too (created, approved, declined, completed), with the language in the title, for example "The Matrix (Spanish subtitles)". They have no failed event |
 | On issue created | A user reported a problem with a title | |
 | On issue updated | An issue changed | |
 
@@ -74,7 +74,7 @@ Other settings on each connection:
 | Tags | none | Only notify for series and movies carrying a matching tag. Empty means all media. Events that are not about a title (health, updates, requests) always pass |
 | Enable | On | Off keeps the connection but sends nothing |
 
-The request and issue events include links to the item only when the application URL is set under Settings > Requests.
+The request and issue events include links to the item only when the application URL is set under Settings > Requests. Health notifications work the same way: their **More Info** link is an absolute address built from the Application URL and opens the matching entry in System > Health docs. With no Application URL set, the link is left out.
 
 Which events to pick: a good starting set for a phone connection is On health issue, On health restored, On manual interaction required and On application update. Add On grab and On import only if you want a message per download; they can be chatty.
 
@@ -107,6 +107,7 @@ Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first
 | Test fails with `network` | Arclight cannot reach the service. In Docker, check DNS and that the container is allowed out. If Arclight runs behind the VPN, see [VPN](vpn.md) |
 | Test fails with `unauthorized` | Wrong token, key or password |
 | Test works but nothing arrives for real events | The event switch is off, the tag filter excludes the item, or health warnings are off while the issue is only a warning |
+| Health notification has no More Info link | Set the Application URL under Settings > Requests |
 | Email sends nothing | Check port and Security together: 587 with STARTTLS, 465 with TLS, 25 with None |
 
 ## Searching your connections

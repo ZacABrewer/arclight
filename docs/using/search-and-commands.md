@@ -76,8 +76,8 @@ These take a title from your library. The palette only offers a command for the 
 | --- | --- | --- |
 | Add series / Add movie / Add artist / Add author | Admins | Opens **Add new** on that kind, with the rest of what you typed in the search box. Artist and author need Music or Audiobooks turned on. |
 | Search indexers | Admins | Opens the indexer search with what you typed. |
-| Search all missing | Admins | Searches every missing movie and episode. Asks first. |
-| Search all cutoff unmet | Admins | Searches upgrades for every movie and episode below its cutoff. Asks first. |
+| Search all missing | Admins | Searches every missing movie and episode that is already released. Asks first. |
+| Search all cutoff unmet | Admins | Searches upgrades for every released movie and episode below its cutoff. Asks first. |
 | Approve all pending requests | Admins and request managers | Approves every pending request. Asks first. |
 | Pause all torrents / Resume all torrents | Admins | Pauses or resumes every torrent in the built-in torrent engine. Only shown while the engine is on. Asks first. |
 | Show stalled downloads | Admins | Opens the queue filtered to downloads with a warning (stalled, no peers, import blocked). |

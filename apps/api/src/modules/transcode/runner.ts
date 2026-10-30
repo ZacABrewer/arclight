@@ -22,6 +22,8 @@ export interface ProcessResult {
   exitCode: number | null;
   /** Last lines of stderr (for the job message). */
   stderrTail: string;
+  /** The last 8 KB of stderr (hardware-failure detection looks past the tail). */
+  stderr?: string;
 }
 
 export interface RunningProcess {
@@ -150,7 +152,7 @@ export class FfmpegRunner implements TranscodeRunner {
     });
     const done = new Promise<ProcessResult>((resolvePromise) => {
       child.on('error', (err) => resolvePromise({ exitCode: -1, stderrTail: err.message }));
-      child.on('close', (code) => resolvePromise({ exitCode: code, stderrTail: tail(stderr) }));
+      child.on('close', (code) => resolvePromise({ exitCode: code, stderrTail: tail(stderr), stderr }));
     });
     const grace = this.opts.killGraceMs ?? 5000;
     return {

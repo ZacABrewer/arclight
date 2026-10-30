@@ -141,3 +141,4 @@ Pull the new image and recreate the application in Container Station (see [updat
 - [folders-and-hardlinks.md](folders-and-hardlinks.md)
 - [first-run-wizard.md](first-run-wizard.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

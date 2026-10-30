@@ -1957,12 +1957,23 @@ ignoring the window. Output goes to `.<name>.arclight-transcode.<ext>` next to t
 
 Then `media_files` `path`/`relative_path`/`size_bytes` are updated, `media_info` is cleared and
 the file is queued for media analysis, a `fileTranscoded` history row is written (data:
-`sourcePath`, `path`, `action`, `rule`, `sizeBefore`, `size`, `recycleBinPath`/`originalPath`),
+`sourcePath`, `path`, `action`, `rule`, `sizeBefore`, `size`, `recycleBinPath`/`originalPath`,
+`hardwareFallback` when the job fell back to software),
 `library updated` is published and a `fileTranscoded` notification is sent (connections with
 `onRename`). `runAfterImport` rules are checked on every `import imported` event against the
 item's newest file; files still without media info wait (up to 6 h, in memory) for analysis to
 publish `library updated`. Running a rule by id skips files it already completed. Deleting a
 rule cancels its queued jobs. Jobs left `running` by a restart go back to `queued`.
+
+Hardware fallback: when a job that encodes video on a hardware backend (`vaapi`, `qsv`, `nvenc`,
+`videotoolbox`) exits non-zero and its stderr shows a device/session init failure (`Device
+creation failed`, `Failed to set value ... for option 'init_hw_device'`, `No VA display found`,
+`Cannot load libcuda`, `Error creating a MFX session`, `No supported child device type is
+enabled` ...), it is retried once with `hwaccel: none` (backend-native presets dropped) when the
+`transcode` settings section has `fallbackToSoftware: true` (default). The job message (and the
+history row's `hardwareFallback`) records the backend, ffmpeg's reason and that software was used.
+With `fallbackToSoftware: false` the job fails with a message naming the probable fix. Other
+failures are never retried.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -1974,7 +1985,20 @@ rule cancels its queued jobs. Jobs left `running` by a restart go back to `queue
 | GET | `/transcode/jobs` | Jobs, newest first (`?status=queued\|running\|completed\|failed\|cancelled`); `progress` 0-100, `command` (display) |
 | POST | `/transcode/run` | `{mediaFileId}`: queue for the first enabled matching rule (400 when none, 409 when the file already has an active job); `{ruleId}`: queue every matching file. Answers `{queued, jobs}` |
 | POST | `/transcode/jobs/:id/cancel` | Queued: cancelled; running: ffmpeg is killed and the temp file removed (409 when finished) |
-| GET | `/transcode/hwaccel` | `ffmpeg -hide_banner -hwaccels`: `{ffmpegPath, methods, backends}` |
+| GET | `/transcode/hwaccel` | Capability test per backend (`?refresh=true` runs it again; otherwise the cached result): `TranscodeHwaccelResponse` `{ffmpegPath, methods, backends, results, testedAt}` |
+| GET | `/settings/transcode` | `TranscodeSettings` `{fallbackToSoftware}` (default `true`) |
+| PUT | `/settings/transcode` | Replace the section |
+
+`GET /transcode/hwaccel` does not trust `ffmpeg -hwaccels` (`methods`, which lists what the
+build was compiled with): every backend the build has runs a 1-frame encode of
+`-f lavfi -i testsrc2=size=256x256:rate=1` with the same init flags and H.264 encoder a job
+would use (`-vaapi_device /dev/dri/renderD128`, `-init_hw_device qsv=hw`, `-hwaccel cuda` ...),
+one at a time with a 20 s limit each. `results` holds `{backend, available, reason}` for every
+`TranscodeHwaccel` in order; `reason` is ffmpeg's failure line (`No VA display found ...`) or
+`this ffmpeg build has no ... support` for backends the build lacks. `backends` lists the ones
+that passed, plus `none` whenever ffmpeg exists. The result is cached in memory until a
+`refresh` or a restart; concurrent requests share one run. Without ffmpeg: `{ffmpegPath: null,
+methods: [], backends: [], results: [], testedAt: null}`.
 
 ## additional-languages ("Add additional…")
 

@@ -96,6 +96,10 @@ private-tracker use, not to match every feature.
 | Out of scope in this build: a Plex library scanner for availability, voting, and the "Recently added" discover slider. By default availability comes from the Arclight library only; the optional "use media server availability" setting also asks Jellyfin or Emby connections (not Plex). | A title that exists on Plex but not in Arclight shows as not available. | 09 |
 | Sign-in through Jellyfin/Emby/Plex accounts is not built; users are local accounts created in Settings -> Security. | | 01, 09 |
 | Seerr-style partial-request enforcement on the server for `partialRequestsEnabled` = false is unverified. | | 09 |
+| A failed subtitle or language request sends no notification; created, approved, declined and completed do. | The requester sees "Failed" in My requests only. | 09 |
+| Language requests have no entry in universal search. | Find them on the Requests page under "Subtitles & languages". | 09 |
+| The Wanted page shows no unreleased warning for season or series interactive searches. | The warning banner appears only when searching a single item. | 07 |
+| Movies on Wanted show the date that counts for their minimum availability rather than a single release-date column. | The cinema, digital and physical dates can differ from the one used for "Upcoming". | 07 |
 
 ## User interface gaps
 
@@ -138,6 +142,10 @@ areas yet.
 | Freeleech-only mode trusts the indexer's freeleech flags and download volume factor (rejection `notFreeleech`). | An indexer that does not report freeleech rejects every release while the mode is on. |
 | Request approval by size (`autoApproveIfSizeBelowGb`, budget `autoApproveUnder.sizeGb`) works only for titles already in the library; the size comes from a quick interactive search (20 s). | Requests for new titles are never size-approved. In `movieGb` budgets, unknown sizes count as 0. |
 | Approval windows use server local time. | Users in other time zones see holds and releases at shifted hours. |
+| The real GPU paths (VA-API, Quick Sync, NVENC) are not exercised in CI, which has no GPU. The code and error handling are tested with fake ffmpeg output only. | Report GPU-specific failures with the Reason text from Settings -> Transcode -> Hardware acceleration. |
+| The arm64 image has no VA-API or Quick Sync (Jellyfin's ffmpeg does not include them there). Only NVENC can work. | On a Raspberry Pi or other ARM host, VAAPI and Quick Sync always show Unavailable. |
+| Hardware test results are cached in memory until Arclight restarts or you press **Test again**. | A GPU added or removed after start is not noticed until you test again. |
+| NAS models whose CPU has no integrated GPU have no `/dev/dri`. | Hardware encoding is unavailable and jobs run on the CPU (or fail, if "Fall back to software" is off). |
 | Transcoding runs one file at a time. There is no HDR tone mapping, mp4 output drops image subtitles, and hardware encoding needs the device passed into the container (`/dev/dri` for VAAPI/QSV, the NVIDIA runtime for NVENC). | An HDR source encoded to h264 keeps PQ/HLG tags on 8-bit video. PGS/VobSub tracks are lost when remuxing to mp4. |
 | `runAfterImport` transcodes wait in memory (up to 6 h) for media analysis. With `keepOriginal` and a container change, the original stays on disk but is no longer tracked by the library. | A restart while a file waits drops that automatic transcode (run it by hand). The untracked original is not cleaned up. |
 | The community scene-numbering feed is not published yet (`/scenemapping/feed` reports it as not published). Applying rules re-registers remapped files with new file ids. | Only manual rules and the anime absolute fallback apply. Records keyed by the old file id (subtitle files, cross-seeds, transcode jobs) are not carried over to the new id. |
@@ -156,7 +164,7 @@ areas yet.
 | Archive files (.rar, .zip) in a completed download are not extracted by Arclight ("Found archive file, might need to be extracted"). | Configure the download client to unpack, or extract by hand then Manual Import. |
 | Language profiles for audio language live on the quality profile; subtitle language profiles are separate (Settings -> Subtitles). | |
 | Metadata comes from TMDB only (no TVDB fallback, no image caching on disk). | Series without TMDB episode data show gaps; posters load from TMDB each time. |
-| Docker image includes ffmpeg and ffprobe but not ffsubsync or alass. | Subtitle sync with the `tool` method is unavailable unless you install them in a derived image; the `builtin` sync check works. |
+| Docker image includes Jellyfin's ffmpeg and ffprobe but not ffsubsync or alass. | Subtitle sync with the `tool` method is unavailable unless you install them in a derived image; the `builtin` sync check works. |
 | Docker permission and read-only-mount health checks assume a Linux container user mapping (`PUID`/`PGID`). | Native Windows reports fewer filesystem problems. |
 
 ## Documentation known to be stale

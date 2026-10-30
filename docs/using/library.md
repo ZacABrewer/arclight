@@ -343,8 +343,8 @@ one there with its **×**.
 setting (the same choices as a language profile). The languages are added to that title only;
 the shared language profile is not changed, so other titles using it are not affected. Existing
 subtitles stay. With **Search now** on, Arclight searches the subtitle providers straight away;
-each title then reads *found*, *not found yet* (Arclight keeps looking on the normal subtitle
-schedule) or *already has it*. If you tick **Generate with Whisper if no provider has it** and a
+each title then reads *found*, *not found yet* (no provider answered for it; Arclight keeps looking on the normal subtitle
+schedule) or *already has it* (the title really has that language). If you tick **Generate with Whisper if no provider has it** and a
 Whisper provider is set up under Settings -> Subtitles (it does not have to be enabled),
 languages no provider has are generated from the audio. That is
 slow, so it can still be running after the dialog closes. A language added this way is wanted even

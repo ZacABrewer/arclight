@@ -7,8 +7,8 @@ Something is not working. This page is organised by what you see: find your symp
 Contents:
 
 - [First checks](#first-checks)
-- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start
-- [Health checks](#health-checks): all 42, with a table of anchors
+- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start, [hardware transcoding fails](#hardware-transcoding-fails), [health notification without More Info link](#health-notification-no-more-info)
+- [Health checks](#health-checks): all 45, with a table of anchors
 - [Still stuck](#still-stuck)
 
 ---
@@ -206,9 +206,10 @@ The wording of these messages can differ slightly by version; the row is the aut
 1. **No indexer is enabled for that kind of search.** An indexer has separate switches for RSS, automatic search and interactive search. Health shows [no-indexers-enabled](#no-indexers-enabled), [no-indexers-available-with-automatic-search-enabled](#no-indexers-available-with-automatic-search-enabled) or [no-indexers-available-with-interactive-search-enabled](#no-indexers-available-with-interactive-search-enabled).
 2. **All indexers are backing off after failures.** See [indexers-are-unavailable-due-to-failures](#indexers-are-unavailable-due-to-failures).
 3. **A site is behind Cloudflare.** See [Cloudflare challenge](#cloudflare-challenge).
-4. **The title is not monitored,** or has no air date yet, so it is not Wanted. Check the title in the Library and the lists under Wanted.
-5. **Results exist but are rejected.** Interactive search lists them with the reason (quality not allowed, below the cutoff, size, custom format score, not enough seeders, blocklisted). Fix the profile or accept the release by hand.
-6. **The title is named differently by the indexer** (alternate titles, anime numbering). Check the series type and alternate names.
+4. **The item is not released yet.** Automatic searches and the **Search** buttons skip unreleased episodes, movies, albums and books (they show under Wanted > **Upcoming**). Use interactive search, or turn on **Search unreleased items** (user-started searches only) under Settings > Media management > Unreleased items. **Wait after release** also holds a search back for a while after release.
+5. **The title is not monitored,** or has no air date yet, so it is not Wanted. Check the title in the Library and the lists under Wanted.
+6. **Results exist but are rejected.** Interactive search lists them with the reason (quality not allowed, below the cutoff, size, custom format score, not enough seeders, blocklisted). Fix the profile or accept the release by hand.
+7. **The title is named differently by the indexer** (alternate titles, anime numbering). Check the series type and alternate names.
 
 **How to confirm:** Settings > Indexers: press **Test** on each indexer and read the error. Indexers > Stats shows queries and failures per indexer. In Interactive search look for rejected rows before concluding that nothing exists.
 
@@ -369,6 +370,16 @@ Files already imported by copy stay duplicated until you delete the download cop
 ---
 
 <a id="locked-out"></a>
+### My subtitle or language request was refused
+
+**What you see:** "Already on this title", "Already requested", or no **Request subtitles or audio** button.
+
+**Cause:** the title already has that language on every file in the scope, an identical request is open (a whole-series request covers its seasons), an admin already added the language and it is still being looked for, or the title or season has no files yet. The button also needs the **Request subtitles & languages** permission (included in **Request**). A declined request shows the manager's reason.
+
+**Fix:** check what the request dialog lists as already covered, wait for the open request, or ask an admin. See [Subtitle and language requests](using/discover-and-requests.md#subtitle-and-language-requests).
+
+---
+
 ### Cannot log in / locked out
 
 **What you see:** the login page rejects you, says "too many failed logins; try again later", or you are sent back to the login page in a loop.
@@ -447,9 +458,50 @@ The container health check calls `/api/v1/system/ping` and allows 20 seconds to 
 
 ---
 
+<a id="hardware-transcoding-fails"></a>
+### Hardware transcoding fails
+
+**What you see:** a transcode job under Activity > Transcode jobs fails, or finishes with a note that software was used instead. The error mentions one of these:
+
+- `No supported child device type is enabled` or `Failed to set value 'qsv=hw' for option 'init_hw_device': Function not implemented` (Quick Sync)
+- `No VA display found for device /dev/dri/renderD128` (VA-API)
+- `Cannot load libcuda.so.1` (NVIDIA)
+
+**Cause:** the container cannot reach the GPU, or the ffmpeg in use was built without the hardware backend. Older images shipped a static ffmpeg that listed Quick Sync but could never start it, which produced the first message. Current images ship Jellyfin's ffmpeg with VA-API, Quick Sync (amd64 only) and NVENC, so the usual causes now are a missing device or runtime:
+
+| Message | Cause |
+|---|---|
+| `No supported child device type is enabled`, `qsv=hw` | Old image, or a custom `ARCLIGHT_FFMPEG` pointing at a static build |
+| `No VA display found` | `/dev/dri` is not passed into the container, or the host has no GPU driver or iGPU (many NAS models have none) |
+| `Cannot load libcuda.so.1` | The NVIDIA Container Toolkit is missing or the `deploy` block is not active |
+
+**How to confirm:** open Settings > Transcode and look at the Hardware pane. Each backend shows Works or Unavailable with ffmpeg's reason. On the host, `ls -l /dev/dri` should list a `renderD128`.
+
+**Fix:**
+
+1. Update to the latest image ([updating.md](getting-started/updating.md)).
+2. Uncomment the `devices: - /dev/dri:/dev/dri` block (Intel and AMD) or the NVIDIA `deploy` block under the `arclight` service in your compose file and run `docker compose up -d`. The container adds the app user to the device's group on start; you do not need to change `PUID` or `PGID`.
+3. Press **Test again** in the Hardware pane. Backends that fail are disabled in the rule editor.
+4. If there is no GPU, set the rule to None (software). With **Fall back to software** on (the default), a job whose hardware start fails is retried once on the CPU, which works but is slow on a small NAS.
+
+Full guide: [hardware-transcoding.md](using/hardware-transcoding.md).
+
+---
+
+<a id="health-notification-no-more-info"></a>
+### Health notification has no More Info link
+
+**What you see:** a notification about a health issue arrives without a "More Info" link.
+
+**Cause:** the link is built from the Application URL. If that is not set, the link is left out rather than pointing at a wrong address.
+
+**Fix:** set **Application URL** under Settings > Requests to the address you use to open Arclight, then save. The next health notification carries a link that opens the matching entry in System > Health docs.
+
+---
+
 ## Health checks
 
-System > Health runs 42 kinds of check, plus one more (hard-links-not-possible) that arrives with a pending change. Each finding is an error (something is broken) or a warning (something needs attention). The **How to fix** link on a finding opens its section here, and the same text is in the app under System > Health docs. Where two findings share a check id, the section says when each appears.
+System > Health runs 45 kinds of check, plus one more (hard-links-not-possible) that arrives with a pending change. Each finding is an error (something is broken) or a warning (something needs attention). The **How to fix** link on a finding opens its section here, and the same text is in the app under System > Health docs. Where two findings share a check id, the section says when each appears.
 
 **Anchor table**
 
@@ -498,6 +550,9 @@ System > Health runs 42 kinds of check, plus one more (hard-links-not-possible) 
 | [download-stalled](#download-stalled) | DownloadStalled | warning | A download stopped receiving data |
 | [torrent-engine-lockdown](#torrent-engine-lockdown) | TorrentEngineLockdown | warning | VPN kill switch paused the engine |
 | [vpn-kill-switch-flapping](#vpn-kill-switch-flapping) | VpnKillSwitchFlapping | warning | Kill switch engaged 3+ times in an hour |
+| [discord-bot-disconnected](#discord-bot-disconnected) | DiscordBotDisconnected | warning | The Discord bot cannot reach Discord |
+| [whisper-unreachable](#whisper-unreachable) | WhisperUnreachable | warning | The Whisper subtitle provider does not answer |
+| [tracker-ratio-low](#tracker-ratio-low) | TrackerRatioLow | warning | A private tracker ratio or buffer is low |
 
 **Disk space**
 
@@ -870,6 +925,51 @@ Source: `VpnKillSwitchFlapping` (warning).
 **Fix:** check the VPN connection for drops (provider, server, container restarts). If the VPN stays up, its status checks are failing: look for slow or timed-out status replies in the logs, and consider a longer poll interval or a different server.
 
 **Indexers**
+
+<a id="discord-bot-disconnected"></a>
+### Discord bot is disconnected
+
+Source: `DiscordBotDisconnected` (warning).
+
+**Meaning:** the Discord bot is enabled but cannot reach Discord, or has been disconnected for a while. Requests from Discord are not received until it reconnects.
+
+**How to confirm:** Settings > Discord bot shows the connection state; press **Test**.
+
+**Fix:**
+
+- Check the bot token and press **Test**. A token reset in the Discord developer portal must be pasted again.
+- Make sure the bot is still in your server and has the permissions and intents the setup page lists.
+- Check that Arclight can reach discord.com (DNS, firewall, or a VPN that blocks it).
+
+<a id="whisper-unreachable"></a>
+### Whisper provider is unreachable
+
+Source: `WhisperUnreachable` (warning).
+
+**Meaning:** the Whisper (speech-to-text) subtitle provider is enabled, but its server does not answer. Subtitles that no other provider has are not generated.
+
+**How to confirm:** Settings > Subtitles > providers shows the Whisper URL and the error.
+
+**Fix:**
+
+- Docker: check that the `whisper` container is running (it is optional, under the `whisper` profile in the compose files).
+- Check the provider's URL; it must be reachable from Arclight (in Docker, use the container name, not `localhost`).
+- If you no longer use Whisper, disable the provider.
+
+<a id="tracker-ratio-low"></a>
+### Tracker ratio or buffer is low
+
+Source: `TrackerRatioLow` (warning).
+
+**Meaning:** a private tracker account is below (or close to) the ratio or upload buffer you set for it, or the tracker reports hit-and-runs. Falling below a tracker's rules can get the account warned or disabled.
+
+**How to confirm:** Indexers > Trackers shows the ratio, buffer and hit-and-runs per tracker.
+
+**Fix:**
+
+- Keep seeding: raise seeding goals for that tracker, or stop removing its torrents early.
+- Seed every torrent the tracker lists as a hit-and-run until it clears.
+- Check the required ratio and buffer set for the account in the indexer's settings, so the warning matches the tracker's actual rules.
 
 <a id="no-indexers-enabled"></a>
 ### No indexers enabled

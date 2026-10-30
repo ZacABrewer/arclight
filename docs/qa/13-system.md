@@ -28,6 +28,8 @@ Test environment: Native unless noted. After a restore, "Restart now" stops the 
 | SYS-08 | Click System -> Health on a fresh install with no download client and no indexer. | Page "Health" with an overall status badge in the subtitle (warning or error) and rows, each with a badge, a bold source name and a message. Expect "No download client is available" and "No indexers enabled, ... will not return search results". Rows that have a link show "More info". | |
 | SYS-09 | Add a download client and an indexer (Settings -> Download Clients, Settings -> Indexers), then click Re-check. | The Re-check button shows a spinner, then the matching rows disappear. When everything passes the card says "No issues" and "Every health check is passing." with an ok badge. | |
 | SYS-10 | Add a root folder under Settings -> Media Management, delete that folder on disk, click Re-check; then recreate the folder and click Re-check. | First an error row "Missing root folder: <path>"; after recreating, the row is gone. | |
+| SYS-10a | Cause a Discord bot, Whisper or tracker ratio finding (enable the bot with a wrong token; enable the Whisper provider with a wrong URL; set a high required ratio on a tracker with stats). Click "How to fix" on each. | The app navigates inside itself (no full page reload) to System -> Health docs and scrolls to the matching entry: "Discord bot is disconnected", "Whisper provider is unreachable" or "Tracker ratio or buffer is low". Each entry has a cause, fix steps and a link to the right settings page. | |
+| SYS-10b | Open System -> Health docs with the address ending `#discord-bot-disconnected`, then `#whisper-unreachable`, then `#tracker-ratio-low`. | Each address lands on its entry. | |
 
 ## System -> Logs
 

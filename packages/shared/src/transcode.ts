@@ -177,15 +177,51 @@ export type TranscodeRunRequest = z.infer<typeof TranscodeRunRequest>;
 export const TranscodeRunResult = z.object({ queued: z.number().int(), jobs: z.array(TranscodeJob) });
 export type TranscodeRunResult = z.infer<typeof TranscodeRunResult>;
 
+/**
+ * One backend's capability test: a 1-frame lavfi encode through the backend's real init args
+ * and H.264 encoder (the same flags a job uses).
+ */
+export const TranscodeBackendStatus = z.object({
+  backend: TranscodeHwaccel,
+  available: z.boolean(),
+  /** ffmpeg's line saying why the test failed (device/driver errors); null when available. */
+  reason: z.string().nullable(),
+});
+export type TranscodeBackendStatus = z.infer<typeof TranscodeBackendStatus>;
+
 export const TranscodeHwaccelResponse = z.object({
   /** Resolved ffmpeg binary; null when ffmpeg was not found. */
   ffmpegPath: z.string().nullable(),
-  /** Raw `ffmpeg -hwaccels` list (`vaapi`, `cuda`, `qsv`, `videotoolbox` ...). */
+  /** Raw `ffmpeg -hwaccels` list (`vaapi`, `cuda`, `qsv`, `videotoolbox` ...): what the build has, not what works. */
   methods: z.array(z.string()),
-  /** The rule `hwaccel` backends this ffmpeg reports support for (`nvenc` from `cuda`). */
+  /** The rule `hwaccel` backends whose capability test passed (`none` is always listed when ffmpeg exists). */
   backends: z.array(TranscodeHwaccel),
+  /** Every backend with its test result, in `TranscodeHwaccel` order. Empty when ffmpeg is missing. */
+  results: z.array(TranscodeBackendStatus),
+  /** When the cached results were measured (GET ?refresh=true tests again); null without ffmpeg. */
+  testedAt: z.string().nullable(),
 });
 export type TranscodeHwaccelResponse = z.infer<typeof TranscodeHwaccelResponse>;
+
+export const TranscodeHwaccelQuery = z.object({
+  /** Run the capability tests again instead of returning the cached results. */
+  refresh: z
+    .union([z.boolean(), z.enum(['true', 'false', '1', '0'])])
+    .transform((v) => v === true || v === 'true' || v === '1')
+    .default(false),
+});
+export type TranscodeHwaccelQuery = z.infer<typeof TranscodeHwaccelQuery>;
+
+/**
+ * `transcode` settings section (GET/PUT /settings/transcode). `fallbackToSoftware`: a job whose
+ * hardware backend fails to initialise (no GPU passed through, no access to it, missing driver)
+ * is retried once with software encoding instead of failing.
+ */
+export const TranscodeSettings = z.object({
+  fallbackToSoftware: z.boolean().default(true),
+});
+export type TranscodeSettings = z.infer<typeof TranscodeSettings>;
+export type TranscodeSettingsInput = z.input<typeof TranscodeSettings>;
 
 export const TranscodeErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type TranscodeErrorResponse = z.infer<typeof TranscodeErrorResponse>;

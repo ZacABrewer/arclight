@@ -55,8 +55,10 @@ export function HealthDocsPage() {
   }, []);
   useEffect(() => {
     if (!anchor) return;
-    const el = document.getElementById(anchor);
-    el?.scrollIntoView?.({ block: 'start' });
+    // After the frame: the router's scroll restoration runs once the page has rendered and
+    // would otherwise put an in-app navigation back at the top.
+    const frame = requestAnimationFrame(() => document.getElementById(anchor)?.scrollIntoView?.({ block: 'start' }));
+    return () => cancelAnimationFrame(frame);
   }, [anchor]);
 
   return (

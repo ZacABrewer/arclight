@@ -97,7 +97,7 @@ System > Backups creates, downloads and restores backups and sets the schedule. 
 
 ## Health
 
-System > Health runs checks and tells you what needs fixing. "Run checks" refreshes them now (they also run every 5 minutes). Each warning has a "How to fix" link to a page that explains the cause and the fix; those pages are also available in the app as System > Health docs. When all is well it says "Every health check passes."
+System > Health runs checks and tells you what needs fixing. "Run checks" refreshes them now (they also run every 5 minutes). Each warning has a "How to fix" link to a page that explains the cause and the fix; those pages are also available in the app as System > Health docs. The link opens inside the app and scrolls to the matching entry. Entries exist for every check, including Discord bot disconnected, Whisper provider unreachable and Tracker ratio or buffer low. The "More Info" link in a health notification opens the same entry when the Application URL is set (see [Notifications](notifications.md)). When all is well it says "Every health check passes."
 
 The most common ones are covered in [Troubleshooting](../TROUBLESHOOTING.md), for example [VPN disconnected](../TROUBLESHOOTING.md#vpn-disconnected), [Empty root folder](../TROUBLESHOOTING.md#empty-root-folder) and [Update available](../TROUBLESHOOTING.md#update-available).
 

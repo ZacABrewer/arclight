@@ -142,6 +142,95 @@ describe('TranscodeWorker', () => {
     expect((await readdir(dirname(fx.moviePath))).sort()).toEqual(['Film (2021).mkv']);
   });
 
+  describe('hardware fallback', () => {
+    const QSV_FAIL = [
+      '[AVHWDeviceContext @ 0x7f3990204340] No supported child device type is enabled',
+      'Device creation failed: -38.',
+      "Failed to set value 'qsv=hw' for option 'init_hw_device': Function not implemented",
+      'Error parsing global options: Function not implemented',
+    ].join('\n');
+    const qsvRule = () => ruleInput({ name: 'To HEVC', action: 'transcode', options: { videoCodec: 'hevc', hwaccel: 'qsv', preset: 'slow', crf: 22 } });
+    const failQsv = (args: readonly string[]) => (args.includes('hevc_qsv') ? { exitCode: 218, stderr: QSV_FAIL } : undefined);
+
+    it('retries once in software and records why', async () => {
+      fx = await setup();
+      fx.runner.respond = failQsv;
+      fx.service.createRule(qsvRule());
+      fx.service.runForFile(fx.movieFileId);
+      expect(await fx.service.process()).toMatchObject({ completed: 1, failed: 0 });
+
+      expect(fx.runner.calls).toHaveLength(2);
+      expect(fx.runner.calls[0]).toContain('hevc_qsv');
+      const retry = fx.runner.calls[1]!;
+      expect(retry).toContain('libx265');
+      expect(retry).not.toContain('-init_hw_device');
+      expect(retry).toEqual(expect.arrayContaining(['-crf', '22', '-preset', 'slow']));
+
+      const job = fx.service.listJobs()[0]!;
+      expect(job.status).toBe('completed');
+      expect(job.command).toContain('libx265');
+      expect(job.message).toContain('hardware acceleration (Intel Quick Sync (QSV)) was unavailable (No supported child device type is enabled); encoded in software instead');
+      const h = fx.db.select().from(history).all();
+      expect(h[0]!.data).toMatchObject({ hardwareFallback: expect.stringContaining('No supported child device type is enabled') });
+      expect(await readFile(fx.moviePath, 'utf8')).toBe('transcoded-bytes');
+    });
+
+    it('drops a hardware-native preset on the software retry', async () => {
+      fx = await setup();
+      fx.runner.respond = (args) => (args.includes('hevc_nvenc') ? { exitCode: 1, stderr: '[AVHWDeviceContext @ 0x1] Cannot load libcuda.so.1\nDevice creation failed: -1.' } : undefined);
+      fx.service.createRule(ruleInput({ name: 'nv', action: 'transcode', options: { videoCodec: 'hevc', hwaccel: 'nvenc', preset: 'p5' } }));
+      fx.service.runForFile(fx.movieFileId);
+      expect(await fx.service.process()).toMatchObject({ completed: 1 });
+      expect(fx.runner.calls[1]).toContain('libx265');
+      expect(fx.runner.calls[1]).not.toContain('-preset');
+    });
+
+    it('fails with the fix when fallbackToSoftware is off', async () => {
+      fx = await setup();
+      fx.service.saveSettings({ fallbackToSoftware: false });
+      fx.runner.respond = failQsv;
+      fx.service.createRule(qsvRule());
+      fx.service.runForFile(fx.movieFileId);
+      expect(await fx.service.process()).toMatchObject({ completed: 0, failed: 1 });
+      expect(fx.runner.calls).toHaveLength(1);
+      const job = fx.service.listJobs()[0]!;
+      expect(job.status).toBe('failed');
+      expect(job.message).toContain('hardware acceleration (Intel Quick Sync (QSV)) is unavailable: No supported child device type is enabled');
+      expect(job.message).toContain('/dev/dri:/dev/dri');
+      expect(job.message).toContain('docs/using/hardware-transcoding.md');
+      expect(await readFile(fx.moviePath, 'utf8')).toBe('original-movie-bytes');
+    });
+
+    it('does not retry failures that are not hardware init, nor software jobs', async () => {
+      fx = await setup();
+      fx.runner.respond = () => ({ exitCode: 1, stderr: 'av_interleaved_write_frame(): No space left on device\nConversion failed!' });
+      const hw = fx.service.createRule(qsvRule());
+      fx.service.runForFile(fx.movieFileId);
+      expect(await fx.service.process()).toMatchObject({ failed: 1 });
+      expect(fx.runner.calls).toHaveLength(1);
+
+      fx.runner.calls = [];
+      fx.service.deleteRule(hw.id);
+      fx.runner.respond = () => ({ exitCode: 1, stderr: QSV_FAIL });
+      fx.service.createRule(ruleInput({ name: 'sw', action: 'transcode', options: { videoCodec: 'hevc', hwaccel: 'none' }, when: { videoCodec: 'h264' } }));
+      fx.service.runForFile(fx.episodeFileId);
+      expect(await fx.service.process()).toMatchObject({ failed: 1 });
+      expect(fx.runner.calls).toHaveLength(1);
+    });
+
+    it('a software retry that also fails says hardware was skipped', async () => {
+      fx = await setup();
+      fx.runner.respond = (args) => (args.includes('hevc_qsv') ? { exitCode: 218, stderr: QSV_FAIL } : { exitCode: 1, stderr: 'Conversion failed!' });
+      fx.service.createRule(qsvRule());
+      fx.service.runForFile(fx.movieFileId);
+      expect(await fx.service.process()).toMatchObject({ failed: 1 });
+      expect(fx.runner.calls).toHaveLength(2);
+      const msg = fx.service.listJobs()[0]!.message!;
+      expect(msg).toContain('code 1: Conversion failed!');
+      expect(msg).toContain('was unavailable (No supported child device type is enabled)');
+    });
+  });
+
   it('records progress while running', async () => {
     fx = await setup();
     fx.runner.hold = true;

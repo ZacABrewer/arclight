@@ -20,6 +20,7 @@ The project does not state minimum CPU, RAM or disk figures, and none are enforc
 - The image is small: about 80 MB to pull and about 220 MB unpacked, and it answers HTTP within a couple of seconds of starting.
 - Release images are built for `linux/amd64` and `linux/arm64` (see [RELEASING.md](../RELEASING.md)).
 - Arclight keeps one SQLite database and its logs in the config folder (`arclight.db`, `logs/`, plus `backups/`, `definitions/` and `torrents/` as you use them). Put the config folder on storage that survives reboots.
+- Transcode rules can encode on a GPU: Intel (Quick Sync, VA-API), AMD (VA-API) or NVIDIA (NVENC). The arm64 image has no Quick Sync or VA-API. Many NAS CPUs have no integrated GPU, and on those transcoding runs on the CPU. See [hardware-transcoding.md](../using/hardware-transcoding.md).
 - Each extra container costs memory. FlareSolverr runs a headless browser, and the optional Whisper container runs a speech model on the CPU by default, so those are the heavy ones. If a small machine struggles, drop the optional extras first.
 - Disk space is mostly your media. A download stays in the downloads folder until it is imported, and longer if you seed.
 

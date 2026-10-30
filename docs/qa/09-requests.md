@@ -83,3 +83,15 @@ Test environments: Native (http://localhost:17878) is enough for everything. Doc
 | WTC-01 | On any title page click "Add to watchlist". | Button changes to "On watchlist - remove". Opening Watchlist shows the poster. Adding again is refused with "already on your watchlist". | |
 | WTC-02 | Open Watchlist and click Remove under a poster. | Poster disappears. When empty the page shows "The watchlist is empty" with hints about adding titles or linking a Plex token. | |
 | WTC-03 | (Needs a Plex account.) On Profile enter your Plex token, tick "Sync movies" and "Sync series", Save; give the user "Auto-request" permission if you want auto requests; add a title to your Plex watchlist; as admin click "Sync now" on the Watchlist page (or run job "WatchlistSync" in System -> Tasks). | Toast "Watchlists synced" with "N users - N added - N requested". Plex items appear in Watchlist labelled with their source, and auto-requests appear in Requests. | |
+
+## Subtitle and language requests
+
+| ID | Step | Expected result | Pass/Fail |
+|---|---|---|---|
+| LNG-01 | As alice (with "Request" or "Request subtitles & languages") open a library title that has files. | A "Request subtitles or audio" button shows. It is hidden for a title without files and for a user without either permission. | |
+| LNG-02 | Click it, choose Subtitles, pick Spanish, tick "Forced only", add a note and send. | The dialog lists the title's existing audio and subtitle languages and open requests. A request is created; with "Auto-approve everyone's subtitle requests" on (default) it is Approved at once. | |
+| LNG-03 | Request the same language again. Then on a series request "All seasons" and one season of the same language. | Refused with "Already requested" (or "Already on this title" when every file has it). A whole-series request covers its seasons. | |
+| LNG-04 | Request an Audio language (no forced or hearing-impaired options). | Stays Pending (auto-approve for audio is off by default). In Settings -> Requests the two "Auto-approve everyone's ..." switches control this. | |
+| LNG-05 | As admin open Requests and choose "Subtitles & languages" in the type filter. Approve the audio request. | The list shows only language requests; Approve for audio offers "Replace the file" or "Add a version". Approving starts a search. | |
+| LNG-06 | Decline one with a reason, Retry a failed one, tick several and use the bulk Approve, Decline and Delete. | The requester sees the reason in My requests; bulk actions report each request on its own. | |
+| LNG-07 | Check quota counters and the admin digest, and the notifications received. | Language requests are not counted in quotas, appear in the digest while pending, and send created, approved, declined and completed notifications with a title such as "<title> (Spanish subtitles)". | |

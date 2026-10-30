@@ -98,3 +98,4 @@ Moving from an older install with separate `/tv`, `/movies` and `/downloads` mou
 - [folders-and-hardlinks.md](folders-and-hardlinks.md)
 - [first-run-wizard.md](first-run-wizard.md)
 - [updating.md](updating.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

@@ -120,6 +120,9 @@ Yes. Add Newznab indexers under Settings > Indexers and a SABnzbd or NZBGet down
 ### Which indexers can I use?
 Torznab and Newznab endpoints (for example from Jackett or a usenet provider), plus built-in site definitions for a few public trackers. Those definitions have not been verified against the live sites, and public sites move often. Cloudflare-protected sites need FlareSolverr. See [Indexers](using/indexers.md) and [Cloudflare challenges](CLOUDFLARE.md).
 
+### Why isn't an episode or movie being searched?
+Probably because it is not released yet. Automatic searches and the **Search** buttons skip unreleased items; they show under Wanted > Upcoming. Interactive search still works, and **Search unreleased items** in Settings > Media management lets your own searches include them. See [Wanted](using/wanted.md#release-filter-released-and-upcoming-items).
+
 ### Why is nothing downloading?
 Check Settings > Download Clients > Test, whether the VPN is paused, and that the release has seeders. See [download stuck](TROUBLESHOOTING.md#download-stuck), [no peers](TROUBLESHOOTING.md#no-peers) and [nothing found](TROUBLESHOOTING.md#nothing-found).
 
@@ -155,6 +158,9 @@ Yes, guides sync is off by default. Enable it under Settings > Guides, map guide
 ### Does it handle subtitles?
 Yes, it replaces Bazarr, with providers such as OpenSubtitles.com and SubDL, optional Whisper (you provide the service), and a language profile per title. Some providers are best-effort or untested against the live service. See [Subtitles](using/subtitles.md).
 
+### Does Arclight support hardware transcoding?
+Yes, for transcode rules (which are optional). They can encode on an Intel iGPU or Arc (Quick Sync, VA-API), an AMD GPU (VA-API) or NVIDIA (NVENC). Pass `/dev/dri` or the NVIDIA runtime into the container with the commented block in the compose file; the image already bundles the Intel drivers (amd64 only). NAS models with no integrated GPU encode on the CPU. Settings > Transcode > Hardware acceleration tests each backend and shows why one is unavailable. See [Hardware transcoding](using/hardware-transcoding.md).
+
 ### Do other apps work with it, like LunaSea or Recyclarr?
 Arclight serves a Sonarr and Radarr v3 compatible API under `/api/v3`, and [API.md](API.md#authentication) lists Overseerr/Jellyseerr, Bazarr, Prowlarr, Notifiarr, Homarr, Recyclarr, LunaSea, nzb360 and dashboards as tools that can point at it. Recyclarr can sync quality profiles but not every setting, and the calendar is episode-only (so movies may not show in Radarr-only apps). Tools not on that list are untested. Details are in [API.md](API.md) and [known limitations](qa/99-known-limitations.md).
 
@@ -171,6 +177,9 @@ No, not through Jellyfin, Emby or Plex. Signing in with a media server only ever
 
 ### Do requests need approval?
 That is up to you. Users with an auto-approve permission are approved automatically; everyone else's requests wait for an admin in Requests. Quotas and approval rules are in Settings > Requests. See [Discover and requests](using/discover-and-requests.md).
+
+### Can people ask for subtitles or another audio language?
+Yes. With the **Request subtitles & languages** permission (included in **Request**), a **Request subtitles or audio** button appears on titles in the library. Subtitle requests are approved automatically by default; audio requests wait for a manager. See [Discover and requests](using/discover-and-requests.md#subtitle-and-language-requests).
 
 ## Updates and data
 

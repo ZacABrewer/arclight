@@ -53,13 +53,14 @@ These pages follow the app's navigation.
 | Library (TV, Movies, Collections, Add New, Retention, Hygiene) | [library.md](using/library.md) |
 | Library health scan (Hygiene > Health) | [health-scan.md](using/health-scan.md) |
 | Tags and tag rules (Settings > Tags) | [tags.md](using/tags.md) |
-| Discover, Requests, Issues, Watchlist, Discord bot | [discover-and-requests.md](using/discover-and-requests.md) |
+| Discover, Requests (including subtitle and language requests), Issues, Watchlist, Discord bot | [discover-and-requests.md](using/discover-and-requests.md) |
 | Calendar | [calendar.md](using/calendar.md) |
 | Activity (Queue, History, Blocklist, Pending, Manual import) | [activity.md](using/activity.md) |
-| Wanted (Missing, Cutoff unmet) | [wanted.md](using/wanted.md) |
+| Wanted (Missing, Cutoff unmet, released and upcoming filter) | [wanted.md](using/wanted.md) |
 | Interactive search and "why this release" | [interactive-search.md](using/interactive-search.md) |
 | Subtitles | [subtitles.md](using/subtitles.md) |
-| Media management and naming | [media-management.md](using/media-management.md) |
+| Media management, naming and unreleased items | [media-management.md](using/media-management.md) |
+| Hardware transcoding (Quick Sync, VA-API, NVENC) for transcode rules | [hardware-transcoding.md](using/hardware-transcoding.md) |
 | Quality profiles, custom formats, TRaSH sync | [quality-profiles.md](using/quality-profiles.md) |
 | Indexers, proxies, challenge solver, cross-seed | [indexers.md](using/indexers.md) |
 | Download clients and the built-in torrent engine | [download-clients.md](using/download-clients.md) |

@@ -19,11 +19,15 @@ describe('health docs', () => {
       `${apiModules}updates/health.ts`,
       `${apiModules}media-analysis/health.ts`,
       `${apiModules}library-hygiene/index.ts`,
+      `${apiModules}discord-bot/index.ts`,
+      `${apiModules}subtitles/whisper.ts`,
     ];
     const anchors = new Set(files.flatMap((f) => anchorsIn(readFileSync(f, 'utf8'))));
     // update/container anchors are passed as constants in updates/health.ts
     anchors.add('update-available');
     anchors.add('container-updates-available');
+    // tracker-stats/index.ts passes it through docsUrl()
+    for (const m of readFileSync(`${apiModules}tracker-stats/index.ts`, 'utf8').matchAll(/docsUrl\('([a-z0-9-]+)'\)/g)) anchors.add(m[1]!);
     expect(anchors.size).toBeGreaterThan(25);
     const documented = new Set(HEALTH_DOCS.map((d) => d.anchor));
     expect([...anchors].filter((a) => !documented.has(a))).toEqual([]);

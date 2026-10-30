@@ -157,3 +157,4 @@ Pull the new image by redeploying or updating the app (see [updating.md](updatin
 - [first-run-wizard.md](first-run-wizard.md)
 - [updating.md](updating.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)
+- [../using/hardware-transcoding.md](../using/hardware-transcoding.md)

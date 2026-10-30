@@ -17,6 +17,8 @@ There are two places to do it:
 | Movie page | **Interactive search** button at the top. |
 | Series or movie page, **Search** tab | Runs the same search and shows the results inline. |
 
+If the item is not released yet, a banner says "Not released yet (expected {date})" (or that no release date is known). Automatic searches and the **Search** buttons skip it, but interactive search still works and anything you grab is your call.
+
 Arclight asks every indexer that has interactive search enabled. This can take several seconds while it says "Searching indexers". If nothing comes back, the table says "No releases found. Every enabled indexer was searched."
 
 ### The table
