@@ -64,6 +64,8 @@ export const ServerEvent = z.discriminatedUnion('type', [
     id: z.number().int(),
     /** true: `id` is a music/audiobook request (`/audiorequest/:id`), not a video request. */
     audio: z.boolean().optional(),
+    /** true: `id` is a subtitle/language request (`/request/language/:id`). */
+    language: z.boolean().optional(),
   }),
   /** A daily summary was stored (GET /summary/latest). */
   z.object({ type: z.literal('summary'), action: z.literal('generated'), id: z.number().int() }),

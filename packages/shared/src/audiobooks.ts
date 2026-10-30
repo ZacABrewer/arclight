@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ListSearchParam } from './list-search.js';
+import { WantedReleaseFilter } from './release-dates.js';
 import { Paged, Ratings, SortOrder } from './library.js';
 import { AudioFile } from './music.js';
 
@@ -473,6 +474,8 @@ export const WantedBooksQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
   /** Text search (list-search.ts): every word must match. */
   q: ListSearchParam,
+  /** Release filter (release-dates.ts): a book's release / publish date. */
+  ...WantedReleaseFilter.shape,
 });
 export type WantedBooksQuery = z.infer<typeof WantedBooksQuery>;
 

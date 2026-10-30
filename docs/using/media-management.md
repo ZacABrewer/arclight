@@ -133,6 +133,15 @@ A hardlink is a second name for the same data on disk, so the file appears in bo
 |---|---|---|
 | Propers and repacks | Prefer and upgrade | How a PROPER or REPACK of a file you already have is treated. Choices: Prefer and upgrade, Do not upgrade automatically, Do not prefer |
 
+## Unreleased items
+
+| Setting | Default | What it does |
+|---|---|---|
+| Search unreleased items | Off | Let **Search** buttons and bulk searches look for items that are not released yet. Automatic searches never do |
+| Wait after release | 0 hours | Automatic searches treat an episode, movie, album or book as released only this long after its air or release time (0 to 168). Useful for episodes that air late at night |
+
+See [Wanted](wanted.md#release-filter-released-and-upcoming-items) for what counts as released.
+
 ## File management
 
 | Setting | Default | What it does |

@@ -133,6 +133,14 @@ export const ReleasesSettings = z.object({
   allowUnairedEpisodes: z.boolean().default(false),
   /** Tolerance before air time a single-episode release is accepted (minutes). */
   unairedToleranceMinutes: z.number().int().min(0).default(60),
+  /**
+   * Let user-started searches (Search buttons, bulk search, artist / author search) look for
+   * items that are not released yet (release-dates.ts). Automatic searches never do; interactive
+   * search always may.
+   */
+  searchUnreleased: z.boolean().default(false),
+  /** Automatic searches count an item as released only this many hours after its air / release moment. */
+  releaseGraceHours: z.number().int().min(0).max(168).default(0),
   /** Release decision log: rows older than this many days are pruned nightly (DecisionLogCleanup). */
   decisionLogDays: z.number().int().min(1).max(365).default(14),
   /** Music: automatic searches and RSS may grab discography / multi-album packs (interactive grabs always may). */

@@ -2,7 +2,7 @@ import { ManualImportRequest, qualityById, type ManualImportRequestInput, type Q
 import type { AppContext } from '../../app.js';
 import { getImportsService } from '../imports/index.js';
 import { libraryService as lib } from '../library/index.js';
-import { releasesServiceFor, type SearchSummary, type SearchTarget } from '../releases/index.js';
+import { releasesServiceFor, unreleasedNote, type SearchSummary, type SearchTarget } from '../releases/index.js';
 import type { CommandPlan, CommandResolver, CommandWork } from './commands.js';
 import { CommandBodies } from './commands.js';
 import { parseOr400, type Json } from './common.js';
@@ -13,7 +13,7 @@ import { languageCodeForId } from './quality.js';
 // else that exactly names a registered scheduler job (e.g. `RssSync`, `HealthCheck`) runs it.
 
 const summary = (r: SearchSummary): string =>
-  `${r.releases} releases found, ${r.approved} approved, ${r.grabbed.length} grabbed${r.pending ? `, ${r.pending} pending` : ''}`;
+  `${r.releases} releases found, ${r.approved} approved, ${r.grabbed.length} grabbed${r.pending ? `, ${r.pending} pending` : ''}${unreleasedNote(r.skippedUnreleased ?? 0)}`;
 
 const work = (fn: CommandWork): CommandPlan => ({ kind: 'work', work: fn });
 

@@ -15,6 +15,7 @@ import { audibleUrl, authorBackdrop, bookYear, chapterRows, formatOffset, format
 import { formatDuration } from '../music/music-model.js';
 import '../library.css';
 import { ItemHealthPanel, useCanSeeHealth } from '../item-health.js';
+import { dateReleaseState } from '../../../components/media/release-state.js';
 import { t } from '../../../i18n/index.js';
 import { usePaletteContext } from '../../../features/command-palette/registry.js';
 
@@ -133,6 +134,7 @@ function BookDetailsView() {
         target={interactive ? { bookId: b.id, authorId: b.authorId } : null}
         title={`${b.author.name} – ${b.title}`}
         bookTitles={new Map([[b.id, b.title]])}
+        release={dateReleaseState(b)}
         onClose={() => setInteractive(false)}
       />
       <DeleteMediaDialog

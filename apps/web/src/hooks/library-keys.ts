@@ -1,4 +1,4 @@
-import type { MetadataSearchType } from '@arclight/shared';
+import type { MetadataSearchType, WantedReleaseFilter } from '@arclight/shared';
 
 // Query keys for the library pages. The first segment matches what live.ts invalidates on a
 // `library` event (`[mediaType]`, `['library']`, `['wanted']`), so everything under
@@ -27,10 +27,10 @@ export const libraryKeys = {
   },
   wanted: {
     all: ['wanted'] as const,
-    missing: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '') =>
-      ['wanted', 'missing', kind, page, pageSize, q] as const,
-    cutoff: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '') =>
-      ['wanted', 'cutoff', kind, page, pageSize, q] as const,
+    missing: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '', release: WantedReleaseFilter = {}) =>
+      ['wanted', 'missing', kind, page, pageSize, q, release] as const,
+    cutoff: (kind: 'episodes' | 'movies', page: number, pageSize: number, q = '', release: WantedReleaseFilter = {}) =>
+      ['wanted', 'cutoff', kind, page, pageSize, q, release] as const,
   },
   calendar: {
     all: ['calendar'] as const,

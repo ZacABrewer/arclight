@@ -1,8 +1,8 @@
-import type { BulkSearchCommand, Movie, QualityProfile, WantedEpisode } from '@arclight/shared';
+import { isEpisodeReleased, isMovieReleased, type BulkSearchCommand, type Movie, type QualityProfile, type WantedEpisode } from '@arclight/shared';
 import { inArray } from 'drizzle-orm';
 import { episodes, movies, series } from '../../db/schema.js';
 import { libraryService, type IsCutoffMet } from '../library/index.js';
-import type { SearchTarget } from '../releases/index.js';
+import type { ReleaseGate, SearchTarget } from '../releases/index.js';
 
 type LibraryDb = Parameters<typeof libraryService.getMovie>[0];
 
@@ -11,8 +11,10 @@ export interface BulkSearchPlan {
   targets: SearchTarget[];
   /** Items (movies, series or episodes) the targets cover. */
   queued: number;
-  /** Selected items that did not match the mode. */
+  /** Selected items that did not match the mode, or are not released yet. */
   skipped: number;
+  /** How many of `skipped` are not released yet (never searched, release-dates.ts). */
+  unreleased: number;
 }
 
 export interface PlanDeps {
@@ -20,6 +22,11 @@ export interface PlanDeps {
   isCutoffMet: () => IsCutoffMet;
   qualityProfiles: () => QualityProfile[];
   now?: string;
+  /**
+   * The release check of user-started searches (ReleasesService.releaseGate(true)); null =
+   * `searchUnreleased` is on. Omitted = released as of `now`.
+   */
+  releaseGate?: ReleaseGate | null;
 }
 
 const PAGE = 500;
@@ -58,33 +65,58 @@ export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: Plan
   const episodeIds = [...new Set(cmd.episodeIds ?? [])];
   const wantMovies = movieIds.length > 0 || cmd.allMovies === true;
   const wantEpisodes = seriesIds.length > 0 || episodeIds.length > 0 || cmd.allEpisodes === true;
+  const now = deps.now ?? new Date().toISOString();
+  const gate = deps.releaseGate === undefined ? { nowMs: Date.parse(now), graceHours: 0 } : deps.releaseGate;
+  // Never search what is not out yet: such movies / episodes are skipped (and counted).
+  const movieOut = (m: Parameters<typeof isMovieReleased>[0]) => !gate || isMovieReleased(m, gate.nowMs, gate.graceHours);
+  const episodeOut = (e: Parameters<typeof isEpisodeReleased>[0]) => !gate || isEpisodeReleased(e, gate.nowMs, gate.graceHours);
 
   if (cmd.mode === 'all') {
-    const knownMovies = movieIds.length ? new Set(db.select({ id: movies.id }).from(movies).where(inArray(movies.id, movieIds)).all().map((r) => r.id)) : new Set<number>();
+    const movieRows = movieIds.length ? db.select().from(movies).where(inArray(movies.id, movieIds)).all() : [];
+    const outMovies = new Set(movieRows.filter(movieOut).map((r) => r.id));
     const knownSeries = seriesIds.length ? new Set(db.select({ id: series.id }).from(series).where(inArray(series.id, seriesIds)).all().map((r) => r.id)) : new Set<number>();
     const eps = episodeIds.length
-      ? db.select({ id: episodes.id, seriesId: episodes.seriesId, seasonNumber: episodes.seasonNumber }).from(episodes).where(inArray(episodes.id, episodeIds)).all()
+      ? db
+          .select({ id: episodes.id, seriesId: episodes.seriesId, seasonNumber: episodes.seasonNumber, airDate: episodes.airDate, airDateUtc: episodes.airDateUtc })
+          .from(episodes)
+          .where(inArray(episodes.id, episodeIds))
+          .all()
       : [];
-    // An episode of a series that is searched whole is covered already.
+    // An episode of a series that is searched whole is covered already. (A whole-series search
+    // leaves out its unaired episodes itself.)
     const looseEpisodes = eps.filter((e) => !knownSeries.has(e.seriesId));
+    const outEpisodes = looseEpisodes.filter(episodeOut);
     const targets: SearchTarget[] = [
-      ...movieIds.filter((id) => knownMovies.has(id)).map((movieId) => ({ movieId })),
+      ...movieIds.filter((id) => outMovies.has(id)).map((movieId) => ({ movieId })),
       ...seriesIds.filter((id) => knownSeries.has(id)).map((seriesId) => ({ seriesId })),
-      ...episodeTargets(looseEpisodes),
+      ...episodeTargets(outEpisodes),
     ];
-    const queued = knownMovies.size + knownSeries.size + looseEpisodes.length;
-    return { targets, queued, skipped: movieIds.length + seriesIds.length + episodeIds.length - queued };
+    const queued = outMovies.size + knownSeries.size + outEpisodes.length;
+    const unreleased = movieRows.length - outMovies.size + looseEpisodes.length - outEpisodes.length;
+    return { targets, queued, skipped: movieIds.length + seriesIds.length + episodeIds.length - queued, unreleased };
   }
 
-  const now = deps.now ?? new Date().toISOString();
   const isMet = cmd.mode === 'upgrade' ? deps.isCutoffMet() : null;
   const noUpgrades = cmd.mode === 'upgrade' ? new Set(deps.qualityProfiles().filter((p) => p.upgradeAllowed === false).map((p) => p.id)) : new Set<number>();
 
+  // "All" acts on the Wanted list as the page shows it, so its text search (`q`) and release
+  // filter apply too. Picked ids are looked up on the whole list (released or not), so a picked
+  // item that is not out yet is skipped for that reason and counted as such.
+  const filterOf = (all: boolean | undefined) =>
+    all
+      ? {
+          ...(cmd.q ? { q: cmd.q } : {}),
+          ...(cmd.released ? { released: cmd.released } : {}),
+          ...(cmd.releasedAfter ? { releasedAfter: cmd.releasedAfter } : {}),
+          ...(cmd.releasedBefore ? { releasedBefore: cmd.releasedBefore } : {}),
+        }
+      : { released: 'all' as const };
+
   let movieRows: Movie[] = [];
+  let unreleasedMovies = 0;
   if (wantMovies) {
-    // "All" acts on the Wanted list as the page shows it, so its text search (`q`) applies too;
-    // the list functions run the very same condition as GET /wanted/*/movies.
-    const mq = (page: number) => ({ page, pageSize: PAGE, ...(cmd.allMovies && cmd.q ? { q: cmd.q } : {}) });
+    // The list functions run the very same conditions as GET /wanted/*/movies.
+    const mq = (page: number) => ({ page, pageSize: PAGE, ...filterOf(cmd.allMovies) });
     movieRows = allPages((page) =>
       isMet ? libraryService.listCutoffUnmetMovies(db, mq(page), isMet, now) : libraryService.listMissingMovies(db, mq(page), now),
     ).filter((m) => !noUpgrades.has(m.qualityProfileId));
@@ -92,19 +124,29 @@ export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: Plan
       const picked = new Set(movieIds);
       movieRows = movieRows.filter((m) => picked.has(m.id));
     }
+    const out = movieRows.filter(movieOut);
+    unreleasedMovies = movieRows.length - out.length;
+    movieRows = out;
   }
 
   let episodeRows: WantedEpisode[] = [];
+  let unreleasedEpisodes = 0;
   let seriesWithMatches = 0;
   if (wantEpisodes) {
-    const q = (page: number) => ({ page, pageSize: PAGE, includeSpecials: false, ...(cmd.allEpisodes && cmd.q ? { q: cmd.q } : {}) });
+    const q = (page: number) => ({ page, pageSize: PAGE, includeSpecials: false, ...filterOf(cmd.allEpisodes) });
     episodeRows = allPages((page) =>
-      isMet ? libraryService.listCutoffUnmetEpisodes(db, q(page), isMet) : libraryService.listMissingEpisodes(db, q(page), now),
+      isMet ? libraryService.listCutoffUnmetEpisodes(db, q(page), isMet, now) : libraryService.listMissingEpisodes(db, q(page), now),
     ).filter((e) => !noUpgrades.has(e.qualityProfileId));
     if (!cmd.allEpisodes) {
       const pickedSeries = new Set(seriesIds);
       const pickedEpisodes = new Set(episodeIds);
       episodeRows = episodeRows.filter((e) => pickedSeries.has(e.seriesId) || pickedEpisodes.has(e.id));
+    }
+    // A picked series' unaired episodes are not picked items of their own: only those picked
+    // one by one (or taken by "all") count as skipped.
+    unreleasedEpisodes = episodeRows.filter((e) => !episodeOut(e) && (cmd.allEpisodes || episodeIds.includes(e.id))).length;
+    episodeRows = episodeRows.filter(episodeOut);
+    if (!cmd.allEpisodes) {
       const matchedSeries = new Set(episodeRows.map((e) => e.seriesId));
       seriesWithMatches = seriesIds.filter((id) => matchedSeries.has(id)).length;
     }
@@ -112,10 +154,12 @@ export function planBulkSearch(db: LibraryDb, cmd: BulkSearchCommand, deps: Plan
 
   const targets: SearchTarget[] = [...movieRows.map((m) => ({ movieId: m.id })), ...episodeTargets(episodeRows)];
   const queued = movieRows.length + episodeRows.length;
-  // Skipped: picked movies / episodes that are not on the list, and picked series with nothing on it.
+  const unreleased = unreleasedMovies + unreleasedEpisodes;
+  // Skipped: picked movies / episodes that are not on the list or not out yet, and picked series
+  // with nothing released on it. With "all", the list's rows that are not out yet.
   const matchedEpisodeIds = new Set(episodeRows.map((e) => e.id));
   const skipped = cmd.allMovies || cmd.allEpisodes
-    ? 0
+    ? unreleased
     : movieIds.length - movieRows.length + episodeIds.filter((id) => !matchedEpisodeIds.has(id)).length + (seriesIds.length - seriesWithMatches);
-  return { targets, queued, skipped };
+  return { targets, queued, skipped, unreleased };
 }

@@ -11,6 +11,7 @@ import { bitrateText, matchedBookTitles, narratorsText, seriesText } from './aud
 import '../library.css';
 import { GrabButton } from '../grab-button.js';
 import { useReleaseFilters } from '../release-filter-bar.js';
+import { UnreleasedSearchNotice, type ReleaseState } from '../../../components/media/release-state.js';
 import { t } from '../../../i18n/index.js';
 
 const dash = <span className="mk-dim">—</span>;
@@ -150,15 +151,19 @@ export function AudiobookInteractiveSearchModal({
   target,
   title,
   bookTitles,
+  release,
   onClose,
 }: {
   target: AudiobookReleaseTarget | null;
   title: string;
   bookTitles?: ReadonlyMap<number, string> | undefined;
+  /** A book that is not released yet: searched anyway, under a warning. */
+  release?: ReleaseState | null | undefined;
   onClose: () => void;
 }) {
   return (
     <Modal open={target !== null} onClose={onClose} title={t('library.interactiveSearch.interactiveSearchTitle', { title })} size={1100}>
+      <UnreleasedSearchNotice state={release} />
       <AudiobookReleaseTable target={target} bookTitles={bookTitles} />
     </Modal>
   );

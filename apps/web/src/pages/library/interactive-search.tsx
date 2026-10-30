@@ -19,6 +19,7 @@ import './library.css';
 import { versionColumn } from './versions/versions-editor.js';
 import { GrabButton } from './grab-button.js';
 import { useReleaseFilters } from './release-filter-bar.js';
+import { UnreleasedSearchNotice, type ReleaseState } from '../../components/media/release-state.js';
 import { t } from '../../i18n/index.js';
 
 export function formatAge(r: Pick<ReleaseDecision, 'age' | 'ageHours' | 'ageMinutes'>): string {
@@ -143,10 +144,24 @@ export function ReleaseTable({ target }: { target: ReleaseSearchTarget | null })
   );
 }
 
-/** Interactive search over GET /release: Modal 1100 with every decision and its rejections. */
-export function InteractiveSearchModal({ target, title, onClose }: { target: ReleaseSearchTarget | null; title: string; onClose: () => void }) {
+/**
+ * Interactive search over GET /release: Modal 1100 with every decision and its rejections. An
+ * item that is not released yet may still be searched here, under a warning (`release`).
+ */
+export function InteractiveSearchModal({
+  target,
+  title,
+  release,
+  onClose,
+}: {
+  target: ReleaseSearchTarget | null;
+  title: string;
+  release?: ReleaseState | null | undefined;
+  onClose: () => void;
+}) {
   return (
     <Modal open={target !== null} onClose={onClose} title={t('library.interactiveSearch.interactiveSearchTitle', { title })} size={1100}>
+      <UnreleasedSearchNotice state={release} />
       <ReleaseTable target={target} />
     </Modal>
   );

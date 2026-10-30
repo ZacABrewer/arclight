@@ -78,6 +78,26 @@ describe('additional subtitle languages', () => {
     ]);
   });
 
+  it('counts a language no provider answered for as not found, not as present', async () => {
+    const { f } = await build();
+    // A subtitles port whose search reports nothing (no provider took the language).
+    const silent = Object.create(f.service) as typeof f.service;
+    silent.searchFile = async () => undefined as never;
+    const service = new AdditionalLanguagesService({
+      db: f.db,
+      bus: f.bus,
+      log: pino({ level: 'silent' }),
+      scheduler: new Scheduler(f.db, f.bus, pino({ level: 'silent' })),
+      subtitles: () => silent,
+      releases: () => new FakeReleases(),
+      now: () => new Date(f.clock.now()),
+      waitMs: 5000,
+    });
+    const r = await service.apply(req({ kind: 'subtitle', targets: [{ movieId: f.movieId }], languages: [{ code: 'es' }] }));
+    expect(r.items[0]).toMatchObject({ outcome: 'notFound', subtitles: [{ language: 'es', outcome: 'notFound' }] });
+    expect(f.db.select().from(additionalLanguages).all()).toMatchObject([{ language: 'es', status: 'notFound' }]);
+  });
+
   it('keeps wanting a language nobody has, past the profile cutoff, only within the chosen season', async () => {
     const { f, service } = await build();
     f.db.update(languageProfiles).set({ cutoff: 'en' }).run();

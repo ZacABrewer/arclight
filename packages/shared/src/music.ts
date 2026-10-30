@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { ListSearchParam } from './list-search.js';
 import { AudioMediaType, GrabOverride, Paged, Ratings, SortOrder } from './library.js';
 import { QualityModel } from './quality.js';
+import { WantedReleaseFilter } from './release-dates.js';
 import { SECRET_MASK } from './settings.js';
 
 // The music contract (docs/design/music-audiobooks.md sections 4.3, 5.1, 9): artists, albums
@@ -505,6 +506,8 @@ export const WantedAlbumsQuery = z.object({
   pageSize: z.coerce.number().int().min(1).max(500).default(50),
   /** Text search (list-search.ts): every word must match. */
   q: ListSearchParam,
+  /** Release filter (release-dates.ts): an album's release date. */
+  ...WantedReleaseFilter.shape,
 });
 export type WantedAlbumsQuery = z.infer<typeof WantedAlbumsQuery>;
 

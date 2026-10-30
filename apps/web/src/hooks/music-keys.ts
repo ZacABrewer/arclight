@@ -1,3 +1,5 @@
+import type { WantedReleaseFilter } from '@arclight/shared';
+
 // Query keys for the music pages. Everything library-side lives under ['music'] so one
 // invalidation (live.ts: a `library`/`import` event with mediaType 'music', or a finished
 // artist job) refetches artists, albums and their details together. Settings-side keys sit
@@ -17,7 +19,8 @@ export const musicKeys = {
   },
   /** MusicBrainz search results: a snapshot, kept out of ['music'] so library events leave them alone. */
   lookup: (term: string) => ['musicLookup', term] as const,
-  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '') => ['wanted', mode, 'albums', page, pageSize, q] as const,
+  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '', release: WantedReleaseFilter = {}) =>
+    ['wanted', mode, 'albums', page, pageSize, q, release] as const,
   features: ['settings', 'features'] as const,
   metadata: ['settings', 'musicmetadata'] as const,
   audio: ['settings', 'audio'] as const,

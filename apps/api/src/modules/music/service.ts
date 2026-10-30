@@ -8,7 +8,9 @@ import {
   AlbumSecondaryType,
   ArtistType,
   albumPassesTypeProfile,
+  dateReleaseMs,
   defaultAlbumTypeProfiles,
+  matchesReleaseFilter,
   type AddArtistRequest,
   type Album,
   type AlbumDetails,
@@ -36,6 +38,7 @@ import {
   type WantedAlbum,
   type WantedAlbumsPage,
   type WantedAlbumsQuery,
+  type WantedReleaseFilter,
 } from '@arclight/shared';
 import { formatArtistCredit, type MbArtist, type MbRelease, type MbReleaseGroup, type MbReleaseSummary } from '@arclight/metadata';
 import { isQualityCutoffMet } from '@arclight/profiles-engine';
@@ -1202,12 +1205,18 @@ function toWanted(album: AlbumRow, artist: ArtistRow, stats: AlbumStatistics | u
   return { ...toAlbum(album, stats), artistName: artist.name, mbArtistId: artist.mbArtistId, qualityProfileId: artist.qualityProfileId };
 }
 
+/** The Wanted release filter on album rows: the album's release date (release-dates.ts). */
+function albumReleaseFilter(q: WantedReleaseFilter, now: Date) {
+  return (r: { album: AlbumRow }) => matchesReleaseFilter(dateReleaseMs(r.album), isReleased(r.album.releaseDate, now), q);
+}
+
 /**
- * Monitored albums (of monitored artists) that are released and lack files: fewer track files
- * than stored tracks, or no tracks loaded yet and nothing on disk. Newest first.
+ * Monitored albums (of monitored artists) that lack files: fewer track files than stored
+ * tracks, or no tracks loaded yet and nothing on disk. Released ones by default (`released`
+ * filter; `unreleased` = release date in the future or unknown). Newest first.
  */
 export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date = new Date()): WantedAlbumsPage {
-  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q).filter((r) => isReleased(r.album.releaseDate, now));
+  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q).filter(albumReleaseFilter(q, now));
   const stats = albumStatistics(
     db,
     rows.map((r) => r.album.id),
@@ -1227,9 +1236,9 @@ export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date =
  * Monitored albums with files whose lowest track-file quality is below the artist's profile
  * cutoff. Custom-format scores for audio arrive in Wave 2; only the quality cutoff counts here.
  */
-export function listCutoffUnmetAlbums(db: MusicDb, q: WantedAlbumsQuery, profiles: readonly QualityProfile[]): WantedAlbumsPage {
+export function listCutoffUnmetAlbums(db: MusicDb, q: WantedAlbumsQuery, profiles: readonly QualityProfile[], now: Date = new Date()): WantedAlbumsPage {
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q);
+  const rows = monitoredAlbumsOfMonitoredArtists(db, q.q).filter(albumReleaseFilter(q, now));
   if (rows.length === 0) return paginate([], q);
   const files = db
     .select({ albumId: audioFiles.albumId, quality: audioFiles.quality, grabOverride: audioFiles.grabOverride })

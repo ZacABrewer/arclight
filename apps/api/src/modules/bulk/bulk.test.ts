@@ -227,6 +227,47 @@ describe('POST /command/bulksearch', () => {
     expect(h.searches).toEqual([{ seriesId: s.id, episodeIds: [e1.id] }]);
   });
 
+  it('never searches items that are not released yet: they are skipped and counted', async () => {
+    const s = insertSeries(h.db, { qualityProfileId: h.profileId });
+    const aired = insertEpisode(h.db, s.id, { episodeNumber: 1, airDateUtc: '2024-01-01T00:00:00Z' });
+    const unaired = insertEpisode(h.db, s.id, { episodeNumber: 2, airDateUtc: '2999-01-01T00:00:00Z' });
+    const out = missingMovie('Out Now');
+    const later = insertMovie(h.db, { qualityProfileId: h.profileId, title: 'Later', sortTitle: 'later', hasFile: false, status: 'announced', minimumAvailability: 'released', inCinemas: '2999-01-01' });
+
+    // Mode all: picked movies / loose episodes that are not out are left out.
+    const all = await h.api('POST', '/command/bulksearch', { movieIds: [out.id, later.id], episodeIds: [aired.id, unaired.id] });
+    expect(all.json()).toMatchObject({ queued: 2, skipped: 2, unreleased: 2 });
+    await finished(BULK_SEARCH_JOB);
+    expect(h.searches).toEqual(expect.arrayContaining([{ movieId: out.id }, { seriesId: s.id, episodeIds: [aired.id] }]));
+    expect(h.searches).toHaveLength(2);
+
+    // Mode missing with ids: the same.
+    h.searches.length = 0;
+    const picked = await h.api('POST', '/command/bulksearch', { mode: 'missing', movieIds: [later.id], episodeIds: [unaired.id, aired.id] });
+    expect(picked.json()).toMatchObject({ queued: 1, skipped: 2, unreleased: 2 });
+
+    // "All" of a list filtered to everything (released=all): the upcoming rows are skipped.
+    const every = await h.api('POST', '/command/bulksearch', { mode: 'missing', allMovies: true, released: 'all' });
+    expect(every.json()).toMatchObject({ queued: 1, skipped: 1, unreleased: 1 });
+    // ... and the Upcoming list alone queues nothing.
+    const upcoming = await h.api('POST', '/command/bulksearch', { mode: 'missing', allEpisodes: true, released: 'unreleased' });
+    expect(upcoming.json()).toEqual({ queued: 0, skipped: 1, unreleased: 1, job: null });
+  });
+
+  it('allEpisodes with a release date range: only the Wanted rows in the range', async () => {
+    const s = insertSeries(h.db, { qualityProfileId: h.profileId });
+    insertEpisode(h.db, s.id, { episodeNumber: 1, airDateUtc: '2024-01-01T00:00:00Z' });
+    const feb = insertEpisode(h.db, s.id, { episodeNumber: 2, airDateUtc: '2024-02-10T00:00:00Z' });
+    const listed = (await h.api('GET', '/wanted/missing/episodes?releasedAfter=2024-02-01&releasedBefore=2024-02-29')).json<{ totalRecords: number; records: Array<{ id: number }> }>();
+    expect(listed.records.map((r) => r.id)).toEqual([feb.id]);
+    const res = await h.api('POST', '/command/bulksearch', { mode: 'missing', allEpisodes: true, releasedAfter: '2024-02-01', releasedBefore: '2024-02-29' });
+    expect(res.json()).toMatchObject({ queued: 1, skipped: 0 });
+    await finished(BULK_SEARCH_JOB);
+    expect(h.searches).toEqual([{ seriesId: s.id, episodeIds: [feb.id] }]);
+    expect((await h.api('GET', '/wanted/missing/episodes?released=soon')).statusCode).toBe(400);
+    expect((await h.api('GET', '/wanted/missing/movies?releasedBefore=not-a-date')).statusCode).toBe(400);
+  });
+
   it('rejects an empty selection and allMovies in mode all', async () => {
     expect((await h.api('POST', '/command/bulksearch', {})).statusCode).toBe(400);
     expect((await h.api('POST', '/command/bulksearch', { mode: 'all', allMovies: true })).statusCode).toBe(400);

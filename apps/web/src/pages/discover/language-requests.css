@@ -1,0 +1,36 @@
+/* Subtitle and language request dialog (title page). */
+.lr-have { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.lr-have .al-label { margin-right: 4px; }
+.lr-picker { display: flex; flex-direction: column; gap: 4px; }
+.lr-picker ul {
+  max-height: 200px;
+  overflow: auto;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--al-line-3);
+  background: var(--al-surface-solid);
+}
+.lr-picker li button {
+  width: 100%;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  text-align: left;
+  background: none;
+  border: 0;
+  color: var(--al-text-2);
+  font: 14px var(--al-font);
+  padding: 0 12px;
+  cursor: pointer;
+}
+.lr-picker li button:hover:not(:disabled),
+.lr-picker li button:focus-visible { background: var(--al-cyan-a06); color: var(--al-text-1); }
+.lr-picker li button:disabled { cursor: not-allowed; color: var(--al-text-4); }
+.lr-code { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-4); }
+.lr-why { margin-left: auto; font-size: 12px; color: var(--al-text-4); }
+.lr-none { padding: 8px 12px; color: var(--al-text-4); font-size: 13px; }
+@media (max-width: 767px) {
+  .lr-picker li button { min-height: 44px; }
+}

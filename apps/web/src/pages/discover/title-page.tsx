@@ -27,6 +27,7 @@ import { MEDIA_STATUS_META, REQUEST_STATUS_META, formatDateTime, seasonsLabel, u
 import { useAddToWatchlist, useRemoveFromWatchlist, useRequestsSettings, useTitle, useWatchlist } from '../../hooks/requests.js';
 import { DiscoverRow, StatusLabelChip, Track } from './discover-kit.js';
 import { RequestModal, seasonName } from './request-modal.js';
+import { LanguageRequestModal } from './language-request-modal.js';
 import { t } from '../../i18n/index.js';
 
 // Title page (Details layout without file data): hero with backdrop, poster, facts, status and
@@ -63,6 +64,11 @@ export function requestable(entry: TitleDetail, fourK: boolean): boolean {
   return fourK ? entry.mediaStatus4k === 'unknown' : entry.mediaStatus === 'unknown';
 }
 
+/** Subtitles or an extra audio language can be asked for: the title is in the library with files. */
+export function languageRequestable(entry: Pick<TitleDetail, 'libraryId' | 'mediaStatus'>): boolean {
+  return entry.libraryId != null && (entry.mediaStatus === 'available' || entry.mediaStatus === 'partiallyAvailable');
+}
+
 /** The title's headline status: Available / Partially available / Requested / Approved / Declined, or null. */
 export function titleStatusLabel(pick: Pick<TitleDetail, 'mediaStatus' | 'requestStatus'>): string | null {
   if (pick.mediaStatus === 'available' || pick.mediaStatus === 'partiallyAvailable') return MEDIA_STATUS_META[pick.mediaStatus].label;
@@ -96,6 +102,7 @@ function TitleView({ t: row }: { t: TitleDetail }) {
   const settings = useRequestsSettings(signedIn);
   const [requesting, setRequesting] = useState<null | { is4k: boolean; seasons?: number[] }>(null);
   const [reporting, setReporting] = useState(false);
+  const [requestingLanguage, setRequestingLanguage] = useState(false);
   const fourK = show4kToggle(row, settings.data);
   const trailers = row.videos.filter((v) => v.url && (v.type === 'Trailer' || v.type === 'Teaser'));
   const videos = trailers.length ? trailers : row.videos.filter((v) => v.url);
@@ -177,6 +184,9 @@ function TitleView({ t: row }: { t: TitleDetail }) {
                 </Button>
               ) : null}
               {signedIn ? <WatchlistToggle t={row} /> : null}
+              {signedIn && languageRequestable(row) && can(Permission.REQUEST_LANGUAGE, Permission.REQUEST) ? (
+                <Button onClick={() => setRequestingLanguage(true)}>{t('discover.languageRequest.button')}</Button>
+              ) : null}
               {row.libraryId && !inPortal ? (
                 <Link
                   className="al-btn al-btn--secondary"
@@ -298,6 +308,9 @@ function TitleView({ t: row }: { t: TitleDetail }) {
       </div>
 
       <RequestModal title={row} open={requesting !== null} is4k={requesting?.is4k ?? false} allow4k={fourK} initialSeasons={requesting?.seasons} onClose={() => setRequesting(null)} />
+      {signedIn ? (
+        <LanguageRequestModal open={requestingLanguage} onClose={() => setRequestingLanguage(false)} mediaType={row.mediaType} tmdbId={row.tmdbId} title={row.title} />
+      ) : null}
       {signedIn ? (
         <ReportIssueDialog target={{ mediaType: row.mediaType, tmdbId: row.tmdbId, title: row.title, seasons: row.seasons }} open={reporting} onClose={() => setReporting(false)} />
       ) : null}

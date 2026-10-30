@@ -39,15 +39,26 @@ export function useBulkSelection<K extends string | number = number>() {
   );
 }
 
+/** What was skipped: items not released yet (never searched), then the ones that did not match. */
+function skippedMessage(r: BulkCommandResponse): string | undefined {
+  const unreleased = r.unreleased ?? 0;
+  const other = r.skipped - unreleased;
+  const parts = [
+    ...(unreleased > 0 ? [t('bulk.toast.skippedUnreleased', { count: unreleased })] : []),
+    ...(other > 0 ? [t('bulk.toast.skipped', { count: other })] : []),
+  ];
+  return parts.length ? parts.join(' · ') : undefined;
+}
+
 function queuedToast(toast: ReturnType<typeof useToast>, r: BulkCommandResponse, kind: 'search' | 'subtitles') {
   if (r.queued === 0) {
-    toast.push({ tone: 'info', title: t('bulk.toast.nothingToSearch'), message: r.skipped ? t('bulk.toast.skipped', { count: r.skipped }) : undefined });
+    toast.push({ tone: 'info', title: t('bulk.toast.nothingToSearch'), message: skippedMessage(r) });
     return;
   }
   toast.push({
     tone: 'ok',
     title: kind === 'search' ? t('bulk.toast.searchQueued', { count: r.queued }) : t('bulk.toast.subtitleSearchQueued', { count: r.queued }),
-    message: r.skipped ? t('bulk.toast.skipped', { count: r.skipped }) : undefined,
+    message: skippedMessage(r),
     durationMs: 5_000,
   });
 }

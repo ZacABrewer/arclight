@@ -24,6 +24,7 @@ import '../library.css';
 import './music.css';
 import { GrabButton } from '../grab-button.js';
 import { useReleaseFilters } from '../release-filter-bar.js';
+import { UnreleasedSearchNotice, type ReleaseState } from '../../../components/media/release-state.js';
 import { t } from '../../../i18n/index.js';
 
 /**
@@ -184,15 +185,19 @@ export function MusicInteractiveSearchModal({
   target,
   title,
   albumTitles,
+  release,
   onClose,
 }: {
   target: MusicReleaseTarget | null;
   title: string;
   albumTitles?: ReadonlyMap<number, string> | undefined;
+  /** An album that is not released yet: searched anyway, under a warning. */
+  release?: ReleaseState | null | undefined;
   onClose: () => void;
 }) {
   return (
     <Modal open={target !== null} onClose={onClose} title={t('library.interactiveSearch.interactiveSearchTitle', { title })} size={1100}>
+      <UnreleasedSearchNotice state={release} />
       <MusicReleaseTable target={target} albumTitles={albumTitles} />
     </Modal>
   );

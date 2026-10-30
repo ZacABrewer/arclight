@@ -45,6 +45,8 @@ export const Permission = {
   WATCHLIST_VIEW: 134217728,
   REQUEST_MUSIC: 268435456,
   REQUEST_AUDIOBOOK: 536870912,
+  /** 2^30 is the last usable bit: JS bitwise operators work on 32-bit signed integers. */
+  REQUEST_LANGUAGE: 1073741824,
 } as const;
 export type PermissionName = keyof typeof Permission;
 
@@ -77,6 +79,7 @@ export const PERMISSION_INFO: readonly PermissionInfo[] = [
   { name: 'REQUEST_4K_TV', value: Permission.REQUEST_4K_TV, group: 'request', label: 'Request 4K series', description: 'Request 4K series only.' },
   { name: 'REQUEST_MUSIC', value: Permission.REQUEST_MUSIC, group: 'request', label: 'Request music', description: 'Request albums and artists (also granted by Request).' },
   { name: 'REQUEST_AUDIOBOOK', value: Permission.REQUEST_AUDIOBOOK, group: 'request', label: 'Request audiobooks', description: 'Request audiobooks and authors (also granted by Request).' },
+  { name: 'REQUEST_LANGUAGE', value: Permission.REQUEST_LANGUAGE, group: 'request', label: 'Request subtitles & languages', description: 'Request subtitles or an additional audio language for titles in the library (also granted by Request).' },
   { name: 'REQUEST_ADVANCED', value: Permission.REQUEST_ADVANCED, group: 'request', label: 'Advanced requests', description: 'Choose root folder, quality profile and tags on a request.' },
   { name: 'AUTO_APPROVE', value: Permission.AUTO_APPROVE, group: 'autoApprove', label: 'Auto-approve', description: 'Own movie and series requests are approved automatically.' },
   { name: 'AUTO_APPROVE_MOVIE', value: Permission.AUTO_APPROVE_MOVIE, group: 'autoApprove', label: 'Auto-approve movies', description: 'Own movie requests are approved automatically.' },
@@ -1331,6 +1334,10 @@ export const RequestsSettings = z.object({
   approvalWindows: z.array(ApprovalWindow).default([]),
   /** Auto-approve when the best approved release (quick interactive search) is smaller; null: off. */
   autoApproveIfSizeBelowGb: z.number().min(0).nullable().default(null),
+  /** Everyone's subtitle requests (language requests of kind subtitle) are approved automatically. */
+  autoApproveSubtitleRequests: z.boolean().default(true),
+  /** Everyone's additional audio language requests are approved automatically. */
+  autoApproveAudioRequests: z.boolean().default(false),
   /** Public request portal: anonymous discover and the login page's portal message. */
   publicPortal: PublicPortalSettings.default(PublicPortalSettings.parse({})),
 });

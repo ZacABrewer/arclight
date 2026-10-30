@@ -467,7 +467,8 @@ export class AdditionalLanguagesService {
       if (s.outcome !== 'searching') return s;
       const key = languageKey(s);
       // A language searched in several files counts as found only when no file came up empty.
-      const outcome: AdditionalLanguageOutcome = notFound.has(key) ? 'notFound' : found.has(key) ? 'found' : 'alreadyPresent';
+      // No answer at all (no provider took it) is not found: the file lacked it before the search.
+      const outcome: AdditionalLanguageOutcome = notFound.has(key) ? 'notFound' : found.has(key) ? 'found' : 'notFound';
       return { ...s, outcome };
     });
     item.outcome = rollUp(item.subtitles.map((s) => s.outcome));

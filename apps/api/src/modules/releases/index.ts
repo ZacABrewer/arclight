@@ -12,8 +12,10 @@ export * from './schema.js';
 export {
   ReleasesService,
   ReleasesError,
+  unreleasedNote,
   type DownloadPort,
   type IndexerPort,
+  type ReleaseGate,
   type SearchSummary,
   type SearchTarget,
 } from './service.js';

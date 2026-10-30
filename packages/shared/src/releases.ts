@@ -308,6 +308,8 @@ export const SearchCommandResponse = z.object({
   approved: z.number().int(),
   grabbed: z.array(z.string()),
   pending: z.number().int(),
+  /** Items of the target left out because they are not released yet (release-dates.ts). */
+  skippedUnreleased: z.number().int().optional(),
 });
 export type SearchCommandResponse = z.infer<typeof SearchCommandResponse>;
 

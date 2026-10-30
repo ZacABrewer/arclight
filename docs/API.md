@@ -198,7 +198,7 @@ when it was registered); the `FeedStale` health check reports stale feeds as war
 |---|---|---|
 | GET | `/settings/metadata` | TMDB settings; API key masked |
 | PUT | `/settings/metadata` | Update TMDB settings; a masked key keeps the stored value |
-| GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired, `decisionLogDays` (default 14) for the release decision log; music: `allowDiscographyPacks` (default false: discography / multi-album packs are only grabbed interactively) and `minPackWanted` (default 2: a pack must fill or upgrade at least this many monitored albums to be grabbed automatically)) |
+| GET | `/settings/releases` | Decision-engine knobs (max size, minimum age, retention, season packs, availability delay, unaired, `decisionLogDays` (default 14) for the release decision log; `searchUnreleased` (default false: only interactive search looks for items not released yet) and `releaseGraceHours` (default 0: hours after the release moment before automatic searches count an item as released; see Wanted → Release filter); music: `allowDiscographyPacks` (default false: discography / multi-album packs are only grabbed interactively) and `minPackWanted` (default 2: a pack must fill or upgrade at least this many monitored albums to be grabbed automatically)) |
 | PUT | `/settings/releases` | Replace the releases settings section |
 
 ## theme (theme packs)
@@ -277,6 +277,29 @@ set; a single-item refresh that fails is a `failed` job carrying the reason), `R
 | GET | `/wanted/missing/movies` | Paged (`WantedMoviesQuery`: `page`, `pageSize`, `q`) monitored movies without a file. `q` matches title, original title and year |
 | GET | `/wanted/cutoff/episodes` | Paged (`page`, `pageSize`, `includeSpecials`, `q` as for missing) monitored episodes of monitored series whose file has not met cutoff, as `WantedEpisodesPage` |
 | GET | `/wanted/cutoff/movies` | Paged (`page`, `pageSize`, `q` as for missing) monitored movies whose file has not met cutoff, as `WantedMoviesPage` |
+
+**Release filter** (every Wanted list: missing and cutoff unmet, episodes, movies, albums, books;
+`WantedReleaseFilter` in `packages/shared/src/release-dates.ts`). `released`: `released`
+(default: out now), `unreleased` (release moment in the future or unknown, "upcoming") or `all`.
+`releasedAfter` / `releasedBefore`: ISO dates or timestamps; a date-only value is a whole UTC day
+(after = from 00:00, before = through 23:59:59.999), both inclusive, and rows without a release
+moment are left out while a bound is set. Rows are filtered before paging, so `totalRecords`
+follows the filter. Invalid values answer 400. The release moment per type: episode = air time
+(`airDateUtc`, else 00:00 UTC of `airDate`); movie = the date that satisfies its
+`minimumAvailability` (`announced`: earliest of in cinemas / digital / physical, always out;
+`inCinemas`: in cinemas; `released`: earlier of digital / physical, else in cinemas + 90 days;
+with no dates the coarse `status` decides); album / book = `releaseDate` (`YYYY` / `YYYY-MM` count
+from the start of the period).
+
+**Unreleased items are never searched** automatically (missing / cutoff-unmet jobs, re-search
+after a failed download, search on add) nor by user-started searches (`POST /command/search`,
+`/command/bulksearch`, series / season / artist / author searches). Those skip them and report
+it: `SearchCommandResponse.skippedUnreleased`, `BulkCommandResponse.unreleased` (counted in
+`skipped`), and ", N not released yet (skipped)" in job messages. A series or season search
+leaves out its unaired episodes (a season counts as whole when every aired episode is asked
+for). Interactive search (`GET /release`) still searches them. `/settings/releases`:
+`searchUnreleased` (default false) lets user-started searches through; `releaseGraceHours`
+(0-168, default 0) makes automatic searches wait that long after the release moment.
 
 **Cutoff.** A file meets cutoff when, under its series' or movie's *current* quality profile,
 its quality reaches the profile cutoff **and** its custom-format score reaches the format cutoff
@@ -1246,7 +1269,8 @@ Jellyfin/Emby/Plex). With no server at all the library decides, as before.
 
 `RequestsSettings` also carries `applicationUrl` (public URL used for links in
 notifications), `digestEnabled` and `digestHour` (0-23, server local time), and
-`approvalBudgets`, `approvalWindows`, `autoApproveIfSizeBelowGb`, `publicPortal` (above).
+`approvalBudgets`, `approvalWindows`, `autoApproveIfSizeBelowGb`, `publicPortal` (above), and
+`autoApproveSubtitleRequests` / `autoApproveAudioRequests` (subtitle and language requests).
 
 ### Sitewide request notifications
 
@@ -1263,6 +1287,44 @@ the poster as thumbnail; Telegram as inline links; ntfy as action buttons; Gotif
 links; email/Pushover in the body (Pushover's URL = the request); webhooks get an `actions`
 array next to the raw event. The `requestsDigest` event (job `RequestsDigest`) goes to
 connections with `onRequestCreated` or `onIssueCreated`.
+
+### Subtitle and language requests
+
+Implemented in `apps/api/src/modules/requests/language-*.ts` (contract:
+`packages/shared/src/language-requests.ts`). A signed-in user asks for subtitles in a language
+(with forced / hearing-impaired modes) or an additional audio language on a title that is in
+the library with files, for a movie, a whole series or one season. Rows live in
+`language_requests` (no foreign keys; open requests of a deleted item are failed). They never
+count toward media quotas. Needs `REQUEST_LANGUAGE` (2^30) or `REQUEST`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/request/language` | `LanguageRequestListQuery` (`take`, `skip`, `filter` all/pending/approved/declined/failed/completed, `kind` all/subtitle/audio, `requestedBy`, `sortDirection`, `q`: title, year, kind, status, language tag, note, decline/failure reason, requester) → `LanguageRequestPage`; own requests only without `MANAGE_REQUESTS`/`REQUEST_VIEW` |
+| GET | `/request/language/count` | `LanguageRequestCount` (`total`, `subtitle`, `audio`, `pending`) over the visible requests |
+| GET | `/request/language/options` | `?mediaType&tmdbId` → `LanguageRequestOptions`: in the library (with files), library ids, seasons with files, the item's audio/subtitle language chips (as `GET /additional-language`), open requests of the title (`mine` flag, no requester names), `canRequest` |
+| GET | `/request/language/languages` | The requestable languages (`code`, `name`; the subtitles language list) |
+| GET | `/request/language/:id` | One `LanguageRequest` (owner, `MANAGE_REQUESTS` or `REQUEST_VIEW`) |
+| POST | `/request/language` | `CreateLanguageRequest` (`kind` subtitle/audio, `mediaType`, `tmdbId`, `seasonNumber?` series only, `language` any spelling, `forced`/`hi` subtitles only, `note` ≤ 500, `userId?` on behalf) → 201 `LanguageRequest`. 400 for an unknown language, a title not in the library or a scope without files; 409 when an identical pending/approved request exists (a whole-series request covers its seasons), the language was already added with "Add additional…", or every file of the scope already has it |
+| POST | `/request/language/:id/approve` | `MANAGE_REQUESTS`; optional `ApproveLanguageRequest` `{ mode: replace \| version }` (audio only, default `replace`) |
+| POST | `/request/language/:id/decline` | `MANAGE_REQUESTS`; optional `{ reason }` |
+| POST | `/request/language/:id/retry` | `MANAGE_REQUESTS`; re-runs a failed approval |
+| POST | `/request/language/bulk/:action` | `approve`, `decline`, `retry` or `delete`; `BulkRequestAction` → `BulkRequestResult` (an approval that ends `failed` is a failure) |
+| DELETE | `/request/language/:id` | `MANAGE_REQUESTS`, or the owner while pending |
+
+Auto-approval: requests settings `autoApproveSubtitleRequests` (default on) and
+`autoApproveAudioRequests` (default off), or a requester (or calling manager) with
+`AUTO_APPROVE` or `MANAGE_REQUESTS`; an auto-approved request answers `approved` and the
+search runs in the background. Approval calls "Add additional…" (`POST /additional-language`
+logic) for the item with `searchNow`, links the saved records (`additionalLanguageIds`) and
+records `outcome` / `outcomeMessage`: `found`, `grabbed`, `alreadyPresent` or `versionAdded`
+complete the request; `failed` or `noFile` (or an error) fail it with `failureReason`;
+`notFound` and `searching` keep it `approved` while the wanted machinery keeps searching.
+`RequestsStatusSync` and `library` updates of the item re-check approved requests (the linked
+records' status, then whether every file of the scope has the language now). Notifications use
+the four request events and audiences of video requests, with the language in `media.title`
+("Title (Spanish subtitles)"), the season in `request.seasons` and no deep links; failures are
+not notified (as for video requests). Pending language requests are in the admin digest.
+WebSocket `request` events of language requests carry `language: true`.
 
 ### Music and audiobook requests
 
@@ -2004,7 +2066,7 @@ when nothing matched); the job reports through `GET /jobs` and `job` events.
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/command/bulksearch` | `BulkSearchCommand`: `movieIds`, `seriesIds`, `episodeIds`, or `allMovies` / `allEpisodes` (everything on the matching Wanted list), and `mode`: `all` (default, a user-invoked search per item), `missing` (Wanted → Missing rules) or `upgrade` (Wanted → Cutoff unmet rules: profile quality and custom-format cutoff, version slots; profiles with `upgradeAllowed: false` are skipped). `all*` needs `missing` or `upgrade`. `q` (with `allMovies` / `allEpisodes` only) narrows "everything" to the Wanted rows matching the list's text search, with the same condition as `GET /wanted/*/episodes` and `/movies` (so "select all" on a searched Wanted page searches what the page shows); explicit ids ignore it. Episodes are searched per series and season. **202**, one `BulkSearch` job |
+| POST | `/command/bulksearch` | `BulkSearchCommand`: `movieIds`, `seriesIds`, `episodeIds`, or `allMovies` / `allEpisodes` (everything on the matching Wanted list), and `mode`: `all` (default, a user-invoked search per item), `missing` (Wanted → Missing rules) or `upgrade` (Wanted → Cutoff unmet rules: profile quality and custom-format cutoff, version slots; profiles with `upgradeAllowed: false` are skipped). `all*` needs `missing` or `upgrade`. `q` and the release filter (`released`, `releasedAfter`, `releasedBefore`; with `allMovies` / `allEpisodes` only) narrow "everything" to the Wanted rows the list shows, with the same conditions as `GET /wanted/*/episodes` and `/movies` (so "select all" on a searched Wanted page searches what the page shows); explicit ids ignore them. Items not released yet are never searched: they count in `skipped` and in `unreleased`. Episodes are searched per series and season. **202**, one `BulkSearch` job |
 | POST | `/rename/bulk` | `BulkRenameRequest` (`seriesIds`, `movieIds`): the rename preview of every item, `{items, failed}` |
 | POST | `/command/bulkrename` | Same body plus `files` (media file ids to limit to): renames through the per-item rename; answers `RenameResult` |
 | POST | `/command/subtitlesearch/bulk` | `mediaFileIds`, or `wanted: series \| movie` (every file on Subtitles → Wanted): **202**, one `BulkSubtitleSearch` job |

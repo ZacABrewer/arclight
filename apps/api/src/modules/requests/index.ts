@@ -19,6 +19,10 @@ import { AudioDiscoverService, type AudioSources } from './audio-discover.js';
 import { AudioRequestsService, type AudioLibraryPort } from './audio-requests.js';
 import { audioRequestsRoutes } from './audio-routes.js';
 import { RequestsError } from './errors.js';
+import { LanguageRequestsService, type LanguagesPort } from './language-requests.js';
+import { languageRequestsRoutes } from './language-routes.js';
+import { additionalLanguagesServiceFor } from '../additional-languages/index.js';
+import { subtitlesServiceFor } from '../subtitles/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
 import { releasesServiceFor, type SearchTarget } from '../releases/index.js';
 import { DiscoverService } from './discover.js';
@@ -63,6 +67,7 @@ export {
 export { RequestsError, REQUESTS_ERROR_STATUS, AudioDisabledError } from './errors.js';
 export { AudioDiscoverService, AUDIO_HOME_TTL_MS, AUDIO_SEARCH_TTL_MS, AUDIO_DETAIL_TTL_MS, type AudioSources, type AudioItemFacts } from './audio-discover.js';
 export { AudioRequestsService, type AudioLibraryPort, type AudioRequestRow } from './audio-requests.js';
+export { LanguageRequestsService, type LanguagesPort, type LanguageRequestRow } from './language-requests.js';
 export { audioLibraryStatus, withAudioStatus, normalizeForeignId } from './audio-status.js';
 export { REQUESTS_STATUS_SYNC_JOB, WATCHLIST_SYNC_JOB, REQUESTS_DIGEST_JOB, REQUESTS_POLICY_SWEEP_JOB } from './jobs.js';
 export * from './permissions.js';
@@ -90,6 +95,8 @@ export interface RequestsModuleOptions {
   audioSources?: AudioSources;
   /** Where approved music/audiobook requests are added; defaults to the metadata module's refreshers. */
   audioLibrary?: AudioLibraryPort;
+  /** "Add additional…" and the language list for language requests; defaults to the additional-languages and subtitles modules. */
+  languages?: LanguagesPort;
   now?: () => Date;
 }
 
@@ -103,6 +110,7 @@ export interface RequestsServices {
   portalLimiter: TokenBuckets;
   audio: AudioRequestsService;
   audioDiscover: AudioDiscoverService;
+  languages: LanguageRequestsService;
 }
 
 const ESTIMATE_TIMEOUT_MS = 20_000;
@@ -214,6 +222,17 @@ export function refresherAudioLibrary(ctx: AppContext): AudioLibraryPort {
   };
 }
 
+/** Language requests through the additional-languages module and the subtitles language list. */
+export function additionalLanguagesPort(ctx: AppContext): LanguagesPort {
+  const additional = additionalLanguagesServiceFor(ctx);
+  return {
+    preview: (req) => additional.preview(req),
+    apply: (req) => additional.apply(req),
+    itemLanguages: (q) => additional.itemLanguages(q),
+    languages: () => subtitlesServiceFor(ctx).languages(),
+  };
+}
+
 // One set of services per app context so routes, jobs and other modules share them.
 const services = new WeakMap<AppContext, RequestsServices>();
 
@@ -284,7 +303,15 @@ export function requestsServicesFor(ctx: AppContext, opts: RequestsModuleOptions
     library: opts.audioLibrary ?? refresherAudioLibrary(ctx),
     ...(now ? { now } : {}),
   });
-  found = { requests, issues, discover, watchlist, notifier, accounts, portalLimiter, audio, audioDiscover };
+  const languages = new LanguageRequestsService({
+    db: ctx.db,
+    bus: ctx.bus,
+    log,
+    notifier,
+    languages: () => opts.languages ?? additionalLanguagesPort(ctx),
+    ...(now ? { now } : {}),
+  });
+  found = { requests, issues, discover, watchlist, notifier, accounts, portalLimiter, audio, audioDiscover, languages };
   services.set(ctx, found);
   return found;
 }
@@ -305,7 +332,18 @@ export const requestsModuleWith =
       }),
     );
     await app.register(audioRequestsRoutes({ requests: s.requests, audio: s.audio, audioDiscover: s.audioDiscover, portalLimiter: s.portalLimiter }));
-    registerRequestsJobs(ctx.scheduler, s.requests, s.watchlist, s.audio);
+    await app.register(languageRequestsRoutes(s.languages));
+    registerRequestsJobs(ctx.scheduler, s.requests, s.watchlist, s.audio, s.languages);
+    // Language requests follow their library item: re-checked when it changes, failed when it goes.
+    const unsubscribe = ctx.bus.subscribe((event) => {
+      if (event.type !== 'library') return;
+      if (event.action === 'deleted') s.languages.itemDeleted(event.mediaType, event.id);
+      else if (event.action === 'updated' || event.action === 'fileAdded') s.languages.itemUpdated(event.mediaType, event.id);
+    });
+    app.addHook('onClose', async () => {
+      unsubscribe();
+      await s.languages.whenIdle();
+    });
     await app.register(mediaServerRoutes(ctx, s.accounts, s.requests));
   };
 

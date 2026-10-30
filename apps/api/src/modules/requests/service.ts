@@ -39,6 +39,7 @@ import type { Db } from '../../db/index.js';
 import { listSearchCondition } from '../../db/list-search.js';
 import { qualityProfiles, rootFolders } from '../../db/schema.js';
 import type { EventBus } from '../../events.js';
+import { displayLanguage } from '../additional-languages/audio.js';
 import {
   DEFAULT_VERSION_TAG,
   UHD_VERSION_TAG,
@@ -68,7 +69,7 @@ import {
 import { CertificationGuard, restrictionsOfSettings } from './certification.js';
 import { evaluatePolicy, needsSizeEstimate, type BudgetUsage, type PolicyDecision, type PolicyResult } from './policy.js';
 import { quotaFor } from './quota.js';
-import { audioRequests, mediaRequests, overrideRules, requestMediaStatus, seasonRequests, issues, issueComments, watchlistItems } from './schema.js';
+import { audioRequests, languageRequests, mediaRequests, overrideRules, requestMediaStatus, seasonRequests, issues, issueComments, watchlistItems } from './schema.js';
 import {
   libraryAvailability,
   overlayRequests,
@@ -1042,6 +1043,7 @@ export class RequestsService {
     removed += this.db.delete(issues).where(sql`${issues.createdById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(issueComments).where(sql`${issueComments.userId} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(audioRequests).where(sql`${audioRequests.requestedById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
+    removed += this.db.delete(languageRequests).where(sql`${languageRequests.requestedById} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     removed += this.db.delete(watchlistItems).where(sql`${watchlistItems.userId} not in (${sql.join(keep.map((id) => sql`${id}`), sql`, `)})`).run().changes;
     return removed;
   }
@@ -1330,9 +1332,12 @@ export class RequestsService {
   async digest(): Promise<RequestsDigestResult> {
     const pending = this.db.select().from(mediaRequests).where(eq(mediaRequests.status, 'pending')).orderBy(asc(mediaRequests.createdAt), asc(mediaRequests.id)).all();
     const open = this.db.select().from(issues).where(eq(issues.status, 'open')).orderBy(asc(issues.createdAt), asc(issues.id)).all();
-    const result: RequestsDigestResult = { sent: false, pendingRequests: pending.length, openIssues: open.length };
-    if (pending.length === 0 && open.length === 0) return result;
-    const names = requestUsers(this.db, [...pending.map((r) => r.requestedById), ...open.map((i) => i.createdById)]);
+    // Subtitle and audio language requests wait for approval too.
+    const languages = this.db.select().from(languageRequests).where(eq(languageRequests.status, 'pending')).orderBy(asc(languageRequests.createdAt), asc(languageRequests.id)).all();
+    const totalPending = pending.length + languages.length;
+    const result: RequestsDigestResult = { sent: false, pendingRequests: totalPending, openIssues: open.length };
+    if (totalPending === 0 && open.length === 0) return result;
+    const names = requestUsers(this.db, [...pending.map((r) => r.requestedById), ...languages.map((r) => r.requestedById), ...open.map((i) => i.createdById)]);
     const nameOf = (id: number) => {
       const u = names.get(id);
       return u?.displayName ?? u?.username ?? `user ${id}`;
@@ -1340,17 +1345,28 @@ export class RequestsService {
     const LIMIT = 15;
     const event: Omit<RequestsDigestEvent, 'instanceName' | 'timestamp'> = {
       type: 'requestsDigest',
-      totalPendingRequests: pending.length,
+      totalPendingRequests: totalPending,
       totalOpenIssues: open.length,
-      pendingRequests: pending.slice(0, LIMIT).map((r) => ({
-        id: r.id,
-        mediaType: r.type,
-        title: r.title,
-        ...(r.year ? { year: r.year } : {}),
-        requestedBy: nameOf(r.requestedById),
-        is4k: r.is4k,
-        createdAt: r.createdAt,
-      })),
+      pendingRequests: [
+        ...pending.map((r) => ({
+          id: r.id,
+          mediaType: r.type,
+          title: r.title,
+          ...(r.year ? { year: r.year } : {}),
+          requestedBy: nameOf(r.requestedById),
+          is4k: r.is4k,
+          createdAt: r.createdAt,
+        })),
+        ...languages.map((r) => ({
+          id: r.id,
+          mediaType: r.mediaType,
+          title: `${r.title} (${displayLanguage(r.language)} ${r.kind === 'audio' ? 'audio' : 'subtitles'})`,
+          ...(r.year ? { year: r.year } : {}),
+          requestedBy: nameOf(r.requestedById),
+          is4k: false,
+          createdAt: r.createdAt,
+        })),
+      ].slice(0, LIMIT),
       openIssues: open.slice(0, LIMIT).map((i) => ({
         id: i.id,
         mediaType: i.mediaType,

@@ -45,6 +45,14 @@ export function canRequestAudio(held: number, domain: 'music' | 'audiobook'): bo
   return can(held, Permission.REQUEST, domain === 'music' ? Permission.REQUEST_MUSIC : Permission.REQUEST_AUDIOBOOK);
 }
 
+/** Subtitle and audio language requests: the general REQUEST flag covers them too. */
+export function canRequestLanguage(held: number): boolean {
+  return can(held, Permission.REQUEST, Permission.REQUEST_LANGUAGE);
+}
+
+/** Language requests have no auto-approve flags of their own: AUTO_APPROVE or MANAGE_REQUESTS. */
+export const canAutoApproveLanguage = (held: number): boolean => can(held, Permission.AUTO_APPROVE, Permission.MANAGE_REQUESTS);
+
 /** Audio requests have no per-domain auto-approve flags: AUTO_APPROVE or MANAGE_REQUESTS. */
 export const canAutoApproveAudio = (held: number): boolean => can(held, Permission.AUTO_APPROVE, Permission.MANAGE_REQUESTS);
 

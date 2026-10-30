@@ -110,6 +110,10 @@ export interface ReleaseSettings {
   allowUnairedEpisodes: boolean;
   /** Tolerance before the air time a single-episode release is accepted (minutes). */
   unairedToleranceMinutes: number;
+  /** User-started searches may look for items that are not released yet (automatic ones never do). */
+  searchUnreleased: boolean;
+  /** Automatic searches count an item as released this many hours after its air / release moment. */
+  releaseGraceHours: number;
   /** Settings → Indexers: accept releases with burned-in subtitles. */
   allowHardcodedSubs: boolean;
   /** Settings → Indexers: subtitle tags (`ENG`, `HC.ENG`, `KORSUB`) accepted even when hardcoded subs are not. */
@@ -186,6 +190,8 @@ export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {
   availabilityDelayDays: 0,
   allowUnairedEpisodes: false,
   unairedToleranceMinutes: 60,
+  searchUnreleased: false,
+  releaseGraceHours: 0,
   allowHardcodedSubs: false,
   whitelistedHardcodedSubs: [],
   preferIndexerFlags: false,

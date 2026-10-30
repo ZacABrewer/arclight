@@ -1,3 +1,4 @@
+import type { WantedReleaseFilter } from '@arclight/shared';
 import type { BookLookupInput } from '../api/audiobooks.js';
 
 // Query keys for the audiobook pages. Everything library-side lives under ['audiobook'] so one
@@ -25,7 +26,8 @@ export const audiobookKeys = {
   /** Catalogue search results: snapshots, kept out of ['audiobook'] so library events leave them alone. */
   authorLookup: (term: string) => ['audiobookLookup', 'author', term] as const,
   bookLookup: (input: BookLookupInput) => ['audiobookLookup', 'book', input] as const,
-  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '') => ['wanted', mode, 'books', page, pageSize, q] as const,
+  wanted: (mode: 'missing' | 'cutoff', page: number, pageSize: number, q = '', release: WantedReleaseFilter = {}) =>
+    ['wanted', mode, 'books', page, pageSize, q, release] as const,
   metadata: ['settings', 'audiobookmetadata'] as const,
   qualityProfiles: ['settings', 'qualityprofiles', 'domain', 'audiobook'] as const,
 };

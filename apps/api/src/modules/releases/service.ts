@@ -15,6 +15,9 @@ import {
   type ParsedRelease,
 } from '@arclight/parser';
 import {
+  isDateReleased,
+  isEpisodeReleased,
+  isMovieReleased,
   MovieListQuery,
   SeriesListQuery,
   type CustomFormat,
@@ -142,7 +145,8 @@ import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, t
 // (grab / park as pending), and run the scheduled searches.
 
 const MINUTE = 60_000;
-const DAY = 24 * 60 * MINUTE;
+const HOUR = 60 * MINUTE;
+const DAY = 24 * HOUR;
 const RELEASE_CACHE_TTL_MS = 30 * MINUTE;
 const CLIENT_RETRY_MINUTES = 5;
 const MAX_REDIRECTS = 5;
@@ -293,6 +297,22 @@ export interface SearchSummary {
   approved: number;
   grabbed: string[];
   pending: number;
+  /** Items of the target left out because they are not released yet (release-dates.ts). */
+  skippedUnreleased?: number;
+}
+
+/** ", N not released yet (skipped)" for a search job's summary line, or nothing. */
+export function unreleasedNote(n: number): string {
+  return n > 0 ? `, ${n} not released yet (skipped)` : '';
+}
+
+/**
+ * When a search counts an item as released: at `nowMs`, `graceHours` after its air / release
+ * moment. Null = no release check (interactive search, or user searches with `searchUnreleased`).
+ */
+export interface ReleaseGate {
+  nowMs: number;
+  graceHours: number;
 }
 
 interface ProcessResult {
@@ -1879,9 +1899,13 @@ export class ReleasesService {
   buildSearch(
     target: SearchTarget,
     userInvoked: boolean,
-  ): { requests: SearchRequest[]; criteria: SearchCriteria; items: { kind: SearchItemType; ids: number[] } } {
+    gate: ReleaseGate | null = null,
+  ): { requests: SearchRequest[]; criteria: SearchCriteria; items: { kind: SearchItemType; ids: number[] }; skippedUnreleased: number } {
     if ('movieId' in target) {
       const movie = libraryService.getMovie(this.db, target.movieId);
+      if (gate && !isMovieReleased(movie, gate.nowMs, gate.graceHours)) {
+        return { requests: [], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [] }, skippedUnreleased: 1 };
+      }
       const request: SearchRequest = {
         kind: 'movie',
         query: movie.title,
@@ -1889,15 +1913,25 @@ export class ReleasesService {
         ...(movie.imdbId ? { imdbId: movie.imdbId } : {}),
         ...(movie.year ? { year: movie.year } : {}),
       };
-      return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [movie.id] } };
+      return { requests: [request], criteria: { mediaType: 'movie', movieId: movie.id, userInvoked }, items: { kind: 'movie', ids: [movie.id] }, skippedUnreleased: 0 };
     }
     if (isMusicTarget(target)) {
-      const plan = this.buildAudioSearch(target, userInvoked);
-      return { requests: plan.steps.flatMap((s) => s.requests), criteria: plan.criteria, items: { kind: 'album', ids: plan.albumIds } };
+      const plan = this.buildAudioSearch(target, userInvoked, gate);
+      return {
+        requests: plan.steps.flatMap((s) => s.requests),
+        criteria: plan.criteria,
+        items: { kind: 'album', ids: plan.albumIds },
+        skippedUnreleased: plan.skippedUnreleased,
+      };
     }
     if (isBookTarget(target)) {
-      const plan = this.buildBookSearch(target, userInvoked);
-      return { requests: plan.steps.flatMap((s) => s.requests), criteria: plan.criteria, items: { kind: 'book', ids: plan.bookIds } };
+      const plan = this.buildBookSearch(target, userInvoked, gate);
+      return {
+        requests: plan.steps.flatMap((s) => s.requests),
+        criteria: plan.criteria,
+        items: { kind: 'book', ids: plan.bookIds },
+        skippedUnreleased: plan.skippedUnreleased,
+      };
     }
     const series = libraryService.getSeries(this.db, target.seriesId, { includeStatistics: false });
     const episodes = libraryService.listEpisodes(this.db, { seriesId: series.id });
@@ -1905,6 +1939,12 @@ export class ReleasesService {
     if (target.episodeIds?.length) targeted = episodes.filter((e) => target.episodeIds!.includes(e.id));
     else if (target.seasonNumber !== undefined) targeted = episodes.filter((e) => e.seasonNumber === target.seasonNumber);
     else targeted = episodes.filter((e) => e.seasonNumber > 0 && (userInvoked || e.monitored));
+    // Episodes that have not aired are left out (release-dates.ts); a season counts as whole
+    // when every aired episode of it is asked for.
+    const released = (e: Episode) => !gate || isEpisodeReleased(e, gate.nowMs, gate.graceHours);
+    const before = targeted.length;
+    targeted = targeted.filter(released);
+    const skippedUnreleased = before - targeted.length;
 
     const base = {
       kind: 'tv' as const,
@@ -1917,7 +1957,7 @@ export class ReleasesService {
     const bySeason = new Map<number, Episode[]>();
     for (const e of targeted) bySeason.set(e.seasonNumber, [...(bySeason.get(e.seasonNumber) ?? []), e]);
     for (const [season, eps] of bySeason) {
-      const wholeSeason = eps.length === episodes.filter((e) => e.seasonNumber === season).length && eps.length > 1;
+      const wholeSeason = eps.length === episodes.filter((e) => e.seasonNumber === season && released(e)).length && eps.length > 1;
       if (series.seriesType === 'daily') {
         for (const e of eps) if (e.airDate) requests.push({ ...base, airDate: e.airDate });
         continue;
@@ -1944,7 +1984,18 @@ export class ReleasesService {
           ? { seasonNumber: targeted[0].seasonNumber }
           : {}),
     };
-    return { requests, criteria, items: { kind: 'episode', ids: targeted.map((e) => e.id) } };
+    return { requests, criteria, items: { kind: 'episode', ids: targeted.map((e) => e.id) }, skippedUnreleased };
+  }
+
+  /**
+   * The release check of a search that grabs (release-dates.ts): automatic searches wait
+   * `releaseGraceHours` past the release moment; user-started ones search anything out now, or
+   * everything with `searchUnreleased`. Interactive searches pass no gate at all.
+   */
+  releaseGate(userInvoked: boolean): ReleaseGate | null {
+    const settings = this.settings();
+    if (userInvoked && settings.searchUnreleased) return null;
+    return { nowMs: this.now().getTime(), graceHours: userInvoked ? 0 : settings.releaseGraceHours };
   }
 
   private async runSearch(requests: SearchRequest[], mode: 'automatic' | 'interactive', signal?: AbortSignal): Promise<ReleaseResource[]> {
@@ -1966,10 +2017,12 @@ export class ReleasesService {
   /** Automatic search + grab for a library item. `userInvoked` relaxes delay/monitored specs. */
   async searchFor(target: SearchTarget, opts: { userInvoked?: boolean; signal?: AbortSignal } = {}): Promise<SearchSummary> {
     const userInvoked = opts.userInvoked ?? false;
-    if (isMusicTarget(target)) return this.searchAudio(target, { userInvoked, ...(opts.signal ? { signal: opts.signal } : {}) });
-    if (isBookTarget(target)) return this.searchBooks(target, { userInvoked, ...(opts.signal ? { signal: opts.signal } : {}) });
-    const { requests, criteria, items } = this.buildSearch(target, userInvoked);
-    if (requests.length === 0) return { releases: 0, approved: 0, grabbed: [], pending: 0 };
+    const gate = this.releaseGate(userInvoked);
+    if (isMusicTarget(target)) return this.searchAudio(target, { userInvoked, gate, ...(opts.signal ? { signal: opts.signal } : {}) });
+    if (isBookTarget(target)) return this.searchBooks(target, { userInvoked, gate, ...(opts.signal ? { signal: opts.signal } : {}) });
+    const { requests, criteria, items, skippedUnreleased } = this.buildSearch(target, userInvoked, gate);
+    const skipped = skippedUnreleased > 0 ? { skippedUnreleased } : {};
+    if (requests.length === 0) return { releases: 0, approved: 0, grabbed: [], pending: 0, ...skipped };
     const source: SearchRunSource = userInvoked ? 'manual' : 'automatic';
     let releases: ReleaseResource[];
     let evaluated: Evaluated[];
@@ -1989,6 +2042,7 @@ export class ReleasesService {
       approved: evaluated.filter((e) => e.decision.approved).length,
       grabbed: result.grabbed.map((e) => e.decision.title),
       pending: result.pending,
+      ...skipped,
     };
   }
 
@@ -2074,16 +2128,13 @@ export class ReleasesService {
   // ---- music searches ---------------------------------------------------------------
 
   /** Albums of the artist a search should look for: released, monitored (unless asked for by id) and missing or below cutoff. */
-  private wantedAlbums(artistId: number, lib: MusicLibrary, profile: QualityProfile | undefined): number[] {
-    const now = this.now().getTime() + DAY;
+  private wantedAlbums(artistId: number, lib: MusicLibrary, profile: QualityProfile | undefined, gate: ReleaseGate | null): number[] {
+    const { nowMs, graceHours } = gate ?? { nowMs: this.now().getTime(), graceHours: 0 };
     const files = lib.files(artistId);
     return lib
       .albums(artistId)
       .filter((a) => a.monitored)
-      .filter((a) => {
-        const ms = a.releaseDate ? Date.parse(/^\d{4}$/.test(a.releaseDate) ? `${a.releaseDate}-01-01` : a.releaseDate.length === 7 ? `${a.releaseDate}-01` : a.releaseDate) : NaN;
-        return !Number.isFinite(ms) || ms <= now;
-      })
+      .filter((a) => isDateReleased(a, nowMs, graceHours))
       .filter((a) => {
         const own = files.filter((f) => f.albumId === a.id);
         if (own.length === 0) return true;
@@ -2098,7 +2149,8 @@ export class ReleasesService {
   buildAudioSearch(
     target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
     userInvoked: boolean,
-  ): { steps: SearchStep[]; criteria: SearchCriteria; albumIds: number[]; artistId: number | null } {
+    gate: ReleaseGate | null = null,
+  ): { steps: SearchStep[]; criteria: SearchCriteria; albumIds: number[]; artistId: number | null; skippedUnreleased: number } {
     const lib = new MusicLibrary(this.db);
     const explicit = target.albumIds?.length ? [...new Set(target.albumIds)] : null;
     const artistId = 'artistId' in target ? target.artistId : explicit ? (lib.album(explicit[0]!)?.artistId ?? null) : null;
@@ -2110,7 +2162,10 @@ export class ReleasesService {
       const missing = explicit.filter((id) => !own.some((a) => a.id === id));
       if (missing.length > 0) throw new ReleasesError('NOT_FOUND', `Album ${missing.join(', ')} not found for artist ${artist.name}`);
     }
-    const ids = explicit ?? this.wantedAlbums(artist.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === artist.qualityProfileId));
+    const wanted = explicit ?? this.wantedAlbums(artist.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === artist.qualityProfileId), gate);
+    // Albums asked for by id that are not out yet are left out (release-dates.ts).
+    const ids = explicit && gate ? wanted.filter((id) => own.some((a) => a.id === id && isDateReleased(a, gate.nowMs, gate.graceHours))) : wanted;
+    const skippedUnreleased = wanted.length - ids.length;
     const albums: PlanAlbum[] = own.filter((a) => ids.includes(a.id)).map((a) => ({ id: a.id, title: a.title, year: a.year }));
     const planArtist = { id: artist.id, name: artist.name };
     // An album search asks per album; an artist search (or several albums of one artist) asks for the artist once first.
@@ -2120,6 +2175,7 @@ export class ReleasesService {
       criteria: { mediaType: 'music', artistId: artist.id, albumIds: albums.map((a) => a.id), userInvoked },
       albumIds: albums.map((a) => a.id),
       artistId: artist.id,
+      skippedUnreleased,
     };
   }
 
@@ -2129,23 +2185,25 @@ export class ReleasesService {
    */
   private async runAudioSearch(
     target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
-    opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
-  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
-    const plan = this.buildAudioSearch(target, opts.userInvoked);
-    return this.runSteps(
+    opts: { userInvoked: boolean; interactive?: boolean; gate?: ReleaseGate | null; signal?: AbortSignal },
+  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number; skippedUnreleased: number }> {
+    const plan = this.buildAudioSearch(target, opts.userInvoked, opts.gate ?? null);
+    const run = await this.runSteps(
       'album',
       { steps: plan.steps.map((s) => ({ ids: s.albumIds, requests: s.requests })), criteria: plan.criteria, ids: plan.albumIds },
       opts,
     );
+    return { ...run, skippedUnreleased: plan.skippedUnreleased };
   }
 
   /** Run a book search plan, like runAudioSearch. */
   private async runBookSearch(
     target: BookTarget,
-    opts: { userInvoked: boolean; interactive?: boolean; signal?: AbortSignal },
-  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number }> {
-    const plan = this.buildBookSearch(target, opts.userInvoked);
-    return this.runSteps('book', { steps: plan.steps.map((s) => ({ ids: s.bookIds, requests: s.requests })), criteria: plan.criteria, ids: plan.bookIds }, opts);
+    opts: { userInvoked: boolean; interactive?: boolean; gate?: ReleaseGate | null; signal?: AbortSignal },
+  ): Promise<{ evaluated: Evaluated[]; result: ProcessResult; releases: number; skippedUnreleased: number }> {
+    const plan = this.buildBookSearch(target, opts.userInvoked, opts.gate ?? null);
+    const run = await this.runSteps('book', { steps: plan.steps.map((s) => ({ ids: s.bookIds, requests: s.requests })), criteria: plan.criteria, ids: plan.bookIds }, opts);
+    return { ...run, skippedUnreleased: plan.skippedUnreleased };
   }
 
   /** The step runner behind album and book searches. */
@@ -2209,14 +2267,15 @@ export class ReleasesService {
 
   private async searchAudio(
     target: { artistId: number; albumIds?: number[] } | { albumIds: number[] },
-    opts: { userInvoked: boolean; signal?: AbortSignal },
+    opts: { userInvoked: boolean; gate: ReleaseGate | null; signal?: AbortSignal },
   ): Promise<SearchSummary> {
-    const { evaluated, result, releases } = await this.runAudioSearch(target, opts);
+    const { evaluated, result, releases, skippedUnreleased } = await this.runAudioSearch(target, opts);
     return {
       releases,
       approved: evaluated.filter((e) => e.decision.approved).length,
       grabbed: result.grabbed.map((e) => e.decision.title),
       pending: result.pending,
+      ...(skippedUnreleased > 0 ? { skippedUnreleased } : {}),
     };
   }
 
@@ -2244,13 +2303,14 @@ export class ReleasesService {
   }
 
   private missingAlbums(): Array<{ id: number; artistId: number }> {
-    const now = this.now();
+    const now = this.releaseNow();
     return this.allPages((page) => musicService.listMissingAlbums(this.db, { page, pageSize: 500 }, now));
   }
 
   private cutoffUnmetAlbums(): Array<{ id: number; artistId: number }> {
     const profiles = this.profilesService.listQualityProfiles('music');
-    return this.allPages((page) => musicService.listCutoffUnmetAlbums(this.db, { page, pageSize: 500 }, profiles));
+    const now = this.releaseNow();
+    return this.allPages((page) => musicService.listCutoffUnmetAlbums(this.db, { page, pageSize: 500 }, profiles, now));
   }
 
   /** MissingAlbumSearch: monitored released albums without (all) their tracks, with the per-album back-off. */
@@ -2283,16 +2343,13 @@ export class ReleasesService {
   // ---- audiobook searches -----------------------------------------------------------
 
   /** Books of the author a search should look for: released, monitored and without a file or below cutoff. */
-  private wantedBooks(authorId: number, lib: BookLibrary, profile: QualityProfile | undefined): number[] {
-    const now = this.now().getTime() + DAY;
+  private wantedBooks(authorId: number, lib: BookLibrary, profile: QualityProfile | undefined, gate: ReleaseGate | null): number[] {
+    const { nowMs, graceHours } = gate ?? { nowMs: this.now().getTime(), graceHours: 0 };
     const files = lib.files(authorId);
     return lib
       .ownBooks(authorId)
       .filter((b) => b.monitored)
-      .filter((b) => {
-        const ms = releaseDateMs(b.releaseDate);
-        return ms === null || ms <= now;
-      })
+      .filter((b) => isDateReleased(b, nowMs, graceHours))
       .filter((b) => {
         const own = files.filter((f) => f.bookId === b.id);
         if (own.length === 0) return true;
@@ -2306,7 +2363,8 @@ export class ReleasesService {
   buildBookSearch(
     target: BookTarget,
     userInvoked: boolean,
-  ): { steps: Array<{ bookIds: number[]; requests: SearchRequest[] }>; criteria: SearchCriteria; bookIds: number[]; authorId: number } {
+    gate: ReleaseGate | null = null,
+  ): { steps: Array<{ bookIds: number[]; requests: SearchRequest[] }>; criteria: SearchCriteria; bookIds: number[]; authorId: number; skippedUnreleased: number } {
     const lib = new BookLibrary(this.db);
     const explicit = target.bookIds?.length ? [...new Set(target.bookIds)] : null;
     const authorId = 'authorId' in target ? target.authorId : explicit ? (lib.book(explicit[0]!)?.authorId ?? null) : null;
@@ -2318,7 +2376,10 @@ export class ReleasesService {
       const missing = explicit.filter((id) => !own.some((b) => b.id === id));
       if (missing.length > 0) throw new ReleasesError('NOT_FOUND', `Book ${missing.join(', ')} not found for author ${author.name}`);
     }
-    const ids = explicit ?? this.wantedBooks(author.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === author.qualityProfileId));
+    const wanted = explicit ?? this.wantedBooks(author.id, lib, this.profilesService.listQualityProfiles().find((p) => p.id === author.qualityProfileId), gate);
+    // Books asked for by id that are not out yet are left out (release-dates.ts).
+    const ids = explicit && gate ? wanted.filter((id) => own.some((b) => b.id === id && isDateReleased(b, gate.nowMs, gate.graceHours))) : wanted;
+    const skippedUnreleased = wanted.length - ids.length;
     const books: PlanBook[] = own.filter((b) => ids.includes(b.id)).map((b) => ({ id: b.id, title: b.title, asin: b.asin }));
     const planAuthor = { id: author.id, name: author.name };
     // A book search asks per book; an author search asks for the author once first.
@@ -2328,16 +2389,18 @@ export class ReleasesService {
       criteria: { mediaType: 'audiobook', authorId: author.id, bookIds: books.map((b) => b.id), userInvoked },
       bookIds: books.map((b) => b.id),
       authorId: author.id,
+      skippedUnreleased,
     };
   }
 
-  private async searchBooks(target: BookTarget, opts: { userInvoked: boolean; signal?: AbortSignal }): Promise<SearchSummary> {
-    const { evaluated, result, releases } = await this.runBookSearch(target, opts);
+  private async searchBooks(target: BookTarget, opts: { userInvoked: boolean; gate: ReleaseGate | null; signal?: AbortSignal }): Promise<SearchSummary> {
+    const { evaluated, result, releases, skippedUnreleased } = await this.runBookSearch(target, opts);
     return {
       releases,
       approved: evaluated.filter((e) => e.decision.approved).length,
       grabbed: result.grabbed.map((e) => e.decision.title),
       pending: result.pending,
+      ...(skippedUnreleased > 0 ? { skippedUnreleased } : {}),
     };
   }
 
@@ -2367,15 +2430,15 @@ export class ReleasesService {
   /** Monitored, released books of monitored authors without a file, newest release first. */
   private missingBooks(): Array<{ id: number; authorId: number }> {
     const lib = new BookLibrary(this.db);
-    const now = this.now().getTime() + DAY;
+    const now = this.releaseNow().getTime();
     const out: Array<{ id: number; authorId: number; ms: number }> = [];
     for (const author of lib.authors()) {
       if (!author.monitored) continue;
       const files = new Set(lib.files(author.id).map((f) => f.bookId));
       for (const b of lib.ownBooks(author.id)) {
         if (!b.monitored || b.hasFile || files.has(b.id)) continue;
+        if (!isDateReleased(b, now)) continue;
         const ms = releaseDateMs(b.releaseDate);
-        if (ms !== null && ms > now) continue;
         out.push({ id: b.id, authorId: author.id, ms: ms ?? 0 });
       }
     }
@@ -2386,6 +2449,7 @@ export class ReleasesService {
   private cutoffUnmetBooks(): Array<{ id: number; authorId: number }> {
     const lib = new BookLibrary(this.db);
     const profiles = new Map(this.profilesService.listQualityProfiles('audiobook').map((p) => [p.id, p]));
+    const now = this.releaseNow().getTime();
     const out: Array<{ id: number; authorId: number }> = [];
     for (const author of lib.authors()) {
       if (!author.monitored) continue;
@@ -2393,7 +2457,7 @@ export class ReleasesService {
       if (!profile) continue;
       const files = lib.files(author.id);
       for (const b of lib.ownBooks(author.id)) {
-        if (!b.monitored) continue;
+        if (!b.monitored || !isDateReleased(b, now)) continue;
         const own = files.filter((f) => f.bookId === b.id);
         if (own.length > 0 && !own.some((f) => f.keptByChoice) && own.some((f) => !isQualityCutoffMet(profile, f.quality))) out.push({ id: b.id, authorId: author.id });
       }
@@ -2655,22 +2719,32 @@ export class ReleasesService {
 
   // The lists the jobs work through, in the order they take them (also read by searchStatus).
 
+  /**
+   * "Now" for the release check of the automatic searches' lists: `releaseGraceHours` back, so an
+   * item counts as released only that long after its air / release moment (release-dates.ts).
+   */
+  private releaseNow(): Date {
+    return new Date(this.now().getTime() - this.settings().releaseGraceHours * HOUR);
+  }
+
   private missingEpisodes(): WantedEpisodeRef[] {
-    const now = this.now().toISOString();
+    const now = this.releaseNow().toISOString();
     return this.allPages((page) => libraryService.listMissingEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, now));
   }
 
   private missingMovies(): Movie[] {
-    const now = this.now().toISOString();
+    const now = this.releaseNow().toISOString();
     return this.allPages((page) => libraryService.listMissingMovies(this.db, { page, pageSize: 500 }, now));
   }
 
   private cutoffUnmetEpisodes(isMet = this.isFileCutoffMet()): WantedEpisodeRef[] {
-    return this.allPages((page) => libraryService.listCutoffUnmetEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, isMet));
+    const now = this.releaseNow().toISOString();
+    return this.allPages((page) => libraryService.listCutoffUnmetEpisodes(this.db, { page, pageSize: 500, includeSpecials: false }, isMet, now));
   }
 
   private cutoffUnmetMovies(isMet = this.isFileCutoffMet()): Movie[] {
-    return this.allPages((page) => libraryService.listCutoffUnmetMovies(this.db, { page, pageSize: 500 }, isMet));
+    const now = this.releaseNow().toISOString();
+    return this.allPages((page) => libraryService.listCutoffUnmetMovies(this.db, { page, pageSize: 500 }, isMet, now));
   }
 
   async missingEpisodeSearch(signal?: AbortSignal, limit = MISSING_EPISODE_SEARCH_LIMIT): Promise<string> {

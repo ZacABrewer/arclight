@@ -36,6 +36,7 @@ import { profileMigrationServiceFor } from './modules/profile-migration/index.js
 import { EventTranslator, notificationsServiceFor, releaseFrom, toEpisodeInfo, toFileInfo } from './modules/notifications/index.js';
 import {
   releasesServiceFor,
+  unreleasedNote,
   type BlocklistCandidate,
   type GrabHistoryInput,
   type HistoryEventSummary,
@@ -284,12 +285,14 @@ export async function runAudiobookSearch(
   let grabbed = 0;
   let found = 0;
   let failed = 0;
+  let unreleased = 0;
   for (const t of targets) {
     if (signal.aborted) break;
     try {
       const summary = await releases.searchFor(t, { userInvoked: true, signal });
       grabbed += summary.grabbed.length;
       found += summary.releases;
+      unreleased += summary.skippedUnreleased ?? 0;
     } catch (err) {
       failed++;
       ctx.log.warn({ err, target: t }, 'audiobook search failed');
@@ -297,7 +300,7 @@ export async function runAudiobookSearch(
   }
   const n = targets.length;
   const what = 'authorIds' in target ? `${n} author${n === 1 ? '' : 's'}` : `${n} book${n === 1 ? '' : 's'}`;
-  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}`;
+  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}${unreleasedNote(unreleased)}`;
 }
 
 /**
@@ -315,12 +318,14 @@ export async function runMusicSearch(
   let grabbed = 0;
   let found = 0;
   let failed = 0;
+  let unreleased = 0;
   for (const t of targets) {
     if (signal.aborted) break;
     try {
       const summary = await releases.searchFor(t, { userInvoked: true, signal });
       grabbed += summary.grabbed.length;
       found += summary.releases;
+      unreleased += summary.skippedUnreleased ?? 0;
     } catch (err) {
       failed++;
       ctx.log.warn({ err, target: t }, 'music search failed');
@@ -328,7 +333,7 @@ export async function runMusicSearch(
   }
   const n = targets.length;
   const what = 'artistIds' in target ? `${n} artist${n === 1 ? '' : 's'}` : `${n} album${n === 1 ? '' : 's'}`;
-  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}`;
+  return `searched ${what}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}${unreleasedNote(unreleased)}`;
 }
 
 /** One job per media type that searches each item in turn; returns the started jobs. */
@@ -338,16 +343,19 @@ export function startLibrarySearch(ctx: AppContext, target: LibraryCommandTarget
     ctx.scheduler.runTask(name, 'manual', async ({ signal, log }) => {
       let grabbed = 0;
       let failed = 0;
+      let unreleased = 0;
       for (const t of targets) {
         if (signal.aborted) break;
         try {
-          grabbed += (await releasesServiceFor(ctx).searchFor(t, { userInvoked: true, signal })).grabbed.length;
+          const summary = await releasesServiceFor(ctx).searchFor(t, { userInvoked: true, signal });
+          grabbed += summary.grabbed.length;
+          unreleased += summary.skippedUnreleased ?? 0;
         } catch (err) {
           failed++;
           log.warn({ err, target: t }, 'library search failed');
         }
       }
-      return `searched ${targets.length}, grabbed ${grabbed}${failed ? `, ${failed} failed` : ''}`;
+      return `searched ${targets.length}, grabbed ${grabbed}${failed ? `, ${failed} failed` : ''}${unreleasedNote(unreleased)}`;
     }, { key: `${name}:${targets.map(searchTargetKey).join(',')}` });
   if (target.seriesIds?.length) started.push(run(SERIES_SEARCH_JOB, target.seriesIds.map((seriesId) => ({ seriesId }))));
   if (target.movieIds?.length) started.push(run(MOVIE_SEARCH_JOB, target.movieIds.map((movieId) => ({ movieId }))));
@@ -422,6 +430,8 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
           availabilityDelayDays: r.availabilityDelayDays,
           allowUnairedEpisodes: r.allowUnairedEpisodes,
           unairedToleranceMinutes: r.unairedToleranceMinutes,
+          searchUnreleased: r.searchUnreleased,
+          releaseGraceHours: r.releaseGraceHours,
           allowHardcodedSubs: i.allowHardcodedSubs,
           whitelistedHardcodedSubs: i.whitelistedHardcodedSubs,
           preferIndexerFlags: i.preferIndexerFlags,

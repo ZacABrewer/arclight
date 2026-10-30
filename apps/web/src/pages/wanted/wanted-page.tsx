@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Link } from '@tanstack/react-router';
-import type { ItemSearchStatus, Movie, QueueSummaryItem, SearchItemType, WantedAlbum, WantedBook, WantedEpisode } from '@arclight/shared';
+import type { BulkSearchCommandInput, ItemSearchStatus, Movie, QueueSummaryItem, SearchItemType, WantedAlbum, WantedBook, WantedEpisode, WantedReleaseFilter } from '@arclight/shared';
 import { errorMessage } from '../../api/client.js';
 import {
   Button,
@@ -26,7 +26,7 @@ import { useQueueSummary } from '../../hooks/activity.js';
 import { useAutomaticSearch, useBulkUpdateMovies, useCutoffUnmet, useMissing, useQualityProfiles } from '../../hooks/library.js';
 import { useSearchStatus } from '../../hooks/search-status.js';
 import { useFeatures, useMusicQualityProfiles, useSetAlbumsMonitored, useWantedAlbums } from '../../hooks/music.js';
-import { useMusicSearch } from '../../hooks/music-acquisition.js';
+import { useMusicReleasesSettings, useMusicSearch } from '../../hooks/music-acquisition.js';
 import { musicApi } from '../../api/music.js';
 import { albumTypeLabel, progressText, trackProgress } from '../library/music/music-model.js';
 import { useAudiobookQualityProfiles, useSetBooksMonitored, useWantedBooks } from '../../hooks/audiobooks.js';
@@ -36,7 +36,16 @@ import { AudiobookChip } from '../library/audiobooks/audiobook-kit.js';
 import { positionLabel, primarySeries } from '../library/audiobooks/audiobook-model.js';
 import { wantedVersionsColumn } from '../library/versions/versions-editor.js';
 import { wantedVersionsSuffix } from '../library/versions/versions-model.js';
+import {
+  dateReleaseState,
+  episodeReleaseState,
+  movieReleaseState,
+  ReleaseAwareSearchButton,
+  UpcomingChip,
+  type ReleaseState,
+} from '../../components/media/release-state.js';
 import { ProfileMismatchList } from './profile-mismatch.js';
+import { ReleaseFilterBar, useReleaseFilter } from './release-filter.js';
 import './wanted.css';
 import { t } from '../../i18n/index.js';
 
@@ -109,26 +118,30 @@ function WantedPage({ mode }: { mode: Mode }) {
   );
 }
 
-function useWantedList(mode: ListMode, kind: VideoKind, page: number, q: string) {
+function useWantedList(mode: ListMode, kind: VideoKind, page: number, q: string, release: WantedReleaseFilter) {
   // Both hooks are always called (rules of hooks); only the one for this mode is enabled.
-  const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing', q);
-  const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff', q);
+  const missing = useMissing(kind, page, PAGE_SIZE, mode === 'missing', q, release);
+  const cutoff = useCutoffUnmet(kind, page, PAGE_SIZE, mode === 'cutoff', q, release);
   return mode === 'missing' ? missing : cutoff;
 }
 
 type ListSearch = ReturnType<typeof useListSearch>;
+type ListRelease = ReturnType<typeof useReleaseFilter>;
 
 /**
- * Page, selection and the text search (`?q=`, shared by every media type) of one wanted list.
- * The lists are server-paged: a new query goes back to page 1 and drops the selection.
+ * Page, selection, the text search (`?q=`) and the release filter (`?released=` and the date
+ * range), shared by every media type, of one wanted list. The lists are server-paged: a new
+ * query or filter goes back to page 1 and drops the selection.
  */
 function useListState() {
   const search = useListSearch();
+  const release = useReleaseFilter();
   const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<Set<RowKey>>(new Set());
-  const [seenQ, setSeenQ] = useState(search.q);
-  if (seenQ !== search.q) {
-    setSeenQ(search.q);
+  const listKey = `${search.q}#${release.key}`;
+  const [seenKey, setSeenKey] = useState(listKey);
+  if (seenKey !== listKey) {
+    setSeenKey(listKey);
     setPage(1);
     setSelected(new Set());
   }
@@ -136,7 +149,17 @@ function useListState() {
     setPage(p);
     setSelected(new Set());
   };
-  return { search, page, onPage, selected, setSelected };
+  return { search, release, page, onPage, selected, setSelected };
+}
+
+/** The `searchUnreleased` setting (Settings → Media management): Search buttons stay on for upcoming rows. */
+function useSearchUnreleased(): boolean {
+  return useMusicReleasesSettings().data?.searchUnreleased ?? false;
+}
+
+/** The bulk search body's part for "all": the list's text search and release filter. */
+function allQuery(q: string | undefined, release: WantedReleaseFilter) {
+  return { ...(q ? { q } : {}), ...release };
 }
 
 /** The search box placeholder per media type: what the server matches. */
@@ -153,8 +176,10 @@ function searchPlaceholder(kind: Kind): string {
   }
 }
 
-function statusChip(mode: ListMode, queued?: QueueSummaryItem) {
+function statusChip(mode: ListMode, queued?: QueueSummaryItem, release?: ReleaseState) {
   if (queued) return <QueueStateChip item={queued} />;
+  // Not out yet: the date it comes out instead of Missing (searches skip it until then).
+  if (release && !release.released) return <UpcomingChip date={release.date} />;
   return mode === 'missing' ? <StatusChip status="missing" /> : <StatusChip status="cutoffUnmet" />;
 }
 
@@ -187,6 +212,12 @@ interface ListShellProps<T> {
   noun: string;
   /** The list's text search; the rows and `total` are already the server's answer to it. */
   search: ListSearch;
+  /** The list's release filter (likewise applied by the server). */
+  release: ListRelease;
+  /** Whether a row is out yet (upcoming rows cannot be searched). */
+  rowRelease: (r: T) => ReleaseState;
+  /** The `searchUnreleased` setting: upcoming rows may be searched after all. */
+  allowUnreleased: boolean;
   total: number | undefined;
   page: number;
   onPage: (p: number) => void;
@@ -219,10 +250,11 @@ function ListShell<T>(p: ListShellProps<T>) {
   const pages = Math.max(1, Math.ceil((p.total ?? 0) / PAGE_SIZE));
   // "Select all N" across pages; any change to the row selection drops back to the rows.
   const [allMatching, setAllMatching] = useState(false);
-  // A new search is a new list: "all matching" meant the old one.
-  const [seenQ, setSeenQ] = useState(p.search.q);
-  if (seenQ !== p.search.q) {
-    setSeenQ(p.search.q);
+  // A new search or filter is a new list: "all matching" meant the old one.
+  const listKey = `${p.search.q}#${p.release.key}`;
+  const [seenKey, setSeenKey] = useState(listKey);
+  if (seenKey !== listKey) {
+    setSeenKey(listKey);
     setAllMatching(false);
   }
   const select = (next: Set<RowKey>) => {
@@ -239,6 +271,10 @@ function ListShell<T>(p: ListShellProps<T>) {
   const ids = [...p.selected].map(Number);
   const empty = p.search.active ? (
     <ListSearchEmpty query={p.search.q} onClear={p.search.clear} />
+  ) : p.release.key !== '||' ? (
+    <EmptyState title={t('wanted.release.empty', { noun: p.noun })} action={<Button onClick={() => p.release.setFilter({})}>{t('wanted.release.clear')}</Button>}>
+      {t('wanted.release.emptyHint')}
+    </EmptyState>
   ) : (
     <EmptyState title={p.mode === 'missing' ? t('wanted.noMissingNoun', { noun: p.noun }) : t('wanted.noNounBelowCutoff', { noun: p.noun })}>
       {p.mode === 'missing' ? t('wanted.everyMonitoredItemThatHas') : t('wanted.everyFileMeetsItsProfile')}
@@ -262,6 +298,7 @@ function ListShell<T>(p: ListShellProps<T>) {
         placeholder={searchPlaceholder(p.kind)}
         shown={p.loading ? undefined : p.total}
       />
+      <ReleaseFilterBar filter={p.release.filter} onChange={p.release.setFilter} />
       {mobile ? (
         p.loading ? (
           <Loading />
@@ -272,8 +309,14 @@ function ListShell<T>(p: ListShellProps<T>) {
             {(p.rows ?? []).map((r) => {
               const m = p.mobileRow(r);
               const key = p.rowKey(r);
+              const release = p.rowRelease(r);
+              const searchable = release.released || p.allowUnreleased;
               return (
-                <SwipeRow key={key} onSearch={() => p.onSearchRows([key])} searchLabel={t('wanted.searchRowlabel', { rowLabel: p.rowLabel(r) })}>
+                <SwipeRow
+                  key={key}
+                  onSearch={searchable ? () => p.onSearchRows([key]) : undefined}
+                  searchLabel={t('wanted.searchRowlabel', { rowLabel: p.rowLabel(r) })}
+                >
                   <div className="mk-mrow mk-mrow--check" role="listitem">
                     <Checkbox aria-label={t('wanted.selectRowlabel', { rowLabel: p.rowLabel(r) })} checked={p.selected.has(key)} onChange={() => toggle(key)} />
                     <div style={{ minWidth: 0 }}>
@@ -281,7 +324,7 @@ function ListShell<T>(p: ListShellProps<T>) {
                       <div className="mk-mrow__sub al-num">{m.sub}</div>
                       {m.extra}
                     </div>
-                    {m.chip ?? statusChip(p.mode)}
+                    {m.chip ?? statusChip(p.mode, undefined, release)}
                   </div>
                 </SwipeRow>
               );
@@ -325,9 +368,10 @@ function ListShell<T>(p: ListShellProps<T>) {
 }
 
 function EpisodesList({ mode }: { mode: ListMode }) {
-  const { search, page, onPage, selected, setSelected } = useListState();
+  const { search, release, page, onPage, selected, setSelected } = useListState();
   const q = search.q || undefined;
-  const list = useWantedList(mode, 'episodes', page, search.q);
+  const list = useWantedList(mode, 'episodes', page, search.q, release.filter);
+  const allowUnreleased = useSearchUnreleased();
   const one = useAutomaticSearch();
   const bulk = useBulkSearch();
   const monitor = useSetEpisodesMonitored();
@@ -338,8 +382,10 @@ function EpisodesList({ mode }: { mode: ListMode }) {
 
   // Missing → the missing rules, cutoff unmet → an upgrade search (profile cutoff honoured server-side).
   const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
-  // "All" is every row the (searched) list holds: the server applies the same `q`.
-  const searchAll = () => bulk.mutate({ mode: searchMode, allEpisodes: true, q });
+  // "All" is every row the (searched, filtered) list holds: the server applies the same `q`
+  // and release filter, and skips (and counts) the rows that are not out yet.
+  const all: BulkSearchCommandInput = { mode: searchMode, allEpisodes: true, ...allQuery(q, release.filter) };
+  const searchAll = () => bulk.mutate(all);
 
   const label = (r: WantedEpisode) => `${r.seriesTitle} ${episodeCode(r.seasonNumber, r.episodeNumber)}`;
   const columns: Column<WantedEpisode>[] = [
@@ -355,7 +401,7 @@ function EpisodesList({ mode }: { mode: ListMode }) {
     { key: 'episode', header: t('common.episode'), mono: true, cell: (r) => episodeCode(r.seasonNumber, r.episodeNumber), width: '96px' },
     { key: 'title', header: t('common.title'), muted: true, cell: (r) => r.title || '—' },
     { key: 'airDate', header: t('wanted.airDate'), mono: true, cell: (r) => shortDate(r.airDateUtc ?? r.airDate), width: '130px' },
-    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id)), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id), episodeReleaseState(r)), width: '170px' },
     searchColumn<WantedEpisode>(pipeline),
     ...wantedVersionsColumn(records, t('wanted.versions')),
     {
@@ -364,9 +410,14 @@ function EpisodesList({ mode }: { mode: ListMode }) {
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => one.mutate({ episodeIds: [r.id] })}>
+        <ReleaseAwareSearchButton
+          state={episodeReleaseState(r)}
+          allowUnreleased={allowUnreleased}
+          label={t('wanted.searchLabel', { label: label(r) })}
+          onClick={() => one.mutate({ episodeIds: [r.id] })}
+        >
           {t('common.search')}
-        </Button>
+        </ReleaseAwareSearchButton>
       ),
     },
   ];
@@ -376,6 +427,9 @@ function EpisodesList({ mode }: { mode: ListMode }) {
       mode={mode}
       kind="episodes"
       search={search}
+      release={release}
+      rowRelease={(r) => episodeReleaseState(r)}
+      allowUnreleased={allowUnreleased}
       noun="episodes"
       total={list.data?.totalRecords}
       page={page}
@@ -389,7 +443,7 @@ function EpisodesList({ mode }: { mode: ListMode }) {
         title: r.seriesTitle,
         sub: `${episodeCode(r.seasonNumber, r.episodeNumber)} · ${shortDate(r.airDateUtc ?? r.airDate)}${wantedVersionsSuffix(r.wantedVersions)}`,
         extra: <SearchStatusLines status={pipeline.status(r.id)} compact />,
-        chip: statusChip(mode, pipeline.queued(r.id)),
+        chip: statusChip(mode, pipeline.queued(r.id), episodeReleaseState(r)),
       })}
       selected={selected}
       onSelect={setSelected}
@@ -401,7 +455,7 @@ function EpisodesList({ mode }: { mode: ListMode }) {
           id: 'search',
           label: bulkSearchLabel(mode),
           loading: bulk.isPending,
-          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allEpisodes: true, q } : { mode: searchMode, episodeIds: sel.ids }, { onSuccess: done }),
+          onSelect: () => bulk.mutate(sel.all ? all : { mode: searchMode, episodeIds: sel.ids }, { onSuccess: done }),
         },
         {
           id: 'unmonitor',
@@ -415,9 +469,10 @@ function EpisodesList({ mode }: { mode: ListMode }) {
 }
 
 function MoviesList({ mode }: { mode: ListMode }) {
-  const { search, page, onPage, selected, setSelected } = useListState();
+  const { search, release, page, onPage, selected, setSelected } = useListState();
   const q = search.q || undefined;
-  const list = useWantedList(mode, 'movies', page, search.q);
+  const list = useWantedList(mode, 'movies', page, search.q, release.filter);
+  const allowUnreleased = useSearchUnreleased();
   const profiles = useQualityProfiles();
   const one = useAutomaticSearch();
   const bulk = useBulkSearch();
@@ -428,7 +483,8 @@ function MoviesList({ mode }: { mode: ListMode }) {
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('wanted.couldNotLoadWantedMovies')} />;
 
   const searchMode = mode === 'missing' ? 'missing' : 'upgrade';
-  const searchAll = () => bulk.mutate({ mode: searchMode, allMovies: true, q });
+  const all: BulkSearchCommandInput = { mode: searchMode, allMovies: true, ...allQuery(q, release.filter) };
+  const searchAll = () => bulk.mutate(all);
 
   const columns: Column<Movie>[] = [
     {
@@ -445,7 +501,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
     { key: 'cinemas', header: t('common.inCinemas'), mono: true, cell: (r) => shortDate(r.inCinemas) },
     { key: 'digital', header: t('wanted.digital'), mono: true, cell: (r) => shortDate(r.digitalRelease) },
     { key: 'physical', header: t('wanted.physical'), mono: true, cell: (r) => shortDate(r.physicalRelease) },
-    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id)), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, pipeline.queued(r.id), movieReleaseState(r)), width: '170px' },
     searchColumn<Movie>(pipeline),
     ...wantedVersionsColumn(records, t('wanted.versions')),
     {
@@ -454,9 +510,14 @@ function MoviesList({ mode }: { mode: ListMode }) {
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchTitle', { title: r.title })} onClick={() => one.mutate({ movieId: r.id })}>
+        <ReleaseAwareSearchButton
+          state={movieReleaseState(r)}
+          allowUnreleased={allowUnreleased}
+          label={t('wanted.searchTitle', { title: r.title })}
+          onClick={() => one.mutate({ movieId: r.id })}
+        >
           {t('common.search')}
-        </Button>
+        </ReleaseAwareSearchButton>
       ),
     },
   ];
@@ -466,6 +527,9 @@ function MoviesList({ mode }: { mode: ListMode }) {
       mode={mode}
       kind="movies"
       search={search}
+      release={release}
+      rowRelease={(r) => movieReleaseState(r)}
+      allowUnreleased={allowUnreleased}
       noun="movies"
       total={list.data?.totalRecords}
       page={page}
@@ -479,7 +543,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
         title: r.title,
         sub: `${r.year || '—'} · ${shortDate(r.digitalRelease ?? r.inCinemas)}${wantedVersionsSuffix(r.wantedVersions)}`,
         extra: <SearchStatusLines status={pipeline.status(r.id)} compact />,
-        chip: statusChip(mode, pipeline.queued(r.id)),
+        chip: statusChip(mode, pipeline.queued(r.id), movieReleaseState(r)),
       })}
       selected={selected}
       onSelect={setSelected}
@@ -491,7 +555,7 @@ function MoviesList({ mode }: { mode: ListMode }) {
           id: 'search',
           label: bulkSearchLabel(mode),
           loading: bulk.isPending,
-          onSelect: () => bulk.mutate(sel.all ? { mode: searchMode, allMovies: true, q } : { mode: searchMode, movieIds: sel.ids }, { onSuccess: done }),
+          onSelect: () => bulk.mutate(sel.all ? all : { mode: searchMode, movieIds: sel.ids }, { onSuccess: done }),
         },
         {
           id: 'unmonitor',
@@ -504,27 +568,53 @@ function MoviesList({ mode }: { mode: ListMode }) {
   );
 }
 
+/**
+ * The ids of `rows` a search may look for: rows that are not out yet are left out (unless
+ * `searchUnreleased` is on) and a toast says how many. Album and book searches are commands
+ * by id, so the page does the skipping the bulk search endpoint does for episodes and movies.
+ */
+function searchableIds<T extends { id: number }>(
+  rows: readonly T[],
+  state: (r: T) => ReleaseState,
+  allowUnreleased: boolean,
+  toast: ReturnType<typeof useToast>,
+): number[] {
+  const ids = rows.filter((r) => allowUnreleased || state(r).released).map((r) => r.id);
+  const skipped = rows.length - ids.length;
+  if (skipped > 0) {
+    toast.push({
+      tone: 'info',
+      title: ids.length === 0 ? t('bulk.toast.nothingToSearch') : t('wanted.release.searchingReleased', { count: ids.length }),
+      message: t('bulk.toast.skippedUnreleased', { count: skipped }),
+    });
+  }
+  return ids;
+}
+
 /** Albums missing tracks / below cutoff: AlbumSearch for the selected rows, one row, or all of them. */
 function AlbumsList({ mode }: { mode: ListMode }) {
-  const { search: listSearch, page, onPage, selected, setSelected } = useListState();
-  const list = useWantedAlbums(mode, page, PAGE_SIZE, true, listSearch.q);
+  const { search: listSearch, release, page, onPage, selected, setSelected } = useListState();
+  const list = useWantedAlbums(mode, page, PAGE_SIZE, true, listSearch.q, release.filter);
   const profiles = useMusicQualityProfiles();
   const search = useMusicSearch();
   const setAlbums = useSetAlbumsMonitored();
   const toast = useToast();
+  const allowUnreleased = useSearchUnreleased();
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('music.wanted.couldNotLoad')} />;
   const rows = list.data?.records;
   const total = list.data?.totalRecords;
   const label = (r: WantedAlbum) => `${r.artistName} - ${r.title}`;
-  const searchAlbums = (albumIds: number[]) => {
+  const searchAlbums = (picked: readonly WantedAlbum[]) => {
+    const albumIds = searchableIds(picked, (r) => dateReleaseState(r), allowUnreleased, toast);
     if (albumIds.length) search.mutate({ name: 'AlbumSearch', albumIds });
   };
+  const byIds = (ids: number[]) => (rows ?? []).filter((r) => ids.includes(r.id));
   const searchAll = async () => {
     try {
-      // The same search as the list, so "all" is what the search shows.
-      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined };
+      // The same search and filter as the list, so "all" is what the list shows.
+      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined, ...release.filter };
       const all = mode === 'missing' ? await musicApi.wanted.missing(query) : await musicApi.wanted.cutoff(query);
-      searchAlbums(all.records.map((r) => r.id));
+      searchAlbums(all.records);
     } catch (err) {
       toast.error(t('common.searchFailed'), errorMessage(err));
     }
@@ -552,16 +642,21 @@ function AlbumsList({ mode }: { mode: ListMode }) {
     { key: 'released', header: t('common.released'), mono: true, cell: (r) => shortDate(r.releaseDate), width: '130px' },
     { key: 'tracks', header: t('music.tracks'), mono: true, cell: (r) => progressText(trackProgress(r.statistics)), width: '96px' },
     { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
-    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, undefined, dateReleaseState(r)), width: '170px' },
     {
       key: 'search',
       header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => searchAlbums([r.id])}>
+        <ReleaseAwareSearchButton
+          state={dateReleaseState(r)}
+          allowUnreleased={allowUnreleased}
+          label={t('wanted.searchLabel', { label: label(r) })}
+          onClick={() => searchAlbums([r])}
+        >
           {t('common.search')}
-        </Button>
+        </ReleaseAwareSearchButton>
       ),
     },
   ];
@@ -570,6 +665,9 @@ function AlbumsList({ mode }: { mode: ListMode }) {
       mode={mode}
       kind="albums"
       search={listSearch}
+      release={release}
+      rowRelease={(r) => dateReleaseState(r)}
+      allowUnreleased={allowUnreleased}
       noun={t('music.albumNoun', { count: 2 })}
       total={total}
       page={page}
@@ -586,7 +684,7 @@ function AlbumsList({ mode }: { mode: ListMode }) {
       selected={selected}
       onSelect={setSelected}
       running={search.isPending}
-      onSearchRows={searchAlbums}
+      onSearchRows={(ids) => searchAlbums(byIds(ids))}
       onSearchAll={() => void searchAll()}
       bulkActions={(sel, done) => [
         {
@@ -595,7 +693,7 @@ function AlbumsList({ mode }: { mode: ListMode }) {
           loading: search.isPending,
           onSelect: () => {
             if (sel.all) void searchAll();
-            else searchAlbums(sel.ids);
+            else searchAlbums(byIds(sel.ids));
             done();
           },
         },
@@ -621,24 +719,27 @@ function seriesText(r: WantedBook): string | null {
 
 /** Books missing / below cutoff: BookSearch for the selected rows, one row, or all of them. */
 function BooksList({ mode }: { mode: ListMode }) {
-  const { search: listSearch, page, onPage, selected, setSelected } = useListState();
-  const list = useWantedBooks(mode, page, PAGE_SIZE, true, listSearch.q);
+  const { search: listSearch, release, page, onPage, selected, setSelected } = useListState();
+  const list = useWantedBooks(mode, page, PAGE_SIZE, true, listSearch.q, release.filter);
   const profiles = useAudiobookQualityProfiles();
   const search = useAudiobookSearch();
   const setBooks = useSetBooksMonitored();
   const toast = useToast();
+  const allowUnreleased = useSearchUnreleased();
   if (list.isError) return <QueryError error={list.error} onRetry={() => void list.refetch()} title={t('audiobooks.wanted.couldNotLoad')} />;
   const rows = list.data?.records;
   const total = list.data?.totalRecords;
   const label = (r: WantedBook) => `${r.authorName} – ${r.title}`;
-  const searchBooks = (bookIds: number[]) => {
+  const searchBooks = (picked: readonly WantedBook[]) => {
+    const bookIds = searchableIds(picked, (r) => dateReleaseState(r), allowUnreleased, toast);
     if (bookIds.length) search.mutate({ name: 'BookSearch', bookIds });
   };
+  const byIds = (ids: number[]) => (rows ?? []).filter((r) => ids.includes(r.id));
   const searchAll = async () => {
     try {
-      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined };
+      const query = { page: 1, pageSize: MAX_PAGE, q: listSearch.q || undefined, ...release.filter };
       const all = mode === 'missing' ? await audiobooksApi.wanted.missing(query) : await audiobooksApi.wanted.cutoff(query);
-      searchBooks(all.records.map((r) => r.id));
+      searchBooks(all.records);
     } catch (err) {
       toast.error(t('common.searchFailed'), errorMessage(err));
     }
@@ -668,16 +769,21 @@ function BooksList({ mode }: { mode: ListMode }) {
     { key: 'series', header: t('audiobooks.series'), muted: true, cell: (r) => seriesText(r) ?? '—' },
     { key: 'released', header: t('common.released'), mono: true, cell: (r) => shortDate(r.releaseDate), width: '130px' },
     { key: 'profile', header: t('common.profile'), muted: true, cell: (r) => profiles.data?.find((p) => p.id === r.qualityProfileId)?.name ?? `#${r.qualityProfileId}` },
-    { key: 'status', header: t('common.status'), cell: () => statusChip(mode), width: '150px' },
+    { key: 'status', header: t('common.status'), cell: (r) => statusChip(mode, undefined, dateReleaseState(r)), width: '170px' },
     {
       key: 'search',
       header: <span className="al-sr-only">{t('common.actions')}</span>,
       align: 'right',
       width: '96px',
       cell: (r) => (
-        <Button size="sm" aria-label={t('wanted.searchLabel', { label: label(r) })} onClick={() => searchBooks([r.id])}>
+        <ReleaseAwareSearchButton
+          state={dateReleaseState(r)}
+          allowUnreleased={allowUnreleased}
+          label={t('wanted.searchLabel', { label: label(r) })}
+          onClick={() => searchBooks([r])}
+        >
           {t('common.search')}
-        </Button>
+        </ReleaseAwareSearchButton>
       ),
     },
   ];
@@ -686,6 +792,9 @@ function BooksList({ mode }: { mode: ListMode }) {
       mode={mode}
       kind="books"
       search={listSearch}
+      release={release}
+      rowRelease={(r) => dateReleaseState(r)}
+      allowUnreleased={allowUnreleased}
       noun={t('audiobooks.bookNoun', { count: 2 })}
       total={total}
       page={page}
@@ -702,7 +811,7 @@ function BooksList({ mode }: { mode: ListMode }) {
       selected={selected}
       onSelect={setSelected}
       running={search.isPending}
-      onSearchRows={searchBooks}
+      onSearchRows={(ids) => searchBooks(byIds(ids))}
       onSearchAll={() => void searchAll()}
       bulkActions={(sel, done) => [
         {
@@ -711,7 +820,7 @@ function BooksList({ mode }: { mode: ListMode }) {
           loading: search.isPending,
           onSelect: () => {
             if (sel.all) void searchAll();
-            else searchBooks(sel.ids);
+            else searchBooks(byIds(sel.ids));
             done();
           },
         },

@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
-import type { AudioRequestCount, HealthResponse, RequestCount, VpnStatus } from '@arclight/shared';
+import type { AudioRequestCount, HealthResponse, LanguageRequestCount, RequestCount, VpnStatus } from '@arclight/shared';
 import type { ConnectionState } from '../api/events.js';
 import { healthApi } from '../api/health.js';
 import { issuesApi } from '../api/requests.js';
 import { vpnApi } from '../api/vpn.js';
 import { queryKeys } from '../hooks/query-keys.js';
 import { useAudioRequestCount } from '../hooks/audio-requests.js';
+import { useLanguageRequestCount } from '../hooks/language-requests.js';
 import { useFeatures } from '../hooks/music.js';
 import { useRequestCount } from '../hooks/requests.js';
 import { requestKeys } from '../hooks/request-keys.js';
@@ -25,6 +26,8 @@ export interface StatusClusterInput {
   requests?: RequestCount | undefined;
   /** Music and audiobook requests (only while one of those features is on). */
   audioRequests?: AudioRequestCount | undefined;
+  /** Subtitle and language requests. */
+  languageRequests?: LanguageRequestCount | undefined;
   health?: HealthResponse | undefined;
   /** Open user-reported issues (shown to role user instead of health issues). */
   openIssues?: number | undefined;
@@ -59,7 +62,7 @@ export function statusCluster(input: StatusClusterInput): StatusCluster {
     connected: input.connection === 'open',
     disconnectedLabel: input.connection === 'connecting' ? t('layout.statusCluster.connecting') : t('layout.statusCluster.reconnecting'),
     vpnLocation: input.isAdmin ? vpnLocationOf(input.vpn) : undefined,
-    requestCount: input.isAdmin && input.requests ? input.requests.pending + (input.audioRequests?.pending ?? 0) : undefined,
+    requestCount: input.isAdmin && input.requests ? input.requests.pending + (input.audioRequests?.pending ?? 0) + (input.languageRequests?.pending ?? 0) : undefined,
     issueCount: input.isAdmin ? healthIssueCount(input.health) : input.openIssues,
     issuesHref: input.isAdmin ? '/system/health' : '/issues',
   };
@@ -74,6 +77,7 @@ export function useStatusCluster(isAdmin: boolean): StatusCluster {
   const requests = useRequestCount(isAdmin);
   const features = useFeatures();
   const audioRequests = useAudioRequestCount(isAdmin && (features.music || features.audiobooks));
+  const languageRequests = useLanguageRequestCount(isAdmin);
   const issues = useQuery({ queryKey: requestKeys.issues.count, queryFn: issuesApi.count, retry: false, enabled: !isAdmin });
   return statusCluster({
     connection: state,
@@ -81,6 +85,7 @@ export function useStatusCluster(isAdmin: boolean): StatusCluster {
     vpn: vpn.data,
     requests: requests.data,
     audioRequests: audioRequests.data,
+    languageRequests: languageRequests.data,
     health: health.data,
     openIssues: issues.data?.open,
   });

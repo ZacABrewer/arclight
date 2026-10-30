@@ -44,6 +44,7 @@ import { useFeatures } from '../../hooks/music.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { ApproveDialog } from './approve-dialog.js';
 import { AudioRequestTable, RequestSearchCount } from './audio-request-list.js';
+import { LanguageRequestTable } from './language-request-list.js';
 import '../../components/media/media-kit.css';
 import { t } from '../../i18n/index.js';
 
@@ -58,9 +59,9 @@ export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> =
 const PAGE_SIZE = 20;
 
 type VideoFilter = 'all' | 'movie' | 'series';
-type MediaFilter = VideoFilter | 'music' | 'audiobook';
+type MediaFilter = VideoFilter | 'music' | 'audiobook' | 'language';
 
-/** The media filter: movies and series, then music and audiobooks while their flag is on. */
+/** The media filter: movies and series, music and audiobooks while their flag is on, then subtitle and language requests. */
 export function requestMediaOptions(features: { music: boolean; audiobooks: boolean }): Array<{ value: MediaFilter; label: string }> {
   return [
     { value: 'all', label: t('requests.moviesAndSeries') },
@@ -68,6 +69,7 @@ export function requestMediaOptions(features: { music: boolean; audiobooks: bool
     { value: 'series', label: t('common.series') },
     ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
     ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+    { value: 'language', label: t('requests.language.filter') },
   ];
 }
 
@@ -108,7 +110,9 @@ export function RequestsPage() {
       >
         <Tabs compact aria-label={t('requests.requestStatus')} value={tab} onChange={(id) => setTab(id as RequestFilter)} tabs={REQUEST_TABS.map((item) => ({ id: item.id, label: item.label }))} />
       </PageHeader>
-      {mediaType === 'music' || mediaType === 'audiobook' ? (
+      {mediaType === 'language' ? (
+        <LanguageRequestTable key={listKey} filter={tab} manage={manage} q={search.q} onClearSearch={search.clear} />
+      ) : mediaType === 'music' || mediaType === 'audiobook' ? (
         <AudioRequestTable key={listKey} filter={tab} domain={mediaType} manage={manage} q={search.q} onClearSearch={search.clear} />
       ) : (
         <RequestList key={listKey} filter={tab} mediaType={mediaType} manage={manage} q={search.q} onClearSearch={search.clear} />

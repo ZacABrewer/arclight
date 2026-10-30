@@ -152,7 +152,8 @@ function showWithFile(fileQuality: QualityName, overrides: { releaseGroup?: stri
 }
 
 function movieWithFile(fileQuality: QualityName, title: string) {
-  const m = insertMovie(h.db, { qualityProfileId: h.profileId, title, sortTitle: title.toLowerCase(), hasFile: true });
+  // Released: the Wanted lists (cutoff unmet too) leave out movies that are not available yet.
+  const m = insertMovie(h.db, { qualityProfileId: h.profileId, title, sortTitle: title.toLowerCase(), hasFile: true, status: 'released' });
   const file = insertFile(h.db, { mediaType: 'movie', movieId: m.id, quality: quality(fileQuality), relativePath: `${title}.mkv` });
   h.db.update(movies).set({ movieFileId: file.id }).where(eq(movies.id, m.id)).run();
   return { movie: m, file };

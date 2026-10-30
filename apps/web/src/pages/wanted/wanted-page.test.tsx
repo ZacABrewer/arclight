@@ -7,6 +7,7 @@ import { createToastStore } from '../../lib/toast.js';
 import { createQueryClient } from '../../query-client.js';
 import { routeTree } from '../../router.js';
 import { makeEpisode, makeMovie } from '../library/test-fixtures.js';
+import { makeAlbum } from '../library/music/music-fixtures.js';
 import { shortDate } from './wanted-page.js';
 
 class FakeSocket {
@@ -297,6 +298,108 @@ describe('wanted page', () => {
     expect(await screen.findByLabelText('Select Show 0 S02E01')).toBeTruthy();
     expect(screen.queryByText('Nothing matches “zzz”')).toBeNull();
     expect(screen.getByRole('searchbox', { name: 'Search this list' })).toHaveProperty('value', '');
+  });
+
+  describe('release filter', () => {
+    const DAY = 24 * HOUR;
+    const isoDay = (offsetDays: number) => new Date(Date.now() + offsetDays * DAY).toISOString().slice(0, 10);
+    /** Severance S02E08 has aired; Andor S02E03 (id 5, not in the queue) airs in 10 days. */
+    const withUpcoming = (extra: Record<string, unknown> = {}) => {
+      const base = vi.mocked(fetch).getMockImplementation()!;
+      vi.mocked(fetch).mockImplementation(async (input, init) => {
+        const url = String(input);
+        const path = url.split('?')[0];
+        if (path === '/api/v1/wanted/missing/episodes') {
+          calls.push({ url, method: 'GET' });
+          const later = { ...wantedEp(5, 'Andor', 3), airDate: isoDay(10), airDateUtc: `${isoDay(10)}T20:00:00.000Z` };
+          return new Response(JSON.stringify(paged([wantedEp(1, 'Severance', 8), later])), { status: 200 });
+        }
+        if (path && path in extra) {
+          calls.push({ url, method: init?.method ?? 'GET', body: init?.body ? JSON.parse(String(init.body)) : undefined });
+          return new Response(JSON.stringify(extra[path]), { status: path.endsWith('/command') ? 201 : path.endsWith('bulksearch') ? 202 : 200 });
+        }
+        return base(input, init);
+      });
+    };
+    const listUrls = (path: string) => calls.filter((c) => c.method === 'GET' && c.url.startsWith(`${path}?`)).map((c) => new URL(c.url, 'http://x').searchParams);
+
+    it('status and date range go to the URL and to the wanted request; Clear resets them', async () => {
+      const router = renderAt('/wanted/missing');
+      await screen.findByLabelText('Select Severance S02E08');
+      const status = screen.getByRole('group', { name: 'Release status' });
+      expect(within(status).getByRole('button', { name: 'Released' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(within(status).getByRole('button', { name: 'Upcoming' }));
+      await waitFor(() => expect(router.state.location.search).toMatchObject({ released: 'unreleased' }));
+      await waitFor(() => expect(listUrls('/api/v1/wanted/missing/episodes').some((p) => p.get('released') === 'unreleased')).toBe(true));
+
+      fireEvent.change(screen.getByRole('combobox', { name: 'Release date' }), { target: { value: '30d' } });
+      await waitFor(() => expect(router.state.location.search).toMatchObject({ released: 'unreleased', releasedAfter: isoDay(-30) }));
+      expect(listUrls('/api/v1/wanted/missing/episodes').at(-1)?.get('releasedAfter')).toBe(isoDay(-30));
+
+      fireEvent.change(screen.getByLabelText('Released before'), { target: { value: '2026-12-31' } });
+      await waitFor(() => expect(router.state.location.search).toMatchObject({ releasedBefore: '2026-12-31' }));
+      expect((screen.getByRole('combobox', { name: 'Release date' }) as HTMLSelectElement).value).toBe('custom');
+
+      fireEvent.click(screen.getByRole('button', { name: 'Clear' }));
+      await waitFor(() => expect(router.state.location.search).not.toHaveProperty('released'));
+      expect(router.state.location.search).not.toHaveProperty('releasedAfter');
+    });
+
+    it('reads the filter from the URL; Search all carries it', async () => {
+      renderAt('/wanted/missing?released=all&releasedAfter=2025-01-01');
+      await screen.findByLabelText('Select Severance S02E08');
+      const sent = listUrls('/api/v1/wanted/missing/episodes').at(-1)!;
+      expect(sent.get('released')).toBe('all');
+      expect(sent.get('releasedAfter')).toBe('2025-01-01');
+      expect(within(screen.getByRole('group', { name: 'Release status' })).getByRole('button', { name: 'All' }).getAttribute('aria-pressed')).toBe('true');
+      fireEvent.click(screen.getByRole('button', { name: 'Search all' }));
+      await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', allEpisodes: true, released: 'all', releasedAfter: '2025-01-01' }]));
+    });
+
+    it('an upcoming row shows its date, and its Search button is off with a tooltip', async () => {
+      withUpcoming();
+      renderAt('/wanted/missing?released=all');
+      const table = await screen.findByRole('table');
+      const andor = (await within(table).findByRole('link', { name: 'Andor' })).closest('tr')!;
+      expect(within(andor).getByText(/^Upcoming · /)).toBeTruthy();
+      const button = within(andor).getByRole('button', { name: 'Search Andor S02E03' }) as HTMLButtonElement;
+      expect(button.disabled).toBe(true);
+      fireEvent.mouseEnter(button.parentElement!);
+      expect(await screen.findByText(/Not released until .*so it is not searched yet/)).toBeTruthy();
+      // The aired row is searchable as before.
+      const severance = within(table).getByRole('link', { name: 'Severance' }).closest('tr')!;
+      expect((within(severance).getByRole('button', { name: 'Search Severance S02E08' }) as HTMLButtonElement).disabled).toBe(false);
+      expect(within(severance).queryByText(/^Upcoming/)).toBeNull();
+    });
+
+    it('bulk search over upcoming rows: the toast says how many were skipped', async () => {
+      withUpcoming({ '/api/v1/command/bulksearch': { queued: 1, skipped: 1, unreleased: 1, job: null } });
+      renderAt('/wanted/missing?released=all');
+      fireEvent.click(await screen.findByLabelText('Select Severance S02E08'));
+      fireEvent.click(screen.getByLabelText('Select Andor S02E03'));
+      fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Search selected' }));
+      await waitFor(() => expect(bulkPosts()).toEqual([{ mode: 'missing', episodeIds: [1, 5] }]));
+      expect(await screen.findByText('Search queued for 1 item')).toBeTruthy();
+      expect(screen.getByText('1 item is not released yet and was skipped')).toBeTruthy();
+    });
+
+    it('albums: Search selected leaves out upcoming albums and says so', async () => {
+      withUpcoming({
+        '/api/v1/settings/features': { music: true, audiobooks: false },
+        '/api/v1/wanted/missing/albums': paged([
+          { ...makeAlbum({ id: 31, title: 'Out Now' }), artistName: 'Band', mbArtistId: '00000000-0000-4000-8000-000000000001', qualityProfileId: 1 },
+          { ...makeAlbum({ id: 32, title: 'Next Year', releaseDate: isoDay(200) }), artistName: 'Band', mbArtistId: '00000000-0000-4000-8000-000000000001', qualityProfileId: 1 },
+        ]),
+        '/api/v1/command': { id: 1, name: 'AlbumSearch', status: 'queued', trigger: 'manual', queuedAt: new Date().toISOString(), startedAt: null, endedAt: null, message: null },
+      });
+      renderAt('/wanted/missing?released=all');
+      fireEvent.click(await screen.findByRole('button', { name: 'Albums' }));
+      fireEvent.click(await screen.findByLabelText('Select Band - Out Now'));
+      fireEvent.click(screen.getByLabelText('Select Band - Next Year'));
+      fireEvent.click(within(screen.getByRole('toolbar', { name: 'Bulk actions' })).getByRole('button', { name: 'Search selected' }));
+      await waitFor(() => expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/command').map((c) => c.body)).toEqual([{ name: 'AlbumSearch', albumIds: [31] }]));
+      expect(await screen.findByText('1 item is not released yet and was skipped')).toBeTruthy();
+    });
   });
 
   it('formats dates short', () => {

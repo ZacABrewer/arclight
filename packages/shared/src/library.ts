@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { ListSearchParam } from './list-search.js';
 import { QualityModel } from './quality.js';
+import { episodeReleaseMs, WantedReleaseFilter } from './release-dates.js';
 
 // The library contract: root folders, series/seasons/episodes, movies, media files, tags.
 // Dates are ISO-8601 strings (date-only `YYYY-MM-DD` for air/release dates where the source
@@ -645,10 +646,12 @@ export const PageQuery = z.object({
 });
 export type PageQuery = z.infer<typeof PageQuery>;
 
+/** GET /wanted/missing/episodes and /wanted/cutoff/episodes; the release filter is release-dates.ts's. */
 export const WantedEpisodesQuery = PageQuery.extend({
   includeSpecials: queryFlag().default(false),
   /** Text search (list-search.ts): every word must match. */
   q: ListSearchParam,
+  ...WantedReleaseFilter.shape,
 });
 export type WantedEpisodesQuery = z.infer<typeof WantedEpisodesQuery>;
 
@@ -656,6 +659,7 @@ export type WantedEpisodesQuery = z.infer<typeof WantedEpisodesQuery>;
 export const WantedMoviesQuery = PageQuery.extend({
   /** Text search (list-search.ts): every word must match. */
   q: ListSearchParam,
+  ...WantedReleaseFilter.shape,
 });
 export type WantedMoviesQuery = z.infer<typeof WantedMoviesQuery>;
 
@@ -739,13 +743,5 @@ export type ErrorResponse = z.infer<typeof ErrorResponse>;
  * already showed them as wanted.
  */
 export function episodeAiredMs(ep: { airDate?: string | null | undefined; airDateUtc?: string | null | undefined }): number | null {
-  if (ep.airDateUtc) {
-    const ms = Date.parse(ep.airDateUtc);
-    if (!Number.isNaN(ms)) return ms;
-  }
-  if (ep.airDate && /^\d{4}-\d{2}-\d{2}$/.test(ep.airDate)) {
-    const ms = Date.parse(`${ep.airDate}T00:00:00Z`);
-    if (!Number.isNaN(ms)) return ms;
-  }
-  return null;
+  return episodeReleaseMs(ep);
 }

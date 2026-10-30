@@ -16,7 +16,8 @@ import type { Db } from '../../db/index.js';
 import { movies, notifications, series, tags as tagTable } from '../../db/schema.js';
 import { toMediaInfo } from '../notifications/index.js';
 import { can } from './permissions.js';
-import type { audioRequests, issues, mediaRequests } from './schema.js';
+import { displayLanguage } from '../additional-languages/audio.js';
+import type { audioRequests, issues, languageRequests, mediaRequests } from './schema.js';
 import { allUserRows, findUserRow, requestSettingsOf, userPermissions, type UserRow } from './users.js';
 
 // Request and issue notifications (docs/spec/requests.md sections 12-13).
@@ -30,6 +31,7 @@ import { allUserRows, findUserRow, requestSettingsOf, userPermissions, type User
 
 type RequestRow = typeof mediaRequests.$inferSelect;
 type AudioRequestRow = typeof audioRequests.$inferSelect;
+type LanguageRequestRow = typeof languageRequests.$inferSelect;
 type IssueRow = typeof issues.$inferSelect;
 
 export type RequestNoticeKind = 'created' | 'approved' | 'declined' | 'available';
@@ -178,6 +180,53 @@ export class RequestNotifier {
               }
             : { author: { id: req.libraryId ?? 0, name: req.title, asin: req.foreignId } };
     const common = { ...base, media, ...parts };
+    let event: NotificationEvent;
+    switch (kind) {
+      case 'created':
+        event = { ...common, type: 'requestCreated', request: info };
+        break;
+      case 'approved':
+        event = { ...common, type: 'requestApproved', request: info };
+        break;
+      case 'available':
+        event = { ...common, type: 'requestAvailable', request: info };
+        break;
+      case 'declined':
+        event = { ...common, type: 'requestDeclined', request: info, ...(extra.reason ? { reason: extra.reason } : {}) };
+        break;
+    }
+    const audience =
+      kind === 'created'
+        ? this.admins(Permission.MANAGE_REQUESTS).filter((u) => u.id !== req.requestedById)
+        : requester
+          ? [requester]
+          : [];
+    await this.fanOut(audience, event, TYPE_KEY[kind]);
+  }
+
+  /**
+   * Subtitle and audio language requests: the same four events and audiences as video requests.
+   * The media title names what was asked for ("Title (Spanish subtitles)") so every agent's
+   * existing request template reads right; no deep link (the web's `/requests/:id` pages are
+   * video requests), so `applicationUrl` is left out.
+   */
+  async languageRequest(kind: RequestNoticeKind, req: LanguageRequestRow, extra: { reason?: string } = {}): Promise<void> {
+    const requester = findUserRow(this.db, req.requestedById);
+    const info: RequestInfo = {
+      id: req.id,
+      requestedBy: {
+        id: req.requestedById,
+        username: requester?.displayName ?? requester?.username ?? `user ${req.requestedById}`,
+        ...(requester?.avatar ? { avatar: requester.avatar } : {}),
+        ...(requester?.email ? { email: requester.email } : {}),
+      },
+      status: kind === 'created' ? (req.status === 'pending' ? 'pending' : 'approved') : kind === 'declined' ? 'declined' : kind === 'available' ? 'available' : 'approved',
+      ...(req.mediaType === 'series' && req.seasonNumber !== null ? { seasons: [req.seasonNumber] } : {}),
+    };
+    const { applicationUrl: _url, ...base } = this.base();
+    const media = this.mediaInfoFor(req.mediaType, req.tmdbId, req.title, req.year, req.poster);
+    const what = `${displayLanguage(req.language)} ${req.kind === 'audio' ? 'audio' : 'subtitles'}`;
+    const common = { ...base, media: { ...media, title: `${media.title} (${what})` } };
     let event: NotificationEvent;
     switch (kind) {
       case 'created':

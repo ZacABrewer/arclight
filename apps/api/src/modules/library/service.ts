@@ -41,7 +41,7 @@ import type {
   WantedEpisodesQuery,
   WantedMoviesQuery,
 } from '@arclight/shared';
-import { episodeAiredMs } from '@arclight/shared';
+import { episodeAiredMs, episodeReleaseMs, isMovieReleased, matchesReleaseFilter, movieReleaseMs, type WantedReleaseFilter } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { getSection } from '../settings/service.js';
 import { listSearchCondition } from '../../db/list-search.js';
@@ -945,39 +945,16 @@ export function bulkSetEpisodesMonitored(db: LibraryDb, ids: readonly number[], 
 // Movies
 // ---------------------------------------------------------------------------------------
 
-const RELEASE_WINDOW_MS = 90 * 24 * 60 * 60 * 1000;
-
-function earliest(...dates: Array<string | null | undefined>): number | null {
-  const values = dates.map((d) => (d ? Date.parse(d) : Number.NaN)).filter((ms) => !Number.isNaN(ms));
-  return values.length ? Math.min(...values) : null;
-}
-
 /**
- * Whether a movie may be searched for under its minimum availability. Dates win over the
- * coarse status when known; a movie seen only in cinemas counts as released 90 days later.
+ * Whether a movie may be searched for under its minimum availability (the shared rule,
+ * release-dates.ts): dates win over the coarse status when known; a movie seen only in cinemas
+ * counts as released 90 days later.
  */
 export function isMovieAvailable(
   movie: Pick<MovieRow, 'status' | 'minimumAvailability' | 'inCinemas' | 'digitalRelease' | 'physicalRelease'>,
   now: string = nowIso(),
 ): boolean {
-  const nowMs = Date.parse(now);
-  if (movie.status === 'deleted') return false;
-  switch (movie.minimumAvailability) {
-    case 'announced':
-      return true;
-    case 'inCinemas': {
-      const cinema = earliest(movie.inCinemas);
-      if (cinema !== null) return cinema <= nowMs;
-      return movie.status === 'inCinemas' || movie.status === 'released';
-    }
-    case 'released': {
-      const home = earliest(movie.digitalRelease, movie.physicalRelease);
-      if (home !== null) return home <= nowMs;
-      const cinema = earliest(movie.inCinemas);
-      if (cinema !== null) return cinema + RELEASE_WINDOW_MS <= nowMs;
-      return movie.status === 'released';
-    }
-  }
+  return isMovieReleased(movie, Date.parse(now));
 }
 
 function toMovie(row: MovieRow, files: MediaFileRow[] | undefined, now: string): Movie {
@@ -1575,17 +1552,28 @@ function anyVersioned(db: LibraryDb, table: typeof t.series | typeof t.movies): 
     .some((r) => isVersioned(r.versions));
 }
 
+/** The Wanted release filter on episode rows: the air time is the release moment. */
+function episodeReleaseFilter(q: WantedReleaseFilter, now: string) {
+  const nowMs = Date.parse(now);
+  return (r: { episode: EpisodeRow }) => {
+    const aired = episodeReleaseMs(r.episode);
+    return matchesReleaseFilter(aired, aired !== null && aired <= nowMs, q);
+  };
+}
+
+/** The Wanted release filter on movie rows: the date that satisfies the minimum availability. */
+function movieReleaseFilter(q: WantedReleaseFilter, now: string) {
+  return (m: MovieRow) => matchesReleaseFilter(movieReleaseMs(m), isMovieAvailable(m, now), q);
+}
+
 /**
- * Monitored episodes of monitored series that have aired and have no file. On a versioned
+ * Monitored episodes of monitored series without a file that have aired (`released`, the
+ * default; `unreleased` = air time in the future or unknown, `all` = both). On a versioned
  * series an episode is missing while any enabled version slot is empty (`wantedVersions`).
  */
 export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: string = nowIso()): Page<WantedEpisode> {
-  const nowMs = Date.parse(now);
   const versioned = anyVersioned(db, t.series);
-  const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials, q.q).filter((r) => {
-    const aired = episodeAiredMs(r.episode);
-    return aired !== null && aired <= nowMs;
-  });
+  const rows = monitoredEpisodesWithSeries(db, versioned ? undefined : false, q.includeSpecials, q.q).filter(episodeReleaseFilter(q, now));
   if (!versioned) return paginate(rows.map((r) => toWanted(r)), q);
   const files = fileRowsForEpisodes(
     db,
@@ -1607,8 +1595,8 @@ export function listMissingEpisodes(db: LibraryDb, q: WantedEpisodesQuery, now: 
  * Monitored episodes whose file does not meet the profile cutoff. The cutoff decision belongs
  * to the profiles module; it is injected so this module stays ignorant of profile shapes.
  */
-export function listCutoffUnmetEpisodes(db: LibraryDb, q: WantedEpisodesQuery, isCutoffMet: IsCutoffMet): Page<WantedEpisode> {
-  const all = monitoredEpisodesWithSeries(db, true, q.includeSpecials, q.q);
+export function listCutoffUnmetEpisodes(db: LibraryDb, q: WantedEpisodesQuery, isCutoffMet: IsCutoffMet, now: string = nowIso()): Page<WantedEpisode> {
+  const all = monitoredEpisodesWithSeries(db, true, q.includeSpecials, q.q).filter(episodeReleaseFilter(q, now));
   const versionedRows = all.filter((r) => isVersioned(r.series.versions));
   if (versionedRows.length > 0) return paginate(cutoffUnmetVersioned(db, all, isCutoffMet), q);
   const rows = all;
@@ -1663,8 +1651,9 @@ function unmetSlots(versions: readonly MediaVersion[] | null, files: readonly Me
 }
 
 /**
- * Monitored movies without a file that are available under their minimum availability. A
- * versioned movie is missing while any enabled version slot is empty (`wantedVersions`).
+ * Monitored movies without a file that are available under their minimum availability (the
+ * `released` filter, the default). A versioned movie is missing while any enabled version slot
+ * is empty (`wantedVersions`).
  */
 export function listMissingMovies(db: LibraryDb, q: WantedMoviesQuery, now: string = nowIso()): Page<Movie> {
   const versioned = anyVersioned(db, t.movies);
@@ -1680,7 +1669,7 @@ export function listMissingMovies(db: LibraryDb, q: WantedMoviesQuery, now: stri
     )
     .orderBy(asc(t.movies.sortTitle))
     .all()
-    .filter((m) => isMovieAvailable(m, now));
+    .filter(movieReleaseFilter(q, now));
   if (!versioned) {
     return paginate(
       rows.map((m) => toMovie(m, [], now)),
@@ -1708,7 +1697,8 @@ export function listCutoffUnmetMovies(db: LibraryDb, q: WantedMoviesQuery, isCut
     .from(t.movies)
     .where(and(eq(t.movies.monitored, true), eq(t.movies.hasFile, true), wantedMovieSearchCondition(q.q)))
     .orderBy(asc(t.movies.sortTitle))
-    .all();
+    .all()
+    .filter(movieReleaseFilter(q, now));
   const ids = rows.map((m) => m.id);
   const files = ids.length ? groupBy(db.select().from(t.mediaFiles).where(inArray(t.mediaFiles.movieId, ids)).all(), (f) => f.movieId ?? -1) : new Map<number, MediaFileRow[]>();
   const out: Movie[] = [];

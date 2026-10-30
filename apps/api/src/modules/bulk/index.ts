@@ -11,7 +11,7 @@ import type { AppContext, AppModule } from '../../app.js';
 import { getImportsService, ImportsError } from '../imports/index.js';
 import { createCutoffChecker } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
-import { releasesServiceFor, type SearchTarget } from '../releases/index.js';
+import { releasesServiceFor, unreleasedNote, type SearchTarget } from '../releases/index.js';
 import { subtitlesServiceFor } from '../subtitles/index.js';
 import { planBulkSearch } from './plan.js';
 
@@ -50,19 +50,21 @@ function startSearchJob(ctx: AppContext, targets: SearchTarget[]) {
       let found = 0;
       let failed = 0;
       let searched = 0;
+      let unreleased = 0;
       for (const t of targets) {
         if (signal.aborted) break;
         try {
           const summary = await releases.searchFor(t, { userInvoked: true, signal });
           grabbed += summary.grabbed.length;
           found += summary.releases;
+          unreleased += summary.skippedUnreleased ?? 0;
         } catch (err) {
           failed++;
           log.warn({ err, target: t }, 'bulk search failed');
         }
         searched++;
       }
-      return `searched ${searched} of ${targets.length}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}`;
+      return `searched ${searched} of ${targets.length}: ${found} releases, ${grabbed} grabbed${failed ? `, ${failed} failed` : ''}${unreleasedNote(unreleased)}`;
     },
     // Two bulk searches over different items may overlap; the same selection never twice.
     { key: `${BULK_SEARCH_JOB}:${targets.map(searchKey).sort().join(',')}` },
@@ -88,9 +90,10 @@ export const bulkModule: AppModule = (ctx) => async (app) => {
     const plan = planBulkSearch(db, req.body, {
       isCutoffMet: () => createCutoffChecker(db, profiles),
       qualityProfiles: () => profiles.listQualityProfiles(),
+      releaseGate: releasesServiceFor(ctx).releaseGate(true),
     });
     const job = plan.targets.length > 0 ? startSearchJob(ctx, plan.targets).job : null;
-    return reply.code(202).send({ queued: plan.queued, skipped: plan.skipped, job });
+    return reply.code(202).send({ queued: plan.queued, skipped: plan.skipped, ...(plan.unreleased ? { unreleased: plan.unreleased } : {}), job });
   });
 
   app.post('/rename/bulk', { schema: { body: BulkRenameRequest, response: { 200: BulkRenamePreview, ...errors } } }, async (req) => {

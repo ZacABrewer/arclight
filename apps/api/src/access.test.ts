@@ -143,6 +143,18 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/audiorequest/bulk/:action': 'portal',
   'GET /api/v1/settings/audiorequests': 'portal',
   'PUT /api/v1/settings/audiorequests': 'portal',
+  // Subtitle and language requests: the service checks REQUEST_LANGUAGE / MANAGE_REQUESTS.
+  'GET /api/v1/request/language': 'portal',
+  'GET /api/v1/request/language/count': 'portal',
+  'GET /api/v1/request/language/options': 'portal',
+  'GET /api/v1/request/language/languages': 'portal',
+  'GET /api/v1/request/language/:id': 'portal',
+  'POST /api/v1/request/language': 'portal',
+  'POST /api/v1/request/language/:id/approve': 'portal',
+  'POST /api/v1/request/language/:id/decline': 'portal',
+  'POST /api/v1/request/language/:id/retry': 'portal',
+  'POST /api/v1/request/language/bulk/:action': 'portal',
+  'DELETE /api/v1/request/language/:id': 'portal',
 
   // ---- issues and watchlist (own; others' with the matching permissions)
   'GET /api/v1/issue': 'portal',

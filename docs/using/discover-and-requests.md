@@ -135,6 +135,60 @@ If adding fails, the request is marked **Failed** with a reason, and a manager c
 
 Every 5 minutes a background job (RequestsStatusSync) checks whether requested titles have arrived. When they have, the request becomes **Completed** and the requester is notified. If **Use media server availability** is on, a request only completes once your media server also shows the title.
 
+## Subtitle and language requests
+
+Besides asking for a title, people can ask for **subtitles** or an extra **audio language** (a dub) on a title that is already in the library. These are separate from video requests and are handled by the same people.
+
+### Asking for a language
+
+**Request subtitles or audio** appears on a title's page when the title is in the library with files and you have the **Request subtitles & languages** permission. The plain **Request** permission includes it. It works in the app and in the [request portal](#public-request-portal).
+
+1. Click **Request subtitles or audio**.
+2. Choose **Subtitles** or **Audio language**. Audio asks for an additional language and keeps the current audio.
+3. Search for and pick the language.
+4. For a series, choose **All seasons** or one season. Only seasons that have files are offered.
+5. For subtitles, tick **Forced only** (just the lines in another language, such as signs and foreign dialogue) and/or **Hearing impaired** (with sound descriptions). Audio has neither option.
+6. Optionally add a note for whoever handles the request, up to 500 characters.
+7. Send it.
+
+The dialog also lists the audio and subtitle languages the title already has and any open requests on it, so you can see what is covered before you ask.
+
+Arclight refuses a request when:
+
+- the title already has that language on every file in the scope ("Already on this title");
+- the same request is already open ("Already requested"). A request for the whole series covers its seasons;
+- the language was already added to the title by an admin and is still being looked for;
+- the title or season has no files yet.
+
+### Approval
+
+Subtitle requests are approved automatically by default; audio requests are not. Change this in **Settings > Requests** with **Auto-approve everyone's subtitle requests** and **Auto-approve everyone's audio language requests**. Users with an Auto-approve permission or **Manage requests** are always approved straight away. An approved request starts a search at once.
+
+### Handling them (admins)
+
+Language requests show on the **Requests** page under the **Subtitles & languages** filter. Users see their own in **My requests** (in the portal too).
+
+- **Approve** a pending request. For an audio request you choose how: **Replace the file** (the default) looks for a release with all the current audio languages plus the new one and replaces the file once it imports; **Add a version** keeps the current file and adds a separate version slot that needs the new language. Subtitle requests have no such choice.
+- **Decline** takes an optional reason, shown to the requester.
+- **Retry** runs a failed request again.
+- Tick requests to **Approve**, **Decline**, **Retry** or **Delete** many at once. The search box matches the title, year, kind, status, language, note, reasons and requester.
+
+### Statuses
+
+| Status | Meaning |
+| --- | --- |
+| Pending | Waiting for a manager. |
+| Approved | Accepted and being searched for. It stays open while Arclight is still searching or has not found anything yet; searches keep running in the background. |
+| Completed | The language was found, grabbed or added as a version, or the title now has it. Checked every 5 minutes and whenever the title changes. |
+| Declined | Refused, with an optional reason. |
+| Failed | Could not be carried out, with a reason (for example the title was removed from the library). Use **Retry**. |
+
+### Good to know
+
+- Language requests do not count toward [quotas](#quotas).
+- Pending ones appear in the admin daily digest.
+- Requesters are notified when a request is created, approved, declined and completed. There is no notification for a failed request yet.
+
 ## Request statuses
 
 | Status | Meaning |

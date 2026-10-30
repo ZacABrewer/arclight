@@ -14,6 +14,7 @@ import { albumCover, albumTypeLabel, albumYear, artistBackdrop, formatDuration, 
 import '../library.css';
 import './music.css';
 import { ItemHealthPanel, useCanSeeHealth } from '../item-health.js';
+import { dateReleaseState } from '../../../components/media/release-state.js';
 import { t } from '../../../i18n/index.js';
 
 const route = getRouteApi('/library/music/album/$id');
@@ -112,6 +113,7 @@ function AlbumDetailsView() {
         target={interactive ? { albumId: a.id, artistId: a.artistId } : null}
         title={`${a.artist.name} – ${a.title}`}
         albumTitles={new Map([[a.id, a.title]])}
+        release={dateReleaseState(a)}
         onClose={() => setInteractive(false)}
       />
     </div>

@@ -2,6 +2,8 @@ import { and, asc, desc, eq, inArray, isNull, like, notInArray, or, sql, type SQ
 import { rm } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve } from 'node:path';
 import {
+  dateReleaseMs,
+  matchesReleaseFilter,
   type AddAuthorRequest,
   type AudioFile,
   type AudioFileTags,
@@ -30,6 +32,7 @@ import {
   type WantedBook,
   type WantedBooksPage,
   type WantedBooksQuery,
+  type WantedReleaseFilter,
 } from '@arclight/shared';
 import { toIsbn13 as isbn13Of, type CatalogAuthor, type CatalogAuthorWithBooks, type CatalogBook } from '@arclight/metadata';
 import { isQualityCutoffMet } from '@arclight/profiles-engine';
@@ -1209,17 +1212,25 @@ function toWanted(db: AudiobookDb, rows: ReadonlyArray<{ book: BookRow; author: 
   return list.map((b, i) => ({ ...b, authorName: rows[i]!.author.name, qualityProfileId: rows[i]!.author.qualityProfileId }));
 }
 
-/** Monitored books (of monitored authors) that are released and have no file. Newest first. */
+/** The Wanted release filter on book rows: the book's release / publish date (release-dates.ts). */
+function bookReleaseFilter(q: WantedReleaseFilter, now: Date) {
+  return (r: { book: BookRow }) => matchesReleaseFilter(dateReleaseMs(r.book), isReleased(r.book.releaseDate, now), q);
+}
+
+/**
+ * Monitored books (of monitored authors) that have no file: released ones by default
+ * (`released` filter; `unreleased` = release date in the future or unknown). Newest first.
+ */
 export function listMissingBooks(db: AudiobookDb, q: WantedBooksQuery, now: Date = new Date()): WantedBooksPage {
-  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => !r.book.hasFile && isReleased(r.book.releaseDate, now));
+  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => !r.book.hasFile).filter(bookReleaseFilter(q, now));
   const page = paginate(rows, q);
   return { ...page, records: toWanted(db, page.records) };
 }
 
 /** Monitored books with files whose lowest file quality is below the author's profile cutoff. */
-export function listCutoffUnmetBooks(db: AudiobookDb, q: WantedBooksQuery, profiles: readonly QualityProfile[]): WantedBooksPage {
+export function listCutoffUnmetBooks(db: AudiobookDb, q: WantedBooksQuery, profiles: readonly QualityProfile[], now: Date = new Date()): WantedBooksPage {
   const byId = new Map(profiles.map((p) => [p.id, p]));
-  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => r.book.hasFile);
+  const rows = monitoredBooksOfMonitoredAuthors(db, q.q).filter((r) => r.book.hasFile).filter(bookReleaseFilter(q, now));
   if (rows.length === 0) return paginate([], q);
   const files = db
     .select({ bookId: audioFiles.bookId, quality: audioFiles.quality })

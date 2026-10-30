@@ -1,4 +1,4 @@
-import type { ArtistStatus, MonitorNewAlbums, MusicMonitorOption } from '@arclight/shared';
+import { calendarDateMs, isDateReleased, type ArtistStatus, type MonitorNewAlbums, type MusicMonitorOption } from '@arclight/shared';
 
 // Monitoring rules for albums (design 4.3), pure. Release dates are MusicBrainz dates: full
 // (`YYYY-MM-DD`) or partial (`YYYY`, `YYYY-MM`). A partial date counts from the start of its
@@ -6,19 +6,14 @@ import type { ArtistStatus, MonitorNewAlbums, MusicMonitorOption } from '@arclig
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Start of the period a (possibly partial) date names, in ms; null when absent or unreadable. */
+/** Start of the period a (possibly partial) date names, in ms; null when absent or unreadable (shared release-dates.ts rule). */
 export function releaseDateMs(date: string | null | undefined): number | null {
-  if (!date) return null;
-  const m = /^(\d{4})(?:-(\d{2}))?(?:-(\d{2}))?/.exec(date);
-  if (!m) return null;
-  const ms = Date.UTC(Number(m[1]), m[2] ? Number(m[2]) - 1 : 0, m[3] ? Number(m[3]) : 1);
-  return Number.isNaN(ms) ? null : ms;
+  return calendarDateMs(date);
 }
 
 /** Released on or before `now`. Undated albums are not known to be released. */
 export function isReleased(date: string | null | undefined, now: Date): boolean {
-  const ms = releaseDateMs(date);
-  return ms !== null && ms <= now.getTime();
+  return isDateReleased({ releaseDate: date }, now.getTime());
 }
 
 export interface MonitorCandidate {

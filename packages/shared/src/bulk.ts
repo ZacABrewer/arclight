@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Job } from './jobs.js';
 import { RenamePreviewItem } from './imports.js';
 import { ListSearchParam } from './list-search.js';
+import { WantedReleaseFilter } from './release-dates.js';
 
 // Bulk commands for the library and Wanted lists: one request acts on many selected items
 // (or on everything a Wanted list matches) and queues a single job. Per-item routes stay as
@@ -40,6 +41,11 @@ export const BulkSearchCommand = z
      * list's `q`), so "Select all" on a searched Wanted list acts on what the search shows.
      */
     q: ListSearchParam,
+    /**
+     * With `allEpisodes` / `allMovies`: the Wanted list's release filter, like `q`. Whatever it
+     * shows, items that are not released yet are never searched (they count as skipped).
+     */
+    ...WantedReleaseFilter.shape,
   })
   .refine(
     (c) => (c.movieIds?.length ?? 0) + (c.seriesIds?.length ?? 0) + (c.episodeIds?.length ?? 0) > 0 || c.allMovies === true || c.allEpisodes === true,
@@ -55,6 +61,8 @@ export const BulkCommandResponse = z.object({
   queued: z.number().int(),
   /** Selected items that did not match the mode (e.g. already at cutoff). */
   skipped: z.number().int(),
+  /** Bulk search: how many of `skipped` were left out because they are not released yet. */
+  unreleased: z.number().int().optional(),
   job: Job.nullable(),
 });
 export type BulkCommandResponse = z.infer<typeof BulkCommandResponse>;

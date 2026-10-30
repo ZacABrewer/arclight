@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { hasAnyPermission, Permission as P } from '@arclight/shared';
-import { canAutoApprove, canAutoRequest, canRequest, canViewAllRequests, effectivePermissions, isQuotaExempt } from './permissions.js';
+import { canAutoApprove, canAutoApproveLanguage, canAutoRequest, canRequest, canRequestLanguage, canViewAllRequests, effectivePermissions, isQuotaExempt } from './permissions.js';
 
 describe('permission checks', () => {
   it('ADMIN passes everything and an empty list always passes', () => {
@@ -55,5 +55,17 @@ describe('permission checks', () => {
   it('the role decides the ADMIN bit', () => {
     expect(effectivePermissions({ role: 'admin', permissions: P.REQUEST })).toBe(P.REQUEST | P.ADMIN);
     expect(effectivePermissions({ role: 'user', permissions: P.ADMIN | P.REQUEST })).toBe(P.REQUEST);
+  });
+
+  it('language requests: REQUEST_LANGUAGE (2^30, still a positive 32-bit flag) or REQUEST; AUTO_APPROVE or MANAGE_REQUESTS auto-approve', () => {
+    expect(P.REQUEST_LANGUAGE).toBe(2 ** 30);
+    expect(canRequestLanguage(P.REQUEST_LANGUAGE)).toBe(true);
+    expect(canRequestLanguage(P.REQUEST)).toBe(true);
+    expect(canRequestLanguage(P.REQUEST_MOVIE | P.REQUEST_MUSIC)).toBe(false);
+    expect(canAutoApproveLanguage(P.AUTO_APPROVE)).toBe(true);
+    expect(canAutoApproveLanguage(P.MANAGE_REQUESTS)).toBe(true);
+    expect(canAutoApproveLanguage(P.AUTO_APPROVE_MOVIE)).toBe(false);
+    expect(effectivePermissions({ role: 'user', permissions: P.ADMIN | P.REQUEST_LANGUAGE })).toBe(P.REQUEST_LANGUAGE);
+    expect(effectivePermissions({ role: 'admin', permissions: P.REQUEST_LANGUAGE })).toBe(P.REQUEST_LANGUAGE | P.ADMIN);
   });
 });

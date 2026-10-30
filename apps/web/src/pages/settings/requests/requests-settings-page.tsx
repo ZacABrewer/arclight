@@ -174,6 +174,22 @@ function SettingsFields({ draft, error }: { draft: Draft<RequestsSettings>; erro
             ))}
           </div>
         </FormRow>
+        <FormRow label={t('settings.requests.settings.autoApproveLanguageRequests')} caption={t('settings.requests.settings.autoApproveLanguageRequestsCaption')}>
+          <div className="al-check-grid" role="group" aria-label={t('settings.requests.settings.autoApproveLanguageRequests')}>
+            <Checkbox
+              label={t('settings.requests.settings.subtitleRequests')}
+              aria-label={t('settings.requests.settings.autoApproveSubtitleRequests')}
+              checked={value.autoApproveSubtitleRequests}
+              onChange={(e) => set('autoApproveSubtitleRequests', e.currentTarget.checked)}
+            />
+            <Checkbox
+              label={t('settings.requests.settings.audioLanguageRequests')}
+              aria-label={t('settings.requests.settings.autoApproveAudioRequests')}
+              checked={value.autoApproveAudioRequests}
+              onChange={(e) => set('autoApproveAudioRequests', e.currentTarget.checked)}
+            />
+          </div>
+        </FormRow>
       </FormSection>
       <FormSection label={t('common.requests')}>
         {toggleRow(t('settings.requests.allowPartialSeriesRequests'), 'partialRequestsEnabled', t('settings.requests.allowPartialSeriesRequests'), t('settings.requests.allowPartialSeriesRequestsCaption'))}

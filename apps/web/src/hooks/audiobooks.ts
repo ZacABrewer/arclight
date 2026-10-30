@@ -10,6 +10,7 @@ import type {
   BookSeriesDetails,
   BulkAuthorUpdateRequest,
   UpdateAuthorRequest,
+  WantedReleaseFilter,
 } from '@arclight/shared';
 import { audiobooksApi, type BookLookupInput } from '../api/audiobooks.js';
 import type { DeleteMediaOptions } from '../api/library.js';
@@ -113,12 +114,12 @@ export function useAudiobookQualityProfiles(enabled = true) {
   return useQuery({ queryKey: audiobookKeys.qualityProfiles, queryFn: () => profilesApi.quality.list('audiobook'), staleTime: 60_000, enabled });
 }
 
-export function useWantedBooks(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '') {
+export function useWantedBooks(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '', release: WantedReleaseFilter = {}) {
   return useQuery({
     enabled,
-    queryKey: audiobookKeys.wanted(mode, page, pageSize, q),
+    queryKey: audiobookKeys.wanted(mode, page, pageSize, q, release),
     queryFn: () => {
-      const query = { page, pageSize, q: q || undefined };
+      const query = { page, pageSize, q: q || undefined, ...release };
       return mode === 'missing' ? audiobooksApi.wanted.missing(query) : audiobooksApi.wanted.cutoff(query);
     },
     placeholderData: keepPreviousData,

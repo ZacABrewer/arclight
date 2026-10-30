@@ -76,6 +76,7 @@ import { CrossSeedSearchButton } from '../../features/cross-seed/cross-seed-sear
 import { EpisodeVersionFiles, VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
+import { episodeReleaseState, type ReleaseState } from '../../components/media/release-state.js';
 import { t } from '../../i18n/index.js';
 import { usePaletteContext } from '../../features/command-palette/registry.js';
 
@@ -90,6 +91,8 @@ export interface AddLanguageState {
 export interface InteractiveState {
   target: ReleaseSearchTarget;
   title: string;
+  /** One episode: whether it has aired (an unaired one is searched under a warning). */
+  release?: ReleaseState | undefined;
 }
 
 /** Season header text: "Airing · 1 of 9 aired", "Complete", "Not started". */
@@ -225,7 +228,7 @@ export function SeriesDetailsPage() {
       />
 
       <AddAdditionalDialog open={addLanguage !== null} onClose={() => setAddLanguage(null)} targets={addLanguage?.targets ?? []} title={addLanguage?.title ?? ''} />
-      <InteractiveSearchModal target={interactive?.target ?? null} title={interactive?.title ?? ''} onClose={() => setInteractive(null)} />
+      <InteractiveSearchModal target={interactive?.target ?? null} title={interactive?.title ?? ''} release={interactive?.release} onClose={() => setInteractive(null)} />
       {editing ? <EditSeriesModal onClose={() => setEditing(false)} series={s} /> : null}
       <DeleteMediaDialog
         open={deleting}
@@ -601,7 +604,7 @@ function EpisodeRow({
           type="button"
           className="mk-action-link"
           aria-label={t('library.seriesDetails.interactiveSearchCode', { code })}
-          onClick={() => onInteractive({ target: { episodeId: ep.id }, title: `${series.title} ${code}` })}
+          onClick={() => onInteractive({ target: { episodeId: ep.id }, title: `${series.title} ${code}`, release: episodeReleaseState(ep) })}
         >
           {t('library.seriesDetails.interactive')}
         </button>
@@ -721,7 +724,7 @@ function EpisodeDrawer({
       footer={
         <>
           <Button onClick={() => onAddLanguage({ targets: [{ seriesId: series.id, episodeIds: [episode.id] }], title: `${series.title} ${code}` })}>{t('features.additionalLanguages.addAdditional')}</Button>
-          <Button onClick={() => onInteractive({ target: { episodeId: episode.id }, title: `${series.title} ${code}` })}>{t('library.seriesDetails.interactiveSearch')}</Button>
+          <Button onClick={() => onInteractive({ target: { episodeId: episode.id }, title: `${series.title} ${code}`, release: episodeReleaseState(episode) })}>{t('library.seriesDetails.interactiveSearch')}</Button>
           <Button variant="primary" loading={search.isPending} onClick={() => search.mutate({ episodeIds: [episode.id] })}>
             {t('library.seriesDetails.searchEpisode')}
           </Button>

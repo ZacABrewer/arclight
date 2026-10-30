@@ -13,6 +13,7 @@ import type {
   UpdateSeriesRequest,
   WantedEpisodesPage,
   WantedMoviesPage,
+  WantedReleaseFilter,
 } from '@arclight/shared';
 import { ApiError } from '../api/client.js';
 import { libraryApi, type DeleteMediaOptions } from '../api/library.js';
@@ -86,27 +87,27 @@ export function useQualityProfiles() {
 export type WantedPage = WantedEpisodesPage | WantedMoviesPage;
 
 /** `q`: the page's text search (blank = every row). */
-export function useMissing(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '') {
+export function useMissing(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '', release: WantedReleaseFilter = {}) {
   return useQuery({
     enabled,
-    queryKey: libraryKeys.wanted.missing(kind, page, pageSize, q),
+    queryKey: libraryKeys.wanted.missing(kind, page, pageSize, q, release),
     queryFn: (): Promise<WantedPage> =>
       kind === 'episodes'
-        ? libraryApi.wanted.missingEpisodes({ page, pageSize, q: q || undefined })
-        : libraryApi.wanted.missingMovies({ page, pageSize, q: q || undefined }),
+        ? libraryApi.wanted.missingEpisodes({ page, pageSize, q: q || undefined, ...release })
+        : libraryApi.wanted.missingMovies({ page, pageSize, q: q || undefined, ...release }),
     placeholderData: keepPreviousData,
   });
 }
 
 /** Cutoff-unmet lists: items with a file below their profile's cutoff (GET /wanted/cutoff/*). */
-export function useCutoffUnmet(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '') {
+export function useCutoffUnmet(kind: 'episodes' | 'movies', page: number, pageSize = 50, enabled = true, q = '', release: WantedReleaseFilter = {}) {
   return useQuery({
     enabled,
-    queryKey: libraryKeys.wanted.cutoff(kind, page, pageSize, q),
+    queryKey: libraryKeys.wanted.cutoff(kind, page, pageSize, q, release),
     queryFn: (): Promise<WantedPage> =>
       kind === 'episodes'
-        ? libraryApi.wanted.cutoffEpisodes({ page, pageSize, q: q || undefined })
-        : libraryApi.wanted.cutoffMovies({ page, pageSize, q: q || undefined }),
+        ? libraryApi.wanted.cutoffEpisodes({ page, pageSize, q: q || undefined, ...release })
+        : libraryApi.wanted.cutoffMovies({ page, pageSize, q: q || undefined, ...release }),
     placeholderData: keepPreviousData,
   });
 }
@@ -414,7 +415,11 @@ export function useAutomaticSearch() {
       toast.push({
         tone: r.grabbed.length > 0 ? 'ok' : 'info',
         title: r.grabbed.length > 0 ? t('hooks.library.grabbedReleases', { grabbedCount: r.grabbed.length }) : t('hooks.library.searchFinished'),
-        message: t('hooks.library.releasesFoundApprovedApprovedValue', { releases: r.releases, approved: r.approved, value: r.pending ? ` · ${r.pending} pending` : '' }),
+        message: [
+          t('hooks.library.releasesFoundApprovedApprovedValue', { releases: r.releases, approved: r.approved, value: r.pending ? ` · ${r.pending} pending` : '' }),
+          // Items of the search that are not out yet were left out by the server.
+          ...(r.skippedUnreleased ? [t('bulk.toast.skippedUnreleased', { count: r.skippedUnreleased })] : []),
+        ].join(' · '),
       }),
   });
 }

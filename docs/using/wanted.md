@@ -43,6 +43,34 @@ Episodes list columns: Series, Episode, Title, Air date, Status, Versions, and a
 
 The search box at the top of the list narrows it down. It matches the series title, the episode title or an episode code such as `s01e02` (episodes), the title (movies), the album or artist (albums), and the book, author or series (books); every word you type must match, upper or lower case does not matter, and dots, dashes and underscores count as spaces. The search is kept in the address bar, so a reload or a shared link keeps it. The box is shared by the media-type switch, so switching from Episodes to Movies keeps the same search. While a search is active the count says how many items match, and **Search all** becomes **Search all matching**: it searches only the matching items. **Select all N** in the bulk bar also means "all matching items". On **Profile mismatch** the same box matches the title, the episode code, the profile, the quality and the version.
 
+## Release filter: released and upcoming items
+
+Both lists (Missing and Cutoff unmet), for episodes, movies, albums and books, have a release filter above the table:
+
+- **Release status**: **Released** (the default), **Upcoming** or **All**. Released shows what is already out. Upcoming shows what is not out yet, including items with no known release date. All shows both. Cutoff unmet also defaults to released items.
+- **Release date**: **Any release date**, **Released in the last 7 days**, **Released in the last 30 days** or **Released in the last year**. For a fixed range, fill in **Released after** and **Released before** (either or both); the dropdown then reads **Custom range**. Dates are whole days in UTC.
+
+Items with no release date drop out of the list as soon as you set a date bound. **Clear filters** resets everything. The filter is kept in the address bar, so you can bookmark it or share the link, and changing it takes you back to page 1.
+
+### What "release date" means
+
+| Type | The release date is |
+| --- | --- |
+| Episode | Its air time (or the start of its air date when no time is known). |
+| Movie | The date that satisfies its minimum availability. **Announced**: the movie always counts as out. **In cinemas**: the cinema date. **Released**: the earlier of the digital and physical dates, or the cinema date plus 90 days when only that is known. With no dates at all, the movie's status field decides. |
+| Album, book | Its release date. A bare year or year and month counts from the start of that period. With no date, the item counts as unreleased. |
+
+### Upcoming items and searching
+
+An upcoming row shows an **Upcoming · date** chip, or **Not released · no date** when nothing is known, and its **Search** button is disabled. **Search selected** and **Search all** skip upcoming items, and the toast says how many were skipped. [Interactive search](interactive-search.md) still works on them, with a warning banner that the item is not released yet; anything you grab there is your call.
+
+Automatic searches (missing and cutoff/upgrade) never look for unreleased items. Two settings under **Settings > Media management > Unreleased items** change this (see [Media management](media-management.md#unreleased-items)):
+
+- **Search unreleased items** (off by default) lets searches you start yourself, the **Search** buttons and bulk searches, include unreleased items. Automatic searches still never do.
+- **Wait after release** (0 to 168 hours, default 0) makes automatic searches wait this long after the air or release time. It helps with episodes that air late at night, before they are available.
+
+RSS sync is not affected by these settings. It already refuses a single episode more than 60 minutes before it airs (unless unaired releases are allowed), season packs that contain unaired or undated episodes, movies before their availability, and albums or books dated more than a day ahead.
+
 ## Searching
 
 | Button | What it does |

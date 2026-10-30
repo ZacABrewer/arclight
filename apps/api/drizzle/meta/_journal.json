@@ -176,6 +176,13 @@
       "when": 1793370211659,
       "tag": "0024_flippant_talon",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1793387419203,
+      "tag": "0025_dashing_vision",
+      "breakpoints": true
     }
   ]
 }

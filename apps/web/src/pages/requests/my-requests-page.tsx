@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { MediaRequest } from '@arclight/shared';
+import { Permission, type MediaRequest } from '@arclight/shared';
 import { Button, EmptyState, Modal, PageHeader, Pane, Segmented, Timeline, type TimelineItem } from '../../arclight/index.js';
 import { Loading, QueryError } from '../../components/media/media-kit.js';
 import { DLink, titleTarget } from '../../features/discover/base.js';
@@ -9,6 +9,7 @@ import { useFeatures } from '../../hooks/music.js';
 import { useDeleteRequest, useRequests } from '../../hooks/requests.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { AudioMyRequests } from './audio-request-list.js';
+import { LanguageMyRequests } from './language-request-list.js';
 import '../../components/media/media-kit.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -69,22 +70,26 @@ export function requestTimelineItem(r: MediaRequest, aside?: React.ReactNode): T
   };
 }
 
-export type MyRequestsMedia = 'video' | 'music' | 'audiobook';
+export type MyRequestsMedia = 'video' | 'music' | 'audiobook' | 'language';
 
-/** The media switch of My requests: Movies & TV, then Music / Audiobooks while their flag is on. */
-export function myRequestsMediaOptions(features: { music: boolean; audiobooks: boolean }): Array<{ value: MyRequestsMedia; label: string }> {
+/**
+ * The media switch of My requests: Movies & TV, Music / Audiobooks while their flag is on, then
+ * subtitle and language requests for users who may make them.
+ */
+export function myRequestsMediaOptions(features: { music: boolean; audiobooks: boolean }, languages = false): Array<{ value: MyRequestsMedia; label: string }> {
   return [
     { value: 'video', label: t('requests.moviesAndTv') },
     ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
     ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+    ...(languages ? [{ value: 'language' as const, label: t('requests.language.filter') }] : []),
   ];
 }
 
 export function MyRequestsPage() {
-  const { userId } = usePermissions();
+  const { userId, can } = usePermissions();
   const features = useFeatures();
   const [picked, setPicked] = useState<MyRequestsMedia>('video');
-  const options = myRequestsMediaOptions(features);
+  const options = myRequestsMediaOptions(features, can(Permission.REQUEST_LANGUAGE, Permission.REQUEST));
   // A flag turned off while its tab was open falls back to Movies & TV.
   const media = options.some((o) => o.value === picked) ? picked : 'video';
 
@@ -105,6 +110,8 @@ export function MyRequestsPage() {
         <EmptyState title={t('requests.myRequests.noUserAccount')}>{t('requests.myRequests.myRequestsListsTheRequests')}</EmptyState>
       ) : media === 'video' ? (
         <VideoRequests userId={userId} />
+      ) : media === 'language' ? (
+        <LanguageMyRequests userId={userId} />
       ) : (
         <AudioMyRequests key={media} domain={media} userId={userId} />
       )}

@@ -13,6 +13,7 @@ import type {
   MusicMetadataSettingsUpdate,
   UpdateAlbumRequest,
   UpdateArtistRequest,
+  WantedReleaseFilter,
 } from '@arclight/shared';
 import type { DeleteMediaOptions } from '../api/library.js';
 import { ApiError } from '../api/client.js';
@@ -140,12 +141,12 @@ export function useAlbumTypeProfiles(enabled = true) {
   return useQuery({ queryKey: musicKeys.albumTypeProfiles, queryFn: musicApi.albumTypeProfiles.list, staleTime: 60_000, enabled });
 }
 
-export function useWantedAlbums(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '') {
+export function useWantedAlbums(mode: 'missing' | 'cutoff', page: number, pageSize = 50, enabled = true, q = '', release: WantedReleaseFilter = {}) {
   return useQuery({
     enabled,
-    queryKey: musicKeys.wanted(mode, page, pageSize, q),
+    queryKey: musicKeys.wanted(mode, page, pageSize, q, release),
     queryFn: () => {
-      const query = { page, pageSize, q: q || undefined };
+      const query = { page, pageSize, q: q || undefined, ...release };
       return mode === 'missing' ? musicApi.wanted.missing(query) : musicApi.wanted.cutoff(query);
     },
     placeholderData: keepPreviousData,

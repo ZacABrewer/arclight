@@ -1,5 +1,19 @@
 import { sqliteTable, integer, text, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
-import type { AudibleRegion, AudioRequestKind, DiscoverSliderType, IssueStatus, IssueType, MediaStatus, MediaType, RequestStatus, WatchlistSource } from '@arclight/shared';
+import type {
+  AdditionalAudioMode,
+  AdditionalLanguageOutcome,
+  AudibleRegion,
+  AudioRequestKind,
+  DiscoverSliderType,
+  LanguageProfileFlagMode,
+  LanguageRequestKind,
+  IssueStatus,
+  IssueType,
+  MediaStatus,
+  MediaType,
+  RequestStatus,
+  WatchlistSource,
+} from '@arclight/shared';
 
 // Requests module tables. User ids are plain integers, not foreign keys: modules do not
 // reference each other's tables, so rows of deleted users are removed by the service
@@ -199,5 +213,50 @@ export const audioRequests = sqliteTable(
     index('audio_requests_item_idx').on(t.kind, t.foreignId),
     index('audio_requests_user_idx').on(t.requestedById),
     index('audio_requests_status_idx').on(t.status),
+  ],
+);
+
+/**
+ * Subtitle and audio language requests on library items. Like `additional_languages`, the
+ * library ids are plain integers: open requests of a deleted item are failed on `library` bus
+ * events. `additional_language_ids` links the records the approval created or reused.
+ */
+export const languageRequests = sqliteTable(
+  'language_requests',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    kind: text('kind').$type<LanguageRequestKind>().notNull(),
+    status: text('status').$type<RequestStatus>().notNull(),
+    mediaType: text('media_type').$type<MediaType>().notNull(),
+    movieId: integer('movie_id'),
+    seriesId: integer('series_id'),
+    /** Series: one season; null = the whole series (and always for movies). */
+    seasonNumber: integer('season_number'),
+    tmdbId: integer('tmdb_id').notNull(),
+    title: text('title').notNull(),
+    year: integer('year'),
+    poster: text('poster'),
+    /** Normalised IETF-style tag ("es", "pt-BR"). */
+    language: text('language').notNull(),
+    forced: text('forced').$type<LanguageProfileFlagMode>().notNull().default('never'),
+    hi: text('hi').$type<LanguageProfileFlagMode>().notNull().default('also'),
+    /** Audio: chosen on approval. */
+    mode: text('mode').$type<AdditionalAudioMode>(),
+    note: text('note'),
+    requestedById: integer('requested_by_id').notNull(),
+    modifiedById: integer('modified_by_id'),
+    declineReason: text('decline_reason'),
+    failureReason: text('failure_reason'),
+    outcome: text('outcome').$type<AdditionalLanguageOutcome>(),
+    outcomeMessage: text('outcome_message'),
+    additionalLanguageIds: text('additional_language_ids', { mode: 'json' }).$type<number[]>().notNull().default([]),
+    createdAt: text('created_at').notNull(),
+    updatedAt: text('updated_at').notNull(),
+  },
+  (t) => [
+    index('language_requests_movie_idx').on(t.movieId),
+    index('language_requests_series_idx').on(t.seriesId),
+    index('language_requests_user_idx').on(t.requestedById),
+    index('language_requests_status_idx').on(t.status),
   ],
 );

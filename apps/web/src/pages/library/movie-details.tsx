@@ -34,6 +34,7 @@ import { SearchTab } from './series-details.js';
 import { VersionsEditor, useVersionsDraft } from './versions/versions-editor.js';
 import { AddAdditionalDialog } from '../../features/additional-languages/add-additional-dialog.js';
 import { ItemLanguageChips } from '../../features/additional-languages/item-language-chips.js';
+import { movieReleaseState } from '../../components/media/release-state.js';
 import { t } from '../../i18n/index.js';
 import { usePaletteContext } from '../../features/command-palette/registry.js';
 
@@ -194,7 +195,7 @@ export function MovieDetailsPage() {
       />
 
       <AddAdditionalDialog open={addingLanguage} onClose={() => setAddingLanguage(false)} targets={[{ movieId: m.id }]} title={m.title} />
-      <InteractiveSearchModal target={interactive ? { movieId: m.id } : null} title={m.title} onClose={() => setInteractive(false)} />
+      <InteractiveSearchModal target={interactive ? { movieId: m.id } : null} title={m.title} release={movieReleaseState(m)} onClose={() => setInteractive(false)} />
       {editing ? <EditMovieModal movie={m} onClose={() => setEditing(false)} /> : null}
       <DeleteMediaDialog
         open={deleting}

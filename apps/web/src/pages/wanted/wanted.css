@@ -5,3 +5,9 @@
   .wanted-page .al-page-header__controls { width: 100%; }
 }
 .wanted-search { padding: 12px 16px; border-bottom: 1px solid var(--al-line-1); }
+/* Release filter row (release-filter.tsx): status, date presets, after / before dates. */
+.wanted-release .wanted-release__date { width: 160px; }
+@media (max-width: 767.98px) {
+  .wanted-release > .al-seg { width: 100%; }
+  .wanted-release .wanted-release__date, .wanted-release > .al-select { flex: 1 1 140px; width: auto; min-width: 0; }
+}
