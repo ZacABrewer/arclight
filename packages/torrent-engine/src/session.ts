@@ -98,6 +98,8 @@ export interface SessionStats {
 
 /** Restored torrents whose data is checked at the same time (see `restore`). */
 const RESTORE_CHECKS = 2;
+/** Smallest cache share and write backlog per downloading torrent. */
+const CACHE_SHARE_MIN = 4 * 1024 * 1024;
 const PEER_ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
 
 export function generatePeerId(prefix: string): Buffer {
@@ -562,6 +564,19 @@ export class Session extends EventEmitter<SessionEvents> {
     this.scheduleQueue();
   }
 
+  /**
+   * Closes peer connections until the session is within `maxConnections` (after it was
+   * lowered), the ones moving the least data first. Returns how many were closed.
+   */
+  trimConnections(): number {
+    const excess = this.connectionCount() - this.settingsValue.maxConnections;
+    if (excess <= 0) return 0;
+    const load = [...this.torrentsById.values()].flatMap((t) => t.connectionLoad()).sort((a, b) => a.rate - b.rate);
+    const closing = load.slice(0, excess);
+    for (const c of closing) c.close();
+    return closing.length;
+  }
+
   // ---- queueing ---------------------------------------------------------------------------------
 
   /**
@@ -636,6 +651,21 @@ export class Session extends EventEmitter<SessionEvents> {
         if (!t.isActive) void t.setActive(true);
       } else if (t.isActive) void t.setActive(false);
     }
+    this.shareCache();
+  }
+
+  /**
+   * Splits cacheBytesTotal across the downloading torrents, each at most cacheBytesPerTorrent,
+   * and gives each a write backlog of half its cache share: memory stays bounded however many
+   * torrents download at once.
+   */
+  private shareCache(): void {
+    const s = this.settingsValue;
+    const downloading = this.getTorrents().filter((t) => t.wantsSlot === 'download' && (t.isActive || t.forceStart));
+    if (downloading.length === 0) return;
+    const share = Math.max(CACHE_SHARE_MIN, Math.min(s.cacheBytesPerTorrent, Math.floor(s.cacheBytesTotal / downloading.length)));
+    const backlog = Math.max(CACHE_SHARE_MIN, Math.floor(share / 2));
+    for (const t of downloading) t.setMemoryBudget(share, backlog);
   }
 
   // ---- network binding ------------------------------------------------------------------------

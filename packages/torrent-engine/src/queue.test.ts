@@ -50,6 +50,21 @@ const torrentFile = (name: string) => createTorrent({ name, files: [{ path: [nam
 const names = (s: Session) => s.getTorrents().map((t) => t.name);
 const active = (ts: Torrent[]) => ts.filter((t) => t.state === 'downloading').map((t) => t.name);
 
+describe('memory budget', () => {
+  it('splits the session cache across downloading torrents, with a floor and a per-torrent cap', async () => {
+    const MiB = 1024 * 1024;
+    const s = await session({ savePath: await tmp(), maxActiveDownloads: 4, cacheBytesTotal: 32 * MiB, cacheBytesPerTorrent: 32 * MiB });
+    const ts = [];
+    for (const n of ['a', 'b', 'c', 'd', 'e']) ts.push(await s.addTorrent({ torrent: torrentFile(n) }));
+    await waitFor(() => active(s.getTorrents()).length === 4);
+    for (const t of ts.slice(0, 4)) expect(t.memoryShare).toEqual({ cacheBytes: 8 * MiB, writeBacklogBytes: 4 * MiB });
+
+    s.updateSettings({ maxActiveDownloads: 1 });
+    await waitFor(() => active(s.getTorrents()).length === 1);
+    expect(ts[0]!.memoryShare).toEqual({ cacheBytes: 32 * MiB, writeBacklogBytes: 16 * MiB });
+  }, 30_000);
+});
+
 describe('queue order', () => {
   it('moves torrents up, down, to the top and bottom and serves them in that order', async () => {
     const s = await session({ savePath: await tmp(), maxActiveDownloads: 1 });

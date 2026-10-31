@@ -3,7 +3,7 @@ import { mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import type { Logger } from 'pino';
 import { attachSeedRules, builtinLive, builtinPhase, builtinQueuePositions, type SeedRuleProvider } from '@arclight/download-clients';
-import { Session, type SessionOptions, type SessionSettings, type Torrent, type TorrentRateLimits } from '@arclight/torrent-engine';
+import { DEFAULT_SETTINGS, Session, type SessionOptions, type SessionSettings, type Torrent, type TorrentRateLimits } from '@arclight/torrent-engine';
 import {
   SeedingRulesSettings,
   TORRENT_TRANSPORT_DEFAULTS,
@@ -32,7 +32,7 @@ import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
 import { applySeedingRules, type SeedingRulesPorts, type SeedingRulesResult } from './seeding-rules.js';
 import { speedMode } from './speed.js';
-import { combineLimit, tcpConnectProbe, TunnelGuard } from './tunnel-guard.js';
+import { combineLimit, GUARD_CONNECTIONS_PER_SECOND, GUARD_HALF_OPEN, tcpConnectProbe, TunnelGuard } from './tunnel-guard.js';
 
 // The built-in torrent engine: owns the single `Session`, the `torrent` settings section and
 // the VPN binding policy.
@@ -235,7 +235,7 @@ export class TorrentService {
       webSeedConnectionsPerTorrent: t.webSeedConnectionsPerTorrent,
       listenPort: binding.port,
       listenAddress: binding.address,
-      maxConnections: s.maxConnections,
+      ...this.connectionLimits(s),
       maxConnectionsPerTorrent: s.maxConnectionsPerTorrent,
       // Normal or alternative limits, whichever apply right now, tightened by the tunnel guard.
       downloadLimit: combineLimit(speed.downloadLimit, this.guard.downloadLimit),
@@ -345,15 +345,44 @@ export class TorrentService {
     return mode;
   }
 
-  /** Pushes the speed-mode limits, tightened by the tunnel guard, to the running engine. */
+  /**
+   * Peer connection limits, tightened by the tunnel guard: fewer peers and slower dialing while
+   * the tunnel chokes (a userspace WireGuard runs out of packets per second before bytes).
+   */
+  private connectionLimits(s: TorrentSettings = this.settings()): Pick<SessionSettings, 'maxConnections' | 'maxHalfOpenConnections' | 'connectionsPerSecond'> {
+    const halfOpen = this.sessionOverrides.maxHalfOpenConnections ?? DEFAULT_SETTINGS.maxHalfOpenConnections;
+    const perSecond = this.sessionOverrides.connectionsPerSecond ?? DEFAULT_SETTINGS.connectionsPerSecond;
+    const guarded = this.guard.active;
+    return {
+      maxConnections: this.guard.connectionLimit === null ? s.maxConnections : Math.min(s.maxConnections, this.guard.connectionLimit),
+      maxHalfOpenConnections: guarded ? Math.min(halfOpen, GUARD_HALF_OPEN) : halfOpen,
+      // 0 = no rate limit, so the guard's rate replaces it rather than min(0, ...).
+      connectionsPerSecond: guarded ? (perSecond > 0 ? Math.min(perSecond, GUARD_CONNECTIONS_PER_SECOND) : GUARD_CONNECTIONS_PER_SECOND) : perSecond,
+    };
+  }
+
+  /**
+   * Pushes the speed-mode limits and the connection limits, tightened by the tunnel guard, to
+   * the running engine. A lowered connection cap closes the least useful peers at once.
+   */
   private applyRateLimits(mode: TorrentSpeedMode = this.speedMode()): void {
     const session = this.sessionValue;
     if (!session) return;
     const downloadLimit = combineLimit(mode.downloadLimit, this.guard.downloadLimit);
     const uploadLimit = combineLimit(mode.uploadLimit, this.guard.uploadLimit);
-    if (session.settings.downloadLimit !== downloadLimit || session.settings.uploadLimit !== uploadLimit) {
-      session.updateSettings({ downloadLimit, uploadLimit });
+    const conn = this.connectionLimits();
+    const cur = session.settings;
+    if (
+      cur.downloadLimit !== downloadLimit ||
+      cur.uploadLimit !== uploadLimit ||
+      cur.maxConnections !== conn.maxConnections ||
+      cur.maxHalfOpenConnections !== conn.maxHalfOpenConnections ||
+      cur.connectionsPerSecond !== conn.connectionsPerSecond
+    ) {
+      session.updateSettings({ downloadLimit, uploadLimit, ...conn });
     }
+    const closed = session.trimConnections();
+    if (closed > 0) this.log?.info({ closed, maxConnections: conn.maxConnections }, 'tunnel guard closed peer connections to ease the VPN tunnel');
   }
 
   private startGuardTimer(): void {
@@ -386,10 +415,13 @@ export class TorrentService {
       if (this.sessionValue !== session) return;
       const st = session.getSessionStats();
       const wasActive = this.guard.active;
-      if (!this.guard.observe(rtt, { down: st.downloadRate, up: st.uploadRate })) return;
+      if (!this.guard.observe(rtt, { down: st.downloadRate, up: st.uploadRate, connections: st.connections, maxConnections: s.maxConnections })) return;
       this.applyRateLimits();
       if (this.guard.active && !wasActive) {
-        this.log?.warn({ rttMs: rtt, downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit }, 'VPN tunnel is choking; tunnel guard slowed the torrent engine');
+        this.log?.warn(
+          { rttMs: rtt, downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit, connectionLimit: this.guard.connectionLimit },
+          'VPN tunnel is choking; tunnel guard slowed the torrent engine',
+        );
       } else if (!this.guard.active && wasActive) {
         this.log?.info('VPN tunnel healthy again; tunnel guard lifted its limits');
       }
@@ -861,10 +893,13 @@ export class TorrentService {
     if (this.lastError) out.error = this.lastError;
     if (session && this.portWarning) out.warning = this.portWarning;
     if (this.bootBlocked) out.bootBlocked = true;
-    if (session && this.guard.active) out.tunnelGuard = { downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit };
+    if (session && this.guard.active) {
+      out.tunnelGuard = { downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit, connectionLimit: this.guard.connectionLimit };
+    }
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
     if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;
     out.lockdownsLastHour = this.recentLockdowns();
+    out.limits = { maxConnections: s.maxConnections, maxConnectionsPerTorrent: s.maxConnectionsPerTorrent, maxActiveDownloads: s.maxActiveDownloads, maxActiveSeeds: s.maxActiveSeeds };
     out.killSwitchPaused = this.killSwitchPaused.size;
     return out;
   }

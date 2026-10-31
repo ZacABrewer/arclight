@@ -112,6 +112,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
           {t('settings.torrent.tunnelGuardActive', {
             down: status.tunnelGuard.downloadLimit === null ? '—' : formatRate(status.tunnelGuard.downloadLimit),
             up: status.tunnelGuard.uploadLimit === null ? '—' : formatRate(status.tunnelGuard.uploadLimit),
+            connections: status.tunnelGuard.connectionLimit ?? status.limits?.maxConnections ?? '—',
           })}
         </p>
       ) : null}

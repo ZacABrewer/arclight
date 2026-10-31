@@ -92,8 +92,14 @@ export interface SessionSettings {
   tickIntervalMs: number;
   /** Delay before reconnecting to a peer that failed or disconnected. */
   peerRetryMs: number;
-  /** Block cache per torrent in bytes. */
+  /** Block cache per torrent in bytes (at most; see cacheBytesTotal). */
   cacheBytesPerTorrent: number;
+  /**
+   * Block cache for the whole session, shared by the downloading torrents. Without it every
+   * downloading torrent could hold cacheBytesPerTorrent, and ten active downloads pinned over
+   * 300 MiB of buffers on a 2 GiB NAS container.
+   */
+  cacheBytesTotal: number;
   /** How often resume data is written while running (ms). */
   resumeSaveIntervalMs: number;
 }
@@ -141,5 +147,6 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   tickIntervalMs: 1000,
   peerRetryMs: 30_000,
   cacheBytesPerTorrent: 32 * 1024 * 1024,
+  cacheBytesTotal: 128 * 1024 * 1024,
   resumeSaveIntervalMs: 5 * 60_000,
 };

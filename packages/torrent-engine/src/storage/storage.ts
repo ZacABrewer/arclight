@@ -36,6 +36,8 @@ export interface StorageOptions {
   incompleteExtension?: string;
   /** Block cache size in bytes (default 32 MiB). */
   cacheBytes?: number;
+  /** Queued write bytes before backpressure (default WRITE_BACKLOG_MAX). */
+  writeBacklogBytes?: number;
   maxOpenFiles?: number;
   /** `sparse` sets the final file size on creation (sparse on most filesystems). */
   preallocate?: 'sparse' | 'none';
@@ -225,7 +227,11 @@ export class Storage {
     return this.queuedWriteBytes;
   }
 
-  /** True while the write backlog is over WRITE_BACKLOG_MAX (until it drains to half). */
+  private get backlogMax(): number {
+    return this.opts.writeBacklogBytes ?? WRITE_BACKLOG_MAX;
+  }
+
+  /** True while the write backlog is over its limit (until it drains to half). */
   get writeBackpressure(): boolean {
     return this.writeBlocked;
   }
@@ -240,14 +246,14 @@ export class Storage {
       return Promise.reject(new TorrentEngineError('storage', `invalid block ${piece}:${begin}:${data.length}`));
     this.cacheBlock(piece, begin, data);
     this.queuedWriteBytes += data.length;
-    if (this.queuedWriteBytes > WRITE_BACKLOG_MAX) this.writeBlocked = true;
+    if (this.queuedWriteBytes > this.backlogMax) this.writeBlocked = true;
     const prev = this.pendingWrites.get(piece) ?? Promise.resolve();
     const p = prev.catch(() => {}).then(() => this.doWrite(piece, begin, data));
     this.pendingWrites.set(piece, p);
     const settled = (): void => {
       if (this.pendingWrites.get(piece) === p) this.pendingWrites.delete(piece);
       this.queuedWriteBytes -= data.length;
-      if (this.writeBlocked && this.queuedWriteBytes <= WRITE_BACKLOG_MAX / 2) {
+      if (this.writeBlocked && this.queuedWriteBytes <= this.backlogMax / 2) {
         this.writeBlocked = false;
         this.opts.onWriteDrain?.();
       }
@@ -290,6 +296,24 @@ export class Storage {
     const max = this.opts.cacheBytes ?? 32 * 1024 * 1024;
     for (const [p, e] of this.cache) {
       if (this.cacheSize <= max || p === piece) break;
+      this.cache.delete(p);
+      this.cacheSize -= e.bytes;
+    }
+  }
+
+  /**
+   * Changes the cache size and write backlog limit. A smaller cache drops the oldest unfinished
+   * pieces at once (they are on disk; hashing reads them back).
+   */
+  setMemoryBudget(bytes: number, writeBacklogBytes: number): void {
+    this.opts.cacheBytes = bytes;
+    this.opts.writeBacklogBytes = writeBacklogBytes;
+    if (this.writeBlocked && this.queuedWriteBytes <= writeBacklogBytes / 2) {
+      this.writeBlocked = false;
+      this.opts.onWriteDrain?.();
+    } else if (this.queuedWriteBytes > writeBacklogBytes) this.writeBlocked = true;
+    for (const [p, e] of this.cache) {
+      if (this.cacheSize <= bytes) break;
       this.cache.delete(p);
       this.cacheSize -= e.bytes;
     }

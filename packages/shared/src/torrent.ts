@@ -273,7 +273,11 @@ export const TorrentSessionStatus = z.object({
   /** ARCLIGHT_TORRENT_ENGINE=0: the engine is not started at boot (only by enabling it). */
   bootBlocked: z.boolean().optional(),
   /** Present while the tunnel guard limits the engine (bytes/s; null = that direction not limited). */
-  tunnelGuard: z.object({ downloadLimit: z.number().nullable(), uploadLimit: z.number().nullable() }).optional(),
+  tunnelGuard: z.object({ downloadLimit: z.number().nullable(), uploadLimit: z.number().nullable(), connectionLimit: z.number().nullable().optional() }).optional(),
+  /** The configured connection and queue limits (the debug report shows them next to the counts). */
+  limits: z
+    .object({ maxConnections: z.number().int(), maxConnectionsPerTorrent: z.number().int(), maxActiveDownloads: z.number().int(), maxActiveSeeds: z.number().int() })
+    .optional(),
   lockdownReason: z.string().optional(),
   /** ISO-8601: when the current lockdown started. */
   lockdownSince: z.string().optional(),

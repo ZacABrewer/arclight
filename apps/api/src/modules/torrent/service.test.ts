@@ -8,6 +8,7 @@ import { torrentEngineCheck } from '../health/checks/torrent.js';
 import type { HealthDeps } from '../health/types.js';
 import { LOCKDOWN_ADDRESS, TorrentModuleError } from './service.js';
 import { freePort, harness, randomMagnet, seededTorrent, waitFor, type Harness } from './test-support.js';
+import { GUARD_CONNECTIONS_PER_SECOND, GUARD_HALF_OPEN } from './tunnel-guard.js';
 
 const open: Harness[] = [];
 afterEach(async () => {
@@ -138,6 +139,27 @@ describe('VPN binding', () => {
     for (let i = 0; i < 60 && h.service.status().tunnelGuard; i++) await h.service.guardTick();
     expect(h.service.status().tunnelGuard).toBeUndefined();
     expect(s.settings.downloadLimit).toBe(0);
+  });
+
+  it('tunnel guard: cuts the connection cap and dialing while active, and restores the user values', async () => {
+    let rtt = 100;
+    const h = await make({ vpn: true, settings: { enabled: true, maxConnections: 300 }, service: { tunnelProbe: async () => rtt } });
+    h.vpn.connect();
+    await h.service.start();
+    await h.service.applyBinding();
+    const s = running(h);
+    const before = { maxConnections: s.settings.maxConnections, half: s.settings.maxHalfOpenConnections, perSecond: s.settings.connectionsPerSecond };
+    expect(before.maxConnections).toBe(300);
+    rtt = -1;
+    await h.service.guardTick();
+    expect(s.settings.maxConnections).toBeLessThan(300);
+    expect(s.settings.maxHalfOpenConnections).toBe(GUARD_HALF_OPEN);
+    expect(s.settings.connectionsPerSecond).toBe(GUARD_CONNECTIONS_PER_SECOND);
+    expect(h.service.status().tunnelGuard?.connectionLimit).toBe(s.settings.maxConnections);
+    rtt = 100;
+    for (let i = 0; i < 60 && h.service.status().tunnelGuard; i++) await h.service.guardTick();
+    expect(s.settings).toMatchObject({ maxConnections: 300, maxHalfOpenConnections: before.half, connectionsPerSecond: before.perSecond });
+    expect(h.service.status().limits).toMatchObject({ maxConnections: 300 });
   });
 
   it('self-heals: unlocks a lockdown whose VPN event was missed, and starts an engine that failed at boot', async () => {

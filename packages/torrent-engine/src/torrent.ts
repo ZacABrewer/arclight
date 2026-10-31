@@ -227,6 +227,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   forceStart = false;
 
   private storage: Storage | null = null;
+  /** This torrent's share of the session cache and write backlog (null = the defaults). */
+  private memoryBudget: { cacheBytes: number; writeBacklogBytes: number } | null = null;
   private picker: PiecePicker | null = null;
   private savePathValue: string;
   private filePriorities: number[] | undefined;
@@ -363,6 +365,25 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     return this.connecting.size;
   }
 
+  /** This torrent's share of the session's cache and write backlog, once the session set one. */
+  get memoryShare(): { cacheBytes: number; writeBacklogBytes: number } | null {
+    return this.memoryBudget;
+  }
+
+  /** Sets this torrent's block cache and write backlog (its share of the session's memory). */
+  setMemoryBudget(cacheBytes: number, writeBacklogBytes: number): void {
+    if (this.memoryBudget?.cacheBytes === cacheBytes && this.memoryBudget.writeBacklogBytes === writeBacklogBytes) return;
+    this.memoryBudget = { cacheBytes, writeBacklogBytes };
+    this.storage?.setMemoryBudget(cacheBytes, writeBacklogBytes);
+  }
+
+  /** Open peer connections with what each moves now (bytes/s both ways), for trimming to a lower cap. */
+  connectionLoad(): { rate: number; close: () => void }[] {
+    return [...this.peers.values()]
+      .filter((p) => !p.conn.isClosed)
+      .map((p) => ({ rate: p.conn.downloadMeter.rate() + p.conn.uploadMeter.rate(), close: () => p.conn.destroy() }));
+  }
+
   get peerCount(): number {
     return this.peers.size + this.connecting.size;
   }
@@ -409,7 +430,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     const settings = this.ctx.settings();
     const opts: ConstructorParameters<typeof Storage>[1] = {
       savePath: this.savePathValue,
-      cacheBytes: settings.cacheBytesPerTorrent,
+      cacheBytes: this.memoryBudget?.cacheBytes ?? settings.cacheBytesPerTorrent,
+      ...(this.memoryBudget ? { writeBacklogBytes: this.memoryBudget.writeBacklogBytes } : {}),
       onWriteDrain: () => {
         for (const p of this.peers.values()) this.requestBlocks(p);
       },

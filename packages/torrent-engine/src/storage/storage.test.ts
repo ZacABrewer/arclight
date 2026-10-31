@@ -129,6 +129,21 @@ describe('Storage', () => {
     await s.close();
   });
 
+  it('a smaller write backlog limit applies backpressure sooner and lifts it when raised', async () => {
+    const dir = await tmp();
+    const { meta } = fixture();
+    let drained = 0;
+    const s = new Storage(meta, { savePath: dir, writeBacklogBytes: 2 * BLOCK_SIZE, onWriteDrain: () => drained++ });
+    const block = randomBytes(BLOCK_SIZE);
+    const writes = [0, 1, 2].map(() => s.writeBlock(0, 0, block));
+    expect(s.writeBackpressure).toBe(true);
+    s.setMemoryBudget(32 * BLOCK_SIZE, 16 * BLOCK_SIZE);
+    expect(s.writeBackpressure).toBe(false);
+    expect(drained).toBe(1);
+    await Promise.all(writes);
+    await s.close();
+  });
+
   it('rejects corrupt pieces and drops them from the cache', async () => {
     const dir = await tmp();
     const { meta } = fixture();

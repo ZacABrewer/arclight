@@ -1,4 +1,4 @@
-import { DEBUG_COMMANDS, DEBUG_MAX_COMMANDS, type DebugCommandName, type DebugCommandResult, type DebugRunResponse } from '@arclight/shared';
+import { DEBUG_COMMANDS, DEBUG_MAX_COMMANDS, type DebugCommandName, type DebugCommandResult, type DebugRunResponse, type TorrentSessionStatus } from '@arclight/shared';
 import { bytes, duration, hexToAscii, kv, mib, rate, spacedHex, table } from './format.js';
 import { redactText } from './redact.js';
 import type { DebugService } from './service.js';
@@ -160,6 +160,18 @@ async function gc(svc: DebugService): Promise<string> {
   return [`Full GC took ${ms.toFixed(0)} ms`, '', table(['', 'before', 'after', 'change'], rows)].join('\n');
 }
 
+function guardText(g: NonNullable<TorrentSessionStatus['tunnelGuard']>): string {
+  const down = g.downloadLimit === null ? 'unlimited' : `${(g.downloadLimit / 1048576).toFixed(1)} MiB/s`;
+  const up = g.uploadLimit === null ? 'unlimited' : `${(g.uploadLimit / 1024).toFixed(0)} KiB/s`;
+  const peers = g.connectionLimit === null || g.connectionLimit === undefined ? '' : `, ${g.connectionLimit} connections`;
+  return `limiting to ${down} down, ${up} up${peers}`;
+}
+
+/** A queue limit: -1 = unlimited. */
+function limitText(n: number): string {
+  return n < 0 ? 'unlimited' : String(n);
+}
+
 function engine(svc: DebugService): string {
   const s = svc.torrent();
   if (!s) return 'Torrent engine: not available.';
@@ -170,12 +182,14 @@ function engine(svc: DebugService): string {
       ['enabled', s.enabled],
       ['state', s.state],
       ['start at boot', s.bootBlocked ? 'blocked by ARCLIGHT_TORRENT_ENGINE=0' : undefined],
-      ['tunnel guard', s.tunnelGuard ? `limiting to ${s.tunnelGuard.downloadLimit === null ? 'unlimited' : `${(s.tunnelGuard.downloadLimit / 1048576).toFixed(1)} MiB/s`} down, ${s.tunnelGuard.uploadLimit === null ? 'unlimited' : `${(s.tunnelGuard.uploadLimit / 1024).toFixed(0)} KiB/s`} up` : undefined],
+      ['tunnel guard', s.tunnelGuard ? guardText(s.tunnelGuard) : undefined],
       ['listen port', s.listenPort === null ? 'not listening' : s.listenPort],
       ['configured port', s.configuredListenPort],
       ['bound address', s.boundAddress ?? 'all interfaces'],
       ['torrents', `${t.total} total: ${t.downloading} downloading, ${t.seeding} seeding, ${t.paused} paused, ${t.queued} queued, ${t.checking} checking, ${t.error} error`],
       ['peers', `${s.peers}${s.encryptedPeers !== undefined ? ` (${s.encryptedPeers} encrypted)` : ''}`],
+      ['connection limits', s.limits ? `${s.limits.maxConnections} total, ${s.limits.maxConnectionsPerTorrent} per torrent` : undefined],
+      ['queue limits', s.limits ? `${limitText(s.limits.maxActiveDownloads)} downloading, ${limitText(s.limits.maxActiveSeeds)} seeding` : undefined],
       ['dht nodes', `${s.dhtNodes}${s.dht6Nodes ? ` + ${s.dht6Nodes} IPv6` : ''}`],
       ['utp connections', s.utpConnections],
       ['download', rate(s.downloadRate)],

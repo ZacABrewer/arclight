@@ -163,6 +163,7 @@ These settings apply to the built-in engine only. The top of the page shows live
 | Default seed ratio | empty (unlimited) | Stop seeding at this ratio |
 | Default seed time | empty (unlimited) | Stop seeding after this many minutes |
 | Bind to VPN | On | When the VPN integration is enabled, bind every socket to the VPN tunnel and pause all torrents while it is down. See [VPN](vpn.md) |
+| Tunnel guard | On | With the VPN on, slow the engine and cut its peer connections when the tunnel starts to choke, so the VPN stays up. See [Tunnel guard](#tunnel-guard) |
 | Downloads folder | empty | Default download folder. Empty means `/data/downloads` when a `/data` folder exists (the standard Docker layout; older installs keep `/downloads`), otherwise a `downloads` folder next to your config folder. The page shows the folder actually used |
 | Peer encryption | Preferred | Preferred: try encrypted first, fall back to plain. Required: encrypted only, fewer peers can connect. Disabled: plain only, peers that insist on encryption cannot connect |
 | TCP | On | Accept and open TCP peer connections |
@@ -188,11 +189,25 @@ Seeding is when you keep uploading after the download finishes. What Arclight do
 4. For tracked private-tracker accounts, the hit-and-run rule (Indexers > Tracker account) keeps a finished torrent from being removed too early. See [Indexers](indexers.md).
 5. With both limits empty, torrents seed until you remove them.
 
-> Coming soon: configurable seeding rules (for example per-category or per-tracker goals and an automatic cleanup action). This page will be updated when it ships.
-
-> Coming soon: speed schedules and a "slow mode" for the global limits. This page will be updated when it ships. For now the global limits are fixed values you change by hand.
-
 > Coming soon: per-download limits editable from the queue. This page will be updated when it ships. For now, limits can be set per client for new torrents (see the Built-in client table above).
+
+### Tunnel guard
+
+Behind a VPN on a NAS, a busy engine can fill the tunnel until the VPN container's own health check fails and it restarts the tunnel. Many NAS kernels have no WireGuard module, so gluetun runs WireGuard in userspace, which runs out of packets per second before it runs out of bandwidth. Hundreds of peers keep the tunnel full of small packets at any speed.
+
+Every 10 seconds the guard times a small connection through the tunnel. When that is slow (over 800 ms, or far above the usual time) or fails, it:
+
+1. halves the download and upload limits (never below 256 KiB/s down and 64 KiB/s up);
+2. halves the peer connection cap (never below 40, and never above your Max connections), closing the peers that move the least data;
+3. allows at most 8 connection attempts in progress and 3 new ones per second.
+
+After three healthy checks in a row it raises the limits by half, and it lets go once they are back at your own values. The status at the top of the page and the debug report's `engine` command show what the guard is limiting.
+
+If the tunnel still drops, lower **Max connections** (100 to 150 suits most NAS models behind a VPN) and **Max active downloads** first; those set the load the guard starts from.
+
+### Memory
+
+Each downloading torrent caches the pieces it is still receiving until they are verified, and queues writes to disk. Both come from one budget for the whole engine: 128 MiB of cache, split across the downloading torrents (at most 32 MiB each, at least 4 MiB), plus a write queue of half each torrent's share. So memory stays about the same however many torrents download at once. Finished data is read back from disk, and the operating system's file cache does the rest. The container's memory figure includes that file cache, which the system frees when something needs the memory; the debug report's `memory` command shows it separately as *file (page cache)*.
 
 ### When the VPN is down
 

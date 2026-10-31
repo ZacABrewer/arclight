@@ -9,6 +9,10 @@ import net from 'node:net';
 /** Floor for guard limits: downloads keep moving even while the tunnel struggles. */
 export const GUARD_MIN_DOWN = 256 * 1024;
 export const GUARD_MIN_UP = 64 * 1024;
+export const GUARD_MIN_CONNECTIONS = 40;
+/** While the guard is active: half-open attempts and new attempts per second, at most. */
+export const GUARD_HALF_OPEN = 8;
+export const GUARD_CONNECTIONS_PER_SECOND = 3;
 /**
  * An RTT above this counts as choking whatever the baseline says: the baseline is learned from
  * the probes, so one learned while the tunnel was already saturated (1.5 s in a stress run) hid
@@ -28,16 +32,22 @@ export interface GuardLimits {
 export interface GuardRates {
   down: number;
   up: number;
+  /** Open plus half-open peer connections right now. */
+  connections: number;
+  /** The user's connection cap (what the guard eases back to). */
+  maxConnections: number;
 }
 
 export class TunnelGuard {
   downloadLimit: number | null = null;
   uploadLimit: number | null = null;
+  /** Peer connection cap, null = the user's. */
+  connectionLimit: number | null = null;
   private baseline: number | null = null;
   private healthy = 0;
 
   get active(): boolean {
-    return this.downloadLimit !== null || this.uploadLimit !== null;
+    return this.downloadLimit !== null || this.uploadLimit !== null || this.connectionLimit !== null;
   }
 
   /** The probe's RTT in ms (-1 = failed or timed out) and the current engine rates. True when the limits changed. */
@@ -52,6 +62,10 @@ export class TunnelGuard {
       this.healthy = 0;
       this.downloadLimit = Math.max(GUARD_MIN_DOWN, Math.round((this.downloadLimit ?? Math.max(rates.down, GUARD_MIN_DOWN * 2)) / 2));
       this.uploadLimit = Math.max(GUARD_MIN_UP, Math.round((this.uploadLimit ?? Math.max(rates.up, GUARD_MIN_UP * 2)) / 2));
+      const from = this.connectionLimit ?? Math.min(rates.maxConnections, Math.max(rates.connections, GUARD_MIN_CONNECTIONS * 2));
+      // Never above the user's cap: a cap already below the floor stays as the user set it.
+      this.connectionLimit = Math.min(rates.maxConnections, Math.max(GUARD_MIN_CONNECTIONS, Math.round(from / 2)));
+      if (this.connectionLimit >= rates.maxConnections) this.connectionLimit = null;
       return true;
     }
     if (!this.active) return false;
@@ -59,14 +73,23 @@ export class TunnelGuard {
     this.healthy = 0;
     this.downloadLimit = raise(this.downloadLimit, rates.down);
     this.uploadLimit = raise(this.uploadLimit, rates.up);
+    this.connectionLimit = raiseConnections(this.connectionLimit, rates.maxConnections);
     return true;
   }
 
   reset(): void {
     this.downloadLimit = null;
     this.uploadLimit = null;
+    this.connectionLimit = null;
     this.healthy = 0;
   }
+}
+
+/** One step up; released (null) once it reaches the user's cap. */
+function raiseConnections(limit: number | null, max: number): number | null {
+  if (limit === null) return null;
+  const next = Math.round(limit * RAISE);
+  return next >= max ? null : next;
 }
 
 /** One step up; released (null) once the limit is well above what the engine actually uses. */
