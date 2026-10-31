@@ -205,11 +205,11 @@ describe('Settings -> Torrent engine', () => {
     expect(within(panel).getByText(/ARCLIGHT_TORRENT_ENGINE=0 keeps the engine from starting/)).toBeTruthy();
   });
 
-  it('says when the tunnel guard is slowing the engine', async () => {
+  it('says when the tunnel guard holds the engine to a safe limit', async () => {
     status = { ...running, tunnelGuard: { downloadLimit: 2 * 1024 * 1024, uploadLimit: 128 * 1024 } };
     renderPage();
     const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
-    expect(within(panel).getByText(/VPN tunnel is struggling/)).toBeTruthy();
+    expect(within(panel).getByText(/To keep the VPN tunnel healthy, the engine is held to/)).toBeTruthy();
   });
 
   it('says when the disk guard holds downloads back and shows the disk write rate', async () => {

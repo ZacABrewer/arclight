@@ -87,7 +87,7 @@ export interface TorrentServiceOptions {
   speedCheckIntervalMs?: number;
   /** Tunnel guard probe: RTT in ms through the VPN, -1 on failure (tests inject one). */
   tunnelProbe?: () => Promise<number>;
-  /** How often the tunnel guard probes. Default 10 s. */
+  /** How often the tunnel guard probes. Default 3 s. */
   tunnelGuardIntervalMs?: number;
   /** How often the disk guard samples the engine's write state. Default 5 s. */
   diskGuardIntervalMs?: number;
@@ -180,7 +180,7 @@ export class TorrentService {
     this.now = opts.now ?? (() => new Date());
     this.speedCheckIntervalMs = opts.speedCheckIntervalMs ?? 30_000;
     this.tunnelProbe = opts.tunnelProbe ?? (() => tcpConnectProbe());
-    this.tunnelGuardIntervalMs = opts.tunnelGuardIntervalMs ?? 10_000;
+    this.tunnelGuardIntervalMs = opts.tunnelGuardIntervalMs ?? 3_000;
     this.diskGuardIntervalMs = opts.diskGuardIntervalMs ?? 5000;
   }
 
@@ -484,7 +484,8 @@ export class TorrentService {
       if (this.sessionValue !== session) return;
       const st = session.getSessionStats();
       const wasActive = this.guard.active;
-      if (!this.guard.observe(rtt, { down: st.downloadRate, up: st.uploadRate, connections: st.connections, maxConnections: s.maxConnections })) return;
+      const rates = { down: st.downloadRate, up: st.uploadRate, connections: st.connections, maxConnections: s.maxConnections, at: this.now().getTime() };
+      if (!this.guard.observe(rtt, rates)) return;
       this.applyRateLimits();
       if (this.guard.active && !wasActive) {
         this.log?.warn(

@@ -214,13 +214,15 @@ Per torrent, Arclight sets the category, the save path, and the ratio and seedin
 
 Behind a VPN on a NAS, a busy engine can fill the tunnel until the VPN container's own health check fails and it restarts the tunnel. Many NAS kernels have no WireGuard module, so gluetun runs WireGuard in userspace, which runs out of packets per second before it runs out of bandwidth. Hundreds of peers keep the tunnel full of small packets at any speed.
 
-Every 10 seconds the guard times a small connection through the tunnel. When that is slow (over 800 ms, or far above the usual time) or fails, it:
+Every 3 seconds the guard times a small connection through the tunnel. The time above the lowest one in the last 15 minutes is how long packets wait in the tunnel. The guard keeps that wait under 150 ms:
 
-1. halves the download and upload limits (never below 256 KiB/s down and 64 KiB/s up);
-2. halves the peer connection cap (never below 40, and never above your Max connections), closing the peers that move the least data;
-3. allows at most 8 connection attempts in progress and 3 new ones per second.
+- **Over 400 ms, over 800 ms in total, or no answer (choking):** the download and upload limits drop to 60% of what flows at that moment, and the guard remembers 85% of that speed as the tunnel's **ceiling**. The peer connection cap is halved (never below 40, and never above your Max connections), closing the peers that move the least data, and at most 8 connection attempts may be in progress, 3 new ones per second. After a cut it waits one check before cutting again, so the tunnel can drain. A direction that carried almost nothing (upload while nothing seeds) is not capped.
+- **150 to 400 ms:** the limits hold.
+- **Under 150 ms:** the limits climb back to the ceiling within a few checks. Above the ceiling they rise only 5% every 30 seconds, and only while downloads actually use the room. A choke at a lower speed lowers the ceiling.
 
-After three healthy checks in a row it raises the limits by half, and it lets go once they are back at your own values. The status at the top of the page and the debug report's `engine` command show what the guard is limiting. It works together with the [Disk guard](#disk-guard); when both limit downloads, the lower limit applies.
+The guard does not let go when the tunnel recovers, because the next burst would fill it again. It forgets the ceiling after 6 hours without a choke. Floors: 256 KiB/s down, 64 KiB/s up.
+
+The status at the top of the page and the debug report's `engine` command show what the guard is limiting. It works together with the [Disk guard](#disk-guard); when both limit downloads, the lower limit applies.
 
 If the tunnel still drops, lower **Max connections** (100 to 150 suits most NAS models behind a VPN) and **Max active downloads** first; those set the load the guard starts from.
 

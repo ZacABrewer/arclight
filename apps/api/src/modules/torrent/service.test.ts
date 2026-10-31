@@ -179,21 +179,34 @@ describe('disk guard', () => {
 });
 
 describe('VPN binding', () => {
-  it('tunnel guard: slows the engine when the tunnel chokes and releases it when healthy', async () => {
+  it('tunnel guard: slows the engine when the tunnel chokes, keeps a safe limit, and forgets it after hours', async () => {
+    const MiB = 1024 * 1024;
     let rtt = 100;
-    const h = await make({ vpn: true, settings: { enabled: true }, service: { tunnelProbe: async () => rtt } });
+    let clock = Date.parse('2026-01-01T00:00:00Z');
+    const h = await make({ vpn: true, settings: { enabled: true }, service: { tunnelProbe: async () => rtt, now: () => new Date(clock) } });
     h.vpn.connect();
     await h.service.start();
     await h.service.applyBinding();
     const s = running(h);
+    const stats = s.getSessionStats.bind(s);
+    let rate = 20 * MiB;
+    s.getSessionStats = () => ({ ...stats(), downloadRate: rate });
     for (let i = 0; i < 3; i++) await h.service.guardTick();
     expect(s.settings.downloadLimit).toBe(0);
     rtt = -1;
     await h.service.guardTick();
-    expect(s.settings.downloadLimit).toBeGreaterThan(0);
+    expect(s.settings.downloadLimit).toBe(12 * MiB);
     expect(h.service.status().tunnelGuard?.downloadLimit).toBe(s.settings.downloadLimit);
+    // healthy again: back up to just under the rate it choked at (85%), not unlimited
     rtt = 100;
-    for (let i = 0; i < 60 && h.service.status().tunnelGuard; i++) await h.service.guardTick();
+    rate = 10 * MiB;
+    for (let i = 0; i < 20; i++) {
+      clock += 3000;
+      await h.service.guardTick();
+    }
+    expect(s.settings.downloadLimit).toBe(17 * MiB);
+    clock += 6 * 60 * 60 * 1000;
+    await h.service.guardTick();
     expect(h.service.status().tunnelGuard).toBeUndefined();
     expect(s.settings.downloadLimit).toBe(0);
   });

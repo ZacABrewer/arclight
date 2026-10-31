@@ -5197,7 +5197,7 @@
   "settings.torrent.torrents": "Torrents",
   "settings.torrent.transport": "Transport",
   "settings.torrent.tunnelGuard": "Tunnel guard",
-  "settings.torrent.tunnelGuardActive": "The VPN tunnel is struggling, so the engine is slowed to {down} down / {up} up with at most {connections} peer connections until it recovers.",
+  "settings.torrent.tunnelGuardActive": "To keep the VPN tunnel healthy, the engine is held to {down} down / {up} up and at most {connections} peer connections. The limit sits just under the speed the tunnel last choked at and rises while the tunnel keeps up.",
   "settings.torrent.tunnelGuardCaption": "With the VPN on, slow the engine down and cut its peer connections automatically when the VPN tunnel starts to choke, so the tunnel stays up. Speeds and connections recover once it is healthy again.",
   "settings.torrent.unlimited": "unlimited",
   "settings.torrent.uploadLimit": "Upload limit",
