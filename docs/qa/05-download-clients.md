@@ -86,7 +86,7 @@ For API-only checks, `<key>` is the API key shown at Settings -> Security and `<
 | ID | Step | Expected result | Pass/Fail |
 |---|---|---|---|
 | DLC-41 | Open Settings -> Torrent Engine. | Page "Torrent Engine" with a "Live status" card (State, Listen port, Bound address, VPN binding, DHT nodes, Peers, Download, Upload, Torrents) and an "Engine" card with the settings form. State shows a green "Running". | |
-| DLC-42 | Read the form fields. | Toggles: Enable engine, Auto-register client, DHT, Peer exchange, Bind to VPN. Numbers: Listen port (6881), Max connections (200), Max connections per torrent (50), Download limit (KiB/s) (0), Upload limit (KiB/s) (0), Max active downloads (3), Max active seeds (5), Default seed ratio, Default seed time (minutes). Text: Downloads folder, Resume data folder (read-only). | |
+| DLC-42 | Read the form fields. | Toggles: Enable engine, Auto-register client, DHT, Peer exchange, Bind to VPN. Numbers: Listen port (6881), Max connections (200), Max connections per torrent (50), Download limit (KiB/s) (0), Upload limit (KiB/s) (0), Max active downloads (3), Max active seeds (5), Default seed ratio, Default seed time (minutes), Max simultaneous checks (2), Magnet metadata timeout (60). Toggles also include Disk guard (on) and Tunnel guard. Text: Downloads folder, Resume data folder (read-only). | |
 | DLC-43 | Set Listen port to 6999 and click Save. | A short confirmation appears, and after a few seconds "Listen port" in Live status shows 6999. | |
 | DLC-44 | Enter 0 in Listen port or 70000 and Save. | The save is refused with a validation message (valid range 1 to 65535). | |
 | DLC-45 | Set Download limit to 500 KiB/s, add a large torrent, and watch Download in Live status. | The download rate stays at or below roughly 500 KiB/s. Set it back to 0 (unlimited). | |
@@ -111,3 +111,33 @@ For API-only checks, `<key>` is the API key shown at Settings -> Security and `<
 | DLC-59 | Open the "Peers" and "Trackers" tabs. | Peers shows address, client, source, flags and rates (or "No peers connected"). Trackers shows URL, tier, state and seeds/leechers (or "No trackers" for magnet/DHT only). | |
 | DLC-60 | Move a torrent's data via API: `curl -X POST http://<host>/api/v1/torrent/<id>/move -H "X-Api-Key: <key>" -H "Content-Type: application/json" -d "{\"savePath\":\"D:\\\\Torrents\\\\moved\"}"` (the id is the queue row's download id). | The reply is OK and the General tab's Save path changes to the new folder. | |
 | DLC-61 | Click "Remove" on the queue row with "Remove from download client" ticked. | The torrent disappears from the engine (`GET /api/v1/torrent/torrents` no longer lists it). | |
+
+## Engine: disk, checks, metadata and resume
+
+| ID | Step | Expected result | Pass/Fail |
+|---|---|---|---|
+| DLC-62 | Open Settings -> Torrent Engine, section "Disk". | A "Disk guard" toggle, on by default. In Live status a "Disk writes" line shows the write speed and the amount waiting. | |
+| DLC-63 | (Needs a slow or busy disk.) Add several large torrents while copying a big file to the same disk. | While data piles up, a notice says downloads are held to a limit because the disk is falling behind. The limit is about 90% of the shown write speed and not below 1 MiB/s. Stop the copy: within a minute or so the limit rises step by step and the notice goes away. | |
+| DLC-64 | Set a Download limit of 500 KiB/s while the disk guard limits at a higher value. | The lower limit wins: the rate stays at or below 500 KiB/s. | |
+| DLC-65 | Untick Disk guard, Save. Copy a big file to the download disk during a download. | No disk notice appears and downloads are not held. Tick it again afterwards. | |
+| DLC-66 | Copy the debug report (System -> Debugging) and find the `engine` command. | It lists "disk guard" (either "not limiting" or "limiting downloads to ...") and, while checks run, "data checks N running, M waiting". | |
+| DLC-67 | Set "Max simultaneous checks" to 1, put the files of three torrents on disk and add the three torrents. | Only one shows "checking" at a time. The Live status "Data checks" line reads "1 running · 2 waiting". They finish in the order they were added. Set the field back to 2. | |
+| DLC-68 | Set "Max simultaneous checks" to 0 or 17 and Save. | The save is refused (valid range 1 to 16). | |
+| DLC-69 | Set "Magnet metadata timeout" to 1, add a magnet of a dead release (a made-up hash) and wait about 2 minutes. | The download fails with "no metadata after 1 minute: no peers had this magnet" and goes through the normal failed-download handling (removed, blocklisted, next release searched). | |
+| DLC-70 | Set "Magnet metadata timeout" to 0 and repeat DLC-69 for 5 minutes. | The magnet keeps waiting on "Fetching metadata" and does not fail. Set the field back to 60. | |
+| DLC-71 | Download a large torrent to about 50%, then kill the process hard (`docker kill arclight`, or end the process) and start it again. | The torrent comes back at about the same percentage without a full recheck. Only a short check of the pieces in flight runs. | |
+| DLC-72 | With a compose file from this release, run `docker compose stop` during a download and time it. Then check the `arclight` service in the compose file. | The container stops cleanly, within about 6 seconds of engine shutdown. The service has `stop_grace_period: 30s`. After the next start the torrent resumes without a full recheck. | |
+| DLC-73 | During a download, watch the torrent's Progress. | Progress counts only verified pieces, so it never drops after a piece was shown as done. | |
+
+## Grabs, repeats and clean-up
+
+| ID | Step | Expected result | Pass/Fail |
+|---|---|---|---|
+| DLC-74 | Add a torrent to qBittorrent by hand in Arclight's category, then grab the same release in Arclight. | The grab counts as done, the queue tracks the existing torrent, and no second copy or "already exists" error appears. Repeat with the built-in engine. | |
+| DLC-75 | Remove a download from the queue (Remove from download client ticked), then right away search and grab the same release. | The grab is skipped and the log says the same release was removed moments ago. After 30 minutes it can be grabbed again. | |
+| DLC-76 | On a queue row use "Try another release" with the blocklist box unticked. | A different release is grabbed, not the one you just removed. | |
+| DLC-77 | Make a client delete each torrent as soon as it is added, then grab one release repeatedly (for example four times within an hour). | After the third send, further grabs of that release to that client are held, and the log says so. The hold is 15 minutes, then doubles each time, up to 6 hours. | |
+| DLC-78 | Make a client refuse a release (for example a broken `.torrent`) while another release for the same item exists. | The refused release fails and the next release is tried. The grab is not parked. Stop the client entirely: the grab is parked and retried a few minutes later. | |
+| DLC-79 | With Remove Completed on, add a torrent by hand to Arclight's category, let it finish, and let Arclight import it. | It is imported but stays in the client; the log says Arclight did not grab it. A torrent Arclight grabbed is removed with its files once its seeding goal is met, and the removal shows on the download's timeline and in the log. | |
+| DLC-80 | Start two downloads that write into the same source folder (for example two episodes of one season pack folder), let one import. | The shared source folder is not cleaned up while the other download is active. | |
+| DLC-81 | Turn on "Mirror to qBittorrent", switch alternative speed limits on in qBittorrent by hand, then use slow mode in Arclight and turn it off. | Arclight does not switch off the alternative limits that you switched on yourself. Limits Arclight switched on are switched off again. | |

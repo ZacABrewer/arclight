@@ -42,7 +42,12 @@ ENV NODE_ENV=production \
     ARCLIGHT_FFMPEG=/usr/lib/jellyfin-ffmpeg/ffmpeg \
     ARCLIGHT_FFPROBE=/usr/lib/jellyfin-ffmpeg/ffprobe \
     PUID=1000 \
-    PGID=1000
+    PGID=1000 \
+    UV_THREADPOOL_SIZE=16
+# UV_THREADPOOL_SIZE: Node runs every file read and write, stat and DNS lookup on libuv's
+# threadpool (4 threads by default). On a disk that falls behind, a few slow writes held all
+# four, and seeding reads, resume saves and tracker/indexer DNS lookups waited behind them.
+# The torrent engine keeps at most 4 writes in flight; 16 threads leave room for the rest.
 # gosu/tini for the entrypoint. npm, corepack and yarn are not needed at runtime.
 RUN apt-get update && apt-get install -y --no-install-recommends gosu tini ca-certificates && rm -rf /var/lib/apt/lists/* \
  && rm -rf /usr/local/lib/node_modules /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack /opt/yarn-* /usr/local/bin/yarn /usr/local/bin/yarnpkg

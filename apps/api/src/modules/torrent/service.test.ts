@@ -80,6 +80,10 @@ describe('engine lifecycle', () => {
     await h.service.updateSettings({ downloadLimitKbps: 100, uploadLimitKbps: 50, maxActiveDownloads: 1, defaultSeedRatio: 2, defaultSeedTimeMinutes: 10 });
     expect(h.service.session).toBe(before);
     expect(before.settings).toMatchObject({ downloadLimit: 102_400, uploadLimit: 51_200, maxActiveDownloads: 1, seedRatioLimit: 2, seedTimeLimitMs: 600_000 });
+    // Disk-bound defaults: two checks at once, magnets fail after an hour without metadata.
+    expect(before.settings).toMatchObject({ maxActiveChecks: 2, metadataTimeoutMs: 3_600_000 });
+    await h.service.updateSettings({ maxActiveChecks: 1, metadataTimeoutMinutes: 0 });
+    expect(before.settings).toMatchObject({ maxActiveChecks: 1, metadataTimeoutMs: 0 });
   });
 
   it('moves the listener when the port changes and restarts when DHT is toggled', async () => {
@@ -118,6 +122,59 @@ describe('engine lifecycle', () => {
     await h.service.stop();
     await h.service.start();
     expect(running(h).getTorrent(t.infoHashHex)?.category).toBe('tv');
+  });
+});
+
+describe('disk guard', () => {
+  const MiB = 1024 * 1024;
+
+  it('limits downloads to what the disk writes while it falls behind, shows it, and lets go when it keeps up', async () => {
+    let clock = Date.parse('2026-01-01T00:00:00Z');
+    const h = await make({ settings: { enabled: true }, service: { now: () => new Date(clock) } });
+    await h.service.start();
+    const session = running(h);
+    let disk = { writtenBytes: 0, writeLatencyMs: 5, queuedWrites: 0, backlogBytes: 0, backlogLimitBytes: 64 * MiB, backpressured: 0, checksActive: 0, checksQueued: 0 };
+    session.getDiskStats = () => disk;
+    const step = (writeRate: number, patch: Partial<typeof disk> = {}): void => {
+      clock += 5000;
+      disk = { ...disk, ...patch, writtenBytes: disk.writtenBytes + writeRate * 5 };
+      h.service.diskGuardTick();
+    };
+    h.service.diskGuardTick();
+    step(15 * MiB, { backlogBytes: 2 * MiB });
+    expect(session.settings.downloadLimit).toBe(0);
+    expect(h.service.status().diskGuard).toMatchObject({ downloadLimit: null, writeRate: 15 * MiB, backlogBytes: 2 * MiB });
+    // The backlog fills: the limit drops to a little under the measured write rate.
+    step(15 * MiB, { backlogBytes: 48 * MiB, backpressured: 1 });
+    const limit = Math.round(15 * MiB * 0.9);
+    expect(session.settings.downloadLimit).toBe(limit);
+    expect(h.service.status().diskGuard).toMatchObject({ downloadLimit: limit, backlogBytes: 48 * MiB });
+    // A tighter user limit wins.
+    await h.service.updateSettings({ downloadLimitKbps: 4096 });
+    expect(session.settings.downloadLimit).toBe(4 * MiB);
+    await h.service.updateSettings({ downloadLimitKbps: 0 });
+    expect(session.settings.downloadLimit).toBe(limit);
+    // Healthy and downloads are slow now: released.
+    for (let i = 0; i < 60 && h.service.status().diskGuard?.downloadLimit !== null; i++) step(MiB, { backlogBytes: 0, backpressured: 0 });
+    expect(h.service.status().diskGuard?.downloadLimit).toBeNull();
+    expect(session.settings.downloadLimit).toBe(0);
+  });
+
+  it('switched off: no limit and nothing in the status', async () => {
+    let clock = Date.parse('2026-01-01T00:00:00Z');
+    const h = await make({ settings: { enabled: true }, service: { now: () => new Date(clock) } });
+    await h.service.start();
+    const session = running(h);
+    let written = 0;
+    session.getDiskStats = () => ({ writtenBytes: (written += 50 * MiB), writeLatencyMs: 5, queuedWrites: 0, backlogBytes: 60 * MiB, backlogLimitBytes: 64 * MiB, backpressured: 2, checksActive: 0, checksQueued: 0 });
+    h.service.diskGuardTick();
+    clock += 5000;
+    h.service.diskGuardTick();
+    expect(session.settings.downloadLimit).toBeGreaterThan(0);
+    await h.service.updateSettings({ diskGuard: false });
+    h.service.diskGuardTick();
+    expect(session.settings.downloadLimit).toBe(0);
+    expect(h.service.status().diskGuard).toBeUndefined();
   });
 });
 

@@ -181,11 +181,16 @@ describe('addTorrent', () => {
     expect(fake.methods('label.add')).toHaveLength(0);
   });
 
-  it('rejects duplicates, null results and invalid input', async () => {
+  it('treats a duplicate as already present; rejects null results and invalid input', async () => {
     fake.labels = ['tv'];
     fake.addTorrent(MAGNET_HASH, { name: 'dup', state: 'Seeding' });
-    const dup = await expectError(client().addTorrent({ magnet: MAGNET, title: 'x', category: 'tv' }), 'rejected');
-    expect(dup.message).toMatch(/already in session/);
+    const dup = await client().addTorrent({ magnet: MAGNET, title: 'x', category: 'tv' });
+    expect(dup).toEqual({ id: MAGNET_HASH, warnings: [], alreadyPresent: true });
+    expect(fake.methods('label.set_torrent')).toHaveLength(0);
+
+    // Deluge 1.3 answers null for a duplicate.
+    fake.override('core.add_torrent_magnet', () => null);
+    expect(await client().addTorrent({ magnet: MAGNET, title: 'x', category: 'tv' })).toMatchObject({ alreadyPresent: true });
 
     fake.override('core.add_torrent_file', () => null);
     await expectError(client().addTorrent({ torrentFile: V1_TORRENT, title: 'x', category: 'tv' }), 'rejected');

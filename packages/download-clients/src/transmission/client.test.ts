@@ -178,9 +178,13 @@ describe('addTorrent', () => {
     expect(result.warnings).toEqual([expect.stringMatching(/Could not set seed limits: .*invalid argument/)]);
   });
 
-  it('rejects duplicates and invalid input', async () => {
+  it('treats a duplicate as already present and rejects invalid input', async () => {
     await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' });
-    await expectError(client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight' }), 'rejected');
+    const setsBefore = fake.rpc('torrent-set').length;
+    const again = await client().addTorrent({ magnet: MAGNET, title: 'Show', category: 'arclight', seedRatioLimit: 2 });
+    expect(again).toEqual({ id: MAGNET_HASH, warnings: [], alreadyPresent: true });
+    // Labels and seed limits of the existing torrent are left alone.
+    expect(fake.rpc('torrent-set')).toHaveLength(setsBefore);
     await expectError(client().addTorrent({ magnet: 'magnet:?dn=nothing', title: 'x', category: '' }), 'rejected');
     await expectError(client().addTorrent({ title: 'x', category: '' }), 'rejected');
   });

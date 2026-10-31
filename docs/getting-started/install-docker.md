@@ -54,6 +54,8 @@ docker compose -f docker-compose.release.yml --profile qbittorrent up -d
 
 In the VPN layouts the WebUI port line (`8080`) on the `gluetun` service is commented out; uncomment it to reach the qBittorrent WebUI from your LAN. In the no-VPN layouts the service publishes 8080 and 6881 itself. Then follow [Using qBittorrent](#using-qbittorrent) after the stack is up. If you install through a tool that cannot use profiles, copy the `qbittorrent` service block out of the compose file instead.
 
+The `arclight` service in every compose file sets `stop_grace_period: 30s`. Docker waits 10 seconds by default before it kills a stopping container, and the torrent engine needs a few seconds to finish its writes and save resume data. Keep that line if you write your own file; see [Resume data and shutdown](../using/download-clients.md#resume-data-and-shutdown).
+
 The compose files and `.env.example` are attached to every GitHub release and live in the repository's `docker/` folder. The helper scripts in `scripts/` are only in the repository, so download or clone the whole repository for a VPN layout.
 
 ## 2. Create the folders

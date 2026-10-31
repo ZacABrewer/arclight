@@ -237,6 +237,60 @@ describe('Storage', () => {
     await s3.close();
   });
 
+  it('resumes when a file was created after the save instead of re-checking everything', async () => {
+    const dir = await tmp();
+    const { meta, payload } = fixture();
+    // Saved with only piece 0 verified: sub/f3.bin did not exist yet.
+    const s = new Storage(meta, { savePath: dir });
+    await s.writeBlock(0, 0, payload.subarray(0, BLOCK_SIZE));
+    await s.writeBlock(0, BLOCK_SIZE, payload.subarray(BLOCK_SIZE, PIECE));
+    expect(await s.verifyPiece(0)).toBe(true);
+    const stats = await s.fileStats();
+    expect(stats[3]).toBeNull();
+    const saved = s.have.toBuffer();
+    // Then, before the next save, piece 3 (f3 only) arrived and the process was killed.
+    await s.writeBlock(3, 0, payload.subarray(3 * PIECE, 3 * PIECE + s.layout.pieceSize(3)));
+    expect(await s.verifyPiece(3)).toBe(true);
+    await s.close();
+    const s2 = new Storage(meta, { savePath: dir });
+    expect(await s2.tryResume(saved, stats)).toBe(true);
+    expect([...s2.have.indices()]).toEqual([0]);
+    await s2.close();
+  });
+
+  it('tracks half-written pieces and re-hashes them on resume after a crash', async () => {
+    const dir = await tmp();
+    const { meta, payload } = fixture();
+    const s = new Storage(meta, { savePath: dir });
+    await writeAll(s, payload);
+    const stats = await s.fileStats();
+    await s.close();
+    // The save happened while piece 3 was half-written; it was finished and verified later.
+    const atSave = s.have.clone();
+    atSave.set(3, false);
+    const w = new Storage(meta, { savePath: await tmp() });
+    await w.writeBlock(3, 0, payload.subarray(3 * PIECE, 3 * PIECE + 100));
+    expect(w.partialPieces).toEqual([3]);
+    await w.close();
+    const later = new Date(Date.now() + 3600_000);
+    await utimes(join(dir, 'pack', 'sub', 'f3.bin'), later, later);
+    const s2 = new Storage(meta, { savePath: dir });
+    expect(await s2.tryResume(atSave.toBuffer(), stats, [3])).toBe(true);
+    expect(s2.have.hasAll()).toBe(true);
+    expect(s2.partialPieces).toEqual([]);
+    await s2.close();
+  });
+
+  it('knows whether there is any data on disk to check', async () => {
+    const dir = await tmp();
+    const { meta, payload } = fixture();
+    const s = new Storage(meta, { savePath: dir });
+    expect(await s.hasDataOnDisk()).toBe(false);
+    await s.writeBlock(0, 0, payload.subarray(0, BLOCK_SIZE));
+    expect(await s.hasDataOnDisk()).toBe(true);
+    await s.close();
+  });
+
   it('keeps skipped files out of the payload via a parts file and migrates on re-enable', async () => {
     const dir = await tmp();
     const { meta, files, payload } = fixture();

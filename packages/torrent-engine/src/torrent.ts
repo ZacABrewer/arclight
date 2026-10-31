@@ -24,6 +24,7 @@ import type { Handshake } from './peer/messages.js';
 import { ALL_PIECES, bitfieldPieces, type PeerPieces, PiecePicker } from './picker.js';
 import { consumeAll, RateMeter, TokenBucket } from './rate.js';
 import type { SessionSettings } from './settings.js';
+import type { DiskIo } from './storage/io.js';
 import type { ResumeData } from './storage/resume.js';
 import { Storage } from './storage/storage.js';
 import { TrackerManager, type TrackerStatus } from './tracker/tracker-manager.js';
@@ -142,6 +143,16 @@ export interface TorrentContext {
   canOpen: () => boolean;
   isBlocked: (ip: string) => boolean;
   trackerFactory: (url: string) => TrackerClient | null;
+  /** The session's disk write scheduler, shared by every torrent's storage. */
+  io: DiskIo;
+  /**
+   * Waits for one of the session's check slots (see `maxActiveChecks`) and returns its release.
+   * Waiting torrents are served in queue order (`priority` = queue position). Rejects when
+   * `signal` aborts first.
+   */
+  checkSlot: (signal: AbortSignal, priority: number) => Promise<() => void>;
+  /** Runs an upload's disk read under the session's read budget (smaller while writes lag). */
+  uploadRead: <T>(read: () => Promise<T>) => Promise<T>;
   now: () => number;
 }
 
@@ -169,6 +180,10 @@ export interface TorrentEvents {
   error: [error: Error];
   /** Metadata became available (after a magnet fetch). */
   metadata: [];
+  /** A downloaded piece passed its hash check (its resume data is out of date now). */
+  verified: [piece: number];
+  /** The data needs a full check and the torrent now waits for (or holds) a check slot. */
+  checkQueued: [];
   seedLimitReached: [];
   warning: [message: string];
 }
@@ -271,6 +286,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   private readonly downloadBucket: TokenBucket;
   private webSeeds: WebSeedManager | null = null;
   private webSeedPickerSeeds = 0;
+  /** Aborts a check in progress (or waiting for a slot) when the torrent closes. */
+  private checkAbort: AbortController | null = null;
+  /** Blocks received and still being written or verified (awaited on close). */
+  private readonly receiving = new Set<Promise<void>>();
+  /** Active time at which the wait for metadata (re)started (see metadataTimeoutMs). */
+  private metadataWaitFrom = 0;
 
   constructor(
     private readonly ctx: TorrentContext,
@@ -307,6 +328,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       this.activeTimeMs = r.activeTimeMs;
       this.addedAt = r.addedAt;
       this.completedAt = r.completedAt;
+      this.metadataWaitFrom = r.metadataWaitFromMs ?? 0;
     }
     for (const p of init.magnet?.peers ?? []) this.addCandidate(p, 'manual');
     this.lastState = this.state;
@@ -363,6 +385,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   /** Outgoing attempts still connecting (half-open). */
   get connectingCount(): number {
     return this.connecting.size;
+  }
+
+  /** Bytes waiting for disk, the backlog limit and whether requests are paused for it (null without storage). */
+  get writeState(): { backlogBytes: number; limitBytes: number; backpressure: boolean } | null {
+    const s = this.storage;
+    return s ? { backlogBytes: s.writeBacklog, limitBytes: s.writeBacklogLimit, backpressure: s.writeBackpressure } : null;
   }
 
   /** This torrent's share of the session's cache and write backlog, once the session set one. */
@@ -428,7 +456,14 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       return;
     }
     const settings = this.ctx.settings();
+    // A re-check replaces the storage: let the old one finish its writes and close its files.
+    const previous = this.storage;
+    if (previous) {
+      await previous.flushWrites();
+      await previous.close();
+    }
     const opts: ConstructorParameters<typeof Storage>[1] = {
+      io: this.ctx.io,
       savePath: this.savePathValue,
       cacheBytes: this.memoryBudget?.cacheBytes ?? settings.cacheBytesPerTorrent,
       ...(this.memoryBudget ? { writeBacklogBytes: this.memoryBudget.writeBacklogBytes } : {}),
@@ -447,18 +482,37 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.picker.setFilePriorities(this.storage.filePriorities);
     this.checking = true;
     this.updateState();
+    const abort = new AbortController();
+    this.checkAbort = abort;
+    const storage = this.storage;
     try {
+      // Fast resume needs no slot: a few stats and at most a handful of pieces re-hashed.
       const resumed =
         resume !== undefined &&
         resume.pieceCount === meta.pieceCount &&
-        (await this.storage.tryResume(Buffer.from(resume.bitfield, 'base64'), resume.fileStats));
-      if (!resumed) await this.storage.recheck();
-      await this.storage.createEmptyFiles();
+        (await storage.tryResume(Buffer.from(resume.bitfield, 'base64'), resume.fileStats, resume.partialPieces));
+      // A full check reads every byte on disk, so it waits for a session check slot. Without
+      // any data there is nothing to hash (a fresh download): it starts right away.
+      if (!resumed && (await storage.hasDataOnDisk())) {
+        this.emit('checkQueued');
+        const release = await this.ctx.checkSlot(abort.signal, this.queuePosition);
+        try {
+          await storage.recheck(undefined, abort.signal);
+        } finally {
+          release();
+        }
+      }
+      await storage.createEmptyFiles();
     } catch (err) {
+      // Closed (shutdown, removal) mid-check: nothing failed, the last resume data stays.
+      if (abort.signal.aborted || this.closed) return;
       this.checking = false;
       this.fail(err);
       return;
+    } finally {
+      if (this.checkAbort === abort) this.checkAbort = null;
     }
+    if (this.closed) return;
     this.checking = false;
     this.wantedLeft = this.picker.wantedRemaining;
     if (this.wantedLeft === 0 && !this.completedAt) this.completedAt = new Date(this.ctx.now()).toISOString();
@@ -507,6 +561,8 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   resume(): void {
     this.userPaused = false;
     this.seedLimitHit = false;
+    // A magnet that timed out gets a fresh metadata wait.
+    this.metadataWaitFrom = this.activeTimeMs;
     if (this.failure && this.metainfo) {
       this.failure = null;
       void this.setupStorage();
@@ -522,11 +578,23 @@ export class Torrent extends EventEmitter<TorrentEvents> {
     this.updateState();
   }
 
-  /** Stops everything; optionally deletes downloaded data. */
-  async close(opts: { deleteData?: boolean; announce?: boolean } = {}): Promise<void> {
+  /**
+   * Stops everything; optionally deletes downloaded data. Blocks already received finish
+   * writing and verifying first (up to `flushTimeoutMs`), then `beforeClose` runs (the session
+   * saves resume data there), while the `stopped` announce is under way.
+   */
+  async close(
+    opts: { deleteData?: boolean; announce?: boolean; flushTimeoutMs?: number; beforeClose?: () => Promise<void> } = {},
+  ): Promise<void> {
     this.closed = true;
-    await this.stopNetworking(opts.announce ?? true);
+    this.checkAbort?.abort();
+    const stopped = this.stopNetworking(opts.announce ?? true);
     this.active = false;
+    if (this.storage && !opts.deleteData && this.receiving.size > 0) {
+      await settleWithin([...this.receiving], opts.flushTimeoutMs ?? 5000);
+    }
+    await opts.beforeClose?.();
+    await stopped;
     if (this.storage) {
       if (opts.deleteData) await this.storage.deleteFiles().catch(() => {});
       await this.storage.close();
@@ -535,7 +603,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
 
   /** Re-hashes everything on disk. */
   async forceRecheck(): Promise<void> {
-    if (!this.metainfo || !this.storage) return;
+    if (!this.metainfo || !this.storage || this.checking) return;
     const wasActive = this.active;
     await this.setActive(false);
     await this.setupStorage();
@@ -993,7 +1061,17 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   }
 
   /** Stores a block from a peer or web seed (`key`), verifying the piece once complete. */
-  private async receiveBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
+  private receiveBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
+    const p = this.storeBlock(key, index, begin, data, refill);
+    this.receiving.add(p);
+    const done = (): void => {
+      this.receiving.delete(p);
+    };
+    void p.then(done, done);
+    return p;
+  }
+
+  private async storeBlock(key: string, index: number, begin: number, data: Buffer, refill: () => void): Promise<void> {
     const picker = this.picker;
     const storage = this.storage;
     if (!picker || !storage || storage.have.get(index)) return;
@@ -1019,6 +1097,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       return;
     }
     picker.pieceVerified(index);
+    this.emit('verified', index);
     if (picker.piecePriority(index) > 0) this.wantedLeft = Math.max(0, this.wantedLeft - 1);
     for (const other of this.peers.values()) if (!other.haveAll && other.conn.handshaken) other.conn.have(index);
     if (this.wantedLeft === 0) await this.onComplete();
@@ -1193,7 +1272,12 @@ export class Torrent extends EventEmitter<TorrentEvents> {
           continue;
         }
         try {
-          const data = await storage.read(r.index, r.begin, r.length);
+          // Blocks still in memory go out at once; disk reads share the session's read budget,
+          // which shrinks while writes lag so uploads keep a trickle without adding to the queue.
+          const { index, begin, length } = r;
+          const data = storage.isCached(index, begin, length)
+            ? await storage.read(index, begin, length)
+            : await this.ctx.uploadRead(() => storage.read(index, begin, length));
           if (await p.conn.sendPiece(r.index, r.begin, data)) {
             this.uploadedSession += r.length;
             this.upMeter.add(r.length);
@@ -1347,6 +1431,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       this.sendPex();
     }
     if (seeding) this.checkSeedLimits();
+    if (!this.metainfo && this.metadataTimedOut(settings.metadataTimeoutMs)) return;
     if (this.webSeeds) this.webSeeds.tick();
     else if (!seeding && this.metainfo && (this.metainfo.urlList.length > 0 || (this.magnet?.webSeeds.length ?? 0) > 0)) this.startWebSeeds();
     if (this.superSeedingActive) for (const p of this.peers.values()) if (p.conn.handshaken && p.offered === null) this.superOffer(p);
@@ -1388,6 +1473,16 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       this.seedLimitHit = true;
       this.emit('seedLimitReached');
     }
+  }
+
+  /**
+   * Fails a magnet that waited `limitMs` of active time without metadata, so the download
+   * client layer sees a failed download it can replace instead of a magnet sitting for days.
+   */
+  private metadataTimedOut(limitMs: number): boolean {
+    if (limitMs <= 0 || this.activeTimeMs - this.metadataWaitFrom < limitMs) return false;
+    this.fail(new TorrentEngineError('timeout', `no metadata after ${durationText(limitMs)}: no peers had this magnet`));
+    return true;
   }
 
   /** True once a seed limit fired (cleared by `resume`). */
@@ -1515,6 +1610,7 @@ export class Torrent extends EventEmitter<TorrentEvents> {
   /** Snapshot for fast resume. */
   async resumeData(): Promise<ResumeData> {
     const storage = this.storage;
+    const partial = storage && !this.checking ? storage.partialPieces : [];
     return {
       version: 1,
       infoHash: this.infoHashHex,
@@ -1541,11 +1637,35 @@ export class Torrent extends EventEmitter<TorrentEvents> {
       ...this.limits,
       queuePosition: this.queuePosition,
       forceStart: this.forceStart,
+      ...(partial.length > 0 ? { partialPieces: partial } : {}),
+      ...(this.metadataWaitFrom > 0 ? { metadataWaitFromMs: this.metadataWaitFrom } : {}),
     };
   }
 
   /** Original magnet URI, kept so magnets without metadata survive restarts. */
   magnetUri: string | undefined;
+}
+
+/** Resolves once every promise settled or `ms` passed, whichever comes first. */
+function settleWithin(promises: Promise<unknown>[], ms: number): Promise<void> {
+  return new Promise((resolve) => {
+    const timer = setTimeout(resolve, ms);
+    timer.unref();
+    void Promise.allSettled(promises).then(() => {
+      clearTimeout(timer);
+      resolve();
+    });
+  });
+}
+
+/** "60 minutes", "90 seconds". */
+function durationText(ms: number): string {
+  if (ms >= 60_000) {
+    const m = Math.round(ms / 60_000);
+    return `${m} minute${m === 1 ? '' : 's'}`;
+  }
+  const sec = Math.max(1, Math.round(ms / 1000));
+  return `${sec} second${sec === 1 ? '' : 's'}`;
 }
 
 /** Seconds of data that may be requested ahead while a download limit applies. */

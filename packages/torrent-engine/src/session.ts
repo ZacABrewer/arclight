@@ -13,6 +13,7 @@ import { PeerListener } from './peer/listener.js';
 import { mseReq2 } from './peer/mse.js';
 import { TokenBucket } from './rate.js';
 import { DEFAULT_SETTINGS, type SessionSettings } from './settings.js';
+import { DiskIo, Semaphore } from './storage/io.js';
 import {
   deleteResumeData,
   listResumeData,
@@ -96,8 +97,35 @@ export interface SessionStats {
   listenAddress: string | null;
 }
 
-/** Restored torrents whose data is checked at the same time (see `restore`). */
-const RESTORE_CHECKS = 2;
+/** How the disk keeps up with downloads, session-wide (see `Session.getDiskStats`). */
+export interface DiskStats {
+  /** Bytes written to disk since the session started. */
+  writtenBytes: number;
+  /** Moving average of one block write's time on disk (ms). */
+  writeLatencyMs: number;
+  /** Block writes waiting for one of the session's write slots. */
+  queuedWrites: number;
+  /** Bytes received and not on disk yet, every torrent. */
+  backlogBytes: number;
+  /** Sum of the downloading torrents' write backlog limits (0 while nothing downloads). */
+  backlogLimitBytes: number;
+  /** Torrents that stopped requesting blocks until their write backlog drains. */
+  backpressured: number;
+  /** Full data checks running, and waiting for a slot (see maxActiveChecks). */
+  checksActive: number;
+  checksQueued: number;
+}
+
+/**
+ * Restored torrents set up at the same time (see `restore`). Fast resume takes milliseconds;
+ * a torrent that needs a full check hands it to the session's check slots and the next starts.
+ */
+const RESTORE_WORKERS = 4;
+/** Upload disk reads in flight at once, session-wide; one while writes lag behind. */
+const UPLOAD_READS = 16;
+const UPLOAD_READS_BACKLOGGED = 1;
+/** How often the upload read budget looks at the write backlog again (ms). */
+const UPLOAD_BUDGET_CHECK_MS = 500;
 /** Smallest cache share and write backlog per downloading torrent. */
 const CACHE_SHARE_MIN = 4 * 1024 * 1024;
 const PEER_ID_CHARS = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz';
@@ -146,6 +174,15 @@ export class Session extends EventEmitter<SessionEvents> {
   private nextQueuePosition = 0;
   private queueScheduled = false;
   private resumeTimer: NodeJS.Timeout | undefined;
+  /** Torrents with pieces verified since their last resume save, and the timer that saves them. */
+  private readonly dirty = new Set<Torrent>();
+  private dirtyTimer: NodeJS.Timeout | undefined;
+  /** Per torrent: the resume save in progress (saves of one torrent never overlap). */
+  private readonly saving = new Map<string, Promise<void>>();
+  private readonly io: DiskIo;
+  private readonly checks: Semaphore;
+  private readonly uploadReads = new Semaphore(UPLOAD_READS);
+  private uploadBudgetAt = 0;
   private started = false;
   /** Restored torrents still being checked in the background (see `whenRestored`). */
   private restoring: Promise<void> = Promise.resolve();
@@ -159,6 +196,8 @@ export class Session extends EventEmitter<SessionEvents> {
     this.peerId = generatePeerId(this.settingsValue.peerIdPrefix);
     this.uploadBucket = new TokenBucket(this.settingsValue.uploadLimit);
     this.downloadBucket = new TokenBucket(this.settingsValue.downloadLimit);
+    this.io = new DiskIo();
+    this.checks = new Semaphore(this.settingsValue.maxActiveChecks);
     const lOpts: ConstructorParameters<typeof PeerListener>[0] = {
       encryption: () => this.settingsValue.encryption,
       findInfoHash: (req2) => this.findInfoHashByReq2(req2),
@@ -374,6 +413,27 @@ export class Session extends EventEmitter<SessionEvents> {
     return this.connectionCount() < this.settingsValue.maxConnections;
   }
 
+  /** True while the disk is behind: writes wait for a slot or a torrent is in backpressure. */
+  private writesLagging(): boolean {
+    if (this.io.queuedWrites > 0) return true;
+    for (const t of this.torrentsById.values()) if (t.writeState?.backpressure) return true;
+    return false;
+  }
+
+  /**
+   * Seeding reads while downloads write: normally a handful at once, a single one while writes
+   * lag. Uploads keep a trickle instead of stopping, and do not add to the disk queue the
+   * writes are waiting in.
+   */
+  private uploadRead<T>(read: () => Promise<T>): Promise<T> {
+    const now = this.now();
+    if (now - this.uploadBudgetAt >= UPLOAD_BUDGET_CHECK_MS) {
+      this.uploadBudgetAt = now;
+      this.uploadReads.limit = this.writesLagging() ? UPLOAD_READS_BACKLOGGED : UPLOAD_READS;
+    }
+    return this.uploadReads.run(read);
+  }
+
   private context(): TorrentContext {
     return {
       peerId: this.peerId,
@@ -388,6 +448,9 @@ export class Session extends EventEmitter<SessionEvents> {
       canConnect: () => this.canConnect(),
       canOpen: () => this.canOpen(),
       requestBudget: () => this.requestBudget(),
+      io: this.io,
+      checkSlot: (signal, priority) => this.checks.acquire(signal, priority),
+      uploadRead: (read) => this.uploadRead(read),
       isBlocked: (ip) => this.opts.isBlocked?.(ip) ?? false,
       trackerFactory: (url) => {
         const fOpts: TrackerClientFactoryOptions = { userAgent: this.settingsValue.userAgent };
@@ -474,6 +537,7 @@ export class Session extends EventEmitter<SessionEvents> {
       this.emit('completed', t);
       void this.saveResumeData(t);
     });
+    t.on('verified', () => this.markDirty(t));
     // 'error' is only emitted when someone listens, so an unobserved torrent failure cannot crash the process.
     t.on('error', (err) => {
       if (this.listenerCount('error') > 0) this.emit('error', t, err);
@@ -514,6 +578,7 @@ export class Session extends EventEmitter<SessionEvents> {
     const t = this.require(id);
     this.torrentsById.delete(t.infoHashHex);
     this.torrentFiles.delete(t.infoHashHex);
+    this.dirty.delete(t);
     await t.close({ deleteData, announce: true });
     if (this.settingsValue.resumeDataDir) await deleteResumeData(this.settingsValue.resumeDataDir, t.infoHashHex);
     t.removeAllListeners();
@@ -561,6 +626,7 @@ export class Session extends EventEmitter<SessionEvents> {
     this.settingsValue = { ...this.settingsValue, ...rest };
     this.uploadBucket.setRate(this.settingsValue.uploadLimit);
     this.downloadBucket.setRate(this.settingsValue.downloadLimit);
+    this.checks.limit = this.settingsValue.maxActiveChecks;
     this.scheduleQueue();
   }
 
@@ -694,7 +760,19 @@ export class Session extends EventEmitter<SessionEvents> {
 
   // ---- persistence ------------------------------------------------------------------------------
 
+  /** Writes a torrent's resume data now (after any save of it still in progress). */
   async saveResumeData(t: Torrent): Promise<void> {
+    const id = t.infoHashHex;
+    const next = (this.saving.get(id) ?? Promise.resolve()).then(() => this.writeResumeData(t));
+    this.saving.set(id, next);
+    try {
+      await next;
+    } finally {
+      if (this.saving.get(id) === next) this.saving.delete(id);
+    }
+  }
+
+  private async writeResumeData(t: Torrent): Promise<void> {
     const dir = this.settingsValue.resumeDataDir;
     if (!dir || !this.torrentsById.has(t.infoHashHex)) return;
     // Mid-check the bitfield is partial (or empty while waiting); keep the last good file.
@@ -708,6 +786,27 @@ export class Session extends EventEmitter<SessionEvents> {
 
   async saveAllResumeData(): Promise<void> {
     for (const t of this.torrentsById.values()) await this.saveResumeData(t);
+  }
+
+  /**
+   * A torrent verified pieces: save its resume data at most `resumeSaveDelayMs` from now. One
+   * timer covers every torrent that changed in the meantime; idle torrents are not rewritten.
+   */
+  private markDirty(t: Torrent): void {
+    if (!this.settingsValue.resumeDataDir || this.stopping) return;
+    this.dirty.add(t);
+    if (this.dirtyTimer) return;
+    this.dirtyTimer = setTimeout(() => {
+      this.dirtyTimer = undefined;
+      void this.saveDirty();
+    }, this.settingsValue.resumeSaveDelayMs);
+    this.dirtyTimer.unref();
+  }
+
+  private async saveDirty(): Promise<void> {
+    const list = [...this.dirty];
+    this.dirty.clear();
+    for (const t of list) await this.saveResumeData(t);
   }
 
   /** Registers every saved torrent; returns the background checks (see `start`). */
@@ -755,17 +854,31 @@ export class Session extends EventEmitter<SessionEvents> {
         this.emit('warning', `restoring ${id} failed: ${errorMessage(err)}`);
       }
     }
-    // Check RESTORE_CHECKS at a time: fast-resume takes milliseconds, a full recheck reads every
-    // byte, and several at once only make the disk seek.
+    // RESTORE_WORKERS at a time, in queue order. A torrent whose fast-resume state no longer
+    // matches waits for a check slot like any other full check (maxActiveChecks at once: several
+    // at once only make the disk seek), and the worker moves on to the next torrent meanwhile.
+    const activations: Promise<void>[] = [];
     const next = async (): Promise<void> => {
       for (let job = pending.shift(); job && !this.stopping; job = pending.shift()) {
         const { t, r } = job;
         if (!this.torrentsById.has(t.infoHashHex)) continue;
-        await this.activate(t, r).catch((err: unknown) => this.emit('warning', `restoring ${t.infoHashHex} failed: ${errorMessage(err)}`));
+        const done = this.activate(t, r).catch((err: unknown) => {
+          this.emit('warning', `restoring ${t.infoHashHex} failed: ${errorMessage(err)}`);
+        });
+        activations.push(done);
+        await new Promise<void>((resolve) => {
+          const queued = (): void => resolve();
+          t.once('checkQueued', queued);
+          void done.then(() => {
+            t.off('checkQueued', queued);
+            resolve();
+          });
+        });
       }
     };
     // Wrapped so `start` can return without awaiting it (awaiting a promise of a promise waits for both).
-    return { checked: Promise.all(Array.from({ length: RESTORE_CHECKS }, next)).then(() => undefined) };
+    const workers = Promise.all(Array.from({ length: RESTORE_WORKERS }, next));
+    return { checked: workers.then(() => Promise.all(activations)).then(() => undefined) };
   }
 
   // ---- events helpers ---------------------------------------------------------------------------
@@ -806,13 +919,57 @@ export class Session extends EventEmitter<SessionEvents> {
     };
   }
 
-  /** Saves resume data, announces `stopped` to trackers and closes every socket. */
+  /** Write throughput, latency and backlog across all torrents (the api's disk guard reads it). */
+  getDiskStats(): DiskStats {
+    let backlog = 0;
+    let limit = 0;
+    let backpressured = 0;
+    for (const t of this.torrentsById.values()) {
+      const w = t.writeState;
+      if (!w) continue;
+      backlog += w.backlogBytes;
+      if (w.backpressure) backpressured++;
+      if (t.state === 'downloading') limit += w.limitBytes;
+    }
+    return {
+      writtenBytes: this.io.writtenBytes,
+      writeLatencyMs: this.io.writeLatencyMs,
+      queuedWrites: this.io.queuedWrites,
+      backlogBytes: backlog,
+      backlogLimitBytes: limit,
+      backpressured,
+      checksActive: this.checks.active,
+      checksQueued: this.checks.queued,
+    };
+  }
+
+  /**
+   * Stops every torrent at once: peers are dropped, blocks already received are written and
+   * verified, resume data is saved and `stopped` is announced, all within shutdownTimeoutMs
+   * (a container stop kills the process soon after). Then every socket closes.
+   */
   async shutdown(): Promise<void> {
     if (this.stopping) return;
-    await this.saveAllResumeData();
     this.stopping = true;
     if (this.resumeTimer) clearInterval(this.resumeTimer);
-    await Promise.all([...this.torrentsById.values()].map((t) => t.close({ announce: true })));
+    if (this.dirtyTimer) clearTimeout(this.dirtyTimer);
+    this.dirtyTimer = undefined;
+    this.dirty.clear();
+    const budget = this.settingsValue.shutdownTimeoutMs;
+    const closing = [...this.torrentsById.values()].map((t) =>
+      t.close({ announce: true, flushTimeoutMs: Math.floor(budget / 2), beforeClose: () => this.saveResumeData(t) }),
+    );
+    await new Promise<void>((resolve) => {
+      const timer = setTimeout(() => {
+        this.emit('warning', `shutdown took longer than ${budget} ms; closing sockets anyway`);
+        resolve();
+      }, budget);
+      timer.unref();
+      void Promise.allSettled(closing).then(() => {
+        clearTimeout(timer);
+        resolve();
+      });
+    });
     await this.listener.close();
     this.utp.close();
     for (const u of this.ownUdp.splice(0)) u.close();

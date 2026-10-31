@@ -5,10 +5,15 @@ import { Bitfield } from '../bitfield.js';
 import { copyExact, ownsBacking } from '../buffers.js';
 import { errorMessage, TorrentEngineError } from '../errors.js';
 import type { TorrentFileEntry } from '../metainfo.js';
+import type { DiskIo } from './io.js';
 import { type FileSpan, PieceLayout } from './layout.js';
 
 /** Pieces re-hashed per file when resuming a file written to after the last resume save. */
 const RESUME_SPOT_CHECKS = 4;
+/** Most pieces that were half-written at the last resume save that a resume re-hashes. */
+const RESUME_PARTIAL_CHECKS = 256;
+/** Bytes hashed from the cache before giving the event loop a turn. */
+const HASH_YIELD_BYTES = 4 * 1024 * 1024;
 /** Disk reads per step when hashing a piece that is not (fully) in the cache. */
 const VERIFY_CHUNK = 256 * 1024;
 /**
@@ -43,6 +48,8 @@ export interface StorageOptions {
   preallocate?: 'sparse' | 'none';
   /** Called when queued writes fall back under half of WRITE_BACKLOG_MAX after being over it. */
   onWriteDrain?: () => void;
+  /** The session's write scheduler (bounded writes in flight, write stats). */
+  io?: DiskIo;
 }
 
 interface CachedPiece {
@@ -221,6 +228,21 @@ export class Storage {
   private readonly pendingWrites = new Map<number, Promise<void>>();
   private queuedWriteBytes = 0;
   private writeBlocked = false;
+  /** Pieces with blocks written (or being written) that are not verified yet. */
+  private readonly unverified = new Set<number>();
+
+  /**
+   * Pieces with some data on disk that is not verified yet. Saved with the resume data: after a
+   * crash, these are the pieces that may have been finished and verified since the last save.
+   */
+  get partialPieces(): number[] {
+    return [...this.unverified].filter((i) => !this.have.get(i));
+  }
+
+  /** Resolves once every write queued so far has settled. */
+  async flushWrites(): Promise<void> {
+    await Promise.allSettled([...this.pendingWrites.values()]);
+  }
 
   /** Bytes received but not yet on disk. */
   get writeBacklog(): number {
@@ -229,6 +251,11 @@ export class Storage {
 
   private get backlogMax(): number {
     return this.opts.writeBacklogBytes ?? WRITE_BACKLOG_MAX;
+  }
+
+  /** Queued write bytes at which backpressure starts. */
+  get writeBacklogLimit(): number {
+    return this.backlogMax;
   }
 
   /** True while the write backlog is over its limit (until it drains to half). */
@@ -247,8 +274,10 @@ export class Storage {
     this.cacheBlock(piece, begin, data);
     this.queuedWriteBytes += data.length;
     if (this.queuedWriteBytes > this.backlogMax) this.writeBlocked = true;
+    this.unverified.add(piece);
     const prev = this.pendingWrites.get(piece) ?? Promise.resolve();
-    const p = prev.catch(() => {}).then(() => this.doWrite(piece, begin, data));
+    const io = this.opts.io;
+    const p = prev.catch(() => {}).then(() => (io ? io.write(data.length, () => this.doWrite(piece, begin, data)) : this.doWrite(piece, begin, data)));
     this.pendingWrites.set(piece, p);
     const settled = (): void => {
       if (this.pendingWrites.get(piece) === p) this.pendingWrites.delete(piece);
@@ -339,6 +368,11 @@ export class Storage {
     return this.cacheSize;
   }
 
+  /** True when `read` would answer from memory (no disk read). */
+  isCached(piece: number, begin: number, length: number): boolean {
+    return this.cache.get(piece)?.blocks.get(begin)?.length === length;
+  }
+
   /** Reads a range of a piece from cache or disk. Missing data throws. */
   async read(piece: number, begin: number, length: number): Promise<Buffer> {
     const cached = this.cache.get(piece)?.blocks.get(begin);
@@ -386,8 +420,17 @@ export class Storage {
       const parts = [...e.blocks.entries()].sort((a, b) => a[0] - b[0]);
       let pos = 0;
       if (parts.every(([b, d]) => (b === pos ? ((pos += d.length), true) : false)) && pos === size) {
+        // Large pieces (16 MiB and up) took tens of ms of hashing in one go: yield between chunks.
         const h = createHash('sha1');
-        for (const [, d] of parts) h.update(d);
+        let sinceYield = 0;
+        for (const [, d] of parts) {
+          h.update(d);
+          sinceYield += d.length;
+          if (sinceYield >= HASH_YIELD_BYTES) {
+            sinceYield = 0;
+            await new Promise<void>((r) => setImmediate(r));
+          }
+        }
         digest = h.digest();
       }
     }
@@ -409,6 +452,7 @@ export class Storage {
     // The cache only holds a piece until it is hashed: kept afterwards, every torrent pinned up
     // to cacheBytes of finished data for good. Uploads read from disk (the OS caches hot data).
     this.dropCache(piece);
+    this.unverified.delete(piece);
     if (ok) await this.markVerified(piece);
     else this.have.set(piece, false);
     return ok;
@@ -488,6 +532,7 @@ export class Storage {
     const total = this.layout.pieceCount;
     this.cache.clear();
     this.cacheSize = 0;
+    this.unverified.clear();
     // Files may exist under either name (finished or still carrying the incomplete suffix).
     for (const f of this.torrent.files) {
       if (!this.opts.incompleteExtension || f.padding) continue;
@@ -516,26 +561,48 @@ export class Storage {
     return out;
   }
 
+  /** True when any payload file (or the parts file) exists with data: a check has something to hash. */
+  async hasDataOnDisk(): Promise<boolean> {
+    if (((await statOrNull(this.partsPath))?.size ?? 0) > 0) return true;
+    return (await this.fileStats()).some((s) => s !== null && s.size > 0);
+  }
+
   /**
    * Trusts a saved bitfield when the files on disk still match the saved sizes and mtimes;
-   * returns false (caller should re-check) otherwise.
+   * returns false (caller should re-check) otherwise. `partial` lists the pieces that were
+   * half-written at save time (see `partialPieces`).
    */
-  async tryResume(bitfield: Buffer, saved: ({ size: number; mtimeMs: number } | null)[]): Promise<boolean> {
+  async tryResume(
+    bitfield: Buffer,
+    saved: ({ size: number; mtimeMs: number } | null)[],
+    partial: readonly number[] = [],
+  ): Promise<boolean> {
     const current = await this.fileStats();
     const bf = new Bitfield(this.layout.pieceCount, bitfield);
     // Files written to after the save (the process stopped before saving again): the saved
     // bitfield is still a subset of what is on disk, so it is kept, and a few of the file's
     // pieces are re-hashed as a spot check. A file that was already complete must not change.
+    // A file created after the save, or grown (no preallocation), is the same case.
     const touched: number[] = [];
     for (let i = 0; i < current.length; i++) {
       const a = saved[i] ?? null;
       const b = current[i] ?? null;
       if (a === null && b === null) continue;
-      if (a === null || b === null || a.size !== b.size) return false;
+      if (b === null) return false;
+      const complete = this.fileComplete(i, bf);
+      if (a === null || a.size !== b.size) {
+        if (complete || (a !== null && b.size < a.size)) return false;
+        touched.push(i);
+        continue;
+      }
       const drift = b.mtimeMs - a.mtimeMs;
       if (Math.abs(drift) <= 2000) continue;
-      if (drift < 0 || this.fileComplete(i, bf)) return false;
+      if (drift < 0 || complete) return false;
       touched.push(i);
+    }
+    // Which name each file has on disk, before any piece is read back.
+    for (const f of this.torrent.files) {
+      if (this.opts.incompleteExtension && !f.padding) this.finalized[f.index] = await exists(this.filePath(f, true));
     }
     for (let i = 0; i < bf.length; i++) this.have.set(i, bf.get(i));
     for (const fileIndex of touched) {
@@ -546,8 +613,14 @@ export class Storage {
         }
       }
     }
-    for (const f of this.torrent.files) {
-      if (this.opts.incompleteExtension && !f.padding) this.finalized[f.index] = await exists(this.filePath(f, true));
+    // Pieces that were in flight at the save may have been finished since: hash them instead of
+    // downloading them again (only where a file changed, else nothing was written after the save).
+    if (touched.length > 0) {
+      const changed = new Set(touched);
+      const candidates = partial.filter(
+        (p) => p >= 0 && p < this.layout.pieceCount && !this.have.get(p) && this.layout.filesForPiece(p).some((f) => changed.has(f)),
+      );
+      for (const piece of candidates.slice(0, RESUME_PARTIAL_CHECKS)) await this.verifyPiece(piece);
     }
     return true;
   }

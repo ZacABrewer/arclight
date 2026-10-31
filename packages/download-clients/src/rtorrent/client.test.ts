@@ -185,15 +185,23 @@ describe('addTorrent', () => {
     fake.appearAfterPolls = 3;
     const result = await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' });
     expect(result.id).toBe(MAGNET_HASH);
-    expect(fake.callsTo('d.hash')).toHaveLength(4);
+    // One check that it is not there yet, then the polls.
+    expect(fake.callsTo('d.hash')).toHaveLength(5);
     expect(sleeps).toEqual([250, 250, 250]);
+  });
+
+  it('does not load a torrent rTorrent already has', async () => {
+    await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' });
+    const again = await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' });
+    expect(again).toEqual({ id: MAGNET_HASH, warnings: [], alreadyPresent: true });
+    expect(fake.callsTo('load.start')).toHaveLength(1);
   });
 
   it('reports rejected when rTorrent silently drops the torrent, or the input is invalid', async () => {
     fake.dropLoads = true;
     const dropped = await expectError(client().addTorrent({ torrentFile: V1_TORRENT, title: 't', category: 'tv' }), 'rejected');
     expect(dropped.message).toContain(V1_TORRENT_HASH);
-    expect(fake.callsTo('d.hash')).toHaveLength(10);
+    expect(fake.callsTo('d.hash')).toHaveLength(11);
     await expectError(client().addTorrent({ title: 't', category: 'tv' }), 'rejected');
     await expectError(client().addTorrent({ magnet: 'magnet:?dn=nohash', title: 't', category: 'tv' }), 'rejected');
     await expectError(client().addTorrent({ torrentFile: new TextEncoder().encode('garbage'), title: 't', category: 'tv' }), 'rejected');

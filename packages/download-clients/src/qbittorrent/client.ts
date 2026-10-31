@@ -145,6 +145,12 @@ export class QBittorrentClient implements DownloadClient {
     const id = await this.computeId(input);
     const apiVersion = await this.getApiVersion();
 
+    // Idempotent: a torrent qBittorrent already has is never sent again. qBittorrent refuses
+    // the duplicate ("Fails.", or 409 on newer versions), and a caller that took that for a
+    // failure would retry the same add forever.
+    const present = await this.findTorrent(id);
+    if (present) return this.alreadyPresent(id, present, input);
+
     if (hasMagnet && input.magnet !== undefined && !magnetHasTrackers(input.magnet)) {
       const prefs = await this.getPreferences();
       if (prefs.dht === false) {
@@ -182,12 +188,21 @@ export class QBittorrentClient implements DownloadClient {
       }
     }
 
-    const reply = (await this.session.requestText('/api/v2/torrents/add', { body: form })).trim();
+    let reply: string;
+    try {
+      reply = (await this.session.requestText('/api/v2/torrents/add', { body: form })).trim();
+    } catch (error) {
+      if (error instanceof DownloadClientError && error.httpStatus === 409) {
+        const raced = await this.findTorrent(id);
+        if (raced) return this.alreadyPresent(id, raced, input);
+      }
+      throw error;
+    }
     if (reply === 'Fails.') {
-      throw new DownloadClientError(
-        'rejected',
-        'qBittorrent refused the torrent (already added, or the torrent is invalid).',
-      );
+      // Added by someone else between the check above and the add: still a success.
+      const raced = await this.findTorrent(id);
+      if (raced) return this.alreadyPresent(id, raced, input);
+      throw new DownloadClientError('rejected', 'qBittorrent refused the torrent (the torrent is invalid).');
     }
 
     const priority = input.isRecent === true ? this.settings.recentPriority : this.settings.olderPriority;
@@ -344,8 +359,11 @@ export class QBittorrentClient implements DownloadClient {
 
   /** qBittorrent only offers a toggle, so the current mode is read first. */
   async setAlternativeSpeed(enabled: boolean): Promise<void> {
-    const current = (await this.session.requestText('/api/v2/transfer/speedLimitsMode')).trim() === '1';
-    if (current !== enabled) await this.post('/api/v2/transfer/toggleSpeedLimitsMode', {});
+    if ((await this.getAlternativeSpeed()) !== enabled) await this.post('/api/v2/transfer/toggleSpeedLimitsMode', {});
+  }
+
+  async getAlternativeSpeed(): Promise<boolean> {
+    return (await this.session.requestText('/api/v2/transfer/speedLimitsMode')).trim() === '1';
   }
 
   async getListenPort(): Promise<number> {
@@ -407,6 +425,31 @@ export class QBittorrentClient implements DownloadClient {
   private listTorrents(category: string): Promise<QbtTorrent[]> {
     const options = category === '' ? {} : { query: { category } };
     return this.session.requestJson('/api/v2/torrents/info', QbtTorrentList, options);
+  }
+
+  /** The torrent with info-hash `id`, in any category, when qBittorrent has it. */
+  private async findTorrent(id: string): Promise<QbtTorrent | undefined> {
+    const list = await this.session.requestJson('/api/v2/torrents/info', QbtTorrentList, { query: { hashes: id } });
+    return list.find((t) => t.hash.toLowerCase() === id);
+  }
+
+  /**
+   * Success for a torrent qBittorrent already has. One without a category joins ours so the
+   * queue sees it; one in another category is left there (it may belong to another app).
+   */
+  private async alreadyPresent(id: string, torrent: QbtTorrent, input: AddTorrentInput): Promise<AddTorrentResult> {
+    const warnings: string[] = [];
+    const current = torrent.category ?? '';
+    if (input.category !== '' && current !== input.category) {
+      if (current === '') {
+        await this.attempt(warnings, `set category "${input.category}"`, () => this.setCategory(id, input.category));
+      } else {
+        warnings.push(
+          `qBittorrent already has this torrent in category "${current}"; Arclight follows it once it is moved to "${input.category}".`,
+        );
+      }
+    }
+    return { id, warnings, alreadyPresent: true };
   }
 
   private async fetchExtras(hash: string): Promise<TorrentExtras> {

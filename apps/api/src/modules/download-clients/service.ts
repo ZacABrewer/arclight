@@ -76,6 +76,7 @@ import {
   stallReplaceReason,
   type RecoverySettings,
 } from './recovery.js';
+import { GrabGuard, payloadHash, releaseKeys } from './grab-guard.js';
 import { deriveState, formatBytes, NOT_TRANSFERRING, type StateReason } from './state-reason.js';
 import { implementationSchemas } from './templates.js';
 import { DownloadTimelineStore, type RecordOptions } from './timeline.js';
@@ -314,6 +315,10 @@ export class DownloadClientsService {
   private readonly stallAfterMs: () => number;
   private readonly freeSpace: (path: string) => Promise<number | null>;
   private readonly bus: EventBus | undefined;
+  /** Re-grab cool-downs and the add loop guard (grab-guard.ts). */
+  private readonly grabGuard: GrabGuard;
+  /** Clients whose alternative speed limits Arclight switched on (only those are switched off again). */
+  private readonly altSpeedOwned = new Set<number>();
   readonly timeline: DownloadTimelineStore;
 
   constructor(options: DownloadClientsServiceOptions) {
@@ -342,6 +347,7 @@ export class DownloadClientsService {
     this.freeSpace = options.freeSpace ?? defaultFreeSpace;
     this.recovery = options.recoverySettings ?? (() => recoveryFromSettings(this.db));
     this.timeline = new DownloadTimelineStore(this.db, this.now, this.bus);
+    this.grabGuard = new GrabGuard(() => this.now().getTime());
     // Kill-switch pauses can be shorter than a queue poll: record them as they happen.
     this.bus?.subscribe((event) => {
       if (event.type !== 'torrent') return;
@@ -1351,6 +1357,9 @@ export class DownloadClientsService {
         }
       }
     }
+    // The search below must find another release, also without the blocklist, and must not
+    // re-add this one into a folder the client may still be deleting.
+    this.grabGuard.coolDown(releaseKeys(row.grabbedRelease, row.downloadId), 'replaced');
     const reason = meta.reason ?? 'replaced by the user';
     if (options.blocklist) {
       if (this.blocklistHooks.size === 0) this.log?.warn({ id }, 'blocklist requested but no blocklist handler is registered');
@@ -1448,6 +1457,12 @@ export class DownloadClientsService {
         continue;
       }
       const update: Partial<TrackedDownloadRow> = { clientStatus: 'unknown', updatedAt: now.toISOString() };
+      if (row.clientStatus !== 'unknown' && isGrabbed(row)) {
+        // Removed in the client (perhaps with its data): the same release is not re-grabbed
+        // straight away, into a folder that may still be being deleted.
+        this.grabGuard.coolDown(releaseKeys(row.grabbedRelease, row.downloadId), `no longer reported by ${config.name}`);
+        this.log?.info({ id: row.id, title: row.title, client: config.name }, 'download vanished from the client; same release on cool-down');
+      }
       if (row.state === 'downloading') {
         update.trackedStatus = 'warning';
         update.statusMessages = [{ title: row.title, messages: [STATUS_TEXT.missing(config.name)] }];
@@ -1561,7 +1576,10 @@ export class DownloadClientsService {
 
   /**
    * Marks an import as done: state `imported`, applies the client's post-import category and
-   * removes the item when the client is set to remove completed downloads and may do so.
+   * removes the item (with its files) when the client is set to remove completed downloads,
+   * the client allows it (seeding goals met) and Arclight grabbed it. Downloads Arclight only
+   * found in the client's category (added by hand, by another app, or linked by a migration)
+   * are never removed: they are not Arclight's to delete.
    */
   async markImported(id: number): Promise<TrackedDownload> {
     const item = this.setState(id, 'imported', { statusMessages: [], trackedStatus: 'ok' });
@@ -1574,7 +1592,18 @@ export class DownloadClientsService {
       const postImport = config.settings.postImportCategory;
       if (postImport) await client.setCategory(item.downloadId, postImport);
       if (config.removeCompletedDownloads && item.canBeRemoved && item.status !== 'downloading') {
-        await client.removeItem(item.downloadId, true);
+        const fields = { id, downloadId: item.downloadId, title: item.title, client: config.name };
+        if (item.grabbedRelease === null || item.grabbedRelease === undefined) {
+          this.log?.info(fields, 'remove completed: kept in the client, Arclight did not grab this download');
+        } else {
+          await client.removeItem(item.downloadId, true);
+          this.grabGuard.coolDown(releaseKeys(item.grabbedRelease, item.downloadId), 'removed after its import');
+          this.log?.info(fields, 'remove completed: removed from the client with its files (imported, seeding goals met)');
+          this.timeline.record({ id, downloadId: item.downloadId, title: item.title }, 'removed', {
+            message: `Removed from ${config.name} with its files after the import: Remove Completed is on and the seeding goals are met.`,
+            data: { trigger: 'removeCompleted' },
+          });
+        }
       }
     } catch (err) {
       this.log?.warn({ err, downloadId: item.downloadId }, 'post-import client action failed');
@@ -1711,9 +1740,47 @@ export class DownloadClientsService {
       target = { config: rowToResource(this.requireRow(picked.id)), client: picked.client };
     }
 
+    // Same release removed a moment ago (its files may still be being deleted): not now.
+    const infoHash = protocol === 'torrent' ? await payloadHash(request) : undefined;
+    const keys = [...new Set([...(infoHash ? [`hash:${infoHash}`] : []), ...releaseKeys(tracking.grabbedRelease)])];
+    const cooling = this.grabGuard.coolingDown(keys);
+    if (cooling) {
+      const until = new Date(cooling.until).toISOString();
+      this.log?.info({ title: request.title, client: target.config.name, reason: cooling.reason, until }, 'grab skipped: the same release was removed moments ago');
+      throw new DownloadClientsError(
+        'CONFLICT',
+        `${request.title}: the same release was ${cooling.reason} moments ago; it is not sent again before ${until}`,
+      );
+    }
+    // Idempotent per (client, info-hash): a torrent the client already has for us is not re-sent.
+    if (infoHash) {
+      const active = this.db
+        .select()
+        .from(trackedDownloads)
+        .where(and(eq(trackedDownloads.clientId, target.config.id), eq(trackedDownloads.downloadId, infoHash), inArray(trackedDownloads.state, ACTIVE_STATES)))
+        .get();
+      if (active && active.clientStatus !== 'unknown') return this.alreadyTracked(active, target.config, tracking, pendingRowId);
+    }
+
     // Disk-space guard: a grab that would not leave the minimum free waits as a held item.
     const hold = await this.diskHoldReason(target.config, target.client, request);
     if (hold) return this.holdGrab(request, tracking, hold, clientId, pendingRowId);
+
+    // Loop guard: the same release sent over and over to one client is held with a back-off.
+    const loopKey = keys[0];
+    if (loopKey) {
+      const held = this.grabGuard.admitAdd(target.config.id, loopKey);
+      if (held) {
+        const until = new Date(held.until).toISOString();
+        const fields = { title: request.title, client: target.config.name, adds: held.count, until };
+        if (held.started) this.log?.warn(fields, 'grab loop guard: the same release keeps being sent; holding it');
+        else this.log?.debug(fields, 'grab loop guard: still holding a repeated grab');
+        throw new DownloadClientsError(
+          'CONFLICT',
+          `${target.config.name}: ${request.title} was sent ${held.count} times within the hour; held until ${until}`,
+        );
+      }
+    }
 
     const category = request.category ?? target.config.settings.category;
     const isRecent = request.isRecent ?? false;
@@ -1784,9 +1851,15 @@ export class DownloadClientsService {
     }
     this.dirty = true;
     const warning = result.warnings.length > 0 ? ` (${result.warnings.join(' ')})` : '';
+    const alreadyPresent = 'alreadyPresent' in result && result.alreadyPresent === true;
+    if (alreadyPresent) {
+      this.log?.info({ title: request.title, client: target.config.name, downloadId: result.id }, 'release already in the download client; tracking the existing download');
+    }
     this.timeline.record({ id, downloadId: result.id, title: request.title }, 'grabbed', {
-      message: `Sent to ${target.config.name}${warning}.`,
-      data: { client: target.config.name },
+      message: alreadyPresent
+        ? `Already in ${target.config.name}; tracking the existing download instead of adding it again${warning}.`
+        : `Sent to ${target.config.name}${warning}.`,
+      data: { client: target.config.name, ...(alreadyPresent ? { alreadyPresent: true } : {}) },
     });
     const sent = this.getTracked(id);
     if (pendingDownloadId !== undefined && pendingDownloadId !== sent.downloadId) {
@@ -1795,6 +1868,44 @@ export class DownloadClientsService {
           await hook(sent, pendingDownloadId);
         } catch (err) {
           this.log?.warn({ err, id }, 'pending-sent hook failed');
+        }
+      }
+    }
+    return sent;
+  }
+
+  /**
+   * A grab of a torrent this client already downloads for Arclight: nothing is sent. The
+   * existing item takes the grab's library link when it has none; a pending item it came from
+   * is folded into it (history follows through the pending-sent hooks).
+   */
+  private async alreadyTracked(
+    row: TrackedDownloadRow,
+    config: DownloadClientResource,
+    tracking: TrackingInfo,
+    pendingRowId: number | null,
+  ): Promise<TrackedDownload> {
+    const pendingDownloadId =
+      pendingRowId === null || pendingRowId === row.id
+        ? undefined
+        : this.db.select({ downloadId: trackedDownloads.downloadId }).from(trackedDownloads).where(eq(trackedDownloads.id, pendingRowId)).get()?.downloadId;
+    if (pendingDownloadId !== undefined && pendingRowId !== null) this.db.delete(trackedDownloads).where(eq(trackedDownloads.id, pendingRowId)).run();
+    if (!isGrabbed(row)) {
+      this.db.update(trackedDownloads).set({ ...trackingColumns(tracking), updatedAt: this.now().toISOString() }).where(eq(trackedDownloads.id, row.id)).run();
+    }
+    this.log?.info({ id: row.id, title: row.title, client: config.name }, 'grab skipped: the download client already has this torrent for Arclight');
+    this.timeline.record(subjectOf(row), 'grabbed', {
+      message: `Grabbed again while ${config.name} already downloads it; not sent twice.`,
+      data: { client: config.name, alreadyPresent: true },
+    });
+    this.bus?.publish({ type: 'queue', action: 'changed' });
+    const sent = this.getTracked(row.id);
+    if (pendingDownloadId !== undefined) {
+      for (const hook of this.pendingSentHooks) {
+        try {
+          await hook(sent, pendingDownloadId);
+        } catch (err) {
+          this.log?.warn({ err, id: row.id }, 'pending-sent hook failed');
         }
       }
     }
@@ -1932,6 +2043,8 @@ export class DownloadClientsService {
             continue;
           }
         }
+        // Its files are being deleted: no re-grab of the same release into that folder now.
+        this.grabGuard.coolDown(releaseKeys(row.grabbedRelease, row.downloadId), 'removed from the queue');
       }
       if (options.blocklist) {
         const item = this.toTracked(row, this.queueContext());
@@ -2016,14 +2129,24 @@ export class DownloadClientsService {
 
   /**
    * Switches the alternative speed limits of every enabled client that has them (qBittorrent),
-   * following Arclight's slow mode. Per-client failures are reported, never thrown.
+   * following Arclight's slow mode. Only what Arclight switched on is switched off again: a
+   * client the user put in alternative mode stays there. Per-client failures are reported,
+   * never thrown.
    */
   async setAlternativeSpeedOnAll(enabled: boolean): Promise<Array<{ id: number; name: string; ok: boolean; message?: string }>> {
     const results: Array<{ id: number; name: string; ok: boolean; message?: string }> = [];
     for (const { config, client } of this.enabledClients()) {
       if (config.implementation === 'builtin' || !client.setAlternativeSpeed) continue;
       try {
-        await client.setAlternativeSpeed(enabled);
+        if (enabled) {
+          if (client.getAlternativeSpeed && (await client.getAlternativeSpeed())) continue;
+          await client.setAlternativeSpeed(true);
+          this.altSpeedOwned.add(config.id);
+        } else {
+          if (!this.altSpeedOwned.has(config.id)) continue;
+          await client.setAlternativeSpeed(false);
+          this.altSpeedOwned.delete(config.id);
+        }
         results.push({ id: config.id, name: config.name, ok: true });
       } catch (err) {
         results.push({ id: config.id, name: config.name, ok: false, message: errorMessage(err) });

@@ -166,6 +166,24 @@ export class ReleasesError extends Error {
   }
 }
 
+/**
+ * A failed send to the download client, for the callers that park or drop the release. Only
+ * an unreachable or missing client is CLIENT_UNAVAILABLE (parked, retried in a few minutes).
+ * A client that refused this release (invalid torrent, ...) and a grab the download-clients
+ * guards hold (same release removed moments ago, sent too often) would fail the same way on
+ * every retry: they fail this release, so the next one is tried and nothing loops.
+ */
+function grabError(err: unknown): unknown {
+  const code = (err as { code?: string }).code;
+  const message = err instanceof Error ? err.message : String(err);
+  if (code === 'CONFLICT') return new ReleasesError('VALIDATION', message, { cause: err });
+  if (code === 'CLIENT_ERROR' && (err as { cause?: { code?: string } }).cause?.code === 'rejected') {
+    return new ReleasesError('DOWNLOAD_FAILED', message, { cause: err });
+  }
+  if (code === 'NO_CLIENT' || code === 'CLIENT_ERROR') return new ReleasesError('CLIENT_UNAVAILABLE', message, { cause: err });
+  return err;
+}
+
 // ---- ports (narrow views of the indexers / download-clients services) ----------------
 
 export interface IndexerPort {
@@ -1559,11 +1577,7 @@ export class ReleasesService {
         tracking,
       );
     } catch (err) {
-      const code = (err as { code?: string }).code;
-      if (code === 'NO_CLIENT' || code === 'CLIENT_ERROR') {
-        throw new ReleasesError('CLIENT_UNAVAILABLE', err instanceof Error ? err.message : String(err), { cause: err });
-      }
-      throw err;
+      throw grabError(err);
     }
 
     this.clearPendingFor(d);
@@ -1626,11 +1640,7 @@ export class ReleasesService {
         {},
       );
     } catch (err) {
-      const code = (err as { code?: string }).code;
-      if (code === 'NO_CLIENT' || code === 'CLIENT_ERROR') {
-        throw new ReleasesError('CLIENT_UNAVAILABLE', err instanceof Error ? err.message : String(err), { cause: err });
-      }
-      throw err;
+      throw grabError(err);
     }
     this.log?.info({ title: release.title, client: tracked.downloadClientName }, 'release force-grabbed without a library match');
     return { kind: 'grabbed', ...grabResponse(tracked), matched: false, rejections };

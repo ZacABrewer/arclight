@@ -32,9 +32,9 @@ export const ADD_LABELS_RPC_VERSION = 17;
  * labels, the category is a sub-directory of that base directory and listing filters on
  * `downloadDir`; `setCategory` is not supported there (it would mean moving data).
  *
- * Duplicates: when torrent-add reports "torrent-duplicate" the grab is rejected
- * (`DownloadClientError('rejected')`) like qBittorrent, rather than adopting a torrent that
- * may belong to someone else; labels and seed limits are not touched in that case.
+ * Duplicates: when torrent-add reports "torrent-duplicate" the add succeeds with
+ * `alreadyPresent` (the torrent is there; refusing would make the caller retry forever), but
+ * its labels and seed limits are not touched: it may belong to someone else.
  */
 export class TransmissionClient implements DownloadClient {
   readonly name = 'Transmission';
@@ -106,8 +106,9 @@ export class TransmissionClient implements DownloadClient {
     if (wantsLabel && rpcVersion >= ADD_LABELS_RPC_VERSION) args['labels'] = [input.category];
 
     const reply = await this.rpc.call('torrent-add', args, TrTorrentAdd);
-    if (reply['torrent-duplicate'] !== undefined) {
-      throw new DownloadClientError('rejected', `Transmission already has this torrent (${reply['torrent-duplicate'].hashString.toLowerCase()}).`);
+    const duplicate = reply['torrent-duplicate'];
+    if (duplicate !== undefined) {
+      return { id: duplicate.hashString.toLowerCase() || computedId, warnings: [], alreadyPresent: true };
     }
     const added = reply['torrent-added'];
     if (added === undefined) {

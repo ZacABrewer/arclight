@@ -167,6 +167,11 @@ function guardText(g: NonNullable<TorrentSessionStatus['tunnelGuard']>): string 
   return `limiting to ${down} down, ${up} up${peers}`;
 }
 
+function diskGuardText(g: NonNullable<TorrentSessionStatus['diskGuard']>): string {
+  const writes = `disk writes ${rate(g.writeRate)}, backlog ${bytes(g.backlogBytes)}${g.backlogLimitBytes ? ` of ${bytes(g.backlogLimitBytes)}` : ''}`;
+  return g.downloadLimit === null ? `not limiting (${writes})` : `limiting downloads to ${rate(g.downloadLimit)} (${writes})`;
+}
+
 /** A queue limit: -1 = unlimited. */
 function limitText(n: number): string {
   return n < 0 ? 'unlimited' : String(n);
@@ -183,6 +188,8 @@ function engine(svc: DebugService): string {
       ['state', s.state],
       ['start at boot', s.bootBlocked ? 'blocked by ARCLIGHT_TORRENT_ENGINE=0' : undefined],
       ['tunnel guard', s.tunnelGuard ? guardText(s.tunnelGuard) : undefined],
+      ['disk guard', s.diskGuard ? diskGuardText(s.diskGuard) : undefined],
+      ['data checks', s.diskGuard?.checksActive || s.diskGuard?.checksQueued ? `${s.diskGuard.checksActive ?? 0} running, ${s.diskGuard.checksQueued ?? 0} waiting` : undefined],
       ['listen port', s.listenPort === null ? 'not listening' : s.listenPort],
       ['configured port', s.configuredListenPort],
       ['bound address', s.boundAddress ?? 'all interfaces'],

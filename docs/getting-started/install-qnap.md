@@ -61,6 +61,7 @@ services:
       - "7878:7878"
       - "6881:6881"
       - "6881:6881/udp"
+    stop_grace_period: 30s
     restart: unless-stopped
     depends_on:
       - flaresolverr

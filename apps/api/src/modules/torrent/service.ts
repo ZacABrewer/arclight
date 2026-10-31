@@ -30,6 +30,7 @@ import type { Db } from '../../db/index.js';
 import type { EngineInsights } from '../download-clients/service.js';
 import type { EventBus } from '../../events.js';
 import { getSection, setSection } from '../settings/service.js';
+import { DiskGuard } from './disk-guard.js';
 import { applySeedingRules, type SeedingRulesPorts, type SeedingRulesResult } from './seeding-rules.js';
 import { speedMode } from './speed.js';
 import { combineLimit, GUARD_CONNECTIONS_PER_SECOND, GUARD_HALF_OPEN, tcpConnectProbe, TunnelGuard } from './tunnel-guard.js';
@@ -88,6 +89,8 @@ export interface TorrentServiceOptions {
   tunnelProbe?: () => Promise<number>;
   /** How often the tunnel guard probes. Default 10 s. */
   tunnelGuardIntervalMs?: number;
+  /** How often the disk guard samples the engine's write state. Default 5 s. */
+  diskGuardIntervalMs?: number;
 }
 
 export type TorrentModuleErrorCode = 'NOT_FOUND' | 'NOT_RUNNING' | 'CONFLICT' | 'VALIDATION';
@@ -150,6 +153,9 @@ export class TorrentService {
   private guardBusy = false;
   private readonly tunnelProbe: () => Promise<number>;
   private readonly tunnelGuardIntervalMs: number;
+  private readonly disk = new DiskGuard();
+  private diskTimer: NodeJS.Timeout | undefined;
+  private readonly diskGuardIntervalMs: number;
   /** boot() ran with the engine wanted: reconcile() may (re)start it. */
   private booted = false;
   /** ARCLIGHT_TORRENT_ENGINE=0 kept boot() from running. */
@@ -175,6 +181,7 @@ export class TorrentService {
     this.speedCheckIntervalMs = opts.speedCheckIntervalMs ?? 30_000;
     this.tunnelProbe = opts.tunnelProbe ?? (() => tcpConnectProbe());
     this.tunnelGuardIntervalMs = opts.tunnelGuardIntervalMs ?? 10_000;
+    this.diskGuardIntervalMs = opts.diskGuardIntervalMs ?? 5000;
   }
 
   /** The running Session, or null while disabled/stopped. */
@@ -237,9 +244,11 @@ export class TorrentService {
       listenAddress: binding.address,
       ...this.connectionLimits(s),
       maxConnectionsPerTorrent: s.maxConnectionsPerTorrent,
-      // Normal or alternative limits, whichever apply right now, tightened by the tunnel guard.
-      downloadLimit: combineLimit(speed.downloadLimit, this.guard.downloadLimit),
+      // Normal or alternative limits, whichever apply right now, tightened by the guards.
+      downloadLimit: this.guardedDownloadLimit(speed.downloadLimit),
       uploadLimit: combineLimit(speed.uploadLimit, this.guard.uploadLimit),
+      maxActiveChecks: s.maxActiveChecks,
+      metadataTimeoutMs: s.metadataTimeoutMinutes * 60_000,
       dht: s.dht,
       pex: s.pex,
       maxActiveDownloads: s.maxActiveDownloads,
@@ -264,6 +273,8 @@ export class TorrentService {
       await this.doStart();
       return;
     }
+    // Switched off: its limit goes now, not at the next sample.
+    if (next.diskGuard === false) this.disk.reset();
     const { listenPort: _p, listenAddress: _a, resumeDataDir: _r, ...live } = this.sessionSettings(next, this.desiredBinding(next));
     void _p;
     void _a;
@@ -368,7 +379,7 @@ export class TorrentService {
   private applyRateLimits(mode: TorrentSpeedMode = this.speedMode()): void {
     const session = this.sessionValue;
     if (!session) return;
-    const downloadLimit = combineLimit(mode.downloadLimit, this.guard.downloadLimit);
+    const downloadLimit = this.guardedDownloadLimit(mode.downloadLimit);
     const uploadLimit = combineLimit(mode.uploadLimit, this.guard.uploadLimit);
     const conn = this.connectionLimits();
     const cur = session.settings;
@@ -383,6 +394,64 @@ export class TorrentService {
     }
     const closed = session.trimConnections();
     if (closed > 0) this.log?.info({ closed, maxConnections: conn.maxConnections }, 'tunnel guard closed peer connections to ease the VPN tunnel');
+  }
+
+  /** The user's (or slow mode's) download limit tightened by the tunnel guard and the disk guard. */
+  private guardedDownloadLimit(user: number): number {
+    return combineLimit(combineLimit(user, this.guard.downloadLimit), this.disk.downloadLimit);
+  }
+
+  private startDiskTimer(): void {
+    if (this.diskTimer) return;
+    this.diskTimer = setInterval(() => {
+      try {
+        this.diskGuardTick();
+      } catch (err) {
+        this.log?.warn({ err }, 'disk guard check failed');
+      }
+    }, this.diskGuardIntervalMs);
+    this.diskTimer.unref();
+  }
+
+  /**
+   * One disk-guard step (see disk-guard.ts): samples the engine's write throughput and backlog
+   * and lowers or raises the session download limit to match what the disk keeps up with.
+   */
+  diskGuardTick(): void {
+    const session = this.sessionValue;
+    const s = this.settings();
+    if (session === null || this.state !== 'running' || s.diskGuard === false) {
+      const wasActive = this.disk.active;
+      this.disk.reset();
+      if (wasActive) {
+        this.applyRateLimits();
+        this.log?.info('disk guard off; download limit restored');
+      }
+      return;
+    }
+    const d = session.getDiskStats();
+    const wasActive = this.disk.active;
+    const before = this.disk.downloadLimit;
+    const changed = this.disk.observe({
+      at: this.now().getTime(),
+      writtenBytes: d.writtenBytes,
+      backlogBytes: d.backlogBytes,
+      backlogLimitBytes: d.backlogLimitBytes,
+      backpressured: d.backpressured,
+      downloadRate: session.getSessionStats().downloadRate,
+    });
+    if (!changed) return;
+    this.applyRateLimits();
+    const detail = {
+      downloadLimit: this.disk.downloadLimit,
+      writeRate: Math.round(this.disk.writeRate),
+      backlogBytes: d.backlogBytes,
+      writeLatencyMs: Math.round(d.writeLatencyMs),
+    };
+    if (this.disk.active && !wasActive) this.log?.warn(detail, 'disk is falling behind downloads; disk guard limited the download rate');
+    else if (!this.disk.active && wasActive) this.log?.info(detail, 'disk keeps up again; disk guard lifted its download limit');
+    else if (before !== null && this.disk.downloadLimit !== null && this.disk.downloadLimit < before) this.log?.info(detail, 'disk guard lowered the download limit');
+    else this.log?.debug(detail, 'disk guard raised the download limit');
   }
 
   private startGuardTimer(): void {
@@ -539,6 +608,7 @@ export class TorrentService {
   subscribe(): void {
     this.startSpeedTimer();
     this.startGuardTimer();
+    this.startDiskTimer();
     if (this.unsubscribe || !this.bus) return;
     this.unsubscribe = this.bus.subscribe((event) => {
       if (event.type === 'vpn') void this.applyBinding().catch((err: unknown) => this.log?.warn({ err }, 'torrent re-bind failed'));
@@ -565,6 +635,8 @@ export class TorrentService {
     this.speedTimer = undefined;
     if (this.guardTimer) clearInterval(this.guardTimer);
     this.guardTimer = undefined;
+    if (this.diskTimer) clearInterval(this.diskTimer);
+    this.diskTimer = undefined;
     await this.stop();
   }
 
@@ -895,6 +967,17 @@ export class TorrentService {
     if (this.bootBlocked) out.bootBlocked = true;
     if (session && this.guard.active) {
       out.tunnelGuard = { downloadLimit: this.guard.downloadLimit, uploadLimit: this.guard.uploadLimit, connectionLimit: this.guard.connectionLimit };
+    }
+    if (session && s.diskGuard !== false) {
+      const d = session.getDiskStats();
+      out.diskGuard = {
+        downloadLimit: this.disk.downloadLimit,
+        writeRate: Math.round(this.disk.writeRate),
+        backlogBytes: d.backlogBytes,
+        backlogLimitBytes: d.backlogLimitBytes,
+        checksActive: d.checksActive,
+        checksQueued: d.checksQueued,
+      };
     }
     if (this.state === 'lockdown' && this.lockdownReason) out.lockdownReason = this.lockdownReason;
     if (this.state === 'lockdown' && this.lockdownSince) out.lockdownSince = this.lockdownSince;

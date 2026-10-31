@@ -4,7 +4,7 @@ import type { TorrentEncryptionMode, TorrentEngineState, TorrentSessionStatus, T
 import { errorMessage } from '../../api/client.js';
 import { Chip, ErrorBlock, FormRow, FormSection, Input, KeyValue, LiveDot, Pane, Segmented, Skeleton, Toggle, type ChipTone, type KeyValueItem } from '../../arclight/index.js';
 import { useSaveTorrentSettings, useTorrentSettings, useTorrentStatus } from '../../hooks/torrent.js';
-import { formatRate } from '../../lib/format.js';
+import { formatRate, formatSize } from '../../lib/format.js';
 import { speedModeText } from '../activity/queue-controls.js';
 import { SettingsPage, useDraft } from './settings-layout.js';
 import { SeedingRulesPane, SpeedSchedulePane } from './torrent-control.js';
@@ -87,6 +87,12 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
     { label: t('common.download'), value: formatRate(status.downloadRate) },
     { label: t('common.upload'), value: formatRate(status.uploadRate) },
     ...(status.speed ? [{ label: t('settings.torrent.speedMode'), value: speedModeText(status.speed), mono: false }] : []),
+    ...(status.diskGuard
+      ? [{ label: t('settings.torrent.diskWrites'), value: t('settings.torrent.diskWritesValue', { rate: formatRate(status.diskGuard.writeRate), backlog: formatSize(status.diskGuard.backlogBytes) }) }]
+      : []),
+    ...(status.diskGuard?.checksActive || status.diskGuard?.checksQueued
+      ? [{ label: t('settings.torrent.dataChecks'), value: t('settings.torrent.dataChecksValue', { active: status.diskGuard.checksActive ?? 0, queued: status.diskGuard.checksQueued ?? 0 }) }]
+      : []),
     {
       label: t('settings.torrent.torrents'),
       value: `${item.total} total · ${item.downloading} downloading · ${item.seeding} seeding · ${item.paused} paused · ${item.queued} queued · ${item.checking} checking · ${item.error} error`,
@@ -116,6 +122,11 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
           })}
         </p>
       ) : null}
+      {status.diskGuard && status.diskGuard.downloadLimit !== null ? (
+        <p className="al-inline-warning">
+          {t('settings.torrent.diskGuardActive', { limit: formatRate(status.diskGuard.downloadLimit), writeRate: formatRate(status.diskGuard.writeRate) })}
+        </p>
+      ) : null}
       <KeyValue items={items} />
     </div>
   );
@@ -123,7 +134,7 @@ export function TorrentStatusFields({ status }: { status: TorrentSessionStatus }
 
 // ---- form draft ----------------------------------------------------------------------
 
-const BOOL_KEYS = ['enabled', 'autoRegisterClient', 'dht', 'pex', 'bindToVpn', 'tunnelGuard'] as const;
+const BOOL_KEYS = ['enabled', 'autoRegisterClient', 'dht', 'pex', 'bindToVpn', 'tunnelGuard', 'diskGuard'] as const;
 const INT_KEYS = [
   'listenPort',
   'maxConnections',
@@ -132,6 +143,8 @@ const INT_KEYS = [
   'uploadLimitKbps',
   'maxActiveDownloads',
   'maxActiveSeeds',
+  'metadataTimeoutMinutes',
+  'maxActiveChecks',
 ] as const;
 const NULLABLE_KEYS = ['defaultSeedRatio', 'defaultSeedTimeMinutes'] as const;
 /** Optional transport switches; rows saved before they existed read as the engine defaults. */
@@ -206,7 +219,7 @@ function BoolRow({ f, checked, onChange }: { f: BoolField; checked: boolean; onC
 }
 
 /** The engine form groups in page order (handoff §10: Port, Limits, Ratio/time, Interface binding, DHT/PEX, Encryption). */
-export const TORRENT_SECTIONS = ['Engine', 'Port', 'Limits', 'Ratio & time', 'Interface binding', 'DHT & PEX', 'Transport', 'Encryption'] as const;
+export const TORRENT_SECTIONS = ['Engine', 'Port', 'Limits', 'Disk', 'Ratio & time', 'Interface binding', 'DHT & PEX', 'Transport', 'Encryption'] as const;
 
 const ENCRYPTION_OPTIONS: { value: TorrentEncryptionMode; readonly label: string }[] = [
   { value: 'preferred', get label() { return t('settings.torrent.encryptionPreferred'); } },
@@ -228,6 +241,7 @@ const LIMIT_FIELDS: NumField[] = [
   { key: 'uploadLimitKbps', get label() { return t('settings.torrent.uploadLimit'); }, unit: 'KiB/s', get caption() { return t('settings.torrent.n0Unlimited'); }, min: 0 },
   { key: 'maxActiveDownloads', get label() { return t('settings.torrent.maxActiveDownloads'); }, get caption() { return t('settings.torrent.n1Unlimited'); }, min: -1 },
   { key: 'maxActiveSeeds', get label() { return t('settings.torrent.maxActiveSeeds'); }, get caption() { return t('settings.torrent.n1Unlimited'); }, min: -1 },
+  { key: 'metadataTimeoutMinutes', get label() { return t('settings.torrent.metadataTimeout'); }, unit: 'min', get caption() { return t('settings.torrent.metadataTimeoutCaption'); }, min: 0, max: 10080 },
 ];
 
 const RATIO_FIELDS: NumField[] = [
@@ -292,6 +306,18 @@ function TorrentForm({
         {LIMIT_FIELDS.map((f) => (
           <NumRow key={f.key} f={f} value={d[f.key]} onChange={(v) => set(f.key, v)} />
         ))}
+      </FormSection>
+      <FormSection label={t('settings.torrent.disk')}>
+        <BoolRow
+          f={{ key: 'diskGuard', label: t('settings.torrent.diskGuard'), caption: t('settings.torrent.diskGuardCaption') }}
+          checked={d.diskGuard}
+          onChange={(v) => set('diskGuard', v)}
+        />
+        <NumRow
+          f={{ key: 'maxActiveChecks', label: t('settings.torrent.maxActiveChecks'), caption: t('settings.torrent.maxActiveChecksCaption'), min: 1, max: 16 }}
+          value={d.maxActiveChecks}
+          onChange={(v) => set('maxActiveChecks', v)}
+        />
       </FormSection>
       <FormSection label={t('settings.torrent.ratioTime')}>
         {RATIO_FIELDS.map((f) => (

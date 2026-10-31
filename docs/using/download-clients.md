@@ -51,7 +51,7 @@ Every card has a checkbox. Tick one or more and a bar appears at the bottom of t
 | Name | - | Your label |
 | Enable | On | Use this client for grabs and for tracking its queue |
 | Client Priority (advanced) | 1 | 1 is the highest, 50 the lowest. When several clients handle the same protocol, higher priority is preferred; equal priorities are used in rotation |
-| Remove Completed (advanced) | On | After a download is imported, remove it from the client once it is allowed to be removed (for torrents: the seeding goal is met) |
+| Remove Completed (advanced) | On | After a download Arclight grabbed is imported, remove it from the client together with its files once it is allowed to be removed (for torrents: the seeding goal is met). Each removal is logged and shows on the download's timeline. Downloads Arclight did not grab (added by hand, by another app, or kept in qBittorrent by a migration) are imported but never removed |
 | Remove Failed (advanced) | On | Remove failed downloads from the client |
 | Tags (advanced) | none | Only use this client for series and movies with at least one of these tags. Empty means everything |
 
@@ -164,6 +164,9 @@ These settings apply to the built-in engine only. The top of the page shows live
 | Default seed time | empty (unlimited) | Stop seeding after this many minutes |
 | Bind to VPN | On | When the VPN integration is enabled, bind every socket to the VPN tunnel and pause all torrents while it is down. See [VPN](vpn.md) |
 | Tunnel guard | On | With the VPN on, slow the engine and cut its peer connections when the tunnel starts to choke, so the VPN stays up. See [Tunnel guard](#tunnel-guard) |
+| Disk guard | On | Hold downloads to what the disk can write while received data piles up waiting for it. See [Disk guard](#disk-guard) |
+| Max simultaneous checks | 2 | Torrents whose files are hashed at the same time (1 to 16). The rest wait in queue order. See [Data checks](#data-checks) |
+| Magnet metadata timeout | 60 | Minutes of active time a magnet may wait for its metadata before it fails (0 to 10080). 0 waits forever. See [Magnets without metadata](#magnets-without-metadata) |
 | Downloads folder | empty | Default download folder. Empty means `/data/downloads` when a `/data` folder exists (the standard Docker layout; older installs keep `/downloads`), otherwise a `downloads` folder next to your config folder. The page shows the folder actually used |
 | Peer encryption | Preferred | Preferred: try encrypted first, fall back to plain. Required: encrypted only, fewer peers can connect. Disabled: plain only, peers that insist on encryption cannot connect |
 | TCP | On | Accept and open TCP peer connections |
@@ -185,11 +188,27 @@ Seeding is when you keep uploading after the download finishes. What Arclight do
 
 1. A torrent added through the built-in client uses the client's seed ratio and seed time limits, or the engine defaults when those are empty. An indexer's own seed ratio and seed time (see [Indexers](indexers.md)) are sent along when a release is grabbed from it.
 2. When a goal is met (ratio reached, or time elapsed), the engine pauses the torrent. It does not delete it.
-3. With **Remove Completed** on, the client removes the item once it is imported and its goal is met. A torrent still seeding keeps its files, so the imported hardlink stays valid.
+3. With **Remove Completed** on, Arclight removes a download it grabbed, together with its files, once it is imported and its goal is met. The library keeps working when it was imported as a hardlink or copy. Each removal is logged and shows on the download's timeline. Torrents Arclight did not grab (added by hand, by another app, or kept in qBittorrent by a migration) are never removed, even when they sit in Arclight's category and get imported.
 4. For tracked private-tracker accounts, the hit-and-run rule (Indexers > Tracker account) keeps a finished torrent from being removed too early. See [Indexers](indexers.md).
 5. With both limits empty, torrents seed until you remove them.
 
 > Coming soon: per-download limits editable from the queue. This page will be updated when it ships. For now, limits can be set per client for new torrents (see the Built-in client table above).
+
+### Grabs that repeat themselves
+
+- **Already in the client.** When a client already has the torrent Arclight sends, the grab counts as done: Arclight tracks the existing torrent and does not add it again. qBittorrent, Transmission, Deluge, rTorrent and the built-in engine all work this way. If qBittorrent has the torrent in another category, Arclight leaves it there and says so on the queue item.
+- **Same release removed a moment ago.** After a download is replaced, removed from the queue, removed after its import, or removed in the client itself, Arclight does not send the same release again for 30 minutes. The client may still be deleting the old files, and a new download in the same folder would lose its files. With **Try another release**, the search picks a different release even when the blocklist box is unticked.
+- **Loop guard.** If the same release goes to the same client more than 3 times in an hour, Arclight holds further grabs of it: first for 15 minutes, then twice as long each time, up to 6 hours. The log says when the hold starts.
+- **Refused by the client.** A client that refuses a release (for example an invalid torrent) fails that release, and Arclight tries the next one. Only an unreachable client parks the grab and retries it a few minutes later.
+
+### qBittorrent settings Arclight changes
+
+Arclight leaves qBittorrent's global settings alone (ratio and seeding-time limits and their action, active torrent and upload limits, global speed limits). The only global changes it makes are these:
+
+- **Listen port**, only with the VPN port sync on, so qBittorrent follows the forwarded port.
+- **Alternative speed limits** switch on and off with the built-in engine's slow mode and schedule, when **Mirror to qBittorrent** is on (Settings > Torrent Engine). Arclight only switches off alternative limits that it switched on itself. Turn the mirror off if you manage qBittorrent's alternative limits yourself.
+
+Per torrent, Arclight sets the category, the save path, and the ratio and seeding-time limits from the indexer's seed settings when a torrent is added.
 
 ### Tunnel guard
 
@@ -201,13 +220,50 @@ Every 10 seconds the guard times a small connection through the tunnel. When tha
 2. halves the peer connection cap (never below 40, and never above your Max connections), closing the peers that move the least data;
 3. allows at most 8 connection attempts in progress and 3 new ones per second.
 
-After three healthy checks in a row it raises the limits by half, and it lets go once they are back at your own values. The status at the top of the page and the debug report's `engine` command show what the guard is limiting.
+After three healthy checks in a row it raises the limits by half, and it lets go once they are back at your own values. The status at the top of the page and the debug report's `engine` command show what the guard is limiting. It works together with the [Disk guard](#disk-guard); when both limit downloads, the lower limit applies.
 
 If the tunnel still drops, lower **Max connections** (100 to 150 suits most NAS models behind a VPN) and **Max active downloads** first; those set the load the guard starts from.
 
 ### Memory
 
-Each downloading torrent caches the pieces it is still receiving until they are verified, and queues writes to disk. Both come from one budget for the whole engine: 128 MiB of cache, split across the downloading torrents (at most 32 MiB each, at least 4 MiB), plus a write queue of half each torrent's share. So memory stays about the same however many torrents download at once. Finished data is read back from disk, and the operating system's file cache does the rest. The container's memory figure includes that file cache, which the system frees when something needs the memory; the debug report's `memory` command shows it separately as *file (page cache)*.
+Each downloading torrent caches the pieces it is still receiving until they are verified, and queues writes to disk. Both come from one budget for the whole engine: 128 MiB of cache, split across the downloading torrents (at most 32 MiB each, at least 4 MiB), plus a write queue of half each torrent's share. So memory stays about the same however many torrents download at once. If the disk cannot keep up with the writes, the [Disk guard](#disk-guard) lowers the download speed so this queue does not grow. Finished data is read back from disk, and the operating system's file cache does the rest. The container's memory figure includes that file cache, which the system frees when something needs the memory; the debug report's `memory` command shows it separately as *file (page cache)*.
+
+### Disk guard
+
+A fast link can bring in data faster than a busy disk writes it, for example a NAS with a 4-disk RAID5 array that also serves a media server. Received data then waits in memory, the engine stops asking peers for more, and seeding stalls behind the writes. The disk guard (Settings > Torrent Engine > Disk, on by default) does by itself what you would otherwise do by hand: it sets the download limit to what the disk actually writes.
+
+Every 5 seconds the guard compares the data waiting for the disk with what the downloading torrents may hold:
+
+1. **Disk behind.** When a torrent has stopped requesting until its backlog drains, or the backlog is at least half of what the downloading torrents may hold, it sets the download limit to about 90% of the measured disk write speed. It never goes below 1 MiB/s, so downloads keep moving.
+2. **Disk keeping up.** After 3 healthy samples in a row (backlog under 20% of the allowance, no torrent waiting) it raises the limit by a quarter.
+3. **Let go.** Once the limit is well above what the swarm delivers anyway, the guard drops it.
+
+The guard combines with your own limits and with the [tunnel guard](#tunnel-guard): the tightest limit wins. While it limits downloads, the status at the top of the page says so and shows the limit and the measured write speed. The Disk writes line shows the current write speed and how much is waiting. The debug report's `engine` command lists the same under "disk guard".
+
+Two more things keep uploads alive while downloads write:
+
+- At most 4 disk writes are in flight at once across the whole engine. The rest wait in line and still count towards the backlog.
+- Peers asking for data you are seeding are served by at most 16 disk reads at once, and by 1 while writes lag behind. Blocks still in the cache are sent without a disk read.
+
+The Docker image sets `UV_THREADPOOL_SIZE=16` (Node's default is 4) so disk reads, resume saves and DNS lookups are not stuck behind a few slow writes. You do not need to set it yourself unless you run Arclight outside the image.
+
+### Data checks
+
+A full check reads and hashes every byte of a torrent. It runs when you add a torrent whose files already exist, when you press Recheck, when saved resume data no longer matches the files, and when a torrent resumes after an error. All of these share **Max simultaneous checks** (default 2) and wait in queue order. On spinning disks every extra check only adds seeking, so keep this at 1 or 2. Settings > Torrent Engine shows how many checks are running and waiting.
+
+A torrent whose resume data still matches its files does not use a slot: it is accepted after a few file checks.
+
+### Magnets without metadata
+
+A magnet link has no file list until a peer sends it. If no peer has it, the torrent would wait for days. After **Magnet metadata timeout** minutes of active time (only time the torrent is running counts) the torrent fails with "no metadata after N minutes: no peers had this magnet". Arclight then handles it like any failed download: it is removed (when **Remove Failed** is on) and, with automatic re-download of failed downloads on (the default), the release is blocklisted and a different one is searched for. Set the timeout to 0 to wait forever. See [Magnet failed: no metadata](../TROUBLESHOOTING.md#magnet-no-metadata).
+
+### Resume data and shutdown
+
+The engine saves resume data (which pieces are verified, file sizes and times, half-written pieces) for every torrent every 5 minutes. It also saves a torrent about 30 seconds after new pieces were verified, but only torrents that changed. After a crash or a kill, the engine starts from the saved state, trusts it, and re-hashes only the pieces that were half written and the files that changed. Without that, a restart would re-check every torrent in full.
+
+On a normal stop the engine finishes the writes in progress, saves resume data and tells the trackers it is stopping. This is limited to about 6 seconds. The supplied compose files set `stop_grace_period: 30s` for the `arclight` service so Docker waits long enough before it kills the container (its default is 10 seconds). If you wrote your own compose file, add the same line. See [Torrents recheck after a restart](../TROUBLESHOOTING.md#torrents-recheck-after-restart).
+
+A torrent's progress counts only pieces that were verified, not data that is merely received.
 
 ### When the VPN is down
 
@@ -221,6 +277,10 @@ With Bind to VPN on and the VPN enabled, the engine enters **Lockdown** when the
 | A torrent is stuck | [Download stuck](../TROUBLESHOOTING.md#download-stuck), [Stalled](../TROUBLESHOOTING.md#stalled), [No peers](../TROUBLESHOOTING.md#no-peers) |
 | Downloads finish but do not import | [Import blocked or failed](../TROUBLESHOOTING.md#import-blocked-or-failed) |
 | Everything paused | [Paused by VPN kill switch](../TROUBLESHOOTING.md#paused-by-vpn-kill-switch) |
+| Downloads slow down on their own | [Downloads slow down on their own](../TROUBLESHOOTING.md#downloads-slow-down-on-their-own) |
+| Magnet failed, no metadata | [Magnet failed: no metadata](../TROUBLESHOOTING.md#magnet-no-metadata) |
+| Torrents recheck after a restart | [Torrents recheck after a restart](../TROUBLESHOOTING.md#torrents-recheck-after-restart) |
+| The same release keeps coming back | [Same release keeps coming back](../TROUBLESHOOTING.md#same-release-keeps-coming-back) |
 | Remote agent not answering | [Remote engine](../REMOTE-ENGINE.md) (Health) |
 
 ## Related

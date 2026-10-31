@@ -100,8 +100,25 @@ export interface SessionSettings {
    * 300 MiB of buffers on a 2 GiB NAS container.
    */
   cacheBytesTotal: number;
-  /** How often resume data is written while running (ms). */
+  /** How often resume data of every torrent is written while running (ms). */
   resumeSaveIntervalMs: number;
+  /**
+   * Longest a torrent's verified pieces go unsaved (ms): resume data is written this long after
+   * the first piece verified since the last save, only for torrents that changed. After a crash
+   * a restart then trusts the saved bitfield and re-hashes the few pieces in flight, instead of
+   * re-checking whole torrents.
+   */
+  resumeSaveDelayMs: number;
+  /**
+   * Torrents whose data is fully hashed at the same time (checks on add, re-checks, restores
+   * whose fast-resume state no longer matches). The rest wait in order. On spinning disks every
+   * extra concurrent check only adds seeking: thirty at once thrashed a RAID5 array for hours.
+   */
+  maxActiveChecks: number;
+  /** A magnet still without metadata after this much active time fails (ms; 0 = never). */
+  metadataTimeoutMs: number;
+  /** Budget for `shutdown`: flush writes, save resume data, announce `stopped` (ms). */
+  shutdownTimeoutMs: number;
 }
 
 export const DEFAULT_SETTINGS: SessionSettings = {
@@ -149,4 +166,9 @@ export const DEFAULT_SETTINGS: SessionSettings = {
   cacheBytesPerTorrent: 32 * 1024 * 1024,
   cacheBytesTotal: 128 * 1024 * 1024,
   resumeSaveIntervalMs: 5 * 60_000,
+  resumeSaveDelayMs: 30_000,
+  maxActiveChecks: 2,
+  metadataTimeoutMs: 60 * 60_000,
+  // docker stop waits 10 s before SIGKILL; leave room for the rest of the process.
+  shutdownTimeoutMs: 6000,
 };

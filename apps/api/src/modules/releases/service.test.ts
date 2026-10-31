@@ -138,6 +138,28 @@ describe('RSS processing', () => {
     await h.service.processReleases([makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP')], 'rss');
     expect(h.service.listPending()).toEqual([expect.objectContaining({ reason: 'downloadClientUnavailable' })]);
   });
+
+  it.each([
+    ['the client refused the release', { code: 'CLIENT_ERROR', cause: { code: 'rejected' } }],
+    ['a download-clients guard holds it (removed moments ago, sent too often)', { code: 'CONFLICT' }],
+  ])('does not park or retry a release when %s; the next release is tried', async (_why, shape) => {
+    const h = await tvSetup();
+    const grab = h.downloads.grab.bind(h.downloads);
+    let calls = 0;
+    h.downloads.grab = async (...args: Parameters<typeof grab>) => {
+      calls++;
+      if (calls === 1) throw Object.assign(new Error('refused'), shape);
+      return grab(...args);
+    };
+    await h.service.processReleases(
+      [makeRelease('Show.Name.S01E01.1080p.WEB-DL-GRP', { seeders: 999 }), makeRelease('Show.Name.S01E01.720p.HDTV-OK')],
+      'rss',
+    );
+    expect(calls).toBe(2);
+    expect(h.downloads.grabs.map((g) => g.request.title)).toEqual(['Show.Name.S01E01.720p.HDTV-OK']);
+    // Parking it would retry the same refused add every few minutes, for ever.
+    expect(h.service.listPending()).toEqual([]);
+  });
 });
 
 describe('grab guard', () => {

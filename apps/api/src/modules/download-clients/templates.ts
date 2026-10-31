@@ -85,7 +85,7 @@ const commonFields: DownloadClientField[] = [
     name: 'removeCompletedDownloads',
     label: 'Remove Completed',
     type: 'checkbox',
-    helpText: 'Remove imported downloads from the client once they are allowed to be removed (seeding goals met).',
+    helpText: 'Remove downloads Arclight grabbed from the client, with their files, once imported and allowed to be removed (seeding goals met). Torrents Arclight did not grab are never removed.',
     required: false,
     advanced: true,
     default: true,

@@ -64,6 +64,7 @@ services:
       - /path/to/data:/data
     depends_on:
       gluetun: { condition: service_healthy }
+    stop_grace_period: 30s
     restart: unless-stopped
 
   flaresolverr:

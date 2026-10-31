@@ -230,7 +230,40 @@ describe('addTorrent', () => {
     expect(add?.form).toEqual({ category: 'tv', stopped: 'true' });
   });
 
-  it('rejects duplicates ("Fails." or 409), invalid input and trackerless magnets without DHT', async () => {
+  it('treats a torrent qBittorrent already has as added, without sending it again', async () => {
+    const existing = { ...torrentsFixture[0], hash: MAGNET_HASH, category: 'tv' };
+    qbt.on('GET', '/api/v2/torrents/info', (req) => ({ body: req.query.get('hashes') === MAGNET_HASH ? [existing] : torrentsFixture }));
+    const result = await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv', seedRatioLimit: 2 });
+    expect(result).toEqual({ id: MAGNET_HASH, warnings: [], alreadyPresent: true });
+    expect(qbt.calls('/api/v2/torrents/add')).toHaveLength(0);
+    expect(qbt.calls('/api/v2/torrents/setShareLimits')).toHaveLength(0);
+
+    // Without a category it joins ours; in another category it stays there, with a warning.
+    qbt.on('GET', '/api/v2/torrents/info', { body: [{ ...existing, category: '' }] });
+    expect((await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' })).warnings).toEqual([]);
+    expect(qbt.calls('/api/v2/torrents/setCategory')[0]?.form).toEqual({ hashes: MAGNET_HASH, category: 'tv' });
+    qbt.on('GET', '/api/v2/torrents/info', { body: [{ ...existing, category: 'other-app' }] });
+    const foreign = await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' });
+    expect(foreign.alreadyPresent).toBe(true);
+    expect(foreign.warnings).toEqual([expect.stringContaining('"other-app"')]);
+    expect(qbt.calls('/api/v2/torrents/setCategory')).toHaveLength(1);
+    expect(qbt.calls('/api/v2/torrents/add')).toHaveLength(0);
+  });
+
+  it('treats "Fails." or 409 for a torrent that appeared meanwhile as added', async () => {
+    const existing = { ...torrentsFixture[0], hash: MAGNET_HASH, category: 'tv' };
+    qbt.once('GET', '/api/v2/torrents/info', { body: [] });
+    qbt.once('POST', '/api/v2/torrents/add', { body: 'Fails.' });
+    qbt.once('GET', '/api/v2/torrents/info', { body: [existing] });
+    expect(await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' })).toMatchObject({ id: MAGNET_HASH, alreadyPresent: true });
+
+    qbt.once('GET', '/api/v2/torrents/info', { body: [] });
+    qbt.once('POST', '/api/v2/torrents/add', { status: 409, body: 'Torrent already exists' });
+    qbt.once('GET', '/api/v2/torrents/info', { body: [existing] });
+    expect(await client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' })).toMatchObject({ id: MAGNET_HASH, alreadyPresent: true });
+  });
+
+  it('rejects refused adds ("Fails." or 409), invalid input and trackerless magnets without DHT', async () => {
     qbt.once('POST', '/api/v2/torrents/add', { body: 'Fails.' });
     await expectError(client().addTorrent({ magnet: MAGNET, title: 't', category: 'tv' }), 'rejected');
 

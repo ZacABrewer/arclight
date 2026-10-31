@@ -118,6 +118,11 @@ export interface AddTorrentResult {
   id: string;
   /** Follow-up steps (priority, force start, share limits) that could not be applied. */
   warnings: string[];
+  /**
+   * The client already had this torrent, so nothing was added. A success: the caller tracks
+   * the existing torrent instead of retrying the add (which the client would refuse forever).
+   */
+  alreadyPresent?: boolean;
 }
 
 /** Which kind of release a client downloads. */
@@ -207,6 +212,8 @@ export interface DownloadClient {
   setForceStart?(id: string, enabled: boolean): Promise<void>;
   /** Optional: switch the client's alternative ("slow mode") speed limits on or off. */
   setAlternativeSpeed?(enabled: boolean): Promise<void>;
+  /** Optional: whether the client's alternative speed limits are on right now. */
+  getAlternativeSpeed?(): Promise<boolean>;
 }
 
 export type DownloadClientErrorCode =

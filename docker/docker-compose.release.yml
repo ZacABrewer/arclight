@@ -74,6 +74,8 @@ services:
         condition: service_healthy
 
   arclight:
+    # Lets the torrent engine finish its writes and save resume data on stop.
+    stop_grace_period: 30s
     image: ${ARCLIGHT_IMAGE:-ghcr.io/zacabrewer/arclight:latest}
     container_name: arclight
     labels:

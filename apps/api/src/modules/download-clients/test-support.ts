@@ -28,6 +28,8 @@ export class FakeDownloadClient implements DownloadClient {
   failRemove: Error | null = null;
   testResult: DownloadClientTestResult | Error = { version: '5.0.2', apiVersion: '2.11.2', warnings: [] };
   nextId = 'abc123';
+  /** Set to answer adds the way a client that already has the torrent does. */
+  alreadyPresent = false;
 
   constructor(readonly config: DownloadClientResource) {
     this.protocol = config.protocol;
@@ -41,7 +43,7 @@ export class FakeDownloadClient implements DownloadClient {
   async addTorrent(input: AddTorrentInput): Promise<AddTorrentResult> {
     if (this.failAdd) throw this.failAdd;
     this.added.push(input);
-    return { id: this.nextId, warnings: [] };
+    return { id: this.nextId, warnings: [], ...(this.alreadyPresent ? { alreadyPresent: true } : {}) };
   }
 
   /** Mirrors the real clients: only usenet clients accept NZBs. */

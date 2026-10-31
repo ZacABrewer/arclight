@@ -4,6 +4,8 @@
 # when you do not use a VPN. For the published image, see README.md.
 services:
   arclight:
+    # Lets the torrent engine finish its writes and save resume data on stop.
+    stop_grace_period: 30s
     build:
       context: ..
       dockerfile: docker/Dockerfile

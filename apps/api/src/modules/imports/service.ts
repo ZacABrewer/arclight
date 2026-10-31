@@ -370,7 +370,7 @@ export class ImportsService {
 
     if (verified) {
       result.verified = true;
-      if (mode === 'move' && !scan.isFile) await this.cleanupSourceFolder(path, settings);
+      if (mode === 'move' && !scan.isFile) await this.cleanupSourceFolder(path, settings, item.id);
       await this.downloads.markImported(item.id);
       return result;
     }
@@ -556,7 +556,15 @@ export class ImportsService {
     return expected.every((id) => done.has(id));
   }
 
-  private async cleanupSourceFolder(path: string, settings: MediaManagementSettings): Promise<void> {
+  private async cleanupSourceFolder(path: string, settings: MediaManagementSettings, trackedId: number): Promise<void> {
+    // Never delete files a newer download (e.g. the same release grabbed again) writes there.
+    const owner = this.downloads
+      .listTracked(['downloading'])
+      .find((t) => t.id !== trackedId && t.outputPath !== undefined && (isUnder(t.outputPath, path) || isUnder(path, t.outputPath)));
+    if (owner) {
+      this.log?.info({ path, downloadId: owner.downloadId, title: owner.title }, 'source folder cleanup skipped: another download is using it');
+      return;
+    }
     try {
       const remaining = await scanPath(path, { filterExtras: false, workingFolders: settings.downloadClientWorkingFolders });
       if (shouldDeleteFolder(remaining, (f) => isSampleByName(f.path))) {

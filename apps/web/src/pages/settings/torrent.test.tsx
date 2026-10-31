@@ -30,6 +30,9 @@ const settings: TorrentSettingsResponse = {
   maxActiveDownloads: 3,
   maxActiveSeeds: 5,
   tunnelGuard: true,
+  diskGuard: true,
+  maxActiveChecks: 2,
+  metadataTimeoutMinutes: 60,
   defaultSeedRatio: 2,
   defaultSeedTimeMinutes: null,
   bindToVpn: true,
@@ -207,6 +210,34 @@ describe('Settings -> Torrent engine', () => {
     renderPage();
     const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
     expect(within(panel).getByText(/VPN tunnel is struggling/)).toBeTruthy();
+  });
+
+  it('says when the disk guard holds downloads back and shows the disk write rate', async () => {
+    status = {
+      ...running,
+      diskGuard: { downloadLimit: 12 * 1024 * 1024, writeRate: 13 * 1024 * 1024, backlogBytes: 20 * 1024 * 1024, checksActive: 1, checksQueued: 2 },
+    };
+    expect(TorrentSessionStatusSchema.safeParse(status).success).toBe(true);
+    renderPage();
+    const panel = await screen.findByLabelText('Torrent engine status', {}, { timeout: 5000 });
+    expect(within(panel).getByText(/disk is falling behind downloads, so they are held to 12(\.0)? MiB\/s/)).toBeTruthy();
+    expect(within(panel).getByText('Disk writes')).toBeTruthy();
+    expect(within(panel).getByText(/^13(\.0)? MiB\/s · 20(\.0)? MiB waiting$/)).toBeTruthy();
+    expect(within(panel).getByText('1 running · 2 waiting')).toBeTruthy();
+  });
+
+  it('edits the disk guard, the check limit and the metadata timeout', async () => {
+    renderPage();
+    const guard = (await screen.findByLabelText('Disk guard', {}, { timeout: 5000 })) as HTMLInputElement;
+    expect(guard.checked).toBe(true);
+    expect((screen.getByLabelText('Max simultaneous checks') as HTMLInputElement).value).toBe('2');
+    expect((screen.getByLabelText('Magnet metadata timeout') as HTMLInputElement).value).toBe('60');
+    fireEvent.click(guard);
+    fireEvent.change(screen.getByLabelText('Max simultaneous checks'), { target: { value: '1' } });
+    fireEvent.change(screen.getByLabelText('Magnet metadata timeout'), { target: { value: '0' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(calls.find((c) => c.method === 'PUT')!.body).toMatchObject({ diskGuard: false, maxActiveChecks: 1, metadataTimeoutMinutes: 0 });
   });
 
   it('maps drafts to update bodies (empty nullable -> null, empty required -> omitted)', () => {

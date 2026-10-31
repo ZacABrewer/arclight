@@ -108,6 +108,8 @@ export class RTorrentClient implements DownloadClient {
       throw new DownloadClientError('rejected', 'Provide exactly one of a magnet link or a torrent file.');
     }
     const id = await this.computeId(input);
+    // rTorrent ignores a load of a torrent it already has; say so instead of sending it again.
+    if (await this.hasTorrent(id)) return { id, warnings: [], alreadyPresent: true };
 
     const commands: string[] = [];
     if (input.category !== '') commands.push(`d.custom1.set=${quoteCommandArg(encodeLabel(input.category))}`);
@@ -188,6 +190,15 @@ export class RTorrentClient implements DownloadClient {
 
   private listTorrents(): Promise<RTorrentTorrent[]> {
     return this.rpc.callAs('d.multicall2', ['', 'main', ...TORRENT_FIELDS], RTorrentTorrentList);
+  }
+
+  private async hasTorrent(id: string): Promise<boolean> {
+    try {
+      return (await this.rpc.callAs('d.hash', [id.toUpperCase()], XmlRpcString)).toLowerCase() === id;
+    } catch (error) {
+      if (error instanceof DownloadClientError && error.code === 'not-found') return false;
+      throw error;
+    }
   }
 
   private async waitForTorrent(id: string): Promise<boolean> {

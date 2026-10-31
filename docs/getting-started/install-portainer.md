@@ -93,6 +93,7 @@ services:
       timeout: 5s
       start_period: 20s
       retries: 3
+    stop_grace_period: 30s
     restart: unless-stopped
     depends_on:
       gluetun:
@@ -140,6 +141,7 @@ services:
       - "7878:7878"
       - "6881:6881"
       - "6881:6881/udp"
+    stop_grace_period: 30s
     restart: unless-stopped
     depends_on:
       - flaresolverr

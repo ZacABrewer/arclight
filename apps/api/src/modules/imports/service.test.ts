@@ -441,6 +441,20 @@ describe('completed download import (movie)', () => {
     expect(await exists(join(downloads, 'Great.Movie.2021.1080p.BluRay.x264-GRP'))).toBe(false);
   });
 
+  it('keeps the source folder when a newer download of the same release writes into it', async () => {
+    const movie = addMovie();
+    const folder = join(downloads, 'Great.Movie.2021.1080p.BluRay.x264-GRP');
+    await put('Great.Movie.2021.1080p.BluRay.x264-GRP/Great.Movie.2021.1080p.BluRay.x264-GRP.mkv');
+    await put('Great.Movie.2021.1080p.BluRay.x264-GRP/Sample/great.movie.sample.mkv', 4);
+    // The same release grabbed again (e.g. after a replace) downloads into the same folder.
+    fake.add(tracked({ id: 23, title: 'Great.Movie.2021.1080p.BluRay.x264-GRP', outputPath: folder, mediaType: 'movie', movieId: movie.id, trackedState: 'downloading' }));
+    const r = await service().importCompletedDownload(
+      tracked({ id: 22, title: 'Great.Movie.2021.1080p.BluRay.x264-GRP', outputPath: folder, mediaType: 'movie', movieId: movie.id }),
+    );
+    expect(r.verified).toBe(true);
+    expect(await exists(join(folder, 'Sample', 'great.movie.sample.mkv'))).toBe(true);
+  });
+
   it('records the "Grab anyway" override on the movie file', async () => {
     const movie = addMovie();
     const override = { rejections: ['Size limit exceeded'], grabbedAt: '2024-06-01T00:00:00.000Z' };

@@ -270,6 +270,7 @@ describe('commands', () => {
       downloadRate: 2 * MiB,
       uploadRate: 512 * 1024,
       torrents: { total: 5, downloading: 2, seeding: 3, paused: 0, queued: 0, checking: 0, error: 0 },
+      diskGuard: { downloadLimit: 12 * MiB, writeRate: 13 * MiB, backlogBytes: 20 * MiB, backlogLimitBytes: 64 * MiB, checksActive: 1, checksQueued: 3 },
     } satisfies TorrentSessionStatus;
     const status: VpnStatus = {
       enabled: true,
@@ -286,6 +287,8 @@ describe('commands', () => {
     expect(results[0]!.output).toMatch(/state\s+running/);
     expect(results[0]!.output).toMatch(/torrents\s+5 total: 2 downloading, 3 seeding/);
     expect(results[0]!.output).toMatch(/download\s+2\.0 MiB\/s/);
+    expect(results[0]!.output).toMatch(/disk guard\s+limiting downloads to 12\.0 MiB\/s \(disk writes 13\.0 MiB\/s, backlog 20\.0 MiB of 64\.0 MiB\)/);
+    expect(results[0]!.output).toMatch(/data checks\s+1 running, 3 waiting/);
     expect(results[1]!.output).toMatch(/public IP\s+203\.0\.113\.7/);
     expect(results[1]!.output).toMatch(/forwarded port\s+51413/);
     expect(results[2]!.output).not.toContain('203.0.113.7');

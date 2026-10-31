@@ -384,6 +384,18 @@ describe('BuiltinClient queue', () => {
     expect('etaSeconds' in item).toBe(false);
   });
 
+  it('reports a magnet that timed out waiting for metadata as failed, with the reason', async () => {
+    // No peer has it: the engine gives up after the metadata timeout and the queue's
+    // failed-download handling (blocklist, search again) takes over from the `failed` status.
+    const { client } = await leecher({}, { metadataTimeoutMs: 300 });
+    const p = pack();
+    const { id } = await client.addTorrent({ magnet: p.magnet, title: p.name, category: 'tv' });
+    expect((await client.getItems('')).find((i) => i.id === id)).toMatchObject({ status: 'downloading', phase: 'metadata' });
+    const item = await waitItem(client, id, (st) => st === 'failed');
+    expect(item.statusMessage).toBe('no metadata after 1 second: no peers had this magnet');
+    expect(item.phase).toBeUndefined();
+  });
+
   it('removes items keeping or deleting their data', async () => {
     const { s, dir, client } = await leecher();
     const keep = await addSeeding(client, s, dir, pack());

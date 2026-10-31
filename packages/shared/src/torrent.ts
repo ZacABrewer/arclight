@@ -51,6 +51,26 @@ export const TorrentSettings = z.object({
     .boolean()
     .default(true)
     .describe('With the VPN on: slow the engine down automatically when the VPN tunnel starts to choke, so the tunnel stays up.'),
+  diskGuard: z
+    .boolean()
+    .default(true)
+    .describe(
+      'Lower the download limit automatically to what the disk actually writes when received data piles up waiting for it, and raise it again once the disk keeps up.',
+    ),
+  maxActiveChecks: z
+    .number()
+    .int()
+    .min(1)
+    .max(16)
+    .default(2)
+    .describe('Torrents whose files are hashed at the same time (checks on add, re-checks, restores). The rest wait in queue order.'),
+  metadataTimeoutMinutes: z
+    .number()
+    .int()
+    .min(0)
+    .max(10_080)
+    .default(60)
+    .describe('A magnet link that has not received its metadata after this many active minutes fails, so it can be replaced (0 = wait forever).'),
   defaultSeedRatio: z.number().min(0).nullable().default(null).describe('Stop seeding at this ratio (empty = unlimited).'),
   defaultSeedTimeMinutes: z
     .number()
@@ -274,6 +294,22 @@ export const TorrentSessionStatus = z.object({
   bootBlocked: z.boolean().optional(),
   /** Present while the tunnel guard limits the engine (bytes/s; null = that direction not limited). */
   tunnelGuard: z.object({ downloadLimit: z.number().nullable(), uploadLimit: z.number().nullable(), connectionLimit: z.number().nullable().optional() }).optional(),
+  /**
+   * Present while the engine runs with the disk guard on. `downloadLimit` (bytes/s) is set while
+   * the guard holds downloads to what the disk writes; null = not limiting. `writeRate` is the
+   * measured disk write throughput (bytes/s), `backlogBytes` the received data waiting for disk.
+   */
+  diskGuard: z
+    .object({
+      downloadLimit: z.number().nullable(),
+      writeRate: z.number(),
+      backlogBytes: z.number(),
+      backlogLimitBytes: z.number().optional(),
+      /** Full data checks running and waiting for a slot. */
+      checksActive: z.number().int().optional(),
+      checksQueued: z.number().int().optional(),
+    })
+    .optional(),
   /** The configured connection and queue limits (the debug report shows them next to the counts). */
   limits: z
     .object({ maxConnections: z.number().int(), maxConnectionsPerTorrent: z.number().int(), maxActiveDownloads: z.number().int(), maxActiveSeeds: z.number().int() })

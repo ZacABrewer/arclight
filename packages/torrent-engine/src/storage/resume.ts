@@ -39,6 +39,10 @@ export const ResumeDataSchema = z.object({
   queuePosition: z.number().int().optional(),
   /** Force-started: ignores the active limits (absent in older files). */
   forceStart: z.boolean().optional(),
+  /** Pieces half-written at save time, re-hashed after a crash (absent in older files). */
+  partialPieces: z.array(z.number().int().nonnegative()).optional(),
+  /** Active time (ms) at which the wait for metadata (re)started, for the metadata timeout. */
+  metadataWaitFromMs: z.number().nonnegative().optional(),
 });
 export type ResumeData = z.infer<typeof ResumeDataSchema>;
 
@@ -50,8 +54,11 @@ export function torrentPath(dir: string, infoHashHex: string): string {
   return join(dir, `${infoHashHex}.torrent`);
 }
 
+let tmpCounter = 0;
+
 async function atomicWrite(path: string, data: string | Buffer): Promise<void> {
-  const tmp = `${path}.${process.pid}.tmp`;
+  // Unique per write: an incremental save and the shutdown save of one torrent can overlap.
+  const tmp = `${path}.${process.pid}.${++tmpCounter}.tmp`;
   await writeFile(tmp, data);
   await rename(tmp, path);
 }

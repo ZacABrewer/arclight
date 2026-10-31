@@ -128,15 +128,28 @@ export class DelugeClient implements DownloadClient {
       options['remove_at_ratio'] = false;
     }
 
-    const result = hasMagnet && input.magnet !== undefined
-      ? await this.rpc.call('core.add_torrent_magnet', [input.magnet, options], DelugeAddResult)
-      : await this.rpc.call(
-        'core.add_torrent_file',
-        [releaseFileName(input.title, 'torrent'), toBase64(input.torrentFile ?? new Uint8Array()), options],
-        DelugeAddResult,
-      );
+    // A torrent Deluge already has is a success (left as it is: it may belong to someone
+    // else); refusing it would make the caller retry the same add forever.
+    const alreadyPresent: AddTorrentResult = { id: expectedId, warnings: [], alreadyPresent: true };
+    let result: string | null;
+    try {
+      result = hasMagnet && input.magnet !== undefined
+        ? await this.rpc.call('core.add_torrent_magnet', [input.magnet, options], DelugeAddResult)
+        : await this.rpc.call(
+          'core.add_torrent_file',
+          [releaseFileName(input.title, 'torrent'), toBase64(input.torrentFile ?? new Uint8Array()), options],
+          DelugeAddResult,
+        );
+    } catch (error) {
+      if (error instanceof DownloadClientError && error.code === 'rejected' && /already in session/i.test(error.message)) {
+        return alreadyPresent;
+      }
+      throw error;
+    }
     if (result === null || result === '') {
-      throw new DownloadClientError('rejected', 'Deluge refused the torrent (already added, or the torrent is invalid).');
+      // Deluge 1.3 answers null for a duplicate instead of raising.
+      if (await this.hasTorrent(expectedId)) return alreadyPresent;
+      throw new DownloadClientError('rejected', 'Deluge refused the torrent (the torrent is invalid).');
     }
     const id = result.toLowerCase();
     const warnings: string[] = [];
@@ -281,6 +294,11 @@ export class DelugeClient implements DownloadClient {
 
   private getConfig(): Promise<DelugeConfigValues> {
     return this.rpc.call('core.get_config_values', [[...DELUGE_CONFIG_KEYS]], DelugeConfigValues);
+  }
+
+  private async hasTorrent(id: string): Promise<boolean> {
+    const torrents = await this.rpc.call('core.get_torrents_status', [{ id: [id] }, ['name']], DelugeTorrentMap);
+    return Object.keys(torrents).some((hash) => hash.toLowerCase() === id);
   }
 
   private listTorrents(label: string, fields: readonly string[] = DELUGE_TORRENT_FIELDS): Promise<DelugeTorrentMap> {

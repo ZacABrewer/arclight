@@ -7,7 +7,7 @@ Something is not working. This page is organised by what you see: find your symp
 Contents:
 
 - [First checks](#first-checks)
-- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start, [hardware transcoding fails](#hardware-transcoding-fails), [health notification without More Info link](#health-notification-no-more-info)
+- [Symptoms](#symptoms): download stuck, paused by the VPN kill switch, stalled, no peers, import blocked or failed, [import wizard problems](#import-wizard-problems), nothing found, Cloudflare challenge, VPN will not connect, port forward not synced, permission denied, hardlinks not working, locked out, "does not match the contract", container keeps restarting, slow engine start, [downloads slow down on their own](#downloads-slow-down-on-their-own), [magnet failed: no metadata](#magnet-no-metadata), [torrents recheck after a restart](#torrents-recheck-after-restart), [same release keeps coming back](#same-release-keeps-coming-back), [Remove Completed removed my torrents](#remove-completed-removed-my-torrents), [hardware transcoding fails](#hardware-transcoding-fails), [health notification without More Info link](#health-notification-no-more-info)
 - [Health checks](#health-checks): all 45, with a table of anchors
 - [Still stuck](#still-stuck)
 
@@ -455,6 +455,82 @@ The container health check calls `/api/v1/system/ping` and allows 20 seconds to 
 **How to confirm:** Settings > Torrent Engine > status shows "Starting", "Lockdown" or "Engine running"; System > Status shows Torrents and Lockdown.
 
 **Fix:** usually nothing; wait. If it never leaves lockdown see [Paused by the VPN kill switch](#paused-by-vpn-kill-switch). If every restart is slow, check that the resume data folder (`<config>/torrents/`) is on a healthy disk, and do not point the downloads folder at a slow network share. You can lower the VPN "Poll interval" (minimum 10 seconds) to shorten the first-check wait.
+
+---
+
+<a id="downloads-slow-down-on-their-own"></a>
+### Downloads slow down on their own
+
+**What you see:** downloads start fast, then drop to a lower speed that holds steady, even though no limit is set. The speed rises again later. Settings > Torrent Engine shows a notice that downloads are held to a limit because the disk is falling behind.
+
+**Cause:** the disk guard. When data arrives faster than the disk writes it (common on a NAS with a busy array), the guard lowers the download limit to about 90% of the measured write speed so memory does not fill up and seeding keeps working. It never goes below 1 MiB/s. It raises the limit again once the disk keeps up. With the VPN on, the [tunnel guard](using/download-clients.md#tunnel-guard) can slow downloads for a different reason; the same status area says which one is limiting.
+
+**How to confirm:** Settings > Torrent Engine, Live status: the Disk writes line shows the write speed and how much is waiting. The debug report's `engine` command lists "disk guard" with "limiting downloads to ...". If it says "not limiting", look at your own limits and the tunnel guard instead.
+
+**Fix:** usually none: the speed is what the disk can take. To get more, move the downloads folder to a faster disk, stop other heavy disk work (library scans, transcoding, parity checks), or lower Max active downloads. You can turn **Disk guard** off in Settings > Torrent Engine > Disk, but then a slow disk can fill memory and stall seeding. See [Disk guard](using/download-clients.md#disk-guard).
+
+---
+
+<a id="magnet-no-metadata"></a>
+### Magnet failed: no metadata
+
+**What you see:** a download fails with "no metadata after 60 minutes: no peers had this magnet" (the number is your setting).
+
+**Cause:** a magnet link only holds the torrent's hash. The file list has to come from a peer, and no peer that had it was reachable for the whole timeout. The release is dead, or its tracker and DHT peers cannot reach you.
+
+**How to confirm:** the queue row and its Timeline show the error. Before it failed, the row said "Fetching metadata". If other magnets work, the release is dead. If none do, check [No peers](#no-peers) and the VPN.
+
+**Fix:** nothing, if automatic re-download is on: the failed release is blocklisted and another one is searched for. Otherwise search again by hand. To wait longer or turn the limit off, change **Magnet metadata timeout** in Settings > Torrent Engine (0 waits forever). See [Magnets without metadata](using/download-clients.md#magnets-without-metadata).
+
+---
+
+<a id="torrents-recheck-after-restart"></a>
+### Torrents recheck after a restart
+
+**What you see:** after the container restarts or the NAS reboots, many torrents sit on "Checking files" for a long time, and the disk is busy.
+
+**Cause:** the engine did not get to save its resume data. Docker stops a container after 10 seconds unless told to wait longer, and a kill (a power cut, an out-of-memory kill, a stop that timed out) leaves no time to save. The engine saves resume data about 30 seconds after new pieces are verified, so after a kill it normally only re-hashes pieces that were half written and files that changed. A full check of everything happens when the resume data is missing, was deleted, or no longer matches the files (for example the files were moved or edited outside Arclight).
+
+**How to confirm:** Settings > Torrent Engine shows how many data checks are running and waiting. Check that your compose file has `stop_grace_period: 30s` under the `arclight` service. The log shows a warning if the engine's shutdown took longer than its limit.
+
+**Fix:**
+
+1. Add `stop_grace_period: 30s` to the `arclight` service (the supplied compose files from 0.14.0 have it) and run `docker compose up -d` again.
+2. Keep the config folder (it holds the resume data in `torrents/`) on a disk that is not full and is not wiped on restart.
+3. If many checks run at once, lower **Max simultaneous checks** to 1 or 2 (the default is 2); the rest wait their turn.
+4. Do not move or rename download folders outside Arclight. Use the client's move action instead.
+
+See [Resume data and shutdown](using/download-clients.md#resume-data-and-shutdown) and [Slow engine start](#slow-engine-start).
+
+---
+
+<a id="same-release-keeps-coming-back"></a>
+### Same release keeps coming back / torrent already exists
+
+**What you see:** the same release is grabbed again and again, or the client reports that the torrent already exists. Or a log line says grabs of a release are held.
+
+**Cause:** Arclight now treats these cases on purpose:
+
+- A torrent the client already has counts as added. Arclight tracks it and does not send it again (qBittorrent, Transmission, Deluge, rTorrent and the built-in engine).
+- After a download is replaced, removed from the queue, removed after import or removed in the client, the same release (matched by info hash or indexer GUID) is not sent again for 30 minutes.
+- If a release goes to the same client more than 3 times in an hour, further grabs are held for 15 minutes, then twice as long each time, up to 6 hours. The log says when the hold starts. This stops a loop, for example a client that deletes the torrent as soon as it is added.
+
+**How to confirm:** the log line names the release and the client. Look at what removes the torrent from the client: its own "remove when finished" setting, a ratio rule, or a script.
+
+**Fix:** stop whatever removes the torrent from the client (turn off the client's own removal rules, see [download-client-removes-completed-downloads](#download-client-removes-completed-downloads)). To get a different release, use **Try another release** on the queue row; it no longer returns the same release even when the blocklist box is not ticked. See [Grabs that repeat themselves](using/download-clients.md#grabs-that-repeat-themselves).
+
+---
+
+<a id="remove-completed-removed-my-torrents"></a>
+### Remove Completed removed torrents I added by hand
+
+**What you see:** torrents you added yourself (to Arclight's category in the client) disappeared after Arclight imported them.
+
+**Cause:** before 0.14.0, Remove Completed removed every imported download in the client's category, not only the ones Arclight grabbed.
+
+**How to confirm:** the log has one line per removed torrent, and each Arclight-grabbed download shows the removal on its Timeline.
+
+**Fix:** update to 0.14.0 or newer. Remove Completed then only removes downloads Arclight grabbed. Others are imported, kept in the client, and the log says why. Torrents already removed are gone; add them again from the file or magnet. To keep your own torrents apart, give Arclight its own category. See [Settings every client has](using/download-clients.md#settings-every-client-has).
 
 ---
 
