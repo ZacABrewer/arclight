@@ -8,6 +8,8 @@ import {
   RequestListQuery,
   REQUEST_SECRET_MASK,
   RequestsSettings,
+  RequestTypes,
+  requestTypesOfSettings,
   UserApprovalPolicy,
   UserQuota,
   UserRequestSettings,
@@ -56,6 +58,7 @@ import { libraryOnlyAvailability, type AvailabilityQuery, type MediaServerAvaila
 import type { RequestNotifier } from './notify.js';
 import {
   type Actor,
+  assertRequestTypeAllowed,
   can,
   canAutoApprove,
   canManageRequests,
@@ -590,6 +593,8 @@ export class RequestsService {
     const is4k = input.is4k;
 
     if (!canRequest(held, type, is4k)) throw RequestsError.forbidden(`not allowed to request ${is4k ? '4K ' : ''}${type === 'movie' ? 'movies' : 'series'}`);
+    // The requester's type filter (on-behalf requests use the target user's, like the caps below).
+    assertRequestTypeAllowed({ permissions: held, settings: requester.settings }, type);
     if (is4k && !(type === 'movie' ? settings.movie4k.enabled : settings.series4k.enabled)) {
       throw new RequestsError('VALIDATION', `4K ${type === 'movie' ? 'movie' : 'series'} requests are disabled`);
     }
@@ -1407,10 +1412,15 @@ export class RequestsService {
   permissions(actor: Actor, userId: number): UserPermissions {
     this.assertSelfOrManager(actor, userId);
     const row = userRow(this.db, userId);
-    return { permissions: userPermissions(row), contentRestrictions: restrictionsOfSettings(row.settings), approvalPolicy: approvalPolicyOf(row) };
+    return {
+      permissions: userPermissions(row),
+      contentRestrictions: restrictionsOfSettings(row.settings),
+      approvalPolicy: approvalPolicyOf(row),
+      requestTypes: requestTypesOfSettings(row.settings),
+    };
   }
 
-  /** Permission bits plus, when given, the content caps and approval override (MANAGE_USERS). */
+  /** Permission bits plus, when given, the content caps, approval override and request type filter (MANAGE_USERS). */
   setPermissions(actor: Actor, userId: number, input: UserPermissions): UserPermissions {
     if (!canManageUsers(actor.permissions)) throw RequestsError.forbidden();
     const target = userRow(this.db, userId);
@@ -1419,6 +1429,7 @@ export class RequestsService {
     const patch: Record<string, unknown> = {};
     if (input.contentRestrictions !== undefined) patch['contentRestrictions'] = ContentRestrictions.parse(input.contentRestrictions);
     if (input.approvalPolicy !== undefined) patch['approvalPolicy'] = UserApprovalPolicy.parse(input.approvalPolicy);
+    if (input.requestTypes !== undefined) patch['requestTypes'] = RequestTypes.parse(input.requestTypes);
     if (Object.keys(patch).length > 0) patchUserSettings(this.db, userId, patch, this.iso());
     return this.permissions(actor, userId);
   }

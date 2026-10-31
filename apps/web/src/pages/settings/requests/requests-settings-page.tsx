@@ -11,7 +11,7 @@ import { errorMessage } from '../../../api/client.js';
 import { Button, Checkbox, ErrorBlock, FormRow, FormSection, Input, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { TagPicker } from '../../../components/forms/tag-picker.js';
 import { useToast } from '../../../components/toast.js';
-import { PermissionsMatrix, QuotaFields } from '../../../features/requests/user-editors.js';
+import { PermissionsMatrix, QuotaFields, RequestTypeToggles } from '../../../features/requests/user-editors.js';
 import { useQualityProfiles, useRootFolders } from '../../../hooks/library.js';
 import { useRequestsSettings, useSaveRequestsSettings, useSendDigest } from '../../../hooks/requests.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
@@ -208,6 +208,11 @@ function SettingsFields({ draft, error }: { draft: Draft<RequestsSettings>; erro
       <SettingsSection label={t('settings.requests.settings.defaultPermissionsForNewUsers')}>
         <div className="al-requests-embed">
           <PermissionsMatrix value={value.defaultPermissions} onChange={(v) => set('defaultPermissions', v)} lockAdmin />
+        </div>
+      </SettingsSection>
+      <SettingsSection label={t('settings.requests.settings.defaultRequestTypesForNewUsers')}>
+        <div className="al-requests-embed">
+          <RequestTypeToggles value={value.defaultRequestTypes} onChange={(v) => set('defaultRequestTypes', v)} />
         </div>
       </SettingsSection>
       <SaveError error={error} />

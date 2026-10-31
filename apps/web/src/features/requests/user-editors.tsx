@@ -5,12 +5,15 @@ import {
   PERMISSION_INFO,
   Permission,
   REQUEST_SECRET_MASK,
+  REQUEST_TYPE_KEYS,
+  RequestTypes,
   TV_CERTIFICATIONS,
   UserApprovalPolicy,
   type MovieCertification,
   type TvCertification,
   type PermissionInfo,
   type QuotaInfo,
+  type RequestTypeKey,
   type UserNotificationTestResult,
   type UserNotificationTypes,
   type UserQuota,
@@ -173,6 +176,48 @@ export function capsSummary(c: ContentRestrictions): string {
   return parts.length ? parts.join(' · ') : t('features.requests.userEditors.noCaps');
 }
 
+// ---------------------------------------------------------------------------------------
+// Request type filter
+// ---------------------------------------------------------------------------------------
+
+const REQUEST_TYPE_TEXT: Record<RequestTypeKey, { label: () => string; hint: () => string }> = {
+  movie: { label: () => t('common.movies'), hint: () => t('features.requests.userEditors.typeMovieHint') },
+  series: { label: () => t('common.series'), hint: () => t('features.requests.userEditors.typeSeriesHint') },
+  music: { label: () => t('common.music'), hint: () => t('features.requests.userEditors.typeMusicHint') },
+  audiobook: { label: () => t('common.audiobooks'), hint: () => t('features.requests.userEditors.typeAudiobookHint') },
+  subtitles: { label: () => t('common.subtitles'), hint: () => t('features.requests.userEditors.typeSubtitlesHint') },
+  audioLanguages: { label: () => t('features.requests.userEditors.typeAudioLanguages'), hint: () => t('features.requests.userEditors.typeAudioLanguagesHint') },
+};
+
+export function requestTypeLabel(key: RequestTypeKey): string {
+  return REQUEST_TYPE_TEXT[key].label();
+}
+
+/** "All request types on", or "Off: Music, Subtitles". */
+export function requestTypesSummary(types: RequestTypes): string {
+  const off = REQUEST_TYPE_KEYS.filter((k) => !types[k]);
+  return off.length ? t('features.requests.userEditors.typesOff', { types: off.map(requestTypeLabel).join(', ') }) : t('features.requests.userEditors.allTypesOn');
+}
+
+/**
+ * Six switches for a request type filter (users.settings.requestTypes, or the default for new
+ * users). Off denies the type even when the permissions allow it; on leaves it to them.
+ */
+export function RequestTypeToggles({ value, onChange }: { value: RequestTypes; onChange: (next: RequestTypes) => void }) {
+  return (
+    <div className="req-stack" data-testid="request-type-toggles">
+      <p className="al-caption" style={{ margin: 0 }}>
+        {t('features.requests.userEditors.requestTypesLead')}
+      </p>
+      {REQUEST_TYPE_KEYS.map((key) => (
+        <Field key={key} label={requestTypeLabel(key)} inline hint={REQUEST_TYPE_TEXT[key].hint()}>
+          <Toggle aria-label={requestTypeLabel(key)} checked={value[key]} onChange={(e) => onChange({ ...value, [key]: e.currentTarget.checked })} />
+        </Field>
+      ))}
+    </div>
+  );
+}
+
 function autoApproveLabel(v: UserApprovalPolicy['autoApprove']): string {
   if (v === 'always') return t('features.requests.userEditors.overrideAlways');
   if (v === 'never') return t('features.requests.userEditors.overrideNever');
@@ -181,16 +226,22 @@ function autoApproveLabel(v: UserApprovalPolicy['autoApprove']): string {
 
 interface PolicyDraft {
   caps: ContentRestrictions;
+  types: RequestTypes;
   policy: UserApprovalPolicy;
 }
 
-function policyDraftOf(data: { contentRestrictions?: unknown; approvalPolicy?: unknown }): PolicyDraft {
-  return { caps: ContentRestrictions.parse(data.contentRestrictions ?? {}), policy: UserApprovalPolicy.parse(data.approvalPolicy ?? {}) };
+function policyDraftOf(data: { contentRestrictions?: unknown; requestTypes?: unknown; approvalPolicy?: unknown }): PolicyDraft {
+  return {
+    caps: ContentRestrictions.parse(data.contentRestrictions ?? {}),
+    types: RequestTypes.parse(data.requestTypes ?? {}),
+    policy: UserApprovalPolicy.parse(data.approvalPolicy ?? {}),
+  };
 }
 
 /**
- * Content caps (certification limits, hide adult) and the approval-policy override for one
- * user. `readOnly` shows them as facts (Profile: users cannot change their own caps).
+ * Content caps (certification limits, hide adult), the request type filter and the
+ * approval-policy override for one user. `readOnly` shows them as facts (Profile: users cannot
+ * change their own caps or filter).
  */
 export function UserPolicyEditor({ userId, readOnly = false }: { userId: number; readOnly?: boolean }) {
   const query = useUserPermissions(userId);
@@ -203,14 +254,16 @@ export function UserPolicyEditor({ userId, readOnly = false }: { userId: number;
 
   if (query.isError) return readOnly ? <p className="al-caption">{t('features.requests.userEditors.capsUnavailable')}</p> : <ErrorView error={query.error} onRetry={() => void query.refetch()} />;
   if (!query.data || draft === null) return <Skeleton lines={4} />;
-  const { caps, policy } = draft;
+  const { caps, types, policy } = draft;
   const permissions = query.data.permissions;
+  const isAdmin = (permissions & Permission.ADMIN) !== 0;
 
   if (readOnly) {
     return (
       <KeyValue
         items={[
           { label: t('features.requests.userEditors.contentCaps'), value: capsSummary(caps), mono: false },
+          ...(isAdmin ? [] : [{ label: t('features.requests.userEditors.requestTypes'), value: requestTypesSummary(types), mono: false }]),
           { label: t('features.requests.userEditors.autoApproval'), value: autoApproveLabel(policy.autoApprove), mono: false },
           ...(policy.budgetExempt ? [{ label: t('features.requests.userEditors.budgets'), value: t('features.requests.userEditors.budgetExemptShort'), mono: false }] : []),
         ]}
@@ -247,6 +300,10 @@ export function UserPolicyEditor({ userId, readOnly = false }: { userId: number;
         <Toggle aria-label={t('features.requests.userEditors.hideAdult')} checked={caps.hideAdultContent} onChange={(e) => setCaps({ hideAdultContent: e.currentTarget.checked })} />
       </Field>
 
+      <SectionLabel>{t('features.requests.userEditors.requestTypes')}</SectionLabel>
+      {isAdmin ? <p className="al-caption">{t('features.requests.userEditors.requestTypesAdmin')}</p> : null}
+      <RequestTypeToggles value={types} onChange={(next) => setDraft({ ...draft, types: next })} />
+
       <SectionLabel>{t('features.requests.userEditors.approvalOverride')}</SectionLabel>
       <div className="req-fields-2">
         <Field label={t('features.requests.userEditors.autoApproval')} hint={t('features.requests.userEditors.autoApprovalHint')}>
@@ -280,10 +337,10 @@ export function UserPolicyEditor({ userId, readOnly = false }: { userId: number;
           loading={save.isPending}
           onClick={() =>
             save.mutate(
-              { permissions, contentRestrictions: caps, approvalPolicy: policy },
+              { permissions, contentRestrictions: caps, requestTypes: types, approvalPolicy: policy },
               {
                 onSuccess: (res) => {
-                  setDraft(policyDraftOf({ contentRestrictions: res.contentRestrictions ?? caps, approvalPolicy: res.approvalPolicy ?? policy }));
+                  setDraft(policyDraftOf({ contentRestrictions: res.contentRestrictions ?? caps, requestTypes: res.requestTypes ?? types, approvalPolicy: res.approvalPolicy ?? policy }));
                   toast.push({ tone: 'ok', title: t('features.requests.userEditors.capsSaved') });
                 },
               },

@@ -33,7 +33,7 @@ import { RequestsError } from './errors.js';
 import { DEFAULT_SERVER_NAMES } from './media-server.js';
 import { canManageSettings, canManageUsers, type Actor } from './permissions.js';
 import type { RequestsService } from './service.js';
-import { allUserRows, mediaServerLinkOf, patchUserSettings, userRow, type UserRow } from './users.js';
+import { allUserRows, mediaServerLinkOf, newUserRequestSettings, patchUserSettings, userRow, type UserRow } from './users.js';
 
 // Media-server accounts (docs/spec/requests.md sections 2.3-2.4, adapted): the
 // `mediaServer` view over Settings > Media servers (media-servers module; the first enabled server
@@ -174,11 +174,11 @@ export class MediaServerAccounts implements ExternalLoginProvider {
     return candidate;
   }
 
-  /** Creates a local `user` with the default permissions from Settings > Requests. */
+  /** Creates a local `user` with the default permissions and request type filter from Settings > Requests. */
   async createLinkedUser(account: MediaServerAccount, link: MediaServerLink): Promise<UserRow> {
     const username = this.freeUsername(localUsernameFrom(account.username));
     const now = this.iso();
-    const settings: Record<string, unknown> = { mediaServerLink: link };
+    const settings: Record<string, unknown> = { ...newUserRequestSettings(this.requests.settings()), mediaServerLink: link };
     if (link.kind === 'plex' && link.accessToken) settings['plexToken'] = link.accessToken;
     const row = this.db
       .insert(users)

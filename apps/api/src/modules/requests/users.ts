@@ -1,5 +1,5 @@
 import { asc, eq, inArray, sql, type SQL, type SQLWrapper } from 'drizzle-orm';
-import { MediaServerLink, UserApprovalPolicy, UserRequestSettings, type RequestUser } from '@arclight/shared';
+import { MediaServerLink, RequestTypes, UserApprovalPolicy, UserRequestSettings, type RequestsSettings, type RequestUser } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { users } from '../../db/schema.js';
 import { RequestsError } from './errors.js';
@@ -103,6 +103,15 @@ export function setUserPermissions(db: Db, id: number, permissions: number, now:
   const row = userRow(db, id);
   const next = effectivePermissions({ role: row.role, permissions });
   return db.update(users).set({ permissions: next, updatedAt: now }).where(eq(users.id, id)).returning().get()!;
+}
+
+/**
+ * The `users.settings` keys a new account starts with: the default request type filter
+ * (Settings > Requests), stored only when it turns a type off, since absent means every type on.
+ */
+export function newUserRequestSettings(settings: Pick<RequestsSettings, 'defaultRequestTypes'>): Record<string, unknown> {
+  const types = RequestTypes.parse(settings.defaultRequestTypes ?? {});
+  return Object.values(types).every(Boolean) ? {} : { requestTypes: types };
 }
 
 /** The user's approval-policy override (users.settings.approvalPolicy), defaults applied. */

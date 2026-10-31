@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { useState } from 'react';
-import { ContentRestrictions, PERMISSION_INFO, Permission, UserPermissions } from '@arclight/shared';
+import { ALL_REQUEST_TYPES, ContentRestrictions, PERMISSION_INFO, Permission, UserPermissions } from '@arclight/shared';
 import { stubApi, renderWithClient } from './test-utils.js';
-import { PermissionsMatrix, UserPolicyEditor, UserQuotaEditor, capsSummary, groupedPermissions, parseOptionalGb, togglePermission } from './user-editors.js';
+import { PermissionsMatrix, UserPolicyEditor, UserQuotaEditor, capsSummary, groupedPermissions, parseOptionalGb, requestTypesSummary, togglePermission } from './user-editors.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -99,7 +99,40 @@ describe('content caps and approval override', () => {
       permissions: Permission.REQUEST,
       contentRestrictions: { maxCertification: { movie: 'PG', tv: 'TV-Y7' }, hideAdultContent: true },
       approvalPolicy: { autoApprove: 'never', autoApproveIfSizeBelowGb: 20, budgetExempt: true },
+      requestTypes: ALL_REQUEST_TYPES,
     });
+  });
+
+  it('summarises the request type filter', () => {
+    expect(requestTypesSummary(ALL_REQUEST_TYPES)).toBe('All request types on');
+    expect(requestTypesSummary({ ...ALL_REQUEST_TYPES, music: false, subtitles: false })).toBe('Off: Music, Subtitles');
+  });
+
+  it('edits the request type filter and PUTs it with the caps', async () => {
+    const calls = stubApi(
+      { '/api/v1/user/4/permissions': { ...perms, requestTypes: { ...ALL_REQUEST_TYPES, audiobook: false } } },
+      (url, method, body) => (method === 'PUT' && url === '/api/v1/user/4/permissions' ? { body } : undefined),
+    );
+    renderWithClient(<UserPolicyEditor userId={4} />);
+    const audiobooks = (await screen.findByRole('switch', { name: 'Audiobooks' })) as HTMLInputElement;
+    expect(audiobooks.checked).toBe(false);
+    expect(screen.getAllByRole('switch', { name: /^(Movies|Series|Music|Audiobooks|Subtitles|Audio languages)$/ })).toHaveLength(6);
+    fireEvent.click(screen.getByRole('switch', { name: 'Music' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Audio languages' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save caps and approval' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    expect(UserPermissions.parse(calls.find((c) => c.method === 'PUT')?.body).requestTypes).toEqual({
+      ...ALL_REQUEST_TYPES,
+      music: false,
+      audiobook: false,
+      audioLanguages: false,
+    });
+  });
+
+  it('notes that admins are not filtered', async () => {
+    stubApi({ '/api/v1/user/4/permissions': { ...perms, permissions: Permission.ADMIN } });
+    renderWithClient(<UserPolicyEditor userId={4} />);
+    expect(await screen.findByText(/Admins are not filtered/)).toBeTruthy();
   });
 
   it('shows caps read-only on the profile', async () => {
@@ -108,6 +141,13 @@ describe('content caps and approval override', () => {
     expect(await screen.findByText('Movies up to PG')).toBeTruthy();
     expect(screen.getByText('Always auto-approve')).toBeTruthy();
     expect(screen.getByText('Exempt')).toBeTruthy();
+    expect(screen.getByText('All request types on')).toBeTruthy();
     expect(screen.queryByRole('button')).toBeNull();
+  });
+
+  it('shows the request type filter read-only on the profile', async () => {
+    stubApi({ '/api/v1/user/4/permissions': { ...perms, requestTypes: { music: false } } });
+    renderWithClient(<UserPolicyEditor userId={4} readOnly />);
+    expect(await screen.findByText('Off: Music')).toBeTruthy();
   });
 });

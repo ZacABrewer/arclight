@@ -3,7 +3,7 @@ import { DiscoverSliderType, MediaServerLink, OverrideRuleInput, Permission, Req
 import * as t from '../../db/schema.js';
 import { localUsernameFrom } from '../requests/accounts.js';
 import { effectivePermissions } from '../requests/permissions.js';
-import { allUserRows, mediaServerLinkOf, type UserRow } from '../requests/users.js';
+import { allUserRows, mediaServerLinkOf, newUserRequestSettings, type UserRow } from '../requests/users.js';
 import { getSection, setSection } from '../settings/service.js';
 import { importedTarget, SkipItem, type AreaEnv, type Existing, type Handlers } from './areas.js';
 import { importedFromArr } from './arr-refs.js';
@@ -129,7 +129,8 @@ function fillUser(env: AreaEnv, id: number, p: SeerrUserPayload, opts: { permiss
 function createUser(env: AreaEnv, p: SeerrUserPayload): number {
   const base = localUsernameFrom(p.username ?? p.mediaServerUsername ?? (p.email.split('@')[0] || 'user'));
   const username = freeUsername(env, base);
-  const settings: Record<string, unknown> = {};
+  // Imported users are new users: they start with the default request type filter.
+  const settings: Record<string, unknown> = { ...newUserRequestSettings(RequestsSettings.parse(getSection(env.db, 'requests') ?? {})) };
   const link = linkFor(p, env.now);
   if (link) {
     const other = userWithLink(env, link);

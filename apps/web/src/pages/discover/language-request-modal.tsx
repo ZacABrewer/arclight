@@ -12,7 +12,8 @@ import './language-requests.css';
 // "Request subtitles or audio" on a title page: a portal user asks for subtitles in a language
 // (forced only / hearing impaired as simple checkboxes) or for an additional audio language, for
 // the whole title or one season. The dialog shows what the title already has and what is
-// already asked for, and refuses those languages up front (the api checks again: 409).
+// already asked for, and refuses those languages up front (the api checks again: 409). A kind
+// the user's request type filter turns off is not offered (options.canRequestSubtitles / Audio).
 
 export interface LanguageDraft {
   kind: LanguageRequestKind;
@@ -67,6 +68,11 @@ export function buildLanguageRequest(mediaType: MediaType, tmdbId: number, draft
   };
 }
 
+/** The kinds the dialog offers, in display order (the user's request type filter). */
+export function allowedLanguageKinds(options: Pick<LanguageRequestOptions, 'canRequestSubtitles' | 'canRequestAudio'>): LanguageRequestKind[] {
+  return [...(options.canRequestSubtitles ? (['subtitle'] as const) : []), ...(options.canRequestAudio ? (['audio'] as const) : [])];
+}
+
 /** "English", "English (forced)", "English (HI)" for a chip key. */
 function chipLabel(key: string, name: (code: string) => string): string {
   const [code = key, flag] = key.split(':');
@@ -109,7 +115,8 @@ function LanguageRequestForm({
 }) {
   const toast = useToast();
   const create = useCreateLanguageRequest();
-  const [draft, setDraft] = useState<LanguageDraft>(EMPTY_LANGUAGE_DRAFT);
+  const kinds = allowedLanguageKinds(options);
+  const [draft, setDraft] = useState<LanguageDraft>(() => ({ ...EMPTY_LANGUAGE_DRAFT, kind: kinds[0] ?? EMPTY_LANGUAGE_DRAFT.kind }));
   const [error, setError] = useState<string | null>(null);
   const names = useMemo(() => new Map(languages.map((l) => [l.code, l.name])), [languages]);
   const name = (code: string) => names.get(code) ?? names.get(baseOf(code)) ?? code;
@@ -119,7 +126,7 @@ function LanguageRequestForm({
   };
 
   if (!options.inLibrary) return <p className="mk-muted">{t('discover.languageRequest.notInLibrary')}</p>;
-  if (!options.canRequest) return <p className="mk-muted">{t('discover.languageRequest.notAllowed')}</p>;
+  if (!options.canRequest || kinds.length === 0) return <p className="mk-muted">{t('discover.languageRequest.notAllowed')}</p>;
 
   const picked = draft.language;
   const pickedReason = picked ? unavailableReason(options, draft, picked) : null;
@@ -155,15 +162,17 @@ function LanguageRequestForm({
         submit();
       }}
     >
-      <Segmented
-        aria-label={t('discover.languageRequest.kind')}
-        value={draft.kind}
-        onChange={(kind) => set({ kind })}
-        options={[
-          { value: 'subtitle', label: t('discover.languageRequest.subtitles') },
-          { value: 'audio', label: t('discover.languageRequest.audioLanguage') },
-        ]}
-      />
+      {kinds.length > 1 ? (
+        <Segmented
+          aria-label={t('discover.languageRequest.kind')}
+          value={draft.kind}
+          onChange={(kind) => set({ kind })}
+          options={[
+            { value: 'subtitle', label: t('discover.languageRequest.subtitles') },
+            { value: 'audio', label: t('discover.languageRequest.audioLanguage') },
+          ]}
+        />
+      ) : null}
       <p className="al-caption" style={{ margin: 0 }}>
         {draft.kind === 'subtitle' ? t('discover.languageRequest.subtitleIntro') : t('discover.languageRequest.audioIntro')}
       </p>

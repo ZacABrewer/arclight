@@ -45,7 +45,7 @@ import { getSection } from '../settings/service.js';
 import { DETAIL_TTL_MS, DiscoverCache, LIST_TTL_MS, STATIC_TTL_MS } from './discover-cache.js';
 import { RequestsError } from './errors.js';
 import type { IssuesService } from './issues.js';
-import { type Actor, can, canManageSettings, canRequest, canRequestAdvanced } from './permissions.js';
+import { type Actor, can, canManageSettings, canRequest, canRequestAdvanced, requestTypeAllowed } from './permissions.js';
 import { discoverSliders, mediaRequests } from './schema.js';
 import type { RequestsService } from './service.js';
 import { userPermissions, findUserRow } from './users.js';
@@ -486,7 +486,9 @@ export class DiscoverService {
     const c = await this.cached(`collection:${id}`, DETAIL_TTL_MS, (client) => client.getCollection(id));
     const parts = this.enrich(c.parts);
     const settings = this.requests.settings();
-    const held = this.actorPermissions(actor);
+    const access = this.actorAccess(actor);
+    const held = access.permissions;
+    const movies = requestTypeAllowed(access, 'movie');
     return {
       tmdbId: c.tmdbId,
       name: c.name,
@@ -495,8 +497,8 @@ export class DiscoverService {
       backdropUrl: c.images.backdrop ?? null,
       parts,
       missing: parts.filter((p) => this.requestableMovie(p, false)).length,
-      canRequest: canRequest(held, 'movie', false),
-      canRequest4k: canRequest(held, 'movie', true) && settings.movie4k.enabled,
+      canRequest: movies && canRequest(held, 'movie', false),
+      canRequest4k: movies && canRequest(held, 'movie', true) && settings.movie4k.enabled,
     };
   }
 
@@ -527,10 +529,11 @@ export class DiscoverService {
   // title pages
   // -------------------------------------------------------------------------------------
 
-  private actorPermissions(actor: Actor): number {
-    if (actor.userId === null || actor.anonymous) return actor.permissions;
+  /** The caller's current permission bits and settings (request type filter); none for system and anonymous callers. */
+  private actorAccess(actor: Actor): { permissions: number; settings: unknown } {
+    if (actor.userId === null || actor.anonymous) return { permissions: actor.permissions, settings: null };
     const row = findUserRow(this.db, actor.userId);
-    return row ? userPermissions(row) : actor.permissions;
+    return row ? { permissions: userPermissions(row), settings: row.settings } : { permissions: actor.permissions, settings: null };
   }
 
   async title(actor: Actor, type: MediaType, tmdbId: number): Promise<TitleDetail> {
@@ -540,7 +543,8 @@ export class DiscoverService {
     ]);
     const settings = this.requests.settings();
     const status = this.requests.titleStatuses(type, [tmdbId]).get(tmdbId);
-    const held = this.actorPermissions(actor);
+    const access = this.actorAccess(actor);
+    const held = access.permissions;
     const releaseDate = 'firstAired' in core ? core.firstAired : 'inCinemas' in core ? (core.inCinemas ?? core.digitalRelease ?? core.physicalRelease) : undefined;
 
     let seasons: TitleSeason[] = [];
@@ -575,6 +579,7 @@ export class DiscoverService {
 
     const requestable = (is4k: boolean): boolean => {
       if (!canRequest(held, type, is4k)) return false;
+      if (!requestTypeAllowed(access, type)) return false;
       if (is4k && !(type === 'movie' ? settings.movie4k.enabled : settings.series4k.enabled)) return false;
       if (type === 'movie') return (is4k ? status?.status4k : status?.status) === 'unknown' || status === undefined;
       return seasons.some(
@@ -699,7 +704,7 @@ export class DiscoverService {
     const rows = this.db.select().from(discoverSliders).orderBy(asc(discoverSliders.sortOrder), asc(discoverSliders.id)).all();
     const all = rows.map((r) => this.toSlider(r));
     if (canManageSettings(actor.permissions)) return all;
-    const held = this.actorPermissions(actor);
+    const held = this.actorAccess(actor).permissions;
     return all.filter((s) => {
       if (!s.enabled) return false;
       if (actor.anonymous && PERSONAL_SLIDERS.includes(s.type)) return false;
@@ -790,7 +795,7 @@ export class DiscoverService {
     const titled = { title: row.title ?? '' };
     switch (row.type) {
       case 'recentlyAdded':
-        if (!can(this.actorPermissions(actor), Permission.RECENT_VIEW)) throw RequestsError.forbidden('the recently added slider needs View recently added');
+        if (!can(this.actorAccess(actor).permissions, Permission.RECENT_VIEW)) throw RequestsError.forbidden('the recently added slider needs View recently added');
         return one(this.recentlyAdded());
       case 'recentRequests':
         return one(actor.anonymous ? [] : this.recentRequests(actor));

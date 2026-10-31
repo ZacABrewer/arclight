@@ -53,6 +53,8 @@ You can edit a user, reset their password ("Reset password": signs the user out 
 
 Request permissions, quotas and notification options for each user are separate: Settings > Users ("User settings"). The **Request subtitles & languages** permission lets someone ask for subtitles or an extra audio language on a title in the library; **Request** includes it. See [discover-and-requests.md](discover-and-requests.md#subtitle-and-language-requests).
 
+**Request** grants every kind of request. To keep a user off some kinds (for example music, audiobooks, subtitles or audio languages), use **Request types** under Settings > Users > Manage > Caps and approval: a type turned off is refused even when the permissions allow it, and admins are not filtered. New accounts start with **Default request types for new users** from Settings > Requests. See [Request types](discover-and-requests.md#request-types).
+
 ### App access
 
 A user sees the request portal and nothing more: signing in takes them to `/portal`, and any app address (the dashboard, `/library`, `/settings` and so on) sends them back there. To let someone look at more, edit the user and set **App access** to "Request portal and parts of the app", then tick the areas:

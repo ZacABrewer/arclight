@@ -129,6 +129,40 @@ export const ContentRestrictions = z.object({
 });
 export type ContentRestrictions = z.infer<typeof ContentRestrictions>;
 
+// ---------------------------------------------------------------------------------------
+// Request type filter (stored in users.settings.requestTypes)
+// ---------------------------------------------------------------------------------------
+
+/**
+ * Per-user request type filter. A type set to false is refused even when the permission bits
+ * allow it (REQUEST grants every type, so this is how an admin keeps a user off music or audio
+ * languages); true leaves the decision to the permissions and never grants anything. ADMIN
+ * users are not filtered. Absent (users from before the filter existed): every type on.
+ * New users start from `RequestsSettings.defaultRequestTypes`.
+ */
+export const RequestTypes = z.object({
+  movie: z.boolean().default(true),
+  series: z.boolean().default(true),
+  music: z.boolean().default(true),
+  audiobook: z.boolean().default(true),
+  /** Language requests of kind subtitle. */
+  subtitles: z.boolean().default(true),
+  /** Language requests of kind audio (an additional audio language). */
+  audioLanguages: z.boolean().default(true),
+});
+export type RequestTypes = z.infer<typeof RequestTypes>;
+export type RequestTypeKey = keyof RequestTypes;
+/** Display order. */
+export const REQUEST_TYPE_KEYS: readonly RequestTypeKey[] = ['movie', 'series', 'music', 'audiobook', 'subtitles', 'audioLanguages'];
+export const ALL_REQUEST_TYPES: RequestTypes = { movie: true, series: true, music: true, audiobook: true, subtitles: true, audioLanguages: true };
+
+/** A stored filter, defaults applied; malformed values count as every type on. */
+export function requestTypesOfSettings(settings: unknown): RequestTypes {
+  const raw = ((settings ?? {}) as Record<string, unknown>)['requestTypes'];
+  const parsed = RequestTypes.safeParse(raw ?? {});
+  return parsed.success ? parsed.data : { ...ALL_REQUEST_TYPES };
+}
+
 /** Per-user override of the approval policies (users.settings.approvalPolicy). */
 export const UserApprovalPolicy = z.object({
   /** inherit: the global policies decide; always: policies always auto-approve; never: policies never do. */
@@ -141,13 +175,15 @@ export const UserApprovalPolicy = z.object({
 export type UserApprovalPolicy = z.infer<typeof UserApprovalPolicy>;
 
 /**
- * GET/PUT /user/:id/permissions. PUT needs MANAGE_USERS; `contentRestrictions` and
- * `approvalPolicy` are optional on PUT (absent: unchanged) and always present on GET.
+ * GET/PUT /user/:id/permissions. PUT needs MANAGE_USERS; `contentRestrictions`,
+ * `approvalPolicy` and `requestTypes` are optional on PUT (absent: unchanged) and always
+ * present on GET.
  */
 export const UserPermissions = z.object({
   permissions: z.number().int().min(0),
   contentRestrictions: ContentRestrictions.optional(),
   approvalPolicy: UserApprovalPolicy.optional(),
+  requestTypes: RequestTypes.optional(),
 });
 export type UserPermissions = z.infer<typeof UserPermissions>;
 
@@ -1311,6 +1347,8 @@ export const RequestsSettings = z.object({
   defaultQuotas: UserQuota.default(UserQuota.parse({})),
   /** Suggested permissions for new users (the users editor pre-fills it). */
   defaultPermissions: z.number().int().min(0).default(Permission.REQUEST | Permission.CREATE_ISSUES),
+  /** Request type filter given to new users (local, media-server and invited accounts). */
+  defaultRequestTypes: RequestTypes.default(ALL_REQUEST_TYPES),
   /** false: series requests must cover every season. */
   partialRequestsEnabled: z.boolean().default(true),
   enableSpecialEpisodes: z.boolean().default(false),

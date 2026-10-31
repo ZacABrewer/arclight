@@ -82,7 +82,7 @@ evaluated per request (the public request portal uses it for `GET /public/portal
 were sent. `GET /auth/status` carries `mediaServerLogin: {kind, name?} | null`, the first
 enabled media server with `loginEnabled` (the login page shows the Jellyfin/Emby selector or the
 Plex button from it). `PUT /user/me` ignores the manager-owned settings keys
-`ADMIN_MANAGED_USER_SETTINGS` (`quota`, `contentRestrictions`, `approvalPolicy`, `discordUserId`).
+`ADMIN_MANAGED_USER_SETTINGS` (`quota`, `contentRestrictions`, `approvalPolicy`, `requestTypes`, `discordUserId`).
 
 **Roles and access (deny by default).** `admin` (and API-key / bypass callers) can do
 everything. Anyone else may call a route only when it opts in with `config.access`, for every
@@ -1096,6 +1096,25 @@ discover lists, sliders, similar/recommended titles and person credits filtered;
 above the cap answer 403; `POST /request` (also on their behalf) answers 403 with the reason.
 Public-portal visitors get `hideAdultContent`.
 
+### Request type filter
+
+`users.settings.requestTypes` (`RequestTypes`, set by `MANAGE_USERS` through
+`PUT /user/:id/permissions`): booleans `movie`, `series`, `music`, `audiobook`, `subtitles`
+(language requests of kind `subtitle`), `audioLanguages` (kind `audio`), each defaulting to
+true. false refuses that type even when the permission bits allow it (REQUEST grants every
+type); true leaves it to the bits and never grants anything. ADMIN is not filtered; absent or
+malformed means every type on. Refusals are 403 `FORBIDDEN` with `"<type> requests are turned
+off for this user"` (`movie`, `series`, `music`, `audiobook`, `subtitle`, `audio language`), on
+`POST /request` (also collection requests), `POST /audiorequest` and `POST /request/language`.
+Requests made on behalf of a user (`userId`) apply that user's filter. Watchlist sync skips
+types that are off. `TitleDetail.canRequest` / `canRequest4k` and `CollectionDetail.canRequest`
+/ `canRequest4k` are false for a type that is off; `LanguageRequestOptions` carries
+`canRequestSubtitles` and `canRequestAudio` (and `canRequest` is false when both are off). The
+web reads the filter for music and audiobook buttons from the session user's `settings`.
+New accounts (`POST /user` for role `user`, media-server sign-in and import, Seerr import) get
+`RequestsSettings.defaultRequestTypes`, stored only when it turns a type off; explicit
+`settings.requestTypes` on `POST /user` wins.
+
 ### Public request portal
 
 `RequestsSettings.publicPortal {enabled, allowAnonymousDiscover, message, paths, hosts}`.
@@ -1257,8 +1276,8 @@ Jellyfin/Emby/Plex). With no server at all the library decides, as before.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/user/:id/permissions` | `UserPermissions {permissions, contentRestrictions, approvalPolicy}` (self or `MANAGE_USERS`) |
-| PUT | `/user/:id/permissions` | `MANAGE_USERS`; the ADMIN bit follows the role; a non-admin cannot edit an admin. `contentRestrictions` / `approvalPolicy` are optional (absent: unchanged) |
+| GET | `/user/:id/permissions` | `UserPermissions {permissions, contentRestrictions, approvalPolicy, requestTypes}` (self or `MANAGE_USERS`) |
+| PUT | `/user/:id/permissions` | `MANAGE_USERS`; the ADMIN bit follows the role; a non-admin cannot edit an admin. `contentRestrictions` / `approvalPolicy` / `requestTypes` are optional (absent: unchanged) |
 | GET | `/user/:id/quota` | `UserQuotaResponse` (self or `MANAGE_USERS`) |
 | PUT | `/user/:id/quota` | `MANAGE_USERS`: `UserQuota` overrides (null = global default) → `UserQuotaResponse` |
 | GET | `/user/:id/requestsettings` | `UserRequestSettings`: personal notification agents, Plex token (masked), watchlist sync, `autoRequestFromWatchlist`, `mediaServerLink` (token masked) (self or `MANAGE_USERS`) |
@@ -1269,8 +1288,10 @@ Jellyfin/Emby/Plex). With no server at all the library decides, as before.
 
 `RequestsSettings` also carries `applicationUrl` (public URL used for links in
 notifications), `digestEnabled` and `digestHour` (0-23, server local time), and
-`approvalBudgets`, `approvalWindows`, `autoApproveIfSizeBelowGb`, `publicPortal` (above), and
-`autoApproveSubtitleRequests` / `autoApproveAudioRequests` (subtitle and language requests).
+`approvalBudgets`, `approvalWindows`, `autoApproveIfSizeBelowGb`, `publicPortal` (above),
+`autoApproveSubtitleRequests` / `autoApproveAudioRequests` (subtitle and language requests), and
+`defaultRequestTypes` (`RequestTypes`, every type on by default: the request type filter new
+users start with; see "Request type filter").
 
 ### Sitewide request notifications
 
@@ -1301,7 +1322,7 @@ count toward media quotas. Needs `REQUEST_LANGUAGE` (2^30) or `REQUEST`.
 |---|---|---|
 | GET | `/request/language` | `LanguageRequestListQuery` (`take`, `skip`, `filter` all/pending/approved/declined/failed/completed, `kind` all/subtitle/audio, `requestedBy`, `sortDirection`, `q`: title, year, kind, status, language tag, note, decline/failure reason, requester) → `LanguageRequestPage`; own requests only without `MANAGE_REQUESTS`/`REQUEST_VIEW` |
 | GET | `/request/language/count` | `LanguageRequestCount` (`total`, `subtitle`, `audio`, `pending`) over the visible requests |
-| GET | `/request/language/options` | `?mediaType&tmdbId` → `LanguageRequestOptions`: in the library (with files), library ids, seasons with files, the item's audio/subtitle language chips (as `GET /additional-language`), open requests of the title (`mine` flag, no requester names), `canRequest` |
+| GET | `/request/language/options` | `?mediaType&tmdbId` → `LanguageRequestOptions`: in the library (with files), library ids, seasons with files, the item's audio/subtitle language chips (as `GET /additional-language`), open requests of the title (`mine` flag, no requester names), `canRequest`, `canRequestSubtitles`, `canRequestAudio` (the caller's request type filter) |
 | GET | `/request/language/languages` | The requestable languages (`code`, `name`; the subtitles language list) |
 | GET | `/request/language/:id` | One `LanguageRequest` (owner, `MANAGE_REQUESTS` or `REQUEST_VIEW`) |
 | POST | `/request/language` | `CreateLanguageRequest` (`kind` subtitle/audio, `mediaType`, `tmdbId`, `seasonNumber?` series only, `language` any spelling, `forced`/`hi` subtitles only, `note` ≤ 500, `userId?` on behalf) → 201 `LanguageRequest`. 400 for an unknown language, a title not in the library or a scope without files; 409 when an identical pending/approved request exists (a whole-series request covers its seasons), the language was already added with "Add additional…", or every file of the scope already has it |

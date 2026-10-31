@@ -95,7 +95,7 @@ function SignInToRequest() {
 }
 
 function TitleView({ t: row }: { t: TitleDetail }) {
-  const { can } = usePermissions();
+  const { can, allows } = usePermissions();
   const { isAdmin } = useAuth();
   const signedIn = useSignedIn();
   const inPortal = useInPortal();
@@ -184,7 +184,7 @@ function TitleView({ t: row }: { t: TitleDetail }) {
                 </Button>
               ) : null}
               {signedIn ? <WatchlistToggle t={row} /> : null}
-              {signedIn && languageRequestable(row) && can(Permission.REQUEST_LANGUAGE, Permission.REQUEST) ? (
+              {signedIn && languageRequestable(row) && can(Permission.REQUEST_LANGUAGE, Permission.REQUEST) && (allows('subtitles') || allows('audioLanguages')) ? (
                 <Button onClick={() => setRequestingLanguage(true)}>{t('discover.languageRequest.button')}</Button>
               ) : null}
               {row.libraryId && !inPortal ? (

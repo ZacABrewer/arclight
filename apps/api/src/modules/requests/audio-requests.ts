@@ -27,7 +27,7 @@ import type { AudioDiscoverService } from './audio-discover.js';
 import { audioLibraryStatus, normalizeForeignId, overlayAudioRequest, type AudioLibraryEntry } from './audio-status.js';
 import { RequestsError } from './errors.js';
 import type { RequestNotifier } from './notify.js';
-import { type Actor, canAutoApproveAudio, canManageRequests, canManageSettings, canManageUsers, canRequestAudio, canViewAllRequests } from './permissions.js';
+import { type Actor, assertRequestTypeAllowed, canAutoApproveAudio, canManageRequests, canManageSettings, canManageUsers, canRequestAudio, canViewAllRequests } from './permissions.js';
 import { audioRequests } from './schema.js';
 import { ownerUser, requestUsers, userNameSearchColumns, userPermissions, userRow, type UserRow } from './users.js';
 
@@ -290,6 +290,7 @@ export class AudioRequestsService {
     const requester = this.resolveRequester(actor, input.userId);
     const held = userPermissions(requester);
     if (!canRequestAudio(held, domain)) throw RequestsError.forbidden(`not allowed to request ${domain === 'music' ? 'music' : 'audiobooks'}`);
+    assertRequestTypeAllowed({ permissions: held, settings: requester.settings }, domain);
     const foreignId = normalizeForeignId(input.kind, input.foreignId);
     if (domain === 'music' ? !isMbid(foreignId) : !ASIN_RE.test(foreignId)) {
       throw new RequestsError('VALIDATION', `${foreignId} is not a ${domain === 'music' ? 'MusicBrainz id' : 'ASIN'}`);

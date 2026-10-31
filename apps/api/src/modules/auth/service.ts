@@ -182,6 +182,8 @@ export class AuthService {
   externalLogin: ExternalLoginProvider | undefined;
   /** Media-server sign-in shown on the login page (set by the requests module); absent: none. */
   mediaServerLogin: (() => { kind: 'jellyfin' | 'emby' | 'plex'; name?: string | undefined } | null) | undefined;
+  /** Settings a new non-admin account starts with (set by the requests module: the default request type filter); absent: none. */
+  newUserSettings: (() => Record<string, unknown>) | undefined;
 
   constructor(opts: AuthServiceOptions) {
     this.db = opts.db;
@@ -322,7 +324,8 @@ export class AuthService {
         appAccess: role === 'admin' ? [] : AppAccess.parse(input.appAccess ?? []),
         localPassword: true,
         avatar: input.avatar ?? null,
-        settings: input.settings ?? {},
+        // Explicit settings win over the defaults for new users.
+        settings: { ...(role === 'admin' ? {} : (this.newUserSettings?.() ?? {})), ...(input.settings ?? {}) },
         createdAt: now,
         updatedAt: now,
       })

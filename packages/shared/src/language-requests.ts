@@ -144,8 +144,12 @@ export const LanguageRequestOptions = z.object({
   audio: z.array(ItemLanguageChip),
   subtitles: z.array(ItemLanguageChip),
   openRequests: z.array(OpenLanguageRequest),
-  /** The caller may request languages (REQUEST_LANGUAGE or REQUEST). */
+  /** The caller may request languages (REQUEST_LANGUAGE or REQUEST, and at least one kind on). */
   canRequest: z.boolean(),
+  /** The caller's request type filter allows subtitle requests (false: hide that kind). */
+  canRequestSubtitles: z.boolean(),
+  /** The caller's request type filter allows additional audio language requests. */
+  canRequestAudio: z.boolean(),
 });
 export type LanguageRequestOptions = z.infer<typeof LanguageRequestOptions>;
 

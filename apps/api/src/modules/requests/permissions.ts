@@ -1,4 +1,5 @@
-import { hasAnyPermission, Permission, type MediaType } from '@arclight/shared';
+import { hasAnyPermission, Permission, requestTypesOfSettings, type MediaType, type RequestTypeKey } from '@arclight/shared';
+import { RequestsError } from './errors.js';
 
 // Permission rules from docs/spec/requests.md section 3.3, as pure functions over a
 // permission bitfield. ADMIN passes everything (hasAnyPermission handles that).
@@ -58,6 +59,32 @@ export const canAutoApproveAudio = (held: number): boolean => can(held, Permissi
 
 export function canAutoRequest(held: number, type: MediaType): boolean {
   return can(held, Permission.AUTO_REQUEST, type === 'movie' ? Permission.AUTO_REQUEST_MOVIE : Permission.AUTO_REQUEST_TV);
+}
+
+/** Words for the refusal: "music requests are turned off for this user". */
+const REQUEST_TYPE_WORDS: Record<RequestTypeKey, string> = {
+  movie: 'movie',
+  series: 'series',
+  music: 'music',
+  audiobook: 'audiobook',
+  subtitles: 'subtitle',
+  audioLanguages: 'audio language',
+};
+
+/**
+ * The per-user request type filter (users.settings.requestTypes): false when the user's filter
+ * turns `type` off. It only ever denies; the permission checks above still decide everything
+ * else. ADMIN is never filtered; callers without a user row (system, anonymous) pass `settings`
+ * as null, which leaves every type on.
+ */
+export function requestTypeAllowed(user: { permissions: number; settings: unknown }, type: RequestTypeKey): boolean {
+  if ((user.permissions & Permission.ADMIN) !== 0) return true;
+  return requestTypesOfSettings(user.settings)[type];
+}
+
+/** Throws FORBIDDEN when the user's request type filter turns `type` off. */
+export function assertRequestTypeAllowed(user: { permissions: number; settings: unknown }, type: RequestTypeKey): void {
+  if (!requestTypeAllowed(user, type)) throw RequestsError.forbidden(`${REQUEST_TYPE_WORDS[type]} requests are turned off for this user`);
 }
 
 export const canManageRequests = (held: number): boolean => can(held, Permission.MANAGE_REQUESTS);

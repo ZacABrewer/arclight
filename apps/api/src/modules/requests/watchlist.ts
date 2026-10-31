@@ -13,7 +13,7 @@ import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { configuredServer } from './media-server.js';
 import { RequestsError } from './errors.js';
-import { type Actor, can, canAutoRequest, canManageUsers } from './permissions.js';
+import { type Actor, can, canAutoRequest, canManageUsers, requestTypeAllowed } from './permissions.js';
 import { Permission } from '@arclight/shared';
 import { watchlistItems } from './schema.js';
 import type { RequestsService } from './service.js';
@@ -342,6 +342,8 @@ export class WatchlistService {
     const held = userPermissions(user);
     if (!settings.autoRequestFromWatchlist) return false;
     if (!canAutoRequest(held, type)) return false;
+    // A type the user's request type filter turns off is never auto-requested.
+    if (!requestTypeAllowed({ permissions: held, settings: user.settings }, type)) return false;
     if (type === 'movie' ? !settings.watchlistSyncMovies : !settings.watchlistSyncSeries) return false;
     const status = this.requests.titleStatuses(type, [tmdbId]).get(tmdbId);
     if (type === 'movie' && status && status.status !== 'unknown') return false;

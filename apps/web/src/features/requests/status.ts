@@ -1,4 +1,4 @@
-import { hasAnyPermission, type DiscoverSliderType, type IssueType, type MediaStatus, type RequestStatus } from '@arclight/shared';
+import { hasAnyPermission, requestTypesOfSettings, type DiscoverSliderType, type RequestTypeKey, type IssueType, type MediaStatus, type RequestStatus } from '@arclight/shared';
 import type { ChipTone } from '../../arclight/index.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { formatDateTime as formatPreferredDateTime } from '../../lib/ui-preferences.js';
@@ -141,12 +141,17 @@ export const CUSTOM_SLIDER_TYPES: ReadonlyArray<{ type: DiscoverSliderType; data
   { type: 'tmdbSearch', get dataLabel() { return t('features.requests.status.searchText'); } },
 ];
 
-/** Permission check against the signed-in user (admins and unavailable auth pass). */
-export function usePermissions(): { userId: number | null; can: (...wanted: number[]) => boolean } {
+/**
+ * Permission check against the signed-in user (admins and unavailable auth pass). `allows`
+ * reads the user's request type filter (users.settings.requestTypes): false hides that type's
+ * request entry points; true leaves it to `can` (the API enforces both).
+ */
+export function usePermissions(): { userId: number | null; can: (...wanted: number[]) => boolean; allows: (type: RequestTypeKey) => boolean } {
   const { user, isAdmin } = useAuth();
   return {
     userId: user?.id ?? null,
     can: (...wanted) => isAdmin || hasAnyPermission(user?.permissions ?? 0, wanted),
+    allows: (type) => isAdmin || requestTypesOfSettings(user?.settings)[type],
   };
 }
 

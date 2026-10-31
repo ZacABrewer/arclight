@@ -65,7 +65,8 @@ interface RequestContext {
 
 /**
  * Why an item cannot be requested now, or null when it can: sign-in, permission (REQUEST or
- * REQUEST_MUSIC / REQUEST_AUDIOBOOK), already in the library, or an open request.
+ * REQUEST_MUSIC / REQUEST_AUDIOBOOK, and the user's request type filter), already in the
+ * library, or an open request.
  */
 export function audioRequestBlocker(item: Pick<AudioDiscoverItem, 'kind' | 'mediaStatus' | 'requestStatus'>, ctx: RequestContext): string | null {
   if (!ctx.signedIn) return t('discover.title.signInToRequest');
@@ -78,9 +79,10 @@ export function audioRequestBlocker(item: Pick<AudioDiscoverItem, 'kind' | 'medi
 /** The blocker for the signed-in user (admins and unavailable auth may request). */
 export function useAudioRequestBlocker(item: Pick<AudioDiscoverItem, 'kind' | 'mediaStatus' | 'requestStatus'>): string | null {
   const { status } = useAuth();
-  const { can } = usePermissions();
+  const { can, allows } = usePermissions();
   const signedIn = status ? status.authenticated : true;
-  const allowed = can(Permission.REQUEST, domainOf(item.kind) === 'music' ? Permission.REQUEST_MUSIC : Permission.REQUEST_AUDIOBOOK);
+  const domain = domainOf(item.kind);
+  const allowed = can(Permission.REQUEST, domain === 'music' ? Permission.REQUEST_MUSIC : Permission.REQUEST_AUDIOBOOK) && allows(domain);
   return audioRequestBlocker(item, { signedIn, allowed });
 }
 

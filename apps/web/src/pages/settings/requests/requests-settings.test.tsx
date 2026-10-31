@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Permission } from '@arclight/shared';
 import { defaultSettings, renderAt, stubApi } from '../../../features/requests/test-utils.js';
 import { moveItem } from './sliders-card.js';
@@ -25,6 +25,22 @@ describe('settings → requests', () => {
     expect(sent.autoApprove).toEqual({ movie: false, series: false, movie4k: true, series4k: false });
     expect(sent.defaultPermissions).toBe(Permission.REQUEST | Permission.CREATE_ISSUES | Permission.REQUEST_VIEW);
     await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Request settings saved'));
+  });
+
+  it('saves the default request types for new users', async () => {
+    const settings = defaultSettings();
+    const calls = stubApi(
+      { '/api/v1/settings/requests': settings, '/api/v1/discoverslider': [], '/api/v1/overriderule': [], '/api/v1/rootfolder': [], '/api/v1/qualityprofile': [], '/api/v1/tag': [] },
+      (url, method, body) => (method === 'PUT' && url === '/api/v1/settings/requests' ? { body } : undefined),
+    );
+    renderAt('/settings/requests');
+    const toggles = within(await screen.findByTestId('request-type-toggles'));
+    fireEvent.click(toggles.getByRole('switch', { name: 'Music' }));
+    fireEvent.click(toggles.getByRole('switch', { name: 'Subtitles' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
+    const sent = calls.find((c) => c.method === 'PUT')?.body as typeof settings;
+    expect(sent.defaultRequestTypes).toEqual({ movie: true, series: true, music: false, audiobook: true, subtitles: false, audioLanguages: true });
   });
 
   it('shows the unsaved-changes bar on edit and Discard reverts the form', async () => {

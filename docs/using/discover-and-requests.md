@@ -141,7 +141,7 @@ Besides asking for a title, people can ask for **subtitles** or an extra **audio
 
 ### Asking for a language
 
-**Request subtitles or audio** appears on a title's page when the title is in the library with files and you have the **Request subtitles & languages** permission. The plain **Request** permission includes it. It works in the app and in the [request portal](#public-request-portal).
+**Request subtitles or audio** appears on a title's page when the title is in the library with files and you have the **Request subtitles & languages** permission. The plain **Request** permission includes it. It works in the app and in the [request portal](#public-request-portal). If your [request types](#request-types) turn off subtitles or audio languages, the dialog offers only the other kind; with both off the button is hidden.
 
 1. Click **Request subtitles or audio**.
 2. Choose **Subtitles** or **Audio language**. Audio asks for an additional language and keeps the current audio.
@@ -297,6 +297,27 @@ New users get the permissions in **Default permissions for new users**, which st
 
 Vote is reserved and has no effect yet. After changing a user, click **Save permissions**.
 
+### Request types
+
+**Request** covers every kind of request: movies, series, music, audiobooks, subtitles and audio languages. To keep someone off a kind while leaving the rest, open **Settings > Users > Manage > Caps and approval**, turn the type off under **Request types**, then **Save caps and approval**.
+
+| Type | What turning it off blocks |
+| --- | --- |
+| Movies | Movie requests (and 4K movie requests), including "Request all missing" on a collection. |
+| Series | Series and season requests (and 4K series requests). |
+| Music | Album and artist requests. |
+| Audiobooks | Audiobook and author requests. |
+| Subtitles | Subtitle requests on titles in the library. |
+| Audio languages | Additional audio language requests on titles in the library. |
+
+- A type turned off is refused even when the permissions allow it. Turning a type on never grants anything: the permissions still decide.
+- Admins are not filtered.
+- The request buttons for a type that is off are hidden or disabled: **Request** on title pages, **Request** on music and audiobook pages, and the matching choice in **Request subtitles or audio** (the button is hidden when both language types are off).
+- Watchlist sync does not auto-request a type that is off.
+- A request made on behalf of someone uses that person's request types, not yours.
+- New users start with **Default request types for new users** in **Settings > Requests** (every type on unless you change it). The default applies when the account is created: local accounts, media-server sign-ins and imports. Changing it later does not touch existing users, and users from before this setting existed have every type on.
+- Users see their own request types on their profile but cannot change them.
+
 ## Quotas
 
 A quota limits how many requests a user can make in a time window. Set it per user in **Settings > Users > Manage** and click **Save quota**.
@@ -404,6 +425,7 @@ You need the Manage settings permission to open this page.
 | Application URL | The address used in Approve, Decline and View links in notifications. |
 | Daily digest | **Digest time** (hour in server time, default 9) and **Send digest now**. A job (RequestsDigest) checks hourly. |
 | Default permissions for new users | See [Users and permissions](#users-and-permissions). |
+| Default request types for new users | See [Request types](#request-types). |
 | Default quotas | See [Quotas](#quotas). |
 | Approval | Size, budgets and windows. |
 | Override rules | See [Override rules](#override-rules). |

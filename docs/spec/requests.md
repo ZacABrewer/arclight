@@ -176,6 +176,8 @@ The 4K auto-approve rule does not accept the non-4K flags and vice versa.
 
 Arclight adds REQUEST_LANGUAGE (1073741824, the last usable bit): request subtitles or an additional audio language for a title already in the library. REQUEST also grants it. These language requests are a separate kind of request beside the video requests above (kind subtitle or audio, one language, optional season, optional forced and hearing-impaired flags, note up to 500 characters); they use the same status values and manager actions, are not counted in quotas, and are described in the user documentation under "Subtitle and language requests". Arclight also uses 268435456 and 536870912 for REQUEST_MUSIC and REQUEST_AUDIOBOOK rather than the blocklist flags in the table.
 
+No permission bits are left, so Arclight adds a per-user request type filter in user settings (requestTypes: movie, series, music, audiobook, subtitles, audioLanguages, each true by default). A type set to false is refused even when the bits allow it (REQUEST grants every type); true never grants anything. ADMIN is not filtered. Requests made on behalf of a user use that user's filter, watchlist auto-requests skip filtered types, and new users (local, imported, or first-time sign-in) start from the main setting defaultRequestTypes (every type on).
+
 ---
 
 ## 4. Quotas

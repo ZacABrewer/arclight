@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Permission, type LanguageRequest, type LanguageRequestOptions } from '@arclight/shared';
 import { authRoutes, makeTitle, renderAt, stubApi, user } from '../../features/requests/test-utils.js';
-import { buildLanguageRequest, EMPTY_LANGUAGE_DRAFT, unavailableReason } from '../discover/language-request-modal.js';
+import { allowedLanguageKinds, buildLanguageRequest, EMPTY_LANGUAGE_DRAFT, unavailableReason } from '../discover/language-request-modal.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -51,6 +51,8 @@ const OPTIONS: LanguageRequestOptions = {
   subtitles: [{ language: 'en', present: true, added: false }],
   openRequests: [{ id: 3, kind: 'subtitle', status: 'pending', seasonNumber: null, language: 'fr', forced: 'never', hi: 'also', mine: false }],
   canRequest: true,
+  canRequestSubtitles: true,
+  canRequestAudio: true,
 };
 
 const LANGUAGES = [
@@ -86,10 +88,10 @@ describe('language request dialog model', () => {
 });
 
 describe('request subtitles or audio on a title page', () => {
-  const routes = (perms: number = Permission.REQUEST) => ({
-    ...authRoutes(user({ permissions: perms })),
+  const routes = (perms: number = Permission.REQUEST, settings: Record<string, unknown> = {}, options: LanguageRequestOptions = OPTIONS) => ({
+    ...authRoutes(user({ permissions: perms, settings })),
     '/api/v1/discover/movie/603': makeTitle({ libraryId: 1, mediaStatus: 'available' }),
-    '/api/v1/request/language/options': OPTIONS,
+    '/api/v1/request/language/options': options,
     '/api/v1/request/language/languages': LANGUAGES,
   });
 
@@ -146,6 +148,44 @@ describe('request subtitles or audio on a title page', () => {
     stubApi({ ...routes(Permission.REQUEST_LANGUAGE) });
     renderAt('/discover/movie/603');
     expect(await screen.findByRole('button', { name: 'Request subtitles or audio' })).toBeTruthy();
+  });
+
+  it('offers only the kinds the request type filter allows', async () => {
+    expect(allowedLanguageKinds({ canRequestSubtitles: true, canRequestAudio: true })).toEqual(['subtitle', 'audio']);
+    expect(allowedLanguageKinds({ canRequestSubtitles: false, canRequestAudio: true })).toEqual(['audio']);
+    expect(allowedLanguageKinds({ canRequestSubtitles: false, canRequestAudio: false })).toEqual([]);
+    const calls = stubApi(
+      routes(Permission.REQUEST, { requestTypes: { audioLanguages: false } }, { ...OPTIONS, canRequestAudio: false }),
+      (url, method, body) => (method === 'POST' && url === '/api/v1/request/language' ? { status: 201, body: makeLanguageRequest({ ...(body as object) }) } : undefined),
+    );
+    renderAt('/discover/movie/603');
+    fireEvent.click(await screen.findByRole('button', { name: 'Request subtitles or audio' }));
+    const dialog = await screen.findByRole('dialog', { name: /Request subtitles or audio/ });
+    await within(dialog).findByLabelText('Search languages');
+    // Subtitles only: no kind switch, and the subtitle checkboxes are there.
+    expect(within(dialog).queryByRole('button', { name: 'Audio language' })).toBeNull();
+    expect(within(dialog).getByLabelText('Hearing impaired')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText('Search languages'), { target: { value: 'spa' } });
+    fireEvent.click(within(dialog).getByRole('option', { name: /Spanish/ }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Request' }));
+    await waitFor(() => expect((calls.find((c) => c.method === 'POST' && c.url === '/api/v1/request/language')?.body as { kind: string }).kind).toBe('subtitle'));
+  });
+
+  it('starts on audio when subtitles are turned off', async () => {
+    stubApi(routes(Permission.REQUEST, { requestTypes: { subtitles: false } }, { ...OPTIONS, canRequestSubtitles: false }));
+    renderAt('/discover/movie/603');
+    fireEvent.click(await screen.findByRole('button', { name: 'Request subtitles or audio' }));
+    const dialog = await screen.findByRole('dialog', { name: /Request subtitles or audio/ });
+    await within(dialog).findByLabelText('Search languages');
+    expect(within(dialog).queryByLabelText('Hearing impaired')).toBeNull();
+    expect(within(dialog).queryByRole('button', { name: 'Subtitles' })).toBeNull();
+  });
+
+  it('hides the button when both language kinds are turned off', async () => {
+    stubApi(routes(Permission.REQUEST | Permission.CREATE_ISSUES, { requestTypes: { subtitles: false, audioLanguages: false } }));
+    renderAt('/discover/movie/603');
+    await screen.findByRole('button', { name: 'Report issue' });
+    expect(screen.queryByRole('button', { name: 'Request subtitles or audio' })).toBeNull();
   });
 });
 

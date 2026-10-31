@@ -31,9 +31,18 @@ import { libraryService } from '../library/index.js';
 import { getSection } from '../settings/service.js';
 import { RequestsError } from './errors.js';
 import type { RequestNotifier } from './notify.js';
-import { type Actor, canAutoApproveLanguage, canManageRequests, canManageUsers, canRequestLanguage, canViewAllRequests } from './permissions.js';
+import {
+  type Actor,
+  assertRequestTypeAllowed,
+  canAutoApproveLanguage,
+  canManageRequests,
+  canManageUsers,
+  canRequestLanguage,
+  canViewAllRequests,
+  requestTypeAllowed,
+} from './permissions.js';
 import { languageRequests } from './schema.js';
-import { ownerUser, requestUsers, userNameSearchColumns, userPermissions, userRow, type UserRow } from './users.js';
+import { findUserRow, ownerUser, requestUsers, userNameSearchColumns, userPermissions, userRow, type UserRow } from './users.js';
 
 // Subtitle and audio language requests (docs/API.md "Subtitle and language requests"). A user
 // asks for subtitles in a language, or an additional audio language, on a title already in
@@ -280,8 +289,13 @@ export class LanguageRequestsService {
   /** GET /request/language/options: what the request dialog shows for a title. */
   options(actor: Actor, q: LanguageRequestOptionsQuery): LanguageRequestOptions {
     const item = this.libraryItem(q.mediaType, q.tmdbId);
-    const canRequest = canRequestLanguage(actor.permissions);
-    const empty: LanguageRequestOptions = { inLibrary: false, mediaType: q.mediaType, movieId: null, seriesId: null, seasons: [], audio: [], subtitles: [], openRequests: [], canRequest };
+    // The caller's request type filter decides which kinds the dialog offers.
+    const filter = { permissions: actor.permissions, settings: actor.userId ? (findUserRow(this.db, actor.userId)?.settings ?? null) : null };
+    const canRequestSubtitles = requestTypeAllowed(filter, 'subtitles');
+    const canRequestAudio = requestTypeAllowed(filter, 'audioLanguages');
+    const canRequest = canRequestLanguage(actor.permissions) && (canRequestSubtitles || canRequestAudio);
+    const kinds = { canRequest, canRequestSubtitles, canRequestAudio };
+    const empty: LanguageRequestOptions = { inLibrary: false, mediaType: q.mediaType, movieId: null, seriesId: null, seasons: [], audio: [], subtitles: [], openRequests: [], ...kinds };
     if (!item) return empty;
     const seasons = item.seriesId !== null ? this.seasonsWithFiles(item.seriesId) : [];
     const hasFiles = item.movieId !== null ? libraryService.getMovie(this.db, item.movieId).hasFile : seasons.length > 0;
@@ -304,7 +318,7 @@ export class LanguageRequestsService {
         hi: r.hi,
         mine: r.requestedById === actor.userId,
       })),
-      canRequest,
+      ...kinds,
     };
   }
 
@@ -354,6 +368,7 @@ export class LanguageRequestsService {
     const requester = this.resolveRequester(actor, input.userId);
     const held = userPermissions(requester);
     if (!canRequestLanguage(held)) throw RequestsError.forbidden('not allowed to request subtitles or languages');
+    assertRequestTypeAllowed({ permissions: held, settings: requester.settings }, input.kind === 'subtitle' ? 'subtitles' : 'audioLanguages');
     const found = this.libraryItem(input.mediaType, input.tmdbId);
     if (!found) throw new RequestsError('VALIDATION', 'this title is not in the library');
     const language = this.languageOf(input.kind, input.language);

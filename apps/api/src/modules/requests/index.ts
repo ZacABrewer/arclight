@@ -40,6 +40,7 @@ import { RequestsService, type SizeEstimator, type TitleSource } from './service
 import { libraryService } from '../library/index.js';
 import { DEFAULT_PORTAL_RATE_LIMIT, TokenBuckets, type MediaServerLoginOption, type RateLimitOptions } from './portal.js';
 import { WatchlistService, type WatchlistProvider } from './watchlist.js';
+import { newUserRequestSettings } from './users.js';
 
 export * from './schema.js';
 export { RequestsService, ANIME_KEYWORD, type TitleSource, type CreateOutcome, type TitleStatus, type SizeEstimator } from './service.js';
@@ -292,6 +293,8 @@ export function requestsServicesFor(ctx: AppContext, opts: RequestsModuleOptions
   auth.externalLogin = accounts;
   // GET /auth/status tells the login page which media-server sign-in to offer.
   auth.mediaServerLogin = () => mediaServerLoginOf(ctx);
+  // Users created on the Users page start with the default request type filter.
+  auth.newUserSettings = () => newUserRequestSettings(requests.settings());
   const portalLimiter = new TokenBuckets(opts.portalRateLimit ?? DEFAULT_PORTAL_RATE_LIMIT);
   const audioDiscover = new AudioDiscoverService({ db: ctx.db, sources: opts.audioSources ?? metadataAudioSources(ctx), log });
   const audio = new AudioRequestsService({

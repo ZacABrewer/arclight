@@ -178,6 +178,17 @@ describe('music in Discover', () => {
     expect(screen.getByText('Your account cannot request music')).toBeTruthy();
   });
 
+  it('disables Request when the request type filter turns music off', async () => {
+    stubApi({
+      ...features(true),
+      ...authRoutes(user({ permissions: Permission.REQUEST, settings: { requestTypes: { music: false } } })),
+      '/api/v1/discover/music/album/rg-1': { item: album(), artistName: 'The Example Band', artistForeignId: 'ar-1', genres: [], tracks: [], moreByArtist: [] },
+    });
+    renderAt('/discover/music/album/rg-1');
+    const button = (await screen.findByRole('button', { name: /Request \(Your account cannot request music\)/ })) as HTMLButtonElement;
+    expect(button.disabled).toBe(true);
+  });
+
   it('Discover home links Music and Audiobooks only while their flags are on', async () => {
     stubApi({ ...features(true, false), '/api/v1/discoverslider': [] });
     renderAt('/discover');
