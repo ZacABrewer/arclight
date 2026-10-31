@@ -174,6 +174,8 @@ Settings > Transcode holds rules that tidy or convert library files with ffmpeg.
 | Strip tracks | Keep only the audio and subtitle languages you list (untagged tracks are always kept) |
 | Add audio track | Keep everything and add one compatibility audio track made from the first kept audio track |
 
+**Channels** sets the encoded audio's channel count (2 = stereo, 6 = 5.1, 8 = 7.1; empty keeps the source layout; Add audio track defaults to 2). E-AC-3 holds at most 5.1, so 7 or 8 channels are written as 5.1 with E-AC-3; AAC keeps 7.1. When a job fails, its message under Activity starts with ffmpeg's own reason.
+
 Each rule can **Keep original** (keep the old file next to the result instead of sending it to the recycle bin), **Run after import** (queue matching files after every import), and have a **Time window** (server time) in which queued jobs may start. A job that has started inside the window runs to the end. Manual runs ignore the window. Jobs show up under Activity > Transcode jobs. ffmpeg must be installed, or its path set in `ARCLIGHT_FFMPEG`; the page warns if it cannot be found (the Docker image includes it). The **Hardware acceleration** pane on the same page tests each GPU backend and holds the **Fall back to software** switch. Passing a GPU into the container is covered in [hardware-transcoding.md](hardware-transcoding.md).
 
 ## Import lists

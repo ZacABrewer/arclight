@@ -488,6 +488,16 @@ Full guide: [hardware-transcoding.md](using/hardware-transcoding.md).
 
 ---
 
+### Transcode fails with code 234 and "Nothing was written into output file"
+
+**What you see:** a transcode or Add audio track job fails with `ffmpeg exited with code 234`, and the message ends with lines like `[aost#0:2/eac3] Task finished with error code: -22 (Invalid argument)`, `Nothing was written into output file` and `Conversion failed!`.
+
+**Cause:** those last lines only say that an output stream could not start. The reason is a line ffmpeg printed earlier. The most common one is `Specified channel layout '7.1' is not supported by the eac3 encoder`: the rule asked for E-AC-3 with 7 or 8 channels, and E-AC-3 holds at most 5.1. Versions before 0.13.2 kept only the last five lines, so the reason was cut off.
+
+**Fix:** update to 0.13.2 or later. E-AC-3 with 7 or 8 channels is now written as 5.1 (AAC still takes 7.1), and a failed job's message starts with the line that names the cause. On an older version, set **Channels** to 6 or empty, or use AAC for 7.1.
+
+---
+
 <a id="health-notification-no-more-info"></a>
 ### Health notification has no More Info link
 

@@ -249,3 +249,23 @@ export async function waitFor(cond: () => boolean, timeoutMs = 2000): Promise<vo
     await new Promise((r) => setTimeout(r, 2));
   }
 }
+
+/** ffmpeg 7 stderr for E-AC-3 asked for 7.1 (exit 234): the cause is far above the last lines. */
+export const EAC3_LAYOUT_FAIL = [
+  "[eac3 @ 0x60ddc4ee1200] Specified channel layout '7.1' is not supported by the eac3 encoder",
+  '[eac3 @ 0x60ddc4ee1200] Supported channel layouts:',
+  '[eac3 @ 0x60ddc4ee1200]   mono',
+  '[eac3 @ 0x60ddc4ee1200]   stereo',
+  '[eac3 @ 0x60ddc4ee1200]   5.1(side)',
+  '[eac3 @ 0x60ddc4ee1200]   5.1',
+  '[aost#0:2/eac3 @ 0x60ddc4ee1ac0] Error while opening encoder - maybe incorrect parameters such as bit_rate, rate, width or height.',
+  '[af#0:2 @ 0x60ddc4eeff40] Error sending frames to consumers: Invalid argument',
+  '[af#0:2 @ 0x60ddc4eeff40] Task finished with error code: -22 (Invalid argument)',
+  '[af#0:2 @ 0x60ddc4eeff40] Terminating thread with return code -22 (Invalid argument)',
+  '[aost#0:2/eac3 @ 0x60ddc4ee1ac0] Could not open encoder before EOF',
+  '[aost#0:2/eac3 @ 0x60ddc4ee1ac0] Task finished with error code: -22 (Invalid argument)',
+  '[aost#0:2/eac3 @ 0x60ddc4ee1ac0] Terminating thread with return code -22 (Invalid argument)',
+  '[out#0/matroska @ 0x60ddc4ec7fc0] Nothing was written into output file, because at least one of its streams received no packets.',
+  'frame=    0 fps=0.0 q=-1.0 Lsize=       0KiB time=N/A bitrate=N/A speed=N/A',
+  'Conversion failed!',
+].join('\n');

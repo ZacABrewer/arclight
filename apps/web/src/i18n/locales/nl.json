@@ -5261,7 +5261,7 @@
   "settings.transcode.backend": "[nl] Backend",
   "settings.transcode.bitrateAbove": "[nl] Bitrate above",
   "settings.transcode.channels": "[nl] Channels",
-  "settings.transcode.channelsCaption": "[nl] 2 = stereo, 6 = 5.1. Empty keeps the source layout.",
+  "settings.transcode.channelsCaption": "[nl] 2 = stereo, 6 = 5.1, 8 = 7.1. E-AC-3 holds at most 5.1, so 7 or 8 become 5.1 there. Empty keeps the source layout.",
   "settings.transcode.container": "[nl] Container",
   "settings.transcode.copy": "[nl] Copy",
   "settings.transcode.couldNotLoad": "[nl] Couldn't load transcode rules",

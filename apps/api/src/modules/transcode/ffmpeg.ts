@@ -251,6 +251,14 @@ export function capabilityTestArgs(hwaccel: TranscodeHwaccel): string[] {
   ];
 }
 
+/**
+ * Channels the encoder can write: E-AC-3 holds at most 5.1, so a 7.1 (or 6.1) request is
+ * downmixed to 5.1 instead of failing the job ("channel layout '7.1' is not supported").
+ */
+export function outputChannels(codec: 'aac' | 'eac3', channels: number): number {
+  return codec === 'eac3' ? Math.min(channels, 6) : channels;
+}
+
 function audioBitrate(codec: 'aac' | 'eac3', channels: number): string {
   if (codec === 'eac3') return channels <= 2 ? '224k' : '640k';
   return `${Math.min(512, channels * 64)}k`;
@@ -301,11 +309,14 @@ export function buildFfmpegArgs(input: string, output: string, spec: BuildSpec, 
   if (encodeAudio) {
     const codec = options.audio as 'aac' | 'eac3';
     args.push('-c:a', codec);
-    if (options.channels !== undefined) args.push('-ac', String(options.channels), '-b:a', audioBitrate(codec, options.channels));
+    if (options.channels !== undefined) {
+      const channels = outputChannels(codec, options.channels);
+      args.push('-ac', String(channels), '-b:a', audioBitrate(codec, channels));
+    }
   } else args.push('-c:a', 'copy');
   if (compat) {
     const codec = options.audio === 'copy' ? 'aac' : options.audio;
-    const channels = options.channels ?? 2;
+    const channels = outputChannels(codec, options.channels ?? 2);
     const n = compat.outIndex;
     const label = `${channels === 2 ? 'Stereo' : channels === 1 ? 'Mono' : `${channels}ch`} (${codec.toUpperCase()})`;
     args.push(
@@ -332,6 +343,24 @@ export function buildFfmpegArgs(input: string, output: string, spec: BuildSpec, 
   else args.push('-f', 'matroska');
   args.push('-max_muxing_queue_size', '1024', '-progress', 'pipe:1', '-nostats', output);
   return args;
+}
+
+/** ffmpeg's follow-on lines after the real error: they say a job failed, not why. */
+const GENERIC_FAILURE =
+  /Task finished with error|Terminating thread|Nothing was written into output|Conversion failed|Error while opening encoder|Could not open encoder before EOF|Error sending frames to consumers|^frame=|^\s*(Supported|mono|stereo)/i;
+const FAILURE_LINE = /error|not supported|invalid|unknown|unrecognized|could not|cannot|unable|no such|not found|failed|permission denied|incorrect|no space left|out of memory|corrupt/i;
+
+/**
+ * The line that says why ffmpeg failed. ffmpeg prints the cause first and a run of generic
+ * lines after it ("Task finished with error code -22", "Conversion failed!"), so the last
+ * lines alone never name it. The `[eac3 @ 0x...]` prefix is kept; it names the stream.
+ */
+export function ffmpegFailureCause(stderr: string): string | null {
+  for (const raw of stderr.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (line && FAILURE_LINE.test(line) && !GENERIC_FAILURE.test(line.replace(/^\[[^\]]*\]\s*/, ''))) return line.replace(/ @ 0x[0-9a-f]+\]/i, ']');
+  }
+  return null;
 }
 
 /** argv -> one display string (quotes arguments with spaces or shell characters). */

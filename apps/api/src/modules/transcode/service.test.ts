@@ -4,7 +4,7 @@ import { eq } from 'drizzle-orm';
 import { afterEach, describe, expect, it } from 'vitest';
 import { history, mediaFiles, settings } from '../../db/schema.js';
 import { TranscodeError } from './service.js';
-import { NOW, ruleInput, setup, waitFor, type Fixture } from './test-support.js';
+import { EAC3_LAYOUT_FAIL, NOW, ruleInput, setup, waitFor, type Fixture } from './test-support.js';
 
 let fx: Fixture;
 
@@ -216,6 +216,17 @@ describe('TranscodeWorker', () => {
       fx.service.runForFile(fx.episodeFileId);
       expect(await fx.service.process()).toMatchObject({ failed: 1 });
       expect(fx.runner.calls).toHaveLength(1);
+    });
+
+    it('a failed job names the cause ffmpeg printed before its generic last lines', async () => {
+      fx = await setup();
+      fx.runner.respond = () => ({ exitCode: 234, stderr: EAC3_LAYOUT_FAIL });
+      fx.service.createRule(ruleInput({ name: 'sw', action: 'transcode', options: { videoCodec: 'hevc', hwaccel: 'none' }, when: { videoCodec: 'h264' } }));
+      fx.service.runForFile(fx.episodeFileId);
+      expect(await fx.service.process()).toMatchObject({ failed: 1 });
+      const msg = fx.service.listJobs()[0]!.message!;
+      expect(msg).toMatch(/^ffmpeg exited with code 234: \[eac3\] Specified channel layout '7\.1' is not supported by the eac3 encoder\n/);
+      expect(msg).toContain('Conversion failed!');
     });
 
     it('a software retry that also fails says hardware was skipped', async () => {

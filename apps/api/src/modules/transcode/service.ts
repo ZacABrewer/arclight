@@ -18,7 +18,7 @@ import type { EventBus } from '../../events.js';
 import { normalizeData } from '../history/index.js';
 import { RecycleBin } from '../imports/mover.js';
 import { getSection, setSection } from '../settings/service.js';
-import { buildFfmpegArgs, containerExtension, formatCommand, softwareOptions, validateOptions, TranscodeBuildError } from './ffmpeg.js';
+import { buildFfmpegArgs, containerExtension, ffmpegFailureCause, formatCommand, softwareOptions, validateOptions, TranscodeBuildError } from './ffmpeg.js';
 import { HWACCEL_NAMES, hwFailureMessage, hwFallbackNote, hwInitFailure, testBackends } from './hwaccel.js';
 import { inWindow, ruleMatches, type MatchableParent } from './match.js';
 import { durationMsOf, FfmpegProgressParser } from './progress.js';
@@ -650,7 +650,10 @@ export class TranscodeService {
           this.db.update(transcodeJobs).set({ progress: 0 }).where(eq(transcodeJobs.id, job.id)).run();
           continue;
         }
-        const failed = `ffmpeg exited with ${res.exitCode === null ? 'a signal' : `code ${res.exitCode}`}${res.stderrTail ? `: ${res.stderrTail}` : ''}`;
+        const cause = ffmpegFailureCause(res.stderr ?? res.stderrTail);
+        // The cause leads; the tail follows unless it already holds the cause.
+        const detail = cause && !res.stderrTail.includes(cause) ? `${cause}\n${res.stderrTail}`.trim() : res.stderrTail;
+        const failed = `ffmpeg exited with ${res.exitCode === null ? 'a signal' : `code ${res.exitCode}`}${detail ? `: ${detail}` : ''}`;
         this.finish(job.id, 'failed', fallbackNote ? `${failed} (${fallbackNote})` : failed);
         return 'failed';
       }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { TranscodeOptions, type MediaInfo, type TranscodeAction, type TranscodeOptionsInput } from '@arclight/shared';
-import { buildFfmpegArgs, capabilityTestArgs, formatCommand, planStreams, presetArgs, qualityArgs, softwareOptions, TranscodeBuildError, VAAPI_DEVICE, videoEncoder } from './ffmpeg.js';
-import { H264_INFO, HEVC_INFO } from './test-support.js';
+import { buildFfmpegArgs, capabilityTestArgs, ffmpegFailureCause, formatCommand, planStreams, presetArgs, qualityArgs, softwareOptions, TranscodeBuildError, VAAPI_DEVICE, videoEncoder } from './ffmpeg.js';
+import { EAC3_LAYOUT_FAIL, H264_INFO, HEVC_INFO } from './test-support.js';
 
 const build = (action: TranscodeAction, raw: TranscodeOptionsInput = {}, info: MediaInfo | null = H264_INFO) =>
   buildFfmpegArgs('/in/a.mkv', '/in/.a.arclight-transcode.mkv', { action, options: TranscodeOptions.parse(raw) }, info);
@@ -158,6 +158,18 @@ describe('buildFfmpegArgs', () => {
     expect(after(args, '-b:a:1')).toBe('640k');
   });
 
+  it('E-AC-3 holds at most 5.1: 7 or 8 channels are written as 6, AAC keeps 8', () => {
+    for (const channels of [7, 8]) {
+      const args = build('transcode', { audio: 'eac3', channels });
+      expect(after(args, '-ac')).toBe('6');
+      expect(after(args, '-b:a')).toBe('640k');
+      const extra = build('addAudioTrack', { audio: 'eac3', channels }, HEVC_INFO);
+      expect(after(extra, '-ac:a:2')).toBe('6');
+      expect(after(extra, '-metadata:s:a:2')).toBe('title=6ch (EAC3)');
+    }
+    expect(after(build('transcode', { audio: 'aac', channels: 8 }), '-ac')).toBe('8');
+  });
+
   it('addAudioTrack needs media info with audio', () => {
     expect(() => build('addAudioTrack', {}, null)).toThrow(/media info/);
     expect(() => build('addAudioTrack', {}, { ...H264_INFO, audioStreams: [], audioStreamCount: 0 })).toThrow(/no audio/);
@@ -227,5 +239,17 @@ describe('hardware fallback and capability test args', () => {
     expect(after(capabilityTestArgs('none'), '-c:v')).toBe('libx264');
     expect(after(capabilityTestArgs('none'), '-i')).toBe('testsrc2=size=256x256:rate=1');
     expect(capabilityTestArgs('none').slice(-3)).toEqual(['-f', 'null', '-']);
+  });
+});
+
+describe('ffmpegFailureCause', () => {
+  it('finds the cause above the generic lines and drops the pointer', () => {
+    expect(ffmpegFailureCause(EAC3_LAYOUT_FAIL)).toBe("[eac3] Specified channel layout '7.1' is not supported by the eac3 encoder");
+  });
+
+  it('keeps plain causes and gives up on generic-only output', () => {
+    expect(ffmpegFailureCause('av_interleaved_write_frame(): No space left on device\nConversion failed!')).toBe('av_interleaved_write_frame(): No space left on device');
+    expect(ffmpegFailureCause('/in/a.mkv: No such file or directory')).toBe('/in/a.mkv: No such file or directory');
+    expect(ffmpegFailureCause('[out#0/matroska @ 0x1] Nothing was written into output file\nConversion failed!')).toBe(null);
   });
 });
