@@ -1,0 +1,29 @@
+/* Companion app (html.in-app, set by lib/native-app.ts when the page runs inside the Arclight
+   app). The WebView draws edge to edge (index.html has viewport-fit=cover), so the fixed chrome
+   keeps clear of the notch / Dynamic Island, the home indicator and landscape side insets.
+   The mobile tab bar already pads for the bottom inset (layout.css). */
+
+/* ---------- admin shell ---------- */
+.in-app .al-topbar { height: calc(var(--al-topbar) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); }
+.in-app .al-rail { padding-top: calc(22px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-bottom: calc(22px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+.in-app .al-content { padding-top: calc(var(--al-topbar) + var(--al-inset-top) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-bottom: calc(40px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+.in-app .al-content--flush-top { padding-top: calc(var(--al-topbar) + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); }
+.in-app .al-drawer { padding-top: var(--safe-area-inset-top, env(safe-area-inset-top, 0px)); padding-bottom: var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); }
+@media (max-width: 767.98px) {
+  .in-app .al-topbar { padding-left: max(20px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); padding-right: max(20px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); }
+  .in-app .al-content { padding-top: calc(var(--al-topbar) + 16px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-bottom: calc(64px + max(22px, var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))) + 20px); }
+}
+
+/* ---------- request portal ---------- */
+.in-app .portal-head { padding-top: calc(14px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-left: max(40px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); padding-right: max(40px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); }
+.in-app .portal-main { padding-bottom: calc(64px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+@media (max-width: 1023.98px) {
+  .in-app .portal-main { padding-bottom: calc(110px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px))); }
+}
+@media (max-width: 767.98px) {
+  .in-app .portal-head { padding-top: calc(10px + var(--safe-area-inset-top, env(safe-area-inset-top, 0px))); padding-left: max(16px, var(--safe-area-inset-left, env(safe-area-inset-left, 0px))); padding-right: max(16px, var(--safe-area-inset-right, env(safe-area-inset-right, 0px))); }
+}
+
+/* ---------- browser-only UI ---------- */
+/* Install-as-app prompts and anything else marked browser-only make no sense inside the app. */
+.in-app [data-browser-only] { display: none !important; }

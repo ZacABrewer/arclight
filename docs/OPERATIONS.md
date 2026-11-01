@@ -265,6 +265,32 @@ languageProfiles:
 (`docs/OPERATIONS.md` is checked by `config-export/docs.test.ts`: this example must import
 cleanly into an empty database.)
 
+## Mobile app push relay
+
+Phones paired through the [mobile app](using/mobile-app.md) get notifications through the
+Arclight push relay, because Apple and Google only deliver to an app from its publisher's
+servers. For every notification a user would get as a browser push (same events, same per-user
+choices), the server also sends `POST <relay>/v1/send` for each of that user's phones, with the
+phone's own relay secret as a bearer token. The body carries the title, the text, the in-app
+path to open (`data.url`) and, when Settings > Requests > Application URL is set, the server
+address (`data.server`). The relay does not store notification content.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ARCLIGHT_PUSH_RELAY_URL` | `https://arclight-push.moviemethat.com` | Base URL of the relay (a self-hosted relay, for example). |
+| `ARCLIGHT_PUSH_RELAY` | on | `off` (also `0`, `false`, `no`) turns phone notifications off: nothing is sent to any relay. Pairing and the device list still work. |
+
+Delivery never holds up the action that caused it. Each send times out after 10 s. A phone the
+relay reports unknown or gone (404, 410) is removed. On 429, 5xx, a timeout or a network error
+the server pauses all relay sends (the relay's `Retry-After`, else 5 s doubling up to 5 min)
+and retries each affected notification once when the pause ends; at most 50 retries wait at a
+time, so a struggling relay never gets a burst. The last problem shows on the phone's row in
+the device list until the next successful send.
+
+Relay secrets never leave the server: no API response includes them, the audit log masks
+them, and backup archives leave the `mobile_devices` table empty (overwritten, not just
+unlinked). Routes: [API.md](API.md#mobile-companion-app).
+
 ## Metrics
 
 `GET /metrics` at the server root (not under `/api/v1`) serves the Prometheus text format.

@@ -89,7 +89,11 @@ export function resolveAuthRedirect(
     return access.admin || (target !== '/' && canOpenAppPath(access, target.split('?')[0] ?? '')) ? target : '/portal';
   }
   // Non-admins never see the dashboard or an admin page: the portal is their home.
-  if (!canOpenAppPath(access, pathname)) return portalTargetFor(pathname);
+  if (!canOpenAppPath(access, pathname)) {
+    // Keep the query (the app's share sheet opens /discover/search?q=...).
+    const query = href.includes('?') ? href.slice(href.indexOf('?')) : '';
+    return portalTargetFor(pathname) + query;
+  }
   return null;
 }
 

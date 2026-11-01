@@ -7,6 +7,9 @@ import { quotaSummary, UserPolicyEditor, UserRequestSettingsForm } from '../feat
 import { DiscordLinkPanel } from '../features/requests/discord-link.js';
 import { useUserQuota } from '../hooks/requests.js';
 import { BrowserNotifications } from '../features/push/browser-notifications.js';
+import { DeviceNotifications } from '../features/mobile/device-notifications.js';
+import { MobileAppSection } from '../features/mobile/mobile-app-section.js';
+import { isInApp, shell } from '../lib/native-app.js';
 import { MediaServerLinkPanel } from '../features/requests/media-server-link.js';
 import '../components/media/media-kit.css';
 import { t } from '../i18n/index.js';
@@ -44,6 +47,8 @@ export function ProfilePage() {
   const { user, session } = useAuth();
   const quota = useUserQuota(user?.id ?? null);
   const [changingPassword, setChangingPassword] = useState(false);
+  const inApp = isInApp();
+  const hasShell = shell() !== null;
 
   if (!user) {
     return (
@@ -107,8 +112,20 @@ export function ProfilePage() {
             <UserPolicyEditor userId={user.id} readOnly />
           </Pane>
         </div>
-        <Pane title={t('profile.browserNotifications')}>
-          <BrowserNotifications />
+        {/* Inside the companion app the phone's own notifications replace web push. */}
+        {inApp ? (
+          hasShell ? (
+            <Pane title={t('profile.deviceNotifications')}>
+              <DeviceNotifications />
+            </Pane>
+          ) : null
+        ) : (
+          <Pane title={t('profile.browserNotifications')}>
+            <BrowserNotifications />
+          </Pane>
+        )}
+        <Pane title={t('profile.mobileApp')} aria-label={t('profile.mobileApp')}>
+          <MobileAppSection />
         </Pane>
         <Pane title={t('profile.notificationsAndWatchlist')}>
           <UserRequestSettingsForm userId={user.id} />

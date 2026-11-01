@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Arclight connects to the user's own self-hosted server at whatever address they type: often
+  plain http:// on a home network (http://192.168.1.20:7878, http://nas:7878) or over a VPN.
+  Those hosts cannot be listed in advance, so cleartext is allowed for all hosts. HTTPS stays the
+  first choice: the app tries https:// first and warns before saving a plain-http server that is
+  not on a private network. Only system CAs are trusted (no user-added CAs).
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

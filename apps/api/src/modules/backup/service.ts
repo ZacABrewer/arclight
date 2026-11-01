@@ -65,6 +65,27 @@ export interface RestoreResult {
   configFiles: number;
 }
 
+/**
+ * Tables whose rows hold per-device capabilities that must never leave the server in a
+ * downloadable archive: mobile app devices carry their push relay secret. The app registers
+ * again when its notifications are turned back on after a restore.
+ */
+export const SCRUBBED_TABLES = ['mobile_devices'] as const;
+
+/** Empty SCRUBBED_TABLES in a snapshot file; secure_delete overwrites the freed pages so nothing lingers. */
+export function scrubSnapshot(path: string): void {
+  const db = new Database(path);
+  try {
+    db.pragma('secure_delete = ON');
+    for (const table of SCRUBBED_TABLES) {
+      const exists = db.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = ?").get(table);
+      if (exists) db.exec(`DELETE FROM "${table}"`);
+    }
+  } finally {
+    db.close();
+  }
+}
+
 export function backupFileName(type: BackupType, at: Date, n = 0): string {
   const p = (v: number) => String(v).padStart(2, '0');
   const stamp = `${at.getUTCFullYear()}.${p(at.getUTCMonth() + 1)}.${p(at.getUTCDate())}_${p(at.getUTCHours())}.${p(at.getUTCMinutes())}.${p(at.getUTCSeconds())}`;
@@ -184,6 +205,7 @@ export class BackupService {
       try {
         // VACUUM INTO writes a consistent, compacted copy while the app keeps running.
         this.opts.db.$client.exec(`VACUUM INTO ${sqlQuote(snapshot)}`);
+        scrubSnapshot(snapshot);
         const configFiles = await this.collectConfigFiles(folder);
         const rows = this.opts.db.select().from(settingsTable).all();
         const settingsExport = {

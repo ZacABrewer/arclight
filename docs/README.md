@@ -66,6 +66,7 @@ These pages follow the app's navigation.
 | Download clients and the built-in torrent engine | [download-clients.md](using/download-clients.md) |
 | VPN and kill switch | [vpn.md](using/vpn.md) |
 | Notifications | [notifications.md](using/notifications.md) |
+| Mobile app (pairing, phone notifications) | [mobile-app.md](using/mobile-app.md) |
 | Media servers (Jellyfin, Emby, Plex) | [media-servers.md](using/media-servers.md) |
 | Users and security | [users-and-security.md](using/users-and-security.md) |
 | System (health, tasks, logs, metrics, config as code) | [system.md](using/system.md) |

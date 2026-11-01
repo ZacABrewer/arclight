@@ -3,7 +3,7 @@ import { registerPushListener } from './listener.js';
 import { pushRoutes } from './routes.js';
 import { PushService, type PushServiceOptions } from './service.js';
 
-export { PushService, PushError, PUSH_SECTION, type PushKind, type PushServiceOptions } from './service.js';
+export { PushService, PushError, PUSH_SECTION, type PushKind, type PushServiceOptions, type PushSink } from './service.js';
 export { deliveriesFor, registerPushListener } from './listener.js';
 export { encryptPayload, generateVapidKeys, sendWebPush, vapidJwt, b64url, fromB64url, type VapidKeys } from './webpush.js';
 export { pushSubscriptions } from './schema.js';

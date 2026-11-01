@@ -1,0 +1,67 @@
+name: Push relay
+
+# The Arclight push relay (push-relay/, a Cloudflare Worker with D1).
+# Pull requests: typecheck and test only.
+# Pushes to main and manual runs: typecheck, test, apply D1 migrations, deploy (arclight-push).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "push-relay/**"
+      - ".github/workflows/push-relay.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "push-relay/**"
+      - ".github/workflows/push-relay.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: push-relay-${{ github.ref }}
+  # Never cancel a deploy half way (between migrations and deploy).
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+jobs:
+  push-relay:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: push-relay
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm from push-relay/package.json packageManager)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: push-relay/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm test
+      - name: Check the Worker bundles
+        run: pnpm exec wrangler deploy --dry-run --outdir dist
+
+      - name: Apply D1 migrations
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: push-relay
+          wranglerVersion: "4.156.0"
+          command: d1 migrations apply arclight-push --remote
+      - name: Deploy to Cloudflare Workers
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: push-relay
+          wranglerVersion: "4.156.0"
+          command: deploy

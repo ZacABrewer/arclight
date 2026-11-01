@@ -1,0 +1,205 @@
+name: Mobile
+
+# Builds the Arclight companion app (apps/mobile, Capacitor) for Android and iOS.
+# Every run: Android debug APK and an unsigned iOS simulator build (proves both compile).
+# With signing secrets: signed Android App Bundle. Manual run with upload=true: Play internal
+# track and/or TestFlight. Secrets are documented in apps/mobile/README.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'apps/mobile/**'
+      - 'design/brand/**'
+      - '.github/workflows/mobile.yml'
+  pull_request:
+    paths:
+      - 'apps/mobile/**'
+      - 'design/brand/**'
+      - '.github/workflows/mobile.yml'
+  workflow_dispatch:
+    inputs:
+      upload:
+        description: 'Upload to Google Play (internal track) and TestFlight when the secrets exist'
+        type: boolean
+        default: false
+      play_status:
+        description: 'Play release status (use "draft" until the app has been published once)'
+        type: choice
+        options: [completed, draft]
+        default: completed
+
+concurrency:
+  group: mobile-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      CI: 'true'
+      HAS_KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' && secrets.ANDROID_KEYSTORE_PASSWORD != '' && secrets.ANDROID_KEY_ALIAS != '' && secrets.ANDROID_KEY_PASSWORD != '' }}
+      HAS_PLAY: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON != '' }}
+      HAS_GOOGLE_SERVICES: ${{ secrets.GOOGLE_SERVICES_JSON != '' }}
+      # Store uploads need a growing version code; plain builds keep 1.
+      ARCLIGHT_VERSION_CODE: ${{ github.event_name == 'workflow_dispatch' && inputs.upload && github.run_number || 1 }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+          cache: gradle
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Typecheck and unit tests
+        run: pnpm typecheck && pnpm test
+      - name: Build web assets
+        run: pnpm build
+      - name: google-services.json (push; optional)
+        if: env.HAS_GOOGLE_SERVICES == 'true'
+        run: printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+      - name: Capacitor sync
+        run: |
+          npx cap sync android
+          chmod +x android/gradlew
+      - name: Debug APK
+        run: ./gradlew assembleDebug --no-daemon --stacktrace
+        working-directory: apps/mobile/android
+      - uses: actions/upload-artifact@v4
+        with:
+          name: arclight-android-debug-apk
+          path: apps/mobile/android/app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Release keystore
+        if: env.HAS_KEYSTORE == 'true'
+        run: |
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload.keystore"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      - name: Signed release bundle (AAB)
+        if: env.HAS_KEYSTORE == 'true'
+        run: ./gradlew bundleRelease --no-daemon --stacktrace
+        working-directory: apps/mobile/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+      - uses: actions/upload-artifact@v4
+        if: env.HAS_KEYSTORE == 'true'
+        with:
+          name: arclight-android-release-aab
+          path: apps/mobile/android/app/build/outputs/bundle/release/*.aab
+          if-no-files-found: error
+          retention-days: 30
+      - name: Upload to Google Play (internal track)
+        if: env.HAS_KEYSTORE == 'true' && env.HAS_PLAY == 'true' && github.event_name == 'workflow_dispatch' && inputs.upload
+        uses: r0adkll/upload-google-play@v1.1.3
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.moviemethat.arclight
+          releaseFiles: apps/mobile/android/app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: ${{ inputs.play_status }}
+      - name: Remove keystore
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.keystore" android/app/google-services.json
+
+  ios:
+    runs-on: macos-latest
+    timeout-minutes: 60
+    env:
+      CI: 'true'
+      HAS_ASC: ${{ secrets.APPSTORE_API_KEY_ID != '' && secrets.APPSTORE_API_ISSUER_ID != '' && secrets.APPSTORE_API_KEY_P8 != '' && secrets.APPLE_TEAM_ID != '' }}
+    defaults:
+      run:
+        working-directory: apps/mobile
+    steps:
+      - uses: actions/checkout@v4
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - name: Enable corepack (pnpm from packageManager)
+        run: corepack enable
+        working-directory: .
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+        working-directory: .
+      - name: Build web assets
+        run: pnpm build
+      - name: Capacitor sync
+        run: npx cap sync ios
+      - name: Unsigned simulator build
+        run: |
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Debug \
+            -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath build/sim CODE_SIGNING_ALLOWED=NO build | tail -n 50
+          test "${PIPESTATUS[0]}" -eq 0
+
+      # TestFlight: manual run with upload=true and App Store Connect API key secrets.
+      # Signing is cloud-managed (-allowProvisioningUpdates with the API key): no certificates
+      # or profiles to store. The key needs the Admin role (or App Manager with access to
+      # cloud-managed distribution certificates).
+      - name: App Store Connect API key
+        if: env.HAS_ASC == 'true' && github.event_name == 'workflow_dispatch' && inputs.upload
+        run: |
+          mkdir -p "$RUNNER_TEMP/asc"
+          printf '%s' "$APPSTORE_API_KEY_P8" > "$RUNNER_TEMP/asc/AuthKey_$APPSTORE_API_KEY_ID.p8"
+          echo "ASC_KEY_PATH=$RUNNER_TEMP/asc/AuthKey_$APPSTORE_API_KEY_ID.p8" >> "$GITHUB_ENV"
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_KEY_P8: ${{ secrets.APPSTORE_API_KEY_P8 }}
+      - name: Archive and upload to TestFlight
+        if: env.HAS_ASC == 'true' && github.event_name == 'workflow_dispatch' && inputs.upload
+        env:
+          APPSTORE_API_KEY_ID: ${{ secrets.APPSTORE_API_KEY_ID }}
+          APPSTORE_API_ISSUER_ID: ${{ secrets.APPSTORE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: |
+          set -o pipefail
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" -authenticationKeyID "$APPSTORE_API_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_API_ISSUER_ID")
+          xcodebuild -project ios/App/App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath build/Arclight.xcarchive \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Automatic CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            "${AUTH[@]}" archive | tail -n 50
+          cat > build/ExportOptions.plist <<EOF
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>uploadSymbols</key><true/>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          EOF
+          xcodebuild -exportArchive -archivePath build/Arclight.xcarchive \
+            -exportOptionsPlist build/ExportOptions.plist -exportPath build/export \
+            "${AUTH[@]}" | tail -n 50
+      - name: Remove API key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/asc"

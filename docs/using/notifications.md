@@ -10,6 +10,7 @@ Three Notification connection types (Jellyfin, Emby and Plex) do a different job
 |---|---|
 | Add, edit, test and delete connections | Settings > Notifications |
 | Browser (web push) notifications, per user | Your profile page, "Show notifications in this browser" |
+| Phone notifications (the Arclight mobile app) | Your profile page in the app, "Notifications on this device"; pairing under "Mobile app". See [Mobile app](mobile-app.md) |
 | Daily admin digest of pending requests and open issues | Settings > Requests, "Daily digest" |
 
 ## Adding a connection
@@ -94,6 +95,8 @@ Separate from connections: each user can receive notifications in their own brow
    - Issues: updates on issues you reported (new issues too if you manage them).
 4. Press **Send test** to confirm. It reports how many browsers received it.
 
+The same three choices apply to phones paired through the [Arclight mobile app](mobile-app.md): one setting per user, for every browser and phone.
+
 Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first, for example through a reverse proxy. If notifications are blocked for the site, allow them in the browser's site settings. On iPhone and iPad, add Arclight to the home screen first. Each browser you enable is its own subscription, and a subscription the browser has revoked is removed automatically.
 
 ## Quiet hours, download alerts and summaries
@@ -120,6 +123,7 @@ Every card has a checkbox. Tick one or more and a bar appears at the bottom of t
 
 ## Related
 
+- [Mobile app](mobile-app.md) (pairing by QR code, notifications on your phone)
 - [Tags and tag rules](tags.md) (tags limit which items this applies to; rules can add them automatically)
 - [Media servers](media-servers.md)
 - [Activity](activity.md)

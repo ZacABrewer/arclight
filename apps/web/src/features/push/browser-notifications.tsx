@@ -23,17 +23,44 @@ export interface BrowserNotificationsProps {
   support?: PushSupport;
 }
 
-export function BrowserNotifications({ support = pushSupport() }: BrowserNotificationsProps) {
+/**
+ * The per-event toggles (requests, availability, issues). They are per user and apply to every
+ * channel: browsers and the mobile app alike.
+ */
+export function PushEventToggles({ enabled = true }: { enabled?: boolean }) {
   const qc = useQueryClient();
   const ids = useId();
-  const [enabled, setEnabled] = useState<boolean | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const prefs = useQuery({ queryKey: prefKeys, queryFn: pushApi.preferences, retry: false, enabled: support === 'supported' });
+  const prefs = useQuery({ queryKey: prefKeys, queryFn: pushApi.preferences, retry: false, enabled });
   const savePrefs = useMutation({
     mutationFn: pushApi.setPreferences,
     meta: { errorTitle: t('features.push.browserNotifications.couldNotSaveNotificationPreferences') },
     onSuccess: (p) => qc.setQueryData(prefKeys, p),
   });
+  if (prefs.data) {
+    const data = prefs.data;
+    return (
+      <>
+        {EVENTS.map((ev) => (
+          <FormRow key={ev.key} label={ev.label} htmlFor={`${ids}-${ev.key}`} captionInline>
+            <Toggle
+              id={`${ids}-${ev.key}`}
+              checked={data[ev.key]}
+              disabled={savePrefs.isPending}
+              label={ev.caption}
+              onChange={(e) => savePrefs.mutate({ ...data, [ev.key]: e.currentTarget.checked })}
+            />
+          </FormRow>
+        ))}
+      </>
+    );
+  }
+  return prefs.isPending && enabled ? <Skeleton lines={3} /> : null;
+}
+
+export function BrowserNotifications({ support = pushSupport() }: BrowserNotificationsProps) {
+  const ids = useId();
+  const [enabled, setEnabled] = useState<boolean | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const toggle = useMutation({
     mutationFn: async (on: boolean) => {
       if (on) await enablePush();
@@ -97,21 +124,7 @@ export function BrowserNotifications({ support = pushSupport() }: BrowserNotific
           {error}
         </p>
       ) : null}
-      {prefs.data
-        ? EVENTS.map((ev) => (
-            <FormRow key={ev.key} label={ev.label} htmlFor={`${ids}-${ev.key}`} captionInline>
-              <Toggle
-                id={`${ids}-${ev.key}`}
-                checked={prefs.data[ev.key]}
-                disabled={savePrefs.isPending}
-                label={ev.caption}
-                onChange={(e) => savePrefs.mutate({ ...prefs.data, [ev.key]: e.currentTarget.checked })}
-              />
-            </FormRow>
-          ))
-        : prefs.isPending
-          ? <Skeleton lines={3} />
-          : null}
+      <PushEventToggles enabled={support === 'supported'} />
     </div>
   );
 }

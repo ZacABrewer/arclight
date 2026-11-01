@@ -28,6 +28,8 @@ Left out on purpose: log files, the backup folder itself, hidden files, cache fo
 
 A backup does contain secrets (your API key, indexer keys, password hashes). Treat the zip files like passwords and do not share them.
 
+Paired phones (the [mobile app](../using/mobile-app.md)) are left out of the database snapshot, because each holds a per-phone push relay secret. After a restore, turn **Notifications on this device** off and on again in the app.
+
 ## Schedule and retention
 
 Settings in "Backup settings" on System > Backups:

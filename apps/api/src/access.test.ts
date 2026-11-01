@@ -74,6 +74,11 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/push/preferences': 'portal',
   'PUT /api/v1/push/preferences': 'portal',
   'POST /api/v1/push/test': 'portal',
+  'GET /api/v1/mobile/pairing': 'portal',
+  'GET /api/v1/mobile/devices': 'portal',
+  'POST /api/v1/mobile/devices': 'portal',
+  'DELETE /api/v1/mobile/devices/:id': 'portal',
+  'POST /api/v1/mobile/devices/:id/test': 'portal',
   'GET /api/v1/events': 'portal',
   // Universal search: kinds scoped in the service (own requests/issues; library, activity, settings by access).
   'GET /api/v1/search/universal': 'portal',

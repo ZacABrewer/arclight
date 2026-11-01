@@ -42,6 +42,14 @@ export class PushError extends Error {
   }
 }
 
+/**
+ * Another delivery channel for the same notifications (the mobile app via the push relay).
+ * Called by notify() once the user's preference allowed the event; must not throw or block.
+ */
+export interface PushSink {
+  deliver(userId: number, payload: PushPayload): Promise<unknown>;
+}
+
 export interface PushServiceOptions {
   db: Db;
   log?: Logger;
@@ -65,7 +73,15 @@ function asRecord(v: unknown): Record<string, unknown> {
 const MAX_BODY_CHARS = 600;
 
 export class PushService {
+  private readonly sinks = new Set<PushSink>();
+
   constructor(private readonly opts: PushServiceOptions) {}
+
+  /** Register another channel for notify(); returns the function that removes it. */
+  addSink(sink: PushSink): () => void {
+    this.sinks.add(sink);
+    return () => this.sinks.delete(sink);
+  }
 
   private now(): Date {
     return this.opts.now?.() ?? new Date();
@@ -199,7 +215,7 @@ export class PushService {
     return result;
   }
 
-  /** `sendPush` gated by the user's preference for `kind`. */
+  /** `sendPush` gated by the user's preference for `kind`; the same payload also goes to every sink (mobile app). */
   async notify(userId: number, kind: PushKind, payload: PushPayload): Promise<PushTestResult | null> {
     let prefs: PushPreferences;
     try {
@@ -208,6 +224,12 @@ export class PushService {
       return null;
     }
     if (!prefs[kind]) return null;
+    for (const sink of this.sinks) {
+      // Fire and forget: a slow relay must never hold up browser pushes or the caller.
+      void Promise.resolve()
+        .then(() => sink.deliver(userId, payload))
+        .catch((err: unknown) => this.opts.log?.warn({ err }, 'push sink delivery failed'));
+    }
     return this.sendPush(userId, payload);
   }
 

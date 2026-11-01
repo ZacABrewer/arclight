@@ -32,7 +32,7 @@ Your account, requests and activity live on the server you use, not with the Arc
 
 ## Push relay data
 
-The relay holds only a push token and a random server identifier. It deletes them automatically as described above. To ask us to delete them sooner, email `privacy@moviemethat.com` with the subject "Delete push data". Tell us which platform (iOS or Android) and, if you can, the push token or server identifier. We hold no names or accounts, so we need something to find the record. We will confirm when it is done, normally within one month.
+The relay holds only a push token, a random device identifier and technical metadata (platform, app version, push environment, created and last-used times). It deletes them automatically as described above. To ask us to delete them sooner, email `privacy@moviemethat.com` with the subject "Delete push data". Tell us which platform (iOS or Android) and, if you can, the push token or device identifier (shown in the app's settings). We hold no names or accounts, so we need something to find the record. We will confirm when it is done, normally within one month.
 
 ## The website
 

@@ -16,7 +16,7 @@ before any `onReady`), backup, metadata, library, profiles, guides, indexers, so
 download-clients, history, blocklist, releases, import-lists, imports, scene-mapping,
 notifications, media-servers (moves a legacy `mediaServer` value into the list once),
 retention, media-analysis, transcode, library-hygiene, health-scan, stats, updates, push (bus listener on),
-subtitles, tag-rules, requests, discord-bot, calendar, compat, migrate, vpn, torrent, tracker-stats,
+mobile, subtitles, tag-rules, requests, discord-bot, calendar, compat, migrate, vpn, torrent, tracker-stats,
 cross-seed, engine-agent, auth, audit, metrics. The Sonarr/Radarr-shaped compat API mounts at
 the root afterwards. Cross-module hooks resolve their target lazily, so the order only matters
 for readability: the releases engine asks tracker-stats for its freeleech-only filter through
@@ -2126,6 +2126,24 @@ Contract: `packages/shared/src/stats.ts`.
 | GET | `/stats/library` | Series (monitored, continuing, ended), episodes (downloaded, missing = monitored + aired, unaired, unmonitored, cutoff unmet), movies (monitored, downloaded, missing as in `/wanted/missing/movies`, cutoff unmet), files and size |
 | GET | `/stats/activity` | Grabs, imports and failures per UTC day for `days` (default 30, max 365) from history; season packs count once (per download id / imported path) |
 | GET | `/stats/indexers` | Proxy of `GET /indexer/stats` (`days`, default 30) |
+
+## mobile (companion app)
+
+Contract: `packages/shared/src/mobile.ts`. Phones paired through the Arclight app
+([user guide](using/mobile-app.md)). Every route is open to any signed-in user (portal access)
+and acts on the caller's own devices; admins may list (`?all=true`), remove and test anyone's.
+Registering needs a signed-in user (API-key callers without one get `400 NO_USER`). No
+response ever includes a device's relay secret. Notifications follow the caller's web push
+choices (`GET/PUT /push/preferences`); delivery and the relay are described in
+[OPERATIONS.md](OPERATIONS.md#mobile-app-push-relay).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/mobile/pairing` | `{ serverUrl, pushEnabled }`: the Application URL (Settings > Requests) or null, and false when the server runs with `ARCLIGHT_PUSH_RELAY=off`. The web UI encodes `arclight://pair?url=<encoded base URL>` in its QR code, using its own origin when `serverUrl` is null |
+| GET | `/mobile/devices` | The caller's devices (MobileDeviceResource: id, userId, relayDeviceId, platform `ios`/`android`, deviceName, appVersion, createdAt, lastSeenAt, lastError). `?all=true`: every user's, with `userName` (admins; others `403 FORBIDDEN`) |
+| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion? }`). Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource |
+| DELETE | `/mobile/devices/:id` | Unpair. `204`; `404` when it is not the caller's (admins: any) |
+| POST | `/mobile/devices/:id/test` | Send a test notification now: `{ ok, outcome: sent \| removed \| rate_limited \| failed \| disabled, message? }`. A device the relay reports gone is deleted (`removed`). One test per device per 10 s, else `429 RATE_LIMITED` |
 
 ## search (universal search)
 

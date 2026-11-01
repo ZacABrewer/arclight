@@ -20,6 +20,7 @@ import { ADMIN_ACCESS, appHomeFor, type Access } from '../../auth/access.js';
 import '../../components/media/media-kit.css';
 import '../discover/discover.css';
 import './portal.css';
+import { shell, switchServer } from '../../lib/native-app.js';
 import { t } from '../../i18n/index.js';
 
 // Public request portal: the full Discover catalogue (home sliders, browse, search, title,
@@ -160,6 +161,7 @@ export function PortalLayout() {
   const section = portalSection(pathname);
   const features = useFeatures();
   const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]));
+  const hasShell = shell() !== null;
 
   return (
     <DiscoverBaseProvider base="/portal">
@@ -192,6 +194,11 @@ export function PortalLayout() {
                   <a href={appHref} className={buttonClass({ variant: 'ghost' })}>
                     {t('portal.openApp')}
                   </a>
+                ) : null}
+                {hasShell ? (
+                  <Button variant="ghost" onClick={() => void switchServer().catch(() => undefined)}>
+                    {t('portal.switchServer')}
+                  </Button>
                 ) : null}
                 <Button variant="ghost" onClick={() => void logout()}>
                   {t('portal.signOut')}

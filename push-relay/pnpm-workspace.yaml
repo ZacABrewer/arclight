@@ -1,0 +1,7 @@
+# The push relay is its own pnpm project, separate from the app workspace in the repository root
+# (same layout as site/), so it never touches the root lockfile.
+packages:
+  - "."
+onlyBuiltDependencies:
+  - esbuild
+  - workerd

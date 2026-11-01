@@ -3,6 +3,7 @@ import { useRouter } from '@tanstack/react-router';
 import type { Session, User } from '@arclight/shared';
 import { Menu, type MenuItem } from '../arclight/index.js';
 import { displayNameOf, useAuth } from '../auth/auth-context.js';
+import { shell, switchServer } from '../lib/native-app.js';
 import { t } from '../i18n/index.js';
 
 /** Two-letter avatar initials: "Sam Kade" → "SK", "admin" → "AD". */
@@ -37,6 +38,8 @@ export function useUserMenu(onShortcuts: () => void): UserMenuModel {
   if (isAdmin) items.push({ id: 'security', label: t('layout.userMenu.securitySettings'), onSelect: () => void router.navigate({ to: '/settings/security' }) });
   items.push({ id: 'shortcuts', label: t('common.keyboardShortcuts'), onSelect: onShortcuts });
   if (isAdmin) items.push({ id: 'design', label: t('layout.userMenu.designSystem'), onSelect: () => void router.navigate({ to: '/design' }) });
+  // Companion app only: back to the app's server picker.
+  if (shell()) items.push({ id: 'switch-server', label: t('layout.userMenu.switchServer'), separatorBefore: true, onSelect: () => void switchServer().catch(() => undefined) });
   if (session.via === 'session') {
     items.push({
       id: 'signout',

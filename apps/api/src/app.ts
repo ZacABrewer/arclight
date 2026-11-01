@@ -55,6 +55,7 @@ import { healthScanModule } from './modules/health-scan/index.js';
 import { statsModule } from './modules/stats/index.js';
 import { updatesModule } from './modules/updates/index.js';
 import { pushModule } from './modules/push/index.js';
+import { mobileModule } from './modules/mobile/index.js';
 import { configExportModule } from './modules/config-export/index.js';
 import { auditModule, installAudit } from './modules/audit/index.js';
 import { installMetrics, metricsModule } from './modules/metrics/index.js';
@@ -172,6 +173,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     updatesModule,
     // Requests do not send their own pushes yet, so the bus listener stays on.
     pushModule,
+    // Mobile companion app devices; adds the push relay as a second channel of the push module's notify().
+    mobileModule,
     subtitlesModule,
     // Bulk search / rename / subtitle search over many selected items (library and Wanted lists).
     bulkModule,

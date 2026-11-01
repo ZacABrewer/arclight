@@ -39,6 +39,8 @@ describe('resolveAuthRedirect', () => {
     // After sign-in a non-admin lands in the portal, whatever the return path was.
     expect(resolveAuthRedirect(s, '/login', '/login', '/settings/general')).toBe('/portal');
     expect(resolveAuthRedirect(s, '/login', '/login')).toBe('/portal');
+    // The app's share sheet opens discover search; the query survives the move to the portal.
+    expect(resolveAuthRedirect(s, '/discover/search', '/discover/search?q=Heat')).toBe('/portal/search?q=Heat');
   });
 
   it('opens exactly the granted app areas, read-only views only', () => {

@@ -75,7 +75,7 @@ Push notifications are optional. If you turn them on:
 2. The app registers that token with **your own server** and with the **Arclight push relay**. The project runs the relay on Cloudflare.
 3. When your server has something to tell you, it sends the notification to the relay. The relay forwards it to Apple or Google, who deliver it to your device.
 
-**What the relay stores:** the push token and a random server identifier. Nothing else.
+**What the relay stores:** the push token, a random device identifier, a hash of the secret your app uses to authorize sends, and technical metadata (platform, app version, push environment, when the record was created and last used). No name, email, account or notification content. The relay sees your server's IP address when it sends a notification and uses it only for short-term rate limiting inside Cloudflare; we do not store it.
 
 **What the relay does not store:** notification content. It passes through to Apple or Google and is not kept after delivery.
 
@@ -103,7 +103,7 @@ Depending on where you live, you may have the right to:
 - withdraw consent at any time;
 - complain to your local data protection supervisory authority.
 
-The only data we could hold about you is a push token and server identifier at the relay, plus standard request data at Cloudflare. To use your rights, email `privacy@moviemethat.com`. We hold no names or accounts, so we may need the push token or server identifier to find your record. We reply within one month.
+The only data we could hold about you is a push token, a random device identifier and its technical metadata at the relay, plus standard request data at Cloudflare. To use your rights, email `privacy@moviemethat.com`. We hold no names or accounts, so we may need the push token or device identifier to find your record (the app shows the device identifier in its settings). We reply within one month.
 
 ### California (CCPA/CPRA)
 
@@ -118,7 +118,7 @@ Cloudflare, Apple and Google operate globally, so data they process (website req
 | Data | Kept for |
 |---|---|
 | Website request data at Cloudflare | Per Cloudflare's retention. We keep nothing ourselves. |
-| Push token and server identifier at the relay | Until unregistered, reported invalid by Apple or Google, or 90 days unused. |
+| Push token, device identifier and metadata at the relay | Until unregistered, reported invalid by Apple or Google, or 90 days unused. |
 | Notification content | Not stored after delivery. |
 | Data on your device | Until you remove the server, sign out or uninstall. |
 | Data on a server | Set by the server operator. |

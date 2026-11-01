@@ -183,6 +183,13 @@
       "when": 1793387419203,
       "tag": "0025_dashing_vision",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "6",
+      "when": 1793499420609,
+      "tag": "0026_redundant_scarlet_witch",
+      "breakpoints": true
     }
   ]
 }

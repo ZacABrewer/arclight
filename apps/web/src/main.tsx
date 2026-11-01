@@ -11,6 +11,7 @@ import { readPortalDocument } from './features/discover/portal-location.js';
 import { setUnauthorizedHandler } from './api/client.js';
 import { authKeys, isPublicPath, loginHref } from './auth/guard.js';
 import { registerServiceWorker } from './register-sw.js';
+import { installInAppMode } from './lib/native-app.js';
 import { I18nProvider, applyLocaleSetting } from './i18n/index.js';
 import { restoreTheme } from './arclight/theme-store.js';
 import './arclight/fonts.js';
@@ -30,6 +31,9 @@ setUnauthorizedHandler(() => {
   void router.navigate({ href: loginHref(href, true), replace: true });
 });
 
+// Inside the companion app: html.in-app (safe areas, browser-only UI hidden) and external
+// links through the system browser. Nothing happens in a plain browser.
+installInAppMode();
 registerServiceWorker();
 // The theme this device used last, painted before the api answers (AuthProvider corrects it).
 restoreTheme();

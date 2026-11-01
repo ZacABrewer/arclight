@@ -25,7 +25,7 @@ Only one kind of data reaches the project, and only if you turn on push notifica
 
 | Data type | Collected by the project? | Linked to your identity? | Used for tracking? | Purpose | Shared? | Encrypted in transit | Can be deleted |
 |---|---|---|---|---|---|---|---|
-| Device or other ID (push token, plus a random server identifier) | Yes, only if push is enabled | No. No name, email or account is attached. | No | App functionality (delivering notifications) | Only with Apple (APNs) or Google (FCM), to deliver notifications | Yes | Yes. Automatic on unregister, on invalid token and after 90 days unused. Also on request. |
+| Device or other ID (push token, plus a random device identifier and technical metadata: platform, app version, timestamps) | Yes, only if push is enabled | No. No name, email or account is attached. | No | App functionality (delivering notifications) | Only with Apple (APNs) or Google (FCM), to deliver notifications | Yes | Yes. Automatic on unregister, on invalid token and after 90 days unused. Also on request. |
 | Notification content | Passes through the relay, not stored | No | No | App functionality | Only with Apple or Google, to deliver | Yes | Not stored after delivery |
 
 ## Data the project does not receive

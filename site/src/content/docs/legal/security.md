@@ -53,7 +53,7 @@ The full list is in [SECURITY.md](https://github.com/ZacABrewer/arclight/blob/ma
 - **HTTPS** is used for the push relay and is the default for servers.
 - **Cleartext HTTP** is allowed only to servers you choose, for example on a home network. Plain HTTP is not encrypted. Anyone on the same network could read or change the traffic, so use it only on a network you trust. Prefer HTTPS when you can.
 - **Biometric lock** is handled by the operating system. No biometric data reaches the app or us.
-- **The push relay** stores only a push token and a random server identifier, and it does not keep notification content after delivery. The Apple and Google credentials used to send pushes are held only by the relay.
+- **The push relay** stores only a push token, a random device identifier, a hash of its secret and technical metadata, and it does not keep notification content after delivery. The Apple and Google credentials used to send pushes are held only by the relay.
 - **No third-party analytics or crash SDKs** run in the apps.
 
 See the [Privacy policy](/legal/privacy/) for more.

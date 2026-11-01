@@ -59,6 +59,7 @@ export * from '../modules/library-hygiene/schema.js';
 export * from '../modules/health-scan/schema.js';
 export * from '../modules/stats/schema.js';
 export * from '../modules/push/schema.js';
+export * from '../modules/mobile/schema.js';
 export * from '../modules/audit/schema.js';
 export * from '../modules/scene-mapping/schema.js';
 export * from '../modules/tracker-stats/schema.js';

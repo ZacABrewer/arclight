@@ -41,6 +41,7 @@ export * from './engine-agent.js';
 export * from './solver.js';
 export * from './updates.js';
 export * from './push.js';
+export * from './mobile.js';
 export * from './guides.js';
 export * from './feeds.js';
 export * from './media-analysis.js';

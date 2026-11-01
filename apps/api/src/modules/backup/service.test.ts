@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import Database from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { Backup } from '@arclight/shared';
+import { mobileDevices, users } from '../../db/schema.js';
 import { settingsService } from '../settings/index.js';
 import { backupFileName, parseBackupFileName, selectForPruning } from './service.js';
 import { harness, type Harness } from './test-support.js';
@@ -86,6 +87,31 @@ describe('BackupService', () => {
     }
     // The temporary snapshot is cleaned up.
     expect(readdirNames(join(dir, 'backups'))).toEqual([b.id]);
+  });
+
+  it('leaves mobile devices (and their relay secrets) out of the database snapshot', async () => {
+    const { service, db, dir } = setup();
+    const now = new Date().toISOString();
+    const userId = db.insert(users).values({ username: 'alice', usernameKey: 'alice', passwordHash: 'x', role: 'user', settings: {}, createdAt: now, updatedAt: now }).returning().get().id;
+    db.insert(mobileDevices).values({ userId, relayDeviceId: 'dev-1', relaySecret: 'relay-secret-do-not-leak', platform: 'ios', createdAt: now, lastSeenAt: now }).run();
+    const b = await service.create('manual');
+    const zip = await ZipReader.open(join(dir, 'backups', b.id));
+    try {
+      const snap = join(dir, 'snap.db');
+      await zip.extract('arclight.db', snap);
+      expect(readFileSync(snap).includes(Buffer.from('relay-secret-do-not-leak'))).toBe(false);
+      const copy = new Database(snap, { readonly: true });
+      try {
+        expect(copy.prepare('SELECT COUNT(*) FROM mobile_devices').pluck().get()).toBe(0);
+        expect(copy.prepare('SELECT COUNT(*) FROM users').pluck().get()).toBeGreaterThan(0);
+      } finally {
+        copy.close();
+      }
+    } finally {
+      await zip.close();
+    }
+    // The live database keeps the device.
+    expect(db.select().from(mobileDevices).all()).toHaveLength(1);
   });
 
   it('lists newest first, disambiguates same-second names, resolves and deletes', async () => {

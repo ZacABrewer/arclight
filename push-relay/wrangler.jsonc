@@ -1,0 +1,55 @@
+// Arclight push relay: forwards push notifications from self-hosted Arclight servers to Apple (APNs)
+// and Google (FCM), so no server ever holds the project's provider credentials. See README.md.
+// Deployed by .github/workflows/push-relay.yml (cloudflare/wrangler-action) on pushes to main.
+// Served only on the custom domain below; the workers.dev address and preview URLs are off.
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "arclight-push",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-10-22",
+  "workers_dev": false,
+  "preview_urls": false,
+  "routes": [{ "pattern": "arclight-push.moviemethat.com", "custom_domain": true }],
+
+  // Device records. Create once with `wrangler d1 create arclight-push`, then paste the printed
+  // database_id here (see README.md, "Deploy").
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arclight-push",
+      "database_id": "971efa3d-5aaf-4453-b9bd-e9936b9524ff",
+      "migrations_dir": "migrations"
+    }
+  ],
+
+  // Abuse limits keyed by client IP. Counters live in Cloudflare's rate-limiting service, not in
+  // our database, and are approximate per Cloudflare location. Per-device send limits are a
+  // token bucket stored on the device row (see src/index.ts).
+  "ratelimits": [
+    // POST /v1/devices: new registrations per IP.
+    { "name": "REGISTER_LIMITER", "namespace_id": "47001", "simple": { "limit": 10, "period": 60 } },
+    // PUT and DELETE /v1/devices/:id per IP.
+    { "name": "DEVICE_LIMITER", "namespace_id": "47002", "simple": { "limit": 30, "period": 60 } },
+    // POST /v1/send per IP (a server sending to many devices), before any database lookup.
+    { "name": "SEND_IP_LIMITER", "namespace_id": "47003", "simple": { "limit": 600, "period": 60 } }
+  ],
+
+  // Daily cleanup of devices unused for 90 days.
+  "triggers": { "crons": ["17 3 * * *"] },
+
+  "vars": {
+    "APNS_TOPIC": "com.moviemethat.arclight"
+  },
+  // Secrets (set with `wrangler secret put`, never in this file):
+  //   APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID   Apple token-based auth key (.p8 PEM, key ID, team ID)
+  //   FCM_SERVICE_ACCOUNT_JSON                  Google service account JSON for FCM HTTP v1
+
+  // Logs: only the Worker's own console.error lines, which never contain tokens or notification
+  // content. Invocation logs (request URL and headers per request) and traces are off.
+  "observability": {
+    "enabled": true,
+    "logs": { "enabled": true, "invocation_logs": false, "head_sampling_rate": 1 },
+    "traces": { "enabled": false }
+  },
+  "upload_source_maps": true
+}

@@ -25,6 +25,7 @@ import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError,
 import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
 import { AlertSettingsSection } from './alert-settings-section.js';
+import { MobileAppSection } from '../../../features/mobile/mobile-app-section.js';
 import './notifications.css';
 import { t } from '../../../i18n/index.js';
 
@@ -388,6 +389,10 @@ export function NotificationsPage() {
         )}
       </SettingsSection>
       <AlertSettingsSection />
+      {/* The companion app: pairing code and every user's paired phones (remove, send a test). */}
+      <SettingsSection label={t('settings.notifications.mobileApp')}>
+        <MobileAppSection all />
+      </SettingsSection>
       {picking ? (
         <Modal open size={640} onClose={() => setPicking(false)} title={t('settings.notifications.addConnection')}>
           {schemas.isPending ? (
