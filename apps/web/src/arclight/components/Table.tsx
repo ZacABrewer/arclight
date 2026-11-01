@@ -30,6 +30,35 @@ export interface Column<T> {
   /** text-3 cell (secondary columns). */
   muted?: boolean | undefined;
   className?: string | undefined;
+  /**
+   * Phone layout (cards, below 768px): `primary` is the card's title line (default: the first
+   * column), `end` puts the cell on its own line at the card's end (row actions), `hide` drops it.
+   */
+  mobile?: 'primary' | 'end' | 'hide' | undefined;
+  /** The cell's label in the phone layout when `header` is not plain text. */
+  label?: string | undefined;
+}
+
+/** Columns that name the row, in the order the phone layout prefers one as the card's title. */
+const TITLE_KEY = /^(title|name|path|release|series|movie|album|book|artist|author)$|title/i;
+/** Columns that describe the row's state rather than name it (never the card's title by default). */
+const STATE_KEY = /^(status|state|type|eventType|kind|enabled|ok|icon|health|select)$/i;
+
+/** The card title column on phones: an explicit `mobile: 'primary'`, else a naming column, else the first. */
+export function cardPrimaryKey<T>(columns: ReadonlyArray<Column<T>>): string | undefined {
+  const usable = columns.filter((c) => c.mobile !== 'hide' && c.mobile !== 'end');
+  return (
+    usable.find((c) => c.mobile === 'primary')?.key ??
+    usable.find((c) => TITLE_KEY.test(c.key))?.key ??
+    usable.find((c) => !STATE_KEY.test(c.key))?.key ??
+    usable[0]?.key
+  );
+}
+
+/** The label a card shows above a cell: the column's `label`, else a plain-text header. */
+function cardLabel<T>(col: Column<T>): string {
+  if (col.label !== undefined) return col.label;
+  return typeof col.header === 'string' || typeof col.header === 'number' ? String(col.header) : '';
 }
 
 function compare(a: SortValue, b: SortValue): number {
@@ -105,6 +134,12 @@ export interface TableProps<T> {
    */
   expandedRows?: ReadonlySet<RowKey> | undefined;
   renderExpanded?: ((row: T) => ReactNode) | undefined;
+  /**
+   * Phone layout below 768px: `cards` (default) stacks each row as a card with the title on top;
+   * `scroll` keeps the table and scrolls it sideways with readable column widths (always used
+   * for virtualised tables, whose fixed row height cards would break).
+   */
+  mobileLayout?: 'cards' | 'scroll' | undefined;
   className?: string | undefined;
 }
 
@@ -135,6 +170,7 @@ export function Table<T>({
   virtualize = false,
   expandedRows,
   renderExpanded,
+  mobileLayout = 'cards',
   className,
 }: TableProps<T>) {
   const [internalSort, setInternalSort] = useState<SortState | null>(defaultSort);
@@ -178,6 +214,9 @@ export function Table<T>({
   };
 
   const colCount = columns.length + (selectable ? 1 : 0);
+  const cards = mobileLayout === 'cards' && !virtualize;
+  const primaryKey = useMemo(() => cardPrimaryKey(columns), [columns]);
+  const isPrimary = (col: Column<T>) => col.key === primaryKey;
 
   if (loading && !rows) {
     return (
@@ -193,7 +232,7 @@ export function Table<T>({
 
   return (
     <>
-      <div ref={scrollRef} className={cx('al-table-wrap', className)} style={wrapStyle}>
+      <div ref={scrollRef} className={cx('al-table-wrap', cards ? 'al-table-wrap--cards' : 'al-table-wrap--scroll', className)} style={wrapStyle}>
         <table className={cx('al-table', density === 'rich' && 'al-table--rich', stickyHeader && 'al-table--sticky')} aria-rowcount={virtualize ? sorted.length + 1 : undefined}>
           {caption ? <caption className="al-sr-only">{caption}</caption> : null}
           <thead>
@@ -254,7 +293,16 @@ export function Table<T>({
                     {columns.map((col) => (
                       <td
                         key={col.key}
-                        className={cx(col.align && col.align !== 'left' && `al-td--${col.align}`, col.mono && 'al-td--mono', col.muted && 'al-td--muted', col.className)}
+                        data-label={cardLabel(col) || undefined}
+                        className={cx(
+                          col.align && col.align !== 'left' && `al-td--${col.align}`,
+                          col.mono && 'al-td--mono',
+                          col.muted && 'al-td--muted',
+                          isPrimary(col) && 'al-td--primary',
+                          (col.mobile === 'end' || (col.mobile === undefined && col.key === 'actions')) && 'al-td--end',
+                          col.mobile === 'hide' && 'al-td--mobile-hide',
+                          col.className,
+                        )}
                       >
                         {col.cell(row)}
                       </td>

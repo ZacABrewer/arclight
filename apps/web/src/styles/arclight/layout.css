@@ -112,7 +112,13 @@
 .al-page-header__subtitle { font-size: 14px; color: var(--al-text-4); }
 .al-page-header__controls { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
 .al-page-header__actions { margin-left: auto; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
-@media (max-width: 767.98px) { .al-page-header { gap: 12px; } .al-page-header .al-title-l { font-size: 24px; } }
+@media (max-width: 767.98px) {
+  .al-page-header { gap: 12px; }
+  .al-page-header .al-title-l { font-size: 24px; }
+  /* Actions get their own full-width row instead of floating right between wrapped controls. */
+  .al-page-header__actions { margin-left: 0; width: 100%; justify-content: flex-start; gap: 8px; }
+  .al-page-header__controls { width: 100%; }
+}
 
 /* ---------- ambient light (v1.1) ---------- */
 /* Border runners sit in clipping tracks: the rail scrolls (overflow-y), which would clip a runner

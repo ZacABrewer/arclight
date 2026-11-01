@@ -393,6 +393,43 @@ textarea.al-input { height: auto; min-height: 96px; padding: 10px 12px; line-hei
 .al-table__empty { padding: 20px; }
 /* Expanded detail row: no fixed row height, no hover tint; content stays in view while the table scrolls sideways. */
 .al-table__detail td { height: auto; padding: 0; background: var(--al-cyan-a02); }
+
+/* Phones: rows become cards (title on top, then label/value pairs, actions at the end) so no
+   column gets squeezed to a few characters. Virtualised tables keep rows and scroll sideways. */
+@media (max-width: 767.98px) {
+  .al-table-wrap--cards { overflow: visible; }
+  .al-table-wrap--cards .al-table,
+  .al-table-wrap--cards .al-table tbody,
+  .al-table-wrap--cards .al-table tr,
+  .al-table-wrap--cards .al-table td { display: block; }
+  .al-table-wrap--cards .al-table thead tr { display: flex; align-items: center; min-height: 0; border-bottom: 1px solid var(--al-line-a12); }
+  .al-table-wrap--cards .al-table thead th { display: none; }
+  .al-table-wrap--cards .al-table thead th.al-table__check { display: block; width: auto; padding: 8px 14px; border: 0; }
+  .al-table-wrap--cards .al-table tbody tr {
+    position: relative; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px;
+    padding: 14px; border-bottom: 1px solid var(--al-line-a12);
+  }
+  .al-table-wrap--cards .al-table tbody tr:hover td,
+  .al-table-wrap--cards .al-table tbody tr[aria-selected="true"] td { background: none; }
+  .al-table-wrap--cards .al-table tbody tr[aria-selected="true"] { background: var(--al-cyan-a08); }
+  .al-table-wrap--cards .al-table td,
+  .al-table-wrap--cards .al-table--rich td { height: auto; min-width: 0; padding: 0; border: 0; text-align: left; overflow-wrap: anywhere; }
+  .al-table-wrap--cards .al-table td[data-label]::before {
+    content: attr(data-label); display: block; margin-bottom: 2px;
+    font: 500 10px var(--al-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--al-text-4);
+  }
+  .al-table-wrap--cards .al-table td.al-td--primary { grid-column: 1 / -1; font-size: 15px; overflow-wrap: break-word; }
+  .al-table-wrap--cards .al-table td.al-td--primary::before { display: none; }
+  .al-table-wrap--cards .al-table tr:has(> .al-table__check) td.al-td--primary { padding-right: 36px; }
+  .al-table-wrap--cards .al-table td.al-td--end { grid-column: 1 / -1; display: flex; justify-content: flex-end; flex-wrap: wrap; gap: 8px; }
+  .al-table-wrap--cards .al-table td.al-td--end::before { display: none; }
+  .al-table-wrap--cards .al-table td.al-td--mobile-hide { display: none; }
+  .al-table-wrap--cards .al-table tbody td.al-table__check { position: absolute; top: 12px; right: 12px; width: auto; padding: 0 !important; }
+  .al-table-wrap--cards .al-table tr.al-table__detail { display: block; padding: 0; }
+  .al-table-wrap--cards .al-table tr.al-table__spacer { display: none; }
+  .al-table-wrap--scroll .al-table { min-width: 640px; }
+  .al-table-wrap--scroll .al-table td.al-td--primary { min-width: 220px; }
+}
 .al-table__detail:hover td { background: var(--al-cyan-a02); }
 
 /* ---------- keyboard sheet ---------- */

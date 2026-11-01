@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { Table, type Column } from './Table.js';
+import { cardPrimaryKey, Table, type Column } from './Table.js';
 import { Button } from './Button.js';
 import { computeVirtualRange } from '../hooks/use-virtual-rows.js';
 
@@ -161,5 +161,41 @@ describe('Table expandable rows', () => {
     expect(screen.queryByText('Details of Dark')).toBeNull();
     rerender(<Table columns={COLUMNS} rows={ROWS} rowKey={(r) => r.id} expandedRows={new Set()} renderExpanded={(r) => <p>Details of {r.title}</p>} />);
     expect(screen.queryByText('Details of Andor')).toBeNull();
+  });
+});
+
+describe('Table phone layout', () => {
+  type R = { id: number; title: string; size: string };
+  const cols: Column<R>[] = [
+    { key: 'title', header: 'Title', cell: (r) => r.title },
+    { key: 'size', header: <span>Size</span>, label: 'Size', cell: (r) => r.size },
+    { key: 'hidden', header: 'Hidden', mobile: 'hide', cell: () => 'x' },
+    { key: 'actions', header: '', cell: () => <Button>Remove</Button> },
+  ];
+
+  it('marks the title as the card heading, labels the other cells and puts actions at the end', () => {
+    const { container } = render(<Table columns={cols} rows={[{ id: 1, title: 'Dune', size: '2 GB' }]} rowKey={(r) => r.id} />);
+    expect(container.querySelector('.al-table-wrap--cards')).not.toBeNull();
+    const cells = container.querySelectorAll('tbody td');
+    expect(cells[0]!.className).toContain('al-td--primary');
+    expect(cells[1]!.getAttribute('data-label')).toBe('Size');
+    expect(cells[2]!.className).toContain('al-td--mobile-hide');
+    expect(cells[3]!.className).toContain('al-td--end');
+    expect(cells[3]!.hasAttribute('data-label')).toBe(false);
+  });
+
+  it('virtualised tables scroll sideways instead of turning into cards', () => {
+    const { container } = render(<Table columns={cols} rows={[{ id: 1, title: 'Dune', size: '2 GB' }]} rowKey={(r) => r.id} virtualize maxHeight={400} />);
+    expect(container.querySelector('.al-table-wrap--scroll')).not.toBeNull();
+  });
+});
+
+describe('cardPrimaryKey', () => {
+  const col = (key: string, extra: Partial<Column<unknown>> = {}): Column<unknown> => ({ key, header: key, cell: () => null, ...extra });
+  it('prefers an explicit primary, then a naming column, then a non-state column', () => {
+    expect(cardPrimaryKey([col('eventType'), col('sourceTitle'), col('quality')])).toBe('sourceTitle');
+    expect(cardPrimaryKey([col('status'), col('size'), col('name', { mobile: 'hide' })])).toBe('size');
+    expect(cardPrimaryKey([col('name'), col('size', { mobile: 'primary' })])).toBe('size');
+    expect(cardPrimaryKey([col('status')])).toBe('status');
   });
 });
