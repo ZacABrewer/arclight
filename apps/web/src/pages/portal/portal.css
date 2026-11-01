@@ -12,6 +12,8 @@
 .portal-nav__link[aria-current="page"] { color: var(--al-text-1); border-bottom-color: var(--al-cyan); }
 .portal-head__end { margin-left: auto; display: flex; align-items: center; gap: 10px; min-width: 0; }
 .portal-head__search { width: 320px; }
+.portal-head__account { display: flex; align-items: center; gap: 10px; }
+.portal-head__menu-btn { display: none; }
 .portal-head__search .dk-search { width: 100%; }
 .portal-main { position: relative; z-index: 1; max-width: 1480px; margin: 0 auto; padding: 32px 40px 64px; display: flex; flex-direction: column; gap: 24px; }
 .portal-stack { display: flex; flex-direction: column; gap: 32px; }
@@ -44,6 +46,17 @@
   .portal-main { padding: 20px 16px calc(110px + env(safe-area-inset-bottom, 0px)); }
   .portal-top { grid-template-columns: minmax(0, 1fr); }
   .portal-head .al-btn, .portal-logins .al-btn { min-height: 44px; }
+  /* Account actions behind one menu button; the panel drops down under the header. */
+  .portal-head { position: sticky; }
+  .portal-head__menu-btn { display: inline-flex; align-items: center; justify-content: center; min-width: 44px; padding: 0 10px; }
+  .portal-head__account { display: none; }
+  .portal-head__account[data-open="true"] {
+    position: absolute; top: 100%; right: 12px; z-index: 30;
+    display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 200px; padding: 8px;
+    background: var(--al-surface-solid); border: 1px solid var(--al-line-a12); box-shadow: 0 12px 32px rgba(0, 0, 0, .35);
+  }
+  .portal-head__account[data-open="true"] .al-btn { justify-content: flex-start; width: 100%; }
+  .portal-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .portal .mk-hero { margin: -20px -16px 16px; padding: 20px 16px 16px; }
 }
 

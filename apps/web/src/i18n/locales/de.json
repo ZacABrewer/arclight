@@ -3142,6 +3142,7 @@
   "palette.toast.resumed": "[de] Resumed {count, plural, one {# torrent} other {# torrents}}",
   "palette.toast.theme": "[de] Theme: {name}",
   "palette.toast.unmonitored": "[de] {title} is no longer monitored",
+  "portal.accountMenu": "[de] Account menu",
   "portal.accountNeedsSignIn": "[de] Sign in to manage your account",
   "portal.couldNotLoad": "[de] Could not load the request portal",
   "portal.defaultMessage": "[de] Sign in to request movies and series.",

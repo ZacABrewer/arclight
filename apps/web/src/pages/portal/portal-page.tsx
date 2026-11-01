@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
 import type { DiscoverItem, PortalDocument, PublicPortal } from '@arclight/shared';
@@ -162,6 +162,9 @@ export function PortalLayout() {
   const features = useFeatures();
   const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]));
   const hasShell = shell() !== null;
+  // Phones: the account actions sit behind one menu button so the header fits on one line.
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => setMenuOpen(false), [pathname]);
 
   return (
     <DiscoverBaseProvider base="/portal">
@@ -190,6 +193,17 @@ export function PortalLayout() {
             <PortalThemeMenu />
             {signedIn ? (
               <>
+                <button
+                  type="button"
+                  className="portal-head__menu-btn al-btn al-btn--ghost"
+                  aria-label={t('portal.accountMenu')}
+                  aria-expanded={menuOpen}
+                  aria-controls="portal-account-actions"
+                  onClick={() => setMenuOpen((o) => !o)}
+                >
+                  <Icon name="menu" size={20} />
+                </button>
+                <div id="portal-account-actions" className="portal-head__account" data-open={menuOpen} onClick={() => setMenuOpen(false)}>
                 {appHref ? (
                   <a href={appHref} className={buttonClass({ variant: 'ghost' })}>
                     {t('portal.openApp')}
@@ -203,6 +217,7 @@ export function PortalLayout() {
                 <Button variant="ghost" onClick={() => void logout()}>
                   {t('portal.signOut')}
                 </Button>
+                </div>
               </>
             ) : (
               <SignInLink>{t('portal.signIn')}</SignInLink>

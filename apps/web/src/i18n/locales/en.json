@@ -3165,6 +3165,7 @@
   "portal.signInLocal": "Sign in with your account",
   "portal.signInTitle": "Sign in",
   "portal.signInWith": "Sign in with {name}",
+  "portal.accountMenu": "Account menu",
   "portal.signOut": "Sign out",
   "portal.signedInHelp": "You are signed in. Open a title to request it.",
   "portal.switchServer": "Switch server",
