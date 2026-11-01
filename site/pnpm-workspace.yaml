@@ -1,0 +1,7 @@
+# The website is its own pnpm project, separate from the app workspace in the repository root.
+packages:
+  - "."
+onlyBuiltDependencies:
+  - esbuild
+  - sharp
+  - workerd

@@ -1,0 +1,266 @@
+/* Arclight website theme for Starlight: dark TRON look from design/brand/, readable light mode. */
+
+:root {
+  --arc-bg-0: #02070a;
+  --arc-bg-1: #0b1830;
+  --arc-primary: #2f7bff;
+  --arc-accent: #6ef6ff;
+  --arc-text: #e9fdff;
+  --arc-line: rgba(110, 246, 255, 0.16);
+  --arc-glow: 0 0 0 1px rgba(110, 246, 255, 0.18), 0 0 24px rgba(47, 123, 255, 0.18);
+  --arc-grid: rgba(110, 246, 255, 0.045);
+
+  --sl-font: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'Noto Sans', sans-serif;
+  --sl-font-heading: 'Chakra Petch', var(--sl-font);
+
+  /* Dark (default) */
+  --sl-color-accent-low: #0a2350;
+  --sl-color-accent: #2f7bff;
+  --sl-color-accent-high: #6ef6ff;
+  --sl-color-white: #e9fdff;
+  --sl-color-gray-1: #d2ecf3;
+  --sl-color-gray-2: #a8c5d3;
+  --sl-color-gray-3: #7f9db0;
+  --sl-color-gray-4: #4c677b;
+  --sl-color-gray-5: #20364b;
+  --sl-color-gray-6: #0d1d30;
+  --sl-color-black: #02070a;
+  --sl-color-bg-nav: rgba(4, 12, 20, 0.88);
+  --sl-color-bg-sidebar: rgba(3, 10, 17, 0.72);
+  --sl-color-hairline-light: rgba(110, 246, 255, 0.12);
+  --sl-color-hairline: rgba(110, 246, 255, 0.16);
+  --sl-color-hairline-shade: rgba(0, 0, 0, 0.5);
+}
+
+:root[data-theme='light'] {
+  --arc-line: rgba(31, 95, 214, 0.18);
+  --arc-glow: 0 0 0 1px rgba(31, 95, 214, 0.16), 0 6px 20px rgba(11, 24, 48, 0.08);
+  --arc-grid: rgba(31, 95, 214, 0.05);
+
+  --sl-color-accent-low: #d9e7ff;
+  --sl-color-accent: #1f5fd6;
+  --sl-color-accent-high: #0b2a6b;
+  --sl-color-white: #0b1830;
+  --sl-color-gray-1: #14263d;
+  --sl-color-gray-2: #2c4258;
+  --sl-color-gray-3: #4a6177;
+  --sl-color-gray-4: #7d91a3;
+  --sl-color-gray-5: #c4d1dc;
+  --sl-color-gray-6: #e7eef5;
+  --sl-color-gray-7: #f3f7fb;
+  --sl-color-black: #ffffff;
+  --sl-color-bg-nav: rgba(255, 255, 255, 0.92);
+  --sl-color-bg-sidebar: #f6f9fc;
+  --sl-color-hairline-light: #e1e9f1;
+  --sl-color-hairline: #d3dde7;
+  --sl-color-hairline-shade: #c4d1dc;
+}
+
+/* Page background: brand gradient with a faint grid in dark mode. */
+:root:not([data-theme='light']) body {
+  background-color: var(--arc-bg-0);
+  background-image:
+    linear-gradient(var(--arc-grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--arc-grid) 1px, transparent 1px),
+    linear-gradient(160deg, var(--arc-bg-1) 0%, var(--arc-bg-0) 70%);
+  background-size: 40px 40px, 40px 40px, 100% 100%;
+  background-attachment: fixed;
+}
+:root[data-theme='light'] body {
+  background-color: #ffffff;
+}
+
+html,
+body {
+  overflow-x: clip;
+}
+
+/* Headings in the brand face. */
+h1,
+h2,
+h3,
+h4,
+.sl-markdown-content :is(h1, h2, h3, h4),
+.hero h1,
+.arc-section h2 {
+  font-family: var(--sl-font-heading);
+  font-weight: 700;
+  letter-spacing: 0.01em;
+}
+
+.site-title img {
+  height: 2.1rem;
+}
+
+/* Header glow line */
+.header {
+  border-bottom: 1px solid var(--arc-line) !important;
+  backdrop-filter: blur(8px);
+}
+
+/* Links */
+.sl-markdown-content a:not(:where(.not-content *)) {
+  text-underline-offset: 0.18em;
+}
+
+/* Code blocks: cool tint and hairline glow */
+.expressive-code .frame {
+  box-shadow: var(--arc-glow);
+  border-radius: 6px;
+}
+
+/* Tables scroll inside themselves, never the page. */
+.sl-markdown-content table {
+  display: block;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+/* Buttons */
+.sl-link-button.primary,
+a.sl-link-button[data-variant='primary'] {
+  background: linear-gradient(90deg, var(--arc-primary), #3fa6ff);
+  border-color: transparent;
+  color: #ffffff;
+  box-shadow: 0 0 18px rgba(47, 123, 255, 0.35);
+}
+:root:not([data-theme='light']) .sl-link-button.secondary {
+  border-color: rgba(110, 246, 255, 0.5);
+  color: var(--arc-accent);
+}
+
+/* Cards: brand colours instead of Starlight's rotating palette */
+.card {
+  --sl-card-border: var(--sl-color-accent);
+  --sl-card-bg: var(--sl-color-accent-low);
+  border-color: var(--arc-line) !important;
+  background: color-mix(in srgb, var(--sl-color-black) 70%, transparent);
+  box-shadow: var(--arc-glow);
+  border-radius: 8px;
+}
+.card .title {
+  font-family: var(--sl-font-heading);
+}
+
+/* ---- Landing page ---- */
+
+/* Stacked, centred hero with the lockup on top. */
+.hero {
+  grid-template-columns: 100% !important;
+  text-align: center;
+  padding-block: clamp(2rem, 6vmin, 5rem) 2rem !important;
+}
+.hero > img {
+  order: 0 !important;
+  width: min(92%, 34rem) !important;
+  height: auto;
+  filter: drop-shadow(0 0 28px rgba(47, 123, 255, 0.35));
+}
+:root[data-theme='light'] .hero > img {
+  filter: none;
+}
+.hero .stack {
+  text-align: center !important;
+}
+.hero .copy {
+  align-items: center !important;
+}
+.hero .copy > * {
+  max-width: 44rem;
+}
+.hero h1 {
+  font-size: clamp(1.9rem, 1rem + 3.4vw, 3.4rem);
+}
+.hero .actions {
+  justify-content: center !important;
+}
+
+.arc-section {
+  margin-top: 3.5rem !important;
+}
+.arc-section h2,
+.arc-section > .sl-heading-wrapper {
+  text-align: center;
+  justify-content: center;
+  margin-bottom: 0.5rem;
+}
+.arc-section > .arc-lede {
+  text-align: center;
+  color: var(--sl-color-gray-2);
+  max-width: 44rem;
+  margin: 0 auto 1.5rem;
+}
+
+.arc-steps {
+  max-width: 48rem;
+  margin-inline: auto;
+}
+
+.arc-mobile {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  max-width: 44rem;
+  margin: 0 auto;
+}
+.arc-store {
+  display: flex;
+  align-items: center;
+  gap: 0.9rem;
+  padding: 1rem 1.2rem;
+  border: 1px solid var(--arc-line);
+  border-radius: 10px;
+  box-shadow: var(--arc-glow);
+  background: color-mix(in srgb, var(--sl-color-black) 70%, transparent);
+}
+.arc-store svg {
+  width: 2rem;
+  height: 2rem;
+  flex: none;
+  color: var(--sl-color-accent-high);
+}
+.arc-store strong {
+  display: block;
+  font-family: var(--sl-font-heading);
+  color: var(--sl-color-white);
+}
+.arc-store .arc-badge {
+  display: inline-block;
+  margin-top: 0.25rem;
+  padding: 0.05rem 0.55rem;
+  font-size: var(--sl-text-xs);
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  border-radius: 999px;
+  color: var(--sl-color-accent-high);
+  border: 1px solid currentColor;
+}
+
+/* ---- Site footer ---- */
+.arc-footer {
+  margin-top: 3rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--arc-line);
+  font-size: var(--sl-text-sm);
+  color: var(--sl-color-gray-3);
+  text-align: center;
+}
+.arc-footer nav {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.4rem 1.4rem;
+  margin-bottom: 1rem;
+}
+.arc-footer nav a {
+  color: var(--sl-color-gray-2);
+  text-decoration: none;
+}
+.arc-footer nav a:hover {
+  color: var(--sl-color-accent-high);
+}
+.arc-footer p {
+  margin: 0.4rem auto;
+  max-width: 46rem;
+}

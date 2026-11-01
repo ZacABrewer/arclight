@@ -1,4 +1,4 @@
-import type { SVGProps } from 'react';
+import { useId, type SVGProps } from 'react';
 import { cx } from '../cx.js';
 
 // Arclight icon set (Design Kit §09): 24px artboard rendered at 16 / 20 / 24, 1.5px stroke,
@@ -98,9 +98,15 @@ export function Icon({ name, size = 16, label, className, ...rest }: IconProps) 
   );
 }
 
-/** Brand mark: rotated square with a filled centre (1.5px stroke). */
+/**
+ * Brand mark: the "fast-forward" double chevron (design/brand/mark-color.svg). The gradient
+ * stops read --al-mark-from / --al-mark-to so a theme pack can recolour it (e.g. both white
+ * on a coloured tile); the defaults are the brand blue -> cyan.
+ */
 export function Mark({ size = 40, label }: { size?: number | undefined; label?: string | undefined }) {
-  const inner = Math.round(size * 0.35);
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const grad = `al-mark-g-${id}`;
+  const chevron = { fill: 'none', stroke: `url(#${grad})`, strokeWidth: 13, strokeLinecap: 'round', strokeLinejoin: 'round' } as const;
   return (
     <span
       className="al-mark"
@@ -109,7 +115,16 @@ export function Mark({ size = 40, label }: { size?: number | undefined; label?: 
       aria-label={label}
       aria-hidden={label ? undefined : true}
     >
-      <i style={{ width: inner, height: inner }} />
+      <svg viewBox="0 0 100 100" width={size} height={size} focusable="false" aria-hidden="true">
+        <defs>
+          <linearGradient id={grad} x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" style={{ stopColor: 'var(--al-mark-from, #2f7bff)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--al-mark-to, #6ef6ff)' }} />
+          </linearGradient>
+        </defs>
+        <path d="M48,22 L76,50 L48,78" {...chevron} opacity={0.45} />
+        <path d="M24,22 L52,50 L24,78" {...chevron} />
+      </svg>
     </span>
   );
 }

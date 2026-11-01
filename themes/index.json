@@ -927,7 +927,7 @@
     {
       "id": "sorbet",
       "name": "Sorbet",
-      "version": "1.0.1",
+      "version": "1.0.2",
       "description": "Light, pastel and rounded: strawberry actions, fruit-tinted status chips, soft shadows and drifting blobs.",
       "author": "Arclight",
       "colorScheme": "light",
@@ -943,12 +943,12 @@
         {
           "path": "theme.json",
           "size": 335,
-          "sha256": "9d5c1292206b8ba51f0948b3d03f8782d7ddf55c886d0f52462ba93a1fafffda"
+          "sha256": "c812cf09adde751e623720f0dd9fbfee0bba10b36f78265b76be4e81d797b0ca"
         },
         {
           "path": "theme.css",
-          "size": 62977,
-          "sha256": "b7ad5a1585e408876b9fc7326020d6de4d8840e027acd8e636747a7870f1f094"
+          "size": 62949,
+          "sha256": "ef0def10d54ab102f316f0c62cc404d1f84efeccf665433bfb1e0c776b9ecd9c"
         },
         {
           "path": "fonts/OFL.txt",

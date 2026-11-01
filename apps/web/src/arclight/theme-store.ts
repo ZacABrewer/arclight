@@ -18,7 +18,7 @@ export interface ActiveTheme {
   themeColor: string;
 }
 
-export const BUILTIN_THEME: Readonly<ActiveTheme> = Object.freeze({ id: 'tron', href: null, colorScheme: 'dark', backdrop: 'tron', themeColor: '#000000' });
+export const BUILTIN_THEME: Readonly<ActiveTheme> = Object.freeze({ id: 'tron', href: null, colorScheme: 'dark', backdrop: 'tron', themeColor: '#02070a' });
 
 const STORAGE_KEY = 'arclight.theme';
 const LINK_ID = 'al-theme-css';

@@ -920,6 +920,7 @@
   "common.usenet": "Usenet",
   "common.user": "User",
   "common.username": "Username",
+  "common.tmdbAttribution": "This product uses the TMDB API but is not endorsed or certified by TMDB.",
   "common.users": "Users",
   "common.version": "Version",
   "common.vpn": "VPN",

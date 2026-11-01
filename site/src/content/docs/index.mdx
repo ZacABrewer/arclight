@@ -1,0 +1,155 @@
+---
+title: Self-hosted media automation
+description: Self-hosted media automation in one app. Requests, search, a built-in torrent engine, subtitles, music and audiobooks, written from scratch to replace the *arr stack.
+template: splash
+editUrl: false
+hero:
+  title: Your whole media stack. One app.
+  tagline: Arclight finds, requests, downloads, imports and subtitles your TV shows and movies, plus music and audiobooks. It does the jobs of Sonarr, Radarr, Prowlarr, Bazarr and Seerr in a single self-hosted service, with its own built-in torrent engine. It is not a media server; it tells Jellyfin, Emby or Plex when new files land.
+  image:
+    dark: ../../assets/lockup-dark.svg
+    light: ../../assets/lockup-light.svg
+    alt: Arclight
+  actions:
+    - text: Get started
+      link: /docs/getting-started/install-other-platforms/
+      icon: right-arrow
+      variant: primary
+    - text: Docs
+      link: /docs/
+      icon: open-book
+      variant: secondary
+    - text: GitHub
+      link: https://github.com/ZacABrewer/arclight
+      icon: github
+      variant: minimal
+---
+
+import { Card, CardGrid, LinkCard, Steps, Icon } from '@astrojs/starlight/components';
+
+<section class="arc-section">
+
+## What it does
+
+<p class="arc-lede">One database, one login, one UI, one scheduler. Free software under the GPL v3, written clean-room in TypeScript.</p>
+
+<CardGrid>
+  <Card title="Requests portal" icon="comment">
+    Family and friends browse Discover and request movies, series, music, audiobooks, subtitles or audio languages. Per-user request types, quotas, auto-approve rules and kids limits. [Requests](/docs/using/discover-and-requests/)
+  </Card>
+  <Card title="Built-in torrent engine" icon="cloud-download">
+    No separate download client needed. Run it through a VPN tunnel with a kill switch, and let the disk guard hold downloads to what your disk can write. qBittorrent and SABnzbd stay optional. [Download clients](/docs/using/download-clients/) · [VPN](/docs/using/vpn/)
+  </Card>
+  <Card title="Sonarr/Radarr-compatible API" icon="puzzle">
+    Tools that speak Sonarr or Radarr v3 (Overseerr, Bazarr, Prowlarr, Recyclarr, Notifiarr, Homarr, LunaSea, nzb360) can point at Arclight as if it were either app. [API](/docs/api/)
+  </Card>
+  <Card title="Subtitles and languages" icon="seti:notebook">
+    Language profiles, subtitle providers, optional speech-to-text with Whisper, and requests for missing subtitles or audio languages. [Subtitles](/docs/using/subtitles/)
+  </Card>
+  <Card title="Music and audiobooks" icon="seti:audio">
+    Artists, albums, authors and books alongside TV and movies, with the same profiles, search and import pipeline. [Library](/docs/using/library/)
+  </Card>
+  <Card title="Hardware transcoding" icon="laptop">
+    Transcode rules can re-encode on Intel Quick Sync, VA-API or NVIDIA NVENC. The image ships an ffmpeg build with the drivers included. [Hardware transcoding](/docs/using/hardware-transcoding/)
+  </Card>
+  <Card title="Health checks" icon="approve-check-circle">
+    Dozens of built-in health checks with a fix for each, plus a library health scan that finds broken, truncated or wrong-language files. [Troubleshooting](/docs/troubleshooting/#health-checks) · [Health scan](/docs/using/health-scan/)
+  </Card>
+  <Card title="Themes" icon="star">
+    Ships with the Tron look. Theme packs re-skin the whole web app with one stylesheet; make and publish your own. [Themes](/docs/themes/)
+  </Card>
+  <Card title="Move from the *arr stack" icon="random">
+    The import wizard brings settings, library, history, users and running torrents over from Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and qBittorrent. [Import your existing stack](/docs/getting-started/migrating/)
+  </Card>
+</CardGrid>
+
+</section>
+
+<section class="arc-section">
+
+## Quick start
+
+<p class="arc-lede">The no-VPN layout with the published image, from the <a href="/docs/getting-started/install-docker/">Docker Compose guide</a>. For the VPN layout (Gluetun and WireGuard) and every NAS, follow the full guide for your device.</p>
+
+<div class="arc-steps">
+
+<Steps>
+
+1. Get `docker-compose.release.novpn.yml` and `.env.example` from the [latest release](https://github.com/ZacABrewer/arclight/releases) or the repository's [`docker/`](https://github.com/ZacABrewer/arclight/tree/main/docker) folder. Copy `.env.example` to `.env` and set `PUID`, `PGID`, `TZ`, `CONFIG_ROOT` and `DATA_ROOT`. The core of the file:
+
+   ```yaml title="docker-compose.release.novpn.yml (excerpt)"
+   services:
+     arclight:
+       stop_grace_period: 30s
+       image: ${ARCLIGHT_IMAGE:-ghcr.io/zacabrewer/arclight:latest}
+       container_name: arclight
+       environment:
+         - PUID=${PUID:-1000}
+         - PGID=${PGID:-1000}
+         - TZ=${TZ:-UTC}
+         - ARCLIGHT_FLARESOLVERR_URL=http://flaresolverr:8191
+       volumes:
+         - ${CONFIG_ROOT:-./data}/arclight:/config
+         # One share for downloads and library, so imports are instant hard links
+         - ${DATA_ROOT:-./data/share}:/data
+       ports:
+         - "7878:7878"
+       restart: unless-stopped
+       depends_on:
+         - flaresolverr
+
+     flaresolverr:
+       image: ghcr.io/flaresolverr/flaresolverr:latest
+       container_name: flaresolverr
+       environment:
+         - TZ=${TZ:-UTC}
+       restart: unless-stopped
+   ```
+
+2. Create the folders and give them to your user (`DATA_ROOT` holds `downloads/`, `media/tv/` and `media/movies/`):
+
+   ```sh
+   sudo mkdir -p /srv/arclight/appdata
+   sudo mkdir -p /srv/arclight/data/downloads /srv/arclight/data/media/tv /srv/arclight/data/media/movies
+   sudo chown -R 1000:1000 /srv/arclight
+   ```
+
+3. Start the stack:
+
+   ```sh
+   docker compose -f docker-compose.release.novpn.yml up -d
+   ```
+
+4. Open `http://<your-host>:7878` and follow the [first-run wizard](/docs/getting-started/first-run-wizard/). There is no default login; you create the admin account there.
+
+</Steps>
+
+</div>
+
+<CardGrid>
+  <LinkCard title="Docker Compose (Linux)" description="The reference install, with or without a VPN." href="/docs/getting-started/install-docker/" />
+  <LinkCard title="Synology, UGREEN, Unraid, TrueNAS, QNAP" description="NAS guides with platform-specific steps." href="/docs/getting-started/install-other-platforms/" />
+  <LinkCard title="Windows, macOS, Raspberry Pi, Portainer" description="Desktop, ARM64 and stack deployments." href="/docs/getting-started/install-other-platforms/" />
+  <LinkCard title="Exposing it outside your home" description="Reverse proxy, Cloudflare Tunnel, Tailscale." href="/docs/getting-started/exposing-outside-home/" />
+</CardGrid>
+
+</section>
+
+<section class="arc-section">
+
+## Mobile apps
+
+<p class="arc-lede">Arclight companion apps for iOS and Android are on the way. They connect to your own server: enter its address and sign in with the account you already use on it. No store links yet.</p>
+
+<div class="arc-mobile not-content">
+  <div class="arc-store">
+    <Icon name="apple" />
+    <div><strong>Arclight for iOS</strong><span class="arc-badge">Coming soon</span></div>
+  </div>
+  <div class="arc-store">
+    <Icon name="mobile-android" />
+    <div><strong>Arclight for Android</strong><span class="arc-badge">Coming soon</span></div>
+  </div>
+</div>
+
+</section>

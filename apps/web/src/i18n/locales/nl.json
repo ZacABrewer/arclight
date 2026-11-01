@@ -903,6 +903,7 @@
   "common.testResult": "[nl] Test result",
   "common.time": "[nl] Time",
   "common.title": "[nl] Title",
+  "common.tmdbAttribution": "[nl] This product uses the TMDB API but is not endorsed or certified by TMDB.",
   "common.torrent": "[nl] Torrent",
   "common.torrentEngine": "[nl] Torrent engine",
   "common.track": "[nl] Track",

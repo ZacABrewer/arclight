@@ -1,13 +1,13 @@
 /* Arclight service worker. Kept deliberately small:
-   - /assets/* (hashed build output), /icons/*, /manifest.webmanifest: cache-first.
+   - /assets/* (hashed build output), /icons/*, /favicon.ico, /manifest.webmanifest: cache-first.
    - /api/*: network only, never cached (live state, auth). Offline gets a 503 JSON body.
    - Page navigations: network-first, falling back to /offline.html when the server is unreachable.
    Push: shows the notification a push carries ({ title, body, url, tag }) and opens its deep
    link on click, focusing an open Arclight tab when there is one.
    Bump VERSION to drop old caches. Registered from main.tsx (register-sw.ts) in production builds only. */
-const VERSION = 'arclight-v2';
+const VERSION = 'arclight-v3';
 const STATIC_CACHE = VERSION + '-static';
-const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png'];
+const PRECACHE = ['/offline.html', '/manifest.webmanifest', '/favicon.ico', '/icons/icon.svg', '/icons/icon-192.png', '/icons/icon-512.png', '/icons/badge-96.png'];
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -28,7 +28,7 @@ self.addEventListener('activate', (event) => {
 });
 
 function isStatic(url) {
-  return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/manifest.webmanifest';
+  return url.pathname.startsWith('/assets/') || url.pathname.startsWith('/icons/') || url.pathname === '/favicon.ico' || url.pathname === '/manifest.webmanifest';
 }
 
 async function cacheFirst(request) {
@@ -90,7 +90,7 @@ self.addEventListener('push', (event) => {
   const options = {
     body: typeof data.body === 'string' ? data.body : '',
     icon: '/icons/icon-192.png',
-    badge: '/icons/icon-192.png',
+    badge: '/icons/badge-96.png',
     data: { url: typeof data.url === 'string' && data.url.startsWith('/') ? data.url : '/' },
   };
   if (typeof data.tag === 'string' && data.tag) {

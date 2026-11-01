@@ -216,6 +216,12 @@ export function PortalLayout() {
           ) : (
             <Outlet />
           )}
+          <p className="portal-attribution">
+            <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer">
+              TMDB
+            </a>{' '}
+            · {t('common.tmdbAttribution')}
+          </p>
         </main>
         {!off ? (
           <nav className="al-tabbar portal-tabbar" aria-label={t('portal.tabs')}>

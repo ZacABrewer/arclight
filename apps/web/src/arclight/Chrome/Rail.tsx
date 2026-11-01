@@ -42,13 +42,13 @@ export interface RailProps {
   onSelect?: ((code: string, e: MouseEvent<HTMLElement>) => void) | undefined;
   /** Force the 64px code-only rail (it switches automatically at 768–1279px). */
   compact?: boolean | undefined;
-  /** Href for the diamond mark (home). */
+  /** Href for the brand mark (home). */
   homeHref?: string | undefined;
   className?: string | undefined;
 }
 
 /**
- * Nav rail: 84px, diamond mark, two-letter codes, active = 2px cyan bar with glow, and a
+ * Nav rail: 84px, brand mark, two-letter codes, active = 2px cyan bar with glow, and a
  * decorative light runner on the right border.
  * Keyboard: Tab enters on the active item; ↑/↓/Home/End move between items.
  */

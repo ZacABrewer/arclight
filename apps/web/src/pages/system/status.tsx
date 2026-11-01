@@ -124,6 +124,12 @@ export function SystemStatusPage() {
                 { label: t('system.status.docker'), value: status.data.isDocker ? t('common.yes') : t('common.no') },
               ]}
             />
+            <p className="al-muted sys-attribution">
+              <a href="https://www.themoviedb.org/" target="_blank" rel="noreferrer">
+                TMDB
+              </a>{' '}
+              · {t('common.tmdbAttribution')}
+            </p>
           </Pane>
           <Pane title={t('common.runtime')}>
             <KeyValue

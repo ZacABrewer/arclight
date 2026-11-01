@@ -177,6 +177,7 @@
 .sys-pad { padding: 18px 24px; }
 .sys-stack { display: flex; flex-direction: column; gap: 24px; }
 .sys-cols { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; align-items: start; }
+.sys-attribution { margin: 12px 0 0; font-size: 0.75rem; }
 .sys-block { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
 .sys-break { overflow-wrap: anywhere; }
 .sys-list { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 10px; }

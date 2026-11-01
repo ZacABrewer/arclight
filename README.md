@@ -1,3 +1,11 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand/lockup-dark-bg.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand/lockup-light-bg.svg">
+    <img src="design/brand/lockup-dark-bg.svg" alt="Arclight" width="340" height="80">
+  </picture>
+</p>
+
 # Arclight
 
 One content-acquisition service for a home media stack, written from scratch.
@@ -8,6 +16,8 @@ engine (external clients such as qBittorrent or SABnzbd are optional) and notifi
 server (Jellyfin, Emby, Plex) when content lands. It is not a media server.
 
 ## Documentation
+
+Website: https://arclight.moviemethat.com
 
 **Full documentation: [docs/README.md](docs/README.md).** Install guides for Docker on Linux, Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer; a first-run walkthrough; one page per area of the app; [Troubleshooting](docs/TROUBLESHOOTING.md), [FAQ](docs/FAQ.md) and [Glossary](docs/GLOSSARY.md). The sections below are a short summary for contributors; the docs are the authoritative guide for users.
 

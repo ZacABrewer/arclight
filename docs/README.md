@@ -90,6 +90,7 @@ These pages follow the app's navigation.
 | [Translating](TRANSLATING.md) | Adding a language |
 | [Releasing](RELEASING.md), [Architecture](ARCHITECTURE.md), [Developing](DEVELOPING.md), [Roadmap](ROADMAP.md) | Contributors |
 | [QA checklists](qa/README.md) | Manual test procedures |
+| [Website](../site/README.md) | How these docs are published at https://arclight.moviemethat.com |
 
 > Some features are still being built (stall auto-recovery, speed schedules, seeding rules,
 > download alerts and others). Pages will mention them as "Coming soon" until they ship.

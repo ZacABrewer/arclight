@@ -1,0 +1,20 @@
+---
+// Starlight's footer (edit link, pagination) followed by the Arclight site footer.
+import Default from '@astrojs/starlight/components/Footer.astro';
+---
+
+<Default><slot /></Default>
+<footer class="arc-footer not-content" aria-label="Site">
+  <nav>
+    <a href="/docs/">Docs</a>
+    <a href="/docs/getting-started/install-other-platforms/">Install</a>
+    <a href="/support/">Support</a>
+    <a href="/legal/">Legal</a>
+    <a href="https://github.com/ZacABrewer/arclight">GitHub</a>
+  </nav>
+  <p>Arclight is free software under the <a href="https://github.com/ZacABrewer/arclight/blob/main/LICENSE">GNU GPL v3</a>. © The Arclight contributors.</p>
+  <p>
+    Not affiliated with Sonarr, Radarr, Seerr or TMDB. This product uses the TMDB API but is not endorsed or
+    certified by TMDB.
+  </p>
+</footer>

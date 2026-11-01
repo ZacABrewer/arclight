@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://arclight.moviemethat.com/sitemap-index.xml

@@ -170,7 +170,7 @@ html[data-theme="sorbet"], [data-theme="sorbet"] body { background: var(--al-voi
 [data-theme="sorbet"] .al-rail__mark::after { content: "Arclight"; font: 600 22px/1 var(--al-display); color: var(--al-text-1); }
 [data-theme="sorbet"] .al-mark { width: 34px !important; height: 34px !important; transform: none; border: 0; border-radius: 12px;
   background: linear-gradient(140deg, #ff9fb2, #ffc49e); box-shadow: inset 0 -3px 0 rgba(0,0,0,.06); }
-[data-theme="sorbet"] .al-mark > i { width: 10px !important; height: 10px !important; border-radius: 50%; background: rgba(255,255,255,.85); }
+[data-theme="sorbet"] .al-mark { --al-mark-from: #fff; --al-mark-to: #fff; padding: 6px; box-sizing: border-box; }
 [data-theme="sorbet"] .al-rail__list { align-items: stretch; gap: 4px; }
 [data-theme="sorbet"] .al-rail__item { width: 100%; height: 44px; flex-direction: row; justify-content: flex-start; gap: 12px; padding: 0 12px;
   border-radius: 14px; color: var(--al-text-3); font-size: 15px; font-weight: 600; }

@@ -44,9 +44,9 @@
 }
 @media (max-width: 767.98px) { .al-rail { display: none; } }
 
-/* brand mark: rotated square with filled centre */
-.al-mark { display: inline-flex; align-items: center; justify-content: center; border: 1.5px solid var(--al-cyan); transform: rotate(45deg); }
-.al-mark > i { display: block; background: var(--al-cyan); }
+/* brand mark: the double chevron (design/brand); --al-mark-from / --al-mark-to recolour it */
+.al-mark { display: inline-flex; align-items: center; justify-content: center; flex: none; }
+.al-mark > svg { display: block; width: 100%; height: 100%; }
 
 /* ---------- top bar ---------- */
 .al-topbar { position: fixed; left: var(--al-rail); right: 0; top: 0; z-index: 50; height: var(--al-topbar);

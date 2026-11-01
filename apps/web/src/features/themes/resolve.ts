@@ -22,6 +22,6 @@ export function activeThemeOf(info: ThemeInfo): ActiveTheme {
     href: info.css ? themeCssUrl(info.css) : null,
     colorScheme: info.colorScheme,
     backdrop: info.backdrop,
-    themeColor: info.colorScheme === 'dark' && info.id === BASE_THEME_ID ? '#000000' : (info.swatches[0] ?? '#000000'),
+    themeColor: info.colorScheme === 'dark' && info.id === BASE_THEME_ID ? '#02070a' : (info.swatches[0] ?? '#02070a'),
   };
 }

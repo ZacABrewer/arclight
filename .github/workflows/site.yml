@@ -1,0 +1,59 @@
+name: Website
+
+# Builds the public website (site/, Astro + Starlight) from docs/ and design/brand/.
+# Pull requests: build only, so a broken doc link fails the PR.
+# Pushes to main and manual runs: build and deploy to Cloudflare Workers (arclight-site).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "design/brand/**"
+      - ".github/workflows/site.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "site/**"
+      - "design/brand/**"
+      - ".github/workflows/site.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  site:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: site
+    steps:
+      - uses: actions/checkout@v4
+      - name: Enable corepack (pnpm from site/package.json packageManager)
+        run: corepack enable
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: site/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Syncs docs/ (fails on broken internal links), builds brand assets, builds the site and
+      # the Pagefind search index, then writes the CSP script hashes into dist/_headers.
+      - run: pnpm build
+      - name: Deploy to Cloudflare Workers
+        if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+        uses: cloudflare/wrangler-action@v3.15.0
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: site
+          wranglerVersion: "4.156.0"
+          command: deploy

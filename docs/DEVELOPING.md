@@ -121,6 +121,13 @@ or regexes.
 - To add cases, append to the matching JSON file, or add a new `.json` file under the right
   folder (the report walks the folder recursively), then rerun the report.
 
+## Website
+
+The public website (https://arclight.moviemethat.com) lives in `site/`: Astro + Starlight, its own
+pnpm project outside the workspace. It publishes `docs/` as-is, so edit the Markdown here, not in
+`site/`. Run `pnpm install && pnpm dev` in `site/`; `pnpm build` fails on a broken link between
+docs. Details: [site/README.md](../site/README.md).
+
 ## Commit conventions
 
 - Imperative subject, 72 characters or fewer; the body explains why. Recent subjects look
