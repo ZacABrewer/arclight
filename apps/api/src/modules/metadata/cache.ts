@@ -1,5 +1,6 @@
 import { and, eq, lt } from 'drizzle-orm';
 import {
+  isMetadataError,
   MUSICBRAINZ_DEFAULT_CACHE_TTLS,
   type MbArtist,
   type MbBrowseReleaseGroupsOptions,
@@ -18,7 +19,8 @@ import { metadataCache } from '../../db/schema.js';
 // keeps its own short-lived in-memory cache for searches; the entity calls (artist, release-group
 // browse, release browse, release) go through this store instead, so a restart does not cost a
 // cold crawl at 1 request per second. Hits never touch the rate limiter. Rows are kept 30 days
-// past their expiry (MetadataCacheCleanup), so an outage can fall back to stale data.
+// past their expiry (MetadataCacheCleanup), so an outage (unreachable or
+// rate limited) falls back to the stale entry instead of failing the refresh.
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 /** Rows are pruned this long after they expire. */
@@ -110,7 +112,18 @@ export function withPersistentCache(
       const hit = store.get<T>(provider, key);
       if (hit) return hit.body;
     }
-    const value = await load();
+    let value: T;
+    try {
+      value = await load();
+    } catch (err) {
+      // MusicBrainz (or the mirror) is down or throttling: an expired entry beats no answer.
+      // `not-found` and bad responses are real answers and pass through.
+      if (isMetadataError(err) && (err.code === 'unreachable' || err.code === 'rate-limited')) {
+        const stale = store.get<T>(provider, key, { allowStale: true });
+        if (stale) return stale.body;
+      }
+      throw err;
+    }
     store.set(provider, key, value, ttlMs);
     return value;
   }

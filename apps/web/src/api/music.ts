@@ -17,10 +17,12 @@ import {
   type BulkAlbumMonitorRequest,
   type BulkArtistUpdateRequest,
   type MusicCommand,
+  type TrackMonitorRequest,
   type MusicMetadataSettingsUpdate,
   type UpdateAlbumRequest,
   type UpdateArtistRequest,
   type WantedAlbumsQuery,
+  type WantTracksRequest,
 } from '@arclight/shared';
 import { request, type QueryParams } from './client.js';
 import type { DeleteMediaOptions } from './library.js';
@@ -53,6 +55,12 @@ export const musicApi = {
     get: (id: number) => request(`/album/${id}`, AlbumDetails),
     update: (id: number, body: UpdateAlbumRequest) => request(`/album/${id}`, Album, { method: 'PUT', json: body }),
     monitor: (body: BulkAlbumMonitorRequest) => request('/album/monitor', null, { method: 'PUT', json: body }),
+    /** Want exactly these tracks: the album is monitored, its other tracks unmonitored. */
+    wantTracks: (id: number, body: WantTracksRequest) => request(`/album/${id}/wanttracks`, AlbumDetails, { method: 'POST', json: body }),
+  },
+  tracks: {
+    /** Per-track wanted flag. */
+    monitor: (body: TrackMonitorRequest) => request('/track/monitor', AlbumListResponse, { method: 'PUT', json: body }),
   },
   albumTypeProfiles: {
     list: () => request('/albumtypeprofile', AlbumTypeProfile.array()),

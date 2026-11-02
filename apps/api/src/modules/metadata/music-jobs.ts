@@ -210,8 +210,10 @@ export class MusicRefresher {
     const row = music.artistRow(this.db, id);
     const mb = await client.getArtist(row.mbArtistId, { priority, fresh, signal });
     const images = await this.deps.service.artistImages(row.mbArtistId, mb.links, priority);
+    // The biography is fetched once (and again on a manual refresh); a failed lookup keeps the old text.
+    const overview = !row.overview || fresh ? await this.deps.service.artistOverview({ mbid: row.mbArtistId, name: mb.name }, mb.links, priority) : undefined;
     if (!this.exists(id)) return `${row.name}: deleted during refresh`;
-    music.applyArtistMetadata(this.db, id, music.artistMetadataFrom(mb), images);
+    music.applyArtistMetadata(this.db, id, { ...music.artistMetadataFrom(mb), overview: overview ?? row.overview }, images);
 
     const profile = music.getAlbumTypeProfile(this.db, row.albumTypeProfileId);
     const types = [...new Set(profile.primaryTypes.map((t) => PROFILE_TYPES[t] ?? 'other'))];
@@ -227,7 +229,7 @@ export class MusicRefresher {
       now.toISOString(),
     );
 
-    const prefs = this.deps.service.releasePreferences();
+    const prefs = this.deps.service.releasePreferences(profile);
     const added = new Set(sync.added);
     let loaded = 0;
     let dropped = 0;
@@ -260,6 +262,8 @@ export class MusicRefresher {
               ...(r.date ? { date: r.date } : {}),
               formats: r.formats,
               trackCount: r.trackCount,
+              title: r.title,
+              ...(r.disambiguation ? { disambiguation: r.disambiguation } : {}),
               row: r,
             })),
             prefs,

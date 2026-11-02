@@ -10,16 +10,29 @@
 import type { FetchLike } from '../tmdb/client.js';
 import { createJsonTransport, type RequestOptions } from '../http.js';
 import { defaultRateLimiter, type RateLimiter, type RequestPriority } from '../rate-limit.js';
-import { isMetadataError } from '../types.js';
+import { MetadataError, isMetadataError } from '../types.js';
 import {
   lbFreshReleasesResponseSchema,
+  lbPlaylistListResponseSchema,
+  lbPlaylistResponseSchema,
+  lbSimilarArtistsResponseSchema,
   lbTopReleaseGroupsResponseSchema,
   type LbFreshReleaseWire,
+  type LbJspfPlaylistWire,
+  type LbJspfTrackWire,
+  type LbSimilarArtistRowWire,
   type LbTopReleaseGroupWire,
 } from './schemas.js';
+import { cleanText, mbidFrom, type SourcePlaylist, type SourcePlaylistTrack } from '../playlist-types.js';
 
 export const LISTENBRAINZ_DEFAULT_BASE_URL = 'https://api.listenbrainz.org/';
 export const LISTENBRAINZ_PROVIDER = 'listenbrainz';
+export const LISTENBRAINZ_LABS_BASE_URL = 'https://labs.api.listenbrainz.org/';
+/** The similar-artists dataset the labs API documents as its example. */
+export const LISTENBRAINZ_SIMILAR_ARTISTS_ALGORITHM = 'session_based_days_1825_session_300_contribution_3_threshold_10_limit_100_filter_True_skip_30';
+
+const JSPF_TRACK_EXT = 'https://musicbrainz.org/doc/jspf#track';
+const JSPF_PLAYLIST_EXT = 'https://musicbrainz.org/doc/jspf#playlist';
 
 const HOUR = 60 * 60 * 1000;
 const DEFAULT_TIMEOUT_MS = 20_000;
@@ -30,6 +43,8 @@ export interface ListenBrainzClientOptions {
   /** `App/version ( contact )`, like MusicBrainz. */
   userAgent: string;
   baseUrl?: string;
+  /** The labs API (similar artists). */
+  labsBaseUrl?: string;
   /** Requests per second. Defaults to 1. */
   requestsPerSecond?: number;
   rateLimiter?: RateLimiter;
@@ -76,10 +91,34 @@ export interface LbSitewideQuery {
   count?: number;
 }
 
+/** A playlist ListenBrainz generated for a user (weekly jams, weekly exploration, ...). */
+export interface LbPlaylistSummary {
+  mbid: string;
+  title: string;
+  date?: string;
+  /** The generator's `source_patch` ("weekly-jams", "weekly-exploration", ...), when given. */
+  sourcePatch?: string;
+}
+
+export interface LbSimilarArtist {
+  mbid: string;
+  name: string;
+  comment?: string;
+  type?: string;
+  /** Raw dataset score (higher = more similar). */
+  score: number;
+}
+
 export interface ListenBrainzClient {
   readonly providerKey: string;
   freshReleases(query?: LbFreshReleasesQuery, options?: RequestOptions): Promise<LbReleaseGroup[]>;
   sitewideReleaseGroups(query?: LbSitewideQuery, options?: RequestOptions): Promise<LbReleaseGroup[]>;
+  /** Playlists generated for `user` (public, keyless), newest first. */
+  createdForPlaylists(user: string, options?: RequestOptions & { count?: number }): Promise<LbPlaylistSummary[]>;
+  /** One playlist with its tracks (recording MBIDs). */
+  getPlaylist(mbid: string, options?: RequestOptions): Promise<SourcePlaylist>;
+  /** Similar artists from the labs dataset, most similar first. */
+  similarArtists(artistMbid: string, options?: RequestOptions & { algorithm?: string; limit?: number }): Promise<LbSimilarArtist[]>;
   clearCache(): void;
 }
 
@@ -127,6 +166,49 @@ export function mapTopReleaseGroup(wire: LbTopReleaseGroupWire): LbReleaseGroup 
   if (!id || !MBID_RE.test(id) || !title) return undefined;
   const artistName = text(wire.artist_name);
   return { releaseGroupMbid: id.toLowerCase(), title, ...(artistName ? { artistName } : {}), ...common(wire) };
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+export function mapJspfTrack(wire: LbJspfTrackWire): SourcePlaylistTrack | undefined {
+  const title = cleanText(wire.title);
+  const artist = cleanText(wire.creator);
+  if (!title || !artist) return undefined;
+  const ids = Array.isArray(wire.identifier) ? wire.identifier : wire.identifier ? [wire.identifier] : [];
+  const recordingMbid = ids.map(mbidFrom).find((v) => v !== undefined);
+  const ext = record(record(wire.extension)[JSPF_TRACK_EXT]);
+  const artistMbids = (Array.isArray(ext['artist_identifiers']) ? ext['artist_identifiers'] : [])
+    .map((v) => (typeof v === 'string' ? mbidFrom(v) : undefined))
+    .filter((v): v is string => v !== undefined);
+  const releaseMbid = typeof ext['release_identifier'] === 'string' ? mbidFrom(ext['release_identifier']) : undefined;
+  const album = cleanText(wire.album);
+  return {
+    title,
+    artist,
+    ...(album ? { album } : {}),
+    ...(typeof wire.duration === 'number' && wire.duration > 0 ? { durationMs: Math.round(wire.duration) } : {}),
+    ...(recordingMbid ? { recordingMbid } : {}),
+    ...(releaseMbid ? { releaseMbid } : {}),
+    ...(artistMbids.length > 0 ? { artistMbids } : {}),
+  };
+}
+
+function sourcePatch(wire: LbJspfPlaylistWire): string | undefined {
+  const ext = record(record(wire.extension)[JSPF_PLAYLIST_EXT]);
+  const algorithm = record(record(ext['additional_metadata'])['algorithm_metadata']);
+  const patch = algorithm['source_patch'];
+  return typeof patch === 'string' && patch.trim() ? patch.trim() : undefined;
+}
+
+export function mapSimilarArtistRow(row: LbSimilarArtistRowWire): LbSimilarArtist | undefined {
+  const mbid = mbidFrom(row.artist_mbid);
+  const name = cleanText(row.name);
+  if (!mbid || !name) return undefined;
+  const comment = cleanText(row.comment);
+  const type = cleanText(row.type);
+  return { mbid, name, ...(comment ? { comment } : {}), ...(type ? { type } : {}), score: typeof row.score === 'number' ? row.score : 0 };
 }
 
 export function createListenBrainzClient(options: ListenBrainzClientOptions): ListenBrainzClient {
@@ -190,5 +272,80 @@ export function createListenBrainzClient(options: ListenBrainzClientOptions): Li
     });
   }
 
-  return { providerKey, freshReleases, sitewideReleaseGroups, clearCache: () => transport.clearCache() };
+  const labsKey = `${providerKey}-labs`;
+  limiter.configure(labsKey, { requestsPerSecond: 1, burst: 1 });
+  const labsRoot = new URL(options.labsBaseUrl ?? LISTENBRAINZ_LABS_BASE_URL);
+  const labs = createJsonTransport({
+    label: 'ListenBrainz labs',
+    providerKey: labsKey,
+    limiter,
+    fetchImpl: options.fetchImpl ?? ((input, init) => globalThis.fetch(input, init)),
+    headers: { Accept: 'application/json', 'User-Agent': userAgent },
+    timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+    maxRetries: options.maxRetries ?? DEFAULT_MAX_RETRIES,
+    now: options.now ?? (() => new Date()),
+    defaultPriority: options.defaultPriority ?? 'interactive',
+  });
+
+  async function createdForPlaylists(user: string, opts: RequestOptions & { count?: number } = {}): Promise<LbPlaylistSummary[]> {
+    const name = user.trim();
+    if (!name) return [];
+    const { count, ...rest } = opts;
+    const body = await transport.get(
+      url(`1/user/${encodeURIComponent(name)}/playlists/createdfor`, { count: Math.min(100, Math.max(1, count ?? 25)), offset: 0 }),
+      lbPlaylistListResponseSchema,
+      { ...rest, ttlMs },
+    );
+    return (body.playlists ?? []).flatMap(({ playlist }): LbPlaylistSummary[] => {
+      const mbid = mbidFrom(playlist.identifier);
+      if (!mbid) return [];
+      const date = text(playlist.date);
+      const patch = sourcePatch(playlist);
+      return [{ mbid, title: text(playlist.title) ?? mbid, ...(date ? { date } : {}), ...(patch ? { sourcePatch: patch } : {}) }];
+    });
+  }
+
+  async function getPlaylist(mbid: string, opts: RequestOptions = {}): Promise<SourcePlaylist> {
+    const id = mbidFrom(mbid);
+    if (!id) throw new MetadataError('not-found', `Not a ListenBrainz playlist id: ${mbid}`);
+    const body = await transport.get(url(`1/playlist/${id}`, {}), lbPlaylistResponseSchema, { ...opts, ttlMs: 0 });
+    const p = body.playlist;
+    const tracks = (p.track ?? []).map(mapJspfTrack).filter((t): t is SourcePlaylistTrack => t !== undefined);
+    const description = text(p.annotation)?.replace(/<[^>]+>/g, '').trim();
+    const owner = text(p.creator);
+    return { id, title: text(p.title) ?? id, ...(description ? { description } : {}), ...(owner ? { owner } : {}), tracks };
+  }
+
+  async function similarArtists(artistMbid: string, opts: RequestOptions & { algorithm?: string; limit?: number } = {}): Promise<LbSimilarArtist[]> {
+    const id = mbidFrom(artistMbid);
+    if (!id) return [];
+    const { algorithm, limit, ...rest } = opts;
+    const u = new URL('similar-artists/json', labsRoot);
+    u.searchParams.set('artist_mbids', id);
+    u.searchParams.set('algorithm', algorithm ?? LISTENBRAINZ_SIMILAR_ARTISTS_ALGORITHM);
+    const body = await labs.get(u.toString(), lbSimilarArtistsResponseSchema, { ...rest, ttlMs: 24 * HOUR });
+    const rows = body.flatMap((entry): LbSimilarArtistRowWire[] => ('data' in entry && Array.isArray(entry.data) ? entry.data : [entry as LbSimilarArtistRowWire]));
+    const seen = new Set<string>([id]);
+    const out: LbSimilarArtist[] = [];
+    for (const row of rows) {
+      const a = mapSimilarArtistRow(row);
+      if (!a || seen.has(a.mbid)) continue;
+      seen.add(a.mbid);
+      out.push(a);
+    }
+    return out.sort((a, b) => b.score - a.score).slice(0, Math.max(1, limit ?? 30));
+  }
+
+  return {
+    providerKey,
+    freshReleases,
+    sitewideReleaseGroups,
+    createdForPlaylists,
+    getPlaylist,
+    similarArtists,
+    clearCache: () => {
+      transport.clearCache();
+      labs.clearCache();
+    },
+  };
 }

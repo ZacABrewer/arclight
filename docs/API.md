@@ -357,11 +357,13 @@ and the music jobs do nothing. Reads open to app-area users like the series/movi
 | GET | `/album/:id` | `AlbumDetails`: the album with `artist` (`ArtistSummary`), every edition in `releases`, the selected edition's `tracks` and the album's `files` (`AudioFile`) |
 | PUT | `/album/monitor` | `BulkAlbumMonitorRequest` (`albumIds`, `monitored`) → `Album[]` |
 | PUT | `/album/:id` | `UpdateAlbumRequest` → `AlbumDetails`: `monitored`, `anyReleaseOk`, `selectedReleaseId` (an `album_releases.id` of this album; anything else is 400). Switching the edition fetches its tracks from MusicBrainz, replaces the stored tracks and re-links the album's files by MusicBrainz recording id, then by disc/track position |
+| PUT | `/track/monitor` | `TrackMonitorRequest` (`trackIds`, `monitored`) → `Album[]` (the albums those tracks belong to, with fresh statistics): per-track wanted. Unknown ids 404. An album whose wanted tracks are all on disk counts as complete (`statistics.missingTrackCount` 0) |
+| POST | `/album/:id/wanttracks` | `WantTracksRequest` (`trackIds`) → `AlbumDetails`: "want only these". Monitors the album (and its artist), wants exactly the listed tracks and turns the album's other tracks off. 400 when a track belongs to another album |
 | GET | `/audiofile` | `artistId` and/or `albumId` → the music `AudioFile[]`. Shared with audiobooks (`authorId` / `bookId`, see "audiobooks"); one kind per request, gated by that kind's flag |
 | DELETE | `/audiofile/:id/grab-override` | "Allow upgrades again" for a music or audiobook file: clears `grabOverride` on every file of its album / book → the `AudioFile[]` that changed |
 | GET | `/albumtypeprofile` | `AlbumTypeProfile[]` ("Studio albums", the default, and "Everything" on a fresh install) |
 | GET | `/albumtypeprofile/:id` | One profile |
-| POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
+| POST | `/albumtypeprofile` | `AlbumTypeProfileInput` → **201**. Besides the types and statuses it carries the edition choice: `editionPreference` (`any` \| `original` \| `standard` \| `deluxe` \| `remaster`, default `any`), `preferredCountries` and `preferredFormats` (empty: use `/settings/musicmetadata`). `isDefault: true` makes it the default (the previous one is unset). 409 on a duplicate name (case-insensitive) |
 | PUT | `/albumtypeprofile/:id` | `AlbumTypeProfileInput` → `AlbumTypeProfile`. The default cannot be un-defaulted directly; mark another one instead |
 | DELETE | `/albumtypeprofile/:id` | **204**; 400 for the default profile, 409 while an artist uses it |
 | POST | `/command` | `MusicCommand` → **202** `Job`: `{name: "RefreshArtist", artistIds}`, `{name: "RescanArtist", artistIds}`, `{name: "ArtistSearch", artistIds}`, `{name: "AlbumSearch", albumIds}`. The search commands search through the release pipeline (see "releases: music"): `ArtistSearch` looks for each artist's wanted albums, `AlbumSearch` for each album; the job message is `searched N artists: R releases, G grabbed`. Unknown ids 404 (no job starts), unknown names 400. The route is shared with the audiobook commands (see "audiobooks"); a music command answers 404 `MUSIC_DISABLED` while music is off |
@@ -1903,6 +1905,31 @@ again. Delay profiles (selected by the artist's tags) park music releases as pen
 back-off as the video searches (`release_search_state`, `media_type = 'album'`, a day per search
 without a grab, at most 7; a grab resets it). Several albums of one artist are searched together
 (artist query first). Both are no-ops while `features.music` is off.
+
+## releases: music via Soulseek (slskd)
+
+An optional music source through the user's own slskd instance (user guide:
+[using/music-soulseek.md](using/music-soulseek.md); contracts `packages/shared/src/soulseek.ts`).
+All routes are admin-only and answer 404 `MUSIC_DISABLED` while `features.music` is off.
+Search, grab and auto answer 409 `SOULSEEK_DISABLED` / `SOULSEEK_NOT_CONFIGURED` until the
+section is on and has a host and key, and 502 `SOULSEEK_UNREACHABLE` / `SOULSEEK_AUTH` /
+`SOULSEEK_ERROR` when slskd fails.
+
+| Method | Path | Notes |
+|---|---|---|
+| GET | `/settings/soulseek` | `SoulseekSettingsResponse`; `apiKey` is masked |
+| PUT | `/settings/soulseek` | `SoulseekSettingsUpdate`: any subset; a masked or omitted `apiKey` keeps the stored one, `''` clears it |
+| POST | `/soulseek/test` | Optional unsaved settings. `SoulseekTestResult {ok, version, loggedIn, message}`; never fails on slskd errors |
+| POST | `/soulseek/search` | `{albumId, query?}` → `SoulseekSearchResult {query, candidates}`. One candidate per peer folder (disc sub-folders folded in), files matched to the selected edition's tracks, ranked best first. `rejections`: `qualityNotAllowed`, `notAnUpgrade`, `tooFewTracks`, `missingWantedTracks`, `peerQueueTooLong`, `mixedQuality` |
+| POST | `/soulseek/grab` | `SoulseekGrabRequest {albumId, username, directory, files[{filename, size}], qualityName?}` → 201 `SoulseekDownload`; 409 `CONFLICT` while the album has an active Soulseek download |
+| POST | `/soulseek/album/:id/auto` | Search and grab the best accepted folder. `SoulseekAutoResult {grabbed, candidates, message}` |
+| GET | `/soulseek/downloads` | `SoulseekDownload[]`, newest first. `status`: `queued`, `downloading`, `importing`, `imported`, `failed`, `cancelled` |
+| DELETE | `/soulseek/downloads/:id` | Cancels open transfers in slskd (best effort) and removes the row. 204 |
+
+**Jobs.** `SoulseekMonitor` (every 2 minutes) follows active downloads and imports finished
+folders through the music importer (`importMode` copy or move). `SoulseekSearch` (every 6
+hours, only with `autoSearch`) searches up to 5 missing albums per run, skipping albums with an
+active download or one from the last 24 hours. Rows live in `soulseek_downloads`.
 
 ## releases: audiobooks (book search, decisions, grabs)
 

@@ -34,6 +34,15 @@
 .music-disc:first-child { margin-top: 0; }
 .music-disc__head { margin-bottom: 8px; }
 .music-track__credit { display: block; font-size: 12px; color: var(--al-text-4); }
+/* Album header format chip ("FLAC · 24/96"), right of the title. */
+.music-format-chip {
+  flex: none; align-self: center; font-family: var(--al-mono); font-size: 12px; letter-spacing: .08em;
+  padding: 5px 10px; border: 1px solid var(--al-line-3); border-radius: var(--al-radius-control);
+  color: var(--al-text-2); background: var(--al-cyan-a04); white-space: nowrap;
+}
+.music-format-chip[data-lossless] { color: var(--al-cyan-text); border-color: var(--al-cyan-a35); }
+.music-track[data-unwanted] { color: var(--al-text-4); }
+.music-wanted-note { font-size: 13px; color: var(--al-text-3); margin: 0 0 12px; }
 
 .music-result__meta { font-size: 13px; color: var(--al-text-3); }
 .music-result__genres { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
@@ -49,3 +58,34 @@
 /* Music interactive search: the release title with its pack badge and the albums it covers. */
 .music-release { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
 .music-release__covers { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; font-size: 12px; }
+
+/* Soulseek album search (soulseek-search.tsx). */
+.music-soulseek__query { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 12px; }
+.music-soulseek__query .al-input { flex: 1 1 220px; min-width: 0; }
+.music-soulseek__peer { display: block; color: var(--al-text-3); font-family: var(--al-mono); font-size: 12px; overflow-wrap: anywhere; }
+.music-soulseek__rejections { color: var(--al-warn-text); font-size: 12px; }
+
+/* Similar artists (library artist page) */
+.music-similar { margin-top: 32px; }
+.music-similar__list { display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.music-similar__item { display: inline-flex; align-items: center; gap: 8px; min-height: 36px; padding: 6px 12px; border: 1px solid var(--al-line-2); border-radius: var(--al-radius-bar); color: var(--al-cyan-text); font-size: 13px; max-width: 100%; overflow-wrap: anywhere; }
+.music-similar__item:hover { border-color: var(--al-cyan-text); text-decoration: none; color: var(--al-text-1); }
+.music-similar__mark { font-family: var(--al-mono); font-size: 10px; letter-spacing: .08em; text-transform: uppercase; color: var(--al-text-4); }
+
+/* Playlists page */
+.music-playlists__intro { margin: 0 0 16px; max-width: 72ch; }
+.music-playlist__name { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.music-playlist__open { font-size: 14px; text-align: left; overflow-wrap: anywhere; }
+.music-playlist__source { overflow-wrap: anywhere; color: var(--al-text-4); }
+.music-playlist__sync { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.music-playlist__actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 6px; }
+.music-playlist__preview { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; margin: 4px 0 20px; }
+.music-playlist__preview-body { display: flex; flex-direction: column; gap: 4px; width: 100%; padding: 12px; border: 1px solid var(--al-line-2); border-radius: var(--al-radius-card); }
+.music-playlist__preview-list { margin: 6px 0 0; padding-left: 20px; font-size: 13px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.music-playlist__targets { display: flex; flex-wrap: wrap; gap: 8px 18px; }
+.music-playlist__settings h3 { margin: 20px 0 6px; }
+.music-playlist__settings h3:first-child { margin-top: 0; }
+.music-playlist__settings-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+@media (max-width: 640px) {
+  .music-playlist__actions { justify-content: flex-start; }
+}

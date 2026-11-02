@@ -137,6 +137,12 @@ describe('Settings → Media management: audiobooks', () => {
       audiobookDurationTolerance: 8,
       renameAudiobookParts: true,
       writeAbsSidecars: true,
+      // Music-only options (cue sheets, tagging) go back unchanged too.
+      cueHandling: 'split',
+      writeTags: false,
+      embedCoverArt: false,
+      saveCoverArt: false,
+      replayGain: false,
     });
   });
 

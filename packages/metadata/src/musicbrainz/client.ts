@@ -34,6 +34,7 @@ import type {
   MbReleaseSummary,
   MbSearchPage,
 } from './types.js';
+import { mapRecording, mbIsrcSchema, mbRecordingSchema, mbRecordingSearchSchema, type MbRecording } from './recordings.js';
 
 export const MUSICBRAINZ_DEFAULT_BASE_URL = 'https://musicbrainz.org/ws/2/';
 /** Limiter bucket of the public MusicBrainz host. */
@@ -119,6 +120,12 @@ export interface MusicBrainzClient {
   ): Promise<MbSearchPage<MbReleaseGroup>>;
   /** One release group with its artist credits and genres. */
   getReleaseGroup(mbid: string, options?: RequestOptions): Promise<MbReleaseGroupDetail>;
+  /** One recording with its releases (and their release groups), artist credits and ISRCs. */
+  getRecording(mbid: string, options?: RequestOptions): Promise<MbRecording>;
+  /** Recordings carrying the ISRC; empty when MusicBrainz knows none. */
+  recordingsByIsrc(isrc: string, options?: RequestOptions): Promise<MbRecording[]>;
+  /** Recording search by title and artist (and optionally the release title), as quoted phrases. */
+  searchRecordings(query: { title: string; artist?: string; release?: string }, options?: MbSearchOptions): Promise<MbSearchPage<MbRecording>>;
   clearCache(): void;
 }
 
@@ -330,6 +337,41 @@ export function createMusicBrainzClient(options: MusicBrainzClientOptions): Musi
     return mapReleaseGroupDetail(body);
   }
 
+  const RECORDING_INC = 'releases+release-groups+artist-credits+isrcs';
+
+  async function getRecording(mbid: string, options?: RequestOptions): Promise<MbRecording> {
+    const id = requireMbid(mbid, 'Recording');
+    const body = await transport.get(url(`recording/${id}`, { inc: RECORDING_INC }), mbRecordingSchema, req(options, ttls.release));
+    return mapRecording(body);
+  }
+
+  async function recordingsByIsrc(isrc: string, options?: RequestOptions): Promise<MbRecording[]> {
+    const code = isrc.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+    if (!/^[A-Z]{2}[A-Z0-9]{3}\d{7}$/.test(code)) return [];
+    const body = await transport.getOptional(url(`isrc/${code}`, { inc: 'releases+release-groups+artist-credits' }), mbIsrcSchema, req(options, ttls.release));
+    return (body?.recordings ?? []).map(mapRecording);
+  }
+
+  async function searchRecordings(
+    query: { title: string; artist?: string; release?: string },
+    options: MbSearchOptions = {},
+  ): Promise<MbSearchPage<MbRecording>> {
+    const title = query.title.trim();
+    if (title.length === 0) return { count: 0, offset: 0, results: [] };
+    const parts = [`recording:${quotePhrase(title)}`];
+    const artist = query.artist?.trim();
+    if (artist) parts.push(`artist:${quotePhrase(artist)}`);
+    const release = query.release?.trim();
+    if (release) parts.push(`release:${quotePhrase(release)}`);
+    const { limit, offset, ...rest } = options;
+    const body = await transport.get(
+      url('recording', { query: parts.join(' AND '), limit: clampLimit(limit), offset: offset ?? 0 }),
+      mbRecordingSearchSchema,
+      req(rest, ttls.search),
+    );
+    return { count: body.count, offset: body.offset, results: body.recordings.map(mapRecording) };
+  }
+
   return {
     providerKey,
     searchArtists,
@@ -339,6 +381,9 @@ export function createMusicBrainzClient(options: MusicBrainzClientOptions): Musi
     getRelease,
     searchReleaseGroups,
     getReleaseGroup,
+    getRecording,
+    recordingsByIsrc,
+    searchRecordings,
     clearCache: () => transport.clearCache(),
   };
 }

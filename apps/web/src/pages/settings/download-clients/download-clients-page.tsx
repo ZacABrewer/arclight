@@ -35,6 +35,7 @@ import { ResourceBulkBar, tableSelection, useResourceBulk } from '../../../compo
 import { useSelection } from '../../../components/bulk-actions.js';
 import { categoriesRenderer, cleanCategories } from './categories-field.js';
 import { EngineAgentSection } from './engine-agent-section.js';
+import { SoulseekSection } from './soulseek-section.js';
 import '../indexers/indexers.css';
 import './download-clients.css';
 import { t } from '../../../i18n/index.js';
@@ -441,6 +442,7 @@ export function DownloadClientsPage() {
       )}
       <RemotePathMappingsSection />
       <EngineAgentSection />
+      <SoulseekSection />
       {picking ? (
         <ClientChooser
           onClose={() => setPicking(false)}

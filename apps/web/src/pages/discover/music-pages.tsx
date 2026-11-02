@@ -3,6 +3,7 @@ import type { AudioAlbumDetail, AudioArtistDetail, AudioTrackEntry } from '@arcl
 import { EmptyState, KeyValue, PageHeader, Pane, Skeleton, Table, Tag, type Column, type KeyValueItem } from '../../arclight/index.js';
 import { DLink } from '../../features/discover/base.js';
 import { useAudioAlbum, useAudioArtist, useAudioDiscoverHome, useAudioDiscoverSearch } from '../../hooks/audio-requests.js';
+import { usePortalSimilarArtists } from '../../hooks/music-playlists.js';
 import { formatDuration } from '../library/music/music-model.js';
 import { AudioFeatureGate, AudioGrid, AudioHero, AudioQueryError, AudioRow, AudioSearchForm, AudioSkeletons } from './audio-kit.js';
 import { t } from '../../i18n/index.js';
@@ -175,6 +176,15 @@ function ArtistView({ artist }: { artist: AudioArtistDetail }) {
         overview={artist.overview}
       />
       <AudioGrid title={t('music.albums')} items={artist.albums} />
+      <PortalSimilarArtists mbid={item.foreignId} />
     </div>
   );
+}
+
+/** Similar artists (ListenBrainz / Last.fm); hidden while loading, on error and when empty. */
+function PortalSimilarArtists({ mbid }: { mbid: string }) {
+  const similar = usePortalSimilarArtists(mbid);
+  const items = similar.data?.items ?? [];
+  if (items.length === 0) return null;
+  return <AudioGrid title={t('musicPlaylists.similarArtists')} items={items} />;
 }

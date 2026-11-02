@@ -147,7 +147,7 @@ export class ProfilesService {
   }
 
   /**
-   * Music quality profiles (Lossless, Hi-Res, High-quality lossy, Any), once: when music is first
+   * Music quality profiles (Lossless, Hi-Res, High-quality lossy, Any, Lossless with lossy fallback, Portable), once: when music is first
    * switched on and on boots while it is on, if there is no music profile yet.
    */
   seedMusicDefaults(): number {

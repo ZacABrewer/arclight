@@ -8,3 +8,8 @@
 .al-dc-desc { margin: 0 0 16px; }
 
 .al-dc-agent-url { overflow-wrap: anywhere; }
+
+/* Soulseek (slskd) section. */
+.al-dc-soulseek__actions { display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: flex-start; gap: 8px; margin-top: 8px; }
+.al-dc-soulseek__downloads { display: flex; flex-direction: column; gap: 8px; margin-top: 20px; }
+.al-dc-soulseek__message { display: block; overflow-wrap: anywhere; }

@@ -2,19 +2,21 @@ import {
   buildMusicBrainzUserAgent,
   coverArtReleaseGroupFrontUrl,
   createFanartClient,
+  createLastfmClient,
   createListenBrainzClient,
   createMusicBrainzClient,
   createWikidataClient,
   defaultRateLimiter,
   type FanartClient,
   type FetchLike,
+  type LastfmClient,
   type ListenBrainzClient,
   type MbLink,
   type RateLimiter,
   type RequestPriority,
   type WikidataClient,
 } from '@arclight/metadata';
-import type { MusicImage, MusicMetadataSettings } from '@arclight/shared';
+import type { AlbumTypeProfile, EditionPreference, MusicImage, MusicMetadataSettings } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
 import { VERSION } from '../../version.js';
@@ -57,6 +59,7 @@ export class MusicMetadataService {
   private wikidata: { key: string; value: WikidataClient } | null = null;
   private fanart: { key: string; value: FanartClient } | null = null;
   private listen: { key: string; value: ListenBrainzClient } | null = null;
+  private lastfm: { key: string; value: LastfmClient } | null = null;
 
   constructor(
     private readonly deps: { db: Db; log: Logger; overrides?: MusicProviderOverrides },
@@ -104,10 +107,21 @@ export class MusicMetadataService {
     return value;
   }
 
-  /** Release choice preferences from settings. */
-  releasePreferences(): { preferredCountries: string[]; preferredFormats: string[] } {
+  /**
+   * Release choice preferences: the album-type profile's edition preference, countries and
+   * formats where it sets them, else the global music metadata settings.
+   */
+  releasePreferences(profile?: Pick<AlbumTypeProfile, 'editionPreference' | 'preferredCountries' | 'preferredFormats'>): {
+    preferredCountries: string[];
+    preferredFormats: string[];
+    edition: EditionPreference;
+  } {
     const s = this.settings();
-    return { preferredCountries: s.preferredCountries, preferredFormats: s.preferredFormats };
+    return {
+      preferredCountries: profile && profile.preferredCountries.length > 0 ? profile.preferredCountries : s.preferredCountries,
+      preferredFormats: profile && profile.preferredFormats.length > 0 ? profile.preferredFormats : s.preferredFormats,
+      edition: profile?.editionPreference ?? 'any',
+    };
   }
 
   /**
@@ -142,13 +156,63 @@ export class MusicMetadataService {
           if (images.length > 0) return images;
         }
       }
-      const ua = musicUserAgent(s.contactEmail);
-      if (this.wikidata?.key !== ua) this.wikidata = { key: ua, value: createWikidataClient({ userAgent: ua, ...common }) };
-      const image = await this.wikidata.value.resolveArtistImage(links, { priority });
+      const image = await this.wikidataClient().resolveArtistImage(links, { priority });
       return image ? [{ coverType: 'poster', url: image.url, remoteUrl: image.url }] : [];
     } catch (err) {
       this.deps.log.debug({ err, mbArtistId }, 'artist images unavailable');
       return [];
+    }
+  }
+
+  private wikidataClient(): WikidataClient {
+    const o = this.deps.overrides ?? {};
+    const ua = musicUserAgent(this.settings().contactEmail);
+    if (this.wikidata?.key !== ua) {
+      this.wikidata = {
+        key: ua,
+        value: createWikidataClient({
+          userAgent: ua,
+          rateLimiter: o.rateLimiter ?? defaultRateLimiter,
+          ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}),
+          ...(o.now ? { now: o.now } : {}),
+        }),
+      };
+    }
+    return this.wikidata.value;
+  }
+
+  /**
+   * Artist biography text (MusicBrainz has none): the Wikipedia summary found through the
+   * artist's url-rels (keyless), else the Last.fm biography when a Last.fm API key is set (in the
+   * music playlist settings). Best effort: undefined when neither has one or both fail.
+   */
+  async artistOverview(artist: { mbid: string; name: string }, links: readonly MbLink[], priority: RequestPriority): Promise<string | undefined> {
+    try {
+      const wiki = await this.wikidataClient().resolveArtistSummary?.(links, { priority });
+      if (wiki?.text) return wiki.text;
+    } catch (err) {
+      this.deps.log.debug({ err, mbArtistId: artist.mbid }, 'Wikipedia summary unavailable');
+    }
+    const key = getSection(this.deps.db, 'musicPlaylists').lastfmApiKey ?? '';
+    if (!key) return undefined;
+    try {
+      const o = this.deps.overrides ?? {};
+      if (this.lastfm?.key !== key) {
+        this.lastfm = {
+          key,
+          value: createLastfmClient({
+            apiKey: key,
+            rateLimiter: o.rateLimiter ?? defaultRateLimiter,
+            ...(o.fetchImpl ? { fetchImpl: o.fetchImpl } : {}),
+            ...(o.now ? { now: o.now } : {}),
+          }),
+        };
+      }
+      const bio = await this.lastfm.value.artistBio({ mbid: artist.mbid, name: artist.name }, { priority });
+      return bio?.summary || undefined;
+    } catch (err) {
+      this.deps.log.debug({ err, mbArtistId: artist.mbid }, 'Last.fm biography unavailable');
+      return undefined;
     }
   }
 }

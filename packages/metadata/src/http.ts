@@ -31,6 +31,8 @@ export interface JsonTransportOptions {
 
 export interface GetOptions extends RequestOptions {
   ttlMs: number;
+  /** Extra headers for this request (a bearer token); not part of the cache key. */
+  headers?: Record<string, string>;
 }
 
 export interface JsonTransport {
@@ -89,11 +91,11 @@ export function createJsonTransport(options: JsonTransportOptions): JsonTranspor
     cache.set(key, { expiresAt: now().getTime() + ttlMs, value });
   }
 
-  async function fetchOnce(url: string, signal: AbortSignal | undefined): Promise<Response> {
+  async function fetchOnce(url: string, signal: AbortSignal | undefined, extra?: Record<string, string>): Promise<Response> {
     const timeout = AbortSignal.timeout(timeoutMs);
     const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
     try {
-      return await fetchImpl(url, { headers, signal: combined });
+      return await fetchImpl(url, { headers: extra ? { ...headers, ...extra } : headers, signal: combined });
     } catch (cause) {
       if (signal?.aborted) throw cause;
       const timedOut = cause instanceof Error && cause.name === 'TimeoutError';
@@ -115,7 +117,7 @@ export function createJsonTransport(options: JsonTransportOptions): JsonTranspor
     const scheduleOptions = signal ? { priority, signal, maxRetries } : { priority, maxRetries };
     const response = await limiter.schedule(
       providerKey,
-      () => fetchOnce(url, signal),
+      () => fetchOnce(url, signal, options.headers),
       scheduleOptions,
     );
     const path = new URL(url).pathname;

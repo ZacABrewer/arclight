@@ -24,6 +24,7 @@ import {
 import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { DetailsHero } from '../details-kit.js';
 import { MusicCrumb, MusicGate, SquareArt } from './music-kit.js';
+import { SimilarArtistsStrip } from './similar-artists.js';
 import { MusicInteractiveSearchModal } from './music-release-table.js';
 import {
   MONITOR_OPTIONS,
@@ -151,6 +152,7 @@ function ArtistDetailsView() {
       </DetailsHero>
 
       <AlbumGroups artist={a} />
+      <SimilarArtistsStrip artistId={a.id} />
 
       {editing ? <EditArtistModal artist={a} onClose={() => setEditing(false)} /> : null}
       <MusicInteractiveSearchModal

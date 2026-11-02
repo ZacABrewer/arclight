@@ -117,11 +117,25 @@ export type ReleaseMedium = z.infer<typeof ReleaseMedium>;
  * listed (so an empty list keeps only groups without secondary types), and at least one of its
  * releases has a listed status.
  */
+/**
+ * Which edition of a release group gets its tracks stored: `original` the earliest release,
+ * `standard` avoids deluxe/expanded/bonus editions and remasters, `deluxe` prefers the most
+ * complete (deluxe, expanded, bonus) edition, `remaster` prefers remastered editions, and `any`
+ * keeps the plain country/format rules.
+ */
+export const EditionPreference = z.enum(['any', 'original', 'standard', 'deluxe', 'remaster']);
+export type EditionPreference = z.infer<typeof EditionPreference>;
+
 export const AlbumTypeProfileInput = z.object({
   name: z.string().trim().min(1).max(100),
   primaryTypes: z.array(AlbumPrimaryType).min(1),
   secondaryTypes: z.array(AlbumSecondaryType).default([]),
   releaseStatuses: z.array(AlbumReleaseStatus).min(1).default(['Official']),
+  editionPreference: EditionPreference.default('any'),
+  /** Release countries in order of preference (`XW`, `US`, ...). Empty: the global music metadata setting. */
+  preferredCountries: z.array(z.string().trim().length(2).toUpperCase()).max(20).default([]),
+  /** Medium formats in order of preference (`Digital Media`, `CD`, ...). Empty: the global setting. */
+  preferredFormats: z.array(z.string().trim().min(1).max(50)).max(20).default([]),
   /** The profile new artists get when the add request names none. Exactly one profile is the default. */
   isDefault: z.boolean().default(false),
 });
@@ -138,6 +152,9 @@ export function defaultAlbumTypeProfiles(): AlbumTypeProfileInput[] {
       primaryTypes: ['Album', 'EP'],
       secondaryTypes: [],
       releaseStatuses: ['Official'],
+      editionPreference: 'any',
+      preferredCountries: [],
+      preferredFormats: [],
       isDefault: true,
     },
     {
@@ -145,6 +162,9 @@ export function defaultAlbumTypeProfiles(): AlbumTypeProfileInput[] {
       primaryTypes: [...AlbumPrimaryType.options],
       secondaryTypes: [...AlbumSecondaryType.options],
       releaseStatuses: [...AlbumReleaseStatus.options],
+      editionPreference: 'any',
+      preferredCountries: [],
+      preferredFormats: [],
       isDefault: false,
     },
   ];
@@ -174,6 +194,10 @@ export const AlbumStatistics = z.object({
   totalTrackCount: z.number().int(),
   sizeOnDisk: z.number().int(),
   percentOfTracks: z.number(),
+  /** Stored tracks that are wanted (per-track monitoring); equals `trackCount` unless some are unmonitored. */
+  monitoredTrackCount: z.number().int().optional(),
+  /** Monitored stored tracks without a file: what "missing" means for an album. */
+  missingTrackCount: z.number().int().optional(),
 });
 export type AlbumStatistics = z.infer<typeof AlbumStatistics>;
 
@@ -284,8 +308,26 @@ export const Track = z.object({
   artistCredit: z.string().nullish(),
   hasFile: z.boolean(),
   audioFileId: z.number().int().nullish(),
+  /** Per-track wanted. Unmonitored tracks never count as missing. */
+  monitored: z.boolean().default(true),
 });
 export type Track = z.infer<typeof Track>;
+
+/** PUT /api/v1/track/monitor: set the monitored flag of tracks (they may span albums). */
+export const TrackMonitorRequest = z.object({
+  trackIds: idList().min(1),
+  monitored: z.boolean(),
+});
+export type TrackMonitorRequest = z.infer<typeof TrackMonitorRequest>;
+
+/**
+ * POST /api/v1/album/:id/wanttracks: want exactly these tracks of the album. The album becomes
+ * monitored, the listed tracks monitored and every other track of it unmonitored.
+ */
+export const WantTracksRequest = z.object({
+  trackIds: z.array(z.number().int()).min(1),
+});
+export type WantTracksRequest = z.infer<typeof WantTracksRequest>;
 
 // ---------------------------------------------------------------------------------------
 // Audio files (shared by music and audiobooks; table `audio_files`)
@@ -327,6 +369,24 @@ export const AudioMediaInfo = z.object({
   replayGainAlbumDb: z.number().nullish(),
   /** Audiobooks: chapter titles and start offsets. */
   chapters: z.array(z.object({ title: z.string(), startMs: z.number().int().min(0) })).nullish(),
+  /** Linear track peak (0-1+), measured with `replayGainTrackDb`. */
+  replayGainTrackPeak: z.number().nullish(),
+  /**
+   * A single-file album image kept whole (`audio.cueHandling: keepImage`): where each track of
+   * the cue sheet starts and ends in the file. Every listed track links to this one row.
+   */
+  cueTracks: z
+    .array(
+      z.object({
+        trackId: z.number().int(),
+        /** Track number in the cue sheet. */
+        cueTrack: z.number().int().min(1),
+        startMs: z.number().int().min(0),
+        /** Null for the last track (runs to the end of the file). */
+        endMs: z.number().int().min(0).nullable(),
+      }),
+    )
+    .nullish(),
 });
 export type AudioMediaInfo = z.infer<typeof AudioMediaInfo>;
 
@@ -696,6 +756,25 @@ export const AudioImportSettings = z.object({
   renameAudiobookParts: z.boolean().default(true),
   /** Audiobooks: write `desc.txt`, `reader.txt` and `cover.jpg` (Audiobookshelf sidecars) into the book folder. */
   writeAbsSidecars: z.boolean().default(false),
+  /**
+   * Music: a single-file album image with a cue sheet. `split` cuts it into one file per track
+   * with ffmpeg (lossless to FLAC, lossy by stream copy) and imports those; `keepImage` imports
+   * the image and cue sheet as they are and links every track to the one file; `manual` leaves
+   * it to Manual Import. `split` falls back to `keepImage` when ffmpeg is missing.
+   */
+  cueHandling: z.enum(['manual', 'keepImage', 'split']).default('split'),
+  /**
+   * Music: write MusicBrainz ids and the catalogue's title, artist, album, track, disc and date
+   * into imported files. Only copies, moves and split tracks are written, never a hard link or
+   * the download itself (rewriting a shared file breaks seeding).
+   */
+  writeTags: z.boolean().default(false),
+  /** Music: embed the album cover into imported files (same limits as `writeTags`). */
+  embedCoverArt: z.boolean().default(false),
+  /** Music: save `cover.jpg` (Cover Art Archive front cover) into album folders that have none. */
+  saveCoverArt: z.boolean().default(false),
+  /** Music: measure ReplayGain with ffmpeg; the gain is stored and, where files are written, tagged. */
+  replayGain: z.boolean().default(false),
 });
 export type AudioImportSettings = z.infer<typeof AudioImportSettings>;
 export type AudioImportSettingsInput = z.input<typeof AudioImportSettings>;

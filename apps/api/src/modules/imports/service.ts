@@ -93,7 +93,7 @@ import {
   type ScannedFile,
 } from './scan.js';
 import { AudiobookImporter } from './audio/audiobook-import.js';
-import { MusicImporter } from './audio/music-import.js';
+import { MusicImporter, type MusicImportRun } from './audio/music-import.js';
 import { ImportsError } from './errors.js';
 import { importedDownloads } from './schema.js';
 import { filesInSlot, formatFor, placeVersioned } from './versions.js';
@@ -415,6 +415,47 @@ export class ImportsService {
     }
     if (run.retryable) this.retryable.add(item.id);
     return this.block(item, result, run.messages);
+  }
+
+  /**
+   * Imports a finished music folder that did not come through a download client (the
+   * Soulseek/slskd source): the music importer runs on a synthetic tracked download that
+   * targets the given artist and albums. Not added to the queue.
+   */
+  importMusicFolder(input: {
+    path: string;
+    downloadId: string;
+    title: string;
+    artistId: number;
+    albumIds: readonly number[];
+    mode: 'copy' | 'move';
+  }): Promise<MusicImportRun> {
+    const item: TrackedDownload = {
+      id: -1,
+      downloadId: input.downloadId,
+      downloadClientId: null,
+      downloadClientName: 'slskd',
+      title: input.title,
+      status: 'completed',
+      trackedStatus: 'ok',
+      statusMessages: [],
+      // The music importer does not read the protocol; neither value fits a P2P folder.
+      protocol: 'torrent',
+      sizeBytes: 0,
+      sizeLeftBytes: 0,
+      progress: 1,
+      outputPath: input.path,
+      added: this.now().toISOString(),
+      trackedState: 'importPending',
+      mediaType: 'music',
+      artistId: input.artistId,
+      albumIds: [...input.albumIds],
+      canMoveFiles: input.mode === 'move',
+      canBeRemoved: false,
+      isReadOnly: input.mode === 'copy',
+      grabbedRelease: null,
+    };
+    return this.music.importCompletedDownload(item, input.path);
   }
 
   private async importAudiobookDownload(item: TrackedDownload, path: string, result: ImportRunResult): Promise<ImportRunResult> {

@@ -33,10 +33,14 @@ export interface DetailsHeroProps {
   label: string;
   /** Replaces the 2:3 poster (music: square artwork with an initial fallback). */
   art?: ReactNode;
+  /** Small mono line above the title ("ALBUM · LOSSLESS 24/96"). */
+  eyebrow?: ReactNode;
+  /** Right-aligned beside the title (music: the "FLAC · 24/96" format chip). */
+  titleAside?: ReactNode;
 }
 
 /** Backdrop (fade left 92%→20% and bottom), 208px poster, title-xl + mono year, meta, chips, facts, verbs. */
-export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips, facts, overview, actions, children, label, art }: DetailsHeroProps) {
+export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips, facts, overview, actions, children, label, art, eyebrow, titleAside }: DetailsHeroProps) {
   return (
     <section className="mk-hero" aria-label={label}>
       <BackdropFrame src={backdrop} title="" fade bleed loading="eager" />
@@ -46,10 +50,14 @@ export function DetailsHero({ backdrop, poster, title, year, crumb, meta, chips,
           <nav className="mk-crumb" aria-label={t('library.detailsKit.breadcrumb')}>
             {crumb}
           </nav>
-          <h1 className="mk-hero__title">
-            <span className="al-title-xl">{title}</span>
-            {year ? <span className="mk-hero__year">{year}</span> : null}
-          </h1>
+          {eyebrow ? <div className="mk-hero__eyebrow">{eyebrow}</div> : null}
+          <div className={titleAside ? 'mk-hero__titlerow' : undefined}>
+            <h1 className="mk-hero__title">
+              <span className="al-title-xl">{title}</span>
+              {year ? <span className="mk-hero__year">{year}</span> : null}
+            </h1>
+            {titleAside}
+          </div>
           {meta ? <div className="mk-hero__meta">{meta}</div> : null}
           {chips ? <div className="mk-hero__chips">{chips}</div> : null}
           {facts}

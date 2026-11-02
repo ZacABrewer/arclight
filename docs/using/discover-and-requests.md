@@ -102,6 +102,10 @@ A person's page shows their photo, biography, a **Known for** row and every cred
 
 A collection page (for example a film series) shows every movie in it with its status. **Request all missing (N)** requests each movie in the collection that is not in your library and has not been requested, one request per movie, under the same rules as requesting one by one (quotas, approval, caps). If you run out of quota part way, Arclight stops and says which ones could not be requested. **Request all in 4K** does the same on the 4K track when 4K requests are enabled for you.
 
+### Similar artists
+
+With music turned on, an artist's page in Discover ends with a **Similar artists** row. It comes from ListenBrainz and, when a Last.fm API key is set, Last.fm (choose under **Library > Music > Playlists > Sources & outputs**). Each card shows the artist's status like any other card; open one to see the artist and request albums. The list is cached for a day. When neither service answers, the row is simply not shown. The library artist page has the same list; see [Music playlists](music-playlists.md#similar-artists).
+
 ## Requesting a title
 
 1. Open the title page and click **Request** (or **Request** next to one season in the **Seasons** list, which opens the dialog with that season ticked).
@@ -473,6 +477,7 @@ Ids are the numeric Discord ids (5 to 25 digits). The page shows the state (Off,
 ## Related
 
 - [Library](library.md) - what happens to a title after it is added
+- [Music playlists](music-playlists.md) - following playlists and similar artists
 - [Quality profiles](quality-profiles.md) - the profiles requests use
 - [Notifications](notifications.md) - request and issue alerts
 - [Media servers](media-servers.md) - sign-in and availability

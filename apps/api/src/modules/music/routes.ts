@@ -19,6 +19,8 @@ import {
   BulkAlbumMonitorRequest,
   BulkArtistUpdateRequest,
   DeleteArtistQuery,
+  TrackMonitorRequest,
+  WantTracksRequest,
   ErrorResponse,
   UpdateAlbumRequest,
   UpdateArtistRequest,
@@ -197,6 +199,22 @@ export const musicRoutes = (ctx: AppContext): FastifyPluginAsync<Record<never, n
         svc.updateAlbumFlags(db, id, req.body);
         if (req.body.selectedReleaseId !== undefined) return refresher().switchRelease(id, req.body.selectedReleaseId);
         return svc.getAlbumDetails(db, id);
+      },
+    );
+
+    // Per-track wanted (the album must also be monitored for a track to be searched for).
+    app.put(
+      '/track/monitor',
+      { schema: { body: TrackMonitorRequest, response: { 200: AlbumListResponse, 404: ErrorResponse } } },
+      async (req) => svc.setTracksMonitored(db, req.body.trackIds, req.body.monitored),
+    );
+
+    app.post(
+      '/album/:id/wanttracks',
+      { schema: { params: IdParams, body: WantTracksRequest, response: { 200: AlbumDetails, 400: ErrorResponse, 404: ErrorResponse } } },
+      async (req) => {
+        svc.wantAlbumTracks(db, req.params.id, req.body.trackIds);
+        return svc.getAlbumDetails(db, req.params.id);
       },
     );
 

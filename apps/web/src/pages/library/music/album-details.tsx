@@ -1,16 +1,30 @@
 import { useId, useMemo, useState } from 'react';
 import { getRouteApi } from '@tanstack/react-router';
 import type { AlbumDetails, AudioFile, Track } from '@arclight/shared';
-import { Button, EmptyState, KeyValue, QualityTag, SectionLabel, Select, StatusChip, Table, Tabs, Toggle, type Column } from '../../../arclight/index.js';
+import { Button, EmptyState, KeyValue, type RowKey, QualityTag, SectionLabel, Select, StatusChip, Table, Tabs, Toggle, type Column } from '../../../arclight/index.js';
 import { formatBytes, formatDate } from '../../../components/media/format.js';
 import { Loading, MonitorSwitch, QualityLabel, QueryError } from '../../../components/media/media-kit.js';
-import { useAlbum, useSetAlbumsMonitored, useUpdateAlbum } from '../../../hooks/music.js';
+import { useAlbum, useSetAlbumsMonitored, useSetTracksMonitored, useUpdateAlbum, useWantTracks } from '../../../hooks/music.js';
 import { useMusicSearch } from '../../../hooks/music-acquisition.js';
 import { DetailsHero } from '../details-kit.js';
 import { AudioFilesTable } from '../media-files-table.js';
 import { MusicCrumb, MusicGate, SquareArt } from './music-kit.js';
 import { MusicInteractiveSearchModal } from './music-release-table.js';
-import { albumCover, albumTypeLabel, albumYear, artistBackdrop, formatDuration, groupTracks, releaseLabel, trackProgress, type DiscGroup } from './music-model.js';
+import { SoulseekActions, useSoulseekAvailable } from './soulseek-search.js';
+import {
+  albumCover,
+  albumEyebrow,
+  albumFormat,
+  albumTypeLabel,
+  albumYear,
+  artistBackdrop,
+  formatChipText,
+  formatDuration,
+  groupTracks,
+  releaseLabel,
+  trackProgress,
+  type DiscGroup,
+} from './music-model.js';
 import '../library.css';
 import './music.css';
 import { ItemHealthPanel, useCanSeeHealth } from '../item-health.js';
@@ -36,6 +50,7 @@ function AlbumDetailsView() {
   const [tab, setTab] = useState('tracks');
   const [interactive, setInteractive] = useState(false);
   const search = useMusicSearch();
+  const soulseek = useSoulseekAvailable();
 
   if (!Number.isInteger(id) || id <= 0) return <QueryError error={new Error(t('music.invalidAlbumId', { rawId }))} title={t('music.albumNotFound')} />;
   if (album.isPending) return <Loading />;
@@ -44,11 +59,20 @@ function AlbumDetailsView() {
   const p = trackProgress(a.statistics);
   const release = a.releases.find((r) => r.id === a.selectedReleaseId);
   const duration = a.tracks.reduce((n, tr) => n + (tr.durationMs ?? 0), 0);
+  const format = albumFormat(a.files);
 
   return (
     <div className="lib-details music-details">
       <DetailsHero
         label={t('music.albumOverview')}
+        eyebrow={albumEyebrow(a.primaryType, format)}
+        titleAside={
+          format ? (
+            <span className="music-format-chip" data-lossless={format.lossless || undefined} title={t('music.album.formatOnDisk')}>
+              {formatChipText(format)}
+            </span>
+          ) : null
+        }
         backdrop={artistBackdrop(a.artist)}
         art={<SquareArt src={albumCover(a)} title={a.title} className="mk-hero__poster" loading="eager" />}
         title={a.title}
@@ -56,7 +80,7 @@ function AlbumDetailsView() {
         crumb={<MusicCrumb artist={a.artist} />}
         meta={[
           a.artist.name,
-          [albumTypeLabel(a.primaryType), ...a.secondaryTypes].join(' · '),
+          [...(a.secondaryTypes.length > 0 ? [albumTypeLabel(a.primaryType)] : []), ...a.secondaryTypes].join(' · ') || null,
           a.genres.slice(0, 3).join(', ') || null,
           t('music.trackCount', { count: p.total }),
           duration > 0 ? formatDuration(duration) : null,
@@ -93,6 +117,7 @@ function AlbumDetailsView() {
               {t('common.search')}
             </Button>
             <Button onClick={() => setInteractive(true)}>{t('library.seriesDetails.interactiveSearch')}</Button>
+            {soulseek ? <SoulseekActions albumId={a.id} title={`${a.artist.name} – ${a.title}`} /> : null}
           </>
         }
       >
@@ -162,9 +187,19 @@ function TrackList({ album }: { album: AlbumDetails }) {
   const discs = useMemo(() => groupTracks(album.tracks, release), [album.tracks, release]);
   const fileById = useMemo(() => new Map(album.files.map((f) => [f.id, f])), [album.files]);
   if (album.tracks.length === 0) return <EmptyState title={t('music.noTracksYet')}>{t('music.noTracksBody')}</EmptyState>;
-  if (discs.length === 1) return <DiscTable disc={discs[0]!} fileById={fileById} />;
+  const wanted = album.tracks.filter((tr) => tr.monitored !== false).length;
+  const note =
+    wanted < album.tracks.length ? <p className="music-wanted-note">{t('music.album.wantedNote', { wanted, total: album.tracks.length })}</p> : null;
+  if (discs.length === 1)
+    return (
+      <>
+        {note}
+        <DiscTable album={album} disc={discs[0]!} fileById={fileById} />
+      </>
+    );
   return (
     <div>
+      {note}
       {discs.map((d) => (
         <section key={d.medium} className="music-disc" aria-label={discTitle(d)}>
           <div className="music-disc__head">
@@ -172,7 +207,7 @@ function TrackList({ album }: { album: AlbumDetails }) {
               {discTitle(d)}
             </SectionLabel>
           </div>
-          <DiscTable disc={d} fileById={fileById} />
+          <DiscTable album={album} disc={d} fileById={fileById} />
         </section>
       ))}
     </div>
@@ -183,32 +218,56 @@ function discTitle(d: DiscGroup): string {
   return [t('music.discNumber', { number: d.medium }), d.name, d.format].filter(Boolean).join(' · ');
 }
 
-function DiscTable({ disc, fileById }: { disc: DiscGroup; fileById: Map<number, AudioFile> }) {
+/**
+ * One disc's tracks: # / title (credit) / wanted / time / file / quality. Rows are selectable;
+ * the bulk bar wants exactly the selection (the album is monitored, every other track is not)
+ * or flips the wanted switch of the selected tracks.
+ */
+function DiscTable({ album, disc, fileById }: { album: AlbumDetails; disc: DiscGroup; fileById: Map<number, AudioFile> }) {
+  const setTracks = useSetTracksMonitored();
+  const wantOnly = useWantTracks();
   const fileOf = (tr: Track) => (tr.audioFileId != null ? fileById.get(tr.audioFileId) : undefined);
+  const busy = setTracks.isPending || wantOnly.isPending;
+  const monitorTracks = (trackIds: number[], monitored: boolean) => setTracks.mutate({ albumId: album.id, artistId: album.artistId, trackIds, monitored });
+  const ids = (keys: Set<RowKey>) => [...keys].map(Number).filter((n) => Number.isInteger(n));
   const columns: Column<Track>[] = [
-    { key: 'disc', header: t('music.disc'), cell: (tr) => tr.mediumNumber, mono: true, width: '56px', muted: true },
-    { key: 'number', header: '#', sortValue: (tr) => tr.trackNumber, cell: (tr) => String(tr.trackNumber).padStart(2, '0'), mono: true, width: '56px' },
+    { key: 'number', header: '#', sortValue: (tr) => tr.trackNumber, cell: (tr) => String(tr.trackNumber).padStart(2, '0'), mono: true, width: '56px', muted: true },
     {
       key: 'title',
       header: t('common.title'),
       sortValue: (tr) => tr.title,
+      mobile: 'primary',
       cell: (tr) => (
-        <span>
+        <span className="music-track" data-unwanted={tr.monitored === false || undefined}>
           {tr.title}
           {tr.artistCredit ? <span className="music-track__credit">{tr.artistCredit}</span> : null}
         </span>
+      ),
+    },
+    {
+      key: 'wanted',
+      header: t('music.album.wanted'),
+      width: '84px',
+      cell: (tr) => (
+        <MonitorSwitch
+          monitored={tr.monitored !== false}
+          disabled={busy}
+          onChange={(m) => monitorTracks([tr.id], m)}
+          label={t('music.album.wantTrack', { title: tr.title })}
+        />
       ),
     },
     { key: 'duration', header: t('music.duration'), sortValue: (tr) => tr.durationMs ?? 0, cell: (tr) => formatDuration(tr.durationMs), mono: true, align: 'right', width: '90px' },
     {
       key: 'file',
       header: t('common.file'),
-      cell: (tr) => (tr.hasFile ? <StatusChip status="downloaded" /> : <StatusChip status="missing" />),
+      cell: (tr) => (tr.hasFile ? <StatusChip status="downloaded" /> : <StatusChip status={tr.monitored === false ? 'unmonitored' : 'missing'} />),
       width: '140px',
     },
     {
       key: 'quality',
       header: t('common.quality'),
+      mobile: 'hide',
       cell: (tr) => {
         const f = fileOf(tr);
         return f ? <QualityLabel quality={f.quality} /> : <span className="mk-muted">—</span>;
@@ -223,6 +282,26 @@ function DiscTable({ disc, fileById }: { disc: DiscGroup; fileById: Map<number, 
       density="dense"
       sortable={false}
       caption={t('music.discNumber', { number: disc.medium })}
+      selectable
+      rowLabel={(tr) => t('music.album.selectTrack', { title: tr.title })}
+      bulkActions={(keys, clear) => (
+        <>
+          <Button
+            variant="primary"
+            size="sm"
+            disabled={busy}
+            onClick={() => wantOnly.mutate({ albumId: album.id, artistId: album.artistId, trackIds: ids(keys) }, { onSuccess: clear })}
+          >
+            {t('music.album.wantOnlyThese')}
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => (monitorTracks(ids(keys), true), clear())}>
+            {t('music.album.wantSelected')}
+          </Button>
+          <Button size="sm" disabled={busy} onClick={() => (monitorTracks(ids(keys), false), clear())}>
+            {t('music.album.unwantSelected')}
+          </Button>
+        </>
+      )}
     />
   );
 }

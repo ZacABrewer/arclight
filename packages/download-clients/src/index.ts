@@ -15,6 +15,8 @@ import { SabnzbdClient } from './sabnzbd/client.js';
 import { SabnzbdSettings, type SabnzbdSettingsInput } from './sabnzbd/settings.js';
 import { TransmissionClient } from './transmission/client.js';
 import { TransmissionSettings, type TransmissionSettingsInput } from './transmission/settings.js';
+import { SlskdClient } from './slskd/client.js';
+import { SlskdSettings, type SlskdSettingsInput } from './slskd/settings.js';
 import type { ClientRuntime, DownloadClient, DownloadProtocol } from './types.js';
 
 export {
@@ -69,6 +71,18 @@ export { hashFromMagnet, hashFromTorrentFile, TorrentParseError } from './torren
 export { RemoteEngineSettings, type RemoteEngineSettingsInput } from './remote-engine/settings.js';
 export { RemoteEngineClient, type RemoteEngineDeps } from './remote-engine/client.js';
 export { PullManager, pullManagerFor, PULL_STATE_DIR, PART_SUFFIX, type PullManifest, type PullProgress, type PullState } from './remote-engine/pull.js';
+export { SlskdSettings, type SlskdSettingsInput } from './slskd/settings.js';
+export {
+  SlskdClient,
+  remoteBaseName,
+  remoteDirName,
+  transferPhase,
+  type SlskdDownload,
+  type SlskdSearchOptions,
+  type SlskdTestResult,
+  type SlskdTransferPhase,
+} from './slskd/client.js';
+export type { SlskdFile, SlskdResponse } from './slskd/schemas.js';
 
 const DEFAULT_RUNTIME: ClientRuntime = {
   fetch: (input, init) => globalThis.fetch(input, init),
@@ -144,6 +158,11 @@ export function createRemoteEngineClient(
   deps: RemoteEngineDeps = {},
 ): RemoteEngineClient {
   return new RemoteEngineClient(RemoteEngineSettings.parse(settings), runtimeWith(runtime), deps);
+}
+
+/** slskd web API (Soulseek client daemon). Not a DownloadClient kind: it has its own flow. */
+export function createSlskdClient(settings: SlskdSettingsInput, runtime: Partial<ClientRuntime> = {}): SlskdClient {
+  return new SlskdClient(SlskdSettings.parse(settings), runtimeWith(runtime));
 }
 
 /** Every client implementation this package can drive. */

@@ -3,11 +3,12 @@ import {
   AlbumPrimaryType,
   AlbumReleaseStatus,
   AlbumSecondaryType,
+  EditionPreference,
   type AlbumTypeProfile,
   type AlbumTypeProfileInput,
 } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
-import { Button, Checkbox, Chip, ErrorBlock, Field, Input, Modal, Skeleton, Tag, Toggle } from '../../../arclight/index.js';
+import { Button, Checkbox, Chip, ErrorBlock, Field, Input, Modal, Select, Skeleton, Tag, Toggle } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { ListSearchCount, ListSearchEmpty, useClientListSearch } from '../../../components/list-search.js';
 import { useAlbumTypeProfiles, useDeleteAlbumTypeProfile, useFeatures, useSaveAlbumTypeProfile } from '../../../hooks/music.js';
@@ -19,7 +20,28 @@ import { t } from '../../../i18n/index.js';
 
 // Album-type profiles (music): which MusicBrainz release groups become album rows.
 
-const EMPTY: AlbumTypeProfileInput = { name: '', primaryTypes: ['Album'], secondaryTypes: [], releaseStatuses: ['Official'], isDefault: false };
+const EMPTY: AlbumTypeProfileInput = {
+  name: '',
+  primaryTypes: ['Album'],
+  secondaryTypes: [],
+  releaseStatuses: ['Official'],
+  isDefault: false,
+  editionPreference: 'any',
+  preferredCountries: [],
+  preferredFormats: [],
+};
+
+/** "GB, us , XW" → ['GB', 'US', 'XW'] (country codes, upper-case, de-duplicated, at most 20). */
+export function parseCountries(text: string): string[] {
+  return [...new Set(text.split(/[\s,;]+/).map((c) => c.trim().toUpperCase()).filter((c) => /^[A-Z]{2}$/.test(c)))].slice(0, 20);
+}
+
+/** "CD, Digital Media" → ['CD', 'Digital Media'] (MusicBrainz medium formats, in order). */
+export function parseFormats(text: string): string[] {
+  return [...new Set(text.split(/[,;]+/).map((f) => f.trim()).filter(Boolean))];
+}
+
+export const editionPreferenceLabel = (p: EditionPreference) => t('music.typeProfiles.edition', { edition: p });
 
 function toInput(p: AlbumTypeProfile): AlbumTypeProfileInput {
   const { id: _id, ...rest } = p;
@@ -55,6 +77,50 @@ function CheckGroup<T extends string>({ label, hint, options, value, onChange, r
         ))}
       </div>
     </Field>
+  );
+}
+
+/** Which edition (release) of an album to pick: kind, then countries and medium formats. */
+function EditionFields({ draft, set }: { draft: AlbumTypeProfileInput; set: <K extends keyof AlbumTypeProfileInput>(k: K, v: AlbumTypeProfileInput[K]) => void }) {
+  // Free text while typing; parsed into the list on blur so "GB, " is not cut short.
+  const [countries, setCountries] = useState(() => draft.preferredCountries.join(', '));
+  const [formats, setFormats] = useState(() => draft.preferredFormats.join(', '));
+  return (
+    <>
+      <Field label={t('music.typeProfiles.editionPreference')} hint={t('music.typeProfiles.editionPreferenceHint')}>
+        <Select value={draft.editionPreference} onChange={(e) => set('editionPreference', EditionPreference.parse(e.currentTarget.value))}>
+          {EditionPreference.options.map((o) => (
+            <option key={o} value={o}>
+              {editionPreferenceLabel(o)}
+            </option>
+          ))}
+        </Select>
+      </Field>
+      <Field label={t('music.typeProfiles.preferredCountries')} hint={t('music.typeProfiles.preferredCountriesHint')}>
+        <Input
+          value={countries}
+          placeholder="GB, US, XW"
+          onChange={(e) => setCountries(e.currentTarget.value)}
+          onBlur={() => {
+            const list = parseCountries(countries);
+            set('preferredCountries', list);
+            setCountries(list.join(', '));
+          }}
+        />
+      </Field>
+      <Field label={t('music.typeProfiles.preferredFormats')} hint={t('music.typeProfiles.preferredFormatsHint')}>
+        <Input
+          value={formats}
+          placeholder="Digital Media, CD"
+          onChange={(e) => setFormats(e.currentTarget.value)}
+          onBlur={() => {
+            const list = parseFormats(formats);
+            set('preferredFormats', list);
+            setFormats(list.join(', '));
+          }}
+        />
+      </Field>
+    </>
   );
 }
 
@@ -103,6 +169,7 @@ function AlbumTypeProfileEditor({ profile, onClose }: { profile: AlbumTypeProfil
             onChange={(v) => set('secondaryTypes', v)}
           />
           <CheckGroup label={t('music.typeProfiles.releaseStatuses')} options={AlbumReleaseStatus.options} value={draft.releaseStatuses} onChange={(v) => set('releaseStatuses', v)} />
+          <EditionFields draft={draft} set={set} />
           <Toggle checked={draft.isDefault} label={t('music.typeProfiles.useForNewArtists')} onChange={(e) => set('isDefault', e.currentTarget.checked)} />
           {problems.length ? (
             <p className="al-inline-error" role="alert">
@@ -187,6 +254,7 @@ function AlbumTypeProfilesList() {
                 {p.secondaryTypes.length ? t('music.typeProfiles.plusSecondary', { count: p.secondaryTypes.length }) : t('music.typeProfiles.noSecondary')}
                 {' · '}
                 {p.releaseStatuses.join(', ')}
+                {p.editionPreference && p.editionPreference !== 'any' ? ` · ${editionPreferenceLabel(p.editionPreference)}` : null}
               </span>
             </ItemCard>
           ))}

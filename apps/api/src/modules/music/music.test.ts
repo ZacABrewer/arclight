@@ -599,3 +599,85 @@ describe('file quality', () => {
     expect(musicQualityFor({ codec: 'whatever', bitrateKbps: 256, bitDepth: null }).quality.name).toBe('Unknown');
   });
 });
+
+describe('per-track wanted and edition preferences', () => {
+  beforeEach(async () => {
+    h = await harness();
+  });
+
+  it('wants only some tracks: missing, statistics and edition switches follow the track flags', async () => {
+    writeOkComputer(join(h.root, 'Radiohead'), { skip: [1, 2, 3] });
+    const added = await addRadiohead();
+    const ok = album(added, 'OK Computer');
+    const details = (await h.api('GET', `/album/${ok.id}`)).json<AlbumDetails>();
+    expect(details.tracks.every((t) => t.monitored)).toBe(true);
+    expect(details.statistics).toMatchObject({ trackCount: 12, trackFileCount: 9, monitoredTrackCount: 12, missingTrackCount: 3 });
+    const missingIds = async () => (await h.api('GET', '/wanted/missing/albums?pageSize=100')).json().records.map((r: { id: number }) => r.id);
+    expect(await missingIds()).toContain(ok.id);
+
+    // Unmonitor the three missing tracks: the album is no longer missing.
+    const absent = details.tracks.filter((t) => !t.hasFile).map((t) => t.id);
+    const res = await h.api('PUT', '/track/monitor', { trackIds: absent, monitored: false });
+    expect(res.statusCode, res.body).toBe(200);
+    expect(res.json()[0].statistics).toMatchObject({ monitoredTrackCount: 9, missingTrackCount: 0 });
+    expect(await missingIds()).not.toContain(ok.id);
+    expect((await h.api('GET', `/artist/${added.id}`)).json().statistics.completeAlbumCount).toBe(1);
+    expect((await h.api('PUT', '/track/monitor', { trackIds: [999999], monitored: true })).statusCode).toBe(404);
+
+    // The flags survive switching to the two-disc reissue and back (matched by recording id).
+    const reissue = details.releases.find((r) => r.mbReleaseId === RELEASE_2DISC)!;
+    const switched = (await h.api('PUT', `/album/${ok.id}`, { selectedReleaseId: reissue.id })).json<AlbumDetails>();
+    const airbag = switched.tracks.find((t) => t.mediumNumber === 1 && t.trackNumber === 1)!;
+    expect(airbag.monitored).toBe(false);
+    expect(switched.tracks.filter((t) => t.mediumNumber === 2).every((t) => t.monitored)).toBe(true);
+    const back = (await h.api('PUT', `/album/${ok.id}`, { selectedReleaseId: details.selectedReleaseId })).json<AlbumDetails>();
+    expect(back.tracks.filter((t) => !t.monitored).map((t) => t.trackNumber)).toEqual([1, 2, 3]);
+  });
+
+  it('want tracks: monitors the album and artist, exactly those tracks', async () => {
+    const added = await addRadiohead({ monitored: false, monitorOption: 'none' });
+    const fresh = (await h.api('GET', `/artist/${added.id}`)).json<ArtistDetails>();
+    expect(fresh.monitored).toBe(false);
+    const ok = album(fresh, 'OK Computer');
+    expect(ok.monitored).toBe(false);
+    const details = (await h.api('GET', `/album/${ok.id}`)).json<AlbumDetails>();
+    const want = details.tracks.filter((t) => [2, 6].includes(t.trackNumber)).map((t) => t.id);
+    const res = await h.api('POST', `/album/${ok.id}/wanttracks`, { trackIds: want });
+    expect(res.statusCode, res.body).toBe(200);
+    const after = res.json<AlbumDetails>();
+    expect(after.monitored).toBe(true);
+    expect(after.tracks.filter((t) => t.monitored).map((t) => t.trackNumber)).toEqual([2, 6]);
+    expect(after.statistics).toMatchObject({ monitoredTrackCount: 2, missingTrackCount: 2 });
+    expect((await h.api('GET', `/artist/${added.id}`)).json().monitored).toBe(true);
+    const missing = (await h.api('GET', '/wanted/missing/albums?pageSize=100')).json();
+    expect(missing.records.map((r: { id: number }) => r.id)).toEqual([ok.id]);
+
+    // Tracks of another album are refused.
+    const other = album(fresh, 'Kid A');
+    expect((await h.api('POST', `/album/${other.id}/wanttracks`, { trackIds: want })).statusCode).toBe(400);
+  });
+
+  it('album-type profiles store edition preference, countries and formats; the refresh uses them', async () => {
+    const created = await h.api('POST', '/albumtypeprofile', {
+      name: 'Albums, two-disc please',
+      primaryTypes: ['Album'],
+      editionPreference: 'deluxe',
+      preferredCountries: ['us'],
+      preferredFormats: ['CD'],
+    });
+    expect(created.statusCode, created.body).toBe(201);
+    expect(created.json()).toMatchObject({ editionPreference: 'deluxe', preferredCountries: ['US'], preferredFormats: ['CD'] });
+    expect((await h.api('GET', '/albumtypeprofile')).json()[0]).toMatchObject({ editionPreference: 'any', preferredCountries: [], preferredFormats: [] });
+    expect((await h.api('POST', '/albumtypeprofile', { name: 'bad', primaryTypes: ['Album'], editionPreference: 'shiny' })).statusCode).toBe(400);
+
+    // The service merges the profile over the global settings.
+    const { musicMetadataFor } = await import('../metadata/index.js');
+    const meta = musicMetadataFor(h.ctx)!;
+    expect(meta.releasePreferences(created.json())).toEqual({ preferredCountries: ['US'], preferredFormats: ['CD'], edition: 'deluxe' });
+    expect(meta.releasePreferences({ editionPreference: 'original', preferredCountries: [], preferredFormats: [] })).toEqual({
+      preferredCountries: ['US'],
+      preferredFormats: ['CD'],
+      edition: 'original',
+    });
+  });
+});

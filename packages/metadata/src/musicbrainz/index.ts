@@ -16,7 +16,9 @@ export {
 export {
   DEFAULT_PREFERRED_FORMATS,
   chooseRelease,
+  editionKind,
   type ChoosableRelease,
+  type ReleaseEditionPreference,
   type ReleasePreferences,
 } from './choose.js';
 export { formatArtistCredit } from './map.js';
@@ -37,3 +39,9 @@ export type {
   MbSearchPage,
   MbTrack,
 } from './types.js';
+export {
+  mapRecording,
+  type MbRecording,
+  type MbRecordingRelease,
+  type MbRecordingReleaseGroup,
+} from './recordings.js';

@@ -293,5 +293,6 @@ With Bind to VPN on and the VPN enabled, the engine enters **Lockdown** when the
 - [Activity](activity.md)
 - [Media management](media-management.md)
 - [Remote engine](../REMOTE-ENGINE.md)
+- [Music: Soulseek through slskd](music-soulseek.md) (an optional music source, set up at the bottom of this page)
 - [Folders and hardlinks](../getting-started/folders-and-hardlinks.md)
 - [Troubleshooting](../TROUBLESHOOTING.md)

@@ -19,6 +19,7 @@ import type {
   AudioAuthorDetail,
   AudioBookDetail,
   AudioDiscoverHome,
+  AudioDiscoverItem,
   AudioDiscoverSearchResult,
   AudioRequestKind,
   AudioTrackEntry,
@@ -64,6 +65,8 @@ export interface AudioSources {
   audibleRegion(): AudibleRegion;
   /** Edition choice for album track lists (`musicMetadata` preferred countries and formats). */
   releasePreferences?(): ReleasePreferences;
+  /** Similar artists (music playlists module: ListenBrainz and/or Last.fm, cached a day). */
+  similarArtists?(mbid: string): Promise<Array<{ mbid: string; name: string }>>;
 }
 
 export interface AudioDiscoverServiceOptions {
@@ -363,6 +366,23 @@ export class AudioDiscoverService {
     const raw = await this.rawArtist(mbid);
     const [item] = withAudioStatus(this.db, [raw.item]);
     return { ...raw, item: item!, albums: withAudioStatus(this.db, raw.albums) };
+  }
+
+  /** Similar artists as portal cards; empty when no source answers (the strip just hides). */
+  async similarArtists(mbid: string): Promise<AudioDiscoverItem[]> {
+    this.assertEnabled('music');
+    if (!this.sources.similarArtists) return [];
+    let list: Array<{ mbid: string; name: string }>;
+    try {
+      list = await this.sources.similarArtists(mbid);
+    } catch (err) {
+      this.log?.warn({ err, mbid }, 'similar artists unavailable');
+      return [];
+    }
+    return withAudioStatus(
+      this.db,
+      list.slice(0, 20).map((a) => ({ kind: 'artist' as const, foreignId: a.mbid, title: a.name })),
+    );
   }
 
   // -------------------------------------------------------------------------------------

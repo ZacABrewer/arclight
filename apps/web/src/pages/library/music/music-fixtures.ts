@@ -89,6 +89,7 @@ export function makeTrack(over: Partial<Track> & { id: number; title: string }):
     trackNumber: over.id,
     durationMs: 200_000,
     hasFile: false,
+    monitored: true,
     ...over,
   };
 }

@@ -1,5 +1,5 @@
 import { and, eq, inArray } from 'drizzle-orm';
-import type { AlbumTypeProfile, QualityModel } from '@arclight/shared';
+import type { AlbumStatistics, AlbumTypeProfile, QualityModel } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import {
   albumReleases,
@@ -105,8 +105,9 @@ export class MusicLibrary implements AudioLibrarySnapshot {
           secondaryTypes: album.secondaryTypes,
           monitored: album.monitored,
           durationMs: durationMs ?? null,
-          trackCount: s?.totalTrackCount ?? 0,
-          trackFileCount: s?.trackFileCount ?? 0,
+          // Per-track wanted: with some tracks unmonitored only the wanted ones count, so an
+          // album whose wanted tracks are all on disk is complete.
+          ...wantedCounts(s),
         };
       });
       this.albumCache.set(artistId, list);
@@ -326,4 +327,15 @@ export class BookLibrary implements BookLibrarySnapshot {
     }
     return list;
   }
+}
+
+/** Track counts the release engine judges an album by. With some tracks unmonitored only the
+ *  wanted ones count, so an album whose wanted tracks are all on disk is complete. */
+function wantedCounts(s: AlbumStatistics | undefined): { trackCount: number; trackFileCount: number } {
+  if (!s) return { trackCount: 0, trackFileCount: 0 };
+  const monitored = s.monitoredTrackCount ?? s.trackCount;
+  if (s.trackCount > 0 && monitored < s.trackCount) {
+    return { trackCount: monitored, trackFileCount: Math.max(0, monitored - (s.missingTrackCount ?? 0)) };
+  }
+  return { trackCount: s.totalTrackCount, trackFileCount: s.trackFileCount };
 }

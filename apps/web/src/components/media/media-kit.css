@@ -69,6 +69,9 @@
 .mk-crumb a { color: var(--al-text-4); } .mk-crumb a:hover { color: var(--al-cyan-text); }
 .mk-hero__title { display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap; margin: 0; }
 .mk-hero__year { font-family: var(--al-mono); font-size: 18px; color: var(--al-text-4); }
+.mk-hero__eyebrow { font-family: var(--al-mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; color: var(--al-cyan-text); margin-bottom: -6px; }
+.mk-hero__titlerow { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px 16px; flex-wrap: wrap; }
+.mk-hero__titlerow > .mk-hero__title { flex: 1 1 auto; min-width: 0; }
 .mk-hero__meta { font-size: 15px; color: var(--al-text-3); }
 .mk-hero__chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mk-hero__overview { font-size: 15px; line-height: 1.55; color: var(--al-text-3); max-width: 720px; margin: 0; text-wrap: pretty; }

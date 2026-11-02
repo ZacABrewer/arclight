@@ -15,6 +15,8 @@ import {
   FeatureSettings,
   maskMusicMetadataSettings,
   MusicMetadataSettings,
+  MusicPlaylistsSettings,
+  SoulseekSettings,
   CommunityCatalogueSettings,
   DefinitionFeedSettings,
   GuidesSettings,
@@ -134,6 +136,12 @@ const sections = {
   audiobookMetadata: AudiobookMetadataSettings,
   // Owned by the audio importer (imports/audio): track matching (routes under /settings/audio).
   audio: AudioImportSettings,
+  // Owned by music/soulseek: the optional slskd source, off by default (routes under
+  // /settings/soulseek; apiKey masked there).
+  soulseek: SoulseekSettings,
+  // Owned by music/playlists: playlist sources, outputs and similar artists (routes under
+  // /settings/musicplaylists; secrets masked there).
+  musicPlaylists: MusicPlaylistsSettings,
   // Owned by the health-scan module: schedule, mode and throttling (routes under /settings/healthscan).
   healthScan: HealthScanSettings,
   // Owned by the transcode module: software fallback (routes under /settings/transcode).

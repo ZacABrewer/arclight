@@ -20,6 +20,8 @@ export interface WikidataClientOptions {
   userAgent: string;
   apiUrl?: string;
   commonsBaseUrl?: string;
+  /** Wikipedia REST host for a language. Defaults to `https://<lang>.wikipedia.org`. */
+  wikipediaBaseUrl?: (lang: string) => string;
   /** Defaults to 2 req/s. */
   requestsPerSecond?: number;
   rateLimiter?: RateLimiter;
@@ -47,7 +49,21 @@ export interface ResolveImageOptions extends RequestOptions {
   width?: number;
 }
 
+export interface ArtistSummary {
+  /** Plain-text lead section of the Wikipedia article. */
+  text: string;
+  /** The article, for attribution ("from Wikipedia"). */
+  pageUrl: string;
+  lang: string;
+}
+
 export interface WikidataClient {
+  /**
+   * Plain-text Wikipedia summary for an artist from its MusicBrainz url-rels: a direct
+   * `wikipedia` link in `lang`, else the Wikidata entity's `<lang>wiki` sitelink (English as the
+   * fallback language). Undefined when there is no article.
+   */
+  resolveArtistSummary?(links: readonly { type: string; url: string }[], options?: RequestOptions & { lang?: string }): Promise<ArtistSummary | undefined>;
   /** Commons file name of the entity's P18 image, if any. */
   getImageFileName(wikidataId: string, options?: RequestOptions): Promise<string | undefined>;
   /** Image for an artist from its MusicBrainz url-rels; undefined when there is none. */
@@ -76,6 +92,38 @@ const claimsResponseSchema = z
     error: z.object({ code: z.string().optional(), info: z.string().optional() }).loose().optional(),
   })
   .loose();
+
+const sitelinksResponseSchema = z
+  .object({
+    entities: z
+      .record(z.string(), z.object({ sitelinks: z.record(z.string(), z.object({ title: z.string() }).loose()).optional() }).loose())
+      .optional(),
+  })
+  .loose();
+
+const summaryResponseSchema = z
+  .object({
+    type: z.string().optional(),
+    extract: z.string().optional(),
+    content_urls: z.object({ desktop: z.object({ page: z.string().optional() }).loose().optional() }).loose().optional(),
+  })
+  .loose();
+
+const LANG_RE = /^[a-z]{2,3}(?:-[a-z]+)?$/;
+
+/** Language and title of a Wikipedia article URL (`https://en.wikipedia.org/wiki/Example_Band`). */
+export function wikipediaArticleFromUrl(url: string): { lang: string; title: string } | undefined {
+  let parsed: URL;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return undefined;
+  }
+  const host = /^([a-z]{2,3}(?:-[a-z]+)?)\.(?:m\.)?wikipedia\.org$/i.exec(parsed.hostname);
+  const path = /^\/wiki\/(.+)$/.exec(parsed.pathname);
+  if (!host?.[1] || !path?.[1]) return undefined;
+  return { lang: host[1].toLowerCase(), title: decodeURIComponent(path[1]).replace(/_/g, ' ') };
+}
 
 /** "Q44190" from a Wikidata entity URL (wiki page, entity URI or mobile page). */
 export function wikidataIdFromUrl(url: string): string | undefined {
@@ -193,5 +241,50 @@ export function createWikidataClient(options: WikidataClientOptions): WikidataCl
     };
   }
 
-  return { getImageFileName, resolveArtistImage, clearCache: () => transport.clearCache() };
+  const wikipediaBase = options.wikipediaBaseUrl ?? ((lang: string) => `https://${lang}.wikipedia.org`);
+
+  async function wikipediaSummary(lang: string, title: string, requestOptions?: RequestOptions): Promise<ArtistSummary | undefined> {
+    if (!LANG_RE.test(lang)) return undefined;
+    const url = `${wikipediaBase(lang).replace(/\/+$/, '')}/api/rest_v1/page/summary/${encodeURIComponent(title.replace(/ /g, '_'))}`;
+    const body = await transport.getOptional(url, summaryResponseSchema, { ...requestOptions, ttlMs });
+    const text = body?.extract?.trim();
+    // Disambiguation pages are lists of links, not a biography.
+    if (!body || !text || body.type === 'disambiguation') return undefined;
+    return { text, lang, pageUrl: body.content_urls?.desktop?.page ?? `${wikipediaBase(lang)}/wiki/${encodeURIComponent(title.replace(/ /g, '_'))}` };
+  }
+
+  async function resolveArtistSummary(
+    links: readonly { type: string; url: string }[],
+    summaryOptions: RequestOptions & { lang?: string } = {},
+  ): Promise<ArtistSummary | undefined> {
+    const { lang: wanted = 'en', ...requestOptions } = summaryOptions;
+    const langs = [...new Set([wanted.toLowerCase(), 'en'])];
+    const direct = links.filter((l) => l.type === 'wikipedia').flatMap((l) => wikipediaArticleFromUrl(l.url) ?? []);
+    for (const lang of langs) {
+      const article = direct.find((a) => a.lang === lang);
+      if (article) {
+        const found = await wikipediaSummary(lang, article.title, requestOptions);
+        if (found) return found;
+      }
+    }
+    const qid = findWikidataId(links);
+    if (!qid) return undefined;
+    const url = new URL(apiUrl);
+    url.searchParams.set('action', 'wbgetentities');
+    url.searchParams.set('ids', qid);
+    url.searchParams.set('props', 'sitelinks');
+    url.searchParams.set('sitefilter', langs.map((l) => `${l.replace(/-/g, '_')}wiki`).join('|'));
+    url.searchParams.set('format', 'json');
+    const body = await transport.getOptional(url.toString(), sitelinksResponseSchema, { ...requestOptions, ttlMs });
+    const sitelinks = body?.entities?.[qid]?.sitelinks ?? {};
+    for (const lang of langs) {
+      const title = sitelinks[`${lang.replace(/-/g, '_')}wiki`]?.title;
+      if (!title) continue;
+      const found = await wikipediaSummary(lang, title, requestOptions);
+      if (found) return found;
+    }
+    return undefined;
+  }
+
+  return { getImageFileName, resolveArtistImage, resolveArtistSummary, clearCache: () => transport.clearCache() };
 }

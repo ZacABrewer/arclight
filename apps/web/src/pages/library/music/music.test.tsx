@@ -7,8 +7,12 @@ import { isLoadingAlbums, withAlbumsMonitored } from '../../../hooks/music.js';
 import { artistResultMeta } from './add-artist.js';
 import {
   DEFAULT_ARTIST_FILTERS,
+  albumEyebrow,
+  albumFormat,
   albumState,
   artistFolder,
+  formatChipText,
+  wantedTracksComplete,
   filterArtists,
   formatDuration,
   groupAlbums,
@@ -114,6 +118,33 @@ describe('music model', () => {
     expect(isLoadingAlbums({ albums: [], lastRefreshed: '2026-01-01' })).toBe(false);
     expect(withAlbumsMonitored({ albums }, [3, 4], false).albums.map((a) => a.monitored)).toEqual([false, false, true, false, false]);
     expect(artistResultMeta({ artistType: 'Group', country: 'GB', beginDate: '1985', endDate: null, ended: false })).toBe('Group · GB · 1985 –');
+  });
+});
+
+describe('album format and per-track wanted', () => {
+  const flac = (over: Partial<Parameters<typeof makeAudioFile>[0]> = {}) => makeAudioFile({ id: 1, trackNumber: 1, ...over });
+  it('summarises lossless and lossy files', () => {
+    const hi = albumFormat([flac({ bitDepth: 24, sampleRateHz: 96_000 }), flac({ id: 2, bitDepth: 16, sampleRateHz: 44_100 })])!;
+    expect(formatChipText(hi)).toBe('FLAC · 24/96');
+    expect(albumEyebrow('Album', hi)).toBe('Album · Lossless 24/96');
+    const mp3 = albumFormat([flac({ codec: 'MP3', bitrateKbps: 320, bitDepth: null, sampleRateHz: 44_100, mediaInfo: { lossless: false } })])!;
+    expect(mp3.lossless).toBe(false);
+    expect(formatChipText(mp3)).toBe('MP3 · 320');
+    expect(albumEyebrow('EP', mp3)).toBe('EP · Lossy');
+    expect(albumFormat([])).toBeNull();
+    expect(albumEyebrow('Single', null)).toBe('Single');
+    const mixed = albumFormat([flac(), flac({ id: 2, codec: 'MP3', mediaInfo: { lossless: false } }), flac({ id: 3 })])!;
+    expect(mixed.lossless).toBe(false);
+    expect(formatChipText(mixed)).toMatch(/^FLAC \+/);
+  });
+
+  it('counts an album whose wanted tracks are all on disk as downloaded', () => {
+    const stats = { trackCount: 10, trackFileCount: 3, totalTrackCount: 10, sizeOnDisk: 1, percentOfTracks: 30, monitoredTrackCount: 3, missingTrackCount: 0 };
+    expect(wantedTracksComplete(stats)).toBe(true);
+    expect(albumState(makeAlbum({ id: 1, title: 'x', statistics: stats }))).toBe('downloaded');
+    expect(wantedTracksComplete({ ...stats, missingTrackCount: 1 })).toBe(false);
+    expect(wantedTracksComplete({ ...stats, monitoredTrackCount: 10 })).toBe(false);
+    expect(wantedTracksComplete({ trackCount: 10 })).toBe(false);
   });
 });
 
@@ -300,6 +331,33 @@ describe('album details', () => {
     expect(screen.getByText('44.1 kHz')).toBeTruthy();
   });
 
+  it('shows the format eyebrow and chip, and toggles or bulk-wants tracks', async () => {
+    const api = musicApi({
+      '/api/v1/album/3': details,
+      'PUT /api/v1/track/monitor': [details],
+      'POST /api/v1/album/3/wanttracks': details,
+    });
+    renderAt('/library/music/album/3');
+    expect(await screen.findByText('Album · Lossless 16/44.1')).toBeTruthy();
+    expect(screen.getByText('FLAC · 16/44.1')).toBeTruthy();
+    const table = screen.getByRole('table', { name: 'Disc 1' });
+    fireEvent.click(within(table).getByRole('switch', { name: 'Want Paranoid Android' }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/track/monitor')?.body).toEqual({ trackIds: [2], monitored: false }));
+
+    fireEvent.click(within(table).getByRole('checkbox', { name: 'Select Airbag' }));
+    const bar = screen.getByRole('toolbar', { name: 'Bulk actions' });
+    fireEvent.click(within(bar).getByRole('button', { name: 'Want only these' }));
+    await waitFor(() => expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/album/3/wanttracks')?.body).toEqual({ trackIds: [1] }));
+  });
+
+  it('notes how many tracks are wanted when some are not', async () => {
+    musicApi({ '/api/v1/album/3': { ...details, tracks: [details.tracks[0]!, { ...details.tracks[1]!, monitored: false }] } });
+    renderAt('/library/music/album/3');
+    expect(await screen.findByText(/1 of 2 tracks wanted/)).toBeTruthy();
+    const row = within(screen.getByRole('table', { name: 'Disc 1' })).getByRole('row', { name: /Paranoid Android/ });
+    expect(within(row).getByText('Unmonitored')).toBeTruthy();
+  });
+
   it('groups a multi-disc edition by disc', async () => {
     const multi = {
       ...details,
@@ -425,6 +483,11 @@ describe('settings', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Add album types' });
     fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Live too' } });
     fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Live' }));
+    fireEvent.change(within(dialog).getByLabelText('Preferred edition'), { target: { value: 'deluxe' } });
+    const countries = within(dialog).getByLabelText('Preferred countries');
+    fireEvent.change(countries, { target: { value: 'gb, us; xx-bad' } });
+    fireEvent.blur(countries);
+    expect((countries as HTMLInputElement).value).toBe('GB, US');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
     await waitFor(() =>
       expect(api.calls.find((c) => c.method === 'POST' && c.path === '/api/v1/albumtypeprofile')?.body).toEqual({
@@ -433,6 +496,9 @@ describe('settings', () => {
         secondaryTypes: ['Live'],
         releaseStatuses: ['Official'],
         isDefault: false,
+        editionPreference: 'deluxe',
+        preferredCountries: ['GB', 'US'],
+        preferredFormats: [],
       }),
     );
   });

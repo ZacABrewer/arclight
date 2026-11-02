@@ -61,6 +61,10 @@ These pages follow the app's navigation.
 | Subtitles | [subtitles.md](using/subtitles.md) |
 | Media management, naming and unreleased items | [media-management.md](using/media-management.md) |
 | Hardware transcoding (Quick Sync, VA-API, NVENC) for transcode rules | [hardware-transcoding.md](using/hardware-transcoding.md) |
+| Music album-type profiles, edition choice, wanted tracks and artist bios | [music-library.md](using/music-library.md) |
+| Music cue sheets, tagging, cover art, ReplayGain and music quality presets | [music-cue-and-tagging.md](using/music-cue-and-tagging.md) |
+| Music from Soulseek through your own slskd | [music-soulseek.md](using/music-soulseek.md) |
+| Music playlists from Spotify, Deezer, ListenBrainz and Last.fm; similar artists | [music-playlists.md](using/music-playlists.md) |
 | Quality profiles, custom formats, TRaSH sync | [quality-profiles.md](using/quality-profiles.md) |
 | Indexers, proxies, challenge solver, cross-seed | [indexers.md](using/indexers.md) |
 | Download clients and the built-in torrent engine | [download-clients.md](using/download-clients.md) |

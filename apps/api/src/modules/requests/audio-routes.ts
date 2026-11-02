@@ -6,6 +6,7 @@ import {
   AudioBookDetail,
   AudioDetailQuery,
   AudioDiscoverHome,
+  AudioDiscoverItem,
   AudioDiscoverSearchQuery,
   AudioDiscoverSearchResult,
   AudioRequest,
@@ -39,6 +40,7 @@ type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodType
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
 const AudioBulkParams = z.object({ action: z.enum(['approve', 'decline', 'retry', 'delete']) });
 const MbidParams = z.object({ mbid: z.string().trim().min(1).max(64) });
+const AudioDiscoverSimilarArtists = z.object({ items: z.array(AudioDiscoverItem) });
 const AsinParams = z.object({ asin: z.string().trim().min(1).max(32) });
 const Empty = z.null();
 const errors = { 400: ErrorResponse, 401: ErrorResponse, 403: ErrorResponse, 404: ErrorResponse, 409: ErrorResponse, 429: ErrorResponse, 502: ErrorResponse, 503: ErrorResponse };
@@ -81,6 +83,9 @@ export function audioRequestsRoutes(s: AudioRequestsRouteServices): Plugin {
     app.get('/discover/music/artist/:mbid', { ...d, schema: { params: MbidParams, response: { 200: AudioArtistDetail, ...errors } } }, async (req) =>
       discover.artist(req.params.mbid),
     );
+    app.get('/discover/music/artist/:mbid/similar', { ...d, schema: { params: MbidParams, response: { 200: AudioDiscoverSimilarArtists, ...errors } } }, async (req) => ({
+      items: await discover.similarArtists(req.params.mbid),
+    }));
 
     // ------------------------------------------------------------------------- discover: audiobooks
     app.get('/discover/audiobooks', { ...d, schema: { querystring: AudioDetailQuery, response: { 200: AudioDiscoverHome, ...errors } } }, async (req) =>
