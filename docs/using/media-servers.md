@@ -168,7 +168,7 @@ What it adds inside Jellyfin Web:
 
 - Arclight results in Jellyfin's search, with a request dialog (seasons, 4K), and status badges on item pages.
 - **Title pages** for titles you don't have yet (plugin 1.2.0): backdrop, poster, runtime, rating, genres, overview, cast, director or creators, networks and studios, trailer link, release dates, seasons with episode counts, "Also on", request status, watchlist and "More like this". Titles already in Jellyfin open Jellyfin's own page.
-- A bigger **Discover** (plugin 1.2.0): Recommended for you (from watch history), Trending, Popular, Top rated, In cinemas now, Upcoming, Airing today and On the air rows, genre chips, "See all" grids and genre pages with sorting.
+- A bigger **Discover** (plugin 1.2.0): Recommended for you (from watch history: the linked Jellyfin account, plus the user's own Plex account when a Plex token is set in their request settings), Trending, Popular, Top rated, In cinemas now, Upcoming, Airing today and On the air rows, genre chips, "See all" grids and genre pages with sorting.
 - My requests, Coming soon, Also on, quality and audio labels on posters, and opt-in Arclight themes.
 - An opt-in 6-second Arclight intro before movies (and optionally the first episode of a session) with Cinema Mode on (plugin 1.1.0). It is off by default and set in the plugin's settings in Jellyfin.
 

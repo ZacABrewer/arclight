@@ -3,8 +3,8 @@
 > Part of the [documentation](README.md). Day-to-day System pages (Status, Tasks, Logs, Health) are in
 > [System](using/system.md); backups are in [Backup and restore](getting-started/backup-restore.md).
 
-Running Arclight as infrastructure: configuration as code, environment overrides, Prometheus
-metrics and the audit log. Route details are in [API.md](API.md); contracts in
+Running Arclight as infrastructure: configuration as code, environment overrides, the Jellyfin
+plugin and the companion app, Prometheus metrics and the audit log. Route details are in [API.md](API.md); contracts in
 `packages/shared/src/operations.ts`.
 
 ## Configuration as code
@@ -264,6 +264,36 @@ languageProfiles:
 
 (`docs/OPERATIONS.md` is checked by `config-export/docs.test.ts`: this example must import
 cleanly into an empty database.)
+
+## Arclight for Jellyfin plugin
+
+The plugin runs inside Jellyfin and calls Arclight's `/api/v1/jellyfin/*` routes with a plugin
+key (`alj_...`, Settings > Media Servers > Jellyfin plugin card). Things to keep in mind when you
+run it:
+
+- **Address.** The Arclight URL in the plugin's settings must be one Jellyfin can reach (often a
+  LAN or container-network address, not the public one). With `ARCLIGHT_BASE_PATH` set, include
+  the sub-path.
+- **Keys.** A plugin key can call only the plugin routes. Rotate it by creating a new key, pasting
+  it into the plugin, then deleting the old one on the card.
+- **Server id.** Press **Test** on the Jellyfin media server entry once after adding it (and
+  after reinstalling Jellyfin), or plugin events are refused with `UNKNOWN_SERVER`.
+- **Updates.** Jellyfin updates the plugin from the repository
+  (`https://arclight.moviemethat.com/jellyfin/manifest.json`) with its **Update Plugins** task.
+  Arclight shows the newest plugin version it knows on the card. A newer plugin hides pages that
+  an older Arclight does not offer, so update Arclight first.
+- **Users.** Every call runs as the linked Arclight user. Unlinked Jellyfin users are refused
+  unless automatic account creation is on. See
+  [Media servers](using/media-servers.md#the-arclight-jellyfin-plugin).
+
+## Companion app
+
+The iOS and Android app is a shell around your own server; it holds no data. For it to work away
+from home, set **Settings > Requests > Application URL** to the address phones use (reverse proxy
+or tunnel), so the pairing QR code and notification links point there. Sign-in in the app is the
+normal Arclight login. Paired phones are listed per user under
+**Mobile app** on the profile, where a lost phone can be removed. See
+[Mobile app](using/mobile-app.md).
 
 ## Mobile app push relay
 

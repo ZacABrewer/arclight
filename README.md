@@ -35,27 +35,34 @@ them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
 ## What it does
 
 - **TV and movies**: library, monitoring, quality and language profiles, custom formats,
-  automatic and interactive search, upgrades, naming, hard-link imports, calendar, Wanted lists.
+  automatic and interactive search, upgrades, naming, hard-link imports, season packs, calendar,
+  Wanted lists.
 - **Indexers**: Torznab and Newznab, YAML-defined site indexers, FlareSolverr and other proxies,
   per-indexer health and stats.
 - **Downloads**: a built-in BitTorrent engine with VPN binding, kill switch, tunnel guard and
   disk guard; qBittorrent, Transmission, Deluge, rTorrent, SABnzbd and NZBGet are optional.
+  Archives are unpacked before import, and fake or unsafe releases are rejected and replaced.
 - **Subtitles**: language profiles, providers, scoring, optional Whisper speech-to-text.
 - **Requests**: a request portal with Discover, permissions, quotas, per-user request types,
-  issues and a watchlist. Users can also ask for subtitles or another audio language.
-- **Music and audiobooks** (preview, off by default): library, search, import and requests.
+  issues and a watchlist. Users can also ask for subtitles or another audio language. Import
+  lists from TMDB, Trakt, IMDb, Letterboxd, AniList and many more.
+- **Notifications** through Discord, Telegram, email, Slack, Matrix, Signal, Home Assistant,
+  Apprise and many more, with filters, templates and personal destinations for every user.
+- **Music, audiobooks, ebooks, comics and podcasts** (preview, off by default): library, search,
+  import and requests; music playlists from Spotify, Deezer, ListenBrainz and Last.fm.
 - **Library care**: health scan, tags and tag rules, bulk actions, command palette, universal search.
 - **Hardware transcoding** rules on Intel Quick Sync, VA-API or NVIDIA NVENC.
-- **Media servers**: Jellyfin, Emby and Plex refresh, Jellyfin watch history sync and the
-  [Arclight for Jellyfin plugin](#arclight-for-jellyfin-plugin).
+- **Media servers**: Jellyfin, Emby and Plex refresh and watch history sync, playback stats and
+  Year in review, smart collections, and the [Arclight for Jellyfin plugin](#arclight-for-jellyfin-plugin).
+- **Sign-in**: single sign-on (OpenID Connect), two-factor and passkeys, personal API keys,
+  forward-auth and sub-path hosting.
 - **Companion app** for iOS and Android with phone notifications (not in the app stores yet).
 - **Move in**: an import wizard for Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and
   qBittorrent, plus a Sonarr/Radarr-compatible API for the tools you already use.
 - **Themes**: the Tron look by default and syncable theme packs.
 
-Still planned and not available yet: Plex watch history sync, season pack and archive unpacking
-on import, single sign-on, ebooks, podcasts and a built-in media player. See the
-[roadmap](docs/ROADMAP.md).
+Still planned and not available yet: a built-in media player and the companion app in the app
+stores. See the [roadmap](docs/ROADMAP.md).
 
 ## Deploy
 

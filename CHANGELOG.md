@@ -7,6 +7,34 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
+## [Unreleased]
+
+### Added
+- Season packs: Arclight understands multi-season, complete-series, partial-season, episode-range and anime batch releases, prefers packs that cover more of what you want, and imports only the episodes you want from a pack. Size limits are per episode, and interactive search shows what a pack covers.
+- Archive unpacking: finished torrent downloads that only hold RAR, 7z or zip archives are unpacked before import. The archives stay for seeding. The queue shows the unpack progress.
+- Fake-release and malware filter: downloads with executables, blocked file types, encrypted archives, no media file or a video too small to be real are removed, blocklisted with the reason and searched again. A new "Download rejected (unsafe)" notification tells you when it happens.
+- Import lists: many new sources (TMDB companies, networks and discover, Trakt lists and charts, IMDb Top Rated, Letterboxd, MDBList, AniList, MyAnimeList, Kitsu, Simkl, Jellyfin and Emby favourites, and your own JSON or CSV URLs). Each list has its own sync interval, rating, vote and year filters, a "skip if on my streaming services" rule, a preview and an optional clean-up for titles that leave the list.
+- Notifications: 18 new services, including Slack, Microsoft Teams, Matrix, Signal, Home Assistant, MQTT, Twilio and Apprise, and a more flexible webhook. Each connection can be filtered by media kind, quality and user, and each event can have its own message template with a live preview. Failed sends are retried, and a delivery log shows the last error.
+- Personal notifications: every user, including request portal users, can add their own destinations and choose their own events.
+- Plex watch history: Plex users, watch history and live playback (webhook or session polling) sync like Jellyfin and Emby.
+- Playback stats: per-user and server-wide stats with watch time, top titles and genres, devices, direct play versus transcode and a weekday-by-hour chart. Users see their own under Profile > My stats.
+- Year in review, as an image, with expiring share links you can revoke.
+- An optional weekly "recently added" newsletter by email.
+- Smart collections: rule-based collections (genre, years, studio, network, lists, rating, recently added, watch status) synced to Jellyfin and Emby, plus a Leaving Soon collection for titles your clean-up rules will remove.
+- Single sign-on with OpenID Connect providers such as Authentik, Authelia, Keycloak, Pocket ID, Google or Microsoft, with account linking, automatic accounts and group-to-role mapping.
+- Two-factor sign-in for local accounts (authenticator app with recovery codes) and passkeys, including passwordless sign-in with a passkey.
+- Personal API keys for every user, with read, requests or admin scope, an expiry date and revoke.
+- Sign-in through a trusted reverse proxy (forward-auth), off by default.
+- Arclight can be served under a sub-path such as `/arclight` with `ARCLIGHT_BASE_PATH`.
+- Podcasts (preview, off by default): subscribe by search, RSS link or Apple Podcasts link, import and export OPML, download episodes automatically with keep and clean-up rules, see episodes on the calendar and get new-episode notifications. Users can request podcasts in the portal.
+- Ebooks and comics (preview, off by default): a Books section with metadata from several sources, monitoring by author, series or book, comic series with new-issue tracking, search through your indexers, format profiles, import and rename, calendar entries and requests. Kavita, Komga, Audiobookshelf and Calibre-Web can be refreshed after an import.
+- Music: edition preferences (original, deluxe, remaster and more), per-track wanted, single-file albums with cue sheets, optional tag writing with cover art and ReplayGain, artist bios, an optional Soulseek source through your own slskd, and playlists from Spotify, Deezer, ListenBrainz and Last.fm that can be pushed to Jellyfin, Emby, Plex and Navidrome.
+
+### Changed
+- Recommended for you in the Jellyfin plugin also uses your Plex watch history when your own Plex token is set in your request settings.
+- Stall recovery no longer removes private-tracker torrents that are still inside a hit-and-run window.
+- The settings menu scrolls on its own on short windows, so every page (down to Updates) can be reached.
+
 ## [0.19.0] - 2026-11-01
 
 ### Added
@@ -381,6 +409,10 @@ at the end of this file.
 
 The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full notes are in
 [jellyfin-plugin/CHANGELOG.md](jellyfin-plugin/CHANGELOG.md).
+
+### [Plugin 1.3.0] - Unreleased
+- A Stats menu with My stats, Year in review and Server stats, and a Leaving Soon row on the Discover page.
+- Needs an Arclight release newer than 0.19.0 for these. Older versions keep working without them.
 
 ### [Plugin 1.2.0] - 2026-11-01
 - Title pages for titles you don't have yet: backdrop, cast, trailer, seasons, "Also on", request status and "More like this".
