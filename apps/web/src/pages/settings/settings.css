@@ -4,7 +4,8 @@
 .al-settings-standalone { display: flex; flex-direction: column; gap: 22px; }
 
 /* ---- sub-nav ---- */
-.al-settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 96px; }
+/* Sticky, but never taller than the screen: a long nav scrolls on its own instead of hiding its last items. */
+.al-settings-nav { display: flex; flex-direction: column; gap: 2px; position: sticky; top: 96px; max-height: calc(100vh - 112px); max-height: calc(100dvh - 112px); overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; padding-bottom: 16px; }
 .al-settings-nav__head { display: flex; align-items: baseline; gap: 16px; margin-bottom: 18px; }
 .al-settings-nav__groups { display: flex; flex-direction: column; gap: 18px; }
 .al-settings-nav__group ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -19,7 +20,7 @@
 .al-settings-main { display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; align-items: start; min-width: 0; }
 .al-settings-main--aside { grid-template-columns: minmax(0, 1fr) 320px; }
 .al-settings-main__col { display: flex; flex-direction: column; gap: 20px; min-width: 0; }
-.al-settings-main__aside { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 20px; }
+.al-settings-main__aside { position: sticky; top: 96px; display: flex; flex-direction: column; gap: 20px; max-height: calc(100dvh - 112px); overflow-y: auto; overscroll-behavior: contain; }
 .al-settings-pane { padding: 28px 36px 0; display: flex; flex-direction: column; }
 .al-settings-pane__head { position: relative; display: flex; align-items: baseline; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 30px; }
 .al-settings-pane__titles { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
@@ -63,11 +64,11 @@
 
 @media (max-width: 1100px) {
   .al-settings-main--aside { grid-template-columns: minmax(0, 1fr); }
-  .al-settings-main__aside { position: static; }
+  .al-settings-main__aside { position: static; max-height: none; overflow: visible; }
 }
 @media (max-width: 767px) {
   .al-settings { grid-template-columns: minmax(0, 1fr); gap: 16px; }
-  .al-settings-nav { position: static; }
+  .al-settings-nav { position: static; max-height: none; overflow: visible; }
   .al-settings-nav__head { margin-bottom: 8px; }
   .al-settings-nav__groups { display: none; }
   .al-settings-nav__mobile { display: block; }
