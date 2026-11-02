@@ -16,12 +16,13 @@ import {
 import type { Db } from '../../db/index.js';
 import { albums, artists, authors, books, episodes, mediaFiles, movies, series, settings } from '../../db/schema.js';
 import { booksFromRows } from '../audiobooks/service.js';
+import { podcastCalendarItems } from '../podcasts/service.js';
 import { albumStatistics } from '../music/statistics.js';
 import { getSection } from '../settings/service.js';
 
 // Calendar over the library tables: episodes by air date, movies by each of their release
 // dates, while `features.music` is on albums by release date and, while `features.audiobooks`
-// is on, books by release date. Ranges are inclusive at both
+// is on, books by release date; while `features.podcasts` is on, podcast episodes by publish date. Ranges are inclusive at both
 // ends. A date-only value (YYYY-MM-DD) counts as midnight UTC of that day.
 
 type SeriesRow = typeof series.$inferSelect;
@@ -82,6 +83,9 @@ export class CalendarService {
       ...(mediaType === 'all' || mediaType === 'movie' ? this.movieItems(range, query) : []),
       ...((mediaType === 'all' || mediaType === 'music') && getSection(this.db, 'features').music ? this.albumItems(range, query) : []),
       ...((mediaType === 'all' || mediaType === 'audiobook') && getSection(this.db, 'features').audiobooks ? this.bookItems(range, query) : []),
+      ...((mediaType === 'all' || mediaType === 'podcast') && getSection(this.db, 'features').podcasts
+        ? podcastCalendarItems(this.db, range.start, range.end, { unmonitored: query.unmonitored, tags: query.tags })
+        : []),
     ];
     return items.sort(
       (a, b) => instant(a.date) - instant(b.date) || titleOf(a).localeCompare(titleOf(b)) || orderOf(a) - orderOf(b),
@@ -325,6 +329,7 @@ function matchesTags(itemTags: number[], wanted: number[]): boolean {
 function titleOf(item: CalendarItem): string {
   if (item.type === 'episode') return item.seriesTitle;
   if (item.type === 'movie') return item.movie.title;
+  if (item.type === 'podcastEpisode') return item.podcastTitle;
   return item.type === 'album' ? item.artistName : item.authorName;
 }
 

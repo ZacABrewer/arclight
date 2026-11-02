@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+<channel>
+<title>Messy &amp; Proud</title>
+<item>
+  <title>Bad date</title>
+  <pubDate>Mon, 32 Foo 2025 99:00:00 GMT</pubDate>
+  <guid>messy-1</guid>
+  <enclosure url="https://cdn.example.com/messy/1.mp3" length="-5" type="audio/mpeg"/>
+</item>
+<item>
+  <title>Localized weekday</title>
+  <pubDate>Lun, 06 Jan 2025 10:00:00 GMT</pubDate>
+  <guid>messy-2</guid>
+  <enclosure url="not a url" type="audio/mpeg"/>
+  <enclosure url="https://cdn.example.com/messy/2.mp3" type="audio/mpeg"/>
+</item>
+<item>
+  <guid>messy-3</guid>
+  <enclosure url="https://cdn.example.com/messy/3.mp3" type="audio/mpeg"/>
+</item>
+</channel>
+</rss>

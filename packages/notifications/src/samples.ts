@@ -62,6 +62,8 @@ const FILE: MediaFileInfo = {
 };
 
 const USER = { id: 2, username: 'alex' };
+const PODCAST = { id: 3, title: 'Night Signals', author: 'Example Radio' };
+const PODCAST_EPISODE = { id: 41, title: 'Static on the Line', publishedAt: '2026-10-24T06:00:00.000Z', durationSeconds: 2_940 };
 const DOWNLOAD = { trackedDownloadId: 12, downloadId: 'abc123', title: RELEASE.title };
 const HEALTH = { source: 'downloadClients', status: 'error' as const, message: 'Unable to communicate with the download client.' };
 
@@ -141,6 +143,10 @@ export function sampleEvent(type: NotificationEventType, instanceName = 'Arcligh
       return { ...series, type, file: FILE, previousPath: '/tv/old.avi', action: 'remux', sizeBefore: 1_700_000_000, sizeAfter: 1_610_612_736 };
     case 'downloadStalled':
       return { ...base, type, download: DOWNLOAD, message: 'No data for 30 minutes' };
+    case 'podcastEpisodes':
+      return { ...base, type, podcast: PODCAST, items: [PODCAST_EPISODE], total: 1 };
+    case 'podcastDownload':
+      return { ...base, type, podcast: PODCAST, item: PODCAST_EPISODE, path: '/podcasts/Night Signals/2026/2026-10-24 - Static on the Line.mp3', sizeBytes: 48_234_496 };
     case 'downloadRejected':
       return { ...base, type, download: DOWNLOAD, message: 'Contains an executable file (setup.exe)' };
     case 'killSwitch':

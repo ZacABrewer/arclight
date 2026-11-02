@@ -128,7 +128,7 @@ export function mediaBrowserProviderIds(raw: unknown): ProviderIds {
 const ITEM_FIELDS = 'ProviderIds,Path,ProductionYear,ParentId';
 
 /** MediaBrowser item type listed for each kind (music items are albums). */
-const ITEM_TYPE: Record<MediaKind, string> = { movie: 'Movie', series: 'Series', music: 'MusicAlbum', audiobook: 'AudioBook' };
+const ITEM_TYPE: Record<MediaKind, string> = { movie: 'Movie', series: 'Series', music: 'MusicAlbum', audiobook: 'AudioBook', podcast: 'Audio' };
 
 /** Virtual-folder `CollectionType` to library kind. */
 export function mediaBrowserLibraryKind(collectionType: string | null): MediaKind | 'other' {
@@ -316,7 +316,10 @@ export class MediaBrowserServerClient implements MediaServerClient {
   async listPlayStates(userId: string, mediaType: MediaKind): Promise<ItemPlayState[]> {
     const userPath = `Users/${encodeURIComponent(userId)}/Items`;
     if (mediaType !== 'series') {
-      const rows = await this.paged(userPath, { Recursive: 'true', IncludeItemTypes: ITEM_TYPE[mediaType], Fields: ITEM_FIELDS, EnableUserData: 'true' });
+      // Podcast episodes are plain Audio items: only the played ones are listed (every music
+      // track is an Audio item too, so the full list would be the whole music library).
+      const filter = mediaType === 'podcast' ? { Filters: 'IsPlayed' } : {};
+      const rows = await this.paged(userPath, { Recursive: 'true', IncludeItemTypes: ITEM_TYPE[mediaType], Fields: ITEM_FIELDS, EnableUserData: 'true', ...filter });
       return rows.flatMap((r) => {
         const item = toItem(r);
         return item ? [{ item, state: stateOf(userId, r) }] : [];

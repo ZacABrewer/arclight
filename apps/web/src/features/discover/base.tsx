@@ -46,6 +46,7 @@ export type DiscoverPath =
   | '/audiobooks'
   | '/audiobooks/book/$asin'
   | '/audiobooks/author/$asin'
+  | '/podcasts'
   | '/requests'
   | '/issues'
   | '/profile';

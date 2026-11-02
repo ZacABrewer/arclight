@@ -55,6 +55,8 @@ export function eventVisibleTo(event: ServerEvent, viewer: EventViewer, owners: 
       return viewer.userId !== null && owners.issueOwner(event.id) === viewer.userId;
     case 'library':
       return granted(viewer, 'library', 'calendar', 'wanted');
+    case 'podcast':
+      return event.action !== 'suggestion' && granted(viewer, 'library', 'calendar');
     case 'queue':
     case 'download':
     case 'history':

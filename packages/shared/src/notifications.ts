@@ -77,6 +77,9 @@ export const NOTIFICATION_TRIGGERS = [
   // Any other timeline entry worth hearing about (recovered, replaced release, ...).
   'onDownloadRecovered',
   'onDailySummary',
+  // Podcasts: new episodes in a feed, and an episode downloaded.
+  'onPodcastEpisodes',
+  'onPodcastDownload',
 ] as const;
 export type NotificationTrigger = (typeof NOTIFICATION_TRIGGERS)[number];
 

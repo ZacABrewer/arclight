@@ -64,6 +64,8 @@ export const TRIGGER_EVENT: Record<NotificationTrigger, NotificationEventType> =
   onDiskSpaceLow: 'diskSpaceLow',
   onDownloadRecovered: 'downloadUpdate',
   onDailySummary: 'dailySummary',
+  onPodcastEpisodes: 'podcastEpisodes',
+  onPodcastDownload: 'podcastDownload',
 };
 
 const IMPLEMENTATION_NAMES: Record<NotificationAgentKind, string> = {

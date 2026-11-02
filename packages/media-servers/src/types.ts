@@ -9,9 +9,9 @@ export type MediaServerKind = (typeof MEDIA_SERVER_KINDS)[number];
 
 /**
  * What a library (or item) holds. Series are matched and evaluated as a whole; music items are
- * albums; audiobook items are books.
+ * albums; audiobook items are books; podcast items are single episodes (files).
  */
-export type MediaKind = 'movie' | 'series' | 'music' | 'audiobook';
+export type MediaKind = 'movie' | 'series' | 'music' | 'audiobook' | 'podcast';
 
 /** The video kinds (retention, TMDB-keyed availability). */
 export type VideoMediaKind = Extract<MediaKind, 'movie' | 'series'>;

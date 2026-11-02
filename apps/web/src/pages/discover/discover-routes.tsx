@@ -8,6 +8,7 @@ import { DiscoverListPage, DiscoverTrendingPage, DiscoverUpcomingPage, parseKind
 import { DiscoverSearchPage, parseSearchParams } from './discover-search.js';
 import { MusicAlbumPage, MusicArtistPage, MusicHomePage } from './music-pages.js';
 import { PersonPage } from './person-page.js';
+import { PodcastSuggestPage } from './podcast-suggest-page.js';
 import { MovieTitlePage, TvTitlePage } from './title-page.js';
 
 // The Discover sub-routes, mounted twice: under /discover in the app and under /portal for the
@@ -39,5 +40,7 @@ export function discoverChildren<TParent extends AnyRoute>(getParentRoute: () =>
     createRoute({ getParentRoute, path: 'audiobooks', validateSearch: parseAudioHomeSearch, component: AudiobooksHomePage }),
     createRoute({ getParentRoute, path: 'audiobooks/book/$asin', validateSearch: parseRegionSearch, component: AudiobookBookPage }),
     createRoute({ getParentRoute, path: 'audiobooks/author/$asin', validateSearch: parseRegionSearch, component: AudiobookAuthorPage }),
+    // Podcast suggestions (feature `podcasts`; signed-in users whose request types allow podcasts).
+    createRoute({ getParentRoute, path: 'podcasts', component: PodcastSuggestPage }),
   ] as const;
 }

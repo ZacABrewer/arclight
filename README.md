@@ -17,7 +17,8 @@ Arclight does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Baz
 (subtitles) and Seerr (requests) in a single application: one database, one API, one
 login, one UI, one background scheduler. It downloads torrents with its own built-in
 engine (external clients such as qBittorrent or SABnzbd are optional) and notifies your media
-server (Jellyfin, Emby, Plex) when content lands. It is not a media server.
+server (Jellyfin, Emby, Plex) when content lands. It can also follow podcasts by RSS, in a
+section of their own. It is not a media server.
 
 ## Documentation
 

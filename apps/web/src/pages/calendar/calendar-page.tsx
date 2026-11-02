@@ -43,6 +43,7 @@ import {
 } from './calendar-math.js';
 import { AlbumSearchButton, MusicChip, SquareArt } from '../library/music/music-kit.js';
 import { AudiobookChip, BookSearchButton } from '../library/audiobooks/audiobook-kit.js';
+import { PodcastChip } from '../podcasts/podcast-kit.js';
 import './calendar.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -205,7 +206,7 @@ function EventBar({ entry, popover, placement = 'bottom-start', block = false }:
           className={block ? 'cal-event cal-event--block' : 'cal-event'}
           data-tone={entry.tone}
           data-unmonitored={entry.monitored ? undefined : true}
-          aria-label={`${entry.kind === 'album' ? `${t('common.music')}: ` : entry.kind === 'book' ? `${t('audiobooks.audiobook')}: ` : ''}${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
+          aria-label={`${entry.kind === 'album' ? `${t('common.music')}: ` : entry.kind === 'book' ? `${t('audiobooks.audiobook')}: ` : entry.kind === 'podcast' ? `${t('common.podcasts')}: ` : ''}${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
           data-kind={entry.kind}
           {...props}
         >
@@ -217,6 +218,10 @@ function EventBar({ entry, popover, placement = 'bottom-start', block = false }:
           ) : entry.kind === 'book' ? (
             <span className="cal-event__kind" aria-hidden="true">
               {t('calendar.audiobookShort')}
+            </span>
+          ) : entry.kind === 'podcast' ? (
+            <span className="cal-event__kind" aria-hidden="true">
+              {t('calendar.podcastShort')}
             </span>
           ) : null}
           <span className="cal-event__title">{entry.title}</span>
@@ -233,7 +238,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
   const chip = episodeChip(entry.status);
   return (
     <div className="cal-detail">
-      {entry.kind === 'album' || entry.kind === 'book' ? <SquareArt src={entry.posterUrl} title={entry.subtitle ?? entry.title} width={64} /> : <Poster src={entry.posterUrl} title={entry.title} width={64} />}
+      {entry.kind === 'album' || entry.kind === 'book' || entry.kind === 'podcast' ? <SquareArt src={entry.posterUrl} title={entry.subtitle ?? entry.title} width={64} /> : <Poster src={entry.posterUrl} title={entry.title} width={64} />}
       <div className="cal-detail__body">
         <div className="cal-detail__title">{entry.title}</div>
         <div className="cal-detail__code">
@@ -245,7 +250,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
           {entry.time ? ` · ${entry.time}` : ''}
         </div>
         <div className="mk-row" style={{ gap: 6 }}>
-          {entry.kind === 'album' ? <MusicChip /> : entry.kind === 'book' ? <AudiobookChip /> : null}
+          {entry.kind === 'album' ? <MusicChip /> : entry.kind === 'book' ? <AudiobookChip /> : entry.kind === 'podcast' ? <PodcastChip /> : null}
           <StatusChip status={chip.status} label={chip.label} />
         </div>
         <div className="cal-detail__actions">
@@ -387,7 +392,7 @@ function Agenda({ days, byDay, popover }: { days: Date[]; byDay: Map<string, Cal
                       <EventBar entry={e} popover={popover} />
                     </span>
                     <span className="cal-agenda__code">
-                      {e.kind === 'album' ? <MusicChip /> : e.kind === 'book' ? <AudiobookChip /> : null}
+                      {e.kind === 'album' ? <MusicChip /> : e.kind === 'book' ? <AudiobookChip /> : e.kind === 'podcast' ? <PodcastChip /> : null}
                       <span className="al-num">{e.code}</span>
                       {e.subtitle ? ` · ${e.subtitle}` : ''}
                     </span>

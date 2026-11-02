@@ -292,6 +292,10 @@ export function eventSubject(event: NotificationEvent): string {
       return `Download ${timelineTypeLabel(event.timelineType)}`;
     case 'dailySummary':
       return 'Daily Summary';
+    case 'podcastEpisodes':
+      return event.total === 1 ? 'New Podcast Episode' : 'New Podcast Episodes';
+    case 'podcastDownload':
+      return 'Podcast Episode Downloaded';
     case 'heldAlerts':
       return 'Alerts From Quiet Hours';
   }
@@ -345,6 +349,7 @@ export function eventSeverity(event: NotificationEvent): Severity {
     case 'healthScan':
       return event.findings.some((f) => f.severity === 'error') ? 'error' : 'warning';
     case 'killSwitchResumed':
+    case 'podcastDownload':
       return 'success';
     case 'importProblem':
       return event.problem === 'failed' ? 'error' : 'warning';
@@ -411,6 +416,8 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   downloadUpdate: 'On Download Recovered',
   dailySummary: 'Daily Summary',
   heldAlerts: 'Held Alerts',
+  podcastEpisodes: 'On New Podcast Episodes',
+  podcastDownload: 'On Podcast Episode Downloaded',
 };
 
 function releaseFields(release: ReleaseInfo): FormattedField[] {
@@ -626,6 +633,31 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       }
       break;
     }
+    case 'podcastEpisodes': {
+      title = event.podcast.title;
+      posterUrl = event.podcast.imageUrl;
+      const out = event.items.map((e) => (e.publishedAt ? `${e.publishedAt.slice(0, 10)}: ${e.title}` : e.title));
+      if (event.total > out.length) out.push(`...and ${event.total - out.length} more`);
+      if (out.length > 0) fields.push({ name: event.total === 1 ? 'Episode' : 'Episodes', value: out.join('\n') });
+      if (event.podcast.author) fields.push({ name: 'Author', value: event.podcast.author, inline: true });
+      if (base) {
+        link = `${base}/podcasts/${event.podcast.id}`;
+        actions.push({ label: 'Open podcast', url: link });
+      }
+      break;
+    }
+    case 'podcastDownload':
+      title = `${event.podcast.title} - ${event.item.title}`;
+      posterUrl = event.podcast.imageUrl;
+      if (event.item.publishedAt) fields.push({ name: 'Published', value: event.item.publishedAt.slice(0, 10), inline: true });
+      if (event.item.durationSeconds) fields.push({ name: 'Duration', value: formatDuration(event.item.durationSeconds * 1000), inline: true });
+      fields.push({ name: 'Size', value: formatBytes(event.sizeBytes), inline: true });
+      fields.push({ name: 'Path', value: event.path });
+      if (base) {
+        link = `${base}/podcasts/${event.podcast.id}`;
+        actions.push({ label: 'Open podcast', url: link });
+      }
+      break;
     case 'healthScan': {
       title = `${event.totalNew} new problem${event.totalNew === 1 ? '' : 's'} in ${event.filesChecked} checked file${event.filesChecked === 1 ? '' : 's'}`;
       const out = event.findings.map((f) => `${f.title}: ${truncate(f.details, 160)}`);

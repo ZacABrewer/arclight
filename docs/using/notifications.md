@@ -279,6 +279,8 @@ A script runs with Arclight's own permissions. In Docker the script must exist i
 | Disk space low | A disk-space health check went to warning or error | Errors are urgent |
 | Download recovered or replaced | Any other noteworthy download event, such as a stalled download recovering or a release being replaced | |
 | Daily summary | The [daily summary](#daily-summary) was built | |
+| New podcast episodes | A podcast feed has new episodes | Only while [Podcasts](podcasts.md) are on. Not sent when you subscribe |
+| Podcast episode downloaded | A podcast episode was saved to the podcast folder | With its size and path |
 
 Other settings on each connection:
 
@@ -513,5 +515,6 @@ Every card has a checkbox. Tick one or more and a bar appears at the bottom of t
 - [Media servers](media-servers.md)
 - [Activity](activity.md)
 - [Discover and requests](discover-and-requests.md)
+- [Podcasts](podcasts.md)
 - [System](system.md) (health checks)
 - [Troubleshooting](../TROUBLESHOOTING.md)

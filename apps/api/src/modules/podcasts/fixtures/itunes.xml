@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>The Example Hour</title>
+    <atom:link href="https://feeds.example.com/hour.xml" rel="self" type="application/rss+xml"/>
+    <link>https://example.com/hour</link>
+    <description>Weekly conversations.</description>
+    <itunes:author>Example Studios</itunes:author>
+    <itunes:image href="https://example.com/hour/art.png"/>
+    <itunes:explicit>true</itunes:explicit>
+    <itunes:type>serial</itunes:type>
+    <itunes:category text="Society &amp; Culture"><itunes:category text="Documentary"/></itunes:category>
+    <itunes:category text="History"/>
+    <item>
+      <title>S2E1: A New Season</title>
+      <itunes:title>A New Season</itunes:title>
+      <content:encoded><![CDATA[<p>Full show notes &amp; links.</p>]]></content:encoded>
+      <description>Short summary.</description>
+      <pubDate>Mon, 03 Mar 2025 08:00:00 GMT</pubDate>
+      <guid>hour-201</guid>
+      <itunes:duration>1:02:03</itunes:duration>
+      <itunes:season>2</itunes:season>
+      <itunes:episode>1</itunes:episode>
+      <itunes:episodeType>full</itunes:episodeType>
+      <itunes:explicit>no</itunes:explicit>
+      <itunes:image href="https://example.com/hour/s2e1.jpg"/>
+      <enclosure url="https://cdn.example.com/hour/s2e1.m4a?source=feed" length="5000" type="audio/x-m4a"/>
+    </item>
+    <item>
+      <title>Trailer</title>
+      <pubDate>Sat, 01 Feb 2025 08:00:00 GMT</pubDate>
+      <guid>hour-trailer</guid>
+      <itunes:duration>95</itunes:duration>
+      <itunes:episodeType>trailer</itunes:episodeType>
+      <enclosure url="https://cdn.example.com/hour/trailer.mp3" length="900" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

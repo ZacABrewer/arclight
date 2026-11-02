@@ -84,7 +84,14 @@ export interface RefreshPathInput {
  * audiobooks may also sit in music libraries (the path decides).
  */
 export function libraryKindsFor(mediaType: MediaKind): readonly MediaKind[] {
+  if (mediaType === 'podcast') return ['podcast', 'music'];
   return mediaType === 'audiobook' ? ['audiobook', 'music'] : [mediaType];
+}
+
+/** Podcasts sit in whatever library contains their folder (Jellyfin has no podcast library type). */
+function libraryMayHold(type: MediaKind | 'other', mediaType: MediaKind, kinds: readonly MediaKind[]): boolean {
+  if (mediaType === 'podcast') return true;
+  return type !== 'other' && kinds.includes(type);
 }
 
 export interface ConfiguredClient<C extends MediaServerConfig = MediaServerConfig> {
@@ -256,7 +263,7 @@ export class MediaServersService {
       const result: MediaServerRefreshResult = { serverId: config.id, name: config.name, status: 'skipped', libraries: [] };
       try {
         const matching = (await client.libraries()).filter(
-          (l) => l.type !== 'other' && kinds.includes(l.type) && l.locations.some((loc) => pathIsInside(input.path, loc)),
+          (l) => libraryMayHold(l.type, input.mediaType, kinds) && l.locations.some((loc) => pathIsInside(input.path, loc)),
         );
         result.libraries = matching.map((l) => l.name);
         if (matching.length === 0) {
@@ -272,6 +279,31 @@ export class MediaServersService {
       results.push(result);
     }
     return results;
+  }
+
+  /**
+   * Podcast episode files below `root` that a user of a refresh-enabled server finished
+   * (Jellyfin/Emby: played Audio items; Audiobookshelf: finished podcast episodes), with the
+   * latest finish time per path. Servers that fail are skipped.
+   */
+  async playedPodcastPaths(root: string): Promise<Map<string, string | null>> {
+    const out = new Map<string, string | null>();
+    for (const { client } of this.clients('refresh')) {
+      try {
+        const users = (await client.users()).filter((u) => !u.isDisabled);
+        for (const user of users) {
+          for (const { item, state } of await client.listPlayStates(user.id, 'podcast')) {
+            if (!state.played || !item.path || !pathIsInside(item.path, root)) continue;
+            const prev = out.get(item.path) ?? null;
+            const at = state.lastPlayedAt;
+            out.set(item.path, prev && at ? (prev > at ? prev : at) : (prev ?? at));
+          }
+        }
+      } catch {
+        // An unreachable server reports nothing this pass.
+      }
+    }
+    return out;
   }
 
   // ---- probes ----------------------------------------------------------------------------

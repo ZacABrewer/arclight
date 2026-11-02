@@ -130,7 +130,7 @@ describe('Audiobookshelf media servers', () => {
       libraries: [
         { id: 'books', name: 'Audiobooks', type: 'audiobook' },
         { id: 'other', name: 'Other Books', type: 'audiobook' },
-        { id: 'pods', name: 'Podcasts', type: 'other' },
+        { id: 'pods', name: 'Podcasts', type: 'podcast' },
       ],
     });
     const bad = await app.inject({ method: 'POST', url: '/api/v1/mediaserver/test', payload: { kind: 'audiobookshelf', name: 'X', url: 'abs.lan', apiKey: 'wrong' } });

@@ -60,6 +60,8 @@ const BASE_ROW = {
   onDiskSpaceLow: false,
   onDownloadRecovered: false,
   onDailySummary: false,
+  onPodcastEpisodes: false,
+  onPodcastDownload: false,
   includeHealthWarnings: false,
 };
 

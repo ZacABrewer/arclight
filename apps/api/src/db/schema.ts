@@ -38,6 +38,7 @@ export * from '../modules/profiles/schema.js';
 export * from '../modules/library/schema.js';
 export * from '../modules/music/schema.js';
 export * from '../modules/audiobooks/schema.js';
+export * from '../modules/podcasts/schema.js';
 export * from '../modules/metadata/schema.js';
 export * from '../modules/indexers/schema.js';
 export * from '../modules/download-clients/schema.js';

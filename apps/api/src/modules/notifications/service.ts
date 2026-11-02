@@ -595,6 +595,10 @@ export function wantsEvent(row: Pick<NotificationRow, NotificationTrigger | 'inc
       return row.onDownloadStalled;
     case 'downloadRejected':
       return row.onDownloadRejected;
+    case 'podcastEpisodes':
+      return row.onPodcastEpisodes;
+    case 'podcastDownload':
+      return row.onPodcastDownload;
     case 'killSwitch':
       return row.onKillSwitch;
     case 'killSwitchResumed':

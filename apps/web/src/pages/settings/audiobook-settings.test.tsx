@@ -74,7 +74,7 @@ describe('Settings → General: audiobooks', () => {
     expect(screen.queryByText('Coming soon')).toBeNull();
     expect(screen.queryByRole('region', { name: 'Audiobook metadata' })).toBeNull();
     fireEvent.click(toggle);
-    await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/settings/features')?.body).toEqual(ON));
+    await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/settings/features')?.body).toMatchObject(ON));
     expect(await screen.findByRole('region', { name: 'Audiobook metadata' })).toBeTruthy();
   });
 

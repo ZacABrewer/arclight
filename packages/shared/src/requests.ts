@@ -149,12 +149,14 @@ export const RequestTypes = z.object({
   subtitles: z.boolean().default(true),
   /** Language requests of kind audio (an additional audio language). */
   audioLanguages: z.boolean().default(true),
+  /** Podcast suggestions (a feed for the admins to subscribe to). */
+  podcast: z.boolean().default(true),
 });
 export type RequestTypes = z.infer<typeof RequestTypes>;
 export type RequestTypeKey = keyof RequestTypes;
 /** Display order. */
-export const REQUEST_TYPE_KEYS: readonly RequestTypeKey[] = ['movie', 'series', 'music', 'audiobook', 'subtitles', 'audioLanguages'];
-export const ALL_REQUEST_TYPES: RequestTypes = { movie: true, series: true, music: true, audiobook: true, subtitles: true, audioLanguages: true };
+export const REQUEST_TYPE_KEYS: readonly RequestTypeKey[] = ['movie', 'series', 'music', 'audiobook', 'subtitles', 'audioLanguages', 'podcast'];
+export const ALL_REQUEST_TYPES: RequestTypes = { movie: true, series: true, music: true, audiobook: true, subtitles: true, audioLanguages: true, podcast: true };
 
 /** A stored filter, defaults applied; malformed values count as every type on. */
 export function requestTypesOfSettings(settings: unknown): RequestTypes {
@@ -1270,7 +1272,7 @@ export const DEFAULT_PORTAL_PATH = '/portal';
  */
 export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
   // app pages (apps/web/src/router.tsx)
-  'activity', 'calendar', 'design', 'discover', 'docs', 'indexers', 'issues', 'library', 'login', 'portal',
+  'activity', 'calendar', 'design', 'discover', 'docs', 'indexers', 'issues', 'library', 'login', 'podcasts', 'portal',
   'profile', 'requests', 'search', 'settings', 'setup', 'subtitles', 'system', 'wanted', 'watchlist',
   // server routes and static files
   'api', 'assets', 'icons', 'metrics', 'ping', 'initialize.json', 'initialize.js', 'sw.js', 'manifest.webmanifest',
@@ -1283,7 +1285,7 @@ export const RESERVED_PORTAL_SEGMENTS: readonly string[] = [
  */
 export const PORTAL_ROUTE_SEGMENTS: readonly string[] = [
   'movies', 'tv', 'movie', 'person', 'search', 'trending', 'upcoming', 'list', 'collection',
-  'genre', 'keyword', 'studio', 'network', 'provider', 'requests', 'issues', 'profile', 'music', 'audiobooks',
+  'genre', 'keyword', 'studio', 'network', 'provider', 'requests', 'issues', 'profile', 'music', 'audiobooks', 'podcasts',
 ];
 
 /** "/watch", "watch" or "/Watch/" → "/watch". */
@@ -1412,7 +1414,7 @@ export const PublicPortal = z.object({
     plex: z.boolean(),
   }),
   /** Which extra media types the catalogue offers, so anonymous visitors see Music/Audiobooks. */
-  features: z.object({ music: z.boolean(), audiobooks: z.boolean() }).optional(),
+  features: z.object({ music: z.boolean(), audiobooks: z.boolean(), podcasts: z.boolean().optional() }).optional(),
 });
 export type PublicPortal = z.infer<typeof PublicPortal>;
 

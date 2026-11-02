@@ -89,7 +89,7 @@ describe('music and feature sections', () => {
   };
 
   it('defaults: features off, MusicBrainz at 1 req/s, track match 0.8', () => {
-    expect(getSection(db, 'features')).toEqual({ music: false, audiobooks: false });
+    expect(getSection(db, 'features')).toEqual({ music: false, audiobooks: false, podcasts: false });
     expect(getSection(db, 'musicMetadata')).toEqual({
       baseUrl: 'https://musicbrainz.org/ws/2/',
       rateLimitPerSecond: 1,
@@ -115,7 +115,7 @@ describe('music and feature sections', () => {
     expect(getSection(db, 'musicMetadata')).not.toHaveProperty('contactEmail');
 
     const features = await a.inject({ method: 'PUT', url: '/api/v1/settings/features', payload: { music: true } });
-    expect(features.json()).toEqual({ music: true, audiobooks: false });
+    expect(features.json()).toEqual({ music: true, audiobooks: false, podcasts: false });
     const bad = await a.inject({ method: 'PUT', url: '/api/v1/settings/audio', payload: { trackMatchThreshold: 2 } });
     expect(bad.statusCode).toBe(400);
     await a.close();
@@ -152,7 +152,7 @@ describe('music and feature sections', () => {
     expect(badRate.statusCode).toBe(400);
 
     const features = await a.inject({ method: 'PUT', url: '/api/v1/settings/features', payload: { music: false, audiobooks: true } });
-    expect(features.json()).toEqual({ music: false, audiobooks: true });
+    expect(features.json()).toEqual({ music: false, audiobooks: true, podcasts: false });
     const names = new ProfilesService({ db }).listQualityProfiles('audiobook').map((p) => p.name);
     expect(names).toEqual(['Standard', 'M4B only', 'Any (audiobook)']);
     await a.close();

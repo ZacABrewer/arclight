@@ -46,6 +46,11 @@ export function canRequestAudio(held: number, domain: 'music' | 'audiobook'): bo
   return can(held, Permission.REQUEST, domain === 'music' ? Permission.REQUEST_MUSIC : Permission.REQUEST_AUDIOBOOK);
 }
 
+/** Podcast suggestions: any request flag (there is no podcast-specific permission bit). */
+export function canSuggestPodcast(held: number): boolean {
+  return can(held, Permission.REQUEST, Permission.REQUEST_MUSIC, Permission.REQUEST_AUDIOBOOK);
+}
+
 /** Subtitle and audio language requests: the general REQUEST flag covers them too. */
 export function canRequestLanguage(held: number): boolean {
   return can(held, Permission.REQUEST, Permission.REQUEST_LANGUAGE);
@@ -69,6 +74,7 @@ const REQUEST_TYPE_WORDS: Record<RequestTypeKey, string> = {
   audiobook: 'audiobook',
   subtitles: 'subtitle',
   audioLanguages: 'audio language',
+  podcast: 'podcast',
 };
 
 /**

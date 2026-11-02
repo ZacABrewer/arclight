@@ -1,0 +1,85 @@
+/* Podcast pages: subscription grid, episode rows, Add podcast results. Colours come from tokens. */
+
+.pod-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(168px, 1fr)); gap: 24px 20px; }
+@media (max-width: 767px) { .pod-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; } }
+
+.pod-card { position: relative; }
+.pod-card__badge { position: absolute; top: 8px; left: 8px; z-index: 1; }
+.pod-card__meta { display: flex; flex-wrap: wrap; gap: 4px 8px; font-size: 12px; color: var(--al-text-4); }
+
+.pod-episode-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 6px; min-width: 0; }
+.pod-episode-code { font-size: 11px; color: var(--al-text-4); }
+.pod-extras { display: inline-flex; gap: 4px; }
+.pod-row-actions { display: inline-flex; flex-wrap: wrap; justify-content: flex-end; gap: 4px; }
+
+.pod-num { max-width: 140px; }
+.pod-settings-fields { display: flex; flex-direction: column; gap: 12px; }
+
+.pod-feed-url { font-family: var(--al-mono); font-size: 12px; color: var(--al-text-3); word-break: break-all; }
+.pod-error { color: var(--al-danger-text); font-size: 13px; margin: 0 0 12px; }
+
+.pod-results { display: flex; flex-direction: column; gap: 0; list-style: none; margin: 0; padding: 0; }
+.pod-result { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: center; padding: 12px 0; border-bottom: 1px solid var(--al-line-1); }
+.pod-result:last-child { border-bottom: 0; }
+.pod-result__title { font-weight: 600; color: var(--al-text-1); }
+.pod-result__meta { font-size: 12px; color: var(--al-text-4); }
+.pod-result__desc { font-size: 13px; color: var(--al-text-3); margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 767px) {
+  .pod-result { grid-template-columns: 48px minmax(0, 1fr); }
+  .pod-result > :last-child { grid-column: 1 / -1; justify-self: start; }
+}
+
+.pod-preview { display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 16px; align-items: start; }
+@media (max-width: 767px) { .pod-preview { grid-template-columns: 1fr; } }
+.pod-preview ul { margin: 8px 0 0; padding-left: 18px; font-size: 13px; color: var(--al-text-3); }
+
+.pod-tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.pod-tokens code { font-size: 11px; padding: 2px 6px; border: 1px solid var(--al-line-1); color: var(--al-text-3); background: var(--al-well); }
+
+.pod-import-result { display: flex; flex-direction: column; gap: 8px; font-size: 13px; }
+.pod-import-result ul { margin: 4px 0 0; padding-left: 18px; }
+.pod-description { white-space: pre-line; }
+
+/* Library (Libraries 2b): Jump back in, the "Your library" row, offline marker, list view. */
+.pod-jump { display: flex; flex-direction: column; gap: 12px; margin-bottom: 28px; }
+.pod-jump__grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px; list-style: none; margin: 0; padding: 0; }
+.pod-jump__tile { display: flex; align-items: center; gap: 12px; min-width: 0; height: 64px; padding-right: 12px; border: var(--al-border-width, 1px) solid var(--al-line-1); background: var(--al-well); color: inherit; }
+.pod-jump__tile:hover { text-decoration: none; border-color: var(--al-line-3); }
+.pod-jump__tile:hover .pod-jump__title { color: var(--al-cyan-text); }
+.pod-jump__tile > :first-child { flex: none; width: 64px; }
+.pod-jump__text { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.pod-jump__title, .pod-jump__sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.pod-jump__title { font-size: 14px; font-weight: 600; color: var(--al-text-1); }
+.pod-jump__sub { font-size: 12px; color: var(--al-text-4); }
+@media (max-width: 767px) { .pod-jump__grid { grid-template-columns: minmax(0, 1fr); } }
+
+.pod-lib-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+
+.pod-offline { display: inline-flex; align-items: center; gap: 6px; font-family: var(--al-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--al-cyan-text); }
+.pod-offline__dot { width: 6px; height: 6px; background: var(--al-cyan); transform: rotate(45deg); flex: none; }
+
+.pod-list-title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+
+/* Show page (Players 1b): episode rows — date / number, title + excerpt, meta, actions. */
+.pod-eps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.pod-ep { display: grid; grid-template-columns: auto 88px minmax(0, 1fr) 200px auto; gap: 8px 20px; align-items: center; padding: 16px 12px; border-top: var(--al-border-width, 1px) solid var(--al-line-1); }
+.pod-ep:last-child { border-bottom: var(--al-border-width, 1px) solid var(--al-line-1); }
+.pod-ep[data-selected] { background: var(--al-cyan-a06); }
+.pod-eps:not(:has(.pod-ep__check)) .pod-ep { grid-template-columns: 88px minmax(0, 1fr) 200px; }
+.pod-ep__when { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--al-text-3); }
+.pod-ep__no { color: var(--al-cyan-text); }
+.pod-ep__main { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.pod-ep__title { display: inline-flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 16px; font-weight: 600; color: var(--al-text-1); }
+.pod-ep[data-played] .pod-ep__title { color: var(--al-text-3); }
+.pod-ep__desc { font-size: 13px; line-height: 1.45; color: var(--al-text-3); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; text-wrap: pretty; }
+.pod-ep__meta { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--al-text-3); min-width: 0; }
+.pod-ep__chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.pod-ep__actions { justify-self: end; }
+@media (max-width: 1023px) {
+  .pod-ep, .pod-eps:not(:has(.pod-ep__check)) .pod-ep { grid-template-columns: auto minmax(0, 1fr); align-items: start; }
+  .pod-eps:not(:has(.pod-ep__check)) .pod-ep > * { grid-column: 1 / -1; }
+  .pod-ep__when { flex-direction: row; gap: 10px; grid-column: 2; grid-row: 1; }
+  .pod-ep__main, .pod-ep__meta, .pod-ep__actions { grid-column: 2; }
+  .pod-ep__check { grid-row: 1 / span 2; }
+  .pod-ep__actions { justify-self: start; }
+}

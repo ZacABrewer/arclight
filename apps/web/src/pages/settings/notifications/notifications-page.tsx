@@ -132,8 +132,27 @@ export function downloadTriggerLabel(flag: DownloadTrigger): string {
   return DOWNLOAD_TRIGGER_LABELS[flag];
 }
 
+/** Podcast triggers (feature `podcasts`), in display order. */
+export const PODCAST_TRIGGERS = ['onPodcastEpisodes', 'onPodcastDownload'] as const satisfies readonly NotificationTrigger[];
+
+type PodcastTrigger = (typeof PODCAST_TRIGGERS)[number];
+
+const PODCAST_TRIGGER_LABELS: Record<PodcastTrigger, string> = {
+  get onPodcastEpisodes() {
+    return t('settings.notifications.podcastEpisodes');
+  },
+  get onPodcastDownload() {
+    return t('settings.notifications.podcastDownload');
+  },
+};
+
+export function podcastTriggerLabel(flag: PodcastTrigger): string {
+  return PODCAST_TRIGGER_LABELS[flag];
+}
+
 /** Card tag for any flag: the grouped triggers keep their own labels. */
 function flagTag(flag: string): string {
+  if (PODCAST_TRIGGER_SET.has(flag)) return podcastTriggerLabel(flag as PodcastTrigger);
   return DOWNLOAD_TRIGGER_SET.has(flag) ? downloadTriggerLabel(flag as DownloadTrigger) : eventFlagTag(flag);
 }
 
@@ -160,6 +179,12 @@ export function supportedDownloadTriggers(source: Record<string, unknown>): Down
 
 const REQUEST_TRIGGER_SET = new Set<string>(REQUEST_TRIGGERS);
 const DOWNLOAD_TRIGGER_SET = new Set<string>(DOWNLOAD_TRIGGERS);
+const PODCAST_TRIGGER_SET = new Set<string>(PODCAST_TRIGGERS);
+
+/** Podcast triggers the agent supports. */
+export function supportedPodcastTriggers(source: Record<string, unknown>): PodcastTrigger[] {
+  return supportedTriggers(PODCAST_TRIGGERS, source);
+}
 
 /**
  * Editor values for a connection or template. Rows saved before quiet hours existed carry no
@@ -269,9 +294,10 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
   const [confirmDelete, setConfirmDelete] = useState(false);
   // Flags come from the template (complete list) merged with whatever the row carries.
   const template = (editing.schema?.template ?? {}) as Record<string, unknown>;
-  const flags = [...new Set([...eventFlags(template), ...eventFlags(form.values)])].filter((f) => !REQUEST_TRIGGER_SET.has(f) && !DOWNLOAD_TRIGGER_SET.has(f)).sort();
+  const flags = [...new Set([...eventFlags(template), ...eventFlags(form.values)])].filter((f) => !REQUEST_TRIGGER_SET.has(f) && !DOWNLOAD_TRIGGER_SET.has(f) && !PODCAST_TRIGGER_SET.has(f)).sort();
   const requestFlags = supportedRequestTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const downloadFlags = supportedDownloadTriggers({ ...template, ...(existing ?? {}), ...form.values });
+  const podcastFlags = supportedPodcastTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const tags = Array.isArray(form.values.tags) ? (form.values.tags as number[]) : [];
   const [tab, setTab] = useState('general');
   const delivery = deliveryOptionsOf(form.values);
@@ -335,6 +361,21 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
               <Checkbox
                 key={flag}
                 label={downloadTriggerLabel(flag)}
+                checked={form.values[flag] === true}
+                onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+      {podcastFlags.length ? (
+        <fieldset className="al-event-flags">
+          <legend className="al-label">{t('common.podcasts')}</legend>
+          <div className="al-check-grid" role="group" aria-label={t('settings.notifications.podcastEvents')}>
+            {podcastFlags.map((flag) => (
+              <Checkbox
+                key={flag}
+                label={podcastTriggerLabel(flag)}
                 checked={form.values[flag] === true}
                 onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
               />

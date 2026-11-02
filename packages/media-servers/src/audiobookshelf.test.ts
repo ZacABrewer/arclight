@@ -31,12 +31,12 @@ describe('AudiobookshelfServerClient', () => {
     expect(calls[0]!.url.search).toBe('');
   });
 
-  it('lists libraries with folder paths; book libraries are audiobook, podcasts other', async () => {
+  it('lists libraries with folder paths; book libraries are audiobook, podcast libraries podcast', async () => {
     const { c } = client();
     expect(await c.libraries()).toEqual([
       { id: 'lib-books', name: 'Audiobooks', type: 'audiobook', locations: ['/data/audiobooks'] },
       { id: 'lib-kids', name: 'Kids', type: 'audiobook', locations: ['/data/kids-books'] },
-      { id: 'lib-pods', name: 'Podcasts', type: 'other', locations: ['/data/podcasts'] },
+      { id: 'lib-pods', name: 'Podcasts', type: 'podcast', locations: ['/data/podcasts'] },
     ]);
     expect(audiobookshelfLibraryKind('BOOK')).toBe('audiobook');
     expect(audiobookshelfLibraryKind(undefined)).toBe('other');
@@ -122,6 +122,31 @@ describe('AudiobookshelfServerClient', () => {
     const { c: c2, calls: calls2 } = client();
     await c2.refreshLibrary();
     expect(calls2.filter((x) => x.method === 'POST').map((s) => s.url.pathname)).toEqual(['/api/libraries/lib-books/scan', '/api/libraries/lib-kids/scan']);
+  });
+
+  it('scans the podcast library for a podcast path and reads podcast episode progress with file paths', async () => {
+    const routes = {
+      ...ROUTES,
+      'POST /api/libraries/lib-pods/scan': () => ({ body: 'OK' }),
+      'GET /api/items/pod-1': {
+        id: 'pod-1',
+        libraryId: 'lib-pods',
+        media: {
+          episodes: [
+            { id: 'ep-1', title: 'Episode one', audioFile: { metadata: { path: '/data/podcasts/Show/2026/ep1.mp3' } } },
+            { id: 'ep-2', title: 'Episode two', audioFile: { metadata: { path: '/data/podcasts/Show/2026/ep2.mp3' } } },
+          ],
+        },
+      },
+    };
+    const { c, calls } = client(routes);
+    await c.refreshLibrary({ path: '/data/podcasts/Show', mediaType: 'podcast' });
+    expect(calls.filter((x) => x.method === 'POST').map((s) => s.url.pathname)).toEqual(['/api/libraries/lib-pods/scan']);
+    const states = await c.listPlayStates('usr-2', 'podcast');
+    expect(states).toHaveLength(1);
+    expect(states[0]!.item).toMatchObject({ id: 'ep-1', mediaType: 'podcast', path: '/data/podcasts/Show/2026/ep1.mp3', libraryId: 'lib-pods' });
+    expect(states[0]!.state).toMatchObject({ played: false, positionMs: 50_000 });
+    expect(calls.find((x) => x.url.pathname === '/api/items/pod-1')!.url.searchParams.get('expanded')).toBe('1');
   });
 
   it('maps a rejected token to unauthorized and validates settings', async () => {

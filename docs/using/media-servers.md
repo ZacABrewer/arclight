@@ -83,6 +83,8 @@ Switch on the same events as for any connection: On download (import), On upgrad
 
 > The "Library refresh" switch on the Media Servers page marks a server as a refresh target, but the rescans described here are sent by the notification connections. Set up a connection if you want rescans.
 
+> Audiobooks and [podcasts](podcasts.md#media-servers) are different: they use the "Library refresh" switch directly. After a podcast episode is downloaded or deleted, Arclight rescans the library that contains the podcast folder on every server with Library refresh on (an Audiobookshelf podcast library, or the Jellyfin, Emby or Plex music library you added the folder to). The same servers are read once a day for finished podcast episodes, which Arclight marks played.
+
 ## Watch-history sync
 
 For Jellyfin, Emby and Plex, Arclight can keep its own read-only copy of who watched what. The media server stays the source of truth; Arclight only reads and never writes to your server. The copy feeds the **Watch history** views, the "Watched by" tab on titles, the Now playing panel and [retention rules](library.md#retention). Audiobookshelf is not synced. Plex has a few differences, described in [Plex watch history](#plex-watch-history).

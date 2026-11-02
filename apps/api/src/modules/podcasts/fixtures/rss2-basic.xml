@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Plain Old Radio</title>
+    <link>https://example.com/plain</link>
+    <description>A feed with nothing but RSS 2.0 &amp; enclosures.</description>
+    <language>en-us</language>
+    <managingEditor>editor@example.com (Pat Example)</managingEditor>
+    <ttl>180</ttl>
+    <image><url>https://example.com/plain/cover.jpg</url><title>Plain Old Radio</title><link>https://example.com/plain</link></image>
+    <category>Talk</category>
+    <item>
+      <title>Episode Two</title>
+      <link>https://example.com/plain/2</link>
+      <description><![CDATA[<p>Second <b>episode</b>.</p><p>With two paragraphs.</p>]]></description>
+      <pubDate>Tue, 07 Jan 2025 10:00:00 GMT</pubDate>
+      <guid isPermaLink="false">plain-2</guid>
+      <enclosure url="https://cdn.example.com/plain/ep2.mp3" length="2048" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Episode One</title>
+      <description>First episode.</description>
+      <pubDate>Wed, 01 Jan 2025 10:00:00 +0000</pubDate>
+      <enclosure url="https://cdn.example.com/plain/ep1.mp3" length="1024" type="audio/mpeg"/>
+    </item>
+    <item>
+      <title>Blog post without audio</title>
+      <pubDate>Thu, 02 Jan 2025 10:00:00 GMT</pubDate>
+      <guid>plain-text-only</guid>
+    </item>
+    <item>
+      <title>Episode Two (duplicate)</title>
+      <pubDate>Tue, 07 Jan 2025 10:00:00 GMT</pubDate>
+      <guid isPermaLink="false">plain-2</guid>
+      <enclosure url="https://cdn.example.com/plain/ep2-dup.mp3" length="2048" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

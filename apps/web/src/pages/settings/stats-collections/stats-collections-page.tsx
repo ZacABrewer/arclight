@@ -139,7 +139,8 @@ function Form({ data }: { data: Combined }) {
     draft.set((d) => ({ ...d, collections: { ...d.collections, leavingSoon: { ...d.collections.leavingSoon, ...patch } } }));
   const errors = statsCollectionsErrors(v);
   const emailConnections = (notifications.data ?? []).filter((n) => n.implementation === 'email');
-  const mediaServers = watchServers(servers.data ?? []);
+  // Collections sync to Jellyfin and Emby only (watch history also covers Plex).
+  const mediaServers = watchServers(servers.data ?? []).filter((s) => s.kind !== 'plex');
   const onSave = () => {
     if (JSON.stringify(v.stats) !== JSON.stringify(data.stats)) saveStats.mutate(v.stats);
     if (JSON.stringify(v.collections) !== JSON.stringify(data.collections)) saveCollections.mutate({ ...v.collections, leavingSoon: { ...v.collections.leavingSoon, name: v.collections.leavingSoon.name.trim() } });
