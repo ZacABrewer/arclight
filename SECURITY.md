@@ -12,7 +12,7 @@ unless you ask otherwise.
 
 ## Supported versions
 
-Only the latest release (currently 0.19.x; `:latest` / the newest `vX.Y.Z` tag) receives security fixes. The Jellyfin plugin is supported on its latest release (currently 1.2.x). Older versions are not patched; update instead. The
+Only the latest release (currently 0.20.x; `:latest` / the newest `vX.Y.Z` tag) receives security fixes. The Jellyfin plugin is supported on its latest release (currently 1.3.x). Older versions are not patched; update instead. The
 `:develop` image follows the main branch and may contain unreleased changes.
 
 ## Hardening your install

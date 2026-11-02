@@ -7,7 +7,7 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
-## [Unreleased]
+## [0.20.0] - 2026-11-02
 
 ### Added
 - Season packs: Arclight understands multi-season, complete-series, partial-season, episode-range and anime batch releases, prefers packs that cover more of what you want, and imports only the episodes you want from a pack. Size limits are per episode, and interactive search shows what a pack covers.
@@ -34,6 +34,8 @@ at the end of this file.
 - Recommended for you in the Jellyfin plugin also uses your Plex watch history when your own Plex token is set in your request settings.
 - Stall recovery no longer removes private-tracker torrents that are still inside a hit-and-run window.
 - The settings menu scrolls on its own on short windows, so every page (down to Updates) can be reached.
+- The web and mobile apps use the Light Slice wordmark (the logo with the line through it). Small places keep the arrows-only mark.
+- Arclight now advertises Jellyfin plugin 1.3.0.
 
 ## [0.19.0] - 2026-11-01
 
@@ -410,7 +412,7 @@ at the end of this file.
 The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full notes are in
 [jellyfin-plugin/CHANGELOG.md](jellyfin-plugin/CHANGELOG.md).
 
-### [Plugin 1.3.0] - Unreleased
+### [Plugin 1.3.0] - 2026-11-02
 - A Stats menu with My stats, Year in review and Server stats, and a Leaving Soon row on the Discover page.
 - Needs an Arclight release newer than 0.19.0 for these. Older versions keep working without them.
 
@@ -427,6 +429,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.20.0]: https://github.com/ZacABrewer/arclight/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/ZacABrewer/arclight/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/ZacABrewer/arclight/compare/v0.18.1...v0.18.2
 [0.18.1]: https://github.com/ZacABrewer/arclight/compare/v0.18.0...v0.18.1

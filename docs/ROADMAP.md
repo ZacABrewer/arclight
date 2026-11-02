@@ -1,6 +1,6 @@
 # Arclight Roadmap
 
-Status as of release 0.19.0 (Jellyfin plugin 1.2.0) plus the work listed under Unreleased in the
+Status as of release 0.20.0 (Jellyfin plugin 1.3.0). See the
 [changelog](../CHANGELOG.md), which also lists what shipped release by release. This page lists what is done by area and what is planned.
 
 Planned items are ideas under development or on the list. They are not available yet, and
@@ -78,7 +78,7 @@ code, derived from how the upstream apps behave. The project is a clean-room bui
   (Plex users, history and live playback).
 - Playback stats, Year in review, smart collections and a Leaving Soon collection synced to
   Jellyfin and Emby.
-- **Arclight for Jellyfin** plugin (1.2.0): request and browse Discover inside Jellyfin, title
+- **Arclight for Jellyfin** plugin (1.3.0): request and browse Discover inside Jellyfin, title
   pages, status badges, watchlist, issues, language requests and opt-in themes. Install it from
   `https://arclight.moviemethat.com/jellyfin/manifest.json`.
 - Companion app for iOS and Android with mobile push through a relay (built from `apps/mobile`;

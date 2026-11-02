@@ -17,7 +17,7 @@ export const JELLYFIN_USER_HEADER = 'x-arclight-jellyfin-user';
 /** Plugin repository manifest users add to Jellyfin (Dashboard > Plugins > Repositories). */
 export const JELLYFIN_PLUGIN_MANIFEST_URL = 'https://arclight.moviemethat.com/jellyfin/manifest.json';
 /** Latest plugin version this Arclight release knows of (static until the manifest is read). */
-export const JELLYFIN_PLUGIN_LATEST_VERSION = '1.2.0.0';
+export const JELLYFIN_PLUGIN_LATEST_VERSION = '1.3.0.0';
 
 /** Features GET /jellyfin/ping advertises; the plugin hides UI for features that are missing. */
 export const JELLYFIN_PLUGIN_FEATURES = [
