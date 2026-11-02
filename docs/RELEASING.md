@@ -51,7 +51,7 @@ These are the source-build files with `build:` replaced by
 Pin the previous tag in `.env` and recreate:
 
 ```sh
-ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:v0.20.0
+ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:v0.20.1
 docker compose -f docker-compose.release.yml up -d
 ```
 

@@ -7,6 +7,11 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
+## [0.20.1] - 2026-11-02
+
+### Fixed
+- Phone top bar: on narrow screens the header now shows the Arclight mark instead of the full wordmark, so search, the command menu, the issue count and your avatar all fit without being cut off.
+
 ## [0.20.0] - 2026-11-02
 
 ### Added
@@ -429,6 +434,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.20.1]: https://github.com/ZacABrewer/arclight/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/ZacABrewer/arclight/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/ZacABrewer/arclight/compare/v0.18.2...v0.19.0
 [0.18.2]: https://github.com/ZacABrewer/arclight/compare/v0.18.1...v0.18.2

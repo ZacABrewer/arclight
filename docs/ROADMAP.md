@@ -1,6 +1,6 @@
 # Arclight Roadmap
 
-Status as of release 0.20.0 (Jellyfin plugin 1.3.0). See the
+Status as of release 0.20.1 (Jellyfin plugin 1.3.0). See the
 [changelog](../CHANGELOG.md), which also lists what shipped release by release. This page lists what is done by area and what is planned.
 
 Planned items are ideas under development or on the list. They are not available yet, and

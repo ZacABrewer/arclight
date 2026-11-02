@@ -26,7 +26,7 @@ Website: https://arclight.moviemethat.com
 
 **Full documentation: [docs/README.md](docs/README.md).** Install guides for Docker on Linux, Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer; a first-run walkthrough; one page per area of the app; [Troubleshooting](docs/TROUBLESHOOTING.md), [FAQ](docs/FAQ.md) and [Glossary](docs/GLOSSARY.md). The sections below are a short summary for contributors; the docs are the authoritative guide for users.
 
-Current release: **0.20.0** (Jellyfin plugin **1.3.0**). See the [changelog](CHANGELOG.md) for what changed in
+Current release: **0.20.1** (Jellyfin plugin **1.3.0**). See the [changelog](CHANGELOG.md) for what changed in
 each release. The full pipeline works end to end (requests, search, download, import, subtitles,
 notifications) with login and API keys, but it is still young: expect rough edges and report
 them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
