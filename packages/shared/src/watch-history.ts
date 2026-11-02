@@ -25,8 +25,11 @@ export type WatchHistorySettings = z.infer<typeof WatchHistorySettings>;
 export const WatchEventType = z.enum(['start', 'progress', 'stop', 'played', 'unplayed']);
 export type WatchEventType = z.infer<typeof WatchEventType>;
 
-/** `sync`: synthesized by the catch-up job when Played flipped; `plugin`: sent by the Jellyfin plugin. */
-export const WatchEventSource = z.enum(['sync', 'plugin']);
+/**
+ * `sync`: synthesized by the catch-up job when Played flipped; `plugin`: sent by the Jellyfin
+ * plugin; `webhook`: a Plex webhook; `poll`: seen by polling Plex's playback sessions.
+ */
+export const WatchEventSource = z.enum(['sync', 'plugin', 'webhook', 'poll']);
 export type WatchEventSource = z.infer<typeof WatchEventSource>;
 
 export const WatchPlayMethod = z.enum(['DirectPlay', 'DirectStream', 'Transcode']);
@@ -143,7 +146,7 @@ export type SyncRunStatus = z.infer<typeof SyncRunStatus>;
 /** GET /mediaserver/:id/sync: watch-history and user sync state of one server. */
 export const MediaServerSyncStatus = z.object({
   serverId: z.string(),
-  /** Effective syncWatchHistory (Jellyfin/Emby and enabled). */
+  /** Effective syncWatchHistory (Jellyfin/Emby/Plex and enabled). */
   watchSyncEnabled: z.boolean(),
   lastSyncAt: z.string().nullable(),
   lastFullSyncAt: z.string().nullable(),
@@ -154,7 +157,7 @@ export const MediaServerSyncStatus = z.object({
   lastUserSyncAt: z.string().nullable(),
   lastUserSyncStatus: SyncRunStatus.nullable(),
   lastUserSyncError: z.string().nullable(),
-  /** Last event the Jellyfin plugin sent for this server. */
+  /** Last event the Jellyfin plugin (or a Plex webhook) sent for this server. */
   lastEventAt: z.string().nullable(),
   users: z.number().int(),
   linkedUsers: z.number().int(),
@@ -216,3 +219,11 @@ export type UserSyncResult = z.infer<typeof UserSyncResult>;
 
 export const WatchHistoryErrorResponse = z.object({ error: z.string(), code: z.string().optional() });
 export type WatchHistoryErrorResponse = z.infer<typeof WatchHistoryErrorResponse>;
+
+/** GET /mediaserver/:id/plexwebhook: the URL path (with its secret) to paste into Plex's Webhooks settings. */
+export const PlexWebhookInfo = z.object({
+  token: z.string(),
+  /** Relative to the Arclight origin, e.g. `/api/v1/plex/webhook?token=...`. */
+  path: z.string(),
+});
+export type PlexWebhookInfo = z.infer<typeof PlexWebhookInfo>;

@@ -38,6 +38,7 @@ import type {
   ProviderIds,
   RefreshOptions,
   ServerInfo,
+  WatchItem,
 } from './types.js';
 import { MediaServerError } from './types.js';
 
@@ -57,23 +58,8 @@ export interface MediaBrowserServerOptions {
  * One movie or episode with one user's play state (the watch-history sync). Episodes carry their
  * series and season ids and numbers so the caller can resolve them against its own library.
  */
-export interface MediaBrowserWatchItem {
-  id: string;
-  type: 'Movie' | 'Episode';
-  name: string;
-  ids: ProviderIds;
-  seriesId: string | null;
-  seasonId: string | null;
-  seasonNumber: number | null;
-  episodeNumber: number | null;
-  durationMs: number | null;
-  played: boolean;
-  /** Raw play count (a server-side "mark played" may leave it at 0). */
-  playCount: number;
-  lastPlayedAt: string | null;
-  positionMs: number;
-  favorite: boolean;
-}
+/** Jellyfin/Emby play state of one movie or episode (the shared watch-item shape). */
+export type MediaBrowserWatchItem = WatchItem;
 
 /** Any item by id (status lookups): type, provider ids and, for episodes and seasons, the series. */
 export interface MediaBrowserItemInfo {

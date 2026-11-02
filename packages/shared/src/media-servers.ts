@@ -25,12 +25,17 @@ export function isMediaBrowserKind(kind: MediaServerConnectionKind): kind is 'je
 }
 
 /**
- * Whether the watch-history sync reads this connection: enabled Jellyfin/Emby servers with
+ * Whether the watch-history sync reads this connection: enabled Jellyfin/Emby/Plex servers with
  * `syncWatchHistory` on. Connections saved before the flag existed follow `usedForRetention`,
  * so an upgrade only starts syncing servers that already fed retention.
  */
 export function watchSyncEnabled(config: { kind: MediaServerConnectionKind; enabled: boolean; usedForRetention: boolean; syncWatchHistory?: boolean | undefined }): boolean {
-  return config.enabled && isMediaBrowserKind(config.kind) && (config.syncWatchHistory ?? config.usedForRetention);
+  return config.enabled && isWatchSyncKind(config.kind) && (config.syncWatchHistory ?? config.usedForRetention);
+}
+
+/** Kinds whose users and watch history Arclight syncs (Jellyfin, Emby, Plex). */
+export function isWatchSyncKind(kind: MediaServerConnectionKind): kind is 'jellyfin' | 'emby' | 'plex' {
+  return kind === 'jellyfin' || kind === 'emby' || kind === 'plex';
 }
 
 /** Kinds that can be a sign-in provider (`loginEnabled`). */
@@ -77,6 +82,11 @@ export const MediaServerConfig = z.object({
    * The Jellyfin plugin names its server by this id.
    */
   remoteId: z.string().max(128).optional(),
+  /**
+   * Plex only: the secret in this server's webhook URL (`/api/v1/plex/webhook?token=`), made on
+   * first use. Never sent to the web UI in the connection list.
+   */
+  webhookToken: z.string().max(128).optional(),
 });
 export type MediaServerConfig = z.infer<typeof MediaServerConfig>;
 
@@ -88,7 +98,7 @@ export type MediaServersSettings = z.infer<typeof MediaServersSettings>;
 
 /**
  * GET /mediaserver, /mediaserver/:id. `apiKey` is SECRET_MASK when one is stored, '' otherwise;
- * `syncWatchHistory` is always present (the effective value for Jellyfin/Emby, false otherwise).
+ * `syncWatchHistory` is always present (the effective value for Jellyfin/Emby/Plex, false otherwise).
  */
 export const MediaServerResource = MediaServerConfig;
 export type MediaServerResource = MediaServerConfig;

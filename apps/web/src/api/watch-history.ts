@@ -4,6 +4,7 @@ import {
   MediaServerAccountRow,
   MediaServerSyncStatus,
   NowPlayingEntry,
+  PlexWebhookInfo,
   UserSyncServerResult,
   WatchedByEntry,
   WatchEventPage,
@@ -28,6 +29,8 @@ export const watchHistoryApi = {
   syncNow: (serverId: string, full = false) => request(`/mediaserver/${sid(serverId)}/sync`, WatchSyncServerResult, { method: 'POST', json: { full } }),
   syncUsers: (serverId: string) => request(`/mediaserver/${sid(serverId)}/usersync`, UserSyncServerResult, { method: 'POST', json: {} }),
   accounts: (serverId: string) => request(`/mediaserver/${sid(serverId)}/accounts`, MediaServerAccountRow.array()),
+  plexWebhook: (serverId: string) => request(`/mediaserver/${sid(serverId)}/plexwebhook`, PlexWebhookInfo),
+  regeneratePlexWebhook: (serverId: string) => request(`/mediaserver/${sid(serverId)}/plexwebhook/regenerate`, PlexWebhookInfo, { method: 'POST', json: {} }),
 };
 
 export const jellyfinPluginApi = {

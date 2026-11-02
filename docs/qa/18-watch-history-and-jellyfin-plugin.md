@@ -1,6 +1,6 @@
 # Watch History Sync and the Jellyfin Plugin
 
-This file covers the read-only sync from Jellyfin or Emby into Arclight (play state, plays, accounts), the places that show it, retention using it, and the API used by the Arclight Jellyfin plugin.
+This file covers the read-only sync from Jellyfin, Emby or Plex into Arclight (play state, plays, accounts), the places that show it, retention using it, Plex webhooks and session polling, and the API used by the Arclight Jellyfin plugin.
 Prerequisites: signed in as an admin; a TMDB key; at least one title in the library that also exists in a Jellyfin (or Emby) server; that server has two accounts, `alice` and `bob`, and you can play and mark items in it. Files 01 and 02 done. Use a test server, not your real one: the checks mark items played and unplayed.
 Test environment: any. The rows marked "(plugin)" need the Arclight Jellyfin plugin installed in Jellyfin; they can be done with `curl` instead where the row says so. Rows marked "via API" use `curl` with the API key from Settings -> Security (`X-Api-Key: <key>`). `BASE` is your Arclight address, for example `http://localhost:7878`.
 
@@ -8,7 +8,7 @@ Test environment: any. The rows marked "(plugin)" need the Arclight Jellyfin plu
 
 | ID | Step | Expected result | Pass/Fail |
 |----|------|-----------------|-----------|
-| WHS-01 | Open Settings -> Media Servers, press "Add media server", choose Jellyfin and look at the switches. | "Sync watch history" is on by default. Choosing Plex hides or ignores it. | |
+| WHS-01 | Open Settings -> Media Servers, press "Add media server", choose Jellyfin and look at the switches. | "Sync watch history" is on by default. Choosing Plex keeps it; choosing Audiobookshelf hides it. | |
 | WHS-02 | Fill in your Jellyfin URL and API key, press Test, then Save. | Test shows the server name, version and libraries. After saving, the server card has a "Watch history" panel with a "Sync" chip and buttons Sync now, Full resync, Sync users and Accounts. | |
 | WHS-03 | Wait up to the sync interval (default 10 minutes) or press "Sync now". Reload the panel. | Toast "<name>: 2 users, N changes". The panel shows Last sync and Last full read with times, "Items tracked" above 0, "Accounts" "0 linked of 2" (or more accounts). | |
 | WHS-04 | Press Accounts. | A dialog "Synced accounts on <name>" lists `alice` and `bob` with their state (an "Admin" badge for administrators) and "Not linked" under "Arclight user". | |
@@ -41,7 +41,7 @@ Test environment: any. The rows marked "(plugin)" need the Arclight Jellyfin plu
 | WHS-21 | Open a title nobody watched, "Watched by" tab. | "Nobody has watched this yet". | |
 | WHS-22 (plugin) | Start playing a movie as alice in Jellyfin and leave it running. Open the Dashboard as admin. | A "Now playing" panel lists the session: title, user, device, client and position, and "Transcoding" when the stream transcodes. It disappears a few minutes after you stop playback. | |
 | WHS-23 | Via API: `curl -H "X-Api-Key: <key>" "BASE/api/v1/watchhistory?pageSize=5&type=played"`, then `curl -H "X-Api-Key: <key>" BASE/api/v1/mediaserver/<server id>/sync`. | First call: `{page, pageSize, totalRecords, records[]}` with only `played` events. Second: sync status with `watchSyncEnabled: true`, `lastStatus: "ok"` and `itemsTracked`. | |
-| WHS-24 | Via API: `curl -X POST -H "X-Api-Key: <key>" -H "Content-Type: application/json" -d '{"full":true}' BASE/api/v1/mediaserver/<server id>/sync`. Repeat the call twice at once from two terminals. | 200 with `status: "ok"`. The overlapping second call can answer 409 "a watch-history sync is already running". An unknown id answers 404; a Plex server answers 400. | |
+| WHS-24 | Via API: `curl -X POST -H "X-Api-Key: <key>" -H "Content-Type: application/json" -d '{"full":true}' BASE/api/v1/mediaserver/<server id>/sync`. Repeat the call twice at once from two terminals. | 200 with `status: "ok"`. The overlapping second call can answer 409 "a watch-history sync is already running". An unknown id answers 404; an Audiobookshelf server answers 400. | |
 
 ## Retention with stored history
 
@@ -102,3 +102,20 @@ Use `PKEY` for the plugin key and `JID` for alice's Jellyfin user id (from the J
 | JFP-23 | Send events with a made-up `serverId`. | 404 `{code: "UNKNOWN_SERVER"}` with a hint to test the connection once. | |
 | JFP-24 | Send a batch of 501 events. | 400 validation error. | |
 | JFP-25 | Send an event with a bad `at` (for example `"not a date"`). | The batch answers 202 but the bad event is not counted in `accepted`. | |
+
+## Plex watch history
+
+Needs a Plex Media Server you can test with, signed in as its owner, with the owner's `X-Plex-Token`, at least one friend or Plex Home user it is shared with, and a library title that also exists in Arclight. Webhook rows need Plex Pass; the `curl` row works without it.
+
+| ID | Step | Expected result | Pass/Fail |
+|----|------|-----------------|-----------|
+| PLX-01 | Add a Plex media server with the owner's token, press Test, then Save. | "Sync watch history" is on and can be switched; "Mirror Jellyfin parental controls" is not offered. The server gets a "Watch history" panel with Sync now, Full resync, Sync users, Accounts and a "Plex webhook URL" field. | |
+| PLX-02 | Press "Sync users", then "Accounts". | The owner (marked Admin), Plex Home users and friends the server is shared with are listed. Friends of the owner who have no access to this server are not. | |
+| PLX-03 | As the owner, play a library movie to the end in Plex. Press "Sync now". | The movie's "Watched by" tab shows the owner as watched, play count 1. Activity -> Watch history has a "Played" event. | |
+| PLX-04 | As a friend, watch an episode in Plex. Press "Sync now". | The series' "Watched by" tab shows the friend with one episode played. | |
+| PLX-05 | Link an Arclight user to that friend through Plex sign-in, half-watch a movie as the friend, then press "Full resync". | "Watched by" shows the friend's progress for the movie. | |
+| PLX-06 | Copy the "Plex webhook URL". In Plex: Settings -> Webhooks -> Add Webhook, paste it and save. Start playing a title, pause it, then stop it. | The dashboard's Now playing shows the session while it plays. Activity -> Watch history (with progress shown) has Started and Stopped events. The panel's "Last webhook or session" updates. | |
+| PLX-07 | Remove the webhook in Plex, play a title for two minutes and stop it. | Now playing picks up the session within a minute (session polling); a Stopped event appears within a minute after you stop. | |
+| PLX-08 | Press "New webhook URL" and confirm. Play something with the old webhook still in Plex. | The field shows a new URL. Plex's delivery of the old URL fails (401) until you paste the new one. | |
+| PLX-09 | Via API: `curl -X POST -H "Content-Type: application/json" -d '{"payload":{"event":"media.play"}}' "BASE/api/v1/plex/webhook?token=wrong"`. | 401. With the token from the field and the same body: 200 `{"status":"ignored"}`. | |
+| PLX-10 | Stop the Plex server's internet access (or use a token plex.tv rejects) and press "Sync users". | No account is marked Deleted. | |

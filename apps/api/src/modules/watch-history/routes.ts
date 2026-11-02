@@ -79,7 +79,7 @@ export function watchHistoryRoutes(ctx: AppContext, wh: WatchHistory, servers: M
       const config = requireServer(req.params.id);
       if (!config) return reply.code(404).send({ error: `Media server ${req.params.id} not found`, code: 'NOT_FOUND' });
       if (!servers.watchSyncServers().some((s) => s.id === config.id)) {
-        return reply.code(400).send({ error: 'watch-history sync is off for this server (or it is not an enabled Jellyfin/Emby server)', code: 'VALIDATION' });
+        return reply.code(400).send({ error: 'watch-history sync is off for this server (or it is not an enabled Jellyfin/Emby/Plex server)', code: 'VALIDATION' });
       }
       const result = await asJob(WATCH_SYNC_JOB, () => wh.sync.syncWatch({ serverId: config.id, full: req.body?.full ?? false }));
       if (!result) return reply.code(409).send({ error: 'a watch-history sync is already running', code: 'CONFLICT' });
@@ -92,7 +92,7 @@ export function watchHistoryRoutes(ctx: AppContext, wh: WatchHistory, servers: M
       const result = await asJob(USER_SYNC_JOB, () => wh.sync.syncUsers({ serverId: config.id }));
       if (!result) return reply.code(409).send({ error: 'a user sync is already running', code: 'CONFLICT' });
       const own = result.servers[0];
-      if (!own) return reply.code(400).send({ error: 'user sync reads enabled Jellyfin/Emby servers only', code: 'VALIDATION' });
+      if (!own) return reply.code(400).send({ error: 'user sync reads enabled Jellyfin/Emby/Plex servers only', code: 'VALIDATION' });
       return own;
     });
 

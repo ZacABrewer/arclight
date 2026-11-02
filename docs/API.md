@@ -1468,8 +1468,9 @@ the `book` libraries (paged `GET /api/libraries/{id}/items`), `findItems({mediaT
 Module `apps/api/src/modules/watch-history`; contract `packages/shared/src/watch-history.ts`; tables
 `media_server_users` (every server account, linked or not), `watch_state` (current play state per
 account and item), `watch_events` (the timeline) and a per-server sync state. A read-only copy of
-Jellyfin/Emby play data, filled by two feeds: the `MediaServerWatchSync` job and the
-[Jellyfin plugin](#jellyfin-plugin)'s events. Arclight never writes to Jellyfin.
+Jellyfin/Emby/Plex play data, filled by the `MediaServerWatchSync` job, the
+[Jellyfin plugin](#jellyfin-plugin)'s events and, for Plex, webhooks and session polling. Arclight
+never writes to the media server.
 
 **Catch-up sync.** The first run per account is a full read (paged `Users/{id}/Items`, `Movie` and
 `Episode` with `UserData`). Later runs are incremental: items sorted by `DatePlayed` descending,
@@ -1478,7 +1479,20 @@ an account is read in full again, which catches "mark unplayed" and favourite ch
 incremental read cannot see. Jellyfin's `MinDateLastSavedForUser` is deliberately not used: it
 filters on the item's `DateLastSaved` (metadata saves), not on the user data, so it would miss
 plays. `played` and `unplayed` events are synthesized when `Played` flips or the play count grows
-(event `source` is `sync`; the plugin's are `plugin`).
+(event `source` is `sync`; the plugin's are `plugin`, Plex webhooks `webhook`, Plex polling `poll`).
+
+**Plex.** The owner is read from the library (`library/sections/{id}/all?includeGuids=1`, types 1
+and 4, `viewCount`/`lastViewedAt`/`viewOffset`); incremental reads sort by `lastViewedAt:desc`. A
+user linked through Plex sign-in is read the same way with their own server token (from
+plex.tv `api/v2/resources`). Other accounts are read from `status/sessions/history/all?accountID=`
+(plays and last played, no resume position). Items match by `tmdb://`/`tvdb://`/`imdb://` guids,
+then title. Accounts: the server's `/accounts` plus plex.tv `api/v2/user`, `api/v2/friends`
+(shared with this server) and `api/v2/home/users`; `externalId` is the plex.tv id and
+`media_server_users.local_id` the server-local id (the owner is `1` locally). When plex.tv fails,
+no account is marked deleted. Live events: `POST /plex/webhook?token=` (below) and the
+`PlexSessionPoll` job (every minute, `status/sessions`; a session that disappears is a stop, and a
+`played` event when it reached 90%). Both share the session id `plex:<server>:<player>:<item>`, so
+a play seen by both is stored once.
 
 **Accounts.** Server accounts map to Arclight users by Jellyfin user id against the user's
 `mediaServerLink.externalId`, never by name. History of unlinked accounts is kept and attaches when
@@ -1499,12 +1513,15 @@ state is never pruned.
 |---|---|---|
 | GET | `/watchhistory` | Portal route. `WatchEventPage` `{page, pageSize, totalRecords, records[]}`, newest first. Query: `userId`, `mediaServerUserId`, `serverId`, `movieId`, `seriesId`, `type` (`start`/`progress`/`stop`/`played`/`unplayed`), `includeProgress` (default false: progress events are left out), `page` (default 1), `pageSize` (1-200, default 50). Admins see everyone; other users always get only their own history whatever the query says |
 | GET | `/watchhistory/title/:mediaType/:id` | Admin. `:mediaType` `movie`/`series`, `:id` the library id. `WatchedByEntry[]` `{user {mediaServerUserId, name, arclightUserId, arclightUsername}, serverId, serverName, played, playCount, lastPlayedAt, positionMs, durationMs, favorite, episodes {total, played} \| null}` |
-| GET | `/watchhistory/nowplaying` | Admin. `NowPlayingEntry[]`: sessions with a start or progress event and no stop in the last 5 minutes (needs the plugin) |
+| GET | `/watchhistory/nowplaying` | Admin. `NowPlayingEntry[]`: sessions with a start or progress event and no stop in the last 5 minutes (needs the plugin, or Plex webhooks/polling) |
 | GET | `/settings/watchhistory`, PUT | Admin. The `watchHistory` settings above |
 | GET | `/mediaserver/:id/sync` | `MediaServerSyncStatus` `{serverId, watchSyncEnabled, lastSyncAt, lastFullSyncAt, lastStatus (ok/failed/running), lastError, itemsTracked, lastUserSyncAt, lastUserSyncStatus, lastUserSyncError, lastEventAt, users, linkedUsers}`; 404 unknown server |
-| POST | `/mediaserver/:id/sync` | Body `{full?: boolean}` (default false). Runs the watch sync for this server now, as the `MediaServerWatchSync` task → `WatchSyncServerResult` `{serverId, name, status (ok/failed/skipped), users, changed, events, message?}`. 400 when sync is off or the server is not an enabled Jellyfin/Emby; 404 unknown; 409 when a watch sync is already running |
+| POST | `/mediaserver/:id/sync` | Body `{full?: boolean}` (default false). Runs the watch sync for this server now, as the `MediaServerWatchSync` task → `WatchSyncServerResult` `{serverId, name, status (ok/failed/skipped), users, changed, events, message?}`. 400 when sync is off or the server is not an enabled Jellyfin/Emby/Plex; 404 unknown; 409 when a watch sync is already running |
 | POST | `/mediaserver/:id/usersync` | Runs the user sync for this server now → `UserSyncServerResult` `{serverId, name, status, added, renamed, disabled, deleted, created, mirrored?, message?}` (`mirrored`: users whose content restrictions changed through `mirrorParentalControls`). 400 for other kinds; 404 unknown; 409 when a user sync is already running |
 | GET | `/mediaserver/:id/accounts` | `MediaServerAccountRow[]` `{id, serverId, externalId, name, isAdmin, disabled, deleted, lastActivityAt, firstSeenAt, arclightUserId, arclightUsername, lastWatchSyncAt}`; 404 unknown server |
+| GET | `/mediaserver/:id/plexwebhook` | Admin. `PlexWebhookInfo` `{token, path}` for a Plex connection (creates the secret on first call); `path` is `/api/v1/plex/webhook?token=...`. 400 for other kinds; 404 unknown |
+| POST | `/mediaserver/:id/plexwebhook/regenerate` | Admin. Replaces the secret → `PlexWebhookInfo`; the old URL answers 401 at once |
+| POST | `/plex/webhook?token=` | Public; the token picks the Plex connection. Plex's `multipart/form-data` with the JSON event in `payload` (a `thumb` part is read and dropped), or a JSON body. Handles `media.play`, `media.pause`, `media.resume`, `media.stop` and `media.scrobble` → `{status: 'stored'\|'ignored', reason?}`. 401 unknown token, 400 not a Plex payload. Other events and other servers' events are ignored |
 
 Errors are `{ error, code? }`.
 

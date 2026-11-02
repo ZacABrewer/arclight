@@ -99,6 +99,29 @@ export interface PlayState {
   episodes?: { total: number; played: number };
 }
 
+/**
+ * One user's play state of one movie or episode, as the watch-history sync reads it
+ * (Jellyfin/Emby `Users/{id}/Items`, Plex section listings or the server's watch history).
+ * `seriesId` / `seasonId` are the server's own ids of the episode's series and season.
+ */
+export interface WatchItem {
+  id: string;
+  type: 'Movie' | 'Episode';
+  name: string;
+  ids: ProviderIds;
+  seriesId: string | null;
+  seasonId: string | null;
+  seasonNumber: number | null;
+  episodeNumber: number | null;
+  durationMs: number | null;
+  played: boolean;
+  /** Raw play count (a server-side "mark played" may leave it at 0). */
+  playCount: number;
+  lastPlayedAt: string | null;
+  positionMs: number;
+  favorite: boolean;
+}
+
 export interface ItemPlayState {
   item: MediaServerItem;
   state: PlayState;

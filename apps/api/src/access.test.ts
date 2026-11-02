@@ -35,6 +35,7 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'POST /api/v1/auth/plex/pin': 'public',
   'POST /api/v1/auth/plex/poll': 'public',
   'GET /api/v1/calendar/feed.ics': 'public',
+  'POST /api/v1/plex/webhook': 'public',
   'GET /api/v1/theme': 'public',
   'GET /api/v1/theme/:id/theme.css': 'public',
   'GET /api/v1/theme/:id/fonts/:file': 'public',

@@ -45,7 +45,7 @@ Row IDs are stable (`SET-01`, `LIB-12`, `FAIL-07`), so quote them in bug reports
 | [15-mobile-pwa-performance.md](15-mobile-pwa-performance.md) | Phone layout, PWA, performance smoke | MOB, PRF |
 | [16-security.md](16-security.md) | Authentication, roles, API key, local bypass | SEC |
 | [17-hardware-transcoding.md](17-hardware-transcoding.md) | Hardware acceleration pane, software fallback, GPU device access | HWT |
-| [18-watch-history-and-jellyfin-plugin.md](18-watch-history-and-jellyfin-plugin.md) | Jellyfin/Emby watch-history sync, user sync, Watch history views, retention with stored history, the Jellyfin plugin API | WHS, JFP |
+| [18-watch-history-and-jellyfin-plugin.md](18-watch-history-and-jellyfin-plugin.md) | Jellyfin/Emby/Plex watch-history sync, user sync, Watch history views, retention with stored history, Plex webhooks and polling, the Jellyfin plugin API | WHS, JFP, PLX |
 | [99-known-limitations.md](99-known-limitations.md) | Things that are known not to work; do not file bugs for these | n/a |
 
 Read [99-known-limitations.md](99-known-limitations.md) before you start. A row that exercises

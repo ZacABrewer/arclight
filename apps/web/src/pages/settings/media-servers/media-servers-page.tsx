@@ -75,8 +75,8 @@ export const FLAG_ROWS: ReadonlyArray<{ key: Flag; label: string; caption: strin
  */
 export function flagRowsFor(kind: MediaServerConnectionKind): ReadonlyArray<{ key: Flag; label: string; caption: string }> {
   // Watch-history sync reads Jellyfin/Emby only.
-  // Watch-history sync and parental-control mirroring read Jellyfin/Emby only.
-  if (isLoginCapableKind(kind)) return kind === 'plex' ? FLAG_ROWS.filter((f) => f.key !== 'syncWatchHistory' && f.key !== 'mirrorParentalControls') : FLAG_ROWS;
+  // Parental-control mirroring reads Jellyfin/Emby only; watch-history sync reads Plex too.
+  if (isLoginCapableKind(kind)) return kind === 'plex' ? FLAG_ROWS.filter((f) => f.key !== 'mirrorParentalControls') : FLAG_ROWS;
   return FLAG_ROWS.filter((f) => f.key === 'enabled' || f.key === 'usedForRefresh').map((f) =>
     f.key === 'usedForRefresh' ? { key: f.key, label: t('settings.mediaServers.refreshAfterImports'), caption: t('settings.mediaServers.absRefreshCaption') } : f,
   );

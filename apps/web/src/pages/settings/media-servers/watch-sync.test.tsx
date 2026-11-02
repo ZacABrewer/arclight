@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
 import { Permission, type MediaServerResource, type MediaServerSyncStatus } from '@arclight/shared';
 import { authRoutes, renderAt, stubApi, user } from '../../../features/requests/test-utils.js';
-import { pluginConnected, watchServers } from './watch-sync.js';
+import { pluginConnected, plexWebhookUrl, watchServers } from './watch-sync.js';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -59,8 +59,14 @@ function routes(extra: Record<string, unknown> = {}) {
 }
 
 describe('watch sync helpers', () => {
-  it('keeps Jellyfin/Emby servers only', () => {
-    expect(watchServers([server(), server({ id: 'p', kind: 'plex' }), server({ id: 'e', kind: 'emby' })]).map((s) => s.id)).toEqual(['jf1', 'e']);
+  it('keeps Jellyfin/Emby/Plex servers only', () => {
+    expect(
+      watchServers([server(), server({ id: 'p', kind: 'plex' }), server({ id: 'a', kind: 'audiobookshelf' }), server({ id: 'e', kind: 'emby' })]).map((s) => s.id),
+    ).toEqual(['jf1', 'p', 'e']);
+  });
+
+  it('builds the Plex webhook URL from the page origin', () => {
+    expect(plexWebhookUrl('/api/v1/plex/webhook?token=abc', 'https://arclight.example.com')).toBe('https://arclight.example.com/api/v1/plex/webhook?token=abc');
   });
 
   it('calls the plugin connected after recent contact', () => {
@@ -72,7 +78,7 @@ describe('watch sync helpers', () => {
 });
 
 describe('Settings → Media servers: watch history and plugin', () => {
-  it('offers the sync toggle for Jellyfin/Emby, not Plex', async () => {
+  it('offers the sync toggle for Jellyfin/Emby and Plex', async () => {
     const calls = stubApi(routes(), (url, method, body) => (method === 'PUT' && url === '/api/v1/mediaserver/jf1' ? { body: { ...server(), ...(body as object) } } : undefined));
     renderAt('/settings/mediaservers');
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Living room' }));
@@ -86,7 +92,8 @@ describe('Settings → Media servers: watch history and plugin', () => {
 
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Den' }));
     const plex = await screen.findByRole('dialog', { name: 'Edit Den' });
-    expect(within(plex).queryByRole('switch', { name: 'Sync watch history' })).toBeNull();
+    expect(within(plex).getByRole('switch', { name: 'Sync watch history' })).toBeTruthy();
+    expect(within(plex).queryByRole('switch', { name: /parental controls/i })).toBeNull();
   });
 
   it('shows the sync state and runs Sync now', async () => {
@@ -97,12 +104,39 @@ describe('Settings → Media servers: watch history and plugin', () => {
     const group = await screen.findByRole('group', { name: 'Watch history sync of Living room' });
     expect(await within(group).findByText('1234')).toBeTruthy();
     expect(within(group).getByText('2 linked of 3')).toBeTruthy();
-    expect(screen.queryByRole('group', { name: 'Watch history sync of Den' })).toBeNull();
+    expect(within(group).queryByLabelText(/Plex webhook URL/)).toBeNull();
     fireEvent.click(within(group).getByRole('button', { name: 'Sync now' }));
     await waitFor(() => expect(calls.find((c) => c.method === 'POST' && c.url === '/api/v1/mediaserver/jf1/sync')?.body).toEqual({ full: false }));
     await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Living room: 3 users, 7 changes'));
     fireEvent.click(within(group).getByRole('button', { name: 'Full resync' }));
     await waitFor(() => expect(calls.filter((c) => c.method === 'POST' && c.url === '/api/v1/mediaserver/jf1/sync').at(-1)?.body).toEqual({ full: true }));
+  });
+
+  it('shows the Plex webhook URL and rotates it', async () => {
+    let token = 'first-secret';
+    const calls = stubApi(
+      routes({
+        '/api/v1/mediaserver/px/sync': { ...status, serverId: 'px', watchSyncEnabled: false, lastEventAt: '2026-10-30T09:00:00.000Z' },
+      }),
+      (url, method) => {
+        if (url === '/api/v1/mediaserver/px/plexwebhook/regenerate' && method === 'POST') token = 'second-secret';
+        if (url.startsWith('/api/v1/mediaserver/px/plexwebhook')) return { body: { token, path: `/api/v1/plex/webhook?token=${token}` } };
+        return undefined;
+      },
+    );
+    const { toasts } = renderAt('/settings/mediaservers');
+    const group = await screen.findByRole('group', { name: 'Watch history sync of Den' });
+    expect(await within(group).findByText('Sync off')).toBeTruthy();
+    expect(within(group).getByText('Last webhook or session')).toBeTruthy();
+    const field = (await within(group).findByLabelText('Plex webhook URL for Den')) as HTMLInputElement;
+    expect(field.value).toBe(`${window.location.origin}/api/v1/plex/webhook?token=first-secret`);
+
+    fireEvent.click(within(group).getByRole('button', { name: 'New webhook URL' }));
+    const confirm = await screen.findByRole('dialog', { name: 'New webhook URL' });
+    fireEvent.click(within(confirm).getByRole('button', { name: 'New webhook URL' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST' && c.url === '/api/v1/mediaserver/px/plexwebhook/regenerate')).toBe(true));
+    await waitFor(() => expect(((within(group).getByLabelText('Plex webhook URL for Den')) as HTMLInputElement).value).toContain('second-secret'));
+    await waitFor(() => expect(toasts.list().map((t) => t.title)).toContain('Webhook URL replaced'));
   });
 
   it('lists synced accounts with their Arclight user', async () => {

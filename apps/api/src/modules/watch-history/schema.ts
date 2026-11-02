@@ -7,7 +7,7 @@ import type { SyncRunStatus, WatchEventSource, WatchEventType, WatchItemType, Wa
 // Media servers live in the `mediaServers` settings section, so `server_id` is a plain text id.
 
 /**
- * Every account seen on a Jellyfin/Emby server. History hangs off these rows, not off Arclight
+ * Every account seen on a Jellyfin/Emby/Plex server. History hangs off these rows, not off Arclight
  * users: an account without an Arclight user keeps its history, which shows up under the user
  * once the account is linked or imported (the link lives in users.settings.mediaServerLink and is
  * matched by server kind + account id, never by name). Accounts are never deleted, only marked.
@@ -17,8 +17,13 @@ export const mediaServerUsers = sqliteTable(
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
     serverId: text('server_id').notNull(),
-    /** Jellyfin/Emby user id, lower-case without dashes. */
+    /** Jellyfin/Emby user id, lower-case without dashes; Plex: the plex.tv account id. */
     externalId: text('external_id').notNull(),
+    /**
+     * Plex: the id the server itself uses for the account in history, sessions and webhooks
+     * (the plex.tv id for everyone but the owner, who is 1). Null for Jellyfin/Emby.
+     */
+    localId: text('local_id'),
     name: text('name').notNull(),
     isAdmin: integer('is_admin', { mode: 'boolean' }).notNull().default(false),
     disabled: integer('disabled', { mode: 'boolean' }).notNull().default(false),

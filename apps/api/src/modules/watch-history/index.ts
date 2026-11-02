@@ -5,6 +5,8 @@ import { requestsServicesFor } from '../requests/index.js';
 import { patchUserSettings } from '../requests/users.js';
 import { EventIngest } from './ingest.js';
 import { registerWatchHistoryJobs } from './jobs.js';
+import { PlexLive } from './plex-live.js';
+import { plexWebhookRoutes } from './plex-routes.js';
 import { WatchQueries } from './queries.js';
 import { watchHistoryRoutes } from './routes.js';
 import { WatchStore } from './store.js';
@@ -14,13 +16,17 @@ export * from './schema.js';
 export { WatchStore, LibraryResolver, resolveItem, linkedUsers, normaliseExternalId, type LinkedUser, type ResolvedItem } from './store.js';
 export { WatchSync, type AccountsPort } from './sync.js';
 export { EventIngest } from './ingest.js';
+export { PlexLive } from './plex-live.js';
+export { PLEX_WEBHOOK_PATH } from './plex-routes.js';
 export { WatchQueries, NOW_PLAYING_WINDOW_MS, type Viewer } from './queries.js';
-export { WATCH_SYNC_JOB, USER_SYNC_JOB, WATCH_CLEANUP_JOB, watchSyncCron } from './jobs.js';
+export { WATCH_SYNC_JOB, USER_SYNC_JOB, WATCH_CLEANUP_JOB, PLEX_POLL_JOB, watchSyncCron } from './jobs.js';
 
 export interface WatchHistory {
   store: WatchStore;
   sync: WatchSync;
   ingest: EventIngest;
+  /** Plex webhooks and session polling. */
+  plex: PlexLive;
   queries: WatchQueries;
 }
 
@@ -53,16 +59,18 @@ export function watchHistoryFor(ctx: AppContext): WatchHistory {
     store,
     sync: new WatchSync({ store, servers, accounts, log }),
     ingest: new EventIngest(store, accounts, log),
+    plex: new PlexLive(store, servers, log),
     queries: new WatchQueries(ctx.db, () => servers.stored()),
   };
   instances.set(ctx, found);
   return found;
 }
 
-// Watch history from Jellyfin/Emby: catch-up sync, account sync, the play timeline and its
+// Watch history from Jellyfin/Emby/Plex: catch-up sync, account sync, the play timeline and its
 // read routes. Registered after the requests module (linked-user creation goes through it).
 export const watchHistoryModule: AppModule = (ctx) => async (app) => {
   const wh = watchHistoryFor(ctx);
   await app.register(watchHistoryRoutes(ctx, wh, mediaServersServiceFor(ctx)));
+  await app.register(plexWebhookRoutes(mediaServersServiceFor(ctx), wh.plex));
   registerWatchHistoryJobs(ctx, wh);
 };
