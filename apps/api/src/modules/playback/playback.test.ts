@@ -233,6 +233,50 @@ describe('access guard', () => {
     expect((after.settings as Record<string, unknown>)['player']).toMatchObject({ allowed: true });
   });
 
+  it('users cannot point their media-server link at another account through PUT /user/me', async () => {
+    const h = await harness();
+    const { book } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const key = `audiobook:${book.id}`;
+    setSection(h.db, 'mediaServers', { servers: [{ id: 'jf1', kind: 'jellyfin', name: 'Media', url: 'http://media.invalid', apiKey: 'k' }] });
+    const victim = h.db.insert(schema.mediaServerUsers).values({ serverId: 'jf1', externalId: 'victim1', name: 'someone', firstSeenAt: NOW, updatedAt: NOW }).returning().get();
+    h.db
+      .insert(schema.watchState)
+      .values({ serverId: 'jf1', mediaServerUserId: victim.id, jellyfinItemId: 'x1', itemType: 'other', itemKey: key, title: 'Long Story', positionMs: 42_000, updatedAt: new Date().toISOString() })
+      .run();
+    const res = await h.app.inject({ method: 'PUT', url: '/api/v1/user/me', headers: { cookie: user.cookie }, payload: { settings: { mediaServerLink: { kind: 'jellyfin', externalId: 'victim1' }, theme: 'light' } } });
+    expect(res.statusCode).toBe(200);
+    const stored = h.db.select().from(schema.users).all().find((u) => u.id === user.id)!.settings as Record<string, unknown>;
+    expect(stored['mediaServerLink']).toBeUndefined();
+    expect(stored['theme']).toBe('light');
+    expect((await get(h, `/api/v1/playback/progress?itemKeys=${key}`, user.cookie)).json().items).toEqual([]);
+    // A link stored by the link routes (patchUserSettings) survives a later PUT /user/me.
+    const { patchUserSettings } = await import('../requests/users.js');
+    patchUserSettings(h.db, user.id, { mediaServerLink: { kind: 'jellyfin', externalId: 'mine' } }, NOW);
+    await h.app.inject({ method: 'PUT', url: '/api/v1/user/me', headers: { cookie: user.cookie }, payload: { settings: { mediaServerLink: { kind: 'jellyfin', externalId: 'victim1' } } } });
+    const after = h.db.select().from(schema.users).all().find((u) => u.id === user.id)!.settings as Record<string, unknown>;
+    expect(after['mediaServerLink']).toEqual({ kind: 'jellyfin', externalId: 'mine' });
+  });
+
+  it('item, stream and artwork routes 404 while their section is off', async () => {
+    const h = await harness();
+    const { trackIds, book, album, partIds } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const musicFile = h.db.select().from(schema.audioFiles).all().find((f) => f.albumId === album.id)!.id;
+    setSection(h.db, 'features', { music: false, audiobooks: true, podcasts: false });
+    expect((await get(h, `/api/v1/playback/item/track:${trackIds[0]}`, user.cookie)).statusCode).toBe(404);
+    expect((await get(h, `/api/v1/stream/audio/${musicFile}`, user.cookie)).statusCode).toBe(404);
+    expect((await get(h, `/api/v1/playback/artwork/album/${album.id}`, user.cookie)).statusCode).toBe(404);
+    const links = await h.app.inject({ method: 'POST', url: '/api/v1/playback/stream-links', headers: { cookie: user.cookie }, payload: { itemKey: `track:${trackIds[0]}` } });
+    expect(links.statusCode).toBe(404);
+    expect((await get(h, `/api/v1/playback/item/audiobook:${book.id}`, user.cookie)).statusCode).toBe(200);
+    expect((await get(h, `/api/v1/stream/audio/${partIds[0]}`, user.cookie)).statusCode).toBe(200);
+    setSection(h.db, 'features', { music: true, audiobooks: false, podcasts: false });
+    expect((await get(h, `/api/v1/playback/item/audiobook:${book.id}`, user.cookie)).statusCode).toBe(404);
+    expect((await get(h, `/api/v1/stream/audio/${partIds[0]}`, user.cookie)).statusCode).toBe(404);
+    expect((await get(h, `/api/v1/stream/audio/${musicFile}`, user.cookie)).statusCode).toBe(200);
+  });
+
   it('player settings are admin only', async () => {
     const h = await harness();
     const user = await signIn(h, { player: { allowed: true } });
@@ -293,6 +337,9 @@ describe('stream', () => {
     const asked = await get(h, `/api/v1/stream/audio/${fileId}?format=mp3&bitrateKbps=128&startMs=1500`, user.cookie);
     expect([asked.statusCode, asked.headers['content-type'], asked.body]).toEqual([200, 'audio/mpeg', 'ENCODED']);
     expect(h.launches[0]).toEqual(expect.arrayContaining(['-ss', '1.500', '-c:a', 'libmp3lame', '-b:a', '128k']));
+    // HEAD (the player's probe after a failed stream) answers without starting ffmpeg.
+    const probe = await h.app.inject({ method: 'HEAD', url: `/api/v1/stream/audio/${fileId}?format=mp3`, headers: { cookie: user.cookie } });
+    expect([probe.statusCode, h.launches.length]).toEqual([200, 1]);
 
     // Local: no cap, the original.
     expect((await get(h, `/api/v1/stream/audio/${fileId}`, user.cookie)).headers['content-type']).toBe('audio/flac');
@@ -434,6 +481,25 @@ describe('progress', () => {
     expect((await get(h, '/api/v1/playback/progress?itemKeys=movie:1', user.cookie)).statusCode).toBe(400);
   });
 
+  it('a favourite or speed PATCH does not make the next reports look stale', async () => {
+    const h = await harness();
+    const { trackIds } = seed(h.db);
+    const user = await signIn(h, { player: { allowed: true } });
+    const key = `track:${trackIds[0]}`;
+    const put = (body: unknown) => h.app.inject({ method: 'PUT', url: `/api/v1/playback/progress/${key}`, headers: { cookie: user.cookie }, payload: body as object });
+    const patch = (body: unknown) => h.app.inject({ method: 'PATCH', url: `/api/v1/playback/progress/${key}`, headers: { cookie: user.cookie }, payload: body as object });
+    // The device clock runs a little behind the server.
+    const behind = (s: number) => new Date(Date.now() - 30_000 + s * 1000).toISOString();
+    // A PATCH before any report.
+    await patch({ favorite: true });
+    expect((await put(report(20_000, behind(1)))).json()).toMatchObject({ positionMs: 20_000, favorite: true });
+    await patch({ prefs: { speed: 1.5 } });
+    expect((await put(report(30_000, behind(2)))).json()).toMatchObject({ positionMs: 30_000, prefs: { speed: 1.5 } });
+    // Marking played still orders: an older report cannot undo it.
+    await patch({ played: true });
+    expect((await put(report(40_000, behind(3)))).json()).toMatchObject({ played: true });
+  });
+
   it('accepts sendBeacon posts (text/plain JSON)', async () => {
     const h = await harness();
     const { book } = seed(h.db);
@@ -539,6 +605,66 @@ describe('queue, bookmarks and playlists', () => {
   });
 });
 
+describe('playlist track edits', () => {
+  async function setup() {
+    const h = await harness();
+    const { trackIds } = seed(h.db);
+    const missing = h.db.select().from(schema.tracks).all().find((t) => !t.hasFile)!.id;
+    const user = await signIn(h, { player: { allowed: true } });
+    const call = (method: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', url: string, payload?: object) =>
+      h.app.inject({ method, url: `/api/v1/playback/playlists${url}`, headers: { cookie: user.cookie }, ...(payload ? { payload } : {}) });
+    const [t0, t1] = trackIds as [number, number];
+    const created = (await call('POST', '', { name: 'Mix', trackIds: [t0, missing, t1] })).json();
+    return { h, t0, t1, missing, call, id: created.id as number };
+  }
+
+  it('GET reports every track id, file or not, and the entry id of each playable track', async () => {
+    const { call, id, t0, t1, missing } = await setup();
+    const pl = (await call('GET', `/${id}`)).json();
+    expect(pl.trackIds).toEqual([t0, missing, t1]);
+    expect(pl.tracks.map((t: { id: number }) => t.id)).toEqual([t0, t1]);
+    expect(pl.entryIds).toHaveLength(2);
+    expect(pl.trackCount).toBe(2);
+  });
+
+  it('adds at the end or at a position, keeping tracks without files', async () => {
+    const { call, id, t0, t1, missing } = await setup();
+    const appended = (await call('POST', `/${id}/tracks`, { trackIds: [t0] })).json();
+    expect(appended.trackIds).toEqual([t0, missing, t1, t0]);
+    const inserted = (await call('POST', `/${id}/tracks`, { trackIds: [t1], position: 0 })).json();
+    expect(inserted.trackIds).toEqual([t1, t0, missing, t1, t0]);
+    expect((await call('POST', `/${id}/tracks`, { trackIds: [] })).statusCode).toBe(400);
+  });
+
+  it('removes and moves single entries; edits from a stale view both land', async () => {
+    const { call, id, t0, t1, missing } = await setup();
+    const first = (await call('GET', `/${id}`)).json().entryIds[0] as number;
+    // Two edits made from the same view: neither undoes the other.
+    await call('POST', `/${id}/tracks`, { trackIds: [t0] });
+    const removed = (await call('DELETE', `/${id}/tracks/${first}`)).json();
+    expect(removed.trackIds).toEqual([missing, t1, t0]);
+    const [a, b] = removed.entryIds as [number, number];
+    const moved = (await call('PATCH', `/${id}/tracks/${b}`, { beforeEntryId: a })).json();
+    expect(moved.trackIds).toEqual([missing, t0, t1]);
+    expect(moved.entryIds).toEqual([b, a]);
+    const back = (await call('PATCH', `/${id}/tracks/${b}`, { afterEntryId: a })).json();
+    expect(back.trackIds).toEqual([missing, t1, t0]);
+    expect((await call('DELETE', `/${id}/tracks/${first}`)).statusCode).toBe(404);
+    expect((await call('PATCH', `/${id}/tracks/${b}`, {})).statusCode).toBe(400);
+    expect((await call('PATCH', `/${id}/tracks/${b}`, { beforeEntryId: 99999 })).statusCode).toBe(404);
+  });
+
+  it('only the owner edits; the size cap holds', async () => {
+    const { h, call, id, t0, t1 } = await setup();
+    const other = await signIn(h, { player: { allowed: true } });
+    const res = await h.app.inject({ method: 'POST', url: `/api/v1/playback/playlists/${id}/tracks`, headers: { cookie: other.cookie }, payload: { trackIds: [t0] } });
+    expect(res.statusCode).toBe(404);
+    const big = await call('POST', '', { name: 'Big', trackIds: Array.from({ length: 4999 }, () => t0) });
+    const full = await call('POST', `/${big.json().id}/tracks`, { trackIds: [t0, t1] });
+    expect([full.statusCode, full.json().code]).toEqual([400, 'PLAYLIST_FULL']);
+  });
+});
+
 describe('browse', () => {
   it('lists only items with files, with format labels', async () => {
     const h = await harness();
@@ -593,5 +719,9 @@ describe('browse', () => {
     expect([img.statusCode, img.headers['content-type'], img.rawPayload.length]).toEqual([200, 'image/jpeg', 4]);
     const denied = await signIn(h);
     expect((await get(h, `/api/v1/playback/artwork/album/${album.id}`, denied.cookie)).statusCode).toBe(403);
+    // A folder image over the size cap is skipped, never read.
+    const { MAX_ARTWORK_BYTES } = await import('./artwork.js');
+    writeFileSync(join(dir, 'Cover.JPG'), Buffer.alloc(MAX_ARTWORK_BYTES + 1));
+    expect((await get(h, `/api/v1/playback/artwork/album/${album.id}`, user.cookie)).statusCode).toBe(404);
   });
 });

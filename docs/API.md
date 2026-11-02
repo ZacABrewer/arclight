@@ -2556,7 +2556,9 @@ Access: every `/playback/*` route except `/playback/me`, and every stream, answe
 `settings.player.allowed`) or `REMOTE_NOT_ALLOWED` (a remote request while `allowRemote` is off
 server-wide or for the user). Admins and the API key always have access. Per-user routes
 (progress, queue, bookmarks, playlists, continue) need a signed-in user: API-key callers get
-`400 NO_USER`. Browse routes answer `404 SECTION_OFF` when the feature (music, audiobooks) is off.
+`400 NO_USER`. Browse routes answer `404 SECTION_OFF` when the feature (music, audiobooks) is off;
+items, stream links, streams and artwork of a section that is off answer `404` as if missing.
+`settings.mediaServerLink` is set only by the media-server link routes, never by `PUT /user/me`.
 
 Item keys are `track:<id>` or `audiobook:<id>`. A track plays its one file; an audiobook is every
 file of the book on one timeline (ordered by part, disc and track number, then path; each part's
@@ -2583,7 +2585,9 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 | POST | `/playback/bookmarks` | `{itemKey, positionMs, note?}`; `201` |
 | PUT, DELETE | `/playback/bookmarks/:id` | Move it or change the note (`BookmarkUpdate`); delete (`204`). Another user's bookmark is `404` |
 | GET, POST | `/playback/playlists` | The caller's playlists; create `UserPlaylistInput` `{name, description?, trackIds?}` (`201`; unknown tracks are dropped, order and repeats kept) |
-| GET, PUT, DELETE | `/playback/playlists/:id` | One playlist with its tracks; replace it; delete. Another user's playlist is `404` |
+| GET, PUT, DELETE | `/playback/playlists/:id` | `UserPlaylistDetails`: the playable `tracks` with the `entryIds` of each (same order) and `trackIds`, every entry's track in order including tracks without a file yet. PUT replaces name, description and (when given) the whole track list; DELETE removes it. Another user's playlist is `404` |
+| POST | `/playback/playlists/:id/tracks` | `PlaylistTracksAdd` `{trackIds, position?}`: insert at `position` in `trackIds` (default: the end). Answers `UserPlaylistDetails`; past 5000 entries `400 PLAYLIST_FULL` |
+| PATCH, DELETE | `/playback/playlists/:id/tracks/:entryId` | Move one entry (`PlaylistTrackMove`, exactly one of `{beforeEntryId}` or `{afterEntryId}`), or remove it. Answers `UserPlaylistDetails`; an unknown entry or anchor is `404`. Edits by entry id, so a track that is in the list twice moves or goes once, and two clients editing at once do not undo each other |
 | GET | `/playback/music/home` | Recently played tracks, jump back in, recently added, the caller's playlists, on this day |
 | GET | `/playback/music/albums`, `/artists`, `/tracks` | `BrowseQuery` `{search, sort, desc, genre, letter, page, pageSize}`; only items with files. Albums carry a format label (`FLAC 24/96`, `MP3 320`) |
 | GET | `/playback/music/albums/:id`, `/artists/:id` | An album with its tracks and disc count; an artist with albums and top tracks (by the caller's plays) |
@@ -2596,8 +2600,12 @@ Streams: the original file is served with `Accept-Ranges: bytes`, a strong `ETag
 `416` with `Content-Range: bytes */<size>`), `If-None-Match`/`If-Modified-Since` (`304`) and
 `If-Range`. `HEAD` answers the same headers without a body. Any other `format` is transcoded by
 ffmpeg on the fly (no ranges; `X-Arclight-Transcode: <format>/<kbps>`), starting at `startMs`. At
-most 6 transcodes run at once (`503 TRANSCODE_BUSY` with `Retry-After`; `503 FFMPEG_MISSING`
-without ffmpeg), and each stops when the client disconnects. A remote original above the
+most 6 transcodes run at once and 2 per user; a user's newest request replaces their oldest, so
+skipping around never locks anyone out (`503 TRANSCODE_BUSY` with `Retry-After` when the server
+is full with other users' work; `503 FFMPEG_MISSING` without ffmpeg). A transcode stops when the
+client disconnects, and is killed when nobody has read its output for 60 seconds (a long pause);
+players ask again from the position on resume. `HEAD` on a transcode answers `503` when a `GET`
+would be refused for lack of a slot, so a player can tell "busy" from "cannot decode". A remote original above the
 caller's cap is sent as Opus at the cap; an asked-for bitrate is clamped to it.
 
 Signed links (`?u=&exp=&sig=`, HMAC-SHA256 over file, user and expiry with a key derived from the

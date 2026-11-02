@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { readdir, readFile, stat } from 'node:fs/promises';
 import { dirname, extname, join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { parseFile } from 'music-metadata';
@@ -9,11 +9,15 @@ import { books } from '../audiobooks/schema.js';
 
 // Artwork for player users, who cannot reach the admin library routes. In order: an image file
 // in the item's folder (cover.jpg, folder.png ...), the picture embedded in its first audio file,
-// a redirect to the stored catalogue image, else 404. Paths come from the database only.
+// a redirect to the stored catalogue image, else 404. Paths come from the database only. Images
+// over MAX_ARTWORK_BYTES are skipped (never read into memory), so a stray huge file cannot pin RAM.
 
 export type ArtworkKind = 'album' | 'artist' | 'book';
 
 export type Artwork = { kind: 'bytes'; body: Buffer; mimeType: string } | { kind: 'redirect'; url: string } | null;
+
+/** Larger folder or embedded images are skipped. */
+export const MAX_ARTWORK_BYTES = 20 * 1024 * 1024;
 
 const IMAGE_MIME: Record<string, string> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 const NAMES: Record<ArtworkKind, string[]> = {
@@ -34,7 +38,10 @@ async function folderImage(dir: string, names: readonly string[]): Promise<Artwo
     const file = entries.find((e) => IMAGE_MIME[extname(e).toLowerCase()] && e.slice(0, -extname(e).length).toLowerCase() === name);
     if (!file) continue;
     try {
-      return { kind: 'bytes', body: await readFile(join(dir, file)), mimeType: IMAGE_MIME[extname(file).toLowerCase()]! };
+      const path = join(dir, file);
+      const info = await stat(path);
+      if (!info.isFile() || info.size > MAX_ARTWORK_BYTES) continue;
+      return { kind: 'bytes', body: await readFile(path), mimeType: IMAGE_MIME[extname(file).toLowerCase()]! };
     } catch {
       continue;
     }
@@ -46,7 +53,7 @@ async function embedded(path: string): Promise<Artwork> {
   try {
     const meta = await parseFile(path, { duration: false, skipCovers: false });
     const pic = meta.common.picture?.[0];
-    return pic ? { kind: 'bytes', body: Buffer.from(pic.data), mimeType: pic.format.includes('/') ? pic.format : `image/${pic.format}` } : null;
+    return pic && pic.data.length <= MAX_ARTWORK_BYTES ? { kind: 'bytes', body: Buffer.from(pic.data), mimeType: pic.format.includes('/') ? pic.format : `image/${pic.format}` } : null;
   } catch {
     return null;
   }

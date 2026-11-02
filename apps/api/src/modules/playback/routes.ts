@@ -26,6 +26,8 @@ import {
   PlayerSettings,
   PlayerTrackPage,
   PlaybackProgress,
+  PlaylistTrackMove,
+  PlaylistTracksAdd,
   PlayQueue,
   ProgressBeacon,
   ProgressListResponse,
@@ -66,7 +68,7 @@ import { playableItem } from './items.js';
 import { hasLinkParams, linkKey, linkQuery, verifyLink } from './links.js';
 import type { ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
-import { BookmarkStore, PlayerNotFound, PlaylistStore, QueueStore } from './stores.js';
+import { BookmarkStore, PlayerNotFound, PlaylistFull, PlaylistStore, QueueStore } from './stores.js';
 import { DEFAULT_BITRATE_KBPS, FfmpegMissing, TRANSCODE_MIME, TranscodeBusy, type AudioTranscoder, type TranscodeFormat } from './transcode.js';
 
 // /api/v1/playback/* and /api/v1/stream/*: the player. Every route is open to signed-in users
@@ -89,6 +91,7 @@ const user = { access: { portal: true } } as const;
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
 const errors = { 400: ErrorBody, 403: ErrorBody, 404: ErrorBody };
 const IdParams = z.object({ id: z.coerce.number().int().positive() });
+const EntryParams = z.object({ id: z.coerce.number().int().positive(), entryId: z.coerce.number().int().positive() });
 const KeyParams = z.object({ itemKey: ItemKey });
 const FileParams = z.object({ fileId: z.coerce.number().int().positive() });
 const ArtworkParams = z.object({ kind: z.enum(['album', 'artist', 'book']), id: z.coerce.number().int().positive() });
@@ -138,6 +141,20 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   const music = { config: user, preHandler: sectionOn('music') } as const;
   const audiobooks = { config: user, preHandler: sectionOn('audiobooks') } as const;
 
+  /** Whether the section of a file or item kind is on (Settings → Features). */
+  function sectionEnabled(kind: 'music' | 'track' | 'audiobook'): boolean {
+    const features = getSection(db, 'features');
+    return kind === 'audiobook' ? features.audiobooks : features.music;
+  }
+
+  /** The playable item, or 404 when it is missing, has no file or its section is off. */
+  function itemOr404(key: string): PlayableItem {
+    const parsed = parseItemKey(key);
+    const item = parsed && sectionEnabled(parsed.kind) ? playableItem(browse, key) : null;
+    if (!item) throw new PlayerNotFound(`${key} not found or has no file`);
+    return item;
+  }
+
   /** The keys of a progress query, validated (400 on a bad or too long list). */
   function keysOf(raw: string): string[] {
     const keys = [...new Set(raw.split(',').map((k) => k.trim()).filter(Boolean))];
@@ -168,21 +185,22 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
   }
 
   /** The decision for a stream request: the signed-in caller, or the user of a valid link. */
-  function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): PlayerDecision | PlayerHttpError {
+  function streamDecision(req: FastifyRequest, query: { u?: unknown; exp?: unknown; sig?: unknown }, fileId: number): { decision: PlayerDecision; userId: number | null } | PlayerHttpError {
     const settings = playerSettings(db);
     const remote = isRemoteRequest(req);
-    if (req.auth) return decide(settings, subjectOf(req), remote);
+    if (req.auth) return { decision: decide(settings, subjectOf(req), remote), userId: req.auth.user?.id ?? null };
     const check = verifyLink(linkKey(deps.apiKey()), fileId, query, now());
     if (!check.ok) return new PlayerHttpError(403, `LINK_${check.reason}`, check.reason === 'EXPIRED' ? 'this stream link has expired' : 'this stream link is not valid');
     const row = db.select({ id: users.id, role: users.role, settings: users.settings }).from(users).where(eq(users.id, check.userId)).get();
     if (!row || !linkUserStillActive(row.id)) return new PlayerHttpError(403, 'LINK_REVOKED', 'this stream link was revoked');
-    return decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote);
+    return { decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote), userId: row.id };
   }
 
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof PlayerHttpError) return reply.code(err.status).send({ error: err.message, code: err.code });
       if (err instanceof PlayerNotFound) return reply.code(404).send({ error: err.message, code: err.code });
+      if (err instanceof PlaylistFull) return reply.code(400).send({ error: err.message, code: err.code });
       if (err instanceof Error && 'validation' in err && err.validation) return reply.code(400).send({ error: err.message, code: 'VALIDATION' });
       const status = (err as { statusCode?: number }).statusCode;
       if (status && status >= 400 && status < 500) return reply.code(status).send({ error: (err as Error).message, code: 'BAD_REQUEST' });
@@ -200,16 +218,11 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     );
 
     // ---- items and stream links ------------------------------------------------------------
-    app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => {
-      const item = playableItem(browse, req.params.itemKey);
-      if (!item) throw new PlayerNotFound(`${req.params.itemKey} not found or has no file`);
-      return item;
-    });
+    app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => itemOr404(req.params.itemKey));
 
     app.post('/playback/stream-links', { ...playerUser, schema: { body: StreamLinksRequest, response: { 200: StreamLinksResponse, ...errors } } }, async (req) => {
       const userId = userIdOf(req);
-      const item = playableItem(browse, req.body.itemKey);
-      if (!item) throw new PlayerNotFound(`${req.body.itemKey} not found or has no file`);
+      const item = itemOr404(req.body.itemKey);
       const exp = Math.floor(now() / 1000) + playerSettings(db).streamLinkHours * 3600;
       const key = linkKey(deps.apiKey());
       const origin = `${req.protocol}://${req.host}`;
@@ -231,11 +244,13 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       schema: { params: FileParams, querystring: StreamQueryWithLink },
       handler: async (req, reply) => {
         const fileId = req.params.fileId;
-        const decision = streamDecision(req, req.query, fileId);
-        if (decision instanceof PlayerHttpError) return reply.code(decision.status).send({ error: decision.message, code: decision.code });
+        const decided = streamDecision(req, req.query, fileId);
+        if (decided instanceof PlayerHttpError) return reply.code(decided.status).send({ error: decided.message, code: decided.code });
+        const { decision, userId } = decided;
         if (decision.denial) return denialReply(reply, decision.denial);
         const file = db.select().from(audioFiles).where(eq(audioFiles.id, fileId)).get();
-        if (!file) return reply.code(404).send({ error: `audio file ${fileId} not found`, code: 'NOT_FOUND' });
+        // A file of a section turned off in Settings → Features reads as missing.
+        if (!file || !sectionEnabled(file.mediaType)) return reply.code(404).send({ error: `audio file ${fileId} not found`, code: 'NOT_FOUND' });
         let info;
         try {
           info = await stat(file.path);
@@ -255,10 +270,11 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
         if (format !== 'original') {
           const kbps = Math.min(bitrate ?? DEFAULT_BITRATE_KBPS[format], cap > 0 ? cap : Number.MAX_SAFE_INTEGER);
           reply.header('content-type', TRANSCODE_MIME[format]).header('accept-ranges', 'none').header('x-arclight-transcode', `${format}/${kbps}`);
-          if (head) return reply.code(200).send();
+          // HEAD answers what a GET would now: the player probes with it after a failed stream.
+          if (head) return deps.transcoder.canStart(userId) ? reply.code(200).send() : reply.code(503).header('retry-after', '5').send();
           let proc;
           try {
-            proc = await deps.transcoder.start(file.path, { format, bitrateKbps: kbps, startMs: req.query.startMs, channels: file.channels });
+            proc = await deps.transcoder.start(file.path, { format, bitrateKbps: kbps, startMs: req.query.startMs, channels: file.channels }, userId);
           } catch (err) {
             if (err instanceof TranscodeBusy) return reply.code(503).header('retry-after', '5').send({ error: err.message, code: err.code });
             if (err instanceof FfmpegMissing) return reply.code(503).send({ error: err.message, code: err.code });
@@ -288,6 +304,7 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
 
     // ---- artwork ------------------------------------------------------------------------------
     app.get('/playback/artwork/:kind/:id', { ...player, schema: { params: ArtworkParams } }, async (req, reply) => {
+      if (!sectionEnabled(req.params.kind === 'book' ? 'audiobook' : 'music')) return reply.code(404).send({ error: 'no artwork', code: 'NOT_FOUND' });
       const art = await findArtwork(db, req.params.kind, req.params.id);
       if (!art) return reply.code(404).send({ error: 'no artwork', code: 'NOT_FOUND' });
       if (art.kind === 'redirect') return reply.redirect(art.url, 302);
@@ -372,6 +389,17 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       playlists.remove(userIdOf(req), req.params.id);
       return reply.code(204).send(null);
     });
+    // Incremental track edits: each is one transaction on the stored list, so two tabs editing
+    // at once cannot drop each other's changes (or tracks that have no file yet).
+    app.post('/playback/playlists/:id/tracks', { ...playerUser, schema: { params: IdParams, body: PlaylistTracksAdd, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
+      playlists.addTracks(userIdOf(req), req.params.id, req.body, now()),
+    );
+    app.delete('/playback/playlists/:id/tracks/:entryId', { ...playerUser, schema: { params: EntryParams, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
+      playlists.removeEntry(userIdOf(req), req.params.id, req.params.entryId, now()),
+    );
+    app.patch('/playback/playlists/:id/tracks/:entryId', { ...playerUser, schema: { params: EntryParams, body: PlaylistTrackMove, response: { 200: UserPlaylistDetails, ...errors } } }, async (req) =>
+      playlists.moveEntry(userIdOf(req), req.params.id, req.params.entryId, req.body, now()),
+    );
 
     // ---- browse: music ------------------------------------------------------------------------
     app.get('/playback/music/home', { ...music, schema: { response: { 200: MusicHome, ...errors } } }, async (req) => {

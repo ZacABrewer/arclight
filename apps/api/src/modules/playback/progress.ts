@@ -194,13 +194,19 @@ export class ProgressStore {
     return { accepted: outcome.accepted, progress: this.own(userId, key)! };
   }
 
-  /** PATCH: mark played/unplayed, favourite, prefs. Marking played counts a play. */
+  /**
+   * PATCH: mark played/unplayed, favourite, prefs. Marking played counts a play. Only played /
+   * unplayed moves `updatedAt` (it orders position reports): a favourite or a speed change made
+   * mid-listen must not make the device's next reports look stale.
+   */
   update(userId: number, key: string, patch: ProgressUpdate, nowMs = Date.now()): PlaybackProgress {
     const prev = this.row(userId, key);
     const now = new Date(nowMs).toISOString();
+    // A row made by a prefs-only PATCH has no position yet: it is older than any report.
     const state: ProgressState = prev
       ? stateOf(prev)
-      : { positionMs: 0, durationMs: 0, played: false, playCount: 0, lastPlayedAt: null, updatedAt: now, favorite: false, prefs: {}, deviceId: null };
+      : { positionMs: 0, durationMs: 0, played: false, playCount: 0, lastPlayedAt: null, updatedAt: new Date(0).toISOString(), favorite: false, prefs: {}, deviceId: null };
+    const movesPosition = patch.played !== undefined;
     if (patch.played === true && !state.played) {
       state.played = true;
       state.playCount += 1;
@@ -213,7 +219,7 @@ export class ProgressStore {
     if (patch.favorite !== undefined) state.favorite = patch.favorite;
     if (patch.prefs) state.prefs = { ...state.prefs, ...patch.prefs };
     // Newer than any report so far, but never ahead of the server clock.
-    state.updatedAt = new Date(Math.max(nowMs, Date.parse(state.updatedAt) || 0)).toISOString();
+    if (movesPosition) state.updatedAt = new Date(Math.max(nowMs, Date.parse(state.updatedAt) || 0)).toISOString();
     this.write(userId, key, state);
     return this.own(userId, key)!;
   }

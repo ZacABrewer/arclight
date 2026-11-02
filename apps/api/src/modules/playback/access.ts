@@ -55,12 +55,19 @@ export function isRemoteRequest(req: FastifyRequest): boolean {
   return !allLocal(credentialsOf(req).addresses);
 }
 
+/** The smaller of two bitrate caps where 0 means "no cap". */
+export function stricterCap(a: number, b: number): number {
+  if (a > 0 && b > 0) return Math.min(a, b);
+  return a > 0 ? a : b > 0 ? b : 0;
+}
+
 /** The pure access rule (tests drive it directly). */
 export function decide(settings: PlayerSettings, subject: PlayerSubject, remote: boolean): PlayerDecision {
   const access = subject.isAdmin ? null : playerAccessOf(subject.settings);
   const allowed = subject.isAdmin || access?.allowed === true;
   const userCap = access?.maxBitrateKbps ?? 0;
-  const maxBitrateKbps = userCap > 0 ? userCap : remote ? settings.remoteMaxBitrateKbps : 0;
+  // Remote: the stricter of the user's cap and the server-wide remote cap (0 on either: none).
+  const maxBitrateKbps = remote ? stricterCap(userCap, settings.remoteMaxBitrateKbps) : userCap;
   let denial: PlayerDenial | null = null;
   if (!settings.enabled) denial = 'PLAYER_DISABLED';
   else if (!allowed) denial = 'PLAYER_NOT_ALLOWED';

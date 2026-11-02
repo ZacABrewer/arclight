@@ -1,7 +1,7 @@
 import { PassThrough } from 'node:stream';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { PlayerSettings, type PlaybackProgress, type ProgressReport } from '@arclight/shared';
-import { decide } from './access.js';
+import { decide, stricterCap } from './access.js';
 import { commonLabel, formatLabel, mimeOf } from './format.js';
 import { linkKey, linkQuery, verifyLink } from './links.js';
 import { applyReport, mergeProgress, PLAYED_WINS_WITHIN_MS, type ProgressState } from './progress.js';
@@ -95,6 +95,19 @@ describe('access rule', () => {
     expect(decide(remoteOn, user({ allowed: true, allowRemote: false }), true).denial).toBe('REMOTE_NOT_ALLOWED');
     expect(decide(remoteOn, user({ allowed: true, maxBitrateKbps: 96 }), true).maxBitrateKbps).toBe(96);
     expect(decide(remoteOn, admin, true)).toMatchObject({ canStream: true, maxBitrateKbps: 192 });
+  });
+
+  it('remote: the stricter non-zero cap applies; local: only the user cap', () => {
+    const remoteOn = PlayerSettings.parse({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 192 });
+    // A user cap above the remote cap does not lift it.
+    expect(decide(remoteOn, user({ allowed: true, maxBitrateKbps: 320 }), true).maxBitrateKbps).toBe(192);
+    expect(decide(remoteOn, user({ allowed: true, maxBitrateKbps: 320 }), false).maxBitrateKbps).toBe(320);
+    const uncapped = PlayerSettings.parse({ enabled: true, allowRemote: true, remoteMaxBitrateKbps: 0 });
+    expect(decide(uncapped, user({ allowed: true, maxBitrateKbps: 128 }), true).maxBitrateKbps).toBe(128);
+    expect(decide(uncapped, user({ allowed: true }), true).maxBitrateKbps).toBe(0);
+    expect(stricterCap(0, 0)).toBe(0);
+    expect(stricterCap(0, 64)).toBe(64);
+    expect(stricterCap(96, 64)).toBe(64);
   });
 });
 
@@ -247,6 +260,74 @@ describe('ffmpeg arguments and the transcode limiter', () => {
     running[1]!.end();
     await new Promise((r) => setImmediate(r));
     expect(t.active).toBe(0);
+  });
+
+  function fakeLauncher() {
+    const running: Array<{ end: () => void; killed: boolean; out: PassThrough }> = [];
+    const launcher = (): RunningTranscode => {
+      let end!: () => void;
+      const done = new Promise<void>((r) => (end = r));
+      const out = new PassThrough();
+      const entry = { end, killed: false, out };
+      running.push(entry);
+      return {
+        stdout: out,
+        done,
+        kill: () => {
+          entry.killed = true;
+          out.destroy();
+          end();
+        },
+      };
+    };
+    return { running, launcher };
+  }
+
+  it('a user holds at most maxPerUser; their newest request replaces their oldest', async () => {
+    const { running, launcher } = fakeLauncher();
+    const t = new AudioTranscoder({ launcher, locate: async () => '/bin/ffmpeg', max: 3, maxPerUser: 2 });
+    await t.start('/a', { format: 'opus', bitrateKbps: 96 }, 1);
+    await t.start('/b', { format: 'opus', bitrateKbps: 96 }, 1);
+    await t.start('/c', { format: 'opus', bitrateKbps: 96 }, 1);
+    expect(running.map((r) => r.killed)).toEqual([true, false, false]);
+    expect(t.activeFor(1)).toBe(2);
+    await t.start('/d', { format: 'opus', bitrateKbps: 96 }, 2);
+    expect(t.active).toBe(3);
+    // Full: user 3 has nothing to give up and gets busy; user 2 replaces their own.
+    await expect(t.start('/e', { format: 'opus', bitrateKbps: 96 }, 3)).rejects.toMatchObject({ code: 'TRANSCODE_BUSY' });
+    // canStart (what HEAD answers) agrees with start.
+    expect([t.canStart(3), t.canStart(2), t.canStart(null)]).toEqual([false, true, false]);
+    await t.start('/f', { format: 'opus', bitrateKbps: 96 }, 2);
+    expect(running[3]!.killed).toBe(true);
+    expect([t.active, t.activeFor(2)]).toEqual([3, 1]);
+    // No user (API key): no per-user cap, only the global one.
+    await expect(t.start('/g', { format: 'opus', bitrateKbps: 96 })).rejects.toMatchObject({ code: 'TRANSCODE_BUSY' });
+  });
+
+  it('kills a transcode whose output nobody reads', async () => {
+    vi.useFakeTimers();
+    try {
+      const { running, launcher } = fakeLauncher();
+      const t = new AudioTranscoder({ launcher, locate: async () => '/bin/ffmpeg', stallMs: 60_000 });
+      const proc = await t.start('/a', { format: 'mp3', bitrateKbps: 128 }, 1);
+      const got: Buffer[] = [];
+      proc.stdout.on('data', (c: Buffer) => got.push(c));
+      // Data keeps flowing: no kill.
+      for (let i = 0; i < 4; i++) {
+        running[0]!.out.write(Buffer.from('x'));
+        await vi.advanceTimersByTimeAsync(30_000);
+      }
+      expect(running[0]!.killed).toBe(false);
+      expect(got.length).toBe(4);
+      // The client stops reading: nothing moves for the stall window.
+      proc.stdout.pause();
+      for (let i = 0; i < 64; i++) running[0]!.out.write(Buffer.alloc(16 * 1024));
+      await vi.advanceTimersByTimeAsync(61_000);
+      expect(running[0]!.killed).toBe(true);
+      expect(t.active).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('reports a missing ffmpeg', async () => {

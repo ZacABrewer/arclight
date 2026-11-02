@@ -1,5 +1,16 @@
 import { and, asc, desc, eq } from 'drizzle-orm';
-import { BookmarkInput, type Bookmark, type BookmarkUpdate, type PlayQueue, type UserPlaylistDetails, type UserPlaylistInput, type UserPlaylistSummary } from '@arclight/shared';
+import {
+  BookmarkInput,
+  MAX_PLAYLIST_TRACKS,
+  type Bookmark,
+  type BookmarkUpdate,
+  type PlaylistTrackMove,
+  type PlaylistTracksAdd,
+  type PlayQueue,
+  type UserPlaylistDetails,
+  type UserPlaylistInput,
+  type UserPlaylistSummary,
+} from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { tracksByIds, type BrowseContext } from './browse.js';
 import { playbackBookmarks, playbackQueue, userPlaylists, userPlaylistTracks, type PlaybackBookmarkRow, type UserPlaylistRow } from './schema.js';
@@ -10,6 +21,11 @@ import { playbackBookmarks, playbackQueue, userPlaylists, userPlaylistTracks, ty
 
 export class PlayerNotFound extends Error {
   readonly code = 'NOT_FOUND';
+}
+
+/** A playlist edit would go over MAX_PLAYLIST_TRACKS (400). */
+export class PlaylistFull extends Error {
+  readonly code = 'PLAYLIST_FULL';
 }
 
 // ---------------------------------------------------------------------------------------
@@ -109,6 +125,11 @@ export class BookmarkStore {
 // User playlists
 // ---------------------------------------------------------------------------------------
 
+interface Entry {
+  id: number;
+  trackId: number;
+}
+
 export class PlaylistStore {
   constructor(private readonly ctx: BrowseContext) {}
 
@@ -126,17 +147,17 @@ export class PlaylistStore {
     return row;
   }
 
-  private trackIds(playlistId: number): number[] {
+  /** Every entry of a playlist in order (tracks without a file included). */
+  private entries(playlistId: number): Entry[] {
     return this.db
-      .select({ trackId: userPlaylistTracks.trackId })
+      .select({ id: userPlaylistTracks.id, trackId: userPlaylistTracks.trackId })
       .from(userPlaylistTracks)
       .where(eq(userPlaylistTracks.playlistId, playlistId))
       .orderBy(asc(userPlaylistTracks.position))
-      .all()
-      .map((r) => r.trackId);
+      .all();
   }
 
-  private summary(row: UserPlaylistRow, tracks = tracksByIds(this.ctx, this.trackIds(row.id))): UserPlaylistSummary {
+  private summary(row: UserPlaylistRow, tracks = tracksByIds(this.ctx, this.entries(row.id).map((e) => e.trackId))): UserPlaylistSummary {
     const covers: string[] = [];
     for (const t of tracks) {
       if (t.artworkUrl && !covers.includes(t.artworkUrl)) covers.push(t.artworkUrl);
@@ -165,16 +186,29 @@ export class PlaylistStore {
 
   get(userId: number, id: number): UserPlaylistDetails {
     const row = this.own(userId, id);
-    const tracks = tracksByIds(this.ctx, this.trackIds(id));
-    return { ...this.summary(row, tracks), tracks };
+    const entries = this.entries(id);
+    const trackIds = entries.map((e) => e.trackId);
+    // tracksByIds keeps the order and drops ids without a playable file, the same for every repeat.
+    const tracks = tracksByIds(this.ctx, trackIds);
+    const playable = new Set(tracks.map((t) => t.id));
+    return { ...this.summary(row, tracks), tracks, entryIds: entries.filter((e) => playable.has(e.trackId)).map((e) => e.id), trackIds };
   }
 
-  private setTracks(playlistId: number, trackIds: readonly number[]): void {
+  /**
+   * Rewrites the entries in this order. Entries that carry an id keep it (so ids stay stable
+   * across moves); new ones get fresh ids. Runs inside the caller's transaction.
+   */
+  private writeEntries(playlistId: number, list: ReadonlyArray<{ id?: number; trackId: number }>): void {
+    if (list.length > MAX_PLAYLIST_TRACKS) throw new PlaylistFull(`a playlist holds at most ${MAX_PLAYLIST_TRACKS} tracks`);
     this.db.delete(userPlaylistTracks).where(eq(userPlaylistTracks.playlistId, playlistId)).run();
-    for (let i = 0; i < trackIds.length; i += 500) {
-      const chunk = trackIds.slice(i, i + 500).map((trackId, j) => ({ playlistId, trackId, position: i + j }));
+    for (let i = 0; i < list.length; i += 500) {
+      const chunk = list.slice(i, i + 500).map((e, j) => ({ ...(e.id !== undefined ? { id: e.id } : {}), playlistId, trackId: e.trackId, position: i + j }));
       if (chunk.length > 0) this.db.insert(userPlaylistTracks).values(chunk).run();
     }
+  }
+
+  private touch(id: number, nowMs: number): void {
+    this.db.update(userPlaylists).set({ updatedAt: new Date(nowMs).toISOString() }).where(eq(userPlaylists.id, id)).run();
   }
 
   create(userId: number, input: UserPlaylistInput, nowMs = Date.now()): UserPlaylistDetails {
@@ -185,13 +219,13 @@ export class PlaylistStore {
         .values({ userId, name: input.name, description: input.description ?? null, createdAt: now, updatedAt: now })
         .returning({ id: userPlaylists.id })
         .get();
+      if (input.trackIds) this.writeEntries(row.id, input.trackIds.map((trackId) => ({ trackId })));
       return row.id;
     });
-    if (input.trackIds) this.db.transaction(() => this.setTracks(id, input.trackIds!));
     return this.get(userId, id);
   }
 
-  /** Replaces the name, the description (when given) and the tracks (when given). */
+  /** Replaces the name, the description (when given) and every entry (when `trackIds` is given). */
   update(userId: number, id: number, input: UserPlaylistInput, nowMs = Date.now()): UserPlaylistDetails {
     this.own(userId, id);
     this.db.transaction((tx) => {
@@ -199,7 +233,55 @@ export class PlaylistStore {
         .set({ name: input.name, ...(input.description !== undefined ? { description: input.description } : {}), updatedAt: new Date(nowMs).toISOString() })
         .where(eq(userPlaylists.id, id))
         .run();
-      if (input.trackIds) this.setTracks(id, input.trackIds);
+      if (input.trackIds) this.writeEntries(id, input.trackIds.map((trackId) => ({ trackId })));
+    });
+    return this.get(userId, id);
+  }
+
+  /** Inserts tracks at `position` (index into the entries; default and past the end: append). */
+  addTracks(userId: number, id: number, input: PlaylistTracksAdd, nowMs = Date.now()): UserPlaylistDetails {
+    this.own(userId, id);
+    this.db.transaction(() => {
+      const list: Array<{ id?: number; trackId: number }> = this.entries(id);
+      if (list.length + input.trackIds.length > MAX_PLAYLIST_TRACKS) throw new PlaylistFull(`a playlist holds at most ${MAX_PLAYLIST_TRACKS} tracks`);
+      const at = Math.min(input.position ?? list.length, list.length);
+      list.splice(at, 0, ...input.trackIds.map((trackId) => ({ trackId })));
+      this.writeEntries(id, list);
+      this.touch(id, nowMs);
+    });
+    return this.get(userId, id);
+  }
+
+  /** Removes one entry (404 when it is not in this playlist). */
+  removeEntry(userId: number, id: number, entryId: number, nowMs = Date.now()): UserPlaylistDetails {
+    this.own(userId, id);
+    this.db.transaction(() => {
+      const gone = this.db
+        .delete(userPlaylistTracks)
+        .where(and(eq(userPlaylistTracks.playlistId, id), eq(userPlaylistTracks.id, entryId)))
+        .returning({ id: userPlaylistTracks.id })
+        .all();
+      if (gone.length === 0) throw new PlayerNotFound(`entry ${entryId} is not in playlist ${id}`);
+      this.touch(id, nowMs);
+    });
+    return this.get(userId, id);
+  }
+
+  /** Moves one entry right before or after another entry of the same playlist. */
+  moveEntry(userId: number, id: number, entryId: number, move: PlaylistTrackMove, nowMs = Date.now()): UserPlaylistDetails {
+    this.own(userId, id);
+    this.db.transaction(() => {
+      const list = this.entries(id);
+      const from = list.findIndex((e) => e.id === entryId);
+      if (from < 0) throw new PlayerNotFound(`entry ${entryId} is not in playlist ${id}`);
+      const anchorId = move.beforeEntryId ?? move.afterEntryId!;
+      if (anchorId === entryId) return;
+      const [entry] = list.splice(from, 1);
+      const anchor = list.findIndex((e) => e.id === anchorId);
+      if (anchor < 0) throw new PlayerNotFound(`entry ${anchorId} is not in playlist ${id}`);
+      list.splice(move.beforeEntryId !== undefined ? anchor : anchor + 1, 0, entry!);
+      this.writeEntries(id, list);
+      this.touch(id, nowMs);
     });
     return this.get(userId, id);
   }

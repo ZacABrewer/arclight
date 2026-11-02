@@ -274,14 +274,34 @@ export const UserPlaylistSummary = z.object({
 });
 export type UserPlaylistSummary = z.infer<typeof UserPlaylistSummary>;
 
-/** GET/POST /playback/playlists, GET/PUT/DELETE /playback/playlists/:id. */
+/** A user playlist holds at most this many entries. */
+export const MAX_PLAYLIST_TRACKS = 5000;
+
+/**
+ * GET/POST /playback/playlists, GET/PUT/DELETE /playback/playlists/:id. PUT with `trackIds`
+ * replaces every entry (send the raw `trackIds` of GET to keep tracks that have no file yet);
+ * editors should prefer the incremental /tracks routes below, which cannot lose a concurrent edit.
+ */
 export const UserPlaylistInput = z.object({
   name: z.string().min(1).max(200),
   description: z.string().max(2000).nullable().optional(),
   /** Track ids in order. Duplicates are allowed. */
-  trackIds: z.array(z.number().int()).max(5000).optional(),
+  trackIds: z.array(z.number().int()).max(MAX_PLAYLIST_TRACKS).optional(),
 });
 export type UserPlaylistInput = z.infer<typeof UserPlaylistInput>;
+
+/** POST /playback/playlists/:id/tracks: insert tracks at `position` (an index into `trackIds`; default: the end). */
+export const PlaylistTracksAdd = z.object({
+  trackIds: z.array(z.number().int().positive()).min(1).max(MAX_PLAYLIST_TRACKS),
+  position: z.number().int().min(0).optional(),
+});
+export type PlaylistTracksAdd = z.infer<typeof PlaylistTracksAdd>;
+
+/** PATCH /playback/playlists/:id/tracks/:entryId: move the entry next to another one. */
+export const PlaylistTrackMove = z
+  .object({ beforeEntryId: z.number().int().positive().optional(), afterEntryId: z.number().int().positive().optional() })
+  .refine((v) => (v.beforeEntryId === undefined) !== (v.afterEntryId === undefined), { message: 'give exactly one of beforeEntryId, afterEntryId' });
+export type PlaylistTrackMove = z.infer<typeof PlaylistTrackMove>;
 
 // ---------------------------------------------------------------------------------------
 // Browse (/playback/music/..., /playback/audiobooks/...): only items with files
@@ -377,7 +397,14 @@ export type PlayerAlbumPage = z.infer<typeof PlayerAlbumPage>;
 export type PlayerArtistPage = z.infer<typeof PlayerArtistPage>;
 export type PlayerTrackPage = z.infer<typeof PlayerTrackPage>;
 
-export const UserPlaylistDetails = UserPlaylistSummary.extend({ tracks: z.array(PlayerTrack) });
+export const UserPlaylistDetails = UserPlaylistSummary.extend({
+  /** The entries that can play (their track has a file), in order. */
+  tracks: z.array(PlayerTrack),
+  /** Entry id of each of `tracks` (same order): what the /tracks/:entryId routes take. */
+  entryIds: z.array(z.number().int()),
+  /** Every entry's track id in order, including tracks without a file yet. */
+  trackIds: z.array(z.number().int()),
+});
 export type UserPlaylistDetails = z.infer<typeof UserPlaylistDetails>;
 
 /** GET /playback/search?q= (music and audiobooks together, typo tolerant). */
