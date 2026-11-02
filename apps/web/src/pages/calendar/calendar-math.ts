@@ -1,4 +1,4 @@
-import type { CalendarItem } from '@arclight/shared';
+import type { CalendarItem, PodcastEpisodeStatus } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
@@ -99,7 +99,7 @@ export interface CalendarEntry {
   sortTime: number;
   /** Local time label when the item has a time component. */
   time: string | null;
-  kind: 'episode' | 'movie' | 'album' | 'book';
+  kind: 'episode' | 'movie' | 'album' | 'book' | 'podcast';
   title: string;
   detail: string;
   status: EpisodeStatus;
@@ -107,14 +107,14 @@ export interface CalendarEntry {
   monitored: boolean;
   /** Local hour as a fraction (21.5 = 21:30); null for date-only items. */
   hour: number | null;
-  /** "S02E03" for episodes, the release label for movies, the album type for albums, the series position for books. */
+  /** "S02E03" for episodes, the release label for movies, the album type for albums, the series position for books, played / downloaded for podcast episodes. */
   code: string;
-  /** Episode title (episodes), album title (albums). */
+  /** Episode title (episodes, podcast episodes), album title (albums). */
   subtitle: string | null;
   posterUrl: string | undefined;
-  /** Automatic search body (POST /command/search) for videos; null for albums and books (AlbumSearch / BookSearch). */
+  /** Automatic search body (POST /command/search) for videos; null for albums, books and podcast episodes. */
   search: { episodeIds: number[] } | { movieId: number } | null;
-  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id'; params: { id: string } };
+  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id' | '/podcasts/$id'; params: { id: string } };
 }
 
 const RELEASE_LABELS = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('calendar.math.digitalRelease'); }, get physical() { return t('calendar.math.physicalRelease'); } } as const;
@@ -199,6 +199,28 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
       link: { to: '/library/audiobooks/book/$id', params: { id: String(book.id) } },
     };
   }
+  if (item.type === 'podcastEpisode') {
+    const ep = item.episode;
+    const status = podcastEpisodeState(ep.status);
+    return {
+      key: `p${ep.id}`,
+      day,
+      sortTime,
+      time,
+      kind: 'podcast',
+      title: item.podcastTitle,
+      detail: ep.title,
+      status,
+      tone: barTone(status),
+      monitored: true,
+      hour,
+      code: ep.played ? t('podcasts.played') : status === 'downloaded' ? t('podcasts.status.downloaded') : t('calendar.podcastShort'),
+      subtitle: ep.title,
+      posterUrl: ep.imageUrl ?? item.podcastImageUrl ?? undefined,
+      search: null,
+      link: { to: '/podcasts/$id', params: { id: String(item.podcastId) } },
+    };
+  }
   const m = item.movie;
   const released = parsed.getTime() <= now.getTime();
   const status: EpisodeStatus = m.hasFile ? 'downloaded' : !released ? 'unaired' : m.monitored ? 'wanted' : 'missing';
@@ -220,6 +242,13 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
     search: { movieId: m.id },
     link: { to: '/library/movie/$id', params: { id: String(m.id) } },
   };
+}
+
+/** A podcast episode's calendar state: downloaded, queued (wanted), or not on disk (missing). */
+export function podcastEpisodeState(status: PodcastEpisodeStatus): EpisodeStatus {
+  if (status === 'downloaded') return 'downloaded';
+  if (status === 'wanted' || status === 'downloading') return 'wanted';
+  return 'missing';
 }
 
 /** Group entries by local day, each day sorted by time then title. */

@@ -163,6 +163,8 @@ export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;
 export const FeatureSettings = z.object({
   music: z.boolean().default(false),
   audiobooks: z.boolean().default(false),
+  /** Podcasts (RSS subscriptions; their own section, separate from music and audiobooks). */
+  podcasts: z.boolean().default(false),
 });
 export type FeatureSettings = z.infer<typeof FeatureSettings>;
 export type FeatureSettingsInput = z.input<typeof FeatureSettings>;

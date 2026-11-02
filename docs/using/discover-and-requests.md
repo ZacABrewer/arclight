@@ -299,7 +299,7 @@ Vote is reserved and has no effect yet. After changing a user, click **Save perm
 
 ### Request types
 
-**Request** covers every kind of request: movies, series, music, audiobooks, subtitles and audio languages. To keep someone off a kind while leaving the rest, open **Settings > Users > Manage > Caps and approval**, turn the type off under **Request types**, then **Save caps and approval**.
+**Request** covers every kind of request: movies, series, music, audiobooks, subtitles, audio languages and podcast suggestions. To keep someone off a kind while leaving the rest, open **Settings > Users > Manage > Caps and approval**, turn the type off under **Request types**, then **Save caps and approval**.
 
 | Type | What turning it off blocks |
 | --- | --- |
@@ -309,6 +309,7 @@ Vote is reserved and has no effect yet. After changing a user, click **Save perm
 | Audiobooks | Audiobook and author requests. |
 | Subtitles | Subtitle requests on titles in the library. |
 | Audio languages | Additional audio language requests on titles in the library. |
+| Podcasts | Podcast suggestions from **Discover > Podcasts** (see [Podcasts](podcasts.md#suggestions-from-the-request-portal)). |
 
 - A type turned off is refused even when the permissions allow it. Turning a type on never grants anything: the permissions still decide.
 - Admins are not filtered.

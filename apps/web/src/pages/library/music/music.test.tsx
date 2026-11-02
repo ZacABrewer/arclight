@@ -383,7 +383,7 @@ describe('settings', () => {
     const music = await screen.findByRole('switch', { name: /^Music/ });
     expect((screen.getByRole('switch', { name: /Audiobooks/ }) as HTMLInputElement).disabled).toBe(false);
     fireEvent.click(music);
-    await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/settings/features')?.body).toEqual(FEATURES_ON));
+    await waitFor(() => expect(api.calls.find((c) => c.method === 'PUT' && c.path === '/api/v1/settings/features')?.body).toMatchObject(FEATURES_ON));
   });
 
   it('edits MusicBrainz settings and keeps the masked Fanart key', async () => {

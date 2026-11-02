@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:it="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:p20="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Odd Prefixes</title>
+    <it:author>Prefix People</it:author>
+    <it:image href="https://example.com/odd/art.jpg"/>
+    <it:new-feed-url>https://feeds.example.com/odd-new.xml</it:new-feed-url>
+    <p20:guid>aaaaaaaa-bbbb-5ccc-8ddd-eeeeeeeeeeee</p20:guid>
+    <item>
+      <title>Aliased</title>
+      <guid>odd-1</guid>
+      <it:duration>12:30</it:duration>
+      <p20:chapters url="https://example.com/odd/1.json" type="application/json+chapters"/>
+      <enclosure url="https://cdn.example.com/odd/1.mp3" type="audio/mpeg"/>
+    </item>
+  </channel>
+</rss>

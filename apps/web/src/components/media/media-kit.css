@@ -73,6 +73,7 @@
 .mk-hero__chips { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .mk-hero__overview { font-size: 15px; line-height: 1.55; color: var(--al-text-3); max-width: 720px; margin: 0; text-wrap: pretty; }
 .mk-hero__tagline { font-size: 15px; color: var(--al-text-4); font-style: italic; margin: 0; }
+.mk-hero__kicker { font-family: var(--al-mono); font-size: 12px; letter-spacing: .2em; text-transform: uppercase; color: var(--al-cyan-text); }
 .mk-hero__actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 6px; }
 .mk-hero .al-kv--grid { margin-top: 4px; }
 .mk-dates { display: flex; flex-wrap: wrap; gap: 6px 28px; font-size: 13px; color: var(--al-text-4); }

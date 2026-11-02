@@ -79,5 +79,11 @@ export const ServerEvent = z.discriminatedUnion('type', [
   }),
   /** File-fit statuses or the profile-migration work list changed (GET /profilemigration/*). */
   z.object({ type: z.literal('profileMigration'), action: z.literal('changed') }),
+  /** A podcast subscription or its episodes changed (polled, downloaded, played, deleted). */
+  z.object({
+    type: z.literal('podcast'),
+    action: z.enum(['added', 'updated', 'deleted', 'episodes', 'suggestion']),
+    id: z.number().int(),
+  }),
 ]);
 export type ServerEvent = z.infer<typeof ServerEvent>;

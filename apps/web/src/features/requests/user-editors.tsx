@@ -187,6 +187,7 @@ const REQUEST_TYPE_TEXT: Record<RequestTypeKey, { label: () => string; hint: () 
   audiobook: { label: () => t('common.audiobooks'), hint: () => t('features.requests.userEditors.typeAudiobookHint') },
   subtitles: { label: () => t('common.subtitles'), hint: () => t('features.requests.userEditors.typeSubtitlesHint') },
   audioLanguages: { label: () => t('features.requests.userEditors.typeAudioLanguages'), hint: () => t('features.requests.userEditors.typeAudioLanguagesHint') },
+  podcast: { label: () => t('common.podcasts'), hint: () => t('features.requests.userEditors.typePodcastHint') },
 };
 
 export function requestTypeLabel(key: RequestTypeKey): string {

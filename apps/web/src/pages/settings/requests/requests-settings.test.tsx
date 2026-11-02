@@ -40,7 +40,7 @@ describe('settings → requests', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
     await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
     const sent = calls.find((c) => c.method === 'PUT')?.body as typeof settings;
-    expect(sent.defaultRequestTypes).toEqual({ movie: true, series: true, music: false, audiobook: true, subtitles: false, audioLanguages: true });
+    expect(sent.defaultRequestTypes).toEqual({ movie: true, series: true, music: false, audiobook: true, subtitles: false, audioLanguages: true, podcast: true });
   });
 
   it('shows the unsaved-changes bar on edit and Discard reverts the form', async () => {

@@ -6,6 +6,7 @@ import { queryKeys, RECENT_JOBS_LIMIT, subtitleKeys } from './hooks/query-keys.j
 import { isMusicJob, musicKeys } from './hooks/music-keys.js';
 import { audiobookKeys, isAudiobookJob } from './hooks/audiobook-keys.js';
 import { healthScanKeys, isHealthJob } from './hooks/health-scan.js';
+import { podcastKeys } from './hooks/podcast-keys.js';
 import { profileMigrationKeys } from './hooks/profile-migration.js';
 import { requestKeys } from './hooks/request-keys.js';
 import { searchStatusKeys } from './hooks/search-status.js';
@@ -117,6 +118,11 @@ export function applyServerEvent(qc: QueryClient, event: ServerEvent): void {
       return;
     case 'profileMigration':
       void qc.invalidateQueries({ queryKey: profileMigrationKeys.all });
+      return;
+    case 'podcast':
+      // Subscriptions, episodes and suggestions share ['podcast']; the calendar lists episodes.
+      void qc.invalidateQueries({ queryKey: podcastKeys.all });
+      if (event.action !== 'suggestion') void qc.invalidateQueries({ queryKey: ['calendar'] });
       return;
     default:
       assertNever(event);

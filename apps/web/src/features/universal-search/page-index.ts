@@ -35,6 +35,7 @@ export const PAGE_KEYWORDS: Readonly<Record<string, readonly string[]>> = {
   '/settings/importlists': ['lists', 'trakt', 'imdb lists', 'watchlist sync'],
   '/settings/notifications': ['connections', 'discord', 'telegram', 'email', 'webhook', 'pushover', 'quiet hours', 'alerts'],
   '/settings/mediaservers': ['plex', 'jellyfin', 'emby', 'library scan'],
+  '/settings/podcasts': ['podcast', 'rss', 'feeds', 'opml', 'podcast index', 'itunes', 'episode format'],
   '/settings/subtitles': ['opensubtitles', 'languages', 'subtitle providers'],
   '/settings/vpn': ['proton', 'wireguard', 'kill switch', 'gluetun', 'port forwarding'],
   '/settings/general': ['host', 'port', 'url base', 'features', 'music', 'audiobooks', 'logging', 'analytics', 'language', 'theme', 'appearance'],

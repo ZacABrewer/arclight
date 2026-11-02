@@ -121,7 +121,7 @@ export const MediaServerTestRequest = MediaServerInput.extend({ id: z.string().o
 export type MediaServerTestRequest = z.infer<typeof MediaServerTestRequest>;
 
 /** What a media-server library holds. */
-export const MediaServerLibraryType = z.enum(['movie', 'series', 'music', 'audiobook', 'other']);
+export const MediaServerLibraryType = z.enum(['movie', 'series', 'music', 'audiobook', 'podcast', 'other']);
 export type MediaServerLibraryType = z.infer<typeof MediaServerLibraryType>;
 
 /** One server's outcome of a post-import refresh (`MediaServersService.refreshPath`). */

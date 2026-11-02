@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd" xmlns:podcast="https://podcastindex.org/namespace/1.0">
+  <channel>
+    <title>Namespace Now</title>
+    <link>https://example.com/ns</link>
+    <description>Every Podcasting 2.0 tag we use.</description>
+    <itunes:author>NS Crew</itunes:author>
+    <podcast:guid>917393e3-1b1e-5cef-ace4-edaa54e1f810</podcast:guid>
+    <podcast:locked owner="owner@example.com">yes</podcast:locked>
+    <podcast:funding url="https://example.com/ns/support">Support the show</podcast:funding>
+    <item>
+      <title>Chapters and transcripts</title>
+      <pubDate>Fri, 14 Mar 2025 12:00:00 GMT</pubDate>
+      <guid>ns-1</guid>
+      <podcast:season name="Origins">1</podcast:season>
+      <podcast:episode>7</podcast:episode>
+      <podcast:chapters url="https://example.com/ns/1/chapters.json" type="application/json+chapters"/>
+      <podcast:transcript url="https://example.com/ns/1/transcript.vtt" type="text/vtt" language="en"/>
+      <podcast:transcript url="https://example.com/ns/1/transcript.srt" type="application/x-subrip" rel="captions"/>
+      <podcast:person role="host" href="https://example.com/people/alex" img="https://example.com/people/alex.jpg">Alex Example</podcast:person>
+      <podcast:person role="guest">Sam Sample</podcast:person>
+      <enclosure url="https://cdn.example.com/ns/1.mp3" length="3000" type="audio/mpeg"/>
+      <podcast:alternateEnclosure type="video/mp4" length="90000" bitrate="2000000" title="Video">
+        <podcast:source uri="https://cdn.example.com/ns/1.mp4"/>
+      </podcast:alternateEnclosure>
+      <podcast:alternateEnclosure type="audio/opus" length="1500" title="Small">
+        <podcast:source uri="ipfs://bafyexample"/>
+        <podcast:source uri="https://cdn.example.com/ns/1.opus"/>
+      </podcast:alternateEnclosure>
+    </item>
+    <item>
+      <title>Only an alternate enclosure</title>
+      <pubDate>Fri, 07 Mar 2025 12:00:00 GMT</pubDate>
+      <guid>ns-0</guid>
+      <podcast:alternateEnclosure type="audio/aac" length="1200">
+        <podcast:source uri="https://cdn.example.com/ns/0.aac"/>
+      </podcast:alternateEnclosure>
+    </item>
+  </channel>
+</rss>

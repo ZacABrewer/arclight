@@ -114,6 +114,20 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
     lines.push('CATEGORIES:Audiobooks', `STATUS:${b.hasFile ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
     return lines;
   }
+  if (item.type === 'podcastEpisode') {
+    const e = item.episode;
+    const lines = [
+      'BEGIN:VEVENT',
+      `UID:arclight-podcast-episode-${e.id}@arclight`,
+      `DTSTAMP:${stamp}`,
+      `DTSTART;VALUE=DATE:${dateValue(item.date)}`,
+      `DTEND;VALUE=DATE:${nextDay(item.date)}`,
+      `SUMMARY:${escapeText(`${item.podcastTitle} - ${e.title}`)}`,
+    ];
+    if (e.description) lines.push(`DESCRIPTION:${escapeText(e.description.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 1000))}`);
+    lines.push('CATEGORIES:Podcasts', `STATUS:${e.status === 'downloaded' ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
+    return lines;
+  }
   const m = item.movie;
   const lines = [
     'BEGIN:VEVENT',

@@ -58,6 +58,22 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('common.hygiene'); }, to: '/library/hygiene', adminOnly: true },
     ],
   },
+  // Podcasts are their own section (RSS subscriptions, no indexers), behind the feature flag.
+  {
+    get label() {
+      return t('common.podcasts');
+    },
+    to: '/podcasts',
+    base: '/podcasts',
+    rail: 'LB',
+    feature: 'podcasts',
+    children: [
+      { get label() { return t('common.podcasts'); }, to: '/podcasts' },
+      { get label() { return t('nav.podcastEpisodes'); }, to: '/podcasts/episodes' },
+      { get label() { return t('nav.addPodcast'); }, to: '/podcasts/add', adminOnly: true },
+      { get label() { return t('nav.podcastSuggestions'); }, to: '/podcasts/suggestions', adminOnly: true },
+    ],
+  },
   {
     get label() {
       return t('common.discover');
@@ -71,6 +87,7 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('common.tv'); }, to: '/discover/tv' },
       { get label() { return t('common.music'); }, to: '/discover/music', feature: 'music' },
       { get label() { return t('common.audiobooks'); }, to: '/discover/audiobooks', feature: 'audiobooks' },
+      { get label() { return t('common.podcasts'); }, to: '/discover/podcasts', feature: 'podcasts' },
       { get label() { return t('common.trending'); }, to: '/discover/trending' },
     ],
   },
@@ -178,6 +195,7 @@ export const FULL_NAV: readonly NavSection[] = [
       { get label() { return t('nav.importLists'); }, to: '/settings/importlists' },
       { get label() { return t('common.notifications'); }, to: '/settings/notifications' },
       { get label() { return t('nav.mediaServers'); }, to: '/settings/mediaservers' },
+      { get label() { return t('common.podcasts'); }, to: '/settings/podcasts', feature: 'podcasts' },
       { get label() { return t('common.subtitles'); }, to: '/settings/subtitles' },
       { get label() { return t('common.vpn'); }, to: '/settings/vpn' },
       { get label() { return t('common.general'); }, to: '/settings/general' },

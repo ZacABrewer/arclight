@@ -68,6 +68,7 @@ These pages follow the app's navigation.
 | Notifications | [notifications.md](using/notifications.md) |
 | Mobile app (pairing, phone notifications) | [mobile-app.md](using/mobile-app.md) |
 | Media servers (Jellyfin, Emby, Plex) | [media-servers.md](using/media-servers.md) |
+| Podcasts (subscriptions, episodes, OPML, suggestions) | [podcasts.md](using/podcasts.md) |
 | Users and security | [users-and-security.md](using/users-and-security.md) |
 | System (health, tasks, logs, metrics, config as code) | [system.md](using/system.md) |
 

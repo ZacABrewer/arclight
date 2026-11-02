@@ -499,6 +499,76 @@ prunes these rows with the music ones.
 lists book release dates as `book` items (`mediaType=audiobook`; books dated only to the year are
 left out) and the iCal feed carries them.
 
+## podcasts
+
+Contract: `packages/shared/src/podcasts.ts`. Podcast subscriptions (`podcasts`), their episodes
+(`podcast_episodes`, one row per feed item, keyed by podcast and `guid`) and request-portal
+suggestions (`podcast_suggestions`). Podcasts are fetched over plain HTTP from their RSS (or Atom)
+feed, never through indexers or download clients. Every route below `/podcast` answers **404**
+`{code: "PODCASTS_DISABLED"}` while `features.podcasts` is off, and the podcast jobs do nothing;
+`/settings/podcasts` always answers. Reads open to app-area users (`library`); suggestions and
+directory search are portal routes; everything else is admin-only.
+
+Feeds: RSS 2.0 with the iTunes and Podcasting 2.0 (`podcast:`) namespaces, matched by namespace
+URI whatever the prefix, and Atom with enclosure links. Polls send `If-None-Match` /
+`If-Modified-Since` (a 304 changes nothing), follow up to 8 redirects, store the new address after
+a permanent (301/308) chain or an `<itunes:new-feed-url>` that parses, and mark a 410 feed `gone`.
+`<ttl>` stretches the poll interval when `respectTtl` is on. Credentials in a feed URL (user info,
+`token`/`key`/`auth`-style query values, long token path segments) are sent as Basic auth or kept
+in the URL as given, and are masked (`********`) in every response, log line, notification and
+OPML export. Feeds, enclosures, artwork, chapters and transcripts go through the indexer proxy
+(http or socks5) of `settings.proxyId`, or of a proxy sharing the podcast's tags.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/podcast` | `Podcast[]` (masked `feedUrl`, `privateFeed`, `statistics`: episode, downloaded, played and wanted counts, size on disk, newest episode date) |
+| POST | `/podcast` | `AddPodcastRequest` (`feedUrl` or an Apple Podcasts page URL, `monitored`, `settings` overrides, `tags`, `itunesId`, `podcastIndexId`) → **201** `Podcast`. Reads the feed, creates `<rootFolder>/<folderFormat>`, stores every episode and queues the newest `backlog`. 400 `NO_ROOT_FOLDER` without a root folder, 409 when the feed (or its `podcast:guid`) is already subscribed, 502 `FEED` when it does not parse |
+| POST | `/podcast/preview` | `{feedUrl}` → `PodcastPreview` (title, author, image, episode count, five latest, `podcastId` when subscribed) |
+| GET | `/podcast/lookup` | `?term=&source=itunes\|podcastindex` → `PodcastSearchResult[]` (`podcastId` set for subscribed feeds). Podcast Index needs `podcastIndexKey` and `podcastIndexSecret`; without them, or with `source=itunes`, the iTunes Search API is used |
+| POST | `/podcast/refresh` | **202**: poll every monitored feed now (`RefreshPodcasts`) |
+| POST | `/podcast/opml` | `{opml, settings?, tags?}` (5 MB) → `{added, existing, failed}`; four feeds at a time |
+| GET | `/podcast/opml` | OPML 2.0 attachment of every subscription; private feeds only with `?includePrivate=true` |
+| GET | `/podcast/:id` | One `Podcast` |
+| PUT | `/podcast/:id` | `UpdatePodcastRequest`: `monitored`, `settings` (merged), `tags`, `feedUrl` (a masked value keeps the stored one) |
+| DELETE | `/podcast/:id` | `?deleteFiles=true` also removes the podcast folder (only inside the root folder; otherwise episode files one by one). **204** |
+| POST | `/podcast/:id/refresh` | Poll one feed now → `Podcast` |
+| GET | `/podcast/episode` | `PodcastEpisodeQuery` (`podcastId`, `status`, `played`, `term`, `page`, `pageSize`, `sortKey` `publishedAt`/`title`/`downloadedAt`/`status`, `sortDirection`) → `PodcastEpisodePage` |
+| PUT | `/podcast/episode/:id` | `{played}` → `PodcastEpisode` (`playedSource: "manual"`) |
+| POST | `/podcast/episode/:id/download` | Queue one episode (status `wanted`) and start the downloader |
+| DELETE | `/podcast/episode/:id/file` | Delete the file and its sidecars (status `deleted`; a later poll does not queue it again) |
+| POST | `/podcast/episode/bulk` | `{ids, action}` (`download`, `markPlayed`, `markUnplayed`, `deleteFile`, `skip`) → `{updated}` |
+| GET | `/podcast/search` | Portal. Directory search for users who may suggest podcasts (same answer as `lookup`) |
+| GET | `/podcast/suggestion` | Portal. `?status=&mine=` → `PodcastSuggestion[]`: request managers see everyone's, others their own |
+| POST | `/podcast/suggestion` | Portal. `{feedUrl, itunesId?, podcastIndexId?, note?}` → **201**. Needs `REQUEST`, `REQUEST_MUSIC` or `REQUEST_AUDIOBOOK` and the `podcast` request type; the feed must parse; 409 when subscribed or already pending. Users with `AUTO_APPROVE` are subscribed at once |
+| POST | `/podcast/suggestion/:id/approve` | `MANAGE_REQUESTS`: subscribe with the default settings (links to an existing subscription) |
+| POST | `/podcast/suggestion/:id/decline` | `MANAGE_REQUESTS`: `{reason?}` |
+| DELETE | `/podcast/suggestion/:id` | Managers any; users their own pending ones. **204** |
+| GET | `/settings/podcasts` | `PodcastSettings` (Podcast Index secret masked) |
+| PUT | `/settings/podcasts` | Partial update (`defaults` merged); a masked secret keeps the stored one |
+
+Episode `status`: `available` (known, not queued), `wanted`, `downloading`, `downloaded`,
+`failed` (retried up to 3 times), `deleted` (file removed by hand or by retention). Downloads go to
+`<podcast folder>/<episodeFormat>.<ext>` (default `{Episode Year}/{Episode Date} - {Episode Title}`;
+a slash inside a title becomes `-`; two episodes with the same path get a guid hash suffix) through
+a `.partial` file. With the per-podcast settings on, Arclight saves `cover.jpg` in the podcast
+folder, `<episode>.chapters.json` (Podcasting 2.0 JSON chapters), transcripts as
+`<episode>[.lang].vtt|srt|json|html|txt`, and writes ID3 (MP3) or MP4 tags with title, podcast,
+date, description, season/episode, chapters and cover art using ffmpeg (skipped with a warning
+when ffmpeg is missing). A refresh-enabled media server is asked to rescan the podcast folder after
+downloads and deletions (Jellyfin/Emby: the library containing the folder; Audiobookshelf: its
+`podcast` libraries; Plex: the section containing it).
+
+Jobs: `RefreshPodcasts` (every 15 minutes; each feed keeps its own `nextRefreshAt`, at least
+`refreshIntervalMinutes` apart), `DownloadPodcastEpisodes` (hourly, and right after a subscribe,
+refresh or manual queue; `maxConcurrentDownloads` at a time), `PodcastRetention` (daily: reads
+finished episodes from Jellyfin, Emby and Audiobookshelf, marking them played with `playedSource:
+"mediaServer"`, then applies `keepLast` and `deletePlayedAfterDays`). New episodes in a poll are
+queued when the podcast is monitored and `autoDownload` is on, unless they are more than two days
+older than the newest known episode (a back catalogue appearing in a feed is not downloaded).
+Notifications: `podcastEpisodes` (new episodes in a poll, not on subscribe) and `podcastDownload`.
+Events: `{type: "podcast", action, id}` with `action` one of `added`, `updated`, `deleted`,
+`episodes`, `suggestion`.
+
 ## imports: music import and manual import (audio mode)
 
 Contract: `packages/shared/src/imports.ts` (`AudioManualImport*`). Code:
@@ -1100,8 +1170,8 @@ Public-portal visitors get `hideAdultContent`.
 
 `users.settings.requestTypes` (`RequestTypes`, set by `MANAGE_USERS` through
 `PUT /user/:id/permissions`): booleans `movie`, `series`, `music`, `audiobook`, `subtitles`
-(language requests of kind `subtitle`), `audioLanguages` (kind `audio`), each defaulting to
-true. false refuses that type even when the permission bits allow it (REQUEST grants every
+(language requests of kind `subtitle`), `audioLanguages` (kind `audio`), `podcast` (podcast
+suggestions, `POST /podcast/suggestion`), each defaulting to true. false refuses that type even when the permission bits allow it (REQUEST grants every
 type); true leaves it to the bits and never grants anything. ADMIN is not filtered; absent or
 malformed means every type on. Refusals are 403 `FORBIDDEN` with `"<type> requests are turned
 off for this user"` (`movie`, `series`, `music`, `audiobook`, `subtitle`, `audio language`), on
@@ -1436,7 +1506,8 @@ it is never the legacy `mediaServer` view, and `clients('availability' | 'retent
 out (those purposes are video). With `usedForRefresh` it is rescanned after audiobook imports:
 `POST /api/libraries/{id}/scan` on each `book` library whose folder (`fullPath`) contains the
 book folder. The connection test reads `GET /status` (version) and `GET /api/libraries`
-(`mediaType: 'book'` → `audiobook`, podcasts → `other`).
+(`mediaType: 'book'` → `audiobook`, `podcast` → `podcast`). With `usedForRefresh` it also
+rescans the `podcast` libraries containing a podcast folder after podcast downloads.
 
 | Method | Path | Purpose |
 |---|---|---|
@@ -2073,12 +2144,14 @@ Contract: `packages/shared/src/calendar.ts`. Episodes by air date, movies once p
 (cinema, digital, physical) and, while `features.music` is on, albums by release date
 (`CalendarAlbumItem`: `type: "album"`, `date`, `artistId`, `artistName`, `album` with
 `statistics`, `artist` summary; albums MusicBrainz dates only to the month or year are left out;
-in the iCal feed as all-day `Artist - Album (Type)` events). Week and day views are client-side
-over `start`/`end`.
+in the iCal feed as all-day `Artist - Album (Type)` events) and, while `features.podcasts` is on,
+podcast episodes by publish time (`CalendarPodcastEpisodeItem`: `type: "podcastEpisode"`, `date`,
+`podcastId`, `podcastTitle`, `podcastImageUrl`, `episode`; in the iCal feed as `Podcast - Title`
+events, category `Podcasts`). Week and day views are client-side over `start`/`end`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/calendar` | Items in `[start, end]` (defaults: today, +7 days). Filters: `mediaType` (`all` default, `series`, `movie`, `music`), `tags` (any of), `unmonitored` (include unmonitored items, default false), plus `includeSeries`, `includeEpisodeFile` |
+| GET | `/calendar` | Items in `[start, end]` (defaults: today, +7 days). Filters: `mediaType` (`all` default, `series`, `movie`, `music`, `podcast`), `tags` (any of), `unmonitored` (include unmonitored items, default false), plus `includeSeries`, `includeEpisodeFile` |
 | GET | `/calendar/feed` | `{token, path}` of the iCal feed |
 | POST | `/calendar/feed/regenerate` | Admin. Rotates the feed token, answers `{token, path}`; the old feed URL answers 401 from then on |
 | GET | `/calendar/feed.ics` | Public, `?token=` required; `pastDays`, `futureDays`, `tags`, `unmonitored` |

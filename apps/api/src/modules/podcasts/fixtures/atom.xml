@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Atom Audio</title>
+  <subtitle>An Atom feed with enclosures.</subtitle>
+  <link rel="alternate" href="https://example.com/atom"/>
+  <link rel="self" href="https://example.com/atom.xml"/>
+  <author><name>Atom Author</name></author>
+  <logo>https://example.com/atom/logo.png</logo>
+  <entry>
+    <id>urn:uuid:atom-1</id>
+    <title>First entry</title>
+    <published>2025-04-01T09:00:00Z</published>
+    <link rel="alternate" href="https://example.com/atom/1"/>
+    <link rel="enclosure" href="https://cdn.example.com/atom/1.ogg" type="audio/ogg" length="777"/>
+    <summary>Entry summary.</summary>
+  </entry>
+  <entry>
+    <id>urn:uuid:atom-2</id>
+    <title>No audio</title>
+    <updated>2025-04-02T09:00:00Z</updated>
+  </entry>
+</feed>

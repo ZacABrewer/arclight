@@ -110,7 +110,7 @@ export function plexLibraryKind(type: string | null): MediaKind | 'other' {
 }
 
 /** Section kind a media kind lives in on Plex. */
-const plexSectionKind = (kind: MediaKind): MediaKind => (kind === 'audiobook' ? 'music' : kind);
+const plexSectionKind = (kind: MediaKind): MediaKind => (kind === 'audiobook' || kind === 'podcast' ? 'music' : kind);
 
 export class PlexServerReadClient implements MediaServerClient {
   readonly kind = 'plex' as const;
@@ -270,6 +270,8 @@ export class PlexServerReadClient implements MediaServerClient {
   }
 
   async listPlayStates(userId: string, mediaType: MediaKind): Promise<ItemPlayState[]> {
+    // Podcast episodes are tracks in a music section; Plex play states are not read for them.
+    if (mediaType === 'podcast') return [];
     const rows = await this.indexed(mediaType);
     if (userId === PLEX_OWNER_ACCOUNT_ID) return rows.map((r) => ({ item: r.item, state: ownerState(userId, mediaType, r.raw) }));
     const history = await this.accountHistory(userId);
@@ -282,7 +284,8 @@ export class PlexServerReadClient implements MediaServerClient {
     const path = options.path;
     const matching = path ? sections.filter((s) => s.locations.some((loc) => pathIsInside(path, loc))) : sections;
     // A path outside every section: let Plex rescan the candidate sections in full.
-    const targets = matching.length > 0 ? matching : sections;
+    // (Podcasts never: their folder is outside Plex unless a section contains it.)
+    const targets = matching.length > 0 || options.mediaType === 'podcast' ? matching : sections;
     for (const section of targets) {
       await request(this.fetchImpl, 'plex', joinUrl(this.base, `library/sections/${encodeURIComponent(section.id)}/refresh`), {
         headers: this.headers(),

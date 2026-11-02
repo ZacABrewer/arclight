@@ -11,7 +11,7 @@ export interface UpcomingRow {
   time: string;
   title: string;
   detail: string;
-  href: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id'; params: { id: string } };
+  href: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id' | '/podcasts/$id'; params: { id: string } };
 }
 
 const RELEASE_LABEL = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('dashboard.digitalRelease'); }, get physical() { return t('dashboard.physicalRelease'); } } as const;
@@ -57,6 +57,15 @@ export function upcomingRows(items: readonly CalendarItem[] | null | undefined, 
           title: it.authorName,
           detail: [it.book.title, t('audiobooks.audiobook')].join(' · '),
           href: { to: '/library/audiobooks/book/$id', params: { id: String(it.book.id) } },
+        };
+      }
+      if (it.type === 'podcastEpisode') {
+        return {
+          key: `p-${it.episode.id}`,
+          time: formatClock(when),
+          title: it.podcastTitle,
+          detail: [it.episode.title, t('common.podcasts')].join(' · '),
+          href: { to: '/podcasts/$id', params: { id: String(it.podcastId) } },
         };
       }
       return {

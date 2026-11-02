@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
-import type { DiscoverItem, PortalDocument, PublicPortal } from '@arclight/shared';
+import type { DiscoverItem, PortalDocument, PublicPortal, RequestTypeKey } from '@arclight/shared';
 import { ApiError, errorMessage } from '../../api/client.js';
 import { kindOf, publicPortalApi } from '../../api/requests.js';
 import { Backdrop, Button, EmptyState, ErrorBlock, Icon, Mark, Pane, Popover, Skeleton, buttonClass, type IconName } from '../../arclight/index.js';
@@ -9,6 +9,7 @@ import { ThemeChoice } from '../../features/themes/theme-choice.js';
 import { useThemeCatalog } from '../../features/themes/use-themes.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { useFeatures } from '../../hooks/music.js';
+import { usePermissions } from '../../features/requests/status.js';
 import { DLink, DiscoverBaseProvider, type DiscoverPath } from '../../features/discover/base.js';
 import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
 import { DiscoverSliders, BrowseLinks } from '../discover/discover-home.js';
@@ -108,7 +109,9 @@ interface PortalNavItem {
   icon: IconName;
   signedIn?: boolean;
   /** Shown only while this feature flag is on. */
-  feature?: 'music' | 'audiobooks';
+  feature?: 'music' | 'audiobooks' | 'podcasts';
+  /** Shown only while the person's request type filter allows this type. */
+  requestType?: RequestTypeKey;
   /** Header nav only: the phone tab bar has no room for it (the home page links it). */
   headerOnly?: boolean;
 }
@@ -119,6 +122,7 @@ const NAV: readonly PortalNavItem[] = [
   { to: '/tv', label: () => t('common.series'), icon: 'tv' },
   { to: '/music', label: () => t('common.music'), icon: 'play', feature: 'music', headerOnly: true },
   { to: '/audiobooks', label: () => t('common.audiobooks'), icon: 'library', feature: 'audiobooks', headerOnly: true },
+  { to: '/podcasts', label: () => t('common.podcasts'), icon: 'link', feature: 'podcasts', requestType: 'podcast', signedIn: true, headerOnly: true },
   { to: '/search', label: () => t('common.search'), icon: 'search' },
   { to: '/requests', label: () => t('common.myRequests'), icon: 'inbox', signedIn: true },
   { to: '/issues', label: () => t('common.issues'), icon: 'alert', signedIn: true },
@@ -134,6 +138,7 @@ export function portalSection(pathname: string): DiscoverPath {
   if (rest.startsWith('/search')) return '/search';
   if (rest === '/music' || rest.startsWith('/music/') || rest.startsWith('/music?')) return '/music';
   if (rest === '/audiobooks' || rest.startsWith('/audiobooks/') || rest.startsWith('/audiobooks?')) return '/audiobooks';
+  if (rest === '/podcasts' || rest.startsWith('/podcasts?')) return '/podcasts';
   if (rest.startsWith('/requests')) return '/requests';
   if (rest.startsWith('/profile')) return '/profile';
   if (rest.startsWith('/issues')) return '/issues';
@@ -160,7 +165,8 @@ export function PortalLayout() {
   const gated = portal.data && !signedIn && !portal.data.allowAnonymousDiscover && !isHome;
   const section = portalSection(pathname);
   const features = useFeatures();
-  const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]));
+  const { allows } = usePermissions();
+  const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]) && (!n.requestType || allows(n.requestType)));
   const hasShell = shell() !== null;
   // Phones: the account actions sit behind one menu button so the header fits on one line.
   const [menuOpen, setMenuOpen] = useState(false);

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { Episode, MediaFile, MediaImage, MovieStatus, SeriesStatus } from './library.js';
 import { Album, Artist } from './music.js';
 import { Author, Book } from './audiobooks.js';
+import { PodcastEpisode } from './podcasts.js';
 
 // Calendar contract: upcoming/recent episodes by air date, movies by release date and (with
 // music enabled) albums by release date. Dates are ISO-8601. An episode's `date` is its UTC air
@@ -126,7 +127,21 @@ export const CalendarBookItem = z.object({
 });
 export type CalendarBookItem = z.infer<typeof CalendarBookItem>;
 
-export const CalendarItem = z.discriminatedUnion('type', [CalendarEpisodeItem, CalendarMovieItem, CalendarAlbumItem, CalendarBookItem]);
+/**
+ * A podcast episode by publication date (podcasts; only while `features.podcasts` is on).
+ * `date` is the episode's `publishedAt`. Feeds only list what is out, so these are past dates.
+ */
+export const CalendarPodcastEpisodeItem = z.object({
+  type: z.literal('podcastEpisode'),
+  date: z.string(),
+  podcastId: z.number().int(),
+  podcastTitle: z.string(),
+  podcastImageUrl: z.string().nullable(),
+  episode: PodcastEpisode,
+});
+export type CalendarPodcastEpisodeItem = z.infer<typeof CalendarPodcastEpisodeItem>;
+
+export const CalendarItem = z.discriminatedUnion('type', [CalendarEpisodeItem, CalendarMovieItem, CalendarAlbumItem, CalendarBookItem, CalendarPodcastEpisodeItem]);
 export type CalendarItem = z.infer<typeof CalendarItem>;
 
 /** Query-string boolean: accepts true/false/1/0 (and real booleans from typed callers). */
@@ -163,8 +178,8 @@ export const CalendarQuery = z.object({
   includeSeries: qsBool(false),
   includeEpisodeFile: qsBool(false),
   tags: qsTags,
-  /** Only episodes (`series`), movies (`movie`), albums (`music`) or books (`audiobook`); default all. */
-  mediaType: z.enum(['all', 'series', 'movie', 'music', 'audiobook']).default('all'),
+  /** Only episodes (`series`), movies (`movie`), albums (`music`), books (`audiobook`) or podcast episodes (`podcast`); default all. */
+  mediaType: z.enum(['all', 'series', 'movie', 'music', 'audiobook', 'podcast']).default('all'),
 });
 export type CalendarQuery = z.infer<typeof CalendarQuery>;
 export type CalendarQueryInput = z.input<typeof CalendarQuery>;

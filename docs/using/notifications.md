@@ -66,6 +66,8 @@ Which events each type can receive: Discord, Telegram, ntfy, Gotify, Pushover an
 | On request available | A requested title is now available | Subtitle and audio language requests use the request events too (created, approved, declined, completed), with the language in the title, for example "The Matrix (Spanish subtitles)". They have no failed event |
 | On issue created | A user reported a problem with a title | |
 | On issue updated | An issue changed | |
+| New podcast episodes | A podcast feed has new episodes | Only while [Podcasts](podcasts.md) are on. Not sent when you subscribe |
+| Podcast episode downloaded | A podcast episode was saved to the podcast folder | With its size and path |
 
 Other settings on each connection:
 
@@ -128,5 +130,6 @@ Every card has a checkbox. Tick one or more and a bar appears at the bottom of t
 - [Media servers](media-servers.md)
 - [Activity](activity.md)
 - [Discover and requests](discover-and-requests.md)
+- [Podcasts](podcasts.md)
 - [System](system.md) (health checks)
 - [Troubleshooting](../TROUBLESHOOTING.md)

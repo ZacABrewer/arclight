@@ -56,7 +56,7 @@ let calls: Array<{ url: string; method: string; body: unknown }>;
 
 beforeEach(() => {
   calls = [];
-  features = { music: false, audiobooks: false };
+  features = { music: false, audiobooks: false, podcasts: false };
   vi.stubGlobal('WebSocket', FakeSocket);
   vi.stubGlobal(
     'fetch',
@@ -135,7 +135,7 @@ describe('indexer editor audio pickers', () => {
   });
 
   it('shows the music picker with the saved selection and saves changes', async () => {
-    features = { music: true, audiobooks: false };
+    features = { music: true, audiobooks: false, podcasts: false };
     const editor = await openEditor();
     await within(editor).findByText('Music categories');
     expect(within(editor).queryByText('Audiobook categories')).toBeNull();
@@ -156,7 +156,7 @@ describe('indexer editor audio pickers', () => {
   });
 
   it('shows the audiobook picker when audiobooks are on', async () => {
-    features = { music: false, audiobooks: true };
+    features = { music: false, audiobooks: true, podcasts: false };
     const editor = await openEditor();
     await within(editor).findByText('Audiobook categories');
     expect(within(editor).queryByText('Music categories')).toBeNull();

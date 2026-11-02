@@ -3,6 +3,8 @@ import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { Button, FloatBar, PageHeader, Pane, Select, Toggle, cx } from '../../arclight/index.js';
 import './settings.css';
 import { t } from '../../i18n/index.js';
+import type { FeatureSettings } from '@arclight/shared';
+import { useFeatures } from '../../hooks/music.js';
 
 // Page 06 shell shared by every settings page: a 240px sub-nav with mono CAPS group labels
 // and a 2px active bar, one form Pane (title-m + "Show advanced" top right), and the sticky
@@ -11,6 +13,8 @@ import { t } from '../../i18n/index.js';
 export interface SettingsNavItem {
   label: string;
   to: string;
+  /** Shown only while this feature flag (Settings → General → Features) is on. */
+  feature?: keyof FeatureSettings;
 }
 
 export interface SettingsNavGroup {
@@ -63,6 +67,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       { get label() { return t('settings.layout.importLists'); }, to: '/settings/importlists' },
       { get label() { return t('common.notifications'); }, to: '/settings/notifications' },
       { get label() { return t('settings.layout.mediaServers'); }, to: '/settings/mediaservers' },
+      { get label() { return t('common.podcasts'); }, to: '/settings/podcasts', feature: 'podcasts' },
       { get label() { return t('common.subtitles'); }, to: '/settings/subtitles' },
       { get label() { return t('common.requests'); }, to: '/settings/requests' },
       { get label() { return t('nav.discordBot'); }, to: '/settings/discordbot' },
@@ -88,6 +93,8 @@ export const SETTINGS_NAV_ITEMS: readonly SettingsNavItem[] = SETTINGS_NAV.flatM
 export function SettingsNav({ pathname }: { pathname: string }) {
   const navigate = useNavigate();
   const selectId = useId();
+  const features = useFeatures();
+  const shown = (i: SettingsNavItem) => i.feature === undefined || features[i.feature];
   const active = SETTINGS_NAV_ITEMS.find((i) => pathname === i.to || pathname.startsWith(`${i.to}/`));
   return (
     <nav className="al-settings-nav" aria-label={t('settings.layout.settingsSections')}>
@@ -105,7 +112,7 @@ export function SettingsNav({ pathname }: { pathname: string }) {
           id={selectId}
           value={active?.to ?? ''}
           onChange={(e) => void navigate({ to: e.currentTarget.value })}
-          options={SETTINGS_NAV_ITEMS.map((i) => ({ value: i.to, label: i.label }))}
+          options={SETTINGS_NAV_ITEMS.filter(shown).map((i) => ({ value: i.to, label: i.label }))}
         />
       </div>
       <div className="al-settings-nav__groups">
@@ -113,7 +120,7 @@ export function SettingsNav({ pathname }: { pathname: string }) {
           <div key={group.label} className="al-settings-nav__group">
             <div className="al-label al-settings-nav__label">{group.label}</div>
             <ul>
-              {group.items.map((item) => {
+              {group.items.filter(shown).map((item) => {
                 const on = item === active;
                 return (
                   <li key={item.to}>

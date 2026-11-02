@@ -257,6 +257,8 @@ export const NOTIFICATION_EVENT_TYPES = [
   'downloadUpdate',
   'dailySummary',
   'heldAlerts',
+  'podcastEpisodes',
+  'podcastDownload',
 ] as const;
 export type NotificationEventType = (typeof NOTIFICATION_EVENT_TYPES)[number];
 
@@ -478,6 +480,42 @@ export interface HealthScanEvent extends EventBase {
   filesChecked: number;
 }
 
+/** The podcast a podcast event is about (podcasts are not library media: no `media`). */
+export interface PodcastInfo {
+  id: number;
+  title: string;
+  author?: string;
+  imageUrl?: string;
+}
+
+/** One podcast episode in a notification. */
+export interface PodcastEpisodeInfo {
+  id: number;
+  title: string;
+  /** ISO-8601 publication date. */
+  publishedAt?: string;
+  durationSeconds?: number;
+}
+
+/** A feed poll found new episodes. */
+export interface PodcastEpisodesEvent extends EventBase {
+  type: 'podcastEpisodes';
+  podcast: PodcastInfo;
+  /** Newest first, at most a screenful; `total` counts everything. */
+  items: PodcastEpisodeInfo[];
+  total: number;
+}
+
+/** A podcast episode was downloaded into the library. */
+export interface PodcastDownloadEvent extends EventBase {
+  type: 'podcastDownload';
+  podcast: PodcastInfo;
+  item: PodcastEpisodeInfo;
+  /** File path (absolute). */
+  path: string;
+  sizeBytes: number;
+}
+
 /** A library file was remuxed/transcoded in place by a transcode rule. */
 export interface FileTranscodedEvent extends MediaEventBase {
   type: 'fileTranscoded';
@@ -605,7 +643,9 @@ export type NotificationEvent =
   | RequestsDigestEvent
   | RetentionEvent
   | HealthScanEvent
-  | FileTranscodedEvent;
+  | FileTranscodedEvent
+  | PodcastEpisodesEvent
+  | PodcastDownloadEvent;
 
 export type NotificationEventOf<T extends NotificationEventType> = Extract<
   NotificationEvent,

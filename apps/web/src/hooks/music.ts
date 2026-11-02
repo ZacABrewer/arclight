@@ -32,7 +32,7 @@ import { t } from '../i18n/index.js';
 // Feature flags
 // ---------------------------------------------------------------------------------------
 
-export const FEATURES_OFF: FeatureSettings = { music: false, audiobooks: false };
+export const FEATURES_OFF: FeatureSettings = { music: false, audiobooks: false, podcasts: false };
 
 /**
  * GET /settings/features. Off until the answer arrives, and off when it fails (an older api,
@@ -48,7 +48,9 @@ async function loadFeatures(): Promise<FeatureSettings> {
     return await musicApi.settings.features.get();
   } catch (err) {
     if (!(err instanceof ApiError) || err.status !== 401) throw err;
-    return (await publicPortalApi.get()).features ?? FEATURES_OFF;
+    // Older portal answers carry fewer flags; the missing ones read as off.
+    const portal = (await publicPortalApi.get()).features;
+    return { ...FEATURES_OFF, ...portal, podcasts: portal?.podcasts ?? false };
   }
 }
 

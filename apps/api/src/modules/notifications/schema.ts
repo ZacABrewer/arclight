@@ -40,6 +40,9 @@ export const notifications = sqliteTable('notifications', {
   onDiskSpaceLow: flag('on_disk_space_low'),
   onDownloadRecovered: flag('on_download_recovered'),
   onDailySummary: flag('on_daily_summary'),
+  // Podcasts (the podcasts module): new episodes in a feed, an episode downloaded.
+  onPodcastEpisodes: flag('on_podcast_episodes'),
+  onPodcastDownload: flag('on_podcast_download'),
   includeHealthWarnings: flag('include_health_warnings'),
   respectQuietHours: integer('respect_quiet_hours', { mode: 'boolean' }).notNull().default(true),
   tags: text('tags', { mode: 'json' }).$type<number[]>().notNull(),

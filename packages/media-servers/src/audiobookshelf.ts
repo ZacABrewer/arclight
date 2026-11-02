@@ -55,9 +55,10 @@ export interface AudiobookshelfServerOptions {
   pageSize?: number;
 }
 
-/** Library `mediaType` to media kind: `book` holds audiobooks, anything else (podcasts) is `other`. */
+/** Library `mediaType` to media kind: `book` holds audiobooks, `podcast` podcasts. */
 export function audiobookshelfLibraryKind(mediaType: unknown): MediaKind | 'other' {
-  return str(mediaType)?.toLowerCase() === 'book' ? 'audiobook' : 'other';
+  const t = str(mediaType)?.toLowerCase();
+  return t === 'book' ? 'audiobook' : t === 'podcast' ? 'podcast' : 'other';
 }
 
 /** ASIN and ISBN from an item's `media.metadata`. */
@@ -220,19 +221,67 @@ export class AudiobookshelfServerClient implements MediaServerClient {
   }
 
   async listPlayStates(userId: string, mediaType: MediaKind): Promise<ItemPlayState[]> {
+    if (mediaType === 'podcast') return this.podcastPlayStates(userId);
     if (mediaType !== 'audiobook') return [];
     const [items, progress] = await Promise.all([this.listItems('audiobook'), this.progressOf(userId)]);
     return items.map((item) => ({ item, state: toPlayState(userId, progress.get(item.id)) }));
   }
 
   /**
-   * Rescans the book libraries whose folders contain `options.path` (every book library
+   * Rescans the book libraries (podcast libraries for `mediaType: podcast`) whose folders contain `options.path` (every book library
    * without a path). Audiobookshelf scans whole libraries; a path outside every library
    * refreshes nothing, since a full rescan of unrelated libraries is never what an import wants.
    */
+  /**
+   * Podcast episodes the user has progress on (finished or started), one item per episode with
+   * the episode file's path. Items come from the library items the progress points at.
+   */
+  private async podcastPlayStates(userId: string): Promise<ItemPlayState[]> {
+    const user = rec(await this.get(`api/users/${encodeURIComponent(userId)}`));
+    const byItem = new Map<string, Map<string, Record<string, unknown>>>();
+    for (const raw of list(user['mediaProgress'])) {
+      const p = rec(raw);
+      const itemId = str(p['libraryItemId']);
+      const episodeId = str(p['episodeId']);
+      if (!itemId || !episodeId) continue;
+      const bucket = byItem.get(itemId) ?? new Map<string, Record<string, unknown>>();
+      bucket.set(episodeId, p);
+      byItem.set(itemId, bucket);
+    }
+    const out: ItemPlayState[] = [];
+    for (const [itemId, progress] of byItem) {
+      let item: Record<string, unknown>;
+      try {
+        item = rec(await this.get(`api/items/${encodeURIComponent(itemId)}`, { expanded: '1' }));
+      } catch {
+        continue; // deleted since: nothing to report
+      }
+      for (const rawEp of list(rec(item['media'])['episodes'])) {
+        const ep = rec(rawEp);
+        const id = str(ep['id']);
+        const p = id ? progress.get(id) : undefined;
+        if (!id || !p) continue;
+        out.push({
+          item: {
+            id,
+            mediaType: 'podcast',
+            title: str(ep['title']) ?? id,
+            year: null,
+            ids: emptyIds(),
+            path: str(rec(rec(ep['audioFile'])['metadata'])['path']),
+            libraryId: str(item['libraryId']),
+          },
+          state: toPlayState(userId, p),
+        });
+      }
+    }
+    return out;
+  }
+
   async refreshLibrary(options: RefreshOptions = {}): Promise<void> {
-    if (options.mediaType && options.mediaType !== 'audiobook') return;
-    const libraries = (await this.libraries()).filter((l) => l.type === 'audiobook');
+    if (options.mediaType && options.mediaType !== 'audiobook' && options.mediaType !== 'podcast') return;
+    const kinds: readonly MediaKind[] = options.mediaType ? [options.mediaType] : ['audiobook'];
+    const libraries = (await this.libraries()).filter((l) => l.type !== 'other' && kinds.includes(l.type));
     const path = options.path;
     const targets = path ? libraries.filter((l) => l.locations.some((loc) => pathIsInside(path, loc))) : libraries;
     for (const library of targets) {

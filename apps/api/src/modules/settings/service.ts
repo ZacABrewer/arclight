@@ -13,6 +13,7 @@ import {
   DiscordBotSettings,
   EngineAgentSettings,
   FeatureSettings,
+  type FeatureSettingsInput,
   maskMusicMetadataSettings,
   MusicMetadataSettings,
   CommunityCatalogueSettings,
@@ -30,6 +31,7 @@ import {
   MetricsSettings,
   AuditSettings,
   NamingConfig,
+  PodcastSettings,
   ProfileMigrationSettings,
   ReleasesSettings,
   RequestsSettings,
@@ -138,6 +140,9 @@ const sections = {
   healthScan: HealthScanSettings,
   // Owned by the transcode module: software fallback (routes under /settings/transcode).
   transcode: TranscodeSettings,
+  // Owned by the podcasts module: root folder, naming, polling, defaults and Podcast Index
+  // credentials (routes under /settings/podcasts; podcastIndexSecret masked there).
+  podcasts: PodcastSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
@@ -157,6 +162,8 @@ export function validateSection(
   return { ok: false, error: parsed.error.message };
 }
 export type SectionValue<K extends SettingsSection> = z.infer<(typeof sections)[K]>;
+/** What a caller may hand to setSection: fields with defaults may be left out. */
+export type SectionInput<K extends SettingsSection> = z.input<(typeof sections)[K]>;
 
 export class SettingsError extends Error {
   constructor(
@@ -182,7 +189,7 @@ export function getSection<K extends SettingsSection>(db: Db, section: K): Secti
 export function setSection<K extends SettingsSection>(
   db: Db,
   section: K,
-  value: SectionValue<K>,
+  value: SectionValue<K> | SectionInput<K>,
   now: string = new Date().toISOString(),
 ): SectionValue<K> {
   const parsed = sections[section].safeParse(value);
@@ -263,7 +270,8 @@ export function getFeatureSettings(db: Db): FeatureSettings {
   return getSection(db, 'features');
 }
 
-export function updateFeatureSettings(db: Db, value: FeatureSettings): FeatureSettings {
+export function updateFeatureSettings(db: Db, value: FeatureSettingsInput): FeatureSettings {
+  // Input type: media types added later (podcasts) default to off when a caller leaves them out.
   return setSection(db, 'features', value);
 }
 

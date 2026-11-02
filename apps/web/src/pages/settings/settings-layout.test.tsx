@@ -2,13 +2,18 @@ import { describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, renderHook, screen } from '@testing-library/react';
 import { RouterProvider, createMemoryHistory, createRootRoute, createRoute, createRouter } from '@tanstack/react-router';
 import { useState, type ReactNode } from 'react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { SETTINGS_NAV_ITEMS, SaveBar, SettingsPage, countChanges, useDraft } from './settings-layout.js';
 
 function renderInRouter(path: string, ui: () => ReactNode) {
   const root = createRootRoute();
   const routes = ['/settings/mediamanagement', '/settings/indexers', '/indexers'].map((p) => createRoute({ getParentRoute: () => root, path: p, component: ui }));
   const router = createRouter({ routeTree: root.addChildren(routes), history: createMemoryHistory({ initialEntries: [path] }) });
-  render(<RouterProvider router={router} />);
+  render(
+    <QueryClientProvider client={new QueryClient({ defaultOptions: { queries: { retry: false } } })}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>,
+  );
   return router;
 }
 
@@ -89,7 +94,8 @@ describe('SettingsPage', () => {
   it('renders the grouped sub-nav with the active item marked', async () => {
     renderInRouter('/settings/mediamanagement', DemoPage);
     const nav = await screen.findByRole('navigation', { name: 'Settings sections' });
-    expect(nav.querySelectorAll('.al-settings-nav__item').length).toBe(SETTINGS_NAV_ITEMS.length);
+    // Feature-gated items (podcasts) stay hidden while the flags are off.
+    expect(nav.querySelectorAll('.al-settings-nav__item').length).toBe(SETTINGS_NAV_ITEMS.filter((i) => !i.feature).length);
     expect(nav.querySelectorAll('.al-label').length).toBe(5);
     const active = nav.querySelector('[aria-current="page"]');
     expect(active?.textContent).toBe('Media management');

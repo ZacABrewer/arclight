@@ -88,6 +88,12 @@ import { CrossSeedActivityPage } from './pages/activity/cross-seed-page.js';
 import { TranscodeSettingsPage } from './pages/settings/transcode/transcode-settings-page.js';
 import { TranscodeJobsPage } from './pages/activity/transcode-jobs-page.js';
 import { WatchHistoryPage } from './features/watch-history/watch-history.js';
+import { PodcastIndexPage } from './pages/podcasts/podcast-index.js';
+import { PodcastDetailsPage } from './pages/podcasts/podcast-details.js';
+import { PodcastEpisodesPage } from './pages/podcasts/podcast-episodes.js';
+import { PodcastAddPage } from './pages/podcasts/podcast-add.js';
+import { PodcastSuggestionsPage } from './pages/podcasts/podcast-suggestions.js';
+import { PodcastSettingsPage } from './pages/settings/podcasts/podcasts-settings-page.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
@@ -254,6 +260,12 @@ export const routeTree = rootRoute.addChildren([
   page('/library/audiobooks/author/$id', AuthorDetailsPage),
   page('/library/audiobooks/book/$id', BookDetailsPage),
   page('/library/audiobooks/series/$id', BookSeriesDetailsPage),
+  // Podcasts (feature flag `podcasts`; the pages answer 404 while it is off).
+  page('/podcasts', PodcastIndexPage),
+  page('/podcasts/episodes', PodcastEpisodesPage),
+  page('/podcasts/add', PodcastAddPage),
+  page('/podcasts/suggestions', PodcastSuggestionsPage),
+  page('/podcasts/$id', PodcastDetailsPage),
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
   page('/library/collections', CollectionsPage),
@@ -325,6 +337,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/transcode', TranscodeSettingsPage),
   page('/settings/discordbot', DiscordBotSettingsPage),
   page('/settings/subtitles', SubtitleSettingsPage),
+  page('/settings/podcasts', PodcastSettingsPage),
   page('/settings/solver', SolverSettingsPage),
   page('/settings/updates', UpdatesSettingsPage),
   sectionRedirect('/settings/media-management', '/settings/mediamanagement'),
