@@ -100,7 +100,7 @@ imported, renamed, and the media server is refreshed, with no other \*arr instal
 - Indexer proxies (FlareSolverr, HTTP/SOCKS), per-indexer stats, rate limits,
   category mapping per media type, cross-indexer manual search page.
 - Additional download clients: Transmission, Deluge, SABnzbd, NZBGet, rTorrent.
-- Import lists (Trakt, TMDB lists, Plex watchlist, IMDb lists).
+- Import lists (Trakt, TMDB lists, Plex watchlist, IMDb lists). Since extended with TMDB company/network/discover, IMDb Top Rated, Letterboxd, MDBList, AniList, MyAnimeList, Kitsu, Simkl, Jellyfin/Emby favourites and custom JSON/CSV URLs, plus per-list rules, preview and clean-up ([guide](using/import-lists.md)).
 
 ## Phase 3 — Subtitles (Bazarr parity)
 

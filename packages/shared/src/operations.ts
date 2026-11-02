@@ -4,7 +4,13 @@ import { IndexerImplementation, IndexerProxyType, IndexerSettings } from './inde
 import { DownloadClientImplementation } from './download-clients.js';
 import { NotificationImplementation } from './notifications.js';
 import { ListSearchParam } from './list-search.js';
-import { ImportListImplementation, ImportListMediaType } from './import-lists.js';
+import {
+  ImportListCleanupAction,
+  ImportListFilters,
+  ImportListImplementation,
+  ImportListMediaType,
+  ImportListStreamingRule,
+} from './import-lists.js';
 import { MinimumAvailability, MonitorOption, SeriesType } from './library.js';
 import { LanguageProfileItem } from './subtitles.js';
 
@@ -171,6 +177,11 @@ export const ConfigImportList = z.object({
   minimumAvailability: MinimumAvailability.default('released'),
   mediaType: ImportListMediaType,
   settings: z.record(z.string(), z.unknown()).default({}),
+  /** Per-list rules (null interval = the global one). */
+  syncIntervalHours: z.number().int().min(1).max(720).nullable().default(null),
+  filters: ImportListFilters.default({}),
+  streaming: ImportListStreamingRule.default({ enabled: false, providerIds: [] }),
+  cleanupAction: ImportListCleanupAction.default('none'),
 });
 export type ConfigImportList = z.infer<typeof ConfigImportList>;
 

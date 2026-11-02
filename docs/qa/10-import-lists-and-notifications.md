@@ -10,7 +10,7 @@ Features without a screen are marked "via API" and use the API key from Settings
 | ID | Step | Expected result | Pass/Fail |
 |----|------|-----------------|-----------|
 | IML-01 | Open Settings -> Import Lists. | Title "Import Lists" with the cards "Lists", "List exclusions" and "Options", and a "Sync now" button. | |
-| IML-02 | Click "Add list". | Modal "Add import list" shows the kinds: TMDB List, TMDB Popular, TMDB Collection, TMDB Person, TMDB Keyword, Trakt List, Trakt Popular, Trakt User, Plex Watchlist, IMDb List, RSS / JSON feed, StevenLu Popular Movies. Trakt kinds carry a "Trakt auth" badge. | |
+| IML-02 | Click "Add list". | Modal "Add import list" shows the kinds: TMDB List, TMDB Popular, TMDB Collection, TMDB Person, TMDB Keyword, TMDB Company, TMDB Network, TMDB Discover, Trakt List, Trakt Popular, Trakt User, Trakt User Lists, Plex Watchlist, IMDb List, IMDb Top Rated, Letterboxd, MDBList, AniList, MyAnimeList, Kitsu, Simkl, Jellyfin / Emby Favorites, Custom JSON / CSV URL, RSS / JSON feed, StevenLu Popular Movies. Trakt kinds carry a "Trakt auth" badge. | |
 | IML-03 | Choose "TMDB Popular". Name = "QA Popular Movies", Media type = Movies, List type = "Popular", Limit = 10, Root folder = movie folder, Quality profile = "HD-1080p", Monitor on, "Add automatically" OFF. Click "Test". | Text "N items found" and a "First items" table with movie titles appear. Nothing is added to the library. | |
 | IML-04 | Click "Save". | The list card shows status "Enabled", a "Movies" badge, "No auto add", and "Last sync: never". | |
 | IML-05 | Click "Preview items" on the card. | Dialog "Items in QA Popular Movies" lists items, each with a state badge "New", "In library" or "Excluded". | |
@@ -50,6 +50,20 @@ Features without a screen are marked "via API" and use the API key from Settings
 | IML-34 | Open System -> Tasks. Click "Run now" beside "ImportListSync". | The job runs; the "History" card shows a new entry and the list cards show an updated "Last sync". | |
 | IML-35 | On a list card click the Delete action (in the editor footer) and confirm "Delete <name>?". | The list is gone. Items it added earlier stay in the library. | |
 | IML-36 | Via API run `curl -s BASE/api/v1/importlist -H "X-Api-Key: KEY"`. | JSON array with the lists you created, secrets (tokens, secret) masked. | |
+
+## Import lists: rules, preview and new sources
+
+| ID | Step | Expected result | Pass/Fail |
+|----|------|-----------------|-----------|
+| IML-37 | Add a "TMDB Company" list (Company id = 420). Under "List rules" set Minimum rating = 7 and Released from = 2010. Click "Preview". | A panel says "This list would add N titles", with "N titles found" and chips such as "Rating too low" and "Outside the years" with counts. Nothing is added; the list is not saved yet. | |
+| IML-38 | Turn on "Skip titles on my streaming services". | "Streaming country" and "My services" appear. "My services" lists streaming services with a search box; picking one shows "1 service selected". Saving without any service shows "My services is required". | |
+| IML-39 | Pick a service you know carries some of the titles and click "Preview" again. | Some rows show "On <service>" and the chip "On your services" has a count. | |
+| IML-40 | Set "Sync every" = 24 and save. | The card shows "Syncs every 24 h" while other lists keep the global interval. | |
+| IML-41 | Set "When a title leaves the list" = "Unmonitor", save and sync. Then change the list so a title it added drops off (for example raise Released from), and sync again. | The card shows "Cleans up". The dropped title becomes unmonitored, unless another enabled list still has it. Titles you added by hand are never touched. | |
+| IML-42 | Add an "AniList" list (Source = Seasonal) and click "Preview". | Current-season anime are listed. Titles the mapping data cannot place are counted as "Not matched". | |
+| IML-43 | Add "Letterboxd" (Source = Watchlist, a public user name) and "IMDb Top Rated" (Minimum votes = 25000, Limit = 50). Preview each. | Each lists movies (and for IMDb, series too when Media type includes series). | |
+| IML-44 | Add "Simkl", enter a Simkl client id and click "Authenticate with Simkl". | A code and link appear; after entering the code on simkl.com: "Authorized with Simkl. Save the list to keep the token." | |
+| IML-45 | Add "Custom JSON / CSV URL" pointing at a CSV with a `tmdb_id` column. Preview. | The rows are listed. A CSV with no id column gives the error "the CSV has no tmdb, imdb or tvdb column". | |
 
 ## Notifications: setup and per-agent tests
 

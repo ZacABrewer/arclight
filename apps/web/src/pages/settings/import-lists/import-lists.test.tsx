@@ -41,6 +41,29 @@ const schemas: ImportListSchema[] = [
     ],
   },
   {
+    implementation: 'simkl',
+    implementationName: 'Simkl',
+    supportedMediaTypes: ['series', 'movie', 'both'],
+    requiresTraktAuth: false,
+    requiresSimklAuth: true,
+    fields: [
+      { name: 'clientId', label: 'Simkl client id', type: 'text', required: true, secret: false },
+      { name: 'accessToken', label: 'Access token', type: 'password', required: false, secret: true, readOnly: true },
+      {
+        name: 'statuses',
+        label: 'Statuses',
+        type: 'multiSelect',
+        required: false,
+        secret: false,
+        default: ['plantowatch'],
+        options: [
+          { value: 'plantowatch', label: 'Plan to watch' },
+          { value: 'watching', label: 'Watching' },
+        ],
+      },
+    ],
+  },
+  {
     implementation: 'stevenLu',
     implementationName: 'StevenLu Popular Movies',
     supportedMediaTypes: ['movie'],
@@ -66,6 +89,10 @@ const baseList: ImportList = {
   minimumAvailability: 'released',
   mediaType: 'movie',
   settings: { listId: '42' },
+  syncIntervalHours: null,
+  filters: {},
+  streaming: { enabled: false, providerIds: [] },
+  cleanupAction: 'none',
   lastSyncAt: new Date(Date.now() - 2 * 3600_000).toISOString(),
   lastSyncError: null,
 };
@@ -73,6 +100,14 @@ const baseList: ImportList = {
 const lists: ImportList[] = [
   baseList,
   { ...baseList, id: 2, name: 'Broken feed', implementation: 'stevenLu', enabled: false, lastSyncAt: null, lastSyncError: 'HTTP 500 from feed' },
+  {
+    ...baseList,
+    id: 4,
+    name: 'Daily picks',
+    syncIntervalHours: 24,
+    streaming: { enabled: true, providerIds: [8] },
+    cleanupAction: 'unmonitor',
+  },
 ];
 
 const allItems: ImportListFoundItem[] = [
@@ -108,6 +143,18 @@ function routes(call: Call): unknown {
       ];
     case 'GET /api/v1/qualityprofile?mediaDomain=video':
       return [{ id: 1, name: 'HD-1080p', upgradeAllowed: true, cutoff: 3, items: [{ kind: 'quality', qualityId: 3, allowed: true }], minFormatScore: 0, cutoffFormatScore: 0, minUpgradeFormatScore: 1, formatItems: [], languages: [] }];
+    case 'GET /api/v1/discover/options':
+      return { region: 'US', language: 'en', regions: [], languages: [], certifications: { movie: [], tv: [] } };
+    case 'GET /api/v1/discover/providers?mediaType=movie':
+      return [
+        { id: 8, name: 'Netflix' },
+        { id: 337, name: 'Disney Plus' },
+      ];
+    case 'GET /api/v1/discover/providers?mediaType=tv':
+      return [
+        { id: 8, name: 'Netflix' },
+        { id: 1899, name: 'Max' },
+      ];
     case 'GET /api/v1/tag':
       return [{ id: 7, label: 'kids' }];
     case 'GET /api/v1/importlistexclusion':
@@ -224,11 +271,11 @@ describe('Settings -> Import Lists', () => {
     const grid = await screen.findByRole('list', { name: 'Import lists' });
     expect(await within(grid).findByRole('button', { name: 'Broken feed' })).toBeTruthy();
     expect(within(grid).queryByRole('button', { name: 'Marvel' })).toBeNull();
-    expect(screen.getByText('1 of 2')).toBeTruthy();
+    expect(screen.getByText('1 of 3')).toBeTruthy();
     const box = screen.getByRole('searchbox', { name: 'Search this list' });
     fireEvent.change(box, { target: { value: 'http 500' } });
     fireEvent.keyDown(box, { key: 'Enter' });
-    await waitFor(() => expect(screen.getByText('1 of 2')).toBeTruthy());
+    await waitFor(() => expect(screen.getByText('1 of 3')).toBeTruthy());
     fireEvent.change(box, { target: { value: 'nothing at all' } });
     fireEvent.keyDown(box, { key: 'Enter' });
     fireEvent.click(await screen.findByRole('button', { name: 'Clear search' }));
@@ -240,7 +287,7 @@ describe('Settings -> Import Lists', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Add list' }));
     const picker = await screen.findByRole('dialog', { name: 'Add import list' });
     const choices = within(picker).getAllByRole('button').filter((b) => b.classList.contains('al-chooser__item'));
-    expect(choices.map((b) => b.querySelector('.al-chooser__name')?.textContent)).toEqual(['TMDB List', 'Trakt List', 'StevenLu Popular Movies']);
+    expect(choices.map((b) => b.querySelector('.al-chooser__name')?.textContent)).toEqual(['TMDB List', 'Trakt List', 'Simkl', 'StevenLu Popular Movies']);
     expect(within(picker).getByText('A public TMDB list by its id.')).toBeTruthy();
     expect(within(picker).getByText('Trakt auth')).toBeTruthy();
   });
@@ -487,7 +534,134 @@ describe('FoundInLists', () => {
   });
 });
 
+describe('per-list rules, preview and Simkl', () => {
+  it('shows the per-list interval and rule chips on the card', async () => {
+    renderPage();
+    const card = (await screen.findByRole('button', { name: 'Daily picks' })).closest('.al-item-card') as HTMLElement;
+    expect((await within(card).findByTestId('sync-interval')).textContent).toBe('every 24 h');
+    expect(within(card).getByText('Skips streamable')).toBeTruthy();
+    expect(within(card).getByText('Cleans up')).toBeTruthy();
+    const marvel = screen.getByRole('button', { name: 'Marvel' }).closest('.al-item-card') as HTMLElement;
+    expect(within(marvel).queryByText('Cleans up')).toBeNull();
+  });
+
+  it('sets filters, the streaming rule and clean-up, then previews before saving', async () => {
+    overrides['POST /api/v1/importlist/preview'] = () => ({
+      ok: true,
+      itemCount: 50,
+      wouldAdd: 37,
+      unresolved: 2,
+      counts: { add: 37, inLibrary: 8, rating: 3, streaming: 2 },
+      items: [
+        { mediaType: 'movie', tmdbId: 10, title: 'Would come', year: 2020, inLibrary: false, excluded: false, outcome: 'add' },
+        { mediaType: 'movie', tmdbId: 11, title: 'Already streaming', year: 2021, inLibrary: false, excluded: false, outcome: 'streaming', streamingOn: ['Netflix'] },
+      ],
+    });
+    renderPage();
+    const dialog = await openAdd('TMDB List');
+    fireEvent.change(within(dialog).getByLabelText(/^List id/), { target: { value: '7' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Sync every/), { target: { value: '12' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Minimum rating/), { target: { value: '6.5' } });
+    fireEvent.change(within(dialog).getByLabelText(/^Released from/), { target: { value: '2000' } });
+    expect(within(dialog).queryByRole('group', { name: 'My services' })).toBeNull();
+    fireEvent.click(within(dialog).getByLabelText(/^Skip titles on my streaming services/));
+    const services = await within(dialog).findByRole('group', { name: 'My services' });
+    // Movie and series providers are merged by id.
+    await waitFor(() => expect(within(services).getAllByRole('checkbox')).toHaveLength(3));
+    fireEvent.change(within(services).getByRole('searchbox', { name: 'Find a service' }), { target: { value: 'net' } });
+    expect(within(services).getAllByRole('checkbox')).toHaveLength(1);
+    fireEvent.click(within(services).getByLabelText('Netflix'));
+    expect(within(services).getByText('1 service selected')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText(/^When a title leaves the list/), { target: { value: 'unmonitor' } });
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Preview' }));
+    const preview = await within(dialog).findByRole('region', { name: 'Preview' });
+    expect(within(preview).getByTestId('preview-would-add').textContent).toBe('This list would add 37 titles');
+    expect(within(preview).getByText('50 titles found')).toBeTruthy();
+    expect(within(preview).getByText('On Netflix')).toBeTruthy();
+    expect(within(preview).getByText(/Not matched/)).toBeTruthy();
+    const expected = {
+      implementation: 'tmdbList',
+      syncIntervalHours: 12,
+      filters: { minRating: 6.5, yearFrom: 2000 },
+      streaming: { enabled: true, region: null, providerIds: [8] },
+      cleanupAction: 'unmonitor',
+    };
+    expect(posted('/importlist/preview')[0]!.body).toMatchObject(expected);
+    expect(posted('/importlist')).toHaveLength(0);
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(posted('/importlist')).toHaveLength(1));
+    expect(posted('/importlist')[0]!.body).toMatchObject(expected);
+  });
+
+  it('requires at least one service once the streaming rule is on', async () => {
+    renderPage();
+    const dialog = await openAdd('TMDB List');
+    fireEvent.change(within(dialog).getByLabelText(/^List id/), { target: { value: '7' } });
+    fireEvent.click(within(dialog).getByLabelText(/^Skip titles on my streaming services/));
+    await within(dialog).findByRole('group', { name: 'My services' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    expect(await within(dialog).findByText('My services is required')).toBeTruthy();
+    expect(posted('/importlist')).toHaveLength(0);
+  });
+
+  it('shows a failed preview with the api message', async () => {
+    overrides['POST /api/v1/importlist/preview'] = () => ({ ok: false, error: { code: 'FETCH', message: 'TMDB list 42 not found' } });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Marvel' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Edit Marvel' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Preview' }));
+    expect((await within(dialog).findByText('TMDB list 42 not found')).getAttribute('role')).toBe('alert');
+    expect(posted('/importlist/preview')[0]!.body).toMatchObject({ id: 1 });
+  });
+
+  it('runs the Simkl PIN flow and renders multi-select settings', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    let polls = 0;
+    overrides['POST /api/v1/importlist/simkl/pin'] = () => ({ userCode: 'PIN42', verificationUrl: 'https://simkl.com/pin/', expiresIn: 900, interval: 5 });
+    overrides['POST /api/v1/importlist/simkl/poll'] = () => {
+      polls += 1;
+      return polls < 2 ? { status: 'pending' } : { status: 'authorized', authRef: 'simkl-ref' };
+    };
+    renderPage();
+    const dialog = await openAdd('Simkl');
+    const statuses = within(dialog).getByRole('group', { name: 'Statuses' });
+    fireEvent.click(within(statuses).getByLabelText('Watching'));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Authenticate with Simkl' }));
+    expect(await within(dialog).findByText('Enter the Simkl client id first.')).toBeTruthy();
+    fireEvent.change(within(dialog).getByLabelText(/^Simkl client id/), { target: { value: 'scid' } });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Authenticate with Simkl' }));
+    expect((await within(dialog).findByTestId('simkl-user-code')).textContent).toBe('PIN42');
+    for (let i = 0; i < 2; i++) await act(async () => vi.advanceTimersByTimeAsync(5000));
+    expect(await within(dialog).findByText(/Authorized with Simkl/)).toBeTruthy();
+    expect(posted('/importlist/simkl/poll')[0]!.body).toEqual({ userCode: 'PIN42', clientId: 'scid' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(posted('/importlist')).toHaveLength(1));
+    expect(posted('/importlist')[0]!.body).toMatchObject({ implementation: 'simkl', settings: { clientId: 'scid', authRef: 'simkl-ref', statuses: ['plantowatch', 'watching'] } });
+  });
+});
+
 describe('import list helpers and routing', () => {
+  it('builds the rule part of the body: drops empty filters, normalises the region', () => {
+    const body = toListBody({
+      mediaType: 'movie',
+      settings: {},
+      syncIntervalHours: undefined,
+      filters: { minRating: 7, minVotes: undefined, yearTo: 2020 },
+      streaming: { enabled: true, region: ' gb ', providerIds: [8, '337'] },
+      cleanupAction: 'remove',
+    });
+    expect(body).toMatchObject({
+      syncIntervalHours: null,
+      filters: { minRating: 7, yearTo: 2020 },
+      streaming: { enabled: true, region: 'GB', providerIds: [8, 337] },
+      cleanupAction: 'remove',
+    });
+    expect(Object.keys(body.filters ?? {})).toEqual(['minRating', 'yearTo']);
+    expect(toListBody({ mediaType: 'movie', settings: {} })).toMatchObject({ filters: {}, streaming: { enabled: false, region: null, providerIds: [] }, cleanupAction: 'none' });
+  });
+
   it('builds the body: drops empty settings, clears the movie root unless mediaType is both', () => {
     const body = toListBody({
       name: ' Mine ',

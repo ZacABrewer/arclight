@@ -12,6 +12,9 @@ export interface FetchedItem {
   tvdbId?: number | null;
   title: string;
   year?: number | null;
+  /** TMDB vote average (0-10) and count when the source already carries them (saves a lookup). */
+  rating?: number | null;
+  votes?: number | null;
 }
 
 /** TMDB access built from the stored metadata key. */
@@ -30,6 +33,29 @@ export interface ProviderContext {
   tmdb(): TmdbAccess;
   /** Persist changed settings (refreshed OAuth tokens). A no-op for unsaved lists. */
   saveSettings(patch: Record<string, unknown>): void;
+  /** Cached downloads (anime id mapping, IMDb ratings dataset). */
+  datasets: DatasetCache;
+  /** Persistent lookups that never change (Letterboxd slug -> TMDB id, ...). */
+  ids: IdCache;
+}
+
+export interface DatasetCache {
+  /** The file at `url`, downloaded at most once per `maxAgeMs`; a stale copy is used when the download fails. */
+  get(name: string, url: string, opts: { maxAgeMs: number; signal?: AbortSignal }): Promise<Buffer>;
+}
+
+export interface CachedId {
+  mediaType: 'series' | 'movie' | null;
+  tmdbId: number | null;
+  imdbId: string | null;
+  title: string | null;
+  year: number | null;
+}
+
+export interface IdCache {
+  /** undefined = never looked up (or the cached miss expired); a null tmdbId = known miss. */
+  get(namespace: string, key: string): CachedId | undefined;
+  set(namespace: string, key: string, value: CachedId): void;
 }
 
 export type Provider<K extends ImportListImplementation> = (

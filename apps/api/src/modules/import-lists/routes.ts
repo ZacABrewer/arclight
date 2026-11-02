@@ -7,6 +7,7 @@ import {
   ImportListFoundItem,
   ImportListItem,
   ImportListItemsQuery,
+  ImportListPreviewResult,
   ImportListSchema,
   ImportListSettings,
   ImportListsErrorResponse,
@@ -18,6 +19,10 @@ import {
   TraktDeviceResponse,
   TraktPollRequest,
   TraktPollResponse,
+  SimklPinRequest,
+  SimklPinResponse,
+  SimklPollRequest,
+  SimklPollResponse,
 } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
@@ -65,6 +70,24 @@ export function importListsRoutes(
       '/importlist/test',
       { schema: { body: ImportListTestRequest, response: { 200: ImportListTestResult, ...errors } } },
       async (req) => service.test(req.body),
+    );
+
+    app.post(
+      '/importlist/preview',
+      { schema: { body: ImportListTestRequest, response: { 200: ImportListPreviewResult, ...errors } } },
+      async (req) => service.preview(req.body),
+    );
+
+    app.post(
+      '/importlist/simkl/pin',
+      { schema: { body: SimklPinRequest, response: { 200: SimklPinResponse, ...errors } } },
+      async (req) => service.simklPin(req.body.clientId),
+    );
+
+    app.post(
+      '/importlist/simkl/poll',
+      { schema: { body: SimklPollRequest, response: { 200: SimklPollResponse, ...errors } } },
+      async (req) => service.simklPoll(req.body),
     );
 
     app.post('/importlist/sync', { schema: { response: { 200: ImportListSyncResult, ...errors } } }, async () =>

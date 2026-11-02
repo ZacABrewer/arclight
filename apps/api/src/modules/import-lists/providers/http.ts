@@ -3,6 +3,23 @@ import type { ProviderContext } from './types.js';
 
 const TIMEOUT_MS = 20_000;
 
+/** Sent to public sites that ask clients to identify themselves (AniList, Kitsu, Letterboxd). */
+export const USER_AGENT = 'Arclight/1 (+https://github.com/ZacABrewer/arclight)';
+
+/** Run `fn` over `items` with at most `limit` in flight; results keep input order. */
+export async function mapLimit<T, R>(items: readonly T[], limit: number, fn: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]!, i);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return out;
+}
+
 /** GET/POST with uniform error mapping. `what` names the service in messages. */
 export async function request(
   ctx: Pick<ProviderContext, 'fetch' | 'signal'>,

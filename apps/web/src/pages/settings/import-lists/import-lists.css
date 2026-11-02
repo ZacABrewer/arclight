@@ -17,7 +17,16 @@
 .al-card-error { margin: 0; font-size: 13px; color: var(--al-danger-text); width: 100%; }
 .al-card-line { width: 100%; }
 
+/* Per-list rules, streaming-service picker and the preview panel. */
+.al-il-rules__head { margin-top: 20px; margin-bottom: 8px; }
+.al-providers { display: flex; flex-direction: column; gap: 8px; width: 100%; }
+.al-providers__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 6px 12px; max-height: 240px; overflow-y: auto; padding: 8px; border: 1px solid var(--al-line-2); background: var(--al-well-2); }
+.al-il-preview { display: flex; flex-direction: column; gap: 10px; margin-top: 16px; padding: 16px; border: 1px solid var(--al-line-2); background: var(--al-well-2); }
+.al-il-preview__headline { margin: 0; font-size: 16px; font-weight: 600; color: var(--al-text-1); }
+
 @media (max-width: 767px) {
+  .al-providers__list { grid-template-columns: minmax(0, 1fr); max-height: 320px; }
+  .al-providers__list .al-choice { min-height: 44px; align-items: center; }
   .al-inline-form { grid-template-columns: minmax(0, 1fr); }
   .al-inline-form .al-btn { min-height: 44px; }
   .al-chooser { grid-template-columns: minmax(0, 1fr); }

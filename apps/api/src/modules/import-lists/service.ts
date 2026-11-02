@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { resolve as resolvePath } from 'node:path';
-import { and, asc, eq, inArray } from 'drizzle-orm';
+import { and, asc, eq, inArray, ne } from 'drizzle-orm';
 import { createTmdbClient, type TmdbClient, type TmdbClientOptions } from '@arclight/metadata';
 import {
   IMPORT_LIST_SECRET_FIELDS,
@@ -15,6 +15,9 @@ import {
   type ImportListItem,
   type ImportListItemsQuery,
   type ImportListMediaType,
+  type ImportListPreviewItem,
+  type ImportListPreviewOutcome,
+  type ImportListPreviewResult,
   type ImportListSchema,
   type ImportListSettings,
   type ImportListSyncResult,
@@ -23,6 +26,11 @@ import {
   type TraktDeviceResponse,
   type TraktPollRequest,
   type TraktPollResponse,
+  type SimklPinResponse,
+  type SimklPollRequest,
+  type SimklPollResponse,
+  type ImportListFilters,
+  type ImportListStreamingRule,
 } from '@arclight/shared';
 import type { Logger } from 'pino';
 import type { Db } from '../../db/index.js';
@@ -32,8 +40,11 @@ import { libraryService, type MetadataLookup } from '../library/index.js';
 import { settingsService } from '../settings/index.js';
 import { ImportListFetchError, ImportListsError } from './errors.js';
 import {
+  createDatasetCache,
   createTmdbAccess,
   providers,
+  simklPin,
+  simklPollPin,
   traktDeviceCode,
   traktPollToken,
   withTmdbErrors,
@@ -41,10 +52,13 @@ import {
   type FetchLike,
   type Provider,
   type ProviderContext,
+  type CachedId,
+  type DatasetCache,
+  type IdCache,
   type TmdbAccess,
-  type TraktTokens,
 } from './providers/index.js';
-import { importListItems, importLists } from './schema.js';
+import { mapLimit } from './providers/http.js';
+import { importListAdditions, importListIdCache, importListItems, importLists } from './schema.js';
 import { importListSchemas, supportedMediaTypes } from './templates.js';
 
 type Row = typeof importLists.$inferSelect;
@@ -58,6 +72,9 @@ export interface ResolvedItem {
   imdbId: string | null;
   title: string;
   year: number | null;
+  /** TMDB vote average/count when the source carried them. */
+  rating?: number | null;
+  votes?: number | null;
 }
 
 export type SearchTrigger = (target: { seriesId: number } | { movieId: number }) => Promise<unknown>;
@@ -74,6 +91,8 @@ export interface ImportListsServiceOptions {
   env?: NodeJS.ProcessEnv;
   now?: () => Date;
   createTmdbClient?: (options: TmdbClientOptions) => TmdbClient;
+  /** Directory for downloaded datasets (anime id mapping, IMDb ratings); null/omitted = memory only. */
+  cacheDir?: string | null;
 }
 
 /** Token-bearing settings fields the server manages; kept when a client omits them. */
@@ -83,13 +102,31 @@ const PENDING_AUTH_TTL_MS = 30 * 60 * 1000;
 /** A list counts as due slightly early so an hourly tick does not drift past the interval. */
 const DUE_SLACK_MS = 2 * 60 * 1000;
 const TEST_PREVIEW_COUNT = 10;
+/** Preview responses list at most this many items. */
+const PREVIEW_MAX_ITEMS = 500;
+/** Parallel TMDB lookups when filters or the streaming rule need data the list did not carry. */
+const LOOKUP_CONCURRENCY = 6;
+/** A cached "no TMDB match" is retried after this long. */
+const ID_MISS_TTL_MS = 7 * 24 * 3_600_000;
 
+/** OAuth/PIN results for lists not saved yet, keyed by the authRef handed to the client. */
 interface PendingAuth {
+  provider: 'trakt' | 'simkl';
   clientId: string;
-  clientSecret: string;
-  tokens: TraktTokens;
+  clientSecret?: string;
+  /** Settings fields filled in on create (tokens). */
+  tokens: Record<string, string>;
   expiresAt: number;
 }
+
+/** Filter/streaming configuration of one list. */
+interface ListRules {
+  mediaType: ImportListMediaType;
+  filters: ImportListFilters;
+  streaming: ImportListStreamingRule;
+}
+
+type Outcome = ImportListPreviewOutcome;
 
 export class ImportListsService {
   private readonly db: Db;
@@ -103,6 +140,8 @@ export class ImportListsService {
   private readonly createClient: (options: TmdbClientOptions) => TmdbClient;
   private readonly pendingAuth = new Map<string, PendingAuth>();
   private tmdbCache: { fingerprint: string; access: TmdbAccess } | null = null;
+  private readonly datasets: DatasetCache;
+  private readonly ids: IdCache;
 
   constructor(opts: ImportListsServiceOptions) {
     this.db = opts.db;
@@ -114,6 +153,8 @@ export class ImportListsService {
     this.env = opts.env ?? process.env;
     this.now = opts.now ?? (() => new Date());
     this.createClient = opts.createTmdbClient ?? createTmdbClient;
+    this.datasets = createDatasetCache({ fetch: this.fetch, log: this.log, now: this.now, dir: opts.cacheDir ?? null });
+    this.ids = this.idCache();
   }
 
   // ---- CRUD -----------------------------------------------------------------------------
@@ -136,7 +177,7 @@ export class ImportListsService {
     this.assertNameFree(input.name);
     const row = this.db
       .insert(importLists)
-      .values({ ...columnsFrom(input), settings, addedAt: this.now().toISOString() })
+      .values({ ...columnsFrom(input, null), settings, addedAt: this.now().toISOString() })
       .returning()
       .get();
     return toResource(row);
@@ -149,7 +190,7 @@ export class ImportListsService {
     this.assertNameFree(input.name, id);
     const row = this.db
       .update(importLists)
-      .set({ ...columnsFrom(input), settings })
+      .set({ ...columnsFrom(input, current), settings })
       .where(eq(importLists.id, id))
       .returning()
       .get();
@@ -216,7 +257,7 @@ export class ImportListsService {
     const current = req.id !== undefined ? this.row(req.id) : null;
     const settings = this.prepareSettings(req, current, { consumeAuthRef: false });
     try {
-      const items = await this.fetchItems(req.implementation, settings, req.mediaType, (patch) => {
+      const { items } = await this.fetchItems(req.implementation, settings, req.mediaType, (patch) => {
         if (current) this.saveSettings(current.id, patch);
       });
       const flags = this.flagger();
@@ -231,6 +272,120 @@ export class ImportListsService {
     }
   }
 
+  // ---- preview --------------------------------------------------------------------------
+
+  /**
+   * What a list would do right now: fetch it with the submitted settings (nothing is stored)
+   * and run every item through the library, exclusion, filter and streaming checks a sync uses.
+   */
+  async preview(req: ImportListTestRequest): Promise<ImportListPreviewResult> {
+    const current = req.id !== undefined ? this.row(req.id) : null;
+    const settings = this.prepareSettings(req, current, { consumeAuthRef: false });
+    let fetched: { items: ResolvedItem[]; unresolved: number };
+    try {
+      fetched = await this.fetchItems(req.implementation, settings, req.mediaType, (patch) => {
+        if (current) this.saveSettings(current.id, patch);
+      });
+    } catch (err) {
+      if (err instanceof ImportListFetchError) return { ok: false, error: { code: err.code, message: err.message } };
+      throw err;
+    }
+    const rules: ListRules = {
+      mediaType: req.mediaType,
+      filters: req.filters ?? current?.filters ?? {},
+      streaming: req.streaming ?? current?.streaming ?? { enabled: false, providerIds: [] },
+    };
+    const flags = this.flagger();
+    const evaluated = await mapLimit(fetched.items, LOOKUP_CONCURRENCY, async (item) => {
+      const f = flags(item.mediaType, item.tmdbId);
+      if (f.inLibrary) return { item, f, outcome: 'inLibrary' as Outcome };
+      if (f.excluded) return { item, f, outcome: 'excluded' as Outcome };
+      const verdict = await this.evaluate(item, rules);
+      return { item, f, outcome: verdict.outcome, streamingOn: verdict.streamingOn };
+    });
+    const counts: Partial<Record<Outcome, number>> = {};
+    for (const e of evaluated) counts[e.outcome] = (counts[e.outcome] ?? 0) + 1;
+    const order = (o: Outcome) => (o === 'add' ? 0 : 1);
+    const items: ImportListPreviewItem[] = evaluated
+      .slice()
+      .sort((a, b) => order(a.outcome) - order(b.outcome))
+      .slice(0, PREVIEW_MAX_ITEMS)
+      .map((e) => ({
+        mediaType: e.item.mediaType,
+        tmdbId: e.item.tmdbId,
+        imdbId: e.item.imdbId,
+        title: e.item.title,
+        year: e.item.year,
+        ...e.f,
+        outcome: e.outcome,
+        ...(e.streamingOn?.length ? { streamingOn: e.streamingOn } : {}),
+      }));
+    return {
+      ok: true,
+      itemCount: fetched.items.length,
+      wouldAdd: counts.add ?? 0,
+      counts,
+      items,
+      unresolved: fetched.unresolved,
+    };
+  }
+
+  /**
+   * The list's own rules for one title not yet in the library: year, rating and vote filters
+   * (from the list's data, else from TMDB), then "skip if streaming on my services".
+   */
+  private async evaluate(item: ResolvedItem, rules: ListRules): Promise<{ outcome: Outcome; streamingOn?: string[] }> {
+    const { minRating, minVotes, yearFrom, yearTo } = rules.filters;
+    const needsRating = (minRating !== undefined && item.rating == null) || (minVotes !== undefined && item.votes == null);
+    const needsYear = (yearFrom !== undefined || yearTo !== undefined) && item.year == null;
+    let { rating, votes, year } = { rating: item.rating ?? null, votes: item.votes ?? null, year: item.year };
+    if (needsRating || needsYear) {
+      const looked = await this.lookupRating(item);
+      rating ??= looked.rating;
+      votes ??= looked.votes;
+      year ??= looked.year;
+    }
+    if (yearFrom !== undefined && (year === null || year < yearFrom)) return { outcome: 'year' };
+    if (yearTo !== undefined && (year === null || year > yearTo)) return { outcome: 'year' };
+    if (minRating !== undefined && (rating === null || rating < minRating)) return { outcome: 'rating' };
+    if (minVotes !== undefined && (votes === null || votes < minVotes)) return { outcome: 'votes' };
+    if (rules.streaming.enabled && rules.streaming.providerIds.length) {
+      const on = await this.streamingOn(item, rules.streaming);
+      if (on.length) return { outcome: 'streaming', streamingOn: on };
+    }
+    return { outcome: 'add' };
+  }
+
+  private async lookupRating(item: ResolvedItem): Promise<{ rating: number | null; votes: number | null; year: number | null }> {
+    try {
+      const { client } = this.tmdb();
+      const meta = await withTmdbErrors<{ ratings: { tmdb: { value: number; votes: number } }; year?: number }>(() =>
+        item.mediaType === 'series' ? client.getSeries(item.tmdbId) : client.getMovie(item.tmdbId),
+      );
+      const r = meta.ratings.tmdb;
+      return { rating: r.votes > 0 ? r.value : null, votes: r.votes, year: meta.year ?? null };
+    } catch (err) {
+      this.log.debug({ err, tmdbId: item.tmdbId }, 'import list filter lookup failed');
+      return { rating: null, votes: null, year: null };
+    }
+  }
+
+  /** Names of the chosen subscription services the title is included with (flatrate) in the region. */
+  private async streamingOn(item: ResolvedItem, rule: ImportListStreamingRule): Promise<string[]> {
+    try {
+      const { client } = this.tmdb();
+      const region = rule.region ?? settingsService.getSection(this.db, 'metadata').region;
+      const kind = item.mediaType === 'series' ? 'tv' : 'movie';
+      const providersFor = await withTmdbErrors(() => client.getTitleWatchProviders(kind, item.tmdbId, region));
+      const wanted = new Set(rule.providerIds);
+      return providersFor.flatrate.filter((p) => wanted.has(p.tmdbId)).map((p) => p.name);
+    } catch (err) {
+      // Unknown availability never blocks an add.
+      this.log.debug({ err, tmdbId: item.tmdbId }, 'import list streaming lookup failed');
+      return [];
+    }
+  }
+
   // ---- fetch & sync ---------------------------------------------------------------------
 
   /** Fetch one list and store its items. Failures are recorded on the list and rethrown. */
@@ -238,7 +393,7 @@ export class ImportListsService {
     const row = this.row(id);
     const fetchedAt = this.now().toISOString();
     try {
-      const items = await this.fetchItems(
+      const { items } = await this.fetchItems(
         row.implementation,
         row.settings,
         row.mediaType,
@@ -271,14 +426,15 @@ export class ImportListsService {
   async sync(opts: { force?: boolean; signal?: AbortSignal } = {}): Promise<ImportListSyncResult> {
     const settings = this.getSettings();
     const nowMs = this.now().getTime();
-    const intervalMs = settings.syncIntervalHours * 3_600_000;
+    // A list's own interval overrides the global one.
+    const intervalMs = (r: Row) => (r.syncIntervalHours ?? settings.syncIntervalHours) * 3_600_000;
     const rows = this.db
       .select()
       .from(importLists)
       .where(eq(importLists.enabled, true))
       .orderBy(asc(importLists.name))
       .all()
-      .filter((r) => opts.force || !r.lastSyncAt || nowMs - Date.parse(r.lastSyncAt) >= intervalMs - DUE_SLACK_MS);
+      .filter((r) => opts.force || !r.lastSyncAt || nowMs - Date.parse(r.lastSyncAt) >= intervalMs(r) - DUE_SLACK_MS);
 
     const result: ImportListSyncResult = {
       lists: rows.length,
@@ -288,15 +444,19 @@ export class ImportListsService {
       skippedExcluded: 0,
       failed: 0,
       cleaned: 0,
+      skippedFiltered: 0,
       errors: [],
     };
     const seen = new Set<string>();
     const toSearch: Array<{ seriesId: number } | { movieId: number }> = [];
     let anyFetched = false;
+    // Clean-up runs once every due list has fetched, so "still on another list" sees fresh items.
+    const cleanups: Array<{ row: Row; previous: Set<string>; items: ResolvedItem[] }> = [];
 
     for (const row of rows) {
       if (opts.signal?.aborted) break;
       let items: ResolvedItem[];
+      const previous = this.storedItemKeys(row.id);
       try {
         items = await this.fetchList(row.id, opts.signal);
       } catch (err) {
@@ -307,26 +467,37 @@ export class ImportListsService {
       }
       anyFetched = true;
       result.fetched += items.length;
+      cleanups.push({ row, previous, items });
       if (!row.enableAutomaticAdd) continue;
 
       for (const item of items) {
         const key = `${item.mediaType}:${item.tmdbId}`;
         if (seen.has(key)) continue;
-        seen.add(key);
         if (this.inLibrary(item.mediaType, item.tmdbId)) {
+          seen.add(key);
           result.skippedExisting++;
           continue;
         }
         if (libraryService.isExcluded(this.db, item.mediaType, item.tmdbId)) {
+          seen.add(key);
           result.skippedExcluded++;
           continue;
         }
+        // Filtered titles stay unseen: another list with looser rules may still add them.
+        const verdict = await this.evaluate(item, row);
+        if (verdict.outcome !== 'add') {
+          result.skippedFiltered++;
+          this.log.debug({ importList: row.name, tmdbId: item.tmdbId, title: item.title, reason: verdict.outcome }, 'import list item filtered');
+          continue;
+        }
+        seen.add(key);
         try {
           const id = await this.add(row, item);
           if (id === null) {
             result.failed++;
             continue;
           }
+          this.recordAddition(row.id, item);
           result.added++;
           if (row.searchOnAdd) toSearch.push(item.mediaType === 'series' ? { seriesId: id } : { movieId: id });
         } catch (err) {
@@ -335,6 +506,8 @@ export class ImportListsService {
         }
       }
     }
+
+    for (const c of cleanups) result.cleaned += await this.cleanUpList(c.row, c.previous, c.items);
 
     if (toSearch.length && this.search) {
       const search = this.search;
@@ -346,8 +519,88 @@ export class ImportListsService {
       })();
     }
 
-    if (anyFetched) result.cleaned = await this.cleanLibrary();
+    if (anyFetched) result.cleaned += await this.cleanLibrary();
     return result;
+  }
+
+  private storedItemKeys(listId: number): Set<string> {
+    return new Set(
+      this.db
+        .select({ mediaType: importListItems.mediaType, tmdbId: importListItems.tmdbId })
+        .from(importListItems)
+        .where(eq(importListItems.importListId, listId))
+        .all()
+        .map((r) => `${r.mediaType}:${r.tmdbId}`),
+    );
+  }
+
+  private recordAddition(listId: number, item: ResolvedItem): void {
+    this.db
+      .insert(importListAdditions)
+      .values({ importListId: listId, mediaType: item.mediaType, tmdbId: item.tmdbId, addedAt: this.now().toISOString() })
+      .onConflictDoNothing()
+      .run();
+  }
+
+  /**
+   * Per-list clean-up: titles this list added that dropped off it since the last fetch (and are
+   * on no other enabled list) are unmonitored or removed per the list's `cleanupAction`. A fetch
+   * that suddenly returns nothing is treated as a source problem, not an emptied list.
+   */
+  private async cleanUpList(row: Row, previous: Set<string>, items: ResolvedItem[]): Promise<number> {
+    if (row.cleanupAction === 'none' || previous.size === 0) return 0;
+    if (items.length === 0) {
+      this.log.warn({ importList: row.name }, 'list clean-up skipped: the list came back empty');
+      return 0;
+    }
+    const current = new Set(items.map((i) => `${i.mediaType}:${i.tmdbId}`));
+    const dropped = [...previous].filter((k) => !current.has(k));
+    if (!dropped.length) return 0;
+    const additions = this.db.select().from(importListAdditions).where(eq(importListAdditions.importListId, row.id)).all();
+    const added = new Map(additions.map((a) => [`${a.mediaType}:${a.tmdbId}`, a]));
+    const elsewhere = new Set(
+      this.db
+        .select({ mediaType: importListItems.mediaType, tmdbId: importListItems.tmdbId })
+        .from(importListItems)
+        .innerJoin(importLists, eq(importLists.id, importListItems.importListId))
+        .where(and(eq(importLists.enabled, true), ne(importListItems.importListId, row.id)))
+        .all()
+        .map((r) => `${r.mediaType}:${r.tmdbId}`),
+    );
+    let cleaned = 0;
+    for (const key of dropped) {
+      const addition = added.get(key);
+      if (!addition || elsewhere.has(key)) continue;
+      const kind = addition.mediaType;
+      const target =
+        kind === 'series'
+          ? this.db.select({ id: series.id, title: series.title, monitored: series.monitored }).from(series).where(eq(series.tmdbId, addition.tmdbId)).get()
+          : this.db.select({ id: movies.id, title: movies.title, monitored: movies.monitored }).from(movies).where(eq(movies.tmdbId, addition.tmdbId)).get();
+      try {
+        if (target) {
+          if (row.cleanupAction === 'unmonitor') {
+            if (target.monitored) {
+              if (kind === 'series') libraryService.updateSeries(this.db, target.id, { monitored: false });
+              else libraryService.updateMovie(this.db, target.id, { monitored: false });
+              this.bus?.publish({ type: 'library', action: 'updated', mediaType: kind, id: target.id });
+              cleaned++;
+            }
+          } else {
+            const opts = { deleteFiles: row.cleanupAction === 'removeAndDeleteFiles', addExclusion: false };
+            if (kind === 'series') await libraryService.deleteSeries(this.db, target.id, opts);
+            else await libraryService.deleteMovie(this.db, target.id, opts);
+            this.bus?.publish({ type: 'library', action: 'deleted', mediaType: kind, id: target.id });
+            cleaned++;
+          }
+          this.log.info({ importList: row.name, mediaType: kind, id: target.id, title: target.title, action: row.cleanupAction }, 'list clean-up: dropped off the list');
+        }
+        // Handled (or already gone from the library): this list no longer owns the title.
+        this.db.delete(importListAdditions).where(eq(importListAdditions.id, addition.id)).run();
+      } catch (err) {
+        this.log.warn({ err, importList: row.name, mediaType: kind, tmdbId: addition.tmdbId }, 'list clean-up action failed');
+      }
+    }
+    return cleaned;
   }
 
   /**
@@ -455,9 +708,39 @@ export class ImportListsService {
     this.prunePendingAuth();
     const authRef = randomUUID();
     this.pendingAuth.set(authRef, {
+      provider: 'trakt',
       clientId: req.clientId,
       clientSecret,
-      tokens: outcome.tokens,
+      tokens: { ...outcome.tokens },
+      expiresAt: this.now().getTime() + PENDING_AUTH_TTL_MS,
+    });
+    return { status: 'authorized', authRef };
+  }
+
+  // ---- simkl PIN flow -------------------------------------------------------------------
+
+  async simklPin(clientId: string): Promise<SimklPinResponse> {
+    return simklPin(this.fetch, clientId);
+  }
+
+  async simklPoll(req: SimklPollRequest): Promise<SimklPollResponse> {
+    const row = req.importListId !== undefined ? this.row(req.importListId) : null;
+    if (row && row.implementation !== 'simkl') {
+      throw new ImportListsError('VALIDATION', `import list ${row.id} is not a Simkl list`);
+    }
+    const outcome = await simklPollPin(this.fetch, req.clientId, req.userCode);
+    if (outcome.status !== 'authorized') return { status: outcome.status };
+    if (row) {
+      const settings = { ...row.settings, clientId: req.clientId, accessToken: outcome.accessToken };
+      const updated = this.db.update(importLists).set({ settings }).where(eq(importLists.id, row.id)).returning().get();
+      return { status: 'authorized', importList: toResource(updated ?? row) };
+    }
+    this.prunePendingAuth();
+    const authRef = randomUUID();
+    this.pendingAuth.set(authRef, {
+      provider: 'simkl',
+      clientId: req.clientId,
+      tokens: { accessToken: outcome.accessToken },
       expiresAt: this.now().getTime() + PENDING_AUTH_TTL_MS,
     });
     return { status: 'authorized', authRef };
@@ -597,10 +880,10 @@ export class ImportListsService {
     if (typeof ref === 'string') {
       this.prunePendingAuth();
       const pending = this.pendingAuth.get(ref);
-      if (!pending) throw new ImportListsError('VALIDATION', 'the Trakt authorization expired; authenticate again');
+      if (!pending) throw new ImportListsError('VALIDATION', 'the authorization expired; authenticate again');
       if (opts.consumeAuthRef) this.pendingAuth.delete(ref);
       merged['clientId'] ??= pending.clientId;
-      merged['clientSecret'] ??= pending.clientSecret;
+      if (pending.clientSecret !== undefined) merged['clientSecret'] ??= pending.clientSecret;
       Object.assign(merged, pending.tokens);
     }
 
@@ -654,7 +937,7 @@ export class ImportListsService {
     mediaType: ImportListMediaType,
     save: (patch: Settings) => void,
     signal?: AbortSignal,
-  ): Promise<ResolvedItem[]> {
+  ): Promise<{ items: ResolvedItem[]; unresolved: number }> {
     const parsed = importListSettingsSchemas[implementation].safeParse(rawSettings);
     if (!parsed.success) throw new ImportListFetchError('bad-response', `stored settings are invalid: ${parsed.error.issues[0]?.message}`);
     const ctx: ProviderContext = {
@@ -663,6 +946,8 @@ export class ImportListsService {
       now: this.now,
       tmdb: () => this.tmdb(),
       saveSettings: save,
+      datasets: this.datasets,
+      ids: this.ids,
       ...(signal ? { signal } : {}),
     };
     // The registry is keyed by implementation; TypeScript cannot correlate the key with the
@@ -672,14 +957,22 @@ export class ImportListsService {
     return this.resolve(fetched, mediaType);
   }
 
-  private async resolve(items: FetchedItem[], mediaType: ImportListMediaType): Promise<ResolvedItem[]> {
+  private async resolve(items: FetchedItem[], mediaType: ImportListMediaType): Promise<{ items: ResolvedItem[]; unresolved: number }> {
     const out: ResolvedItem[] = [];
     const seen = new Set<string>();
     const push = (i: FetchedItem, tmdbId: number) => {
       const key = `${i.mediaType}:${tmdbId}`;
       if (seen.has(key)) return;
       seen.add(key);
-      out.push({ mediaType: i.mediaType, tmdbId, imdbId: i.imdbId ?? null, title: i.title, year: i.year ?? null });
+      out.push({
+        mediaType: i.mediaType,
+        tmdbId,
+        imdbId: i.imdbId ?? null,
+        title: i.title,
+        year: i.year ?? null,
+        ...(i.rating != null ? { rating: i.rating } : {}),
+        ...(i.votes != null ? { votes: i.votes } : {}),
+      });
     };
     const unresolved = items.filter((i) => !i.tmdbId && (i.imdbId || i.tvdbId));
     const tmdb = unresolved.length ? this.tmdb() : null;
@@ -702,7 +995,31 @@ export class ImportListsService {
       else dropped++;
     }
     if (dropped) this.log.debug({ dropped }, 'import list items without a resolvable TMDB id were skipped');
-    return out;
+    return { items: out, unresolved: dropped };
+  }
+
+  /** IdCache over import_list_id_cache; misses expire after a week so they are retried. */
+  private idCache(): IdCache {
+    return {
+      get: (namespace, key) => {
+        const row = this.db
+          .select()
+          .from(importListIdCache)
+          .where(and(eq(importListIdCache.namespace, namespace), eq(importListIdCache.key, key)))
+          .get();
+        if (!row) return undefined;
+        if (row.tmdbId === null && this.now().getTime() - Date.parse(row.fetchedAt) > ID_MISS_TTL_MS) return undefined;
+        return { mediaType: row.mediaType, tmdbId: row.tmdbId, imdbId: row.imdbId, title: row.title, year: row.year };
+      },
+      set: (namespace, key, value: CachedId) => {
+        const values = { ...value, fetchedAt: this.now().toISOString() };
+        this.db
+          .insert(importListIdCache)
+          .values({ namespace, key, ...values })
+          .onConflictDoUpdate({ target: [importListIdCache.namespace, importListIdCache.key], set: values })
+          .run();
+      },
+    };
   }
 
   private inLibrary(kind: Kind, tmdbId: number): boolean {
@@ -762,7 +1079,12 @@ export class ImportListsService {
 // ---- mapping --------------------------------------------------------------------------
 
 function isTrakt(implementation: ImportListImplementation): boolean {
-  return implementation === 'trakt' || implementation === 'traktPopular' || implementation === 'traktUser';
+  return (
+    implementation === 'trakt' ||
+    implementation === 'traktPopular' ||
+    implementation === 'traktUser' ||
+    implementation === 'traktLists'
+  );
 }
 
 export function maskSettings(settings: Settings): Settings {
@@ -789,13 +1111,22 @@ function toResource(row: Row): ImportList {
     minimumAvailability: row.minimumAvailability,
     mediaType: row.mediaType,
     settings: maskSettings(row.settings),
+    syncIntervalHours: row.syncIntervalHours ?? null,
+    filters: row.filters ?? {},
+    streaming: row.streaming ?? { enabled: false, providerIds: [] },
+    cleanupAction: row.cleanupAction ?? 'none',
     lastSyncAt: row.lastSyncAt,
     lastSyncError: row.lastSyncError,
   };
 }
 
-function columnsFrom(input: ImportListCreate) {
+/** Columns from a create/update body; the optional list rules keep their stored value when omitted. */
+function columnsFrom(input: ImportListCreate, current: Row | null) {
   return {
+    syncIntervalHours: input.syncIntervalHours !== undefined ? (input.syncIntervalHours ?? null) : (current?.syncIntervalHours ?? null),
+    filters: input.filters ?? current?.filters ?? {},
+    streaming: input.streaming ?? current?.streaming ?? { enabled: false, providerIds: [] },
+    cleanupAction: input.cleanupAction ?? current?.cleanupAction ?? 'none',
     name: input.name,
     implementation: input.implementation,
     enabled: input.enabled,

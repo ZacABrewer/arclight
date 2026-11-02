@@ -10,6 +10,8 @@ async function build() {
     [/feeds\.example\/a\.json$/, () => [{ tmdbId: 1, title: 'One', year: 2001 }]],
     [/api\.trakt\.tv\/oauth\/device\/code$/, () => ({ device_code: 'dc', user_code: 'UC', verification_url: 'https://trakt.tv/activate', expires_in: 600, interval: 5 })],
     [/api\.trakt\.tv\/oauth\/device\/token$/, () => new Response('', { status: 400 })],
+    [/api\.simkl\.com\/oauth\/pin$/, () => ({ result: 'OK', user_code: 'PIN1', verification_url: 'https://simkl.com/pin/', expires_in: 900, interval: 5 })],
+    [/api\.simkl\.com\/oauth\/pin\/PIN1$/, () => ({ result: 'KO', message: 'Authorization pending' })],
   ]);
   const ctx = await setup(fetch);
   const app = Fastify().withTypeProvider<ZodTypeProvider>();
@@ -62,7 +64,7 @@ describe('import-lists routes', () => {
     const trakt = res.json().find((s: { implementation: string }) => s.implementation === 'trakt');
     expect(trakt.requiresTraktAuth).toBe(true);
     expect(trakt.fields.find((f: { name: string }) => f.name === 'accessToken')).toMatchObject({ secret: true, readOnly: true });
-    expect(res.json()).toHaveLength(12);
+    expect(res.json()).toHaveLength(25);
   });
 
   it('test, sync, preview items and found-in-list', async () => {
@@ -108,5 +110,18 @@ describe('import-lists routes', () => {
     expect(poll.json()).toEqual({ status: 'pending' });
     const noSecret = await app.inject({ method: 'POST', url: '/api/v1/importlist/trakt/poll', payload: { deviceCode: 'dc', clientId: 'cid' } });
     expect(noSecret.statusCode).toBe(400);
+  });
+
+  it('preview and simkl pin routes', async () => {
+    const { app, body } = await build();
+    const preview = await app.inject({ method: 'POST', url: '/api/v1/importlist/preview', payload: body() });
+    expect(preview.statusCode).toBe(200);
+    expect(preview.json()).toMatchObject({ ok: true, itemCount: 1, wouldAdd: 1, counts: { add: 1 } });
+    expect((await app.inject({ method: 'POST', url: '/api/v1/importlist/preview', payload: body({ filters: { minRating: 11 } }) })).statusCode).toBe(400);
+
+    const pin = await app.inject({ method: 'POST', url: '/api/v1/importlist/simkl/pin', payload: { clientId: 'cid' } });
+    expect(pin.json()).toMatchObject({ userCode: 'PIN1', interval: 5 });
+    const poll = await app.inject({ method: 'POST', url: '/api/v1/importlist/simkl/poll', payload: { userCode: 'PIN1', clientId: 'cid' } });
+    expect(poll.json()).toEqual({ status: 'pending' });
   });
 });

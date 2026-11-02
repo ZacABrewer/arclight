@@ -67,6 +67,8 @@ function ListCard({
       </Chip>
       {list.enableAutomaticAdd ? null : <Chip tone="warn">{t('settings.importLists.noAutoAdd')}</Chip>}
       {list.searchOnAdd ? <Chip dot="none">{t('common.searchOnAdd')}</Chip> : null}
+      {list.streaming?.enabled ? <Chip dot="none">{t('settings.importLists.rules.skipsStreaming')}</Chip> : null}
+      {list.cleanupAction && list.cleanupAction !== 'none' ? <Chip dot="none">{t('settings.importLists.rules.cleansUp')}</Chip> : null}
       <span className="al-card-line">
         {intervalHours !== undefined ? (
           <>
@@ -173,7 +175,7 @@ export function ImportListsPage() {
                   list={l}
                   schema={schema}
                   itemCount={items.data ? (counts.get(l.id) ?? 0) : undefined}
-                  intervalHours={options.saved?.syncIntervalHours}
+                  intervalHours={l.syncIntervalHours ?? options.saved?.syncIntervalHours}
                   onEdit={() => setEditing({ list: l, schema })}
                   onPreview={() => setPreview(l)}
                   select={bulk.cardProps(l)}

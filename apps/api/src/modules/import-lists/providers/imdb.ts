@@ -1,6 +1,9 @@
+import { gunzipSync } from 'node:zlib';
+import type { ImdbTopSettings } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
-import { asArray, asRecord, getText, imdbIdOf, int, str } from './http.js';
-import { wants, type FetchedItem, type Provider } from './types.js';
+import { asArray, asRecord, getText, imdbIdOf, int, mapLimit, str } from './http.js';
+import { wants, type FetchedItem, type Provider, type ProviderContext } from './types.js';
+import { withTmdbErrors } from './tmdb.js';
 
 export function imdbExportUrl(listId: string): string {
   return listId.startsWith('ur')
@@ -94,4 +97,85 @@ export function parseImdbExport(text: string): FetchedItem[] {
 export const imdbList: Provider<'imdbList'> = async (settings, mediaType, ctx) => {
   const text = await getText(ctx, 'IMDb', imdbExportUrl(settings.listId), { headers: { Accept: 'text/csv, application/json' } });
   return parseImdbExport(text).filter((i) => wants(mediaType, i.mediaType));
+};
+
+// ---- IMDb Top Rated from the official datasets ------------------------------------------
+//
+// IMDb publishes daily TSV dumps for personal and non-commercial use (datasets.imdbws.com).
+// title.ratings carries every rated title's average and vote count but no title type, so
+// candidates are resolved through TMDB's find-by-IMDb-id (cached per id); episodes, shorts and
+// games have no TMDB movie/series match and drop out.
+
+export const IMDB_RATINGS_URL = 'https://datasets.imdbws.com/title.ratings.tsv.gz';
+const IMDB_RATINGS_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+const RESOLVE_CONCURRENCY = 4;
+const NL = String.fromCharCode(10);
+const TAB = String.fromCharCode(9);
+
+export interface ImdbRating {
+  imdbId: string;
+  rating: number;
+  votes: number;
+}
+
+/** Rated titles with at least `minVotes` votes, best first (ties: more votes first). */
+export function parseImdbRatings(tsv: string, minVotes: number): ImdbRating[] {
+  const out: ImdbRating[] = [];
+  let start = tsv.indexOf(NL) + 1; // skip the header row
+  while (start > 0 && start < tsv.length) {
+    let end = tsv.indexOf(NL, start);
+    if (end < 0) end = tsv.length;
+    const line = tsv.slice(start, end);
+    start = end + 1;
+    const [id, avg, num] = line.split(TAB);
+    const votes = Number(num);
+    if (!id || !(votes >= minVotes)) continue;
+    const rating = Number(avg);
+    if (!Number.isFinite(rating)) continue;
+    out.push({ imdbId: id, rating, votes });
+  }
+  return out.sort((a, b) => b.rating - a.rating || b.votes - a.votes);
+}
+
+async function resolveImdb(ctx: ProviderContext, imdbId: string): Promise<FetchedItem | null> {
+  const cached = ctx.ids.get('imdb', imdbId);
+  if (cached) {
+    if (cached.tmdbId === null || !cached.mediaType) return null;
+    return { mediaType: cached.mediaType, tmdbId: cached.tmdbId, imdbId, title: cached.title ?? imdbId, year: cached.year };
+  }
+  const { client } = ctx.tmdb();
+  const [hit] = await withTmdbErrors(() => client.findByImdbId(imdbId));
+  if (!hit) {
+    ctx.ids.set('imdb', imdbId, { mediaType: null, tmdbId: null, imdbId, title: null, year: null });
+    return null;
+  }
+  ctx.ids.set('imdb', imdbId, { mediaType: hit.mediaType, tmdbId: hit.tmdbId, imdbId, title: hit.title, year: hit.year ?? null });
+  return { mediaType: hit.mediaType, tmdbId: hit.tmdbId, imdbId, title: hit.title, year: hit.year ?? null };
+}
+
+export const imdbTop: Provider<'imdbTop'> = async (s: ImdbTopSettings, mediaType, ctx) => {
+  const gz = await ctx.datasets.get('imdb-title-ratings.tsv.gz', IMDB_RATINGS_URL, {
+    maxAgeMs: IMDB_RATINGS_MAX_AGE_MS,
+    ...(ctx.signal ? { signal: ctx.signal } : {}),
+  });
+  let tsv: string;
+  try {
+    tsv = gunzipSync(gz).toString('utf8');
+  } catch (cause) {
+    throw new ImportListFetchError('bad-response', 'the IMDb ratings dataset is not a gzip file', { cause });
+  }
+  const candidates = parseImdbRatings(tsv, s.minVotes);
+  // Most top-rated titles are episodes when unfiltered; resolve in batches until the list is full.
+  const budget = Math.min(candidates.length, s.limit * 4);
+  const out: FetchedItem[] = [];
+  const batch = Math.max(RESOLVE_CONCURRENCY * 5, s.limit);
+  for (let i = 0; i < budget && out.length < s.limit; i += batch) {
+    const slice = candidates.slice(i, Math.min(i + batch, budget));
+    const items = await mapLimit(slice, RESOLVE_CONCURRENCY, (c) => resolveImdb(ctx, c.imdbId));
+    for (const item of items) {
+      if (item && wants(mediaType, item.mediaType)) out.push(item);
+      if (out.length >= s.limit) break;
+    }
+  }
+  return out;
 };
