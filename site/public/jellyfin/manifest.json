@@ -1,1 +1,29 @@
-[]
+[
+  {
+    "guid": "a0751e21-86da-4afd-8e35-7da8b087febc",
+    "name": "Arclight",
+    "overview": "Arclight for Jellyfin: watch-state sync, requests, status badges and watchlist from your Arclight server.",
+    "description": "Connects Jellyfin to a self-hosted Arclight media manager. Forwards playback, watched, library and user events to Arclight from every Jellyfin client, and adds Arclight search results, request buttons, download/request status badges, a watchlist button, problem reports and subtitle/audio language requests to Jellyfin Web. The Arclight API key stays on the Jellyfin server.",
+    "owner": "ZacABrewer",
+    "category": "General",
+    "imageUrl": "https://arclight.moviemethat.com/jellyfin/icon.png",
+    "versions": [
+      {
+        "version": "1.0.0.12",
+        "changelog": "- First release.\n- Forwards playback start/progress/stop, watched and favourite changes, new library items and user changes to Arclight.\n- Jellyfin Web: Arclight results in search with request dialog (seasons, 4K), status badges on item pages, watchlist, report a problem, subtitle/audio language requests.\n- API key stays on the Jellyfin server; browser calls go through the plugin with the user's own Jellyfin session.\n- Discover page, My requests page, Coming soon row, \"Also on\" streaming providers, quality labels on posters, and opt-in Arclight themes.\n- Every call acts as the linked Arclight account: content caps, request rights and visibility follow that account.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.0.0/arclight-jellyfin_1.0.0.12.zip",
+        "checksum": "c99ea72bc8ed8c8d082cb708422b7694",
+        "timestamp": "2026-11-02T01:01:07Z"
+      },
+      {
+        "version": "1.0.0.11",
+        "changelog": "- First release.\n- Forwards playback start/progress/stop, watched and favourite changes, new library items and user changes to Arclight.\n- Jellyfin Web: Arclight results in search with request dialog (seasons, 4K), status badges on item pages, watchlist, report a problem, subtitle/audio language requests.\n- API key stays on the Jellyfin server; browser calls go through the plugin with the user's own Jellyfin session.\n- Discover page, My requests page, Coming soon row, \"Also on\" streaming providers, quality labels on posters, and opt-in Arclight themes.\n- Every call acts as the linked Arclight account: content caps, request rights and visibility follow that account.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.0.0/arclight-jellyfin_1.0.0.11.zip",
+        "checksum": "895c269cea1b45a127142044f8599441",
+        "timestamp": "2026-11-02T01:01:07Z"
+      }
+    ]
+  }
+]
