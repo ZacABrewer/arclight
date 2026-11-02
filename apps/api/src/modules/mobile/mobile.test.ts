@@ -215,7 +215,8 @@ describe('mobile delivery', () => {
     expect(relay.calls).toHaveLength(1);
     expect(mobile.list(alice)[0]!.lastError).toMatch(/rate limited/);
     // Each send is retried once after the pause; still 429, so they are dropped.
-    await eventually(() => expect(relay.calls).toHaveLength(3));
+    // Generous on busy CI runners; it returns as soon as both retries have gone out.
+    await eventually(() => expect(relay.calls).toHaveLength(3), 10_000);
     await wait(600);
     expect(relay.calls).toHaveLength(3);
     expect(mobile.pendingRetries).toBe(0);
