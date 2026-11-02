@@ -4,7 +4,7 @@ import type { LoginMethod, MediaServerKind, Session } from '@arclight/shared';
 import { useRouter, useRouterState } from '@tanstack/react-router';
 import { ApiError, errorMessage } from '../api/client.js';
 import { authApi } from '../api/auth.js';
-import { Backdrop, Banner, Button, Checkbox, Field, Input, Mark, Pane, Segmented } from '../arclight/index.js';
+import { Backdrop, Banner, Button, Checkbox, Field, Input, Mark, Pane, Segmented, Wordmark } from '../arclight/index.js';
 import { authKeys, safeRedirect } from '../auth/guard.js';
 import { usePlexPinFlow } from '../features/requests/plex-pin.js';
 import { PasskeySignInButton, ProviderButtons, TwoFactorStep, passwordFormHidden, ssoErrorMessage, visibleProviders, type TwoFactorChallengeState } from '../features/identity/sign-in.js';
@@ -113,9 +113,7 @@ export function LoginPage() {
           <div className="login-form">
             <div className="login-brand">
               <Mark size={44} />
-              <span className="login-wordmark" aria-hidden="true">
-                {t('common.arclight')}
-              </span>
+              <Wordmark height={26} label={t('common.arclight')} className="login-wordmark" />
               <h1 id="login-title" className="al-sr-only">
                 {t('login.signIn')}
               </h1>

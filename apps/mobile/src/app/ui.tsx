@@ -1,6 +1,7 @@
-import type { ReactNode } from 'react';
+import { useId, type ReactNode } from 'react';
 import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { isNative } from '../platform/capacitor.js';
+import { WORDMARK_ASPECT, WORDMARK_BOX, WORDMARK_LETTERS, WORDMARK_SPAN, WORDMARK_VIEWBOX, sliceGeometry } from '../../../../design/brand/wordmark.js';
 
 export function Mark({ small = false }: { small?: boolean }) {
   return (
@@ -13,6 +14,45 @@ export function Mark({ small = false }: { small?: boolean }) {
       </defs>
       <path d="M48,22 L76,50 L48,78" fill="none" stroke="url(#arclight-g)" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" opacity=".45" />
       <path d="M24,22 L52,50 L24,78" fill="none" stroke="url(#arclight-g)" strokeWidth="13" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+/**
+ * The "Light Slice" wordmark (design/brand/wordmark.ts: Michroma outlines, SIL OFL 1.1), the same
+ * letters and slice as the web app. Colours: --primary -> --accent, the line in --accent (styles.css).
+ */
+export function Wordmark({ height = 24, label = 'Arclight' }: { height?: number; label?: string }) {
+  const id = useId().replace(/[^a-zA-Z0-9_-]/g, '');
+  const slice = sliceGeometry(height);
+  const width = Math.round(height * WORDMARK_ASPECT * 100) / 100;
+  const { x, y, width: w, height: h } = WORDMARK_BOX;
+  return (
+    <svg className="wordmark" role="img" aria-label={label} viewBox={WORDMARK_VIEWBOX} width={width} height={height} focusable="false">
+      <defs>
+        <linearGradient id={`wm-f-${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={WORDMARK_SPAN} y2="0">
+          <stop offset="0" style={{ stopColor: 'var(--wordmark-from)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--wordmark-to)' }} />
+        </linearGradient>
+        <linearGradient id={`wm-l-${id}`} gradientUnits="userSpaceOnUse" x1="0" y1="0" x2={WORDMARK_SPAN} y2="0">
+          <stop offset="0" style={{ stopColor: 'var(--wordmark-line)', stopOpacity: 0 }} />
+          <stop offset=".5" style={{ stopColor: 'var(--wordmark-line)' }} />
+          <stop offset="1" style={{ stopColor: 'var(--wordmark-line)', stopOpacity: 0 }} />
+        </linearGradient>
+        <mask id={`wm-c-${id}`} maskUnits="userSpaceOnUse" x={x - 20} y={y} width={w + 40} height={h}>
+          <rect x={x - 20} y={y} width={w + 40} height={h} fill="#fff" />
+          <rect x={x - 20} y={slice.cutY} width={w + 40} height={slice.cutHeight} fill="#000" />
+        </mask>
+        <filter id={`wm-g-${id}`} x="-10%" y="-600%" width="120%" height="1300%">
+          <feGaussianBlur stdDeviation="3" />
+          <feMerge>
+            <feMergeNode />
+            <feMergeNode in="SourceGraphic" />
+          </feMerge>
+        </filter>
+      </defs>
+      <path d={WORDMARK_LETTERS} fill={`url(#wm-f-${id})`} mask={`url(#wm-c-${id})`} />
+      <rect y={slice.lineY} width={WORDMARK_SPAN} height={slice.lineHeight} fill={`url(#wm-l-${id})`} filter={`url(#wm-g-${id})`} />
     </svg>
   );
 }

@@ -140,6 +140,9 @@ growing, so read the file rather than this page for the exact names. The groups:
   all cyan, so a pack with a different accent must override the tints too.
 - **Lines**: `--al-line-1` to `-4` and the `--al-line-aNN` dividers.
 - **Light effects**: glow, focus rings, sheen, scrim, scanline and vignette.
+- **Wordmark**: `--al-wordmark-from` / `--al-wordmark-to` (the letters' gradient) and
+  `--al-wordmark-line` (the light line in the cut). Packs get `--al-text-1` into `--al-accent-text`,
+  so most never set them.
 - **Type**: `--al-font` (body), `--al-display` (headings, defaults to `--al-font`), `--al-mono`.
 - **Shape**: corners and elevation, below.
 

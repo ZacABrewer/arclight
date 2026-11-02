@@ -1,6 +1,7 @@
 import { useRef, type KeyboardEvent, type MouseEvent } from 'react';
 import { cx } from '../cx.js';
 import { Mark } from '../components/Icon.js';
+import { Wordmark } from '../components/Wordmark.js';
 import { t } from '../../i18n/index.js';
 
 export type RailCode = 'DB' | 'LB' | 'DS' | 'RQ' | 'CL' | 'WN' | 'AC' | 'SB' | 'IX' | 'ST' | 'SY';
@@ -80,10 +81,12 @@ export function Rail({ active, items = RAIL_ITEMS, onSelect, compact, homeHref, 
         {homeHref ? (
           <a className="al-rail__mark" href={homeHref} aria-label={t('arclight.chrome.rail.arclightHome')} onClick={(e) => onSelect?.('DB', e)}>
             <Mark size={40} />
+            <Wordmark height={12} className="al-rail__word" />
           </a>
         ) : (
           <span className="al-rail__mark">
             <Mark size={40} label={t('arclight.chrome.rail.arclight')} />
+            <Wordmark height={12} className="al-rail__word" />
           </span>
         )}
         <ul ref={listRef} className="al-rail__list" onKeyDown={onKeyDown}>

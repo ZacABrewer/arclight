@@ -25,6 +25,7 @@ import {
   Select,
   Skeleton,
   Stepper,
+  Wordmark,
   type PathEntry,
 } from '../../arclight/index.js';
 import { useAuth } from '../../auth/auth-context.js';
@@ -472,7 +473,7 @@ function WizardFrame({ index, children }: { index: number; children: ReactNode }
       <Backdrop vx={0.5} horizon={0.625} spire={false} />
       <header className="wiz-bar">
         <Mark size={26} />
-        <span className="al-wordmark">{t('common.arclight')}</span>
+        <Wordmark height={16} label={t('common.arclight')} />
         <span className="wiz-bar__label">{t('setup.wizard.setup')}</span>
         <span className="wiz-bar__spacer" />
         {index >= 0 ? (

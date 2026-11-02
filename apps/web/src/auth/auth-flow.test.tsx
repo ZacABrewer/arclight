@@ -152,6 +152,7 @@ describe('login form', () => {
     handler = (url) => (url === '/api/v1/auth/status' ? { status: 200, body: anonymous() } : undefined);
     renderAt('/login');
     await screen.findByRole('heading', { name: 'Sign in' });
+    expect(screen.getByRole('img', { name: /^arclight$/i }).classList.contains('login-wordmark')).toBe(true);
     expect(screen.queryByText(/session expired/)).toBeNull();
   });
 

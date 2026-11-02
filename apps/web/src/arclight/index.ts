@@ -83,6 +83,7 @@ export { EmptyState, Skeleton, ErrorBlock, Banner, type EmptyStateProps, type Sk
 export { Poster, BackdropFrame, PosterCard, type PosterProps, type BackdropFrameProps, type PosterCardProps } from './components/Media.js';
 export { Derezz, ScanFilter, type DerezzProps } from './components/Derezz.js';
 export { Icon, Mark, ICON_NAMES, type IconName, type IconProps } from './components/Icon.js';
+export { Wordmark, type WordmarkProps } from './components/Wordmark.js';
 
 // Overlays with data via props
 export { KeyboardSheet, KeyCombo, DEFAULT_SHORTCUTS, type Shortcut, type ShortcutGroup, type KeyboardSheetProps } from './components/KeyboardSheet.js';

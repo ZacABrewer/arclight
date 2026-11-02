@@ -56,6 +56,13 @@ describe('Rail', () => {
     expect(onSelect).toHaveBeenLastCalledWith('WN', expect.anything());
   });
 
+  it('carries a decorative wordmark beside the mark for the wide pack rail', () => {
+    render(<Rail active="DB" homeHref="/" />);
+    const word = document.querySelector('.al-rail__mark .al-rail__word')!;
+    expect(word.getAttribute('aria-hidden')).toBe('true');
+    expect(screen.getByRole('link', { name: 'Arclight home' })).toBeTruthy();
+  });
+
   it('renders links when items carry hrefs, and the compact variant', () => {
     const items = RAIL_ITEMS.map((i) => ({ ...i, href: `/${i.code.toLowerCase()}` }));
     const { container } = render(<Rail active="LB" items={items} compact />);
@@ -71,6 +78,14 @@ describe('TopBar', () => {
     expect(screen.getByText('VPN Amsterdam')).toBeTruthy();
     expect(screen.getByText('requests', { exact: false }).textContent).toBe('4 requests');
     expect(screen.getByRole('button', { name: 'Account' }).textContent).toBe('SK');
+  });
+
+  it('shows the Light Slice wordmark as an image named after the app, not as text', () => {
+    const { container } = render(<TopBar />);
+    const word = screen.getByRole('img', { name: /^arclight$/i });
+    expect(word.classList.contains('al-wordmark')).toBe(true);
+    expect(word.querySelector('svg path')).toBeTruthy();
+    expect(container.querySelector('.al-topbar')!.textContent).not.toMatch(/arclight/i);
   });
 
   it('colours the issue count orange only when > 0', () => {
