@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState, type CSSProperties } from 'react';
-import { cx } from '../../../arclight/index.js';
+import { cx, Mark } from '../../../arclight/index.js';
 import { t } from '../../../i18n/index.js';
 import { formatClock } from '../format.js';
 
@@ -9,7 +9,13 @@ import { formatClock } from '../format.js';
 export function Artwork({ url, size, className }: { url: string | null | undefined; size?: number; className?: string }) {
   const [broken, setBroken] = useState(false);
   const style: CSSProperties | undefined = size ? { width: size, height: size } : undefined;
-  if (!url || broken) return <span className={cx('pl-art', 'pl-art--empty', className)} style={style} aria-hidden="true" />;
+  if (!url || broken) {
+    return (
+      <span className={cx('pl-art', 'pl-art--empty', className)} style={style} aria-hidden="true">
+        <Mark size={size ? Math.max(16, Math.round(size * 0.4)) : 40} />
+      </span>
+    );
+  }
   return <img className={cx('pl-art', className)} style={style} src={url} alt="" loading="lazy" decoding="async" onError={() => setBroken(true)} />;
 }
 

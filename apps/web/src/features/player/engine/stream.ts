@@ -80,9 +80,22 @@ export function chooseStream(part: Pick<PlayablePart, 'bitrateKbps'>, policy: St
   return { format: policy.transcodeTo, transcoded: true, bitrateKbps: bitrate };
 }
 
+// Readers report long codec names ("MPEG 1 Layer 3", "mp4a.40.2"); show the short ones.
+const CODEC_NAMES: ReadonlyArray<readonly [RegExp, string]> = [
+  [/flac/i, 'FLAC'],
+  [/alac|apple lossless/i, 'ALAC'],
+  [/mpeg.*layer\s*3|mp3|^mpeg$/i, 'MP3'],
+  [/aac|mp4a/i, 'AAC'],
+  [/vorbis/i, 'VORBIS'],
+  [/opus/i, 'OPUS'],
+  [/^pcm|wav/i, 'WAV'],
+  [/aiff/i, 'AIFF'],
+];
+
 /** "FLAC", "MP3 320", "FLAC 24/96": the codec of the original file for the format badge. */
 export function codecLabel(part: Pick<PlayablePart, 'codec' | 'container' | 'mimeType' | 'bitrateKbps' | 'bitDepth' | 'sampleRateHz'>): string {
-  const name = (part.codec ?? part.container ?? part.mimeType.replace(/^audio\//, '')).toUpperCase();
+  const raw = part.codec ?? part.container ?? part.mimeType.replace(/^audio\//, '');
+  const name = CODEC_NAMES.find(([re]) => re.test(raw))?.[1] ?? raw.toUpperCase();
   const lossless = /^(FLAC|ALAC|WAV|PCM)/.test(name);
   if (lossless && part.bitDepth && part.sampleRateHz && (part.bitDepth > 16 || part.sampleRateHz > 48_000)) {
     return `${name} ${part.bitDepth}/${Math.round(part.sampleRateHz / 1000)}`;

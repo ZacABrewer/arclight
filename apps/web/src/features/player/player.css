@@ -40,7 +40,8 @@
 
 /* Artwork. */
 .pl-art { display: block; aspect-ratio: 1; object-fit: cover; background: var(--al-poster-bg); border: 1px solid var(--al-line-2); }
-.pl-art--empty { background: linear-gradient(135deg, var(--al-well), var(--al-well-2)); }
+.pl-art--empty { display: grid; place-items: center; color: var(--al-text-5); background: linear-gradient(135deg, var(--al-well), var(--al-well-2)); }
+.pl-art--empty svg { opacity: .55; }
 
 /* Seek bar: a native range over the drawing. */
 .pl-seek { position: relative; height: 28px; --pl-p: 0%; }
@@ -166,7 +167,7 @@
 @media (max-width: 767.98px) {
   .pl-head { padding: 6px 12px; gap: 8px; }
   .pl-main { padding: 16px 16px calc(110px + env(safe-area-inset-bottom, 0px)); }
-  .pl-tabs__soon { display: none; }
+  .pl-tabs__link.is-soon { display: none; }
   .pl-tabs__link { padding: 0 8px; }
   .pl-mini { padding-left: 12px; padding-right: 12px; gap: 8px; }
   .pl-np__title { font-size: 22px; }
