@@ -53,6 +53,8 @@ export const HistoryEventType = z.enum([
   'profileReplaced',
   // "Add additional…" asked for an audio/subtitle language, and what came of it (data.outcome).
   'additionalLanguage',
+  // A file of a (season) pack was not imported; data.reasons says why (packs import partially).
+  'importSkipped',
 ]);
 export type HistoryEventType = z.infer<typeof HistoryEventType>;
 

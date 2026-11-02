@@ -19,7 +19,9 @@ import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
 import type { TrackedDownload } from '../download-clients/index.js';
+import { eq } from 'drizzle-orm';
 import { libraryService } from '../library/index.js';
+import { episodes as episodesTable } from '../library/schema.js';
 import { setSection } from '../settings/service.js';
 import type { ImportedEvent, ImportsDeps } from './deps.js';
 import { importsRoutes } from './routes.js';
@@ -201,7 +203,7 @@ describe('completed download import (series)', () => {
     expect(await exists(src)).toBe(true);
   });
 
-  it('imports a season pack and blocks with messages when an episode is missing', async () => {
+  it('imports a season pack partially when an episode is missing, with the outcome per file', async () => {
     const series = addSeries();
     const eps = episodesOf(series.id);
     const folder = join(downloads, 'Show.Name.S01.1080p.WEB-DL-GRP');
@@ -213,12 +215,31 @@ describe('completed download import (series)', () => {
       tracked({ id: 3, title: 'Show.Name.S01.1080p.WEB-DL-GRP', outputPath: folder, mediaType: 'series', seriesId: series.id, episodeIds: eps.map((e) => e.id) }),
     );
     expect(r.outcomes.filter((o) => o.status === 'imported')).toHaveLength(2);
-    expect(r.verified).toBe(false);
-    expect(fake.items.get(3)).toMatchObject({ trackedState: 'importPending', trackedStatus: 'warning' });
+    // Every file has its final outcome: the pack is done; the missing episode stays wanted.
+    expect(r.verified).toBe(true);
+    expect(fake.items.get(3)?.trackedState).toBe('imported');
     const lines = r.messages[0]!.messages;
-    expect(lines[0]).toMatch(/One or more episodes expected/);
+    expect(lines[0]).toBe('Imported 2 of 3 files; 1 skipped');
+    expect(lines[1]).toBe('1 expected episode is not in the release');
     expect(lines.some((l) => l.includes('sample') && l.includes('Sample'))).toBe(true);
-    expect(events.some((e) => e.type === 'import' && e.action === 'manualRequired')).toBe(true);
+    expect(events.some((e) => e.type === 'import' && e.action === 'manualRequired')).toBe(false);
+  });
+
+  it('still blocks a pack when a file failed only temporarily', async () => {
+    const series = addSeries();
+    const eps = episodesOf(series.id);
+    const folder = join(downloads, 'Show.Name.S01.1080p.WEB-DL-GRP');
+    await put('Show.Name.S01.1080p.WEB-DL-GRP/Show.Name.S01E01.1080p.WEB-DL-GRP.mkv');
+    await put('Show.Name.S01.1080p.WEB-DL-GRP/Show.Name.S01E02.1080p.WEB-DL-GRP.mkv');
+    // A recently aired episode without a title is a temporary rejection when renaming needs it.
+    setSection(db, 'naming', { ...service().getNaming(), renameEpisodes: true });
+    db.update(episodesTable).set({ title: '', airDate: '2024-06-15', airDateUtc: '2024-06-15T01:00:00Z' }).where(eq(episodesTable.id, eps[1]!.id)).run();
+    const r = await service().importCompletedDownload(
+      tracked({ id: 4, title: 'Show.Name.S01.1080p.WEB-DL-GRP', outputPath: folder, mediaType: 'series', seriesId: series.id, episodeIds: eps.map((e) => e.id) }),
+    );
+    expect(r.outcomes.filter((o) => o.status === 'imported')).toHaveLength(1);
+    expect(r.verified).toBe(false);
+    expect(fake.items.get(4)?.trackedState).toBe('importPending');
   });
 
   it('upgrades: recycles the old file and reports replacedFileIds', async () => {

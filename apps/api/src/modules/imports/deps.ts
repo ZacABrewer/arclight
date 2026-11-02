@@ -24,6 +24,8 @@ export interface ImportedEvent {
   isUpgrade: boolean;
   importMode: 'move' | 'copy' | 'hardlink';
   manual: boolean;
+  /** Series packs: the pack kind of the download (history `releaseType`). */
+  releaseType?: string;
 }
 
 /**
@@ -99,11 +101,30 @@ export interface ImportFailedEvent {
   message: string;
 }
 
+/** One file of a series pack that was not imported (the pack itself imported partially). */
+export interface ImportSkippedEvent {
+  downloadId: string | null;
+  sourceTitle: string;
+  seriesId: number;
+  /** The file's episodes; empty when it mapped to none. */
+  episodeIds: number[];
+  path: string;
+  quality: QualityModel;
+  languages: string[];
+  releaseGroup: string | null;
+  sizeBytes: number;
+  /** Rejection reasons and messages, in order. */
+  reasons: Array<{ reason: string; message: string }>;
+  releaseType?: string;
+}
+
 export interface HistoryHook {
   recordImport(event: ImportedEvent): void | Promise<void>;
   recordAudioImport?(event: AudioImportedEvent): void | Promise<void>;
   recordAudiobookImport?(event: AudiobookImportedEvent): void | Promise<void>;
   recordImportFailed?(event: ImportFailedEvent): void | Promise<void>;
+  /** A pack file that was skipped while the rest of the pack imported. */
+  recordImportSkipped?(event: ImportSkippedEvent): void | Promise<void>;
   recordDownloadFailed?(item: TrackedDownload, message: string): void | Promise<void>;
 }
 

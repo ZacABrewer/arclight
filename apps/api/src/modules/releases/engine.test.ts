@@ -174,11 +174,11 @@ describe('series-specific specs', () => {
     expect(reasons(makeContext(), tv('Show.Name.S01.1080p.WEB-DL-GRP', { size: 4 * GB }))).not.toContain('fullSeasonNotAired');
   });
 
-  it('rejects multi-season packs unless allowed', () => {
+  it('rejects multi-season packs only when they are turned off', () => {
     const l = snapshot([show], [...s1, makeEpisode(show.id, 2, 1)]);
     const c = tv('Show.Name.S01-S02.1080p.BluRay-GRP', { size: 0 }, l);
-    expect(reasons(makeContext(), c)).toContain('multiSeason');
-    expect(reasons(makeContext({ settings: { ...makeContext().settings, allowMultiSeason: true } }), c)).not.toContain('multiSeason');
+    expect(reasons(makeContext({ settings: { ...makeContext().settings, allowMultiSeason: false } }), c)).toContain('multiSeason');
+    expect(reasons(makeContext(), c)).not.toContain('multiSeason');
   });
 
   it('rejects split episodes', () => {

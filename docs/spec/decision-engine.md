@@ -313,7 +313,23 @@ Example: finale in 3 days rejected; aired yesterday accepted; in 12 hours accept
 
 ### 4.19 Multi-season packs (P) [TV]
 Reject `multiSeason` ("Multi-season releases are not supported") when the parse spans several
-seasons. Matching (3.2.3) supports them; the spec rejects. Make it a setting; default reject.
+seasons and `allowMultiSeasonPacks` is off. **[Arclight]** The setting defaults to on, so
+multi-season and "Complete Series" packs are accepted.
+
+### 4.19a Season packs (Arclight) [TV]
+Packs are season packs, multi-season packs, complete-series packs, season parts and dash-written
+episode ranges of three or more (`S01E01-E06`, `001-024`). For a pack:
+- **Coverage.** Each decision carries `pack` = {kind, seasons, episodeCount, wantedCount, part?}.
+  Wanted means monitored and missing, or monitored with a file the pack would upgrade.
+- **Size limits per episode.** Quality-definition and maximum-size limits apply to the size
+  divided by the episode count ("X per episode is larger than the Y allowed (N episodes, Z in
+  total)"). Custom formats with a size condition also see the per-episode size.
+- **Only wanted.** Monitored checks pass when any mapped episode is monitored; the disk-upgrade
+  spec counts only wanted episodes and `seasonPackUpgradeMode` / `Threshold` decide how many must
+  be upgrades ("Pack upgrades only X of Y wanted episodes").
+- **Preference.** `seasonPackPreferPercent` (default 50): a pack is preferred when wanted /
+  episodes >= that share. Ranking (11.4) puts a preferred pack before single episodes; an
+  unpreferred one ranks after them. Packs are scored with custom formats like any release.
 
 ### 4.20 Split episodes (P) [TV]
 Reject `splitEpisode` when the parser flagged a split episode ("Part 1 of 2").
@@ -565,6 +581,12 @@ pack is `fullSeason` unless the search is a season search.
 whose indexer has `seasonSearchMaximumSingleEpisodeAge` > 0: a non-pack release that maps to
 episodes is rejected `notSeasonPack` if the newest air date among the searched episodes of that
 season is more than N days ago. Single-episode searches are exempt.
+8.6 Season searches (Arclight) [TV]: automatic searches search a season as a whole (which also
+finds packs) when every released episode is wanted, or when the wanted share reaches
+`seasonPackPreferPercent`; a single wanted episode is searched on its own. Anime season searches
+add text queries: scene titles mapped to the season, "Title Season N", "Title Nth Season",
+"Title SN", and the absolute range ("Title 13-24"); season 1 uses "Title Batch" and its range.
+Release titles named by season words ("Title 2nd Season") are matched to that season.
 
 ---
 
@@ -602,8 +624,9 @@ priority, peers, usenet age, size.
 Group members tie.
 11.2 Format score: higher better.
 11.3 Protocol: the release matching the best delay profile's `preferredProtocol` wins.
-11.4 Episode count [TV]: a season pack beats a non-pack. Otherwise anime: more episodes better;
-non-anime: fewer episodes better.
+11.4 Episode count [TV]: a season pack beats a non-pack. **[Arclight]** only when the pack is
+preferred (4.19a); an unpreferred pack loses to single episodes. Otherwise anime: more episodes
+better; non-anime: fewer episodes better.
 11.5 Episode number [TV]: lower smallest episode number better.
 11.6 Indexer priority: lower number better (1 beats 25).
 11.7 Indexer flags [MOVIE], only if `preferIndexerFlags`: +2 each for freeleech, double-upload,

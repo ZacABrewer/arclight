@@ -68,6 +68,8 @@ export interface GrabbedInfo {
   quality?: QualityModel;
   /** "Grab anyway": the rejections the user overrode; recorded on the imported file. */
   grabOverride?: GrabOverride;
+  /** The user grabbed it by hand (interactive or manual search): unmonitored episodes are wanted too. */
+  userInvoked?: boolean;
 }
 
 export interface DecisionContext {
@@ -93,6 +95,12 @@ export interface DecisionContext {
    * engine only grabs such releases under that rule. Absent/`none`: classic upgrade rules.
    */
   mismatchAction?: ProfileMismatchAction;
+  /**
+   * The download is a series pack (season, multi-season, complete series, Part/Vol, episode
+   * range). Its files import only where they help: episodes nobody monitors and files no
+   * better than the library's are skipped (`notWanted`, `packNotUpgrade`), and the rest import.
+   */
+  pack?: boolean;
 }
 
 export interface ImportDecision {
@@ -198,15 +206,33 @@ export const mappingSpec: ImportSpec = (item) => {
   if (!item.series) return item.parsed?.series ? permanent('unknownSeries', 'Unknown Series') : permanent('unableToParse', 'Unable to parse file');
   if (item.episodes.length > 0) return null;
   const s = item.parsed?.series;
-  if (s?.isPartialSeason) return permanent('partialSeason', 'Partial season packs are not supported');
+  // A file named like a whole pack ("Show S01 Part 1.mkv", "Show S01-S03.mkv") holds no
+  // episode numbers of its own; packs are imported file by file.
+  if (s?.isMultiSeason) return permanent('multiSeason', 'File is named like a multi-season pack; no episode numbers in its name');
+  if (s?.isPartialSeason) return permanent('partialSeason', 'File is named like a partial season pack; no episode numbers in its name');
   if (s?.isSeasonExtra) return permanent('seasonExtra', 'Extras are not supported');
   return permanent('invalidSeasonOrEpisode', 'Invalid season or episode');
 };
 
-export const multiSeasonSpec: ImportSpec = (item) =>
-  item.mediaType === 'series' && item.parsed?.series?.isMultiSeason
-    ? permanent('multiSeason', 'Multi-season download, unable to import automatically')
-    : null;
+/** One file never spans seasons: a file that maps to episodes of several seasons is refused. */
+export const multiSeasonSpec: ImportSpec = (item) => {
+  if (item.mediaType !== 'series' || item.episodes.length < 2) return null;
+  const seasons = new Set(item.episodes.map((e) => e.seasonNumber));
+  return seasons.size > 1 ? permanent('multiSeason', `File maps to episodes of ${seasons.size} seasons (${item.episodes.map(sxe).join(', ')})`) : null;
+};
+
+/**
+ * Packs import only wanted episodes: a file whose episodes are all unmonitored is skipped
+ * (unless the user grabbed the pack by hand). Single-episode downloads keep the old rule:
+ * the release engine already decided the episode was wanted.
+ */
+export const packWantedSpec: ImportSpec = (item, ctx) => {
+  if (!ctx.pack || item.mediaType !== 'series' || item.existingFile || item.episodes.length === 0) return null;
+  if (ctx.grab?.userInvoked || ctx.grab?.grabOverride) return null;
+  if (item.series && !item.series.monitored) return permanent('notWanted', 'Series is not monitored; skipped from the pack');
+  if (item.episodes.some((e) => e.monitored)) return null;
+  return permanent('notWanted', `Episode ${item.episodes.map(sxe).join(', ')} is not monitored; skipped from the pack`);
+};
 
 export const fullSeasonSpec: ImportSpec = (item) =>
   item.mediaType === 'series' && item.parsed?.series?.fullSeason && item.parsed.series.episodes.length === 0
@@ -351,6 +377,16 @@ export const upgradeSpec: ImportSpec = (item, ctx) => {
       rejections.push(
         permanent('notCustomFormatUpgrade', `Not a custom format upgrade for existing file. New: ${item.formatScore}, existing: ${existingScore}`),
       );
+      continue;
+    }
+    // Packs replace only what they improve: same quality, revision and score is no upgrade
+    // (a single episode grabbed on purpose still replaces its equal, as before).
+    if (ctx.pack) {
+      const betterRevision =
+        ctx.settings.downloadPropersAndRepacks !== 'doNotPrefer' && compareRevision(item.quality.revision, existing.quality.revision) > 0;
+      if (!betterRevision && item.formatScore === existingScore) {
+        rejections.push(permanent('packNotUpgrade', `Existing file is as good (${existing.quality.quality.name}, score ${existingScore}); kept`));
+      }
     }
   }
   return rejections;
@@ -375,6 +411,7 @@ export const IMPORT_SPECS: ReadonlyArray<[string, ImportSpec]> = [
   ['sameFile', sameFileSpec],
   ['alreadyImported', alreadyImportedSpec],
   ['matchesGrab', matchesGrabSpec],
+  ['packWanted', packWantedSpec],
   ['unverifiedSceneNumbering', unverifiedSceneNumberingSpec],
   ['sameEpisodes', sameEpisodesSpec],
   ['episodeTitle', episodeTitleSpec],
@@ -431,6 +468,7 @@ export function readGrabbedRelease(raw: unknown): GrabbedInfo | null {
   if (seriesId !== undefined) out.seriesId = seriesId;
   const movieId = num(r['movieId']);
   if (movieId !== undefined) out.movieId = movieId;
+  if (r['userInvoked'] === true) out.userInvoked = true;
   if (Array.isArray(r['episodeIds'])) {
     const ids = r['episodeIds'].filter((v): v is number => typeof v === 'number');
     if (ids.length > 0) out.episodeIds = ids;

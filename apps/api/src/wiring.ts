@@ -427,6 +427,7 @@ export function releasesDeps(ctx: AppContext): ReleasesDeps {
           allowMultiSeason: r.allowMultiSeasonPacks,
           seasonPackUpgrade: r.seasonPackUpgradeMode,
           seasonPackUpgradeThreshold: r.seasonPackUpgradeThreshold,
+          seasonPackPreferPercent: r.seasonPackPreferPercent,
           availabilityDelayDays: r.availabilityDelayDays,
           allowUnairedEpisodes: r.allowUnairedEpisodes,
           unairedToleranceMinutes: r.unairedToleranceMinutes,
@@ -598,6 +599,20 @@ export function importsDeps(ctx: AppContext): ImportsDeps {
       recordAudiobookImport: (event) => {
         recordAudiobookImportInHistory(ctx, event);
       },
+      recordImportSkipped: (event) => {
+        historyServiceFor(ctx).recordImportSkipped({
+          target: { mediaType: 'series', seriesId: event.seriesId, episodeIds: event.episodeIds },
+          sourceTitle: event.sourceTitle,
+          quality: event.quality,
+          languages: event.languages,
+          downloadId: event.downloadId,
+          droppedPath: event.path,
+          reasons: event.reasons,
+          size: event.sizeBytes,
+          ...(event.releaseGroup ? { releaseGroup: event.releaseGroup } : {}),
+          ...(event.releaseType ? { releaseType: event.releaseType } : {}),
+        });
+      },
     },
     notifications: {
       onAudioImported: async (event) => {
@@ -678,6 +693,7 @@ export function recordImportInHistory(ctx: AppContext, event: ImportedEvent): vo
     ...(downloadClient ? { downloadClient } : {}),
     ...(downloadClientName ? { downloadClientName } : {}),
     ...(grabbed && grabbed.customFormatScore !== 0 ? { customFormatScore: grabbed.customFormatScore } : {}),
+    ...(event.releaseType ? { releaseType: event.releaseType } : {}),
   });
 }
 

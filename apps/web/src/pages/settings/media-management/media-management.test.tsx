@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createMemoryHistory, createRouter } from '@tanstack/react-router';
-import { NAMING_DEFAULTS } from '@arclight/shared';
+import { NAMING_DEFAULTS, ReleasesSettings } from '@arclight/shared';
 import { MEDIA_MANAGEMENT_WIRE_DEFAULTS } from '../../../api/settings.js';
 import { ToastProvider } from '../../../components/toast.js';
 import { createToastStore } from '../../../lib/toast.js';
@@ -43,6 +43,7 @@ beforeEach(() => {
       if (url === '/api/v1/settings/naming') return new Response(JSON.stringify(method === 'PUT' ? body : naming), { status: 200 });
       if (url === '/api/v1/settings/mediamanagement') return new Response(JSON.stringify(method === 'PUT' ? body : MEDIA_MANAGEMENT_WIRE_DEFAULTS), { status: 200 });
       if (url === '/api/v1/rootfolder') return new Response(JSON.stringify(folders), { status: 200 });
+      if (url === '/api/v1/settings/releases') return new Response(JSON.stringify(method === 'PUT' ? body : ReleasesSettings.parse({})), { status: 200 });
       return new Response(JSON.stringify({ error: 'not found' }), { status: 404 });
     }),
   );
@@ -75,6 +76,20 @@ describe('naming preview', () => {
 });
 
 describe('Settings -> Media management', () => {
+  it('edits the season pack settings and saves them with the rest of the releases section', async () => {
+    renderAt('/settings/mediamanagement');
+    const section = await screen.findByRole('region', { name: 'Season packs' });
+    const prefer = await within(section).findByLabelText('Prefer packs at');
+    expect((prefer as HTMLInputElement).value).toBe('50');
+    fireEvent.change(prefer, { target: { value: '70' } });
+    fireEvent.change(within(section).getByLabelText('Upgrade with a pack'), { target: { value: 'percent' } });
+    fireEvent.change(within(section).getByLabelText('Share of episodes'), { target: { value: '60' } });
+    fireEvent.click(within(section).getByRole('button', { name: 'Save' }));
+    await waitFor(() => expect(calls.some((c) => c.url === '/api/v1/settings/releases' && c.method === 'PUT')).toBe(true));
+    const put = calls.find((c) => c.url === '/api/v1/settings/releases' && c.method === 'PUT')!.body as Record<string, unknown>;
+    expect(put).toMatchObject({ seasonPackPreferPercent: 70, seasonPackUpgradeMode: 'percent', seasonPackUpgradeThreshold: 60, allowMultiSeasonPacks: true, maximumSizeMb: 0 });
+  });
+
   it('shows the live mono sample under a naming format and updates it as the user types', async () => {
     renderAt('/settings/mediamanagement');
     const sample = await screen.findByTestId('sample-standardEpisodeFormat');

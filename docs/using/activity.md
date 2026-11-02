@@ -146,6 +146,7 @@ Engine-wide settings (speed limits, ports, VPN binding) live in **Settings > Tor
 | --- | --- |
 | Grabbed | A release was sent to a download client. |
 | Download folder imported | The download was imported into the library. |
+| Skipped from pack | A file in a season pack was not imported. The details say why: the episode is not monitored, the file on disk is as good, or the file has no episode number. The rest of the pack still imports. |
 | Download failed | The download failed. |
 | File deleted | A library file was removed. |
 | File renamed | A library file was renamed. |

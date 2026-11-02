@@ -168,7 +168,7 @@ Afterwards publish DownloadCanBeRemoved for each item with CanBeRemoved and stat
    - Parse the folder name (folder info) and the client item title (client info).
    - Collect video files under the folder (recursive), applying the path filters of 4.7.
    - If there is no client item and any video file is locked (cannot be opened exclusively): return rejection FileLocked "Locked file, try again later".
-   - **[Sonarr]** If the client title parses as a multi-season pack: reject MultiSeason "Multi-season download, unable to import automatically".
+   - **[Arclight]** Multi-season, complete-series and partial-season packs are imported like season packs: every file is mapped on its own (section 6). The download counts as a pack when the client title parses as one, or when it holds more than one video and the title names only a season.
    - Run decisions with sceneSource = true (4.8), then execute imports.
 3. **Mode resolution for Auto:** Move if there is no client item or the client item CanMoveFiles; otherwise Copy (hard link or copy per config, section 9).
 4. **Cleanup:** if the resolved mode is Move, at least one file imported, and ShouldDeleteFolder holds, delete the folder recursively (IO errors ignored). If no files imported, run the empty-result check (4.6).
@@ -226,7 +226,7 @@ Media extensions and the fallback quality they imply when nothing else is known:
 2. Create a local item (LocalEpisode / LocalMovie) with path, size, whether the file is already inside the library path (**ExistingFile**), and whether there are other non-sample video files alongside it. The count of non-sample videos is computed only for scene sources.
 3. Parse the file path (file info). ReleaseType = first non-Unknown among client, folder, file info **[Sonarr]**.
 4. Run aggregators (section 6). If no episodes/movie result:
-   - **[Sonarr]** PartialSeason "Partial season packs are not supported" when the file parse is a partial season; SeasonExtra "Extras are not supported" for season extras; otherwise InvalidSeasonOrEpisode "Invalid season or episode".
+   - **[Arclight]** A file whose own name has no episode numbers: MultiSeason "File is named like a multi-season pack; no episode numbers in its name" or PartialSeason (same wording) when the parse is such a pack; SeasonExtra "Extras are not supported" for season extras; otherwise InvalidSeasonOrEpisode "Invalid season or episode". Files named only by number inside a pack folder ("03 - Episode Title.mkv", "E05.mkv", "013.mkv") take the folder's season or range narrowed to that number. Anime files named by season words ("Title 2nd Season - 05") are mapped to that season; absolute numbers go through scene mapping, so "Title - 13" of a 01-24 batch lands on 2x01.
    - **[Radarr]** InvalidMovie / UnknownMovie.
 5. Copy indexer flags from the tracked download; compute custom formats (section 6.5).
 6. Evaluate **every** import specification. All rejection reasons are collected; there is no short-circuit. A spec that throws yields a DecisionError rejection.
@@ -568,7 +568,9 @@ If nothing matched and the candidate list has subtitles, all of them are used pr
 
 16.6 Multiple files for the same episode in one pack: the best quality (then largest) is processed first, the rest are rejected with "already imported".
 
-16.7 Season pack with a missing episode: the present episodes import, the download stays ImportBlocked with the "not imported or missing" message until the user intervenes or the missing files are supplied.
+16.7 Season pack with a missing episode: **[Arclight]** a partial import. The present episodes import and the download is marked imported once every file has a final outcome. The status lines read "Imported X of Y files; N skipped", "N expected episodes are not in the release" and one "<file>: reasons" line per skipped file. Each skipped file (samples excepted) gets an `importSkipped` History row. The missing episodes stay wanted. A file that failed only for a temporary reason (locked, free space) still blocks the download.
+
+16.8 **[Arclight] Only wanted from packs.** For pack downloads, an extra spec `packWanted` rejects files of unmonitored episodes or series (`notWanted`), and the upgrade spec rejects a file that is no better than the one on disk (same quality, revision and format score) with `packNotUpgrade` "Existing file is as good (Q, score N); kept": a pack never replaces an equal file. Both are skipped when the user grabbed the pack by hand (interactive search sets `userInvoked` on the grab) or chose an override in manual import.
 
 ---
 

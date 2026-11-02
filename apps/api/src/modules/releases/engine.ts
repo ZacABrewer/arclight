@@ -14,7 +14,7 @@ import {
   qualityIndex,
   scoreRelease,
 } from '@arclight/profiles-engine';
-import type { ParsedAudiobookInfo, ParsedMusicInfo, ParsedRelease } from '@arclight/parser';
+import { seriesPackKind, type ParsedAudiobookInfo, type ParsedMusicInfo, type ParsedRelease } from '@arclight/parser';
 import {
   indexerFlagsFromVolumeFactors,
   type AnyMediaType,
@@ -30,6 +30,7 @@ import {
   type QualityModel,
   type QualityProfile,
   type ReleaseDecision,
+  type ReleasePackCoverage,
   type ReleaseIndexerFlag,
   type ReleaseKind,
   type ReleaseAudiobookInfo,
@@ -380,6 +381,67 @@ export function filesFor(ctx: Pick<DecisionContext, 'existingFiles'>, c: Candida
   return ctx.existingFiles.filter((f) => f.episodeIds.some((id) => ids.has(id)) && !seen.has(f.id) && (seen.add(f.id), true));
 }
 
+/**
+ * Series packs (season, multi-season, complete series, Part/Vol, or an episode range written as
+ * one): releases of several separate episode files where only the wanted ones are imported.
+ */
+export function isSeriesPack(c: Candidate): boolean {
+  if (c.match.mediaType !== 'series') return false;
+  return c.match.fullSeason || seriesPackKind(c.parsed.series) !== null;
+}
+
+type PackContext = Pick<DecisionContext, 'existingFiles' | 'profile' | 'propers' | 'mismatchAction' | 'source' | 'criteria' | 'requiredAudio'>;
+
+/**
+ * Episodes of a pack worth having: monitored (any episode when the user searched by hand) and
+ * missing, on a file the profile no longer allows, or below cutoff and upgraded by this release.
+ * A pack never downgrades what is already good; only these episodes are imported from it.
+ */
+export function packWantedEpisodes(ctx: PackContext, c: Candidate): number[] {
+  if (c.match.mediaType !== 'series') return [];
+  const next = { quality: c.quality, formatScore: c.formatScore };
+  const userInvoked = isUserInvoked(ctx as DecisionContext);
+  const files = filesFor(ctx, c);
+  const out: number[] = [];
+  for (const e of c.match.episodes) {
+    if (!e.monitored && !userInvoked) continue;
+    const file = files.find((f) => f.episodeIds.includes(e.id));
+    if (!file || replacesDisallowedFile(ctx, file, next)) {
+      out.push(e.id);
+      continue;
+    }
+    if (isLanguageReplacement(ctx as DecisionContext, c, file)) {
+      if (compareQuality(ctx.profile, c.quality, file.quality) >= 0) out.push(e.id);
+      continue;
+    }
+    if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
+    if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') out.push(e.id);
+  }
+  return out;
+}
+
+/** Coverage of a series pack for the decision ("S01-S03, 36 episodes, 24 wanted"); undefined for single releases. */
+export function seriesPackCoverage(ctx: PackContext, c: Candidate): ReleasePackCoverage | undefined {
+  if (c.match.mediaType !== 'series' || !isSeriesPack(c)) return undefined;
+  const info = c.parsed.series;
+  const kind = seriesPackKind(info) ?? 'season';
+  const seasons = [...new Set(c.match.episodes.map((e) => e.seasonNumber))].sort((a, b) => a - b);
+  return {
+    kind,
+    seasons,
+    episodeCount: c.match.episodes.length,
+    wantedCount: packWantedEpisodes(ctx, c).length,
+    ...(info?.isPartialSeason && info.seasonPart > 0 ? { part: info.seasonPart } : {}),
+  };
+}
+
+/** Is the pack worth preferring over single episodes: enough of it is wanted. */
+export function packPreferred(coverage: ReleasePackCoverage | undefined, settings: Pick<ReleaseSettings, 'seasonPackPreferPercent'>): boolean {
+  if (!coverage || coverage.episodeCount === 0) return false;
+  const threshold = settings.seasonPackPreferPercent ?? 50;
+  return (coverage.wantedCount / coverage.episodeCount) * 100 >= threshold;
+}
+
 /** The original language of the matched series / movie; undefined for audio. */
 function originalLanguageOf(c: Candidate): string | undefined {
   if (c.match.mediaType === 'movie') return c.match.movie.originalLanguage;
@@ -569,6 +631,14 @@ export const specifications: readonly Specification[] = [
     evaluate: (ctx, c) => {
       const max = ctx.settings.maximumSizeMb;
       if (max <= 0 || c.release.size <= 0) return null;
+      // Series packs: the cap is per episode (size / episode count).
+      const count = c.match.mediaType === 'series' && isSeriesPack(c) ? Math.max(1, c.match.episodes.length) : 1;
+      if (count > 1) {
+        const each = c.release.size / count;
+        return each > max * MB
+          ? { reason: 'maximumSizeExceeded', message: `${mb(each)} per episode (${mb(c.release.size)} for ${count}) exceeds the maximum size of ${max} MB` }
+          : null;
+      }
       return c.release.size > max * MB
         ? { reason: 'maximumSizeExceeded', message: `${mb(c.release.size)} exceeds the maximum size of ${max} MB` }
         : null;
@@ -591,10 +661,16 @@ export const specifications: readonly Specification[] = [
       }
       const limits = ctx.qualityLimits(c.quality.quality.id);
       if (!limits) return null;
+      // Series: the runtime is summed over the episodes, so the limits are per episode x count.
+      const count = c.match.mediaType === 'series' ? c.match.episodes.length : 1;
+      const perEpisode = (word: 'smaller' | 'larger', limit: number): string | null =>
+        count > 1
+          ? `${mb(c.release.size / count)} per episode is ${word} than the ${mb(limit / count)} allowed (${count} episodes, ${mb(c.release.size)} in total)`
+          : null;
       if (limits.minSize && limits.minSize > 0) {
         const min = limits.minSize * runtime * MB;
         if (c.release.size < min) {
-          return { reason: 'belowMinimumSize', message: `${mb(c.release.size)} is smaller than minimum allowed ${mb(min)}` };
+          return { reason: 'belowMinimumSize', message: perEpisode('smaller', min) ?? `${mb(c.release.size)} is smaller than minimum allowed ${mb(min)}` };
         }
       }
       // Packs often hold more than the library knows of (other albums, bonus discs): no upper bound.
@@ -602,7 +678,7 @@ export const specifications: readonly Specification[] = [
       if (limits.maxSize && limits.maxSize > 0 && !pack) {
         const max = limits.maxSize * runtime * MB;
         if (c.release.size > max) {
-          return { reason: 'aboveMaximumSize', message: `${mb(c.release.size)} is larger than maximum allowed ${mb(max)}` };
+          return { reason: 'aboveMaximumSize', message: perEpisode('larger', max) ?? `${mb(c.release.size)} is larger than maximum allowed ${mb(max)}` };
         }
       }
       return null;
@@ -758,8 +834,18 @@ export const specifications: readonly Specification[] = [
     appliesTo: 'series',
     evaluate: (ctx, c) => {
       if (c.match.mediaType !== 'series' || !c.match.fullSeason) return null;
+      // Part/Vol packs hold only the aired part of a season; the import maps their files.
+      if (c.parsed.series?.isPartialSeason) return null;
       const limit = ctx.now.getTime() + DAY;
-      const bad = c.match.episodes.some((e) => !e.airDateUtc || Date.parse(e.airDateUtc) > limit);
+      const aired = (e: { airDateUtc?: string | null | undefined }) => !!e.airDateUtc && Date.parse(e.airDateUtc) <= limit;
+      let episodes = c.match.episodes;
+      if (c.parsed.series?.isMultiSeason) {
+        // Multi-season / complete series packs: seasons that have not started airing (a
+        // renewal already in the guide) are simply not in the pack.
+        const started = new Set(episodes.filter(aired).map((e) => e.seasonNumber));
+        episodes = episodes.filter((e) => started.has(e.seasonNumber));
+      }
+      const bad = episodes.some((e) => !aired(e));
       return bad ? { reason: 'fullSeasonNotAired', message: 'Full season pack contains episodes that have not aired' } : null;
     },
   },
@@ -856,6 +942,12 @@ export const specifications: readonly Specification[] = [
       if (!c.match.series.monitored) return { reason: 'seriesNotMonitored', message: 'Series is not monitored' };
       const unmonitored = c.match.episodes.filter((e) => !e.monitored);
       if (unmonitored.length === 0) return null;
+      // A pack is wanted for its monitored episodes; the others are skipped on import.
+      if (isSeriesPack(c)) {
+        return unmonitored.length < c.match.episodes.length
+          ? null
+          : { reason: 'episodeNotMonitored', message: 'None of the episodes in the pack is monitored' };
+      }
       return {
         reason: 'episodeNotMonitored',
         message: c.match.episodes.length === 1 ? 'Episode is not monitored' : 'One or more episodes is not monitored',
@@ -975,26 +1067,16 @@ export const specifications: readonly Specification[] = [
         const gained = booksGainedBy(ctx, c);
         return gained.length > 0 ? null : { reason: 'diskNotUpgrade', message: `Pack upgrades none of its ${c.match.books.length} books` };
       }
-      if (c.match.mediaType === 'series' && c.match.fullSeason) {
-        const total = c.match.episodes.length;
-        let upgraded = 0;
-        for (const e of c.match.episodes) {
-          const file = files.find((f) => f.episodeIds.includes(e.id));
-          if (!file || replacesDisallowedFile(ctx, file, next)) {
-            upgraded++;
-            continue;
-          }
-          if (isLanguageReplacement(ctx, c, file)) {
-            if (compareQuality(ctx.profile, c.quality, file.quality) >= 0) upgraded++;
-            continue;
-          }
-          if (!cutoffNotMet(ctx.profile, file, c.quality)) continue;
-          if (isUpgradable(ctx.profile, file, next, ctx.propers) === 'none') upgraded++;
-        }
+      if (c.match.mediaType === 'series' && isSeriesPack(c)) {
+        // Only wanted (monitored) episodes count: an unmonitored episode on disk is never
+        // touched, and an episode that is already good is skipped on import, not downgraded.
+        const userInvoked = isUserInvoked(ctx);
+        const total = c.match.episodes.filter((e) => e.monitored || userInvoked).length;
+        const upgraded = packWantedEpisodes(ctx, c).length;
         const percent = total === 0 ? 0 : (upgraded / total) * 100;
         const mode = ctx.settings.seasonPackUpgrade;
-        const ok = mode === 'any' ? upgraded >= 1 : mode === 'all' ? upgraded === total : percent >= ctx.settings.seasonPackUpgradeThreshold;
-        return ok ? null : { reason: 'diskNotUpgrade', message: `Season pack upgrades only ${upgraded} of ${total} episodes` };
+        const ok = upgraded > 0 && (mode === 'any' || (mode === 'all' ? upgraded === total : percent >= ctx.settings.seasonPackUpgradeThreshold));
+        return ok ? null : { reason: 'diskNotUpgrade', message: `Pack upgrades only ${upgraded} of ${total} wanted episodes` };
       }
       for (const f of files) {
         if (replacesDisallowedFile(ctx, f, next)) continue;
@@ -1140,7 +1222,9 @@ export const specifications: readonly Specification[] = [
         return null;
       }
       if (cr.seriesId !== undefined && cr.seriesId !== c.match.series.id) return { reason: 'wrongSeries', message: 'Wrong series' };
-      const parsedSeasons = c.parsed.series?.seasons.length ? c.parsed.series.seasons : [c.match.seasonNumber ?? -1];
+      // "Complete Series" names no season: the seasons it maps to are the ones it covers.
+      const mappedSeasons = [...new Set(c.match.episodes.map((e) => e.seasonNumber))];
+      const parsedSeasons = c.parsed.series?.seasons.length ? c.parsed.series.seasons : mappedSeasons.length > 0 ? mappedSeasons : [c.match.seasonNumber ?? -1];
       const requested = cr.episodeIds ?? [];
       if (requested.length === 1) {
         // Single-episode search (§8.4).
@@ -1446,6 +1530,11 @@ export interface Ranked {
     firstEpisodeNumber: number;
     /** Settings → Indexers `preferIndexerFlags`: flags break ties after indexer priority. */
     preferIndexerFlags?: boolean;
+    /**
+     * Series packs: enough of the pack is wanted (`seasonPackPreferPercent`) to rank it before
+     * single episodes of the same quality. Absent on a pack = preferred.
+     */
+    packPreferred?: boolean;
   };
 }
 
@@ -1458,6 +1547,10 @@ export function itemKey(d: ReleaseDecision): string | undefined {
   if (d.mediaType === 'audiobook' && d.authorId !== undefined && d.bookIds?.length) return `author:${d.authorId}`;
   if (d.mediaType === 'series' && d.seriesId !== undefined && d.episodeIds?.length) return `series:${d.seriesId}${v}`;
   return undefined;
+}
+
+function isPackDecision(d: ReleaseDecision): boolean {
+  return d.fullSeason || d.pack !== undefined;
 }
 
 function log10Round(n: number | undefined): number {
@@ -1499,7 +1592,13 @@ export function compareDecisions(a: Ranked, b: Ranked, propers: DownloadPropersA
     },
     () => {
       if (da.mediaType !== 'series') return 0;
-      if (da.fullSeason !== db.fullSeason) return da.fullSeason ? -1 : 1;
+      const pa = isPackDecision(da);
+      const pb = isPackDecision(db);
+      if (pa !== pb) {
+        // A pack ranks first when enough of it is wanted; otherwise the single episodes do.
+        const packFirst = (pa ? ra.packPreferred : rb.packPreferred) ?? true;
+        return pa === packFirst ? -1 : 1;
+      }
       const ca = da.episodeIds?.length ?? 0;
       const cb = db.episodeIds?.length ?? 0;
       return ra.isAnime ? cb - ca : ca - cb;

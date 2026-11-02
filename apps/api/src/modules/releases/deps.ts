@@ -104,6 +104,8 @@ export interface ReleaseSettings {
   allowMultiSeason: boolean;
   seasonPackUpgrade: 'all' | 'any' | 'percent';
   seasonPackUpgradeThreshold: number;
+  /** Prefer a season pack once this share (%) of its episodes is wanted; absent = 50. */
+  seasonPackPreferPercent?: number;
   /** Movies: extra days after the minimum-availability date. */
   availabilityDelayDays: number;
   /** Accept single-episode releases before the episode has aired. */
@@ -184,9 +186,10 @@ export const DEFAULT_RELEASE_SETTINGS: ReleaseSettings = {
   maximumSizeMb: 0,
   minimumAgeMinutes: 0,
   retentionDays: 0,
-  allowMultiSeason: false,
+  allowMultiSeason: true,
   seasonPackUpgrade: 'all',
   seasonPackUpgradeThreshold: 100,
+  seasonPackPreferPercent: 50,
   availabilityDelayDays: 0,
   allowUnairedEpisodes: false,
   unairedToleranceMinutes: 60,

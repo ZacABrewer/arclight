@@ -1,0 +1,1845 @@
+{
+  "source": "arclight",
+  "description": "Season packs: multi-season ranges, complete series, episode-range packs, anime batches named by absolute range or season words, and files inside pack folders. Made-up names with generic groups.",
+  "cases": [
+    {
+      "input": "Show.Name.S01-S03.1080p.BluRay.x264-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01-S05.720p.WEB-DL.DDP5.1.H.264-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name S01-S03 COMPLETE 1080p WEB-DL",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01-03.1080p.BluRay.x265-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S02-S04.2160p.WEB-DL.HDR-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2,
+          3,
+          4
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Seasons 1-3 1080p WEB-DL",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Seasons.1-3.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Season 1-3 Complete 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Seasons 1 to 4 720p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01.S02.S03.1080p.BluRay-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.2019.S01-S02.2160p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name 2019",
+        "seasons": [
+          1,
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name (2015) S01-S06 1080p BluRay",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name (2015)",
+        "seasons": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.US.S01-S04.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name US",
+        "seasons": [
+          1,
+          2,
+          3,
+          4
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Complete.Series.1080p.BluRay.x264-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": true,
+        "packKind": "completeSeries",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name - The Complete Series (2010-2015) 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": true,
+        "packKind": "completeSeries",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.COMPLETE.SERIES.720p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": true,
+        "packKind": "completeSeries",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name The Complete Series 1080p BluRay x265",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": true,
+        "packKind": "completeSeries",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Complete Series S01-S05 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3,
+          4,
+          5
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": true,
+        "packKind": "completeSeries",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01-E06.1080p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01-06.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S02E05-E10.1080p.WEB-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S03E01-E12.Complete.1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          3
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name S04E07-E13 1080p AMZN WEB-DL",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          4
+        ],
+        "episodes": [
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01-E03.720p.HDTV.x264-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Season.1.Episodes.1-6.720p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Season 2 Episodes 01 to 10 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01E02.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01-E02.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01E02E03.720p.HDTV-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01.1080p.BluRay.x264-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Season.2.720p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01.Part.1.1080p.WEB-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": true,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "partialSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S03.Vol.2.1080p.NF.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": true,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "partialSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.E01-E24.1080p.BluRay-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 001-024 [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title (001-024) [Batch] [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title - 01-12 [Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title - 25-48 [1080p] (Batch)",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title - 01 ~ 13 [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 01-26 [BD 1080p] [Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "Anime Title 001-024 [Batch] 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 2nd Season [1080p] [Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title 2nd Season",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title Second Season [720p][Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title Second Season",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 3rd Season [BD 1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title 3rd Season",
+        "seasons": [
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title Season 2 [1080p][Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title S2 [Batch][1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title S02 [1080p] [Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title Final Season Part 2 [1080p][Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title Final Season",
+        "seasons": [],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": true,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "partialSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 3rd Season - 01-12 [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title 3rd Season",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title - 05 [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          5
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title S2 - 07 [720p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title S2",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          7
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Season.1.thru.3.1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1,
+          2,
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S00.Specials.1080p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S02.Extras.1080p.BluRay-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name (2018) S01-S02 + Specials 1080p",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name (2018)",
+        "seasons": [
+          1,
+          2
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": true,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "multiSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S2021.1080p.WEB-DL-GRP",
+      "method": "season_pack",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2021
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title S3 - 01-13 [1080p] [Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title S3",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title (2023) - 01-12 [Batch] [WEB 1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title (2023)",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title - 001-100 [1080p HEVC]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          1,
+          2,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+          9,
+          10,
+          11,
+          12,
+          13,
+          14,
+          15,
+          16,
+          17,
+          18,
+          19,
+          20,
+          21,
+          22,
+          23,
+          24,
+          25,
+          26,
+          27,
+          28,
+          29,
+          30,
+          31,
+          32,
+          33,
+          34,
+          35,
+          36,
+          37,
+          38,
+          39,
+          40,
+          41,
+          42,
+          43,
+          44,
+          45,
+          46,
+          47,
+          48,
+          49,
+          50,
+          51,
+          52,
+          53,
+          54,
+          55,
+          56,
+          57,
+          58,
+          59,
+          60,
+          61,
+          62,
+          63,
+          64,
+          65,
+          66,
+          67,
+          68,
+          69,
+          70,
+          71,
+          72,
+          73,
+          74,
+          75,
+          76,
+          77,
+          78,
+          79,
+          80,
+          81,
+          82,
+          83,
+          84,
+          85,
+          86,
+          87,
+          88,
+          89,
+          90,
+          91,
+          92,
+          93,
+          94,
+          95,
+          96,
+          97,
+          98,
+          99,
+          100
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": true,
+        "isCompleteSeries": false,
+        "packKind": "episodeRange",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title Third Season [1080p][Batch]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title Third Season",
+        "seasons": [
+          3
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": true,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "season",
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title 4th Season Part 2 [1080p]",
+      "method": "season_pack",
+      "expect": {
+        "title": "Anime Title 4th Season",
+        "seasons": [
+          4
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": true,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": "partialSeason",
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name S01-S03 1080p/Season 2/Show.Name.S02E05.1080p.WEB-DL-GRP.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          5
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.Complete.Series.1080p/Show.Name.S03E01.1080p.BluRay-GRP.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          3
+        ],
+        "episodes": [
+          1
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title (001-024) [Batch]/[SubGroup] Anime Title - 013 [1080p].mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          13
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Season 1/Specials/Show.Name.S00E01.1080p.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          0
+        ],
+        "episodes": [
+          1
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": true
+      }
+    },
+    {
+      "input": "Show.Name.S01.1080p.WEB-DL-GRP/Show.Name.S01E01E02.1080p.WEB-DL-GRP.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          1,
+          2
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01E01-E06.1080p.WEB-DL-GRP/Show.Name.S01E04.1080p.WEB-DL-GRP.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          1
+        ],
+        "episodes": [
+          4
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name Season 2/03 - Episode Title.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          3
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show Name/Season 2/03 - Episode Title.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          3
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S02.1080p.WEB-DL-GRP/03 - Episode Title.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          3
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S02.1080p.WEB-DL-GRP/E07.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          7
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "[SubGroup] Anime Title (001-024) [Batch]/13 - Some Title.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Anime Title",
+        "seasons": [
+          0
+        ],
+        "episodes": [],
+        "absoluteEpisodes": [
+          13
+        ],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    },
+    {
+      "input": "Show.Name.S01-S03.1080p.BluRay-GRP/Show.Name.S02.1080p.BluRay-GRP/Show.Name.S02E08.1080p.BluRay-GRP.mkv",
+      "method": "pack_file_path",
+      "expect": {
+        "title": "Show Name",
+        "seasons": [
+          2
+        ],
+        "episodes": [
+          8
+        ],
+        "absoluteEpisodes": [],
+        "fullSeason": false,
+        "isMultiSeason": false,
+        "isPartialSeason": false,
+        "isEpisodeRange": false,
+        "isCompleteSeries": false,
+        "packKind": null,
+        "special": false
+      }
+    }
+  ]
+}

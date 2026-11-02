@@ -121,8 +121,13 @@ export const ReleasesSettings = z.object({
   minimumAgeMinutes: z.number().int().min(0).default(0),
   /** Usenet: ignore releases older than this (days); 0 = off. */
   retentionDays: z.number().int().min(0).default(0),
-  /** Accept multi-season packs. */
-  allowMultiSeasonPacks: z.boolean().default(false),
+  /** Accept multi-season packs (S01-S03, "Complete Series"). */
+  allowMultiSeasonPacks: z.boolean().default(true),
+  /**
+   * Series: prefer a season pack over single episodes (in searches and when ranking) once at
+   * least this share (%) of the season's episodes in the pack are wanted (missing or upgradable).
+   */
+  seasonPackPreferPercent: z.number().int().min(0).max(100).default(50),
   /** How many episodes of a season pack must be upgrades before it is grabbed. */
   seasonPackUpgradeMode: SeasonPackUpgradeMode.default('all'),
   /** Percentage used when `seasonPackUpgradeMode` is `percent`. */

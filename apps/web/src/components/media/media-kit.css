@@ -111,6 +111,8 @@
 /* ---------- release table cells ---------- */
 /* min-width keeps a narrow table from squeezing the title into one word per line. */
 .mk-release-title { display: block; min-width: min(22ch, 40vw); color: var(--al-text-1); overflow-wrap: anywhere; }
+/* Series pack coverage under a release title ("S01-S03, 36 episodes, 24 wanted"). */
+.mk-release-pack { display: block; margin-top: 2px; color: var(--al-text-3); font-size: 12px; }
 .mk-scores { display: inline-flex; gap: 6px; flex-wrap: wrap; }
 
 /* ---------- drawer content ---------- */

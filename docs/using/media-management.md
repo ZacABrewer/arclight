@@ -133,6 +133,27 @@ A hardlink is a second name for the same data on disk, so the file appears in bo
 |---|---|---|
 | Propers and repacks | Prefer and upgrade | How a PROPER or REPACK of a file you already have is treated. Choices: Prefer and upgrade, Do not upgrade automatically, Do not prefer |
 
+## Season packs
+
+A season pack is one release with a whole season. Arclight also handles packs of several seasons (`S01-S03`, "Complete Series"), parts of a season (`S01E01-E06`, "Part 2") and anime batches named by absolute range (`001-024`) or by season words ("2nd Season"). These settings sit under the **Season packs** heading and are saved with their own **Save** button.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Multi-season packs | On | Accept packs that hold several seasons. Only the episodes you want are imported from them |
+| Prefer packs at | 50% | Once at least this share of a season's episodes is wanted (missing, or monitored and worth upgrading), automatic searches look for the whole season and a pack ranks before single episodes of the same quality. Below it, single episodes win |
+| Upgrade with a pack | Every wanted episode | How many of the wanted episodes a pack must improve before it is grabbed: Every wanted episode, At least one episode, or A share of the episodes |
+| Share of episodes | 100% | Only shown for "A share of the episodes": the share of wanted episodes that must be upgrades |
+
+How packs are judged:
+
+- **Size limits are per episode.** The size limits of your quality definitions apply to the pack size divided by its episode count, so a 40 GB pack of ten episodes is checked as 4 GB per episode.
+- **Custom formats score packs like single releases.**
+- **Only what you want is imported.** Files for episodes that are not monitored are skipped, and a pack never replaces a file that is already as good (same quality, revision and custom format score). If you grab a pack yourself from interactive search, its unmonitored episodes are imported too.
+- **Partial imports.** If a pack is missing episodes or some files are skipped, the rest still imports. The Queue shows "Imported X of Y files; N skipped" with a line per skipped file, and each skipped file gets a **Skipped from pack** row in [Activity > History](activity.md#history). Missing episodes stay wanted.
+- **Anime.** Season searches for anime also search by the season's name ("Title 2nd Season", "Title S2") and by its absolute range ("Title 13-24"). Files numbered absolutely are mapped to the right season and episode, using [scene mapping](library.md#scene-mapping) when it applies.
+
+Interactive search shows what a pack covers under its title, for example "S01-S03, 36 episodes, 24 wanted". See [Interactive search](interactive-search.md).
+
 ## Unreleased items
 
 | Setting | Default | What it does |

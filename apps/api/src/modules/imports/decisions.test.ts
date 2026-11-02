@@ -230,8 +230,42 @@ describe('decision engine', () => {
     expect(full.series?.fullSeason).toBe(true);
     expect(reasons(item({ parsed: full, episodes: [] }))).toContain('fullSeason');
     const parsed = parseRelease('Show.Name.S01E01.1080p.WEB-DL-GRP.mkv', 'series');
-    expect(reasons(item({ parsed: { ...parsed, series: { ...parsed.series!, isMultiSeason: true } } }))).toContain('multiSeason');
+    // A file named like a multi-season pack holds no episode numbers of its own.
+    const multi = parseRelease('Show.Name.S01-S03.1080p.WEB-DL-GRP.mkv', 'series');
+    expect(reasons(item({ parsed: multi, episodes: [] }))).toContain('multiSeason');
+    // One file never spans seasons.
+    expect(reasons(item({ episodes: [ep(11, 1), ep(21, 1, { seasonNumber: 2 })], parsedEpisodeCount: 2 }))).toContain('multiSeason');
     expect(reasons(item({ parsed: { ...parsed, series: { ...parsed.series!, isSplitEpisode: true } } }))).toContain('splitEpisode');
+  });
+
+  it('imports pack files only where they help (wanted episodes, real upgrades)', () => {
+    const pack = ctx({ pack: true, videoCount: 12 });
+    // Unmonitored episodes are skipped from a pack, but not from a single-episode download.
+    const off = item({ episodes: [ep(11, 1, { monitored: false })] });
+    expect(reasons(off, pack)).toContain('notWanted');
+    expect(reasons(off)).not.toContain('notWanted');
+    // A pack grabbed by hand imports them anyway.
+    expect(reasons(off, ctx({ pack: true, grab: { userInvoked: true } }))).toEqual([]);
+    // A multi-episode file with one monitored episode is wanted.
+    expect(reasons(item({ episodes: [ep(11, 1, { monitored: false }), ep(12, 2)], parsedEpisodeCount: 2 }), pack)).not.toContain('notWanted');
+    // An unmonitored series wants nothing from a pack.
+    expect(reasons(item({ series: { ...series, monitored: false } }), pack)).toContain('notWanted');
+
+    // Same quality and score: a single download replaces it (as before), a pack keeps the file.
+    const same = file(7, q(QUALITIES['WEBDL-1080p']));
+    expect(reasons(item({ existingFiles: [same] }))).toEqual([]);
+    expect(reasons(item({ existingFiles: [same] }), pack)).toEqual(['packNotUpgrade']);
+    // Better quality, revision or score still upgrades from a pack.
+    expect(reasons(item({ existingFiles: [file(7, q(QUALITIES['HDTV-720p']))] }), pack)).toEqual([]);
+    expect(reasons(item({ existingFiles: [same], quality: q(QUALITIES['WEBDL-1080p'], 2) }), pack)).toEqual([]);
+    expect(reasons(item({ existingFiles: [same], formatScore: 10 }), pack)).toEqual([]);
+    // Worse stays the classic rejection.
+    expect(reasons(item({ existingFiles: [file(7, q(QUALITIES['Bluray-1080p']))] }), pack)).toEqual(['notQualityUpgrade']);
+  });
+
+  it('reads the user-invoked flag from the grab snapshot', () => {
+    expect(readGrabbedRelease({ title: 'x', userInvoked: true })?.userInvoked).toBe(true);
+    expect(readGrabbedRelease({ title: 'x' })?.userInvoked).toBeUndefined();
   });
 
   it('rejects unknown episodes and unparseable files', () => {

@@ -112,11 +112,13 @@ import {
   evaluateFormats,
   itemTags,
   musicInfoOf,
+  packPreferred,
   prioritize,
   qualityModelOf,
   releaseIndexerFlags,
   releaseKindOf,
   runtimeMinutes,
+  seriesPackCoverage,
   toLanguageCodes,
   unmatchedDecision,
   type Candidate,
@@ -139,6 +141,7 @@ import {
 } from './jobs.js';
 import { matchRelease, type LibrarySnapshot, type MovieMatch, type SeriesMatch } from './matcher.js';
 import { pendingReleases, releaseSearchResults, releaseSearchState } from './schema.js';
+import { animeSeasonQueries, wantsSeasonSearch } from './season-search.js';
 import { isSearchDue, itemOutcomes, planSearchRuns, searchDueAt, upcomingRuns, type ItemOutcome } from './search-status.js';
 
 // The release pipeline: decide on releases (RSS, searches, pushes), act on the decisions
@@ -655,6 +658,9 @@ export class ReleasesService {
 
     // Multi-version: evaluate against the version slot whose profile the release fits best (a
     // slot that asks for audio languages the release carries wins: "Add additional…" versions).
+    // Custom-format size conditions read the size of one episode, so a pack scores like the
+    // single releases it competes with (size / episode count).
+    const formatSize = match.mediaType === 'series' && match.episodes.length > 1 ? Math.round(release.size / match.episodes.length) : release.size;
     const versions = match.mediaType === 'series' ? match.series.versions : match.movie.versions;
     const original = match.mediaType === 'series' ? match.series.originalLanguage : match.movie.originalLanguage;
     const releaseAudio = releaseAudioLanguages(release.title, toLanguageCodes(parsed.languages), original);
@@ -664,7 +670,7 @@ export class ReleasesService {
           batch.profiles,
           qualityModelOf(parsed.quality),
           (p) =>
-            evaluateFormats(p, batch.formats, { title: release.title, quality: qualityModelOf(parsed.quality), mediaType: match.mediaType, sizeBytes: release.size }).score,
+            evaluateFormats(p, batch.formats, { title: release.title, quality: qualityModelOf(parsed.quality), mediaType: match.mediaType, sizeBytes: formatSize }).score,
           (v) => slotLanguageFit(v, releaseAudio),
         )
       : null;
@@ -688,7 +694,7 @@ export class ReleasesService {
       title: release.title,
       quality,
       mediaType,
-      sizeBytes: release.size,
+      sizeBytes: formatSize,
       languages,
       releaseGroup: releaseGroup ?? null,
       ...(parsed.movie?.year ? { year: parsed.movie.year } : {}),
@@ -720,6 +726,8 @@ export class ReleasesService {
     const ev = evaluate(ctx, candidate);
     const decision = buildDecision(source, candidate, ev);
     if (version) decision.versionTag = version.tag;
+    const pack = seriesPackCoverage(ctx, candidate);
+    if (pack) decision.pack = pack;
     const limits = batch.limits.get(quality.quality.id);
     return {
       decision,
@@ -732,6 +740,7 @@ export class ReleasesService {
         isAnime: match.mediaType === 'series' && match.series.seriesType === 'anime',
         firstEpisodeNumber: match.mediaType === 'series' ? Math.min(...match.episodes.map((e) => e.episodeNumber)) : 0,
         preferIndexerFlags: settings.preferIndexerFlags,
+        ...(pack ? { packPreferred: packPreferred(pack, settings) } : {}),
       },
     };
   }
@@ -1557,6 +1566,9 @@ export class ReleasesService {
         customFormatScore: d.customFormatScore,
         languages: d.languages,
         releaseGroup: d.releaseGroup,
+        // Packs grabbed by hand import unmonitored episodes too (the import reads this back).
+        ...(d.source === 'interactiveSearch' || d.source === 'userInvokedSearch' ? { userInvoked: true } : {}),
+        ...(d.pack ? { pack: d.pack } : {}),
         // Read back by the import, which records it on the imported files (upgrades pause).
         ...(override ? { grabOverride: override } : {}),
       },
@@ -1966,14 +1978,22 @@ export class ReleasesService {
     const requests: SearchRequest[] = [];
     const bySeason = new Map<number, Episode[]>();
     for (const e of targeted) bySeason.set(e.seasonNumber, [...(bySeason.get(e.seasonNumber) ?? []), e]);
+    const preferPercent = this.settings().seasonPackPreferPercent ?? 50;
     for (const [season, eps] of bySeason) {
-      const wholeSeason = eps.length === episodes.filter((e) => e.seasonNumber === season && released(e)).length && eps.length > 1;
+      // A whole season, or enough of it (Settings: season packs), is searched as a season so
+      // packs come back too.
+      const releasedInSeason = episodes.filter((e) => e.seasonNumber === season && released(e)).length;
+      const seasonWide = season > 0 && wantsSeasonSearch(eps.length, releasedInSeason, preferPercent);
       if (series.seriesType === 'daily') {
         for (const e of eps) if (e.airDate) requests.push({ ...base, airDate: e.airDate });
         continue;
       }
-      if (wholeSeason || (target.seasonNumber !== undefined && !target.episodeIds?.length)) {
+      if (seasonWide || (target.seasonNumber !== undefined && !target.episodeIds?.length)) {
         requests.push({ ...base, season });
+        if (series.seriesType === 'anime') {
+          // Anime batches are named by season words or absolute range, not by S01.
+          for (const query of animeSeasonQueries(series, season, episodes, loadSceneRules(this.db, this.log))) requests.push({ kind: 'search', query });
+        }
         continue;
       }
       for (const e of eps) {

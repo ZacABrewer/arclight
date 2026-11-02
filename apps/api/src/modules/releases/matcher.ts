@@ -1,4 +1,4 @@
-import { parseRelease, type MediaTypeHint, type ParsedRelease } from '@arclight/parser';
+import { parseRelease, parseSeriesTitleInfo, splitSeasonTitle, type MediaTypeHint, type ParsedRelease } from '@arclight/parser';
 import type { Episode, Movie, Series } from '@arclight/shared';
 import {
   absoluteIndex,
@@ -281,8 +281,10 @@ export function mapEpisodes(
 
   if (info.special && season !== undefined && season !== 0) return none; // §3.2.7
 
-  if (info.fullSeason) {
-    const seasons = new Set(info.isMultiSeason ? info.seasons : season !== undefined ? [season] : []);
+  // Season packs, multi-season packs, "Complete Series" (every regular season) and Part/Vol
+  // packs (which episodes a part holds is only known from its files, so it covers the season).
+  if (info.fullSeason || (info.isPartialSeason && info.episodes.length === 0 && season !== undefined)) {
+    const seasons = new Set(packSeasonNumbers(info, episodes));
     const hits = episodes.filter((e) => seasons.has(e.seasonNumber));
     return { episodes: sortEpisodes(hits), seasonNumber: season, fullSeason: true, special: false };
   }
@@ -315,6 +317,15 @@ export function mapEpisodes(
     if (hit) hits.push(hit); // missing numbers are skipped (§3.2.6)
   }
   return { episodes: dedupeEpisodes(hits), seasonNumber: season, fullSeason: false, special: season === 0 };
+}
+
+/** Seasons a pack covers: its own list, or every regular season for "Complete Series". */
+export function packSeasonNumbers(info: NonNullable<ParsedRelease['series']>, episodes: readonly Episode[]): number[] {
+  if (info.isMultiSeason && info.seasons.length === 0) {
+    return [...new Set(episodes.filter((e) => e.seasonNumber > 0).map((e) => e.seasonNumber))].sort((a, b) => a - b);
+  }
+  if (info.isMultiSeason) return info.seasons;
+  return info.seasons[0] !== undefined ? [info.seasons[0]] : [];
 }
 
 function sortEpisodes(list: Episode[]): Episode[] {
@@ -367,7 +378,7 @@ export function matchSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: Library
     if (special) return special;
     return { status: 'unknown', mediaType: 'series', reason: 'unableToParse', message: 'Unable to parse release' };
   }
-  const found = lookupSeries(parsed, ids, lib, criteria);
+  const found = lookupSeries(parsed, ids, lib, criteria) ?? lookupBySeasonTitle(parsed, ids, lib, criteria);
   if (!found) return { status: 'unknown', mediaType: 'series', reason: 'unknownSeries', message: 'Unknown Series' };
   if ('ambiguous' in found) {
     return {
@@ -389,6 +400,62 @@ export function matchSeries(parsed: ParsedRelease, ids: ReleaseIds, lib: Library
     };
   }
   return { status: 'mapped', mediaType: 'series', series: found.series, ...mapped, matchType: found.matchType };
+}
+
+/**
+ * Anime batches named by their season ("[Group] Title 2nd Season [Batch]", "Title S2 - 01-12",
+ * "Title Final Season Part 2") when no series or alias carries that full title: look the series
+ * up by the title without the season words, then read the numbers as that season's. Mutates
+ * `parsed.series` so later checks see the season the name meant.
+ */
+function lookupBySeasonTitle(parsed: ParsedRelease, ids: ReleaseIds, lib: LibrarySnapshot, criteria?: MatchCriteria): SeriesLookup {
+  const info = parsed.series;
+  if (!info) return null;
+  const split = splitSeasonTitle(info.title);
+  if (!split) return null;
+  const base = parseSeriesTitleInfo(split.title);
+  const probe: ParsedRelease = { ...parsed, series: { ...info, title: split.title, titleInfo: base } };
+  const found = lookupSeries(probe, ids, lib, criteria);
+  if (!found || 'ambiguous' in found) return found;
+  return applySeasonWords(info, split, lib.episodes(found.series.id)) ? found : null;
+}
+
+/**
+ * Reads a season named in the title ("Title 2nd Season - 03", "Title Final Season") as the
+ * parsed season. Mutates `info`; false when the season is not one the series has.
+ */
+export function applySeasonWords(
+  info: NonNullable<ParsedRelease['series']>,
+  split: NonNullable<ReturnType<typeof splitSeasonTitle>>,
+  episodes: readonly Episode[],
+): boolean {
+  const regular = episodes.filter((e) => e.seasonNumber > 0);
+  const season = split.season === 'final' ? Math.max(0, ...regular.map((e) => e.seasonNumber)) : split.season;
+  if (season <= 0) return false;
+  info.seasons = [season];
+  if (info.episodes.length === 0 && info.absoluteEpisodes.length > 0) {
+    // Fansub season names restart their numbers: "Title S2 - 03" is the season's third episode.
+    // Numbers past the season's end fall back to absolute in mapEpisodes.
+    info.episodes = info.absoluteEpisodes;
+    info.absoluteEpisodes = [];
+  }
+  if (info.episodes.length === 0 && !info.isPartialSeason) info.fullSeason = true;
+  return true;
+}
+
+/**
+ * A file of a known series whose name carries season words the series title does not
+ * ("[Group] Title 2nd Season - 03.mkv" for "Title"): a copy of the parse with that season
+ * applied, else the parse itself.
+ */
+export function withSeasonWords(parsed: ParsedRelease, series: Pick<Series, 'title'>, episodes: readonly Episode[]): ParsedRelease {
+  const info = parsed.series;
+  // Absolute-numbered anime names parse with season 0 ("no season").
+  if (!info || info.seasons.some((n) => n > 0) || info.special) return parsed;
+  const split = splitSeasonTitle(info.title);
+  if (!split || cleanTitle(info.title) === cleanTitle(series.title)) return parsed;
+  const copy = { ...info, seasons: [...info.seasons], episodes: [...info.episodes], absoluteEpisodes: [...info.absoluteEpisodes] };
+  return applySeasonWords(copy, split, episodes) ? { ...parsed, series: copy } : parsed;
 }
 
 export type MappedEpisodes = ReturnType<typeof mapEpisodes> & { sceneSource?: SceneNumberingSource };

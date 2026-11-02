@@ -264,7 +264,7 @@ function seContinuation(s: string): { nums: number[]; consumed: number; split: b
   for (;;) {
     const rest = s.slice(pos);
     const m =
-      /^(?:[-_. ]*(?:-|to|&|and|\+)[-_. ]*|[-_. ]?)(?:S\d{1,4}[-_. ]?)?(?:E|Ep)[-_. ]?(\d{1,5})(?![a-z\d])/i.exec(rest) ??
+      /^(?:[-_. ]*(?:-|to|&|and|\+)[-_. ]*|[-_. ]?)(?:S\d{1,4}[-_. ]?)?(?:E|Ep)[-_. ]?(\d{1,5})(?!\d|(?!E\d)[a-z])/i.exec(rest) ??
       /^[-_. ]*(?:-|to)[-_. ]*S\d{1,4}(?:E|Ep)(\d{1,5})(?![a-z\d])/i.exec(rest) ??
       /^(?:x|-x?|_|\+)(\d{1,5})(?![\da-z])/i.exec(rest) ??
       /^-E?(\d{1,5})(?=[-_. )\]]|$)/i.exec(rest);
@@ -669,7 +669,7 @@ function parseSeasonPack(ctx: Ctx): ParsedSeriesInfo | null {
   }
 
   // Multi-season: "S01-S05", "S01-04", "Season 1-5", "S01 S04", "S01 04 (1080p"
-  const multi = new RegExp(String.raw`^(.*?)${PRE}${SEASON_WORD}[-_. ]?(\d{1,2})(?:-(?=\d)|[-_. ]*(?:-|to|thru|through)[-_. ]*(?=S)|[-_. ]+(?=S\d)|${ctx.subGroup ? '(?!)' : PAREN_SEASON})${SEASON_WORD}?[-_. ]?(\d{1,2})((?:[-_. ]+S\d{1,2})*)(?![\dEex])`, 'i').exec(t);
+  const multi = new RegExp(String.raw`^(.*?)${PRE}${SEASON_WORD}[-_. ]?(\d{1,2})(?:-(?=\d)|[-_. ]*(?:-|to|thru|through)[-_. ]*(?=S)|[-_. ]+(?:to|thru|through)[-_. ]+(?=\d)|[-_. ]+(?=S\d)|${ctx.subGroup ? '(?!)' : PAREN_SEASON})${SEASON_WORD}?[-_. ]?(\d{1,2})((?:[-_. ]+S\d{1,2})*)(?![\dEex])`, 'i').exec(t);
   if (multi) {
     const a = Number(multi[2]);
     const b = Number(multi[3]);
@@ -703,6 +703,107 @@ function parseSeasonPack(ctx: Ctx): ParsedSeriesInfo | null {
     return build(stripPackWords(full[1]!), ctx, (info) => { info.seasons = [season]; info.fullSeason = true; });
   }
   return null;
+}
+
+/** "Title - The Complete Series (2010-2015)", "Title.COMPLETE.SERIES": every season, no numbers. */
+function parseCompleteSeries(ctx: Ctx): ParsedSeriesInfo | null {
+  const m = /^(.+?)[-_. ]+(?:-[-_. ]+)?(?:the[-_. ]+)?Complete[-_. ]+Series(?![a-z])/i.exec(ctx.text);
+  if (!m || !m[1]!.trim()) return null;
+  return build(m[1]!, ctx, (info) => {
+    info.fullSeason = true;
+    info.isMultiSeason = true;
+    info.isCompleteSeries = true;
+  });
+}
+
+/** "Title.Season.1.Episodes.1-6", "Title Season 2 Episodes 01 to 10": a run of one season. */
+function parseSeasonEpisodeRange(ctx: Ctx): ParsedSeriesInfo | null {
+  const m = /^(.*?)(?<=^|[-_. \[(])(?:Season|Saison|Temporada|Stagione)[-_. ]?(\d{1,2})[-_. ]+(?:Episodes|Eps)[-_. ]?(\d{1,3})[-_. ]*(?:-|~|to|thru)[-_. ]*(\d{1,3})(?![\d])/i.exec(ctx.text);
+  if (!m) return null;
+  const a = Number(m[3]);
+  const b = Number(m[4]);
+  if (b <= a) return null;
+  return build(m[1]!, ctx, (info) => { info.seasons = [Number(m[2])]; info.episodes = range(a, b); info.isEpisodeRange = true; });
+}
+
+const ORDINAL_WORDS: Record<string, number> = {
+  first: 1, second: 2, third: 3, fourth: 4, fifth: 5, sixth: 6, seventh: 7, eighth: 8, ninth: 9, tenth: 10,
+};
+
+/** A season named in an anime title: "2nd Season", "Second Season", "Season 2", "S2", "Final Season". */
+const TITLE_SEASON = String.raw`(?:(\d{1,2})(?:st|nd|rd|th)[-_. ]+Season|(First|Second|Third|Fourth|Fifth|Sixth|Seventh|Eighth|Ninth|Tenth)[-_. ]+Season|(?:Season|Saison)[-_. ]?(\d{1,2})|S(\d{1,2})|(Final)[-_. ]+Season)(?:[-_. ]+(?:Part|Cour)[-_. ]?(\d{1,2}))?`;
+
+/**
+ * "[Group] Title 2nd Season [1080p] [Batch]", "[Group] Title Final Season Part 2 [Batch]": a
+ * season batch named only by its season words. The title keeps the season words, like other
+ * fansub names ("Title S2 - 07"); the season number is filled in from them.
+ */
+function parseAnimeSeasonBatch(ctx: Ctx): ParsedSeriesInfo | null {
+  const m = new RegExp(String.raw`^(.+?)[-_. ]+${TITLE_SEASON}(?=[-_. ]*(?:$|[\[(]|Batch\b|Complete\b|${TAG}))`, 'i').exec(ctx.loose);
+  // "Season 2" / "S2" batches are plain season packs (parseSeasonPack).
+  if (!m || m[4] || m[5]) return null;
+  const season = seasonOfTitleMatch(m.slice(2, 7));
+  const part = m[7] ? Number(m[7]) : 0;
+  return build(ctx.text.slice(0, m[0].length), ctx, (info) => {
+    info.title = info.title.replace(/[-_. ]+(?:Part|Cour)[-_. ]?\d{1,2}$/i, '');
+    if (season !== null) info.seasons = [season];
+    info.fullSeason = part === 0;
+    if (part > 0) {
+      info.isPartialSeason = true;
+      info.seasonPart = part;
+    }
+  });
+}
+
+/** Season number from TITLE_SEASON's groups; null for "Final Season". */
+function seasonOfTitleMatch(g: Array<string | undefined>): number | null {
+  const [ord, word, seasonN, sN] = g;
+  if (ord) return Number(ord);
+  if (word) return ORDINAL_WORDS[word.toLowerCase()] ?? null;
+  if (seasonN) return Number(seasonN);
+  if (sN) return Number(sN);
+  return null;
+}
+
+/**
+ * Split season words off the end of an anime title: "Title 2nd Season" → { title: "Title",
+ * season: 2 }; "Title Final Season Part 2" → { season: 'final', part: 2 }. Null when the
+ * title does not end in season words.
+ */
+export function splitSeasonTitle(title: string): { title: string; season: number | 'final'; part: number } | null {
+  const m = new RegExp(String.raw`^(.+?)[-_. :]+${TITLE_SEASON}[-_. ]*$`, 'i').exec(title.trim());
+  if (!m || !m[1]!.trim()) return null;
+  const n = seasonOfTitleMatch(m.slice(2, 7));
+  const season = n ?? (m[6] ? 'final' : null);
+  if (season === null) return null;
+  return { title: m[1]!.trim(), season, part: m[7] ? Number(m[7]) : 0 };
+}
+
+export type SeriesPackKind = 'season' | 'multiSeason' | 'completeSeries' | 'partialSeason' | 'episodeRange';
+
+/** What kind of pack a parsed series release is, or null for a single (or multi-episode) file. */
+export function seriesPackKind(info: ParsedSeriesInfo | null | undefined): SeriesPackKind | null {
+  if (!info) return null;
+  if (info.isCompleteSeries) return 'completeSeries';
+  if (info.isMultiSeason) return 'multiSeason';
+  if (info.isSeasonExtra) return null;
+  if (info.isPartialSeason) return 'partialSeason';
+  if (info.fullSeason) return 'season';
+  if (info.isEpisodeRange) return 'episodeRange';
+  return null;
+}
+
+/** Ranges written with a dash, tilde or "to" ("E01-E06", "001-024", "01~12"), not "E01E02E03". */
+const RANGE_WRITTEN = /\d\s?(?:-|~|to)\s?(?:E|EP)?\d/i;
+
+/** Flag dash-written ranges of three or more episodes as packs; mark "Complete Series" names. */
+function packFlags(info: ParsedSeriesInfo, ctx: Ctx): void {
+  const nums = info.episodes.length > 0 ? info.episodes : info.absoluteEpisodes;
+  if (!info.isEpisodeRange && nums.length >= 3 && RANGE_WRITTEN.test(ctx.text)) {
+    const contiguous = nums.every((n, i) => i === 0 || n === nums[i - 1]! + 1);
+    if (contiguous) info.isEpisodeRange = true;
+  }
+  if (info.isMultiSeason && !info.isCompleteSeries && /Complete[-_. ]+Series/i.test(ctx.text)) info.isCompleteSeries = true;
 }
 
 // ---------------------------------------------------------------------------------------
@@ -882,8 +983,10 @@ export function parseSeries(releaseTitle: string): ParsedSeriesInfo | null {
     parseStrong,
     (c) => (DATE_SHAPED.test(c.text) ? REJECT : null),
   ];
-  if (ctx.subGroup) steps.push(animeDashParts, animeSpaceNumber);
-  steps.push(parseInlineBracket, parseExplicitAbsolute, parseDashAbsolute, parseSeasonPack, parseEpisodeOnly, parseCombined, parsePlainAbsolute, parseMini);
+  if (ctx.subGroup) steps.push(animeDashParts, animeSpaceNumber, parseAnimeSeasonBatch);
+  steps.push(parseSeasonEpisodeRange, parseInlineBracket, parseExplicitAbsolute, parseDashAbsolute, parseSeasonPack, parseCompleteSeries, parseEpisodeOnly, parseCombined, parsePlainAbsolute);
+  if (!ctx.subGroup && /Batch/i.test(ctx.text)) steps.push(parseAnimeSeasonBatch);
+  steps.push(parseMini);
 
   for (const step of steps) {
     const raw = step(ctx);
@@ -891,6 +994,7 @@ export function parseSeries(releaseTitle: string): ParsedSeriesInfo | null {
     const info = acceptable(raw, ctx);
     if (info) {
       cjkEpisodeRange(info, releaseTitle);
+      packFlags(info, ctx);
       return info;
     }
   }

@@ -130,6 +130,7 @@ const SONARR_EVENT: Record<HistoryEventType, string> = {
   profileChanged: 'profileChanged',
   profileReplaced: 'profileReplaced',
   additionalLanguage: 'additionalLanguage',
+  importSkipped: 'importSkipped',
 };
 
 const RADARR_EVENT: Record<HistoryEventType, string> = {

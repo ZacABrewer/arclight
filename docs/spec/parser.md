@@ -23,7 +23,7 @@ Conventions used below:
 | `languages` | string[] | default `["Unknown"]` (section 5) |
 | `releaseGroup` | string or null | section 6 |
 | `releaseHash` | string | 8-hex CRC from `[]`/`()`; empty string when absent in anime fixtures (C7) |
-| `series` | object or null | title, titleInfo, seasons, episodes, absoluteEpisodes, airDate, fullSeason, isPartialSeason, isMultiSeason, isSeasonExtra, isSplitEpisode, isMiniSeries, seasonPart, special, releaseVersion, subGroup |
+| `series` | object or null | title, titleInfo, seasons, episodes, absoluteEpisodes, airDate, fullSeason, isPartialSeason, isMultiSeason, isSeasonExtra, isSplitEpisode, isMiniSeries, isEpisodeRange, isCompleteSeries, seasonPart, special, releaseVersion, subGroup |
 | `movie` | object or null | title, titleWithoutYear, year (0 if none), edition, imdbId, tmdbId |
 
 Additional fixture-visible outputs: `specialAbsoluteEpisodes` (decimal recap numbers), `dailyPart`,
@@ -234,6 +234,23 @@ keeps title `Series of Sonarr`.
 **R2.45 Season extras.** `S05 EXTRAS`, `S03.Extras.01.Deleted.Scenes`, `SUBPACK` -> fullSeason true, isSeasonExtra true.
 
 **R2.46 `[Group] Title 2 S01`** -> title `Series Title 2`, season 1 (number before season token stays in title).
+
+**R2.47 Complete series (Arclight).** `Title - The Complete Series (2010-2015)`, `Title.COMPLETE.SERIES.1080p` -> no season
+numbers, fullSeason true, isMultiSeason true, isCompleteSeries true. A multi-season range written with "Complete Series" also
+sets isCompleteSeries.
+
+**R2.48 Episode ranges (Arclight).** A dash-, tilde- or "to"-written run of three or more contiguous episodes (`S01E01-E06`,
+`S02E01-06`, `[Group] Title - 001-024 [Batch]`, `Title Season 1 Episodes 1-6`) sets isEpisodeRange true; `S01E01E02E03` does not.
+Multi-season ranges may also be written `S01 to S03`.
+
+**R2.49 Anime season batches (Arclight).** `[Group] Title 2nd Season [1080p] [Batch]`, `Title Second Season`, `Title Final Season
+Part 2` -> fullSeason true (or isPartialSeason with seasonPart for Part/Cour) with the season taken from the words; the title keeps
+the season words, like other fansub names. `splitSeasonTitle` splits them back off ("Title 2nd Season" -> Title, season 2) for
+matching. `seriesPackKind` reports the pack kind: `completeSeries`, `multiSeason`, `partialSeason`, `season` or `episodeRange`
+(null for single and multi-episode files and season extras).
+
+**R2.50 Files inside packs (Arclight).** A file named only by its number (`03 - Episode Title.mkv`, `E05.mkv`, `013.mkv`) inside
+a pack folder takes the folder's parse narrowed to that one episode.
 
 ### 2.7 Mini-series, specials, season 0
 

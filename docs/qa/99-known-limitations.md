@@ -169,8 +169,7 @@ areas yet.
 
 | Limitation | Effect |
 |---|---|
-| Multi-season packs are rejected ("Multi-season releases are not supported" by the decision engine; "Multi-season download, unable to import automatically" on import). | Grab season packs one season at a time. |
-| Partial season packs and season extras are not imported automatically ("Partial season packs are not supported", "Extras are not supported"). | Use Activity -> Manual Import. |
+| Season extras packs (`S05 EXTRAS`) are not imported automatically ("Extras are not supported"). Files in a pack that carry no episode number at all ("Multi-season pack; no episode numbers in its name") are skipped too. | Use Activity -> Manual Import. |
 | Archive files (.rar, .zip) in a completed download are not extracted by Arclight ("Found archive file, might need to be extracted"). | Configure the download client to unpack, or extract by hand then Manual Import. |
 | Language profiles for audio language live on the quality profile; subtitle language profiles are separate (Settings -> Subtitles). | |
 | Metadata comes from TMDB only (no TVDB fallback, no image caching on disk). | Series without TMDB episode data show gaps; posters load from TMDB each time. |

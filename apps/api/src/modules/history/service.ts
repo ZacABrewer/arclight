@@ -208,6 +208,22 @@ export interface IgnoredInput {
   releaseType?: string;
 }
 
+/** One file of a pack that was not imported while the rest of the pack was. */
+export interface ImportSkippedInput {
+  target: HistoryTarget;
+  /** The download's title (the pack). */
+  sourceTitle: string;
+  quality: QualityModel;
+  languages: readonly string[];
+  downloadId?: string | null;
+  droppedPath: string;
+  /** Why it was skipped: reason codes and messages, in order. */
+  reasons: ReadonlyArray<{ reason: string; message: string }>;
+  releaseGroup?: string;
+  size?: number;
+  releaseType?: string;
+}
+
 export interface MarkFailedOptions {
   message?: string;
   source?: string;
@@ -561,6 +577,30 @@ export class HistoryService {
       quality: input.quality,
       languages: [...input.languages],
       downloadId: null,
+      data,
+    });
+  }
+
+  /**
+   * A pack file that was skipped (not wanted, no better than the library's, unparsable) while
+   * the rest of the pack imported: one `importSkipped` row per episode, or one series row when
+   * the file mapped to none. `data.reasons` holds the reason codes, `data.message` the text.
+   */
+  recordImportSkipped(input: ImportSkippedInput): HistoryRecord[] {
+    const data = normalizeData({
+      droppedPath: input.droppedPath,
+      message: input.reasons.map((r) => r.message).join('; '),
+      reasons: input.reasons.map((r) => r.reason).join(','),
+      releaseGroup: input.releaseGroup,
+      size: input.size,
+      releaseType: input.target.mediaType === 'series' ? input.releaseType : undefined,
+    });
+    return this.insert(input.target, {
+      eventType: 'importSkipped',
+      sourceTitle: input.sourceTitle,
+      quality: input.quality,
+      languages: [...input.languages],
+      downloadId: blankToNull(input.downloadId),
       data,
     });
   }

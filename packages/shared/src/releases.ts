@@ -102,6 +102,25 @@ export const ReleaseBookRef = z.object({
 });
 export type ReleaseBookRef = z.infer<typeof ReleaseBookRef>;
 
+/** What kind of series pack a release is. */
+export const SeriesPackKind = z.enum(['season', 'multiSeason', 'completeSeries', 'partialSeason', 'episodeRange']);
+export type SeriesPackKind = z.infer<typeof SeriesPackKind>;
+
+/**
+ * Series packs: what the pack covers in the library. `wantedCount` counts the monitored
+ * episodes it would fill or upgrade (missing, or below cutoff and upgradable by this release).
+ */
+export const ReleasePackCoverage = z.object({
+  kind: SeriesPackKind,
+  /** Library seasons the pack's episodes belong to, ascending. */
+  seasons: z.array(z.number().int()),
+  episodeCount: z.number().int(),
+  wantedCount: z.number().int(),
+  /** Part/Vol packs: the part number. */
+  part: z.number().int().optional(),
+});
+export type ReleasePackCoverage = z.infer<typeof ReleasePackCoverage>;
+
 /** The verdict on one release. Extends the indexer's resource so the UI can show both at once. */
 export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved: true }).extend({
   rejections: z.array(ReleaseRejection),
@@ -145,6 +164,8 @@ export const ReleaseDecision = ReleaseResource.omit({ rejections: true, approved
   mappedEpisodeNumbers: z.array(z.number().int()).optional(),
   mappedAbsoluteEpisodeNumbers: z.array(z.number().int()).optional(),
   fullSeason: z.boolean(),
+  /** Series packs: what the pack covers ("S01-S03, 36 episodes, 24 wanted"). */
+  pack: ReleasePackCoverage.optional(),
   /** Remaining delay in minutes when the release is held back by a delay profile. */
   delayMinutes: z.number().int().optional(),
 });

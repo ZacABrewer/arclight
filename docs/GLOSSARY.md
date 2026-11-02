@@ -237,7 +237,7 @@ A top-level folder where finished titles live, for example `/data/media/tv` or `
 "Scene" release names follow strict rules (dots between words, a year, a quality tag, `-GROUP`). "P2P" names are looser. Arclight's parser reads both; Arclight's own naming settings decide how files are named in your library. See [Media management](using/media-management.md).
 
 **Season pack**
-One release that holds a whole season instead of one episode. Often better quality and fewer torrents; Arclight decides between a pack and single episodes using its season-pack rules in the releases settings. See [Quality profiles](using/quality-profiles.md).
+One release that holds a whole season instead of one episode. Packs can also span several seasons (`S01-S03`, "Complete Series"), part of a season (`S01E01-E06`) or, for anime, an absolute batch (`001-024`). Arclight prefers a pack when enough of its episodes are wanted and imports only the files that help. See [Media management](using/media-management.md#season-packs).
 
 <a id="seed"></a>
 **Seed / seeder**

@@ -122,6 +122,14 @@ Unless stated, every data value is stored as a string. Age fields are integers r
   path), `RelativePath` (new path relative to parent folder), `ReleaseGroup`, `Size`, `IndexerFlags`; [TV] also `ReleaseType`.
 - One row per linked episode [TV]; one for movies. The event is only emitted for files the organizer actually moved.
 
+**1.3.5a Import skipped** [Arclight] (a file of a pack download was not imported):
+
+- Event type `importSkipped`. Row columns: source title = the download title; quality and languages from the file;
+  download id = client item id.
+- Data: `DroppedPath`, `Message` (the rejection messages joined with "; "), `Reasons` (rejection codes, comma separated),
+  `ReleaseGroup`, `Size`, `ReleaseType`.
+- One row per episode the file maps to; one row with no episode for a file that maps to none. Samples write nothing.
+
 **1.3.6 Ignored** (user removed a queue item with "keep in client, do not blocklist"):
 
 - Row columns: source title = the download item's title in the client; quality and languages from the matched release;

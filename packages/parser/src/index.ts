@@ -1,6 +1,6 @@
 import { prepare, stripExtension, cleanTitle, normalizeTitle, spaced } from './normalize.js';
 import { parseQuality, parseRevision } from './quality.js';
-import { parseSeries, parseSeriesTitleInfo, parseSeasonTitle } from './series.js';
+import { parseSeries, parseSeriesTitleInfo, parseSeasonTitle, seriesPackKind, splitSeasonTitle, type SeriesPackKind } from './series.js';
 import { parseMovie, normalizeImdbId } from './movie.js';
 import { parseLanguages } from './language.js';
 import { parseReleaseGroup } from './group.js';
@@ -48,6 +48,9 @@ export {
   parseSeries,
   parseSeriesTitleInfo,
   parseSeasonTitle,
+  seriesPackKind,
+  splitSeasonTitle,
+  type SeriesPackKind,
   parseMovie,
   normalizeImdbId,
   parseLanguages,
@@ -165,6 +168,18 @@ export function parsePath(path: string, hint: MediaTypeHint = 'auto'): ParsedRel
     }
   }
 
+  // "Show.S02.1080p-GRP/E07.mkv": a title-less file in a one-season pack folder takes the
+  // folder's season and title ("E07" alone would otherwise imply season 1).
+  const fileSeries = fromFile?.series;
+  if (fileSeries && !fileSeries.title && folder && folderSeason === null && hint !== 'movie' && fileSeries.episodes.length > 0 && !/S\d/i.test(fileName)) {
+    const packSeries = parseRelease(folder, hint).series;
+    if (packSeries && packSeries.seasons.length === 1 && !packSeries.isMultiSeason && (packSeries.fullSeason || packSeries.isPartialSeason || packSeries.isEpisodeRange)) {
+      fileSeries.seasons = [packSeries.seasons[0]!];
+      fileSeries.title = packSeries.title;
+      fileSeries.titleInfo = packSeries.titleInfo;
+    }
+  }
+
   const fileOk = fromFile && (fromFile.series || fromFile.movie);
   if (fileOk && folder) {
     // "Movie.2011.UHD.BluRay-CtrlHD/ctrlhd-rotpota-1080p.mkv": the file name gives the
@@ -183,6 +198,8 @@ export function parsePath(path: string, hint: MediaTypeHint = 'auto'): ParsedRel
   const folderSeries = fromFolder.series;
   if (bare && folderSeries && folderSeries.absoluteEpisodes.includes(Number(bare[0]))) {
     folderSeries.absoluteEpisodes = [Number(bare[0])];
+  } else if (folderSeries && !fromFile?.series) {
+    packFileNumber(folderSeries, stripExtension(fileName).title);
   }
   if (fromFolder.series || fromFolder.movie) {
     // Keep extension-derived quality from the file if the folder has none.
@@ -198,4 +215,27 @@ export function parsePath(path: string, hint: MediaTypeHint = 'auto'): ParsedRel
     if (deeper.series || deeper.movie) return deeper;
   }
   return fromFile ?? fromFolder;
+}
+
+/**
+ * A file inside a pack folder named only by its number ("03 - Episode Name.mkv",
+ * "E05.mkv", "013.mkv"): narrow the folder's season or range down to that one episode.
+ */
+function packFileNumber(series: NonNullable<ParsedRelease['series']>, base: string): void {
+  const lead = /^(?:E|EP|Episode[-_. ]?)?(\d{1,4})(?=$|[-_. \[(])/i.exec(base.trim());
+  if (!lead) return;
+  const n = Number(lead[1]);
+  if (series.absoluteEpisodes.length > 1 && series.episodes.length === 0) {
+    if (series.absoluteEpisodes.includes(n)) series.absoluteEpisodes = [n];
+    series.isEpisodeRange = false;
+    return;
+  }
+  if (series.seasons.length !== 1 || series.isMultiSeason) return;
+  if (series.fullSeason || series.isPartialSeason || (series.isEpisodeRange && series.episodes.includes(n))) {
+    series.episodes = [n];
+    series.fullSeason = false;
+    series.isPartialSeason = false;
+    series.seasonPart = 0;
+    series.isEpisodeRange = false;
+  }
 }
