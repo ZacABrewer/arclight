@@ -12,7 +12,7 @@ unless you ask otherwise.
 
 ## Supported versions
 
-Only the latest release (`:latest` / the newest `vX.Y.Z` tag) receives security fixes. The
+Only the latest release (currently 0.19.x; `:latest` / the newest `vX.Y.Z` tag) receives security fixes. The Jellyfin plugin is supported on its latest release (currently 1.2.x). Older versions are not patched; update instead. The
 `:develop` image follows the main branch and may contain unreleased changes.
 
 ## Hardening your install
@@ -30,4 +30,5 @@ Only the latest release (`:latest` / the newest `vX.Y.Z` tag) receives security 
   Settings > Security if it leaks.
 - Mounting the Docker socket (for automatic updates) gives Arclight root-equivalent control of
   the Docker host. Leave it unmounted unless you want that.
+- The Jellyfin plugin uses its own plugin key, which only reaches the plugin API. Keep it on the Jellyfin server, and delete it in Settings > Media Servers if the Jellyfin server is lost.
 - Keep VPN credentials and API keys in your `.env` file, never in a compose file you share.

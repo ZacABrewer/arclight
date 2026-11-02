@@ -1,146 +1,90 @@
 # Arclight Roadmap
 
-## Phase 1 status (2026-10-26)
+Status as of release 0.19.0 (Jellyfin plugin 1.2.0). What shipped, release by release, is in the
+[changelog](../CHANGELOG.md). This page lists what is done by area and what is planned.
 
-Phase 1 is partway through. The foundations and the data layer are built and tested:
-metadata (TMDB), library, profiles, indexers, download clients, the naming and
-notification packages, and the web shell. The release pipeline is the gap: the decision
-engine, grab, import, history, blocklist, calendar and notifications api modules do not
-exist yet (shared contracts for them are being written), and most web pages are
-placeholders. The parser package is being finished. Phase 0 is complete except
-authentication.
+Planned items are ideas under development or on the list. They are not available yet, and
+the order is not a promise. Behaviour specs for each area are written to `docs/spec/` before the
+code, derived from how the upstream apps behave. The project is a clean-room build; see
+[Conventions](CONVENTIONS.md).
 
-| Phase 1 item | Status |
-|---|---|
-| metadata (package, routes, refresh jobs) | done |
-| library module | done, except disk scan |
-| parser | in progress |
-| profiles module | done, except separate language profiles |
-| indexers module + package | done, except interactive-search UI and auto search |
-| releases / decision engine | not started (contracts in progress) |
-| downloads + download-clients package | in progress |
-| organizer | in progress |
-| history, blocklist, calendar, notifications | in progress |
-| web | in progress |
+## Done
 
-Status markers below: **[done]**, **[in progress]**, **[not started]**.
-Tests: 778 passing across the workspace.
+### Core
 
-Clean-room build. Each phase ends with something that runs in Docker on the NAS and does
-real work. Functionality first; the Tron theme is a layer in Phase 5 and does not block
-anything before it. Behaviour specs for each area are written to `docs/spec/` before the
-code, derived from how the upstream apps behave.
+- pnpm monorepo: `apps/api` (Fastify, Drizzle, SQLite), `apps/web` (React, Vite), `apps/mobile`,
+  shared packages, `jellyfin-plugin` and `push-relay`.
+- First-run wizard, login, API keys, roles and permissions, audit log, backup and restore, in-app
+  updates (including container self-update), config as code, metrics, scheduler with a persistent
+  job table, WebSocket feed, health checks with a fix for each.
+- Docker image on GHCR, compose files for VPN (Gluetun) and no-VPN layouts, guides for Linux,
+  Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer.
 
-## Phase 0 — Skeleton that boots
+### TV and movies (Sonarr and Radarr)
 
-- **[done]** pnpm monorepo, `apps/api` (Fastify + Drizzle/SQLite), `apps/web` (React + Vite),
-  `packages/shared` (Zod contract).
-- **[not started]** Auth (first-run setup, sessions, API key). The api has no auth module
-  and is unauthenticated today.
-- **[done]** Settings store, system info, health,
-  structured logging, in-process scheduler with a persistent job table, WebSocket feed
-  (all present; the auth line above is the exception).
-- **[done]** Multi-stage Dockerfile + compose with qBittorrent; PUID/PGID entrypoint.
-  (The Dockerfile's install layer copies only the api, web and shared manifests; verify the
-  image still builds now that more packages exist.)
+- TMDB metadata, library, root folders, monitoring, release-name parser, quality and language
+  profiles, custom formats, delay and release profiles, naming and renaming, hard-link imports.
+- Decision engine, automatic and interactive search (with filters and "Grab anyway"), upgrades,
+  blocklist, history, calendar and ICS feed, Wanted lists (missing, cutoff unmet) with a release filter.
+- Bulk actions on every list, tags and tag rules, library hygiene and a library health scan,
+  command palette and universal search.
+- Hardware transcoding rules (Quick Sync, VA-API, NVENC) and media analysis with ffprobe.
 
-Done when: `docker compose up` on the NAS → setup wizard → dashboard, jobs visible.
+### Indexers (Prowlarr)
 
-## Phase 1 — Library, metadata, parser, download pipeline (TV + movies)
+- Torznab and Newznab, YAML-defined site indexers, indexer proxies including FlareSolverr,
+  per-indexer stats and health, rate limits, category mapping.
 
-The core loop, for both media types from day one:
+### Downloads
 
-- **[done]** `packages/metadata`: TMDB search/lookup for series and movies, images, refresh jobs.
-- **[done]** `library` module: root folders, series/seasons/episodes, movies, monitored flags,
-  media files, disk scan, free-space.
-- **[in progress]** `packages/parser`: release-name parser (title, year, season/episode/daily/anime/absolute
-  numbering, quality source + resolution, codecs, HDR, audio, release group, proper/repack,
-  languages, edition for movies, hash/scene checks). Fixture suite built from the
-  documented upstream parser test cases (as data, not code).
-- **[done]** `profiles` module: quality definitions and profiles, custom formats (spec engine),
-  language profiles, delay profiles, release profiles (must/must-not contain, preferred).
-- **[in progress]** `indexers` module + `packages/indexers`: Torznab/Newznab clients, categories,
-  per-indexer settings, RSS sync, interactive + automatic search, indexer health/backoff.
-- **[not started]** `releases` module: decision engine (quality cutoff/upgrade, custom-format score,
-  language, size limits, seeders, blocklist, already-grabbed, delay, protocol priority).
-- **[in progress]** `downloads` module (api module is named `download-clients`) + `packages/download-clients`: qBittorrent client (add/track/remove,
-  categories, seed limits, path mapping), queue, completed-download handling, import with
-  episode/movie matching, failed-download handling and auto re-search.
-- **[in progress]** `organizer` module (the package exists with tests; no api module yet): naming tokens, rename preview, file moves/hardlinks, media
-  management settings.
-- **[in progress]** `history`, `blocklist`, `calendar`, `notifications` (Discord, Telegram, webhook,
-  email, custom script, Jellyfin/Emby/Plex library refresh).
-- **[in progress]** Web: Library (one grid, TV + movies), item pages, add-new, Activity (queue/history/
-  blocklist), Calendar, Settings for everything above, interactive search modal.
+- Built-in BitTorrent engine with VPN binding, kill switch, tunnel guard and disk guard, stall
+  recovery and a disk-space guard, plus an optional remote engine.
+- Download clients: qBittorrent, Transmission, Deluge, rTorrent, SABnzbd, NZBGet.
+- Gluetun and native Windows VPN integrations with forwarded-port handling.
 
-Notes on partial items:
+### Subtitles (Bazarr)
 
-- metadata: image URL building only, no image caching yet.
-- library: root-folder free space is reported; there is no disk scan.
-- parser: 2910 of 2932 fixture cases pass (99.2%); package is uncommitted.
-- profiles: language lives on the quality profile; no separate language-profile entity.
-- indexers: Torznab/Newznab, caps, rate limit, backoff, RSS sync and manual search
-  (`GET /search`) work. Automatic search needs the releases module.
-- downloads: qBittorrent client, remote path mappings, tracked downloads, queue and
-  refresh job work. Completed-download handling, import and failed-download re-search
-  need the imports module (in progress).
-- history/blocklist/calendar/notifications: the `notifications` package (agents for Discord, Telegram, webhook, email, script, push, media servers) is
-  tested; the four api modules have no folders yet and only shared contracts exist.
-- web: shell, dashboard, search and the System pages are real; Library, Activity,
-  Calendar, Wanted and all Settings pages are `ComingSoon` placeholders.
+- Language profiles, providers, scoring, wanted list, history and blacklist, optional Whisper
+  speech-to-text, and requests for missing subtitles or audio languages.
 
-Done when: add a series and a movie, both get searched, grabbed through qBittorrent,
-imported, renamed, and the media server is refreshed, with no other \*arr installed.
+### Requests and Discover (Seerr)
 
-## Phase 2 — Indexer depth (Prowlarr parity)
+- Local and media-server users, permissions, quotas, per-user request type switches, approval and
+  auto-approve rules, issues, watchlist, Discover for movies, series, music and audiobooks.
+- Request portal for non-admin users, installable as a PWA.
 
-- YAML-defined site indexers (public and private trackers that lack Torznab), with
-  login flows, search templates, result parsing. Definition format designed for
-  Arclight, informed by Cardigann/Prowlarr's catalogue.
-- Indexer proxies (FlareSolverr, HTTP/SOCKS), per-indexer stats, rate limits,
-  category mapping per media type, cross-indexer manual search page.
-- Additional download clients: Transmission, Deluge, SABnzbd, NZBGet, rTorrent.
-- Import lists (Trakt, TMDB lists, Plex watchlist, IMDb lists).
+### Music and audiobooks (preview, off by default)
 
-## Phase 3 — Subtitles (Bazarr parity)
+- Music library, search, grab and import, and audiobooks with Audiobookshelf support. Both
+  have import of existing files and requests in Discover. Turn them on in Settings > General > Features.
 
-- `subtitles` module: language profiles (forced/HI/cutoff), wanted list, per-file
-  subtitle state, history, blacklist, upgrade logic, scoring with ranked matches.
-- `packages/subtitles`: provider abstraction; OpenSubtitles.com, Subdl, Addic7ed,
-  Podnapisi, Gestdown, Subf2m, Napisy24, Animetosho, embedded-subtitle extraction
-  first; more by usage. Whisper (optional, external endpoint) last.
-- Post-processing: sync (ffsubsync/alass), encoding, custom scripts.
-- Web: Subtitles pages — wanted, history, blacklist, profiles, providers, per-item
-  manual search/upload.
+### Media servers and apps
 
-Done when: subtitles arrive automatically after import for every configured language.
+- Jellyfin, Emby and Plex library refresh, and Jellyfin watch history sync.
+- **Arclight for Jellyfin** plugin (1.2.0): request and browse Discover inside Jellyfin, title
+  pages, status badges, watchlist, issues, language requests and opt-in themes. Install it from
+  `https://arclight.moviemethat.com/jellyfin/manifest.json`.
+- Companion app for iOS and Android with mobile push through a relay (built from `apps/mobile`;
+  not in the app stores yet).
+- Import wizard for Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and qBittorrent,
+  and a Sonarr/Radarr-compatible API for third-party tools.
 
-## Phase 4 — Requests and discover (Seerr parity)
+### Look and feel
 
-- Users with roles, permission flags, quotas; local and media-server (Jellyfin/Emby/
-  Plex) sign-in.
-- `requests` module: movie/series/season requests, approval flow and auto-approve,
-  4K/alternate-profile targets, override rules, issues + comments, watchlist sync,
-  availability tracking against the library and the media server.
-- Discover: TMDB trending/popular/upcoming/genres/networks/people, configurable sliders.
-- Notifications for request events; per-user notification agents (push, email,
-  Discord DM, Telegram, webhook).
-- Web: Discover pages, request flow, Requests admin, Issues, per-user settings.
+- Tron look by default and syncable theme packs; installable PWA; phone-friendly lists.
+- Translations framework with several languages.
+- Public website with the documentation at https://arclight.moviemethat.com.
 
-Done when: a non-admin user requests a show, an admin approves, it is grabbed,
-imported, subtitled, and the user is notified it is available.
+## Planned
 
-## Phase 5 — neon light-grid theme and polish
-
-- Theme tokens (neon cyan / orange on near-black, grid, glow), motion, typography.
-- Dashboard as a live grid of activity; mobile layout; PWA.
-
-## Phase 6 — Adoption and release
-
-- Importer that reads existing Sonarr / Radarr / Prowlarr / Bazarr / Seerr databases
-  and configs to adopt a running stack in place.
-- Optional Sonarr/Radarr-shaped compatibility API for third-party tools.
-- Backup/restore, update channel, docs, GHCR image, release process.
-- Remove the pre-rename compatibility shims: the deprecated `MEDIATRON_*` env fallback in
-  `apps/api/src/config.ts`, the one-time `media-tron.db` -> `arclight.db` file move in
-  `apps/api/src/db/index.ts`, and acceptance of `media-tron_*.zip` backups in the backup module.
+- **Plex watch history sync**, matching the Jellyfin sync that already exists.
+- **Season packs and archive unpacking** on import.
+- **Import lists and notifications**: more sources and channels beyond what ships today.
+- **Single sign-on** (SSO) for the web app.
+- **Ebooks** and **podcasts**, next to the music and audiobook support.
+- **Music** moving out of preview once it has had more real-world testing.
+- **A built-in media player**, so you can browse and play your library in Arclight. Arclight is
+  not a media server today and keeps working alongside Jellyfin, Emby and Plex.
+- **Companion app in the app stores**, after review.
+- **Pre-rename clean-up**: remove the deprecated `MEDIATRON_*` environment fallback, the one-time
+  `media-tron.db` to `arclight.db` file move and acceptance of `media-tron_*.zip` backups.

@@ -1,8 +1,11 @@
 # Arclight UI Inventory
 
-Every screen, tab, list, dialog and component the application needs. This is the design
-brief for the light-grid theme pass (Phase 5) and the checklist for functional completeness.
-Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
+Every screen, tab, list, dialog and component the application needs. This is the original
+design brief. The status markers below date from an early build and understate what exists
+today: the app now has bulk actions, the command palette, week and day calendar views, the
+Tags page, Updates, the audit log, Discover and the request portal, and a PWA manifest. Read
+the pages in `docs/using/` for current behaviour; the code is the authority.
+Status at the time: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 
 ## 1. Application shell
 
@@ -14,8 +17,8 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - **First-run setup wizard** (admin account → TMDB key → root folders → download client → indexer → VPN → done) 🔧 (all but VPN ✅)
 - **Login** page, **logout**, **session expired** ✅
 - **Theme**: light-grid tokens (colour, glow, grid, motion), light-grid variant for daytime ⬜
-- **Keyboard shortcuts** help sheet ⬜
-- **Command palette** (quick actions: add series, search, run task) ⬜ (nice-to-have)
+- **Keyboard shortcuts** help sheet ✅
+- **Command palette** (quick actions: add series, search, run task) ✅
 
 ## 2. Dashboard ✅ (will be redesigned)
 
@@ -32,7 +35,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 
 ### 3.1 Library index ✅
 - Tabs: **TV** / **Movies** (route per tab)
-- Views: **poster grid**, **table**, **overview list** (poster + synopsis) 🔧 (grid+table ✅)
+- Views: **poster grid**, **table**, **overview list** (poster + synopsis) ✅
 - Toolbar: search-as-you-type, sort menu, filter menu (monitored, missing, status, profile, tags, quality), view switch, poster size slider, select-mode toggle
 - Bulk editor bar: monitor/unmonitor, set profile, set root folder (move files option), add/remove tags, delete, refresh, search
 - Empty state ("add your first series")
@@ -42,7 +45,7 @@ Status: ✅ built (functional, unstyled) · 🔧 partial · ⬜ not built.
 - Result card: poster, year, status, network/studio, overview, "already in library" badge
 - **Add dialog**: root folder, quality profile, monitor option, series type, season folder, tags, minimum availability (movies), search on add, path preview
 - "No TMDB key" notice → Settings
-- Import existing library from folder (bulk match) ⬜
+- Import existing library from folder (bulk match) ✅
 
 ### 3.3 Series details ✅ 🔧
 - Header: fanart backdrop, poster, title/year, status, network, runtime, genres, ratings, certification, profile, path, size on disk, next/previous airing, monitored toggle

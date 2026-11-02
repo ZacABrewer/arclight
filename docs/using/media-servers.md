@@ -137,6 +137,16 @@ The favourites sync (`WatchlistSync`) mirrors Jellyfin and Emby favourites into 
 
 A separate plugin for Jellyfin adds Arclight to the Jellyfin interface and reports plays as they happen. It shows request status on items, lets linked users search, request, ask for subtitle and audio languages, report issues and manage their watchlist from Jellyfin, and sends playback, played and unplayed marks, favourite changes and user changes to Arclight in real time. It is optional: the watch-history sync works without it, with the delays described above.
 
+What it adds inside Jellyfin Web:
+
+- Arclight results in Jellyfin's search, with a request dialog (seasons, 4K), and status badges on item pages.
+- **Title pages** for titles you don't have yet (plugin 1.2.0): backdrop, poster, runtime, rating, genres, overview, cast, director or creators, networks and studios, trailer link, release dates, seasons with episode counts, "Also on", request status, watchlist and "More like this". Titles already in Jellyfin open Jellyfin's own page.
+- A bigger **Discover** (plugin 1.2.0): Recommended for you (from watch history), Trending, Popular, Top rated, In cinemas now, Upcoming, Airing today and On the air rows, genre chips, "See all" grids and genre pages with sorting.
+- My requests, Coming soon, Also on, quality and audio labels on posters, and opt-in Arclight themes.
+- An opt-in 6-second Arclight intro before movies (and optionally the first episode of a session) with Cinema Mode on (plugin 1.1.0). It is off by default and set in the plugin's settings in Jellyfin.
+
+The plugin builds for Jellyfin 12.x and 10.11.x; Jellyfin installs the build that fits. The title pages and the new Discover rows and genres need Arclight newer than 0.18.2. With an older Arclight the plugin keeps working, but rows Arclight does not know show an error instead of titles. Plugins installed from the repository update themselves through Jellyfin's **Update Plugins** task. The plugin's release notes are in [`jellyfin-plugin/CHANGELOG.md`](https://github.com/ZacABrewer/arclight/blob/main/jellyfin-plugin/CHANGELOG.md).
+
 Set it up:
 
 1. In Arclight open **Settings > Media Servers**, find the **Jellyfin plugin** card and press **Create plugin key**. Copy the key (it starts with `alj_`); it is shown once.
@@ -155,7 +165,7 @@ Everything the plugin shows or does for a Jellyfin user is decided by the **link
 - **Content limits** (the user's maximum movie and TV certification and "hide adult content", Settings > Users): titles above the limits are left out of the plugin's search, Discover rows and Coming soon row. Opening one directly (title page, "Also on" streaming services) answers that it does not exist, and requesting it, asking for a language or reporting a problem is refused. Status badges for such titles show nothing beyond "not in the library". These are the same rules as the request portal, and titles without a known US rating count as unrated.
 - **Permissions and request types**: the Request button appears only when the account may request that kind of title (Request, Request movies / series, Request 4K with the 4K switch on in Settings > Requests) and its request type filter allows it. Otherwise the plugin shows why: already in the library, already requested, no permission, request type turned off, or quota used up. Quality profiles are offered only to accounts with Advanced requests. Subtitle and audio-language requests appear only when the account may make them. Quotas count exactly as on the portal.
 - **Seeing other people's requests**: who requested a title, and requests made by other users, are shown only to accounts with View requests or Manage requests. Everyone else sees only their own. **My requests** in Jellyfin always lists only the user's own requests, and a request can be cancelled from there only while it is pending.
-- **Coming soon** lists monitored movies and episodes from Arclight's calendar, which are library titles only, filtered by the account's content limits.
+- **Coming soon** lists monitored movies and episodes from Arclight's calendar, which are library titles only, filtered by the account's content limits. It leaves out releases Arclight already has a file for, and the plugin also drops movies and episodes your Jellyfin already holds. Missing (placeholder) episodes still show.
 - **Disabled or deleted Jellyfin accounts**: once the user sync (or a plugin event) marks a Jellyfin account disabled or deleted, the plugin is refused for it (`account_disabled`), even if it is still linked.
 - **Imported accounts**: accounts created through the plugin or on sign-in get the default permissions and default request types from Settings > Requests. There are no default content limits, so set limits per user (or turn on **Mirror Jellyfin parental controls**).
 

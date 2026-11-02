@@ -19,14 +19,13 @@ private-tracker use, not to match every feature.
 
 | Limitation | Effect | Where you notice it |
 |---|---|---|
-| No MSE/PE (message stream) encryption. The Torrent Engine setting for encryption accepts only "disabled". | Peers that require encrypted connections cannot connect. Some swarms are slower than in qBittorrent. A tracker that forces encryption cannot be used. | 05 (engine), 06 |
-| No uTP (BEP 29); TCP only. | Fewer reachable peers behind some NATs. Slower on congested links than clients with uTP. | 05, 11 |
-| No IPv6 (no IPv6 peers, no `peers6`, no DHT over IPv6). | IPv6-only peers are never used. | 05 |
-| No web seeds (BEP 17/19). `url-list` in a .torrent is read but ignored. | Torrents that depend on an HTTP seed with no peers stay at 0%. | 05 |
+| MSE/PE encryption never sends an initial payload and pads at most 64 bytes. A handshake that times out counts as "MSE unsupported" and falls back. | Rare peers fail to connect. | 05 (engine), 06 |
+| uTP uses fixed 1200-byte datagrams (no path-MTU discovery), acknowledges every second packet at once, and has no clock-drift correction. | Slightly less efficient than a full uTP stack. | 05, 11 |
+| IPv6 peers and DHT work, but there is no BEP 7 `ipv6=` announce parameter, and UDP trackers use IPv6 only for literal IPv6 hosts. | Some IPv6 swarms are not reachable. | 05 |
+| Web seeds support GetRight style (BEP 19) only. BEP 17 `httpseeds` is ignored. | Torrents that depend on a BEP 17 seed with no peers stay at 0%. | 05 |
 | No v2-only torrents (BEP 52). Hybrid torrents download through their v1 data; v2-only torrents go to the error state. | Rare; shows as an errored torrent. | 05 |
-| No super-seeding, no secure DHT node ids (BEP 42), no read-only DHT or BEP 44, no UPnP or NAT-PMP port mapping, no IP-filter file formats. | Port forwarding must come from the VPN (Proton via Gluetun) or the router by hand. | 05, 11 |
+| No secure DHT node ids (BEP 42), no read-only DHT or BEP 44, no UPnP or NAT-PMP port mapping, no IP-filter file formats. | Port forwarding must come from the VPN (Proton via Gluetun) or the router by hand. | 05, 11 |
 | Fast extension is partial: incoming `suggest` and `allowed fast` messages are ignored and the engine never sends allowed-fast sets. | Slightly slower start on some swarms. | n/a |
-| Rate limits are global and per connection. There are no per-torrent limits. | Cannot cap one torrent below the others. | 05 |
 | Engine state lives in the config folder under `torrents/` (fast-resume data). Losing the folder loses partial-download resume points. | Torrents recheck from scratch after restoring a backup that omits it. | 13 |
 
 ## Download clients
@@ -113,19 +112,15 @@ private-tracker use, not to match every feature.
 
 ## User interface gaps
 
-The inventory in `docs/UI-INVENTORY.md` lists these as planned or partly built. They are not
-bugs unless the checklist for that area says otherwise.
+Most pages that earlier checklists listed as missing now exist: bulk actions, the Tags page,
+import exclusions, library import from a folder, the Cutoff Unmet lists, movie History, week
+and day calendar views, the command palette, the Updates page, the audit log, the web app
+manifest and service worker. What is still API only or not on screen:
 
 | Area | What is missing |
 |---|---|
-| Library | No poster-size slider, no Overview view, no bulk Refresh/Search/Tags actions (API: `PUT /api/v1/series/bulk` and `/movie/bulk` take `tags`, `refresh`, `search`), no tag-management page, no import-exclusions screen, no "import existing library from folder". The series "Refresh" button is greyed out (API: `POST /api/v1/command/refresh`). No series History tab; the movie History tab shows "History is coming soon". Rename preview, rescan and library statistics are API only. |
-| Calendar | Month and Agenda views only. No week or day view, no tag/type/date-kind filters, no popovers. No "regenerate token" button for the iCal feed (API: `POST /api/v1/calendar/feed/regenerate`; `GET /calendar` also takes `mediaType`). |
-| Wanted | No filters and no monitored toggle on Missing. Cutoff Unmet shows "Cutoff unmet is not available yet"; the native API now has `GET /api/v1/wanted/cutoff/episodes` and `/movies` but the page is not wired to them yet. |
-| Activity | History has no Redownload action (API: `POST /api/v1/history/:id/redownload`); the Imported, Failed and Ignored filter chips use event names the API does not store, so they may show nothing. The Queue has no status filter. Blocklist cannot be cleared or added to from the UI (API only). "Mark as failed" cannot set skip-redownload. |
-| Settings | Notification flags `enabled` and `includeHealthWarnings`, compat settings, and the log level have no screen. Changing your own password has no screen (API only: `PUT /api/v1/user/me/password`). Settings -> General still shows a stale "Backups are coming soon" card; backups are under System -> Backups. |
-| Shell | The newer UI kit pieces (Backdrop, Rail, CommandPalette, KeyboardSheet, MobileTabBar) are not mounted in the live app. The only keyboard shortcut is `/` (focus search). No keyboard-shortcut help sheet, no command palette. |
-| Mobile / PWA | No web app manifest and no service worker, so "Install app" is not offered. The layout collapses to a drawer below 900 px; there is no bottom tab bar and no push notification. |
-| System | No Updates page (current/available, changelog) and no audit/events log. |
+| Settings | The log level has no screen; set `ARCLIGHT_LOG_LEVEL` (Settings -> General shows where). |
+| Activity | If a filter chip or queue filter shows nothing, check the event names the API stores before reporting it. |
 
 ## Authentication and access
 
@@ -179,11 +174,8 @@ areas yet.
 
 ## Documentation known to be stale
 
-`docs/ARCHITECTURE.md`, `docs/ROADMAP.md`, `docs/API.md` (module list and the "not built yet"
-statements) and the Status paragraph in `README.md` still describe an earlier phase. The code is
-the authority. `docs/UI-INVENTORY.md` marks pages as unbuilt that now exist (Discover, Requests,
-Issues, Watchlist, Subtitles, Indexer Proxies, Indexer Stats, Import Lists, Backups, Import,
-VPN, Torrent Engine) and lists features that do not (week view, bulk tags, command palette).
+`docs/UI-INVENTORY.md` is the original design brief. Its status markers date from an early
+phase and understate what the app does today. The code is the authority.
 
 ## Open questions from the specs (undecided behaviour)
 

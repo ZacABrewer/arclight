@@ -152,6 +152,11 @@ if (!existsSync(DOCS)) {
 const files = walk(DOCS);
 const published = new Map(files.map((f) => [resolve(f).toLowerCase(), f]));
 const sources = new Map(files.map((f) => [f, readFileSync(f, 'utf8').replace(/\r\n/g, '\n')]));
+// The repository changelog is published as its own page at /changelog/ (not under /docs/).
+const CHANGELOG = join(REPO, 'CHANGELOG.md');
+const CHANGELOG_URL = '/changelog/';
+const CHANGELOG_OUT = join(SITE, 'src', 'content', 'docs', 'changelog.md');
+if (existsSync(CHANGELOG)) sources.set(CHANGELOG, readFileSync(CHANGELOG, 'utf8').split('\r\n').join('\n'));
 const anchorCache = new Map();
 const anchorsFor = (f) => {
   if (!anchorCache.has(f)) anchorCache.set(f, anchorsOf(sources.get(f)));
@@ -187,6 +192,9 @@ function rewrite(target, fromAbs, lineNo) {
     broken.push(`${repoRel(fromAbs)}:${lineNo}  ${target}  (points outside the repository)`);
     return target;
   }
+
+  // The changelog page.
+  if (existsSync(CHANGELOG) && resolve(abs).toLowerCase() === CHANGELOG.toLowerCase()) return CHANGELOG_URL + anchor;
 
   // A published doc page.
   const doc = published.get(abs.toLowerCase());
@@ -276,6 +284,27 @@ for (const file of files) {
   const out = outFileOf(file);
   mkdirSync(dirname(out), { recursive: true });
   writeFileSync(out, `${fm.join('\n')}\n${rewritten.trimEnd()}\n`);
+  pages++;
+}
+
+if (existsSync(CHANGELOG)) {
+  const lines = sources.get(CHANGELOG).split('\n');
+  const h1 = lines.findIndex((l) => /^#\s+\S/.test(l));
+  const bodyLines = lines.map((l, i) => (i === h1 ? '' : l));
+  const body = rewriteBody(bodyLines.join('\n'), CHANGELOG, 0).replace(/^\s+/, '');
+  const fm = [
+    '---',
+    'title: "Changelog"',
+    'description: "What changed in each Arclight release, newest first, and in the Arclight for Jellyfin plugin."',
+    `editUrl: ${JSON.stringify(`${GITHUB}/edit/main/CHANGELOG.md`)}`,
+    'tableOfContents:',
+    '  minHeadingLevel: 2',
+    '  maxHeadingLevel: 2',
+    '---',
+    '',
+  ];
+  mkdirSync(dirname(CHANGELOG_OUT), { recursive: true });
+  writeFileSync(CHANGELOG_OUT, `${fm.join('\n')}\n${body.trimEnd()}\n`);
   pages++;
 }
 

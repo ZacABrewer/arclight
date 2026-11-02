@@ -12,6 +12,10 @@ git tag v0.2.0
 git push origin main v0.2.0
 ```
 
+Add a section for the new version to [CHANGELOG.md](../CHANGELOG.md) in the release commit. The
+Jellyfin plugin is versioned and tagged separately (`jellyfin-plugin-vX.Y.Z`); its notes live in
+`jellyfin-plugin/CHANGELOG.md`.
+
 CI on the tag builds a multi-arch (linux/amd64, linux/arm64) image, pushes it to
 `ghcr.io/<owner>/arclight` with SBOM and provenance attestations, and creates a GitHub
 Release with generated notes plus the compose files and `.env.example`. A tag containing a
@@ -47,7 +51,7 @@ These are the source-build files with `build:` replaced by
 Pin the previous tag in `.env` and recreate:
 
 ```sh
-ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:v0.1.0
+ARCLIGHT_IMAGE=ghcr.io/<owner>/arclight:v0.19.0
 docker compose -f docker-compose.release.yml up -d
 ```
 

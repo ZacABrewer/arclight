@@ -63,6 +63,7 @@ const sidebar = [
   { label: 'Contributing', collapsed: true, items: rootPages('developing', 'conventions', 'releasing', 'translating', 'roadmap') },
   hasDir('qa') && { label: 'QA checklists', collapsed: true, items: [{ autogenerate: { directory: 'docs/qa' } }] },
   hasLegal && { label: 'Legal', collapsed: true, items: [{ autogenerate: { directory: 'legal' } }] },
+  { label: 'Changelog', link: '/changelog/' },
   { label: 'Support', link: '/support/' },
 ].filter(Boolean);
 

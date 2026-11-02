@@ -29,7 +29,7 @@ System > Status is the "what am I running" page.
 
 During a VPN lockdown the engine card says torrents are paused and bound to `127.0.0.1` until the VPN is back. See [vpn.md](vpn.md).
 
-> Coming soon: speed and VPN history charts. This page will be updated when it ships.
+Speed history is on the Activity page and VPN history is in Settings > VPN: see [Activity](activity.md) and [VPN](vpn.md#history).
 
 ## Tasks
 

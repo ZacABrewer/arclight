@@ -101,7 +101,44 @@ Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first
 
 ## Quiet hours, download alerts and summaries
 
-> Coming soon: download alerts (stalls, failures, low disk space) with quiet hours and a daily summary. This page will be updated when it ships. For now, connections send events as they happen at any time of day. To mute a connection, turn off its Enable switch or the events you do not want.
+### Download alerts
+
+Each connection has a **Download problems** group of switches:
+
+| Switch | Fires when |
+|---|---|
+| Download stalled | A download got no new data for longer than the stall threshold (Settings > Media Management, "Stalled download after") |
+| Download recovered or replaced | A stalled download moved again, or Arclight replaced its release (see [Activity](activity.md)) |
+| Import problem | An import failed or was blocked |
+| Kill switch paused downloads | The VPN kill switch paused the built-in engine. If it lasts 30 minutes, one more urgent alert follows |
+| Kill switch released | The VPN reconnected and the paused downloads resumed |
+| Disk space low | A free-space health check (downloads, root folders or the config volume) went to a warning or error |
+| Daily summary | The daily summary is built (see below) |
+
+Other download timeline entries that have no switch of their own, such as a client error, are sent as a general download update.
+
+### Quiet hours
+
+Settings > Notifications has a **Quiet hours and daily summary** section.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Quiet hours | Off | Hold non-urgent alerts during the window and send them as one batch when it ends |
+| Start / End | 22:00 / 07:00 | Server local time, 24-hour. An end earlier than the start means the next day |
+| Days | All | The days on which a quiet period starts |
+
+A connection only holds alerts when its **Respect quiet hours** switch is on. Urgent alerts, such as a disk that is out of space or a long kill switch pause, and test messages are sent at once. The section shows "Quiet hours are in effect now" and how many alerts are held.
+
+### Daily summary
+
+Once a day Arclight builds a summary of the last 24 hours: what was grabbed, imported, failed, stalled and replaced, how long the kill switch held downloads, free space per volume, open health issues and what is still downloading. It is shown on the dashboard and sent to connections with the **Daily summary** switch on. Summaries are kept for 30 days.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Daily summary | On | Build and send the summary |
+| Summary time | 08:00 | Server local time |
+
+To mute a connection, turn off its Enable switch or the events you do not want.
 
 ## Troubleshooting
 

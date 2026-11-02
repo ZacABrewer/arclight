@@ -134,9 +134,24 @@ Drawer buttons: **Pause** or **Resume**, and **Recheck** (verify the files on di
 
 Engine-wide settings (speed limits, ports, VPN binding) live in **Settings > Torrent Engine**; see [Download clients](download-clients.md).
 
-> Coming soon: queue priority (choosing which downloads go first). This page will be updated when it ships.
+### Queue order
 
-> Coming soon: automatic recovery of stalled downloads and "try another release". This page will be updated when it ships. Today a stalled download is flagged but not replaced on its own. To get another release, remove it with **Add to blocklist** ticked, which searches for a replacement.
+For clients that report a queue order, select rows and use **Move to top** or **Move to bottom** to choose which downloads go first. In the torrent drawer, the Files tab sets a priority per file (Skip, Normal, High, Max).
+
+### Stall recovery
+
+Arclight deals with a stalled download in two steps. It turns on with **Recover stalled downloads** in Settings > Media Management (on by default).
+
+1. When the download is flagged as stalled, Arclight asks the trackers and the DHT for fresh peers (**Re-announce**). You can also do this by hand from the queue.
+2. If it is still stalled after **Replace a stalled release after** (default 30 minutes, counted from the moment it was flagged), Arclight removes it with its data, blocklists the release and searches for another one. A "Searching for another release" entry appears on the timeline.
+
+Downloads at or above **Never replace downloads past** (default 90%) are only re-announced, never replaced. Setting the replace time to 0 re-announces only. Nothing is replaced while the VPN kill switch holds the engine or while the download is paused.
+
+To do this by hand, use **Try another release** on the row. It removes the download, blocklists the release (untick the blocklist box to keep it eligible) and searches again.
+
+### Disk-space guard
+
+With **Disk-space guard** on (Settings > Media Management, on by default, off while "Skip free space check" is on), a grab that would leave its download volume below **Minimum free space** (default 100 MB) is held in the queue as "Waiting to send" and sent when there is room. Downloads already running on a volume that falls below the minimum are paused, and resume when the volume has the minimum plus 1 GiB free again. Use **Send now** to send a held grab anyway. A banner above the queue shows the free space of the affected volume.
 
 ## History
 

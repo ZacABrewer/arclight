@@ -46,14 +46,17 @@ import { Card, CardGrid, LinkCard, Steps, Icon } from '@astrojs/starlight/compon
   <Card title="Subtitles and languages" icon="seti:notebook">
     Language profiles, subtitle providers, optional speech-to-text with Whisper, and requests for missing subtitles or audio languages. [Subtitles](/docs/using/subtitles/)
   </Card>
-  <Card title="Music and audiobooks" icon="seti:audio">
-    Artists, albums, authors and books alongside TV and movies, with the same profiles, search and import pipeline. [Library](/docs/using/library/)
+  <Card title="Music and audiobooks (preview)" icon="seti:audio">
+    Artists, albums, authors and books alongside TV and movies, with the same profiles, search and import pipeline. Off by default; turn it on in Settings. [Library](/docs/using/library/)
   </Card>
   <Card title="Hardware transcoding" icon="laptop">
     Transcode rules can re-encode on Intel Quick Sync, VA-API or NVIDIA NVENC. The image ships an ffmpeg build with the drivers included. [Hardware transcoding](/docs/using/hardware-transcoding/)
   </Card>
   <Card title="Health checks" icon="approve-check-circle">
     Dozens of built-in health checks with a fix for each, plus a library health scan that finds broken, truncated or wrong-language files. [Troubleshooting](/docs/troubleshooting/#health-checks) · [Health scan](/docs/using/health-scan/)
+  </Card>
+  <Card title="Jellyfin plugin" icon="puzzle">
+    Request, browse Discover and see title pages inside Jellyfin itself, with status badges, a watchlist and watch history sync. [Media servers](/docs/using/media-servers/) · [Install the plugin](#jellyfin-plugin)
   </Card>
   <Card title="Themes" icon="star">
     Ships with the Tron look. Theme packs re-skin the whole web app with one stylesheet; make and publish your own. [Themes](/docs/themes/)
@@ -137,9 +140,32 @@ import { Card, CardGrid, LinkCard, Steps, Icon } from '@astrojs/starlight/compon
 
 <section class="arc-section">
 
+## Jellyfin plugin
+
+<p class="arc-lede">Arclight for Jellyfin puts Arclight inside Jellyfin's web interface: search and request, a Discover page with rows and genres, title pages for titles you don't have yet, status badges, watchlist, issue reports and subtitle or audio language requests. It builds for Jellyfin 12.x and 10.11.</p>
+
+<Steps>
+
+1. In Arclight open **Settings > Media Servers** and press **Create plugin key** on the Jellyfin plugin card.
+2. In Jellyfin open **Dashboard > Plugins > Repositories** and add this URL, then install **Arclight** from the catalogue and restart Jellyfin:
+
+   ```text
+   https://arclight.moviemethat.com/jellyfin/manifest.json
+   ```
+
+3. Paste your Arclight address and the plugin key into the plugin's settings.
+
+</Steps>
+
+Plugin 1.2.0 needs Arclight newer than 0.18.2. See the [full setup steps](/docs/using/media-servers/) and the [changelog](/changelog/).
+
+</section>
+
+<section class="arc-section">
+
 ## Mobile apps
 
-<p class="arc-lede">Arclight companion apps for iOS and Android are on the way. They connect to your own server: enter its address and sign in with the account you already use on it. No store links yet.</p>
+<p class="arc-lede">Arclight companion apps for iOS and Android are on the way. They are built from the repository but are not in the app stores yet. They connect to your own server: enter its address and sign in with the account you already use on it. No store links yet. The [changelog](/changelog/) lists every release.</p>
 
 <div class="arc-mobile not-content">
   <div class="arc-store">

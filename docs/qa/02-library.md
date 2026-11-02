@@ -3,7 +3,7 @@
 This file checks the Library section of Arclight: adding a series or movie from TMDB, the TV and Movies list pages, series and movie detail pages, editing, deleting, root folders, tags, exclusions, rename, rescan and library statistics.
 Prerequisites: a TMDB API key saved under Settings -> General (see 03-metadata-and-profiles.md), at least one quality profile, and folders you can use as root folders (for example `D:\media\tv` and `D:\media\movies` on Native, `/data/media/tv` and `/data/media/movies` on Docker or NAS).
 Test environments: Native, Docker and NAS all apply. Steps marked "via API" use `curl` with the API key from Settings -> Security; replace `<host>` with `localhost:17878` (Native) or `<host>:7878` (Docker/NAS).
-Not built in the web app (do not report as bugs): poster-size control, an Overview view, bulk Refresh/Search/Tags actions, a series History tab, a working Refresh button (it is greyed out), a tag management page, and a UI for library import exclusions (API only).
+Some rows below describe an older, smaller UI. The library now also has a poster-size control, an Overview view, bulk actions, a History tab on series and movies, working Refresh buttons, a Tags page (Settings -> Tags) and a library import from a folder. If a row disagrees with what you see, check the page against `docs/using/library.md` and fix the row.
 
 ## Root folders (Settings -> Media Management)
 
@@ -57,7 +57,7 @@ Not built in the web app (do not report as bugs): poster-size control, an Overvi
 | ID | Step | Expected result | Pass/Fail |
 |----|------|-----------------|-----------|
 | LIB-23 | Click a series title in the TV list. | Header with poster, fanart background, monitor toggle, title, status badge, and facts: Network, Quality profile, Path, Size on disk, Episodes (for example "0 / 62"), Next airing, Type, Runtime, Genres, Tags, plus the overview. Buttons: Refresh, "Search monitored", "Interactive search", "Manual import", Edit, Delete. | |
-| LIB-24 | Hover the Refresh button and look at the tabs. | Refresh is greyed out and cannot be clicked (tooltip says it has no api contract yet). Tabs are "Episodes", "Files (0)" and "Subtitles"; there is no History tab. | |
+| LIB-24 | Hover the Refresh button and look at the tabs. | Refresh is enabled and queues a refresh and rescan. Tabs include "Episodes", "Files (0)", "Subtitles" and "History". | |
 | LIB-25 | On the Episodes tab look at the seasons, and click a season heading such as "Season 1". | Seasons are newest first with "Specials" last; the newest real season starts expanded. Each header has a monitor toggle, progress bar, "N episodes" and size, a red "N wanted" badge when relevant, "Search season" and "Interactive" buttons. Clicking the heading opens or closes it. | |
 | LIB-26 | Look at the episode table in an open season. | Columns: monitor toggle, #, Title, Air date, Quality, Status, and per-row "Search" and "Interactive" buttons. Status chips read Downloaded, Wanted, Missing, Unaired or TBA; an untitled episode shows "TBA". | |
 | LIB-27 | Click the monitor toggle on one aired episode, then the one in the season header. | The episode chip flips between "Wanted" and "Missing". Unmonitoring the season dims it and its episodes; clicking again restores it. | |
@@ -70,8 +70,8 @@ Not built in the web app (do not report as bugs): poster-size control, an Overvi
 | ID | Step | Expected result | Pass/Fail |
 |----|------|-----------------|-----------|
 | LIB-31 | Put a file such as `The Expanse - S01E01 - Dulcinea.mkv` in the series folder, rescan (LIB-38), and open the "Files" tab. Click "Delete" on the row, then Cancel. | The tab label reads "Files (1)" and lists Relative path, Season, Quality, Languages, Group, Size, Added and Delete. An empty series shows "No files on disk". The delete dialog "Delete file" says "This cannot be undone." with Cancel and "Delete from disk". | |
-| LIB-32 | Open a movie from Library -> Movies. | Title, monitor toggle, a status badge (for example Released) and a file badge (Downloaded, Wanted, Missing or Not available). Facts: In cinemas, Digital release, Physical release, Quality profile, Minimum availability, Path, Size on disk, File, Runtime, Genres, Collection, Tags. Buttons: Refresh (greyed out), Search, "Interactive search", "Manual import", Edit, Delete. Tabs: "Files", "Subtitles", "History". | |
-| LIB-33 | Click the movie "History" tab. | It shows "History is coming soon" and "Grabs, imports and failures for this movie will be listed here once the history module lands." | |
+| LIB-32 | Open a movie from Library -> Movies. | Title, monitor toggle, a status badge (for example Released) and a file badge (Downloaded, Wanted, Missing or Not available). Facts: In cinemas, Digital release, Physical release, Quality profile, Minimum availability, Path, Size on disk, File, Runtime, Genres, Collection, Tags. Buttons: Refresh, Search, "Interactive search", "Manual import", Edit, Delete. Tabs: "Files", "Subtitles", "History". | |
+| LIB-33 | Click the movie "History" tab. | It lists the movie's grabs, imports and failures, newest first. | |
 | LIB-34 | On the movie click Search, then "Interactive search". | Search gives a toast as in LIB-28. The dialog is titled "Interactive search: <movie title>" with the same table as LIB-29. | |
 
 ## Edit and delete

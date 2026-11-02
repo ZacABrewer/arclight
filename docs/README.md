@@ -67,7 +67,7 @@ These pages follow the app's navigation.
 | VPN and kill switch | [vpn.md](using/vpn.md) |
 | Notifications | [notifications.md](using/notifications.md) |
 | Mobile app (pairing, phone notifications) | [mobile-app.md](using/mobile-app.md) |
-| Media servers (Jellyfin, Emby, Plex) | [media-servers.md](using/media-servers.md) |
+| Media servers (Jellyfin, Emby, Plex) and the Arclight for Jellyfin plugin | [media-servers.md](using/media-servers.md) |
 | Users and security | [users-and-security.md](using/users-and-security.md) |
 | System (health, tasks, logs, metrics, config as code) | [system.md](using/system.md) |
 
@@ -90,8 +90,6 @@ These pages follow the app's navigation.
 | [Themes](THEMES.md) | Choosing a theme, theme pack sync, making and publishing your own |
 | [Translating](TRANSLATING.md) | Adding a language |
 | [Releasing](RELEASING.md), [Architecture](ARCHITECTURE.md), [Developing](DEVELOPING.md), [Roadmap](ROADMAP.md) | Contributors |
+| [Changelog](../CHANGELOG.md) | What changed in each release |
 | [QA checklists](qa/README.md) | Manual test procedures |
 | [Website](../site/README.md) | How these docs are published at https://arclight.moviemethat.com |
-
-> Some features are still being built (stall auto-recovery, speed schedules, seeding rules,
-> download alerts and others). Pages will mention them as "Coming soon" until they ship.

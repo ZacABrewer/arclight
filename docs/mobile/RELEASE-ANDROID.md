@@ -8,7 +8,7 @@ Google changes requirements often. Before each section, check the linked Play Co
 
 ## 0. Decisions to make first
 
-- [ ] **Application ID (permanent).** Planned: `com.moviemethat.arclight` (reverse of the project domain). It is unique across Google Play forever, cannot be reused after deletion, and must match the iOS bundle ID if you want one ID everywhere. Use a domain you control.
+- [ ] **Application ID (permanent).** Used by the app: `com.moviemethat.arclight` (reverse of the project domain). It is unique across Google Play forever, cannot be reused after deletion, and must match the iOS bundle ID if you want one ID everywhere. Use a domain you control.
 - [ ] **Store name.** "Arclight" (up to 30 characters). Names do not have to be unique on Play, but trademark complaints can remove a listing; search Play for "Arclight" first and keep a fallback ("Arclight Media Manager").
 - [ ] **Free, no ads, no in-app purchases** (assumed below; paid apps need a payments profile and tax setup).
 - [ ] **Minimum Android version.** Android 8.0 (API 26) or newer is a sensible floor.
@@ -17,7 +17,7 @@ Google changes requirements often. Before each section, check the linked Play Co
 
 ### How the app is built
 
-The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, planned in `apps/mobile`) handles server setup, secure sign-in, push notifications, biometric lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins therefore see the admin portal and other users the request portal, exactly as on the web, and new server features appear without an app update. Only changes to the native shell need a new release.
+The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, secure sign-in, push notifications, biometric lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins therefore see the admin portal and other users the request portal, exactly as on the web, and new server features appear without an app update. Only changes to the native shell need a new release.
 
 ## 1. Developer account
 
@@ -29,7 +29,7 @@ The app is a **companion app**, like the Home Assistant and Jellyfin apps: a nat
 
 ## 2. Project setup
 
-- [ ] App project created in the repository (planned: `apps/mobile`, Capacitor). Built by GitHub Actions (free for public repositories) or locally with Android Studio.
+- [ ] App project created in the repository (`apps/mobile`, Capacitor). Built by GitHub Actions (free for public repositories) or locally with Android Studio.
 - [ ] `applicationId`, version name (`1.0.0`) and version code (`1`, increased on every upload) set.
 - [ ] Target SDK at the level Play currently requires for new apps (API 36 / Android 16 from August 2026). Check "Target API level requirements" in the Play Console help.
 - [ ] Release build is an **Android App Bundle (.aab)**; Play no longer accepts APKs for new apps.

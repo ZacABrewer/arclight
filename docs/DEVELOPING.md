@@ -131,7 +131,7 @@ docs. Details: [site/README.md](../site/README.md).
 ## Commit conventions
 
 - Imperative subject, 72 characters or fewer; the body explains why. Recent subjects look
-  like "Phase 1 wave 2: library, profiles, indexers, download clients, web shell".
+  like "Add the retention rules page and its API routes".
 - Body bullets list what changed per area, with test counts where useful.
 - Give a reason for any new dependency and name the package it is for.
 - End with the Co-Authored-By line the session provides.

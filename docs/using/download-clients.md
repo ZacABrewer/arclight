@@ -192,7 +192,7 @@ Seeding is when you keep uploading after the download finishes. What Arclight do
 4. For tracked private-tracker accounts, the hit-and-run rule (Indexers > Tracker account) keeps a finished torrent from being removed too early. See [Indexers](indexers.md).
 5. With both limits empty, torrents seed until you remove them.
 
-> Coming soon: per-download limits editable from the queue. This page will be updated when it ships. For now, limits can be set per client for new torrents (see the Built-in client table above).
+6. For a torrent in the built-in engine, open **Details** on its queue row and use the **Limits** tab to set a download and upload limit, per-peer limits and super-seeding for that torrent only. See [Activity](activity.md#torrent-drawer-built-in-engine).
 
 ### Grabs that repeat themselves
 

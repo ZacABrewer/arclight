@@ -8,7 +8,7 @@ Apple changes requirements every year, usually around WWDC and in the spring. Ch
 
 ## 0. Decisions to make first
 
-- [ ] **Bundle ID (permanent).** Planned: `com.moviemethat.arclight`. Use the same ID as the Android application ID.
+- [ ] **Bundle ID (permanent).** Used by the app: `com.moviemethat.arclight`. Use the same ID as the Android application ID.
 - [ ] **App Store name.** "Arclight" (up to 30 characters). Names are **unique across the App Store**; reserve it early by creating the app record (section 3). Have a fallback ready, for example "Arclight Media Manager" or "Arclight – Server Remote".
 - [ ] **Subtitle** (30 characters), for example "Your self-hosted media server".
 - [ ] **Free, no in-app purchases** (assumed below; paid apps need the Paid Apps agreement, tax and banking).
@@ -18,7 +18,7 @@ Apple changes requirements every year, usually around WWDC and in the spring. Ch
 
 ### How the app is built
 
-The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, planned in `apps/mobile`) handles server setup, Keychain sign-in, push notifications, Face ID lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins see the admin portal and other users the request portal, as on the web, and new server features appear without an app update. Those native features are also what keeps the app clear of guideline 4.2 (a plain website in a frame is rejected).
+The app is a **companion app**, like the Home Assistant and Jellyfin apps: a native shell (Capacitor, in `apps/mobile`) handles server setup, Keychain sign-in, push notifications, Face ID lock and the share sheet, and shows the Arclight interface served by the user's own server. Admins see the admin portal and other users the request portal, as on the web, and new server features appear without an app update. Those native features are also what keeps the app clear of guideline 4.2 (a plain website in a frame is rejected).
 
 ## 1. Membership and agreements
 
@@ -32,7 +32,7 @@ The app is a **companion app**, like the Home Assistant and Jellyfin apps: a nat
 iOS apps must be built and signed with Xcode on macOS.
 
 - [ ] Build route chosen:
-  - **GitHub Actions macOS runners (planned):** free for public repositories; build, sign and upload to App Store Connect with fastlane, using an App Store Connect API key stored as encrypted secrets. Works from Windows.
+  - **GitHub Actions macOS runners:** free for public repositories; build, sign and upload to App Store Connect with fastlane, using an App Store Connect API key stored as encrypted secrets. Works from Windows.
   - Or a Mac (or a cloud Mac rental) with Xcode, or a hosted service such as Codemagic.
 - [ ] Builds use the Xcode and iOS SDK version Apple currently requires for uploads (Xcode 26 / iOS 26 SDK as of 2026; check "Upcoming requirements" in the developer news).
 
@@ -46,7 +46,7 @@ iOS apps must be built and signed with Xcode on macOS.
 
 ## 4. Project setup
 
-- [ ] App project in the repository (planned: `apps/mobile`, Capacitor, shared with Android).
+- [ ] App project in the repository (`apps/mobile`, Capacitor, shared with Android).
 - [ ] Version (`1.0.0`) and build number (`1`, increased on every upload).
 - [ ] **App Transport Security**: Arclight servers are often plain `http://` on a home network. Prefer `NSAllowsLocalNetworking` (allows HTTP to local addresses only) over `NSAllowsArbitraryLoads`; if arbitrary loads are needed for HTTP servers reached by hostname, be ready to justify it to App Review ("connects to the user's own self-hosted server").
 - [ ] **Local network permission**: `NSLocalNetworkUsageDescription` text, for example "Arclight connects to your Arclight server on your home network." Add `NSBonjourServices` only if server discovery on the LAN is implemented.

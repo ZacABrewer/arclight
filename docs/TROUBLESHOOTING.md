@@ -110,7 +110,7 @@ The other kill-switch effect is that grabs (sending a release to a client) are h
 3. If many downloads stall at once, look at the VPN and the listening port: [Paused by the VPN kill switch](#paused-by-vpn-kill-switch), [Port forward not synced](#port-forward-not-synced).
 4. If a slow-but-alive swarm is flagged too eagerly, raise "Stalled download after".
 
-> Coming soon: stall auto-recovery and "try another release" (Arclight automatically blocklisting a stalled release and grabbing the next best one). This page will be updated when it ships. Today you do this by hand as in step 1.
+Arclight also does step 1 for you. With **Recover stalled downloads** on (Settings > Media Management, default on), a stalled download is re-announced to the trackers and the DHT, and if it is still stalled 30 minutes later (and below 90% progress) Arclight removes it, blocklists the release and searches for another. Both limits are settings in the same place. See [Stall recovery](using/activity.md#stall-recovery).
 
 ---
 
@@ -686,7 +686,7 @@ Source: `DownloadDiskSpace` (error).
 
 **Fix:** free space on the download volume, or move the download folder to a larger disk. Remove or pause downloads you do not need from the queue.
 
-> Coming soon: a disk-space guard that pauses or holds new downloads automatically before the disk fills. This page will be updated when it ships. The health check above already warns you today.
+The disk-space guard (Settings > Media Management, on by default) also holds new grabs that would leave the volume below the minimum free space, and pauses running downloads on a volume that falls below it. See [Disk-space guard](using/activity.md#disk-space-guard). Held grabs raise the health warning "Grabs held for disk space".
 
 <a id="download-disk-space-low"></a>
 ### Downloads will leave the disk almost full
@@ -1191,7 +1191,7 @@ Source: `DownloadStalled` (warning).
 
 **Fix:** open the download in the queue: the state reason and timeline say what happened (no peers, kill switch, client errors). If no seeders are left, remove it with **Add to blocklist** so a different release is searched for. More in [Stalled](#stalled).
 
-> Coming soon: stall auto-recovery and "try another release". This page will be updated when it ships.
+With **Recover stalled downloads** on (default), Arclight re-announces a stalled download and, if it stays stalled, replaces the release on its own. See [Stall recovery](using/activity.md#stall-recovery).
 
 ---
 

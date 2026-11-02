@@ -8,6 +8,10 @@
 
 # Arclight
 
+[![Release](https://img.shields.io/github/v/release/ZacABrewer/arclight?sort=semver)](https://github.com/ZacABrewer/arclight/releases)
+[![Licence: GPL-3.0](https://img.shields.io/badge/licence-GPL--3.0-blue)](LICENSE)
+[![Image](https://img.shields.io/badge/image-ghcr.io%2Fzacabrewer%2Farclight-informational)](https://github.com/ZacABrewer/arclight/pkgs/container/arclight)
+
 One content-acquisition service for a home media stack, written from scratch.
 Arclight does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
 (subtitles) and Seerr (requests) in a single application: one database, one API, one
@@ -21,10 +25,36 @@ Website: https://arclight.moviemethat.com
 
 **Full documentation: [docs/README.md](docs/README.md).** Install guides for Docker on Linux, Synology, UGREEN, Unraid, TrueNAS SCALE, QNAP, Windows, macOS, Raspberry Pi and Portainer; a first-run walkthrough; one page per area of the app; [Troubleshooting](docs/TROUBLESHOOTING.md), [FAQ](docs/FAQ.md) and [Glossary](docs/GLOSSARY.md). The sections below are a short summary for contributors; the docs are the authoritative guide for users.
 
-Status: **early release.** The full pipeline works end to end (requests, search, download,
-import, subtitles, notifications) with login and API keys; expect rough edges and report
+Current release: **0.19.0** (Jellyfin plugin **1.2.0**). See the [changelog](CHANGELOG.md) for what changed in
+each release. The full pipeline works end to end (requests, search, download, import, subtitles,
+notifications) with login and API keys, but it is still young: expect rough edges and report
 them in [Issues](https://github.com/ZacABrewer/arclight/issues). Design notes:
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md), plans: [docs/ROADMAP.md](docs/ROADMAP.md).
+
+## What it does
+
+- **TV and movies**: library, monitoring, quality and language profiles, custom formats,
+  automatic and interactive search, upgrades, naming, hard-link imports, calendar, Wanted lists.
+- **Indexers**: Torznab and Newznab, YAML-defined site indexers, FlareSolverr and other proxies,
+  per-indexer health and stats.
+- **Downloads**: a built-in BitTorrent engine with VPN binding, kill switch, tunnel guard and
+  disk guard; qBittorrent, Transmission, Deluge, rTorrent, SABnzbd and NZBGet are optional.
+- **Subtitles**: language profiles, providers, scoring, optional Whisper speech-to-text.
+- **Requests**: a request portal with Discover, permissions, quotas, per-user request types,
+  issues and a watchlist. Users can also ask for subtitles or another audio language.
+- **Music and audiobooks** (preview, off by default): library, search, import and requests.
+- **Library care**: health scan, tags and tag rules, bulk actions, command palette, universal search.
+- **Hardware transcoding** rules on Intel Quick Sync, VA-API or NVIDIA NVENC.
+- **Media servers**: Jellyfin, Emby and Plex refresh, Jellyfin watch history sync and the
+  [Arclight for Jellyfin plugin](#arclight-for-jellyfin-plugin).
+- **Companion app** for iOS and Android with phone notifications (not in the app stores yet).
+- **Move in**: an import wizard for Sonarr, Radarr, Prowlarr, Bazarr, Overseerr or Jellyseerr and
+  qBittorrent, plus a Sonarr/Radarr-compatible API for the tools you already use.
+- **Themes**: the Tron look by default and syncable theme packs.
+
+Still planned and not available yet: Plex watch history sync, season pack and archive unpacking
+on import, single sign-on, ebooks, podcasts and a built-in media player. See the
+[roadmap](docs/ROADMAP.md).
 
 ## Deploy
 
@@ -206,6 +236,26 @@ flagged as a leak instead of passing silently.
 
 Arclight has its own login (set up in the first-run wizard) and API keys. Before exposing it
 outside your network, read [Exposing Arclight outside your home](docs/getting-started/exposing-outside-home.md).
+
+## Arclight for Jellyfin plugin
+
+Arclight for Jellyfin adds Arclight to Jellyfin's own web interface: search and request titles,
+a Discover page with rows and genres, title pages for titles you don't have yet, status badges,
+watchlist, issue reports, subtitle and audio language requests, a Coming soon row, "Also on"
+streaming services and opt-in Arclight themes. It builds for Jellyfin 12.x and 10.11.
+
+To install it, in Jellyfin open **Dashboard > Plugins > Repositories**, add this repository URL,
+then install **Arclight** from the Catalog and restart Jellyfin:
+
+```
+https://arclight.moviemethat.com/jellyfin/manifest.json
+```
+
+Then press **Create plugin key** on the Jellyfin plugin card in Arclight (Settings > Media Servers) and paste the key, with your Arclight
+address, into the plugin's settings. The plugin's title pages and the extra Discover rows need
+Arclight newer than 0.18.2. Full steps are in
+[Media servers](docs/using/media-servers.md); the plugin's own notes are in
+[jellyfin-plugin/CHANGELOG.md](jellyfin-plugin/CHANGELOG.md).
 
 ## Develop
 

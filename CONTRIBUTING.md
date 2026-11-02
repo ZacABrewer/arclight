@@ -32,3 +32,6 @@ pnpm build
 
 Tests must not call live services; inject a fake `fetch`. CI runs the same commands plus a
 Docker build on every pull request.
+
+User-visible changes go in [CHANGELOG.md](CHANGELOG.md) when a release is cut; see
+[docs/RELEASING.md](docs/RELEASING.md).

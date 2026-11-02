@@ -6,7 +6,7 @@ The app does not include a server and does not store your library. Without a run
 
 ## Get the app
 
-Download links are at [arclight.moviemethat.com](https://arclight.moviemethat.com/). The **Mobile app** section in Arclight (see below) links there too.
+The app is built from [`apps/mobile`](https://github.com/ZacABrewer/arclight/tree/main/apps/mobile) in the repository. It is not in the App Store or Google Play yet; store links will appear on [arclight.moviemethat.com](https://arclight.moviemethat.com/) when it is. Until then you can build it yourself from the repository.
 
 ## Pair your phone with your server
 

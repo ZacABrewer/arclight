@@ -142,7 +142,11 @@ If the port never shows up, see [Port forward not synced](../TROUBLESHOOTING.md#
 
 A leak counts as down: the same lockdown happens when your public IP equals the Home public IP.
 
-> Coming soon: speed and VPN history charts. This page will be updated when they ship. For now the Live status panel shows the current state only.
+### History
+
+Below the Live status panel, **Connection history** shows a strip of the VPN state over time (connected, warning, down, or no data) for the last hour, 6 hours, 24 hours or 7 days, with lists of connection changes, kill switch pauses and releases, and forwarded port changes. It is recorded while the VPN is enabled. One-minute samples are kept 7 days and hourly ones 90 days, and events 90 days.
+
+The built-in engine's speed history is on the Activity page: an engine-wide **Transfer** section above the queue, and a speed chart for each download in its Info panel, with timeline events marked on it.
 
 ## Health warnings
 

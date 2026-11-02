@@ -35,7 +35,7 @@ The Docker image is published as `ghcr.io/zacabrewer/arclight` with these tags:
 
 | Tag | What it is |
 |---|---|
-| `vX.Y.Z` (for example `v0.1.0`) | One exact release. Never changes. |
+| `vX.Y.Z` (for example `v0.19.0`) | One exact release. Never changes. |
 | `X.Y` | The newest patch release of that minor version. |
 | `latest` | The newest stable release. This is what the compose files use by default. |
 | `develop` | Built from every push to the main branch. Can break. |
@@ -117,7 +117,7 @@ To stay on one version and never move by accident:
 2. Set the image to an exact tag:
 
    ```
-   ARCLIGHT_IMAGE=ghcr.io/zacabrewer/arclight:v0.1.0
+   ARCLIGHT_IMAGE=ghcr.io/zacabrewer/arclight:v0.19.0
    ```
 
 3. Recreate: `docker compose up -d`.

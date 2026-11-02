@@ -195,4 +195,4 @@ Summary line per file, for example: `06-acquisition-flow: 74 pass, 3 fail, 2 ski
 | Blocker | The core loop cannot complete or data is lost | Grab works but nothing ever imports; backup restore corrupts the database |
 | Major | A feature does not work, with no workaround | Cannot add an indexer of one kind |
 | Minor | Works but wrong text, layout or edge case | Typo in a toast; sorting off by one |
-| Known | Described in 99-known-limitations.md | Cutoff Unmet page says "not available yet" |
+| Known | Described in 99-known-limitations.md | The log level has no screen |

@@ -3,7 +3,8 @@
 Arclight is a single, Docker-deployable content-acquisition service written from
 scratch. It does the jobs of Sonarr (TV), Radarr (movies), Prowlarr (indexers), Bazarr
 (subtitles) and Seerr (requests) in one process with one database, one API, one login,
-one UI and one scheduler. It drives an external download client (qBittorrent by default)
+one UI and one scheduler. It downloads torrents with its own built-in engine (external
+clients such as qBittorrent, Transmission, Deluge, rTorrent, SABnzbd and NZBGet are optional)
 and tells the media server (Jellyfin / Emby / Plex) when content lands. It is **not** a
 media server.
 
@@ -47,7 +48,7 @@ TypeScript end to end, one language for the whole project.
 |---|---|---|
 | Runtime | Node 24 | Long-running background service, excellent HTTP/IO, single container |
 | API | Fastify | Fast, schema-first (JSON Schema from Zod), plugin model for modules |
-| Validation / types | Zod | One schema → request validation + TS types (OpenAPI generation planned) |
+| Validation / types | Zod | One schema → request validation + TS types  |
 | Database | SQLite via Drizzle ORM (Postgres optional later) | Zero-ops on a NAS, typed migrations |
 | Jobs | In-process scheduler (croner) + persistent job table | No Redis dependency; jobs survive restarts |
 | Realtime | WebSocket (`@fastify/websocket`) | Live queue, job progress, library and release events |
@@ -57,114 +58,104 @@ TypeScript end to end, one language for the whole project.
 
 ## Repository layout
 
-State as of 2026-10-26. Test counts come from one `pnpm -r test` run (all green).
-
 ```
 arclight/
 ├── apps/
 │   ├── api/                 Fastify host: modules, scheduler, SQLite/Drizzle, serves web/dist
-│   └── web/                 React SPA shell; most pages are still ComingSoon placeholders
-├── packages/
-│   ├── shared/              Zod contract shared by api and web
-│   ├── parser/              Release-name parser (in progress, uncommitted)
-│   ├── profiles-engine/     Quality profile / custom format / delay / release profile logic
-│   ├── indexers/            Torznab + Newznab clients, caps, query planning, rate limiting
-│   ├── download-clients/    qBittorrent client, torrent hash helpers
-│   ├── metadata/            TMDB client and mapping to Arclight shapes
-│   ├── organizer/           Naming-template parsing, file/folder name builders
-│   └── notifications/       Notification agents behind one event model
-├── docker/                  Dockerfile, compose (build-from-source), entrypoint (PUID/PGID)
-└── docs/                    ARCHITECTURE, ROADMAP, CONVENTIONS, API, DEVELOPING, spec/
+│   ├── web/                 React SPA: admin app, request portal, themes
+│   └── mobile/              Capacitor companion app (iOS and Android)
+├── packages/                Pure logic and service clients (see below)
+├── jellyfin-plugin/         Arclight for Jellyfin (C#, separate release line)
+├── push-relay/              Cloudflare Worker that relays phone push notifications
+├── site/                    Public website (Astro + Starlight), built from docs/
+├── themes/                  Theme packs synced by running instances
+├── design/                  Brand assets
+├── docker/                  Dockerfile, compose files, entrypoint (PUID/PGID)
+└── docs/                    User docs, specs, API reference, QA checklists
 ```
 
 ### Packages
 
 Packages are pure logic and external-service clients: no database, no HTTP server.
 
-| Package | Purpose | Tests |
-|---|---|---|
-| `@arclight/shared` | Zod schemas and inferred types for every API shape, the quality vocabulary and the WebSocket event union. Areas: system, jobs, events, quality, profiles, library, indexers, download-clients, naming, settings, metadata, releases, imports, history, notifications, calendar. The last five files (releases, imports, history, notifications, calendar) are new and uncommitted. | none (`--passWithNoTests`) |
-| `@arclight/parser` | Release-name parsing: series and movie titles, numbering, quality and revision, languages, release group, hash/obfuscation detection. Fixture-driven; fixtures run at 2910/2932 (99.2%) in `pnpm --filter @arclight/parser report`. In progress: the folder is untracked, `scripts/_dbg.ts` is scratch, and `series.ts`/`movie.ts` have no unit test files of their own. | 41 |
-| `@arclight/profiles-engine` | Evaluate quality profiles (allowed, cutoff, upgrade, revision), custom formats (spec matching and scoring), delay and release profiles. Used by the profiles module and, later, the decision engine. | 64 |
-| `@arclight/indexers` | `Indexer` abstraction over Torznab and Newznab: caps, RSS, search, test; search planning, URL redaction, category helpers, per-indexer rate limiter. No YAML site definitions yet. | 58 |
-| `@arclight/download-clients` | `DownloadClient` interface and a qBittorrent WebUI v2 client; torrent file and magnet hash extraction. qBittorrent only. | 64 |
-| `@arclight/metadata` | TMDB client (search, series, movie, trending/discover helpers), mapping to Arclight metadata shapes, image URL builder, title cleaning. No TVDB fallback, no image caching. | 57 |
-| `@arclight/organizer` | Parse naming formats and build episode/movie file names and series/season/movie folder names. Spec: `docs/spec/naming.md`. | 224 |
-| `@arclight/notifications` | Agents behind `createAgent(kind, settings)`: Discord, Telegram, webhook, email (own SMTP), custom script, Gotify, ntfy, Pushover, Plex and Jellyfin/Emby (media-browser) refresh; event formatting. | 67 |
-
-There is no `packages/subtitles` yet (Phase 3).
+| Package | Purpose |
+|---|---|
+| `@arclight/shared` | Zod schemas and inferred types for every API shape, the quality vocabulary, the WebSocket event union and the Jellyfin plugin contract. |
+| `@arclight/parser` | Release-name parsing: titles, numbering, quality, languages, release group. Fixture-driven (`pnpm --filter @arclight/parser report`). |
+| `@arclight/profiles-engine` | Quality profiles, custom formats, delay and release profiles. Used by the decision engine. |
+| `@arclight/indexers` | Torznab and Newznab clients, YAML site definitions, search planning, proxies, rate limiting. |
+| `@arclight/download-clients` | The `DownloadClient` interface and clients for qBittorrent, Transmission, Deluge, rTorrent, SABnzbd and NZBGet. |
+| `@arclight/torrent-engine` | The built-in BitTorrent engine: DHT, uTP, MSE encryption, web seeds, IPv6. |
+| `@arclight/engine-agent` | The agent that runs the torrent engine on another machine (see [Remote engine](REMOTE-ENGINE.md)). |
+| `@arclight/metadata` | TMDB client and mapping to Arclight shapes; MusicBrainz and audiobook catalogue clients. |
+| `@arclight/organizer` | Naming templates and file and folder name builders. Spec: `docs/spec/naming.md`. |
+| `@arclight/notifications` | Notification agents behind `createAgent(kind, settings)`: Discord, Telegram, webhook, email, custom script, Gotify, ntfy, Pushover and media-server refresh. |
+| `@arclight/subtitles` | Subtitle providers, scoring, selection, encoding and sync. |
+| `@arclight/media-servers` | Jellyfin, Emby, Plex and Audiobookshelf clients. |
+| `@arclight/challenge-solver` | The built-in Cloudflare challenge solver (a local browser); FlareSolverr is the usual route in Docker. |
 
 ### API modules
 
-`apps/api/src/modules/<name>/` is registered in `apps/api/src/app.ts` in this order:
-system, health, jobs, events, settings, metadata, library, profiles, indexers,
-download-clients. Every route lives under `/api/v1`. See [API.md](API.md) for routes.
+`apps/api/src/modules/<name>/` holds one folder per area, registered in
+`apps/api/src/app.ts`. Every route lives under `/api/v1`. See [API.md](API.md) for routes.
+The main areas:
 
-| Module | Purpose | Tests |
-|---|---|---|
-| `system` | `GET /system/status`: version, uptime, paths | none |
-| `health` | Health check aggregation and the `HealthCheck` job | none |
-| `jobs` | Recent job runs, scheduled jobs, manual run | none |
-| `events` | WebSocket feed of bus events | none |
-| `settings` | Key-value settings store; currently TMDB (metadata) settings, API key masked | 7 |
-| `metadata` | TMDB search/lookup routes, library metadata adapter, daily refresh jobs | 17 (incl. map tests) |
-| `library` | Root folders, tags, series/seasons/episodes, movies, media files, wanted-missing, import exclusions, statistics | 41 |
-| `profiles` | Quality profiles, custom formats, delay profiles, release profiles, quality definitions; seeded defaults | 17 |
-| `indexers` | Persisted indexer config, caps cache, status/backoff, fan-out manual search, RSS sync and status jobs | 43 |
-| `download-clients` | Client registry, remote path mappings, tracked downloads and queue, queue refresh job | 45 |
+- Core: `system`, `settings`, `auth`, `health`, `jobs`, `events`, `audit`, `backup`, `updates`, `logs`, `debug`, `metrics`, `config-export`.
+- Library and metadata: `library`, `metadata`, `profiles`, `profile-migration`, `library-hygiene`, `health-scan`, `tag-rules`, `retention`, `scene-mapping`, `media-analysis`, `transcode`, `bulk`.
+- Acquisition: `indexers`, `releases`, `download-clients`, `torrent`, `vpn`, `imports`, `history`, `blocklist`, `calendar`, `cross-seed`, `tracker-stats`, `solver`, `engine-agent`.
+- Subtitles and languages: `subtitles`, `additional-languages`.
+- Music and audiobooks: `music`, `audiobooks`.
+- Requests and users: `requests`, `import-lists`, `discord-bot`, `notifications`, `push`, `mobile`, `themes`.
+- Media servers: `media-servers`, `watch-history`, `jellyfin-plugin`.
+- Compatibility and import: `compat` (the Sonarr/Radarr-shaped API), `migrate` (the stack import wizard).
 
-`apps/api` also has 170 tests in total (these module numbers sum to it).
-Web has 33 tests.
-
-Not present in the tree yet: `releases`, `imports`, `history`, `blocklist`,
-`notifications` and `calendar` modules (their shared contracts exist, in progress),
-and `auth`, `users`, `organizer` (api side), `subtitles`, `requests`, `backup`.
-Several of these are being written in parallel; their internals are not described here
-until they land.
+Not built yet: Plex watch-history sync, season-pack and archive-unpacking import, ebooks,
+podcasts, single sign-on and a media player. See [Roadmap](ROADMAP.md).
 
 ### Database
 
 SQLite through Drizzle (`better-sqlite3`). `apps/api/src/db/schema.ts` defines the core tables
-(`settings`, `jobs`, `scheduled_jobs`) and re-exports each module's `schema.ts`
-(profiles, library, indexers, download-clients). Three migrations in `apps/api/drizzle/`
-(`0000` core, `0001` profiles + library, `0002` indexers + download clients) create 23
-tables. Tests build in-memory databases from the table definitions with `createTestDb`.
+and re-exports each module's `schema.ts`. Migrations live in `apps/api/drizzle/` and run at
+boot. Tests build in-memory databases from the table definitions with `createTestDb`.
 
 ### Web
 
-`apps/web` is a TanStack Router code-based route tree with a sidebar driven by `nav.ts`.
-Built pages: Dashboard, Search, System Status, System Tasks, System Health. Everything
-else in the sidebar renders a `ComingSoon` placeholder tagged with its roadmap phase.
-The app has a typed API client per module, a React Query cache kept live by the WebSocket
-feed, and a small component kit (table, form, modal, tabs, toast).
+`apps/web` is a TanStack Router code-based route tree with navigation driven by `nav.ts`.
+It holds the admin app (library, wanted, activity, calendar, settings, system), the
+request portal for non-admin users, Discover, the command palette and the theme system
+(see [Themes](THEMES.md)). It has a typed API client per module and a React Query cache
+kept live by the WebSocket feed. Below 768 px tables turn into cards. The companion app
+in `apps/mobile` shows this same UI.
 
 ## Runtime shape
 
 ```
 docker compose up
-├── arclight      Node 24, port 7878, serves API + SPA + WebSocket
-│     ├── /config   arclight.db, logs, backups, image cache
-│     ├── /tv  /movies  /downloads
-│     └── scheduler (today): RssSync · IndexerStatusCheck · RefreshQueue ·
-│         RefreshSeries · RefreshMovie · HealthCheck
-│         (planned: searches · import · subtitle pass · availability · housekeeping · backup)
-└── qbittorrent     lscr.io/linuxserver/qbittorrent; auto-wiring on first boot is planned
+├── gluetun         optional VPN layouts: the tunnel and firewall
+├── arclight        Node 24, port 7878, serves API + SPA + WebSocket
+│     ├── /config   arclight.db, logs, backups, themes
+│     ├── /data     downloads/ and media/ (one share, so imports are hard links)
+│     ├── built-in torrent engine
+│     └── scheduler with a visible job board (RSS sync, searches, import,
+│         subtitles, health scan, tag rules, retention, backup, ...)
+└── flaresolverr    solves Cloudflare challenges for indexers
 ```
 
-Headless by design: the UI is a window onto the service, never required for it to run.
+qBittorrent and Whisper are optional compose profiles. Headless by design: the UI is a
+window onto the service, never required for it to run.
 
 ## API
 
 `/api/v1/*`, request and response validation from the Zod schemas in `packages/shared`.
-The WebSocket feed is `/api/v1/events`. Not built yet: authentication (one API key, one
-session cookie) and generated OpenAPI; both are design targets. The API is currently
-unauthenticated, so do not expose port 7878 beyond a trusted network. A compatibility layer exposing Sonarr/Radarr-shaped endpoints for third-party tools
-(e.g. `*/api/v3/series`) is a Phase 6 option, not a design constraint.
+The WebSocket feed is `/api/v1/events`. Access needs a session cookie or an API key.
+Sonarr/Radarr v3-shaped endpoints let third-party tools talk to Arclight (see
+[API](API.md)). Do not expose port 7878 to the internet without a reverse proxy; see
+[Exposing Arclight outside your home](getting-started/exposing-outside-home.md).
 
 ## Out of scope
 
-Media playback/transcoding/library scanning (media servers), music/books/comics
-(module shape allows them later), embedding a torrent or usenet client.
+Media playback and library streaming (media servers do that). Ebooks, comics and podcasts
+are not supported.
 
 ## Licence
 
