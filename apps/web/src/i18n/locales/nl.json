@@ -3939,6 +3939,7 @@
   "player.entry.open": "Speler openen",
   "player.entry.openPlayer": "Afspelen in Arclight",
   "player.error.blocked": "De browser heeft het afspelen geblokkeerd. Druk op afspelen om te starten.",
+  "player.error.busy": "De server is nu bezet. Wacht even en druk op afspelen.",
   "player.error.load": "Dit item kon niet worden geladen.",
   "player.error.network": "De stream is gestopt. Controleer de verbinding en druk op afspelen.",
   "player.error.unsupported": "Dit bestand kan in deze browser niet worden afgespeeld.",

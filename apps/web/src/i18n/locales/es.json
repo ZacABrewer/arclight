@@ -3939,6 +3939,7 @@
   "player.entry.open": "Abrir el reproductor",
   "player.entry.openPlayer": "Reproducir en Arclight",
   "player.error.blocked": "El navegador bloqueó la reproducción. Pulsa reproducir para empezar.",
+  "player.error.busy": "El servidor está ocupado ahora mismo. Espera un momento y pulsa reproducir.",
   "player.error.load": "No se pudo cargar este elemento.",
   "player.error.network": "La transmisión se detuvo. Comprueba la conexión y pulsa reproducir.",
   "player.error.unsupported": "Este archivo no se puede reproducir en este navegador.",

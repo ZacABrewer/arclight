@@ -55,6 +55,9 @@ describe('PlaylistPage', () => {
     return stubFetch({
       [api('/playlists/7')]: playlistDetails(7, tracks, { name: 'Evening' }),
       [`PUT ${api('/playlists/7')}`]: (_u: URL, body: unknown) => playlistSummary(7, body as { name: string }),
+      [`PATCH ${api('/playlists/7/tracks/1001')}`]: playlistDetails(7, [tracks[1]!, tracks[0]!, tracks[2]!], { name: 'Evening' }),
+      [`PATCH ${api('/playlists/7/tracks/1003')}`]: playlistDetails(7, [tracks[0]!, tracks[2]!, tracks[1]!], { name: 'Evening' }),
+      [`DELETE ${api('/playlists/7/tracks/1002')}`]: playlistDetails(7, [tracks[0]!, tracks[2]!], { name: 'Evening' }),
       ...extra,
     });
   }
@@ -69,12 +72,15 @@ describe('PlaylistPage', () => {
     expect(player.playItems).toHaveBeenLastCalledWith(['track:1', 'track:2', 'track:3'], { startIndex: 2, source: 'playlist:7' });
   });
 
-  it('moves a track down by saving the new order', async () => {
+  it('moves a track down after the next entry', async () => {
     const calls = stub();
     renderBrowse('/player/music/playlist/7');
     await userEvent.click(await screen.findByRole('button', { name: 'Move Track 1 down' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
-    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ name: 'Evening', trackIds: [2, 1, 3] });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    const call = calls.find((c) => c.method === 'PATCH')!;
+    expect(call.path).toBe(api('/playlists/7/tracks/1001'));
+    expect(call.body).toEqual({ afterEntryId: 1002 });
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
   });
 
   it('moves a track up and cannot move the first one up', async () => {
@@ -83,16 +89,18 @@ describe('PlaylistPage', () => {
     expect((await screen.findByRole('button', { name: 'Move Track 1 up' })).hasAttribute('disabled')).toBe(true);
     expect(screen.getByRole('button', { name: 'Move Track 3 down' }).hasAttribute('disabled')).toBe(true);
     await userEvent.click(screen.getByRole('button', { name: 'Move Track 3 up' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
-    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ name: 'Evening', trackIds: [1, 3, 2] });
+    await waitFor(() => expect(calls.some((c) => c.method === 'PATCH')).toBe(true));
+    const call = calls.find((c) => c.method === 'PATCH')!;
+    expect(call.path).toBe(api('/playlists/7/tracks/1003'));
+    expect(call.body).toEqual({ beforeEntryId: 1002 });
   });
 
   it('removes a track', async () => {
     const calls = stub();
     renderBrowse('/player/music/playlist/7');
     await userEvent.click(await screen.findByRole('button', { name: 'Remove Track 2 from the playlist' }));
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
-    expect(calls.find((c) => c.method === 'PUT')?.body).toEqual({ name: 'Evening', trackIds: [1, 3] });
+    await waitFor(() => expect(calls.some((c) => c.method === 'DELETE')).toBe(true));
+    expect(calls.find((c) => c.method === 'DELETE')?.path).toBe(api('/playlists/7/tracks/1002'));
   });
 
   it('renames without touching the tracks', async () => {

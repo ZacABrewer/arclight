@@ -75,7 +75,7 @@ describe('AlbumPage', () => {
       [api('/music/albums/12')]: albumDetails(12, tracks),
       [api('/playlists')]: [playlistSummary(7, { name: 'Evening' })],
       [api('/playlists/7')]: playlistDetails(7, [track(40)], { name: 'Evening' }),
-      [`PUT ${api('/playlists/7')}`]: playlistSummary(7, { name: 'Evening', trackCount: 4 }),
+      [`POST ${api('/playlists/7/tracks')}`]: playlistDetails(7, [track(40), ...tracks], { name: 'Evening' }),
     });
     renderBrowse('/player/music/album/12');
 
@@ -83,9 +83,12 @@ describe('AlbumPage', () => {
     const dialog = await screen.findByRole('dialog');
     await userEvent.click(await within(dialog).findByRole('button', { name: /Evening/ }));
 
-    await waitFor(() => expect(calls.some((c) => c.method === 'PUT')).toBe(true));
-    const put = calls.find((c) => c.method === 'PUT');
-    expect(put?.body).toEqual({ name: 'Evening', trackIds: [40, 1, 2, 3] });
+    // Only the new tracks are sent: the server appends them, nothing is read and rewritten.
+    await waitFor(() => expect(calls.some((c) => c.method === 'POST')).toBe(true));
+    const post = calls.find((c) => c.method === 'POST');
+    expect(post?.path).toBe(api('/playlists/7/tracks'));
+    expect(post?.body).toEqual({ trackIds: [1, 2, 3] });
+    expect(calls.some((c) => c.method === 'PUT')).toBe(false);
   });
 
   it('shows an error with a retry when loading fails', async () => {

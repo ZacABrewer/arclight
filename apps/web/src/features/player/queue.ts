@@ -154,16 +154,43 @@ export const REPEAT_CYCLE: Record<RepeatMode, RepeatMode> = { off: 'all', all: '
  * not.
  */
 export function toServerQueue(q: Queue, positionMs: number, deviceId?: string): PlayQueue {
+  const { items, index, order } = serverWindow(q);
   return {
-    items: q.items.slice(0, 5000),
-    index: q.order[q.pos] ?? 0,
+    items,
+    index,
     positionMs: Math.max(0, Math.floor(positionMs)),
     shuffle: q.shuffle,
-    order: q.shuffle ? q.order.slice(0, 5000) : null,
+    order: q.shuffle ? order : null,
     repeat: q.repeat,
     source: q.source,
     ...(deviceId ? { deviceId } : {}),
   };
+}
+
+/** The most a saved queue holds. */
+export const MAX_SERVER_QUEUE = 5000;
+/** A trimmed queue keeps this much of what already played before the current item. */
+const KEEP_BEHIND = 1000;
+
+/**
+ * The part of a long queue that is saved: MAX_SERVER_QUEUE entries of the play order around the
+ * current item (a little history, mostly what comes next), so the saved index always points at
+ * what is playing. Shuffled, the kept items stay in their added order and `order` is renumbered.
+ */
+function serverWindow(q: Queue): { items: ItemKey[]; index: number; order: number[] } {
+  const n = q.order.length;
+  const current = q.order[q.pos] ?? 0;
+  if (q.items.length <= MAX_SERVER_QUEUE && n <= MAX_SERVER_QUEUE) return { items: [...q.items], index: current, order: [...q.order] };
+  const start = Math.min(Math.max(0, q.pos - KEEP_BEHIND), Math.max(0, n - MAX_SERVER_QUEUE));
+  const kept = q.order.slice(start, start + MAX_SERVER_QUEUE);
+  if (!q.shuffle) {
+    // Not shuffled, the order is the items: a plain slice.
+    const from = kept[0] ?? 0;
+    return { items: q.items.slice(from, from + kept.length), index: current - from, order: kept.map((i) => i - from) };
+  }
+  const sorted = [...kept].sort((a, b) => a - b);
+  const rank = new Map(sorted.map((i, r) => [i, r]));
+  return { items: sorted.map((i) => q.items[i]!), index: rank.get(current) ?? 0, order: kept.map((i) => rank.get(i)!) };
 }
 
 export function fromServerQueue(s: PlayQueue): Queue {

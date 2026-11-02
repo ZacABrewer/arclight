@@ -19,7 +19,7 @@
  *   sleepTimer     { kind: 'minutes' | 'chapter', minutes, remainingMs } | null
  *   chapterIndex   number                  chapter playing (-1: none)
  *   stream         StreamInfo | null       format badge: direct or transcode, codec, bitrate
- *   error          'unsupported' | 'network' | 'blocked' | 'load' | null
+ *   error          'unsupported' | 'network' | 'busy' | 'blocked' | 'load' | null
  *
  * actions:
  *   playItems(itemKeys, { startIndex?, source?, startMs?, shuffle? })  replace the queue and play
@@ -86,12 +86,15 @@ export interface PlayerApi extends Actions {
 
 const PlayerContext = createContext<PlayerController | null>(null);
 
-/** Build the controller wired to the real api (tests build their own with fakes). */
-export function createPlayerController(qc: QueryClient, caps: PlayerCapabilities | undefined): PlayerController {
+/**
+ * Build the controller wired to the real api (tests build their own with fakes). `caps` is read
+ * on every stream choice, so a cap that changes later (another network, an admin edit) applies.
+ */
+export function createPlayerController(qc: QueryClient, caps: () => PlayerCapabilities | undefined): PlayerController {
   const prefs = loadPrefs();
   const engine = new AudioEngine({
     createAudioContext: defaultAudioContext,
-    maxBitrateKbps: () => caps?.maxBitrateKbps ?? 0,
+    maxBitrateKbps: () => caps()?.maxBitrateKbps ?? 0,
   });
   return new PlayerController({
     engine,
@@ -128,7 +131,10 @@ export function PlayerProvider({
   restoreQueue?: boolean;
 }) {
   const qc = useQueryClient();
-  const [controller] = useState(() => given ?? createPlayerController(qc, capabilities));
+  // The controller is built once; it reads the latest capabilities through this ref.
+  const capsRef = useRef(capabilities);
+  capsRef.current = capabilities;
+  const [controller] = useState(() => given ?? createPlayerController(qc, () => capsRef.current));
 
   useEffect(() => {
     if (restoreQueue) void controller.restore();

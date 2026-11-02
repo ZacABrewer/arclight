@@ -176,6 +176,8 @@ export function makeEngine(opts: EngineOptions = {}): { engine: AudioEngine; dec
     streamUrl: (fileId, o) => `/stream/${fileId}?format=${o.format}${o.startMs ? `&startMs=${o.startMs}` : ''}`,
     createAudioContext: null,
     userAgent: 'test',
+    // The stream answers fine: an element error is the browser's (decode) problem.
+    probe: async () => 200,
     ...opts,
   });
   return { engine, decks };

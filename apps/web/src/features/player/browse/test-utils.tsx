@@ -164,7 +164,8 @@ export function playlistSummary(id: number, over: Partial<UserPlaylistSummary> =
 }
 
 export function playlistDetails(id: number, tracks: PlayerTrack[], over: Partial<UserPlaylistDetails> = {}): UserPlaylistDetails {
-  return { ...playlistSummary(id), tracks, trackCount: tracks.length, ...over };
+  // Entry ids 1001, 1002, ... so they never look like track ids in assertions.
+  return { ...playlistSummary(id), tracks, trackCount: tracks.length, entryIds: tracks.map((_, i) => 1001 + i), trackIds: tracks.map((tr) => tr.id), ...over };
 }
 
 export function progress(itemKey: string, over: Partial<PlaybackProgress> = {}): PlaybackProgress {

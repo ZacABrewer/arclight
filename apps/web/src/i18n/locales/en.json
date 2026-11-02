@@ -3939,6 +3939,7 @@
   "player.entry.open": "Open the player",
   "player.entry.openPlayer": "Play in Arclight",
   "player.error.blocked": "The browser blocked playback. Press play to start.",
+  "player.error.busy": "The server is busy right now. Wait a moment and press play.",
   "player.error.load": "Could not load this item.",
   "player.error.network": "The stream stopped. Check the connection and press play.",
   "player.error.unsupported": "This file cannot be played in this browser.",

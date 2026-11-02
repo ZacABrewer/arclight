@@ -3939,6 +3939,7 @@
   "player.entry.open": "Ouvrir le lecteur",
   "player.entry.openPlayer": "Écouter dans Arclight",
   "player.error.blocked": "Le navigateur a bloqué la lecture. Appuyez sur Lire pour commencer.",
+  "player.error.busy": "Le serveur est occupé pour le moment. Patientez un instant et appuyez sur Lire.",
   "player.error.load": "Impossible de charger cet élément.",
   "player.error.network": "Le flux s'est arrêté. Vérifiez la connexion et appuyez sur Lire.",
   "player.error.unsupported": "Ce fichier ne peut pas être lu dans ce navigateur.",

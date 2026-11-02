@@ -3,14 +3,23 @@ import type { PlayableChapter, PlayableItem, PlayablePart } from '@arclight/shar
 // One item, one timeline: an audiobook spread over many files plays as a single position from 0
 // to durationMs. These helpers map between that global position and (part, local offset).
 
-/** Index of the part that holds `globalMs` (clamped to the item). */
+/**
+ * Index of the part that holds `globalMs`: the first one whose [start, start + length) contains
+ * it. A zero-length part (an unknown length) holds everything up to where the next part starts,
+ * so one followed by a part at the same start (an empty file) never captures the position. Past
+ * every part it falls back to the last one that starts at or before `globalMs`.
+ */
 export function partIndexAt(parts: readonly PlayablePart[], globalMs: number): number {
-  let index = 0;
+  let last = 0;
   for (let i = 0; i < parts.length; i++) {
-    if (parts[i]!.startMs <= globalMs) index = i;
-    else break;
+    const p = parts[i]!;
+    if (p.startMs > globalMs && i > 0) break;
+    last = i;
+    const next = parts[i + 1];
+    const holds = p.durationMs > 0 ? globalMs < p.startMs + p.durationMs : !next || next.startMs > globalMs;
+    if (holds) return i;
   }
-  return index;
+  return last;
 }
 
 export interface TimelinePoint {
@@ -21,10 +30,12 @@ export interface TimelinePoint {
 
 /** Where `globalMs` falls: part and offset inside it. */
 export function locate(item: Pick<PlayableItem, 'parts' | 'durationMs'>, globalMs: number): TimelinePoint {
-  const ms = clamp(globalMs, 0, Math.max(0, item.durationMs));
+  // An unknown length (0) is no upper bound.
+  const ms = item.durationMs > 0 ? clamp(globalMs, 0, item.durationMs) : Math.max(0, globalMs);
   const partIndex = partIndexAt(item.parts, ms);
   const part = item.parts[partIndex]!;
-  return { partIndex, localMs: clamp(ms - part.startMs, 0, Math.max(0, part.durationMs)) };
+  const local = ms - part.startMs;
+  return { partIndex, localMs: part.durationMs > 0 ? clamp(local, 0, part.durationMs) : Math.max(0, local) };
 }
 
 /** Global position of a local offset in a part. */

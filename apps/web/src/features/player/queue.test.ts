@@ -118,4 +118,35 @@ describe('queue', () => {
     expect(broken.shuffle).toBe(false);
     expect(currentKey(broken)).toBe('track:2');
   });
+
+  it('saves a window of a long queue around what is playing', () => {
+    const ids = Array.from({ length: 7000 }, (_, i) => i + 1);
+    // Unshuffled, deep into the queue: the slice holds the current item and the index follows it.
+    const q = newQueue(k(...ids), 6500);
+    const server = toServerQueue(q, 0);
+    expect(server.items).toHaveLength(5000);
+    expect(server.items[server.index]).toBe('track:6501');
+    expect(server.items[0]).toBe('track:2001');
+    const back = fromServerQueue(server);
+    expect(currentKey(back)).toBe('track:6501');
+
+    // Early on, history is kept up to 1000 items and the rest is what comes next.
+    const early = toServerQueue(newQueue(k(...ids), 1500), 0);
+    expect(early.items[early.index]).toBe('track:1501');
+    expect(early.index).toBe(1000);
+
+    // Shuffled: the play order around the current item, renumbered to the kept items.
+    let r = 0;
+    const sq = goTo(setShuffle(newQueue(k(...ids), 0), true, () => ((r = (r * 9301 + 49297) % 233280) / 233280)), 6000);
+    const sv = toServerQueue(sq, 0);
+    expect(sv.items).toHaveLength(5000);
+    expect(sv.order).toHaveLength(5000);
+    expect(new Set(sv.order).size).toBe(5000);
+    expect(sv.items[sv.index]).toBe(currentKey(sq));
+    const sback = fromServerQueue(sv);
+    expect(sback.shuffle).toBe(true);
+    expect(currentKey(sback)).toBe(currentKey(sq));
+    // Near the end, the window is the last 5000 of the play order.
+    expect(playOrder(sback)).toEqual(playOrder(sq).slice(2000));
+  });
 });

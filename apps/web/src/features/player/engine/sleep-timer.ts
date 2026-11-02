@@ -21,6 +21,8 @@ export interface SleepTimerState {
 
 export interface SleepContext {
   now: number;
+  /** The item playing; an end-of-chapter timer belongs to the one it was set on. */
+  itemKey?: string | null;
   playing: boolean;
   positionMs: number;
   durationMs: number;
@@ -44,17 +46,20 @@ export function sleepFade(remainingMs: number): number {
 /**
  * A running timer. Minutes count down only while something plays (pausing pauses the timer);
  * "end of chapter" pins the end of the chapter playing when it was set (the end of the item
- * when there are no chapters) and counts in listening time at the current speed.
+ * when there are no chapters) and counts in listening time at the current speed. It is tied to
+ * the item it was set on: once playback moves to another item, it has run out.
  */
 export class SleepTimer {
   private setting: SleepTimerSetting;
   private leftMs: number;
   private endMs: number;
   private lastTick: number;
+  private readonly itemKey: string | null;
 
   constructor(setting: SleepTimerSetting, ctx: SleepContext) {
     this.setting = setting;
     this.lastTick = ctx.now;
+    this.itemKey = ctx.itemKey ?? null;
     if (setting.kind === 'minutes') {
       this.leftMs = Math.max(1, setting.minutes) * 60_000;
       this.endMs = 0;
@@ -88,6 +93,9 @@ export class SleepTimer {
     this.lastTick = ctx.now;
     if (this.setting.kind === 'minutes') {
       if (ctx.playing) this.leftMs = Math.max(0, this.leftMs - elapsed);
+    } else if (this.itemKey !== null && ctx.itemKey != null && ctx.itemKey !== this.itemKey) {
+      // The item ended (or was left): that was the end of "this chapter".
+      this.leftMs = 0;
     } else {
       this.leftMs = this.chapterLeft(ctx);
     }

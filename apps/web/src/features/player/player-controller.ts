@@ -37,7 +37,7 @@ export interface QueueEntry {
   position: number;
 }
 
-export type PlayerErrorCode = 'unsupported' | 'network' | 'blocked' | 'load';
+export type PlayerErrorCode = 'unsupported' | 'network' | 'busy' | 'blocked' | 'load';
 
 export interface PlayerState {
   /** The item loaded right now (playing or paused). */
@@ -229,6 +229,7 @@ export class PlayerController {
     if (this.sleep && item) {
       const tick = this.sleep.tick({
         now: this.now(),
+        itemKey: item.itemKey,
         playing: snap.playing,
         positionMs: snap.positionMs,
         durationMs: snap.durationMs,
@@ -289,6 +290,16 @@ export class PlayerController {
   }
 
   private onAdvance(item: PlayableItem): void {
+    // An end-of-chapter timer set on the item that just finished: stop here, at the boundary
+    // (the gapless handoff already started the next one).
+    if (this.sleep?.kind === 'chapter') {
+      this.sleep = null;
+      this.set({ sleepTimer: null });
+      queueMicrotask(() => {
+        this.pause();
+        this.engine.setFade(1);
+      });
+    }
     // The previous item finished: close its report at its end, then start the new one.
     const prev = this.reporter.startedKey;
     const prevItem = prev ? this.s.current : null;
@@ -612,6 +623,7 @@ export class PlayerController {
     }
     this.sleep = new SleepTimer(setting, {
       now: this.now(),
+      itemKey: item.itemKey,
       playing: this.engine.isPlaying,
       positionMs: this.engine.positionMs,
       durationMs: item.durationMs,

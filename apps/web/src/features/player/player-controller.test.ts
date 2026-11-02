@@ -88,6 +88,20 @@ describe('PlayerController', () => {
     expect(h.controller.getState().playing).toBe(false);
   });
 
+  it('an end-of-chapter timer on a song stops when the song ends, not after the next one', async () => {
+    const h = makeController([track(1), track(2)]);
+    await h.controller.playItems(['track:1', 'track:2']);
+    await flush(); // next item prefetched
+    h.controller.setSleepTimer({ kind: 'chapter' });
+    h.active().at(175);
+    h.active().fire('ended');
+    await flush();
+    const s = h.controller.getState();
+    expect(s.current?.itemKey).toBe('track:2');
+    expect(s.playing).toBe(false);
+    expect(s.sleepTimer).toBeNull();
+  });
+
   it('rewinds an audiobook a little after a long pause', async () => {
     const h = makeController([book()]);
     await h.controller.playItem('audiobook:7', { startMs: 600_000 });

@@ -15,6 +15,8 @@ import {
   UserPlaylistSummary,
   type BrowseSort,
   type PlaybackProgress,
+  type PlaylistTrackMove,
+  type PlaylistTracksAdd,
   type ProgressUpdate,
   type UserPlaylistInput,
 } from '@arclight/shared';
@@ -26,7 +28,9 @@ import { request, type QueryParams } from '../../../api/client.js';
 //   GET  /playback/search?q=
 //   GET  /playback/progress?itemKeys=   PATCH /playback/progress/:itemKey
 //   GET/POST /playback/playlists        GET/PUT/DELETE /playback/playlists/:id
-// Playlist track edits (add, remove, reorder) send the whole ordered trackIds list with PUT.
+//   POST /playback/playlists/:id/tracks  PATCH/DELETE /playback/playlists/:id/tracks/:entryId
+// Track edits go one entry at a time (by entry id), so two tabs editing the same playlist do
+// not undo each other and tracks without a file yet are never dropped by a rewrite.
 
 /** The browse filters a page sends (BrowseQuery without the paging fields). */
 export interface BrowseFilters {
@@ -74,6 +78,10 @@ export const playerBrowseApi = {
   createPlaylist: (body: UserPlaylistInput) => request('/playback/playlists', UserPlaylistSummary, { method: 'POST', json: body }),
   updatePlaylist: (id: number, body: UserPlaylistInput) => request(`/playback/playlists/${id}`, UserPlaylistSummary, { method: 'PUT', json: body }),
   deletePlaylist: (id: number) => request(`/playback/playlists/${id}`, null, { method: 'DELETE' }),
+  addPlaylistTracks: (id: number, body: PlaylistTracksAdd) => request(`/playback/playlists/${id}/tracks`, UserPlaylistDetails, { method: 'POST', json: body }),
+  removePlaylistEntry: (id: number, entryId: number) => request(`/playback/playlists/${id}/tracks/${entryId}`, UserPlaylistDetails, { method: 'DELETE' }),
+  movePlaylistEntry: (id: number, entryId: number, body: PlaylistTrackMove) =>
+    request(`/playback/playlists/${id}/tracks/${entryId}`, UserPlaylistDetails, { method: 'PATCH', json: body }),
 };
 
 export const browseKeys = {
@@ -217,41 +225,55 @@ export function useDeletePlaylist() {
   });
 }
 
-/** Replace a playlist's tracks (reorder, remove): the whole ordered list of track ids. */
-export function useSetPlaylistTracks() {
+/** Show a playlist edit now; the server's answer (the whole playlist) replaces it. */
+function optimisticEntries(qc: QueryClient, id: number, edit: (entryIds: number[]) => number[]) {
+  const prev = qc.getQueryData<UserPlaylistDetails>(browseKeys.playlist(id));
+  if (prev) {
+    const byEntry = new Map(prev.entryIds.map((e, i) => [e, prev.tracks[i]!]));
+    const entryIds = edit([...prev.entryIds]);
+    const tracks = entryIds.map((e) => byEntry.get(e)!);
+    qc.setQueryData<UserPlaylistDetails>(browseKeys.playlist(id), { ...prev, tracks, entryIds, trackCount: tracks.length });
+  }
+  return { prev };
+}
+
+function usePlaylistEdit<V extends { id: number }>(send: (v: V) => Promise<UserPlaylistDetails>, preview?: (entryIds: number[], v: V) => number[]) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, name, trackIds }: { id: number; name: string; trackIds: number[] }) => playerBrowseApi.updatePlaylist(id, { name, trackIds }),
-    onMutate: ({ id, trackIds }) => {
-      // Reorders feel instant: move the cached rows now, the refetch confirms.
-      const prev = qc.getQueryData<UserPlaylistDetails>(browseKeys.playlist(id));
-      if (prev) {
-        const pool = new Map<number, UserPlaylistDetails['tracks']>();
-        for (const tr of prev.tracks) pool.set(tr.id, [...(pool.get(tr.id) ?? []), tr]);
-        const tracks = trackIds.flatMap((tid) => {
-          const list = pool.get(tid);
-          const tr = list?.shift();
-          return tr ? [tr] : [];
-        });
-        qc.setQueryData<UserPlaylistDetails>(browseKeys.playlist(id), { ...prev, tracks, trackCount: tracks.length });
-      }
-      return { prev };
+    mutationFn: send,
+    onMutate: (v: V) => (preview ? optimisticEntries(qc, v.id, (e) => preview(e, v)) : { prev: undefined }),
+    onError: (_e, v, ctx) => {
+      if (ctx?.prev) qc.setQueryData(browseKeys.playlist(v.id), ctx.prev);
     },
-    onError: (_e, { id }, ctx) => {
-      if (ctx?.prev) qc.setQueryData(browseKeys.playlist(id), ctx.prev);
-    },
+    onSuccess: (data, v) => qc.setQueryData(browseKeys.playlist(v.id), data),
     onSettled: (_d, _e, v) => invalidatePlaylists(qc, v.id),
   });
 }
 
-/** Append tracks to a playlist: reads its current tracks, then PUTs the longer list. */
-export function useAddToPlaylist() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: async ({ id, trackIds }: { id: number; trackIds: number[] }) => {
-      const current = await qc.fetchQuery({ queryKey: browseKeys.playlist(id), queryFn: () => playerBrowseApi.playlist(id), staleTime: 0 });
-      return playerBrowseApi.updatePlaylist(id, { name: current.name, trackIds: [...current.tracks.map((tr) => tr.id), ...trackIds] });
+/** Remove one entry (by entry id; a track can be in a playlist more than once). */
+export function useRemovePlaylistEntry() {
+  return usePlaylistEdit(
+    ({ id, entryId }: { id: number; entryId: number }) => playerBrowseApi.removePlaylistEntry(id, entryId),
+    (entryIds, { entryId }) => entryIds.filter((e) => e !== entryId),
+  );
+}
+
+/** Move one entry before or after another; reorders feel instant, the answer confirms. */
+export function useMovePlaylistEntry() {
+  return usePlaylistEdit(
+    ({ id, entryId, to }: { id: number; entryId: number; to: PlaylistTrackMove }) => playerBrowseApi.movePlaylistEntry(id, entryId, to),
+    (entryIds, { entryId, to }) => {
+      const rest = entryIds.filter((e) => e !== entryId);
+      const before = to.beforeEntryId !== undefined;
+      const at = rest.indexOf((before ? to.beforeEntryId : to.afterEntryId) ?? -1);
+      if (at < 0) return entryIds;
+      rest.splice(before ? at : at + 1, 0, entryId);
+      return rest;
     },
-    onSuccess: (_d, v) => invalidatePlaylists(qc, v.id),
-  });
+  );
+}
+
+/** Append tracks to a playlist (the server adds them; nothing is read and rewritten). */
+export function useAddToPlaylist() {
+  return usePlaylistEdit(({ id, trackIds }: { id: number; trackIds: number[] }) => playerBrowseApi.addPlaylistTracks(id, { trackIds }));
 }

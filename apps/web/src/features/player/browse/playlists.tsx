@@ -3,7 +3,7 @@ import { useNavigate } from '@tanstack/react-router';
 import type { PlayerTrack } from '@arclight/shared';
 import { Button, ButtonGroup, Field, Icon, Input, Modal } from '../../../arclight/index.js';
 import { useT } from '../../../i18n/index.js';
-import { useCreatePlaylist, useDeletePlaylist, usePlaylist, usePlaylists, useRenamePlaylist, useSetPlaylistTracks } from './api.js';
+import { useCreatePlaylist, useDeletePlaylist, useMovePlaylistEntry, usePlaylist, usePlaylists, useRemovePlaylistEntry, useRenamePlaylist } from './api.js';
 import { PlaylistArt, PlaylistCard } from './cards.js';
 import { lengthLabel, shuffled } from './format.js';
 import { DetailsSkeleton, Empty, GridSkeleton, LoadError, PageTitle, ShuffleIcon, playerPaths, useNumericParam } from './kit.js';
@@ -156,7 +156,8 @@ export function PlaylistPage() {
   const player = usePlayerActions();
   const rename = useRenamePlaylist();
   const remove = useDeletePlaylist();
-  const setTracks = useSetPlaylistTracks();
+  const moveEntry = useMovePlaylistEntry();
+  const removeEntry = useRemovePlaylistEntry();
   const navigate = useNavigate();
   const [dialog, setDialog] = useState<'rename' | 'delete' | null>(null);
 
@@ -173,14 +174,18 @@ export function PlaylistPage() {
   const list = q.data;
   const keys = list.tracks.map((tr) => tr.itemKey);
   const source = `playlist:${list.id}`;
-  const ids = list.tracks.map((tr) => tr.id);
-  const save = (trackIds: number[]) => setTracks.mutate({ id: list.id, name: list.name, trackIds });
+  // Edits name entries, not track ids: the same song can be in a playlist twice.
+  const entries = list.entryIds;
+  const busy = moveEntry.isPending || removeEntry.isPending;
   const move = (index: number, by: -1 | 1) => {
-    const to = index + by;
-    if (to < 0 || to >= ids.length) return;
-    const next = [...ids];
-    [next[index], next[to]] = [next[to] as number, next[index] as number];
-    save(next);
+    const entryId = entries[index];
+    const anchor = entries[index + by];
+    if (entryId === undefined || anchor === undefined) return;
+    moveEntry.mutate({ id: list.id, entryId, to: by < 0 ? { beforeEntryId: anchor } : { afterEntryId: anchor } });
+  };
+  const removeAt = (index: number) => {
+    const entryId = entries[index];
+    if (entryId !== undefined) removeEntry.mutate({ id: list.id, entryId });
   };
   const rowActions = (track: PlayerTrack, index: number) => (
     <span className="pb-track__edit">
@@ -189,7 +194,7 @@ export function PlaylistPage() {
         className="pb-icon-btn"
         icon={<Icon name="arrowUp" />}
         aria-label={t('player.browse.playlist.moveUp', { title: track.title })}
-        disabled={index === 0 || setTracks.isPending}
+        disabled={index === 0 || busy}
         onClick={() => move(index, -1)}
       />
       <Button
@@ -197,7 +202,7 @@ export function PlaylistPage() {
         className="pb-icon-btn"
         icon={<Icon name="arrowDown" />}
         aria-label={t('player.browse.playlist.moveDown', { title: track.title })}
-        disabled={index === ids.length - 1 || setTracks.isPending}
+        disabled={index === entries.length - 1 || busy}
         onClick={() => move(index, 1)}
       />
       <Button
@@ -205,8 +210,8 @@ export function PlaylistPage() {
         className="pb-icon-btn"
         icon={<Icon name="close" />}
         aria-label={t('player.browse.playlist.remove', { title: track.title })}
-        disabled={setTracks.isPending}
-        onClick={() => save(ids.filter((_, i) => i !== index))}
+        disabled={busy}
+        onClick={() => removeAt(index)}
       />
     </span>
   );

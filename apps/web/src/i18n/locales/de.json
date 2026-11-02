@@ -3939,6 +3939,7 @@
   "player.entry.open": "Player öffnen",
   "player.entry.openPlayer": "In Arclight abspielen",
   "player.error.blocked": "Der Browser hat die Wiedergabe blockiert. Zum Starten auf Abspielen drücken.",
+  "player.error.busy": "Der Server ist gerade ausgelastet. Kurz warten und auf Abspielen drücken.",
   "player.error.load": "Dieser Eintrag konnte nicht geladen werden.",
   "player.error.network": "Der Stream wurde unterbrochen. Verbindung prüfen und auf Abspielen drücken.",
   "player.error.unsupported": "Diese Datei kann in diesem Browser nicht abgespielt werden.",

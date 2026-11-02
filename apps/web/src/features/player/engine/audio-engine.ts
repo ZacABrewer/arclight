@@ -9,6 +9,10 @@ import { clamp, globalPosition, locate } from './timeline.js';
 // and starts the moment the active one runs out, so albums and multi-file audiobooks play
 // without a gap. Framework-free: the React provider (player-context.tsx) drives it and
 // renders its snapshots.
+//
+// The precise (timer) handoff runs only when the element knows the file's length and it agrees
+// with the library's; otherwise (unknown length, a live transcode, a file longer than the database
+// says) the switch waits for the element's 'ended', so nothing is cut short.
 
 /** The slice of HTMLAudioElement the engine uses; tests pass fakes. */
 export interface AudioLike {
@@ -43,8 +47,11 @@ export interface EngineSnapshot {
   durationMs: number;
   playing: boolean;
   buffering: boolean;
-  /** 'unsupported' (no way to decode), 'network', 'blocked' (autoplay refused), or null. */
-  error: 'unsupported' | 'network' | 'blocked' | null;
+  /**
+   * 'unsupported' (no way to decode), 'network' (the stream failed or the server refused it),
+   * 'busy' (the server is out of transcode slots), 'blocked' (autoplay refused), or null.
+   */
+  error: 'unsupported' | 'network' | 'busy' | 'blocked' | null;
   stream: StreamInfo | null;
 }
 
@@ -60,7 +67,29 @@ export interface EngineOptions {
   preloadAheadMs?: number;
   /** Schedule the precise handoff once this little is left (ms). */
   handoffWindowMs?: number;
+  /**
+   * After a media error: the HTTP status of the stream URL (a HEAD request), 0 when the request
+   * itself failed, null when it cannot tell. Tells a refused or failed stream from a decode error.
+   */
+  probe?: (url: string) => Promise<number | null>;
+  now?: () => number;
 }
+
+/** HEAD the stream URL; 0 when the request fails, null without fetch. */
+export async function probeStream(url: string): Promise<number | null> {
+  if (typeof fetch !== 'function') return null;
+  try {
+    const res = await fetch(url, { method: 'HEAD', credentials: 'same-origin', cache: 'no-store' });
+    return res.status;
+  } catch {
+    return 0;
+  }
+}
+
+/** The element's length beyond the library's by more than this: wait for 'ended' instead of a timer. */
+const DURATION_TOLERANCE_MS = 1_500;
+/** A transcode paused longer than this is requested again on play (the server drops stalled ones). */
+const TRANSCODE_RESUME_AFTER_MS = 45_000;
 
 export interface EngineHooks {
   /** The standby deck took over with the queue's next item (gapless advance). */
@@ -88,6 +117,8 @@ interface Deck {
   forceTranscode: boolean;
   gain: { gain: { value: number } } | null;
   wired: boolean;
+  /** Bumped on every new src, so a late error probe for an old one is dropped. */
+  srcToken: number;
 }
 
 const MEDIA_ERR_SRC_NOT_SUPPORTED = 4;
@@ -95,6 +126,11 @@ const MEDIA_ERR_DECODE = 3;
 
 function sameSeg(a: Segment | null, b: Segment | null): boolean {
   return Boolean(a && b && a.item.itemKey === b.item.itemKey && a.partIndex === b.partIndex && a.item === b.item);
+}
+
+/** Global position of a local offset; a part of unknown length (0) is not clamped at its end. */
+function positionIn(part: PlayablePart, localMs: number): number {
+  return part.durationMs > 0 ? globalPosition(part, localMs) : part.startMs + Math.max(0, localMs);
 }
 
 export class AudioEngine {
@@ -111,6 +147,9 @@ export class AudioEngine {
   private rgMode: ReplayGainMode = 'off';
   private fade = 1;
   private handoffTimer: ReturnType<typeof setTimeout> | null = null;
+  /** The next segment failed to preload: not tried again on standby; the advance loads it. */
+  private failedPreload: Segment | null = null;
+  private pausedAt: number | null = null;
   private ctx: AudioContextLike | null = null;
   private ctxTried = false;
   private readonly listeners = new Set<(s: EngineSnapshot) => void>();
@@ -130,6 +169,8 @@ export class AudioEngine {
       userAgent: options.userAgent,
       preloadAheadMs: options.preloadAheadMs ?? 30_000,
       handoffWindowMs: options.handoffWindowMs ?? 1_500,
+      probe: options.probe ?? probeStream,
+      now: options.now ?? Date.now,
     };
     this.decks = [this.makeDeck(), this.makeDeck()];
     this.decks.forEach((d) => this.wire(d));
@@ -167,7 +208,7 @@ export class AudioEngine {
     if (!d.seg) return 0;
     const part = d.seg.item.parts[d.seg.partIndex]!;
     const localMs = d.pendingSeekS !== null ? d.pendingSeekS * 1000 : d.offsetMs + (Number.isFinite(d.el.currentTime) ? d.el.currentTime : 0) * 1000;
-    return globalPosition(part, localMs);
+    return positionIn(part, localMs);
   }
 
   snapshot(): EngineSnapshot {
@@ -194,7 +235,7 @@ export class AudioEngine {
   private makeDeck(): Deck {
     const el = this.opts.createElement();
     el.preload = 'auto';
-    return { el, seg: null, stream: null, offsetMs: 0, pendingSeekS: null, forceTranscode: false, gain: null, wired: false };
+    return { el, seg: null, stream: null, offsetMs: 0, pendingSeekS: null, forceTranscode: false, gain: null, wired: false, srcToken: 0 };
   }
 
   private wire(deck: Deck): void {
@@ -256,7 +297,8 @@ export class AudioEngine {
     });
     deck.seg = seg;
     deck.stream = { ...choice, sourceLabel: codecLabel(part) };
-    const local = clamp(localMs, 0, part.durationMs);
+    deck.srcToken += 1;
+    const local = part.durationMs > 0 ? clamp(localMs, 0, part.durationMs) : Math.max(0, localMs);
     if (choice.transcoded) {
       deck.offsetMs = local;
       deck.pendingSeekS = null;
@@ -272,6 +314,7 @@ export class AudioEngine {
   }
 
   private clearDeck(deck: Deck): void {
+    deck.srcToken += 1;
     deck.el.pause();
     deck.seg = null;
     deck.stream = null;
@@ -371,8 +414,30 @@ export class AudioEngine {
       return;
     }
     if (sameSeg(sb.seg, want)) return;
+    // It failed on standby once: leave it to the advance, which can still fall back to a transcode.
+    if (sameSeg(this.failedPreload, want)) return;
     sb.forceTranscode = false;
     this.place(sb, want, 0);
+  }
+
+  /** The active file's length as the element reports it (ms), or null while unknown (live transcodes). */
+  private elementDurationMs(d: Deck): number | null {
+    const s = d.el.duration;
+    if (!Number.isFinite(s) || s <= 0) return null;
+    return d.offsetMs + s * 1000;
+  }
+
+  /**
+   * The active file's length and whether a timer may end it: only when the element knows the
+   * length and it is not meaningfully longer than the library's (that would cut the file short).
+   */
+  private partLength(): { durationMs: number; timed: boolean } {
+    const d = this.deck;
+    if (!d.seg) return { durationMs: Infinity, timed: false };
+    const db = d.seg.item.parts[d.seg.partIndex]!.durationMs;
+    const el = this.elementDurationMs(d);
+    if (el === null) return { durationMs: db > 0 ? db : Infinity, timed: false };
+    return { durationMs: el, timed: db <= 0 || el <= db + DURATION_TOLERANCE_MS };
   }
 
   private remainingInPartMs(): number {
@@ -380,13 +445,14 @@ export class AudioEngine {
     if (!d.seg) return Infinity;
     const part: PlayablePart = d.seg.item.parts[d.seg.partIndex]!;
     const local = this.positionMs - part.startMs;
-    return (part.durationMs - local) / this.speed;
+    return (this.partLength().durationMs - local) / this.speed;
   }
 
   private onTick(): void {
     if (!this.wantPlay) return;
     const left = this.remainingInPartMs();
     if (left <= this.opts.preloadAheadMs) this.preloadNext();
+    if (!this.partLength().timed) return;
     if (left <= this.opts.handoffWindowMs && this.handoffTimer === null && this.standby.seg && sameSeg(this.standby.seg, this.expectedNext())) {
       this.handoffTimer = setTimeout(() => {
         this.handoffTimer = null;
@@ -418,6 +484,7 @@ export class AudioEngine {
     }
     const sb = this.standby;
     if (!sameSeg(sb.seg, want)) this.place(sb, want, 0);
+    this.failedPreload = null;
     this.active = 1 - this.active;
     if (this.wantPlay) this.startElement(sb);
     this.clearDeck(old);
@@ -433,24 +500,45 @@ export class AudioEngine {
   }
 
   private onError(deck: Deck): void {
-    const code = deck.el.error?.code ?? 0;
-    const decodeIssue = code === MEDIA_ERR_SRC_NOT_SUPPORTED || code === MEDIA_ERR_DECODE;
-    if (deck.seg && deck.stream && !deck.stream.transcoded && !deck.forceTranscode && decodeIssue) {
-      // The browser claimed it could play the file and then could not: ask for a transcode.
-      const at = deck === this.deck ? this.positionMs - deck.seg.item.parts[deck.seg.partIndex]!.startMs : 0;
-      deck.forceTranscode = true;
-      this.place(deck, deck.seg, at);
-      if (deck === this.deck && this.wantPlay) this.startElement(deck);
-      if (deck === this.deck) this.emit();
+    if (!deck.seg) return;
+    if (deck !== this.deck) {
+      // The preload failed: remember it so the next ticks do not retry (and flip to a transcode)
+      // every quarter second. The advance loads it on the active deck and handles it there.
+      this.failedPreload = deck.seg;
+      this.clearDeck(deck);
       return;
     }
-    if (deck !== this.deck) {
-      this.clearDeck(deck);
+    const code = deck.el.error?.code ?? 0;
+    const decodeIssue = code === MEDIA_ERR_SRC_NOT_SUPPORTED || code === MEDIA_ERR_DECODE;
+    const seg = deck.seg;
+    const at = this.positionMs - seg.item.parts[seg.partIndex]!.startMs;
+    const token = deck.srcToken;
+    // Browsers report a 403/404/503 answer as "source not supported" too: ask the server first.
+    this.buffering = true;
+    this.emit();
+    void this.opts
+      .probe(deck.el.src)
+      .catch(() => null)
+      .then((status) => {
+        if (token !== deck.srcToken || deck !== this.deck || deck.seg !== seg) return;
+        this.resolveError(deck, decodeIssue, status, at);
+      });
+  }
+
+  private resolveError(deck: Deck, decodeIssue: boolean, status: number | null, atMs: number): void {
+    const refused = status !== null && (status === 0 || status >= 400);
+    if (!refused && decodeIssue && deck.seg && deck.stream && !deck.stream.transcoded && !deck.forceTranscode) {
+      // The browser claimed it could play the file and then could not: ask for a transcode.
+      deck.forceTranscode = true;
+      this.place(deck, deck.seg, atMs);
+      if (this.wantPlay) this.startElement(deck);
+      this.emit();
       return;
     }
     this.wantPlay = false;
     this.buffering = false;
-    this.error = decodeIssue ? 'unsupported' : 'network';
+    if (refused) this.error = status === 503 || status === 429 ? 'busy' : 'network';
+    else this.error = decodeIssue ? 'unsupported' : 'network';
     this.emit();
   }
 
@@ -459,6 +547,8 @@ export class AudioEngine {
   /** Start an item `startMs` into its timeline. */
   load(item: PlayableItem, startMs = 0, autoplay = true): void {
     this.cancelHandoff();
+    this.failedPreload = null;
+    this.pausedAt = autoplay ? null : this.opts.now();
     this.clearDeck(this.standby);
     const d = this.deck;
     d.forceTranscode = false;
@@ -486,7 +576,14 @@ export class AudioEngine {
   }
 
   play(): void {
-    if (!this.deck.seg) return;
+    const d = this.deck;
+    if (!d.seg) return;
+    // A live transcode paused for long was dropped by the server (it kills stalled ones): ask
+    // for it again from here instead of letting the cut-off stream "end" the item.
+    if (d.stream?.transcoded && this.pausedAt !== null && this.opts.now() - this.pausedAt > TRANSCODE_RESUME_AFTER_MS) {
+      this.place(d, d.seg, this.positionMs - d.seg.item.parts[d.seg.partIndex]!.startMs);
+    }
+    this.pausedAt = null;
     this.wantPlay = true;
     this.error = null;
     this.ensureAudioGraph();
@@ -496,6 +593,7 @@ export class AudioEngine {
 
   pause(): void {
     this.wantPlay = false;
+    this.pausedAt = this.opts.now();
     this.cancelHandoff();
     this.deck.el.pause();
     this.buffering = false;
