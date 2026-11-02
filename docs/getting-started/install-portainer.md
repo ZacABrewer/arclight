@@ -168,7 +168,7 @@ It needs only `PUID`, `PGID`, `TZ`, `CONFIG_ROOT` and `DATA_ROOT`. Leave Setting
 
 1. Open the stack and click Update the stack (or Editor, then Update).
 2. Turn on the option to re-pull the image (wording varies: "Re-pull image and redeploy"), then confirm. This downloads the newest `latest` image and recreates the containers. Your settings stay in `CONFIG_ROOT`.
-3. To control the version, replace `latest` with a release tag such as `v0.20.1` in the file.
+3. To control the version, replace `latest` with a release tag such as `v0.21.0` in the file.
 4. In a VPN stack, recreate the whole stack rather than one container: containers sharing gluetun's network must be recreated whenever gluetun restarts.
 
 Arclight can also update its own containers from Settings > Updates, but that needs the Docker socket mounted into it, which gives it full control of the host. It is off by default. See [updating.md](updating.md) before enabling it. Back up first: [backup-restore.md](backup-restore.md).

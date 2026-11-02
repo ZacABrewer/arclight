@@ -1,6 +1,6 @@
 # Arclight Roadmap
 
-Status as of release 0.20.1 (Jellyfin plugin 1.3.0). See the
+Status as of release 0.21.0 (Jellyfin plugin 1.3.0). See the
 [changelog](../CHANGELOG.md), which also lists what shipped release by release. This page lists what is done by area and what is planned.
 
 Planned items are ideas under development or on the list. They are not available yet, and
@@ -90,13 +90,15 @@ code, derived from how the upstream apps behave. The project is a clean-room bui
 
 - Tron look by default and syncable theme packs; installable PWA; phone-friendly lists.
 - Translations framework with several languages.
+- Built-in player (preview) for music and audiobooks at `/player`, with an optional Jellyfin playback engine.
 - Public website with the documentation at https://arclight.moviemethat.com.
 
 ## Planned
 
 - **Music, books and podcasts** moving out of preview once they have had more real-world testing.
-- **A built-in media player**, so you can browse and play your library in Arclight. Arclight is
-  not a media server today and keeps working alongside Jellyfin, Emby and Plex.
+- **More of the built-in player**: video direct play, then live video transcoding (Quick Sync and
+  other GPUs), podcasts, ebook and comic readers, and progress sync back to Jellyfin, Plex and
+  Audiobookshelf. Arclight keeps working alongside Jellyfin, Emby and Plex.
 - **Companion app in the app stores**, after review.
 - **Pre-rename clean-up**: remove the deprecated `MEDIATRON_*` environment fallback, the one-time
   `media-tron.db` to `arclight.db` file move and acceptance of `media-tron_*.zip` backups.

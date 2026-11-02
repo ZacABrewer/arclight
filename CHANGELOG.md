@@ -7,7 +7,7 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
-## [Unreleased]
+## [0.21.0] - 2026-11-02
 
 ### Added
 - Built-in player (preview): a new `/player` portal that plays your music and audiobooks in the browser. It is off until an admin turns it on under Settings > Player, and each user needs access on their Users > Player tab. Movies, TV and podcasts are planned for later.
@@ -445,6 +445,7 @@ The plugin is released separately and tagged `jellyfin-plugin-vX.Y.Z`. Its full 
 ### [Plugin 1.0.0] - 2026-11-01
 - First release: playback and library events sent to Arclight, and requests, Discover, watchlist, issues, language requests, Coming soon, Also on, My requests, quality labels and opt-in themes inside Jellyfin.
 
+[0.21.0]: https://github.com/ZacABrewer/arclight/compare/v0.20.1...v0.21.0
 [0.20.1]: https://github.com/ZacABrewer/arclight/compare/v0.20.0...v0.20.1
 [0.20.0]: https://github.com/ZacABrewer/arclight/compare/v0.19.0...v0.20.0
 [0.19.0]: https://github.com/ZacABrewer/arclight/compare/v0.18.2...v0.19.0
