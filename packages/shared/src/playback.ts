@@ -253,6 +253,9 @@ export type Bookmark = z.infer<typeof Bookmark>;
 export const BookmarkInput = z.object({ itemKey: ItemKey, positionMs: z.number().int().min(0), note: z.string().max(2000).default('') });
 export type BookmarkInput = z.input<typeof BookmarkInput>;
 export const BookmarkListQuery = z.object({ itemKey: ItemKey });
+/** PUT /playback/bookmarks/:id: move a bookmark or change its note. */
+export const BookmarkUpdate = z.object({ positionMs: z.number().int().min(0).optional(), note: z.string().max(2000).optional() });
+export type BookmarkUpdate = z.infer<typeof BookmarkUpdate>;
 
 // ---------------------------------------------------------------------------------------
 // User playlists (the player's own; separate from the music module's synced playlists)
@@ -355,7 +358,7 @@ export type BrowseSort = z.infer<typeof BrowseSort>;
 export const BrowseQuery = z.object({
   search: z.string().max(200).optional(),
   sort: BrowseSort.default('name'),
-  desc: z.coerce.boolean().default(false),
+  desc: z.union([z.boolean(), z.stringbool()]).default(false),
   genre: z.string().max(100).optional(),
   /** First letter for the A-Z rail ("#" for digits and symbols). */
   letter: z.string().max(1).optional(),

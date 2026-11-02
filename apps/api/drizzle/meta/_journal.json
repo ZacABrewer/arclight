@@ -204,6 +204,13 @@
       "when": 1793643941103,
       "tag": "0028_release_0_20",
       "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "6",
+      "when": 1793654859509,
+      "tag": "0029_player",
+      "breakpoints": true
     }
   ]
 }

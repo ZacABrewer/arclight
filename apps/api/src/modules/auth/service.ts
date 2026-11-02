@@ -6,6 +6,7 @@ import {
   AppAccess,
   AuthSettings,
   Permission,
+  PlayerAccess,
   SignInSettings,
   type ApiKeyScope,
   type AppArea,
@@ -246,6 +247,17 @@ function permissionsFor(role: User['role'], requested: number | undefined): numb
   return role === 'admin' ? base | Permission.ADMIN : base & ~Permission.ADMIN;
 }
 
+/**
+ * Admin-managed settings with a schema: `player` (PlayerAccess) is validated and stored with its
+ * defaults filled in; null removes it. Other keys pass through as before.
+ */
+function checkedSettings(settings: Record<string, unknown>): Record<string, unknown> {
+  if (!('player' in settings) || settings['player'] === null) return settings;
+  const parsed = PlayerAccess.safeParse(settings['player']);
+  if (!parsed.success) throw new AuthError('VALIDATION', `invalid player access: ${parsed.error.issues.map((i) => `${i.path.join('.') || 'player'}: ${i.message}`).join('; ')}`);
+  return { ...settings, player: parsed.data };
+}
+
 export class AuthService {
   readonly db: Db;
   private readonly log: Logger | undefined;
@@ -469,7 +481,7 @@ export class AuthService {
         localPassword: true,
         avatar: input.avatar ?? null,
         // Explicit settings win over the defaults for new users.
-        settings: { ...(role === 'admin' ? {} : (this.newUserSettings?.() ?? {})), ...(input.settings ?? {}) },
+        settings: { ...(role === 'admin' ? {} : (this.newUserSettings?.() ?? {})), ...checkedSettings(input.settings ?? {}) },
         createdAt: now,
         updatedAt: now,
       })
@@ -510,7 +522,7 @@ export class AuthService {
     if (input.displayName !== undefined) patch.displayName = input.displayName;
     if (input.email !== undefined) patch.email = input.email?.toLowerCase() ?? null;
     if (input.avatar !== undefined) patch.avatar = input.avatar;
-    if (input.settings !== undefined) patch.settings = { ...current.settings, ...input.settings };
+    if (input.settings !== undefined) patch.settings = { ...current.settings, ...checkedSettings(input.settings) };
     patch.permissions = permissionsFor(role, input.permissions ?? current.permissions);
     if (role === 'admin') patch.appAccess = [];
     else if (input.appAccess !== undefined) patch.appAccess = AppAccess.parse(input.appAccess);

@@ -35,6 +35,7 @@ import {
   MetricsSettings,
   AuditSettings,
   NamingConfig,
+  PlayerSettings,
   PodcastSettings,
   ProfileMigrationSettings,
   ReleasesSettings,
@@ -168,6 +169,9 @@ const sections = {
   // Owned by the books module: catalogue sources, naming and search (routes under /books/settings;
   // BOOKS_SECRET_FIELDS masked there).
   books: BooksSettings,
+  // Owned by the playback module: the built-in player switch, remote streaming and its bitrate cap,
+  // and how long signed stream links last (routes under /settings/player).
+  player: PlayerSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;

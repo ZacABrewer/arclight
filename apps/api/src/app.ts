@@ -77,6 +77,7 @@ import { profileMigrationModule } from './modules/profile-migration/index.js';
 import { additionalLanguagesModule } from './modules/additional-languages/index.js';
 import { themesModule } from './modules/themes/index.js';
 import { searchModule } from './modules/search/index.js';
+import { playbackModule } from './modules/playback/index.js';
 import { wireModules } from './wiring.js';
 
 export interface AppContext {
@@ -230,6 +231,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     bulkActionsModule,
     // GET /search/universal: the topbar search over everything above, scoped to the caller.
     searchModule,
+    // The built-in player (music and audiobooks); reads the library, auth and watch history.
+    playbackModule,
     metricsModule,
   ];
   await app.register(
