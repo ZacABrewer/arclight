@@ -579,6 +579,8 @@ export class JellyfinPluginService {
   /**
    * GET /jellyfin/upcoming: monitored movies and episodes releasing in the next `days` days, from
    * Arclight's calendar (so library titles only), without titles above the account's caps.
+   * "Coming soon" means not here yet: anything that already has a file is left out, and a movie
+   * appears once (its next release) rather than once per cinema / digital / physical date.
    */
   async upcoming(user: PluginUser, raw: unknown): Promise<JellyfinUpcoming> {
     const q = JellyfinUpcomingQuery.parse(raw);
@@ -593,7 +595,18 @@ export class JellyfinPluginService {
       tags: [],
       mediaType: 'all',
     });
-    const mapped = items.flatMap((i) => (i.type === 'movie' || i.type === 'episode' ? [toUpcoming(i)] : [])).slice(0, 300);
+    const seenMovies = new Set<number>();
+    const mapped = items
+      .flatMap((i) => (i.type === 'movie' || i.type === 'episode' ? [toUpcoming(i)] : []))
+      .filter((m) => {
+        if (m.item.hasFile) return false;
+        if (m.item.kind !== 'movie' || m.item.tmdbId === null) return true;
+        // Calendar items arrive in date order, so the first one is the movie's next release.
+        if (seenMovies.has(m.item.tmdbId)) return false;
+        seenMovies.add(m.item.tmdbId);
+        return true;
+      })
+      .slice(0, 300);
     const caps = this.guard().restrictionsFor(user.actor);
     if (!caps) return { days: q.days, items: mapped.map((m) => m.item) };
     const ratings = new Map<string, string | null>();

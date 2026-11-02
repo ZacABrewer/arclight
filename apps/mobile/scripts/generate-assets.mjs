@@ -58,7 +58,8 @@ const roundedIcon = () => readFileSync(join(brand, 'app-icon.svg'), 'utf8');
 const circleIcon = () => svg(100, 100, `<circle cx="50" cy="50" r="50" fill="url(#bg)"/>${mark({ cx: 50, cy: 50, size: 60 })}`);
 // Adaptive foreground: 108dp canvas, content inside the 66dp safe zone.
 const adaptiveForeground = () => svg(108, 108, mark({ cx: 54, cy: 54, size: 56 }));
-const splash = (w, h) => svg(w, h, `<rect width="${w}" height="${h}" fill="url(#bg)"/>${mark({ cx: w / 2, cy: h / 2, size: Math.min(w, h) * 0.22 })}`);
+// Splash: the mark on black, so the native splash hands off to the intro's first (black) frame.
+const splash = (w, h) => svg(w, h, `<rect width="${w}" height="${h}" fill="#000"/>${mark({ cx: w / 2, cy: h / 2, size: Math.min(w, h) * 0.22 })}`);
 
 // ---------------------------------------------------------------- Android
 const densities = { mdpi: 1, hdpi: 1.5, xhdpi: 2, xxhdpi: 3, xxxhdpi: 4 };

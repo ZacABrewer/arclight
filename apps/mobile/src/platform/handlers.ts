@@ -20,6 +20,21 @@ export interface HandlerHooks {
   pair: (url: string) => Promise<void> | void;
   /** Show the lock and resolve once unlocked. */
   lock: () => Promise<void>;
+  /**
+   * Called synchronously as soon as a notification tap, share or deep link arrives, before it is
+   * routed (the startup intro skips itself so it never delays one).
+   */
+  onLaunchEvent?: () => void;
+}
+
+/** The URL the app was launched with (arclight://pair?...), if any. */
+export async function launchUrl(): Promise<string | null> {
+  if (!isNative()) return null;
+  try {
+    return (await App.getLaunchUrl())?.url || null;
+  } catch {
+    return null;
+  }
 }
 
 export const NOTIFICATION_CHANNELS = [
@@ -64,6 +79,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
 
   // Notification tapped: data.url (a path) on data.server (a saved server's base URL).
   void PushNotifications.addListener('pushNotificationActionPerformed', async (action) => {
+    hooks.onLaunchEvent?.();
     const data = (action.notification?.data ?? {}) as Record<string, unknown>;
     const servers = await rt.servers.list();
     const fallback = (await hooks.currentServer()) ?? (await rt.servers.selected());
@@ -74,6 +90,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
   // Shared text / IMDb / TMDB link: discover search on the current (or selected) server.
   if (platform() === 'android') {
     void CapacitorShareTarget.addListener('shareReceived', async (e) => {
+      hooks.onLaunchEvent?.();
       const q = shareQuery(e.title, e.texts ?? []);
       const server = (await hooks.currentServer()) ?? (await rt.servers.selected());
       if (q && server) await hooks.open({ server, url: `${server.url}${discoverSearchPath(q)}` });
@@ -82,6 +99,7 @@ export async function installHandlers(rt: Runtime, hooks: HandlerHooks): Promise
 
   // arclight://pair?url=... opened from the camera app or a link.
   void App.addListener('appUrlOpen', (e) => {
+    hooks.onLaunchEvent?.();
     const url = parsePairingCode(e.url);
     if (url) void hooks.pair(url);
   });

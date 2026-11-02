@@ -2,4 +2,6 @@
 <resources>
     <color name="arclight_bg">#02070A</color>
     <color name="arclight_accent">#6EF6FF</color>
+    <!-- Splash: black, so it hands off to the first (black) frame of the intro. -->
+    <color name="arclight_splash">#000000</color>
 </resources>

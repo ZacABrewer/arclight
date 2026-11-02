@@ -6,7 +6,11 @@ import type { RouteTarget } from '../core/routing.js';
 import type { Server } from '../core/servers.js';
 import { loadSettings } from '../core/settings.js';
 import { createRuntime, isNative, openInWebView, syncServerOrigins, type Runtime } from '../platform/capacitor.js';
-import { ensureNotificationChannels, installHandlers, verifyBiometric } from '../platform/handlers.js';
+import { ensureNotificationChannels, installHandlers, launchUrl, verifyBiometric } from '../platform/handlers.js';
+import stingUrl from '../../../../design/brand/intro/arclight-sting.m4a?url';
+import { IntroOverlay } from '../intro/IntroOverlay.js';
+import { decideIntro, introSoundOn, markPlayed, readPlayed, type IntroMode } from '../intro/policy.js';
+import { loadSting, type Sting } from '../intro/sting.js';
 import { parseRoute, routeHash, type Route } from './route.js';
 import { AboutScreen, AddServerScreen, LicensesScreen, LockScreen, ServerListScreen, SettingsScreen } from './screens.js';
 import { Mark, TopBar, haptic } from './ui.js';
@@ -21,12 +25,42 @@ type View =
 /** Time to wait on launch for a notification tap / share delivered by the native side. */
 const LAUNCH_EVENT_GRACE_MS = 350;
 
+const sessionStore = (): Storage | undefined => {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return undefined;
+  }
+};
+
+/** Resolves after the next frame has been painted (or 150 ms, if frames are not running). */
+const nextPaint = () =>
+  new Promise<void>((resolve) => {
+    const t = setTimeout(resolve, 150);
+    requestAnimationFrame(() =>
+      requestAnimationFrame(() => {
+        clearTimeout(t);
+        resolve();
+      }),
+    );
+  });
+
 export function App() {
   const rt = useRef<Runtime>(createRuntime()).current;
   const [view, setView] = useState<View>({ kind: 'booting' });
   const navigatedByEvent = useRef(false);
   const lockWaiters = useRef<Array<() => void>>([]);
   const beforeLock = useRef<View | null>(null);
+  // Startup intro (cold start only). A notification tap, share or deep link ends it at once.
+  const [intro, setIntro] = useState<{ mode: Exclude<IntroMode, 'skip'>; sting: Sting | null } | null>(null);
+  const launchEvent = useRef(false);
+  const introEnded = useRef<() => void>(() => undefined);
+  const introFinished = useRef<Promise<void>>(Promise.resolve());
+  const endIntro = useCallback(() => {
+    setIntro(null);
+    introEnded.current();
+    introEnded.current = () => undefined;
+  }, []);
 
   const go = useCallback((route: Route) => {
     const hash = routeHash(route);
@@ -87,16 +121,45 @@ export function App() {
         currentServer: async () => null,
         open: async (target: RouteTarget) => {
           navigatedByEvent.current = true;
+          endIntro();
           await rt.servers.select(target.server.id);
           await connectTo(target.server, target.url.slice(target.server.url.length) || '/');
         },
         pair: (url) => go({ name: 'add', url }),
         lock,
+        onLaunchEvent: () => {
+          launchEvent.current = true;
+          endIntro();
+        },
       });
+
+      // Intro: decided before the splash goes, so the black splash hands off to its black first frame.
+      const settings = await loadSettings(rt.kv);
+      const mode = decideIntro({
+        playIntro: settings.playIntro,
+        alreadyPlayed: readPlayed(sessionStore()),
+        reducedMotion: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false,
+        launchedByEvent: launchEvent.current || (await launchUrl()) !== null,
+        routeIsAuto: parseRoute(window.location.hash).name === 'auto',
+      });
+      if (mode !== 'skip' && !cancelled) {
+        markPlayed(sessionStore());
+        const sting = introSoundOn(mode, settings.introSound) ? await loadSting(stingUrl) : null;
+        if (cancelled || launchEvent.current) {
+          sting?.stop();
+        } else {
+          introFinished.current = new Promise<void>((resolve) => {
+            introEnded.current = resolve;
+          });
+          setIntro({ mode, sting });
+          await nextPaint();
+        }
+      }
       void SplashScreen.hide().catch(() => undefined);
+      await introFinished.current;
+      if (cancelled) return;
 
       // Biometric lock on launch.
-      const settings = await loadSettings(rt.kv);
       if (settings.biometricLock && isNative()) {
         const unlocked = lock();
         void unlock();
@@ -120,74 +183,83 @@ export function App() {
       cancelled = true;
       window.removeEventListener('hashchange', onHash);
     };
-  }, [rt, go, connectTo, lock, unlock]);
+  }, [rt, go, connectTo, lock, unlock, endIntro]);
 
-  switch (view.kind) {
-    case 'booting':
-      return (
-        <main className="screen">
-          <div className="center">
-            <Mark />
-          </div>
-        </main>
-      );
-    case 'locked':
-      return <LockScreen onUnlock={unlock} />;
-    case 'connecting':
-      return (
-        <main className="screen" aria-busy="true">
-          <div className="center">
-            <Mark />
-            <div className="spinner" role="progressbar" aria-label="Connecting" />
-            <p>
-              Connecting to <strong>{view.server.name}</strong>
-            </p>
-            <p className="muted small mono">{view.server.url}</p>
-            <button type="button" className="btn ghost" onClick={() => go({ name: 'servers' })}>
-              Cancel
-            </button>
-          </div>
-        </main>
-      );
-    case 'unreachable':
-      return (
-        <main className="screen">
-          <TopBar title="Can't reach server" />
-          <div className="center">
-            <Mark />
-            <h2>{view.server.name}</h2>
-            <p className="muted small mono">{view.server.url}</p>
-            <p>{failureMessage(view.reason, new URL(view.server.url).host)}</p>
-          </div>
-          <div className="actions">
-            <button type="button" className="btn accent block" onClick={() => void connectTo(view.server)}>
-              Try again
-            </button>
-            <button type="button" className="btn block" onClick={() => go({ name: 'servers' })}>
-              Switch server
-            </button>
-            <button type="button" className="btn ghost block" onClick={() => go({ name: 'edit', id: view.server.id })}>
-              Edit address
-            </button>
-          </div>
-        </main>
-      );
-    case 'route':
-      switch (view.route.name) {
-        case 'servers':
-        case 'auto':
-        case 'unreachable':
-          return <ServerListScreen rt={rt} go={go} connectTo={connectTo} />;
-        case 'add':
-          return <AddServerScreen rt={rt} go={go} connectTo={connectTo} {...(view.route.url ? { initialUrl: view.route.url } : {})} />;
-        case 'edit':
-          return <AddServerScreen rt={rt} go={go} connectTo={connectTo} editId={view.route.id} />;
-        case 'settings':
-          return <SettingsScreen rt={rt} go={go} />;
-        case 'about':
-          return <AboutScreen go={go} />;
-        case 'licenses':
-          return <LicensesScreen go={go} />;
-      }
+  return (
+    <>
+      {renderView()}
+      {intro && <IntroOverlay mode={intro.mode} sting={intro.sting} onDone={endIntro} />}
+    </>
+  );
+
+  function renderView() {
+    switch (view.kind) {
+      case 'booting':
+        return (
+          <main className="screen">
+            <div className="center">
+              <Mark />
+            </div>
+          </main>
+        );
+      case 'locked':
+        return <LockScreen onUnlock={unlock} />;
+      case 'connecting':
+        return (
+          <main className="screen" aria-busy="true">
+            <div className="center">
+              <Mark />
+              <div className="spinner" role="progressbar" aria-label="Connecting" />
+              <p>
+                Connecting to <strong>{view.server.name}</strong>
+              </p>
+              <p className="muted small mono">{view.server.url}</p>
+              <button type="button" className="btn ghost" onClick={() => go({ name: 'servers' })}>
+                Cancel
+              </button>
+            </div>
+          </main>
+        );
+      case 'unreachable':
+        return (
+          <main className="screen">
+            <TopBar title="Can't reach server" />
+            <div className="center">
+              <Mark />
+              <h2>{view.server.name}</h2>
+              <p className="muted small mono">{view.server.url}</p>
+              <p>{failureMessage(view.reason, new URL(view.server.url).host)}</p>
+            </div>
+            <div className="actions">
+              <button type="button" className="btn accent block" onClick={() => void connectTo(view.server)}>
+                Try again
+              </button>
+              <button type="button" className="btn block" onClick={() => go({ name: 'servers' })}>
+                Switch server
+              </button>
+              <button type="button" className="btn ghost block" onClick={() => go({ name: 'edit', id: view.server.id })}>
+                Edit address
+              </button>
+            </div>
+          </main>
+        );
+      case 'route':
+        switch (view.route.name) {
+          case 'servers':
+          case 'auto':
+          case 'unreachable':
+            return <ServerListScreen rt={rt} go={go} connectTo={connectTo} />;
+          case 'add':
+            return <AddServerScreen rt={rt} go={go} connectTo={connectTo} {...(view.route.url ? { initialUrl: view.route.url } : {})} />;
+          case 'edit':
+            return <AddServerScreen rt={rt} go={go} connectTo={connectTo} editId={view.route.id} />;
+          case 'settings':
+            return <SettingsScreen rt={rt} go={go} />;
+          case 'about':
+            return <AboutScreen go={go} />;
+          case 'licenses':
+            return <LicensesScreen go={go} />;
+        }
+    }
   }
 }

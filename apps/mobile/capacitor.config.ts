@@ -38,7 +38,8 @@ const config: CapacitorConfig = {
     SplashScreen: {
       launchAutoHide: false,
       launchShowDuration: 0,
-      backgroundColor: '#02070a',
+      // Black like the intro's first frame: the app hides the splash once the intro is on screen.
+      backgroundColor: '#000000',
       androidScaleType: 'CENTER_CROP',
       showSpinner: false,
     },

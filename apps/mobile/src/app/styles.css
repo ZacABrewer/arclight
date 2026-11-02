@@ -148,3 +148,15 @@ button { font: inherit; cursor: pointer; }
 .licenses li { padding: 10px 0; border-bottom: 1px solid var(--line); }
 .licenses li:last-child { border-bottom: 0; }
 .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Startup intro: full screen on black, above everything (src/intro/IntroOverlay.tsx). */
+.intro {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: #000;
+  overflow: hidden;
+  touch-action: none;
+  cursor: pointer;
+  outline: none;
+}

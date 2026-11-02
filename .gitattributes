@@ -4,3 +4,6 @@
 *.jpg binary
 *.ico binary
 *.woff2 binary
+*.mp4 binary
+*.m4a binary
+*.wav binary

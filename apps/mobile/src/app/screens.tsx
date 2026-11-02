@@ -342,6 +342,31 @@ export function SettingsScreen({ rt, go }: Nav & { rt: Runtime }) {
         {error && <Notice kind="error">{error}</Notice>}
       </section>
       <section className="card actions">
+        <h2>Intro</h2>
+        <label className="toggle">
+          <span>
+            Play intro on launch
+            <br />
+            <span className="hint">The Arclight intro when the app starts. Tap to skip it.</span>
+          </span>
+          <input type="checkbox" role="switch" checked={settings.playIntro} onChange={(e) => void update({ ...settings, playIntro: e.target.checked })} />
+        </label>
+        <label className="toggle">
+          <span>
+            Intro sound
+            <br />
+            <span className="hint">Plays at media volume. On iPhone it stays quiet when the silent switch is on.</span>
+          </span>
+          <input
+            type="checkbox"
+            role="switch"
+            checked={settings.introSound}
+            disabled={!settings.playIntro}
+            onChange={(e) => void update({ ...settings, introSound: e.target.checked })}
+          />
+        </label>
+      </section>
+      <section className="card actions">
         <h2>Notifications</h2>
         <p className="hint">Turn notifications on in each server's own settings (your profile → Notifications). The server decides what to send.</p>
         {push ? (

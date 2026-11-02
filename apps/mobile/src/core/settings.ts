@@ -6,9 +6,13 @@ export interface AppSettings {
   biometricLock: boolean;
   /** Minutes in the background before the lock is asked again (0 = every time). */
   lockAfterMinutes: number;
+  /** Play the Arclight intro on a cold start. On by default. */
+  playIntro: boolean;
+  /** Play the intro's sound (follows the iOS silent switch). On by default. */
+  introSound: boolean;
 }
 
-export const DEFAULT_SETTINGS: AppSettings = { biometricLock: false, lockAfterMinutes: 5 };
+export const DEFAULT_SETTINGS: AppSettings = { biometricLock: false, lockAfterMinutes: 5, playIntro: true, introSound: true };
 export const LOCK_AFTER_CHOICES = [0, 1, 5, 15, 60] as const;
 
 export async function loadSettings(kv: KeyValueStore): Promise<AppSettings> {
@@ -16,6 +20,8 @@ export async function loadSettings(kv: KeyValueStore): Promise<AppSettings> {
   return {
     biometricLock: typeof s?.biometricLock === 'boolean' ? s.biometricLock : DEFAULT_SETTINGS.biometricLock,
     lockAfterMinutes: typeof s?.lockAfterMinutes === 'number' && s.lockAfterMinutes >= 0 ? s.lockAfterMinutes : DEFAULT_SETTINGS.lockAfterMinutes,
+    playIntro: typeof s?.playIntro === 'boolean' ? s.playIntro : DEFAULT_SETTINGS.playIntro,
+    introSound: typeof s?.introSound === 'boolean' ? s.introSound : DEFAULT_SETTINGS.introSound,
   };
 }
 

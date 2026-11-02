@@ -229,6 +229,19 @@ describe('Jellyfin plugin: upcoming, providers, my requests', () => {
     expect((await t.get(ADULT, 'upcoming?days=500')).statusCode).toBe(400);
   });
 
+  it('leaves out releases already on disk and lists a movie once, at its next release', async () => {
+    const t = await build();
+    const day = (n: number) => new Date(Date.now() + n * 86_400_000).toISOString();
+    const have = addMovie(t.db, 11, 'Already Here');
+    const twice = addMovie(t.db, 12, 'Two Dates');
+    t.db.update(movies).set({ physicalRelease: day(3), hasFile: true }).where(eq(movies.id, have)).run();
+    t.db.update(movies).set({ digitalRelease: day(4), physicalRelease: day(20) }).where(eq(movies.id, twice)).run();
+
+    const items = (await t.get(ADULT, 'upcoming?days=30')).json().items as { title: string; releaseType: string }[];
+    expect(items.map((i) => i.title)).toEqual(['Two Dates']);
+    expect(items[0]).toMatchObject({ releaseType: 'digital' });
+  });
+
   it('returns watch providers for a region with the JustWatch attribution', async () => {
     const t = await build();
     const res = await t.get(ADULT, 'providers/movie/2?region=us');

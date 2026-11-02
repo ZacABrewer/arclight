@@ -36,6 +36,7 @@ Store checklists: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md)
 - **Notification taps**: payload `data.url` (a path such as `/requests/12`) is opened on the saved server whose base URL is `data.server`, switching servers if needed. Unknown servers and non-path URLs are ignored.
 - **User agent**: ` ArclightApp/<version> (ios|android)` is appended, so the web UI can detect the app.
 - **Unreachable server**: the app probes before opening a server; a page that fails to load later (`server.errorPath`) also lands on the native "Can't reach server" screen (retry, switch server, edit address).
+- **Startup intro** (`src/intro/`): on a cold start the 6.1 s Arclight intro plays before the server list or the last server opens. It is the animation from `design/brand/intro/src` drawn live in the app's DOM (scaled to fit, letterboxed on black), not the MP4. The native splash is the mark on black and is hidden once the intro's first (black) frame is on screen. Tap anywhere, or the Android back gesture, skips it. It never plays when the app was launched by a notification tap, a share or a deep link (one arriving during the intro ends it at once), when returning from a server page, or with "Play intro on launch" off; with reduced motion the static logo shows for 1 s instead. The sound (`arclight-sting.m4a`, "Intro sound" setting) uses Web Audio, which WebKit plays in the ambient audio category, so it follows the iPhone silent switch and does not stop other audio; on Android it plays at media volume.
 - **Share sheet (Android)**: "Request in Arclight" on shared text or IMDb/TMDB links opens `/discover/search?q=<title>` on the current or selected server.
 
 ## Develop
@@ -43,7 +44,7 @@ Store checklists: [docs/mobile/RELEASE-IOS.md](../../docs/mobile/RELEASE-IOS.md)
 ```sh
 pnpm install                                 # from the repository root
 pnpm --filter @arclight/mobile dev           # app screens in a desktop browser (no native features)
-pnpm --filter @arclight/mobile test          # unit tests (address normalisation, probe, QR, store, push, contract)
+pnpm --filter @arclight/mobile test          # unit tests (address normalisation, probe, QR, store, push, contract, intro)
 pnpm --filter @arclight/mobile typecheck
 pnpm --filter @arclight/mobile sync          # build + cap sync (both platforms)
 ```

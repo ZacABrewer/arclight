@@ -36,7 +36,7 @@ Arclight is an independent, from-scratch implementation. Other projects' behavio
 
 ## Fonts
 
-The interface uses **Chakra Petch**, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/). The font is bundled, so no font requests go to third parties.
+The interface uses **Chakra Petch**, licensed under the [SIL Open Font License 1.1](https://openfontlicense.org/). The font is bundled, so no font requests go to third parties. The ARCLIGHT wordmark in the startup intro is drawn from **Michroma** letterforms (also SIL Open Font License 1.1), converted to outlines.
 
 ## Name and logo
 
