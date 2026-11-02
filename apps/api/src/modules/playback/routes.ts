@@ -1,8 +1,10 @@
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
+import { Readable } from 'node:stream';
+import type { ReadableStream as WebReadableStream } from 'node:stream/web';
 import type { FastifyPluginAsync, FastifyReply, FastifyRequest, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { and, eq, gt, isNull, or } from 'drizzle-orm';
+import { and, asc, eq, gt, inArray, isNull, or } from 'drizzle-orm';
 import { z } from 'zod';
 import {
   AudiobookHome,
@@ -22,6 +24,8 @@ import {
   PlayerAudiobookDetails,
   PlayerAudiobookPage,
   PlayerCapabilities,
+  PlayerEngineTestRequest,
+  PlayerEngineTestResult,
   PlayerSearchResponse,
   PlayerSettings,
   PlayerTrackPage,
@@ -41,7 +45,9 @@ import {
   UserPlaylistInput,
   UserPlaylistSummary,
   parseItemKey,
+  type PlaybackEngine,
   type PlayerCapabilities as Capabilities,
+  type PlayerSettings as Settings,
 } from '@arclight/shared';
 import type { Db } from '../../db/index.js';
 import { sessions, userApiKeys, users } from '../auth/schema.js';
@@ -65,6 +71,7 @@ import {
 } from './browse.js';
 import { mimeOf } from './format.js';
 import { playableItem } from './items.js';
+import type { EngineTarget, JellyfinEngine } from './jellyfin.js';
 import { hasLinkParams, linkKey, linkQuery, verifyLink } from './links.js';
 import type { ProgressStore } from './progress.js';
 import { etagOf, notModified, parseRange, rangeStillValid } from './range.js';
@@ -84,8 +91,12 @@ export interface PlaybackDeps {
   transcoder: AudioTranscoder;
   /** The install API key (links are signed with a key derived from it). */
   apiKey: () => string;
+  /** The Jellyfin/Emby engine (Settings → Player → Playback engine); absent: Arclight only. */
+  engine?: JellyfinEngine | undefined;
   now?: () => number;
 }
+
+type AudioFileRow = typeof audioFiles.$inferSelect;
 
 const user = { access: { portal: true } } as const;
 const ErrorBody = z.object({ error: z.string(), code: z.string() });
@@ -196,6 +207,95 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     return { decision: decide(settings, { userId: row.id, isAdmin: row.role === 'admin', settings: row.settings }, remote), userId: row.id };
   }
 
+  /** Where streams go now: the Jellyfin/Emby target, or null for Arclight's own engine. */
+  function engineTarget(settings: Settings = playerSettings(db)): EngineTarget | null {
+    return deps.engine?.target(settings) ?? null;
+  }
+
+  const engineFile = (file: AudioFileRow) => ({ id: file.id, path: file.path, title: file.tags?.title ?? null });
+
+  /** Who serves each file now (the link response tells clients). Never throws. */
+  async function backendsOf(fileIds: number[]): Promise<Map<number, PlaybackEngine>> {
+    const out = new Map<number, PlaybackEngine>(fileIds.map((id) => [id, 'arclight']));
+    const target = engineTarget();
+    if (!target || !deps.engine || fileIds.length === 0) return out;
+    const rows = db.select().from(audioFiles).where(inArray(audioFiles.id, fileIds)).all();
+    for (const row of rows) {
+      try {
+        if (await deps.engine.resolve(target, engineFile(row))) out.set(row.id, 'jellyfin');
+      } catch (err) {
+        deps.engine.warnOnce(`down:${target.config.id}`, { server: target.config.name, err: (err as Error).message }, 'Jellyfin/Emby is unreachable; the player streams with Arclight', 60_000);
+        break;
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Proxies the stream from Jellyfin/Emby. Null when it cannot (the file is unknown there, the
+   * server is down or refuses): the caller then streams with Arclight's own engine.
+   */
+  async function viaJellyfin(
+    req: FastifyRequest,
+    reply: FastifyReply,
+    target: EngineTarget,
+    file: AudioFileRow,
+    spec: { format: 'original' | TranscodeFormat; bitrateKbps: number | undefined; startMs: number | undefined },
+  ): Promise<FastifyReply | null> {
+    const engine = deps.engine!;
+    const server = target.config.name;
+    const fallBack = (key: string, msg: string, extra: object = {}, everyMs?: number) => {
+      engine.warnOnce(key, { server, fileId: file.id, ...extra }, msg, everyMs);
+      return null;
+    };
+    const down = (err: unknown) => fallBack(`down:${target.config.id}`, 'Jellyfin/Emby is unreachable; the player streams with Arclight', { err: (err as Error).message }, 60_000);
+    let itemId: string | null;
+    try {
+      itemId = await engine.resolve(target, engineFile(file));
+    } catch (err) {
+      return down(err);
+    }
+    if (!itemId) return fallBack(`miss:${target.config.id}:${file.albumId ?? file.bookId ?? file.id}`, 'file not found on Jellyfin/Emby; the player streams it with Arclight', { path: file.path });
+    const head = req.method === 'HEAD';
+    const transcode = spec.format !== 'original';
+    if (head && transcode) {
+      // Do not start a server-side transcode just to answer a probe.
+      return reply.code(200).header('content-type', TRANSCODE_MIME[spec.format as TranscodeFormat]).header('accept-ranges', 'none').header('x-arclight-backend', 'jellyfin').send();
+    }
+    const abort = new AbortController();
+    reply.raw.on('close', () => abort.abort());
+    let res: Response;
+    try {
+      res = await engine.open(target, itemId, spec, { method: head ? 'HEAD' : 'GET', range: transcode ? undefined : headerText(req.headers.range), signal: abort.signal });
+    } catch (err) {
+      return down(err);
+    }
+    if (res.status === 404 || res.status === 401 || res.status === 403 || res.status >= 500) {
+      void res.body?.cancel().catch(() => undefined);
+      if (res.status === 404) engine.forget(target, file.id);
+      return fallBack(`status:${target.config.id}:${res.status}`, `Jellyfin/Emby answered ${res.status}; the player streams with Arclight`, { status: res.status }, 60_000);
+    }
+    reply.code(res.status).header('x-arclight-backend', 'jellyfin');
+    for (const name of ['content-type', 'content-length', 'content-range', 'accept-ranges', 'etag', 'last-modified']) {
+      const value = res.headers.get(name);
+      if (value) reply.header(name, value);
+    }
+    if (transcode) {
+      const fmt = spec.format as TranscodeFormat;
+      reply.header('accept-ranges', 'none').header('x-arclight-transcode', `${fmt}/${spec.bitrateKbps ?? DEFAULT_BITRATE_KBPS[fmt]}`);
+      if (!res.headers.get('content-type')) reply.header('content-type', TRANSCODE_MIME[fmt]);
+    } else if (!res.headers.get('content-type')) {
+      reply.header('content-type', mimeOf(file.path));
+    }
+    if (head || !res.body || res.status === 304 || res.status === 416) {
+      void res.body?.cancel().catch(() => undefined);
+      return reply.send();
+    }
+    const body = Readable.fromWeb(res.body as unknown as WebReadableStream<Uint8Array>);
+    body.on('error', () => abort.abort());
+    return reply.send(body);
+  }
+
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof PlayerHttpError) return reply.code(err.status).send({ error: err.message, code: err.code });
@@ -211,11 +311,17 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
     // ---- settings (admin only) -------------------------------------------------------
     app.get('/settings/player', { schema: { response: { 200: PlayerSettings } } }, async () => playerSettings(db));
     app.put('/settings/player', { schema: { body: PlayerSettings, response: { 200: PlayerSettings } } }, async (req) => setSection(db, 'player', req.body));
+    app.post('/settings/player/engine-test', { schema: { body: PlayerEngineTestRequest, response: { 200: PlayerEngineTestResult } } }, async (req) => {
+      if (!deps.engine) return { ok: false, serverId: null, serverName: null, version: null, sample: null, message: 'The Jellyfin engine is not available' };
+      const sample = db.select().from(audioFiles).orderBy(asc(audioFiles.mediaType), asc(audioFiles.id)).limit(1).get();
+      return deps.engine.test(req.body.jellyfinServerId, sample ? engineFile(sample) : null);
+    });
 
     // ---- access -------------------------------------------------------------------------
-    app.get('/playback/me', { config: user, schema: { response: { 200: PlayerCapabilities } } }, async (req): Promise<Capabilities> =>
-      capabilitiesOf(db, decide(playerSettings(db), subjectOf(req), isRemoteRequest(req))),
-    );
+    app.get('/playback/me', { config: user, schema: { response: { 200: PlayerCapabilities } } }, async (req): Promise<Capabilities> => {
+      const settings = playerSettings(db);
+      return { ...capabilitiesOf(db, decide(settings, subjectOf(req), isRemoteRequest(req))), engine: engineTarget(settings) ? 'jellyfin' : 'arclight' };
+    });
 
     // ---- items and stream links ------------------------------------------------------------
     app.get('/playback/item/:itemKey', { ...player, schema: { params: KeyParams, response: { 200: PlayableItem, ...errors } } }, async (req) => itemOr404(req.params.itemKey));
@@ -227,13 +333,14 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
       const key = linkKey(deps.apiKey());
       const origin = `${req.protocol}://${req.host}`;
       const format = req.body.format === 'original' ? '' : `format=${req.body.format}&${req.body.bitrateKbps ? `bitrateKbps=${req.body.bitrateKbps}&` : ''}`;
-      return {
-        links: item.parts.map((p) => ({
-          fileId: p.fileId,
-          url: `${origin}${deps.basePath}/api/v1/stream/audio/${p.fileId}?${format}${linkQuery(key, { userId, fileId: p.fileId, exp })}`,
-          expiresAt: new Date(exp * 1000).toISOString(),
-        })),
-      };
+      const backends = await backendsOf(item.parts.map((p) => p.fileId));
+      const links = item.parts.map((p) => ({
+        fileId: p.fileId,
+        url: `${origin}${deps.basePath}/api/v1/stream/audio/${p.fileId}?${format}${linkQuery(key, { userId, fileId: p.fileId, exp })}`,
+        expiresAt: new Date(exp * 1000).toISOString(),
+        backend: backends.get(p.fileId) ?? ('arclight' as const),
+      }));
+      return { links, backendInUse: links.every((l) => l.backend === 'jellyfin') ? ('jellyfin' as const) : ('arclight' as const) };
     });
 
     // ---- the stream -----------------------------------------------------------------------
@@ -267,6 +374,14 @@ export function playbackRoutes(deps: PlaybackDeps): FastifyPluginAsync<Record<ne
           bitrate = cap;
         }
         reply.header('cache-control', 'private, no-cache');
+        // The Jellyfin engine, when chosen: same format and cap, bytes from the server.
+        const target = engineTarget();
+        if (target) {
+          const kbps = format === 'original' ? undefined : Math.min(bitrate ?? DEFAULT_BITRATE_KBPS[format], cap > 0 ? cap : Number.MAX_SAFE_INTEGER);
+          const proxied = await viaJellyfin(req, reply, target, file, { format, bitrateKbps: kbps, startMs: req.query.startMs });
+          if (proxied) return proxied;
+        }
+        reply.header('x-arclight-backend', 'arclight');
         if (format !== 'original') {
           const kbps = Math.min(bitrate ?? DEFAULT_BITRATE_KBPS[format], cap > 0 ? cap : Number.MAX_SAFE_INTEGER);
           reply.header('content-type', TRANSCODE_MIME[format]).header('accept-ranges', 'none').header('x-arclight-transcode', `${format}/${kbps}`);

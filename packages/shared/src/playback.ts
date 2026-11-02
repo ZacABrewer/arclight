@@ -10,6 +10,16 @@ import { z } from 'zod';
 // ---------------------------------------------------------------------------------------
 
 /**
+ * Who serves the audio bytes. `arclight`: Arclight reads the file and transcodes with its own
+ * ffmpeg. `jellyfin`: Arclight finds the file's item on a configured Jellyfin or Emby server
+ * (by path) and proxies that server's audio stream; Arclight's access rules, signed links and
+ * bitrate caps still apply, and the server's API key never reaches the client. A file the server
+ * cannot find, or a server that is down, falls back to Arclight's own engine.
+ */
+export const PlaybackEngine = z.enum(['arclight', 'jellyfin']);
+export type PlaybackEngine = z.infer<typeof PlaybackEngine>;
+
+/**
  * Settings section `player` (GET/PUT /settings/player). The player is a preview: off until an
  * admin turns it on. Remote streaming (outside the home network) stays off until an admin allows it.
  */
@@ -21,9 +31,32 @@ export const PlayerSettings = z.object({
   remoteMaxBitrateKbps: z.number().int().min(0).max(100_000).default(320),
   /** Signed stream links (cast, native players, downloads) stay valid this long. */
   streamLinkHours: z.number().int().min(1).max(72).default(6),
+  /** Playback engine (see PlaybackEngine). */
+  backend: PlaybackEngine.default('arclight'),
+  /**
+   * With `backend: 'jellyfin'`: the id of the Jellyfin or Emby connection (Settings → Media
+   * servers) to stream through. null: the first enabled Jellyfin/Emby connection.
+   */
+  jellyfinServerId: z.string().max(100).nullable().default(null),
 });
 export type PlayerSettings = z.infer<typeof PlayerSettings>;
 export type PlayerSettingsInput = z.input<typeof PlayerSettings>;
+
+/** POST /settings/player/engine-test: checks a Jellyfin/Emby server for the player (unsaved choice). */
+export const PlayerEngineTestRequest = z.object({ jellyfinServerId: z.string().max(100).nullable().default(null) });
+export type PlayerEngineTestRequest = z.input<typeof PlayerEngineTestRequest>;
+export const PlayerEngineTestResult = z.object({
+  ok: z.boolean(),
+  /** The connection that was tested, when one was found. */
+  serverId: z.string().nullable(),
+  serverName: z.string().nullable(),
+  version: z.string().nullable(),
+  /** One audio file Arclight has, and whether the server knows it. null: no audio files yet. */
+  sample: z.object({ fileId: z.number().int(), resolved: z.boolean(), itemId: z.string().nullable() }).nullable(),
+  /** Why it failed (or a note when the sample did not resolve). */
+  message: z.string().nullable(),
+});
+export type PlayerEngineTestResult = z.infer<typeof PlayerEngineTestResult>;
 
 /**
  * Per-user player access, stored in `users.settings.player` and managed by admins (Users → edit
@@ -48,6 +81,8 @@ export const PlayerCapabilities = z.object({
   canStream: z.boolean(),
   /** Effective cap in kbps for this request; 0: none. */
   maxBitrateKbps: z.number().int(),
+  /** The engine in effect: `jellyfin` when it is chosen and a Jellyfin/Emby server is set up. */
+  engine: PlaybackEngine.optional(),
   sections: z.object({ music: z.boolean(), audiobooks: z.boolean(), podcasts: z.boolean(), books: z.boolean(), video: z.boolean() }),
 });
 export type PlayerCapabilities = z.infer<typeof PlayerCapabilities>;
@@ -145,8 +180,18 @@ export const StreamLinksRequest = z.object({
   format: StreamFormat.default('original'),
   bitrateKbps: z.number().int().min(32).max(512).optional(),
 });
-export const StreamLink = z.object({ fileId: z.number().int(), url: z.string(), expiresAt: z.string() });
-export const StreamLinksResponse = z.object({ links: z.array(StreamLink) });
+export const StreamLink = z.object({
+  fileId: z.number().int(),
+  url: z.string(),
+  expiresAt: z.string(),
+  /** Who serves this file's bytes right now (the Jellyfin item resolved, or Arclight's own engine). */
+  backend: PlaybackEngine.optional(),
+});
+export const StreamLinksResponse = z.object({
+  links: z.array(StreamLink),
+  /** `jellyfin` when every part streams through Jellyfin/Emby; otherwise `arclight`. */
+  backendInUse: PlaybackEngine.optional(),
+});
 export type StreamLinksRequest = z.infer<typeof StreamLinksRequest>;
 export type StreamLink = z.infer<typeof StreamLink>;
 export type StreamLinksResponse = z.infer<typeof StreamLinksResponse>;

@@ -7,9 +7,12 @@ import {
   PlayQueue,
   PlaybackProgress,
   PlayerCapabilities,
+  PlayerEngineTestResult,
   PlayerSettings,
   ProgressListResponse,
+  StreamLinksResponse,
   type BookmarkInput,
+  type PlayerEngineTestRequest,
   type PlayerSettingsInput,
   type ProgressBeacon,
   type ProgressReport,
@@ -33,6 +36,7 @@ export const playerKeys = {
   continue: ['playback', 'continue'] as const,
   queue: ['playback', 'queue'] as const,
   bookmarks: (itemKey: string) => ['playback', 'bookmarks', itemKey] as const,
+  backend: (itemKey: string) => ['playback', 'backend', itemKey] as const,
   /** Under ['settings'] so settings events refresh it. */
   settings: ['settings', 'player'] as const,
 };
@@ -70,7 +74,10 @@ export const playbackApi = {
   addBookmark: (body: BookmarkInput) => request('/playback/bookmarks', Bookmark, { method: 'POST', json: body }),
   updateBookmark: (id: number, body: BookmarkInput) => request(`/playback/bookmarks/${id}`, Bookmark, { method: 'PUT', json: body }),
   removeBookmark: (id: number) => request(`/playback/bookmarks/${id}`, null, { method: 'DELETE' }),
+  /** Signed links for every part, plus who serves them now (`backendInUse`). */
+  streamLinks: (itemKey: string) => request('/playback/stream-links', StreamLinksResponse, { method: 'POST', json: { itemKey } }),
   settings: () => request('/settings/player', PlayerSettings),
+  testEngine: (body: PlayerEngineTestRequest) => request('/settings/player/engine-test', PlayerEngineTestResult, { method: 'POST', json: body }),
   saveSettings: (body: PlayerSettingsInput) => request('/settings/player', PlayerSettings, { method: 'PUT', json: body }),
 };
 
@@ -188,6 +195,29 @@ export function useRemoveBookmark(itemKey: string) {
   return useInvalidatingMutation((id: number) => playbackApi.removeBookmark(id), [playerKeys.bookmarks(itemKey)], {
     errorTitle: t('player.api.couldNotRemoveBookmark'),
   });
+}
+
+/**
+ * Who serves the item's audio when the Jellyfin engine is on (`jellyfin`, or `arclight` when
+ * Jellyfin does not have the file or is down). Off, and no request, while the engine is Arclight.
+ */
+export function useStreamBackend(itemKey: string | null | undefined) {
+  const caps = usePlaybackCapabilities();
+  const on = caps.data?.engine === 'jellyfin' && Boolean(itemKey);
+  const links = useQuery({
+    queryKey: playerKeys.backend(itemKey ?? ''),
+    queryFn: () => playbackApi.streamLinks(itemKey ?? ''),
+    enabled: on,
+    retry: false,
+    staleTime: 5 * 60_000,
+    meta: { silent: true },
+  });
+  return on ? (links.data?.backendInUse ?? null) : null;
+}
+
+/** Settings → Player → Test: checks a Jellyfin/Emby server and resolves one sample file. */
+export function useTestPlayerEngine() {
+  return useMutation({ mutationFn: (body: PlayerEngineTestRequest) => playbackApi.testEngine(body), meta: { silent: true } });
 }
 
 /** Settings → Player (admins). */

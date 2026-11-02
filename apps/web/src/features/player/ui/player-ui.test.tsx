@@ -94,6 +94,15 @@ describe('Now playing', () => {
     expect(await screen.findByText('Nothing playing')).toBeTruthy();
   });
 
+  it('says "via Jellyfin" on the format badge when Jellyfin serves the item', async () => {
+    const links = { links: [{ fileId: 101, url: 'http://x/stream', expiresAt: '2026-01-01T18:00:00Z', backend: 'jellyfin' }], backendInUse: 'jellyfin' };
+    stubApi({ '/api/v1/playback/me': caps({ engine: 'jellyfin' }) }, (url, method) => (method === 'POST' && url.endsWith('/playback/stream-links') ? { body: links } : undefined));
+    const h = makeController([track(1)]);
+    await h.controller.playItems(['track:1']);
+    renderWithPlayer(<NowPlayingPage />, h.controller);
+    expect(await screen.findByText('FLAC · DIRECT · VIA JELLYFIN', { exact: false })).toBeTruthy();
+  });
+
   it('shows the music view with the queue', async () => {
     stubApi({ '/api/v1/playback/item/track%3A2': track(2), '/api/v1/playback/item/track%3A1': track(1) });
     const h = makeController([track(1), track(2)]);

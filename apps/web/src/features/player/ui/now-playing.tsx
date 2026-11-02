@@ -3,7 +3,7 @@ import { Link } from '@tanstack/react-router';
 import type { PlayableItem } from '@arclight/shared';
 import { Button, EmptyState, Icon, Input, Pane, Select, Slider, SwitchButton, buttonClass, cx } from '../../../arclight/index.js';
 import { t } from '../../../i18n/index.js';
-import { useAddBookmark, useBookmarks, usePlayableItem, useRemoveBookmark } from '../api.js';
+import { useAddBookmark, useBookmarks, usePlayableItem, useRemoveBookmark, useStreamBackend } from '../api.js';
 import { BOOK_SKIP_MS } from '../engine/media-session.js';
 import { REPLAY_GAIN_MODES, type ReplayGainMode } from '../engine/gain.js';
 import { SLEEP_PRESETS_MIN } from '../engine/sleep-timer.js';
@@ -46,7 +46,8 @@ function ErrorLine({ code }: { code: PlayerApi['state']['error'] }) {
 }
 
 function FormatBadge({ player }: { player: PlayerApi }) {
-  const badge = streamBadge(player.state.stream);
+  const backend = useStreamBackend(player.state.current?.itemKey);
+  const badge = streamBadge(player.state.stream, backend);
   if (!badge) return null;
   return (
     <span className={cx('pl-badge', player.state.stream?.transcoded && 'pl-badge--transcode')} title={t('player.format.title')}>

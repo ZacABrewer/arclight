@@ -22,6 +22,8 @@ Admins can always use the player once it is on. Everyone else needs access (see 
 | Stream outside the home network | Lets people listen while away from home. Each user also needs remote streaming on. | Off |
 | Remote bitrate limit | Files above this bitrate are converted on the fly for remote listeners. `0` means no limit. | 320 kbps |
 | Stream link lifetime | How long links for casting and other players keep working. 1 to 72 hours. | 6 hours |
+| Playback engine | **Arclight** plays files itself. **Jellyfin** streams them through a Jellyfin or Emby server. See [Playing through Jellyfin](#playing-through-jellyfin). | Arclight |
+| Jellyfin server | Which Jellyfin or Emby server to stream through. Shown when the engine is Jellyfin. | First enabled server |
 
 Arclight decides "remote" from the address a request comes from. A request from outside your home network counts as remote.
 
@@ -121,6 +123,7 @@ The **format badge** on Now playing shows how the file reaches you:
 
 - `FLAC · DIRECT` means the original file is sent as it is. This is the default and gives the best quality.
 - `AAC · TRANSCODE` means Arclight converts the audio on the fly. It does this when the file is above your bitrate limit, which usually happens for remote listeners. It needs ffmpeg on the server.
+- `· VIA JELLYFIN` at the end, for example `FLAC · DIRECT · VIA JELLYFIN`, means a Jellyfin or Emby server is sending the audio. See [Playing through Jellyfin](#playing-through-jellyfin).
 
 Converting costs server power, so Arclight only does it when it has to. A converted stream cannot be fetched in ranges, so a seek starts a new conversion from that point. This can take a moment.
 
@@ -128,11 +131,28 @@ Converting costs server power, so Arclight only does it when it has to. A conver
 
 Arclight saves your place about every 10 to 15 seconds, and when you pause, seek or close the page. The home page and the **Books** page show what is in progress. Anything with less than 2% played has nothing to resume. Anything past 90% counts as played.
 
-## Playing through a media server
+## Playing through Jellyfin
 
-This page covers the built-in player only. Arclight has no setting that hands the built-in player's playback to Jellyfin. If you prefer Jellyfin, Emby or Plex for playback, connect it as described in [Media servers](media-servers.md) and use that app.
+The built-in player can let a Jellyfin or Emby server do the streaming and converting, while you keep using Arclight's player, queue and progress.
+
+1. Connect the server under **Settings > Media servers** (see [Media servers](media-servers.md)). Its music and audiobook libraries need to point at the same folders as Arclight's.
+2. Open **Settings > Player**. Under **Playback engine**, pick **Jellyfin**. The choice is greyed out until a Jellyfin or Emby server is set up.
+3. Pick a **Jellyfin server**, or leave **First enabled server**.
+4. Press **Test**. It connects to the server and tries to find one of your audio files there.
+5. Press **Save changes**.
+
+What stays the same: who may listen, remote rules, bitrate limits and stream links are still checked by Arclight first. Your Jellyfin API key stays on the server and is never sent to the browser.
+
+How files are matched: Arclight finds each file on Jellyfin by its path. The file name and at least one folder above it must be the same on both. Paths that match more than one item are skipped. The first time Arclight looks up a file Jellyfin does not know, it may read the server's whole audio list, which can take a moment on big libraries. The list is kept for 10 minutes.
+
+When Jellyfin cannot help: if a file is not on Jellyfin, or the server is down or refuses the request, Arclight plays the file itself instead. A warning goes to the log. The format badge then shows no `VIA JELLYFIN`.
+
+Plex cannot be used as an engine. If you prefer to play in the Jellyfin, Emby or Plex app itself, use that app instead.
 
 ## Troubleshooting
+
+**I picked Jellyfin, but the badge never says "VIA JELLYFIN".**
+Press **Test** in **Settings > Player**. If it connects but finds no sample file, Jellyfin's library paths do not match Arclight's. Check that both see the same folders and that Jellyfin has scanned them. The log names the files that were not found.
 
 **I cannot see the player, or it says "The player isn't turned on for your account".**
 An admin has to turn it on in **Settings > Player**, and allow your account under **Users > your user > Player > Can use the player**. If you are the admin, check both.

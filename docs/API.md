@@ -2546,8 +2546,9 @@ issues (else their own). Settings entities, users, tags and tasks are admin only
 ## Player (music and audiobooks)
 
 Contract: `packages/shared/src/playback.ts`; module `apps/api/src/modules/playback`. The built-in
-player streams the library's music and audiobooks to the web UI and the companion apps; no media
-server is involved. Everything is off until an admin turns it on (`PUT /settings/player`) and
+player streams the library's music and audiobooks to the web UI and the companion apps. By default
+Arclight serves the audio itself; with the Jellyfin engine (`backend: 'jellyfin'`) the stream
+routes proxy a Jellyfin or Emby server instead (below). Everything is off until an admin turns it on (`PUT /settings/player`) and
 gives users access (`settings.player` `{allowed, allowRemote, maxBitrateKbps}` on
 `PUT /user/:id`; users cannot change it through `PUT /user/me`).
 
@@ -2568,11 +2569,12 @@ the chapter marks embedded in the files (offset by each file's start), else one 
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours}` (admin) |
+| GET | `/settings/player` | `PlayerSettings` `{enabled, allowRemote, remoteMaxBitrateKbps (0: no cap), streamLinkHours, backend ('arclight' \| 'jellyfin', default 'arclight'), jellyfinServerId (null: the first enabled Jellyfin/Emby server)}` (admin) |
 | PUT | `/settings/player` | Save `PlayerSettings` (admin) |
-| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) and the `sections` the caller may open. Any signed-in user |
+| POST | `/settings/player/engine-test` | `PlayerEngineTestRequest` `{jellyfinServerId?}`: connects to that Jellyfin/Emby server (or the first enabled one) and tries to resolve one library audio file. Answers `PlayerEngineTestResult` `{ok, serverId, serverName, version, sample: {fileId, resolved, itemId} \| null, message}` (`200` also when `ok` is false). Admin |
+| GET | `/playback/me` | `PlayerCapabilities`: `enabled`, `allowed`, `remote`, `canStream`, `maxBitrateKbps` (the stricter of the server's remote cap and the user's cap; 0: none) the `sections` the caller may open, and `engine` (`arclight` or `jellyfin`, the configured engine). Any signed-in user |
 | GET | `/playback/item/:itemKey` | `PlayableItem`: title, subtitle (artist or authors), context (album, or `Series, book N`), artwork URL, parts, chapters, ReplayGain. `404` when unknown or without a file |
-| POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads) |
+| POST | `/playback/stream-links` | `{itemKey, format?, bitrateKbps?}`: absolute signed URLs, one per part, valid `streamLinkHours` (casting, native players, downloads). With the Jellyfin engine each link carries `backend` (who will serve that part) and the answer `backendInUse` (`jellyfin` only when every part resolved on Jellyfin, else `arclight`) |
 | GET, HEAD | `/stream/audio/:fileId` | The audio. `?format=original\|aac\|opus\|mp3&bitrateKbps=&startMs=` (below) |
 | GET | `/playback/artwork/:kind/:id` | `album`, `artist` or `book`: a cover image in the folder (cover/folder/front, artist/folder/poster), else the picture embedded in the first file, else a `302` to the catalogue image, else `404` |
 | PUT | `/playback/progress/:itemKey` | `ProgressReport` `{event, positionMs, durationMs, deviceId, clientTime, speed?, ...}`; answers the stored `PlaybackProgress` |
@@ -2607,6 +2609,20 @@ client disconnects, and is killed when nobody has read its output for 60 seconds
 players ask again from the position on resume. `HEAD` on a transcode answers `503` when a `GET`
 would be refused for lack of a slot, so a player can tell "busy" from "cannot decode". A remote original above the
 caller's cap is sent as Opus at the cap; an asked-for bitrate is clamped to it.
+
+Every stream answers `X-Arclight-Backend: arclight` or `jellyfin`. With the Jellyfin engine,
+access, signed links, remote rules and bitrate caps are checked first exactly as above; then the
+file is matched to its Jellyfin item by path (an exact path, else the longest unique run of at
+least two trailing path segments; the mapping is cached in memory) and Jellyfin's audio stream is
+proxied: the original as `Audio/{id}/stream?static=true` with `Range` forwarded and Jellyfin's
+status, `Content-Range`, `Content-Length`, `ETag` and `Last-Modified` passed through; a transcode
+as `Audio/{id}/stream.{ext}` with the format's container and codec, `audioBitRate` from
+`bitrateKbps` and `startTimeTicks` from `startMs` (no ranges, `X-Arclight-Transcode` as above;
+`HEAD` on a transcode answers `200` without contacting Jellyfin). The API key is sent only in
+headers from the server and never appears in a URL the client sees. When the file is not found
+on Jellyfin, Jellyfin is unreachable, or it answers `401`, `403`, `404` or `5xx`, the request is
+served by Arclight's own engine instead and a warning is logged (rate-limited). Arclight's
+transcode limits do not apply to proxied streams.
 
 Signed links (`?u=&exp=&sig=`, HMAC-SHA256 over file, user and expiry with a key derived from the
 install's API key) let the stream route work without a cookie. A link is refused with `403`:

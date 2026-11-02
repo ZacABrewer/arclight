@@ -16,6 +16,7 @@ at the end of this file.
 - Queue, mini-player and Now playing with shuffle, repeat, gapless playback and ReplayGain volume levelling. Keyboard shortcuts and media-key and lock-screen controls are included.
 - Direct play where possible, with live transcoding when a file is above the bitrate limit. A format badge shows which one is in use.
 - Remote streaming is off by default. Admins can allow it, set a remote bitrate cap and choose how long stream links last, and can set remote access and a bitrate cap per user.
+- Jellyfin playback engine for the built-in player: under Settings > Player > Playback engine, admins can let a Jellyfin or Emby server stream and convert the audio. Arclight still checks access, limits and links first, and keeps the API key on the server. Files Jellyfin does not have play with Arclight's own engine, and the format badge shows "via Jellyfin" when Jellyfin is in use.
 
 ## [0.20.1] - 2026-11-02
 

@@ -78,6 +78,54 @@ export interface MediaBrowserCollection {
   overview: string | null;
 }
 
+/** An Audio item and its file path as the server sees it. */
+export interface MediaBrowserAudioPath {
+  id: string;
+  path: string;
+}
+
+/** What to stream: the original bytes, or a server-side transcode. */
+export interface MediaBrowserAudioStreamSpec {
+  format: 'original' | 'aac' | 'opus' | 'mp3';
+  /** Transcodes: target bitrate. */
+  bitrateKbps?: number | undefined;
+  /** Transcodes: start this far into the file. */
+  startMs?: number | undefined;
+  /** Transcodes: the server keys its transcode jobs on device + play session. */
+  deviceId?: string | undefined;
+  playSessionId?: string | undefined;
+}
+
+/** Container (the path extension) and codec of each transcode format. */
+const AUDIO_TRANSCODE: Record<'aac' | 'opus' | 'mp3', { container: string; codec: string }> = {
+  aac: { container: 'aac', codec: 'aac' },
+  opus: { container: 'ogg', codec: 'opus' },
+  mp3: { container: 'mp3', codec: 'mp3' },
+};
+
+/**
+ * The `Audio/{id}/stream` request for a spec (the same endpoint on Jellyfin and Emby). Originals
+ * use `static=true` (the file as is, with range support); transcodes name the container in the
+ * path and pass codec, bitrate (bits/s), start (100 ns ticks) and a stereo downmix.
+ */
+export function mediaBrowserAudioStream(itemId: string, spec: MediaBrowserAudioStreamSpec): { path: string; query: Record<string, string> } {
+  const id = encodeURIComponent(itemId);
+  if (spec.format === 'original') return { path: `Audio/${id}/stream`, query: { static: 'true', mediaSourceId: itemId } };
+  const t = AUDIO_TRANSCODE[spec.format];
+  const query: Record<string, string> = {
+    static: 'false',
+    mediaSourceId: itemId,
+    container: t.container,
+    audioCodec: t.codec,
+    maxAudioChannels: '2',
+    deviceId: spec.deviceId ?? 'arclight',
+  };
+  if (spec.bitrateKbps && spec.bitrateKbps > 0) query['audioBitRate'] = String(Math.round(spec.bitrateKbps * 1000));
+  if (spec.startMs && spec.startMs > 0) query['startTimeTicks'] = String(Math.round(spec.startMs * 10_000));
+  if (spec.playSessionId) query['playSessionId'] = spec.playSessionId;
+  return { path: `Audio/${id}/stream.${t.container}`, query };
+}
+
 /** Item ids per collection add/remove call (keeps the query string short). */
 const COLLECTION_BATCH = 50;
 /** Fields read before an item update, so the update sends them back unchanged. */
@@ -403,6 +451,53 @@ export class MediaBrowserServerClient implements MediaServerClient {
       }
     }
     return out;
+  }
+
+  // ---- audio streaming (Arclight's player with the Jellyfin/Emby engine) -------------------
+
+  /**
+   * Audio items with the file path the server sees. `searchTerm` narrows by name (one page of
+   * `limit`); without it every Audio item is listed (paged), for a path index.
+   */
+  async audioPaths(opts: { searchTerm?: string; limit?: number } = {}): Promise<MediaBrowserAudioPath[]> {
+    const query: Record<string, string> = { Recursive: 'true', IncludeItemTypes: 'Audio', Fields: 'Path', EnableImages: 'false', EnableUserData: 'false' };
+    if (opts.searchTerm) query['SearchTerm'] = opts.searchTerm;
+    const rows = opts.searchTerm ? list(rec(await this.get('Items', { ...query, Limit: String(opts.limit ?? 50) }))['Items']).map(rec) : await this.paged('Items', query);
+    return rows.flatMap((r) => {
+      const id = str(r['Id']);
+      const path = str(r['Path']);
+      return id && path ? [{ id, path }] : [];
+    });
+  }
+
+  /**
+   * Opens the server's audio stream for one item (see `mediaBrowserAudioStream` for the
+   * request). Resolves with the response whatever its status, so a proxy can forward 206/416 and
+   * friends; throws MediaServerError on a network failure or when no headers arrive in time.
+   * `signal` aborts the request and its body (the listener went away).
+   */
+  async audioStream(itemId: string, spec: MediaBrowserAudioStreamSpec, opts: { method?: 'GET' | 'HEAD'; range?: string | undefined; signal?: AbortSignal } = {}): Promise<Response> {
+    const { path, query } = mediaBrowserAudioStream(itemId, spec);
+    const url = new URL(joinUrl(this.base, path));
+    for (const [k, v] of Object.entries(query)) url.searchParams.set(k, v);
+    const controller = new AbortController();
+    const onAbort = () => controller.abort();
+    if (opts.signal) {
+      if (opts.signal.aborted) controller.abort();
+      else opts.signal.addEventListener('abort', onAbort, { once: true });
+    }
+    const timer = setTimeout(() => controller.abort(), this.timeoutMs ?? 30_000);
+    const headers: Record<string, string> = { 'User-Agent': 'Arclight', Accept: '*/*', ...this.headers() };
+    if (opts.range) headers['Range'] = opts.range;
+    try {
+      return await this.fetchImpl(url.toString(), { method: opts.method ?? 'GET', headers, signal: controller.signal });
+    } catch (err) {
+      const label = `${url.origin}${url.pathname}`;
+      if (controller.signal.aborted && !opts.signal?.aborted) throw new MediaServerError(this.kind, 'timeout', `Request to ${label} timed out`, { cause: err });
+      throw new MediaServerError(this.kind, 'network', `Could not reach ${label}: ${err instanceof Error ? err.message : String(err)}`, { cause: err });
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   // ---- collections (BoxSets; the same endpoints on Jellyfin and Emby) ----------------------

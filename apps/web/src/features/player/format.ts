@@ -26,12 +26,14 @@ export function formatDuration(ms: number): string {
   return m === 0 ? t('player.time.hours', { h }) : t('player.time.hoursMinutes', { h, m });
 }
 
-/** Format badge: "FLAC · DIRECT", "OPUS 160 · TRANSCODE". */
-export function streamBadge(stream: StreamInfo | null): string | null {
+/** Format badge: "FLAC · DIRECT", "OPUS 160 · TRANSCODE", and "· VIA JELLYFIN" when Jellyfin serves it. */
+export function streamBadge(stream: StreamInfo | null, backend: 'arclight' | 'jellyfin' | null = null): string | null {
   if (!stream) return null;
-  if (!stream.transcoded) return t('player.format.direct', { codec: stream.sourceLabel });
   const codec = stream.format.toUpperCase();
-  return t('player.format.transcode', { codec: stream.bitrateKbps ? `${codec} ${stream.bitrateKbps}` : codec });
+  const label = stream.transcoded
+    ? t('player.format.transcode', { codec: stream.bitrateKbps ? `${codec} ${stream.bitrateKbps}` : codec })
+    : t('player.format.direct', { codec: stream.sourceLabel });
+  return backend === 'jellyfin' ? t('player.format.viaJellyfin', { label }) : label;
 }
 
 /** 1x, 1.25x. */
