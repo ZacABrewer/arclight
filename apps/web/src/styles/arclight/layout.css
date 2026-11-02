@@ -78,8 +78,11 @@
 .al-topbar__user { position: relative; }
 @media (max-width: 1279.98px) { .al-topbar { gap: 20px; padding: 0 20px 0 24px; } .al-topbar__status { gap: 18px; } .al-topbar__vpn { display: none; } }
 @media (max-width: 767.98px) {
-  .al-topbar { padding: 0 20px; }
+  .al-topbar { padding: 0 20px; gap: 12px; }
+  .al-topbar__status { gap: 12px; }
   .al-topbar__search, .al-topbar__requests, .al-topbar__conn-label { display: none; }
+  /* Phones show only the issue count next to the wider wordmark; the word stays for screen readers. */
+  .al-topbar__issues-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 
 /* ---------- mobile tab bar ---------- */

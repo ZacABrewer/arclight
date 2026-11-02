@@ -125,7 +125,7 @@ export function TopBar({
               onIssuesClick,
               'al-topbar__issues',
               <>
-                <Count n={issueCount} /> {t('arclight.chrome.topBar.issues', { count: issueCount })}
+                <Count n={issueCount} /> <span className="al-topbar__issues-label">{t('arclight.chrome.topBar.issues', { count: issueCount })}</span>
               </>,
               { 'data-active': issuesActive ? 'true' : undefined },
             )
