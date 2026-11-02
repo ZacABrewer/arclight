@@ -1,9 +1,9 @@
 import { and, eq } from 'drizzle-orm';
 import type { Logger } from 'pino';
-import { MediaBrowserServerClient, type MediaServerUser } from '@arclight/media-servers';
+import { MediaBrowserServerClient, PlexServerReadClient, PLEX_OWNER_ACCOUNT_ID, type MediaServerItem, type MediaServerUser, type WatchItem } from '@arclight/media-servers';
 import {
   ContentRestrictions,
-  isMediaBrowserKind,
+  isWatchSyncKind,
   type MediaServerConfig,
   type MediaServerLink,
   type UserSyncResult,
@@ -20,7 +20,7 @@ import { mediaServerUsers, type MediaServerUserRow } from './schema.js';
 import { LibraryResolver, linkedUsers, normaliseExternalId, resolveItem, type SeriesMeta, type WatchStore } from './store.js';
 
 // The two catch-up jobs. MediaServerWatchSync copies every account's play state from the
-// Jellyfin/Emby servers with watch-history sync on into watch_state (full read on the first run
+// Jellyfin/Emby/Plex servers with watch-history sync on into watch_state (full read on the first run
 // and every `fullSyncHours`, otherwise only recently played items); MediaServerUserSync keeps
 // media_server_users in step with the servers' accounts (new, renamed, disabled, deleted) and
 // carries renames and deletions over to linked Arclight users. Each server is handled on its own:
@@ -32,6 +32,31 @@ const INCREMENTAL_MARGIN_MS = 10 * 60_000;
 
 function messageOf(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+/** A server account as the sync sees it; Plex accounts also carry their server-local id. */
+type SyncAccount = MediaServerUser & { localId?: string };
+
+/** What one sync run reads from a server, the same for every kind. */
+interface WatchReader {
+  remoteId: string | undefined;
+  accounts: SyncAccount[];
+  series: Map<string, MediaServerItem>;
+  /** `resume` false: the items carry no resume points (Plex history), so stored ones are kept. */
+  watchItems(account: SyncAccount, playedSince: string | null): Promise<{ items: WatchItem[]; resume: boolean }>;
+}
+
+/** The plex.tv token each linked user signed in with (users.settings), by plex.tv account id. */
+function plexTokens(db: WatchStore['db']): Map<string, string> {
+  const out = new Map<string, string>();
+  for (const row of db.select({ settings: users.settings }).from(users).all()) {
+    const settings = (row.settings ?? {}) as Record<string, unknown>;
+    const link = settings['mediaServerLink'] as Partial<MediaServerLink> | undefined;
+    if (link?.kind !== 'plex' || typeof link.externalId !== 'string') continue;
+    const token = link.accessToken ?? (typeof settings['plexToken'] === 'string' ? settings['plexToken'] : undefined);
+    if (token) out.set(normaliseExternalId(link.externalId), token);
+  }
+  return out;
 }
 
 export interface AccountsPort {
@@ -70,10 +95,50 @@ export class WatchSync {
     return getSection(this.store.db, 'watchHistory');
   }
 
-  private client(config: MediaServerConfig): MediaBrowserServerClient {
+  private client(config: MediaServerConfig): MediaBrowserServerClient | PlexServerReadClient {
     const client = this.servers.clientFor(config);
-    if (!(client instanceof MediaBrowserServerClient)) throw new Error(`${config.name} is not a Jellyfin/Emby server`);
+    if (!(client instanceof MediaBrowserServerClient) && !(client instanceof PlexServerReadClient)) throw new Error(`${config.name} is not a Jellyfin, Emby or Plex server`);
     return client;
+  }
+
+  /** The Plex owner's plex.tv id from the last read (used when plex.tv cannot be reached). */
+  private plexOwnerId(serverId: string): string | null {
+    return this.store.accountByLocalId(serverId, PLEX_OWNER_ACCOUNT_ID)?.externalId ?? null;
+  }
+
+  private async reader(config: MediaServerConfig): Promise<WatchReader> {
+    const client = this.client(config);
+    const info = await client.info();
+    const series = new Map((await client.listItems('series')).map((s) => [s.id, s]));
+    if (client instanceof MediaBrowserServerClient) {
+      return {
+        remoteId: info.id,
+        accounts: await client.users(),
+        series,
+        watchItems: async (account, playedSince) => ({ items: await client.watchItems(account.id, { playedSince }), resume: true }),
+      };
+    }
+    const { accounts } = await client.accounts({ ownerId: this.plexOwnerId(config.id) });
+    const tokens = plexTokens(this.store.db);
+    return {
+      remoteId: info.id,
+      accounts,
+      series,
+      watchItems: async (account, playedSince) => {
+        const localId = account.localId ?? account.id;
+        // A linked user who signed in with Plex: their own server token shows their resume points.
+        const userToken = localId !== PLEX_OWNER_ACCOUNT_ID ? tokens.get(normaliseExternalId(account.id)) : undefined;
+        if (userToken) {
+          try {
+            const token = await client.serverTokenFor(userToken);
+            if (token) return { items: await client.watchItems({ localId }, { playedSince, token }), resume: true };
+          } catch (err) {
+            this.log?.debug({ err, server: config.name }, 'plex user token not usable; reading the watch history instead');
+          }
+        }
+        return { items: await client.watchItems({ localId }, { playedSince }), resume: localId === PLEX_OWNER_ACCOUNT_ID };
+      },
+    };
   }
 
   // ---- watch history -------------------------------------------------------------------
@@ -93,11 +158,10 @@ export class WatchSync {
     const out: WatchSyncServerResult = { serverId: config.id, name: config.name, status: 'ok', users: 0, changed: 0, events: 0 };
     this.store.patchSyncState(config.id, { lastStatus: 'running' });
     try {
-      const client = this.client(config);
-      const info = await client.info();
-      this.servers.rememberRemoteId(config.id, info.id);
-      const accounts = await client.users();
-      const seriesIndex = new Map((await client.listItems('series')).map((s) => [s.id, s]));
+      const reader = await this.reader(config);
+      this.servers.rememberRemoteId(config.id, reader.remoteId);
+      const accounts = reader.accounts;
+      const seriesIndex = reader.series;
       const resolver = new LibraryResolver(this.store.db);
       const fullAfterMs = this.settings().fullSyncHours * HOUR_MS;
       for (const account of accounts) {
@@ -107,7 +171,7 @@ export class WatchSync {
         const started = this.now();
         const full = forceFull || !row.lastFullSyncAt || started.getTime() - Date.parse(row.lastFullSyncAt) >= fullAfterMs;
         const since = !full && row.lastWatchSyncAt ? new Date(Date.parse(row.lastWatchSyncAt) - INCREMENTAL_MARGIN_MS).toISOString() : null;
-        const items = await client.watchItems(account.id, { playedSince: full ? null : since });
+        const { items, resume } = await reader.watchItems(account, full ? null : since);
         const seen = new Set<string>();
         const seriesSeen = new Map<string, SeriesMeta>();
         for (const item of items) {
@@ -135,9 +199,10 @@ export class WatchSync {
               played: item.played,
               playCount: item.playCount,
               lastPlayedAt: item.lastPlayedAt,
-              positionMs: item.positionMs,
+              ...(resume ? { positionMs: item.positionMs } : {}),
               durationMs: item.durationMs,
-              favorite: item.favorite,
+              // Plex has no favourites.
+              ...(config.kind === 'plex' ? {} : { favorite: item.favorite }),
             },
             { source: 'sync' },
           );
@@ -197,8 +262,8 @@ export class WatchSync {
   }
 
   /** Inserts or refreshes an account row from the server's user list (no rename/link handling). */
-  private upsertAccount(serverId: string, account: MediaServerUser): MediaServerUserRow {
-    const row = this.store.ensureAccount(serverId, account.id, account.name);
+  private upsertAccount(serverId: string, account: SyncAccount): MediaServerUserRow {
+    const row = this.store.ensureAccount(serverId, account.id, account.name, account.localId);
     const patch = { isAdmin: account.isAdmin, disabled: account.isDisabled, deleted: false, lastActivityAt: account.lastActivityAt };
     if (row.isAdmin === patch.isAdmin && row.disabled === patch.disabled && !row.deleted && row.lastActivityAt === patch.lastActivityAt) return row;
     return this.store.db.update(mediaServerUsers).set({ ...patch, updatedAt: this.store.iso() }).where(eq(mediaServerUsers.id, row.id)).returning().get()!;
@@ -206,11 +271,11 @@ export class WatchSync {
 
   // ---- accounts --------------------------------------------------------------------------
 
-  /** MediaServerUserSync: every enabled Jellyfin/Emby server (or just `serverId`). */
+  /** MediaServerUserSync: every enabled Jellyfin/Emby/Plex server (or just `serverId`). */
   async syncUsers(opts: { serverId?: string } = {}): Promise<UserSyncResult> {
     const result: UserSyncResult = { servers: [] };
     for (const config of this.servers.stored()) {
-      if (!config.enabled || !isMediaBrowserKind(config.kind)) continue;
+      if (!config.enabled || !isWatchSyncKind(config.kind)) continue;
       if (opts.serverId && config.id !== opts.serverId) continue;
       result.servers.push(await this.syncServerUsers(config));
     }
@@ -219,11 +284,19 @@ export class WatchSync {
 
   private async syncServerUsers(config: MediaServerConfig): Promise<UserSyncServerResult> {
     const out: UserSyncServerResult = { serverId: config.id, name: config.name, status: 'ok', added: 0, renamed: 0, disabled: 0, deleted: 0, created: 0 };
-    const kind = config.kind as 'jellyfin' | 'emby';
+    const kind = config.kind as 'jellyfin' | 'emby' | 'plex';
     this.store.patchSyncState(config.id, { lastUserSyncStatus: 'running' });
     try {
       const client = this.client(config);
-      const listed = await client.users();
+      let listed: SyncAccount[];
+      let complete = true;
+      if (client instanceof PlexServerReadClient) {
+        const read = await client.accounts({ ownerId: this.plexOwnerId(config.id) });
+        listed = read.accounts;
+        complete = read.complete;
+      } else {
+        listed = await client.users();
+      }
       const linked = linkedUsers(this.store.db);
       const accounts = this.accounts?.();
       const policy = getSection(this.store.db, 'signIn');
@@ -243,7 +316,6 @@ export class WatchSync {
         existing.delete(key);
         const link = linked.get(`${kind}:${key}`);
         if (!row) {
-          this.store.ensureAccount(config.id, account.id, account.name);
           this.upsertAccount(config.id, account);
           out.added++;
           if (autoCreate && accounts && !link && !account.isDisabled) {
@@ -270,13 +342,22 @@ export class WatchSync {
         }
         this.store.db
           .update(mediaServerUsers)
-          .set({ name: account.name, isAdmin: account.isAdmin, disabled: account.isDisabled, deleted: false, lastActivityAt: account.lastActivityAt, updatedAt: now })
+          .set({
+            name: account.name,
+            isAdmin: account.isAdmin,
+            disabled: account.isDisabled,
+            deleted: false,
+            lastActivityAt: account.lastActivityAt,
+            ...(account.localId !== undefined ? { localId: account.localId } : {}),
+            updatedAt: now,
+          })
           .where(eq(mediaServerUsers.id, row.id))
           .run();
       }
-      if (config.mirrorParentalControls && accounts) out.mirrored = this.mirrorParental(kind, listed);
+      if (kind !== 'plex' && config.mirrorParentalControls && accounts) out.mirrored = this.mirrorParental(kind, listed);
       // A server always lists at least its admin; an empty list is a broken answer, not "everyone left".
-      if (listed.length > 0) {
+      // A Plex list read without plex.tv may miss friends, so nobody is marked gone then.
+      if (listed.length > 0 && complete) {
         for (const row of existing.values()) {
           if (row.deleted) continue;
           out.deleted++;

@@ -106,8 +106,10 @@ private-tracker use, not to match every feature.
 | Retention does not evaluate seasons: a series counts as watched when every present episode is played, and actions apply to the whole series. | A rule cannot remove only the watched seasons of a series. | 18 |
 | Music and audiobook favourites are not mirrored to the watchlist, because the watchlist holds movies and series only. | Favouriting an album in Jellyfin adds nothing to the Arclight watchlist. | 18 |
 | The incremental watch-history read sorts by last played date, so it cannot see an item marked unplayed or a favourite that changed. Both wait for the next full read (default every 24 hours) unless the Jellyfin plugin is installed, which reports them at once. | History or favourites look stale for up to a day. Use "Full resync" to force it. | 18 |
-| Plex watch history is not synced; retention still reads it live from Plex. Audiobookshelf is not synced either. | Plex plays do not appear in Activity > Watch history, "Watched by" or Now playing. | 18 |
-| Now playing and the play timeline's start, progress and stop events come from the Jellyfin plugin only. Without it the timeline holds the played and unplayed events the sync works out. | Now playing stays empty without the plugin. | 18 |
+| Audiobookshelf watch history is not synced. | Audiobookshelf listening does not appear in Activity > Watch history. | 18 |
+| For Plex friends who never signed in to Arclight with Plex, the sync reads the server's play history only: plays and last played, no resume position. Plex has no favourites. | "Watched by" shows no progress for those users until a webhook or poll sees them playing. | 18 |
+| Plex webhooks need Plex Pass. Without it, session polling runs once a minute, so a play shorter than a minute can be missed and stops are noticed up to a minute late. | Short plays may be missing from the timeline. | 18 |
+| Now playing and the play timeline's start, progress and stop events come from the Jellyfin plugin, or for Plex from webhooks and polling. Without them the timeline holds the played and unplayed events the sync works out. | Now playing stays empty for Jellyfin/Emby without the plugin. | 18 |
 | The Arclight Jellyfin plugin is a separate project; these checks need it installed in Jellyfin. | Plugin rows are skipped without it (use the `curl` rows to exercise the API). | 18 |
 
 ## User interface gaps

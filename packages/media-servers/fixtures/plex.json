@@ -1,20 +1,65 @@
 {
-  "root": { "MediaContainer": { "friendlyName": "Living Room Plex", "version": "1.41.2.9200", "machineIdentifier": "abc123machine" } },
+  "root": {
+    "MediaContainer": {
+      "friendlyName": "Living Room Plex",
+      "version": "1.41.2.9200",
+      "machineIdentifier": "abc123machine"
+    }
+  },
   "sections": {
     "MediaContainer": {
       "Directory": [
-        { "key": "1", "title": "Movies", "type": "movie", "Location": [{ "id": 1, "path": "/media/movies" }] },
-        { "key": "2", "title": "TV Shows", "type": "show", "Location": [{ "id": 2, "path": "/media/tv" }] },
-        { "key": "3", "title": "Music", "type": "artist", "Location": [{ "id": 3, "path": "/media/music" }] }
+        {
+          "key": "1",
+          "title": "Movies",
+          "type": "movie",
+          "Location": [
+            {
+              "id": 1,
+              "path": "/media/movies"
+            }
+          ]
+        },
+        {
+          "key": "2",
+          "title": "TV Shows",
+          "type": "show",
+          "Location": [
+            {
+              "id": 2,
+              "path": "/media/tv"
+            }
+          ]
+        },
+        {
+          "key": "3",
+          "title": "Music",
+          "type": "artist",
+          "Location": [
+            {
+              "id": 3,
+              "path": "/media/music"
+            }
+          ]
+        }
       ]
     }
   },
   "accounts": {
     "MediaContainer": {
       "Account": [
-        { "id": 0, "name": "" },
-        { "id": 1, "name": "owner" },
-        { "id": 5, "name": "dave" }
+        {
+          "id": 0,
+          "name": ""
+        },
+        {
+          "id": 1,
+          "name": "owner"
+        },
+        {
+          "id": 5,
+          "name": "dave"
+        }
       ]
     }
   },
@@ -29,11 +74,26 @@
           "year": 2021,
           "librarySectionID": 1,
           "guid": "plex://movie/5d776",
-          "Guid": [{ "id": "imdb://tt7654321" }, { "id": "tmdb://98765" }],
+          "Guid": [
+            {
+              "id": "imdb://tt7654321"
+            },
+            {
+              "id": "tmdb://98765"
+            }
+          ],
           "duration": 7200000,
           "viewCount": 1,
           "lastViewedAt": 1759348800,
-          "Media": [{ "Part": [{ "file": "/media/movies/Harbour Lights (2021)/Harbour Lights (2021).mkv" }] }]
+          "Media": [
+            {
+              "Part": [
+                {
+                  "file": "/media/movies/Harbour Lights (2021)/Harbour Lights (2021).mkv"
+                }
+              ]
+            }
+          ]
         },
         {
           "ratingKey": "102",
@@ -55,7 +115,14 @@
           "ratingKey": "200",
           "title": "Signal Lost",
           "year": 2023,
-          "Guid": [{ "id": "tvdb://424242" }, { "id": "tmdb://123456" }],
+          "Guid": [
+            {
+              "id": "tvdb://424242"
+            },
+            {
+              "id": "tmdb://123456"
+            }
+          ],
           "leafCount": 3,
           "viewedLeafCount": 3,
           "viewCount": 4,
@@ -68,11 +135,322 @@
     "MediaContainer": {
       "size": 4,
       "Metadata": [
-        { "historyKey": "/status/sessions/history/9", "ratingKey": "201", "key": "/library/metadata/201", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1760100000, "accountID": 5 },
-        { "historyKey": "/status/sessions/history/8", "ratingKey": "202", "key": "/library/metadata/202", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1760000000, "accountID": 5 },
-        { "historyKey": "/status/sessions/history/7", "ratingKey": "201", "key": "/library/metadata/201", "grandparentKey": "/library/metadata/200", "type": "episode", "viewedAt": 1759000000, "accountID": 5 },
-        { "historyKey": "/status/sessions/history/6", "key": "/library/metadata/101", "type": "movie", "viewedAt": 1758000000, "accountID": 5 }
+        {
+          "historyKey": "/status/sessions/history/9",
+          "ratingKey": "201",
+          "key": "/library/metadata/201",
+          "grandparentKey": "/library/metadata/200",
+          "type": "episode",
+          "viewedAt": 1760100000,
+          "accountID": 5
+        },
+        {
+          "historyKey": "/status/sessions/history/8",
+          "ratingKey": "202",
+          "key": "/library/metadata/202",
+          "grandparentKey": "/library/metadata/200",
+          "type": "episode",
+          "viewedAt": 1760000000,
+          "accountID": 5
+        },
+        {
+          "historyKey": "/status/sessions/history/7",
+          "ratingKey": "201",
+          "key": "/library/metadata/201",
+          "grandparentKey": "/library/metadata/200",
+          "type": "episode",
+          "viewedAt": 1759000000,
+          "accountID": 5
+        },
+        {
+          "historyKey": "/status/sessions/history/6",
+          "key": "/library/metadata/101",
+          "type": "movie",
+          "viewedAt": 1758000000,
+          "accountID": 5
+        }
       ]
+    }
+  },
+  "plexTvUser": {
+    "id": 1000001,
+    "uuid": "aa11bb22cc33",
+    "username": "owner",
+    "title": "owner",
+    "email": "owner@example.com",
+    "thumb": "https://plex.tv/users/aa11bb22cc33/avatar",
+    "subscription": {
+      "active": true,
+      "status": "Active",
+      "plan": "lifetime"
+    }
+  },
+  "friends": [
+    {
+      "id": 5,
+      "uuid": "dd55",
+      "title": "dave",
+      "username": "dave",
+      "restricted": false,
+      "home": false,
+      "status": "accepted",
+      "sharedServers": [
+        {
+          "id": 77,
+          "machineIdentifier": "abc123machine",
+          "name": "Living Room Plex"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "uuid": "ee66",
+      "title": "erin",
+      "username": "erin",
+      "restricted": false,
+      "home": false,
+      "status": "accepted",
+      "sharedServers": [
+        {
+          "id": 78,
+          "machineIdentifier": "abc123machine",
+          "name": "Living Room Plex"
+        }
+      ]
+    },
+    {
+      "id": 7,
+      "uuid": "ff77",
+      "title": "frank",
+      "username": "frank",
+      "restricted": false,
+      "home": false,
+      "status": "accepted",
+      "sharedServers": [
+        {
+          "id": 79,
+          "machineIdentifier": "othermachine",
+          "name": "Elsewhere"
+        }
+      ]
+    },
+    {
+      "id": 8,
+      "uuid": "gg88",
+      "title": "gina",
+      "username": "gina",
+      "restricted": false,
+      "home": false,
+      "status": "pending",
+      "sharedServers": []
+    }
+  ],
+  "homeUsers": {
+    "id": 3001,
+    "name": "Home",
+    "users": [
+      {
+        "id": 1000001,
+        "uuid": "aa11bb22cc33",
+        "title": "owner",
+        "username": "owner",
+        "admin": true,
+        "restricted": false,
+        "home": true
+      },
+      {
+        "id": 9,
+        "uuid": "hh99",
+        "title": "Kids",
+        "username": "",
+        "admin": false,
+        "restricted": true,
+        "home": true
+      }
+    ]
+  },
+  "resources": [
+    {
+      "name": "Living Room Plex",
+      "product": "Plex Media Server",
+      "provides": "server",
+      "clientIdentifier": "abc123machine",
+      "accessToken": "server-token-erin"
+    },
+    {
+      "name": "Phone",
+      "product": "Plex for Android",
+      "provides": "player",
+      "clientIdentifier": "phone1"
+    }
+  ],
+  "episodes": {
+    "MediaContainer": {
+      "size": 3,
+      "totalSize": 3,
+      "Metadata": [
+        {
+          "ratingKey": "201",
+          "type": "episode",
+          "title": "Pilot",
+          "grandparentTitle": "Signal Lost",
+          "grandparentRatingKey": "200",
+          "grandparentKey": "/library/metadata/200",
+          "parentRatingKey": "210",
+          "parentKey": "/library/metadata/210",
+          "parentIndex": 1,
+          "index": 1,
+          "duration": 2700000,
+          "viewCount": 2,
+          "lastViewedAt": 1760100000,
+          "Guid": [
+            {
+              "id": "tvdb://9000001"
+            },
+            {
+              "id": "tmdb://5550001"
+            }
+          ]
+        },
+        {
+          "ratingKey": "202",
+          "type": "episode",
+          "title": "Static",
+          "grandparentTitle": "Signal Lost",
+          "grandparentRatingKey": "200",
+          "parentRatingKey": "210",
+          "parentIndex": 1,
+          "index": 2,
+          "duration": 2700000,
+          "viewOffset": 900000,
+          "lastViewedAt": 1760000000
+        },
+        {
+          "ratingKey": "203",
+          "type": "episode",
+          "title": "Echo",
+          "grandparentTitle": "Signal Lost",
+          "grandparentRatingKey": "200",
+          "parentRatingKey": "210",
+          "parentIndex": 1,
+          "index": 3,
+          "duration": 2700000
+        }
+      ]
+    }
+  },
+  "sessions": {
+    "MediaContainer": {
+      "size": 2,
+      "Metadata": [
+        {
+          "sessionKey": "12",
+          "ratingKey": "202",
+          "key": "/library/metadata/202",
+          "type": "episode",
+          "title": "Static",
+          "grandparentTitle": "Signal Lost",
+          "grandparentRatingKey": "200",
+          "parentRatingKey": "210",
+          "parentIndex": 1,
+          "index": 2,
+          "duration": 2700000,
+          "viewOffset": 1200000,
+          "Guid": [
+            {
+              "id": "tvdb://9000002"
+            }
+          ],
+          "User": {
+            "id": "5",
+            "title": "dave",
+            "thumb": ""
+          },
+          "Player": {
+            "machineIdentifier": "tv-dave",
+            "product": "Plex for LG",
+            "title": "Bedroom TV",
+            "state": "playing",
+            "platform": "webOS"
+          },
+          "Session": {
+            "id": "sess-a",
+            "bandwidth": 8000,
+            "location": "lan"
+          }
+        },
+        {
+          "sessionKey": "13",
+          "ratingKey": "101",
+          "key": "/library/metadata/101",
+          "type": "movie",
+          "title": "Harbour Lights",
+          "duration": 7200000,
+          "viewOffset": 60000,
+          "Guid": [
+            {
+              "id": "tmdb://98765"
+            }
+          ],
+          "User": {
+            "id": "1",
+            "title": "owner"
+          },
+          "Player": {
+            "machineIdentifier": "web-owner",
+            "product": "Plex Web",
+            "title": "Chrome",
+            "state": "paused"
+          },
+          "Session": {
+            "id": "sess-b"
+          },
+          "TranscodeSession": {
+            "key": "/transcode/sessions/x",
+            "videoDecision": "transcode",
+            "audioDecision": "copy"
+          }
+        }
+      ]
+    }
+  },
+  "webhookScrobble": {
+    "event": "media.scrobble",
+    "user": true,
+    "owner": true,
+    "Account": {
+      "id": 1,
+      "thumb": "https://plex.tv/users/aa11bb22cc33/avatar",
+      "title": "owner"
+    },
+    "Server": {
+      "title": "Living Room Plex",
+      "uuid": "abc123machine"
+    },
+    "Player": {
+      "local": true,
+      "publicAddress": "203.0.113.10",
+      "title": "Chrome",
+      "uuid": "web-owner"
+    },
+    "Metadata": {
+      "librarySectionType": "movie",
+      "ratingKey": "101",
+      "key": "/library/metadata/101",
+      "guid": "plex://movie/5d776",
+      "Guid": [
+        {
+          "id": "imdb://tt7654321"
+        },
+        {
+          "id": "tmdb://98765"
+        }
+      ],
+      "type": "movie",
+      "title": "Harbour Lights",
+      "duration": 7200000,
+      "viewOffset": 6600000,
+      "viewCount": 1
     }
   }
 }

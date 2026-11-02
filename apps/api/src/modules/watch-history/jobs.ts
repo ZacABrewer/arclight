@@ -5,6 +5,8 @@ import type { WatchHistory } from './index.js';
 export const WATCH_SYNC_JOB = 'MediaServerWatchSync';
 export const USER_SYNC_JOB = 'MediaServerUserSync';
 export const WATCH_CLEANUP_JOB = 'WatchHistoryCleanup';
+/** Plex live playback without (or besides) webhooks: reads /status/sessions every minute. */
+export const PLEX_POLL_JOB = 'PlexSessionPoll';
 /** Hourly, at minute 5 (clear of the top-of-the-hour jobs). */
 export const USER_SYNC_CRON = '5 * * * *';
 /** Daily at 04:45. */
@@ -28,11 +30,16 @@ export function registerWatchHistoryJobs(ctx: AppContext, wh: WatchHistory): voi
     cron: USER_SYNC_CRON,
     handler: async () => {
       const r = await wh.sync.syncUsers();
-      if (r.servers.length === 0) return 'no Jellyfin/Emby server';
+      if (r.servers.length === 0) return 'no Jellyfin/Emby/Plex server';
       return r.servers
         .map((s) => (s.status === 'failed' ? `${s.name}: failed (${s.message ?? ''})` : `${s.name}: ${s.added} new, ${s.renamed} renamed, ${s.disabled} disabled, ${s.deleted} gone, ${s.created} user(s) created`))
         .join('; ');
     },
+  });
+  ctx.scheduler.register({
+    name: PLEX_POLL_JOB,
+    cron: '* * * * *',
+    handler: async () => wh.plex.poll(),
   });
   ctx.scheduler.register({
     name: WATCH_CLEANUP_JOB,

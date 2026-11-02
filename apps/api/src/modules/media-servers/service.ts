@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import {
   createMediaServerClient,
@@ -156,6 +156,8 @@ export class MediaServersService {
       apiKey: mergeKey(current, input),
       // The server's own id survives edits unless the connection now points elsewhere.
       ...(current.remoteId && current.url === url && current.kind === input.kind ? { remoteId: current.remoteId } : {}),
+      // The Plex webhook URL stays valid across edits of the same Plex connection.
+      ...(current.webhookToken && current.kind === 'plex' && input.kind === 'plex' ? { webhookToken: current.webhookToken } : {}),
     });
     if (!next.apiKey) throw new MediaServersError('VALIDATION', 'apiKey is required');
     this.save(servers.map((s) => (s.id === id ? next : s)));
@@ -183,7 +185,32 @@ export class MediaServersService {
     return this.stored().find((s) => isMediaBrowserKind(s.kind) && s.remoteId !== undefined && s.remoteId.toLowerCase().replace(/-/g, '') === want);
   }
 
-  /** Enabled Jellyfin/Emby connections whose play state the watch-history sync reads. */
+  /**
+   * The secret of a Plex connection's webhook URL, made on first ask; `regenerate` replaces it
+   * (the old URL stops working).
+   */
+  webhookToken(id: string, opts: { regenerate?: boolean } = {}): string {
+    const servers = this.stored();
+    const current = servers.find((s) => s.id === id);
+    if (!current) throw notFound(id);
+    if (current.kind !== 'plex') throw new MediaServersError('VALIDATION', 'Webhooks are for Plex servers');
+    if (current.webhookToken && !opts.regenerate) return current.webhookToken;
+    const webhookToken = randomBytes(24).toString('base64url');
+    this.save(servers.map((s) => (s.id === id ? { ...s, webhookToken } : s)));
+    return webhookToken;
+  }
+
+  /** The Plex connection a webhook URL's token belongs to. */
+  byWebhookToken(token: string): MediaServerConfig | undefined {
+    const given = Buffer.from(token);
+    return this.stored().find((s) => {
+      if (s.kind !== 'plex' || !s.webhookToken) return false;
+      const want = Buffer.from(s.webhookToken);
+      return want.length === given.length && timingSafeEqual(want, given);
+    });
+  }
+
+  /** Enabled Jellyfin/Emby/Plex connections whose play state the watch-history sync reads. */
   watchSyncServers(): MediaServerConfig[] {
     return this.stored().filter(watchSyncEnabled);
   }
@@ -299,7 +326,7 @@ function notFound(id: string): MediaServersError {
   return new MediaServersError('NOT_FOUND', `Media server ${id} not found`);
 }
 
-function mask(config: MediaServerConfig): MediaServerResource {
+function mask({ webhookToken: _webhookToken, ...config }: MediaServerConfig): MediaServerResource {
   return {
     ...config,
     apiKey: config.apiKey ? SECRET_MASK : '',

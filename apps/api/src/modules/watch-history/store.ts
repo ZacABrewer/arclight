@@ -30,7 +30,7 @@ export function linkedUsers(db: Db): Map<string, LinkedUser> {
   for (const row of db.select().from(users).all()) {
     const link = ((row.settings ?? {}) as Record<string, unknown>)['mediaServerLink'] as { kind?: unknown; externalId?: unknown } | undefined;
     if (!link || typeof link.kind !== 'string' || typeof link.externalId !== 'string') continue;
-    if (link.kind !== 'jellyfin' && link.kind !== 'emby') continue;
+    if (link.kind !== 'jellyfin' && link.kind !== 'emby' && link.kind !== 'plex') continue;
     out.set(`${link.kind}:${normaliseExternalId(link.externalId)}`, {
       id: row.id,
       username: row.username,
@@ -240,19 +240,33 @@ export class WatchStore {
       .get();
   }
 
-  /** The account row, created on first sight (the name is refreshed when given). */
-  ensureAccount(serverId: string, externalId: string, name?: string | null): MediaServerUserRow {
+  /** Plex: the account a server-local id (history, sessions, webhooks) belongs to. */
+  accountByLocalId(serverId: string, localId: string): MediaServerUserRow | undefined {
+    return (
+      this.db
+        .select()
+        .from(mediaServerUsers)
+        .where(and(eq(mediaServerUsers.serverId, serverId), eq(mediaServerUsers.localId, localId)))
+        .get() ??
+      // Everyone but the Plex owner uses the plex.tv id locally too.
+      (localId === '1' ? undefined : this.account(serverId, localId))
+    );
+  }
+
+  /** The account row, created on first sight (the name, and a Plex local id, are refreshed when given). */
+  ensureAccount(serverId: string, externalId: string, name?: string | null, localId?: string): MediaServerUserRow {
     const found = this.account(serverId, externalId);
     const now = this.iso();
     if (found) {
-      if (name && name !== found.name) {
-        return this.db.update(mediaServerUsers).set({ name, updatedAt: now }).where(eq(mediaServerUsers.id, found.id)).returning().get()!;
+      const patch = { ...(name && name !== found.name ? { name } : {}), ...(localId !== undefined && localId !== found.localId ? { localId } : {}) };
+      if (Object.keys(patch).length > 0) {
+        return this.db.update(mediaServerUsers).set({ ...patch, updatedAt: now }).where(eq(mediaServerUsers.id, found.id)).returning().get()!;
       }
       return found;
     }
     return this.db
       .insert(mediaServerUsers)
-      .values({ serverId, externalId: normaliseExternalId(externalId), name: name || externalId, firstSeenAt: now, updatedAt: now })
+      .values({ serverId, externalId: normaliseExternalId(externalId), name: name || externalId, localId: localId ?? null, firstSeenAt: now, updatedAt: now })
       .returning()
       .get();
   }

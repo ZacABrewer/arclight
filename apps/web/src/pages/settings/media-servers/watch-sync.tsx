@@ -17,6 +17,7 @@ import { useInvalidatingMutation } from '../../../hooks/settings-keys.js';
 import {
   useJellyfinPlugin,
   useMediaServerSync,
+  usePlexWebhook,
   useRemovePluginKey,
   useSaveWatchHistorySettings,
   useServerAccounts,
@@ -42,9 +43,14 @@ export function syncChip(status: MediaServerSyncStatus['lastStatus']) {
   return <Chip tone="muted">{t('settings.watchSync.never')}</Chip>;
 }
 
-/** Jellyfin/Emby servers: the only kinds the watch-history sync and the plugin read. */
+/** Jellyfin/Emby/Plex servers: the kinds the watch-history sync reads. */
 export function watchServers(servers: readonly MediaServerResource[]): MediaServerResource[] {
-  return servers.filter((s) => s.kind === 'jellyfin' || s.kind === 'emby');
+  return servers.filter((s) => s.kind === 'jellyfin' || s.kind === 'emby' || s.kind === 'plex');
+}
+
+/** The full webhook URL to paste into Plex: this page's origin plus the API path and secret. */
+export function plexWebhookUrl(path: string, origin = typeof window === 'undefined' ? '' : window.location.origin): string {
+  return `${origin}${path}`;
 }
 
 // ---- per-server sync ------------------------------------------------------------------------
@@ -87,10 +93,11 @@ function ServerSyncRow({ server }: { server: MediaServerResource }) {
             { label: t('settings.watchSync.itemsTracked'), value: String(st?.itemsTracked ?? 0) },
             { label: t('settings.watchSync.accounts'), value: t('settings.watchSync.linkedOfTotal', { linked: st?.linkedUsers ?? 0, total: st?.users ?? 0 }), mono: false },
             { label: t('settings.watchSync.lastUserSync'), value: when(st?.lastUserSyncAt) },
-            { label: t('settings.watchSync.lastPluginEvent'), value: when(st?.lastEventAt) },
+            { label: server.kind === 'plex' ? t('settings.watchSync.lastLiveEvent') : t('settings.watchSync.lastPluginEvent'), value: when(st?.lastEventAt) },
           ]}
         />
       )}
+      {server.kind === 'plex' ? <PlexWebhookField server={server} /> : null}
       {st?.lastError ? <p className="al-caption al-ms-sync__error">{st.lastError}</p> : null}
       {st?.lastUserSyncError ? <p className="al-caption al-ms-sync__error">{st.lastUserSyncError}</p> : null}
       <div className="al-ms-sync__actions">
@@ -119,6 +126,47 @@ function ServerSyncRow({ server }: { server: MediaServerResource }) {
       </div>
       {accounts ? <SyncedAccountsDialog server={server} onClose={() => setAccounts(false)} /> : null}
     </div>
+  );
+}
+
+/** Plex: the webhook URL (Plex Pass) with a rotate button; sessions are polled either way. */
+function PlexWebhookField({ server }: { server: MediaServerResource }) {
+  const hook = usePlexWebhook(server.id);
+  const toast = useToast();
+  const [confirm, setConfirm] = useState(false);
+  const rotate = useInvalidatingMutation(() => watchHistoryApi.regeneratePlexWebhook(server.id), [watchHistoryKeys.plexWebhook(server.id)], { errorTitle: t('settings.watchSync.plexWebhookRotateFailed') });
+  const label = t('settings.watchSync.plexWebhookUrl');
+  return (
+    <FormRow label={label} caption={t('settings.watchSync.plexWebhookCaption')}>
+      {hook.isPending ? (
+        <Skeleton lines={1} />
+      ) : hook.isError ? (
+        <p className="al-caption">{errorMessage(hook.error)}</p>
+      ) : (
+        <>
+          <CopyField value={plexWebhookUrl(hook.data.path)} label={t('settings.watchSync.plexWebhookUrlOf', { name: server.name })} />
+          <div>
+            <Button size="sm" variant="ghost" loading={rotate.isPending} onClick={() => setConfirm(true)}>
+              {t('settings.watchSync.plexWebhookRotate')}
+            </Button>
+          </div>
+        </>
+      )}
+      <ConfirmDialog
+        open={confirm}
+        danger
+        title={t('settings.watchSync.plexWebhookRotate')}
+        confirmLabel={t('settings.watchSync.plexWebhookRotate')}
+        onCancel={() => setConfirm(false)}
+        onConfirm={async () => {
+          await rotate.mutateAsync(undefined);
+          setConfirm(false);
+          toast.push({ tone: 'ok', title: t('settings.watchSync.plexWebhookRotated') });
+        }}
+      >
+        <p>{t('settings.watchSync.plexWebhookRotateConfirm')}</p>
+      </ConfirmDialog>
+    </FormRow>
   );
 }
 
@@ -210,7 +258,7 @@ function WatchHistorySettingsForm() {
   );
 }
 
-/** Watch history: sync state per Jellyfin/Emby server and the sync settings. */
+/** Watch history: sync state per Jellyfin/Emby/Plex server and the sync settings. */
 export function WatchHistorySection({ servers }: { servers: readonly MediaServerResource[] }) {
   const jellyfin = watchServers(servers);
   return (

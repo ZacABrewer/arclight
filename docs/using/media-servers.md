@@ -34,7 +34,7 @@ Press **Add media server**, fill in the form, press **Test**, then save. The tes
 | Enabled | On | Off keeps the entry but nothing uses it |
 | Availability | On | Requests count as available once this server has the title |
 | Retention | Off | Watch history from this server feeds retention rules |
-| Sync watch history | On for new Jellyfin and Emby connections | Copies every user's play state and plays into Arclight (see [Watch-history sync](#watch-history-sync)). Ignored for Plex and Audiobookshelf. A connection saved before this option existed follows its Retention switch |
+| Sync watch history | On for new Jellyfin, Emby and Plex connections | Copies every user's play state and plays into Arclight (see [Watch-history sync](#watch-history-sync)). Ignored for Audiobookshelf. A connection saved before this option existed follows its Retention switch |
 | Library refresh | Off | Marks the server for post-import rescans (see the next section) |
 | Sign-in | Off | Users may sign in to Arclight with their account on this server. The first enabled server with this on is used |
 | Create users on sign-in | Off | A first sign-in creates a local Arclight account with the default permissions from Settings > Requests |
@@ -85,15 +85,15 @@ Switch on the same events as for any connection: On download (import), On upgrad
 
 ## Watch-history sync
 
-For Jellyfin and Emby, Arclight can keep its own read-only copy of who watched what. Jellyfin stays the source of truth; Arclight only reads and never writes to your server. The copy feeds the **Watch history** views, the "Watched by" tab on titles, the Now playing panel and [retention rules](library.md#retention). Plex and Audiobookshelf are not synced; Plex history is still read live when retention needs it.
+For Jellyfin, Emby and Plex, Arclight can keep its own read-only copy of who watched what. The media server stays the source of truth; Arclight only reads and never writes to your server. The copy feeds the **Watch history** views, the "Watched by" tab on titles, the Now playing panel and [retention rules](library.md#retention). Audiobookshelf is not synced. Plex has a few differences, described in [Plex watch history](#plex-watch-history).
 
-Switch **Sync watch history** on for the server. It is on by default for new Jellyfin and Emby connections; a connection saved before the option existed follows its **Retention** switch, so an upgrade only starts syncing servers that already fed retention. Each synced server shows a **Watch history** panel on **Settings > Media Servers** with its status, last sync, last full read, items tracked, linked accounts, last user sync and last plugin event, plus the buttons **Sync now**, **Full resync**, **Sync users** and **Accounts** (the server's accounts as last synced, with their Arclight user or "Not linked").
+Switch **Sync watch history** on for the server. It is on by default for new Jellyfin, Emby and Plex connections; a connection saved before the option existed follows its **Retention** switch, so an upgrade only starts syncing servers that already fed retention. Each synced server shows a **Watch history** panel on **Settings > Media Servers** with its status, last sync, last full read, items tracked, linked accounts, last user sync and last plugin event (for Plex: last webhook or session), plus the buttons **Sync now**, **Full resync**, **Sync users** and **Accounts** (the server's accounts as last synced, with their Arclight user or "Not linked").
 
 ### What is read
 
 For every account on the server Arclight reads the movies and episodes with their per-user data: played, play count, last played date, resume position and favourite. It stores the current play state per user and item, and keeps a timeline of plays. When a read sees an item flip to played, or its play count grow, Arclight adds a played event to the timeline; an item that flips back to unplayed adds an unplayed event. Music, audiobooks and anything the library does not hold are stored as "other".
 
-Accounts are matched to Arclight users by the Jellyfin user id kept in the user's media server link, never by name. Every server account is kept in its own list, so history of an account with no Arclight user yet is not lost: it attaches when the account is linked or imported later.
+Accounts are matched to Arclight users by the server's user id kept in the user's media server link (for Plex, the plex.tv account id), never by name. Every server account is kept in its own list, so history of an account with no Arclight user yet is not lost: it attaches when the account is linked or imported later.
 
 ### How often
 
@@ -112,7 +112,7 @@ Accounts are matched to Arclight users by the Jellyfin user id kept in the user'
 
 ### User sync
 
-The `MediaServerUserSync` job runs hourly at five past (or press **Sync users**) and lists the accounts on each Jellyfin and Emby server:
+The `MediaServerUserSync` job runs hourly at five past (or press **Sync users**) and lists the accounts on each Jellyfin, Emby and Plex server:
 
 - **New accounts** are added to the account list. An Arclight user is created for one only when the server has **Sign-in** and **Create users on sign-in** on, the sign-in policy allows that server kind, and new users are set to automatic (see [Users and security](users-and-security.md)).
 - **Renamed accounts** update the username on the linked Arclight user's media server link.
@@ -127,7 +127,32 @@ The `MediaServerUserSync` job runs hourly at five past (or press **Sync users**)
 | **Activity > Watch history** (`/activity/watchhistory`) | The timeline of plays. Admins see everyone and can filter by user; other users see only their own |
 | **Profile > Watch history** | Your own plays |
 | **Watched by** tab on a movie or series page (admins) | Who watched the title: played state, play count, last played, progress and favourite per user, and for series the episodes played of the total |
-| **Now playing** on the dashboard (admins) | Sessions that started or reported progress in the last 5 minutes with no stop. Needs the plugin |
+| **Now playing** on the dashboard (admins) | Sessions that started or reported progress in the last 5 minutes with no stop. Needs the Jellyfin plugin, or for Plex the webhook or session polling |
+
+### Plex watch history
+
+Plex works like Jellyfin and Emby, with these differences.
+
+**Token.** The connection's token must be the server owner's `X-Plex-Token` (see [How to find an X-Plex-Token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)). Arclight uses it on the server and on plex.tv, where it lists the owner's friends and Plex Home users.
+
+**Accounts.** The user sync reads the server's own account list and adds, from plex.tv, the owner, Plex Home (managed) users and friends the server is shared with. Each account is stored by its plex.tv id, so it links to the Arclight user who signs in with that Plex account. When plex.tv cannot be reached, accounts are only added or renamed, never marked deleted, so an outage does not unlink anyone; on a first sync without plex.tv the owner is added once plex.tv answers. Parental controls are not mirrored from Plex.
+
+**What is read for each account.**
+
+| Account | Source | Resume position |
+|---|---|---|
+| The owner | The library itself (played, play count, last played, resume position) | Yes |
+| A linked user who signed in to Arclight with Plex | The library, read with that user's own server token | Yes |
+| Anyone else | The server's play history for that account (plays and last played) | Only from webhooks and polling |
+
+Plex has no favourites, so the favourites sync and the "Favourite" column do not apply. Movies and episodes are matched by the `tmdb://`, `tvdb://` and `imdb://` ids of the current Plex agents. Items without them (for example from a legacy agent) are matched by title and year, or by series, season and episode number.
+
+**Live playback.** Arclight learns about plays in two ways, and both feed the same timeline and Now playing panel as the Jellyfin plugin:
+
+1. **Webhooks (Plex Pass).** On the Plex card in the **Watch history** panel copy the **Plex webhook URL**. In Plex open **Settings > Webhooks**, press **Add Webhook** and paste it. The URL looks like `https://arclight.example.com/api/v1/plex/webhook?token=...`; it has to be an address the Plex server can reach. The token in it is a secret for that connection only. **New webhook URL** replaces it, and the old URL stops working at once. Plex sends play, pause, resume, stop and scrobble (watched) events.
+2. **Session polling.** The `PlexSessionPoll` job reads the server's playing sessions every minute, so plays show up without Plex Pass too. A session that disappears counts as stopped, and as played when it reached 90%.
+
+A play reported by both the webhook and the poll is stored once.
 
 ### Favourites and the watchlist
 
@@ -198,6 +223,10 @@ Only linked users are changed, and "hide adult content" is left as it is. Jellyf
 | A "mark unplayed" or favourite change is missing | Incremental reads cannot see it. It appears after the next full read (default every 24 hours) or at once with the plugin. Use **Full resync** to force it |
 | Plugin events are refused with `UNKNOWN_SERVER` | Press **Test** on the Jellyfin entry once so Arclight learns the server id |
 | The plugin says a user is not linked | The Jellyfin account has no Arclight user. Import or link it, or turn on **Create users on sign-in** with automatic new users |
+| Plex: friends or Home users are missing | The token is not the server owner's, or plex.tv could not be reached. The user sync retries hourly |
+| Plex: plays arrive only once a minute | No webhook is set up (it needs Plex Pass), or Plex cannot reach the webhook URL. Polling still records the plays |
+| Plex: the webhook returns 401 | The URL's token was replaced with **New webhook URL**. Paste the current URL into Plex |
+| Plex: no resume positions for a friend | Only the owner and users who signed in to Arclight with Plex can be read with their own token. For others, resume positions come from webhooks and polling |
 
 ## Bulk actions
 

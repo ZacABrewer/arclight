@@ -50,6 +50,8 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   '/system/ping',
   // Calendar apps cannot send headers; the feed checks its own token.
   '/calendar/feed.ics',
+  // Plex cannot send credentials with webhooks; the URL carries a per-server token.
+  '/plex/webhook',
   // Theme catalogue and pack files: the sign-in page is themed too, and they hold nothing private.
   '/theme',
   '/theme/:id/theme.css',

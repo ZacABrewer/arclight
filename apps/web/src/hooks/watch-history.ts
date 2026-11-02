@@ -13,6 +13,7 @@ export const watchHistoryKeys = {
   settings: ['settings', 'watchhistory'] as const,
   sync: (serverId: string) => ['settings', 'mediaservers', serverId, 'sync'] as const,
   accounts: (serverId: string) => ['settings', 'mediaservers', serverId, 'accounts'] as const,
+  plexWebhook: (serverId: string) => ['settings', 'mediaservers', serverId, 'plexwebhook'] as const,
   plugin: ['settings', 'jellyfinplugin'] as const,
 };
 
@@ -39,6 +40,11 @@ export function useSaveWatchHistorySettings() {
 
 export function useMediaServerSync(serverId: string | null) {
   return useQuery({ queryKey: watchHistoryKeys.sync(serverId ?? ''), queryFn: () => watchHistoryApi.syncStatus(serverId ?? ''), enabled: serverId !== null, retry: false });
+}
+
+/** The Plex webhook URL (path plus secret) for one Plex connection. */
+export function usePlexWebhook(serverId: string | null) {
+  return useQuery({ queryKey: watchHistoryKeys.plexWebhook(serverId ?? ''), queryFn: () => watchHistoryApi.plexWebhook(serverId ?? ''), enabled: serverId !== null, retry: false });
 }
 
 export function useServerAccounts(serverId: string | null) {
