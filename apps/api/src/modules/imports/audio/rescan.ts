@@ -6,6 +6,7 @@ import {
   matchFileFrom,
   matchTracks,
   titleSimilarity,
+  type MatchFile,
   type MissingTrack,
   type ReleaseCandidate,
   type ReleaseMatch,
@@ -157,8 +158,22 @@ function releasesFor(album: KnownAlbum): ReleaseCandidate[] {
   return album.releases.map((r) => ({ ...r, preferred: r.id === selected }));
 }
 
-function bestAttempt(group: AudioGroup, albums: readonly KnownAlbum[], threshold: number): Attempt | null {
-  const files = group.files.map(matchFileFrom);
+/**
+ * The best album and release for a group. `files` replaces the group's own files, so the cue
+ * import can match a sheet's virtual tracks (`cue.ts`) the same way.
+ */
+export function bestAlbumMatch(
+  group: AudioGroup,
+  albums: readonly KnownAlbum[],
+  threshold: number = DEFAULT_TRACK_MATCH_THRESHOLD,
+  files?: readonly MatchFile[],
+): { album: KnownAlbum; match: ReleaseMatch } | null {
+  const attempt = bestAttempt(group, albums, threshold, files);
+  return attempt ? { album: attempt.album, match: attempt.match } : null;
+}
+
+function bestAttempt(group: AudioGroup, albums: readonly KnownAlbum[], threshold: number, matchFiles?: readonly MatchFile[]): Attempt | null {
+  const files = matchFiles ?? group.files.map(matchFileFrom);
   const title = group.album ?? albumTitleFromFolder(group.folder);
   let best: Attempt | null = null;
   for (const album of candidateAlbums(group, albums)) {
@@ -209,9 +224,14 @@ export function matchArtistScan(scan: AudioScanResult, albums: readonly KnownAlb
       continue;
     }
     const { album, match } = attempt;
-    if (!match.accepted) {
-      // One big file next to a cue sheet is a disc image: manual import (or a later CUE split).
-      const cueImage = group.hasCue && group.files.length < Math.max(2, match.stats.trackCount / 2);
+    // One big file next to a cue sheet is a disc image: the importer maps it through the sheet
+    // (`cue.ts`). Also when the image happens to fit one track well enough to pass the
+    // threshold (one file for three or more tracks): a rescan must not shrink a kept image's
+    // links to that one track.
+    const cueImage =
+      group.hasCue &&
+      (match.accepted ? group.files.length === 1 && match.stats.trackCount >= 3 : group.files.length < Math.max(2, match.stats.trackCount / 2));
+    if (cueImage || !match.accepted) {
       unmatchedGroups.push({ group, reason: cueImage ? 'cueImage' : 'belowThreshold', best: bestInfo });
       continue;
     }

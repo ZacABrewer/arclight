@@ -5,6 +5,7 @@ import type {
   AlbumSecondaryType,
   ArtistLink,
   ArtistType,
+  EditionPreference,
   MusicImage,
   Ratings,
   ReleaseLabel,
@@ -23,6 +24,12 @@ export const albumTypeProfiles = sqliteTable(
     primaryTypes: text('primary_types', { mode: 'json' }).$type<AlbumPrimaryType[]>().notNull(),
     secondaryTypes: text('secondary_types', { mode: 'json' }).$type<AlbumSecondaryType[]>().notNull(),
     releaseStatuses: text('release_statuses', { mode: 'json' }).$type<AlbumReleaseStatus[]>().notNull(),
+    /** Which edition of a release group to store tracks for (`any` keeps the global rules). */
+    editionPreference: text('edition_preference').$type<EditionPreference>().notNull().default('any'),
+    /** Overrides the global `musicMetadata.preferredCountries` when non-empty. */
+    preferredCountries: text('preferred_countries', { mode: 'json' }).$type<string[]>().notNull().default([]),
+    /** Overrides the global `musicMetadata.preferredFormats` when non-empty. */
+    preferredFormats: text('preferred_formats', { mode: 'json' }).$type<string[]>().notNull().default([]),
     /** The profile new artists get when the add request names none. */
     isDefault: integer('is_default', { mode: 'boolean' }).notNull().default(false),
   },
@@ -147,6 +154,8 @@ export const tracks = sqliteTable(
     durationMs: integer('duration_ms'),
     artistCredit: text('artist_credit'),
     hasFile: integer('has_file', { mode: 'boolean' }).notNull().default(false),
+    /** Per-track wanted: an unmonitored track of a monitored album is neither missing nor searched for. */
+    monitored: integer('monitored', { mode: 'boolean' }).notNull().default(true),
     /** audio_files.id (no FK: the file row may be replaced while the track stays). */
     audioFileId: integer('audio_file_id'),
   },

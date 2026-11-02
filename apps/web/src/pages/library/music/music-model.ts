@@ -6,6 +6,7 @@ import type {
   Artist,
   ArtistLink,
   ArtistStatus,
+  AudioFile,
   MonitorNewAlbums,
   MusicImage,
   MusicMonitorOption,
@@ -61,6 +62,76 @@ export function trackProgress(stats: Pick<AlbumStatistics, 'trackCount' | 'track
 }
 
 export const progressText = (p: TrackProgress) => `${p.have}/${p.total}`;
+
+/** Some tracks are unwanted (per-track monitoring) and every wanted one is on disk. */
+export function wantedTracksComplete(stats: Pick<AlbumStatistics, 'trackCount' | 'monitoredTrackCount' | 'missingTrackCount'> | null | undefined): boolean {
+  if (!stats || stats.monitoredTrackCount == null || stats.missingTrackCount == null) return false;
+  return stats.trackCount > 0 && stats.monitoredTrackCount > 0 && stats.monitoredTrackCount < stats.trackCount && stats.missingTrackCount === 0;
+}
+
+// ---------------------------------------------------------------------------------------
+// Album header: format summary ("FLAC · 24/96", "ALBUM · LOSSLESS 24/96")
+// ---------------------------------------------------------------------------------------
+
+export interface AlbumFormat {
+  /** Most common codec among the album's files, upper-case ("FLAC", "MP3"). */
+  codec: string;
+  lossless: boolean;
+  /** Highest bit depth / sample rate seen on a lossless file. */
+  bitDepth: number | null;
+  sampleRateHz: number | null;
+  /** Mean bitrate of lossy files. */
+  bitrateKbps: number | null;
+  /** More than one codec on disk. */
+  mixed: boolean;
+}
+
+const LOSSLESS_CODECS = /^(flac|alac|ape|wavpack|wv|wav|pcm|aiff?|tta|dsd|dsf|dff|tak)/i;
+
+/** The format the album is held in, or null with no files. */
+export function albumFormat(files: readonly Pick<AudioFile, 'codec' | 'container' | 'bitDepth' | 'sampleRateHz' | 'bitrateKbps' | 'mediaInfo' | 'quality'>[]): AlbumFormat | null {
+  if (files.length === 0) return null;
+  const counts = new Map<string, number>();
+  for (const f of files) {
+    const c = (f.codec ?? f.container ?? f.quality.quality.name).toUpperCase();
+    counts.set(c, (counts.get(c) ?? 0) + 1);
+  }
+  const codec = [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))[0]![0];
+  const isLossless = (f: (typeof files)[number]) => f.mediaInfo?.lossless ?? LOSSLESS_CODECS.test(f.codec ?? f.container ?? '');
+  const lossless = files.every(isLossless);
+  const max = (xs: (number | null | undefined)[]) => xs.reduce<number | null>((m, x) => (x != null && x > 0 && (m == null || x > m) ? x : m), null);
+  const lossy = files.filter((f) => !isLossless(f) && f.bitrateKbps);
+  return {
+    codec,
+    lossless,
+    bitDepth: lossless ? max(files.map((f) => f.bitDepth)) : null,
+    sampleRateHz: lossless ? max(files.map((f) => f.sampleRateHz)) : null,
+    bitrateKbps: lossy.length > 0 ? Math.round(lossy.reduce((n, f) => n + (f.bitrateKbps ?? 0), 0) / lossy.length) : null,
+    mixed: counts.size > 1,
+  };
+}
+
+/** "16/44.1", "24/96"; null without both values. */
+export function resolutionText(f: Pick<AlbumFormat, 'bitDepth' | 'sampleRateHz'>): string | null {
+  if (!f.bitDepth || !f.sampleRateHz) return null;
+  const khz = f.sampleRateHz / 1000;
+  return `${f.bitDepth}/${Number.isInteger(khz) ? khz : khz.toFixed(1)}`;
+}
+
+/** Right-aligned mono chip: "FLAC · 24/96", "MP3 · 320", "FLAC +". */
+export function formatChipText(f: AlbumFormat): string {
+  const detail = f.lossless ? resolutionText(f) : f.bitrateKbps ? String(f.bitrateKbps) : null;
+  return [f.mixed ? `${f.codec} +` : f.codec, detail].filter(Boolean).join(' · ');
+}
+
+/** Mono eyebrow above the title: "ALBUM · LOSSLESS 24/96", "EP · LOSSY", "SINGLE". */
+export function albumEyebrow(type: AlbumPrimaryType, format: AlbumFormat | null): string {
+  const kind = albumTypeLabel(type);
+  if (!format) return kind;
+  const res = format.lossless ? resolutionText(format) : null;
+  const quality = format.lossless ? t('music.album.lossless') : t('music.album.lossy');
+  return [kind, res ? `${quality} ${res}` : quality].join(' · ');
+}
 
 /** Group order on the artist page. */
 export const ALBUM_TYPE_ORDER: readonly AlbumPrimaryType[] = PrimaryTypes.options;
@@ -143,6 +214,7 @@ export type AlbumState = 'downloaded' | 'unaired' | 'wanted' | 'missing';
 export function albumState(album: Pick<Album, 'monitored' | 'releaseDate' | 'statistics'>, now: Date = new Date()): AlbumState {
   const p = trackProgress(album.statistics);
   if (p.total > 0 && p.have >= p.total) return 'downloaded';
+  if (wantedTracksComplete(album.statistics)) return 'downloaded';
   const released = album.releaseDate ? parseDateish(album.releaseDate) : null;
   if (released && released.getTime() > now.getTime()) return 'unaired';
   return album.monitored ? 'wanted' : 'missing';

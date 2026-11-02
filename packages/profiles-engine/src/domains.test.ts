@@ -12,7 +12,7 @@ import {
   qualityInDomain,
   type QualityProfileItem,
 } from '@arclight/shared';
-import { buildItems, defaultQualityProfiles, qualitiesByWeight, specImplementations, validateQualityProfile } from './index.js';
+import { buildItems, defaultMusicProfiles, defaultQualityProfiles, qualitiesByWeight, specImplementations, validateQualityProfile } from './index.js';
 
 // Audio qualities share the vocabulary but must never reach series/movie code: video profiles,
 // video defaults, the profile template or the Sonarr/Radarr compat output.
@@ -119,5 +119,19 @@ describe('audio profiles', () => {
     expect(validateQualityProfile(musicWithWeb).some((i) => /not a music quality/.test(i.message))).toBe(true);
     const music = { ...base, mediaDomain: 'music' as const, cutoff: 131, items: buildItems(['FLAC'], 'music') };
     expect(validateQualityProfile(music)).toEqual([]);
+  });
+
+  it('seeds a lossless-with-lossy-fallback and a portable music preset that upgrade to their cutoff', () => {
+    const byName = new Map(defaultMusicProfiles().map((p) => [p.name, p]));
+    const names = (p: ReturnType<typeof defaultMusicProfiles>[number]) =>
+      p.items.flatMap((i) => (i.kind === 'quality' && i.allowed ? [qualityById(i.qualityId).name] : []));
+    const fallback = byName.get('Lossless, lossy fallback')!;
+    expect(fallback).toMatchObject({ mediaDomain: 'music', upgradeAllowed: true, cutoff: QUALITIES.FLAC.id });
+    expect(names(fallback).sort()).toEqual(['AAC-256', 'AAC-320', 'ALAC', 'FLAC', 'Lossless-Other', 'MP3-320', 'MP3-VBR-V0', 'Opus'].sort());
+    const portable = byName.get('Portable (Opus/AAC/MP3)')!;
+    expect(portable).toMatchObject({ mediaDomain: 'music', upgradeAllowed: true, cutoff: QUALITIES['MP3-VBR-V0'].id });
+    expect(names(portable).some((n) => /FLAC|ALAC|Lossless|PCM|DSD/.test(n))).toBe(false);
+    expect(names(portable)).toEqual(expect.arrayContaining(['Opus', 'AAC-256', 'MP3-VBR-V0', 'MP3-320']));
+    for (const p of [fallback, portable]) expect(validateQualityProfile(p)).toEqual([]);
   });
 });

@@ -12,7 +12,16 @@ export type MusicDb = Db | Tx;
 const percent = (files: number, total: number) => (total > 0 ? Math.round((files / total) * 1000) / 10 : 0);
 
 function emptyAlbum(): AlbumStatistics {
-  return { trackCount: 0, trackFileCount: 0, totalTrackCount: 0, sizeOnDisk: 0, percentOfTracks: 0 };
+  return { trackCount: 0, trackFileCount: 0, totalTrackCount: 0, sizeOnDisk: 0, percentOfTracks: 0, monitoredTrackCount: 0, missingTrackCount: 0 };
+}
+
+/**
+ * Is the album missing wanted tracks? Uses per-track monitoring once tracks are stored, else
+ * (before tracks are loaded) whether anything is on disk.
+ */
+export function albumIsMissing(s: AlbumStatistics | undefined): boolean {
+  if (!s) return true;
+  return s.trackCount > 0 ? (s.missingTrackCount ?? s.trackCount - s.trackFileCount) > 0 : s.sizeOnDisk === 0;
 }
 
 /** Statistics per album id (every id gets an entry). Pass no ids for all albums. */
@@ -26,13 +35,23 @@ export function albumStatistics(db: MusicDb, albumIds?: readonly number[]): Map<
       id: albums.id,
       trackCount: sql<number>`count(${tracks.id})`,
       trackFileCount: sql<number>`coalesce(sum(case when ${tracks.hasFile} then 1 else 0 end), 0)`,
+      monitoredTrackCount: sql<number>`coalesce(sum(case when ${tracks.monitored} then 1 else 0 end), 0)`,
+      missingTrackCount: sql<number>`coalesce(sum(case when ${tracks.monitored} and not ${tracks.hasFile} then 1 else 0 end), 0)`,
     })
     .from(albums)
     .leftJoin(tracks, and(eq(tracks.albumId, albums.id), eq(tracks.albumReleaseId, albums.selectedReleaseId)))
     .where(filter)
     .groupBy(albums.id)
     .all();
-  for (const r of rows) out.set(r.id, { ...emptyAlbum(), trackCount: Number(r.trackCount), trackFileCount: Number(r.trackFileCount) });
+  for (const r of rows) {
+    out.set(r.id, {
+      ...emptyAlbum(),
+      trackCount: Number(r.trackCount),
+      trackFileCount: Number(r.trackFileCount),
+      monitoredTrackCount: Number(r.monitoredTrackCount),
+      missingTrackCount: Number(r.missingTrackCount),
+    });
+  }
 
   const totals = db
     .select({ id: albums.id, total: albumReleases.trackCount })
@@ -65,7 +84,7 @@ export function albumStatistics(db: MusicDb, albumIds?: readonly number[]): Map<
 
 /**
  * Statistics per artist id (every id gets an entry). `trackCount` counts the tracks of monitored
- * albums plus any track with a file (so percent stays at most 100); `totalTrackCount` and the
+ * albums (per-track monitoring respected) plus any track with a file (so percent stays at most 100); `totalTrackCount` and the
  * album counts cover every album.
  */
 export function artistStatistics(db: MusicDb, artistIds: readonly number[]): Map<number, ArtistStatistics> {
@@ -89,7 +108,7 @@ export function artistStatistics(db: MusicDb, artistIds: readonly number[]): Map
       .select({ artistId: albums.artistId, n: sql<number>`count(${tracks.id})` })
       .from(tracks)
       .innerJoin(albums, and(eq(tracks.albumId, albums.id), eq(tracks.albumReleaseId, albums.selectedReleaseId)))
-      .where(and(inArray(albums.artistId, [...artistIds]), sql`(${albums.monitored} = 1 or ${tracks.hasFile} = 1)`))
+      .where(and(inArray(albums.artistId, [...artistIds]), sql`((${albums.monitored} = 1 and ${tracks.monitored} = 1) or ${tracks.hasFile} = 1)`))
       .groupBy(albums.artistId)
       .all();
     for (const r of rows) wantedTracks.set(r.artistId, Number(r.n));
@@ -100,10 +119,12 @@ export function artistStatistics(db: MusicDb, artistIds: readonly number[]): Map
     if (!s || !st) continue;
     s.albumCount++;
     if (a.monitored) s.monitoredAlbumCount++;
-    if (st.trackCount > 0 && st.trackFileCount >= st.trackCount) s.completeAlbumCount++;
+    if (st.trackCount > 0 && st.missingTrackCount === 0) s.completeAlbumCount++;
     s.trackFileCount += st.trackFileCount;
     s.totalTrackCount += st.totalTrackCount;
     s.sizeOnDisk += st.sizeOnDisk;
+    s.monitoredTrackCount = (s.monitoredTrackCount ?? 0) + (st.monitoredTrackCount ?? 0);
+    if (a.monitored) s.missingTrackCount = (s.missingTrackCount ?? 0) + (st.missingTrackCount ?? 0);
   }
   for (const [id, s] of out) {
     s.trackCount = wantedTracks.get(id) ?? 0;

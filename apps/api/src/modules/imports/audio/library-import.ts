@@ -1026,9 +1026,11 @@ export class LibraryImportService {
           ...(r.date ? { date: r.date } : {}),
           formats: r.formats,
           trackCount: r.trackCount,
+          title: r.title,
+          ...(r.disambiguation ? { disambiguation: r.disambiguation } : {}),
           row: r,
         })),
-        service.releasePreferences(),
+        service.releasePreferences(music.getAlbumTypeProfile(this.db, artist.albumTypeProfileId)),
       )?.row;
     if (!target) throw new Error(`MusicBrainz lists no edition of ${album.title}`);
     const hasTracks = this.db.select({ id: tracks.id }).from(tracks).where(eq(tracks.albumReleaseId, target.id)).limit(1).get() !== undefined;

@@ -110,7 +110,9 @@ export {
   createWikidataClient,
   findWikidataId,
   wikidataIdFromUrl,
+  wikipediaArticleFromUrl,
   type ArtistImage,
+  type ArtistSummary as WikipediaArtistSummary,
   type ResolveImageOptions,
   type WikidataClient,
   type WikidataClientOptions,
@@ -136,3 +138,11 @@ export * from './openlibrary/index.js';
 export * from './audiobook-catalog/index.js';
 export * from './books/index.js';
 export { normalizeIsbn, toIsbn13 } from './audiobook-util.js';
+
+// ---------------------------------------------------------------------------
+// Music playlists: Spotify, Deezer, Last.fm (ListenBrainz playlists live in its client)
+
+export { cleanIsrc, mbidFrom, type SourcePlaylist, type SourcePlaylistTrack } from './playlist-types.js';
+export * from './spotify/index.js';
+export * from './deezer/index.js';
+export * from './lastfm/index.js';

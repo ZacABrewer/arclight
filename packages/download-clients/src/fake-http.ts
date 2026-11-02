@@ -84,7 +84,7 @@ export class FakeHttpServer {
         form[k] = v;
       });
     } else if (body instanceof FormData) {
-      const entries: Array<[string, FormDataEntryValue]> = [];
+      const entries: Array<[string, Parameters<Parameters<FormData['forEach']>[0]>[0]]> = [];
       body.forEach((v, k) => entries.push([k, v]));
       for (const [k, v] of entries) {
         if (typeof v === 'string') form[k] = v;

@@ -67,7 +67,7 @@ function PodcastView({ podcast: p }: { podcast: Podcast }) {
             <Link to="/podcasts">{t('common.podcasts')}</Link> / {p.title}
           </>
         }
-        kicker={[t('podcasts.kicker'), p.categories[0] ?? null].filter(Boolean).join(' · ')}
+        eyebrow={[t('podcasts.kicker'), p.categories[0] ?? null].filter(Boolean).join(' · ')}
         meta={[p.author, t('podcasts.episodeCount', { count: s.episodeCount })].filter(Boolean).join(' · ')}
         chips={
           <>

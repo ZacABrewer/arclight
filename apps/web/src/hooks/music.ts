@@ -259,6 +259,42 @@ export function useSetAlbumsMonitored() {
 }
 
 /** PUT /album/:id: monitored, anyReleaseOk or the edition (`selectedReleaseId`). */
+/** Per-track wanted: flips tracks of one album (optimistic), then reloads the album and its artist. */
+export function useSetTracksMonitored() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ trackIds, monitored }: { albumId: number; artistId: number; trackIds: number[]; monitored: boolean }) =>
+      musicApi.tracks.monitor({ trackIds, monitored }),
+    meta: { errorTitle: t('music.hooks.couldNotChangeTrackMonitoring') },
+    onMutate: ({ albumId, trackIds, monitored }) =>
+      patchQueries<AlbumDetails>(qc, musicKeys.albums.detail(albumId), (x) => ({
+        ...x,
+        tracks: x.tracks.map((tr) => (trackIds.includes(tr.id) ? { ...tr, monitored } : tr)),
+      })),
+    onError: (_e, _v, snapshot) => {
+      for (const [key, data] of snapshot ?? []) qc.setQueryData(key, data);
+    },
+    onSettled: (_r, _e, { albumId, artistId }) => {
+      void qc.invalidateQueries({ queryKey: musicKeys.albums.detail(albumId) });
+      void qc.invalidateQueries({ queryKey: musicKeys.artists.detail(artistId) });
+    },
+  });
+}
+
+/** "Want only these": monitors the album and exactly the given tracks. */
+export function useWantTracks() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ albumId, trackIds }: { albumId: number; artistId: number; trackIds: number[] }) => musicApi.albums.wantTracks(albumId, { trackIds }),
+    meta: { errorTitle: t('music.hooks.couldNotChangeTrackMonitoring') },
+    onSuccess: (album) => qc.setQueryData(musicKeys.albums.detail(album.id), album),
+    onSettled: (_r, _e, { albumId, artistId }) => {
+      void qc.invalidateQueries({ queryKey: musicKeys.albums.detail(albumId) });
+      void qc.invalidateQueries({ queryKey: musicKeys.artists.detail(artistId) });
+    },
+  });
+}
+
 export function useUpdateAlbum() {
   const qc = useQueryClient();
   return useMutation({

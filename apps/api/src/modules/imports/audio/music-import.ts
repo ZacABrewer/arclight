@@ -1,8 +1,9 @@
 import { and, eq, gte, inArray } from 'drizzle-orm';
-import { readdir, rename, rm, stat } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { mkdir, readdir, rename, rm, rmdir, stat, writeFile } from 'node:fs/promises';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path';
 import type { Logger } from 'pino';
-import { formatArtistCredit, type MbRelease } from '@arclight/metadata';
+import { coverArtReleaseFrontUrl, coverArtReleaseGroupFrontUrl, formatArtistCredit, type MbRelease } from '@arclight/metadata';
 import { buildAlbumFolder, buildTrackFileName, type NamingAlbum, type NamingArtist, type NamingFile } from '@arclight/organizer';
 import { parseAudioPath, parseAudioQuality, parseMusicRelease, type ParsedAudioQuality } from '@arclight/parser';
 import {
@@ -38,7 +39,11 @@ import { ImportsError } from '../errors.js';
 import { ImportFileError, RecycleBin, setPermissions, transferFile, type FsOps, type TransferMode, type TransferResult } from '../mover.js';
 import { ScanError, isUnder } from '../scan.js';
 import { importedDownloads } from '../schema.js';
-import { type KnownAlbum, matchArtistScan, type RescanArtistResult } from './rescan.js';
+import { defaultFetchImage } from './audiobook-import.js';
+import { FfmpegAudioTools, type AudioTools, type TrackTagValues } from './audio-tools.js';
+import { cueVirtualPath, type CueTrackSpan } from './cue.js';
+import { readCueGroup, type CueGroup } from './cue-import.js';
+import { bestAlbumMatch, type KnownAlbum, matchArtistScan, type RescanArtistResult, type UnmatchedGroup } from './rescan.js';
 import { albumFolderOf, isAudioExtension, scanAudioPath, type AudioExtraFile, type AudioGroup, type AudioScanFile, type AudioScanResult } from './scan-audio.js';
 import { createCombinedTagReader, type AudioTags, type TagReader } from './tags.js';
 import { matchFileFrom, scoreRelease, type ReleaseCandidate } from './track-match.js';
@@ -47,9 +52,16 @@ import { matchFileFrom, scoreRelease, type ReleaseCandidate } from './track-matc
 // picked for manual import) is scanned, its album groups matched to the artist's albums and
 // editions, the files checked against the import specs and transferred into
 // `<artist>/<album folder>/<track file>` with `transferFile` (hard link, copy or move; replaced
-// files go to the recycle bin). Files are never retagged: rewriting tags would break hard links
-// and seeding. Each imported file gets an `audio_files` row linked from `tracks.audio_file_id`,
-// so album/artist statistics (computed from those columns) reflect the import at once.
+// files go to the recycle bin). Each imported file gets an `audio_files` row linked from
+// `tracks.audio_file_id`, so album/artist statistics (computed from those columns) reflect the
+// import at once.
+//
+// Single-file images with a cue sheet follow `audio.cueHandling` (docs/using/music-cue-and-tagging.md):
+// split into tagged tracks with ffmpeg in a staging folder and imported from there, or kept
+// whole with every track linked to the one row. Tags, covers and ReplayGain are opt-in
+// (`audio.writeTags`, `embedCoverArt`, `replayGain`) and only ever written into copies, moves
+// and split tracks: a hard link shares its data with the download, and rewriting it would
+// break seeding.
 
 /** What the importer needs from the imports service. */
 export interface MusicImporterOptions {
@@ -115,6 +127,8 @@ interface PlannedFile {
   /** The file already lives inside the artist folder: register in place. */
   inPlace: boolean;
   rejections: ImportRejection[];
+  /** A cue image kept whole: every track it holds (`track` is the first). */
+  cue?: { tracks: Array<{ track: TrackRow; cueTrack: number; startMs: number; endMs: number | null }> };
 }
 
 interface AlbumPlan {
@@ -128,6 +142,8 @@ interface AlbumPlan {
   missingTrackCount: number;
   releaseChanged: boolean;
   warnings: string[];
+  /** Split cue tracks waiting in this staging folder (moved, whatever the download's mode). */
+  staged?: string;
 }
 
 interface Rejected {
@@ -142,6 +158,8 @@ interface ScanPlan {
   /** Queue lines about whole groups (cue images, unknown albums). */
   groupMessages: string[];
   cueImages: number;
+  /** The cue-image groups behind `cueImages` (resolved through their sheets when enabled). */
+  cueGroups: UnmatchedGroup[];
 }
 
 interface ExecuteOptions {
@@ -153,9 +171,33 @@ interface ExecuteOptions {
   grabOverride?: GrabOverride | null;
 }
 
+/** A cue-image group matched through its sheets. */
+interface CueAlbum {
+  album: AlbumRow;
+  release: AlbumReleaseRow;
+  confidence: number;
+  group: AudioGroup;
+  cue: CueGroup;
+  mapped: Array<{ track: TrackRow; span: CueTrackSpan; score: number }>;
+  warnings: string[];
+  releaseTitle: string | null;
+}
+
 const permanent = (reason: ImportRejectionReason, message: string): ImportRejection => ({ reason, message, type: 'permanent' });
 
 const EXTRA_KINDS = new Set(['cue', 'log', 'cover', 'lyrics']);
+
+const COVER_NAMES = ['cover.jpg', 'cover.png', 'folder.jpg', 'folder.png', 'front.jpg', 'front.png'];
+
+const STAGING_FOLDER = '.arclight-staging';
+
+const cueMessage = (group: AudioGroup) => `${basename(group.folder)}: album image with a cue sheet, Manual Import required`;
+
+/** A track title as a file name: path and reserved characters out, length capped. */
+function fileNameOf(title: string): string {
+  const clean = title.replace(/[\\/:*?"<>|\u0000-\u001f]/g, ' ').replace(/\s+/g, ' ').replace(/[. ]+$/, '').trim();
+  return (clean || 'Track').slice(0, 150);
+}
 
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
@@ -287,6 +329,7 @@ async function containsAudio(dir: string): Promise<boolean> {
 
 export class MusicImporter {
   private reader: TagReader | null = null;
+  private tools: AudioTools | null = null;
 
   constructor(private readonly o: MusicImporterOptions) {}
 
@@ -299,6 +342,13 @@ export class MusicImporter {
     if (injected) return injected;
     this.reader ??= createCombinedTagReader();
     return this.reader;
+  }
+
+  private audioTools(): AudioTools {
+    const injected = this.o.deps().audioTools;
+    if (injected) return injected;
+    this.tools ??= new FfmpegAudioTools();
+    return this.tools;
   }
 
   private threshold(): number {
@@ -343,18 +393,23 @@ export class MusicImporter {
 
     const candidates = target.albumIds.length > 0 ? target.albumIds : this.albumIdsOf(artist.id);
     const plan = await this.plan(scan, artist, candidates, { switchReleases: true, releaseTitle: item.title });
+    const staging = await this.resolveCueImages(plan, artist, candidates, item.title);
     const grabOverride = readGrabOverride(item.grabbedRelease);
-    await this.applySpecs(plan, artist, { downloadId: item.downloadId, addedAt: item.added, settings, forced: grabOverride !== null });
-
-    run.outcomes = plan.rejected.map((r) => ({ path: r.file.path, status: 'rejected' as const, rejections: r.rejections, ...(r.albumId !== undefined ? { albumId: r.albumId } : {}) }));
     const mode: 'move' | 'copy' = item.canMoveFiles ? 'move' : 'copy';
-    for (const album of plan.albums) {
-      const outcomes = await this.executeAlbum(artist, album, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false, grabOverride });
-      run.outcomes.push(...outcomes);
-      if (outcomes.some((o) => o.status === 'imported')) {
-        run.importedAlbumIds.push(album.album.id);
-        run.warnings.push(...album.warnings);
+    try {
+      await this.applySpecs(plan, artist, { downloadId: item.downloadId, addedAt: item.added, settings, forced: grabOverride !== null });
+
+      run.outcomes = plan.rejected.map((r) => ({ path: r.file.path, status: 'rejected' as const, rejections: r.rejections, ...(r.albumId !== undefined ? { albumId: r.albumId } : {}) }));
+      for (const album of plan.albums) {
+        const outcomes = await this.executeAlbum(artist, album, { mode, downloadId: item.downloadId, sourceTitle: item.title, manual: false, grabOverride });
+        run.outcomes.push(...outcomes);
+        if (outcomes.some((o) => o.status === 'imported')) {
+          run.importedAlbumIds.push(album.album.id);
+          run.warnings.push(...album.warnings);
+        }
       }
+    } finally {
+      await this.removeStaging(staging);
     }
 
     // Verification: every targeted album got files (a pack without targets: at least one).
@@ -563,7 +618,7 @@ export class MusicImporter {
     result: RescanArtistResult,
     opts: { releaseTitle: string | null; releaseChanged: ReadonlySet<number> },
   ): ScanPlan {
-    const plan: ScanPlan = { albums: [], rejected: [], groupMessages: [], cueImages: 0 };
+    const plan: ScanPlan = { albums: [], rejected: [], groupMessages: [], cueImages: 0, cueGroups: [] };
     const groupByKey = new Map(scan.groups.map((g) => [g.key, g]));
     const groupOfFile = new Map<string, AudioGroup>();
     for (const g of scan.groups) for (const f of g.files) groupOfFile.set(f.path, g);
@@ -651,8 +706,9 @@ export class MusicImporter {
       switch (u.reason) {
         case 'cueImage':
           plan.cueImages++;
+          plan.cueGroups.push(u);
           rejection = permanent('cueImage', 'Single-file album image with a cue sheet; use Manual Import');
-          plan.groupMessages.push(`${name}: album image with a cue sheet, Manual Import required`);
+          plan.groupMessages.push(cueMessage(u.group));
           break;
         case 'albumAlreadyMatched': {
           const winner = plan.albums.find((p) => p.album.id === Number(u.best?.albumId));
@@ -675,6 +731,290 @@ export class MusicImporter {
       for (const f of u.group.files) plan.rejected.push({ file: f, rejections: [rejection], ...(u.best ? { albumId: Number(u.best.albumId) } : {}) });
     }
     return plan;
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Cue images (audio.cueHandling)
+  // -------------------------------------------------------------------------------------
+
+  /**
+   * Groups the matcher set aside as single-file images are matched again through their cue
+   * sheets' tracks. `split` cuts each image into tagged per-track files in a staging folder
+   * below the root folder and plans those like any download; `keepImage` (and `split` without
+   * ffmpeg, or when a cut fails) plans the image itself, linked to every track it holds. Groups
+   * whose sheets do not fit stay with Manual Import. Returns the staging folders to remove.
+   */
+  private async resolveCueImages(plan: ScanPlan, artist: ArtistRow, albumIds: readonly number[], releaseTitle: string | null): Promise<string[]> {
+    const audio = getSection(this.db, 'audio');
+    const staging: string[] = [];
+    if (audio.cueHandling === 'manual' || plan.cueGroups.length === 0) return staging;
+    const threshold = this.threshold();
+    const known = this.known(artist.id, albumIds);
+    let tools: AudioTools | null = null;
+    if (audio.cueHandling === 'split') {
+      const candidate = this.audioTools();
+      if (await candidate.available()) tools = candidate;
+      else this.o.log?.info('ffmpeg not found; cue images are imported whole');
+    }
+    for (const u of plan.cueGroups) {
+      const { cue, problems } = await readCueGroup(u.group);
+      if (!cue) {
+        if (problems.length > 0) this.o.log?.info({ folder: u.group.folder, problems }, 'cue sheet not usable');
+        continue;
+      }
+      const hit = bestAlbumMatch(u.group, known, threshold, cue.files);
+      if (!hit?.match.accepted) continue;
+      const albumId = Number(hit.album.albumId);
+      if (plan.albums.some((p) => p.album.id === albumId)) continue;
+      const album = this.db.select().from(albums).where(eq(albums.id, albumId)).get();
+      const releaseId = typeof hit.match.ref === 'number' ? hit.match.ref : album?.selectedReleaseId;
+      if (!album || releaseId == null) continue;
+      const release = music.releaseRow(this.db, albumId, releaseId);
+      const trackIds = hit.match.mapping.map((m) => m.ref).filter((r): r is number => typeof r === 'number');
+      const trackRows = new Map((trackIds.length ? this.db.select().from(tracks).where(inArray(tracks.id, trackIds)).all() : []).map((t) => [t.id, t]));
+      const spanOf = new Map(cue.spans.map((s) => [cueVirtualPath(s.imagePath, s.track.number), s]));
+      const mapped = hit.match.mapping.flatMap((m) => {
+        const track = typeof m.ref === 'number' ? trackRows.get(m.ref) : undefined;
+        const span = spanOf.get(m.path);
+        return track && span ? [{ track, span, score: m.score }] : [];
+      });
+      if (mapped.length === 0) continue;
+
+      const warnings: string[] = [];
+      if (hit.match.missingTracks.length > 0) {
+        warnings.push(`${album.title}: ${hit.match.missingTracks.length} of ${hit.match.missingTracks.length + mapped.length} tracks are missing; the album stays wanted`);
+      }
+      const base = { album, release, confidence: hit.match.confidence, group: u.group, cue, mapped, warnings, releaseTitle };
+      let planned: AlbumPlan[] | null = null;
+      if (tools) {
+        const dir = join(artist.rootFolderPath, STAGING_FOLDER, `cue-${randomUUID()}`);
+        staging.push(dir);
+        planned = await this.splitCueGroup(artist, known, tools, dir, base);
+      }
+      plan.albums.push(...(planned ?? [this.cueImagePlan(artist, base)]));
+      const images = new Set(cue.images.map((f) => f.path));
+      plan.rejected = plan.rejected.filter((r) => !images.has(r.file.path));
+      plan.groupMessages = plan.groupMessages.filter((m) => m !== cueMessage(u.group));
+      plan.cueImages--;
+    }
+    return staging;
+  }
+
+  /** keepImage: one planned file per image, linked to every track its sheet maps. */
+  private cueImagePlan(artist: ArtistRow, c: CueAlbum): AlbumPlan {
+    const byImage = new Map<string, CueAlbum['mapped']>();
+    for (const m of c.mapped) byImage.set(m.span.imagePath, [...(byImage.get(m.span.imagePath) ?? []), m]);
+    const files: PlannedFile[] = [];
+    for (const [path, list] of byImage) {
+      const scanned = c.cue.images.find((f) => f.path === path);
+      if (!scanned) continue;
+      list.sort((a, b) => a.track.mediumNumber - b.track.mediumNumber || a.track.trackNumber - b.track.trackNumber);
+      const first = list[0]!.track;
+      const existing = first.audioFileId != null ? (this.db.select().from(audioFiles).where(eq(audioFiles.id, first.audioFileId)).get() ?? null) : null;
+      files.push({
+        file: scanned,
+        groupFolder: c.group.folder,
+        track: first,
+        score: Math.min(...list.map((m) => m.score)),
+        quality: audioQualityOf(scanned, c.releaseTitle),
+        releaseGroup: safe(() => parseAudioPath(path, 'music').releaseGroup) ?? null,
+        existing,
+        inPlace: isUnder(path, artist.path),
+        rejections: [],
+        cue: { tracks: list.map((m) => ({ track: m.track, cueTrack: m.span.track.number, startMs: m.span.startMs, endMs: m.span.endMs })) },
+      });
+    }
+    return {
+      album: c.album,
+      release: c.release,
+      confidence: c.confidence,
+      mediumCount: Math.max(1, c.release.mediumCount, ...c.mapped.map((m) => m.track.mediumNumber)),
+      groups: [c.group],
+      files,
+      extras: c.group.extras,
+      missingTrackCount: c.release.trackCount > 0 ? Math.max(0, c.release.trackCount - c.mapped.length) : 0,
+      releaseChanged: false,
+      warnings: c.warnings,
+    };
+  }
+
+  /**
+   * split: every mapped cue track is cut into `<staging>/<disc>-<nn> - <title>.<ext>` (FLAC for
+   * lossless images, the image's own format by stream copy otherwise), tagged from the
+   * catalogue and the sheet, then scanned and planned like a download. The download is only
+   * read. Null when ffmpeg fails or the cut tracks do not map back (the caller keeps the image).
+   */
+  private async splitCueGroup(artist: ArtistRow, known: readonly KnownAlbum[], tools: AudioTools, dir: string, c: CueAlbum): Promise<AlbumPlan[] | null> {
+    const mediumCount = Math.max(1, c.release.mediumCount, ...c.mapped.map((m) => m.track.mediumNumber));
+    const totals = this.mediumTotals(c.release.id);
+    try {
+      await mkdir(dir, { recursive: true });
+      for (const { track, span } of c.mapped) {
+        const image = c.cue.images.find((f) => f.path === span.imagePath)!;
+        const lossless = image.tags?.lossless ?? audioQualityOf(image).quality.name.match(/FLAC|ALAC|PCM|Lossless|DSD/) !== null;
+        const ext = lossless ? '.flac' : extname(image.path).toLowerCase();
+        const name = `${mediumCount > 1 ? `${track.mediumNumber}-` : ''}${String(track.trackNumber).padStart(2, '0')} - ${fileNameOf(track.title)}${ext}`;
+        const sheet = c.cue.sheets.find((s) => s.spans.includes(span))?.sheet;
+        const tags: TrackTagValues = {
+          ...this.tagValues(artist, c.album, c.release, track, totals, mediumCount),
+          isrc: span.track.isrc,
+          genre: sheet?.genre ?? null,
+        };
+        await tools.split({ source: image.path, destination: join(dir, name), startMs: span.startMs, endMs: span.endMs, lossless, tags });
+      }
+      const scan = await scanAudioPath(dir, { tagReader: this.tagReader() });
+      const result = matchArtistScan(
+        scan,
+        known.filter((k) => Number(k.albumId) === c.album.id),
+        { threshold: this.threshold() },
+      );
+      const sub = this.toPlan(scan, artist, result, { releaseTitle: c.releaseTitle, releaseChanged: new Set() });
+      if (sub.albums.length === 0) throw new Error('the split tracks did not map back to the album');
+      const releaseGroup = safe(() => parseAudioPath(c.cue.images[0]!.path, 'music').releaseGroup) ?? null;
+      for (const p of sub.albums) {
+        p.staged = dir;
+        p.groups = [c.group];
+        // The cue sheet describes the image, not the split tracks; logs and covers still come along.
+        p.extras = c.group.extras.filter((e) => e.kind !== 'cue');
+        p.warnings.push(...c.warnings.filter((w) => !p.warnings.includes(w)));
+        for (const f of p.files) f.releaseGroup ??= releaseGroup;
+      }
+      return sub.albums;
+    } catch (err) {
+      this.o.log?.warn({ err, folder: c.group.folder }, 'cue image not split; importing it whole');
+      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+      return null;
+    }
+  }
+
+  private async removeStaging(dirs: readonly string[]): Promise<void> {
+    for (const dir of dirs) {
+      await rm(dir, { recursive: true, force: true }).catch((err: unknown) => this.o.log?.warn({ err, dir }, 'staging folder not removed'));
+      // The shared parent goes when it is empty (another import may still use it).
+      await rmdir(dirname(dir)).catch(() => undefined);
+    }
+  }
+
+  /** Track count per medium of an edition. */
+  private mediumTotals(releaseId: number): Map<number, number> {
+    const out = new Map<number, number>();
+    for (const t of this.db.select({ medium: tracks.mediumNumber }).from(tracks).where(eq(tracks.albumReleaseId, releaseId)).all()) {
+      out.set(t.medium, (out.get(t.medium) ?? 0) + 1);
+    }
+    return out;
+  }
+
+  /** What `audio.writeTags` writes for a track: the catalogue's names and MusicBrainz ids. */
+  private tagValues(artist: ArtistRow, album: AlbumRow, release: AlbumReleaseRow, track: TrackRow, totals: ReadonlyMap<number, number>, mediumCount: number): TrackTagValues {
+    // A track credited to someone else (compilations, features) does not get the album artist's id.
+    const ownCredit = !track.artistCredit || track.artistCredit === artist.name;
+    return {
+      title: track.title,
+      artist: track.artistCredit ?? artist.name,
+      albumArtist: artist.name,
+      album: album.title,
+      date: release.date ?? album.releaseDate ?? (album.year ? String(album.year) : null),
+      trackNumber: track.trackNumber,
+      trackTotal: totals.get(track.mediumNumber) ?? null,
+      discNumber: track.mediumNumber,
+      discTotal: mediumCount,
+      mbRecordingId: track.mbRecordingId,
+      mbReleaseTrackId: track.mbTrackId,
+      mbReleaseId: release.mbReleaseId,
+      mbReleaseGroupId: album.mbReleaseGroupId,
+      mbArtistId: ownCredit ? artist.mbArtistId : null,
+      mbAlbumArtistId: artist.mbArtistId,
+    };
+  }
+
+  // -------------------------------------------------------------------------------------
+  // Covers, tags and ReplayGain (opt-in, after the files are placed)
+  // -------------------------------------------------------------------------------------
+
+  private async findCover(folder: string): Promise<string | null> {
+    const names = new Set((await readdir(folder).catch(() => [] as string[])).map((n) => n.toLowerCase()));
+    const hit = COVER_NAMES.find((n) => names.has(n));
+    if (!hit) return null;
+    const actual = (await readdir(folder)).find((n) => n.toLowerCase() === hit)!;
+    return join(folder, actual);
+  }
+
+  /** `audio.saveCoverArt`: the edition's Cover Art Archive front (500 px), else the release group's. */
+  private async saveCover(plan: AlbumPlan, albumFolder: string): Promise<string | null> {
+    const fetchImage = this.o.deps().fetchImage ?? defaultFetchImage;
+    const urls = [coverArtReleaseFrontUrl(plan.release.mbReleaseId, 500), coverArtReleaseGroupFrontUrl(plan.album.mbReleaseGroupId, 500)];
+    for (const url of urls) {
+      try {
+        const bytes = await fetchImage(url);
+        if (!bytes || bytes.length === 0) continue;
+        const path = join(albumFolder, 'cover.jpg');
+        await writeFile(path, bytes);
+        return path;
+      } catch (err) {
+        this.o.log?.debug({ err, url }, 'cover not fetched');
+      }
+    }
+    return null;
+  }
+
+  /**
+   * The opt-in finishing pass over the placed files: `cover.jpg`, ReplayGain, tags and an
+   * embedded cover. Tags are only written into files the import owns (copies, moves, split
+   * tracks); a hard link or a file registered in place is only measured. Kept cue images are
+   * left alone. A failure keeps the file as it was and becomes a warning on its outcome.
+   */
+  private async finishFiles(
+    artist: ArtistRow,
+    plan: AlbumPlan,
+    albumFolder: string,
+    placed: Array<{ f: PlannedFile; row: AudioFileRow; destination: string; transfer: TransferResult | 'none' }>,
+    outcomes: MusicImportOutcome[],
+  ): Promise<void> {
+    const audio = getSection(this.db, 'audio');
+    let cover = audio.saveCoverArt || audio.embedCoverArt ? await this.findCover(albumFolder) : null;
+    if (audio.saveCoverArt && !cover) cover = await this.saveCover(plan, albumFolder);
+    if (!audio.writeTags && !audio.embedCoverArt && !audio.replayGain) return;
+    const tools = this.audioTools();
+    if (!(await tools.available())) {
+      this.o.log?.warn('ffmpeg not found; tags, covers and ReplayGain were not written');
+      return;
+    }
+    const totals = this.mediumTotals(plan.release.id);
+    for (const p of placed) {
+      if (p.f.cue) continue;
+      const outcome = outcomes.find((o) => o.audioFileId === p.row.id);
+      const warn = (what: string, err: unknown) => {
+        this.o.log?.warn({ err, path: p.destination }, what);
+        if (outcome) outcome.warnings = [...(outcome.warnings ?? []), `${what}: ${errorMessage(err)}`];
+      };
+      const writable = p.transfer === 'copy' || p.transfer === 'move';
+      let gain: { gainDb: number; peak: number } | null = null;
+      if (audio.replayGain) {
+        try {
+          gain = await tools.measureReplayGain(p.destination);
+        } catch (err) {
+          warn('ReplayGain not measured', err);
+        }
+      }
+      const tags: TrackTagValues = {
+        ...(audio.writeTags ? this.tagValues(artist, plan.album, plan.release, p.f.track, totals, plan.mediumCount) : {}),
+        ...(gain ? { replayGainTrackGain: gain.gainDb, replayGainTrackPeak: gain.peak } : {}),
+      };
+      const coverPath = audio.embedCoverArt ? cover : null;
+      let written = false;
+      if (writable && (Object.keys(tags).length > 0 || coverPath)) {
+        try {
+          await tools.writeTags(p.destination, { tags, coverPath });
+          written = true;
+        } catch (err) {
+          warn('Tags not written', err);
+        }
+      }
+      if (!gain && !written) continue;
+      const sizeBytes = written ? (await stat(p.destination)).size : p.row.sizeBytes;
+      const mediaInfo = { ...(p.row.mediaInfo ?? {}), ...(gain ? { replayGainTrackDb: gain.gainDb, replayGainTrackPeak: gain.peak } : {}) };
+      p.row = this.db.update(audioFiles).set({ sizeBytes, mediaInfo }).where(eq(audioFiles.id, p.row.id)).returning().get();
+    }
   }
 
   private albumTitle(id: number): string | null {
@@ -805,7 +1145,9 @@ export class MusicImporter {
     }
     const albumFolder = this.albumFolderFor(artist, plan.album, naming);
     const artistExisted = await isDirectory(artist.path);
-    const mode = this.transferMode(opts.mode, settings);
+    // Split cue tracks are Arclight's own files in a staging folder: always moved.
+    const extrasMode = this.transferMode(opts.mode, settings);
+    const mode: TransferMode = plan.staged ? 'move' : extrasMode;
     const bin = new RecycleBin(settings.recycleBinPath, this.o.now);
     const placed: Array<{ f: PlannedFile; row: AudioFileRow; destination: string; replaced: AudioFileRow | null; transfer: TransferResult | 'none' }> = [];
 
@@ -833,7 +1175,8 @@ export class MusicImporter {
     }
     if (placed.length === 0) return outcomes;
 
-    await this.importExtras(plan, albumFolder, placed, mode);
+    await this.importExtras(plan, albumFolder, placed, extrasMode);
+    await this.finishFiles(artist, plan, albumFolder, placed, outcomes);
     if (settings.setPermissions) {
       if (!artistExisted) await setPermissions(artist.path, settings.chmodFolder, true);
       await setPermissions(albumFolder, settings.chmodFolder, true);
@@ -876,7 +1219,7 @@ export class MusicImporter {
       artistId: artist.id,
       albumId: plan.album.id,
       albumIds: [plan.album.id],
-      trackIds: placed.map((p) => p.f.track.id),
+      trackIds: placed.flatMap((p) => (p.f.cue ? p.f.cue.tracks.map((t) => t.track.id) : [p.f.track.id])),
       files,
       replacedFiles,
       quality: best,
@@ -917,7 +1260,8 @@ export class MusicImporter {
         );
       }
     } else {
-      destination = this.trackDestination(artist, plan.album, albumFolder, f, plan.mediumCount, o.naming);
+      // A kept cue image keeps its file name: the cue sheet next to it refers to it by name.
+      destination = this.trackDestination(artist, plan.album, albumFolder, f, plan.mediumCount, f.cue ? { ...o.naming, renameTracks: false } : o.naming);
       // The new file is placed first; a replaced file on the same path is set aside meanwhile
       // and put back when the transfer fails (the same routine as video upgrades).
       let setAside: string | null = null;
@@ -979,7 +1323,12 @@ export class MusicImporter {
       partNumber: null,
       chapterCount: t?.chapters ? t.chapters.length : null,
       tags: t ? fileTags(t) : null,
-      mediaInfo: t ? { source: t.source, lossless: t.lossless } : null,
+      mediaInfo: t || f.cue
+        ? {
+            ...(t ? { source: t.source, lossless: t.lossless } : {}),
+            ...(f.cue ? { cueTracks: f.cue.tracks.map((c) => ({ trackId: c.track.id, cueTrack: c.cueTrack, startMs: c.startMs, endMs: c.endMs })) } : {}),
+          }
+        : null,
       grabOverride: o.grabOverride,
     };
     const row = this.db.transaction((tx) => {
@@ -992,7 +1341,8 @@ export class MusicImporter {
       const saved = prior
         ? tx.update(audioFiles).set(values).where(eq(audioFiles.id, prior.id)).returning().get()
         : tx.insert(audioFiles).values({ ...values, dateAdded: now }).returning().get();
-      tx.update(tracks).set({ hasFile: true, audioFileId: saved.id }).where(eq(tracks.id, f.track.id)).run();
+      const linked = f.cue ? f.cue.tracks.map((c) => c.track.id) : [f.track.id];
+      tx.update(tracks).set({ hasFile: true, audioFileId: saved.id }).where(inArray(tracks.id, linked)).run();
       return saved;
     });
     return { row, destination, replaced, transfer };

@@ -28,7 +28,7 @@ Defaults chosen for the open questions (changeable later):
 - Multi-disc: flat `1-01 - Title` by default; `Disc N/` subfolders optional.
 - Audiobook folders without narrator or year by default (tokens available).
 - Audiobookshelf: library-wide scan of the matching library (incremental, cheap).
-- CUE + single-image rips go to manual import (splitting is Wave 5).
+- CUE + single-image rips follow `audio.cueHandling`: split into per-track files with ffmpeg (default; falls back to keeping the image when ffmpeg is missing or fails), kept whole with each track pointing into the image, or sent to manual import ([using/music-cue-and-tagging.md](../using/music-cue-and-tagging.md)).
 - Fanart.tv: the user supplies their own key.
 
 ## 2. Fit with the current architecture
@@ -68,14 +68,14 @@ On `tracked_downloads`, `history`, `blocklist`, `pending_releases`, `release_dec
 | Table | Columns |
 |---|---|
 | `artists` | `id, mb_artist_id UNIQUE, name, sort_name, clean_name (idx), disambiguation, artist_type, status ('continuing'\|'ended'), overview, genres json, images json, links json, aliases json, path UNIQUE, root_folder_path, quality_profile_id, album_type_profile_id, monitored, monitor_new_albums ('all'\|'none'\|'future'), tags json, added, last_refreshed, next_refresh_at` |
-| `album_type_profiles` | `id, name UNIQUE, primary_types json, secondary_types json, release_statuses json`; seeded "Studio albums" (default: Album + EP) and "Everything". Decides which release groups become album rows. |
+| `album_type_profiles` | `id, name UNIQUE, primary_types json, secondary_types json, release_statuses json, edition_preference ('any'\|'original'\|'standard'\|'deluxe'\|'remaster'), preferred_countries json, preferred_formats json`; seeded "Studio albums" (default: Album + EP) and "Everything". Decides which release groups become album rows. |
 | `albums` | `id, artist_id→artists cascade, mb_release_group_id UNIQUE, title, clean_title, disambiguation, primary_type, secondary_types json, release_date, year, overview, genres json, images json, ratings json, monitored, any_release_ok default true, selected_release_id, added, last_refreshed`; idx `(artist_id)`, `(monitored, release_date)` |
 | `album_releases` | `id, album_id→albums cascade, mb_release_id UNIQUE, title, status, country, date, labels json, catalog_number, barcode, formats json, medium_count, track_count, duration_ms, media json, disambiguation` |
-| `tracks` | `id, album_id→albums cascade, album_release_id→album_releases cascade, mb_track_id, mb_recording_id (idx), medium_number, absolute_number, track_number, title, duration_ms, artist_credit, has_file, audio_file_id (idx)`; unique `(album_release_id, medium_number, track_number)`. Only the selected release's tracks are stored; switching re-fetches and re-links by recording id, then position. |
+| `tracks` | `id, album_id→albums cascade, album_release_id→album_releases cascade, mb_track_id, mb_recording_id (idx), medium_number, absolute_number, track_number, title, duration_ms, artist_credit, has_file, audio_file_id (idx), monitored default true` (per-track wanted; kept across an edition switch by recording id, then position); unique `(album_release_id, medium_number, track_number)`. Only the selected release's tracks are stored; switching re-fetches and re-links by recording id, then position. |
 
-Default release choice: official → preferred countries (setting) → preferred format (Digital Media, then CD) → most common track count → earliest date. With `any_release_ok`, an import may switch to a better-fitting release.
+Default release choice (`chooseRelease`): official → the profile's edition preference (`original`: earliest date; `standard`: no deluxe/remaster; `deluxe`: deluxe/expanded, then most tracks; `remaster`; read from title and disambiguation by `editionKind`) → preferred countries → preferred format (profile lists override `musicMetadata`; defaults Digital Media, then CD) → most common track count → earliest date. With `any_release_ok`, an import may switch to a better-fitting release.
 
-Monitoring: `MusicMonitorOption = all | future | missing | existing | latest | first | none` (like `applyMonitorOption`). `monitor_new_albums` decides what refresh does with new release groups. Statistics `AlbumStatistics {trackCount, trackFileCount, totalTrackCount, sizeOnDisk, percentOfTracks}` and `ArtistStatistics` computed in SQL; `getLibraryStatistics` gains artist/album/track-file/author/book counts. Missing: monitored, released, `trackFileCount < trackCount`. Cutoff unmet: lowest track-file quality or format score below the profile cutoff.
+Monitoring: `MusicMonitorOption = all | future | missing | existing | latest | first | none` (like `applyMonitorOption`). `monitor_new_albums` decides what refresh does with new release groups. Statistics `AlbumStatistics {trackCount, trackFileCount, totalTrackCount, sizeOnDisk, percentOfTracks, monitoredTrackCount, missingTrackCount}` (missing = monitored tracks without a file; an album whose wanted tracks are all on disk is complete for wanted, search and the release engine) and `ArtistStatistics` computed in SQL; `getLibraryStatistics` gains artist/album/track-file/author/book counts. Missing: monitored, released, `trackFileCount < trackCount`. Cutoff unmet: lowest track-file quality or format score below the profile cutoff.
 
 ### 4.4 Audiobooks (0019, `modules/audiobooks/schema.ts`)
 
@@ -113,7 +113,7 @@ Missing: monitored, released, no files. Cutoff on the book's files (one release;
 
 ### 5.3 Caching and jobs
 
-In-memory TTL cache (as TMDB) plus `metadata_cache` with ETag. TTLs: MB artist 7 d; release-group browse 1 d (active) / 7 d; release with tracks 30 d; Audnexus book 7 d; Audible search 1 d; OpenLibrary 30 d.
+In-memory TTL cache (as TMDB) plus `metadata_cache` with ETag. When a provider is unreachable or rate-limits, `cached()` serves the stale stored answer instead of failing. Artist overviews: Wikidata sitelink (or a MusicBrainz Wikipedia url-rel) → Wikipedia REST summary (disambiguation pages skipped), else Last.fm `artist.getInfo` with the playlist settings' key. TTLs: MB artist 7 d; release-group browse 1 d (active) / 7 d; release with tracks 30 d; Audnexus book 7 d; Audible search 1 d; OpenLibrary 30 d.
 
 Jobs (`modules/metadata/jobs.ts`): `RefreshArtists` every 6 h, budgeted (~20 min of calls), ordered by `next_refresh_at` (+1 d if a release in the last 90 days or upcoming, +7 d continuing, +30 d ended); `RefreshAuthors` every 12 h (+7 d, +1 d with a future monitored book); ad-hoc `ArtistAdd` / `AuthorAdd`; daily `MetadataCacheCleanup`. `MusicRefresher` / `AudiobookRefresher` next to `MetadataRefresher`, wired into `libraryCommands` (`artistIds`, `authorIds`).
 
@@ -147,7 +147,7 @@ Fixtures `packages/parser/fixtures/music.json`, `audiobook.json` (`{input, expec
 
 Guard: `qualitiesByWeight()`, `buildItems()`, profile routes and `compat/quality.ts` filter by domain; audio never appears in video profiles or the Sonarr/Radarr compat output. Default sizes (MB/min): MP3-320 2.2–2.6, V0 1.4–2.4, FLAC 3.5–12, FLAC-24 8–40, AB-AAC 0.25–1.5, checked against album duration / book runtime.
 
-Profiles seeded on first enable — music: Lossless (cutoff FLAC), Hi-Res (FLAC-24bit), High-quality lossy (MP3-320, V0, AAC-256+; cutoff MP3-320), Any (FLAC); audiobooks: Standard (AB-MP3+, AB-AAC; cutoff AB-AAC), M4B only, Any. The profile UI gets a domain selector.
+Profiles seeded on first enable — music: Lossless (cutoff FLAC), Hi-Res (FLAC-24bit), High-quality lossy (MP3-320, V0, AAC-256+; cutoff MP3-320), Any (FLAC), Lossless, lossy fallback (lossy HQ + lossless; cutoff FLAC), Portable (Opus/AAC/MP3; cutoff V0; seeded on new installs only, since seeding runs once per domain); audiobooks: Standard (AB-MP3+, AB-AAC; cutoff AB-AAC), M4B only, Any. The profile UI gets a domain selector.
 
 New `CustomFormatSpec` kinds: `audioCodec`, `audioBitrate`, `bitDepth`, `sampleRate`, `audioSource` (cd, web, vinyl, sacd, cassette, other), `ripLog` (requireLog, minScore, requireCue), `fileLayout` (single, multi), `formatType`, `narrator` (pattern). Existing `releaseTitle`, `releaseGroup`, `edition`, `size`, `indexerFlag`, `year` apply; `releaseType` gains `discography`, `multiAlbum`, `bookPack`. `ReleaseEvaluation.audio?`; audio specs evaluate false without it. The UI lists only formats matching a profile's domain.
 
@@ -163,7 +163,7 @@ New `CustomFormatSpec` kinds: `audioCodec`, `audioBitrate`, `bitDepth`, `sampleR
 
 `TagReader` (`imports/audio/tags.ts`) returning `AudioTags { title, artist, albumArtist, album, date, trackNo, trackOf, discNo, discOf, mbRecordingId, mbReleaseId, mbReleaseGroupId, mbArtistId, asin, isbn, narrator, series, seriesPart, codec, container, bitrateKbps, sampleRateHz, bitDepth, channels, durationMs, chapters? }`. `music-metadata` primary (in-process, ~1–5 ms/file, normalised tags, m4b chapters), ffprobe fallback on parse error and as the source of truth for duration disagreements.
 
-Music import (`imports/audio/music-import.ts`): scan audio extensions (`.flac .mp3 .m4a .aac .ogg .opus .wav .aiff .ape .wv .dsf .dff`) plus extras (`.cue .log` covers `.lrc .txt`); group by MB release-group id → album/album-artist tags → folder; match each group to a release (target from the grab's `album_ids` or a library lookup) scoring track-count fit, title similarity, duration delta (±7 s or ±3%), disc/track numbers, recording-id bonus; accept above `audio.trackMatchThreshold` (0.8), switching `selected_release_id` if `any_release_ok`. Import specs reused (absolutePath, freeSpace, notUnpacking, sameFile, alreadyImported, upgrade) plus `trackMapping`, `incompleteAlbum` (warn; album stays wanted), `cueImage` (→ manual import), `mixedReleases`. Transfer with `transferFile` (hard link/copy/move, recycle bin). **No retagging** (it breaks hard links and seeding). One `audio_files` row per file, linked from `tracks.audio_file_id`. Bus `import imported` with `mediaType: 'music'` → history, notifications, media-server refresh.
+Music import (`imports/audio/music-import.ts`): scan audio extensions (`.flac .mp3 .m4a .aac .ogg .opus .wav .aiff .ape .wv .dsf .dff`) plus extras (`.cue .log` covers `.lrc .txt`); group by MB release-group id → album/album-artist tags → folder; match each group to a release (target from the grab's `album_ids` or a library lookup) scoring track-count fit, title similarity, duration delta (±7 s or ±3%), disc/track numbers, recording-id bonus; accept above `audio.trackMatchThreshold` (0.8), switching `selected_release_id` if `any_release_ok`. Import specs reused (absolutePath, freeSpace, notUnpacking, sameFile, alreadyImported, upgrade) plus `trackMapping`, `incompleteAlbum` (warn; album stays wanted), `cueImage` (→ `audio.cueHandling`, manual import when set to `manual` or the sheet does not map), `mixedReleases`. Transfer with `transferFile` (hard link/copy/move, recycle bin). **No retagging of hard links or download files** (it breaks seeding). Opt-in `audio.writeTags` / `embedCoverArt` / `replayGain` (all off by default) touch only copied, moved or split library files, via `ffmpeg -c copy` into a temp file renamed over the original; `saveCoverArt` writes `cover.jpg` from the Cover Art Archive. One `audio_files` row per file, linked from `tracks.audio_file_id`. Bus `import imported` with `mediaType: 'music'` → history, notifications, media-server refresh.
 
 Audiobook import (`imports/audio/audiobook-import.ts`): one book = one folder or file group, ordered by disc tag → track tag → natural filename sort; total duration within ±5% of the runtime (configurable); narrator mismatch is a warning; parts renamed with `{Part:00}` (`renameAudiobookParts`, default on); optional `writeAbsSidecars` (`desc.txt`, `reader.txt`, `cover.jpg`).
 
@@ -246,7 +246,7 @@ Each wave ships behind its flag. WP-A lands first (contracts + migration); the r
 
 **Wave 4 — requests and availability.** `media_requests` rebuild (0020) and audio request service; availability via Plex/Jellyfin/ABS ids; portal discover (ListenBrainz, Audible lists) and request UI; notification and Discord formats.
 
-**Wave 5 — ecosystem (optional).** Lidarr compat; `migrate` readers for Lidarr and Readarr databases; import lists (ListenBrainz, Last.fm, MusicBrainz collections, Hardcover); Gazelle-API indexers; CUE splitting via ffmpeg; optional retag on copy; image cache.
+**Wave 5 — ecosystem (optional).** Lidarr compat; `migrate` readers for Lidarr and Readarr databases; import lists (ListenBrainz, Last.fm, MusicBrainz collections, Hardcover); Gazelle-API indexers; image cache. (CUE splitting via ffmpeg and optional retag on copy shipped early, see section 9.)
 
 ### Tests
 
@@ -264,6 +264,6 @@ No live calls: every client takes `FetchLike`; recorded responses in `packages/m
 | Audiobook category ambiguity | Per-indexer categories; matcher needs a library hit; decision log shows the domain |
 | Union widening leaks into video code | Separate `AudioMediaType` / `AnyMediaType`; compiler finds exhaustive switches |
 | Audio qualities leaking into video | Domain filters with tests |
-| Retagging breaks seeding | No retagging in Waves 1–4 |
+| Retagging breaks seeding | Tagging is opt-in and never touches hard links or the download; only copies, moves and split output are rewritten |
 | Parallel migration conflicts | One schema owner per wave |
 | Many music users rely on Gazelle trackers | Wave 5; Torznab via Jackett-style proxies until then |

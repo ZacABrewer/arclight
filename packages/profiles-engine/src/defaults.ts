@@ -97,13 +97,20 @@ const LOSSY_HQ: QualityName[] = ['MP3-VBR-V0', 'MP3-320', 'AAC-256', 'AAC-320', 
 const LOSSLESS: QualityName[] = ['ALAC', 'FLAC', 'Lossless-Other'];
 const HI_RES: QualityName[] = ['ALAC-24bit', 'FLAC-24bit'];
 
-/** Music profiles, seeded the first time music is switched on (design section 7.2). */
+/**
+ * Music profiles, seeded the first time music is switched on (design section 7.2). Seeding is
+ * once per domain, so profiles added here reach new installs only; existing ones add them by hand.
+ */
 export function defaultMusicProfiles(): QualityProfileInput[] {
   return [
     profile('Lossless', 'FLAC', LOSSLESS, 'music'),
     profile('Hi-Res', 'FLAC-24bit', [...LOSSLESS, ...HI_RES], 'music'),
     profile('High-quality lossy', 'MP3-320', LOSSY_HQ, 'music'),
     profile('Any (music)', 'FLAC', ['MP3-192', 'MP3-VBR-V2', 'MP3-256', ...LOSSY_HQ, 'AAC-Low', 'Vorbis', ...LOSSLESS, ...HI_RES], 'music'),
+    // Takes good lossy now and keeps upgrading until FLAC arrives.
+    profile('Lossless, lossy fallback', 'FLAC', [...LOSSY_HQ, ...LOSSLESS], 'music'),
+    // Device-friendly sizes: lossy only, done once V0 or better is in.
+    profile('Portable (Opus/AAC/MP3)', 'MP3-VBR-V0', ['MP3-256', ...LOSSY_HQ, 'Vorbis'], 'music'),
   ];
 }
 

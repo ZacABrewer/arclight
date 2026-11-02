@@ -10,6 +10,7 @@ import type { MbRelease } from '@arclight/metadata';
 import { buildItems } from '@arclight/profiles-engine';
 import {
   QUALITIES,
+  type AudioImportSettings,
   type AudioManualImportItem,
   type AudioManualImportResult,
   type MediaManagementSettings,
@@ -37,7 +38,9 @@ import type { TrackedDownload } from '../../download-clients/index.js';
 import type { AudioImportedEvent, ImportsDeps } from '../deps.js';
 import { importsRoutes } from '../routes.js';
 import { ImportsService, type DownloadClientsPort } from '../service.js';
+import type { AudioTools, TrackTagValues } from './audio-tools.js';
 import { buildFlac, buildMp3, type FixtureTags } from './fixtures/builders.js';
+import { rescanArtist } from './rescan.js';
 
 // The music importer end to end over temp folders of tiny silent tagged files (durations of
 // 1-4 s stand in for real track lengths) and a test database seeded with an artist, albums,
@@ -692,6 +695,245 @@ describe('music import of a completed download', () => {
 function extnameOf(p: string): string {
   return p.slice(p.lastIndexOf('.'));
 }
+
+// ---------------------------------------------------------------------------------------
+
+describe('cue images, tags, covers and ReplayGain', () => {
+  // FIRST runs 1.0 + 1.5 + 2.0 s; the image holds the three tracks back to back.
+  const CUE = [
+    'REM GENRE Rock',
+    'PERFORMER "Fixture Artist"',
+    'TITLE "First Record"',
+    'FILE "Fixture Artist - First Record.flac" WAVE',
+    '  TRACK 01 AUDIO',
+    '    TITLE "Opening"',
+    '    INDEX 01 00:00:00',
+    '  TRACK 02 AUDIO',
+    '    TITLE "Middle Part"',
+    '    ISRC GBAAA0100002',
+    '    INDEX 01 00:01:00',
+    '  TRACK 03 AUDIO',
+    '    TITLE "Closing Time"',
+    '    INDEX 01 00:02:38',
+  ].join('\r\n');
+
+  async function writeImage(src: string): Promise<string> {
+    const image = await put(join(src, 'Fixture Artist - First Record.flac'), buildFlac({ durationMs: 4500, tags: { album: 'First Record', albumArtist: ARTIST, title: 'First Record' } }));
+    await put(join(src, 'Fixture Artist - First Record.cue'), CUE);
+    await put(join(src, 'rip.log'), 'EAC log');
+    return image;
+  }
+
+  /** ffmpeg stand-in: "cuts" by writing a silent tagged FLAC of the span's length. */
+  class FakeTools implements AudioTools {
+    splits: Array<Parameters<AudioTools['split']>[0]> = [];
+    writes: Array<{ path: string; tags: TrackTagValues; coverPath: string | null }> = [];
+    measured: string[] = [];
+    constructor(private readonly found = true) {}
+    async available() {
+      return this.found;
+    }
+    async split(input: Parameters<AudioTools['split']>[0]) {
+      this.splits.push(input);
+      const durationMs = (input.endMs ?? 4500) - input.startMs;
+      const t = input.tags;
+      await writeFile(
+        input.destination,
+        buildFlac({
+          durationMs,
+          // Only the values the cut was given (exactOptionalPropertyTypes: no undefined fields).
+          tags: Object.fromEntries(
+            Object.entries({ title: t.title, artist: t.artist, albumArtist: t.albumArtist, album: t.album, trackNo: t.trackNumber, discNo: t.discNumber, mbRecordingId: t.mbRecordingId }).filter(
+              ([, v]) => v !== null && v !== undefined,
+            ),
+          ) as FixtureTags,
+        }),
+      );
+    }
+    async writeTags(path: string, input: { tags: TrackTagValues; coverPath?: string | null }) {
+      this.writes.push({ path, tags: input.tags, coverPath: input.coverPath ?? null });
+    }
+    async measureReplayGain(path: string) {
+      this.measured.push(path);
+      return { gainDb: -6.5, peak: 0.9 };
+    }
+  }
+
+  const setAudio = (values: Partial<AudioImportSettings>) => setSection(db, 'audio', { ...getSection(db, 'audio'), ...values });
+
+  it('keeps an image whole and links every track to it (keepImage); a rescan keeps the links', async () => {
+    setAudio({ cueHandling: 'keepImage' });
+    const album = addAlbum('First Record', [release('First Record', FIRST)]);
+    const src = join(downloads, 'First Record [FLAC Image]');
+    await writeImage(src);
+    const result = await service().importCompletedDownload(tracked({ id: 40, title: 'First Record [FLAC Image]', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(await listTree(artistPath)).toEqual([
+      'First Record (2001)/Fixture Artist - First Record.cue',
+      'First Record (2001)/Fixture Artist - First Record.flac',
+      'First Record (2001)/rip.log',
+    ]);
+    const rows = albumTracks(album.id);
+    expect(rows.every((t) => t.hasFile)).toBe(true);
+    expect(new Set(rows.map((t) => t.audioFileId)).size).toBe(1);
+    const file = db.select().from(audioFiles).where(eq(audioFiles.id, rows[0]!.audioFileId!)).get()!;
+    expect(file.mediaInfo?.cueTracks).toEqual([
+      { trackId: rows[0]!.id, cueTrack: 1, startMs: 0, endMs: 1000 },
+      { trackId: rows[1]!.id, cueTrack: 2, startMs: 1000, endMs: 2507 },
+      { trackId: rows[2]!.id, cueTrack: 3, startMs: 2507, endMs: null },
+    ]);
+    expect(albumStatistics(db, [album.id]).get(album.id)!.trackFileCount).toBe(3);
+
+    const rescan = await rescanArtist({ artistFolder: artistPath, albums: music.knownAlbumsFor(db, artistId) });
+    expect(rescan.unmatchedGroups.map((g) => g.reason)).toEqual(['cueImage']);
+    music.applyRescan(db, artistId, rescan);
+    expect(albumTracks(album.id).map((t) => t.audioFileId)).toEqual(rows.map((t) => t.audioFileId));
+    expect(db.select().from(audioFiles).all()).toHaveLength(1);
+  });
+
+  it('splits an image into tagged tracks from a staging folder and leaves the download alone (split)', async () => {
+    const album = addAlbum('First Record', [release('First Record', FIRST)]);
+    const src = join(downloads, 'First Record [FLAC Image]');
+    const image = await writeImage(src);
+    const before = await stat(image);
+    const tools = new FakeTools();
+    const result = await service({ audioTools: tools }).importCompletedDownload(tracked({ id: 41, title: 'First Record [FLAC Image]', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(tools.splits.map((s) => [s.source, s.startMs, s.endMs, s.lossless])).toEqual([
+      [image, 0, 1000, true],
+      [image, 1000, 2507, true],
+      [image, 2507, null, true],
+    ]);
+    const rows = albumTracks(album.id);
+    expect(tools.splits[1]!.tags).toMatchObject({ title: 'Middle Part', trackNumber: 2, trackTotal: 3, isrc: 'GBAAA0100002', genre: 'Rock', mbRecordingId: rows[1]!.mbRecordingId, album: 'First Record' });
+    // The cue sheet described the image, so it stays behind; the rip log comes along.
+    expect(await listTree(artistPath)).toEqual([
+      'First Record (2001)/01 - Opening.flac',
+      'First Record (2001)/02 - Middle Part.flac',
+      'First Record (2001)/03 - Closing Time.flac',
+      'First Record (2001)/rip.log',
+    ]);
+    expect(new Set(rows.map((t) => t.audioFileId)).size).toBe(3);
+    expect(await exists(join(musicRoot, '.arclight-staging'))).toBe(false);
+    // The download is untouched (copied away from, never written).
+    expect((await stat(image)).mtimeMs).toBe(before.mtimeMs);
+    expect(await listTree(src)).toEqual(['Fixture Artist - First Record.cue', 'Fixture Artist - First Record.flac', 'rip.log']);
+  });
+
+  it('keeps the image whole when ffmpeg is missing or the cut fails', async () => {
+    const album = addAlbum('First Record', [release('First Record', FIRST)]);
+    const src = join(downloads, 'img');
+    await writeImage(src);
+    const result = await service({ audioTools: new FakeTools(false) }).importCompletedDownload(tracked({ id: 42, title: 'First Record', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(new Set(albumTracks(album.id).map((t) => t.audioFileId)).size).toBe(1);
+
+    const other = addAlbum('Second Record', [release('Second Record', tracksOf(['Alpha', 'Beta', 'Gamma']))], { year: 2004 });
+    const src2 = join(downloads, 'img2');
+    await put(join(src2, 'Second.flac'), buildFlac({ durationMs: 4500, tags: { album: 'Second Record', albumArtist: ARTIST } }));
+    await put(join(src2, 'Second.cue'), CUE.replace('Fixture Artist - First Record.flac', 'Second.flac').replace('Opening', 'Alpha').replace('Middle Part', 'Beta').replace('Closing Time', 'Gamma'));
+    const failing = new FakeTools();
+    failing.split = async () => {
+      throw new Error('Invalid data found when processing input');
+    };
+    const second = await service({ audioTools: failing }).importCompletedDownload(tracked({ id: 43, title: 'Second Record', outputPath: src2, albumIds: [other.id] }));
+    expect(second.verified).toBe(true);
+    expect(await listTree(join(artistPath, 'Second Record (2004)'))).toEqual(['Second.cue', 'Second.flac']);
+    expect(await exists(join(musicRoot, '.arclight-staging'))).toBe(false);
+  });
+
+  it('leaves a cue image to Manual Import with cueHandling manual', async () => {
+    setAudio({ cueHandling: 'manual' });
+    const album = addAlbum('First Record', [release('First Record', FIRST)]);
+    const src = join(downloads, 'img');
+    await writeImage(src);
+    const result = await service({ audioTools: new FakeTools() }).importCompletedDownload(tracked({ id: 44, title: 'First Record', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(false);
+    expect(result.outcomes.find((o) => o.path.endsWith('.flac'))!.rejections[0]!.reason).toBe('cueImage');
+  });
+
+  it('measures ReplayGain everywhere but writes tags only into copies, never hard links', async () => {
+    setAudio({ writeTags: true, replayGain: true });
+    const std = release('First Record', FIRST);
+    const album = addAlbum('First Record', [std]);
+    const src = join(downloads, 'First Record');
+    await writeAlbum(src, 'First Record', std);
+    const linked = new FakeTools();
+    const result = await service({ audioTools: linked }).importCompletedDownload(tracked({ id: 45, title: 'First Record', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(linked.measured).toHaveLength(3);
+    expect(linked.writes).toEqual([]);
+    const row = db.select().from(audioFiles).where(eq(audioFiles.id, albumTracks(album.id)[0]!.audioFileId!)).get()!;
+    expect(row.mediaInfo).toMatchObject({ replayGainTrackDb: -6.5, replayGainTrackPeak: 0.9 });
+
+    setMedia({ useHardlinks: false });
+    const second = addAlbum('Second Record', [release('Second Record', tracksOf(['Alpha', 'Beta']))], { year: 2004 });
+    const src2 = join(downloads, 'Second Record');
+    await writeAlbum(src2, 'Second Record', second.releases[0]!);
+    const copied = new FakeTools();
+    const r2 = await service({ audioTools: copied }).importCompletedDownload(tracked({ id: 46, title: 'Second Record', outputPath: src2, albumIds: [second.id] }));
+    expect(r2.verified).toBe(true);
+    expect(copied.writes.map((w) => basename(w.path))).toEqual(['01 - Alpha.flac', '02 - Beta.flac']);
+    for (const w of copied.writes) expect(w.path.startsWith(artistPath)).toBe(true);
+    const rows = albumTracks(second.id);
+    const artist = db.select().from(artists).where(eq(artists.id, artistId)).get()!;
+    expect(copied.writes[0]!.tags).toMatchObject({
+      title: 'Alpha',
+      album: 'Second Record',
+      albumArtist: ARTIST,
+      trackNumber: 1,
+      trackTotal: 2,
+      discNumber: 1,
+      mbRecordingId: rows[0]!.mbRecordingId,
+      mbReleaseTrackId: rows[0]!.mbTrackId,
+      mbReleaseId: second.releases[0]!.mbid,
+      mbAlbumArtistId: artist.mbArtistId,
+      replayGainTrackGain: -6.5,
+      replayGainTrackPeak: 0.9,
+    });
+  });
+
+  it('saves cover.jpg from the Cover Art Archive and embeds it (opt-in)', async () => {
+    setMedia({ useHardlinks: false });
+    setAudio({ saveCoverArt: true, embedCoverArt: true });
+    const std = release('First Record', FIRST);
+    const album = addAlbum('First Record', [std]);
+    const src = join(downloads, 'First Record');
+    await writeAlbum(src, 'First Record', std);
+    const urls: string[] = [];
+    const tools = new FakeTools();
+    const result = await service({
+      audioTools: tools,
+      fetchImage: async (url) => {
+        urls.push(url);
+        return new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
+      },
+    }).importCompletedDownload(tracked({ id: 47, title: 'First Record', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(urls).toEqual([`https://coverartarchive.org/release/${std.mbid}/front-500`]);
+    const cover = join(artistPath, 'First Record (2001)', 'cover.jpg');
+    expect(await exists(cover)).toBe(true);
+    expect(tools.writes).toHaveLength(3);
+    expect(tools.writes.every((w) => w.coverPath === cover && Object.keys(w.tags).length === 0)).toBe(true);
+  });
+
+  it('keeps the file and warns when writing tags fails', async () => {
+    setMedia({ useHardlinks: false });
+    setAudio({ writeTags: true });
+    const std = release('First Record', FIRST);
+    const album = addAlbum('First Record', [std]);
+    const src = join(downloads, 'First Record');
+    await writeAlbum(src, 'First Record', std);
+    const tools = new FakeTools();
+    tools.writeTags = async () => {
+      throw new Error('Permission denied');
+    };
+    const result = await service({ audioTools: tools }).importCompletedDownload(tracked({ id: 48, title: 'First Record', outputPath: src, albumIds: [album.id] }));
+    expect(result.verified).toBe(true);
+    expect(result.outcomes.filter((o) => o.status === 'imported')).toHaveLength(3);
+    expect(result.outcomes[0]!.warnings).toEqual(['Tags not written: Permission denied']);
+  });
+});
 
 // ---------------------------------------------------------------------------------------
 

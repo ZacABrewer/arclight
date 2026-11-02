@@ -487,7 +487,7 @@ function stripHtml(text: string): string {
 }
 
 /** Global fetch for the cover sidecar: 20 s timeout, 15 MB cap, images only. */
-async function defaultFetchImage(url: string): Promise<Uint8Array | null> {
+export async function defaultFetchImage(url: string): Promise<Uint8Array | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 20_000);
   try {

@@ -120,6 +120,9 @@ function ArtistIndex() {
             <Button variant={selectMode ? 'secondary' : 'ghost'} aria-pressed={selectMode} onClick={() => (selectMode ? clear() : setSelectMode(true))}>
               {selectMode ? t('library.done') : t('common.select')}
             </Button>
+            <Link to="/library/music/playlists" className={buttonClass({ variant: 'ghost' })}>
+              {t('musicPlaylists.navLabel')}
+            </Link>
             <Link to="/library/music/import" className={buttonClass({ variant: 'secondary' })}>
               {t('libraryImport.importExisting')}
             </Link>

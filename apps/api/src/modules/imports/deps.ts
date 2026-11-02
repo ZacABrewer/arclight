@@ -1,6 +1,7 @@
 import type { MbRelease } from '@arclight/metadata';
 import type { AudioFile, MediaFile, MediaType, ProfileMismatchAction, QualityModel } from '@arclight/shared';
 import type { TrackedDownload } from '../download-clients/index.js';
+import type { AudioTools } from './audio/audio-tools.js';
 import type { TagReader } from './audio/tags.js';
 
 // Hooks into modules that are written in parallel (history, notifications, blocklist,
@@ -201,6 +202,8 @@ export interface ImportsDeps {
   musicReleases?: MusicReleasesHook;
   /** Audio tag reader; the combined music-metadata + ffprobe reader when absent. */
   tagReader?: TagReader;
+  /** ffmpeg for cue splitting, tag writing and ReplayGain (music); located on PATH when absent. */
+  audioTools?: AudioTools;
   /**
    * Fetches a book's cover image for the `cover.jpg` sidecar (only with `audio.writeAbsSidecars`).
    * Global fetch when absent. The URL is the book's public catalogue image, never a tracker.

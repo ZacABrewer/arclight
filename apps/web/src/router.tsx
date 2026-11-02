@@ -19,6 +19,7 @@ import { AddNewPage, parseAddNewSearch } from './pages/library/add-new.js';
 import { ArtistIndexPage } from './pages/library/music/artist-index.js';
 import { ArtistDetailsPage } from './pages/library/music/artist-details.js';
 import { AlbumDetailsPage } from './pages/library/music/album-details.js';
+import { MusicPlaylistsPage } from './pages/library/music/playlists.js';
 import { AuthorIndexPage } from './pages/library/audiobooks/author-index.js';
 import { AuthorDetailsPage } from './pages/library/audiobooks/author-details.js';
 import { BookDetailsPage } from './pages/library/audiobooks/book-details.js';
@@ -270,6 +271,7 @@ export const routeTree = rootRoute.addChildren([
   page('/library/music/import', MusicLibraryImportPage),
   page('/library/music/artist/$id', ArtistDetailsPage),
   page('/library/music/album/$id', AlbumDetailsPage),
+  page('/library/music/playlists', MusicPlaylistsPage),
   // Audiobooks (feature flag `audiobooks`; the pages answer 404 while it is off).
   page('/library/audiobooks', AuthorIndexPage),
   page('/library/audiobooks/import', AudiobookLibraryImportPage),

@@ -41,6 +41,7 @@ import { libraryService } from '../library/index.js';
 import { DEFAULT_PORTAL_RATE_LIMIT, TokenBuckets, type MediaServerLoginOption, type RateLimitOptions } from './portal.js';
 import { WatchlistService, type WatchlistProvider } from './watchlist.js';
 import { newUserRequestSettings } from './users.js';
+import { playlistServiceFor } from '../music/playlists/index.js';
 
 export * from './schema.js';
 export { RequestsService, ANIME_KEYWORD, type TitleSource, type CreateOutcome, type TitleStatus, type SizeEstimator } from './service.js';
@@ -183,6 +184,7 @@ export function metadataAudioSources(ctx: AppContext): AudioSources {
     audiobookCatalog: () => bookMeta().catalog(),
     audibleRegion: () => getSection(ctx.db, 'audiobookMetadata').audibleRegion,
     releasePreferences: () => musicMeta().releasePreferences(),
+    similarArtists: (mbid) => playlistServiceFor(ctx).similarByMbid(mbid, { limit: 20 }),
   };
 }
 

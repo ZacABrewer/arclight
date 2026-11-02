@@ -252,5 +252,6 @@ Every card has a checkbox. Tick one or more and a bar appears at the bottom of t
 - [Download clients](download-clients.md) (including remote path mapping)
 - [Library](library.md)
 - [Subtitles](subtitles.md)
+- [Music: cue sheets, tags and covers](music-cue-and-tagging.md)
 - [Troubleshooting](../TROUBLESHOOTING.md)
 - [Naming spec](../spec/naming.md) and [import spec](../spec/import.md) for the full rules

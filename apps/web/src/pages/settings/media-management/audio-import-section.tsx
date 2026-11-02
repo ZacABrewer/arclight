@@ -1,11 +1,13 @@
 import { useEffect, useState } from 'react';
 import type { AudioImportSettings } from '@arclight/shared';
 import { errorMessage } from '../../../api/client.js';
-import { Button, ErrorBlock, FormRow, Input, Skeleton, Toggle } from '../../../arclight/index.js';
+import { Button, ErrorBlock, FormRow, Input, Select, Skeleton, Toggle } from '../../../arclight/index.js';
 import { useToast } from '../../../components/toast.js';
 import { useAudioImportSettings, useFeatures, useSaveAudioImportSettings } from '../../../hooks/music.js';
 import { SettingsSection } from '../shared.js';
 import { t } from '../../../i18n/index.js';
+
+type CueHandling = AudioImportSettings['cueHandling'];
 
 /**
  * Audio import knobs (GET/PUT /settings/audio), shown while music or audiobooks are on; saves
@@ -23,13 +25,32 @@ interface Draft {
   tolerance: string;
   renameParts: boolean;
   sidecars: boolean;
+  cueHandling: CueHandling;
+  writeTags: boolean;
+  embedCoverArt: boolean;
+  saveCoverArt: boolean;
+  replayGain: boolean;
 }
+
+/** Music toggles that map one-to-one onto the stored section, with their label and caption keys. */
+const MUSIC_FLAG_ROWS = [
+  ['writeTags', 'music.settings.writeTags', 'music.settings.writeTagsCaption'],
+  ['embedCoverArt', 'music.settings.embedCoverArt', 'music.settings.embedCoverArtCaption'],
+  ['saveCoverArt', 'music.settings.saveCoverArt', 'music.settings.saveCoverArtCaption'],
+  ['replayGain', 'music.settings.replayGain', 'music.settings.replayGainCaption'],
+] as const;
+const MUSIC_FLAGS = MUSIC_FLAG_ROWS.map(([k]) => k);
 
 const toDraft = (s: AudioImportSettings): Draft => ({
   threshold: String(Math.round(s.trackMatchThreshold * 100)),
   tolerance: String(s.audiobookDurationTolerance),
   renameParts: s.renameAudiobookParts,
   sidecars: s.writeAbsSidecars,
+  cueHandling: s.cueHandling,
+  writeTags: s.writeTags,
+  embedCoverArt: s.embedCoverArt,
+  saveCoverArt: s.saveCoverArt,
+  replayGain: s.replayGain,
 });
 
 const percentOk = (v: string) => v.trim() !== '' && Number.isFinite(Number(v)) && Number(v) >= 0 && Number(v) <= 100;
@@ -42,6 +63,11 @@ export function toAudioImportUpdate(saved: AudioImportSettings, d: Draft): Audio
     audiobookDurationTolerance: Number(d.tolerance),
     renameAudiobookParts: d.renameParts,
     writeAbsSidecars: d.sidecars,
+    cueHandling: d.cueHandling,
+    writeTags: d.writeTags,
+    embedCoverArt: d.embedCoverArt,
+    saveCoverArt: d.saveCoverArt,
+    replayGain: d.replayGain,
   };
 }
 
@@ -62,7 +88,9 @@ function AudioImportForm({ music, audiobooks }: { music: boolean; audiobooks: bo
     (Number(draft.threshold) !== Number(saved.threshold) ||
       Number(draft.tolerance) !== Number(saved.tolerance) ||
       draft.renameParts !== saved.renameParts ||
-      draft.sidecars !== saved.sidecars);
+      draft.sidecars !== saved.sidecars ||
+      draft.cueHandling !== saved.cueHandling ||
+      MUSIC_FLAGS.some((k) => draft[k] !== saved[k]));
   const set = <K extends keyof Draft>(k: K, v: Draft[K]) => setDraft((d) => (d ? { ...d, [k]: v } : d));
 
   return (
@@ -101,6 +129,28 @@ function AudioImportForm({ music, audiobooks }: { music: boolean; audiobooks: bo
             >
               <Input id="audio-track-match" type="number" mono min={0} max={100} value={draft.threshold} onChange={(e) => set('threshold', e.target.value)} end="%" />
             </FormRow>
+          ) : null}
+          {music ? (
+            <>
+              <FormRow label={t('music.settings.cueHandling')} htmlFor="audio-cue-handling" caption={t('music.settings.cueHandlingCaption')}>
+                <Select
+                  id="audio-cue-handling"
+                  className="al-mm-select"
+                  value={draft.cueHandling}
+                  options={[
+                    { value: 'split', label: t('music.settings.cueSplit') },
+                    { value: 'keepImage', label: t('music.settings.cueKeepImage') },
+                    { value: 'manual', label: t('music.settings.cueManual') },
+                  ]}
+                  onChange={(e) => set('cueHandling', e.currentTarget.value as CueHandling)}
+                />
+              </FormRow>
+              {MUSIC_FLAG_ROWS.map(([k, label, caption]) => (
+                <FormRow key={k} label={t(label)} htmlFor={`audio-${k}`} caption={t(caption)} captionInline>
+                  <Toggle id={`audio-${k}`} checked={draft[k]} onChange={(e) => set(k, e.currentTarget.checked)} />
+                </FormRow>
+              ))}
+            </>
           ) : null}
           {audiobooks ? (
             <>

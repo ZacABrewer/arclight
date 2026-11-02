@@ -60,7 +60,7 @@ import { LibraryError, libraryService } from '../library/index.js';
 import { getSection } from '../settings/service.js';
 import { albumsToMonitor, isReleased, monitorNewAlbum, releaseDateMs } from './monitoring.js';
 import { musicQualityFor } from './quality.js';
-import { albumStatistics, artistStatistics, type MusicDb } from './statistics.js';
+import { albumIsMissing, albumStatistics, artistStatistics, type MusicDb } from './statistics.js';
 import type { AlbumReleaseRow, AlbumRow, ArtistRow, TrackRow } from './schema.js';
 
 // Business logic for the music library (artists → albums → releases → tracks, audio files).
@@ -205,6 +205,9 @@ function toProfile(row: typeof albumTypeProfiles.$inferSelect): AlbumTypeProfile
     primaryTypes: row.primaryTypes,
     secondaryTypes: row.secondaryTypes,
     releaseStatuses: row.releaseStatuses,
+    editionPreference: row.editionPreference,
+    preferredCountries: row.preferredCountries,
+    preferredFormats: row.preferredFormats,
     isDefault: row.isDefault,
   };
 }
@@ -643,6 +646,46 @@ export function bulkSetAlbumsMonitored(db: Db, ids: readonly number[], monitored
   });
 }
 
+/**
+ * Sets the monitored flag of tracks (per-track wanted). Returns the albums the tracks belong to,
+ * with fresh statistics.
+ */
+export function setTracksMonitored(db: Db, trackIds: readonly number[], monitored: boolean): Album[] {
+  return db.transaction((tx) => {
+    const rows = tx.select({ id: tracks.id, albumId: tracks.albumId }).from(tracks).where(inArray(tracks.id, [...trackIds])).all();
+    const found = new Set(rows.map((r) => r.id));
+    const missing = trackIds.filter((id) => !found.has(id));
+    if (missing.length > 0) throw LibraryError.notFound('track', missing.join(', '));
+    tx.update(tracks).set({ monitored }).where(inArray(tracks.id, [...trackIds])).run();
+    const albumIds = [...new Set(rows.map((r) => r.albumId))];
+    return toAlbumWithStats(tx, tx.select().from(albums).where(inArray(albums.id, albumIds)).all());
+  });
+}
+
+/**
+ * Wants exactly `trackIds` of the album: the album (and its artist) become monitored, the listed
+ * tracks monitored and the album's other tracks unmonitored. With `keepOthers`, tracks that were
+ * already monitored stay so (used by playlists adding to an album that is already wanted).
+ */
+export function wantAlbumTracks(db: Db, albumId: number, trackIds: readonly number[], opts: { keepOthers?: boolean } = {}): Album {
+  return db.transaction((tx) => {
+    const album = albumRow(tx, albumId);
+    const own = tx.select({ id: tracks.id }).from(tracks).where(eq(tracks.albumId, albumId)).all();
+    const ownIds = new Set(own.map((t) => t.id));
+    const foreign = trackIds.filter((id) => !ownIds.has(id));
+    if (foreign.length > 0) throw new LibraryError('VALIDATION', `tracks ${foreign.join(', ')} are not tracks of album ${albumId}`);
+    const keepOthers = opts.keepOthers === true && album.monitored;
+    if (!keepOthers) {
+      const others = own.map((t) => t.id).filter((id) => !trackIds.includes(id));
+      if (others.length > 0) tx.update(tracks).set({ monitored: false }).where(inArray(tracks.id, others)).run();
+    }
+    if (trackIds.length > 0) tx.update(tracks).set({ monitored: true }).where(inArray(tracks.id, [...trackIds])).run();
+    if (!album.monitored) tx.update(albums).set({ monitored: true }).where(eq(albums.id, albumId)).run();
+    tx.update(artists).set({ monitored: true }).where(and(eq(artists.id, album.artistId), eq(artists.monitored, false))).run();
+    return toAlbumWithStats(tx, [albumRow(tx, albumId)])[0]!;
+  });
+}
+
 /** Album ids of the artist that have at least one track file. */
 function albumsWithFiles(db: MusicDb, artistId: number): Set<number> {
   return new Set(
@@ -829,8 +872,19 @@ export function selectRelease(db: Db, albumId: number, release: MbRelease, artis
     const byRecording = new Map<string, number>();
     const byPosition = new Map<string, number>();
     const linkedIds = new Set<number>();
+    // Per-track wanted flags survive an edition switch (by recording, then position).
+    const monitoredByRecording = new Map<string, boolean>();
+    const monitoredByPosition = new Map<string, boolean>();
     for (const t of old) {
-      if (t.audioFileId == null) continue;
+      if (t.mbRecordingId) monitoredByRecording.set(t.mbRecordingId, t.monitored);
+      monitoredByPosition.set(`${t.mediumNumber}:${t.trackNumber}`, t.monitored);
+    }
+    // Kept cue images link many tracks to one file: remember which old track each cue entry was.
+    const cueFiles = fileRows.filter((f) => (f.mediaInfo?.cueTracks?.length ?? 0) > 0);
+    const cueFileIds = new Set(cueFiles.map((f) => f.id));
+    const oldById = new Map(old.map((t) => [t.id, t]));
+    for (const t of old) {
+      if (t.audioFileId == null || cueFileIds.has(t.audioFileId)) continue;
       linkedIds.add(t.audioFileId);
       if (t.mbRecordingId) byRecording.set(t.mbRecordingId, t.audioFileId);
       byPosition.set(`${t.mediumNumber}:${t.trackNumber}`, t.audioFileId);
@@ -862,9 +916,27 @@ export function selectRelease(db: Db, albumId: number, release: MbRelease, artis
           artistCredit: credit && credit !== artistName ? credit : null,
           hasFile: false,
           audioFileId: null as number | null,
+          monitored:
+            (t.recordingMbid ? monitoredByRecording.get(t.recordingMbid) : undefined) ??
+            monitoredByPosition.get(`${t.mediumNumber}:${t.position}`) ??
+            true,
         };
       }),
     );
+    // Cue entries re-point to the new edition's tracks (recording id, then position).
+    const cueFor = new Map<string, number>();
+    for (const f of cueFiles) {
+      for (const c of f.mediaInfo?.cueTracks ?? []) {
+        const t = oldById.get(c.trackId);
+        if (!t) continue;
+        if (t.mbRecordingId) cueFor.set(`r:${t.mbRecordingId}`, f.id);
+        cueFor.set(`p:${t.mediumNumber}:${t.trackNumber}`, f.id);
+      }
+    }
+    for (const t of fresh) {
+      const id = (t.mbRecordingId ? cueFor.get(`r:${t.mbRecordingId}`) : undefined) ?? cueFor.get(`p:${t.mediumNumber}:${t.trackNumber}`);
+      if (id !== undefined) t.audioFileId = id;
+    }
     const used = new Set<number>();
     for (const t of fresh) {
       const id = t.mbRecordingId ? byRecording.get(t.mbRecordingId) : undefined;
@@ -881,12 +953,28 @@ export function selectRelease(db: Db, albumId: number, release: MbRelease, artis
         used.add(id);
       }
     }
+    const newIdByOld = new Map<number, number>();
     for (const t of fresh) {
       t.hasFile = t.audioFileId !== null;
-      tx.insert(tracks).values(t).run();
+      const id = tx.insert(tracks).values(t).returning({ id: tracks.id }).get().id;
+      if (t.audioFileId !== null && cueFileIds.has(t.audioFileId)) {
+        const prev = old.find(
+          (o) =>
+            o.audioFileId === t.audioFileId &&
+            ((t.mbRecordingId && o.mbRecordingId === t.mbRecordingId) || (o.mediumNumber === t.mediumNumber && o.trackNumber === t.trackNumber)),
+        );
+        if (prev) newIdByOld.set(prev.id, id);
+      }
+    }
+    for (const f of cueFiles) {
+      const cueTracks = (f.mediaInfo?.cueTracks ?? []).flatMap((c) => {
+        const id = newIdByOld.get(c.trackId);
+        return id === undefined ? [] : [{ ...c, trackId: id }];
+      });
+      tx.update(audioFiles).set({ mediaInfo: { ...f.mediaInfo, cueTracks } }).where(eq(audioFiles.id, f.id)).run();
     }
     tx.update(albums).set({ selectedReleaseId: releaseId }).where(eq(albums.id, albumId)).run();
-    return { linked: used.size };
+    return { linked: fresh.filter((t) => t.hasFile).length };
   });
 }
 
@@ -1211,8 +1299,7 @@ function albumReleaseFilter(q: WantedReleaseFilter, now: Date) {
 }
 
 /**
- * Monitored albums (of monitored artists) that lack files: fewer track files than stored
- * tracks, or no tracks loaded yet and nothing on disk. Released ones by default (`released`
+ * Monitored albums (of monitored artists) that lack files: a monitored track without a file, or no tracks loaded yet and nothing on disk. Released ones by default (`released`
  * filter; `unreleased` = release date in the future or unknown). Newest first.
  */
 export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date = new Date()): WantedAlbumsPage {
@@ -1221,11 +1308,7 @@ export function listMissingAlbums(db: MusicDb, q: WantedAlbumsQuery, now: Date =
     db,
     rows.map((r) => r.album.id),
   );
-  const missing = rows.filter((r) => {
-    const s = stats.get(r.album.id);
-    if (!s) return true;
-    return s.trackCount > 0 ? s.trackFileCount < s.trackCount : s.sizeOnDisk === 0;
-  });
+  const missing = rows.filter((r) => albumIsMissing(stats.get(r.album.id)));
   return paginate(
     missing.map((r) => toWanted(r.album, r.artist, stats.get(r.album.id))),
     q,

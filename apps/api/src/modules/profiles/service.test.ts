@@ -68,10 +68,10 @@ describe('ProfilesService', () => {
 
     it('seeds the music profiles once, with music qualities only', () => {
       service.seedDefaults();
-      expect(service.seedMusicDefaults()).toBe(4);
+      expect(service.seedMusicDefaults()).toBe(6);
       expect(service.seedMusicDefaults()).toBe(0);
       const music = service.listQualityProfiles('music');
-      expect(music.map((p) => p.name)).toEqual(expect.arrayContaining(['Lossless', 'Hi-Res', 'High-quality lossy', 'Any (music)']));
+      expect(music.map((p) => p.name)).toEqual(expect.arrayContaining(['Lossless', 'Hi-Res', 'High-quality lossy', 'Any (music)', 'Lossless, lossy fallback', 'Portable (Opus/AAC/MP3)']));
       for (const p of music) {
         expect(p.mediaDomain).toBe('music');
         // Unknown (id 0) heads every profile; everything else is a music quality.
@@ -98,7 +98,7 @@ describe('ProfilesService', () => {
       expect(allowed('M4B only').sort()).toEqual([QUALITIES['AB-AAC-Low'].id, QUALITIES['AB-AAC'].id].sort());
       // Music and video profiles are untouched; music seeding still works independently.
       expect(service.listQualityProfiles('music')).toEqual([]);
-      expect(service.seedMusicDefaults()).toBe(4);
+      expect(service.seedMusicDefaults()).toBe(6);
     });
 
     it('seeds the audiobook quality definitions with the default MB/min bands', () => {

@@ -7,6 +7,7 @@ import {
   createWikidataClient,
   findWikidataId,
   wikidataIdFromUrl,
+  wikipediaArticleFromUrl,
 } from './index.js';
 
 const UA = 'Arclight-test/0.0 ( https://example.invalid/arclight )';
@@ -98,5 +99,49 @@ describe('createWikidataClient', () => {
     await client.getImageFileName('Q44190');
     await client.getImageFileName('Q44190');
     expect(fake.calls).toHaveLength(1);
+  });
+});
+
+describe('Wikipedia artist summaries', () => {
+  const summary = (title: string, extra: Record<string, unknown> = {}) =>
+    jsonResponse({ type: 'standard', title, extract: `${title} is an example band.`, content_urls: { desktop: { page: `https://en.wikipedia.org/wiki/${title}` } }, ...extra });
+
+  it('parses Wikipedia article URLs', () => {
+    expect(wikipediaArticleFromUrl('https://en.wikipedia.org/wiki/Example_Band')).toEqual({ lang: 'en', title: 'Example Band' });
+    expect(wikipediaArticleFromUrl('https://de.m.wikipedia.org/wiki/Caf%C3%A9_Band')).toEqual({ lang: 'de', title: 'Café Band' });
+    expect(wikipediaArticleFromUrl('https://example.com/wiki/X')).toBeUndefined();
+  });
+
+  it('uses a direct wikipedia url-rel first', async () => {
+    const { client, fake } = makeClient((url) => summary(decodeURIComponent(url.pathname.split('/').pop() ?? '')));
+    const found = await client.resolveArtistSummary!([{ type: 'wikipedia', url: 'https://en.wikipedia.org/wiki/Example_Band' }, ...LINKS]);
+    expect(found).toMatchObject({ lang: 'en', text: 'Example_Band is an example band.' });
+    expect(fake.calls).toHaveLength(1);
+    expect(fake.calls[0]!.url.pathname).toBe('/api/rest_v1/page/summary/Example_Band');
+  });
+
+  it('follows the Wikidata sitelink in the wanted language, falling back to English', async () => {
+    const { client, fake } = makeClient((url) => {
+      if (url.hostname === 'www.wikidata.org') {
+        expect(url.searchParams.get('action')).toBe('wbgetentities');
+        expect(url.searchParams.get('sitefilter')).toBe('frwiki|enwiki');
+        return jsonResponse({ entities: { Q44190: { sitelinks: { enwiki: { title: 'Example Band' } } } } });
+      }
+      expect(url.hostname).toBe('en.wikipedia.org');
+      return summary('Example Band');
+    });
+    const found = await client.resolveArtistSummary!(LINKS, { lang: 'fr' });
+    expect(found).toMatchObject({ lang: 'en', pageUrl: 'https://en.wikipedia.org/wiki/Example Band' });
+    expect(fake.calls).toHaveLength(2);
+  });
+
+  it('skips disambiguation pages and answers undefined without links', async () => {
+    const { client } = makeClient((url) =>
+      url.hostname === 'www.wikidata.org'
+        ? jsonResponse({ entities: { Q44190: { sitelinks: { enwiki: { title: 'Example' } } } } })
+        : summary('Example', { type: 'disambiguation' }),
+    );
+    expect(await client.resolveArtistSummary!(LINKS)).toBeUndefined();
+    expect(await client.resolveArtistSummary!([{ type: 'discogs', url: 'https://www.discogs.com/artist/1' }])).toBeUndefined();
   });
 });
