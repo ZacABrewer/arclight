@@ -75,6 +75,7 @@ These pages follow the app's navigation.
 | Notifications | [notifications.md](using/notifications.md) |
 | Mobile app (pairing, phone notifications) | [mobile-app.md](using/mobile-app.md) |
 | Media servers (Jellyfin, Emby, Plex) and the Arclight for Jellyfin plugin | [media-servers.md](using/media-servers.md) |
+| Player: listen to your music and audiobooks in the browser (setup, access, controls) | [player.md](using/player.md) |
 | Podcasts (subscriptions, episodes, OPML, suggestions) | [podcasts.md](using/podcasts.md) |
 | Users and security | [users-and-security.md](using/users-and-security.md) |
 | Single sign-on (OpenID Connect, forward-auth), two-factor, passkeys, API keys | [single-sign-on.md](using/single-sign-on.md) |

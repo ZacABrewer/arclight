@@ -9,6 +9,7 @@ The user guide has been split into focused pages. Start at the **[documentation 
 | Understand folders and hard links | [Folders and hard links](getting-started/folders-and-hardlinks.md) |
 | Use each part of the app | [Using Arclight](README.md#using-arclight) |
 | Request titles as a family member or friend | [Discover and requests](using/discover-and-requests.md) |
+| Listen to music and audiobooks in the browser | [Player](using/player.md) |
 | Follow podcasts (subscribe, download episodes, import OPML) | [Podcasts](using/podcasts.md) |
 | Ask for subtitles or another audio language | [Subtitle and language requests](using/discover-and-requests.md#subtitle-and-language-requests) |
 | Move from Sonarr, Radarr, Prowlarr, Bazarr or Overseerr | [Migrating](getting-started/migrating.md) |

@@ -7,6 +7,16 @@ Each release is a container image at `ghcr.io/zacabrewer/arclight`.
 The Jellyfin plugin has its own version numbers; see [Arclight for Jellyfin](#arclight-for-jellyfin-plugin)
 at the end of this file.
 
+## [Unreleased]
+
+### Added
+- Built-in player (preview): a new `/player` portal that plays your music and audiobooks in the browser. It is off until an admin turns it on under Settings > Player, and each user needs access on their Users > Player tab. Movies, TV and podcasts are planned for later.
+- Music browsing: albums, artists and playlists with filters, sorting and genre and letter jumps, plus search across music and audiobooks.
+- Audiobooks: chapters, resume across devices, speed from 0.5x to 3.5x remembered per book, bookmarks with notes, and a sleep timer.
+- Queue, mini-player and Now playing with shuffle, repeat, gapless playback and ReplayGain volume levelling. Keyboard shortcuts and media-key and lock-screen controls are included.
+- Direct play where possible, with live transcoding when a file is above the bitrate limit. A format badge shows which one is in use.
+- Remote streaming is off by default. Admins can allow it, set a remote bitrate cap and choose how long stream links last, and can set remote access and a bitrate cap per user.
+
 ## [0.20.1] - 2026-11-02
 
 ### Fixed
