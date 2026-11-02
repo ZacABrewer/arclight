@@ -43,7 +43,7 @@ If Arclight runs inside Gluetun's network, the web port is published on the glue
 - The proxy must send `X-Forwarded-For` (the real client address) and `X-Forwarded-Proto: https` so the sign-in cookie is marked Secure. Caddy, Traefik and Nginx Proxy Manager do this by default; a plain Nginx config needs the lines shown below.
 - For the "local address" rule, Arclight checks the connection and every address in `X-Forwarded-For`. If any is public, sign-in is required. A proxy on the same machine therefore does not turn internet visitors into local users.
 - Two paths need WebSocket upgrades or the page looks stuck: `/api/v1/events` (live updates) and `/api/v1/log/stream` (live log).
-- Arclight lives at the root of its address. There is no base-URL setting, so `https://example.com/arclight/` does not work. Use a subdomain such as `arclight.example.com`.
+- Arclight lives at the root of its address unless you set `ARCLIGHT_BASE_PATH`. A subdomain such as `arclight.example.com` is the simplest; to serve it below a path such as `https://example.com/arclight/`, see [Hosting Arclight under a sub-path](sub-path-hosting.md).
 - Arclight reads the hostname from `Host`, or `X-Forwarded-Host` when the proxy sets it. Keep the original hostname (Caddy, Traefik, Nginx Proxy Manager and Cloudflare Tunnel do; plain Nginx needs `proxy_set_header Host $host;`, shown below). It matters for [portal hostnames](../using/discover-and-requests.md#portal-on-its-own-hostname).
 
 ## Option 1: do nothing
@@ -182,7 +182,7 @@ A Cloudflare Access policy can then stay strict on `arclight.example.com` and be
 |---|---|
 | Page loads but never updates | WebSockets not allowed for `/api/v1/events` |
 | Redirect loop after sign-in | The proxy does not send `X-Forwarded-Proto: https` |
-| Blank page under `/arclight/` | Sub-paths are not supported; use a subdomain |
+| Blank page under `/arclight/` | `ARCLIGHT_BASE_PATH` is not set, or the proxy strips the prefix. See [sub-path-hosting.md](sub-path-hosting.md) |
 | Everyone sees "Too many failed attempts" | The proxy hides client addresses, so all users share one counter. Send `X-Forwarded-For` |
 | You locked yourself out | See [locked out](../TROUBLESHOOTING.md#locked-out) |
 | The requests hostname shows the full app | It is not under Portal hostnames, the portal is off, or the proxy changes the `Host` header |
@@ -191,6 +191,7 @@ A Cloudflare Access policy can then stay strict on `arclight.example.com` and be
 
 - [../using/users-and-security.md](../using/users-and-security.md)
 - [../CLOUDFLARE.md](../CLOUDFLARE.md)
+- [sub-path-hosting.md](sub-path-hosting.md)
 - [install-docker.md](install-docker.md)
 - [updating.md](updating.md)
 - [../TROUBLESHOOTING.md](../TROUBLESHOOTING.md)

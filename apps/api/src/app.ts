@@ -12,6 +12,7 @@ import type { Db } from './db/index.js';
 import { EventBus } from './events.js';
 import { Scheduler } from './scheduler.js';
 import { registerSpa } from './spa.js';
+import { installBasePath, basePathRewriter } from './base-path.js';
 import { systemModule } from './modules/system/index.js';
 import { jobsModule } from './modules/jobs/index.js';
 import { eventsModule } from './modules/events/index.js';
@@ -108,10 +109,18 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
   // Plugins get 5 minutes to start, not Fastify's 10 s: on a NAS with busy spinning disks, loading
   // the indexer definitions (hundreds of small files) took longer, so the boot failed with
   // AVV_ERR_PLUGIN_EXEC_TIMEOUT and the container restarted in a loop, adding to the disk load.
-  const app = Fastify({ loggerInstance: log, trustProxy: true, pluginTimeout: 300_000 }).withTypeProvider<ZodTypeProvider>();
+  // ARCLIGHT_BASE_PATH: the prefix is stripped before routing (base-path.ts), so routes keep their paths.
+  const basePath = config.basePath ?? '';
+  const app = Fastify({
+    loggerInstance: log,
+    trustProxy: true,
+    pluginTimeout: 300_000,
+    ...(basePath ? { rewriteUrl: basePathRewriter(basePath) } : {}),
+  }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
   if (opts.onRoute) app.addHook('onRoute', opts.onRoute);
+  if (basePath) installBasePath(app as unknown as FastifyInstance, basePath);
 
   const bus = new EventBus();
   const scheduler = new Scheduler(db, bus, log.child({ component: 'scheduler' }));
@@ -231,7 +240,7 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     // Static files + SPA fallback (anything that is not /api gets the web app's index, with
     // the request portal's paths and hostnames applied).
     // (Cast: as for installMetrics above.)
-    await registerSpa(app as unknown as FastifyInstance, ctx, config.webDist);
+    await registerSpa(app as unknown as FastifyInstance, ctx, config.webDist, basePath);
   }
 
   app.addHook('onReady', async () => scheduler.start());

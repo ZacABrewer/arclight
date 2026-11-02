@@ -39,6 +39,7 @@ const ORDER = {
   'getting-started/folders-and-hardlinks.md': 41,
   'getting-started/migrating.md': 42,
   'getting-started/exposing-outside-home.md': 43,
+  'getting-started/sub-path-hosting.md': 43.5,
   'getting-started/updating.md': 44,
   'getting-started/backup-restore.md': 45,
   'qa/README.md': 0,

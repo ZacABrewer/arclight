@@ -244,6 +244,7 @@ See [docs/DEVELOPING.md](docs/DEVELOPING.md) for how to add modules and packages
 | `ARCLIGHT_CONFIG` | `/config` in Docker, else `./config` | Config dir: `arclight.db`, `logs/` |
 | `ARCLIGHT_PORT` | `7878` | HTTP port |
 | `ARCLIGHT_HOST` | `0.0.0.0` | Bind address |
+| `ARCLIGHT_BASE_PATH` | empty (root) | Serve everything below a sub-path such as `/arclight` behind a reverse proxy that keeps the prefix ([docs/getting-started/sub-path-hosting.md](docs/getting-started/sub-path-hosting.md)) |
 | `ARCLIGHT_LOG_LEVEL` | `info` | pino log level |
 | `ARCLIGHT_DOCKER` | auto (`/.dockerenv`) | Force Docker path defaults with `1` |
 | `ARCLIGHT_WEB_DIST` | unset | Built web app to serve (set to `/app/web` in the image) |

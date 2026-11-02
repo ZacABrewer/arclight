@@ -295,6 +295,7 @@ export function requestsServicesFor(ctx: AppContext, opts: RequestsModuleOptions
   auth.mediaServerLogin = () => mediaServerLoginOf(ctx);
   // Users created on the Users page start with the default request type filter.
   auth.newUserSettings = () => newUserRequestSettings(requests.settings());
+  auth.newUserPermissions = () => requests.settings().defaultPermissions;
   const portalLimiter = new TokenBuckets(opts.portalRateLimit ?? DEFAULT_PORTAL_RATE_LIMIT);
   const audioDiscover = new AudioDiscoverService({ db: ctx.db, sources: opts.audioSources ?? metadataAudioSources(ctx), log });
   const audio = new AudioRequestsService({

@@ -7,8 +7,11 @@ import {
   AuthSettings,
   Permission,
   SignInSettings,
+  type ApiKeyScope,
   type AppArea,
   type AuthVia,
+  type IdentitySettings,
+  type SecondFactor,
   type LoginMethod,
   type SecuritySettings,
   type SessionRecord,
@@ -23,7 +26,11 @@ import { pluginApiKeys, sessions, users } from '../../db/schema.js';
 import { getSection, setSection } from '../settings/service.js';
 import { dummyHash, hashPassword, needsRehash, verifyPassword } from './password.js';
 import { allLocal } from './network.js';
+import { TwoFactorError, TwoFactorService, type RelyingParty } from './two-factor.js';
+import { ApiKeyNotFoundError } from './api-keys.js';
+import { UserApiKeyService } from './api-keys.js';
 import { audit } from '../audit/recorder.js';
+import { hashToken } from './hash.js';
 
 export type AuthErrorCode =
   | 'VALIDATION'
@@ -36,7 +43,11 @@ export type AuthErrorCode =
   | 'RATE_LIMITED'
   | 'SETUP_COMPLETE'
   | 'SETUP_REQUIRED'
-  | 'PASSWORD_REQUIRED';
+  | 'PASSWORD_REQUIRED'
+  | 'TWO_FACTOR_REQUIRED'
+  | 'CHALLENGE_EXPIRED'
+  | 'TWO_FACTOR_SETUP_REQUIRED'
+  | 'LAST_SIGN_IN_METHOD';
 
 export class AuthError extends Error {
   constructor(
@@ -60,7 +71,24 @@ export const AUTH_ERROR_STATUS: Record<AuthErrorCode, number> = {
   SETUP_COMPLETE: 409,
   SETUP_REQUIRED: 403,
   PASSWORD_REQUIRED: 400,
+  TWO_FACTOR_REQUIRED: 200,
+  CHALLENGE_EXPIRED: 401,
+  TWO_FACTOR_SETUP_REQUIRED: 403,
+  LAST_SIGN_IN_METHOD: 409,
 };
+
+/**
+ * The password was right and the account has a second factor: no session yet. POST /auth/login
+ * answers the challenge (TwoFactorChallenge); POST /auth/login/2fa or /auth/passkey/login finish.
+ */
+export class TwoFactorRequiredError extends AuthError {
+  constructor(
+    readonly challenge: string,
+    readonly methods: SecondFactor[],
+  ) {
+    super('TWO_FACTOR_REQUIRED', 'enter the code from your authenticator app');
+  }
+}
 
 /** Who a request is, as decided by the auth hook. `user` is null for API-key and bypass callers. */
 export interface RequestAuth {
@@ -73,6 +101,11 @@ export interface RequestAuth {
   expiresAt?: string;
   /** `via: 'plugin'`: the plugin key's id. */
   pluginKeyId?: number;
+  /** `via: 'userkey'`: the key's id and scope. */
+  apiKeyId?: number;
+  apiKeyScope?: ApiKeyScope;
+  /** `via: 'session'`: how the session was opened (password, oidc:<id>, passkey, ...). */
+  sessionMethod?: string;
 }
 
 /** The credentials a request carried, extracted by the hook. */
@@ -82,7 +115,31 @@ export interface RequestCredentials {
   basic?: { username: string; password: string } | undefined;
   /** Socket peer followed by every forwarded address. */
   addresses: readonly (string | undefined)[];
+  /** The TCP peer alone (forward-auth trusts only this). */
+  peer?: string | undefined;
+  /** Reads a request header (forward-auth). */
+  header?: ((name: string) => string | undefined) | undefined;
 }
+
+/**
+ * Resolves forward-auth (trusted header) requests; registered by the identity service. Returns
+ * null when forward-auth is off, the peer is not a trusted proxy or no user header was sent.
+ */
+export type ForwardAuthResolver = (creds: RequestCredentials) => Promise<RequestAuth | null>;
+
+/** What a `requests`-scoped key of an admin may do: the portal's request rights. */
+export const REQUESTS_KEY_ADMIN_PERMISSIONS =
+  Permission.REQUEST |
+  Permission.AUTO_APPROVE |
+  Permission.REQUEST_4K |
+  Permission.AUTO_APPROVE_4K |
+  Permission.REQUEST_MUSIC |
+  Permission.REQUEST_AUDIOBOOK |
+  Permission.REQUEST_LANGUAGE |
+  Permission.VIEW_ISSUES |
+  Permission.CREATE_ISSUES |
+  Permission.REQUEST_VIEW |
+  Permission.VOTE;
 
 export interface ResolvedRequest {
   auth: RequestAuth | null;
@@ -97,6 +154,14 @@ export interface LoginResult {
   expiresAt: string;
   /** null: browser-session cookie (rememberMe false). */
   maxAgeSeconds: number | null;
+}
+
+export interface SessionMeta {
+  ip?: string | undefined;
+  userAgent?: string | undefined;
+  rememberMe?: boolean | undefined;
+  /** Stored on the session (SessionRecord.method). */
+  method?: string | undefined;
 }
 
 /**
@@ -155,9 +220,7 @@ export function toUser(row: UserRow): User {
   return user;
 }
 
-export function hashToken(token: string): string {
-  return createHash('sha256').update(token).digest('hex');
-}
+export { hashToken };
 
 /** Constant-time string comparison that does not leak length (both sides are hashed first). */
 export function safeEqual(a: string, b: string): boolean {
@@ -184,7 +247,7 @@ function permissionsFor(role: User['role'], requested: number | undefined): numb
 }
 
 export class AuthService {
-  private readonly db: Db;
+  readonly db: Db;
   private readonly log: Logger | undefined;
   private readonly now: () => Date;
   private readonly maxFailures: number;
@@ -196,6 +259,12 @@ export class AuthService {
   mediaServerLogin: (() => { kind: 'jellyfin' | 'emby' | 'plex'; name?: string | undefined } | null) | undefined;
   /** Settings a new non-admin account starts with (set by the requests module: the default request type filter); absent: none. */
   newUserSettings: (() => Record<string, unknown>) | undefined;
+  /** Permission bits for accounts created by an identity provider or forward-auth (requests module: default permissions). */
+  newUserPermissions: (() => number) | undefined;
+  /** Forward-auth (set by the identity service); absent: off. */
+  forwardAuth: ForwardAuthResolver | undefined;
+  readonly twoFactor: TwoFactorService;
+  readonly apiKeys: UserApiKeyService;
 
   constructor(opts: AuthServiceOptions) {
     this.db = opts.db;
@@ -203,6 +272,27 @@ export class AuthService {
     this.now = opts.now ?? (() => new Date());
     this.maxFailures = opts.maxFailures ?? 10;
     this.lockoutWindowMs = opts.lockoutWindowMs ?? 15 * 60_000;
+    this.twoFactor = new TwoFactorService(this.db, this.now, this.log);
+    this.apiKeys = new UserApiKeyService(this.db, this.now);
+  }
+
+  /** Settings section `identity`: providers, password form, 2FA requirement, forward-auth. */
+  identitySettings(): IdentitySettings {
+    return getSection(this.db, 'identity');
+  }
+
+  /**
+   * "Require two-factor for admins" applies to this request and the admin has no second factor
+   * yet. Only password-based sessions and Basic count: an identity provider or a passkey already
+   * did more than a password, and API keys are separate credentials.
+   */
+  twoFactorSetupRequired(auth: RequestAuth | null): boolean {
+    if (!auth?.user || auth.user.role !== 'admin') return false;
+    if (auth.via !== 'session' && auth.via !== 'basic') return false;
+    const method = auth.sessionMethod ?? 'password';
+    if (method.startsWith('oidc:') || method === 'passkey') return false;
+    if (!this.identitySettings().requireTwoFactorForAdmins) return false;
+    return !this.twoFactor.hasSecondFactor(auth.user.id);
   }
 
   // -------------------------------------------------------------------------------------
@@ -523,10 +613,74 @@ export class AuthService {
       audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local', reason: 'local sign-in off' } });
       throw new AuthError('FORBIDDEN', 'signing in with an Arclight password is turned off for user accounts; sign in with your media server');
     }
+    this.requireNoSecondStep(row.id, 'password', meta);
     audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method: 'local' } });
-    const now = this.now();
-    this.db.update(users).set({ lastLoginAt: now.toISOString() }).where(eq(users.id, row.id)).run();
-    return { ...this.createSession(row.id, meta), user: toUser({ ...row, lastLoginAt: now.toISOString() }) };
+    return this.loginAs(row.id, { ...meta, method: 'password' });
+  }
+
+  /** Throws TwoFactorRequiredError (with a parked sign-in) when the account has a second factor. */
+  private requireNoSecondStep(userId: number, method: string, meta: SessionMeta): void {
+    const methods = this.twoFactor.methodsFor(userId);
+    if (methods.length === 0) return;
+    throw new TwoFactorRequiredError(this.twoFactor.createChallenge(userId, method, meta), methods);
+  }
+
+  /** POST /auth/login/2fa: finishes a parked password sign-in with a TOTP or recovery code. */
+  completeTwoFactor(challenge: string, proof: { code?: string | undefined; recoveryCode?: string | undefined }, ip?: string): LoginResult {
+    const address = ip ?? 'unknown';
+    this.checkRateLimit(address);
+    let pending;
+    try {
+      pending = this.twoFactor.completeChallenge(challenge, proof);
+    } catch (err) {
+      if (err instanceof TwoFactorError && err.code === 'INVALID_CREDENTIALS') {
+        this.recordFailure(address);
+        audit(this.db).record({ action: 'login.failed', ip: ip ?? null, details: { method: 'two-factor' } });
+      }
+      throw toAuthError(err);
+    }
+    this.failures.delete(address);
+    const row = this.row(pending.userId);
+    const factor = proof.code !== undefined ? 'totp' : 'recovery';
+    audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: pending.meta.ip ?? null, details: { method: pending.method, factor } });
+    return this.loginAs(row.id, { ...pending.meta, method: pending.method });
+  }
+
+  /** Options for a passkey prompt on the sign-in page (second factor when `challenge` is set). */
+  async passkeyOptions(rp: RelyingParty, challenge?: string) {
+    try {
+      return await this.twoFactor.authenticationOptions(rp, challenge);
+    } catch (err) {
+      throw toAuthError(err);
+    }
+  }
+
+  /**
+   * POST /auth/passkey/login: a passkey as the second factor of a parked password sign-in
+   * (`challenge`), or as a sign-in of its own.
+   */
+  async loginWithPasskey(ceremony: string, response: Record<string, unknown>, challenge: string | undefined, meta: SessionMeta): Promise<LoginResult> {
+    const address = meta.ip ?? 'unknown';
+    this.checkRateLimit(address);
+    let result;
+    try {
+      result = await this.twoFactor.authenticate(ceremony, response, challenge);
+    } catch (err) {
+      if (err instanceof TwoFactorError && err.code === 'INVALID_CREDENTIALS') {
+        this.recordFailure(address);
+        audit(this.db).record({ action: 'login.failed', ip: meta.ip ?? null, details: { method: 'passkey' } });
+      }
+      throw toAuthError(err);
+    }
+    this.failures.delete(address);
+    const row = this.row(result.userId);
+    // Passwordless passkeys are an Arclight sign-in: the same switch as passwords for non-admins.
+    if (!result.pending && !this.localLoginAllowed(row)) {
+      throw new AuthError('FORBIDDEN', 'signing in with Arclight credentials is turned off for user accounts');
+    }
+    const method = result.pending ? result.pending.method : 'passkey';
+    audit(this.db).record({ action: 'login.success', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { method, factor: 'passkey' } });
+    return this.loginAs(row.id, { ...(result.pending?.meta ?? meta), method });
   }
 
   /**
@@ -557,7 +711,8 @@ export class AuthService {
       throw new AuthError('INVALID_CREDENTIALS', 'invalid username or password');
     }
     this.failures.delete(address);
-    const result = this.loginExternal(userId, meta);
+    if (this.row(userId).role !== 'admin') this.requireNoSecondStep(userId, method, meta);
+    const result = this.loginExternal(userId, { ...meta, method });
     audit(this.db).record({ action: 'login.success', userId, username, ip: meta.ip ?? null, details: { method } });
     return result;
   }
@@ -573,21 +728,21 @@ export class AuthService {
    */
   loginExternal(
     userId: number,
-    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
+    meta: SessionMeta = {},
   ): LoginResult {
     const row = this.row(userId);
     if (row.role === 'admin') {
       audit(this.db).record({ action: 'login.failed', userId: row.id, username: row.username, ip: meta.ip ?? null, details: { reason: 'admin via media server' } });
       throw new AuthError('FORBIDDEN', 'admins sign in with their Arclight username and password, not a media server');
     }
-    return this.loginAs(userId, meta);
+    return this.loginAs(userId, { method: 'mediaServer', ...meta });
   }
 
-  /** Issues a session for a user whose identity is already established (internal; see loginExternal). */
-  private loginAs(
-    userId: number,
-    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
-  ): LoginResult {
+  /**
+   * Issues a session for a user whose identity is already established: loginExternal, the
+   * second factor, an identity provider (identity.ts). Callers have done every check.
+   */
+  loginAs(userId: number, meta: SessionMeta = {}): LoginResult {
     const row = this.row(userId);
     const now = this.now().toISOString();
     this.db.update(users).set({ lastLoginAt: now }).where(eq(users.id, row.id)).run();
@@ -595,10 +750,7 @@ export class AuthService {
   }
 
   /** Issues a session for a user (login and the setup wizard's first admin). */
-  createSession(
-    userId: number,
-    meta: { ip?: string | undefined; userAgent?: string | undefined; rememberMe?: boolean | undefined } = {},
-  ): Omit<LoginResult, 'user'> {
+  createSession(userId: number, meta: SessionMeta = {}): Omit<LoginResult, 'user'> {
     this.purgeExpired();
     const persistent = meta.rememberMe ?? true;
     const now = this.now();
@@ -616,6 +768,7 @@ export class AuthService {
         lastSeenAt: now.toISOString(),
         userAgent: meta.userAgent?.slice(0, 512) ?? null,
         ip: meta.ip ?? null,
+        method: meta.method ?? null,
       })
       .returning()
       .get();
@@ -631,7 +784,7 @@ export class AuthService {
    * Looks up a session token. Expired sessions are deleted. A persistent session past half
    * its lifetime slides forward, so active users stay signed in.
    */
-  resolveSession(token: string): { user: User; sessionId: number; expiresAt: string; renewed?: { maxAgeSeconds: number | null } } | null {
+  resolveSession(token: string): { user: User; sessionId: number; expiresAt: string; method: string | null; renewed?: { maxAgeSeconds: number | null } } | null {
     const found = this.db
       .select({ session: sessions, user: users })
       .from(sessions)
@@ -657,7 +810,7 @@ export class AuthService {
     // Throttle last-seen writes to one a minute per session.
     if (t - Date.parse(found.session.lastSeenAt) > 60_000) patch.lastSeenAt = now.toISOString();
     if (Object.keys(patch).length > 0) this.db.update(sessions).set(patch).where(eq(sessions.id, found.session.id)).run();
-    return { user: toUser(found.user), sessionId: found.session.id, expiresAt, ...(renewed ? { renewed } : {}) };
+    return { user: toUser(found.user), sessionId: found.session.id, expiresAt, method: found.session.method ?? null, ...(renewed ? { renewed } : {}) };
   }
 
   listSessions(userId: number, currentId?: number): SessionRecord[] {
@@ -679,6 +832,7 @@ export class AuthService {
         };
         if (s.userAgent) rec.userAgent = s.userAgent;
         if (s.ip) rec.ip = s.ip;
+        if (s.method) rec.method = s.method;
         return rec;
       });
   }
@@ -732,6 +886,7 @@ export class AuthService {
             appAccess: effectiveAppAccess(found.user, isAdmin),
             sessionId: found.sessionId,
             expiresAt: found.expiresAt,
+            ...(found.method ? { sessionMethod: found.method } : {}),
           },
           ...(found.renewed ? { renewed: found.renewed } : {}),
         };
@@ -741,7 +896,8 @@ export class AuthService {
       const address = creds.addresses[0] ?? 'unknown';
       this.checkRateLimit(address);
       const row = await this.verifyCredentials(creds.basic.username, creds.basic.password);
-      if (row && this.localLoginAllowed(row)) {
+      // Basic cannot carry a second factor: accounts with one use an API key instead.
+      if (row && this.localLoginAllowed(row) && !this.twoFactor.hasSecondFactor(row.id)) {
         const user = toUser(row);
         const isAdmin = user.role === 'admin';
         return { auth: { user, via: 'basic', isAdmin, appAccess: effectiveAppAccess(user, isAdmin) } };
@@ -751,14 +907,126 @@ export class AuthService {
     if (creds.apiKey && this.verifyApiKey(creds.apiKey)) {
       return { auth: { user: null, via: 'apikey', isAdmin: true, appAccess: APP_AREAS } };
     }
+    const userKey = creds.apiKey ? this.apiKeys.verify(creds.apiKey) : null;
+    if (userKey) {
+      const keyAuth = this.userKeyAuth(userKey.userId, userKey.id, userKey.scope);
+      if (keyAuth) return { auth: keyAuth };
+    }
     const pluginKey = creds.apiKey ? this.verifyPluginKey(creds.apiKey) : null;
     if (pluginKey) {
       // Never admin and no app areas: the hook confines it to /api/v1/jellyfin/*.
       return { auth: { user: null, via: 'plugin', isAdmin: false, appAccess: [], pluginKeyId: pluginKey.id } };
+    }
+    if (this.forwardAuth) {
+      const forwarded = await this.forwardAuth(creds);
+      if (forwarded) return { auth: forwarded };
     }
     if (this.bypasses(creds.addresses)) {
       return { auth: { user: null, via: 'bypass', isAdmin: true, appAccess: APP_AREAS } };
     }
     return { auth: null };
   }
+
+  /**
+   * The request identity of a per-user key: the account's current role and grants, narrowed by
+   * the scope. `admin` keys of an account that is no longer an admin act as `requests`.
+   */
+  private userKeyAuth(userId: number, apiKeyId: number, scope: ApiKeyScope): RequestAuth | null {
+    const row = this.db.select().from(users).where(eq(users.id, userId)).get();
+    if (!row) return null;
+    const user = toUser(row);
+    const isAdminAccount = user.role === 'admin';
+    const effective: ApiKeyScope = scope === 'admin' && !isAdminAccount ? 'requests' : scope;
+    if (effective === 'requests') {
+      // Never admin, no admin-app areas: the request portal's rights only.
+      const permissions = isAdminAccount ? REQUESTS_KEY_ADMIN_PERMISSIONS : user.permissions & ~Permission.ADMIN;
+      const portalUser: User = { ...user, role: 'user', permissions, appAccess: [] };
+      return { user: portalUser, via: 'userkey', isAdmin: false, appAccess: [], apiKeyId, apiKeyScope: 'requests' };
+    }
+    return { user, via: 'userkey', isAdmin: isAdminAccount, appAccess: effectiveAppAccess(user, isAdminAccount), apiKeyId, apiKeyScope: effective };
+  }
+
+  /**
+   * Creates an account for an identity proven elsewhere (identity provider, forward-auth). It has
+   * no usable password (localPassword false) until an admin sets one.
+   */
+  async createExternalUser(input: { username: string; email?: string | undefined; displayName?: string | undefined; role: User['role'] }): Promise<User> {
+    const now = this.now().toISOString();
+    const row = this.db
+      .insert(users)
+      .values({
+        username: input.username,
+        usernameKey: input.username.toLowerCase(),
+        passwordHash: await hashPassword(randomBytes(32).toString('base64url')),
+        displayName: input.displayName ?? null,
+        email: input.email?.toLowerCase() ?? null,
+        role: input.role,
+        permissions: permissionsFor(input.role, input.role === 'admin' ? undefined : (this.newUserPermissions?.() ?? 0)),
+        appAccess: [],
+        localPassword: false,
+        settings: input.role === 'admin' ? {} : (this.newUserSettings?.() ?? {}),
+        createdAt: now,
+        updatedAt: now,
+      })
+      .returning()
+      .get();
+    return toUser(row);
+  }
+
+  /** A free username based on `wanted` (wanted, wanted-2, wanted-3, ...). */
+  freeUsername(wanted: string): string {
+    const cleaned = wanted.replace(/[^A-Za-z0-9._@-]/g, '').slice(0, 56) || 'user';
+    const base = cleaned.length < 2 ? `${cleaned}-user` : cleaned;
+    for (let i = 1; i < 1000; i++) {
+      const candidate = i === 1 ? base : `${base}-${i}`;
+      if (!this.findUserByUsername(candidate)) return candidate;
+    }
+    return `${base}-${randomBytes(4).toString('hex')}`;
+  }
+
+  /**
+   * Sets the role an identity provider's groups ask for. Never demotes the last admin; a change
+   * ends the account's sessions (as an admin edit would).
+   */
+  syncRole(userId: number, role: User['role']): User {
+    const current = this.row(userId);
+    if (current.role === role) return toUser(current);
+    if (role === 'user' && current.role === 'admin' && this.adminCount() <= 1) {
+      this.log?.warn({ userId }, 'identity provider groups would demote the only admin; keeping the admin role');
+      return toUser(current);
+    }
+    const row = this.db
+      .update(users)
+      .set({
+        role,
+        permissions: permissionsFor(role, role === 'admin' ? undefined : current.role === 'admin' ? (this.newUserPermissions?.() ?? 0) : current.permissions),
+        appAccess: role === 'admin' ? [] : current.appAccess,
+        updatedAt: this.now().toISOString(),
+      })
+      .where(eq(users.id, userId))
+      .returning()
+      .get()!;
+    this.revokeAllSessions(userId);
+    audit(this.db).record({ action: 'user.role.sync', userId, username: row.username, details: { role } });
+    return toUser(row);
+  }
+
+  findUsersByEmail(email: string): UserRow[] {
+    return this.db.select().from(users).where(eq(users.email, email.toLowerCase())).all();
+  }
+
+  findUserByUsername(username: string): UserRow | undefined {
+    return this.db.select().from(users).where(eq(users.usernameKey, username.trim().toLowerCase())).get();
+  }
+
+  userRow(id: number): UserRow {
+    return this.row(id);
+  }
+}
+
+/** TwoFactorError → AuthError (same codes; the routes' error handler knows AuthError). */
+export function toAuthError(err: unknown): unknown {
+  if (err instanceof TwoFactorError) return new AuthError(err.code, err.message);
+  if (err instanceof ApiKeyNotFoundError) return new AuthError('NOT_FOUND', err.message);
+  return err;
 }

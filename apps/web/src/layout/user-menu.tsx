@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { useRouter } from '@tanstack/react-router';
 import type { Session, User } from '@arclight/shared';
 import { Menu, type MenuItem } from '../arclight/index.js';
-import { displayNameOf, useAuth } from '../auth/auth-context.js';
+import { displayNameOf, useAuth, viaLabel } from '../auth/auth-context.js';
 import { shell, switchServer } from '../lib/native-app.js';
 import { t } from '../i18n/index.js';
 
@@ -14,7 +14,11 @@ export function initialsOf(name: string): string {
 }
 
 function roleLine(user: User | null, session: Session): string {
-  if (user) return user.role === 'admin' ? t('common.admin') : t('common.user');
+  if (user) {
+    const role = user.role === 'admin' ? t('common.admin') : t('common.user');
+    // A personal API key or the reverse proxy's header, not this browser's sign-in.
+    return session.via === 'userkey' || session.via === 'forward' ? `${role} · ${viaLabel(session.via)}` : role;
+  }
   if (session.via === 'bypass') return t('layout.userMenu.noSignInNeeded');
   if (session.via === 'apikey') return t('common.apiKey');
   return t('layout.userMenu.signedIn');

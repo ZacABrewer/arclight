@@ -25,6 +25,7 @@ export * from './alerts.js';
 export * from './calendar.js';
 export * from './vpn.js';
 export * from './auth.js';
+export * from './identity.js';
 export * from './import-lists.js';
 export * from './logs.js';
 export * from './debug.js';

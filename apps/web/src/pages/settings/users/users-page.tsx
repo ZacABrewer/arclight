@@ -9,6 +9,7 @@ import { authKeys } from '../../../auth/guard.js';
 import { Button, Chip, ErrorBlock, Modal, Table, Tabs, buttonClass, type Column } from '../../../arclight/index.js';
 import { UserPermissionsEditor, UserPolicyEditor, UserQuotaEditor, UserRequestSettingsForm } from '../../../features/requests/user-editors.js';
 import { UserDefaultsFields, useUserDefaults } from '../../../features/users/user-defaults.js';
+import { UserSignInAdmin } from '../../../features/identity/user-sign-in-admin.js';
 import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
 import { SettingsListSearch, SettingsSection } from '../shared.js';
@@ -141,6 +142,7 @@ export function UsersPage() {
               { id: 'quota', label: t('settings.users.quota'), content: <UserQuotaEditor userId={open.id} /> },
               { id: 'policy', label: t('settings.users.capsAndApproval'), content: <UserPolicyEditor userId={open.id} /> },
               { id: 'notifications', label: t('common.notifications'), content: <UserRequestSettingsForm userId={open.id} /> },
+              { id: 'signin', label: t('identity.admin.tab'), content: <UserSignInAdmin userId={open.id} name={open.displayName ?? open.username} /> },
             ]}
           />
         </Modal>

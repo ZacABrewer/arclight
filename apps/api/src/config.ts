@@ -1,5 +1,6 @@
 import { mkdirSync, existsSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { normalizeBasePath } from './base-path.js';
 
 // Runtime configuration comes from the environment only. Everything the user can change
 // in the UI lives in the settings table, not here.
@@ -22,6 +23,12 @@ export interface AppConfig {
    * by hand (tests) leave it undefined, which means off, so tests never open sockets by accident.
    */
   torrentEngine?: boolean;
+  /**
+   * Sub-path the app is served under behind a reverse proxy (ARCLIGHT_BASE_PATH), normalised:
+   * "/arclight" (leading slash, no trailing slash) or "" for the root. Configs built by hand
+   * (tests) may leave it out, which means the root. See base-path.ts.
+   */
+  basePath?: string;
 }
 
 /**
@@ -60,5 +67,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): AppConfig {
     isDocker,
     webDist,
     torrentEngine: readEnv(env, 'TORRENT_ENGINE') !== '0',
+    basePath: normalizeBasePath(readEnv(env, 'BASE_PATH')),
   };
 }

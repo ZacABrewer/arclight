@@ -1,6 +1,7 @@
 import type { PushSubscriptionInput } from '@arclight/shared';
 import { pushApi } from '../api/push.js';
 import { t } from '../i18n/index.js';
+import { withBase } from './base-path.js';
 
 // Browser side of web push: permission, PushManager subscription and the api calls that
 // register it. The service worker (public/sw.js) shows the notifications.
@@ -35,9 +36,9 @@ export function toSubscriptionInput(json: PushSubscriptionJSON, userAgent?: stri
 
 /** The service worker registration; registers /sw.js when the app did not (dev builds). */
 export async function serviceWorkerRegistration(): Promise<ServiceWorkerRegistration> {
-  const existing = await navigator.serviceWorker.getRegistration('/');
+  const existing = await navigator.serviceWorker.getRegistration(withBase('/'));
   if (existing) return existing;
-  return navigator.serviceWorker.register('/sw.js', { scope: '/' });
+  return navigator.serviceWorker.register(withBase('/sw.js'), { scope: withBase('/') });
 }
 
 export async function currentSubscription(): Promise<PushSubscription | null> {

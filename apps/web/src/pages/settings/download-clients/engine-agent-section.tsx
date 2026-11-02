@@ -4,6 +4,7 @@ import { Chip, ErrorBlock, FormRow, Skeleton, Toggle } from '../../../arclight/i
 import { useEngineAgentSettings, useSaveEngineAgentSettings } from '../../../hooks/engine-agent.js';
 import { PendingApiNotice, SettingsSection } from '../shared.js';
 import { t } from '../../../i18n/index.js';
+import { appOrigin } from '../../../lib/base-path.js';
 
 // "Act as remote engine": lets other Arclight instances add this one's built-in torrent engine
 // as a Remote Engine download client (GET/PUT /settings/engineagent).
@@ -39,7 +40,7 @@ export function EngineAgentSection() {
 
   const s = settings.data;
   const enabled = save.isPending && save.variables?.enabled !== undefined ? save.variables.enabled : s.enabled;
-  const url = engineAgentUrl(window.location.origin, s.path);
+  const url = engineAgentUrl(appOrigin(), s.path);
   return (
     <SettingsSection label={label}>
       <FormRow label={t('settings.engineAgent.actAsRemoteEngine')} caption={t('settings.engineAgent.actAsRemoteEngineCaption')} captionInline>

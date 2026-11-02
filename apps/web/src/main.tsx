@@ -8,8 +8,8 @@ import { toasts } from './lib/toast.js';
 import { createQueryClient } from './query-client.js';
 import { createAppRouter } from './router.js';
 import { readPortalDocument } from './features/discover/portal-location.js';
-import { setUnauthorizedHandler } from './api/client.js';
-import { authKeys, isPublicPath, loginHref } from './auth/guard.js';
+import { setTwoFactorSetupHandler, setUnauthorizedHandler } from './api/client.js';
+import { TWO_FACTOR_SETUP_PATH, authKeys, isPublicPath, loginHref } from './auth/guard.js';
 import { registerServiceWorker } from './register-sw.js';
 import { installInAppMode } from './lib/native-app.js';
 import { I18nProvider, applyLocaleSetting } from './i18n/index.js';
@@ -29,6 +29,14 @@ setUnauthorizedHandler(() => {
   if (pathname === '/login' || pathname === '/setup' || isPublicPath(pathname)) return;
   void queryClient.invalidateQueries({ queryKey: authKeys.all });
   void router.navigate({ href: loginHref(href, true), replace: true });
+});
+
+// "Require two-factor for admins": an admin without a second factor gets 403 from every call
+// until they set one up; re-read the session (the guard then keeps them on the setup screen).
+setTwoFactorSetupHandler(() => {
+  if (router.state.location.pathname === TWO_FACTOR_SETUP_PATH) return;
+  void queryClient.invalidateQueries({ queryKey: authKeys.all });
+  void router.navigate({ href: TWO_FACTOR_SETUP_PATH, replace: true });
 });
 
 // Inside the companion app: html.in-app (safe areas, browser-only UI hidden) and external

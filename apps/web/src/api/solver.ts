@@ -1,6 +1,6 @@
 import { ProxyAutoDetectResult, SolverSettings, SolverStatus, type SolverSettingsUpdate } from '@arclight/shared';
 import { z } from 'zod';
-import { request } from './client.js';
+import { API_BASE, request } from './client.js';
 import { t } from '../i18n/index.js';
 
 // Paths mirror apps/api/src/modules/solver/routes.ts.
@@ -24,7 +24,7 @@ export const solverApi = {
   async test(url = 'https://example.com/', maxTimeoutMs = 60_000): Promise<{ response: SolverTestResponse; elapsedMs: number }> {
     const started = performance.now();
     // The route answers 500 with a FlareSolverr error body when solving fails; read it either way.
-    const res = await fetch('/api/v1/solver/v1', {
+    const res = await fetch(`${API_BASE}/solver/v1`, {
       method: 'POST',
       credentials: 'same-origin',
       headers: { 'content-type': 'application/json', accept: 'application/json' },

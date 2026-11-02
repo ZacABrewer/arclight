@@ -293,7 +293,7 @@ unlinked). Routes: [API.md](API.md#mobile-companion-app).
 
 ## Metrics
 
-`GET /metrics` at the server root (not under `/api/v1`) serves the Prometheus text format.
+`GET /metrics` at the server root (not under `/api/v1`; below `ARCLIGHT_BASE_PATH` when that is set) serves the Prometheus text format.
 It takes the API's credentials (`X-Api-Key` header, `?apikey=`, Basic auth or a session
 cookie); set `metrics.allowAnonymous` (Settings, `PUT /api/v1/settings/metrics`, the config
 file or `ARCLIGHT_SETTING__metrics__allowAnonymous=true`) to scrape without one.

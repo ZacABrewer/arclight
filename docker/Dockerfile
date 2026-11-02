@@ -77,6 +77,6 @@ RUN chmod +x /entrypoint.sh
 VOLUME ["/config"]
 EXPOSE 7878
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s \
-  CMD node -e "fetch('http://127.0.0.1:7878/api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+  CMD node -e "const b=(process.env.ARCLIGHT_BASE_PATH||'').split('/').filter(Boolean).join('/');fetch('http://127.0.0.1:7878/'+(b?b+'/':'')+'api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
 ENTRYPOINT ["/usr/bin/tini", "--", "/entrypoint.sh"]
 CMD ["node", "dist/server.mjs"]

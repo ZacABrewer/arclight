@@ -21,6 +21,7 @@ import '../../components/media/media-kit.css';
 import '../discover/discover.css';
 import './portal.css';
 import { shell, switchServer } from '../../lib/native-app.js';
+import { ProviderButtons, passwordFormHidden, visibleProviders } from '../../features/identity/sign-in.js';
 import { t } from '../../i18n/index.js';
 
 // Public request portal: the full Discover catalogue (home sliders, browse, search, title,
@@ -314,8 +315,12 @@ export function PortalHomePage() {
   const signedIn = useSignedIn();
   // Signed-in people always get their portal, even when the descriptor did not load.
   const data = portal.data ?? (signedIn ? SIGNED_IN_FALLBACK : null);
+  const signInOptions = useAuth().status?.signIn;
+  const here = useRouterState({ select: (s) => s.location.href });
   if (!data) return null;
-  const logins = portalLoginOptions(data.loginMethods);
+  const providers = visibleProviders(signInOptions, 'portal');
+  // With the password form hidden, the username/password methods would land on a page without it.
+  const logins = portalLoginOptions(data.loginMethods).filter((o) => !passwordFormHidden(signInOptions, providers, false) || o.id === 'plex');
   const browse = signedIn || data.allowAnonymousDiscover;
   return (
     <div className="portal-stack">
@@ -332,10 +337,15 @@ export function PortalHomePage() {
         </Pane>
         {!signedIn ? (
           <Pane title={t('portal.signInTitle')} aria-label={t('portal.signInTitle')}>
+            {providers.length > 0 ? (
+              <div className="portal-providers">
+                <ProviderButtons providers={providers} returnTo={here} primary />
+              </div>
+            ) : null}
             <ul className="portal-logins" aria-label={t('portal.loginMethods')}>
               {logins.map((o, i) => (
                 <li key={o.id}>
-                  <SignInLink variant={i === 0 ? 'primary' : 'secondary'} block>
+                  <SignInLink variant={i === 0 && providers.length === 0 ? 'primary' : 'secondary'} block>
                     {o.label}
                   </SignInLink>
                 </li>

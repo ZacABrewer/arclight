@@ -6,6 +6,7 @@ import {
   PlexPollPending,
   type PlexPollRequest,
   AuthStatus,
+  LoginResponse,
   RootFolder,
   SecuritySettingsResponse,
   Session,
@@ -44,7 +45,8 @@ export type PlexPollResponse = z.infer<typeof PlexPollResponse>;
 export const authApi = {
   status: () => request('/auth/status', AuthStatus),
   me: () => request('/auth/me', Session),
-  login: (body: LoginRequest) => request('/auth/login', Session, { method: 'POST', json: body }),
+  /** A session, or `{twoFactorRequired, challenge, methods}` when the account has two-factor on. */
+  login: (body: LoginRequest) => request('/auth/login', LoginResponse, { method: 'POST', json: body }),
   logout: () => request('/auth/logout', null, { method: 'POST' }),
   sessions: () => request('/auth/sessions', SessionRecord.array()),
   revokeSession: (id: number) => request(`/auth/sessions/${id}`, null, { method: 'DELETE' }),

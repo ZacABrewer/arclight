@@ -11,6 +11,7 @@ import { useAdditionalLanguagePreview, useApplyAdditionalLanguage } from '../../
 import { useQualityProfiles } from '../../hooks/library.js';
 import { useDebouncedValue } from '../../hooks/metadata.js';
 import { t } from '../../i18n/index.js';
+import { withBase } from '../../lib/base-path.js';
 import { FLAG_MODE_LABELS, LanguagePicker, useLanguageName } from '../../pages/subtitles/subtitle-ui.js';
 import {
   EMPTY_AUDIO,
@@ -313,7 +314,7 @@ function ResultsView({ result }: { result: AdditionalLanguageResult }) {
       {result.jobId !== null ? (
         <p className="mk-muted addl-note">
           {t('features.additionalLanguages.searchesInActivity')}{' '}
-          <a className="mk-link" href="/system/tasks">
+          <a className="mk-link" href={withBase('/system/tasks')}>
             {t('common.tasks')}
           </a>
         </p>

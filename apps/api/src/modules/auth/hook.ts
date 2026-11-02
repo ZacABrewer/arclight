@@ -47,6 +47,12 @@ export const PUBLIC_ROUTES: ReadonlySet<string> = new Set([
   // Plex PIN sign-in (requests module); the poll only signs in once plex.tv confirms the PIN.
   '/auth/plex/pin',
   '/auth/plex/poll',
+  // Second step of a password sign-in, passkey sign-in, identity-provider redirects.
+  '/auth/login/2fa',
+  '/auth/passkey/options',
+  '/auth/passkey/login',
+  '/auth/oidc/:id/start',
+  '/auth/oidc/:id/callback',
   '/system/ping',
   // Calendar apps cannot send headers; the feed checks its own token.
   '/calendar/feed.ics',
@@ -100,6 +106,69 @@ export function nonAdminMay(auth: RequestAuth, method: string, access: RouteAcce
   return (access.permissions ?? []).some((p) => p !== 0 && (held & p) === p);
 }
 
+/**
+ * Routes that reveal or change install-wide secrets (the global API key, provider secrets,
+ * backups with every credential): only sessions and admin-scoped keys, never narrower keys.
+ * Full route patterns, since the hook also guards /api/v3.
+ */
+export const SECRET_ROUTES: ReadonlySet<string> = new Set([
+  `${API_PREFIX}/settings/security`,
+  `${API_PREFIX}/settings/security/apikey`,
+  `${API_PREFIX}/settings/identity`,
+  `${API_PREFIX}/apikeys`,
+  `${API_PREFIX}/apikeys/:id`,
+  `${API_PREFIX}/config/export`,
+  `${API_PREFIX}/system/backup/:id/download`,
+  '/api/v3/config/host',
+]);
+
+/**
+ * Routes a per-user API key may never call, whatever its scope: managing the account's own
+ * credentials needs a signed-in browser session, so a leaked key cannot mint more keys, turn
+ * off two-factor or link another sign-in.
+ */
+export const SESSION_ONLY_PREFIXES: readonly string[] = [
+  `${API_PREFIX}/user/me/2fa`,
+  `${API_PREFIX}/user/me/passkeys`,
+  `${API_PREFIX}/user/me/identities`,
+  `${API_PREFIX}/user/me/apikeys`,
+  `${API_PREFIX}/user/me/password`,
+  `${API_PREFIX}/auth/oidc/`,
+  `${API_PREFIX}/auth/sessions`,
+];
+
+/** Whether a per-user key (`via: 'userkey'`) may call this route on this method. */
+export function apiKeyScopeAllows(auth: RequestAuth, method: string, routeUrl: string | undefined): boolean {
+  if (auth.via !== 'userkey') return true;
+  if (!routeUrl) return false;
+  if (SESSION_ONLY_PREFIXES.some((p) => routeUrl.startsWith(p))) return false;
+  if (auth.apiKeyScope === 'read' && method !== 'GET' && method !== 'HEAD') return false;
+  if (auth.apiKeyScope !== 'admin' && SECRET_ROUTES.has(routeUrl)) return false;
+  return true;
+}
+
+/**
+ * While "require two-factor for admins" applies to a request (twoFactorSetupRequired), only
+ * these answer: who am I, sign out, and setting up the second factor.
+ */
+export const TWO_FACTOR_SETUP_ROUTES: readonly string[] = [
+  `${API_PREFIX}/auth/me`,
+  `${API_PREFIX}/auth/status`,
+  `${API_PREFIX}/auth/logout`,
+  `${API_PREFIX}/auth/sessions`,
+  `${API_PREFIX}/user/me`,
+  `${API_PREFIX}/user/me/2fa`,
+  `${API_PREFIX}/user/me/passkeys`,
+  `${API_PREFIX}/system/ping`,
+  `${API_PREFIX}/theme`,
+];
+
+function allowedDuringTwoFactorSetup(method: string, routeUrl: string | undefined): boolean {
+  if (!routeUrl) return false;
+  if (routeUrl === `${API_PREFIX}/user/me`) return method === 'GET' || method === 'HEAD';
+  return TWO_FACTOR_SETUP_ROUTES.some((p) => routeUrl === p || routeUrl.startsWith(`${p}/`));
+}
+
 function parseBasic(header: string | undefined): RequestCredentials['basic'] {
   if (!header?.toLowerCase().startsWith('basic ')) return undefined;
   const decoded = Buffer.from(header.slice(6).trim(), 'base64').toString('utf8');
@@ -123,6 +192,9 @@ export function credentialsOf(req: FastifyRequest): RequestCredentials {
     basic: parseBasic(req.headers.authorization),
     // The socket peer plus every forwarded address; all must be local for the bypass.
     addresses: addressesOf(req),
+    // Forward-auth trusts the TCP peer only: X-Forwarded-For is whatever the client sent.
+    peer: (req.socket as FastifyRequest['socket'] | undefined)?.remoteAddress,
+    header: (name) => firstString(req.headers[name.toLowerCase()]),
   };
 }
 
@@ -155,10 +227,12 @@ export interface AuthHookOptions {
 /**
  * The onRequest hook for every API route, in this order:
  * 1. no admin account yet: 403 SETUP_REQUIRED, except the setup bootstrap routes;
- * 2. resolve `req.auth` (session cookie, Basic, API key, local bypass);
- * 3. public routes answer; anonymous callers elsewhere get 401;
- * 4. a Jellyfin plugin key passes on /api/v1/jellyfin/* and gets 403 anywhere else;
- * 5. admins (and API-key / bypass callers) pass; anyone else needs the route's
+ * 2. resolve `req.auth` (session cookie, Basic, API keys, plugin key, forward-auth, local bypass);
+ * 3. a per-user key outside its scope gets 403; an admin who must set up two-factor gets 403
+ *    TWO_FACTOR_SETUP_REQUIRED outside the setup routes;
+ * 4. public routes answer; anonymous callers elsewhere get 401;
+ * 5. a Jellyfin plugin key passes on /api/v1/jellyfin/* and gets 403 anywhere else;
+ * 6. admins (and API-key / bypass callers) pass; anyone else needs the route's
  *    `config.access` to admit them for this method (nonAdminMay), else 403.
  */
 export function requireAuth(service: AuthService, options: AuthHookOptions | PublicRoutePredicate = {}) {
@@ -184,6 +258,12 @@ export function requireAuth(service: AuthService, options: AuthHookOptions | Pub
     if (resolved.renewed && resolved.auth?.via === 'session') {
       const token = readCookie(req.headers.cookie, SESSION_COOKIE);
       if (token) setSessionCookie(req, reply, token, resolved.renewed.maxAgeSeconds);
+    }
+    if (req.auth && !apiKeyScopeAllows(req.auth, req.method, routeUrl)) {
+      return reply.code(403).send({ error: `this API key (${req.auth.apiKeyScope ?? 'read'} scope) may not call this`, code: 'FORBIDDEN' });
+    }
+    if (req.auth && !isPublic(routeUrl) && !allowedDuringTwoFactorSetup(req.method, routeUrl) && service.twoFactorSetupRequired(req.auth)) {
+      return reply.code(403).send({ error: 'set up two-factor sign-in on your account first', code: 'TWO_FACTOR_SETUP_REQUIRED' });
     }
     if (isPublic(routeUrl)) return;
     if (!req.auth && (req.method === 'GET' || req.method === 'HEAD')) {

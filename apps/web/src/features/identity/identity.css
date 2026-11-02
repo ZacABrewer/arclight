@@ -1,0 +1,30 @@
+/* Sign-in hardening: sign-in page pieces, profile Security, Settings > Security identity. Tokens only. */
+.login-fields { display: flex; flex-direction: column; gap: 20px; }
+.id-providers { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+.id-passkey { display: flex; flex-direction: column; gap: 8px; }
+.id-local-note { margin: 0; font-size: 13px; color: var(--al-text-3); text-align: center; }
+.id-step-head { display: flex; flex-direction: column; gap: 6px; }
+.id-step-title { margin: 0; }
+.id-step-help { margin: 0; }
+.id-step-alt { display: flex; flex-wrap: wrap; gap: 4px 8px; justify-content: center; }
+
+/* Profile > Security */
+.id-security { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 20px; }
+.id-stack { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.id-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.id-muted { margin: 0; color: var(--al-text-3); }
+.id-qr { display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-start; }
+.id-qr svg { flex: none; border: 1px solid var(--al-line-2, var(--al-text-4)); }
+.id-secret { font-family: var(--al-mono); font-size: 14px; letter-spacing: .06em; color: var(--al-text-1); overflow-wrap: anywhere; word-break: break-all; }
+.id-codes { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px 16px; font-family: var(--al-mono); font-size: 15px; color: var(--al-text-1); }
+.id-key { display: block; font-family: var(--al-mono); font-size: 14px; color: var(--al-text-1); overflow-wrap: anywhere; word-break: break-all; padding: 10px 12px; border: 1px solid var(--al-line-2, var(--al-text-4)); }
+.id-redirect { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.id-redirect code { font-family: var(--al-mono); font-size: 13px; overflow-wrap: anywhere; word-break: break-all; color: var(--al-text-2); }
+.id-grid-2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: 16px; }
+.id-test-result { margin: 0; font-size: 13px; overflow-wrap: anywhere; }
+.id-test-result[data-ok='true'] { color: var(--al-ok); }
+.id-test-result[data-ok='false'] { color: var(--al-danger-text); }
+
+@media (max-width: 767px) {
+  .id-actions .al-btn, .id-step-alt .al-btn { min-height: 44px; }
+}

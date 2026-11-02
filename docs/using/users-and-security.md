@@ -106,6 +106,10 @@ There is no command-line or environment-variable reset. Pick whichever applies:
 
 If you are locked out for another reason (rate limit, wrong auth method), see [Locked out](../TROUBLESHOOTING.md#locked-out).
 
+## Single sign-on, two-factor and API keys
+
+Beyond the password login you can let people sign in through an identity provider such as Authentik, Authelia, Keycloak or Pocket ID (OpenID Connect), trust a login proxy in front of Arclight (forward-auth), require a second step with an authenticator app or passkey, and give each person their own revocable API keys. All of it is optional and covered, with examples, in [single-sign-on.md](single-sign-on.md).
+
 ## Rate limiting and lockout
 
 After 10 failed sign-ins from one address within 15 minutes, Arclight answers with "Too many failed attempts. Wait a few minutes and try again." The counter covers the login page, media-server sign-in and HTTP Basic together. It is kept in memory, so it resets when Arclight restarts.
@@ -129,7 +133,7 @@ What your proxy must do:
 
 Important limits:
 
-- Arclight is served at the root of its address (`/`). There is no base-URL setting, so a sub-path such as `https://example.com/arclight/` is not supported. Use a sub-domain (`arclight.example.com`).
+- Arclight is served at the root of its address (`/`) by default. A sub-domain (`arclight.example.com`) is the simplest; for a sub-path such as `https://example.com/arclight/`, set `ARCLIGHT_BASE_PATH=/arclight` and keep the prefix at the proxy ([sub-path-hosting.md](../getting-started/sub-path-hosting.md)).
 - Port 7878 is the default. Point the proxy at `http://<your-host>:7878`.
 - A proxy on the same machine looks like a local connection, but Arclight also checks the forwarded addresses, so a visitor from the internet is still treated as public.
 
@@ -163,6 +167,7 @@ On Settings > Users, tick users to delete several at once (it asks first, with t
 
 - [Exposing Arclight outside your home](../getting-started/exposing-outside-home.md)
 - [System pages](system.md)
+- [Single sign-on, two-factor and API keys](single-sign-on.md)
 - [Media servers](media-servers.md)
 - [Discover and requests](discover-and-requests.md)
 - [Back up and restore](../getting-started/backup-restore.md)

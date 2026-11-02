@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@tanstack/react-router';
 import { listSearchTokens, matchesListSearch } from '@arclight/shared';
 import { API_BASE } from '../../api/client.js';
+import { withBase } from '../../lib/base-path.js';
 import {
   Banner,
   Button,
@@ -410,7 +411,7 @@ export interface FeedOptions {
 
 /** Absolute iCal URL from the feed path the api reports plus the user's options. */
 export function buildFeedUrl(origin: string, path: string, opts: FeedOptions): string {
-  const base = path.startsWith('/api/') ? path : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
+  const base = path.startsWith('/api/') ? withBase(path) : `${API_BASE}${path.startsWith('/') ? '' : '/'}${path}`;
   const url = new URL(base, origin);
   url.searchParams.set('pastDays', String(opts.pastDays));
   url.searchParams.set('futureDays', String(opts.futureDays));

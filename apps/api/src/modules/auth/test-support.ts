@@ -5,12 +5,13 @@ import type { AppContext } from '../../app.js';
 import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
 import { Scheduler } from '../../scheduler.js';
-import { authServiceFor } from './context.js';
+import { authServiceFor, identityServiceFor } from './context.js';
+import type { IdentityServiceOptions } from './identity.js';
 import { authModule, installAuth } from './index.js';
 import type { AuthServiceOptions } from './service.js';
 
 /** Test-only: an api scope with the auth hook, the auth module and two probe routes. */
-export async function buildAuthApp(overrides: Partial<Omit<AuthServiceOptions, 'db'>> = {}) {
+export async function buildAuthApp(overrides: Partial<Omit<AuthServiceOptions, 'db'>> = {}, identityOverrides: Partial<Omit<IdentityServiceOptions, 'db' | 'auth'>> = {}) {
   const db = await createTestDb();
   const log = pino({ level: 'silent' });
   const bus = new EventBus();
@@ -32,6 +33,7 @@ export async function buildAuthApp(overrides: Partial<Omit<AuthServiceOptions, '
     startedAt: new Date(),
   };
   const auth = authServiceFor(ctx, overrides);
+  const identity = identityServiceFor(ctx, identityOverrides);
   const app = Fastify({ trustProxy: true }).withTypeProvider<ZodTypeProvider>();
   app.setValidatorCompiler(validatorCompiler);
   app.setSerializerCompiler(serializerCompiler);
@@ -46,12 +48,13 @@ export async function buildAuthApp(overrides: Partial<Omit<AuthServiceOptions, '
     { prefix: '/api/v1' },
   );
   await app.ready();
-  return { app, auth, db, ctx };
+  return { app, auth, identity, db, ctx };
 }
 
 /** The `al_session=...` pair from a response's set-cookie header. */
-export function cookieFrom(res: { headers: Record<string, unknown> }): string {
+export function cookieFrom(res: { headers: Record<string, unknown> }, name = 'al_session'): string {
   const header = res.headers['set-cookie'];
-  const raw = Array.isArray(header) ? String(header[0]) : String(header ?? '');
+  const list = Array.isArray(header) ? header.map(String) : header === undefined ? [] : [String(header)];
+  const raw = list.find((c) => c.startsWith(`${name}=`)) ?? list[0] ?? '';
   return raw.split(';')[0] ?? '';
 }

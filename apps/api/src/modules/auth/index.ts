@@ -1,11 +1,13 @@
 import type { FastifyInstance } from 'fastify';
 import type { AppContext, AppModule } from '../../app.js';
-import { authServiceFor } from './context.js';
+import { authServiceFor, identityServiceFor } from './context.js';
+import { applicationUrlOf } from './routes-identity.js';
 import { installAuthHook } from './hook.js';
 import { authRoutes } from './routes.js';
 import { SetupService } from './setup.js';
 
-export { authServiceFor } from './context.js';
+export { authServiceFor, identityServiceFor } from './context.js';
+export { IdentityService } from './identity.js';
 export {
   requireAdmin,
   requireAuth,
@@ -38,11 +40,15 @@ export * from './schema.js';
 export function installAuth(scope: FastifyInstance, ctx: AppContext): void {
   const service = authServiceFor(ctx);
   service.ensureApiKey();
+  // Registers the forward-auth resolver before the first request.
+  identityServiceFor(ctx);
   installAuthHook(scope, service);
 }
 
 // Users, sessions, API key, security settings and first-run setup.
 export const authModule: AppModule = (ctx) => async (app) => {
   const service = authServiceFor(ctx);
-  await app.register(authRoutes(service, new SetupService(ctx.db, service)));
+  await app.register(
+    authRoutes(service, new SetupService(ctx.db, service), identityServiceFor(ctx), { basePath: ctx.config.basePath ?? '', applicationUrl: applicationUrlOf(ctx.db) }),
+  );
 };

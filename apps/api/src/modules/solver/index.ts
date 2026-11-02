@@ -51,6 +51,7 @@ export function autoDetectDepsFor(ctx: AppContext, overrides: Partial<Pick<AutoD
       available: solver.available(),
       listenHost: ctx.config.host,
       port: ctx.config.port,
+      basePath: ctx.config.basePath ?? '',
       apiKey: authServiceFor(ctx).apiKey(),
       timeoutSeconds: solver.settings().timeoutSeconds,
     }),

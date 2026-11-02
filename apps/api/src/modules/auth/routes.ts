@@ -5,6 +5,7 @@ import {
   AuthSettings,
   AuthStatus,
   LoginRequest,
+  LoginResponse,
   PasswordChange,
   RootFolder,
   SecuritySettingsResponse,
@@ -24,7 +25,9 @@ import type { FastifyPluginAsync, FastifyRequest, RawServerDefault } from 'fasti
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { clearSessionCookie, readCookie, SESSION_COOKIE, setSessionCookie } from './cookies.js';
 import { requireAdmin } from './hook.js';
-import { AUTH_ERROR_STATUS, AuthError, type AuthService, type RequestAuth } from './service.js';
+import { AUTH_ERROR_STATUS, AuthError, TwoFactorRequiredError, type AuthService, type RequestAuth } from './service.js';
+import type { IdentityService } from './identity.js';
+import { registerIdentityRoutes, type IdentityRouteOptions } from './routes-identity.js';
 import type { SetupService } from './setup.js';
 
 type Plugin = FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider>;
@@ -42,12 +45,14 @@ const errors = {
   429: AuthErrorResponse,
 };
 
-function sessionOf(auth: RequestAuth): Session {
+function sessionOf(auth: RequestAuth, service: AuthService): Session {
   return {
     user: auth.user,
     via: auth.via,
     isAdmin: auth.isAdmin,
     ...(auth.expiresAt ? { expiresAt: auth.expiresAt } : {}),
+    ...(service.twoFactorSetupRequired(auth) ? { twoFactorSetupRequired: true } : {}),
+    ...(auth.apiKeyScope ? { apiKeyScope: auth.apiKeyScope } : {}),
   };
 }
 
@@ -62,7 +67,7 @@ function meta(req: FastifyRequest) {
   return { ip: req.ip, userAgent: req.headers['user-agent'] };
 }
 
-export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
+export function authRoutes(auth: AuthService, setup: SetupService, identity?: IdentityService, identityOptions: IdentityRouteOptions = {}): Plugin {
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
       if (err instanceof AuthError) return reply.code(AUTH_ERROR_STATUS[err.code]).send({ error: err.message, code: err.code });
@@ -74,8 +79,15 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
     });
 
     // ----------------------------------------------------------------------------- auth
-    app.post('/auth/login', { schema: { body: LoginRequest, response: { 200: Session, ...errors } } }, async (req, reply) => {
-      const result = await auth.loginWith(req.body.method, req.body.username, req.body.password, { ...meta(req), rememberMe: req.body.rememberMe });
+    app.post('/auth/login', { schema: { body: LoginRequest, response: { 200: LoginResponse, ...errors } } }, async (req, reply) => {
+      let result;
+      try {
+        result = await auth.loginWith(req.body.method, req.body.username, req.body.password, { ...meta(req), rememberMe: req.body.rememberMe });
+      } catch (err) {
+        // Right password, second factor still to come: no session yet.
+        if (err instanceof TwoFactorRequiredError) return { twoFactorRequired: true as const, challenge: err.challenge, methods: err.methods };
+        throw err;
+      }
       setSessionCookie(req, reply, result.token, result.maxAgeSeconds);
       return { user: result.user, via: 'session' as const, isAdmin: result.user.role === 'admin', expiresAt: result.expiresAt };
     });
@@ -86,16 +98,19 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
       return reply.code(204).send(null);
     });
 
-    app.get('/auth/me', { config: portal, schema: { response: { 200: Session, 401: AuthErrorResponse } } }, async (req) => sessionOf(req.auth!));
+    app.get('/auth/me', { config: portal, schema: { response: { 200: Session, 401: AuthErrorResponse } } }, async (req) => sessionOf(req.auth!, auth));
 
     app.get('/auth/status', { schema: { response: { 200: AuthStatus } } }, async (req) => ({
       needsSetup: auth.needsSetup(),
       adminExists: auth.hasAdmin(),
       authMethod: auth.authSettings().method,
       authenticated: req.auth !== null,
-      session: req.auth ? sessionOf(req.auth) : null,
+      session: req.auth ? sessionOf(req.auth, auth) : null,
       mediaServerLogin: auth.mediaServerLogin?.() ?? null,
+      ...(identity ? { signIn: identity.signInOptions() } : {}),
     }));
+
+    if (identity) registerIdentityRoutes(app, auth, identity, identityOptions);
 
     app.get('/auth/sessions', { config: portal, schema: { response: { 200: z.array(SessionRecord) } } }, async (req) =>
       req.auth?.user ? auth.listSessions(req.auth.user.id, req.auth.sessionId) : [],
@@ -196,7 +211,7 @@ export function authRoutes(auth: AuthService, setup: SetupService): Plugin {
 
     app.post('/setup/admin', { schema: { body: SetupAdminRequest, response: { 201: Session, ...errors } } }, async (req, reply) => {
       const user = await setup.createAdmin(req.body);
-      const session = auth.createSession(user.id, meta(req));
+      const session = auth.createSession(user.id, { ...meta(req), method: 'setup' });
       setSessionCookie(req, reply, session.token, session.maxAgeSeconds);
       return reply.code(201).send({ user, via: 'session' as const, isAdmin: true, expiresAt: session.expiresAt });
     });

@@ -119,6 +119,7 @@ Open `http://localhost:7878`. Settings you may use:
 | `ARCLIGHT_WEB_DIST` | unset | Folder with the built web app (`apps\web\dist`). |
 | `ARCLIGHT_PORT` | `7878` | HTTP port. |
 | `ARCLIGHT_HOST` | `0.0.0.0` | Listen address. Use `127.0.0.1` to allow only this PC. |
+| `ARCLIGHT_BASE_PATH` | empty | Serve Arclight below a path such as `/arclight` behind a reverse proxy ([sub-path-hosting.md](sub-path-hosting.md)). |
 | `ARCLIGHT_LOG_LEVEL` | `info` | Log detail. |
 | `ARCLIGHT_TMDB_API_KEY` | unset | TMDB key used when none is saved in the UI. |
 | `ARCLIGHT_TORRENT_ENGINE` | `1` | `0` stops the built-in torrent engine. |

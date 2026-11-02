@@ -102,7 +102,7 @@ services:
       # are instant hard links only when both live under the same mount.
       - ${DATA_ROOT:-./data/share}:/data
     healthcheck:
-      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:7878/api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      test: ["CMD", "node", "-e", "const b=(process.env.ARCLIGHT_BASE_PATH||'').split('/').filter(Boolean).join('/');fetch('http://127.0.0.1:7878/'+(b?b+'/':'')+'api/v1/system/ping').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 30s
       timeout: 5s
       start_period: 20s

@@ -55,6 +55,8 @@ export const sessions = sqliteTable(
     lastSeenAt: text('last_seen_at').notNull(),
     userAgent: text('user_agent'),
     ip: text('ip'),
+    /** How it was opened: password, oidc:<provider>, passkey, jellyfin/emby/plex, setup; null for older sessions. */
+    method: text('method'),
   },
   (t) => [uniqueIndex('sessions_token_hash_idx').on(t.tokenHash), index('sessions_user_idx').on(t.userId)],
 );
@@ -78,4 +80,86 @@ export const pluginApiKeys = sqliteTable(
     lastPingAt: text('last_ping_at'),
   },
   (t) => [uniqueIndex('plugin_api_keys_hash_idx').on(t.keyHash)],
+);
+
+/**
+ * An external identity (OpenID Connect provider + subject) linked to an Arclight account. One
+ * per provider per account; a (provider, subject) pair belongs to one account.
+ */
+export const userIdentities = sqliteTable(
+  'user_identities',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    /** OidcProvider.id from the `identity` settings section. */
+    providerId: text('provider_id').notNull(),
+    subject: text('subject').notNull(),
+    email: text('email'),
+    linkedAt: text('linked_at').notNull(),
+    lastLoginAt: text('last_login_at'),
+  },
+  (t) => [uniqueIndex('user_identities_subject_idx').on(t.providerId, t.subject), uniqueIndex('user_identities_user_idx').on(t.userId, t.providerId)],
+);
+
+/**
+ * TOTP second factor. `enabledAt` null: set up but not confirmed with a code yet. `lastStep` is
+ * the last accepted 30-second step, so a code cannot be used twice. Recovery codes are sha256
+ * hashes; a used one is removed.
+ */
+export const userTwoFactor = sqliteTable('user_two_factor', {
+  userId: integer('user_id')
+    .primaryKey()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  /** Base32 TOTP secret. */
+  totpSecret: text('totp_secret').notNull(),
+  enabledAt: text('enabled_at'),
+  lastStep: integer('last_step').notNull().default(0),
+  recoveryCodes: text('recovery_codes', { mode: 'json' }).$type<string[]>().notNull().default([]),
+  updatedAt: text('updated_at').notNull(),
+});
+
+/** WebAuthn credentials (passkeys). */
+export const webauthnCredentials = sqliteTable(
+  'webauthn_credentials',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    /** base64url credential id. */
+    credentialId: text('credential_id').notNull(),
+    /** base64url COSE public key. */
+    publicKey: text('public_key').notNull(),
+    counter: integer('counter').notNull().default(0),
+    transports: text('transports', { mode: 'json' }).$type<string[]>().notNull().default([]),
+    backedUp: integer('backed_up', { mode: 'boolean' }).notNull().default(false),
+    createdAt: text('created_at').notNull(),
+    lastUsedAt: text('last_used_at'),
+  },
+  (t) => [uniqueIndex('webauthn_credentials_cred_idx').on(t.credentialId), index('webauthn_credentials_user_idx').on(t.userId)],
+);
+
+/**
+ * Per-user API keys (alu_…). The scope limits what the key can do, on top of the account's own
+ * access, which is read at every use. Only the sha256 of a key is stored; the key is shown once.
+ */
+export const userApiKeys = sqliteTable(
+  'user_api_keys',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    userId: integer('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    name: text('name').notNull(),
+    scope: text('scope').$type<'read' | 'requests' | 'admin'>().notNull(),
+    keyHash: text('key_hash').notNull(),
+    prefix: text('prefix').notNull(),
+    createdAt: text('created_at').notNull(),
+    lastUsedAt: text('last_used_at'),
+    expiresAt: text('expires_at'),
+  },
+  (t) => [uniqueIndex('user_api_keys_hash_idx').on(t.keyHash), index('user_api_keys_user_idx').on(t.userId)],
 );

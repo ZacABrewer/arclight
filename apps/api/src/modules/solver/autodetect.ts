@@ -28,6 +28,8 @@ export interface BuiltinSolverState {
   /** Host the api listens on (config.host) and its port. */
   listenHost: string;
   port: number;
+  /** ARCLIGHT_BASE_PATH ("" or "/arclight"): the loopback URL must go through it too. */
+  basePath?: string;
   apiKey: string;
   timeoutSeconds: number;
 }
@@ -129,7 +131,7 @@ export async function runProxyAutoDetect(deps: AutoDetectDeps): Promise<ProxyAut
   const existing = deps.proxies.allRows().find(isBuiltinSolverRow);
   if (state.available) {
     const desired = {
-      host: `http://${loopbackFor(state.listenHost)}${SOLVER_ROUTE_BASE}`,
+      host: `http://${loopbackFor(state.listenHost)}${state.basePath ?? ''}${SOLVER_ROUTE_BASE}`,
       port: state.port,
       password: state.apiKey,
       requestTimeout: Math.min(600, Math.max(1, state.timeoutSeconds)),
