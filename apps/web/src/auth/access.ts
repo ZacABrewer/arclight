@@ -59,6 +59,9 @@ export const canViewIssuesIn = (a: Access) => a.admin || hasAnyPermission(a.perm
 /** Whether `pathname` (an app page outside the portal) may be shown to this person. */
 export function canOpenAppPath(access: Access, pathname: string): boolean {
   if (access.admin) return true;
+  // The player portal: any signed-in person; the page itself asks /playback/me whether the
+  // player is on for them (and says so when it is not).
+  if (under(pathname, '/player')) return true;
   if (access.areas.some((a) => AREA_PATHS[a].some((base) => under(pathname, base)))) return true;
   // Request and issue management, for people an admin gave those permissions.
   if (under(pathname, '/requests') && canManageRequestsIn(access)) return true;

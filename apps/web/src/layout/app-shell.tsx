@@ -1,6 +1,7 @@
 import { useState, type MouseEvent } from 'react';
 import { Link, Outlet, useRouter, useRouterState } from '@tanstack/react-router';
-import { Backdrop, Button, ContentInset, Drawer, Icon, MobileTabBar, Rail, TopBar, type RailItem, type TabBarItem } from '../arclight/index.js';
+import { Backdrop, Button, ContentInset, Drawer, Icon, MobileTabBar, Rail, TopBar, buttonClass, type RailItem, type TabBarItem } from '../arclight/index.js';
+import { useCanOpenPlayer } from '../features/player/api.js';
 import { useAuth } from '../auth/auth-context.js';
 import type { Access } from '../auth/access.js';
 import { useLiveEvents } from '../live.js';
@@ -17,6 +18,16 @@ import { t } from '../i18n/index.js';
 /** Plain left clicks route client-side; modified clicks keep the browser's behaviour. */
 function isPlainClick(e: MouseEvent<HTMLElement>): boolean {
   return e.button === 0 && !e.metaKey && !e.ctrlKey && !e.shiftKey && !e.altKey;
+}
+
+/** "Player" in the top bar, while the player is on for this person (GET /playback/me). */
+function PlayerLink() {
+  if (!useCanOpenPlayer()) return null;
+  return (
+    <Link to="/player" className={buttonClass({ variant: 'ghost', size: 'sm', className: 'al-topbar__player' })} aria-label={t('player.entry.open')} title={t('player.entry.open')}>
+      <Icon name="play" size={20} />
+    </Link>
+  );
 }
 
 function ShellBackdrop() {
@@ -88,6 +99,7 @@ function Shell() {
         userLabel={user.label}
         userMenu={user.menu}
       >
+        <PlayerLink />
         <Button variant="ghost" size="sm" className="al-topbar__search-icon" icon={<Icon name="search" size={20} />} aria-label={t('common.search')} onClick={() => setSearch(true)} />
         <Button
           variant="ghost"

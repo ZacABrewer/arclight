@@ -1,12 +1,12 @@
 import { Suspense, lazy } from 'react';
-import { Outlet, createRootRouteWithContext, createRoute, createRouter, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
+import { Outlet, createRootRouteWithContext, createRoute, createRouter, lazyRouteComponent, redirect, useRouterState, type ErrorComponentProps } from '@tanstack/react-router';
 import type { QueryClient } from '@tanstack/react-query';
 
 import { ErrorView } from './components/error-boundary.js';
 import { Skeleton } from './arclight/index.js';
 import { AppShell } from './layout/app-shell.js';
 import { AuthProvider } from './auth/auth-context.js';
-import { SHELLLESS_PATHS, isPublicPath, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
+import { SHELLLESS_PATHS, isPlayerPath, isPublicPath, loadAuthStatus, resolveAuthRedirect } from './auth/guard.js';
 import { LoginPage } from './pages/login.js';
 import { SetupWizard } from './pages/setup/setup-wizard.js';
 import { SecurityPage } from './pages/settings/security/security-page.js';
@@ -105,6 +105,7 @@ import { PodcastEpisodesPage } from './pages/podcasts/podcast-episodes.js';
 import { PodcastAddPage } from './pages/podcasts/podcast-add.js';
 import { PodcastSuggestionsPage } from './pages/podcasts/podcast-suggestions.js';
 import { PodcastSettingsPage } from './pages/settings/podcasts/podcasts-settings-page.js';
+import { PlayerSettingsPage } from './pages/settings/player/player-settings-page.js';
 import { DiscordBotSettingsPage } from './pages/settings/discord-bot/discord-bot-page.js';
 import { PortalHomePage, PortalIssueDetailPage, PortalIssuesPage, PortalLayout, PortalProfilePage, PortalRequestsPage } from './pages/portal/portal-page.js';
 import { portalOnlyRedirect, portalRewrite } from './features/discover/portal-location.js';
@@ -125,10 +126,11 @@ function RouteError({ error, reset }: ErrorComponentProps) {
   return <ErrorView error={error} onRetry={reset} />;
 }
 
-/** /login, /setup, /design and the portal draw their own chrome; everything else lives in the app shell. */
+/** /login, /setup, /design, the portal and the player draw their own chrome; everything else lives in the app shell. */
 function RootLayout() {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
-  return <AuthProvider>{SHELLLESS_PATHS.has(pathname) || isPublicPath(pathname) ? <Outlet /> : <AppShell />}</AuthProvider>;
+  const shellless = SHELLLESS_PATHS.has(pathname) || isPublicPath(pathname) || isPlayerPath(pathname);
+  return <AuthProvider>{shellless ? <Outlet /> : <AppShell />}</AuthProvider>;
 }
 
 function PendingPage() {
@@ -244,6 +246,30 @@ const portalProfileRoute = createRoute({ getParentRoute: () => portalRoute, path
 const portalIssuesRoute = createRoute({ getParentRoute: () => portalRoute, path: 'issues', component: PortalIssuesPage });
 const portalIssueRoute = createRoute({ getParentRoute: () => portalRoute, path: 'issues/$id', component: PortalIssueDetailPage });
 
+// The player portal (features/player): its own chrome and one audio engine for every page
+// under it, so playback carries on while browsing. Loaded on demand.
+const playerRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/player',
+  component: lazyRouteComponent(() => import('./features/player/ui/player-layout.js'), 'PlayerLayout'),
+});
+const playerHomeRoute = createRoute({
+  getParentRoute: () => playerRoute,
+  path: '/',
+  component: lazyRouteComponent(() => import('./features/player/ui/player-home.js'), 'PlayerHome'),
+});
+const playerNowPlayingRoute = createRoute({
+  getParentRoute: () => playerRoute,
+  path: 'now-playing',
+  component: lazyRouteComponent(() => import('./features/player/ui/now-playing.js'), 'NowPlayingPage'),
+});
+/**
+ * Browse pages of the player (/player/music/..., /player/books/..., /player/search) go here,
+ * each `createRoute({ getParentRoute: () => playerRoute, path: 'music', ... })` with a lazy
+ * component, so they render inside PlayerLayout (header, mini-player, the shared engine).
+ */
+const playerSectionRoutes = [] as const;
+
 // Notification deep links: /requests/:id?action=approve|decline.
 const requestDeepLinkRoute = createRoute({
   getParentRoute: () => rootRoute,
@@ -258,6 +284,8 @@ export const routeTree = rootRoute.addChildren([
   page('/setup', SetupWizard),
   // Public request portal: reachable without signing in (auth/guard.ts PUBLIC_PATHS).
   portalRoute.addChildren([...discoverChildren(() => portalRoute, PortalHomePage), portalRequestsRoute, portalProfileRoute, portalIssuesRoute, portalIssueRoute]),
+  // The player portal: signed-in users the player is on for (the layout checks /playback/me).
+  playerRoute.addChildren([playerHomeRoute, playerNowPlayingRoute, ...playerSectionRoutes]),
   page('/', DashboardPage),
   searchRoute,
 
@@ -366,6 +394,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/discordbot', DiscordBotSettingsPage),
   page('/settings/subtitles', SubtitleSettingsPage),
   page('/settings/podcasts', PodcastSettingsPage),
+  page('/settings/player', PlayerSettingsPage),
   page('/settings/books', BooksSettingsPage),
   page('/settings/solver', SolverSettingsPage),
   page('/settings/updates', UpdatesSettingsPage),

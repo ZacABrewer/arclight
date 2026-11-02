@@ -10,6 +10,7 @@ import { useThemeCatalog } from '../../features/themes/use-themes.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { useFeatures } from '../../hooks/music.js';
 import { usePermissions } from '../../features/requests/status.js';
+import { useCanOpenPlayer } from '../../features/player/api.js';
 import { DLink, DiscoverBaseProvider, type DiscoverPath } from '../../features/discover/base.js';
 import { PORTAL_ROOT } from '../../features/discover/portal-location.js';
 import { DiscoverSliders, BrowseLinks } from '../discover/discover-home.js';
@@ -169,6 +170,7 @@ export function PortalLayout() {
   const { allows } = usePermissions();
   const nav = NAV.filter((n) => (!n.signedIn || signedIn) && (!n.feature || features[n.feature]) && (!n.requestType || allows(n.requestType)));
   const hasShell = shell() !== null;
+  const canPlay = useCanOpenPlayer(signedIn);
   // Phones: the account actions sit behind one menu button so the header fits on one line.
   const [menuOpen, setMenuOpen] = useState(false);
   useEffect(() => setMenuOpen(false), [pathname]);
@@ -211,6 +213,11 @@ export function PortalLayout() {
                   <Icon name="menu" size={20} />
                 </button>
                 <div id="portal-account-actions" className="portal-head__account" data-open={menuOpen} onClick={() => setMenuOpen(false)}>
+                {canPlay ? (
+                  <Link to="/player" className={buttonClass({ variant: 'ghost' })}>
+                    {t('player.entry.openPlayer')}
+                  </Link>
+                ) : null}
                 {appHref ? (
                   <a href={appHref} className={buttonClass({ variant: 'ghost' })}>
                     {t('portal.openApp')}

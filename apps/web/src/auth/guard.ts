@@ -32,6 +32,13 @@ export function isPublicPath(pathname: string): boolean {
   return [...PUBLIC_PATHS].some((p) => pathname.startsWith(`${p}/`));
 }
 
+/** The player portal (/player and every page under it): signed in, drawn in its own chrome. */
+export const PLAYER_ROOT = '/player';
+
+export function isPlayerPath(pathname: string): boolean {
+  return pathname === PLAYER_ROOT || pathname.startsWith(`${PLAYER_ROOT}/`);
+}
+
 /** Pages that draw their own chrome (the component gallery renders a full demo shell). */
 export const SHELLLESS_PATHS: ReadonlySet<string> = new Set([...BARE_PATHS, ...PUBLIC_PATHS, '/design']);
 
