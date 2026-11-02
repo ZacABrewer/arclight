@@ -9,6 +9,22 @@
     "imageUrl": "https://arclight.moviemethat.com/jellyfin/icon.png",
     "versions": [
       {
+        "version": "1.2.0.12",
+        "changelog": "- Title pages for titles you don't have yet. Any search result, Discover title, Coming soon entry, request or recommendation opens a full page with:\n  - backdrop, poster, runtime, rating and TMDB score;\n  - genres, overview, cast with photos, director or creators, networks and studios;\n  - trailer (opens in a new tab), release dates, and seasons with episode counts and status;\n  - \"Also on\", request status with the request dialog, watchlist, and \"More like this\".\n  Titles already in Jellyfin open Jellyfin's own page. Library item pages get a \"View in Arclight\" link.\n- A bigger Discover:\n  - rows: Recommended for you (from your watch history), Trending (today / this week), Popular, Top rated, In cinemas now, Upcoming, Airing today, On the air;\n  - genre chips for movies and series;\n  - \"See all\" grids that load more as you scroll;\n  - genre pages with sorting (popularity, rating, release date, title) and a movies/series switch.\n- The title page data, the new Discover rows and genres need an Arclight release newer than 0.18.2. With older Arclight versions the plugin keeps working, and rows Arclight doesn't know yet show an error instead of titles.",
+        "targetAbi": "12.0.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.2.0/arclight-jellyfin_1.2.0.12.zip",
+        "checksum": "3171762cb225fea44452679458a24fc6",
+        "timestamp": "2026-11-02T03:49:30Z"
+      },
+      {
+        "version": "1.2.0.11",
+        "changelog": "- Title pages for titles you don't have yet. Any search result, Discover title, Coming soon entry, request or recommendation opens a full page with:\n  - backdrop, poster, runtime, rating and TMDB score;\n  - genres, overview, cast with photos, director or creators, networks and studios;\n  - trailer (opens in a new tab), release dates, and seasons with episode counts and status;\n  - \"Also on\", request status with the request dialog, watchlist, and \"More like this\".\n  Titles already in Jellyfin open Jellyfin's own page. Library item pages get a \"View in Arclight\" link.\n- A bigger Discover:\n  - rows: Recommended for you (from your watch history), Trending (today / this week), Popular, Top rated, In cinemas now, Upcoming, Airing today, On the air;\n  - genre chips for movies and series;\n  - \"See all\" grids that load more as you scroll;\n  - genre pages with sorting (popularity, rating, release date, title) and a movies/series switch.\n- The title page data, the new Discover rows and genres need an Arclight release newer than 0.18.2. With older Arclight versions the plugin keeps working, and rows Arclight doesn't know yet show an error instead of titles.",
+        "targetAbi": "10.11.0.0",
+        "sourceUrl": "https://github.com/ZacABrewer/arclight/releases/download/jellyfin-plugin-v1.2.0/arclight-jellyfin_1.2.0.11.zip",
+        "checksum": "08b415aa1c486f7b5c2578e35d958cf8",
+        "timestamp": "2026-11-02T03:49:30Z"
+      },
+      {
         "version": "1.1.0.12",
         "changelog": "- Coming soon only lists what is not here yet: Arclight leaves out releases it already has, and the plugin also drops movies and episodes this Jellyfin already holds. Missing (placeholder) episodes still show.\n- Arclight intro in Cinema Mode (opt-in): a 6-second Arclight intro before movies, and optionally before the first episode of a viewing session. Off by default; 1080p or 720p.\n- New 16:9 catalog image.",
         "targetAbi": "12.0.0.0",
