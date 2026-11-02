@@ -75,3 +75,4 @@ export * from './release-dates.js';
 export * from './watch-stats.js';
 export * from './smart-collections.js';
 export * from './music-playlists.js';
+export * from './playback.js';

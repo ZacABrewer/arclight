@@ -44,7 +44,7 @@ export type ThemeName = z.infer<typeof ThemeName>;
  * Keys of `users.settings` only managers may change (through their own routes); PUT /user/me
  * drops them so users cannot lift their own quota, caps, approval overrides or request type filter.
  */
-export const ADMIN_MANAGED_USER_SETTINGS: readonly string[] = ['quota', 'contentRestrictions', 'approvalPolicy', 'requestTypes', 'discordUserId'];
+export const ADMIN_MANAGED_USER_SETTINGS: readonly string[] = ['quota', 'contentRestrictions', 'approvalPolicy', 'requestTypes', 'discordUserId', 'player'];
 
 /** Per-user preferences. Unknown keys are kept so later phases can add their own. */
 export const UserSettings = z.looseObject({
