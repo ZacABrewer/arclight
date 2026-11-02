@@ -73,6 +73,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       { get label() { return t('common.requests'); }, to: '/settings/requests' },
       { get label() { return t('nav.discordBot'); }, to: '/settings/discordbot' },
       { get label() { return t('nav.transcode'); }, to: '/settings/transcode' },
+      { get label() { return t('player.settings.title'); }, to: '/settings/player' },
     ],
   },
   {

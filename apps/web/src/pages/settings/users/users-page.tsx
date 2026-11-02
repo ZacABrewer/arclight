@@ -11,6 +11,7 @@ import { UserPermissionsEditor, UserPolicyEditor, UserQuotaEditor, UserRequestSe
 import { PersonalDestinations } from '../../../features/notifications/personal-destinations.js';
 import { UserDefaultsFields, useUserDefaults } from '../../../features/users/user-defaults.js';
 import { UserSignInAdmin } from '../../../features/identity/user-sign-in-admin.js';
+import { UserPlayerAccessEditor } from '../../../features/player/user-player-access.js';
 import { appAccessSummary } from '../security/security-page.js';
 import { SettingsPage } from '../settings-layout.js';
 import { SettingsListSearch, SettingsSection } from '../shared.js';
@@ -145,6 +146,7 @@ export function UsersPage() {
               { id: 'notifications', label: t('common.notifications'), content: <UserRequestSettingsForm userId={open.id} /> },
               { id: 'destinations', label: t('notify.personal.title'), content: <PersonalDestinations userId={open.id} /> },
               { id: 'signin', label: t('identity.admin.tab'), content: <UserSignInAdmin userId={open.id} name={open.displayName ?? open.username} /> },
+              { id: 'player', label: t('player.userAccess.tab'), content: <UserPlayerAccessEditor user={open} /> },
             ]}
           />
         </Modal>
