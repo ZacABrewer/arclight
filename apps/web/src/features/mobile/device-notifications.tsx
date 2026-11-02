@@ -7,7 +7,7 @@ import { shell, shellErrorCode, shellErrorMessage, type ArclightShellPlugin, typ
 import { t } from '../../i18n/index.js';
 import { mobileKeys } from './mobile-app-section.js';
 
-// Profile → Notifications on this device (inside the companion app, in place of the web push
+// Profile → Notifications on this device (inside the Arclight Admin app, in place of the web push
 // toggle). On: ArclightShell.registerPush() → POST /mobile/devices. Off: DELETE the device →
 // ArclightShell.unregisterPush(). The relay device id of this phone is remembered locally
 // (it is not secret) so the toggle knows which listed device is this one.

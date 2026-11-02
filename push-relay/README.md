@@ -1,7 +1,7 @@
 # Arclight push relay
 
 A small Cloudflare Worker that lets self-hosted Arclight servers send push notifications to the
-Arclight iOS and Android apps.
+Arclight iOS and Android apps (Arclight Admin, the companion app, and Arclight, the player app).
 
 Apple (APNs) and Google (FCM) only deliver notifications to an app when the sender holds that app's
 signing credentials. Those credentials can't be shipped inside thousands of self-hosted servers, so
@@ -24,9 +24,9 @@ step if either changes.
 - **Notification content is never stored or logged.** Title, body, data and thread ID pass
   through memory to Apple or Google and nothing else. The tests check D1 and every console line
   for them on success and on every error path.
-- **What is stored, per registration** (`migrations/0001_devices.sql`): the push token, the random
-  `deviceId`, the platform, a SHA-256 hash of the secret (never the secret), the app version if
-  the app sends one, the APNs environment, created and last-used timestamps, and the per-device
+- **What is stored, per registration** (`migrations/`): the push token, the random
+  `deviceId`, the platform, a SHA-256 hash of the secret (never the secret), the app version and
+  app ID (which Arclight app registered) if the app sends them, the APNs environment, created and last-used timestamps, and the per-device
   rate-limit counter. No names, accounts, IP addresses or server addresses.
 - **Deletion**: when the app unregisters (`DELETE /v1/devices/:id`); when Apple or Google report the
   token invalid (the send returns `410`); and by a daily cron after 90 days without use (no send and
@@ -52,10 +52,14 @@ All bodies are JSON. Errors are `{ "error": "..." }`. Responses are never cached
 ### `POST /v1/devices` (app)
 
 ```json
-{ "token": "<APNs or FCM token>", "platform": "ios", "appVersion": "1.4.0", "environment": "sandbox" }
+{ "token": "<APNs or FCM token>", "platform": "ios", "appId": "com.moviemethat.arclight.admin", "appVersion": "1.4.0", "environment": "sandbox" }
 ```
 
 - `platform`: `ios` or `android`.
+- `appId` (optional): the app's bundle ID / application ID, reverse-DNS, up to 155 characters. On
+  iOS it is the APNs topic for the device and must be in `APNS_TOPICS` (else `400 appId not
+  allowed`). Registrations without one (older app builds) use the first topic in the list. On
+  Android it is only stored; FCM delivery does not depend on it.
 - `appVersion` (optional): up to 64 printable ASCII characters.
 - `environment` (optional, iOS only): `production` (default) or `sandbox`, for development builds
   whose tokens only work against the APNs sandbox. Ignored for Android.
@@ -85,7 +89,8 @@ Wrong secret for an existing device: `404`.
   "body": "Dune (2021) is ready to watch",
   "data": { "route": "/requests/42", "channel": "downloads" },
   "badge": 3,
-  "threadId": "request-42"
+  "threadId": "request-42",
+  "appId": "com.moviemethat.arclight.admin"
 }
 ```
 
@@ -96,6 +101,7 @@ Wrong secret for an existing device: `404`.
 | `data` | optional object of string values, up to 2048 bytes as JSON. Keys `aps`, `from`, `notification`, `message_type`, `collapse_key`, `google.*` and `gcm.*` are reserved. On Android, `data.channel` picks the notification channel (default `default`). |
 | `badge` | optional integer 0 to 99999 |
 | `threadId` | optional, 1 to 64 characters of `A-Z a-z 0-9 _ . : -`. Groups (iOS `thread-id`) and replaces (iOS `apns-collapse-id`, Android `tag`) earlier notifications with the same ID. |
+| `appId` | optional, the app ID the Arclight server has on record for the device. iOS only: used as the APNs topic when the device registered without an `appId` (an `appId` stored at registration always wins). Must be in `APNS_TOPICS`. Ignored for Android. |
 
 The encoded provider payload must also fit Apple's and Google's 4 KB limit (multi-byte text counts
 more than once), otherwise `413`.
@@ -103,7 +109,7 @@ more than once), otherwise `413`.
 | Status | Meaning |
 |---|---|
 | `200 { "ok": true }` | Accepted by Apple or Google. |
-| `400` | Invalid body. |
+| `400` | Invalid body, or `{ "error": "appId not allowed" }` for an iOS app ID outside `APNS_TOPICS`. |
 | `401` | Missing or malformed `Authorization` header. |
 | `404` | Unknown device or wrong secret (deliberately indistinguishable). |
 | `410` | Apple or Google say the token is dead. The relay has deleted the device; stop sending to it. |
@@ -179,8 +185,13 @@ Credentials:
 
 - **APNs**: Apple Developer, Certificates, Identifiers & Profiles, Keys: create a key with *Apple
   Push Notifications service (APNs)* enabled, download the `.p8` (once). One key works for both the
-  sandbox and production environments and every app in the team. The topic is the bundle ID, set by
-  the `APNS_TOPIC` var (`com.moviemethat.arclight`).
+  sandbox and production environments and every app in the team. The topic is the bundle ID. The
+  relay serves several apps, so the topics are an allow-list in the `APNS_TOPICS` var,
+  comma-separated, default first: `com.moviemethat.arclight.admin` (Arclight Admin, the companion
+  app) and `com.moviemethat.arclight` (Arclight, the player app). Each device's topic comes from the
+  `appId` it registered with; devices registered without one use the first entry. When
+  `APNS_TOPICS` is unset, the older single `APNS_TOPIC` var is used, and without either the relay
+  falls back to those two built-in IDs.
 - **FCM**: Firebase console, Project settings, Service accounts: generate a new private key. The
   account needs the *Firebase Cloud Messaging API Admin* role (the default Firebase Admin SDK
   account has it), and the *Firebase Cloud Messaging API (V1)* must be enabled for the project.
@@ -203,9 +214,10 @@ Edit*, *D1: Edit* and, for the custom domain, *Workers Routes: Edit* and *DNS: E
 ## Run your own relay
 
 The relay is part of the GPL-3.0 Arclight source. To run your own, deploy this directory to your
-own Cloudflare account with your own domain (edit `routes` and `APNS_TOPIC` in `wrangler.jsonc`)
-and your own APNs/FCM credentials. Your credentials must belong to the app build that receives the
-notifications, so in practice this means building the companion apps yourself. Then point your
+own Cloudflare account with your own domain (edit `routes` and `APNS_TOPICS` in `wrangler.jsonc`)
+and your own APNs/FCM credentials. Your credentials must belong to the app builds that receive the
+notifications, so in practice this means building the Arclight apps yourself with your own bundle
+IDs and listing them in `APNS_TOPICS`. Then point your
 Arclight server at it:
 
 ```sh

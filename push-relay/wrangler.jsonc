@@ -37,8 +37,10 @@
   // Daily cleanup of devices unused for 90 days.
   "triggers": { "crons": ["17 3 * * *"] },
 
+  // APNs topics (iOS bundle IDs) the relay sends for, default first: Arclight Admin, then the
+  // Arclight player app. Devices registered without an appId use the first one.
   "vars": {
-    "APNS_TOPIC": "com.moviemethat.arclight"
+    "APNS_TOPICS": "com.moviemethat.arclight.admin,com.moviemethat.arclight"
   },
   // Secrets (set with `wrangler secret put`, never in this file):
   //   APNS_KEY_P8, APNS_KEY_ID, APNS_TEAM_ID   Apple token-based auth key (.p8 PEM, key ID, team ID)

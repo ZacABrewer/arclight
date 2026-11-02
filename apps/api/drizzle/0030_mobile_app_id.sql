@@ -1,0 +1,1 @@
+ALTER TABLE `mobile_devices` ADD `app_id` text;

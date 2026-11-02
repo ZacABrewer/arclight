@@ -36,4 +36,4 @@ Please do not report security problems in a public issue. Follow the [security p
 
 ## Mobile apps
 
-The Arclight apps for iOS and Android (coming soon) are companions to your own server: they connect to the address you enter and show the Arclight interface it serves. Most app problems are server problems, so check that the server is reachable from your phone's network first ([Exposing it outside your home](/docs/getting-started/exposing-outside-home/)). For anything else, open an issue and mention the app, its version and your phone's OS version.
+The Arclight apps for iOS and Android (coming soon: Arclight Admin, the companion app, and later the Arclight player) are companions to your own server: they connect to the address you enter and show the Arclight interface it serves. Most app problems are server problems, so check that the server is reachable from your phone's network first ([Exposing it outside your home](/docs/getting-started/exposing-outside-home/)). For anything else, open an issue and mention the app, its version and your phone's OS version.

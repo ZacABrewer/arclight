@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>Arclight</string>
+        <string>Arclight Admin</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -42,19 +42,19 @@
 		<true/>
 	</dict>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>Arclight connects to your Arclight server on your home network.</string>
+	<string>Arclight Admin connects to your Arclight server on your home network.</string>
 	<key>NSCameraUsageDescription</key>
-	<string>Arclight uses the camera to scan the pairing code shown in your server's settings.</string>
+	<string>Arclight Admin uses the camera to scan the pairing code shown in your server's settings.</string>
 	<key>NSFaceIDUsageDescription</key>
-	<string>Arclight can ask for Face ID before showing your server, if you turn on the app lock.</string>
+	<string>Arclight Admin can ask for Face ID before showing your server, if you turn on the app lock.</string>
 	<key>CFBundleURLTypes</key>
 	<array>
 		<dict>
 			<key>CFBundleURLName</key>
-			<string>com.moviemethat.arclight.pair</string>
+			<string>com.moviemethat.arclight.admin.pair</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>arclight</string>
+				<string>arclight-admin</string>
 			</array>
 		</dict>
 	</array>

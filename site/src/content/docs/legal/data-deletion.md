@@ -1,17 +1,17 @@
 ---
 title: Delete your data
-description: How to delete data held by the Arclight app, by a server, at the push relay and on the website.
+description: How to delete data held by the Arclight Admin app, by a server, at the push relay and on the website.
 sidebar:
   order: 4
 ---
 
-Last updated: 31 October 2026
+Last updated: 2 November 2026
 
 Effective: 31 October 2026
 
-This page explains how to delete your data. It is the data deletion URL for the Arclight app on Google Play.
+This page explains how to delete your data. It is the data deletion URL for the Arclight Admin app on Google Play.
 
-## The Arclight app
+## The Arclight Admin app
 
 Data stored by the app lives on your device only. To remove it:
 

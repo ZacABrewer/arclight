@@ -22,7 +22,7 @@ public class ArclightNativePlugin: CAPPlugin, CAPBridgedPlugin {
     ]
 
     private static let defaultsKey = "ArclightNative.serverOrigins"
-    private let queue = DispatchQueue(label: "com.moviemethat.arclight.origins")
+    private let queue = DispatchQueue(label: "com.moviemethat.arclight.admin.origins")
     private var origins = Set<String>()
 
     override public func load() {

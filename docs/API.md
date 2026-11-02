@@ -2486,9 +2486,9 @@ Contract: `packages/shared/src/stats.ts`.
 | GET | `/stats/activity` | Grabs, imports and failures per UTC day for `days` (default 30, max 365) from history; season packs count once (per download id / imported path) |
 | GET | `/stats/indexers` | Proxy of `GET /indexer/stats` (`days`, default 30) |
 
-## mobile (companion app)
+## mobile (Arclight Admin app)
 
-Contract: `packages/shared/src/mobile.ts`. Phones paired through the Arclight app
+Contract: `packages/shared/src/mobile.ts`. Phones paired through the Arclight Admin app
 ([user guide](using/mobile-app.md)). Every route is open to any signed-in user (portal access)
 and acts on the caller's own devices; admins may list (`?all=true`), remove and test anyone's.
 Registering needs a signed-in user (API-key callers without one get `400 NO_USER`). No
@@ -2498,9 +2498,9 @@ choices (`GET/PUT /push/preferences`); delivery and the relay are described in
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/mobile/pairing` | `{ serverUrl, pushEnabled }`: the Application URL (Settings > Requests) or null, and false when the server runs with `ARCLIGHT_PUSH_RELAY=off`. The web UI encodes `arclight://pair?url=<encoded base URL>` in its QR code, using its own origin when `serverUrl` is null |
-| GET | `/mobile/devices` | The caller's devices (MobileDeviceResource: id, userId, relayDeviceId, platform `ios`/`android`, deviceName, appVersion, createdAt, lastSeenAt, lastError). `?all=true`: every user's, with `userName` (admins; others `403 FORBIDDEN`) |
-| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion? }`). Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource |
+| GET | `/mobile/pairing` | `{ serverUrl, pushEnabled }`: the Application URL (Settings > Requests) or null, and false when the server runs with `ARCLIGHT_PUSH_RELAY=off`. The web UI encodes `arclight-admin://pair?url=<encoded base URL>` in its QR code (`mobilePairingUri`; the app still reads the older `arclight://pair` form), using its own origin when `serverUrl` is null |
+| GET | `/mobile/devices` | The caller's devices (MobileDeviceResource: id, userId, relayDeviceId, platform `ios`/`android`, deviceName, appVersion, appId, createdAt, lastSeenAt, lastError). `?all=true`: every user's, with `userName` (admins; others `403 FORBIDDEN`) |
+| POST | `/mobile/devices` | Body: the app's `ArclightShell.registerPush()` result plus `appVersion` (`{ relayDeviceId, relaySecret, platform, deviceName, appVersion?, appId? }`). `appId` is the app's bundle ID (for example `com.moviemethat.arclight.admin`); it is stored and sent to the relay with every notification so the relay picks the right APNs topic. Upserts by `relayDeviceId` and binds the device to the caller; `201` with the resource |
 | DELETE | `/mobile/devices/:id` | Unpair. `204`; `404` when it is not the caller's (admins: any) |
 | POST | `/mobile/devices/:id/test` | Send a test notification now: `{ ok, outcome: sent \| removed \| rate_limited \| failed \| disabled, message? }`. A device the relay reports gone is deleted (`removed`). One test per device per 10 s, else `429 RATE_LIMITED` |
 

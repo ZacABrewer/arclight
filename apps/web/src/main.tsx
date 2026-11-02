@@ -39,7 +39,7 @@ setTwoFactorSetupHandler(() => {
   void router.navigate({ href: TWO_FACTOR_SETUP_PATH, replace: true });
 });
 
-// Inside the companion app: html.in-app (safe areas, browser-only UI hidden) and external
+// Inside the Arclight Admin app: html.in-app (safe areas, browser-only UI hidden) and external
 // links through the system browser. Nothing happens in a plain browser.
 installInAppMode();
 registerServiceWorker();

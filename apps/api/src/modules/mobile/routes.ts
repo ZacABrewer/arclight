@@ -4,7 +4,7 @@ import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { z } from 'zod';
 import { MobileError, type MobileService } from './service.js';
 
-// /api/v1/mobile/*: the companion app's devices. Every route is open to signed-in users
+// /api/v1/mobile/*: the Arclight Admin app's devices. Every route is open to signed-in users
 // (portal) and scoped to the caller's own devices; admins may list (`?all=true`), remove and
 // test anyone's. Registering needs a signed-in user (API-key callers get 400 NO_USER). No
 // response ever carries the relay secret.

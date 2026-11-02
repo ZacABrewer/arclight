@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "license": "GPL-3.0",
-  "description": "Arclight companion app for iOS and Android (Capacitor shell around the user's own Arclight server).",
+  "description": "Arclight Admin, the companion app for iOS and Android (Capacitor shell around the user's own Arclight server).",
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build && vite build -c vite.shell.config.ts",

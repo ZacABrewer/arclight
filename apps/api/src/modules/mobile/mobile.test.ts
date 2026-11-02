@@ -182,6 +182,21 @@ describe('mobile delivery', () => {
     });
   });
 
+  it('stores the app id from the registration and sends it to the relay (APNs topic)', async () => {
+    const { db, relay, mobile, push } = await setup();
+    const alice = await addUser(db, 'alice');
+    const dev = mobile.register(alice, { relayDeviceId: 'dev-admin', relaySecret: `${SECRET}-admin`, platform: 'ios', deviceName: 'iPhone', appId: 'com.moviemethat.arclight.admin' });
+    expect(dev.appId).toBe('com.moviemethat.arclight.admin');
+    expect(db.select().from(mobileDevices).get()?.appId).toBe('com.moviemethat.arclight.admin');
+    // A device registered by an older app has no app id; the relay then uses its default topic.
+    mobile.register(alice, { relayDeviceId: 'dev-old', relaySecret: `${SECRET}-old`, platform: 'ios', deviceName: 'Old iPhone' });
+    await push.notify(alice, 'availability', { title: 'Now available', body: 'Dune is available.' });
+    await eventually(() => expect(relay.calls).toHaveLength(2));
+    const byDevice = Object.fromEntries(relay.calls.map((c) => [c.body.deviceId, c.body]));
+    expect(byDevice['dev-admin']).toMatchObject({ appId: 'com.moviemethat.arclight.admin' });
+    expect(byDevice['dev-old']).not.toHaveProperty('appId');
+  });
+
   it('respects the user’s push preferences and omits data.server without an Application URL', async () => {
     const { db, relay, push, register, setServerUrl } = await setup();
     const alice = await addUser(db, 'alice', { settings: { notifications: { push: { requests: false, availability: true, issues: true } } } });

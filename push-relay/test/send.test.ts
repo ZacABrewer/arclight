@@ -43,7 +43,7 @@ describe("POST /v1/send via APNs", () => {
     const c = calls[0]!;
     expect(c.method).toBe("POST");
     expect(c.url).toBe(`https://api.push.apple.com/3/device/${IOS_TOKEN}`);
-    expect(c.headers["apns-topic"]).toBe("com.moviemethat.arclight");
+    expect(c.headers["apns-topic"]).toBe("com.moviemethat.arclight.admin"); // no appId: the default topic
     expect(c.headers["apns-push-type"]).toBe("alert");
     expect(c.headers["apns-priority"]).toBe("10");
     expect(c.headers["apns-collapse-id"]).toBe("request-42");
@@ -149,6 +149,80 @@ describe("POST /v1/send via APNs", () => {
     const calls = mockFetch(() => new Response(null, { status: 200 }));
     await call(e, "POST", "/v1/send", { secret, body: { deviceId, title: "t", body: "b" } });
     expect(calls[0]!.url).toBe(`https://apns-forwarder.moviemethat.com/3/device/${IOS_TOKEN}`);
+  });
+});
+
+describe("APNs topic per app", () => {
+  const topicOf = (c: { headers: Record<string, string> }) => c.headers["apns-topic"];
+
+  it("uses the app id stored at registration", async () => {
+    const e = await makeEnv();
+    const player = await register(e, { token: IOS_TOKEN, platform: "ios", appId: "com.moviemethat.arclight" });
+    const admin = await register(e, { token: IOS_TOKEN, platform: "ios", appId: "com.moviemethat.arclight.admin" });
+    expect((await row(player.deviceId))!.app_id).toBe("com.moviemethat.arclight");
+    const calls = mockFetch(happyProviders);
+    expect((await call(e, "POST", "/v1/send", { secret: player.secret, body: { deviceId: player.deviceId, title: "t", body: "b" } })).status).toBe(200);
+    expect((await call(e, "POST", "/v1/send", { secret: admin.secret, body: { deviceId: admin.deviceId, title: "t", body: "b" } })).status).toBe(200);
+    expect(calls.map(topicOf)).toEqual(["com.moviemethat.arclight", "com.moviemethat.arclight.admin"]);
+  });
+
+  it("prefers the registered app id over the server's, and uses the server's for older registrations", async () => {
+    const e = await makeEnv();
+    const admin = await register(e, { token: IOS_TOKEN, platform: "ios", appId: "com.moviemethat.arclight.admin" });
+    const legacy = await register(e);
+    expect((await row(legacy.deviceId))!.app_id).toBeNull();
+    const calls = mockFetch(happyProviders);
+    const body = (deviceId: string) => ({ deviceId, title: "t", body: "b", appId: "com.moviemethat.arclight" });
+    expect((await call(e, "POST", "/v1/send", { secret: admin.secret, body: body(admin.deviceId) })).status).toBe(200);
+    expect((await call(e, "POST", "/v1/send", { secret: legacy.secret, body: body(legacy.deviceId) })).status).toBe(200);
+    expect(calls.map(topicOf)).toEqual(["com.moviemethat.arclight.admin", "com.moviemethat.arclight"]);
+  });
+
+  it("refuses app ids outside APNS_TOPICS on iOS, at registration and at send", async () => {
+    const e = await makeEnv();
+    const reg = await call(e, "POST", "/v1/devices", { body: { token: IOS_TOKEN, platform: "ios", appId: "com.example.other" } });
+    expect(reg.status).toBe(400);
+    expect(((await reg.json()) as { error: string }).error).toBe("appId not allowed");
+
+    const legacy = await register(e);
+    const calls = mockFetch(happyProviders);
+    const res = await call(e, "POST", "/v1/send", { secret: legacy.secret, body: { deviceId: legacy.deviceId, title: "t", body: "b", appId: "com.example.other" } });
+    expect(res.status).toBe(400);
+    expect(calls).toHaveLength(0);
+    const bad = await call(e, "POST", "/v1/send", { secret: legacy.secret, body: { deviceId: legacy.deviceId, title: "t", body: "b", appId: "not an id" } });
+    expect(bad.status).toBe(400);
+  });
+
+  it("reads the allow-list from APNS_TOPICS, else APNS_TOPIC, else the built-in default", async () => {
+    const custom = { ...(await makeEnv()), APNS_TOPICS: " org.example.fork , org.example.fork.player " };
+    const a = await register(custom);
+    const b = await register(custom, { token: IOS_TOKEN, platform: "ios", appId: "org.example.fork.player" });
+    const single = { ...(await makeEnv()), APNS_TOPICS: undefined, APNS_TOPIC: "org.example.single" };
+    const c = await register(single);
+    const builtIn = { ...(await makeEnv()), APNS_TOPICS: undefined };
+    const d = await register(builtIn, { token: IOS_TOKEN, platform: "ios", appId: "com.moviemethat.arclight" });
+    const f = await register(builtIn);
+    const calls = mockFetch(happyProviders);
+    for (const [envX, dev] of [[custom, a], [custom, b], [single, c], [builtIn, d], [builtIn, f]] as const) {
+      expect((await call(envX, "POST", "/v1/send", { secret: dev.secret, body: { deviceId: dev.deviceId, title: "t", body: "b" } })).status).toBe(200);
+    }
+    expect(calls.map(topicOf)).toEqual([
+      "org.example.fork",
+      "org.example.fork.player",
+      "org.example.single",
+      "com.moviemethat.arclight",
+      "com.moviemethat.arclight.admin",
+    ]);
+  });
+
+  it("leaves FCM alone: any well-formed app id is stored, none is required", async () => {
+    const e = await makeEnv();
+    const { deviceId, secret } = await register(e, { token: ANDROID_TOKEN, platform: "android", appId: "com.example.other" });
+    expect((await row(deviceId))!.app_id).toBe("com.example.other");
+    const calls = mockFetch(happyProviders);
+    expect((await call(e, "POST", "/v1/send", { secret, body: { deviceId, title: "t", body: "b", appId: "com.example.whatever" } })).status).toBe(200);
+    expect(calls.some((c) => c.url.startsWith("https://fcm.googleapis.com/"))).toBe(true);
+    expect((await call(e, "POST", "/v1/devices", { body: { token: ANDROID_TOKEN, platform: "android", appId: "bad id" } })).status).toBe(400);
   });
 });
 

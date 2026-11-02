@@ -43,7 +43,7 @@ describe('Mobile app section', () => {
     stubApi({ '/api/v1/mobile/pairing': { serverUrl: 'https://arclight.example.com', pushEnabled: true }, '/api/v1/mobile/devices': [] });
     wrap(<MobileAppSection />);
     const qr = await screen.findByRole('img', { name: /Pairing code for https:\/\/arclight\.example\.com/ });
-    expect(qr.getAttribute('data-value')).toBe('arclight://pair?url=https%3A%2F%2Farclight.example.com');
+    expect(qr.getAttribute('data-value')).toBe('arclight-admin://pair?url=https%3A%2F%2Farclight.example.com');
     expect(screen.getByTestId('mobile-server-url').textContent).toBe('https://arclight.example.com');
     expect(screen.getByRole('link', { name: /iPhone and iPad/ }).getAttribute('href')).toBe('https://arclight.moviemethat.com/');
     expect(await screen.findByText(/No phone is paired yet/)).toBeTruthy();
@@ -53,7 +53,7 @@ describe('Mobile app section', () => {
     stubApi({ '/api/v1/mobile/pairing': { serverUrl: null, pushEnabled: false }, '/api/v1/mobile/devices': [] });
     wrap(<MobileAppSection />);
     const qr = await screen.findByRole('img', { name: /Pairing code/ });
-    expect(qr.getAttribute('data-value')).toBe(`arclight://pair?url=${encodeURIComponent(window.location.origin)}`);
+    expect(qr.getAttribute('data-value')).toBe(`arclight-admin://pair?url=${encodeURIComponent(window.location.origin)}`);
     expect(screen.getByText(/Phone notifications are turned off/)).toBeTruthy();
     expect(pairingServerUrl(' https://x.example.com/ ', 'http://o')).toBe('https://x.example.com');
   });
@@ -83,7 +83,7 @@ function plugin(over: Partial<Record<keyof ArclightShellPlugin, unknown>> = {}) 
     info: vi.fn(async () => ({ platform: 'ios', appVersion: '1.4.0', build: '12', pushAvailable: true })),
     registerPush: vi.fn(async () => {
       order.push('registerPush');
-      return { relayDeviceId: 'dev-9', relaySecret: 'secret-'.repeat(5), platform: 'ios', deviceName: 'Sam’s iPhone' };
+      return { relayDeviceId: 'dev-9', relaySecret: 'secret-'.repeat(5), platform: 'ios', deviceName: 'Sam’s iPhone', appId: 'com.moviemethat.arclight.admin' };
     }),
     unregisterPush: vi.fn(async () => {
       order.push('unregisterPush');
@@ -114,7 +114,7 @@ describe('Notifications on this device', () => {
     expect(await screen.findByRole('switch', { name: /Notifications are on/ })).toBeTruthy();
     expect(order).toEqual(['registerPush', 'POST']);
     expect(mocks.registerPush).toHaveBeenCalledTimes(1);
-    expect(api.calls.find((c) => c.method === 'POST')?.body).toEqual({ relayDeviceId: 'dev-9', relaySecret: 'secret-'.repeat(5), platform: 'ios', deviceName: 'Sam’s iPhone', appVersion: '1.4.0' });
+    expect(api.calls.find((c) => c.method === 'POST')?.body).toEqual({ relayDeviceId: 'dev-9', relaySecret: 'secret-'.repeat(5), platform: 'ios', deviceName: 'Sam’s iPhone', appId: 'com.moviemethat.arclight.admin', appVersion: '1.4.0' });
     expect(localStorage.getItem(DEVICE_ID_KEY)).toBe('dev-9');
   });
 
@@ -144,7 +144,7 @@ describe('Notifications on this device', () => {
     stubApi({ ...prefs, '/api/v1/mobile/pairing': { serverUrl: null, pushEnabled: true }, '/api/v1/mobile/devices': [] });
     wrap(<DeviceNotifications plugin={p} />);
     fireEvent.click(await screen.findByRole('switch', { name: /Show notifications on this device/ }));
-    expect((await screen.findByRole('alert')).textContent).toMatch(/turned off for Arclight in the phone’s settings/);
+    expect((await screen.findByRole('alert')).textContent).toMatch(/turned off for Arclight Admin in the phone’s settings/);
   });
 
   it('renders nothing without the plugin (plain browser)', () => {

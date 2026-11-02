@@ -4,7 +4,13 @@ export interface Env {
   DEVICE_LIMITER: RateLimit;
   SEND_IP_LIMITER: RateLimit;
 
-  /** APNs topic (the iOS bundle ID). */
+  /**
+   * APNs topics (iOS bundle IDs) this relay sends for, comma-separated. A device registers with
+   * its app's `appId`, which must be one of these; devices registered without one use the first
+   * entry. Default: com.moviemethat.arclight.admin,com.moviemethat.arclight.
+   */
+  APNS_TOPICS?: string;
+  /** Older single-topic setting, used only when APNS_TOPICS is not set. */
   APNS_TOPIC?: string;
   /** Apple token-based auth key: the .p8 file contents (PEM, PKCS#8). Secret. */
   APNS_KEY_P8?: string;

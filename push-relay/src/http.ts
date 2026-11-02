@@ -1,4 +1,4 @@
-/** Origins of the Arclight companion apps (Capacitor iOS, Capacitor Android, local dev). */
+/** Origins of the Arclight apps, Arclight Admin and the Arclight player (Capacitor iOS, Capacitor Android, local dev). */
 export const APP_ORIGINS = new Set(["capacitor://localhost", "https://localhost", "http://localhost"]);
 
 const BASE_HEADERS = {

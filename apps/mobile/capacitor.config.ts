@@ -5,8 +5,8 @@ import pkg from './package.json';
 const { version } = pkg;
 
 const config: CapacitorConfig = {
-  appId: 'com.moviemethat.arclight',
-  appName: 'Arclight',
+  appId: 'com.moviemethat.arclight.admin',
+  appName: 'Arclight Admin',
   webDir: 'dist',
   // The app's own screens are bundled; server pages are the user's server's own web UI, opened
   // in the same WebView. Which hosts may load in place is decided at runtime from the saved
