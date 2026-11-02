@@ -132,7 +132,7 @@ const server = createServer((req, res) => {
         res.writeHead(200, { 'content-type': 'text/css; charset=utf-8', etag: '"fake-1"' });
         return res.end(':root{--arclight-accent:#ff00aa}body{background-color:#200018!important}');
       case 'GET ping':
-        return send(res, 200, { version: '9.9.9-fake', serverName: 'Fake Arclight', features: ['events', 'search', 'requests', 'watchlist'], linkedUsers: 1 });
+        return send(res, 200, { version: '9.9.9-fake', serverName: 'Fake Arclight', features: ['events', 'search', 'requests', 'watchlist', 'stats', 'wrapped', 'leavingSoon'], linkedUsers: 1 });
       case 'POST events':
         if (!Array.isArray(body?.events) || body.events.length > 500) return send(res, 400, { code: 'invalid' });
         return send(res, 202, { accepted: body.events.length });
@@ -182,6 +182,48 @@ const server = createServer((req, res) => {
         return send(res, 201, { id: 43, status: 'pending' });
       case 'POST issue':
         return send(res, 201, { id: 44, status: 'open' });
+      case 'GET stats': {
+        if (route === 'stats/access') return send(res, 200, { myStats: true, wrapped: true, serverStats: true, shareLinks: true, leavingSoon: true, isAdmin: false });
+        if (route !== 'stats/me' && route !== 'stats/server') return send(res, 404, { code: 'not_found' });
+        const days = Number(url.searchParams.get('days') ?? 30);
+        const title = (mediaType, tmdbId, name) => ({ key: `${mediaType}:${tmdbId}`, mediaType, title: name, year: 1999, movieId: null, seriesId: null, tmdbId, plays: 3, watchMs: 3 * 7200000, users: 1, lastPlayedAt: '2026-10-30T20:00:00Z' });
+        return send(res, 200, {
+          from: '2026-10-01T00:00:00Z', to: '2026-11-01T00:00:00Z', userId: route === 'stats/me' ? 1 : null, days,
+          totals: { plays: 9, watchMs: 9 * 3600000, titles: 3, users: route === 'stats/me' ? 1 : 2, movies: 2, episodes: 7 },
+          playMethods: { directPlay: 6, directStream: 1, transcode: 2, unknown: 0 },
+          topMovies: [title('movie', 550, 'Fight Club'), title('movie', 603, 'The Matrix')],
+          topSeries: [title('series', 1396, 'Breaking Bad')],
+          topGenres: [{ name: 'Drama', plays: 5, watchMs: 5 * 3600000 }],
+          clients: [{ name: 'Jellyfin Web', plays: 9, watchMs: 9 * 3600000 }],
+          devices: [{ name: 'Living room TV', plays: 9, watchMs: 9 * 3600000 }],
+          users: route === 'stats/server' ? [{ key: 'user:1', arclightUserId: 1, name: 'Viewer One', plays: 6, watchMs: 6 * 3600000, lastPlayedAt: null }] : [],
+          perDay: [{ date: '2026-10-30', plays: 4, watchMs: 4 * 3600000 }, { date: '2026-10-31', plays: 5, watchMs: 5 * 3600000 }],
+          heatmap: Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => (d + h) % 5)),
+        });
+      }
+      case 'GET wrapped': {
+        const year = Number(url.searchParams.get('year') ?? new Date().getFullYear());
+        if (route === 'wrapped/image') return send(res, 200, { svg: `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><text>${year}</text></svg>`, fileName: `year-in-review-${year}.svg` });
+        return send(res, 200, {
+          year, userId: 1, name: 'Viewer One', plays: 40, watchMs: 40 * 3600000, movies: 10, episodes: 30, series: 3, activeDays: 25,
+          topMovies: [{ key: 'movie:550', mediaType: 'movie', title: 'Fight Club', year: 1999, movieId: null, seriesId: null, tmdbId: 550, plays: 2, watchMs: 4 * 3600000, users: 1, lastPlayedAt: null }],
+          topSeries: [], topGenres: [{ name: 'Drama', plays: 20, watchMs: 20 * 3600000 }], topDevice: 'Living room TV',
+          busiestMonth: 10, favouriteWeekday: 5, favouriteHour: 21, longestDay: { date: `${year}-10-31`, watchMs: 6 * 3600000 },
+          firstPlay: { title: 'The Matrix', at: `${year}-01-02T19:00:00Z` }, monthly: Array.from({ length: 12 }, (_, i) => i * 3600000), percentile: 80, years: [year, year - 1],
+        });
+      }
+      case 'POST wrapped':
+        if (route !== 'wrapped/share') return send(res, 404, { code: 'not_found' });
+        return send(res, 201, { id: 1, userId: 1, year: body?.year, path: '/api/v1/share/wrapped/faketoken', url: 'https://arclight.example.com/api/v1/share/wrapped/faketoken', imagePath: '/api/v1/share/wrapped/faketoken/image.svg', createdAt: '2026-11-01T00:00:00Z', expiresAt: '2026-12-01T00:00:00Z' });
+      case 'GET leaving-soon':
+        return send(res, 200, {
+          name: 'Leaving Soon', days: 14,
+          items: [
+            // In the test Jellyfin library -> the plugin marks it with jellyfinId.
+            { mediaType: 'movie', id: 1, tmdbId: 550, title: 'Fight Club', year: 1999, posterUrl: null, removeAt: '2026-11-12T00:00:00Z' },
+            { mediaType: 'movie', id: 2, tmdbId: 603, title: 'The Matrix', year: 1999, posterUrl: null, removeAt: '2026-11-14T00:00:00Z' },
+          ],
+        });
       case 'GET watchlist':
         return send(res, 200, { items: [...(watchlist.get(norm(user)) ?? new Map()).values()] });
       case 'POST watchlist': {

@@ -416,6 +416,56 @@ async function main() {
   r = await proxy('GET', 'Discover?category=airingToday&page=1');
   check('new discover categories accepted (airingToday)', r.status === 200, r.status);
 
+  // ---- plugin 1.3: stats, Year in review, Leaving Soon
+  const fcId = movie.Id.replace(/-/g, '');
+  r = await proxy('GET', 'ClientConfig');
+  check('ClientConfig reports the Arclight features and the stats toggles', ['stats', 'wrapped', 'leavingSoon'].every((f) => r.json?.arclightFeatures?.includes(f))
+    && r.json?.features?.myStats === true && r.json?.features?.wrapped === true && r.json?.features?.serverStats === true && r.json?.features?.leavingSoon === true, r.json && { arclightFeatures: r.json.arclightFeatures, features: r.json.features });
+  r = await proxy('GET', 'Stats/Access');
+  c = await lastCall('/api/v1/jellyfin/stats/access');
+  check('GET /Arclight/Stats/Access forwards the user', r.status === 200 && r.json?.myStats === true && r.json?.shareLinks === true && r.json?.isAdmin === false && c?.headers['x-arclight-jellyfin-user'] === N, { resp: r.json, user: c?.headers['x-arclight-jellyfin-user'] });
+  r = await proxy('GET', 'Stats/Me?days=90');
+  c = await lastCall('/api/v1/jellyfin/stats/me');
+  check('GET /Arclight/Stats/Me forwards days + user', r.status === 200 && r.json?.totals?.plays === 9 && c?.query.days === '90' && c?.headers['x-arclight-jellyfin-user'] === N, { status: r.status, q: c?.query });
+  check('my stats: library top title gets jellyfinId, others not', r.json?.topMovies?.[0]?.jellyfinId === fcId && !r.json?.topMovies?.[1]?.jellyfinId, r.json?.topMovies);
+  r = await proxy('GET', 'Stats/Me');
+  c = await lastCall('/api/v1/jellyfin/stats/me');
+  check('Stats/Me defaults to 30 days', r.status === 200 && c?.query.days === '30', c?.query);
+  r = await proxy('GET', 'Stats/Me?days=0');
+  const r2 = await proxy('GET', 'Stats/Server?days=3651');
+  check('stats reject days outside 1-3650', r.status === 400 && r.json?.code === 'invalid_days' && r2.status === 400, [r.status, r2.status]);
+  r = await proxy('GET', 'Stats/Server?days=7');
+  c = await lastCall('/api/v1/jellyfin/stats/server');
+  check('GET /Arclight/Stats/Server forwards days + user', r.status === 200 && r.json?.users?.[0]?.name === 'Viewer One' && c?.query.days === '7' && c?.headers['x-arclight-jellyfin-user'] === N, { status: r.status, q: c?.query });
+  r = await proxy('GET', 'Wrapped?year=2025');
+  c = await lastCall('/api/v1/jellyfin/wrapped');
+  check('GET /Arclight/Wrapped forwards the year + user', r.status === 200 && r.json?.year === 2025 && r.json?.topMovies?.[0]?.jellyfinId === fcId && c?.query.year === '2025' && c?.headers['x-arclight-jellyfin-user'] === N, { status: r.status, q: c?.query });
+  r = await proxy('GET', 'Wrapped/Image?year=2025');
+  c = await lastCall('/api/v1/jellyfin/wrapped/image');
+  check('GET /Arclight/Wrapped/Image returns the svg', r.status === 200 && r.json?.svg?.startsWith('<svg') && r.json?.fileName === 'year-in-review-2025.svg' && c?.headers['x-arclight-jellyfin-user'] === N, { status: r.status, fileName: r.json?.fileName });
+  r = await proxy('GET', 'Wrapped?year=1999');
+  check('Wrapped rejects years outside 2000-2100', r.status === 400 && r.json?.code === 'invalid_year', r.status);
+  r = await proxy('POST', 'Wrapped/Share', { year: 2025, userId: 99 });
+  c = await lastCall('/api/v1/jellyfin/wrapped/share');
+  check('POST /Arclight/Wrapped/Share sends only the year', r.status === 201 && r.json?.url?.startsWith('https://') && c?.body?.year === 2025 && !('userId' in (c?.body ?? {})) && c?.headers['x-arclight-jellyfin-user'] === N, { status: r.status, sent: c?.body });
+  r = await proxy('POST', 'Wrapped/Share', {});
+  check('Wrapped/Share needs a year', r.status === 400, r.status);
+  r = await proxy('GET', 'LeavingSoon');
+  c = await lastCall('/api/v1/jellyfin/leaving-soon');
+  check('GET /Arclight/LeavingSoon marks library items with jellyfinId', r.status === 200 && r.json?.items?.[0]?.jellyfinId === fcId && !r.json?.items?.[1]?.jellyfinId && c?.headers['x-arclight-jellyfin-user'] === N, r.json?.items);
+  {
+    const cfgStats = (await http('GET', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token })).json;
+    await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgStats, EnableServerStats: false, EnableLeavingSoon: false } });
+    await http('DELETE', `${FAKE}/__calls`);
+    r = await proxy('GET', 'Stats/Server');
+    const r3 = await proxy('GET', 'LeavingSoon');
+    const forwarded = (await fakeCalls()).filter((x) => x.path === '/api/v1/jellyfin/stats/server' || x.path === '/api/v1/jellyfin/leaving-soon');
+    check('turned-off server stats / Leaving Soon: 404 and nothing forwarded', r.status === 404 && r.json?.code === 'feature_disabled' && r3.status === 404 && forwarded.length === 0, { server: r.status, leaving: r3.status, forwarded: forwarded.length });
+    r = await proxy('GET', 'Stats/Access');
+    check('Stats/Access is narrowed by the plugin toggles', r.status === 200 && r.json?.serverStats === false && r.json?.leavingSoon === false && r.json?.myStats === true, r.json);
+    await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgStats, EnableServerStats: true, EnableLeavingSoon: true } });
+  }
+
   // ---- Cinema Mode intro
   const intros = async (id) => ((await http('GET', `${JF}/Items/${id}/Intros?userId=${adminId}`, { token })).json?.Items ?? []);
   const isOurs = (i) => /arclight-intro/i.test(`${i.Name ?? ''} ${i.Path ?? ''}`);
@@ -471,10 +521,13 @@ async function main() {
   r = await http('GET', `${JF}/Arclight/web/arclight.js`);
   check('script served anonymously', r.status === 200 && r.body.includes('window.__arclight') && /javascript/.test(r.headers.get('content-type') ?? ''), r.status);
   check('script contains no API key', !r.body.includes(API_KEY));
+  check('script has the stats, Year in review and Leaving Soon pages', ["arclightPage === 'stats'", "arclightPage === 'wrapped'", "arclightPage === 'serverstats'", "'Stats/Access'", "'Wrapped/Share'", "'LeavingSoon'", "arclightHas('leavingSoon')", 'URL.revokeObjectURL'].every((x) => r.body.includes(x)));
   r = await http('GET', `${JF}/Arclight/web/arclight.css`);
   check('stylesheet served', r.status === 200 && r.body.includes('.arclight-chip'), r.status);
+  check('stylesheet has the stats styles', r.body.includes('.arclight-heatmap') && r.body.includes('.arclight-wrapped-img'), r.status);
   r = await http('GET', `${JF}/web/ConfigurationPage?name=Arclight`, { token });
   check('config page served by Jellyfin', r.status === 200 && r.body.includes('ArclightConfigPage'), r.status);
+  check('config page has the stats toggles and the Arclight settings note', ['EnableMyStats', 'EnableWrapped', 'EnableServerStats', 'EnableLeavingSoon', '/settings/statscollections'].every((x) => r.body.includes(x)), r.status);
 
   // ---- user deleted
   r = await http('DELETE', `${JF}/Users/${newUserId}`, { token });

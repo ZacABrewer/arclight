@@ -51,6 +51,8 @@ import { mediaServersModule } from './modules/media-servers/index.js';
 import { retentionModule } from './modules/retention/index.js';
 import { watchHistoryModule } from './modules/watch-history/index.js';
 import { jellyfinPluginModule } from './modules/jellyfin-plugin/index.js';
+import { watchStatsModule } from './modules/watch-stats/index.js';
+import { collectionsModule } from './modules/collections/index.js';
 import { mediaAnalysisModule } from './modules/media-analysis/index.js';
 import { libraryHygieneModule } from './modules/library-hygiene/index.js';
 import { healthScanModule } from './modules/health-scan/index.js';
@@ -189,6 +191,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     watchHistoryModule,
     // /jellyfin/*: the Arclight Jellyfin plugin's API over requests, discover and the watch history.
     jellyfinPluginModule,
+    watchStatsModule,
+    collectionsModule,
     // Slash commands and request channel posts over the requests service.
     discordBotModule,
     calendarModule,

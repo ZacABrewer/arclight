@@ -163,7 +163,68 @@
       viewInArclight: 'View in Arclight',
       reportNeedsLibrary: 'Available once the title is in the library',
       runtime: '{n} min',
-      score: '★ {n}'
+      score: '★ {n}',
+      stats: 'Stats',
+      myStats: 'My stats',
+      serverStats: 'Server stats',
+      yearInReview: 'Year in review',
+      lastDays: 'Last {n} days',
+      allTime: 'All time',
+      period: 'Period',
+      plays: 'Plays',
+      watchTime: 'Watch time',
+      titlesWatched: 'Titles',
+      moviesWatched: 'Movies',
+      episodesWatched: 'Episodes',
+      seriesWatched: 'Series',
+      viewers: 'Viewers',
+      activeDays: 'Active days',
+      playMethods: 'How it played',
+      directPlay: 'Direct play',
+      directStream: 'Direct stream',
+      transcode: 'Transcode',
+      unknownMethod: 'Unknown',
+      topMovies: 'Top movies',
+      topSeries: 'Top series',
+      topGenres: 'Top genres',
+      devices: 'Devices',
+      clients: 'Apps',
+      mostActiveUsers: 'Most active users',
+      perDay: 'Watch time per day',
+      heatmap: 'When you watch',
+      heatmapServer: 'When people watch',
+      heatCell: '{day} {hour}:00 · {n} plays',
+      dayBar: '{date} · {time}',
+      playsAndTime: '{n} plays · {time}',
+      durM: '{m}m',
+      durHM: '{h}h {m}m',
+      durDH: '{d}d {h}h',
+      noPlays: 'No plays in this period yet.',
+      year: 'Year',
+      wrappedTitle: '{name}: {year}',
+      noPlaysYear: 'No plays in {year} yet.',
+      topDevice: 'Favourite device',
+      busiestMonth: 'Busiest month',
+      favouriteDay: 'Favourite day',
+      favouriteHour: 'Favourite hour',
+      longestDay: 'Longest day',
+      longestDayValue: '{date} · {time}',
+      firstPlay: 'First play',
+      firstPlayValue: '{title} · {date}',
+      percentile: 'Watched more than {n}% of viewers',
+      perMonth: 'Watch time per month',
+      shareCard: 'Your card',
+      downloadImage: 'Download image',
+      createShareLink: 'Create share link',
+      shareLinkCreated: 'Share link created',
+      shareLinkExpires: 'Expires {date}',
+      shareLinkPath: 'Arclight has no public address set, so this link is relative to your Arclight server:',
+      copy: 'Copy',
+      copied: 'Copied',
+      copyFailed: 'Could not copy; select the link and copy it yourself',
+      leavingSoon: 'Leaving Soon',
+      leavesOn: 'Leaves {date}',
+      statsOff: 'This is turned off in Arclight.'
     }
   };
 
@@ -392,7 +453,8 @@
     detailsToken: 0,
     searchToken: 0,
     lastQuery: null,
-    linked: true
+    linked: true,
+    access: null
   };
 
   function features() {
@@ -408,11 +470,44 @@
     state.watchlist = null;
     state.linked = true;
     themeState.loaded = false;
+    state.access = null;
     return call('GET', 'ClientConfig').then(function (cfg) {
       state.config = cfg;
-      return cfg;
+      return loadAccess().then(function () { return cfg; });
     }, function () {
       state.config = null;
+      return null;
+    });
+  }
+
+  /** Whether the connected Arclight advertises a feature in its ping (older releases have no stats). */
+  function arclightHas(name) {
+    var list = state.config && state.config.arclightFeatures;
+    return Array.isArray(list) && list.indexOf(name) >= 0;
+  }
+
+  /** What this user may see: the plugin toggles AND Arclight's features AND Arclight's per-user answer. */
+  function statsAccess() {
+    var f = features();
+    var a = state.access || {};
+    return {
+      myStats: !!f.myStats && arclightHas('stats') && a.myStats === true,
+      serverStats: !!f.serverStats && arclightHas('stats') && a.serverStats === true,
+      wrapped: !!f.wrapped && arclightHas('wrapped') && a.wrapped === true,
+      shareLinks: !!f.wrapped && arclightHas('wrapped') && a.wrapped === true && a.shareLinks === true,
+      leavingSoon: !!f.leavingSoon && arclightHas('leavingSoon') && a.leavingSoon === true
+    };
+  }
+
+  function loadAccess() {
+    var f = features();
+    var wanted = ((f.myStats || f.serverStats) && arclightHas('stats')) || (f.wrapped && arclightHas('wrapped')) || (f.leavingSoon && arclightHas('leavingSoon'));
+    if (!wanted) return Promise.resolve(null);
+    return call('GET', 'Stats/Access').then(function (a) {
+      state.access = a && typeof a === 'object' ? a : null;
+      return state.access;
+    }, function () {
+      state.access = null;
       return null;
     });
   }
@@ -1170,7 +1265,11 @@
   var overlay = null;
 
   function closeOverlay() {
-    if (overlay) { overlay.remove(); overlay = null; }
+    if (overlay) {
+      (overlay.__urls || []).forEach(function (u) { try { URL.revokeObjectURL(u); } catch (e) { /* ignore */ } });
+      overlay.remove();
+      overlay = null;
+    }
     document.documentElement.classList.remove('arclight-page-open');
   }
 
@@ -1270,6 +1369,17 @@
         if (!items.length) { soon.remove(); return; } // nothing coming: no empty row
         soon.appendChild(scroller(t('comingSoon'), items.map(upcomingCard)));
       }, function () { soon.remove(); });
+    }
+
+    if (statsAccess().leavingSoon) {
+      var leaving = el('div', { class: 'arclight-leaving-soon' });
+      inner.appendChild(leaving);
+      call('GET', 'LeavingSoon').then(function (d) {
+        if (!leaving.isConnected) return;
+        var items = (d && Array.isArray(d.items) && d.items) || [];
+        if (!items.length) { leaving.remove(); return; } // nothing leaving: no empty row
+        leaving.appendChild(scroller(typeof d.name === 'string' && d.name ? d.name.slice(0, 80) : t('leavingSoon'), items.slice(0, 60).map(leavingCard)));
+      }, function () { leaving.remove(); });
     }
 
     inner.appendChild(genreStrip('movie', t('movieGenres')));
@@ -1572,11 +1682,414 @@
     load();
   }
 
+  // ------------------------------------------------------------------ stats, Year in review, Leaving Soon
+  function leavingCard(u) {
+    var poster = u.posterUrl
+      ? el('img', { class: 'arclight-poster-img', src: u.posterUrl, alt: '', loading: 'lazy', referrerpolicy: 'no-referrer' })
+      : el('div', { class: 'arclight-poster-empty material-icons', 'aria-hidden': 'true', text: u.mediaType === 'series' ? 'tv' : 'movie' });
+    var href = u.tmdbId && /^(movie|series)$/.test(u.mediaType || '') ? titleHref(u.mediaType, u.tmdbId, u.jellyfinId) : (u.jellyfinId ? '#/details?id=' + u.jellyfinId : null);
+    return el('div', { class: 'arclight-card' }, [
+      el(href ? 'a' : 'div', { class: 'arclight-poster arclight-card-link', href: href }, [
+        poster,
+        u.removeAt ? el('span', { class: 'arclight-chip arclight-chip-leaving arclight-poster-chip', text: t('leavesOn', { date: formatDate(u.removeAt) }) }) : null
+      ]),
+      el(href ? 'a' : 'div', { class: 'arclight-card-title arclight-card-link', href: href, text: u.title || '' }),
+      el('div', { class: 'arclight-card-meta', text: u.year ? String(u.year) : '' })
+    ]);
+  }
+
+  function num(v) {
+    var n = Number(v);
+    return isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function formatCount(n) {
+    try { return Number(n || 0).toLocaleString(document.documentElement.lang || undefined); } catch (e) { return String(n || 0); }
+  }
+
+  /** Watch time: "45m", "3h 20m", "2d 5h". */
+  function formatWatch(ms) {
+    var m = Math.round(num(ms) / 60000);
+    if (m < 60) return t('durM', { m: m });
+    var h = Math.floor(m / 60);
+    if (h < 48) return t('durHM', { h: h, m: m % 60 });
+    return t('durDH', { d: Math.floor(h / 24), h: h % 24 });
+  }
+
+  function weekdayName(i) {
+    // 2023-01-01 was a Sunday (index 0).
+    try { return new Date(2023, 0, 1 + i).toLocaleDateString(document.documentElement.lang || undefined, { weekday: 'short' }); } catch (e) { return ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][i] || ''; }
+  }
+
+  function weekdayLong(i) {
+    try { return new Date(2023, 0, 1 + i).toLocaleDateString(document.documentElement.lang || undefined, { weekday: 'long' }); } catch (e) { return weekdayName(i); }
+  }
+
+  function monthName(m, long) {
+    try { return new Date(2023, m - 1, 1).toLocaleDateString(document.documentElement.lang || undefined, { month: long ? 'long' : 'short' }); } catch (e) { return String(m); }
+  }
+
+  function hourLabel(h) {
+    return (h < 10 ? '0' : '') + h + ':00';
+  }
+
+  function statTile(label, value) {
+    return el('div', { class: 'arclight-stat' }, [
+      el('div', { class: 'arclight-stat-value', text: value }),
+      el('div', { class: 'arclight-stat-label', text: label })
+    ]);
+  }
+
+  function statSection(title, children) {
+    return el('section', { class: 'verticalSection arclight-section arclight-stats-section' }, [
+      el('h2', { class: 'sectionTitle arclight-section-title', text: title })
+    ].concat(children));
+  }
+
+  /** Horizontal bars: rows of [label, value, display]. */
+  function barList(rows) {
+    var max = rows.reduce(function (m, r) { return Math.max(m, num(r[1])); }, 0) || 1;
+    return el('div', { class: 'arclight-barlist' }, rows.map(function (r) {
+      return el('div', { class: 'arclight-barlist-row' }, [
+        el('div', { class: 'arclight-barlist-label', text: r[0], title: r[0] }),
+        el('div', { class: 'arclight-barlist-track' }, [el('div', { class: 'arclight-barlist-fill', style: 'width:' + Math.max(1, Math.round(num(r[1]) / max * 100)) + '%' })]),
+        el('div', { class: 'arclight-barlist-value', text: r[2] })
+      ]);
+    }));
+  }
+
+  /** Vertical bars: [label, value, tooltip]; labels shown under the first, middle and last bar. */
+  function columnChart(cols, labelEvery) {
+    var max = cols.reduce(function (m, c) { return Math.max(m, num(c[1])); }, 0) || 1;
+    var chart = el('div', { class: 'arclight-columns', role: 'img', 'aria-label': cols.map(function (c) { return c[2]; }).join(', ') });
+    cols.forEach(function (c, i) {
+      var h = num(c[1]) ? Math.max(2, Math.round(num(c[1]) / max * 100)) : 0;
+      chart.appendChild(el('div', { class: 'arclight-column', title: c[2] }, [
+        el('div', { class: 'arclight-column-fill', style: 'height:' + h + '%' }),
+        el('div', { class: 'arclight-column-label', text: labelEvery && (i % labelEvery === 0 || i === cols.length - 1) ? c[0] : '' })
+      ]));
+    });
+    return chart;
+  }
+
+  /** 7 x 24 plays heatmap (rows Sunday first, as Arclight sends it). */
+  function heatmap(grid) {
+    var rows = Array.isArray(grid) ? grid.slice(0, 7) : [];
+    var max = 0;
+    rows.forEach(function (r) { (Array.isArray(r) ? r : []).forEach(function (v) { max = Math.max(max, num(v)); }); });
+    var table = el('div', { class: 'arclight-heatmap', role: 'table' });
+    var head = el('div', { class: 'arclight-heat-row', role: 'row' }, [el('div', { class: 'arclight-heat-day' })]);
+    for (var h = 0; h < 24; h++) head.appendChild(el('div', { class: 'arclight-heat-hour', text: h % 6 === 0 ? String(h) : '' }));
+    table.appendChild(head);
+    rows.forEach(function (r, d) {
+      var row = el('div', { class: 'arclight-heat-row', role: 'row' }, [el('div', { class: 'arclight-heat-day', role: 'rowheader', text: weekdayName(d) })]);
+      for (var hh = 0; hh < 24; hh++) {
+        var v = num(Array.isArray(r) ? r[hh] : 0);
+        var cell = el('div', { class: 'arclight-heat-cell', role: 'cell', title: t('heatCell', { day: weekdayName(d), hour: hourLabel(hh).slice(0, 2), n: v }) });
+        if (v && max) cell.style.opacity = String(0.15 + 0.85 * v / max);
+        else cell.classList.add('arclight-heat-empty');
+        row.appendChild(cell);
+      }
+      table.appendChild(row);
+    });
+    return table;
+  }
+
+  function titleList(items) {
+    return el('ol', { class: 'arclight-toplist' }, (items || []).slice(0, 10).map(function (x) {
+      var label = (x.title || '') + (x.year ? ' (' + x.year + ')' : '');
+      var href = x.jellyfinId ? '#/details?id=' + x.jellyfinId
+        : x.tmdbId && (x.mediaType === 'movie' || x.mediaType === 'series') ? titleHref(x.mediaType, x.tmdbId, null) : null;
+      return el('li', { class: 'arclight-toplist-row' }, [
+        el(href ? 'a' : 'span', { class: 'arclight-toplist-title' + (href ? ' arclight-card-link' : ''), href: href, text: label }),
+        el('span', { class: 'arclight-toplist-meta', text: t('playsAndTime', { n: formatCount(x.plays), time: formatWatch(x.watchMs) }) })
+      ]);
+    }));
+  }
+
+  function bucketBars(list) {
+    return barList((list || []).slice(0, 10).map(function (b) { return [b.name || '', b.watchMs || b.plays, t('playsAndTime', { n: formatCount(b.plays), time: formatWatch(b.watchMs) })]; }));
+  }
+
+  /** The tabs between the stats pages this user may see: [page, label]. */
+  function statsTabs() {
+    var a = statsAccess();
+    var tabs = [];
+    if (a.myStats) tabs.push(['stats', t('myStats')]);
+    if (a.wrapped) tabs.push(['wrapped', t('yearInReview')]);
+    if (a.serverStats) tabs.push(['serverstats', t('serverStats')]);
+    return tabs;
+  }
+
+  function statsHeader(current) {
+    var tabs = statsTabs();
+    var nav = el('nav', { class: 'arclight-toggle arclight-stats-tabs', 'aria-label': t('stats') });
+    tabs.forEach(function (tab) {
+      nav.appendChild(el('a', {
+        class: 'emby-button arclight-toggle-btn' + (tab[0] === current ? ' arclight-toggle-on' : ''),
+        href: pageHref(tab[0]),
+        'aria-current': tab[0] === current ? 'page' : null,
+        text: tab[1]
+      }));
+    });
+    return tabs.length > 1 ? nav : null;
+  }
+
+  var STAT_PERIODS = [7, 30, 90, 365, 3650];
+
+  function renderStatsPage(key, scope) {
+    var page = openOverlay(key);
+    if (!page) return;
+    var server = scope === 'server';
+    var days = 30;
+    var picker = el('div', { class: 'arclight-toggle', role: 'group', 'aria-label': t('period') });
+    var body = el('div', { class: 'arclight-stats-body' });
+    var inner = el('div', { class: 'arclight-page-inner padded-left padded-right' }, [
+      el('h1', { class: 'arclight-page-title', text: t(server ? 'serverStats' : 'myStats') }),
+      statsHeader(server ? 'serverstats' : 'stats'),
+      picker,
+      body
+    ]);
+    page.appendChild(inner);
+    var token = 0;
+
+    function drawPicker() {
+      picker.textContent = '';
+      STAT_PERIODS.forEach(function (d) {
+        picker.appendChild(el('button', {
+          type: 'button',
+          class: 'emby-button arclight-toggle-btn' + (d === days ? ' arclight-toggle-on' : ''),
+          'aria-pressed': String(d === days),
+          text: d === 3650 ? t('allTime') : t('lastDays', { n: d }),
+          onclick: function () { if (d !== days) { days = d; load(); } }
+        }));
+      });
+    }
+
+    function draw(s) {
+      body.textContent = '';
+      var totals = s.totals || {};
+      if (!num(totals.plays)) {
+        body.appendChild(el('div', { class: 'arclight-muted arclight-empty', text: t('noPlays') }));
+        return;
+      }
+      var tiles = [
+        [t('plays'), formatCount(totals.plays)],
+        [t('watchTime'), formatWatch(totals.watchMs)],
+        [t('titlesWatched'), formatCount(totals.titles)],
+        [t('moviesWatched'), formatCount(totals.movies)],
+        [t('episodesWatched'), formatCount(totals.episodes)]
+      ];
+      if (server) tiles.push([t('viewers'), formatCount(totals.users)]);
+      body.appendChild(el('div', { class: 'arclight-stat-grid' }, tiles.map(function (x) { return statTile(x[0], x[1]); })));
+
+      var pm = s.playMethods || {};
+      var methods = [['directPlay', pm.directPlay], ['directStream', pm.directStream], ['transcode', pm.transcode], ['unknownMethod', pm.unknown]]
+        .filter(function (m) { return num(m[1]); })
+        .map(function (m) { return [t(m[0]), m[1], formatCount(m[1])]; });
+
+      var grid = el('div', { class: 'arclight-stats-columns' });
+      if ((s.topMovies || []).length) grid.appendChild(statSection(t('topMovies'), [titleList(s.topMovies)]));
+      if ((s.topSeries || []).length) grid.appendChild(statSection(t('topSeries'), [titleList(s.topSeries)]));
+      if ((s.topGenres || []).length) grid.appendChild(statSection(t('topGenres'), [bucketBars(s.topGenres)]));
+      if (methods.length) grid.appendChild(statSection(t('playMethods'), [barList(methods)]));
+      if ((s.devices || []).length) grid.appendChild(statSection(t('devices'), [bucketBars(s.devices)]));
+      if ((s.clients || []).length) grid.appendChild(statSection(t('clients'), [bucketBars(s.clients)]));
+      if (server && (s.users || []).length) {
+        grid.appendChild(statSection(t('mostActiveUsers'), [barList(s.users.slice(0, 10).map(function (u) {
+          return [u.name || '', u.watchMs || u.plays, t('playsAndTime', { n: formatCount(u.plays), time: formatWatch(u.watchMs) })];
+        }))]));
+      }
+      body.appendChild(grid);
+
+      var perDay = (s.perDay || []).slice(-366);
+      if (perDay.length) {
+        body.appendChild(statSection(t('perDay'), [columnChart(perDay.map(function (d) {
+          return [formatDate(d.date), d.watchMs, t('dayBar', { date: formatDate(d.date), time: formatWatch(d.watchMs) })];
+        }), Math.max(1, Math.ceil(perDay.length / 6)))]));
+      }
+      if (Array.isArray(s.heatmap) && s.heatmap.length) body.appendChild(statSection(t(server ? 'heatmapServer' : 'heatmap'), [heatmap(s.heatmap)]));
+    }
+
+    function load() {
+      drawPicker();
+      var mine = ++token;
+      body.textContent = '';
+      body.appendChild(el('div', { class: 'arclight-muted', text: t('loading') }));
+      call('GET', (server ? 'Stats/Server' : 'Stats/Me') + '?days=' + days).then(function (s) {
+        if (mine !== token || !body.isConnected) return;
+        draw(s || {});
+      }, function (err) {
+        if (mine !== token || !body.isConnected) return;
+        body.textContent = '';
+        body.appendChild(el('div', { class: 'arclight-muted', text: err && err.code === 'disabled' ? t('statsOff') : errorMessage(err) }));
+      });
+    }
+
+    load();
+  }
+
+  /** A download name that is safe on every OS. */
+  function safeFileName(name, year) {
+    var n = String(name || '').replace(/[^A-Za-z0-9._ -]+/g, '_').replace(/^[ .]+/, '').slice(0, 100);
+    if (!n) n = 'year-in-review-' + year;
+    if (!/\.svg$/i.test(n)) n += '.svg';
+    return n;
+  }
+
+  function copyText(text, input) {
+    function fallback() {
+      try {
+        input.focus();
+        input.select();
+        if (document.execCommand('copy')) { toast(t('copied')); return; }
+      } catch (e) { /* fall through */ }
+      toast(t('copyFailed'), true);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText && window.isSecureContext) {
+      navigator.clipboard.writeText(text).then(function () { toast(t('copied')); }, fallback);
+    } else {
+      fallback();
+    }
+  }
+
+  function renderWrappedPage(key, initialYear) {
+    var page = openOverlay(key);
+    if (!page) return;
+    page.__urls = page.__urls || [];
+    var year = initialYear && initialYear >= 2000 && initialYear <= 2100 ? initialYear : new Date().getFullYear();
+    var select = el('select', { class: 'arclight-input emby-select arclight-year-select', 'aria-label': t('year') });
+    var body = el('div', { class: 'arclight-stats-body' });
+    var inner = el('div', { class: 'arclight-page-inner padded-left padded-right' }, [
+      el('h1', { class: 'arclight-page-title', text: t('yearInReview') }),
+      statsHeader('wrapped'),
+      el('label', { class: 'arclight-row arclight-year-picker' }, [el('span', { class: 'arclight-label', text: t('year') }), select]),
+      body
+    ]);
+    page.appendChild(inner);
+    var token = 0;
+    var knownYears = [];
+
+    function fillYears(years) {
+      (Array.isArray(years) ? years : []).forEach(function (y) {
+        if (Number.isInteger(y) && y >= 2000 && y <= 2100 && knownYears.indexOf(y) < 0) knownYears.push(y);
+      });
+      var list = knownYears.slice();
+      if (list.indexOf(year) < 0) list.push(year);
+      list.sort(function (a, b) { return b - a; });
+      select.textContent = '';
+      list.forEach(function (y) {
+        var o = el('option', { value: String(y), text: String(y) });
+        if (y === year) o.selected = true;
+        select.appendChild(o);
+      });
+    }
+    select.addEventListener('change', function () { year = Number(select.value); load(); });
+
+    function cardSection() {
+      var holder = el('div', { class: 'arclight-wrapped-card' }, [el('div', { class: 'arclight-muted', text: t('loading') })]);
+      var actions = el('div', { class: 'arclight-wrapped-actions' });
+      var share = el('div', { class: 'arclight-wrapped-share' });
+      var mine = token;
+      call('GET', 'Wrapped/Image?year=' + year).then(function (img) {
+        if (mine !== token || !holder.isConnected) return;
+        holder.textContent = '';
+        if (!img || typeof img.svg !== 'string' || !img.svg) { holder.remove(); return; }
+        var blob = new Blob([img.svg], { type: 'image/svg+xml' });
+        var objectUrl = URL.createObjectURL(blob);
+        page.__urls.push(objectUrl);
+        holder.appendChild(el('img', { class: 'arclight-wrapped-img', src: objectUrl, alt: t('yearInReview') + ' ' + year }));
+        var fileName = safeFileName(img.fileName, year);
+        actions.appendChild(el('a', { class: 'emby-button raised arclight-btn', href: objectUrl, download: fileName }, [
+          el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'download' }), el('span', { text: t('downloadImage') })
+        ]));
+      }, function () { holder.remove(); });
+      if (statsAccess().shareLinks) {
+        var btn = el('button', { type: 'button', class: 'emby-button raised arclight-btn', onclick: function () {
+          busy(btn, true);
+          call('POST', 'Wrapped/Share', { year: year }).then(function (s) {
+            busy(btn, false);
+            share.textContent = '';
+            var link = s && (typeof s.url === 'string' && /^https?:\/\//i.test(s.url) ? s.url : typeof s.path === 'string' ? s.path : '');
+            if (!link) { toast(t('genericError', { code: 'share' }), true); return; }
+            var input = el('input', { class: 'arclight-input arclight-share-url', type: 'text', readonly: true, value: link, 'aria-label': t('createShareLink') });
+            share.appendChild(el('div', { class: 'arclight-muted', text: s.url ? t('shareLinkCreated') : t('shareLinkPath') }));
+            share.appendChild(el('div', { class: 'arclight-row' }, [
+              input,
+              el('button', { type: 'button', class: 'emby-button arclight-btn', text: t('copy'), onclick: function () { copyText(link, input); } })
+            ]));
+            if (s.expiresAt) share.appendChild(el('div', { class: 'arclight-muted', text: t('shareLinkExpires', { date: formatDate(s.expiresAt) }) }));
+            toast(t('shareLinkCreated'));
+          }, function (err) { busy(btn, false); toast(errorMessage(err), true); });
+        } }, [el('span', { class: 'material-icons arclight-icon', 'aria-hidden': 'true', text: 'share' }), el('span', { text: t('createShareLink') })]);
+        actions.appendChild(btn);
+      }
+      return statSection(t('shareCard'), [holder, actions, share]);
+    }
+
+    function draw(w) {
+      body.textContent = '';
+      fillYears(w.years);
+      body.appendChild(el('h2', { class: 'arclight-wrapped-name', text: t('wrappedTitle', { name: w.name || '', year: w.year || year }) }));
+      if (!num(w.plays)) {
+        body.appendChild(el('div', { class: 'arclight-muted arclight-empty', text: t('noPlaysYear', { year: year }) }));
+        return;
+      }
+      var tiles = [
+        [t('watchTime'), formatWatch(w.watchMs)],
+        [t('plays'), formatCount(w.plays)],
+        [t('moviesWatched'), formatCount(w.movies)],
+        [t('episodesWatched'), formatCount(w.episodes)],
+        [t('seriesWatched'), formatCount(w.series)],
+        [t('activeDays'), formatCount(w.activeDays)]
+      ];
+      if (w.topDevice) tiles.push([t('topDevice'), String(w.topDevice)]);
+      if (w.busiestMonth >= 1 && w.busiestMonth <= 12) tiles.push([t('busiestMonth'), monthName(w.busiestMonth, true)]);
+      if (w.favouriteWeekday >= 0 && w.favouriteWeekday <= 6) tiles.push([t('favouriteDay'), weekdayLong(w.favouriteWeekday)]);
+      if (w.favouriteHour >= 0 && w.favouriteHour <= 23) tiles.push([t('favouriteHour'), hourLabel(w.favouriteHour)]);
+      if (w.longestDay && w.longestDay.date) tiles.push([t('longestDay'), t('longestDayValue', { date: formatDate(w.longestDay.date), time: formatWatch(w.longestDay.watchMs) })]);
+      if (w.firstPlay && w.firstPlay.title) tiles.push([t('firstPlay'), t('firstPlayValue', { title: w.firstPlay.title, date: formatDate(w.firstPlay.at) })]);
+      body.appendChild(el('div', { class: 'arclight-stat-grid' }, tiles.map(function (x) { return statTile(x[0], x[1]); })));
+      if (typeof w.percentile === 'number' && w.percentile > 0) body.appendChild(el('div', { class: 'arclight-wrapped-percentile', text: t('percentile', { n: Math.round(w.percentile) }) }));
+
+      var grid = el('div', { class: 'arclight-stats-columns' });
+      if ((w.topMovies || []).length) grid.appendChild(statSection(t('topMovies'), [titleList(w.topMovies)]));
+      if ((w.topSeries || []).length) grid.appendChild(statSection(t('topSeries'), [titleList(w.topSeries)]));
+      if ((w.topGenres || []).length) grid.appendChild(statSection(t('topGenres'), [bucketBars(w.topGenres)]));
+      body.appendChild(grid);
+      if (Array.isArray(w.monthly) && w.monthly.length) {
+        body.appendChild(statSection(t('perMonth'), [columnChart(w.monthly.slice(0, 12).map(function (ms, i) {
+          return [monthName(i + 1), ms, monthName(i + 1, true) + ' · ' + formatWatch(ms)];
+        }), 1)]));
+      }
+      body.appendChild(cardSection());
+    }
+
+    function load() {
+      var mine = ++token;
+      fillYears([]);
+      body.textContent = '';
+      body.appendChild(el('div', { class: 'arclight-muted', text: t('loading') }));
+      call('GET', 'Wrapped?year=' + year).then(function (w) {
+        if (mine !== token || !body.isConnected) return;
+        draw(w || {});
+      }, function (err) {
+        if (mine !== token || !body.isConnected) return;
+        body.textContent = '';
+        body.appendChild(el('div', { class: 'arclight-muted', text: err && err.code === 'disabled' ? t('statsOff') : errorMessage(err) }));
+      });
+    }
+
+    load();
+  }
+
   function menuLinks() {
     var f = features();
     var links = [];
     if (f.discover) links.push(['#/home?arclight=discover', 'explore', t('discover')]);
     if (f.myRequests) links.push(['#/home?arclight=requests', 'playlist_add_check', t('myRequests')]);
+    var firstStats = statsTabs()[0];
+    if (firstStats) links.push([pageHref(firstStats[0]), 'insights', t('stats')]);
     return links;
   }
 
@@ -1760,6 +2273,10 @@
       var p = hp.params;
       if (arclightPage === 'discover' && features().discover) { renderDiscoverPage(key); return; }
       if (arclightPage === 'requests' && features().myRequests) { renderRequestsPage(key); return; }
+      var sa = statsAccess();
+      if (arclightPage === 'stats' && sa.myStats) { renderStatsPage(key, 'me'); return; }
+      if (arclightPage === 'serverstats' && sa.serverStats) { renderStatsPage(key, 'server'); return; }
+      if (arclightPage === 'wrapped' && sa.wrapped) { renderWrappedPage(key, /^\d{4}$/.test(p.get('year') || '') ? Number(p.get('year')) : null); return; }
       if (arclightPage === 'grid' && features().discover && /^[a-zA-Z]{3,20}$/.test(p.get('category') || '')) { renderGridPage(key, p.get('category')); return; }
       if (arclightPage === 'genre' && features().discover && /^(movie|series)$/.test(p.get('type') || '') && /^\d+$/.test(p.get('genre') || '')) {
         renderGenrePage(key, p.get('type'), p.get('genre'), (p.get('name') || '').slice(0, 60), /^(popularity|rating|releaseDate|title)$/.test(p.get('sort') || '') ? p.get('sort') : 'popularity');

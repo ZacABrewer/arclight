@@ -63,6 +63,7 @@ export const SETTINGS_NAV: readonly SettingsNavGroup[] = [
       { get label() { return t('settings.layout.importLists'); }, to: '/settings/importlists' },
       { get label() { return t('common.notifications'); }, to: '/settings/notifications' },
       { get label() { return t('settings.layout.mediaServers'); }, to: '/settings/mediaservers' },
+      { get label() { return t('nav.statsCollections'); }, to: '/settings/statscollections' },
       { get label() { return t('common.subtitles'); }, to: '/settings/subtitles' },
       { get label() { return t('common.requests'); }, to: '/settings/requests' },
       { get label() { return t('nav.discordBot'); }, to: '/settings/discordbot' },

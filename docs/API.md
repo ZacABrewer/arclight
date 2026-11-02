@@ -1595,6 +1595,17 @@ Admin routes (admin session or admin API key; plugin keys cannot call them):
 | POST | `/settings/jellyfinplugin/keys` | Optional body `{name}` (1-100 characters, default `Jellyfin plugin`) → **201** the key row plus `key`, the secret, which is never shown again |
 | DELETE | `/settings/jellyfinplugin/keys/:id` | 204; the plugin using it is refused from then on; 404 unknown |
 
+**Stats, Year in review and Leaving Soon** (plugin 1.3.0; ping `features` lists `stats`, `wrapped`, `leavingSoon`):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/jellyfin/stats/access` | `{myStats, wrapped, serverStats, shareLinks, leavingSoon, isAdmin}` for the acting user. Admin here means an Arclight admin or a Jellyfin administrator |
+| GET | `/jellyfin/stats/me` | The user's `PlaybackStats` (query `days`); 403 `disabled` when My stats is off |
+| GET | `/jellyfin/stats/server` | Server-wide `PlaybackStats` when the `serverStats` audience allows; `users` only for admins or with `showUserNames` |
+| GET | `/jellyfin/wrapped`, `/jellyfin/wrapped/image` | The user's `Wrapped` (query `year`), and `{svg, fileName}` |
+| POST | `/jellyfin/wrapped/share` | Body `{year}` → 201 `WrappedShare`; 403 `disabled` when share links are off |
+| GET | `/jellyfin/leaving-soon` | `{name, days, items}`; 403 `disabled` unless Leaving Soon and Show in Jellyfin are on |
+
 ### Jellyfin plugin: themes
 
 Module `apps/api/src/modules/jellyfin-plugin` (`theme-routes.ts`, generator `theme-css.ts`); contract
@@ -1608,6 +1619,60 @@ other `/jellyfin` routes (plugin key, admin API key or admin session; portal use
 | GET | `/jellyfin/theme/:themeId.css` | Jellyfin Web stylesheet generated from the pack's `--al-*` tokens and fonts (`text/css`; `ETag` from pack id + version + source + generator version; `If-None-Match` → 304; `Cache-Control: public, max-age=3600`). 404 `NOT_FOUND` for unknown packs and for `tron` |
 | GET | `/jellyfin/theme-fonts/:themeId/:file` | A `.woff2` font the pack ships (the stylesheet links it as `url(theme-fonts/<id>/<file>)`); 404 for anything else. Cached a week |
 | GET | `/jellyfin/userconfig` | Per user (`X-Arclight-Jellyfin-User`). `{theme, canRequestMovies, canRequestSeries, canRequest4k, canViewAllRequests}`; `theme` is the account's pick when user choice is on (or the account is an admin) and the pack is installed, else the server default, null for Tron. Request rights combine permission bits and the account's request type filter |
+
+### Playback stats and Year in review
+
+Module `apps/api/src/modules/watch-stats`; contract `packages/shared/src/watch-stats.ts`; tables
+`wrapped_shares` and `newsletter_runs`. Read-only over the watch history (`watch_events`, `watch_state`,
+`media_server_users`); plays are built from the timeline: one per plugin session and item (watch time
+= how far the position moved, capped by wall time and runtime; unfinished sessions under 60 s are
+dropped), and a `played` row with no matching session is a play of the item's runtime.
+
+**Settings.** Section `watchStats` (`GET`/`PUT /settings/watchstats`, admin): `{jellyfin {myStats, wrapped,
+serverStats (nobody/admins/everyone, default admins), showUserNames}, wrapped {shareLinks, shareLinkDays (1-365,
+default 14)}, newsletter {enabled, notificationId (an email connection), recipients (connection/users), weekday
+(0-6), hour (0-23), maxItems}}`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/watchstats` | Portal route. `PlaybackStats` `{from, to, userId, totals, playMethods, topMovies, topSeries, topGenres, clients, devices, users, perDay, heatmap (7 x 24, server time)}`. Query `days` (1-3650, default 30), `userId`, `serverId`. Admins without `userId` get the whole server; other users always get their own (another `userId` is 403) and no `users` list |
+| GET | `/watchstats/growth` | Admin. `LibraryGrowth` `{snapshots [{date, usedBytes, fileCount}], added [{month, movies, series, episodes}]}`. Query `days` |
+| GET | `/watchstats/wrapped` | Portal route. `Wrapped` (the user's year). Query `year`, `userId` (admins) |
+| GET | `/watchstats/wrapped/image.svg` | Portal route. The Year in review card as an SVG download |
+| GET | `/watchstats/wrapped/shares`, POST | Portal route. The caller's live share links; POST `{year, userId?}` creates one → 201 `WrappedShare` `{id, userId, year, path, url, imagePath, createdAt, expiresAt}`. 403 `DISABLED` when share links are off |
+| DELETE | `/watchstats/wrapped/shares/:id` | Portal route. Revokes a link (own links; admins any) |
+| GET | `/share/wrapped/:token`, `/share/wrapped/:token/image.svg` | Public. The shared page (HTML, strict CSP) and its image; 404 once expired or revoked |
+| GET | `/watchstats/newsletter` | Admin. `{preview {subject, from, to, items, html, text, recipients, problem}, runs}` |
+| POST | `/watchstats/newsletter/send` | Admin. Sends now → `NewsletterRun`; 502 `SEND_FAILED` with the SMTP error |
+| GET | `/settings/watchstats`, PUT | Admin. The settings above |
+
+Task `WatchStatsNewsletter` (hourly at :05) prunes expired share links and sends the newsletter in its weekday
+and hour (at most once in six days).
+
+### Collections (smart collections and Leaving Soon)
+
+Module `apps/api/src/modules/collections`; contract `packages/shared/src/smart-collections.ts`; tables
+`smart_collections` and `collection_syncs` (per collection and server: the server's collection id, item
+count, missing, last sync and error). Collections are written to Jellyfin/Emby over their REST API
+(`/Collections`, `/Collections/{id}/Items`, `DELETE /Items/{id}`); only collections in `collection_syncs` are
+ever deleted.
+
+**Settings.** Section `collections` (`GET`/`PUT /settings/collections`, admin): `{leavingSoon {enabled (default
+false), days (1-365, default 14), name (default "Leaving Soon"), showInJellyfin}, serverIds (empty = every
+enabled Jellyfin/Emby server)}`.
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/collections/smart`, POST | Admin. `SmartCollection[]`; POST `SmartCollectionInput` `{name, enabled, mediaType (movie/series/all), criteria {genres, genreMatch, excludeGenres, yearFrom, yearTo, studios, tmdbCollectionIds, list (trending/popular/topRated), minRating, addedWithinDays, watchStatus (any/unwatched/watched/inProgress)}, sort (added/title/year/rating/plays/list), limit}` → 201. 400 on a duplicate name |
+| GET | `/collections/smart/:id`, PUT, DELETE | Admin. One rule with `sync[]` per server; DELETE → 204 (its collections go on the next sync) |
+| GET | `/collections/smart/:id/items` | Admin. `CollectionPreview` `{total, items [{mediaType, id, tmdbId, title, year, posterUrl, removeAt}]}`. Query `limit` |
+| POST | `/collections/smart/preview` | Admin. Body `SmartCollectionInput` → `CollectionPreview` |
+| GET | `/collections/leavingsoon` | Admin. `LeavingSoon` `{enabled, days, name, items, sync}` |
+| GET | `/collections/sync` | Admin. `{servers [{id, name}], states []}` |
+| POST | `/collections/sync` | Admin. Runs the sync now → `CollectionSyncResult` `{collections, servers, added, removed, created, deleted, errors}` |
+| GET | `/settings/collections`, PUT | Admin. The settings above |
+
+Task `CollectionsSync` runs hourly at :20.
 
 ## retention
 

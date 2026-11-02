@@ -34,6 +34,10 @@ export const JELLYFIN_PLUGIN_FEATURES = [
   'providers',
   'requests',
   'themes',
+  // 1.3.0: playback stats, Year in review and the Leaving Soon row.
+  'stats',
+  'wrapped',
+  'leavingSoon',
 ] as const;
 
 /**

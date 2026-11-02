@@ -1,8 +1,8 @@
 # Activity
 
-Activity is where you watch Arclight work: what is downloading right now, what happened to past grabs, which releases are blocked, and what is waiting to be imported. You will mostly use it when a download looks stuck or a title has not shown up in your library yet. Activity is visible to administrators only. Find it in the left menu under **Activity**.
+Activity is where you watch Arclight work: what is downloading right now, what happened to past grabs, which releases are blocked, and what is waiting to be imported. You will mostly use it when a download looks stuck or a title has not shown up in your library yet. Activity is visible to administrators only (except **Playback stats**, see below). Find it in the left menu under **Activity**.
 
-The sub-pages are **Queue**, **History**, **Blocklist**, **Pending**, **Cross-seeds**, **Transcode jobs** and **Manual import**.
+The sub-pages are **Queue**, **History**, **Blocklist**, **Pending**, **Cross-seeds**, **Transcode jobs**, **Manual import** and **Playback stats**.
 
 ### Searching a list
 
@@ -191,6 +191,26 @@ Tick rows to act on several at once: **Mark failed** (asks first, with the count
 5. Confirm, then read the import results.
 
 You can jump straight here from a queue row with the **Import** button.
+
+## Playback stats
+
+**Activity > Playback stats** (`/activity/playbackstats`) turns the [watch history](media-servers.md#watch-history-sync) into numbers. Pick a period (7, 30, 90 or 365 days). Admins see the whole server and can pick one user. Everyone else sees only their own plays, on **Profile > My stats**.
+
+- **Totals**: plays, hours watched, titles and viewers.
+- **How it was played**: direct play, direct stream and transcode. Plays known only from the watch-history sync (no plugin) count as "unknown".
+- **Top movies, top series and top genres**. Episodes count towards their series. Genres come from the library.
+- **Apps and devices**, and (admins) **most active users**.
+- **Plays per day** and a **day and hour heatmap** (server time).
+- **Library growth** (admins): storage used per day, and titles and episodes added per month.
+
+How a play is counted: a plugin session counts the time the play position actually moved, never more than the time that passed or the runtime. Sessions shorter than a minute that never finished are left out. A "played" mark from the sync with no session counts as one play of the full runtime. Plays are therefore most accurate with the [Arclight Jellyfin plugin](media-servers.md#the-arclight-jellyfin-plugin) installed. Stats reach back as far as the watch history keeps events (**Event retention**, 400 days by default).
+
+### Year in review
+
+The **Year in review** tab sums up one user's year: hours and plays, movies, episodes and series, active days, top titles and genres, the busiest month, favourite weekday and hour, the longest day, the first play of the year and how the user compares with the other viewers. Admins can open anyone's.
+
+- **Download image** saves the year as a 1080 x 1350 picture (SVG).
+- **Create share link** makes a link anyone can open without signing in. It expires after the number of days set in **Settings > Stats & collections** (14 by default) and can be revoked at any time. The link shows the year as it is when opened. It is a full address only when **Application URL** is set in **Settings > Requests**; otherwise it is a path on your Arclight address. Share links can be turned off altogether.
 
 ## Related
 

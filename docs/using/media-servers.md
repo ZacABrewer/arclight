@@ -148,6 +148,23 @@ The plugin card lists each key with its prefix, last use and last ping, and per 
 
 A plugin key is limited on purpose: it may call only the `/api/v1/jellyfin/*` routes and nothing else. For the per-user features the plugin names the Jellyfin user who is acting, and Arclight runs the call as the linked Arclight user, with that user's permissions, request types and quotas. A Jellyfin user with no Arclight user is refused (`not_linked`) unless the sign-in server has **Create users on sign-in** on and the sign-in policy admits new users automatically, in which case the account is imported on first use. See the [API reference](../API.md#jellyfin-plugin).
 
+### Stats, Year in review and Leaving Soon in Jellyfin
+
+Plugin 1.3.0 adds a **Stats** menu entry inside Jellyfin with **My stats**, **Year in review** (with the image download and share links) and, for allowed users, **Server stats**. It also adds a **Leaving Soon** row to Discover. The numbers are the same as **Activity > Playback stats** in Arclight (see [Activity](activity.md#playback-stats)).
+
+Who sees what is set in Arclight under **Settings > Stats & collections**, which is also linked from the Jellyfin plugin card:
+
+| Setting | Default | Effect |
+|---|---|---|
+| My stats | on | Users see their own stats |
+| Year in review | on | Users see their own Year in review and can download the image |
+| Share links | on | Users can make share links, which expire after **Share link days** (default 14) |
+| Server stats | admins | Nobody, admins (Arclight admins and Jellyfin administrators) or everyone |
+| Show user names | off | Non-admins who may see server stats also see the most active users by name |
+| Leaving Soon: Show in Jellyfin | on | The Discover row (needs Leaving Soon turned on) |
+
+The plugin's own settings page has switches that can only hide these pages further. With older Arclight versions the plugin hides them. The collections themselves (Leaving Soon and [smart collections](library.md#smart-collections)) are created by Arclight and work without the plugin, on Emby too.
+
 ### What Jellyfin users can see and request
 
 Everything the plugin shows or does for a Jellyfin user is decided by the **linked Arclight account**, never by the Jellyfin account. A Jellyfin administrator is not an Arclight administrator: what counts is the linked account's role and permissions.

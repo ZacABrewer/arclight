@@ -5,7 +5,7 @@ import { MediaServerError, type FetchLike, type MediaServerErrorCode, type Media
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface RequestOptions {
-  method?: 'GET' | 'POST';
+  method?: 'GET' | 'POST' | 'DELETE';
   headers?: Record<string, string>;
   query?: Record<string, string>;
   body?: unknown;

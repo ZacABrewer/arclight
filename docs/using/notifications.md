@@ -99,6 +99,17 @@ The same three choices apply to phones paired through the [Arclight mobile app](
 
 Notes: browser push needs HTTPS (or `localhost`). Open Arclight over HTTPS first, for example through a reverse proxy. If notifications are blocked for the site, allow them in the browser's site settings. On iPhone and iPad, add Arclight to the home screen first. Each browser you enable is its own subscription, and a subscription the browser has revoked is removed automatically.
 
+## Weekly newsletter
+
+Arclight can email a weekly "recently added" newsletter: the movies and episodes whose files arrived in the last seven days, with posters, grouped per series. Set it up in **Settings > Stats & collections > Newsletter**:
+
+1. Add an **Email** connection first. Its SMTP server sends the newsletter.
+2. Turn on **Newsletter**, choose the email connection and when it goes out (weekday and hour, server time).
+3. Choose the recipients: **the connection's recipients** (its To, Cc and Bcc) or **all users with an email address** (sent as Bcc, so nobody sees the others). A user is left out when their account has the `newsletterOptOut` setting.
+4. Check the preview (subject, recipient count and the rendered email) and press **Send now** to try it.
+
+The `WatchStatsNewsletter` task checks every hour and sends once a week. Every send is listed with its recipient count and any error.
+
 ## Quiet hours, download alerts and summaries
 
 > Coming soon: download alerts (stalls, failures, low disk space) with quiet hours and a daily summary. This page will be updated when it ships. For now, connections send events as they happen at any time of day. To mute a connection, turn off its Enable switch or the events you do not want.

@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 using System;
+using System.Collections.Generic;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
@@ -40,6 +41,8 @@ public sealed class ArclightClient : IDisposable
     private readonly HttpClient _http;
     private readonly IArclightSettings _settings;
     private readonly bool _ownsClient;
+    private readonly object _featuresLock = new();
+    private (string Key, IReadOnlyList<string>? Features, DateTimeOffset At)? _features;
 
     /// <summary>Initializes a new instance of the <see cref="ArclightClient"/> class.</summary>
     /// <param name="settings">Settings source.</param>
@@ -162,6 +165,64 @@ public sealed class ArclightClient : IDisposable
         catch (TaskCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
             return new ArclightResponse(0, "{\"code\":\"arclight_timeout\"}");
+        }
+    }
+
+    /// <summary>
+    /// The features the configured Arclight advertises in <c>GET /ping</c>, so the web UI can hide what
+    /// an older Arclight doesn't have. Cached for 10 minutes (1 minute after a failed ping).
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Feature names, or null when Arclight could not be asked.</returns>
+    public async Task<IReadOnlyList<string>?> GetFeaturesAsync(CancellationToken cancellationToken)
+    {
+        var key = _settings.ArclightUrl + "\n" + _settings.ApiKey.GetHashCode(StringComparison.Ordinal);
+        var now = DateTimeOffset.UtcNow;
+        lock (_featuresLock)
+        {
+            if (_features is { } c && c.Key == key && now - c.At < (c.Features is null ? TimeSpan.FromMinutes(1) : TimeSpan.FromMinutes(10)))
+            {
+                return c.Features;
+            }
+        }
+
+        var response = await SendAsync(HttpMethod.Get, "ping", null, null, cancellationToken).ConfigureAwait(false);
+        var features = response.IsSuccess ? ParseFeatures(response.Body) : null;
+        lock (_featuresLock)
+        {
+            _features = (key, features, now);
+        }
+
+        return features;
+    }
+
+    /// <summary>Reads <c>features</c> from a ping body.</summary>
+    /// <param name="body">Ping response.</param>
+    /// <returns>Feature names (at most 200, each at most 64 characters), or null when the body has none.</returns>
+    public static IReadOnlyList<string>? ParseFeatures(string body)
+    {
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            if (doc.RootElement.ValueKind != JsonValueKind.Object || !doc.RootElement.TryGetProperty("features", out var list) || list.ValueKind != JsonValueKind.Array)
+            {
+                return null;
+            }
+
+            var result = new List<string>();
+            foreach (var f in list.EnumerateArray())
+            {
+                if (f.ValueKind == JsonValueKind.String && f.GetString() is { Length: > 0 and <= 64 } name && result.Count < 200)
+                {
+                    result.Add(name);
+                }
+            }
+
+            return result;
+        }
+        catch (JsonException)
+        {
+            return null;
         }
     }
 
