@@ -61,6 +61,7 @@ copyFileSync(join(BRAND, 'png', 'app-icon-192.png'), join(PUBLIC, 'icon-192.png'
 copyFileSync(join(BRAND, 'png', 'app-icon-512.png'), join(PUBLIC, 'icon-512.png'));
 
 // Social card: lockup centred on the brand gradient with a faint grid.
+const lockupWidth = Number(dark.match(/viewBox="0 0 ([0-9.]+)/)[1]);
 const inner = dark.replace(/^<svg[^>]*>/, '').replace(/<\/svg>\s*$/, '');
 const tagline = 'Self-hosted media automation in one app';
 let tx = 0;
@@ -83,7 +84,7 @@ const og = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" vi
 <rect width="1200" height="630" fill="url(#grid)"/>
 <rect width="1200" height="630" fill="url(#glow)"/>
 <rect x="0" y="626" width="1200" height="4" fill="#6ef6ff" fill-opacity="0.6"/>
-<g transform="translate(${(1200 - 340 * 2.6) / 2} 160) scale(2.6)">${inner}</g>
+<g transform="translate(${(1200 - lockupWidth * 2.6) / 2} 160) scale(2.6)">${inner}</g>
 <path fill="#9fd8ff" d="${tagPath}"/>
 </svg>`;
 await sharp(Buffer.from(og)).png({ compressionLevel: 9 }).toFile(join(PUBLIC, 'og.png'));

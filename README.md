@@ -2,7 +2,7 @@
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="design/brand/lockup-dark-bg.svg">
     <source media="(prefers-color-scheme: light)" srcset="design/brand/lockup-light-bg.svg">
-    <img src="design/brand/lockup-dark-bg.svg" alt="Arclight" width="340" height="80">
+    <img src="design/brand/lockup-dark-bg.svg" alt="Arclight" width="404" height="80">
   </picture>
 </p>
 
