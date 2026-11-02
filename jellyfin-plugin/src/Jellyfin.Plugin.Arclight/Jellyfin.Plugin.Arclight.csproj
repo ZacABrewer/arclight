@@ -21,6 +21,9 @@
     <EmbeddedResource Include="Web\arclight.js" />
     <None Remove="Web\arclight.css" />
     <EmbeddedResource Include="Web\arclight.css" />
+    <!-- The owner's intro videos, rendered in design/brand/intro (Cinema Mode intro). -->
+    <EmbeddedResource Include="..\..\..\design\brand\intro\arclight-intro-1080p.mp4" LogicalName="Jellyfin.Plugin.Arclight.Intro.arclight-intro-1080p.mp4" />
+    <EmbeddedResource Include="..\..\..\design\brand\intro\arclight-intro-720p.mp4" LogicalName="Jellyfin.Plugin.Arclight.Intro.arclight-intro-720p.mp4" />
   </ItemGroup>
 
   <ItemGroup>

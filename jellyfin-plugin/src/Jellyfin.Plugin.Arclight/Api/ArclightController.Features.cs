@@ -57,9 +57,26 @@ public partial class ArclightController
         }
 
         var d = days ?? 30;
-        return d is < 1 or > 90
-            ? Invalid("invalid_days")
-            : await Forward(HttpMethod.Get, "upcoming?days=" + d.ToString(CultureInfo.InvariantCulture), null, ct).ConfigureAwait(false);
+        if (d is < 1 or > 90)
+        {
+            return Invalid("invalid_days");
+        }
+
+        var userId = await CurrentUserIdAsync().ConfigureAwait(false);
+        if (userId == Guid.Empty)
+        {
+            return StatusCode(StatusCodes.Status403Forbidden, new { code = "user_required" });
+        }
+
+        var response = await _client.SendAsync(HttpMethod.Get, "upcoming?days=" + d.ToString(CultureInfo.InvariantCulture), null, userId, ct).ConfigureAwait(false);
+        var (status, text) = ProxyValidation.ToBrowser(response.StatusCode, response.Body);
+        if (status is >= 200 and < 300)
+        {
+            // Not "coming soon" if this Jellyfin already has it.
+            text = UpcomingFilter.Filter(text, _upcomingIndex.HasMovie, _upcomingIndex.HasEpisode);
+        }
+
+        return new ContentResult { StatusCode = status, Content = text, ContentType = "application/json" };
     }
 
     /// <summary>Where else the title streams (TMDB watch providers, data from JustWatch).</summary>

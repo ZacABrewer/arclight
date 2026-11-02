@@ -38,7 +38,8 @@ public class ProxyTests
             new EventSender(queue, client, _settings, () => "s", NullLogger.Instance),
             new InjectionStatus(),
             new Jellyfin.Plugin.Arclight.Labels.LabelService(Substitute.For<ILibraryManager>(), Substitute.For<IMediaSourceManager>()),
-            new ThemeCache());
+            new ThemeCache(),
+            new LibraryTmdbIndex(Substitute.For<ILibraryManager>()));
         var claims = new List<Claim> { new(ClaimTypes.Role, "User") };
         if (useClaim)
         {

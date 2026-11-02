@@ -31,6 +31,7 @@ public sealed class EventForwarder : IHostedService, IDisposable
     private readonly EventQueue _queue;
     private readonly IArclightSettings _settings;
     private readonly ILogger<EventForwarder> _logger;
+    private readonly Intro.IntroAssets _intro;
     private Timer? _expiryTimer;
 
     /// <summary>Initializes a new instance of the <see cref="EventForwarder"/> class.</summary>
@@ -43,6 +44,7 @@ public sealed class EventForwarder : IHostedService, IDisposable
     /// <param name="queue">Queue.</param>
     /// <param name="settings">Settings.</param>
     /// <param name="logger">Logger.</param>
+    /// <param name="intro">Intro files (never forwarded).</param>
     public EventForwarder(
         ISessionManager sessions,
         IUserDataManager userData,
@@ -52,7 +54,8 @@ public sealed class EventForwarder : IHostedService, IDisposable
         EventSender sender,
         EventQueue queue,
         IArclightSettings settings,
-        ILogger<EventForwarder> logger)
+        ILogger<EventForwarder> logger,
+        Intro.IntroAssets intro)
     {
         _sessions = sessions;
         _userData = userData;
@@ -63,6 +66,7 @@ public sealed class EventForwarder : IHostedService, IDisposable
         _queue = queue;
         _settings = settings;
         _logger = logger;
+        _intro = intro;
     }
 
     /// <inheritdoc />
@@ -148,15 +152,35 @@ public sealed class EventForwarder : IHostedService, IDisposable
         _sender.Signal();
     });
 
-    private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e) => Safe("playbackStart", () => _ingest.PlaybackStart(Snapshot(e)));
+    private bool IsIntro(BaseItem? item) => item is not null && _intro.IsIntro(item.Path);
 
-    private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e) => Safe("playbackProgress", () => _ingest.PlaybackProgress(Snapshot(e)));
+    private void OnPlaybackStart(object? sender, PlaybackProgressEventArgs e) => Safe("playbackStart", () =>
+    {
+        if (!IsIntro(e.Item))
+        {
+            _ingest.PlaybackStart(Snapshot(e));
+        }
+    });
 
-    private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e) => Safe("playbackStop", () => _ingest.PlaybackStop(Snapshot(e)));
+    private void OnPlaybackProgress(object? sender, PlaybackProgressEventArgs e) => Safe("playbackProgress", () =>
+    {
+        if (!IsIntro(e.Item))
+        {
+            _ingest.PlaybackProgress(Snapshot(e));
+        }
+    });
+
+    private void OnPlaybackStopped(object? sender, PlaybackStopEventArgs e) => Safe("playbackStop", () =>
+    {
+        if (!IsIntro(e.Item))
+        {
+            _ingest.PlaybackStop(Snapshot(e));
+        }
+    });
 
     private void OnUserDataSaved(object? sender, UserDataSaveEventArgs e) => Safe("userDataSaved", () =>
     {
-        if (e.Item is null || e.UserData is null)
+        if (e.Item is null || e.UserData is null || IsIntro(e.Item))
         {
             return;
         }
@@ -174,7 +198,7 @@ public sealed class EventForwarder : IHostedService, IDisposable
 
     private void OnItemAdded(object? sender, ItemChangeEventArgs e) => Safe("itemAdded", () =>
     {
-        if (e.Item is not { } item || !_ingest.WantsItemAdded(item.GetBaseItemKind().ToString(), item.IsVirtualItem))
+        if (e.Item is not { } item || IsIntro(item) || !_ingest.WantsItemAdded(item.GetBaseItemKind().ToString(), item.IsVirtualItem))
         {
             return;
         }

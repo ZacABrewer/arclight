@@ -225,11 +225,31 @@ async function main() {
     token, body: { LibraryOptions: { EnableRealtimeMonitor: false, PathInfos: [{ Path: '/media/movies' }] } },
   });
   check('create movie library', r.status === 204, r.body);
+  const ep = spawnSync('docker', ['exec', container, 'sh', '-c',
+    'mkdir -p "/media/tv/Breaking Bad (2008) [tmdbid-1396]/Season 01" && /usr/lib/jellyfin-ffmpeg/ffmpeg -hide_banner -loglevel error -y -f lavfi -i testsrc=duration=5:size=320x240:rate=24 -f lavfi -i sine=frequency=440:duration=5 -c:v libx264 -preset ultrafast -c:a aac -shortest "/media/tv/Breaking Bad (2008) [tmdbid-1396]/Season 01/Breaking Bad S01E01.mkv"'], { encoding: 'utf8' });
+  check('generate sample episode', ep.status === 0, ep.stderr);
+  r = await http('POST', `${JF}/Library/VirtualFolders?name=Shows&collectionType=tvshows&refreshLibrary=true&paths=${encodeURIComponent('/media/tv')}`, {
+    token, body: { LibraryOptions: { EnableRealtimeMonitor: false, PathInfos: [{ Path: '/media/tv' }] } },
+  });
+  check('create TV library', r.status === 204, r.body);
   const movie = await waitFor('movie in library', async () => {
     const items = (await http('GET', `${JF}/Items?Recursive=true&IncludeItemTypes=Movie&Fields=ProviderIds&userId=${adminId}`, { token })).json;
     return items?.Items?.[0];
   }, 120000, 2000);
   check('movie scanned with Tmdb id from the folder name', movie?.ProviderIds?.Tmdb === '550', movie?.ProviderIds);
+
+  // A second library's scan is skipped while the first one runs; ask for a full refresh.
+  await http('POST', `${JF}/Library/Refresh`, { token });
+  const episode = await waitFor('episode in library', async () => {
+    const items = (await http('GET', `${JF}/Items?Recursive=true&IncludeItemTypes=Episode&Fields=ProviderIds&userId=${adminId}`, { token })).json?.Items ?? [];
+    const series = (await http('GET', `${JF}/Items?Recursive=true&IncludeItemTypes=Series&Fields=ProviderIds&userId=${adminId}`, { token })).json?.Items ?? [];
+    const real = items.find((i) => i.ParentIndexNumber === 1 && i.IndexNumber === 1 && i.LocationType !== 'Virtual');
+    return real && series[0]?.ProviderIds?.Tmdb === '1396' ? real : null;
+  }, 180000, 3000).catch((e) => e);
+  check('sample episode scanned (series Tmdb 1396, S01E01)', !!episode?.Id, String(episode));
+  const virtualE2 = ((await http('GET', `${JF}/Items?Recursive=true&IncludeItemTypes=Episode&userId=${adminId}&IsMissing=true`, { token })).json?.Items ?? [])
+    .find((i) => i.ParentIndexNumber === 1 && i.IndexNumber === 2);
+  console.log(`NOTE  S01E02 ${virtualE2 ? 'exists as a virtual (missing) episode' : 'is not in Jellyfin at all'}`);
 
   const added = await waitFor('itemAdded event', async () => (await events()).find((e) => e.type === 'itemAdded' && e.item?.type === 'Movie'), 90000, 1500).catch((e) => e);
   check('itemAdded event with provider ids', added?.item?.providerIds?.Tmdb === '550' && added?.item?.id === movie.Id.replace(/-/g, ''), added?.item ?? String(added));
@@ -337,7 +357,10 @@ async function main() {
   check('Discover rejects unknown categories', r.status === 400, r.status);
   r = await proxy('GET', 'Upcoming?days=14');
   c = await lastCall('/api/v1/jellyfin/upcoming');
-  check('GET /Arclight/Upcoming', r.status === 200 && r.json?.items?.length === 2 && c?.query.days === '14', r.json);
+  const upKeys = (r.json?.items ?? []).map((i) => (i.kind === 'movie' ? `m${i.tmdbId}` : `e${i.tmdbId}-${i.seasonNumber}-${i.episodeNumber}`));
+  check('GET /Arclight/Upcoming forwards days', r.status === 200 && c?.query.days === '14', r.status);
+  check('Coming soon drops the library movie (550) and the episode on disk (S01E01)', !upKeys.includes('m550') && !upKeys.includes('e1396-1-1'), upKeys);
+  check('Coming soon keeps the missing episode (S01E02) and the absent movie (603)', upKeys.includes('e1396-1-2') && upKeys.includes('m603'), upKeys);
   r = await proxy('GET', 'Providers/movie/550');
   c = await lastCall('/api/v1/jellyfin/providers/movie/550');
   check('GET /Arclight/Providers (region from settings, attribution kept)', r.status === 200 && r.json?.attribution === 'Data from JustWatch' && c?.query.region === 'US', r.json);
@@ -374,6 +397,40 @@ async function main() {
   const missing = await fetch(`${JF}/Arclight/Theme.css?theme=nosuchpack`);
   check('Theme.css 404 for an unknown pack', missing.status === 404, missing.status);
   await proxy('POST', 'Themes/Choice', { choice: '' });
+
+  // ---- Cinema Mode intro
+  const intros = async (id) => ((await http('GET', `${JF}/Items/${id}/Intros?userId=${adminId}`, { token })).json?.Items ?? []);
+  const isOurs = (i) => /arclight-intro/i.test(`${i.Name ?? ''} ${i.Path ?? ''}`);
+  check('intro off by default: none for the movie', !(await intros(movie.Id)).some(isOurs));
+  const cfgIntro = (await http('GET', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token })).json;
+  await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgIntro, EnableIntro: true } });
+  const movieIntros = await intros(movie.Id);
+  const ours = movieIntros.find(isOurs);
+  check('intro enabled: /Items/{movie}/Intros includes the Arclight intro', !!ours, movieIntros.map((i) => i.Name));
+  check('intro is a playable video of about 6 s', ours && ours.MediaType === 'Video' && ours.RunTimeTicks > 50_000_000 && ours.RunTimeTicks < 80_000_000, ours && { MediaType: ours.MediaType, RunTimeTicks: ours.RunTimeTicks });
+  if (episode?.Id) {
+    check('episodes off by default: no intro for the episode', !(await intros(episode.Id)).some(isOurs));
+    await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgIntro, EnableIntro: true, IntroBeforeEpisodes: true } });
+    // The movie intro above already started this user's 3-hour session, so even the first episode is skipped.
+    check('first-episode-only: no episode intro within 3 h of the last intro', !(await intros(episode.Id)).some(isOurs));
+    await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgIntro, EnableIntro: true, IntroBeforeEpisodes: true, IntroFirstEpisodeOnly: false } });
+    check('first-episode-only off: the episode gets the intro', (await intros(episode.Id)).some(isOurs));
+  }
+  const all = (await http('GET', `${JF}/Items?Recursive=true&userId=${adminId}&IncludeItemTypes=Movie,Video,Episode`, { token })).json?.Items ?? [];
+  check('intro does not appear in the libraries', !all.some(isOurs), all.map((i) => i.Name));
+  if (ours) {
+    await http('DELETE', `${FAKE}/__calls`);
+    const ps = randomBytes(6).toString('hex');
+    await http('POST', `${JF}/Sessions/Playing`, { token, body: { ItemId: ours.Id, PlaySessionId: ps, PositionTicks: 0, PlayMethod: 'DirectPlay' } });
+    await http('POST', `${JF}/Sessions/Playing/Stopped`, { token, body: { ItemId: ours.Id, PlaySessionId: ps, PositionTicks: 61_000_000 } });
+    await sleep(4000);
+    const evs = await events();
+    check('intro playback is not forwarded to Arclight', !evs.some((e) => e.item?.id === ours.Id.replace(/-/g, '')), evs.map((e) => `${e.type}:${e.item?.name}`));
+    const resume = (await http('GET', `${JF}/UserItems/Resume?userId=${adminId}`, { token })).json?.Items ?? [];
+    check('intro not in Continue Watching', !resume.some(isOurs), resume.map((i) => i.Name));
+  }
+  await http('POST', `${JF}/Plugins/${PLUGIN_ID}/Configuration`, { token, body: { ...cfgIntro, EnableIntro: false } });
+  check('intro disabled again: absent', !(await intros(movie.Id)).some(isOurs));
 
   // not linked: log in as the second user and mark them unlinked in the fake
   await http('POST', `${JF}/Users/${newUserId}/Password`, { token, body: { NewPw: 'it-pass-2', ResetPassword: false } });

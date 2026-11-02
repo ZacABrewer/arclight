@@ -87,6 +87,24 @@ public class PluginConfiguration : BasePluginConfiguration
 
     /// <summary>Gets or sets per-user theme choices (survive across that user's devices).</summary>
     public List<UserThemeChoice> UserThemes { get; set; } = new();
+
+    /// <summary>Gets or sets a value indicating whether the Arclight intro plays in Cinema Mode (opt-in).</summary>
+    public bool EnableIntro { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether the intro plays before movies.</summary>
+    public bool IntroBeforeMovies { get; set; } = true;
+
+    /// <summary>Gets or sets a value indicating whether the intro plays before episodes.</summary>
+    public bool IntroBeforeEpisodes { get; set; }
+
+    /// <summary>Gets or sets a value indicating whether episodes only get it at the start of a session (no intro in the last 3 hours).</summary>
+    public bool IntroFirstEpisodeOnly { get; set; } = true;
+
+    /// <summary>Gets or sets the intro quality: 1080p or 720p.</summary>
+    public string IntroQuality { get; set; } = "1080p";
+
+    /// <summary>Gets or sets Jellyfin user ids that never get the intro.</summary>
+    public List<string> IntroSkipUsers { get; set; } = new();
 }
 
 /// <summary>A Jellyfin user's theme choice.</summary>

@@ -32,6 +32,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         serviceCollection.AddSingleton<InjectionStatus>();
         serviceCollection.AddSingleton<Labels.LabelService>();
         serviceCollection.AddSingleton<ThemeCache>();
+        serviceCollection.AddSingleton<Api.LibraryTmdbIndex>();
+        serviceCollection.AddSingleton<Intro.IntroAssets>();
+        serviceCollection.AddSingleton<Intro.IntroPolicy>();
+        // ArclightIntroProvider (IIntroProvider) is discovered by Jellyfin itself, like every plugin export.
 
         serviceCollection.AddHostedService<EventForwarder>();
         serviceCollection.AddHostedService<WebPatchService>();

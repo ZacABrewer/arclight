@@ -47,6 +47,7 @@ public partial class ArclightController : ControllerBase
     private readonly InjectionStatus _injection;
     private readonly Labels.LabelService _labels;
     private readonly ThemeCache _themeCache;
+    private readonly LibraryTmdbIndex _upcomingIndex;
 
     /// <summary>Initializes a new instance of the <see cref="ArclightController"/> class.</summary>
     /// <param name="client">Arclight client.</param>
@@ -59,6 +60,7 @@ public partial class ArclightController : ControllerBase
     /// <param name="injection">Injection status.</param>
     /// <param name="labels">Label service.</param>
     /// <param name="themeCache">Theme cache.</param>
+    /// <param name="upcomingIndex">Library index for "Coming soon".</param>
     public ArclightController(
         ArclightClient client,
         IArclightSettings settings,
@@ -69,7 +71,8 @@ public partial class ArclightController : ControllerBase
         EventSender sender,
         InjectionStatus injection,
         Labels.LabelService labels,
-        ThemeCache themeCache)
+        ThemeCache themeCache,
+        LibraryTmdbIndex upcomingIndex)
     {
         _client = client;
         _settings = settings;
@@ -81,6 +84,7 @@ public partial class ArclightController : ControllerBase
         _injection = injection;
         _labels = labels;
         _themeCache = themeCache;
+        _upcomingIndex = upcomingIndex;
     }
 
     // ---------------------------------------------------------------- static web assets (anonymous)

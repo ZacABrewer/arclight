@@ -83,7 +83,12 @@ const server = createServer((req, res) => {
         return send(res, 200, {
           days: Number(url.searchParams.get('days') ?? 30),
           items: [
-            { date: new Date(Date.now() + 3 * 86400000).toISOString(), kind: 'episode', releaseType: null, mediaType: 'series', tmdbId: 1396, title: 'Breaking Bad', year: 2008, posterUrl: null, seasonNumber: 6, episodeNumber: 1, episodeTitle: 'Return', hasFile: false },
+            // On disk in the test Jellyfin (S01E01) -> the plugin must drop it.
+            { date: new Date(Date.now() + 1 * 86400000).toISOString(), kind: 'episode', releaseType: null, mediaType: 'series', tmdbId: 1396, title: 'Breaking Bad', year: 2008, posterUrl: null, seasonNumber: 1, episodeNumber: 1, episodeTitle: 'Pilot', hasFile: false },
+            // Not on disk -> stays.
+            { date: new Date(Date.now() + 3 * 86400000).toISOString(), kind: 'episode', releaseType: null, mediaType: 'series', tmdbId: 1396, title: 'Breaking Bad', year: 2008, posterUrl: null, seasonNumber: 1, episodeNumber: 2, episodeTitle: 'Cat in the Bag', hasFile: false },
+            // In the Jellyfin library -> the plugin must drop it.
+            { date: new Date(Date.now() + 5 * 86400000).toISOString(), kind: 'movie', releaseType: 'physical', mediaType: 'movie', tmdbId: 550, title: 'Fight Club', year: 1999, posterUrl: null, seasonNumber: null, episodeNumber: null, episodeTitle: null, hasFile: false },
             { date: new Date(Date.now() + 10 * 86400000).toISOString(), kind: 'movie', releaseType: 'digital', mediaType: 'movie', tmdbId: 603, title: 'The Matrix', year: 1999, posterUrl: null, seasonNumber: null, episodeNumber: null, episodeTitle: null, hasFile: false },
           ],
         });

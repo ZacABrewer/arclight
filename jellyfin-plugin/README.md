@@ -11,6 +11,7 @@ A Jellyfin server plugin that connects your existing Jellyfin to your [Arclight]
 - **Also on.** Item pages and the request dialog show where else a title streams, rents or sells in your region (data from JustWatch, via TMDB).
 - **Quality labels.** Posters and item pages show 4K/1080p/720p/SD, Dolby Vision/HDR, Atmos/5.1, audio languages and file size, read from Jellyfin's own media info.
 - **Arclight themes (opt-in).** Jellyfin Web can wear any theme pack installed on your Arclight server: colours, fonts and corners only.
+- **Arclight intro (opt-in).** A 6-second Arclight intro before movies (and optionally the first episode of a session) for users with Cinema Mode on.
 
 The Arclight API key never leaves the Jellyfin server. Browsers call this plugin with the user's own Jellyfin session, and the plugin adds the key when it forwards the call to Arclight.
 
@@ -25,6 +26,33 @@ Every per-user call runs as the **linked Arclight account**, never as the Jellyf
 - **Other people's requests.** Who requested a title, and other users' requests, are only shown to accounts with View requests or Manage requests. My requests always lists only your own.
 - **Accounts.** A Jellyfin account that isn't linked sees "Ask your admin to link your account in Arclight". A linked account whose Jellyfin user is disabled or deleted sees "Your Jellyfin account is disabled in Arclight". Accounts Arclight creates automatically get the default permissions and request types from Settings > Requests.
 - **Parental controls (optional).** Turn on **Mirror Jellyfin parental controls** on the media server in Arclight, and Arclight copies each linked user's Jellyfin maximum parental rating into their Arclight content caps on every user sync. While that is on, manual edits in Arclight are overwritten. The rating mapping is in Arclight's media-server documentation.
+
+## Arclight intro (Cinema Mode)
+
+The plugin can play a short Arclight intro before playback, the same way Jellyfin plays trailers before a movie.
+
+**Turn it on**
+
+1. Dashboard > Plugins > Arclight > **Arclight intro (Cinema Mode)**: tick **Play the Arclight intro**. It is off by default.
+2. Choose **Before movies** (on by default) and/or **Before episodes** (off by default). With **Only before the first episode of a session** (on by default), an episode only gets the intro when that user has had no intro in the last 3 hours, so binge-watching isn't interrupted. Sessions are tracked in memory and reset when Jellyfin restarts.
+3. Pick **Intro quality**: 1080p (60 fps, 1.4 MB, default) or 720p (30 fps, 0.6 MB). Optionally tick users who should never get it.
+4. Each user needs **Cinema mode** on in Jellyfin: Settings > Playback > Cinema mode. Jellyfin Web 12.4 has it on by default. It is a per-device client setting.
+
+**How it works**
+
+- The intro videos are embedded in the plugin. On first use they are written to `<Jellyfin data>/arclight/intro/`, and rewritten after a plugin update.
+- The intro is registered once as a stand-alone video that belongs to no library. It never shows in libraries, search or Continue Watching.
+- The plugin never forwards intro playback to Arclight, so it never shows up in Arclight's watch history.
+- Jellyfin asks every intro provider and plays everything they return. This plugin adds one item and never removes trailers or other providers' intros. Jellyfin decides the order between providers, so if you also use trailers as intros, the Arclight intro may play before or after them.
+
+**Which clients play intros**
+
+- Verified: Jellyfin Web 12.4 (intro, then the movie).
+- Verified that `/Items/{id}/Intros` returns the intro on Jellyfin 10.11.11 and 12.4.
+- Not verified here: Jellyfin Media Player, Android, iOS and Android TV. They honour Cinema Mode when the app supports it; most use the same `/Intros` call.
+- Third-party clients (Kodi, Infuse, Swiftfin and others) may ignore Cinema Mode.
+
+The intro video and the plugin's catalog image are the Arclight owner's artwork, made for this project.
 
 ## Requirements
 
@@ -54,7 +82,7 @@ Users who already have Jellyfin Web open must reload the page once to load the n
 
 ### Manual install (no repository)
 
-Download `arclight-jellyfin_<version>.<12|11>.zip` from the [GitHub Releases](https://github.com/ZacABrewer/arclight/releases?q=jellyfin-plugin) page. Unzip it into a folder named `Arclight_<version>` inside Jellyfin's `plugins` directory (for example `/config/plugins/Arclight_1.0.0.12` in the official Docker image), then restart Jellyfin. A plugin installed by hand does not update itself.
+Download `arclight-jellyfin_<version>.<12|11>.zip` from the [GitHub Releases](https://github.com/ZacABrewer/arclight/releases?q=jellyfin-plugin) page. Unzip it into a folder named `Arclight_<version>` inside Jellyfin's `plugins` directory (for example `/config/plugins/Arclight_1.1.0.12` in the official Docker image), then restart Jellyfin. A plugin installed by hand does not update itself.
 
 ## Updates
 
@@ -131,6 +159,10 @@ Progress events are throttled to one per playback session per 60 seconds by defa
 | Streaming services region | US | Two-letter region for "Also on". |
 | Default Jellyfin theme | Off | Off, "Follow each user's Arclight theme", or any pack installed on Arclight. |
 | Let users choose their theme | on | Adds a palette button to the header. The choice is stored per Jellyfin user in the plugin settings, so it follows them to every device. |
+| Play the Arclight intro | off | Cinema Mode intro (see above). |
+| Before movies / Before episodes / Only first episode of a session | on / off / on | |
+| Intro quality | 1080p | 1080p or 720p. |
+| Skip the intro for these users | (none) | |
 
 If Arclight is unreachable or returns 5xx, 401, 403, 408 or 429, delivery retries with backoff starting at 5 seconds and doubling up to 5 minutes. Events stay queued meanwhile. Batches Arclight rejects as invalid (400, 404, 413, 422) are dropped and logged. Event handling never blocks Jellyfin, because handlers only add to the queue and a background task does the sending.
 
@@ -161,9 +193,10 @@ These endpoints are called by the web script, and any client may use them with a
 | `GET /Arclight/Item/{jellyfinItemId}` | `POST /api/v1/jellyfin/status`. Returns `{ item: { id, type, mediaType, tmdbId, seasonNumber, episodeNumber }, status }`. The item must be visible to the caller. |
 | `POST /Arclight/Status` `{ itemIds: [...≤100] }` | `POST /api/v1/jellyfin/status` |
 | `GET /Arclight/Discover?category=trending\|popularMovies\|popularSeries\|upcomingMovies\|upcomingSeries&page=` | `GET /api/v1/jellyfin/discover` |
-| `GET /Arclight/Upcoming?days=30` | `GET /api/v1/jellyfin/upcoming` |
+| `GET /Arclight/Upcoming?days=30` | `GET /api/v1/jellyfin/upcoming`, then movies and episodes this Jellyfin already has are removed (library index refreshed every 10 minutes; missing/virtual episodes stay). |
 | `GET /Arclight/Providers/{movie\|series}/{tmdbId}` | `GET /api/v1/jellyfin/providers/...?region=<setting>` |
 | `GET /Arclight/Requests?take=&skip=`, `DELETE /Arclight/Requests/{id}?kind=media\|language` | `GET /api/v1/jellyfin/requests`, `DELETE /api/v1/jellyfin/requests/:id` |
+| (intro) | No endpoint of its own: an `IIntroProvider` that Jellyfin's `/Items/{id}/Intros` calls. |
 | `GET /Arclight/Labels?ids=` (≤ 100) | (none) Computed from Jellyfin's media info, cached per item until the item changes; only items visible to the caller. |
 | `GET /Arclight/Themes`, `POST /Arclight/Themes/Choice` `{choice}` | `GET /api/v1/jellyfin/themes` (+ `/userconfig` for "follow"); the choice is stored in the plugin. |
 | `GET /Arclight/Theme.css?theme=<pack>`, `GET /Arclight/theme-fonts/{pack}/{file}.woff2` | `GET /api/v1/jellyfin/theme/:id.css`, `/theme-fonts/:id/:file`. Anonymous (stylesheet links carry no token), ids validated. The plugin caches each file for an hour (so Arclight sees at most one fetch per pack per hour); browsers revalidate the stylesheet on every load with ETag/304 and keep fonts for a week. |
@@ -182,11 +215,11 @@ The proxy validates every input (media type, positive TMDB id, query length ≤ 
 cd jellyfin-plugin
 dotnet test -p:JellyfinTarget=12        # unit tests, Jellyfin 12 (net10.0)
 dotnet test -p:JellyfinTarget=10.11     # unit tests, Jellyfin 10.11 (needs the .NET 9 runtime)
-bash scripts/build.sh 1.0.0             # build both targets, test, zip -> artifacts/
+bash scripts/build.sh 1.1.0             # build both targets, test, zip -> artifacts/
 node scripts/manifest.mjs --release artifacts/release.json   # what CI does on a tag
 ```
 
-No .NET SDK installed? Use `docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash scripts/build.sh 1.0.0`.
+No .NET SDK installed? Use `docker run --rm -v "$PWD:/src" -w /src mcr.microsoft.com/dotnet/sdk:10.0 bash scripts/build.sh 1.1.0`.
 
 ### Integration test
 
@@ -201,9 +234,9 @@ No .NET SDK installed? Use `docker run --rm -v "$PWD:/src" -w /src mcr.microsoft
 7. asserts what the fake Arclight received, then removes the container.
 
 ```bash
-bash scripts/build.sh 1.0.0
-node integration/run.mjs --zip artifacts/arclight-jellyfin_1.0.0.12.zip --image jellyfin/jellyfin:12.4
-node integration/run.mjs --zip artifacts/arclight-jellyfin_1.0.0.11.zip --image jellyfin/jellyfin:10.11.11
+bash scripts/build.sh 1.1.0
+node integration/run.mjs --zip artifacts/arclight-jellyfin_1.1.0.12.zip --image jellyfin/jellyfin:12.4
+node integration/run.mjs --zip artifacts/arclight-jellyfin_1.1.0.11.zip --image jellyfin/jellyfin:10.11.11
 ```
 
 Add `--keep` to leave the container running for manual testing. Never point the script at a real Jellyfin server.

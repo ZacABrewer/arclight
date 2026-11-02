@@ -110,6 +110,28 @@
                     </div>
 
                     <div class="verticalSection">
+                        <h3 class="sectionTitle">Arclight intro (Cinema Mode)</h3>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="EnableIntro" /><span>Play the Arclight intro</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">A 6-second intro before playback, for users who turned on Cinema mode in their Jellyfin settings (Settings &gt; Playback). Other intros and trailers still play.</div>
+                        </div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="IntroBeforeMovies" /><span>Before movies</span></label></div>
+                        <div class="checkboxContainer"><label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="IntroBeforeEpisodes" /><span>Before episodes</span></label></div>
+                        <div class="checkboxContainer checkboxContainer-withDescription">
+                            <label class="emby-checkbox-label"><input is="emby-checkbox" type="checkbox" id="IntroFirstEpisodeOnly" /><span>Only before the first episode of a session</span></label>
+                            <div class="fieldDescription checkboxFieldDescription">No intro when the same user got one in the last 3 hours, so binge-watching isn't interrupted.</div>
+                        </div>
+                        <div class="selectContainer">
+                            <select is="emby-select" id="IntroQuality" label="Intro quality">
+                                <option value="1080p">1080p (60 fps, 1.4 MB)</option>
+                                <option value="720p">720p (30 fps, 0.6 MB)</option>
+                            </select>
+                        </div>
+                        <div class="fieldDescription" style="margin-bottom:.5em">Skip the intro for these users:</div>
+                        <div id="IntroSkipUsers"></div>
+                    </div>
+
+                    <div class="verticalSection">
                         <h3 class="sectionTitle">Status</h3>
                         <div id="ArclightStatus" class="fieldDescription">Loading…</div>
                     </div>
@@ -127,7 +149,8 @@
                 var page = document.querySelector('#ArclightConfigPage');
                 var checkboxes = ['EnableEventForwarding', 'EnablePlaybackEvents', 'EnableUserDataEvents', 'EnableLibraryEvents', 'EnableUserEvents',
                     'EnableWebInjection', 'PatchIndexHtmlOnDisk', 'EnableSearch', 'EnableRequests', 'EnableItemBadges', 'EnableWatchlist', 'EnableIssues', 'EnableLanguageRequests',
-                    'EnableDiscover', 'EnableUpcoming', 'EnableMyRequests', 'EnableProviders', 'EnableLabels', 'LetUsersChooseTheme'];
+                    'EnableDiscover', 'EnableUpcoming', 'EnableMyRequests', 'EnableProviders', 'EnableLabels', 'LetUsersChooseTheme',
+                    'EnableIntro', 'IntroBeforeMovies', 'IntroBeforeEpisodes', 'IntroFirstEpisodeOnly'];
                 var numbers = { BatchIntervalSeconds: [2, 300, 10], ProgressThrottleSeconds: [10, 600, 60], MaxQueueSize: [500, 50000, 5000] };
 
                 function $(id) { return page.querySelector('#' + id); }
@@ -165,6 +188,30 @@
                     }, function () { /* Arclight unreachable: keep the stored value */ });
                 }
 
+                function fillSkipUsers(skipped) {
+                    var box = $('IntroSkipUsers');
+                    var norm = function (id) { return String(id || '').replace(/-/g, '').toLowerCase(); };
+                    var set = {};
+                    (skipped || []).forEach(function (id) { set[norm(id)] = true; });
+                    ApiClient.getUsers().then(function (users) {
+                        box.textContent = '';
+                        users.forEach(function (u) {
+                            var label = document.createElement('label');
+                            label.className = 'emby-checkbox-label';
+                            label.style.display = 'flex';
+                            var input = document.createElement('input');
+                            input.type = 'checkbox';
+                            input.setAttribute('data-user', norm(u.Id));
+                            input.checked = !!set[norm(u.Id)];
+                            var span = document.createElement('span');
+                            span.textContent = u.Name;
+                            label.appendChild(input);
+                            label.appendChild(span);
+                            box.appendChild(label);
+                        });
+                    });
+                }
+
                 function when(v) { return v ? new Date(v).toLocaleString() : 'never'; }
 
                 function text(node, value) { node.textContent = value; }
@@ -198,6 +245,8 @@
                         Object.keys(numbers).forEach(function (k) { $(k).value = config[k] || numbers[k][2]; });
                         $('ProvidersRegion').value = config.ProvidersRegion || 'US';
                         fillThemes(config.DefaultTheme || '');
+                        $('IntroQuality').value = config.IntroQuality === '720p' ? '720p' : '1080p';
+                        fillSkipUsers(config.IntroSkipUsers);
                         Dashboard.hideLoadingMsg();
                         loadStatus();
                     });
@@ -227,6 +276,8 @@
                         var region = $('ProvidersRegion').value.trim().toUpperCase();
                         config.ProvidersRegion = /^[A-Z]{2}$/.test(region) ? region : 'US';
                         config.DefaultTheme = $('DefaultTheme').value;
+                        config.IntroQuality = $('IntroQuality').value;
+                        config.IntroSkipUsers = Array.prototype.map.call(page.querySelectorAll('#IntroSkipUsers input:checked'), function (i) { return i.getAttribute('data-user'); });
                         checkboxes.forEach(function (k) { config[k] = $(k).checked; });
                         Object.keys(numbers).forEach(function (k) {
                             var n = parseInt($(k).value, 10);
