@@ -226,7 +226,11 @@ export class MobileService {
   private async attempt(deviceId: number, payload: PushPayload, attempt: number): Promise<keyof DeliveryResult> {
     const row = this.opts.db.select().from(mobileDevices).where(eq(mobileDevices.id, deviceId)).get();
     if (!row) return 'failed';
-    if (this.now() < this.pausedUntil) return this.defer(row, payload, attempt, this.pauseReason);
+    if (this.now() < this.pausedUntil) {
+      // Paused again (another retry hit the relay first): this send was not tried, so waiting for the
+      // new pause does not use up its one retry. Pauses only come from real sends, so this ends.
+      return this.defer(row, payload, Math.max(0, attempt - 1), this.pauseReason);
+    }
     const outcome = await this.relay.send(row.relaySecret, this.bodyFor(row.relayDeviceId, payload));
     return this.settle(row, outcome, payload, attempt);
   }
