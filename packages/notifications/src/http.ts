@@ -10,7 +10,7 @@ export type FetchLike = (input: string, init?: RequestInit) => Promise<Response>
 export const DEFAULT_TIMEOUT_MS = 30_000;
 
 export interface HttpRequestOptions {
-  method?: 'GET' | 'POST' | 'PUT';
+  method?: 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   headers?: Record<string, string>;
   body?: string;
   timeoutMs?: number;

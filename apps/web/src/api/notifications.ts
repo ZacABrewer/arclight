@@ -1,7 +1,17 @@
 import { z } from 'zod';
-import { NotificationField } from '@arclight/shared';
+import {
+  NotificationDelivery,
+  NotificationField,
+  NotificationPreview,
+  NotificationTemplateMeta,
+  PersonalDestination,
+  PersonalDestinationOptions,
+  type NotificationPreviewRequest,
+  type PersonalDestinationInputRaw,
+} from '@arclight/shared';
 import { request } from './client.js';
 import type { FieldDefinition, FieldType, FormValues } from '../components/forms/types.js';
+import { t } from '../i18n/index.js';
 
 // Connection rows and schema templates stay loose so a save never drops server fields; the
 // field definitions are the shared `NotificationField`. Its names are keys of `settings` and its
@@ -9,6 +19,7 @@ import type { FieldDefinition, FieldType, FormValues } from '../components/forms
 // see notificationFormFields / toNotificationForm / fromNotificationForm below.
 
 export { NotificationField };
+export type { NotificationDelivery, NotificationPreview, NotificationTemplateMeta, PersonalDestination };
 
 export const Notification = z.looseObject({
   id: z.number().int(),
@@ -39,6 +50,9 @@ export type NotificationSchema = z.infer<typeof NotificationSchema>;
 
 export const NotificationTestResult = z.looseObject({
   ok: z.boolean(),
+  /** The api's failure text (`{ok, message, code}`). */
+  message: z.string().optional(),
+  code: z.string().optional(),
   warnings: z.array(z.string()).optional(),
   error: z.object({ code: z.string().optional(), message: z.string() }).optional(),
 });
@@ -65,6 +79,34 @@ export const notificationsApi = {
   remove: (id: number) => request(`/notification/${id}`, null, { method: 'DELETE' }),
   test: (body: NotificationInput & { id?: number }) =>
     request('/notification/test', NotificationTestResult, { method: 'POST', json: body }),
+  /** Recent delivery attempts of one connection, newest first. */
+  deliveries: (id: number) => request(`/notification/${id}/deliveries`, NotificationDelivery.array()),
+  /** Template keys (`default` + event types) and the variables templates may use. */
+  templateMeta: () => request('/notification/templates', NotificationTemplateMeta),
+  /** Render a template against a sample event. */
+  preview: (body: NotificationPreviewRequest) => request('/notification/preview', NotificationPreview, { method: 'POST', json: body }),
+};
+
+// ---- personal destinations (a user's own notification services) ----------------------------
+
+/** GET /user/:id/notification-destination/options: allowed kinds and events plus their form schemas. */
+export const PersonalDestinationOptionsResponse = PersonalDestinationOptions.extend({ schemas: z.array(NotificationSchema).default([]) });
+export type PersonalDestinationOptionsResponse = z.infer<typeof PersonalDestinationOptionsResponse>;
+
+export type PersonalDestinationBody = PersonalDestinationInputRaw;
+
+export const personalDestinationsApi = {
+  options: (userId: number) => request(`/user/${userId}/notification-destination/options`, PersonalDestinationOptionsResponse),
+  list: (userId: number) => request(`/user/${userId}/notification-destination`, PersonalDestination.array()),
+  create: (userId: number, body: PersonalDestinationBody) =>
+    request(`/user/${userId}/notification-destination`, PersonalDestination, { method: 'POST', json: body }),
+  update: (userId: number, id: number, body: PersonalDestinationBody) =>
+    request(`/user/${userId}/notification-destination/${id}`, PersonalDestination, { method: 'PUT', json: body }),
+  remove: (userId: number, id: number) => request(`/user/${userId}/notification-destination/${id}`, null, { method: 'DELETE' }),
+  test: (userId: number, body: PersonalDestinationBody & { id?: number }) =>
+    request(`/user/${userId}/notification-destination/test`, NotificationTestResult, { method: 'POST', json: body }),
+  deliveries: (userId: number, id: number) =>
+    request(`/user/${userId}/notification-destination/${id}/deliveries`, NotificationDelivery.array()),
 };
 
 // ---- form mapping -------------------------------------------------------------------------
@@ -73,6 +115,7 @@ const FORM_TYPE: Record<NotificationField['type'], FieldType> = {
   text: 'text',
   url: 'text',
   email: 'text',
+  textarea: 'textarea',
   password: 'password',
   number: 'number',
   boolean: 'checkbox',
@@ -84,13 +127,16 @@ const FORM_TYPE: Record<NotificationField['type'], FieldType> = {
   keyValue: 'textarea',
 };
 
+const LIST_TYPES = new Set<NotificationField['type']>(['textList', 'emailList', 'keyValue']);
+
 /** Schema fields as form fields bound to `settings.<name>`. */
 export function notificationFormFields(fields: readonly NotificationField[]): FieldDefinition[] {
   return fields.map((f) => ({
     name: `settings.${f.name}`,
     label: f.label,
     type: FORM_TYPE[f.type],
-    helpText: f.helpText,
+    // Stored secret entries come back masked one per line; leaving a masked line keeps it.
+    helpText: f.secret && LIST_TYPES.has(f.type) ? [f.helpText, t('notify.form.secretListHint')].filter(Boolean).join(' ') : f.helpText,
     required: f.required,
     default: toFormValue(f.type, f.default),
     options: f.options,

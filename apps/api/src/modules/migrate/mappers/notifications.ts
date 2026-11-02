@@ -19,6 +19,14 @@ const IMPLEMENTATIONS: Record<string, NotificationImplementation> = {
   mediabrowser: 'emby',
   plexserver: 'plex',
   plex: 'plex',
+  slack: 'slack',
+  signal: 'signal',
+  pushbullet: 'pushbullet',
+  prowl: 'prowl',
+  join: 'join',
+  simplepush: 'simplepush',
+  apprise: 'apprise',
+  notifiarr: 'notifiarr',
 };
 
 export interface NotificationMapResult {
@@ -131,6 +139,63 @@ function translateSettings(impl: NotificationImplementation, s: Record<string, u
       });
     case 'plex':
       return defined({ host: str(g('host')), port: int(g('port')) ?? 32400, useSsl: bool(g('useSsl')), authToken: str(g('authToken')), updateLibrary: bool(g('updateLibrary'), true) });
+    case 'slack': {
+      const icon = str(g('icon'));
+      return defined({
+        webhookUrl: str(g('webHookUrl', 'webhookUrl')),
+        channel: str(g('channel')),
+        username: str(g('username')),
+        ...(icon && /^https?:\/\//.test(icon) ? { iconUrl: icon } : icon ? { iconEmoji: icon } : {}),
+      });
+    }
+    case 'signal': {
+      const host = str(g('host'));
+      const port = int(g('port')) ?? 8080;
+      return defined({
+        serverUrl: host ? `${bool(g('useSsl')) ? 'https' : 'http'}://${host}:${port}` : undefined,
+        number: str(g('senderNumber')),
+        recipients: list(g('receiverId')),
+        username: str(g('authUsername')),
+        password: str(g('authPassword')),
+      });
+    }
+    case 'pushbullet': {
+      const devices = list(g('deviceIds'));
+      const channels = list(g('channelTags'));
+      if (devices.length + channels.length > 1) notes.push('Only the first Pushbullet device or channel is kept');
+      return defined({ accessToken: str(g('apiKey')), deviceIden: devices[0], channelTag: devices.length ? undefined : channels[0] });
+    }
+    case 'prowl': {
+      const priority = int(g('priority'));
+      return defined({ apiKey: str(g('apiKey')), priority: priority !== null && priority >= -2 && priority <= 2 ? priority : undefined });
+    }
+    case 'join': {
+      const priority = int(g('priority'));
+      return defined({
+        apiKey: str(g('apiKey')),
+        deviceIds: list(g('deviceIds')),
+        deviceNames: list(g('deviceNames')),
+        priority: priority !== null && priority >= -2 && priority <= 2 ? priority : undefined,
+      });
+    }
+    case 'simplepush':
+      return defined({ apiKey: str(g('key', 'apiKey')), event: str(g('event')) });
+    case 'apprise': {
+      const urls = list(g('statelessUrls'));
+      return defined({
+        serverUrl: str(g('serverUrl')),
+        configKey: urls.length ? undefined : str(g('configurationKey', 'configKey')),
+        urls: urls.length ? urls : undefined,
+        tags: list(g('tags')),
+        username: str(g('authUsername')),
+        password: str(g('authPassword')),
+      });
+    }
+    case 'notifiarr':
+      return defined({ apiKey: str(g('apiKey')) });
+    default:
+      // Kinds no upstream app has; nothing maps onto them.
+      return {};
   }
 }
 

@@ -45,6 +45,8 @@ export interface RequestNotifierOptions {
   agentFactory?: AgentFactory;
   /** System-wide connections (notifications module). */
   systemDispatch?: (event: NotificationEvent) => Promise<unknown>;
+  /** A user's own destinations (notifications module, personal destinations). */
+  personalDispatch?: (userId: number, key: keyof UserNotificationTypes, event: NotificationEvent) => Promise<unknown>;
   instanceName?: string;
   /** Public URL of this Arclight (read per event so a saved setting applies at once). */
   applicationUrl?: () => string | undefined;
@@ -72,6 +74,7 @@ export class RequestNotifier {
   private readonly log: Logger | undefined;
   private readonly agentFactory: AgentFactory;
   private readonly systemDispatch: ((event: NotificationEvent) => Promise<unknown>) | undefined;
+  private readonly personalDispatch: RequestNotifierOptions['personalDispatch'];
   private readonly instanceName: string;
   private readonly applicationUrl: () => string | undefined;
   private readonly now: () => Date;
@@ -83,6 +86,7 @@ export class RequestNotifier {
     this.log = opts.log;
     this.agentFactory = opts.agentFactory ?? ((kind, settings) => createAgent(kind, settings));
     this.systemDispatch = opts.systemDispatch;
+    this.personalDispatch = opts.personalDispatch;
     this.instanceName = opts.instanceName ?? 'Arclight';
     this.applicationUrl = opts.applicationUrl ?? (() => undefined);
     this.now = opts.now ?? (() => new Date());
@@ -312,6 +316,14 @@ export class RequestNotifier {
     for (const user of audience) {
       if (seen.has(user.id)) continue;
       seen.add(user.id);
+      if (this.personalDispatch) {
+        jobs.push(
+          this.personalDispatch(user.id, typeKey, event).then(
+            () => undefined,
+            (err: unknown) => this.log?.warn({ err, userId: user.id, event: event.type }, 'personal destination dispatch failed'),
+          ),
+        );
+      }
       const settings = requestSettingsOf(user).notifications;
       if (!settings.types[typeKey]) continue;
       for (const { agent, build } of this.agentsFor(user)) {

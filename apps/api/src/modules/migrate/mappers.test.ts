@@ -150,7 +150,10 @@ describe('notifications', () => {
 
   it('flags settings that do not validate and unknown implementations', () => {
     expect(mapNotification({ implementation: 'Pushover', name: 'p' }, { apiKey: 'short', userKey: 'short' }).unsupported).toMatch(/do not validate/);
-    expect(mapNotification({ implementation: 'Slack', name: 's' }, {}).unsupported).toMatch(/not supported/);
+    expect(mapNotification({ implementation: 'Mailgun', name: 'm' }, {}).unsupported).toMatch(/not supported/);
+    const slack = mapNotification({ implementation: 'Slack', name: 's' }, { webHookUrl: 'https://hooks.slack.com/services/T0/B0/x', icon: ':tv:' });
+    expect(slack).toMatchObject({ implementation: 'slack', settings: { webhookUrl: 'https://hooks.slack.com/services/T0/B0/x', iconEmoji: ':tv:' } });
+    expect(slack.unsupported).toBeUndefined();
   });
 
   it('maps email encryption and MediaBrowser to Jellyfin by name', () => {

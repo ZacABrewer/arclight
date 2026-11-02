@@ -1,23 +1,48 @@
 import { z } from 'zod';
 import {
   NotificationConnection,
+  NotificationDelivery,
   NotificationInput,
+  NotificationPreview,
+  NotificationPreviewRequest,
+  NotificationTemplateMeta,
   NotificationSchema,
   NotificationsErrorResponse,
   NotificationTestAllResult,
   NotificationTestRequest,
   NotificationTestResult,
+  PersonalDestination,
+  PersonalDestinationInput,
+  PersonalDestinationOptions,
+  PersonalDestinationTestRequest,
 } from '@arclight/shared';
+import type { FastifyRequest } from 'fastify';
+import { requireSelfOrAdmin } from '../auth/hook.js';
+import type { PersonalNotifications } from './personal.js';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
 import { NotificationsError, type NotificationsErrorCode, type NotificationsService } from './service.js';
 
 const IdParams = z.object({ id: z.coerce.number().int().min(1) });
-const errors = { 400: NotificationsErrorResponse, 404: NotificationsErrorResponse, 409: NotificationsErrorResponse };
+const DestinationParams = z.object({ id: z.coerce.number().int().min(1), destinationId: z.coerce.number().int().min(1) });
+const portal = { access: { portal: true } } as const;
+
+/** Whether the caller sees full error texts (admins and the API key) or only their category. */
+function viewerIsAdmin(req: FastifyRequest): boolean {
+  return req.auth?.isAdmin ?? false;
+}
+const errors = {
+  400: NotificationsErrorResponse,
+  401: NotificationsErrorResponse,
+  403: NotificationsErrorResponse,
+  404: NotificationsErrorResponse,
+  409: NotificationsErrorResponse,
+};
 const statusFor: Record<NotificationsErrorCode, number> = { NOT_FOUND: 404, VALIDATION: 400, CONFLICT: 409 };
 
 export function notificationsRoutes(
   service: NotificationsService,
+  personal?: PersonalNotifications,
 ): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
@@ -37,6 +62,26 @@ export function notificationsRoutes(
 
     app.get('/notification/schema', { schema: { response: { 200: z.array(NotificationSchema) } } }, async () =>
       service.schemas(),
+    );
+
+    // Template editor helpers. Sample data only, so request-portal users (personal
+    // destinations) may use them too.
+    app.get(
+      '/notification/templates',
+      { config: { access: { portal: true } }, schema: { response: { 200: NotificationTemplateMeta } } },
+      async () => service.templateMeta(),
+    );
+
+    app.post(
+      '/notification/preview',
+      { config: { access: { portal: true } }, schema: { body: NotificationPreviewRequest, response: { 200: NotificationPreview, ...errors } } },
+      async (req) => service.preview(req.body),
+    );
+
+    app.get(
+      '/notification/:id/deliveries',
+      { schema: { params: IdParams, response: { 200: z.array(NotificationDelivery), ...errors } } },
+      async (req) => service.deliveries(req.params.id),
     );
 
     app.get(
@@ -76,6 +121,57 @@ export function notificationsRoutes(
       '/notification/testall',
       { schema: { response: { 200: NotificationTestAllResult } } },
       async () => service.testAll(),
+    );
+
+    if (!personal) return;
+
+    // ---- personal destinations: every user manages their own (admins anyone's) ----
+
+    const own = { config: portal, preHandler: requireSelfOrAdmin } as const;
+
+    app.get(
+      '/user/:id/notification-destination/options',
+      { ...own, schema: { params: IdParams, response: { 200: PersonalDestinationOptions.extend({ schemas: z.array(NotificationSchema) }), ...errors } } },
+      async (req) => personal.options(req.params.id),
+    );
+
+    app.get(
+      '/user/:id/notification-destination',
+      { ...own, schema: { params: IdParams, response: { 200: z.array(PersonalDestination), ...errors } } },
+      async (req) => personal.list(req.params.id, viewerIsAdmin(req)),
+    );
+
+    app.post(
+      '/user/:id/notification-destination',
+      { ...own, schema: { params: IdParams, body: PersonalDestinationInput, response: { 201: PersonalDestination, ...errors } } },
+      async (req, reply) => reply.code(201).send(personal.create(req.params.id, req.body)),
+    );
+
+    app.post(
+      '/user/:id/notification-destination/test',
+      { ...own, schema: { params: IdParams, body: PersonalDestinationTestRequest, response: { 200: NotificationTestResult, ...errors } } },
+      async (req) => personal.test(req.params.id, req.body, viewerIsAdmin(req)),
+    );
+
+    app.put(
+      '/user/:id/notification-destination/:destinationId',
+      { ...own, schema: { params: DestinationParams, body: PersonalDestinationInput, response: { 200: PersonalDestination, ...errors } } },
+      async (req) => personal.update(req.params.id, req.params.destinationId, req.body),
+    );
+
+    app.delete(
+      '/user/:id/notification-destination/:destinationId',
+      { ...own, schema: { params: DestinationParams, response: { 204: z.null(), ...errors } } },
+      async (req, reply) => {
+        personal.delete(req.params.id, req.params.destinationId);
+        return reply.code(204).send(null);
+      },
+    );
+
+    app.get(
+      '/user/:id/notification-destination/:destinationId/deliveries',
+      { ...own, schema: { params: DestinationParams, response: { 200: z.array(NotificationDelivery), ...errors } } },
+      async (req) => personal.deliveries(req.params.id, req.params.destinationId, viewerIsAdmin(req)),
     );
   };
 }

@@ -1,4 +1,3 @@
-import { formatEvent } from '../format.js';
 import { basicAuthHeader, httpRequest, joinUrl } from '../http.js';
 import type { NtfySettings } from '../settings.js';
 import type { NotificationEvent } from '../types.js';
@@ -22,7 +21,7 @@ export class NtfyAgent extends BaseAgent {
   }
 
   buildRequests(event: NotificationEvent): NtfyRequest[] {
-    const formatted = formatEvent(event);
+    const formatted = this.format(event);
     const headers: Record<string, string> = {
       'Content-Type': 'text/plain; charset=utf-8',
       // ntfy reads metadata from headers; non-ASCII titles must be RFC 2047 encoded.

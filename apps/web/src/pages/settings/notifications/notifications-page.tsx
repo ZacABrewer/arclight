@@ -1,5 +1,13 @@
-import { useMemo, useState } from 'react';
-import { supportFlagFor, type NotificationTrigger } from '@arclight/shared';
+import { useId, useMemo, useState } from 'react';
+import {
+  NOTIFICATION_MAX_ATTEMPTS,
+  NOTIFICATION_MAX_RATE_PER_MINUTE,
+  supportFlagFor,
+  type NotificationDeliveryStatus,
+  type NotificationTemplates,
+  type NotificationTrigger,
+  type QuietHoursSettings,
+} from '@arclight/shared';
 import { ApiError, errorMessage } from '../../../api/client.js';
 import {
   eventFlagLabel,
@@ -11,29 +19,32 @@ import {
   type Notification,
   type NotificationInput,
   type NotificationSchema,
-  type NotificationTestResult,
 } from '../../../api/notifications.js';
-import { Button, Checkbox, Chip, ErrorBlock, Field, Modal, Skeleton, Tag } from '../../../arclight/index.js';
+import { Button, Checkbox, Chip, ErrorBlock, Field, FormRow, Input, Modal, Skeleton, Tabs, Tag } from '../../../arclight/index.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { TagPicker, tagRenderer } from '../../../components/forms/tag-picker.js';
-import { TestButton, type TestOutcome } from '../../../components/forms/test-result.js';
+import { TestButton } from '../../../components/forms/test-result.js';
 import type { FieldDefinition, FormValues } from '../../../components/forms/types.js';
 import { useDeleteNotification, useNotificationList, useNotificationSchema, useSaveNotification } from '../../../hooks/settings.js';
 import { SettingsPage } from '../settings-layout.js';
 import { AddCard, CardGrid, EditorFooter, ItemCard, PendingApiNotice, SaveError, SettingsListSearch, SettingsSection, type ItemCardSelect } from '../shared.js';
 import { useClientListSearch } from '../../../components/list-search.js';
 import { useResourceBulk } from '../../../components/resource-bulk-actions.js';
-import { AlertSettingsSection } from './alert-settings-section.js';
+import { AlertSettingsSection, isLocalTime } from './alert-settings-section.js';
+import { DeliveryLog, DeliveryStatusLine } from '../../../features/notifications/delivery-log.js';
+import { FiltersEditor, filtersOf } from '../../../features/notifications/filters-editor.js';
+import { QuietHoursOverride } from '../../../features/notifications/quiet-hours-override.js';
+import { TemplateEditor } from '../../../features/notifications/template-editor.js';
+import { useNotificationDeliveries } from '../../../hooks/notifications.js';
+import { notificationTestOutcome } from '../../../features/notifications/labels.js';
 import { MobileAppSection } from '../../../features/mobile/mobile-app-section.js';
 import './notifications.css';
 import { t } from '../../../i18n/index.js';
 
 const NAME_FIELD: FieldDefinition = { name: 'name', get label() { return t('common.name'); }, type: 'text', required: true };
 
-export function notificationTestOutcome(r: NotificationTestResult): TestOutcome {
-  return { ok: r.ok, warnings: r.warnings ?? [], errors: r.error ? [r.error.message] : [] };
-}
+export { notificationTestOutcome };
 
 /** `onGrab` -> "On grab", `onHealthIssue` -> "On health issue" (sentence case for tags). */
 export function eventFlagTag(flag: string): string {
@@ -158,6 +169,83 @@ export function notificationFormBase(source: Record<string, unknown>): FormValue
   return { ...source, respectQuietHours: typeof source.respectQuietHours === 'boolean' ? source.respectQuietHours : true };
 }
 
+/** Delivery options of a connection (or template), with the api defaults for older rows. */
+export function deliveryOptionsOf(source: Record<string, unknown>): {
+  quietHours: QuietHoursSettings | null;
+  rateLimitPerMinute: number;
+  maxAttempts: number;
+  templates: NotificationTemplates;
+} {
+  const num = (v: unknown, fallback: number) => (typeof v === 'number' ? v : fallback);
+  return {
+    quietHours: source.quietHours && typeof source.quietHours === 'object' ? (source.quietHours as QuietHoursSettings) : null,
+    rateLimitPerMinute: num(source.rateLimitPerMinute, 0),
+    maxAttempts: num(source.maxAttempts, 3),
+    templates: source.templates && typeof source.templates === 'object' ? (source.templates as NotificationTemplates) : {},
+  };
+}
+
+/** Problems in the Delivery tab, keyed by field (empty when it can be saved). */
+export function deliveryErrors(values: Record<string, unknown>): Record<string, string> {
+  const d = deliveryOptionsOf(values);
+  const errors: Record<string, string> = {};
+  if (!Number.isInteger(d.rateLimitPerMinute) || d.rateLimitPerMinute < 0 || d.rateLimitPerMinute > NOTIFICATION_MAX_RATE_PER_MINUTE) {
+    errors.rateLimitPerMinute = t('notify.delivery.rateRange', { max: NOTIFICATION_MAX_RATE_PER_MINUTE });
+  }
+  if (!Number.isInteger(d.maxAttempts) || d.maxAttempts < 1 || d.maxAttempts > NOTIFICATION_MAX_ATTEMPTS) {
+    errors.maxAttempts = t('notify.delivery.attemptsRange', { max: NOTIFICATION_MAX_ATTEMPTS });
+  }
+  if (d.quietHours && (!isLocalTime(d.quietHours.start) || !isLocalTime(d.quietHours.end))) errors.quietHours = t('settings.notifications.alerts.useHhMm');
+  return errors;
+}
+
+function NumberRow({
+  label,
+  caption,
+  value,
+  error,
+  min,
+  max,
+  onChange,
+}: {
+  label: string;
+  caption: string;
+  value: number;
+  error?: string | undefined;
+  min: number;
+  max: number;
+  onChange: (v: number) => void;
+}) {
+  const id = useId();
+  return (
+    <FormRow label={label} htmlFor={id} caption={caption} error={error}>
+      <Input
+        id={id}
+        type="number"
+        inputMode="numeric"
+        mono
+        className="al-input--num"
+        min={min}
+        max={max}
+        value={Number.isFinite(value) ? String(value) : ''}
+        invalid={error ? true : undefined}
+        onChange={(e) => onChange(e.currentTarget.value === '' ? Number.NaN : Number(e.currentTarget.value))}
+      />
+    </FormRow>
+  );
+}
+
+function ConnectionLog({ id, status }: { id: number; status: NotificationDeliveryStatus | undefined }) {
+  const deliveries = useNotificationDeliveries(id);
+  return <DeliveryLog query={deliveries} status={status} />;
+}
+
+/** The delivery health a connection row carries, when the api sent one. */
+export function statusOf(source: Record<string, unknown>): NotificationDeliveryStatus | undefined {
+  const s = source.status;
+  return s && typeof s === 'object' && typeof (s as NotificationDeliveryStatus).consecutiveFailures === 'number' ? (s as NotificationDeliveryStatus) : undefined;
+}
+
 function toBody(values: FormValues, schema: NotificationSchema | undefined): NotificationInput {
   const { id: _id, ...rest } = fromNotificationForm(values, schema?.fields ?? []);
   return rest as NotificationInput;
@@ -185,11 +273,91 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
   const requestFlags = supportedRequestTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const downloadFlags = supportedDownloadTriggers({ ...template, ...(existing ?? {}), ...form.values });
   const tags = Array.isArray(form.values.tags) ? (form.values.tags as number[]) : [];
+  const [tab, setTab] = useState('general');
+  const delivery = deliveryOptionsOf(form.values);
+  const dErrors = deliveryErrors(form.values);
+  const patch = (next: FormValues) => form.setValues({ ...form.values, ...next });
 
   const submit = () => {
-    if (!form.validate()) return;
+    const valid = form.validate();
+    if (!valid) {
+      setTab('general');
+      return;
+    }
+    if (Object.keys(dErrors).length) {
+      setTab('delivery');
+      return;
+    }
     save.mutate({ id: existing?.id, body: toBody(form.values, editing.schema) }, { onSuccess: onClose });
   };
+
+  const general = (
+    <div className="al-notification-editor">
+      <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
+      {flags.length ? (
+        <fieldset className="al-event-flags">
+          <legend className="al-label">{t('settings.notifications.notifyOn')}</legend>
+          <div className="al-check-grid" role="group" aria-label={t('settings.notifications.events')}>
+            {flags.map((flag) => (
+              <Checkbox
+                key={flag}
+                label={eventFlagTag(flag)}
+                checked={form.values[flag] === true}
+                onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+      {requestFlags.length ? (
+        <fieldset className="al-event-flags">
+          <legend className="al-label">{t('settings.notifications.requestsAndIssues')}</legend>
+          <div className="al-check-grid" role="group" aria-label={t('settings.notifications.requestAndIssueEvents')}>
+            {requestFlags.map((flag) => (
+              <Checkbox
+                key={flag}
+                label={requestTriggerLabel(flag)}
+                checked={form.values[flag] === true}
+                onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+              />
+            ))}
+          </div>
+          <p className="al-caption" style={{ margin: '8px 0 0' }}>
+            {t('settings.notifications.sitewideEveryUsersRequestsAnd')}
+          </p>
+        </fieldset>
+      ) : null}
+      {downloadFlags.length ? (
+        <fieldset className="al-event-flags">
+          <legend className="al-label">{t('settings.notifications.downloadProblems')}</legend>
+          <div className="al-check-grid" role="group" aria-label={t('settings.notifications.downloadProblemEvents')}>
+            {downloadFlags.map((flag) => (
+              <Checkbox
+                key={flag}
+                label={downloadTriggerLabel(flag)}
+                checked={form.values[flag] === true}
+                onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
+              />
+            ))}
+          </div>
+        </fieldset>
+      ) : null}
+      <fieldset className="al-event-flags">
+        <legend className="al-label">{t('settings.notifications.delivery')}</legend>
+        <Checkbox
+          label={t('settings.notifications.respectQuietHours')}
+          hint={t('settings.notifications.respectQuietHoursHint')}
+          checked={form.values.respectQuietHours !== false}
+          onChange={(e) => form.setValues({ ...form.values, respectQuietHours: e.currentTarget.checked })}
+        />
+      </fieldset>
+      {fields.some((f) => f.name === 'tags') ? null : (
+        <Field label={t('common.tags')} hint={t('settings.notifications.onlyNotifyForItemsWith')}>
+          <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
+        </Field>
+      )}
+    </div>
+  );
 
   return (
     <>
@@ -206,7 +374,11 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
             extra={
               <TestButton
-                beforeTest={form.validate}
+                beforeTest={() => {
+                  const ok = form.validate();
+                  if (!ok) setTab('general');
+                  return ok;
+                }}
                 onTest={async () =>
                   notificationTestOutcome(await notificationsApi.test({ ...toBody(form.values, editing.schema), ...(existing ? { id: existing.id } : {}) }))
                 }
@@ -215,72 +387,49 @@ function NotificationEditor({ editing, onClose }: { editing: Editing; onClose: (
           />
         }
       >
-        <div className="al-notification-editor">
-          <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={form.setValues} renderers={{ tags: tagRenderer }} />
-          {flags.length ? (
-            <fieldset className="al-event-flags">
-              <legend className="al-label">{t('settings.notifications.notifyOn')}</legend>
-              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.events')}>
-                {flags.map((flag) => (
-                  <Checkbox
-                    key={flag}
-                    label={eventFlagTag(flag)}
-                    checked={form.values[flag] === true}
-                    onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
-          {requestFlags.length ? (
-            <fieldset className="al-event-flags">
-              <legend className="al-label">{t('settings.notifications.requestsAndIssues')}</legend>
-              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.requestAndIssueEvents')}>
-                {requestFlags.map((flag) => (
-                  <Checkbox
-                    key={flag}
-                    label={requestTriggerLabel(flag)}
-                    checked={form.values[flag] === true}
-                    onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
-                  />
-                ))}
-              </div>
-              <p className="al-caption" style={{ margin: '8px 0 0' }}>
-                {t('settings.notifications.sitewideEveryUsersRequestsAnd')}
-              </p>
-            </fieldset>
-          ) : null}
-          {downloadFlags.length ? (
-            <fieldset className="al-event-flags">
-              <legend className="al-label">{t('settings.notifications.downloadProblems')}</legend>
-              <div className="al-check-grid" role="group" aria-label={t('settings.notifications.downloadProblemEvents')}>
-                {downloadFlags.map((flag) => (
-                  <Checkbox
-                    key={flag}
-                    label={downloadTriggerLabel(flag)}
-                    checked={form.values[flag] === true}
-                    onChange={(e) => form.setValues({ ...form.values, [flag]: e.currentTarget.checked })}
-                  />
-                ))}
-              </div>
-            </fieldset>
-          ) : null}
-          <fieldset className="al-event-flags">
-            <legend className="al-label">{t('settings.notifications.delivery')}</legend>
-            <Checkbox
-              label={t('settings.notifications.respectQuietHours')}
-              hint={t('settings.notifications.respectQuietHoursHint')}
-              checked={form.values.respectQuietHours !== false}
-              onChange={(e) => form.setValues({ ...form.values, respectQuietHours: e.currentTarget.checked })}
-            />
-          </fieldset>
-          {fields.some((f) => f.name === 'tags') ? null : (
-            <Field label={t('common.tags')} hint={t('settings.notifications.onlyNotifyForItemsWith')}>
-              <TagPicker value={tags} onChange={(next) => form.setValues({ ...form.values, tags: next })} />
-            </Field>
-          )}
-          <SaveError error={save.error} />
-        </div>
+        <Tabs
+          aria-label={t('notify.editor.sections')}
+          value={tab}
+          onChange={setTab}
+          className="al-notification-tabs"
+          tabs={[
+            { id: 'general', label: t('notify.editor.general'), content: general },
+            { id: 'filters', label: t('notify.editor.filters'), content: <FiltersEditor value={filtersOf(form.values.filters)} onChange={(filters) => patch({ filters })} /> },
+            { id: 'templates', label: t('notify.editor.templates'), content: <TemplateEditor value={delivery.templates} onChange={(templates) => patch({ templates })} /> },
+            {
+              id: 'delivery',
+              label: t('settings.notifications.delivery'),
+              content: (
+                <div className="al-notify-section">
+                  <QuietHoursOverride value={delivery.quietHours} onChange={(quietHours) => patch({ quietHours })} />
+                  {form.values.respectQuietHours === false ? <p className="al-caption">{t('notify.delivery.quietIgnored')}</p> : null}
+                  <div className="al-form-grid">
+                    <NumberRow
+                      label={t('notify.delivery.rateLimit')}
+                      caption={t('notify.delivery.rateLimitCaption')}
+                      value={delivery.rateLimitPerMinute}
+                      min={0}
+                      max={NOTIFICATION_MAX_RATE_PER_MINUTE}
+                      error={dErrors.rateLimitPerMinute}
+                      onChange={(rateLimitPerMinute) => patch({ rateLimitPerMinute })}
+                    />
+                    <NumberRow
+                      label={t('notify.delivery.maxAttempts')}
+                      caption={t('notify.delivery.maxAttemptsCaption')}
+                      value={delivery.maxAttempts}
+                      min={1}
+                      max={NOTIFICATION_MAX_ATTEMPTS}
+                      error={dErrors.maxAttempts}
+                      onChange={(maxAttempts) => patch({ maxAttempts })}
+                    />
+                  </div>
+                </div>
+              ),
+            },
+            ...(existing ? [{ id: 'log', label: t('notify.editor.log'), content: <ConnectionLog id={existing.id} status={statusOf(existing)} /> }] : []),
+          ]}
+        />
+        <SaveError error={save.error} />
       </Modal>
       {existing ? (
         <ConfirmDialog
@@ -312,13 +461,23 @@ function NotificationCard({
   select?: ItemCardSelect | undefined;
 }) {
   const on = eventFlags(n).filter((f) => n[f] === true);
+  const status = statusOf(n);
+  const failing = (status?.consecutiveFailures ?? 0) > 0;
   return (
     <ItemCard
       title={n.name}
       onClick={onEdit}
       select={select}
       muted={!n.enabled}
-      status={!n.enabled ? <Chip tone="muted">{t('common.disabled')}</Chip> : on.length ? null : <Chip tone="warn">{t('settings.notifications.noEvents')}</Chip>}
+      status={
+        !n.enabled ? (
+          <Chip tone="muted">{t('common.disabled')}</Chip>
+        ) : failing ? (
+          <Chip tone="danger">{t('notify.status.failing')}</Chip>
+        ) : on.length ? null : (
+          <Chip tone="warn">{t('settings.notifications.noEvents')}</Chip>
+        )
+      }
       actions={
         <>
           <TestButton
@@ -335,6 +494,11 @@ function NotificationCard({
       }
     >
       <span className="al-card-line">{schema?.implementationName ?? n.implementation}</span>
+      {failing ? (
+        <span className="al-card-line">
+          <DeliveryStatusLine status={status} />
+        </span>
+      ) : null}
       {on.map((f) => (
         <Tag key={f}>{flagTag(f)}</Tag>
       ))}

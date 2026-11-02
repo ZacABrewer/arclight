@@ -1,0 +1,35 @@
+/* Notification editor sections, delivery log, template editor and personal destinations.
+   Tokens only, so every theme (and phones) works. */
+.al-notification-tabs .al-tabpanel { padding-top: 16px; }
+.al-notify-section { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.al-notify-section > .al-caption { margin: 0; }
+.al-quiet-override { display: flex; flex-direction: column; gap: 12px; }
+
+.al-delivery-status { color: var(--al-danger-text); font-size: 13px; overflow-wrap: anywhere; }
+.al-delivery-log { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.al-delivery-log__head { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 32px; }
+.al-delivery-event { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.al-delivery-error { overflow-wrap: anywhere; }
+
+.al-template-editor { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.al-template-editor__intro { margin: 0; }
+.al-template-editor__bar { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.al-template-vars__label { color: var(--al-text-2); font-size: 13px; }
+.al-template-vars__list { list-style: none; margin: 8px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; max-height: 240px; overflow: auto; }
+.al-template-vars__item { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; width: 100%; min-height: 44px; padding: 8px 10px; border: 1px solid var(--al-line-2); background: var(--al-well-2); color: var(--al-text-3); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.al-template-vars__item:hover, .al-template-vars__item:focus-visible { border-color: var(--al-cyan); color: var(--al-text-1); }
+.al-template-vars__item code { font-family: var(--al-mono); color: var(--al-text-1); font-size: 12px; }
+.al-template-vars__sample { color: var(--al-text-4); overflow-wrap: anywhere; }
+.al-template-preview { display: flex; flex-direction: column; gap: 8px; }
+.al-template-preview__card { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--al-line-2); background: var(--al-well-2); min-width: 0; }
+.al-template-preview__title { color: var(--al-text-1); font-size: 14px; overflow-wrap: anywhere; }
+.al-template-preview__body { margin: 0; color: var(--al-text-2); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.al-template-preview__link { color: var(--al-text-4); font-family: var(--al-mono); font-size: 12px; overflow-wrap: anywhere; }
+
+.al-personal-dest { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+.al-personal-dest__events { display: flex; flex-wrap: wrap; gap: 6px; }
+
+@media (max-width: 767px) {
+  .al-template-vars__list { grid-template-columns: minmax(0, 1fr); }
+  .al-template-editor__bar > * { flex: 1 1 100%; }
+}

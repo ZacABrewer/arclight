@@ -5,7 +5,7 @@ Compiled from the `routes.ts` and `index.ts` files in `apps/api/src/modules/*` o
 prefixed with `/api/v1`. Every route requires authentication unless listed as public in
 [Authentication](#authentication).
 
-Some modules (releases, imports, notifications) are not fully listed here yet; history,
+Some modules (releases, imports) are not fully listed here yet; history,
 blocklist and calendar are.
 
 Module registration order (`apps/api/src/app.ts`): `installMetrics` on the root instance first
@@ -2361,13 +2361,66 @@ book) with the `library` app area, `queue` and `history` with `activity`; every 
 Manage requests or View requests (else their own), every issue with Manage issues or View
 issues (else their own). Settings entities, users, tags and tasks are admin only.
 
+## notifications (connections, templates, delivery log, personal destinations)
+
+Contract: `packages/shared/src/notifications.ts`. Connection routes are admin only. Secrets
+read as `********`; sending the mask back keeps the stored value, and secrets are redacted
+from errors and the delivery log. Behaviour is described in [Notifications](using/notifications.md).
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/notification` | All connections (`NotificationConnection`), each with its `status` (`consecutiveFailures`, `lastError`, `lastFailureAt`, `lastSuccessAt`) and `supportsOn*` capability flags |
+| GET | `/notification/schema` | One form definition per type (`NotificationSchema`): fields with type, help text, default, `required`, `secret`, plus a ready-to-fill create body |
+| GET | `/notification/templates` | Template editor help: the template keys (`default` and every event type) and the variables (`NotificationTemplateMeta`). Also open to portal users |
+| POST | `/notification/preview` | Body `{eventType, template: {title?, body?}}` renders a template against a sample event (`NotificationPreview`, with an `error` for a syntax problem). Also open to portal users |
+| GET | `/notification/:id` | One connection |
+| POST | `/notification` | Create (`NotificationInput`, 201) |
+| PUT | `/notification/:id` | Replace |
+| DELETE | `/notification/:id` | Delete (204) |
+| GET | `/notification/:id/deliveries` | The delivery log, newest first (last 100): `eventType`, `title`, `state` (`sent`, `failed`, `held`, `rateLimited`, `skipped`), `attempts`, `error`, `code`, `test`, `at` |
+| POST | `/notification/test` | Send a test through an unsaved candidate, or a saved one (`id`) with edits → `{ok, message?, code?}` |
+| POST | `/notification/testall` | Test every enabled connection → one result per connection |
+
+Beyond the type's own `settings` and the trigger flags (`onGrab` through `onDailySummary`),
+a connection carries these delivery options:
+
+- `filters`: `{mediaTypes: [series|movie|music|audiobook], qualities: [string], users: [userId]}`;
+  every list empty means no filter.
+- `templates`: `{ <eventType or "default">: {title?, body?} }` (title up to 500 characters, body
+  up to 4000; webhook body templates are a setting of the webhook type).
+- `quietHours`: `null` follows the global quiet hours, otherwise `{enabled, start, end, days}`
+  for this connection only. `respectQuietHours` (default true) opts the connection in to holding.
+- `rateLimitPerMinute`: 0 (default) is unlimited, maximum 600. Extra alerts are held and sent
+  as one `heldAlerts` message.
+- `maxAttempts`: 1 to 6, default 3. Network errors, timeouts, 429 and 5xx are retried with a
+  back-off of 2 s, 4 s, 8 s (5 s base after a 429), capped at 60 s; authentication errors, other
+  4xx answers and invalid settings are not retried.
+
+Personal destinations (any signed-in user for their own `:id`, an admin for anyone; portal
+users included). Creating and testing answer a 400 validation error while an admin has switched the feature
+off (`personalDestinations` in `/settings/alerts`, below):
+
+| Method | Path | Purpose |
+|---|---|---|
+| GET | `/user/:id/notification-destination/options` | What this user may pick: the allowed services with their form schemas and the events (managers also get `requestPending` and `issueCreated`) |
+| GET | `/user/:id/notification-destination` | The user's destinations (`PersonalDestination`). Non-admins see only an error category, not the raw error text |
+| POST | `/user/:id/notification-destination` | Create (`PersonalDestinationInput`, 201). At most 20 per user; non-admins cannot target localhost, private or LAN addresses or local-only names |
+| PUT | `/user/:id/notification-destination/:destinationId` | Replace |
+| DELETE | `/user/:id/notification-destination/:destinationId` | Delete (204) |
+| POST | `/user/:id/notification-destination/test` | Test a candidate (or a saved one with `id`) |
+| GET | `/user/:id/notification-destination/:destinationId/deliveries` | The destination's delivery log |
+
+Personal events: `requestApproved`, `requestAvailable`, `requestDeclined`, `issueUpdated`,
+`watchlistAvailable` (default set), plus `requestPending` and `issueCreated` for managers.
+Personal destinations are rate limited to 20 messages a minute with 3 attempts.
+
 ## summary (daily summary, quiet hours)
 
 Contract: `packages/shared/src/alerts.ts`.
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/settings/alerts` | `AlertSettingsResponse`: `quietHours` `{enabled (false), start "22:00", end "07:00", days [0..6]}` (server local time; a window ending before it starts runs past midnight and belongs to its start day), `dailySummary` `{enabled (true), time "08:00"}`, plus `heldAlerts` and `quietNow` |
+| GET | `/settings/alerts` | `AlertSettingsResponse`: `quietHours` `{enabled (false), start "22:00", end "07:00", days [0..6]}` (server local time; a window ending before it starts runs past midnight and belongs to its start day), `dailySummary` `{enabled (true), time "08:00"}`, `personalDestinations` (true; false stops users adding or sending to their own destinations), plus `heldAlerts` and `quietNow` |
 | PUT | `/settings/alerts` | Body `AlertSettings`; reschedules the `DailySummary` job (no cron while off) |
 | GET | `/summary/latest` | The newest `DailySummary`, or `null` |
 | GET | `/summary?limit=30` | Stored summaries, newest first (kept 30 days) |

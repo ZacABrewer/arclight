@@ -23,7 +23,7 @@ import { LanguageRequestsService, type LanguagesPort } from './language-requests
 import { languageRequestsRoutes } from './language-routes.js';
 import { additionalLanguagesServiceFor } from '../additional-languages/index.js';
 import { subtitlesServiceFor } from '../subtitles/index.js';
-import { notificationsServiceFor } from '../notifications/index.js';
+import { notificationsServiceFor, personalNotificationsFor } from '../notifications/index.js';
 import { releasesServiceFor, type SearchTarget } from '../releases/index.js';
 import { DiscoverService } from './discover.js';
 import { IssuesService } from './issues.js';
@@ -33,7 +33,7 @@ import { mediaServersServiceFor } from '../media-servers/index.js';
 import { mediaServerAvailability, mediaServerConnections, toServerConn, type FetchLike, type MediaServerAvailability } from './media-server.js';
 import { authServiceFor } from '../auth/index.js';
 import { getFeatureSettings, getSection } from '../settings/service.js';
-import { RequestNotifier, type AgentFactory } from './notify.js';
+import { RequestNotifier, type AgentFactory, type RequestNotifierOptions } from './notify.js';
 import { mediaServerRoutes } from './media-server-routes.js';
 import { requestsRoutes } from './routes.js';
 import { RequestsService, type SizeEstimator, type TitleSource } from './service.js';
@@ -81,6 +81,8 @@ export interface RequestsModuleOptions {
   agentFactory?: AgentFactory;
   /** System-wide notification connections; defaults to the notifications module's dispatcher. */
   systemDispatch?: (event: NotificationEvent) => Promise<unknown>;
+  /** Personal destinations (defaults to the notifications module). */
+  personalDispatch?: RequestNotifierOptions['personalDispatch'];
   watchlistProviders?: WatchlistProvider[];
   /** Used when settings.useMediaServerAvailability is on; defaults to Settings > Media server (then the Jellyfin/Emby connections). */
   mediaServer?: MediaServerAvailability;
@@ -247,6 +249,7 @@ export function requestsServicesFor(ctx: AppContext, opts: RequestsModuleOptions
     log,
     ...(opts.agentFactory ? { agentFactory: opts.agentFactory } : {}),
     systemDispatch: opts.systemDispatch ?? ((event) => notificationsServiceFor(ctx).dispatch(event)),
+    personalDispatch: opts.personalDispatch ?? ((userId, key, event) => personalNotificationsFor(ctx).dispatch(userId, key, event)),
     applicationUrl: () => getSection(ctx.db, 'requests').applicationUrl || undefined,
     ...(now ? { now } : {}),
   });

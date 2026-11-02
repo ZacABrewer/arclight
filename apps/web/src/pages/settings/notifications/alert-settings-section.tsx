@@ -17,6 +17,7 @@ export function toAlertSettings(res: AlertSettingsResponse): AlertSettings {
   return {
     quietHours: { ...res.quietHours, days: [...res.quietHours.days].sort((a, b) => a - b) },
     dailySummary: { ...res.dailySummary },
+    personalDestinations: res.personalDestinations !== false,
   };
 }
 
@@ -44,13 +45,13 @@ export function alertStatusLines(res: Pick<AlertSettingsResponse, 'quietNow' | '
 }
 
 /** Weekdays in the user's week order, labelled in the active locale. */
-function useWeekdays(): Array<{ day: Weekday; label: string }> {
+export function useWeekdays(): Array<{ day: Weekday; label: string }> {
   const { firstDayOfWeek } = useUiPreferences();
   const names = weekdayNames(firstDayOfWeek, 'short');
   return names.map((label, i) => ({ day: ((firstDayOfWeek + i) % 7) as Weekday, label }));
 }
 
-function TimeRow({ label, caption, value, onChange }: { label: string; caption?: string; value: string; onChange: (v: string) => void }) {
+export function TimeRow({ label, caption, value, onChange }: { label: string; caption?: string; value: string; onChange: (v: string) => void }) {
   const id = useId();
   const invalid = !isLocalTime(value);
   return (
@@ -133,6 +134,16 @@ function AlertForm({ data }: { data: AlertSettingsResponse }) {
       {d.dailySummary.enabled ? (
         <TimeRow label={t('settings.notifications.alerts.summaryTime')} value={d.dailySummary.time} onChange={(time) => setSummary({ time })} />
       ) : null}
+      <FormRow label={t('notify.alerts.personalDestinations')} caption={t('notify.alerts.personalDestinationsCaption')} captionInline>
+        <Toggle
+          aria-label={t('notify.alerts.personalDestinations')}
+          checked={d.personalDestinations}
+          onChange={(e) => {
+            const personalDestinations = e.currentTarget.checked;
+            draft.set((p) => ({ ...p, personalDestinations }));
+          }}
+        />
+      </FormRow>
     </SettingsSection>
   );
 }
