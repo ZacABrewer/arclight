@@ -51,6 +51,7 @@ These pages follow the app's navigation.
 |---|---|
 | Universal search and the command palette (/ and Ctrl+K) | [search-and-commands.md](using/search-and-commands.md) |
 | Library (TV, Movies, Collections, Add New, Retention, Hygiene) | [library.md](using/library.md) |
+| Import lists (TMDB, Trakt, IMDb, Letterboxd, MDBList, anime lists, Simkl, Jellyfin/Emby favourites, custom URLs) | [import-lists.md](using/import-lists.md) |
 | Library health scan (Hygiene > Health) | [health-scan.md](using/health-scan.md) |
 | Tags and tag rules (Settings > Tags) | [tags.md](using/tags.md) |
 | Discover, Requests (including subtitle and language requests), Issues, Watchlist, Discord bot | [discover-and-requests.md](using/discover-and-requests.md) |

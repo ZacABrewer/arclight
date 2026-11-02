@@ -4,16 +4,20 @@ import {
   ImportListExclusion,
   ImportListFoundItem,
   ImportListItem,
+  ImportListPreviewResult,
   ImportListSchema,
   ImportListSettings,
   ImportListSyncResult,
   ImportListTestResult,
+  SimklPinResponse,
+  SimklPollResponse,
   TraktDeviceResponse,
   TraktPollResponse,
   type ImportListCreateInput,
   type ImportListExclusionCreate,
   type ImportListImplementation,
   type ImportListItemsQuery,
+  type SimklPollRequest,
   type TraktPollRequest,
 } from '@arclight/shared';
 import { request } from './client.js';
@@ -32,6 +36,8 @@ export const importListsApi = {
   update: (id: number, body: ImportListCreateInput) => request(`/importlist/${id}`, ImportList, { method: 'PUT', json: body }),
   remove: (id: number) => request(`/importlist/${id}`, null, { method: 'DELETE' }),
   test: (body: ImportListTestInput) => request('/importlist/test', ImportListTestResult, { method: 'POST', json: body }),
+  /** What a sync of this (possibly unsaved) list would add right now. */
+  preview: (body: ImportListTestInput) => request('/importlist/preview', ImportListPreviewResult, { method: 'POST', json: body }),
   sync: () => request('/importlist/sync', ImportListSyncResult, { method: 'POST' }),
   items: (id: number) => request(`/importlist/${id}/items`, z.array(ImportListItem)),
   /** Items across every list; filter by title to drive the "found in list" chips. */
@@ -40,6 +46,8 @@ export const importListsApi = {
   traktDevice: (clientId: string) =>
     request('/importlist/trakt/device', TraktDeviceResponse, { method: 'POST', json: { clientId } }),
   traktPoll: (body: TraktPollRequest) => request('/importlist/trakt/poll', TraktPollResponse, { method: 'POST', json: body }),
+  simklPin: (clientId: string) => request('/importlist/simkl/pin', SimklPinResponse, { method: 'POST', json: { clientId } }),
+  simklPoll: (body: SimklPollRequest) => request('/importlist/simkl/poll', SimklPollResponse, { method: 'POST', json: body }),
   exclusions: {
     list: () => request('/importlistexclusion', z.array(ImportListExclusion)),
     create: (body: ImportListExclusionCreate) =>
@@ -89,5 +97,44 @@ export const IMPORT_LIST_DESCRIPTIONS: Record<ImportListImplementation, string> 
   },
   get stevenLu() {
     return t('api.importLists.theStevenluPopularMoviesFeed');
+  },
+  get tmdbCompany() {
+    return t('api.importLists.desc.tmdbCompany');
+  },
+  get tmdbNetwork() {
+    return t('api.importLists.desc.tmdbNetwork');
+  },
+  get tmdbDiscover() {
+    return t('api.importLists.desc.tmdbDiscover');
+  },
+  get traktLists() {
+    return t('api.importLists.desc.traktLists');
+  },
+  get imdbTop() {
+    return t('api.importLists.desc.imdbTop');
+  },
+  get letterboxd() {
+    return t('api.importLists.desc.letterboxd');
+  },
+  get mdblist() {
+    return t('api.importLists.desc.mdblist');
+  },
+  get anilist() {
+    return t('api.importLists.desc.anilist');
+  },
+  get myAnimeList() {
+    return t('api.importLists.desc.myAnimeList');
+  },
+  get kitsu() {
+    return t('api.importLists.desc.kitsu');
+  },
+  get simkl() {
+    return t('api.importLists.desc.simkl');
+  },
+  get jellyfinFavorites() {
+    return t('api.importLists.desc.jellyfinFavorites');
+  },
+  get customUrl() {
+    return t('api.importLists.desc.customUrl');
   },
 };

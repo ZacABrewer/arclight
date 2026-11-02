@@ -123,9 +123,14 @@ const POPULAR_PATHS: Record<TraktPopularSettings['listType'], string> = {
   trending: 'trending',
   popular: 'popular',
   anticipated: 'anticipated',
-  watched: 'watched/weekly',
+  watched: 'watched',
   boxOffice: 'boxoffice',
+  played: 'played',
+  collected: 'collected',
+  recommended: 'recommended',
 };
+/** Charts that take a period segment (`/movies/played/weekly`). */
+const PERIOD_CHARTS = new Set<TraktPopularSettings['listType']>(['watched', 'played', 'collected', 'recommended']);
 
 export const traktPopular: Provider<'traktPopular'> = async (s, mediaType, ctx) => {
   const years =
@@ -140,7 +145,8 @@ export const traktPopular: Provider<'traktPopular'> = async (s, mediaType, ctx) 
   const out: FetchedItem[] = [];
   for (const { kind, path } of kinds(mediaType)) {
     if (s.listType === 'boxOffice' && kind === 'series') continue; // movies only
-    const rows = await traktGet(ctx, s, `/${path}/${POPULAR_PATHS[s.listType]}`, filters);
+    const chart = POPULAR_PATHS[s.listType] + (PERIOD_CHARTS.has(s.listType) ? `/${s.period}` : '');
+    const rows = await traktGet(ctx, s, `/${path}/${chart}`, filters);
     for (const r of rows) {
       const item = fromTrakt(r, kind);
       if (item) out.push(item);
@@ -154,15 +160,64 @@ export const traktUser: Provider<'traktUser'> = async (s, mediaType, ctx) => {
   if (user === 'me' && !s.accessToken) {
     throw new ImportListFetchError('auth', 'Trakt user lists without a username need authentication');
   }
+  if (s.listType === 'recommendations' && !s.accessToken) {
+    throw new ImportListFetchError('auth', 'Trakt recommendations are personal and need authentication');
+  }
   const out: FetchedItem[] = [];
   for (const { kind, path } of kinds(mediaType)) {
-    const rows = await traktGet(ctx, s, `/users/${user}/${s.listType}/${path}`, { limit: s.limit });
+    // Recommendations are always the authenticated user's own; the rest are per-user paths.
+    const url = s.listType === 'recommendations' ? `/recommendations/${path}` : `/users/${user}/${s.listType}/${path}`;
+    const rows = await traktGet(ctx, s, url, { limit: s.limit, ignore_collected: s.listType === 'recommendations' ? 'true' : undefined });
     for (const r of rows) {
       const item = fromTrakt(r, kind);
       if (item) out.push(item);
     }
   }
   return out;
+};
+
+/** A list row from `/users/{u}/lists` (bare) or `/users/{u}/likes/lists` (`{ list: {...} }`). */
+export function parseTraktLists(rows: unknown[]): Array<{ id: number; slug: string | null; name: string }> {
+  const out: Array<{ id: number; slug: string | null; name: string }> = [];
+  for (const raw of rows) {
+    const r = asRecord(raw);
+    const list = asRecord(r?.['list']) ?? r;
+    const ids = asRecord(list?.['ids']);
+    const id = int(ids?.['trakt']);
+    if (!list || id === null) continue;
+    out.push({ id, slug: str(ids?.['slug']), name: str(list['name']) ?? String(id) });
+  }
+  return out;
+}
+
+export const traktLists: Provider<'traktLists'> = async (s, mediaType, ctx) => {
+  const user = s.username ? encodeURIComponent(s.username) : 'me';
+  if (user === 'me' && !s.accessToken) {
+    throw new ImportListFetchError('auth', 'Trakt lists without a username need authentication');
+  }
+  const listRows = await traktGet(ctx, s, s.source === 'liked' ? `/users/${user}/likes/lists` : `/users/${user}/lists`, {
+    limit: s.source === 'liked' ? 100 : undefined,
+  });
+  const wanted = new Set(s.listNames.map((n) => n.toLowerCase()));
+  const lists = parseTraktLists(listRows).filter(
+    (l) => wanted.size === 0 || wanted.has(l.name.toLowerCase()) || (l.slug !== null && wanted.has(l.slug.toLowerCase())),
+  );
+  const types = kinds(mediaType).map((k) => (k.kind === 'series' ? 'show' : 'movie')).join(',');
+  const out: FetchedItem[] = [];
+  const seen = new Set<string>();
+  for (const list of lists) {
+    if (out.length >= s.limit) break;
+    const rows = await traktGet(ctx, s, `/lists/${list.id}/items/${types}`, { limit: s.limit });
+    for (const r of rows) {
+      const item = fromTrakt(r);
+      if (!item || !wants(mediaType, item.mediaType)) continue;
+      const key = `${item.mediaType}:${item.tmdbId ?? item.imdbId ?? item.tvdbId ?? item.title}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(item);
+    }
+  }
+  return out.slice(0, s.limit);
 };
 
 // ---- device-code OAuth flow -----------------------------------------------------------

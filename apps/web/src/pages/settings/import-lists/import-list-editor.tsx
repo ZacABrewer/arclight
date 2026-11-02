@@ -1,8 +1,19 @@
 import { useMemo, useState } from 'react';
-import type { ImportList, ImportListMediaType, ImportListSchema, ImportListTestResult, TraktPollResponse } from '@arclight/shared';
+import { useQuery } from '@tanstack/react-query';
+import type {
+  ImportList,
+  ImportListMediaType,
+  ImportListPreviewResult,
+  ImportListSchema,
+  ImportListTestResult,
+  SimklPollResponse,
+  TraktPollResponse,
+} from '@arclight/shared';
 import { importListsApi } from '../../../api/import-lists.js';
+import { discoverApi } from '../../../api/requests.js';
 import { errorMessage } from '../../../api/client.js';
-import { Button, Modal } from '../../../arclight/index.js';
+import { Button, Modal, SectionLabel } from '../../../arclight/index.js';
+import { requestKeys } from '../../../hooks/request-keys.js';
 import { ConfirmDialog } from '../../../components/forms/confirm-dialog.js';
 import { SchemaForm, useSchemaForm } from '../../../components/forms/schema-form.js';
 import { TestResultView } from '../../../components/forms/test-result.js';
@@ -12,6 +23,9 @@ import { useDeleteImportList, useSaveImportList } from '../../../hooks/import-li
 import { EditorFooter, SaveError } from '../shared.js';
 import { existingListValues, listFields, newListValues, rootsFor, settingsFields, toListBody, type RootFolderOption } from './fields.js';
 import { ItemsTable } from './items-table.js';
+import { PreviewPanel } from './preview-panel.js';
+import { ruleFields, ruleRenderers } from './rules.js';
+import { SimklAuth } from './simkl-auth.js';
 import { TraktAuth } from './trakt-auth.js';
 import { t } from '../../../i18n/index.js';
 
@@ -35,12 +49,23 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
     [],
   );
   const [mediaType, setMediaType] = useState<ImportListMediaType>(base.mediaType as ImportListMediaType);
+  const [streamingEnabled, setStreamingEnabled] = useState(getPath(base, 'streaming.enabled') === true);
   const settings = useMemo(() => settingsFields(schema), [schema]);
-  const fields = useMemo(
+  // The instance region is only needed once the streaming rule is on.
+  const discoverOptions = useQuery({ queryKey: requestKeys.discover.options, queryFn: discoverApi.options, staleTime: 3_600_000, enabled: streamingEnabled, retry: false });
+  const defaultRegion = discoverOptions.data?.region;
+  const rules = useMemo(() => ruleFields({ mediaType, streamingEnabled, defaultRegion }), [mediaType, streamingEnabled, defaultRegion]);
+  const mainFields = useMemo(
     () => [...listFields({ schema, mediaType, rootFolders, profiles }), ...settings.fields],
     [schema, mediaType, rootFolders, profiles, settings.fields],
   );
+  const fields = useMemo(() => [...mainFields, ...rules], [mainFields, rules]);
   const form = useSchemaForm(fields, base);
+  const regionValue = getPath(form.values, 'streaming.region');
+  const region = typeof regionValue === 'string' && /^[A-Za-z]{2}$/.test(regionValue.trim()) ? regionValue.trim().toUpperCase() : undefined;
+  const renderers = useMemo(() => ruleRenderers({ mediaType, region }), [mediaType, region]);
+  const [previewing, setPreviewing] = useState(false);
+  const [preview, setPreview] = useState<ImportListPreviewResult | null>(null);
   const save = useSaveImportList();
   const remove = useDeleteImportList();
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -60,6 +85,7 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
         values = { ...values, movieRootFolderPath: movie[0]?.path };
       }
     }
+    setStreamingEnabled(getPath(values, 'streaming.enabled') === true);
     form.setValues(values);
   };
 
@@ -81,7 +107,20 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
     }
   };
 
-  const authorized = (res: TraktPollResponse) => {
+  const runPreview = async () => {
+    if (!form.validate()) return;
+    setPreviewing(true);
+    setPreview(null);
+    try {
+      setPreview(await importListsApi.preview({ ...toListBody(form.values), ...(existing ? { id: existing.id } : {}) }));
+    } catch (err) {
+      setPreview({ ok: false, error: { code: 'REQUEST', message: errorMessage(err) } });
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
+  const authorized = (res: TraktPollResponse | SimklPollResponse) => {
     let values = form.values;
     if (res.authRef) values = setPath(values, 'settings.authRef', res.authRef);
     if (res.importList) {
@@ -111,9 +150,14 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
             saving={save.isPending}
             onDelete={existing ? () => setConfirmDelete(true) : undefined}
             extra={
-              <Button variant="secondary" loading={testing} onClick={() => void runTest()}>
-                {t('common.test')}
-              </Button>
+              <>
+                <Button variant="secondary" loading={testing} onClick={() => void runTest()}>
+                  {t('common.test')}
+                </Button>
+                <Button variant="secondary" loading={previewing} onClick={() => void runPreview()}>
+                  {t('settings.importLists.preview.button')}
+                </Button>
+              </>
             }
           />
         }
@@ -125,7 +169,10 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
             </a>
           </p>
         ) : null}
-        <SchemaForm fields={fields} values={form.values} errors={form.errors} onChange={change} renderers={settings.renderers} />
+        <SchemaForm fields={mainFields} values={form.values} errors={form.errors} onChange={change} renderers={settings.renderers} />
+        {schema?.requiresSimklAuth ? (
+          <SimklAuth clientId={typeof clientId === 'string' ? clientId : ''} importListId={existing?.id} onAuthorized={authorized} />
+        ) : null}
         {schema?.requiresTraktAuth ? (
           <TraktAuth
             clientId={typeof clientId === 'string' ? clientId : ''}
@@ -134,6 +181,9 @@ export function ImportListEditor({ editing, rootFolders, profiles, onClose }: Ed
             onAuthorized={authorized}
           />
         ) : null}
+        <SectionLabel className="al-il-rules__head">{t('settings.importLists.rules.title')}</SectionLabel>
+        <SchemaForm fields={rules} values={form.values} errors={form.errors} onChange={change} renderers={renderers} />
+        {preview ? <PreviewPanel result={preview} /> : null}
         {test ? (
           <section aria-label={t('common.testResult')}>
             <TestResultView

@@ -5,6 +5,7 @@ import { tagRenderer } from '../../../components/forms/tag-picker.js';
 import type { FieldDefinition, FieldRendererProps, FieldRenderers, FormValues } from '../../../components/forms/types.js';
 import { MINIMUM_AVAILABILITY_LABELS, MONITOR_OPTION_LABELS, SERIES_TYPE_LABELS } from '../../library/add-form.js';
 import { t } from '../../../i18n/index.js';
+import { RULE_DEFAULTS, rulesBody } from './rules.js';
 
 // Maps the import-list schema (GET /importlist/schema) and the list-level defaults onto the
 // shared schema-form vocabulary, and turns form values back into a create/update body.
@@ -52,6 +53,7 @@ const toFieldType = (item: ImportListField['type']): FieldDefinition['type'] => 
     case 'password':
     case 'number':
     case 'select':
+    case 'multiSelect':
       return item;
     default:
       return 'text';
@@ -156,12 +158,13 @@ export function newListValues(schema: ImportListSchema, ctx: Pick<ListFieldConte
     ...(ctx.profiles[0] ? { qualityProfileId: ctx.profiles[0].id } : {}),
     tags: [],
     settings: {},
+    ...structuredClone(RULE_DEFAULTS),
   };
 }
 
 export function existingListValues(list: ImportList): FormValues {
   const { id: _id, lastSyncAt: _a, lastSyncError: _e, ...rest } = list;
-  return structuredClone(rest) as FormValues;
+  return { ...structuredClone(RULE_DEFAULTS), ...structuredClone(rest) } as FormValues;
 }
 
 /** Form values -> POST/PUT body. Empty settings values are dropped; series-only fields are kept as-is. */
@@ -189,5 +192,6 @@ export function toListBody(values: FormValues): ImportListCreateInput {
     minimumAvailability: values.minimumAvailability as ImportListCreateInput['minimumAvailability'],
     mediaType,
     settings,
+    ...rulesBody(values),
   };
 }

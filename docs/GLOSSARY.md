@@ -97,7 +97,7 @@ Moving or hardlinking a finished download into the library folder with the right
 
 <a id="import-list"></a>
 **Import list**
-A source Arclight reads on a schedule to add titles for you: TMDB lists, Trakt, a Plex watchlist, an IMDb list, and so on. Settings > Import Lists. See [Library](using/library.md).
+A source Arclight reads on a schedule to add titles for you: TMDB, Trakt, IMDb, Letterboxd, MDBList, AniList and other anime sites, Simkl, a Plex watchlist, and so on. Settings > Import Lists. See [Import lists](using/import-lists.md).
 
 <a id="indexer"></a>
 **Indexer**

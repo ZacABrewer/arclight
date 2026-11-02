@@ -6,8 +6,8 @@ import { qualityProfiles, rootFolders } from '../../db/schema.js';
 import { createTestDb } from '../../db/test-utils.js';
 import type { MetadataLookup } from '../library/index.js';
 import { settingsService } from '../settings/index.js';
-import type { FetchLike, ProviderContext } from './providers/index.js';
-import { createTmdbAccess } from './providers/index.js';
+import type { CachedId, FetchLike, IdCache, ProviderContext } from './providers/index.js';
+import { createDatasetCache, createTmdbAccess } from './providers/index.js';
 import * as tables from './schema.js';
 import { ImportListsService, type ImportListsServiceOptions } from './service.js';
 
@@ -54,6 +54,16 @@ export const TMDB_CONFIGURATION: [RegExp, Handler] = [
   () => ({ images: { secure_base_url: 'https://image.tmdb.org/t/p/', poster_sizes: ['w500', 'original'], backdrop_sizes: ['original'] } }),
 ];
 
+/** An in-memory IdCache (exposes its map for assertions). */
+export function memoryIds(): IdCache & { map: Map<string, CachedId> } {
+  const map = new Map<string, CachedId>();
+  return {
+    map,
+    get: (ns, key) => map.get(`${ns}:${key}`),
+    set: (ns, key, value) => void map.set(`${ns}:${key}`, value),
+  };
+}
+
 /** A provider context over a fake fetch with TMDB configured. */
 export function providerCtx(fetch: FetchLike, overrides: Partial<ProviderContext> = {}): ProviderContext & { saved: Record<string, unknown>[] } {
   const saved: Record<string, unknown>[] = [];
@@ -64,6 +74,8 @@ export function providerCtx(fetch: FetchLike, overrides: Partial<ProviderContext
     now: () => new Date('2026-10-25T12:00:00Z'),
     tmdb: () => access,
     saveSettings: (p) => saved.push(p),
+    datasets: createDatasetCache({ fetch, log: silentLog, now: () => new Date('2026-10-25T12:00:00Z'), dir: null }),
+    ids: memoryIds(),
     saved,
     ...overrides,
   };

@@ -1,3 +1,4 @@
+import { join } from 'node:path';
 import type { AppContext, AppModule } from '../../app.js';
 import type { MetadataLookup } from '../library/index.js';
 import { metadata as metadataLookup } from '../metadata/index.js';
@@ -33,6 +34,7 @@ export function importListsServiceFor(ctx: AppContext, opts: ImportListsModuleOp
       // Resolved lazily: the releases module registers its service (with its wiring) first.
       search: opts.search ?? ((target) => releasesServiceFor(ctx).searchFor(target)),
       ...(opts.fetch ? { fetch: opts.fetch } : {}),
+      cacheDir: join(ctx.config.configDir, 'cache', 'import-lists'),
     });
     services.set(ctx, service);
   }
@@ -48,5 +50,5 @@ export const importListsModuleWith =
     registerImportListJobs(ctx.scheduler, service);
   };
 
-/** Automatically add series/movies from external lists (TMDB, Trakt, Plex, IMDb, feeds). */
+/** Automatically add series/movies from external lists (TMDB, Trakt, Plex, IMDb, Letterboxd, anime trackers, feeds). */
 export const importListsModule: AppModule = importListsModuleWith({});

@@ -1,6 +1,7 @@
-import type { ImportListMediaType } from '@arclight/shared';
+import type { CustomUrlSettings, ImportListMediaType } from '@arclight/shared';
 import { ImportListFetchError } from '../errors.js';
 import { asArray, asRecord, getText, imdbIdOf, int, str } from './http.js';
+import { parseCsv } from './imdb.js';
 import { wants, type FetchedItem, type Provider } from './types.js';
 
 // Generic feeds: a JSON document of titles (or bare TMDB ids), or an RSS/Atom feed whose items
@@ -18,9 +19,18 @@ function fallbackKind(mediaType: ImportListMediaType): 'series' | 'movie' {
 }
 
 export function parseJsonFeed(json: unknown, mediaType: ImportListMediaType): FetchedItem[] {
-  const fallback = fallbackKind(mediaType);
   const root = asRecord(json);
-  const rows = Array.isArray(json) ? json : asArray(root?.['items'] ?? root?.['results'] ?? root?.['movies'] ?? root?.['shows']);
+  // `{ movies: [...], shows: [...] }` documents keep both halves with their kind.
+  if (root && !Array.isArray(root['items']) && Array.isArray(root['movies']) && Array.isArray(root['shows'])) {
+    return [...parseJsonRows(root['movies'], 'movie'), ...parseJsonRows(root['shows'], 'series')];
+  }
+  const rows = Array.isArray(json)
+    ? json
+    : asArray(root?.['items'] ?? root?.['results'] ?? root?.['data'] ?? root?.['movies'] ?? root?.['shows']);
+  return parseJsonRows(rows, fallbackKind(mediaType));
+}
+
+function parseJsonRows(rows: unknown[], fallback: 'series' | 'movie'): FetchedItem[] {
   const out: FetchedItem[] = [];
   for (const raw of rows) {
     const bare = int(raw);
@@ -28,14 +38,20 @@ export function parseJsonFeed(json: unknown, mediaType: ImportListMediaType): Fe
       out.push({ mediaType: fallback, tmdbId: bare, title: `TMDB ${bare}` });
       continue;
     }
-    const r = asRecord(raw);
+    let r = asRecord(raw);
     if (!r) continue;
-    const tmdbId = int(r['tmdbId'] ?? r['tmdb_id'] ?? r['tmdb'] ?? r['id']);
-    const imdbId = imdbIdOf(r['imdbId'] ?? r['imdb_id'] ?? r['imdb']);
-    const tvdbId = int(r['tvdbId'] ?? r['tvdb_id'] ?? r['tvdb']);
+    // Trakt-style rows wrap the title: `{ movie: {...} }` / `{ show: {...} }`.
+    let rowKind = fallback;
+    if (asRecord(r['movie'])) [r, rowKind] = [asRecord(r['movie'])!, 'movie'];
+    else if (asRecord(r['show'])) [r, rowKind] = [asRecord(r['show'])!, 'series'];
+    const ids = asRecord(r['ids']);
+    // A bare `id` is a TMDB id only when there is no `ids` object naming the services.
+    const tmdbId = int(r['tmdbId'] ?? r['tmdb_id'] ?? r['tmdb'] ?? ids?.['tmdb'] ?? (ids ? undefined : r['id']));
+    const imdbId = imdbIdOf(r['imdbId'] ?? r['imdb_id'] ?? r['imdb'] ?? ids?.['imdb']);
+    const tvdbId = int(r['tvdbId'] ?? r['tvdb_id'] ?? r['tvdb'] ?? ids?.['tvdb']);
     if (tmdbId === null && !imdbId && tvdbId === null) continue;
     out.push({
-      mediaType: kindFrom(r['mediaType'] ?? r['media_type'] ?? r['type'], fallback),
+      mediaType: kindFrom(r['mediaType'] ?? r['media_type'] ?? r['mediatype'] ?? r['type'], rowKind),
       tmdbId,
       imdbId,
       tvdbId,
@@ -114,4 +130,75 @@ export const stevenLu: Provider<'stevenLu'> = async (settings, mediaType, ctx) =
   if (!wants(mediaType, 'movie')) return [];
   const text = await getText(ctx, 'StevenLu', settings.url, { headers: { Accept: 'application/json' } });
   return parseFeed(text, 'movie').filter((i) => i.mediaType === 'movie');
+};
+
+/** Walk a dotted path (`data.items`) into a JSON document. */
+function atPath(json: unknown, path: string | undefined): unknown {
+  if (!path) return json;
+  let cur: unknown = json;
+  for (const part of path.split('.').filter(Boolean)) {
+    if (Array.isArray(cur) && /^\d+$/.test(part)) cur = cur[Number(part)];
+    else cur = asRecord(cur)?.[part];
+    if (cur === undefined) throw new ImportListFetchError('bad-response', `the document has nothing at "${path}"`);
+  }
+  return cur;
+}
+
+const CSV_COLUMNS = {
+  tmdb: ['tmdb', 'tmdbid', 'tmdb_id', 'tmdb id', 'themoviedb'],
+  imdb: ['imdb', 'imdbid', 'imdb_id', 'imdb id', 'const'],
+  tvdb: ['tvdb', 'tvdbid', 'tvdb_id', 'tvdb id'],
+  title: ['title', 'name'],
+  year: ['year', 'release year', 'release_year'],
+  type: ['type', 'mediatype', 'media_type', 'media type', 'title type', 'kind'],
+};
+
+/** A CSV with a header row naming any of the id columns above (case-insensitive). */
+export function parseCsvList(text: string, mediaType: ImportListMediaType): FetchedItem[] {
+  const [header, ...rows] = parseCsv(text.replace(/^\uFEFF/, ''));
+  if (!header) return [];
+  const names = header.map((h) => h.trim().toLowerCase());
+  const col = (k: keyof typeof CSV_COLUMNS) => names.findIndex((n) => CSV_COLUMNS[k].includes(n));
+  const i = { tmdb: col('tmdb'), imdb: col('imdb'), tvdb: col('tvdb'), title: col('title'), year: col('year'), type: col('type') };
+  if (i.tmdb < 0 && i.imdb < 0 && i.tvdb < 0) {
+    throw new ImportListFetchError('bad-response', 'the CSV has no tmdb, imdb or tvdb column');
+  }
+  const fallback = fallbackKind(mediaType);
+  const cell = (r: string[], idx: number) => (idx >= 0 ? (r[idx]?.trim() ?? '') : '');
+  const out: FetchedItem[] = [];
+  for (const r of rows) {
+    const tmdbId = int(cell(r, i.tmdb));
+    const imdbId = imdbIdOf(cell(r, i.imdb));
+    const tvdbId = int(cell(r, i.tvdb));
+    if (tmdbId === null && !imdbId && tvdbId === null) continue;
+    out.push({
+      mediaType: kindFrom(cell(r, i.type), fallback),
+      tmdbId,
+      imdbId,
+      tvdbId,
+      title: str(cell(r, i.title)) ?? imdbId ?? `TMDB ${tmdbId ?? tvdbId}`,
+      year: int(cell(r, i.year)),
+    });
+  }
+  return out;
+}
+
+export function parseCustomDocument(text: string, s: Pick<CustomUrlSettings, 'format' | 'itemsPath'>, mediaType: ImportListMediaType): FetchedItem[] {
+  const trimmed = text.trim();
+  const format = s.format === 'auto' ? (trimmed.startsWith('[') || trimmed.startsWith('{') ? 'json' : 'csv') : s.format;
+  if (format === 'csv') return parseCsvList(trimmed, mediaType);
+  let json: unknown;
+  try {
+    json = JSON.parse(trimmed);
+  } catch (cause) {
+    throw new ImportListFetchError('bad-response', 'the document is not valid JSON', { cause });
+  }
+  return parseJsonFeed(atPath(json, s.itemsPath), mediaType);
+}
+
+export const customUrl: Provider<'customUrl'> = async (settings, mediaType, ctx) => {
+  const headers: Record<string, string> = { Accept: 'application/json, text/csv, text/plain' };
+  if (settings.headerName && settings.headerValue) headers[settings.headerName] = settings.headerValue;
+  const text = await getText(ctx, 'Custom list', settings.url, { headers });
+  return parseCustomDocument(text, settings, mediaType).filter((i) => wants(mediaType, i.mediaType));
 };
