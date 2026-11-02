@@ -44,6 +44,7 @@ import { useFeatures } from '../../hooks/music.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { ApproveDialog } from './approve-dialog.js';
 import { AudioRequestTable, RequestSearchCount } from './audio-request-list.js';
+import { BooksRequestTable } from './books-request-list.js';
 import { LanguageRequestTable } from './language-request-list.js';
 import '../../components/media/media-kit.css';
 import { t } from '../../i18n/index.js';
@@ -59,27 +60,30 @@ export const REQUEST_TABS: ReadonlyArray<{ id: RequestFilter; label: string }> =
 const PAGE_SIZE = 20;
 
 type VideoFilter = 'all' | 'movie' | 'series';
-type MediaFilter = VideoFilter | 'music' | 'audiobook' | 'language';
+type MediaFilter = VideoFilter | 'music' | 'audiobook' | 'books' | 'language';
 
 /** The media filter: movies and series, music and audiobooks while their flag is on, then subtitle and language requests. */
-export function requestMediaOptions(features: { music: boolean; audiobooks: boolean }): Array<{ value: MediaFilter; label: string }> {
+export function requestMediaOptions(features: { music: boolean; audiobooks: boolean; books?: boolean | undefined }): Array<{ value: MediaFilter; label: string }> {
   return [
     { value: 'all', label: t('requests.moviesAndSeries') },
     { value: 'movie', label: t('common.movies') },
     { value: 'series', label: t('common.series') },
     ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
     ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+    ...(features.books ? [{ value: 'books' as const, label: t('books.title') }] : []),
     { value: 'language', label: t('requests.language.filter') },
   ];
 }
 
 export function RequestsPage() {
-  const { can } = usePermissions();
+  const { can, allows } = usePermissions();
   const manage = can(Permission.MANAGE_REQUESTS);
   const features = useFeatures();
+  // Book requests: the flag, then managers or users whose ebook / comic request type is on.
+  const books = features.books === true && (manage || allows('ebook') || allows('comic'));
   const [tab, setTab] = useState<RequestFilter>(manage ? 'pending' : 'all');
   const [picked, setPicked] = useState<MediaFilter>('all');
-  const mediaOptions = requestMediaOptions(features);
+  const mediaOptions = requestMediaOptions({ ...features, books });
   // A flag turned off while its list was open falls back to movies and series.
   const mediaType = mediaOptions.some((o) => o.value === picked) ? picked : 'all';
   // Text search (`?q=`): title, requester, status, matched by the server. The lists are keyed by
@@ -112,6 +116,8 @@ export function RequestsPage() {
       </PageHeader>
       {mediaType === 'language' ? (
         <LanguageRequestTable key={listKey} filter={tab} manage={manage} q={search.q} onClearSearch={search.clear} />
+      ) : mediaType === 'books' ? (
+        <BooksRequestTable key={listKey} filter={tab} manage={manage} />
       ) : mediaType === 'music' || mediaType === 'audiobook' ? (
         <AudioRequestTable key={listKey} filter={tab} domain={mediaType} manage={manage} q={search.q} onClearSearch={search.clear} />
       ) : (

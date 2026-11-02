@@ -30,7 +30,7 @@ export interface HealthFs {
 
 export interface HealthRootFolder {
   path: string;
-  mediaType: 'series' | 'movie' | 'music' | 'audiobook';
+  mediaType: 'series' | 'movie' | 'music' | 'audiobook' | 'ebook' | 'comic';
   /** Series/movies stored under this root (audio roots: 0 until the audio modules count theirs). */
   itemCount: number;
 }

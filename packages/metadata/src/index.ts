@@ -134,4 +134,5 @@ export * from './audnexus/index.js';
 export * from './audible/index.js';
 export * from './openlibrary/index.js';
 export * from './audiobook-catalog/index.js';
+export * from './books/index.js';
 export { normalizeIsbn, toIsbn13 } from './audiobook-util.js';

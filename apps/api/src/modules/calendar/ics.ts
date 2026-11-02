@@ -15,6 +15,21 @@ export interface IcsOptions {
   /** DTSTAMP for every event; defaults to now. */
   now?: Date;
   calendarName?: string;
+  /** All-day events of other modules (the books section), after the built-in items. */
+  extraEvents?: IcsDayEvent[];
+}
+
+/** An all-day event another module adds to the feed. */
+export interface IcsDayEvent {
+  /** Unique across the feed, e.g. `arclight-ebook-12@arclight`. */
+  uid: string;
+  /** `YYYY-MM-DD`. */
+  date: string;
+  summary: string;
+  description?: string;
+  category: string;
+  /** CONFIRMED when the item is on disk, else TENTATIVE. */
+  confirmed: boolean;
 }
 
 export function escapeText(value: string): string {
@@ -143,6 +158,20 @@ function eventLines(item: CalendarItem, stamp: string): string[] {
   return lines;
 }
 
+function dayEventLines(e: IcsDayEvent, stamp: string): string[] {
+  const lines = [
+    'BEGIN:VEVENT',
+    `UID:${e.uid}`,
+    `DTSTAMP:${stamp}`,
+    `DTSTART;VALUE=DATE:${dateValue(e.date)}`,
+    `DTEND;VALUE=DATE:${nextDay(e.date)}`,
+    `SUMMARY:${escapeText(e.summary)}`,
+  ];
+  if (e.description) lines.push(`DESCRIPTION:${escapeText(e.description)}`);
+  lines.push(`CATEGORIES:${escapeText(e.category)}`, `STATUS:${e.confirmed ? 'CONFIRMED' : 'TENTATIVE'}`, 'END:VEVENT');
+  return lines;
+}
+
 export function renderIcs(items: CalendarItem[], options: IcsOptions = {}): string {
   const stamp = utcStamp(options.now ?? new Date());
   const lines = [
@@ -153,6 +182,7 @@ export function renderIcs(items: CalendarItem[], options: IcsOptions = {}): stri
     'METHOD:PUBLISH',
     `X-WR-CALNAME:${escapeText(options.calendarName ?? 'Arclight')}`,
     ...items.flatMap((item) => eventLines(item, stamp)),
+    ...(options.extraEvents ?? []).flatMap((e) => dayEventLines(e, stamp)),
     'END:VCALENDAR',
   ];
   return lines.map(foldLine).join('\r\n') + '\r\n';

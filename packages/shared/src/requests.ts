@@ -151,12 +151,16 @@ export const RequestTypes = z.object({
   audioLanguages: z.boolean().default(true),
   /** Podcast suggestions (a feed for the admins to subscribe to). */
   podcast: z.boolean().default(true),
+  /** Ebook requests (Books section). */
+  ebook: z.boolean().default(true),
+  /** Comic requests (Books section). */
+  comic: z.boolean().default(true),
 });
 export type RequestTypes = z.infer<typeof RequestTypes>;
 export type RequestTypeKey = keyof RequestTypes;
 /** Display order. */
-export const REQUEST_TYPE_KEYS: readonly RequestTypeKey[] = ['movie', 'series', 'music', 'audiobook', 'subtitles', 'audioLanguages', 'podcast'];
-export const ALL_REQUEST_TYPES: RequestTypes = { movie: true, series: true, music: true, audiobook: true, subtitles: true, audioLanguages: true, podcast: true };
+export const REQUEST_TYPE_KEYS: readonly RequestTypeKey[] = ['movie', 'series', 'music', 'audiobook', 'ebook', 'comic', 'subtitles', 'audioLanguages', 'podcast'];
+export const ALL_REQUEST_TYPES: RequestTypes = { movie: true, series: true, music: true, audiobook: true, ebook: true, comic: true, subtitles: true, audioLanguages: true, podcast: true };
 
 /** A stored filter, defaults applied; malformed values count as every type on. */
 export function requestTypesOfSettings(settings: unknown): RequestTypes {

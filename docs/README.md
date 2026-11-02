@@ -59,6 +59,7 @@ These pages follow the app's navigation.
 | Calendar | [calendar.md](using/calendar.md) |
 | Activity (Queue, History, Blocklist, Pending, Manual import) | [activity.md](using/activity.md) |
 | Wanted (Missing, Cutoff unmet, released and upcoming filter) | [wanted.md](using/wanted.md) |
+| Books: ebooks, comics, manga and graphic novels (metadata sources, format profiles, naming, library apps, requests) | [books.md](using/books.md) |
 | Interactive search and "why this release" | [interactive-search.md](using/interactive-search.md) |
 | Subtitles | [subtitles.md](using/subtitles.md) |
 | Media management, naming and unreleased items | [media-management.md](using/media-management.md) |

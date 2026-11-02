@@ -239,3 +239,12 @@ function packFileNumber(series: NonNullable<ParsedRelease['series']>, base: stri
     series.isEpisodeRange = false;
   }
 }
+export {
+  bookTitleKey,
+  parseComicPath,
+  parseComicRelease,
+  parseEbookPath,
+  parseEbookRelease,
+  type ParsedComicRelease,
+  type ParsedEbookRelease,
+} from './books.js';

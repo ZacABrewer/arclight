@@ -24,6 +24,7 @@ import { libraryModuleWith, type MetadataLookup } from './modules/library/index.
 import { musicModule } from './modules/music/index.js';
 import { audiobooksModule } from './modules/audiobooks/index.js';
 import { podcastsModule } from './modules/podcasts/index.js';
+import { booksModule } from './modules/books/index.js';
 import { indexersModule } from './modules/indexers/index.js';
 import { solverModule } from './modules/solver/index.js';
 import { downloadClientsModule } from './modules/download-clients/index.js';
@@ -157,6 +158,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     audiobooksModule,
     // Podcasts (features.podcasts): feeds, episode downloads, suggestions, /settings/podcasts.
     podcastsModule,
+    // Ebooks and comics (the Books section): authors, books, comic series, issues, requests.
+    booksModule,
     profilesModule,
     guidesModule,
     // Theme packs: catalogue, pack files and the sync from the repository.

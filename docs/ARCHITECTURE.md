@@ -154,8 +154,7 @@ Sonarr/Radarr v3-shaped endpoints let third-party tools talk to Arclight (see
 
 ## Out of scope
 
-Media playback and library streaming (media servers do that). Ebooks, comics and podcasts
-are not supported.
+Media playback and library streaming (media servers do that).
 
 ## Licence
 

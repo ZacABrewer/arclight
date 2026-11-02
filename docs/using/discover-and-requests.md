@@ -299,7 +299,7 @@ Vote is reserved and has no effect yet. After changing a user, click **Save perm
 
 ### Request types
 
-**Request** covers every kind of request: movies, series, music, audiobooks, subtitles, audio languages and podcast suggestions. To keep someone off a kind while leaving the rest, open **Settings > Users > Manage > Caps and approval**, turn the type off under **Request types**, then **Save caps and approval**.
+**Request** covers every kind of request: movies, series, music, audiobooks, ebooks, comics, subtitles, audio languages and podcast suggestions. To keep someone off a kind while leaving the rest, open **Settings > Users > Manage > Caps and approval**, turn the type off under **Request types**, then **Save caps and approval**.
 
 | Type | What turning it off blocks |
 | --- | --- |
@@ -307,6 +307,8 @@ Vote is reserved and has no effect yet. After changing a user, click **Save perm
 | Series | Series and season requests (and 4K series requests). |
 | Music | Album and artist requests. |
 | Audiobooks | Audiobook and author requests. |
+| Ebooks | Ebook requests (see [Books](books.md#requests)). |
+| Comics | Comic series, manga and graphic novel requests (see [Books](books.md#requests)). |
 | Subtitles | Subtitle requests on titles in the library. |
 | Audio languages | Additional audio language requests on titles in the library. |
 | Podcasts | Podcast suggestions from **Discover > Podcasts** (see [Podcasts](podcasts.md#suggestions-from-the-request-portal)). |

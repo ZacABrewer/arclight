@@ -13,7 +13,7 @@ One self-hosted app that does the jobs of Sonarr (TV), Radarr (movies), Prowlarr
 No. It finds, downloads, imports, renames and fetches subtitles for your TV and movies, then tells Jellyfin, Emby or Plex to rescan. You still watch through your media server. See [Media servers](using/media-servers.md).
 
 ### Does it replace Sonarr, Radarr, Prowlarr, Bazarr and Overseerr?
-Yes, each of those jobs is built in: [Library](using/library.md) (Sonarr/Radarr), [Indexers](using/indexers.md) (Prowlarr), [Subtitles](using/subtitles.md) (Bazarr) and [Discover and requests](using/discover-and-requests.md) (Seerr). It also manages music (Lidarr) and audiobooks (Readarr) in the same [Library](using/library.md). It does not replace a media server (the known gaps are in [known limitations](qa/99-known-limitations.md)).
+Yes, each of those jobs is built in: [Library](using/library.md) (Sonarr/Radarr), [Indexers](using/indexers.md) (Prowlarr), [Subtitles](using/subtitles.md) (Bazarr) and [Discover and requests](using/discover-and-requests.md) (Seerr). It also manages music (Lidarr) and audiobooks (Readarr) in the same [Library](using/library.md). Ebooks and comics, manga and graphic novels (Readarr, Mylar3, Kapowarr) live under [Books](using/books.md). It does not replace a media server (the known gaps are in [known limitations](qa/99-known-limitations.md)).
 
 ### Can I run it next to my existing Sonarr and Radarr while I try it?
 Yes, but let only one app download, or they will fight over the same titles. Radarr also uses port 7878, so give Arclight another host port (`ARCLIGHT_PORT`, or the left side of the `7878:7878` mapping in compose). See [Migrating](getting-started/migrating.md).

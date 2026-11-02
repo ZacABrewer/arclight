@@ -24,6 +24,13 @@ import { AuthorDetailsPage } from './pages/library/audiobooks/author-details.js'
 import { BookDetailsPage } from './pages/library/audiobooks/book-details.js';
 import { SeriesDetailsPage as BookSeriesDetailsPage } from './pages/library/audiobooks/series-details.js';
 import { AudiobookLibraryImportPage, MusicLibraryImportPage } from './pages/library/library-import/library-import-page.js';
+import { BooksShelfPage } from './pages/library/books/books-shelf.js';
+import { EbookAuthorDetailsPage } from './pages/library/books/ebook-author-details.js';
+import { EbookSeriesDetailsPage } from './pages/library/books/ebook-series-details.js';
+import { ComicSeriesDetailsPage } from './pages/library/books/comic-details.js';
+import { BooksAddPage } from './pages/library/books/books-add.js';
+import { BooksWantedPage } from './pages/library/books/books-wanted.js';
+import { BooksSettingsPage } from './pages/settings/books/books-settings-page.js';
 import { MovieLibraryPage, SeriesLibraryPage } from './pages/library/library-index.js';
 import { MovieDetailsPage } from './pages/library/movie-details.js';
 import { SeriesDetailsPage } from './pages/library/series-details.js';
@@ -275,6 +282,13 @@ export const routeTree = rootRoute.addChildren([
   page('/podcasts/add', PodcastAddPage),
   page('/podcasts/suggestions', PodcastSuggestionsPage),
   page('/podcasts/$id', PodcastDetailsPage),
+  // Books: ebooks and comics (feature flag `books`; the pages answer 404 while it is off).
+  page('/library/books', BooksShelfPage),
+  page('/library/books/add', BooksAddPage),
+  page('/library/books/wanted', BooksWantedPage),
+  page('/library/books/authors/$id', EbookAuthorDetailsPage),
+  page('/library/books/series/$id', EbookSeriesDetailsPage),
+  page('/library/books/comics/$id', ComicSeriesDetailsPage),
   page('/library/series/$id', SeriesDetailsPage),
   page('/library/movie/$id', MovieDetailsPage),
   page('/library/collections', CollectionsPage),
@@ -350,6 +364,7 @@ export const routeTree = rootRoute.addChildren([
   page('/settings/discordbot', DiscordBotSettingsPage),
   page('/settings/subtitles', SubtitleSettingsPage),
   page('/settings/podcasts', PodcastSettingsPage),
+  page('/settings/books', BooksSettingsPage),
   page('/settings/solver', SolverSettingsPage),
   page('/settings/updates', UpdatesSettingsPage),
   sectionRedirect('/settings/media-management', '/settings/mediamanagement'),

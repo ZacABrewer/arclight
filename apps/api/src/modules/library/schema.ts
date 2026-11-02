@@ -22,7 +22,7 @@ export const rootFolders = sqliteTable(
     id: integer('id').primaryKey({ autoIncrement: true }),
     path: text('path').notNull(),
     // Enum is TS-only on SQLite; music/audiobook roots need no migration of the column.
-    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook'] }).notNull(),
+    mediaType: text('media_type', { enum: ['series', 'movie', 'music', 'audiobook', 'ebook', 'comic'] }).notNull(),
   },
   (t) => [uniqueIndex('root_folders_path_idx').on(t.path)],
 );

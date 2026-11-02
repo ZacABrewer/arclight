@@ -15,6 +15,10 @@ export function rootKindLabel(mediaType: AnyMediaType | (string & {}), seriesLab
       return t('common.music');
     case 'audiobook':
       return t('common.audiobooks');
+    case 'ebook':
+      return t('books.kind.ebooks');
+    case 'comic':
+      return t('books.kind.comics');
     default:
       return mediaType;
   }

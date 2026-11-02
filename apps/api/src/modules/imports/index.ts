@@ -5,7 +5,14 @@ import { registerImportJobs } from './jobs.js';
 import { importsRoutes } from './routes.js';
 import { ImportsService } from './service.js';
 
-export { ImportsService, ImportsError, type ImportRunResult, type ImportOutcome, type DownloadClientsPort } from './service.js';
+export {
+  ImportsService,
+  ImportsError,
+  type CompletedDownloadHandler,
+  type ImportRunResult,
+  type ImportOutcome,
+  type DownloadClientsPort,
+} from './service.js';
 export { IMPORT_JOBS } from './jobs.js';
 export type * from './deps.js';
 export { createFfprobeProbe, ffprobeAvailable, noProbe } from './scan.js';

@@ -3,7 +3,7 @@ import {
   ColonReplacement,
   MultiEpisodeStyle,
   NAMING_DEFAULTS,
-  type AnyMediaType,
+  type RootFolderMediaType,
   type NamingConfig,
   type RootFolder,
 } from '@arclight/shared';
@@ -332,9 +332,15 @@ export function RootFolderRow({ folder, maxFree, onRemove }: { folder: RootFolde
   );
 }
 
-/** Root folder types on offer: music and audiobook roots while their flags are on. */
-export function rootFolderKinds(features: { music: boolean; audiobooks: boolean }): AnyMediaType[] {
-  return ['series', 'movie', ...(features.music ? (['music'] as const) : []), ...(features.audiobooks ? (['audiobook'] as const) : [])];
+/** Root folder types on offer: music, audiobook, ebook and comic roots while their flags are on. */
+export function rootFolderKinds(features: { music: boolean; audiobooks: boolean; books?: boolean | undefined }): RootFolderMediaType[] {
+  return [
+    'series',
+    'movie',
+    ...(features.music ? (['music'] as const) : []),
+    ...(features.audiobooks ? (['audiobook'] as const) : []),
+    ...(features.books ? (['ebook', 'comic'] as const) : []),
+  ];
 }
 
 function RootFoldersSection() {
@@ -342,7 +348,7 @@ function RootFoldersSection() {
   const add = useAddRootFolder();
   const remove = useDeleteRootFolder();
   const [picking, setPicking] = useState(false);
-  const [pending, setPending] = useState<{ path: string; mediaType: AnyMediaType } | null>(null);
+  const [pending, setPending] = useState<{ path: string; mediaType: RootFolderMediaType } | null>(null);
   const features = useFeatures();
   const kinds = rootFolderKinds(features);
   const [removing, setRemoving] = useState<RootFolder | null>(null);

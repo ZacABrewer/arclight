@@ -8,6 +8,8 @@ import {
   AudioImportSettings,
   AudioRequestDefaults,
   BackupSettings,
+  BOOKS_SECRET_FIELDS,
+  BooksSettings,
   CompatSettings,
   CrossSeedSettings,
   DiscordBotSettings,
@@ -155,6 +157,9 @@ const sections = {
   // Owned by the podcasts module: root folder, naming, polling, defaults and Podcast Index
   // credentials (routes under /settings/podcasts; podcastIndexSecret masked there).
   podcasts: PodcastSettings,
+  // Owned by the books module: catalogue sources, naming and search (routes under /books/settings;
+  // BOOKS_SECRET_FIELDS masked there).
+  books: BooksSettings,
 } as const;
 
 export type SettingsSection = keyof typeof sections;
@@ -272,6 +277,34 @@ export function getAudiobookMetadataSettings(db: Db): AudiobookMetadataSettings 
 
 export function updateAudiobookMetadataSettings(db: Db, update: AudiobookMetadataSettingsUpdate): AudiobookMetadataSettings {
   return setSection(db, 'audiobookMetadata', applyAudiobookMetadataUpdate(getSection(db, 'audiobookMetadata'), update));
+}
+
+// ---------------------------------------------------------------------------------------
+// books section: secret masking
+// ---------------------------------------------------------------------------------------
+
+/** The `books` section with every stored secret (BOOKS_SECRET_FIELDS) replaced by SECRET_MASK. */
+export function maskBooksSettings(value: BooksSettings): BooksSettings {
+  const metadata = { ...value.metadata };
+  for (const field of BOOKS_SECRET_FIELDS) if (metadata[field]) metadata[field] = SECRET_MASK;
+  return { ...value, metadata };
+}
+
+export function getBooksSettings(db: Db): BooksSettings {
+  return maskBooksSettings(getSection(db, 'books'));
+}
+
+/** Replace the `books` section; a secret sent back as SECRET_MASK keeps the stored value. */
+export function updateBooksSettings(db: Db, update: unknown): BooksSettings {
+  const parsed = BooksSettings.safeParse(update);
+  if (!parsed.success) throw new SettingsError('VALIDATION', parsed.error.message);
+  const current = getSection(db, 'books');
+  const next = parsed.data;
+  for (const field of BOOKS_SECRET_FIELDS) {
+    if (next.metadata[field] === SECRET_MASK) next.metadata[field] = current.metadata[field];
+    else next.metadata[field] = next.metadata[field].trim();
+  }
+  return maskBooksSettings(setSection(db, 'books', next));
 }
 
 // ---------------------------------------------------------------------------------------
