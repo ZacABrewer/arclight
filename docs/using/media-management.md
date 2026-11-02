@@ -111,9 +111,34 @@ These settings sit under the **Importing** heading.
 | Minimum free space (Advanced) | 100 MB | Refuse to import if less than this would remain on the drive |
 | Stalled download after | 10 min | Flag a download as stalled if it receives no data for this long. 0 turns this off. Paused, queued and kill-switch-paused downloads are never flagged |
 
-Two more import options exist in the stored settings but have no switch on this page: completed download handling and re-download of failed downloads. Both default to on. Arclight also treats folders whose names start with `_UNPACK_` or `_FAILED_` (the working folders some download clients unpack into) as "still being unpacked" and does not import from them.
+Two more import options exist in the stored settings but have no switch on this page: completed download handling and re-download of failed downloads. Both default to on. Arclight also treats folders whose names start with `_UNPACK_` or `_FAILED_` (the working folders some download clients unpack into) as "still being unpacked" and does not import from them. Arclight's own unpacking is described under [Archives](#archives).
 
 When a download finishes, Arclight checks it (right episode or movie, not a sample, enough disk space, a real quality upgrade, and so on). If a check fails, the item stays in Activity as blocked; see [Import blocked or failed](../TROUBLESHOOTING.md#import-blocked-or-failed). The checks are described in the [import spec](../spec/import.md).
+
+### Download safety
+
+These settings sit under the **Download safety** heading. All of them are on by default.
+
+| Setting | Default | What it does |
+|---|---|---|
+| Unpack archives | On | Extracts releases packed in RAR (including `.part01.rar` and `.r00` sets), 7z or zip archives before the import. See [Archives](#archives) |
+| Reject fake and unsafe releases | On | Checks a torrent's file list as soon as the client knows it, and the files on disk again before the import. A release that fails is removed with its data, blocklisted with the reason and searched for again |
+| Blocked file extensions | `exe, scr, ...` | Comma-separated. A release that contains any of these is rejected. Programs, scripts and shortcuts (`.exe`, `.bat`, `.lnk`, `.js` and the like) are always blocked, even if you empty the list. `.zipx` is on the default list |
+| Reject implausibly small videos | On | Rejects a release whose main video is far too small for its resolution and runtime, for example a 40 MB "1080p movie". The floor is about 0.7 MiB per minute for SD, 1.5 for 720p, 2.5 for 1080p and 5 for 2160p. That is well below any real encode. The runtime comes from the library, or 80 minutes for a movie and 20 for an episode when it is not known |
+| Keep stalled torrents with seeding rules | On | Stall recovery does not remove a stalled torrent from a private tracker with a hit-and-run rule (minimum seeding time or ratio, set under Indexers > Tracker stats) once it has data. Removing it could count as a hit-and-run. The queue row says why it was kept, and you decide |
+
+A release is also rejected when it holds no video file at all (no audio file for music and audiobooks), or when one of its archives is password-protected, damaged or missing a volume. The rejection shows in the queue row's Timeline, in a banner above the queue for a day, and in Activity > History with the reason. It also sends the **Download rejected (unsafe)** notification.
+
+<a id="archives"></a>
+### Archives
+
+When a completed download contains archives and no video of its own, Arclight extracts them into a hidden `.arclight-unpacked` folder next to the download. It never extracts inside the download itself. It then imports from there and removes the extracted copies, so the original archives stay in place and the torrent keeps seeding.
+
+- Multi-part sets are joined. An archive found inside an archive is extracted once more (one level only).
+- Before extracting, Arclight checks the free space on that drive against **Minimum free space**. When there is not enough, the import waits and is retried.
+- While it works, the queue row shows **Unpacking 42%**.
+- This works for the built-in engine and for qBittorrent, Transmission, Deluge and rTorrent. SABnzbd and NZBGet unpack downloads themselves, so usenet downloads are never unpacked again.
+- Unpacking uses 7-Zip (`7zz`, version 23 or newer for RAR5). The Docker image includes it. On other installs, put `7zz` or `7z` on the PATH, or set `ARCLIGHT_7ZIP` to its full path. Without it, archived downloads stay blocked and Health shows [seven-zip-missing](../TROUBLESHOOTING.md#seven-zip-missing).
 
 ### Hardlink, copy or move
 

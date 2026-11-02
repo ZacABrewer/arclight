@@ -58,6 +58,15 @@ export type DownloadPropersAndRepacks = z.infer<typeof DownloadPropersAndRepacks
 export const FileDateMode = z.enum(['none', 'localAirDate', 'utcAirDate', 'releaseDate']);
 export type FileDateMode = z.infer<typeof FileDateMode>;
 
+/**
+ * File types the release-safety filter rejects by default: executables, scripts, installers,
+ * shortcuts and archives that hide their content (.zipx). Media releases never need them.
+ */
+export const DEFAULT_BLOCKED_EXTENSIONS = [
+  'exe', 'scr', 'bat', 'cmd', 'com', 'msi', 'msp', 'lnk', 'pif', 'vbs', 'vbe', 'js', 'jse', 'wsf', 'wsh', 'hta',
+  'ps1', 'psm1', 'jar', 'apk', 'cpl', 'reg', 'dll', 'zipx',
+] as const;
+
 /** Stored form of the `mediaManagement` section; also the GET/PUT body of /settings/mediamanagement. */
 export const MediaManagementSettings = z.object({
   enableCompletedDownloadHandling: z.boolean().default(true),
@@ -78,6 +87,28 @@ export const MediaManagementSettings = z.object({
    * `minimumFreeSpaceMb`, and pause downloads while it is below it.
    */
   diskSpaceGuard: z.boolean().default(true),
+  /**
+   * Stall recovery never replaces a torrent from a tracker with a hit-and-run rule once it has
+   * received data (removing it would count as a hit-and-run); it is only re-announced.
+   */
+  stallRespectHitAndRun: z.boolean().default(true),
+  /**
+   * Extract RAR / 7z / zip sets of finished torrents into a staging folder next to the download,
+   * import from there and delete the extracted copies afterwards (the archives keep seeding).
+   * Usenet clients unpack themselves, so their downloads are left alone.
+   */
+  unpackArchives: z.boolean().default(true),
+  /**
+   * Release-safety filter: check a torrent's file list once its metadata is known (and every
+   * download before import) and reject fakes: blocked file types, password-protected or .zipx
+   * archives, no media at all, or media implausibly small for the quality and runtime. A
+   * rejected download is removed with its data, blocklisted and searched for again.
+   */
+  releaseSafetyFilter: z.boolean().default(true),
+  /** Extensions (without dots) that make the filter reject a release. */
+  blockedExtensions: z.array(z.string().trim().min(1)).default([...DEFAULT_BLOCKED_EXTENSIONS]),
+  /** Part of the filter: reject releases whose main video is far too small for its quality and runtime. */
+  rejectImplausibleSize: z.boolean().default(true),
   /** Empty or absent: replaced/deleted files are deleted permanently. */
   recycleBinPath: z.string().optional(),
   /** 0 disables cleanup. */

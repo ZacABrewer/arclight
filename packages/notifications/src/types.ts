@@ -250,6 +250,7 @@ export const NOTIFICATION_EVENT_TYPES = [
   'healthScan',
   'fileTranscoded',
   'downloadStalled',
+  'downloadRejected',
   'killSwitch',
   'killSwitchResumed',
   'importProblem',
@@ -509,6 +510,17 @@ export interface DownloadStalledEvent extends EventBase {
 }
 
 /**
+ * A download was rejected by the fake-release / malware filter (blocked file types, no media,
+ * implausible size, password-protected archives): removed with its data and blocklisted.
+ */
+export interface DownloadRejectedEvent extends EventBase {
+  type: 'downloadRejected';
+  download: DownloadAlertInfo;
+  /** Why it was rejected. */
+  message?: string;
+}
+
+/**
  * The VPN kill switch paused the built-in engine's downloads. One event per lockdown, not per
  * torrent. `pausedMinutes` is set on the reminder sent when a lockdown outlasts the urgent limit.
  */
@@ -577,6 +589,7 @@ export interface HeldAlertsEvent extends EventBase {
 export type NotificationEvent =
   | TestEvent
   | DownloadStalledEvent
+  | DownloadRejectedEvent
   | KillSwitchEvent
   | KillSwitchResumedEvent
   | ImportProblemEvent

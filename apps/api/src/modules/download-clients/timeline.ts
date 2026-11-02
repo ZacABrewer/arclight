@@ -28,6 +28,8 @@ export const EVENT_SEVERITY: Readonly<Record<DownloadEventType, QueueSeverity>> 
   reannounced: 'info',
   replaced: 'warning',
   held: 'warning',
+  unpacked: 'ok',
+  rejected: 'error',
 };
 
 /** Timeline entries are kept this long by default (DownloadEventsCleanup). */

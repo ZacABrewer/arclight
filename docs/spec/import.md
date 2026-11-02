@@ -188,7 +188,7 @@ When a folder produced no results, report the first of:
 1. Dangerous extension file present.
 2. Executable extension file present.
 3. **[Sonarr]** user-rejected extension file present.
-4. Archive file present → ArchiveFile "Found archive file, might need to be extracted".
+4. Archive file present → ArchiveFile "Found archive file, might need to be extracted". With `unpackArchives` on (torrent downloads only) a download with archives and no non-sample video is extracted first, into `.arclight-unpacked/<name>` next to it, and the import runs on the extracted files (always a move). The archives are left for seeding.
 
 ### 4.7 File filters
 

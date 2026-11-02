@@ -12,6 +12,7 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
   type ItemSpeedLimits,
   type QueueMove,
 } from '../types.js';
@@ -308,6 +309,13 @@ export class QBittorrentClient implements DownloadClient {
   async setCategory(id: string, category: string): Promise<void> {
     if (category !== '') await this.ensureCategory(category);
     await this.post('/api/v2/torrents/setCategory', { hashes: id.toLowerCase(), category });
+  }
+
+  /** qBittorrent lists no files while a magnet is still fetching its metadata. */
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    const files = await this.session.requestJson('/api/v2/torrents/files', QbtFileList, { query: { hash: id.toLowerCase() } });
+    if (files.length === 0) return null;
+    return files.map((f) => ({ path: f.name.replaceAll('\\', '/'), sizeBytes: Math.max(0, f.size ?? 0) }));
   }
 
   async pause(id: string): Promise<void> {

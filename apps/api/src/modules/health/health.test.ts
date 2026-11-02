@@ -28,6 +28,7 @@ import {
   mountReadOnlyCheck,
   notificationConfigCheck,
   notificationStatusCheck,
+  sevenZipMissingCheck,
   recycleBinCheck,
   remotePathMappingCheck,
   rootFolderCheck,
@@ -196,6 +197,17 @@ describe('root folder checks', () => {
 // ---------------------------------------------------------------------------------------
 // Download clients
 // ---------------------------------------------------------------------------------------
+
+describe('archive unpacking check', () => {
+  it('warns only when unpacking is on and no 7-Zip is installed', async () => {
+    const [r] = await run(sevenZipMissingCheck, fakeDeps({ unpacking: async () => ({ enabled: true, binary: null }) }));
+    expect(r).toMatchObject({ source: 'SevenZipMissing', status: 'warning', wikiUrl: expect.stringContaining('seven-zip-missing') });
+    expect(r!.message).toContain('7-Zip (7zz) is not installed');
+    expect(await run(sevenZipMissingCheck, fakeDeps({ unpacking: async () => ({ enabled: true, binary: '7zz' }) }))).toEqual([]);
+    expect(await run(sevenZipMissingCheck, fakeDeps({ unpacking: async () => ({ enabled: false, binary: null }) }))).toEqual([]);
+    expect(await run(sevenZipMissingCheck, fakeDeps())).toEqual([]);
+  });
+});
 
 describe('download client checks', () => {
   it('warns when no download client is enabled', async () => {

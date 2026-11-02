@@ -171,7 +171,7 @@ areas yet.
 |---|---|
 | Multi-season packs are rejected ("Multi-season releases are not supported" by the decision engine; "Multi-season download, unable to import automatically" on import). | Grab season packs one season at a time. |
 | Partial season packs and season extras are not imported automatically ("Partial season packs are not supported", "Extras are not supported"). | Use Activity -> Manual Import. |
-| Archive files (.rar, .zip) in a completed download are not extracted by Arclight ("Found archive file, might need to be extracted"). | Configure the download client to unpack, or extract by hand then Manual Import. |
+| Archives are extracted only when the download has no video of its own, and only one nested level deep. Usenet downloads are never unpacked by Arclight (SABnzbd and NZBGet do it). Without 7-Zip, archived torrent downloads stay blocked ("7-Zip (7zz) is not installed"). | Install 7-Zip, or extract by hand then Manual Import. |
 | Language profiles for audio language live on the quality profile; subtitle language profiles are separate (Settings -> Subtitles). | |
 | Metadata comes from TMDB only (no TVDB fallback, no image caching on disk). | Series without TMDB episode data show gaps; posters load from TMDB each time. |
 | Docker image includes Jellyfin's ffmpeg and ffprobe but not ffsubsync or alass. | Subtitle sync with the `tool` method is unavailable unless you install them in a derived image; the `builtin` sync check works. |

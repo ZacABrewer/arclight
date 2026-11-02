@@ -17,6 +17,7 @@ import {
 import { getDownloadClientsService } from '../download-clients/index.js';
 import { communityCatalogueFor, indexersServiceFor } from '../indexers/index.js';
 import { notificationsServiceFor } from '../notifications/index.js';
+import { findSevenZip } from '../imports/unpack/sevenzip.js';
 import { getSection } from '../settings/service.js';
 import { subtitlesServiceFor } from '../subtitles/index.js';
 import { torrentServiceFor } from '../torrent/index.js';
@@ -255,6 +256,11 @@ export function createHealthDeps(ctx: AppContext, env: NodeJS.ProcessEnv = proce
     remoteEngines: () => downloads.remoteEngineHealth(),
 
     whisper: () => subtitlesServiceFor(ctx).whisperStatus(),
+
+    async unpacking() {
+      const enabled = getSection(db, 'mediaManagement').unpackArchives !== false;
+      return { enabled, binary: enabled ? await findSevenZip({ refresh: true }) : null };
+    },
 
     async flareSolverrs() {
       const proxies = indexersServiceFor(ctx).proxies;

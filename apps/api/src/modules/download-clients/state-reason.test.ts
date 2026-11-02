@@ -28,6 +28,19 @@ describe('deriveState', () => {
     expect(derive({ state: 'importing' }).reason).toBe('Importing into the library.');
   });
 
+  it('shows unpacking progress while archives are extracted', () => {
+    expect(derive({ state: 'importing', unpackProgress: 0.42 })).toEqual({ code: 'unpacking', severity: 'info', reason: 'Unpacking archives: 42%.' });
+  });
+
+  it('says why a stalled torrent is kept for its hit-and-run rule', () => {
+    const r = derive({
+      stalledSince: '2026-01-01T00:00:00.000Z',
+      stallRecovery: { keptForSeedRule: 'Tracker A has a hit-and-run rule (72 h of seeding)' },
+    });
+    expect(r.code).toBe('stalled');
+    expect(r.reason).toContain('Not removed automatically: Tracker A has a hit-and-run rule (72 h of seeding).');
+  });
+
   it('says the engine is starting instead of unreachable while it restores torrents', () => {
     const r = derive({ engineStarting: true, clientError: 'The built-in torrent engine is not running.' });
     expect(r).toMatchObject({ code: 'checking', severity: 'info' });

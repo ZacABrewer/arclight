@@ -24,6 +24,9 @@ export const TORRENT_FIELDS = [
 ] as const;
 
 const count = z.number().int().transform((n) => Math.max(0, n));
+
+/** `f.multicall <hash> "" f.path= f.size_bytes=`: one [path, size] row per file. */
+export const RTorrentFileList = z.array(z.tuple([z.string(), count]));
 /** rTorrent reports booleans as integers 0/1. */
 const flag = z.union([z.number(), z.boolean()]).transform((v) => v === true || (typeof v === 'number' && v !== 0));
 

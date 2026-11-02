@@ -13,7 +13,14 @@ import { flareSolverrUnreachableCheck } from './flaresolverr.js';
 import { hardLinkCheck } from './hard-links.js';
 import { feedStaleCheck, indexerCatalogueEmptyCheck } from './feeds.js';
 import { torrentEngineCheck } from './torrent.js';
-import { diskGuardCheck, downloadDiskSpaceCheck, killSwitchFlappingCheck, stalledDownloadsCheck, torrentLockdownCheck } from './downloads.js';
+import {
+  diskGuardCheck,
+  downloadDiskSpaceCheck,
+  killSwitchFlappingCheck,
+  sevenZipMissingCheck,
+  stalledDownloadsCheck,
+  torrentLockdownCheck,
+} from './downloads.js';
 import { remoteEngineUnreachableCheck } from './remote-engine.js';
 import { vpnDisconnectedCheck } from './vpn.js';
 import { whisperUnreachableCheck } from '../../subtitles/whisper.js';
@@ -53,6 +60,7 @@ export function createChecks(): HealthCheckDef[] {
     downloadDiskSpaceCheck,
     diskGuardCheck,
     stalledDownloadsCheck,
+    sevenZipMissingCheck,
     indexerCheck,
     indexerStatusCheck,
     indexerLongTermStatusCheck,

@@ -1,6 +1,7 @@
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import Fastify from 'fastify';
 import { serializerCompiler, validatorCompiler, type ZodTypeProvider } from 'fastify-type-provider-zod';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
@@ -20,11 +21,13 @@ import { createTestDb } from '../../db/test-utils.js';
 import { EventBus } from '../../events.js';
 import type { TrackedDownload } from '../download-clients/index.js';
 import { libraryService } from '../library/index.js';
-import { setSection } from '../settings/service.js';
+import { getSection, setSection } from '../settings/service.js';
 import type { ImportedEvent, ImportsDeps } from './deps.js';
 import { importsRoutes } from './routes.js';
 import * as tables from './schema.js';
 import { ImportsService, type DownloadClientsPort } from './service.js';
+import { findSevenZip, SevenZip } from './unpack/sevenzip.js';
+import { STAGING_FOLDER } from './unpack/unpacker.js';
 
 const NOW = '2024-06-15T12:00:00.000Z';
 
@@ -57,6 +60,20 @@ class FakeDownloads implements DownloadClientsPort {
   listTracked(states?: readonly TrackedDownloadState[]) {
     return [...this.items.values()].filter((i) => !states || states.includes(i.trackedState));
   }
+  rejected: Array<{ id: number; reason: string; trigger: string; rule?: string | undefined }> = [];
+  unpackProgress: Array<number | null> = [];
+  timeline: string[] = [];
+  async rejectUnsafe(id: number, reason: string, trigger: 'metadata' | 'import' | 'unpack', rule?: string) {
+    this.rejected.push({ id, reason, trigger, rule });
+    this.items.delete(id);
+    return { id, blocklisted: true, searchStarted: true, message: reason };
+  }
+  setUnpackProgress(_downloadId: string, fraction: number | null) {
+    this.unpackProgress.push(fraction);
+  }
+  recordEvent(_id: number, type: string) {
+    this.timeline.push(type);
+  }
 }
 
 let fake: FakeDownloads;
@@ -77,6 +94,8 @@ beforeEach(async () => {
   events = [];
   bus.subscribe((e) => events.push(e));
   fake = new FakeDownloads();
+  // Test files are a few bytes: the fake-release size rule would reject them.
+  setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), rejectImplausibleSize: false });
 });
 
 afterEach(async () => {
@@ -403,6 +422,7 @@ describe('completed download import (series)', () => {
   });
 
   it('reports archives when nothing is importable', async () => {
+    setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), unpackArchives: false });
     const series = addSeries();
     await put('Show.Name.S01E01.720p/show.rar', 10);
     const r = await service().importCompletedDownload(
@@ -700,5 +720,121 @@ describe('routes', () => {
     expect(noParent.statusCode).toBe(404);
     const listing = await a.inject({ method: 'GET', url: `/api/v1/filesystem?path=${encodeURIComponent(downloads)}&allowFoldersWithoutTrailingSlashes=true` });
     expect(listing.json().directories.map((d: { name: string }) => d.name)).toContain('New Folder');
+  });
+});
+
+describe('archives and the release safety filter', () => {
+  const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), 'unpack', 'fixtures');
+  const RELEASE = 'Great.Movie.2021.1080p.BluRay.x264-GRP';
+  let binary: string | null = null;
+  beforeEach(async () => {
+    binary = await findSevenZip();
+  });
+
+  async function release(...fixtures: string[]): Promise<string> {
+    const folder = join(downloads, RELEASE);
+    await mkdir(folder, { recursive: true });
+    for (const f of fixtures) await copyFile(join(FIXTURES, f), join(folder, f));
+    return folder;
+  }
+
+  function svc(sevenZip?: () => Promise<SevenZip | null>) {
+    return new ImportsService({
+      db,
+      bus,
+      downloadClients: fake,
+      now: () => new Date(NOW),
+      ...(sevenZip ? { sevenZip } : {}),
+    });
+  }
+
+  it('unpacks a RAR release, imports the movie, keeps the archive and removes staging', async (ctx) => {
+    if (!binary) return ctx.skip();
+    const movie = addMovie();
+    const folder = await release('single.rar');
+    const r = await svc().importCompletedDownload(tracked({ id: 40, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id }));
+    expect(r.messages, JSON.stringify(r)).toEqual([]);
+    expect(r.verified).toBe(true);
+    expect(libraryService.getMovie(db, movie.id).hasFile).toBe(true);
+    // The archive stays for seeding; the extracted copy is gone.
+    expect(await readdir(folder)).toEqual(['single.rar']);
+    expect(await exists(join(downloads, STAGING_FOLDER))).toBe(false);
+    expect(fake.timeline).toContain('unpacked');
+    expect(fake.unpackProgress.at(-1)).toBeNull();
+    expect(fake.unpackProgress.some((p) => p === 1)).toBe(true);
+  });
+
+  it('unpacks a multi-part RAR set', async (ctx) => {
+    if (!binary) return ctx.skip();
+    const movie = addMovie();
+    const folder = await release('multi.part1.rar', 'multi.part2.rar', 'multi.part3.rar');
+    const r = await svc().importCompletedDownload(tracked({ id: 41, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id }));
+    expect(r.verified).toBe(true);
+    expect((await readdir(folder)).sort()).toEqual(['multi.part1.rar', 'multi.part2.rar', 'multi.part3.rar']);
+  });
+
+  it('rejects a password-protected release (blocklist + search again)', async (ctx) => {
+    if (!binary) return ctx.skip();
+    const movie = addMovie();
+    const folder = await release('password.rar');
+    await svc().importCompletedDownload(tracked({ id: 42, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id }));
+    expect(fake.rejected).toEqual([expect.objectContaining({ id: 42, trigger: 'unpack', rule: 'encrypted', reason: expect.stringMatching(/password-protected/) })]);
+    expect(libraryService.getMovie(db, movie.id).hasFile).toBe(false);
+    expect(await exists(join(downloads, STAGING_FOLDER, RELEASE))).toBe(false);
+  });
+
+  it('rejects an incomplete multi-part set as a broken release', async (ctx) => {
+    if (!binary) return ctx.skip();
+    const movie = addMovie();
+    const folder = await release('multi.part1.rar', 'multi.part2.rar');
+    await svc().importCompletedDownload(tracked({ id: 43, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id }));
+    expect(fake.rejected[0]).toMatchObject({ id: 43, trigger: 'unpack', reason: expect.stringMatching(/^Broken release/) });
+  });
+
+  it('does not unpack usenet downloads (their client unpacks)', async () => {
+    const movie = addMovie();
+    const folder = await release('single.rar');
+    let asked = false;
+    const r = await svc(async () => {
+      asked = true;
+      return null;
+    }).importCompletedDownload(tracked({ id: 44, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id, protocol: 'usenet' }));
+    expect(asked).toBe(false);
+    expect(r.verified).toBe(false);
+    expect(fake.rejected).toEqual([]);
+  });
+
+  it('blocks with a clear message when 7-Zip is not installed', async () => {
+    const movie = addMovie();
+    const folder = await release('single.rar');
+    const r = await svc(async () => null).importCompletedDownload(tracked({ id: 45, title: RELEASE, outputPath: folder, mediaType: 'movie', movieId: movie.id }));
+    expect(r.messages[0]!.messages[0]).toMatch(/7-Zip \(7zz\) is not installed/);
+    expect(fake.rejected).toEqual([]);
+  });
+
+  it('rejects a release carrying an executable', async () => {
+    const movie = addMovie();
+    await put(`${RELEASE}/${RELEASE}.mkv`);
+    await put(`${RELEASE}/setup.exe`);
+    await svc().importCompletedDownload(tracked({ id: 46, title: RELEASE, outputPath: join(downloads, RELEASE), mediaType: 'movie', movieId: movie.id }));
+    expect(fake.rejected[0]).toMatchObject({ id: 46, trigger: 'import', reason: expect.stringMatching(/\.exe/) });
+    expect(libraryService.getMovie(db, movie.id).hasFile).toBe(false);
+  });
+
+  it('rejects an implausibly small main video when the size rule is on', async () => {
+    setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), rejectImplausibleSize: true });
+    const movie = addMovie();
+    await put(`${RELEASE}/${RELEASE}.mkv`, 4096);
+    await svc().importCompletedDownload(tracked({ id: 47, title: RELEASE, outputPath: join(downloads, RELEASE), mediaType: 'movie', movieId: movie.id }));
+    expect(fake.rejected[0]).toMatchObject({ id: 47, reason: expect.stringMatching(/implausibly small for 1080p with 120 min/) });
+  });
+
+  it('leaves everything alone when the filter is off', async () => {
+    setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), releaseSafetyFilter: false });
+    const movie = addMovie();
+    await put(`${RELEASE}/${RELEASE}.mkv`);
+    await put(`${RELEASE}/setup.exe`);
+    await svc().importCompletedDownload(tracked({ id: 48, title: RELEASE, outputPath: join(downloads, RELEASE), mediaType: 'movie', movieId: movie.id }));
+    expect(fake.rejected).toEqual([]);
   });
 });

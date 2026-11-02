@@ -32,6 +32,7 @@ const IGNORED: ReadonlySet<string> = new Set([
   'importStarted',
   'imported',
   'removed',
+  'unpacked',
 ]);
 
 const MAX_TITLES = 10;
@@ -108,6 +109,8 @@ export class DownloadAlerts {
     switch (type) {
       case 'stalled':
         return [{ ...this.base(), type: 'downloadStalled', download, ...message }];
+      case 'rejected':
+        return [{ ...this.base(), type: 'downloadRejected', download, ...message }];
       case 'importFailed':
       case 'importBlocked':
         return [{ ...this.base(), type: 'importProblem', problem: type === 'importFailed' ? 'failed' : 'blocked', download, ...message }];

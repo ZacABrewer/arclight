@@ -29,6 +29,10 @@ describe('download alert formatting', () => {
     expect(stalled).toMatchObject({ subject: 'Download Stalled', title: download.title, severity: 'warning', link: 'https://arclight.example/activity/queue' });
     expect(stalled.body).toContain('Message: No new data for 30 minutes');
 
+    const rejected = formatEvent({ ...base, type: 'downloadRejected', download, message: 'Unsafe release: contains setup.exe' });
+    expect(rejected).toMatchObject({ subject: 'Download Rejected (Unsafe)', title: download.title, severity: 'error' });
+    expect(rejected.body).toContain('Message: Unsafe release: contains setup.exe');
+
     const failed = formatEvent({ ...base, type: 'importProblem', problem: 'failed', download, message: 'Disk error' });
     expect(failed).toMatchObject({ subject: 'Import Failed', severity: 'error' });
     expect(formatEvent({ ...base, type: 'importProblem', problem: 'blocked', download }).subject).toBe('Import Blocked');

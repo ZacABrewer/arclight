@@ -93,6 +93,10 @@ import {
   type ScannedFile,
 } from './scan.js';
 import { AudiobookImporter } from './audio/audiobook-import.js';
+import { AUDIO_EXTENSIONS, checkReleaseFiles, expectedRuntimeMinutes, type SafetyFile, type SafetyTrigger } from '../download-clients/safety.js';
+import { isUnpackableArchive } from './unpack/archives.js';
+import { findSevenZip, SevenZip } from './unpack/sevenzip.js';
+import { stagingDirFor, unpackArchives, UnpackError } from './unpack/unpacker.js';
 import { MusicImporter } from './audio/music-import.js';
 import { ImportsError } from './errors.js';
 import { importedDownloads } from './schema.js';
@@ -105,7 +109,7 @@ export { ImportsError, type ImportsErrorCode } from './errors.js';
 
 /** The slice of the download-clients service the importer uses. */
 export type DownloadClientsPort = Pick<DownloadClientsService, 'setState' | 'markImported' | 'listTracked'> &
-  Partial<Pick<DownloadClientsService, 'setImportProgress'>>;
+  Partial<Pick<DownloadClientsService, 'setImportProgress' | 'setUnpackProgress' | 'rejectUnsafe' | 'recordEvent'>>;
 
 export interface ImportsServiceOptions {
   db: Db;
@@ -117,6 +121,8 @@ export interface ImportsServiceOptions {
   now?: () => Date;
   /** Test seam for rename/link failures. */
   fsOps?: Partial<FsOps>;
+  /** The 7-Zip used to unpack archives; null when none is installed. Default: 7zz / 7z on PATH. */
+  sevenZip?: () => Promise<SevenZip | null>;
 }
 
 export interface ImportOutcome {
@@ -207,6 +213,7 @@ export class ImportsService {
   private readonly platform: NodeJS.Platform;
   private readonly now: () => Date;
   private readonly fsOps: Partial<FsOps> | undefined;
+  private readonly sevenZip: () => Promise<SevenZip | null>;
   private readonly profiles: ProfilesService;
   /** Tracked downloads whose last attempt failed only on temporary rejections. */
   private readonly retryable = new Set<number>();
@@ -224,6 +231,7 @@ export class ImportsService {
     this.platform = options.platform ?? process.platform;
     this.now = options.now ?? (() => new Date());
     this.fsOps = options.fsOps;
+    this.sevenZip = options.sevenZip ?? defaultSevenZip;
     this.profiles = new ProfilesService({ db: options.db });
     const importerOptions = {
       db: this.db,
@@ -309,8 +317,17 @@ export class ImportsService {
     if (!isAbsolute(path)) {
       return this.block(item, result, [`Import failed, path is not a valid local path: ${path}. You may need a Remote Path Mapping.`]);
     }
-    if (item.mediaType === 'music') return this.importMusicDownload(item, path, result);
-    if (item.mediaType === 'audiobook') return this.importAudiobookDownload(item, path, result);
+    if (item.mediaType === 'music' || item.mediaType === 'audiobook') {
+      this.downloads.setState(item.id, 'importing');
+      const prepared = await this.prepareSource(item, path, settings, result);
+      if ('done' in prepared) return prepared.done;
+      const run =
+        item.mediaType === 'music'
+          ? await this.importMusicDownload(item, prepared.path, result)
+          : await this.importAudiobookDownload(item, prepared.path, result);
+      if (run.verified && prepared.staging) await this.removeStaging(prepared.staging);
+      return run;
+    }
 
     const grab = this.grabFor(item);
     const target = this.resolveTarget(item, grab);
@@ -319,16 +336,16 @@ export class ImportsService {
       return this.block(item, result, [`${what} title mismatch; automatic import is not possible. Manual Import required.`]);
     }
 
-    this.downloads.setState(item.id, 'importing');
-    let scan: ScanResult;
-    try {
-      scan = await scanPath(path, { workingFolders: settings.downloadClientWorkingFolders });
-    } catch (err) {
-      const message = err instanceof ScanError ? err.message : `Import failed: ${errorMessage(err)}`;
-      return this.block(item, result, [message]);
+    if (target.series && resolve(path) === resolve(target.series.path)) {
+      return this.block(item, result, ['Import path is mapped to a series folder']);
     }
 
-    if (target.series && resolve(path) === resolve(target.series.path)) {
+    this.downloads.setState(item.id, 'importing');
+    const prepared = await this.prepareSource(item, path, settings, result, target);
+    if ('done' in prepared) return prepared.done;
+    const { scan, staging } = prepared;
+
+    if (target.series && resolve(prepared.path) === resolve(target.series.path)) {
       return this.block(item, result, ['Import path is mapped to a series folder']);
     }
 
@@ -344,7 +361,8 @@ export class ImportsService {
       videoCount: scan.videos.length,
     });
     const decisions = await this.decide(items, { grab, downloadId: item.downloadId, addedAt: item.added });
-    const mode: 'move' | 'copy' = item.canMoveFiles ? 'move' : 'copy';
+    // Extracted files are Arclight's own copies: always moved. The archives stay for seeding.
+    const mode: 'move' | 'copy' = staging || item.canMoveFiles ? 'move' : 'copy';
     result.outcomes = await this.execute(decisions, {
       mode,
       downloadId: item.downloadId,
@@ -370,7 +388,8 @@ export class ImportsService {
 
     if (verified) {
       result.verified = true;
-      if (mode === 'move' && !scan.isFile) await this.cleanupSourceFolder(path, settings, item.id);
+      if (staging) await this.removeStaging(staging);
+      else if (mode === 'move' && !scan.isFile) await this.cleanupSourceFolder(path, settings, item.id);
       await this.downloads.markImported(item.id);
       return result;
     }
@@ -382,7 +401,7 @@ export class ImportsService {
       else if (scan.executables.length > 0) lines.push(`Caution: found executable file with extension: ${scan.executables[0]!.extension}`);
       else if (scan.archives.length > 0) lines.push('Found archive file, might need to be extracted');
       else if (scan.unpacking) lines.push('Download is still being unpacked');
-      lines.push(`No files found are eligible for import in ${path}`);
+      lines.push(`No files found are eligible for import in ${prepared.path}`);
     } else {
       lines.push(
         target.mediaType === 'series'
@@ -400,7 +419,138 @@ export class ImportsService {
         result.outcomes.every((o) => o.status === 'imported' || (o.rejections.length > 0 && o.rejections.every((r) => r.type === 'temporary')))) ||
       (decisions.length === 0 && scan.unpacking);
     if (onlyTemporary) this.retryable.add(item.id);
+    if (staging) lines.push(`The unpacked files are in ${staging} (Manual Import can take them from there).`);
     return this.block(item, result, lines);
+  }
+
+  // ---- unpacking and the safety filter -----------------------------------------------
+
+  /**
+   * Before an import: checks what the download contains against the fake-release / malware
+   * filter and unpacks its archives when it holds no media of its own (RAR, 7z, zip; never
+   * for usenet, whose clients unpack themselves). Returns where to import from, or `done`
+   * when the download was blocked or rejected.
+   */
+  private async prepareSource(
+    item: TrackedDownload,
+    path: string,
+    settings: MediaManagementSettings,
+    result: ImportRunResult,
+    target?: Target,
+  ): Promise<{ path: string; staging: string | null; scan: ScanResult } | { done: ImportRunResult }> {
+    let scan: ScanResult;
+    try {
+      scan = await scanPath(path, { workingFolders: settings.downloadClientWorkingFolders });
+    } catch (err) {
+      const message = err instanceof ScanError ? err.message : `Import failed: ${errorMessage(err)}`;
+      return { done: this.block(item, result, [message]) };
+    }
+    const runtimeMinutes = target?.movie?.runtimeMinutes ?? expectedRuntimeMinutes(this.db, item);
+    const check = (s: ScanResult) =>
+      checkReleaseFiles(
+        scannedFiles(s),
+        { mediaType: item.mediaType ?? target?.mediaType ?? null, title: item.title, runtimeMinutes },
+        { blockedExtensions: settings.blockedExtensions, rejectImplausibleSize: settings.rejectImplausibleSize },
+      );
+    if (settings.releaseSafetyFilter) {
+      const verdict = check(scan);
+      if (!verdict.ok) return { done: await this.rejectRelease(item, result, verdict.reason, 'import', verdict.rule) };
+    }
+
+    const archives = [...scan.archives, ...scan.others].filter((f) => isUnpackableArchive(f.path)).map((f) => f.path);
+    const audio = item.mediaType === 'music' || item.mediaType === 'audiobook';
+    const hasMedia = audio
+      ? scan.others.some((f) => AUDIO_EXTENSIONS.has(f.extension))
+      : scan.videos.some((v) => !isSampleByName(v.path));
+    if (!settings.unpackArchives || item.protocol === 'usenet' || archives.length === 0 || hasMedia) {
+      return { path, staging: null, scan };
+    }
+
+    const sevenZip = await this.sevenZip();
+    if (!sevenZip) {
+      this.retryable.add(item.id);
+      return {
+        done: this.block(item, result, [
+          'The download contains archives, but 7-Zip (7zz) is not installed, so they cannot be unpacked. See System > Status.',
+        ]),
+      };
+    }
+    const staging = stagingDirFor(path, scan.isFile);
+    const minimumFreeBytes = settings.skipFreeSpaceCheck ? 0 : settings.minimumFreeSpaceMb * 1024 * 1024;
+    let unpacked;
+    try {
+      unpacked = await unpackArchives(scan.isFile ? dirname(path) : path, archives, staging, {
+        sevenZip,
+        freeSpace: (p) => this.freeSpace(p),
+        minimumFreeBytes,
+        onProgress: (fraction) => this.downloads.setUnpackProgress?.(item.downloadId, fraction),
+      });
+    } catch (err) {
+      if (err instanceof UnpackError && err.rejectsRelease) {
+        const reason = err.kind === 'encrypted' ? `Unsafe release: ${err.message}` : `Broken release: ${err.message}`;
+        return { done: await this.rejectRelease(item, result, reason, 'unpack', err.kind) };
+      }
+      if (err instanceof UnpackError && err.kind === 'diskSpace') this.retryable.add(item.id);
+      return { done: this.block(item, result, [err instanceof Error ? err.message : String(err)]) };
+    } finally {
+      this.downloads.setUnpackProgress?.(item.downloadId, null);
+    }
+    this.downloads.recordEvent?.(item.id, 'unpacked', {
+      message: `Unpacked ${unpacked.sets} archive${unpacked.sets === 1 ? '' : 's'} (${unpacked.files.length} file${unpacked.files.length === 1 ? '' : 's'}) for import.`,
+      data: { sets: unpacked.sets, files: unpacked.files.length },
+    });
+
+    let staged: ScanResult;
+    try {
+      staged = await scanPath(staging, { workingFolders: settings.downloadClientWorkingFolders });
+    } catch (err) {
+      return { done: this.block(item, result, [`Import failed: ${errorMessage(err)}`]) };
+    }
+    if (settings.releaseSafetyFilter) {
+      const verdict = check(staged);
+      if (!verdict.ok) {
+        await this.removeStaging(staging);
+        return { done: await this.rejectRelease(item, result, verdict.reason, 'unpack', verdict.rule) };
+      }
+    }
+    return { path: staging, staging, scan: staged };
+  }
+
+  /** Hands an unsafe / broken release to the download pipeline (remove, blocklist, search again). */
+  private async rejectRelease(
+    item: TrackedDownload,
+    result: ImportRunResult,
+    reason: string,
+    trigger: SafetyTrigger,
+    rule?: string,
+  ): Promise<ImportRunResult> {
+    if (!this.downloads.rejectUnsafe) return this.block(item, result, [reason]);
+    try {
+      await this.downloads.rejectUnsafe(item.id, reason, trigger, rule);
+    } catch (err) {
+      this.log?.warn({ err, id: item.id }, 'could not reject an unsafe download');
+      return this.block(item, result, [reason]);
+    }
+    result.messages = [{ title: item.title, messages: [reason] }];
+    this.bus?.publish({
+      type: 'import',
+      action: 'failed',
+      title: item.title,
+      ...(videoMediaType(item.mediaType) ? { mediaType: videoMediaType(item.mediaType)! } : {}),
+      message: reason,
+    });
+    return result;
+  }
+
+  private async removeStaging(staging: string): Promise<void> {
+    try {
+      const { rm, rmdir } = await import('node:fs/promises');
+      await rm(staging, { recursive: true, force: true });
+      // Drop the shared `.arclight-unpacked` folder once it is empty (rmdir fails otherwise).
+      await rmdir(dirname(staging)).catch(() => undefined);
+    } catch (err) {
+      this.log?.debug({ err, staging }, 'could not remove the unpack staging folder');
+    }
   }
 
   private async importMusicDownload(item: TrackedDownload, path: string, result: ImportRunResult): Promise<ImportRunResult> {
@@ -1832,4 +1982,17 @@ function failureMessage(err: unknown, mediaType: MediaType): string {
   }
   if (err instanceof ImportsError) return err.message;
   return `Failed to import ${what}: ${errorMessage(err)}`;
+}
+
+/** Every file of a scan, for the safety filter. */
+function scannedFiles(scan: ScanResult): SafetyFile[] {
+  return [...scan.videos, ...scan.archives, ...scan.dangerous, ...scan.executables, ...scan.others].map((f) => ({
+    path: f.relativePath,
+    sizeBytes: f.sizeBytes,
+  }));
+}
+
+async function defaultSevenZip(): Promise<SevenZip | null> {
+  const binary = await findSevenZip();
+  return binary ? new SevenZip(binary) : null;
 }

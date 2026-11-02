@@ -580,6 +580,8 @@ export const QueueItemStateCode = z.enum([
   'importPending',
   'importBlocked',
   'importing',
+  /** Extracting the download's archives into a staging folder before the import. */
+  'unpacking',
 ]);
 export type QueueItemStateCode = z.infer<typeof QueueItemStateCode>;
 
@@ -673,6 +675,8 @@ export const QueueItem = z.object({
   /** ISO-8601: when the download last received data, set while it counts as stalled. */
   stalledSince: z.string().optional(),
   live: QueueItemLive.optional(),
+  /** 0..1 while the download's archives are being extracted (state code `unpacking`). */
+  unpackProgress: z.number().optional(),
 });
 export type QueueItem = z.infer<typeof QueueItem>;
 
@@ -765,6 +769,13 @@ export const QueueStatus = z.object({
       minimumFreeBytes: z.number().int(),
     })
     .optional(),
+  /**
+   * Downloads the release-safety filter rejected in the last 24 hours (they left the queue:
+   * removed, blocklisted and searched for again), newest first. Optional: older servers omit it.
+   */
+  recentRejections: z
+    .array(z.object({ trackedDownloadId: z.number().int(), title: z.string(), reason: z.string(), time: z.string() }))
+    .optional(),
 });
 export type QueueStatus = z.infer<typeof QueueStatus>;
 
@@ -840,6 +851,10 @@ export const DownloadEventType = z.enum([
   'replaced',
   /** Grab held back until the download volume has room (disk-space guard). */
   'held',
+  /** Archives extracted into a staging folder for the import. */
+  'unpacked',
+  /** The release-safety filter rejected the download (unsafe or fake): removed, blocklisted, searched again. */
+  'rejected',
 ]);
 export type DownloadEventType = z.infer<typeof DownloadEventType>;
 

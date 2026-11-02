@@ -32,6 +32,7 @@ const schemas = [
       onDownload: false,
       onHealthIssue: false,
       onDownloadStalled: false,
+      onDownloadRejected: false,
       onKillSwitch: false,
       onDailySummary: false,
       supportsOnDailySummary: false,
@@ -164,7 +165,7 @@ describe('Settings -> Notifications', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Edit Discord' }));
     const dialog = await screen.findByRole('dialog', { name: 'Edit Discord' });
     const problems = within(dialog).getByRole('group', { name: 'Download problem events' });
-    expect(within(problems).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).toEqual(['Download stalled', 'Kill switch paused downloads']);
+    expect(within(problems).getAllByRole('checkbox').map((c) => c.closest('label')?.textContent)).toEqual(['Download stalled', 'Download rejected (unsafe)', 'Kill switch paused downloads']);
     // Not repeated in the general events group.
     expect(within(within(dialog).getByRole('group', { name: 'Events' })).queryByRole('checkbox', { name: /stalled/i })).toBeNull();
     fireEvent.click(within(problems).getByRole('checkbox', { name: 'Download stalled' }));

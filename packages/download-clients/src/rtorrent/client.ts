@@ -11,9 +11,10 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
 } from '../types.js';
 import { CLIENT_NAME, RTorrentRpc } from './rpc.js';
-import { RTorrentTorrentList, TORRENT_FIELDS, XmlRpcString, type RTorrentTorrent } from './schemas.js';
+import { RTorrentFileList, RTorrentTorrentList, TORRENT_FIELDS, XmlRpcString, type RTorrentTorrent } from './schemas.js';
 import { RTORRENT_PRIORITY_VALUES, type RTorrentSettings } from './settings.js';
 import { decodeLabel, encodeLabel, mapTorrent } from './state.js';
 
@@ -170,6 +171,13 @@ export class RTorrentClient implements DownloadClient {
 
   async setCategory(id: string, category: string): Promise<void> {
     await this.rpc.call('d.custom1.set', [id.toUpperCase(), encodeLabel(category)]);
+  }
+
+  /** rTorrent lists no files while a magnet is still fetching its metadata. */
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    const rows = await this.rpc.callAs('f.multicall', [id.toUpperCase(), '', 'f.path=', 'f.size_bytes='], RTorrentFileList);
+    if (rows.length === 0) return null;
+    return rows.map(([path, size]) => ({ path: path.replaceAll('\\', '/'), sizeBytes: Math.max(0, size) }));
   }
 
   async pause(id: string): Promise<void> {

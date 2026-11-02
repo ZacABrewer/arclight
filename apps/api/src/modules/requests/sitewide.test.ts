@@ -53,6 +53,7 @@ const BASE_ROW = {
   onIssueCreated: false,
   onIssueUpdated: false,
   onDownloadStalled: false,
+  onDownloadRejected: false,
   onKillSwitch: false,
   onKillSwitchResumed: false,
   onImportProblem: false,

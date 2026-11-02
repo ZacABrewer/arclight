@@ -997,7 +997,7 @@ its own feed.
 | PUT | `/remotepathmapping/:id` | Update |
 | DELETE | `/remotepathmapping/:id` | Delete |
 | GET | `/queue` | Paged queue of tracked downloads |
-| GET | `/queue/status` | Queue totals; `diskGuard` `{paused, held, volumes, minimumFreeBytes}`: downloads the disk-space guard paused and grabs it holds |
+| GET | `/queue/status` | Queue totals; `diskGuard` `{paused, held, volumes, minimumFreeBytes}`: downloads the disk-space guard paused and grabs it holds; `recentRejections` `[{trackedDownloadId, title, reason, time}]`: downloads the safety filter rejected in the last 24 hours, newest first (at most 10) |
 | GET | `/queue/summary` | `QueueSummaryItem[]`: one compact row per queue item linked to a series or movie (`id`, `mediaType`, `seriesId`, `episodeIds`, `movieId`, `trackedState`, `trackedStatus`, `status`, `progress`, `eta`, `stateCode`, `stateSeverity`; no titles or paths), for the library's Queued / Downloading / Importing / Failed chips. Read-only for the Library and Activity app areas |
 | GET | `/queue/:id` | One queue item (with `stateCode` / `stateReason` / `stateSeverity`, `stalledSince`, `live` rates and peers) |
 | GET | `/queue/:id/timeline` | What happened to the download (grabbed, paused by the kill switch, stalled, imported, ...), oldest first; kept 30 days, also after it left the queue |
@@ -1016,6 +1016,21 @@ that would leave the client's download folder below the minimum as `pending` ite
 `diskHeld`, retried by the `RetryHeldGrabs` job every 2 minutes) and pauses downloads on a
 volume below the minimum (`diskPaused`), resuming them at the minimum + 1 GiB. Timeline event
 types `reannounced`, `replaced` and `held`; paused/resumed carry `data.reason = 'diskSpace'`.
+With `stallRespectHitAndRun` (default true), a stalled torrent with data from a tracker that has a
+hit-and-run rule (tracker stats) is re-announced but never replaced. Its stall sentence ends with
+"Not removed automatically: ...".
+
+Download safety (Settings > Media Management): `releaseSafetyFilter` (default true) checks a
+torrent's file list once, as soon as the client reports it, and the files again before import.
+`blockedExtensions` (array, no dots) is added to the built-in executable and script lists, and
+`rejectImplausibleSize` (default true) is the size floor per resolution and runtime. A release
+with no media file, a blocked file or a password-protected, damaged or incomplete archive is
+removed with its data, blocklisted with the reason (History shows it) and searched for again.
+The timeline type is `rejected` (`data.trigger`: `metadata`, `import` or `unpack`; `data.rule`).
+`unpackArchives` (default true) extracts RAR / 7z / zip downloads of torrent clients with 7-Zip
+into `<download parent>/.arclight-unpacked/<name>`, imports from there and removes the copies.
+The archives are kept for seeding. The queue item has `stateCode: 'unpacking'` and
+`unpackProgress` (0..1) meanwhile, and the timeline type is `unpacked`.
 
 | POST | `/queue/:id/limits` | `{ downloadLimit?, uploadLimit? }` in bytes/s (0 = unlimited) for one download; built-in engine (kept in its resume data) and qBittorrent. Returns the queue item; 409 when the client cannot |
 | POST | `/queue/:id/move` | `{ move: top / up / down / bottom }`: download queue order (built-in engine; qBittorrent with torrent queueing on) |
@@ -2364,7 +2379,8 @@ kill-switch lockdowns overlapping the period (count, total time), free space per
 download-client folder with the change since the previous summary, up to 10 problems, open
 health issues and what is still downloading. The bus event `summary generated` announces it.
 
-Notification connections have seven more trigger flags: `onDownloadStalled`, `onKillSwitch`
+Notification connections have eight more trigger flags: `onDownloadStalled`,
+`onDownloadRejected` (a download the safety filter rejected, with the reason), `onKillSwitch`
 (one alert per lockdown with the reason; a lockdown lasting 30 minutes sends an urgent reminder
 to connections that held the first alert), `onKillSwitchResumed`, `onImportProblem` (import
 failed/blocked with the message), `onDiskSpaceLow` (the disk-space health checks entering

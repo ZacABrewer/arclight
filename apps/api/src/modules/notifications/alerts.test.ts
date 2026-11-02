@@ -86,7 +86,12 @@ describe('DownloadAlerts', () => {
       severity: 'ok',
       message: 'Data again',
     });
-    for (const routine of ['grabbed', 'started', 'paused', 'resumed', 'completed', 'imported', 'removed']) {
+    expect(alerts.translate(entry('rejected', { severity: 'error', message: 'Unsafe release: contains x.exe' }))[0]).toMatchObject({
+      type: 'downloadRejected',
+      download: { trackedDownloadId: 7 },
+      message: 'Unsafe release: contains x.exe',
+    });
+    for (const routine of ['grabbed', 'started', 'paused', 'resumed', 'completed', 'imported', 'removed', 'unpacked']) {
       expect(alerts.translate(entry(routine))).toEqual([]);
     }
   });

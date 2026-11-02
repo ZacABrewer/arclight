@@ -142,6 +142,14 @@ export const IMPORT_FIELDS: FieldDefinition[] = [
   { name: 'diskSpaceGuard', get label() { return t('settings.mediaManagement.diskSpaceGuard'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.diskSpaceGuardHelp'); } },
 ];
 
+export const SAFETY_FIELDS: FieldDefinition[] = [
+  { name: 'unpackArchives', get label() { return t('settings.mediaManagement.unpackArchives'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.unpackArchivesHelp'); } },
+  { name: 'releaseSafetyFilter', get label() { return t('settings.mediaManagement.releaseSafetyFilter'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.releaseSafetyFilterHelp'); } },
+  { name: 'blockedExtensions', get label() { return t('settings.mediaManagement.blockedExtensions'); }, type: 'text', placeholder: 'exe, scr, lnk', get helpText() { return t('settings.mediaManagement.blockedExtensionsHelp'); } },
+  { name: 'rejectImplausibleSize', get label() { return t('settings.mediaManagement.rejectImplausibleSize'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.rejectImplausibleSizeHelp'); } },
+  { name: 'stallRespectHitAndRun', get label() { return t('settings.mediaManagement.stallRespectHitAndRun'); }, type: 'checkbox', get helpText() { return t('settings.mediaManagement.stallRespectHitAndRunHelp'); } },
+];
+
 export const PROPER_FIELDS: FieldDefinition[] = [
   { name: 'downloadPropersAndRepacks', get label() { return t('settings.mediaManagement.propersAndRepacks'); }, type: 'select', options: PROPERS, get helpText() { return t('settings.mediaManagement.howAProperOrRepack'); } },
 ];
@@ -497,6 +505,7 @@ export function MediaManagementPage() {
         <>
           <SettingsSection label={t('settings.mediaManagement.fileManagement')}>{settingsBody(FILE_FIELDS)}</SettingsSection>
           <SettingsSection label={t('status.importing')}>{settingsBody(IMPORT_FIELDS)}</SettingsSection>
+          <SettingsSection label={t('settings.mediaManagement.downloadSafety')}>{settingsBody(SAFETY_FIELDS)}</SettingsSection>
           <SettingsSection label={t('settings.mediaManagement.propers')}>{settingsBody(PROPER_FIELDS)}</SettingsSection>
         </>
       ) : null}

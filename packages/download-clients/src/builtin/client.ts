@@ -21,6 +21,7 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
   type DownloadItemLive,
   type DownloadItemPhase,
   type DownloadItemStatus,
@@ -433,6 +434,14 @@ export class BuiltinClient implements DownloadClient {
     const session = this.session();
     const t = this.torrent(session, id);
     await session.setCategory(t.infoHashHex, category, false);
+  }
+
+  /** Files of the torrent once its metadata is known (padding files left out); null before. */
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    const t = this.torrent(this.session(), id);
+    const meta = t.metainfo;
+    if (!meta) return null;
+    return meta.files.filter((f) => !f.padding).map((f) => ({ path: f.pathSegments.join('/'), sizeBytes: f.length }));
   }
 
   async pause(id: string): Promise<void> {

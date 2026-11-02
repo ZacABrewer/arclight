@@ -29,6 +29,11 @@ export const DelugeVersion = z.string();
 export const DelugePort = z.number().int();
 export const DelugeAny = z.unknown();
 
+/** `core.get_torrent_status` with `files`: empty while a magnet has no metadata yet. */
+export const DelugeTorrentFiles = z.object({
+  files: z.array(z.object({ path: z.string(), size: z.number() })).optional(),
+});
+
 export const DelugeTorrentStatus = z.object({
   hash: z.string().optional(),
   name: z.string().default(''),

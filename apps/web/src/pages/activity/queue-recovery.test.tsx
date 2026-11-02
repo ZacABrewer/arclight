@@ -89,6 +89,14 @@ beforeEach(() => {
           warnings: 1,
           unknownCount: 0,
           diskGuard: { paused: 0, held: 1, volumes: [], minimumFreeBytes: 100 * MIB },
+          recentRejections: [
+            {
+              trackedDownloadId: 5,
+              title: 'Fake.Movie.2021.1080p',
+              reason: 'Unsafe release: contains setup.exe (.exe files are blocked): removed from qBit with its data, release blocklisted, searching for another release.',
+              time: '2026-10-26T11:00:00.000Z',
+            },
+          ],
         });
       }
       if (path === '/api/v1/queue/1/timeline') return json({ trackedDownloadId: 1, events: [] });
@@ -130,6 +138,16 @@ describe('queue page recovery actions', () => {
   it('shows the disk-guard banner', async () => {
     renderQueue();
     expect(await screen.findByText(/1 grab is held until the download volume has room/, {}, { timeout: 5000 })).toBeTruthy();
+  });
+
+  it('lists releases the safety filter rejected, and hides them on dismiss', async () => {
+    renderQueue();
+    const banner = await screen.findByTestId('queue-rejections', {}, { timeout: 5000 });
+    expect(banner.textContent).toContain('1 download was rejected as unsafe in the last day.');
+    expect(banner.textContent).toContain('Fake.Movie.2021.1080p');
+    expect(banner.textContent).toContain('setup.exe');
+    fireEvent.click(within(banner).getByRole('button', { name: 'Dismiss' }));
+    await waitFor(() => expect(screen.queryByTestId('queue-rejections')).toBeNull());
   });
 
   it('says why a remove failed and keeps the dialog open to retry without the client', async () => {

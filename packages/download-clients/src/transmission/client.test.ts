@@ -286,3 +286,17 @@ describe('listing and management', () => {
     await expectError(c.setListenPort(0), 'rejected');
   });
 });
+
+describe('getFiles', () => {
+  it('lists the files of one torrent, null before its metadata', async () => {
+    const hash = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    fake = newFake(sessionFixture.arguments, [
+      { hashString: hash, name: 'Show', files: [{ name: 'Show/Show.S01E01.mkv', length: 1234, bytesCompleted: 0 }] } as unknown as RawTorrent,
+      { hashString: 'b'.repeat(40), name: 'Magnet', files: [] } as unknown as RawTorrent,
+    ]);
+    const c = client();
+    expect(await c.getFiles(hash.toUpperCase())).toEqual([{ path: 'Show/Show.S01E01.mkv', sizeBytes: 1234 }]);
+    expect(fake.rpc('torrent-get').at(-1)?.arguments['ids']).toEqual([hash]);
+    expect(await c.getFiles('b'.repeat(40))).toBeNull();
+  });
+});

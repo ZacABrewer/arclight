@@ -34,6 +34,7 @@ export const notifications = sqliteTable('notifications', {
   onIssueUpdated: flag('on_issue_updated'),
   // Download problems and the daily summary (download-alerts.ts, the summary module).
   onDownloadStalled: flag('on_download_stalled'),
+  onDownloadRejected: flag('on_download_rejected'),
   onKillSwitch: flag('on_kill_switch'),
   onKillSwitchResumed: flag('on_kill_switch_resumed'),
   onImportProblem: flag('on_import_problem'),

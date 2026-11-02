@@ -422,6 +422,20 @@ export const HEALTH_DOCS: readonly HealthDoc[] = [
     link: { get label() { return t('docs.healthDocs.subtitlesLabel'); }, to: '/settings/subtitles' },
   },
   {
+    anchor: 'seven-zip-missing',
+    sources: ['SevenZipMissing'],
+    get title() {
+      return t('docs.healthDocs.sevenZipIsMissing');
+    },
+    get cause() {
+      return t('docs.healthDocs.sevenZipMissingCause');
+    },
+    get fix() {
+      return [t('docs.healthDocs.sevenZipFixDocker'), t('docs.healthDocs.sevenZipFixInstall'), t('docs.healthDocs.sevenZipFixDisable')];
+    },
+    link: { get label() { return t('common.mediaManagement'); }, to: '/settings/mediamanagement' },
+  },
+  {
     anchor: 'tracker-ratio-low',
     sources: ['TrackerRatioLow'],
     get title() {

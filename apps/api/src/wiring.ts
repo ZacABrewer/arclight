@@ -202,6 +202,9 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   });
   // Automatic replacements wait while grabs would (VPN down): the search could not grab anyway.
   downloads.setReplaceGuard(() => vpnServiceFor(ctx).isSafeToGrab());
+  // Stall recovery keeps private torrents still inside their tracker's hit-and-run window.
+  const seedRules = trackerStatsServiceFor(ctx).seedRuleProvider();
+  downloads.setSeedRuleLookup((infoHash) => seedRules([], infoHash));
   // A held (disk space) or delayed grab got its real download id: history follows it.
   disposers.push(downloads.onPendingSent((item, pendingId) => {
     historyServiceFor(ctx).rekeyDownloadId(pendingId, item.downloadId);
@@ -209,6 +212,7 @@ export function wireModules(ctx: AppContext, options: WiringOptions = {}): Wirin
   disposers.push(() => {
     downloads.setReplacementSearch(undefined);
     downloads.setReplaceGuard(undefined);
+    downloads.setSeedRuleLookup(undefined);
   });
 
   if (options.probe ?? true) {

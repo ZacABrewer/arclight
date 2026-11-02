@@ -17,7 +17,7 @@ import type { TrackedDownload } from '../download-clients/index.js';
 import { libraryService } from '../library/index.js';
 import { ProfilesService } from '../profiles/index.js';
 import { HD_ALLOWED, makeProfile, quality } from '../releases/test-support.js';
-import { setSection } from '../settings/service.js';
+import { getSection, setSection } from '../settings/service.js';
 import * as tables from './schema.js';
 import { ImportsService, type DownloadClientsPort } from './service.js';
 import { filesInSlot, placeVersioned } from './versions.js';
@@ -74,6 +74,8 @@ beforeEach(async () => {
     { tag: '4K', qualityProfileId: uhd.id, enabled: true },
   ];
   fake = new FakeDownloads();
+  // Test files are a few bytes: the fake-release size rule would reject them.
+  setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), rejectImplausibleSize: false });
 });
 
 afterEach(async () => {

@@ -51,7 +51,9 @@ export function QueueStateChip({ item }: { item: QueueItem }) {
   const detail = [item.stateReason, ...messages].filter(Boolean).join('\n');
   const chip = (
     <Chip tone={severityTone(item.stateSeverity)} tabIndex={detail ? 0 : undefined} aria-label={detail ? `${stateLabel(item.stateCode)}: ${detail}` : undefined}>
-      {stateLabel(item.stateCode)}
+      {item.stateCode === 'unpacking' && item.unpackProgress !== undefined
+        ? t('activity.queueState.unpackingValue', { value: Math.round(item.unpackProgress * 100) })
+        : stateLabel(item.stateCode)}
     </Chip>
   );
   if (!detail) return chip;
