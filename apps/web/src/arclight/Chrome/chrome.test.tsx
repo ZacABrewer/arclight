@@ -80,11 +80,13 @@ describe('TopBar', () => {
     expect(screen.getByRole('button', { name: 'Account' }).textContent).toBe('SK');
   });
 
-  it('shows the Light Slice wordmark as an image named after the app, not as text', () => {
+  it('shows the Light Slice wordmark, and the mark for phones, as images named after the app, not as text', () => {
     const { container } = render(<TopBar />);
-    const word = screen.getByRole('img', { name: /^arclight$/i });
-    expect(word.classList.contains('al-wordmark')).toBe(true);
-    expect(word.querySelector('svg path')).toBeTruthy();
+    const [mark, word] = screen.getAllByRole('img', { name: /^arclight$/i });
+    // CSS shows the mark below 768 px and the wordmark above it, so only one is ever visible.
+    expect(mark!.closest('.al-topbar__mark')).toBeTruthy();
+    expect(word!.classList.contains('al-wordmark')).toBe(true);
+    expect(word!.querySelector('svg path')).toBeTruthy();
     expect(container.querySelector('.al-topbar')!.textContent).not.toMatch(/arclight/i);
   });
 

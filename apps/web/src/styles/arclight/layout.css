@@ -59,6 +59,7 @@
   font-size: 14px; color: var(--al-text-3); }
 .al-wordmark { display: inline-flex; flex: none; align-items: center; line-height: 0; }
 .al-wordmark > svg { display: block; overflow: visible; }
+.al-topbar__mark { display: none; flex: none; line-height: 0; }
 .al-topbar__search { flex: 1; max-width: 420px; height: 34px; display: flex; align-items: center; gap: 10px; padding: 0 12px;
   border: 0; border-bottom: 1px solid var(--al-line-a25); border-radius: var(--al-radius-control); background: transparent; color: var(--al-placeholder); font: 14px var(--al-font); text-align: left; cursor: text;
   transition: border-color var(--t-fast); }
@@ -81,7 +82,9 @@
   .al-topbar { padding: 0 20px; gap: 12px; }
   .al-topbar__status { gap: 12px; }
   .al-topbar__search, .al-topbar__requests, .al-topbar__conn-label { display: none; }
-  /* Phones show only the issue count next to the wider wordmark; the word stays for screen readers. */
+  .al-topbar > .al-wordmark { display: none; }
+  .al-topbar__mark { display: inline-flex; }
+  /* Phones show only the issue count; the word stays for screen readers. */
   .al-topbar__issues-label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 }
 

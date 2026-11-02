@@ -183,7 +183,6 @@
 [data-theme] .al-avatar:hover { border-color: var(--al-line-3); background: var(--al-tone-people); }
 @media (max-width: 767.98px) {
   [data-theme] .al-topbar { padding: 0 16px; gap: 10px; }
-  [data-theme] .al-topbar > .al-wordmark { display: inline-flex; }
   [data-theme] .al-avatar { width: 44px; height: 44px; }
   [data-theme] .portal-title { font-size: 18px; }
   [data-theme] .portal-head .al-btn { padding: 0 10px; white-space: nowrap; }

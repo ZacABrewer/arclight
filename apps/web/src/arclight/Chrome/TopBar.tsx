@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { cx } from '../cx.js';
 import { useHotkey } from '../hooks/use-hotkey.js';
 import { LiveDot } from '../components/Progress.js';
+import { Mark } from '../components/Icon.js';
 import { Wordmark } from '../components/Wordmark.js';
 import { t } from '../../i18n/index.js';
 
@@ -95,6 +96,10 @@ export function TopBar({
       {/* v1.1 ambient light: a runner travels along the bottom border (12 s loop). */}
       <span className="al-topbar__runner" aria-hidden="true">
         <i className="al-runner al-runner--h" />
+      </span>
+      {/* Phones are a compact header: the mark alone (the wordmark needs more width than the bar has). */}
+      <span className="al-topbar__mark">
+        <Mark size={28} label={t('common.arclight')} />
       </span>
       <Wordmark height={16} label={t('common.arclight')} />
       {onSearch ? (
