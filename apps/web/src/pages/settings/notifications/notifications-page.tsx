@@ -79,6 +79,7 @@ export function requestTriggerLabel(flag: (typeof REQUEST_TRIGGERS)[number]): st
 /** Download-problem triggers (timeline, kill switch, disk space) and the daily summary, in display order. */
 export const DOWNLOAD_TRIGGERS = [
   'onDownloadStalled',
+  'onDownloadRejected',
   'onImportProblem',
   'onDownloadRecovered',
   'onKillSwitch',
@@ -92,6 +93,9 @@ type DownloadTrigger = (typeof DOWNLOAD_TRIGGERS)[number];
 const DOWNLOAD_TRIGGER_LABELS: Record<DownloadTrigger, string> = {
   get onDownloadStalled() {
     return t('settings.notifications.downloadStalled');
+  },
+  get onDownloadRejected() {
+    return t('settings.notifications.downloadRejected');
   },
   get onImportProblem() {
     return t('settings.notifications.importProblem');

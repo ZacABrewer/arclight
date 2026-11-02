@@ -276,6 +276,8 @@ export function eventSubject(event: NotificationEvent): string {
       return `${noun(event.media, event.episodes)} File Transcoded`;
     case 'downloadStalled':
       return 'Download Stalled';
+    case 'downloadRejected':
+      return 'Download Rejected (Unsafe)';
     case 'killSwitch':
       return event.pausedMinutes !== undefined ? 'Downloads Still Paused by Kill Switch' : 'Downloads Paused by Kill Switch';
     case 'killSwitchResumed':
@@ -360,6 +362,8 @@ export function eventSeverity(event: NotificationEvent): Severity {
     }
     case 'killSwitch':
       return event.pausedMinutes !== undefined ? 'error' : 'warning';
+    case 'downloadRejected':
+      return 'error';
     case 'downloadStalled':
     case 'manualInteractionRequired':
     case 'mediaDeleted':
@@ -397,6 +401,7 @@ export const EVENT_LABELS: Record<NotificationEventType, string> = {
   healthScan: 'On Health Scan Problems',
   fileTranscoded: 'On File Transcoded',
   downloadStalled: 'On Download Stalled',
+  downloadRejected: 'On Download Rejected (Unsafe)',
   killSwitch: 'On Kill Switch',
   killSwitchResumed: 'On Kill Switch Resumed',
   importProblem: 'On Import Problem',
@@ -638,6 +643,7 @@ export function formatEvent(event: NotificationEvent): FormattedEvent {
       fields.push({ name: 'Path', value: event.file.relativePath });
       break;
     case 'downloadStalled':
+    case 'downloadRejected':
     case 'importProblem':
     case 'downloadUpdate':
       title = event.download.title;

@@ -146,6 +146,24 @@ export const torrentLockdownCheck: HealthCheckDef = {
   },
 };
 
+/** Archive unpacking is on but no 7-Zip binary (7zz / 7z) is installed: archived releases cannot be imported. */
+export const sevenZipMissingCheck: HealthCheckDef = {
+  id: 'SevenZipMissing',
+  async run(deps) {
+    if (!deps.unpacking) return [];
+    const st = await deps.unpacking();
+    if (!st.enabled || st.binary) return [];
+    return [
+      finding(
+        this.id,
+        'warning',
+        'Archive unpacking is on, but 7-Zip (7zz) is not installed, so downloads packed in RAR, 7z or zip archives cannot be imported. Install 7-Zip or set ARCLIGHT_7ZIP to its path',
+        'seven-zip-missing',
+      ),
+    ];
+  },
+};
+
 /** The kill switch engaged repeatedly within an hour: the VPN (or its status checks) is unstable. */
 export const killSwitchFlappingCheck: HealthCheckDef = {
   id: 'VpnKillSwitchFlapping',

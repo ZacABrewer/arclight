@@ -11,9 +11,10 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
 } from '../types.js';
 import { buildRpcUrl, TransmissionRpc } from './rpc.js';
-import { TORRENT_FIELDS, TR_LIMIT_MODE, TrAnything, TrSession, TrTorrentAdd, TrTorrentGet, type TrTorrent } from './schemas.js';
+import { TORRENT_FIELDS, TR_LIMIT_MODE, TrAnything, TrSession, TrTorrentAdd, TrTorrentFiles, TrTorrentGet, type TrTorrent } from './schemas.js';
 import type { TransmissionSettings } from './settings.js';
 import { categoryDir, inCategory, mapTorrent, type CategoryMode } from './state.js';
 
@@ -187,6 +188,14 @@ export class TransmissionClient implements DownloadClient {
       throw notSupported(this.name, 'changing categories before version 3.00 (no labels)');
     }
     await this.rpc.call('torrent-set', { ids: [id.toLowerCase()], labels: category === '' ? [] : [category] }, TrAnything);
+  }
+
+  /** Transmission lists no files while a magnet is still fetching its metadata. */
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    const reply = await this.rpc.call('torrent-get', { ids: [id.toLowerCase()], fields: ['hashString', 'files'] }, TrTorrentFiles);
+    const files = reply.torrents[0]?.files ?? [];
+    if (files.length === 0) return null;
+    return files.map((f) => ({ path: f.name.replaceAll('\\', '/'), sizeBytes: Math.max(0, f.length) }));
   }
 
   async pause(id: string): Promise<void> {

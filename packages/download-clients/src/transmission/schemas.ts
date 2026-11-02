@@ -75,6 +75,11 @@ export type TrTorrent = z.infer<typeof TrTorrent>;
 
 export const TrTorrentGet = z.object({ torrents: z.array(TrTorrent) });
 
+/** torrent-get with `files`: empty while a magnet has no metadata yet. */
+export const TrTorrentFiles = z.object({
+  torrents: z.array(z.object({ files: z.array(z.object({ name: z.string(), length: z.number() })).default([]) })),
+});
+
 const TrAddedTorrent = z.object({ hashString: z.string(), id: z.number().optional(), name: z.string().optional() });
 
 export const TrTorrentAdd = z.object({

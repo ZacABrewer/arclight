@@ -11,6 +11,7 @@ import {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
 } from '../types.js';
 import { DelugeRpc } from './rpc.js';
 import {
@@ -22,6 +23,7 @@ import {
   DelugeLabelOptions,
   DelugePort,
   DelugeStringList,
+  DelugeTorrentFiles,
   DelugeTorrentMap,
   DelugeVersion,
 } from './schemas.js';
@@ -223,6 +225,14 @@ export class DelugeClient implements DownloadClient {
     if (label !== '') await this.ensureLabel(label);
     else await this.ensureLabelPlugin();
     await this.rpc.call('label.set_torrent', [id.toLowerCase(), label], DelugeAny);
+  }
+
+  /** Deluge lists no files while a magnet is still fetching its metadata. */
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    const status = await this.rpc.call('core.get_torrent_status', [id.toLowerCase(), ['files']], DelugeTorrentFiles);
+    const files = status.files ?? [];
+    if (files.length === 0) return null;
+    return files.map((f) => ({ path: f.path.replaceAll('\\', '/'), sizeBytes: Math.max(0, f.size) }));
   }
 
   async pause(id: string): Promise<void> {

@@ -1,5 +1,10 @@
 import { z } from 'zod';
-import { MediaManagementSettings as MediaManagementWire, MetadataSettingsResponse, type MetadataSettingsUpdate } from '@arclight/shared';
+import {
+  DEFAULT_BLOCKED_EXTENSIONS,
+  MediaManagementSettings as MediaManagementWire,
+  MetadataSettingsResponse,
+  type MetadataSettingsUpdate,
+} from '@arclight/shared';
 import { request } from './client.js';
 import { t } from '../i18n/index.js';
 
@@ -28,6 +33,11 @@ export const MediaManagementSettings = z.looseObject({
   stallReplaceMinutes: z.number().int().min(0).max(10080).default(30),
   stallReplaceMaxProgress: z.number().int().min(0).max(100).default(90),
   diskSpaceGuard: z.boolean().default(true),
+  stallRespectHitAndRun: z.boolean().default(true),
+  unpackArchives: z.boolean().default(true),
+  releaseSafetyFilter: z.boolean().default(true),
+  blockedExtensions: z.string().default(DEFAULT_BLOCKED_EXTENSIONS.join(', ')),
+  rejectImplausibleSize: z.boolean().default(true),
   createEmptySeriesFolders: z.boolean().default(false),
   deleteEmptyFolders: z.boolean().default(false),
   setPermissions: z.boolean().default(false),
@@ -46,13 +56,18 @@ export const MEDIA_MANAGEMENT_DEFAULTS: MediaManagementSettings = MediaManagemen
 export const MEDIA_MANAGEMENT_WIRE_DEFAULTS = MediaManagementWire.parse({});
 
 const MediaManagementResponse = MediaManagementWire.transform((wire) =>
-  MediaManagementSettings.parse({ ...wire, recycleBinPath: wire.recycleBinPath ?? '', extraFileExtensions: wire.extraFileExtensions.join(', ') }),
+  MediaManagementSettings.parse({
+    ...wire,
+    recycleBinPath: wire.recycleBinPath ?? '',
+    extraFileExtensions: wire.extraFileExtensions.join(', '),
+    blockedExtensions: wire.blockedExtensions.join(', '),
+  }),
 );
 
-/** Form → wire: split the extension list ("srt, .nfo" → ["srt", "nfo"]). */
+/** Form → wire: split the extension lists ("srt, .nfo" → ["srt", "nfo"]). */
 export function mediaManagementToWire(form: MediaManagementSettings): Record<string, unknown> {
-  const extensions = form.extraFileExtensions.split(/[\s,]+/).map((e) => e.replace(/^\./, '')).filter(Boolean);
-  return { ...form, extraFileExtensions: extensions };
+  const split = (list: string) => list.split(/[\s,]+/).map((e) => e.replace(/^\*?\./, '').toLowerCase()).filter(Boolean);
+  return { ...form, extraFileExtensions: split(form.extraFileExtensions), blockedExtensions: split(form.blockedExtensions) };
 }
 
 export const settingsApi = {

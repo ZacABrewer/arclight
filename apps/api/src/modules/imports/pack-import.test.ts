@@ -7,6 +7,7 @@ import type { Db } from '../../db/index.js';
 import { createTestDb } from '../../db/test-utils.js';
 import type { TrackedDownload } from '../download-clients/index.js';
 import { libraryService } from '../library/index.js';
+import { getSection, setSection } from '../settings/service.js';
 import type { ImportedEvent, ImportSkippedEvent } from './deps.js';
 import * as tables from './schema.js';
 import { ImportsService, isSettledPack, packKindOf, type DownloadClientsPort, type ImportOutcome } from './service.js';
@@ -52,6 +53,8 @@ beforeEach(async () => {
   await writeFile(join(tvRoot, '.keep'), '');
   db = await createTestDb(tables);
   await libraryService.addRootFolder(db, { path: tvRoot, mediaType: 'series' });
+  // Fixture videos are a few bytes; the implausible-size check would reject them.
+  setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), rejectImplausibleSize: false });
   fake = new FakeDownloads();
 });
 

@@ -56,6 +56,8 @@
 
 /* Queue diagnostics (queue-diagnostics.tsx): banner, speed cell and the expanded row panel. */
 .al-queue-banner { padding: 16px 26px 0; }
+.al-queue-rejections { margin: 6px 0; padding-left: 18px; overflow-wrap: anywhere; }
+.al-queue-rejections__title { font-family: var(--al-mono); color: var(--al-text-1); }
 .al-queue-speed { display: inline-flex; flex-direction: column; gap: 2px; white-space: nowrap; }
 .al-queue-detail { position: sticky; left: 0; box-sizing: border-box; max-width: min(100%, calc(100vw - 32px)); padding: 16px 26px 20px; display: flex; flex-direction: column; gap: 18px; }
 .al-queue-detail__reason { margin: 0; display: flex; flex-wrap: wrap; align-items: center; gap: 10px; color: var(--al-text-2); }

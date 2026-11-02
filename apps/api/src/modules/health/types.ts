@@ -118,6 +118,8 @@ export interface HealthDeps {
   diskGuard?(): Promise<HealthDiskGuard>;
   /** Whisper ASR provider status (subtitles module); optional so deps without it skip the check. */
   whisper?(): Promise<SubtitleWhisperStatus>;
+  /** Archive unpacking: whether it is on and the 7-Zip binary found (imports); optional so deps without it skip the check. */
+  unpacking?(): Promise<{ enabled: boolean; binary: string | null }>;
 }
 
 export interface HealthActiveDownload {

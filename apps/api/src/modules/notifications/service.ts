@@ -440,6 +440,8 @@ export function wantsEvent(row: Pick<NotificationRow, NotificationTrigger | 'inc
       return row.onRequestCreated || row.onIssueCreated;
     case 'downloadStalled':
       return row.onDownloadStalled;
+    case 'downloadRejected':
+      return row.onDownloadRejected;
     case 'killSwitch':
       return row.onKillSwitch;
     case 'killSwitchResumed':

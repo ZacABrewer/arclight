@@ -84,7 +84,7 @@ export const QbtProperties = z.preprocess(withoutNulls, z.object({
 }));
 export type QbtProperties = z.infer<typeof QbtProperties>;
 
-export const QbtFileList = z.array(z.object({ name: z.string() }));
+export const QbtFileList = z.array(z.object({ name: z.string(), size: z.number().optional() }));
 
 /** max_ratio_act: 0 pause/stop, 1 remove, 2 super seeding, 3 remove with files. */
 export const QBT_RATIO_ACTION_REMOVE = 1;

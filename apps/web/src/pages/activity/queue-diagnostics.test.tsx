@@ -96,6 +96,11 @@ describe('queue diagnostics pieces', () => {
     expect(chip.tabIndex).toBe(0);
   });
 
+  it('shows unpacking progress in the state chip', () => {
+    render(<QueueStateChip item={item({ trackedState: 'importing', stateCode: 'unpacking', stateSeverity: 'info', stateReason: 'Unpacking archives: 42%.', unpackProgress: 0.42 })} />);
+    expect(screen.getByText('Unpacking 42%')).toBeTruthy();
+  });
+
   it('formats speeds and peers, with dashes when the client reports nothing', () => {
     expect(formatPeers(item().live)).toBe('4 (1)');
     expect(formatPeers({ downloadRate: 0, uploadRate: 0, connectedPeers: 2 })).toBe('2');

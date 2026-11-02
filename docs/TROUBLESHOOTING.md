@@ -158,6 +158,9 @@ Arclight also does step 1 for you. With **Recover stalled downloads** on (Settin
 | Not enough free space | The root folder is below the free-space rule. | Free space, or lower "Minimum free space" in Settings > Media Management (default 100 MB). Then press **Retry import**. |
 | Download folder not found | The client reports a path Arclight cannot see. | See [bad-remote-path-mapping](#bad-remote-path-mapping) and [docker-bad-remote-path-mapping](#docker-bad-remote-path-mapping). |
 | Permission denied | Arclight cannot read the download or write the library. | See [Permission denied on folders](#permission-denied). |
+| 7-Zip is not installed | The download is packed in archives and there is nothing to extract them with. | See [seven-zip-missing](#seven-zip-missing). |
+| Not enough free disk space to unpack | Extracting the archives would leave the drive below the minimum free space. | Free space; the import is retried. |
+| Unsafe release / Fake release / Broken release | The download safety filter rejected it (a blocked file type, a password-protected or damaged archive, no video, or a video far too small). It was removed, blocklisted and searched for again. | Nothing to do. To loosen the rules, see [Download safety](using/media-management.md#download-safety). |
 
 The wording of these messages can differ slightly by version; the row is the authority.
 
@@ -638,6 +641,7 @@ System > Health runs 45 kinds of check, plus one more (hard-links-not-possible) 
 | [vpn-kill-switch-flapping](#vpn-kill-switch-flapping) | VpnKillSwitchFlapping | warning | Kill switch engaged 3+ times in an hour |
 | [discord-bot-disconnected](#discord-bot-disconnected) | DiscordBotDisconnected | warning | The Discord bot cannot reach Discord |
 | [whisper-unreachable](#whisper-unreachable) | WhisperUnreachable | warning | The Whisper subtitle provider does not answer |
+| [seven-zip-missing](#seven-zip-missing) | SevenZipMissing | warning | Archive unpacking is on but 7-Zip is not installed |
 | [tracker-ratio-low](#tracker-ratio-low) | TrackerRatioLow | warning | A private tracker ratio or buffer is low |
 
 **Disk space**
@@ -1026,6 +1030,21 @@ Source: `DiscordBotDisconnected` (warning).
 - Check the bot token and press **Test**. A token reset in the Discord developer portal must be pasted again.
 - Make sure the bot is still in your server and has the permissions and intents the setup page lists.
 - Check that Arclight can reach discord.com (DNS, firewall, or a VPN that blocks it).
+
+<a id="seven-zip-missing"></a>
+### 7-Zip is not installed
+
+Source: `SevenZipMissing` (warning).
+
+**Meaning:** **Unpack archives** is on (Settings > Media Management > Download safety), but Arclight found no 7-Zip program (`7zz` or `7z`). Downloads that come packed in RAR, 7z or zip archives cannot be imported. Their queue rows say "The download contains archives, but 7-Zip (7zz) is not installed".
+
+**How to confirm:** on the host or in the container, run `7zz i`. It should print the 7-Zip version.
+
+**Fix:**
+
+- Docker: the official image includes `7zz`. Pull the current image. A custom image must install it.
+- Other installs: install 7-Zip (version 23 or newer reads RAR5) and put it on the PATH, or set `ARCLIGHT_7ZIP` to its full path. Then restart Arclight. Blocked imports are retried on their own.
+- If you do not want Arclight to unpack anything, turn off **Unpack archives**.
 
 <a id="whisper-unreachable"></a>
 ### Whisper provider is unreachable

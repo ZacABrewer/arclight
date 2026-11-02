@@ -90,6 +90,12 @@ export interface DownloadItem {
   phase?: DownloadItemPhase;
 }
 
+/** One file of a download, as the client lists it (path relative to the download, `/`-separated). */
+export interface DownloadItemFile {
+  path: string;
+  sizeBytes: number;
+}
+
 export interface AddTorrentInput {
   magnet?: string;
   torrentFile?: Uint8Array;
@@ -214,6 +220,12 @@ export interface DownloadClient {
   setAlternativeSpeed?(enabled: boolean): Promise<void>;
   /** Optional: whether the client's alternative speed limits are on right now. */
   getAlternativeSpeed?(): Promise<boolean>;
+  /**
+   * Optional: the files of a download (torrents: as soon as the metadata is known). Null while
+   * the client does not know them yet (a magnet still fetching its metadata). Used by the
+   * release-safety filter to reject fakes and malware before they finish downloading.
+   */
+  getFiles?(id: string): Promise<DownloadItemFile[] | null>;
 }
 
 export type DownloadClientErrorCode =

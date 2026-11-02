@@ -43,6 +43,8 @@ export interface StateInput {
   diskPaused?: { minimumBytes: number; resumeAboveBytes: number } | undefined;
   /** A pending grab the disk-space guard holds back. */
   diskHeld?: boolean | undefined;
+  /** Archives of a completed download being extracted before import (0..1). */
+  unpackProgress?: number | undefined;
   /** Where stall recovery stands, appended to the "stalled" sentence. */
   stallRecovery?: StallRecoveryInfo | undefined;
 }
@@ -54,6 +56,8 @@ export interface StallRecoveryInfo {
   replaceInMinutes?: number | undefined;
   /** Not replaced because the download is at least this far (percent). */
   keptAtProgress?: number | undefined;
+  /** Not replaced: the private tracker's minimum seeding / hit-and-run rule still applies. */
+  keptForSeedRule?: string | undefined;
 }
 
 export interface StateReason {
@@ -84,6 +88,7 @@ export const STATE_SEVERITY: Readonly<Record<QueueItemStateCode, QueueSeverity>>
   importPending: 'info',
   importBlocked: 'warning',
   importing: 'info',
+  unpacking: 'info',
 };
 
 /** Codes under which a download is not expected to receive data (the stall clock stands still). */
@@ -103,6 +108,7 @@ export const NOT_TRANSFERRING: ReadonlySet<QueueItemStateCode> = new Set<QueueIt
   'importPending',
   'importBlocked',
   'importing',
+  'unpacking',
 ]);
 
 export function deriveState(input: StateInput): StateReason {
@@ -121,6 +127,9 @@ export function deriveState(input: StateInput): StateReason {
       }
       return r('pendingGrab', first ?? 'Waiting to be sent to a download client.', input.trackedStatus === 'ok' ? 'info' : 'warning');
     case 'importing':
+      if (input.unpackProgress !== undefined) {
+        return r('unpacking', `Unpacking archives: ${Math.floor(Math.max(0, Math.min(1, input.unpackProgress)) * 100)}%.`);
+      }
       if (input.importCopy) {
         const c = input.importCopy;
         return r(
@@ -208,7 +217,9 @@ function recoverySentence(info: StallRecoveryInfo | undefined): string {
   let out = '';
   const ago = info.reannouncedMinutesAgo;
   if (ago !== undefined) out += ago < 1 ? ' Asked for fresh peers just now.' : ` Asked for fresh peers ${plural(ago, 'minute')} ago.`;
-  if (info.keptAtProgress !== undefined) {
+  if (info.keptForSeedRule !== undefined) {
+    out += ` Not removed automatically: ${trimDot(info.keptForSeedRule)}.`;
+  } else if (info.keptAtProgress !== undefined) {
     out += ` Not replaced automatically: it is past ${info.keptAtProgress}%.`;
   } else if (info.replaceInMinutes !== undefined) {
     out +=

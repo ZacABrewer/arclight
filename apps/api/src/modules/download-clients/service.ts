@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { stat, statfs } from 'node:fs/promises';
 import { dirname } from 'node:path';
-import { and, asc, eq, inArray, isNotNull, lt } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, lt } from 'drizzle-orm';
 import type { Logger } from 'pino';
 import { z } from 'zod';
 import {
@@ -14,6 +14,7 @@ import {
   type DownloadItemPhase,
   type ItemSpeedLimits,
   type QueueMove,
+  type SeedRule,
   type SessionSource,
 } from '@arclight/download-clients';
 import {
@@ -61,6 +62,7 @@ import {
 } from './remote-paths.js';
 import {
   downloadClients,
+  downloadEvents,
   remotePathMappings,
   trackedDownloads,
   type DownloadClientRow,
@@ -74,10 +76,12 @@ import {
   grabHoldReason,
   planStallRecovery,
   stallReplaceReason,
+  stallSeedRuleExemption,
   type RecoverySettings,
 } from './recovery.js';
 import { GrabGuard, payloadHash, releaseKeys } from './grab-guard.js';
-import { deriveState, formatBytes, NOT_TRANSFERRING, type StateReason } from './state-reason.js';
+import { deriveState, formatBytes, NOT_TRANSFERRING, type StallRecoveryInfo, type StateReason } from './state-reason.js';
+import { checkReleaseFiles, expectedRuntimeMinutes, type SafetyTrigger } from './safety.js';
 import { implementationSchemas } from './templates.js';
 import { DownloadTimelineStore, type RecordOptions } from './timeline.js';
 
@@ -255,6 +259,8 @@ export interface DownloadClientsServiceOptions {
 // ---------------------------------------------------------------------------------------
 
 const IMPLEMENTATION_PROTOCOL = DOWNLOAD_CLIENT_PROTOCOLS;
+/** File lists the safety filter reads per queue refresh (the rest wait for the next one). */
+const SAFETY_CHECKS_PER_REFRESH = 20;
 
 const ACTIVE_STATES: TrackedDownloadState[] = ['downloading', 'importPending', 'importing', 'failedPending'];
 /** States the missing-item grace rule never deletes. */
@@ -308,6 +314,10 @@ export class DownloadClientsService {
   private readonly clientHealth = new Map<number, { ok: boolean; at: string; message?: string }>();
   /** Copies into the library in progress, by download id (imports report them). */
   private readonly importCopies = new Map<string, { copiedBytes: number; totalBytes: number; startedAt: number }>();
+  /** Archive extraction before import, by download id (0..1). */
+  private readonly unpacking = new Map<string, number>();
+  /** Tracker seed / hit-and-run rule of a torrent (tracker-stats), for the stall exemption. */
+  private seedRuleLookup: ((infoHash: string) => SeedRule | null) | undefined;
   private lastRefreshAt: number | null = null;
   private dirty = true;
   private torrentSession: SessionSource | undefined;
@@ -494,6 +504,18 @@ export class DownloadClientsService {
     this.bus?.publish({ type: 'queue', action: 'changed' });
   }
 
+  /** Progress of the archive unpacker for a completed download (0..1); null when it ends. */
+  setUnpackProgress(downloadId: string, fraction: number | null): void {
+    const before = this.unpacking.get(downloadId);
+    if (fraction === null) this.unpacking.delete(downloadId);
+    else this.unpacking.set(downloadId, Math.max(0, Math.min(1, fraction)));
+    // Whole percents only: 7-Zip reports progress far more often than the queue needs it.
+    const after = this.unpacking.get(downloadId);
+    if (before === undefined || after === undefined || Math.floor(before * 100) !== Math.floor(after * 100)) {
+      this.bus?.publish({ type: 'queue', action: 'changed' });
+    }
+  }
+
   private importCopyOf(downloadId: string): { copiedBytes: number; totalBytes: number; bytesPerSecond: number } | undefined {
     const c = this.importCopies.get(downloadId);
     if (!c) return undefined;
@@ -636,6 +658,26 @@ export class DownloadClientsService {
     this.replacementSearch = search;
   }
 
+  /**
+   * Tracker seed rules (tracker-stats): a stalled torrent from a tracker with a hit-and-run
+   * rule is not removed automatically once it has data (Settings > Media Management).
+   */
+  setSeedRuleLookup(lookup: ((infoHash: string) => SeedRule | null) | undefined): void {
+    this.seedRuleLookup = lookup;
+  }
+
+  /** Why stall recovery keeps this download, or null (see `stallSeedRuleExemption`). */
+  private seedRuleExemption(row: Pick<TrackedDownloadRow, 'protocol' | 'downloadId' | 'progress' | 'downloadedBytes'>, settings: RecoverySettings): string | null {
+    if (!settings.respectHitAndRun || row.protocol !== 'torrent' || !this.seedRuleLookup) return null;
+    let rule: SeedRule | null = null;
+    try {
+      rule = this.seedRuleLookup(row.downloadId);
+    } catch (err) {
+      this.log?.debug({ err }, 'seed rule lookup failed');
+    }
+    return stallSeedRuleExemption(rule, { progress: row.progress, downloadedBytes: row.downloadedBytes ?? 0 });
+  }
+
   /** Automatic replacements wait while this answers false (the app wires the VPN grab guard). */
   setReplaceGuard(guard: (() => boolean | Promise<boolean>) | undefined): void {
     this.replaceGuard = guard;
@@ -735,6 +777,11 @@ export class DownloadClientsService {
       await this.recoverStalled(now, stallMs);
     } catch (err) {
       this.log?.warn({ err }, 'stall recovery failed');
+    }
+    try {
+      await this.checkReleaseSafety(clients);
+    } catch (err) {
+      this.log?.warn({ err }, 'release safety check failed');
     }
     this.lastRefreshAt = now.getTime();
     this.dirty = false;
@@ -1271,6 +1318,7 @@ export class DownloadClientsService {
       if (plan.reannounce) await this.autoReannounce(row);
       if (!plan.replace || !isGrabbed(row) || row.diskPausedAt !== null || row.clientStatus === 'paused') continue;
       if (this.engineLockedDown(row.clientId)) continue;
+      if (this.seedRuleExemption(row, settings) !== null) continue;
       guardOk ??= this.replaceGuard ? await this.replaceGuard() : true;
       if (!guardOk) continue;
       const reason = stallReplaceReason(plan.stalledMinutes);
@@ -1338,22 +1386,30 @@ export class DownloadClientsService {
   async replace(
     id: number,
     options: { blocklist: boolean; removeData: boolean },
-    meta: { reason?: string; automatic?: boolean } = {},
+    meta: { reason?: string; automatic?: boolean; unsafe?: { trigger: SafetyTrigger; rule?: string } } = {},
   ): Promise<QueueReplaceResult> {
     const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
     if (!row) throw notFound('Queue item', id);
-    if (!VISIBLE_STATES.includes(row.state) || row.state === 'importing') {
+    // An unsafe release is dropped even mid-import (the import itself found the problem).
+    if (!VISIBLE_STATES.includes(row.state) || (row.state === 'importing' && !meta.unsafe)) {
       throw new DownloadClientsError('VALIDATION', `Queue item ${id} cannot be replaced while ${row.state}`);
     }
     const item = this.toTracked(row, this.queueContext());
     const sent = row.clientId !== null && row.state !== 'pending';
     const clientName = item.downloadClientName ?? 'the download client';
+    let removed = true;
     if (sent && row.clientId !== null) {
+      const client = this.clientById(row.clientId);
       try {
-        await this.clientById(row.clientId).removeItem(row.downloadId, options.removeData);
+        await client.removeItem(row.downloadId, options.removeData);
       } catch (err) {
         if (!(err instanceof DownloadClientError && err.code === 'not-found')) {
-          throw new DownloadClientsError('CLIENT_ERROR', `${clientName}: ${errorMessage(err)}`, { cause: err });
+          if (!meta.unsafe) throw new DownloadClientsError('CLIENT_ERROR', `${clientName}: ${errorMessage(err)}`, { cause: err });
+          // Unsafe: blocklist and search regardless, and at least stop the transfer (a
+          // hit-and-run guard may refuse to remove a torrent that still has to seed).
+          removed = false;
+          this.log?.warn({ err, id, title: row.title }, 'could not remove an unsafe download from its client');
+          await client.pause?.(row.downloadId).catch(() => undefined);
         }
       }
     }
@@ -1381,19 +1437,101 @@ export class DownloadClientsService {
       }
     }
     const steps = [
-      sent ? `removed from ${clientName}${options.removeData ? ' with its data' : ''}` : 'dropped from the queue',
+      !sent
+        ? 'dropped from the queue'
+        : removed
+          ? `removed from ${clientName}${options.removeData ? ' with its data' : ''}`
+          : `paused in ${clientName} (it refused the removal; remove it there)`,
       options.blocklist ? 'release blocklisted' : null,
       searchStarted ? 'searching for another release' : 'nothing to search for',
     ].filter(Boolean);
-    const message = `${meta.automatic ? 'Gave up on this release' : 'Replaced on request'} (${reason}): ${steps.join(', ')}.`;
-    this.timeline.record(subjectOf(row), 'replaced', {
-      message,
-      data: { trigger: meta.automatic ? 'stall' : 'manual', blocklisted: options.blocklist, search: searchStarted },
-    });
+    const message = meta.unsafe
+      ? `${capitalize(reason)}: ${steps.join(', ')}.`
+      : `${meta.automatic ? 'Gave up on this release' : 'Replaced on request'} (${reason}): ${steps.join(', ')}.`;
+    if (meta.unsafe) {
+      this.timeline.record(subjectOf(row), 'rejected', {
+        message,
+        data: {
+          trigger: meta.unsafe.trigger,
+          ...(meta.unsafe.rule !== undefined ? { rule: meta.unsafe.rule } : {}),
+          blocklisted: options.blocklist,
+          search: searchStarted,
+        },
+      });
+    } else {
+      this.timeline.record(subjectOf(row), 'replaced', {
+        message,
+        data: { trigger: meta.automatic ? 'stall' : 'manual', blocklisted: options.blocklist, search: searchStarted },
+      });
+    }
+    this.unpacking.delete(row.downloadId);
     this.db.delete(trackedDownloads).where(eq(trackedDownloads.id, id)).run();
     this.dirty = true;
     this.bus?.publish({ type: 'queue', action: 'changed' });
     return { id, blocklisted: options.blocklist, searchStarted, message };
+  }
+
+  /**
+   * The fake-release / malware filter rejected this download: it is removed from its client
+   * with its data, blocklisted with `reason` (shown in History) and searched for again; the
+   * timeline gets a `rejected` entry (the "Download rejected (unsafe)" notification). Also
+   * works while the download is importing. Null when it is no longer tracked.
+   */
+  async rejectUnsafe(id: number, reason: string, trigger: SafetyTrigger, rule?: string): Promise<QueueReplaceResult | null> {
+    const row = this.db.select({ id: trackedDownloads.id }).from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!row) return null;
+    const unsafe = { trigger, ...(rule !== undefined ? { rule } : {}) };
+    const result = await this.replace(id, { blocklist: true, removeData: true }, { reason, automatic: true, unsafe });
+    this.log?.warn({ id, reason, trigger }, 'rejected an unsafe download');
+    return result;
+  }
+
+  /**
+   * Checks the file list of torrents as soon as their client knows it (after the metadata),
+   * once per download: blocked file types, no media at all, an implausibly small main video.
+   * Clients without a file list (usenet) are checked at import time only.
+   */
+  private async checkReleaseSafety(clients: ReadonlyArray<{ config: DownloadClientResource; client: DownloadClient }>): Promise<void> {
+    const settings = getSection(this.db, 'mediaManagement');
+    if (!settings.releaseSafetyFilter) return;
+    const byId = new Map(clients.map((c) => [c.config.id, c.client]));
+    const rows = this.db
+      .select()
+      .from(trackedDownloads)
+      .where(and(eq(trackedDownloads.state, 'downloading'), isNull(trackedDownloads.safetyCheckedAt)))
+      .all()
+      .filter((r) => r.protocol === 'torrent' && r.clientId !== null && byId.has(r.clientId) && r.phase !== 'metadata' && isGrabbed(r));
+    for (const row of rows.slice(0, SAFETY_CHECKS_PER_REFRESH)) {
+      const client = byId.get(row.clientId!)!;
+      if (!client.getFiles) {
+        this.markSafetyChecked(row.id);
+        continue;
+      }
+      let files;
+      try {
+        files = await client.getFiles(row.downloadId);
+      } catch (err) {
+        this.log?.debug({ err, id: row.id }, 'could not read the file list of a download');
+        continue;
+      }
+      if (files === null || files.length === 0) continue;
+      this.markSafetyChecked(row.id);
+      const verdict = checkReleaseFiles(
+        files,
+        { mediaType: row.mediaType, title: row.title, runtimeMinutes: expectedRuntimeMinutes(this.db, row) },
+        { blockedExtensions: settings.blockedExtensions, rejectImplausibleSize: settings.rejectImplausibleSize },
+      );
+      if (verdict.ok) continue;
+      try {
+        await this.rejectUnsafe(row.id, verdict.reason, 'metadata', verdict.rule);
+      } catch (err) {
+        this.log?.warn({ err, id: row.id }, 'could not reject an unsafe download');
+      }
+    }
+  }
+
+  private markSafetyChecked(id: number): void {
+    this.db.update(trackedDownloads).set({ safetyCheckedAt: this.now().toISOString() }).where(eq(trackedDownloads.id, id)).run();
   }
 
   /** Downloads still transferring, with local paths (disk-space and stall health checks). */
@@ -2014,7 +2152,21 @@ export class DownloadClientsService {
       errors: items.filter((i) => i.trackedStatus === 'error').length,
       warnings: items.filter((i) => i.trackedStatus === 'warning').length,
       diskGuard: { paused: guard.paused, held: guard.held, volumes: guard.volumes, minimumFreeBytes: guard.minimumFreeBytes },
+      recentRejections: this.recentRejections(),
     };
+  }
+
+  /** Downloads the safety filter rejected in the last day (they left the queue; the banner says why). */
+  private recentRejections(): NonNullable<QueueStatus['recentRejections']> {
+    const since = new Date(this.now().getTime() - 24 * 3_600_000).toISOString();
+    return this.db
+      .select()
+      .from(downloadEvents)
+      .where(and(eq(downloadEvents.type, 'rejected'), gte(downloadEvents.time, since)))
+      .orderBy(desc(downloadEvents.time))
+      .limit(10)
+      .all()
+      .map((e) => ({ trackedDownloadId: e.trackedDownloadId, title: e.title, reason: e.message ?? '', time: e.time }));
   }
 
   /**
@@ -2159,6 +2311,17 @@ export class DownloadClientsService {
    * Timeline entry for the built-in engine's torrent `infoHash`, whatever state its tracked
    * download is in (the seeding rules act after import). No-op when Arclight does not track it.
    */
+  /** Adds a timeline entry to a tracked download (e.g. the importer's unpack step). */
+  recordEvent(id: number, type: DownloadEventType, options: RecordOptions = {}): void {
+    const row = this.db.select().from(trackedDownloads).where(eq(trackedDownloads.id, id)).get();
+    if (!row) return;
+    try {
+      this.timeline.record(subjectOf(row), type, options);
+    } catch (err) {
+      this.log?.warn({ err, id }, 'could not record a timeline entry');
+    }
+  }
+
   recordEngineEvent(infoHash: string, type: DownloadEventType, options: RecordOptions = {}): void {
     const builtinIds = this.db
       .select({ id: downloadClients.id })
@@ -2230,6 +2393,7 @@ export class DownloadClientsService {
     const health = row.clientId === null ? undefined : this.clientHealth.get(row.clientId);
     const killSwitch =
       builtin && ctx.killSwitch.has(row.downloadId) ? (ctx.lockdownReason !== undefined ? { reason: ctx.lockdownReason } : {}) : undefined;
+    const unpackProgress = row.state === 'importing' ? this.unpacking.get(row.downloadId) : undefined;
     const state = deriveState({
       state: row.state,
       clientStatus: row.clientStatus,
@@ -2248,15 +2412,8 @@ export class DownloadClientsService {
       maxActiveDownloads: builtin ? ctx.maxActiveDownloads : null,
       diskPaused: row.state === 'downloading' && row.diskPausedAt !== null ? ctx.diskPaused : undefined,
       diskHeld: row.state === 'pending' && row.pendingGrab?.hold === 'diskSpace',
-      stallRecovery:
-        row.stalledSince === null
-          ? undefined
-          : planStallRecovery(
-              { stalledSince: row.stalledSince, reannouncedAt: row.reannouncedAt, progress },
-              ctx.recovery,
-              ctx.now,
-              ctx.stallMs,
-            )?.info,
+      stallRecovery: row.stalledSince === null ? undefined : this.stallInfo(row, progress, ctx),
+      unpackProgress,
     });
     const etaMs = engine ? engine.etaMs : row.etaMs ?? undefined;
     return {
@@ -2288,7 +2445,18 @@ export class DownloadClientsService {
       stateSeverity: state.severity,
       ...(row.stalledSince !== null ? { stalledSince: row.stalledSince } : {}),
       ...(live !== undefined ? { live } : {}),
+      ...(unpackProgress !== undefined ? { unpackProgress } : {}),
     };
+  }
+
+  private stallInfo(row: TrackedDownloadRow, progress: number, ctx: QueueContext): StallRecoveryInfo | undefined {
+    if (row.stalledSince === null) return undefined;
+    const info = planStallRecovery({ stalledSince: row.stalledSince, reannouncedAt: row.reannouncedAt, progress }, ctx.recovery, ctx.now, ctx.stallMs)?.info;
+    if (!info) return undefined;
+    const kept = this.seedRuleExemption(row, ctx.recovery);
+    if (kept === null) return info;
+    const { replaceInMinutes: _due, keptAtProgress: _kept, ...rest } = info;
+    return { ...rest, keptForSeedRule: kept };
   }
 
   // ---- helpers -------------------------------------------------------------------------
@@ -2368,6 +2536,7 @@ function recoveryFromSettings(db: Db): RecoverySettings {
     replaceAfterMs: (m.stallReplaceMinutes ?? 30) * 60_000,
     replaceMaxProgress: (m.stallReplaceMaxProgress ?? 90) / 100,
     diskGuard: (m.diskSpaceGuard ?? DEFAULT_RECOVERY_SETTINGS.diskGuard) && !m.skipFreeSpaceCheck,
+    respectHitAndRun: m.stallRespectHitAndRun ?? DEFAULT_RECOVERY_SETTINGS.respectHitAndRun,
   };
 }
 

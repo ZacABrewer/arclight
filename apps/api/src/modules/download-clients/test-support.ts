@@ -7,6 +7,7 @@ import type {
   DownloadClientStatus,
   DownloadClientTestResult,
   DownloadItem,
+  DownloadItemFile,
 } from '@arclight/download-clients';
 import { DownloadClientError } from '@arclight/download-clients';
 import type { DownloadClientImplementation, DownloadClientResource, ReleaseProtocol } from '@arclight/shared';
@@ -94,6 +95,11 @@ export class FakeDownloadClient implements DownloadClient {
     if (this.failReannounce) throw this.failReannounce;
     this.reannounced.push(id);
   }
+  /** File lists by item id (the safety filter); missing ids answer null (not known yet). */
+  files = new Map<string, DownloadItemFile[]>();
+  async getFiles(id: string): Promise<DownloadItemFile[] | null> {
+    return this.files.get(id) ?? null;
+  }
 }
 
 export function item(overrides: Partial<DownloadItem> & { id: string }): DownloadItem {
@@ -139,6 +145,7 @@ export async function setup(options: Partial<DownloadClientsServiceOptions> = {}
         fake.paused = existing.paused;
         fake.resumed = existing.resumed;
         fake.reannounced = existing.reannounced;
+        fake.files = existing.files;
       }
       if (config.id !== 0) fakes.set(config.id, fake);
       return fake;

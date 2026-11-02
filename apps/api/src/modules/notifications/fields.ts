@@ -54,6 +54,7 @@ export const TRIGGER_EVENT: Record<NotificationTrigger, NotificationEventType> =
   onIssueCreated: 'issueCreated',
   onIssueUpdated: 'issueUpdated',
   onDownloadStalled: 'downloadStalled',
+  onDownloadRejected: 'downloadRejected',
   onKillSwitch: 'killSwitch',
   onKillSwitchResumed: 'killSwitchResumed',
   onImportProblem: 'importProblem',

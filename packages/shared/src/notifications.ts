@@ -50,6 +50,7 @@ export const NOTIFICATION_TRIGGERS = [
   'onIssueUpdated',
   // Download problems (download timeline, VPN kill switch, disk space health checks).
   'onDownloadStalled',
+  'onDownloadRejected',
   'onKillSwitch',
   'onKillSwitchResumed',
   'onImportProblem',

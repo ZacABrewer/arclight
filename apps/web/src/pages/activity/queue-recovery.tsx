@@ -8,7 +8,8 @@ import { isPendingItem } from './queue-remove.js';
 import { t } from '../../i18n/index.js';
 
 // Self-healing downloads in the Activity queue: the "Try another release" and "Re-announce"
-// actions of an expanded row, and the banner while the disk-space guard holds or pauses things.
+// actions of an expanded row, the banner while the disk-space guard holds or pauses things, and
+// the banner for releases the safety filter rejected (they left the queue; History keeps them).
 
 /** Re-announce applies to torrents that reached a client and are still downloading. */
 export function canReannounce(item: QueueItem): boolean {
@@ -141,6 +142,32 @@ export function diskGuardBannerText(guard: QueueStatus['diskGuard']): string | n
   }
   if (guard.held > 0) parts.push(t('activity.queueRecovery.bannerHeld', { count: guard.held, minimum }));
   return parts.join(' ');
+}
+
+/** Downloads the fake-release / malware filter rejected in the last day, newest first. */
+export function RejectionsBanner({ rejections }: { rejections: QueueStatus['recentRejections'] }) {
+  const [dismissedAt, setDismissedAt] = useState<string | null>(null);
+  const shown = (rejections ?? []).filter((r) => dismissedAt === null || r.time > dismissedAt);
+  if (shown.length === 0) return null;
+  const visible = shown.slice(0, 3);
+  return (
+    <div className="al-queue-banner" data-testid="queue-rejections">
+      <Banner tone="danger">
+        <strong>{t('activity.queueRecovery.rejectedTitle', { count: shown.length })}</strong>
+        <ul className="al-queue-rejections">
+          {visible.map((r) => (
+            <li key={`${r.trackedDownloadId}-${r.time}`}>
+              <span className="al-queue-rejections__title">{r.title}</span>: {r.reason}
+            </li>
+          ))}
+        </ul>
+        {shown.length > visible.length ? <span>{t('activity.queueRecovery.rejectedMore', { count: shown.length - visible.length })} </span> : null}
+        <Button size="sm" variant="ghost" onClick={() => setDismissedAt(shown[0]!.time)}>
+          {t('activity.queueRecovery.rejectedDismiss')}
+        </Button>
+      </Banner>
+    </div>
+  );
 }
 
 export function DiskGuardBanner({ guard }: { guard: QueueStatus['diskGuard'] }) {

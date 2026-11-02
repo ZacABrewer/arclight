@@ -17,6 +17,7 @@ import { getDownloadClientsService } from './modules/download-clients/index.js';
 import { indexersServiceFor } from './modules/indexers/index.js';
 import type { MetadataLookup } from './modules/library/index.js';
 import { notificationsServiceFor } from './modules/notifications/index.js';
+import { getSection, setSection } from './modules/settings/service.js';
 import { HD_ALLOWED, makeIndexer, makeProfile, makeRelease } from './modules/releases/test-support.js';
 
 // End-to-end pipeline through the real modules and wiring: search -> decide -> grab -> queue
@@ -159,6 +160,8 @@ describe('phase 1 pipeline', () => {
       const outputPath = join(downloads, TITLE);
       await mkdir(outputPath, { recursive: true });
       await writeFile(join(outputPath, `${TITLE}.mkv`), Buffer.alloc(4096, 1));
+      // A 4 KB stand-in video: the fake-release size rule would reject it.
+      setSection(db, 'mediaManagement', { ...getSection(db, 'mediaManagement'), rejectImplausibleSize: false });
       fake.items = [
         item({
           id: HASH,

@@ -134,6 +134,19 @@ describe('Settings -> Media management', () => {
     expect(put!.body).toMatchObject({ extraFileExtensions: ['srt', 'nfo'] });
   });
 
+  it('edits the download safety settings, with blocked extensions as a list', async () => {
+    renderAt('/settings/mediamanagement');
+    const field = (await screen.findByLabelText('Blocked file extensions')) as HTMLInputElement;
+    expect(field.value).toContain('exe');
+    expect((screen.getByLabelText('Unpack archives') as HTMLInputElement).checked).toBe(true);
+    fireEvent.change(field, { target: { value: 'exe, .SCR,  lnk' } });
+    fireEvent.click(screen.getByLabelText('Reject implausibly small videos'));
+    fireEvent.click(within(screen.getByRole('region', { name: 'Unsaved changes' })).getByRole('button', { name: 'Save changes' }));
+    await waitFor(() => expect(calls.some((c) => c.method === 'PUT' && c.url === '/api/v1/settings/mediamanagement')).toBe(true));
+    const put = calls.find((c) => c.method === 'PUT' && c.url === '/api/v1/settings/mediamanagement');
+    expect(put!.body).toMatchObject({ blockedExtensions: ['exe', 'scr', 'lnk'], rejectImplausibleSize: false, unpackArchives: true });
+  });
+
   it('hides advanced rows until Show advanced is on', async () => {
     renderAt('/settings/mediamanagement');
     await screen.findByLabelText('Standard episode format');

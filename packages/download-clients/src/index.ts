@@ -29,6 +29,7 @@ export {
   type DownloadClientStatus,
   type DownloadClientTestResult,
   type DownloadItem,
+  type DownloadItemFile,
   type DownloadItemLive,
   type DownloadItemPhase,
   type DownloadItemStatus,

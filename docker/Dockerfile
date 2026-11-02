@@ -26,11 +26,24 @@ RUN npm install --omit=dev --no-package-lock --no-audit --no-fund \
  && find better-sqlite3/build -mindepth 1 ! -path '*/Release' ! -name 'better_sqlite3.node' -prune -exec rm -rf {} + \
  && node -e "require('/ext/node_modules/better-sqlite3')(':memory:').prepare('select 1').get()"
 
+# 7-Zip (7zz) for archive unpacking: the official static Linux build, which reads RAR/RAR5 (the
+# Debian 7zip package has no RAR codec). Both archives are pinned by checksum; TARGETARCH picks one.
+FROM debian:bookworm-slim AS sevenzip
+ARG TARGETARCH
+ADD --checksum=sha256:dc99eff5008f1ab79bd7084c68513701547a808a89502bf4133683535ab3c695 \
+    https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-x64.tar.xz /dl/7z-amd64.tar.xz
+ADD --checksum=sha256:2389ba20e4d8295e8709c20b6263b69bd1ec4972fe38a04ad7a1badbf595b996 \
+    https://github.com/ip7z/7zip/releases/download/26.03/7z2603-linux-arm64.tar.xz /dl/7z-arm64.tar.xz
+RUN apt-get update && apt-get install -y --no-install-recommends xz-utils && rm -rf /var/lib/apt/lists/* \
+ && mkdir /out && tar -xJf "/dl/7z-${TARGETARCH:-amd64}.tar.xz" -C /out 7zz \
+ && /out/7zz i | head -n 3
+
 # Runtime: the node:24-bookworm-slim userland minus npm/corepack/yarn. Starting from
 # debian:bookworm-slim and copying just the node binary avoids inheriting those layers
 # (deleting files in a later layer would not shrink the image).
 FROM debian:bookworm-slim
 COPY --from=build /usr/local/bin/node /usr/local/bin/node
+COPY --from=sevenzip /out/7zz /usr/local/bin/7zz
 ARG VERSION=0.1.0-dev
 ENV NODE_ENV=production \
     ARCLIGHT_DOCKER=1 \

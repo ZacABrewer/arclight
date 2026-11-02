@@ -23,6 +23,11 @@ export interface RecoverySettings {
   replaceMaxProgress: number;
   /** Master switch of the disk-space guard (held grabs and paused downloads). */
   diskGuard: boolean;
+  /**
+   * Never remove a stalled torrent from a tracker with a seed / hit-and-run rule once it has
+   * data: removing it can count as a hit-and-run there. Optional for callers built before it.
+   */
+  respectHitAndRun?: boolean;
 }
 
 export const DEFAULT_RECOVERY_SETTINGS: RecoverySettings = {
@@ -30,6 +35,7 @@ export const DEFAULT_RECOVERY_SETTINGS: RecoverySettings = {
   replaceAfterMs: 30 * 60_000,
   replaceMaxProgress: 0.9,
   diskGuard: true,
+  respectHitAndRun: true,
 };
 
 export interface StalledDownload {
@@ -80,6 +86,35 @@ export function planStallRecovery(
     }
   }
   return { reannounce: d.reannouncedAt === null, replace, info, stalledMinutes };
+}
+
+/** The tracker seed rule of a torrent (tracker-stats), as far as the exemption needs it. */
+export interface StallSeedRule {
+  minSeedHours?: number | undefined;
+  minRatio?: number | undefined;
+  label?: string | undefined;
+}
+
+/**
+ * Why a stalled torrent is kept instead of replaced, or null. Private trackers with a
+ * minimum-seeding (hit-and-run) rule count a download that was started and then removed
+ * before seeding as a hit-and-run, so once any data has arrived the torrent is left for the
+ * user to decide. Torrents without data, or from trackers without a rule, are replaced as usual.
+ */
+export function stallSeedRuleExemption(
+  rule: StallSeedRule | null | undefined,
+  d: { progress: number; downloadedBytes: number },
+): string | null {
+  if (!rule || (rule.minSeedHours === undefined && rule.minRatio === undefined)) return null;
+  if (d.progress <= 0 && d.downloadedBytes <= 0) return null;
+  const needs = [
+    rule.minSeedHours !== undefined ? `${rule.minSeedHours} h of seeding` : null,
+    rule.minRatio !== undefined ? `ratio ${rule.minRatio}` : null,
+  ]
+    .filter((x): x is string => x !== null)
+    .join(' or ');
+  const who = rule.label ? rule.label : 'its tracker';
+  return `${who} has a hit-and-run rule (${needs}) and this torrent already has data, so removing it could count as a hit-and-run`;
 }
 
 /** Blocklist / timeline reason of an automatic replacement. */

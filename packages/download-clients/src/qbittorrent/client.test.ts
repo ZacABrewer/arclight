@@ -491,3 +491,19 @@ describe('listen port', () => {
     await expect(client().getListenPort!()).resolves.toBe(6881);
   });
 });
+
+describe('getFiles', () => {
+  it('lists the torrent files with sizes', async () => {
+    const files = await client().getFiles!('ABC');
+    expect(files).toEqual([
+      { path: 'Movie.Title.2020.1080p.BluRay.x264-GRP/Movie.Title.2020.1080p.BluRay.x264-GRP.mkv', sizeBytes: 7_900_000_000 },
+      { path: 'Movie.Title.2020.1080p.BluRay.x264-GRP/sample.mkv', sizeBytes: 100_000_000 },
+    ]);
+    expect(qbt.calls('/api/v2/torrents/files').at(-1)?.query.get('hash')).toBe('abc');
+  });
+
+  it('answers null while a magnet has no metadata (no files yet)', async () => {
+    qbt.on('GET', '/api/v2/torrents/files', { body: [] });
+    expect(await client().getFiles!('abc')).toBeNull();
+  });
+});

@@ -38,7 +38,7 @@ import { BulkBar } from '../../components/media/bulk-bar.js';
 import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
 import { useAudioNames } from './audio-names.js';
 import { EngineBanner, engineBannerKind, formatPeers, QueueItemDetail, QueueStateChip, SpeedCell } from './queue-diagnostics.js';
-import { DiskGuardBanner, QueueRecoveryActions } from './queue-recovery.js';
+import { DiskGuardBanner, QueueRecoveryActions, RejectionsBanner } from './queue-recovery.js';
 import { initialRemoveState, isPendingItem, removeReducer, toRemoveOptions } from './queue-remove.js';
 import { qualityFromTitle, queueChip, queueTrailState } from './queue-status.js';
 import { AudioMediaLabel, audioImportMode, isAudioRecord } from './audiobook-media.js';
@@ -341,6 +341,7 @@ export function QueuePage() {
       <EngineBannerSlot engine={engine.data ?? undefined} vpn={vpn.data ?? undefined} />
       <EngineTransferSection engine={engine.data ?? undefined} />
       <DiskGuardBanner guard={status.data?.diskGuard} />
+      <RejectionsBanner rejections={status.data?.recentRejections} />
       <Pane chamfer="tl" flush bare className="al-activity-pane">
         <div className="al-activity-filters">
           <ListSearchBar

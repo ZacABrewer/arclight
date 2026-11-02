@@ -117,6 +117,8 @@ export const trackedDownloads = sqliteTable(
     reannouncedAt: text('reannounced_at'),
     /** Set while the disk-space guard holds this download paused (it resumes it later). */
     diskPausedAt: text('disk_paused_at'),
+    /** When the release's file list passed (or failed) the fake-release / malware filter. */
+    safetyCheckedAt: text('safety_checked_at'),
     // Audio targets (docs/design/music-audiobooks.md section 4.2); null on video rows.
     artistId: integer('artist_id'),
     albumIds: text('album_ids', { mode: 'json' }).$type<number[]>(),
