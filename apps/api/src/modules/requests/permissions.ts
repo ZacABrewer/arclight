@@ -67,6 +67,8 @@ const REQUEST_TYPE_WORDS: Record<RequestTypeKey, string> = {
   series: 'series',
   music: 'music',
   audiobook: 'audiobook',
+  ebook: 'ebook',
+  comic: 'comic',
   subtitles: 'subtitle',
   audioLanguages: 'audio language',
 };

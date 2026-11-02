@@ -55,6 +55,17 @@ export function FeaturesSection() {
               }}
             />
           </FormRow>
+          <FormRow label={t('books.title')} htmlFor="feature-books" captionInline caption={t('books.feature.caption')}>
+            <Toggle
+              id="feature-books"
+              checked={value.books === true}
+              disabled={save.isPending}
+              onChange={(e) => {
+                const books = e.target.checked;
+                save.mutate({ ...value, books }, { onSuccess: () => toast.push({ tone: 'ok', title: books ? t('books.feature.on') : t('books.feature.off') }) });
+              }}
+            />
+          </FormRow>
         </>
       )}
     </SettingsSection>

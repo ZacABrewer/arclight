@@ -1,4 +1,4 @@
-import type { CalendarItem } from '@arclight/shared';
+import type { BooksCalendarEntry, BooksKind, CalendarItem } from '@arclight/shared';
 import { episodeStatus, localIsoDate, type EpisodeStatus } from '../../components/media/episode-status.js';
 import { episodeCode, imageUrl, parseDateish } from '../../components/media/format.js';
 import { clockLabel, type TimeFormat } from '../../lib/ui-preferences.js';
@@ -99,7 +99,7 @@ export interface CalendarEntry {
   sortTime: number;
   /** Local time label when the item has a time component. */
   time: string | null;
-  kind: 'episode' | 'movie' | 'album' | 'book';
+  kind: 'episode' | 'movie' | 'album' | 'book' | 'ebook' | 'comic';
   title: string;
   detail: string;
   status: EpisodeStatus;
@@ -114,7 +114,12 @@ export interface CalendarEntry {
   posterUrl: string | undefined;
   /** Automatic search body (POST /command/search) for videos; null for albums and books (AlbumSearch / BookSearch). */
   search: { episodeIds: number[] } | { movieId: number } | null;
-  link: { to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id'; params: { id: string } };
+  link: {
+    to: '/library/series/$id' | '/library/movie/$id' | '/library/music/album/$id' | '/library/audiobooks/book/$id' | '/library/books/authors/$id' | '/library/books/comics/$id';
+    params: { id: string };
+  };
+  /** Ebook or comic issue the entry is (EbookSearch / ComicIssueSearch); absent for everything else. */
+  books?: { kind: BooksKind; id: number } | undefined;
 }
 
 const RELEASE_LABELS = { get cinema() { return t('common.inCinemas'); }, get digital() { return t('calendar.math.digitalRelease'); }, get physical() { return t('calendar.math.physicalRelease'); } } as const;
@@ -220,6 +225,50 @@ export function toEntry(item: CalendarItem, now: Date = new Date(), timeFormat: 
     search: { movieId: m.id },
     link: { to: '/library/movie/$id', params: { id: String(m.id) } },
   };
+}
+
+/** An ebook or comic issue from /books/calendar (date-only, so it sorts first in its day). */
+export function booksToEntry(item: BooksCalendarEntry, now: Date = new Date()): CalendarEntry | null {
+  const parsed = parseDateish(item.date);
+  if (!parsed) return null;
+  const released = parsed.getTime() <= now.getTime();
+  const status: EpisodeStatus = item.hasFile ? 'downloaded' : !released ? 'unaired' : item.monitored ? 'wanted' : 'missing';
+  const ebook = item.kind === 'ebook';
+  return {
+    key: `${ebook ? 'eb' : 'ci'}${item.id}`,
+    day: localIsoDate(parsed),
+    sortTime: parsed.getTime() - 1,
+    time: null,
+    kind: item.kind,
+    title: item.parentTitle,
+    detail: item.title,
+    status,
+    tone: barTone(status),
+    monitored: item.monitored,
+    hour: null,
+    code: ebook ? t('books.kind.ebook') : t('books.kind.comic'),
+    subtitle: item.title,
+    posterUrl: item.coverUrl ?? undefined,
+    search: null,
+    link: { to: ebook ? '/library/books/authors/$id' : '/library/books/comics/$id', params: { id: String(item.parentId) } },
+    books: { kind: item.kind, id: item.id },
+  };
+}
+
+/** Adds book entries to days grouped by groupByDay (a new map; the same per-day order). */
+export function mergeBooksEntries(byDay: Map<string, CalendarEntry[]>, items: readonly BooksCalendarEntry[] | undefined, now: Date = new Date()): Map<string, CalendarEntry[]> {
+  if (!items || items.length === 0) return byDay;
+  const out = new Map<string, CalendarEntry[]>();
+  for (const [day, list] of byDay) out.set(day, [...list]);
+  for (const item of items) {
+    const e = booksToEntry(item, now);
+    if (!e) continue;
+    const list = out.get(e.day) ?? [];
+    list.push(e);
+    out.set(e.day, list);
+  }
+  for (const list of out.values()) list.sort((a, b) => a.sortTime - b.sortTime || a.title.localeCompare(b.title));
+  return out;
 }
 
 /** Group entries by local day, each day sorted by time then title. */

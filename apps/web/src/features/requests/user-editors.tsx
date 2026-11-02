@@ -185,6 +185,8 @@ const REQUEST_TYPE_TEXT: Record<RequestTypeKey, { label: () => string; hint: () 
   series: { label: () => t('common.series'), hint: () => t('features.requests.userEditors.typeSeriesHint') },
   music: { label: () => t('common.music'), hint: () => t('features.requests.userEditors.typeMusicHint') },
   audiobook: { label: () => t('common.audiobooks'), hint: () => t('features.requests.userEditors.typeAudiobookHint') },
+  ebook: { label: () => t('books.requestType.ebook'), hint: () => t('books.requestType.ebookHint') },
+  comic: { label: () => t('books.requestType.comic'), hint: () => t('books.requestType.comicHint') },
   subtitles: { label: () => t('common.subtitles'), hint: () => t('features.requests.userEditors.typeSubtitlesHint') },
   audioLanguages: { label: () => t('features.requests.userEditors.typeAudioLanguages'), hint: () => t('features.requests.userEditors.typeAudioLanguagesHint') },
 };

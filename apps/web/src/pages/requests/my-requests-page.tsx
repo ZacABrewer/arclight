@@ -9,6 +9,7 @@ import { useFeatures } from '../../hooks/music.js';
 import { useDeleteRequest, useRequests } from '../../hooks/requests.js';
 import { StatusLabelChip } from '../discover/discover-kit.js';
 import { AudioMyRequests } from './audio-request-list.js';
+import { BooksMyRequests } from './books-request-list.js';
 import { LanguageMyRequests } from './language-request-list.js';
 import '../../components/media/media-kit.css';
 import { t, intlLocale } from '../../i18n/index.js';
@@ -70,26 +71,29 @@ export function requestTimelineItem(r: MediaRequest, aside?: React.ReactNode): T
   };
 }
 
-export type MyRequestsMedia = 'video' | 'music' | 'audiobook' | 'language';
+export type MyRequestsMedia = 'video' | 'music' | 'audiobook' | 'books' | 'language';
 
 /**
  * The media switch of My requests: Movies & TV, Music / Audiobooks while their flag is on, then
  * subtitle and language requests for users who may make them.
  */
-export function myRequestsMediaOptions(features: { music: boolean; audiobooks: boolean }, languages = false): Array<{ value: MyRequestsMedia; label: string }> {
+export function myRequestsMediaOptions(features: { music: boolean; audiobooks: boolean }, languages = false, books = false): Array<{ value: MyRequestsMedia; label: string }> {
   return [
     { value: 'video', label: t('requests.moviesAndTv') },
     ...(features.music ? [{ value: 'music' as const, label: t('common.music') }] : []),
     ...(features.audiobooks ? [{ value: 'audiobook' as const, label: t('common.audiobooks') }] : []),
+    ...(books ? [{ value: 'books' as const, label: t('books.title') }] : []),
     ...(languages ? [{ value: 'language' as const, label: t('requests.language.filter') }] : []),
   ];
 }
 
 export function MyRequestsPage() {
-  const { userId, can } = usePermissions();
+  const { userId, can, allows } = usePermissions();
   const features = useFeatures();
   const [picked, setPicked] = useState<MyRequestsMedia>('video');
-  const options = myRequestsMediaOptions(features, can(Permission.REQUEST_LANGUAGE, Permission.REQUEST));
+  // Ebook / comic requests: the books flag, the Request permission and the user's request types.
+  const bookKinds = features.books && can(Permission.REQUEST) ? (['ebook', 'comic'] as const).filter((k) => allows(k)) : [];
+  const options = myRequestsMediaOptions(features, can(Permission.REQUEST_LANGUAGE, Permission.REQUEST), bookKinds.length > 0);
   // A flag turned off while its tab was open falls back to Movies & TV.
   const media = options.some((o) => o.value === picked) ? picked : 'video';
 
@@ -112,6 +116,8 @@ export function MyRequestsPage() {
         <VideoRequests userId={userId} />
       ) : media === 'language' ? (
         <LanguageMyRequests userId={userId} />
+      ) : media === 'books' ? (
+        <BooksMyRequests kinds={bookKinds} />
       ) : (
         <AudioMyRequests key={media} domain={media} userId={userId} />
       )}

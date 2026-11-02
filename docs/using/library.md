@@ -324,6 +324,7 @@ Scans are kept until Arclight restarts.
 
 ## Related
 
+- [Books](books.md) - ebooks, comics, manga and graphic novels, and how they share series with audiobooks
 - [Wanted](wanted.md) - what is missing and how it is searched
 - [Interactive search](interactive-search.md) - pick a release yourself
 - [Quality profiles](quality-profiles.md) - what "good enough" means

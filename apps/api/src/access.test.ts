@@ -233,6 +233,24 @@ const NON_ADMIN_ROUTES: Record<string, string> = {
   'GET /api/v1/blocklist': 'areas:activity',
   'GET /api/v1/blocklist/series': 'areas:activity',
   'GET /api/v1/blocklist/movie': 'areas:activity',
+
+  // ---- Books (ebooks and comics): library reads by app area; requests scoped by the service
+  'GET /api/v1/books/overview': 'areas:library',
+  'GET /api/v1/books/authors': 'areas:library',
+  'GET /api/v1/books/authors/:id': 'areas:library',
+  'GET /api/v1/books/ebooks/:id': 'areas:library',
+  'GET /api/v1/books/series/:id': 'areas:library',
+  'GET /api/v1/books/comics': 'areas:library',
+  'GET /api/v1/books/comics/:id': 'areas:library',
+  'GET /api/v1/books/wanted': 'areas:wanted',
+  'GET /api/v1/books/calendar': 'areas:calendar',
+  'GET /api/v1/books/requests': 'portal',
+  'POST /api/v1/books/requests': 'portal',
+  'GET /api/v1/books/requests/lookup/ebooks': 'portal',
+  'GET /api/v1/books/requests/lookup/comics': 'portal',
+  'POST /api/v1/books/requests/:id/approve': 'portal',
+  'POST /api/v1/books/requests/:id/decline': 'portal',
+  'DELETE /api/v1/books/requests/:id': 'portal',
 };
 
 const PERMISSION_NAMES = new Map<number, string>(Object.entries(Permission).map(([name, bit]) => [bit, name]));

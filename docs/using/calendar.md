@@ -8,6 +8,7 @@ Find it in the left menu under **Calendar**.
 
 - **Episodes**, on their air date. If Arclight knows the air time, the event shows that time (in your browser's local time). Otherwise it is an all-day item.
 - **Movies**, on their release dates: in cinemas, digital release and physical release each show up as their own entry.
+- **Ebooks and comic issues**, when [Books](books.md) is turned on, on their release date (store date for comics when known).
 
 By default only monitored items are shown. Turn on **Show unmonitored** to include the rest. See [Library](library.md#what-monitored-means) for what monitored means.
 

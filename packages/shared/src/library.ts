@@ -27,6 +27,10 @@ export type AudioMediaType = z.infer<typeof AudioMediaType>;
 export const AnyMediaType = z.enum(['series', 'movie', 'music', 'audiobook']);
 export type AnyMediaType = z.infer<typeof AnyMediaType>;
 
+/** Root folders also hold ebooks and comics (the Books section, books.ts), which no other pipeline sees. */
+export const RootFolderMediaType = z.enum(['series', 'movie', 'music', 'audiobook', 'ebook', 'comic']);
+export type RootFolderMediaType = z.infer<typeof RootFolderMediaType>;
+
 export function isAudioMediaType(t: AnyMediaType): t is AudioMediaType {
   return t === 'music' || t === 'audiobook';
 }
@@ -77,7 +81,7 @@ export const RootFolder = z.object({
   id: z.number().int(),
   path: z.string(),
   /** Each media type has its own roots; a music root never holds series. */
-  mediaType: AnyMediaType,
+  mediaType: RootFolderMediaType,
   freeSpaceBytes: z.number().int().nullish(),
   accessible: z.boolean(),
 });
@@ -85,7 +89,7 @@ export type RootFolder = z.infer<typeof RootFolder>;
 
 export const AddRootFolderRequest = z.object({
   path: z.string().min(1),
-  mediaType: AnyMediaType,
+  mediaType: RootFolderMediaType,
 });
 export type AddRootFolderRequest = z.infer<typeof AddRootFolderRequest>;
 

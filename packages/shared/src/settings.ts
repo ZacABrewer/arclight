@@ -163,6 +163,8 @@ export type ReleasesSettingsInput = z.input<typeof ReleasesSettings>;
 export const FeatureSettings = z.object({
   music: z.boolean().default(false),
   audiobooks: z.boolean().default(false),
+  /** Ebooks and comics (the Books section). Optional so older callers that set the two audio flags stay valid; absent means off. */
+  books: z.boolean().optional(),
 });
 export type FeatureSettings = z.infer<typeof FeatureSettings>;
 export type FeatureSettingsInput = z.input<typeof FeatureSettings>;

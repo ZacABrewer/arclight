@@ -199,3 +199,12 @@ export function parsePath(path: string, hint: MediaTypeHint = 'auto'): ParsedRel
   }
   return fromFile ?? fromFolder;
 }
+export {
+  bookTitleKey,
+  parseComicPath,
+  parseComicRelease,
+  parseEbookPath,
+  parseEbookRelease,
+  type ParsedComicRelease,
+  type ParsedEbookRelease,
+} from './books.js';

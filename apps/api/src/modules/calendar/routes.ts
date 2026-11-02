@@ -2,15 +2,19 @@ import { z } from 'zod';
 import { CalendarErrorResponse, CalendarFeedInfo, CalendarFeedQuery, CalendarItem, CalendarQuery } from '@arclight/shared';
 import type { FastifyPluginAsync, RawServerDefault } from 'fastify';
 import type { ZodTypeProvider } from 'fastify-type-provider-zod';
-import { renderIcs } from './ics.js';
+import { renderIcs, type IcsDayEvent } from './ics.js';
 import { CalendarError, type CalendarService } from './service.js';
 
 const DAY_MS = 24 * 60 * 60_000;
 const statusFor: Record<CalendarError['code'], number> = { VALIDATION: 400, UNAUTHORIZED: 401 };
 
+/** Feed events of other modules for a range (the books section adds its releases). */
+export type IcsEventSource = (range: { start: string; end: string; unmonitored: boolean }) => IcsDayEvent[];
+
 export function calendarRoutes(
   service: CalendarService,
   now: () => Date = () => new Date(),
+  extraEvents?: IcsEventSource,
 ): FastifyPluginAsync<Record<never, never>, RawServerDefault, ZodTypeProvider> {
   return async (app) => {
     app.setErrorHandler((err, req, reply) => {
@@ -37,9 +41,11 @@ export function calendarRoutes(
       async (req, reply) => {
         service.verifyToken(req.query.token);
         const t = now().getTime();
+        const start = new Date(t - req.query.pastDays * DAY_MS).toISOString();
+        const end = new Date(t + req.query.futureDays * DAY_MS).toISOString();
         const items = service.list({
-          start: new Date(t - req.query.pastDays * DAY_MS).toISOString(),
-          end: new Date(t + req.query.futureDays * DAY_MS).toISOString(),
+          start,
+          end,
           unmonitored: req.query.unmonitored,
           includeSeries: true,
           includeEpisodeFile: false,
@@ -48,7 +54,7 @@ export function calendarRoutes(
         return reply
           .header('content-type', 'text/calendar; charset=utf-8')
           .header('content-disposition', 'inline; filename="arclight.ics"')
-          .send(renderIcs(items, { now: now() }));
+          .send(renderIcs(items, { now: now(), extraEvents: extraEvents?.({ start, end, unmonitored: req.query.unmonitored }) ?? [] }));
       },
     );
 

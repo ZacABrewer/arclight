@@ -25,6 +25,8 @@ import { formatDate } from '../../components/media/format.js';
 import { Loading, QueryError, copyText, episodeChip, useIsMobile } from '../../components/media/media-kit.js';
 import { useAutomaticSearch } from '../../hooks/library.js';
 import { useCalendar, useCalendarFeed, useRegenerateCalendarFeed } from '../../hooks/library-calendar.js';
+import { useBooksCalendar } from '../../hooks/books.js';
+import { useFeatures } from '../../hooks/music.js';
 import { useUiPreferences } from '../../hooks/ui-preferences.js';
 import { useAuth } from '../../auth/auth-context.js';
 import { ListSearchBar, ListSearchEmpty, useListSearch } from '../../components/list-search.js';
@@ -32,6 +34,7 @@ import { formatDate as formatPreferredDate, hourLabel, type TimeFormat, type Wee
 import {
   gridRange,
   groupByDay,
+  mergeBooksEntries,
   isSameDay,
   startOfMonth,
   stepAnchor,
@@ -42,6 +45,7 @@ import {
 } from './calendar-math.js';
 import { AlbumSearchButton, MusicChip, SquareArt } from '../library/music/music-kit.js';
 import { AudiobookChip, BookSearchButton } from '../library/audiobooks/audiobook-kit.js';
+import { BooksKindChip, BooksSearchButton } from '../library/books/books-kit.js';
 import './calendar.css';
 import { t, intlLocale } from '../../i18n/index.js';
 
@@ -84,7 +88,12 @@ export function CalendarPage() {
   const days = useMemo(() => viewDays(view === 'agenda' ? 'month' : view, anchor, weekStart), [view, anchor, weekStart]);
   const range = useMemo(() => gridRange(days), [days]);
   const calendar = useCalendar(range.start, range.end, unmonitored);
-  const allByDay = useMemo(() => groupByDay(calendar.data ?? [], new Date(), prefs.timeFormat), [calendar.data, prefs.timeFormat]);
+  const features = useFeatures();
+  const booksCalendar = useBooksCalendar(range.start, range.end, unmonitored, features.books === true);
+  const allByDay = useMemo(
+    () => mergeBooksEntries(groupByDay(calendar.data ?? [], new Date(), prefs.timeFormat), features.books === true ? booksCalendar.data : undefined),
+    [calendar.data, prefs.timeFormat, features.books, booksCalendar.data],
+  );
   // Text search (`?q=`) over the loaded range: series / movie / album / book title, episode or
   // album title, episode code. Client-side, every view shows only the matching entries.
   const search = useListSearch();
@@ -204,7 +213,7 @@ function EventBar({ entry, popover, placement = 'bottom-start', block = false }:
           className={block ? 'cal-event cal-event--block' : 'cal-event'}
           data-tone={entry.tone}
           data-unmonitored={entry.monitored ? undefined : true}
-          aria-label={`${entry.kind === 'album' ? `${t('common.music')}: ` : entry.kind === 'book' ? `${t('audiobooks.audiobook')}: ` : ''}${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
+          aria-label={`${entry.kind === 'album' ? `${t('common.music')}: ` : entry.kind === 'book' ? `${t('audiobooks.audiobook')}: ` : entry.books ? `${entry.code}: ` : ''}${entry.title}, ${entry.detail}${entry.time ? `, ${entry.time}` : ''}`}
           data-kind={entry.kind}
           {...props}
         >
@@ -216,6 +225,10 @@ function EventBar({ entry, popover, placement = 'bottom-start', block = false }:
           ) : entry.kind === 'book' ? (
             <span className="cal-event__kind" aria-hidden="true">
               {t('calendar.audiobookShort')}
+            </span>
+          ) : entry.books ? (
+            <span className="cal-event__kind" aria-hidden="true">
+              {entry.books.kind === 'ebook' ? t('books.calendarShort.ebook') : t('books.calendarShort.comic')}
             </span>
           ) : null}
           <span className="cal-event__title">{entry.title}</span>
@@ -244,7 +257,7 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
           {entry.time ? ` · ${entry.time}` : ''}
         </div>
         <div className="mk-row" style={{ gap: 6 }}>
-          {entry.kind === 'album' ? <MusicChip /> : entry.kind === 'book' ? <AudiobookChip /> : null}
+          {entry.kind === 'album' ? <MusicChip /> : entry.kind === 'book' ? <AudiobookChip /> : entry.books ? <BooksKindChip kind={entry.books.kind} /> : null}
           <StatusChip status={chip.status} label={chip.label} />
         </div>
         <div className="cal-detail__actions">
@@ -261,6 +274,8 @@ function EventDetail({ entry, onClose }: { entry: CalendarEntry; onClose: () => 
                 <AlbumSearchButton albumId={Number(entry.link.params.id)} />
               ) : entry.kind === 'book' ? (
                 <BookSearchButton bookId={Number(entry.link.params.id)} />
+              ) : entry.books ? (
+                <BooksSearchButton kind={entry.books.kind} id={entry.books.id} />
               ) : null
             )
           ) : null}
@@ -386,7 +401,7 @@ function Agenda({ days, byDay, popover }: { days: Date[]; byDay: Map<string, Cal
                       <EventBar entry={e} popover={popover} />
                     </span>
                     <span className="cal-agenda__code">
-                      {e.kind === 'album' ? <MusicChip /> : e.kind === 'book' ? <AudiobookChip /> : null}
+                      {e.kind === 'album' ? <MusicChip /> : e.kind === 'book' ? <AudiobookChip /> : e.books ? <BooksKindChip kind={e.books.kind} /> : null}
                       <span className="al-num">{e.code}</span>
                       {e.subtitle ? ` · ${e.subtitle}` : ''}
                     </span>

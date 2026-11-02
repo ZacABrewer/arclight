@@ -1,0 +1,72 @@
+/* Books pages (Library → Books: ebooks and comics). Builds on media-kit.css and music.css; tokens only. */
+
+/* Format badge: top-left on covers, inline in tables. */
+.bk-format { display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border: 1px solid var(--al-line-3); background: var(--al-field); color: var(--al-text-2); font-family: var(--al-mono); font-size: 10px; letter-spacing: .06em; border-radius: var(--al-radius-control); }
+.bk-format[data-overlay] { position: absolute; left: 8px; top: 8px; z-index: 2; }
+.bk-done { position: absolute; right: 8px; top: 8px; z-index: 2; display: grid; place-items: center; width: 20px; height: 20px; background: var(--al-cyan); color: var(--al-cyan-ink); font-size: 12px; font-weight: 700; border-radius: var(--al-radius-control); }
+.mk-poster-wrap:has(.mk-poster-monitor) .bk-format[data-overlay] { top: 36px; }
+
+/* Shelf filter chips (format) under the filter bar. */
+.bk-filters { display: flex; flex-direction: column; gap: 10px; margin-bottom: 20px; }
+.bk-filters .lib-filters { margin-bottom: 0; }
+.bk-chips { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--al-line-1); }
+.bk-chip { height: 28px; padding: 0 12px; border: 1px solid var(--al-line-2); background: transparent; color: var(--al-text-3); font-family: var(--al-mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; cursor: pointer; border-radius: var(--al-radius-control); }
+.bk-chip:hover { color: var(--al-text-1); border-color: var(--al-line-3); }
+.bk-chip[aria-pressed='true'] { color: var(--al-text-1); border-color: var(--al-cyan); background: var(--al-cyan-a12); }
+.bk-chip:focus-visible { outline: 2px solid var(--al-cyan); outline-offset: 2px; }
+.bk-chips__count { margin-left: auto; font-size: 11px; color: var(--al-text-4); letter-spacing: .06em; text-transform: uppercase; }
+
+/* "Recently added" and "Wanted" rows: three cards, a cover beside the text. */
+.bk-row { margin-bottom: 28px; }
+.bk-row__head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 12px; }
+.bk-row__more { margin-left: auto; font-size: 13px; color: var(--al-cyan-text); }
+.bk-row__grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+.bk-rowcard { display: grid; grid-template-columns: 96px minmax(0, 1fr); gap: 14px; padding: 12px; border: 1px solid var(--al-line-1); background: var(--al-glass); border-radius: var(--al-radius-card, 0); min-width: 0; }
+.bk-rowcard__cover { width: 96px; }
+.bk-rowcard__body { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.bk-rowcard__title { font-weight: 600; color: var(--al-text-1); overflow-wrap: anywhere; }
+.bk-rowcard__byline { font-size: 13px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.bk-rowcard__facts { display: flex; flex-direction: column; gap: 2px; margin: 4px 0 0; }
+.bk-rowcard__facts > div { display: flex; gap: 8px; font-size: 12px; }
+.bk-rowcard__facts dt { font-family: var(--al-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--al-text-4); min-width: 84px; }
+.bk-rowcard__facts dd { margin: 0; color: var(--al-text-2); }
+.bk-rowcard__actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: auto; padding-top: 6px; }
+@media (max-width: 1279.98px) { .bk-row__grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 767.98px) {
+  .bk-row__grid { grid-template-columns: minmax(0, 1fr); }
+  .bk-rowcard { grid-template-columns: 72px minmax(0, 1fr); }
+  .bk-rowcard__cover { width: 72px; }
+}
+
+/* Lookup source chips (add page) and result rows. */
+.bk-sources { display: flex; flex-wrap: wrap; gap: 6px; }
+.bk-results { display: flex; flex-direction: column; gap: 10px; margin: 0; padding: 0; list-style: none; }
+.bk-result { display: grid; grid-template-columns: 64px minmax(0, 1fr) auto; gap: 14px; align-items: start; padding: 12px; border: 1px solid var(--al-line-1); border-radius: var(--al-radius-card, 0); }
+.bk-result[data-selected] { border-color: var(--al-cyan); }
+.bk-result__cover { width: 64px; }
+.bk-result__title { font-weight: 600; color: var(--al-text-1); overflow-wrap: anywhere; }
+.bk-result__meta { font-size: 12px; color: var(--al-text-3); overflow-wrap: anywhere; }
+.bk-result__overview { font-size: 13px; color: var(--al-text-3); margin: 4px 0 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (max-width: 767.98px) {
+  .bk-result { grid-template-columns: 48px minmax(0, 1fr); }
+  .bk-result__cover { width: 48px; }
+  .bk-result > :last-child { grid-column: 1 / -1; }
+}
+
+/* Details pages. */
+.bk-details .al-poster.mk-hero__poster { aspect-ratio: 2 / 3; }
+.bk-book-row { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.bk-book-row__cover { width: 32px; flex: none; }
+.bk-position { font-family: var(--al-mono); font-size: 11px; color: var(--al-cyan-text); letter-spacing: .04em; }
+.bk-note { font-size: 13px; color: var(--al-text-3); margin: 0 0 16px; }
+.bk-note a { color: var(--al-cyan-text); }
+.bk-releases { margin-top: 8px; }
+
+/* Settings: ordered format list in the profile editor. */
+.bk-format-list { display: flex; flex-direction: column; gap: 6px; margin: 0; padding: 0; list-style: none; }
+.bk-format-list li { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--al-line-1); border-radius: var(--al-radius-control); }
+.bk-format-list li[data-off] { opacity: .6; }
+.bk-format-list__name { font-family: var(--al-mono); font-size: 12px; letter-spacing: .06em; min-width: 48px; }
+.bk-format-list__moves { margin-left: auto; display: flex; gap: 4px; }
+.bk-tokens { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; }
+.bk-tokens code { font-family: var(--al-mono); font-size: 11px; padding: 2px 6px; border: 1px solid var(--al-line-2); color: var(--al-text-3); }

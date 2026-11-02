@@ -24,3 +24,13 @@ export { parseFormat, normalizeTokenName, hasVersionToken, type FormatPart, type
 export { cleanTitle, titleThe } from './text.js';
 export { SAMPLES } from './samples.js';
 export type * from './types.js';
+export {
+  COMIC_TOKENS,
+  EBOOK_TOKENS,
+  comicRelativePath,
+  ebookRelativePath,
+  validateBookFormat,
+  type BookNamingFormats,
+  type ComicNamingInput,
+  type EbookNamingInput,
+} from './books.js';

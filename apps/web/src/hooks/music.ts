@@ -32,7 +32,7 @@ import { t } from '../i18n/index.js';
 // Feature flags
 // ---------------------------------------------------------------------------------------
 
-export const FEATURES_OFF: FeatureSettings = { music: false, audiobooks: false };
+export const FEATURES_OFF: FeatureSettings = { music: false, audiobooks: false, books: false };
 
 /**
  * GET /settings/features. Off until the answer arrives, and off when it fails (an older api,

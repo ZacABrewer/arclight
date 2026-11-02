@@ -9,6 +9,7 @@ export * from './profiles.js';
 export * from './library.js';
 export * from './music.js';
 export * from './audiobooks.js';
+export * from './books.js';
 export * from './indexers.js';
 export * from './indexer-catalogue.js';
 export * from './download-clients.js';

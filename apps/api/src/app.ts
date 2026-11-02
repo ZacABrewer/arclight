@@ -22,6 +22,7 @@ import { metadataModule, metadata } from './modules/metadata/index.js';
 import { libraryModuleWith, type MetadataLookup } from './modules/library/index.js';
 import { musicModule } from './modules/music/index.js';
 import { audiobooksModule } from './modules/audiobooks/index.js';
+import { booksModule } from './modules/books/index.js';
 import { indexersModule } from './modules/indexers/index.js';
 import { solverModule } from './modules/solver/index.js';
 import { downloadClientsModule } from './modules/download-clients/index.js';
@@ -143,6 +144,8 @@ export async function buildApp(config: AppConfig, db: Db, log: Logger, opts: Bui
     musicModule,
     // Authors, books, series (features.audiobooks), plus the shared audio routes (POST /command, GET /audiofile).
     audiobooksModule,
+    // Ebooks and comics (the Books section): authors, books, comic series, issues, requests.
+    booksModule,
     profilesModule,
     guidesModule,
     // Theme packs: catalogue, pack files and the sync from the repository.

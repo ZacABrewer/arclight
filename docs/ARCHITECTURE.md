@@ -163,8 +163,7 @@ unauthenticated, so do not expose port 7878 beyond a trusted network. A compatib
 
 ## Out of scope
 
-Media playback/transcoding/library scanning (media servers), music/books/comics
-(module shape allows them later), embedding a torrent or usenet client.
+Media playback/transcoding/library scanning (media servers), embedding a torrent or usenet client.
 
 ## Licence
 

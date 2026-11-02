@@ -198,6 +198,9 @@ function stripExt(name: string): string {
   return ext ? name.slice(0, -ext.length) : name;
 }
 
+/** A completed download and its local path; resolves true when the handler imported (or blocked) it. */
+export type CompletedDownloadHandler = (item: TrackedDownload, path: string) => Promise<boolean>;
+
 export class ImportsService {
   private readonly db: Db;
   private readonly downloads: DownloadClientsPort;
@@ -214,6 +217,8 @@ export class ImportsService {
   private readonly music: MusicImporter;
   /** Audiobook downloads and the audiobook manual import (imports/audio/audiobook-import.ts). */
   private readonly audiobooks: AudiobookImporter;
+  /** Importers of other modules (books), asked before the built-in ones. */
+  private readonly completedHandlers: CompletedDownloadHandler[] = [];
 
   constructor(options: ImportsServiceOptions) {
     this.db = options.db;
@@ -290,6 +295,19 @@ export class ImportsService {
     return getSamples(config ? NamingConfig.parse(config) : this.getNaming());
   }
 
+  /**
+   * Let another module import some completed downloads (the books module owns its grabs). The
+   * handler runs after the path checks; returning true means it took the item. Returns an
+   * unsubscribe function.
+   */
+  addCompletedDownloadHandler(handler: CompletedDownloadHandler): () => void {
+    this.completedHandlers.push(handler);
+    return () => {
+      const i = this.completedHandlers.indexOf(handler);
+      if (i >= 0) this.completedHandlers.splice(i, 1);
+    };
+  }
+
   private recycleBin(settings = this.getMediaManagement()): RecycleBin {
     return new RecycleBin(settings.recycleBinPath, this.now);
   }
@@ -308,6 +326,9 @@ export class ImportsService {
     if (!path) return this.block(item, result, ["Download doesn't contain intermediate path, Skipping."]);
     if (!isAbsolute(path)) {
       return this.block(item, result, [`Import failed, path is not a valid local path: ${path}. You may need a Remote Path Mapping.`]);
+    }
+    for (const handler of this.completedHandlers) {
+      if (await handler(item, path)) return result;
     }
     if (item.mediaType === 'music') return this.importMusicDownload(item, path, result);
     if (item.mediaType === 'audiobook') return this.importAudiobookDownload(item, path, result);

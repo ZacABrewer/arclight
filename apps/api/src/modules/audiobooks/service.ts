@@ -45,6 +45,7 @@ import {
   bookAuthors,
   bookSeries,
   bookSeriesEntries,
+  ebookSeriesEntries,
   books,
   qualityProfiles,
   rootFolders,
@@ -510,10 +511,15 @@ export function bulkUpdateAuthors(db: Db, req: BulkAuthorUpdateRequest, now: str
   });
 }
 
-/** Series no book belongs to any more. */
+/** Series no book belongs to any more (ebooks in the Books section share these series too). */
 export function pruneOrphanSeries(db: AudiobookDb): number {
   const used = db.select({ id: bookSeriesEntries.seriesId }).from(bookSeriesEntries);
-  return db.delete(bookSeries).where(notInArray(bookSeries.id, used)).returning({ id: bookSeries.id }).all().length;
+  const usedByEbooks = db.select({ id: ebookSeriesEntries.seriesId }).from(ebookSeriesEntries);
+  return db
+    .delete(bookSeries)
+    .where(and(notInArray(bookSeries.id, used), notInArray(bookSeries.id, usedByEbooks)))
+    .returning({ id: bookSeries.id })
+    .all().length;
 }
 
 /**
@@ -605,7 +611,8 @@ export function applyAudiobookMonitorOption(
 // Books from the catalog
 // ---------------------------------------------------------------------------------------
 
-function seriesIdFor(tx: AudiobookDb, ref: { name: string; asin?: string | undefined }): number {
+/** The `book_series` row for a series reference (by ASIN, else by clean name), created when new. */
+export function seriesIdFor(tx: AudiobookDb, ref: { name: string; asin?: string | undefined }): number {
   const asin = ref.asin ? ref.asin.toUpperCase() : null;
   const cleanName = libraryService.toCleanTitle(ref.name);
   if (asin) {
