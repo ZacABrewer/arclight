@@ -494,26 +494,28 @@ export class PlexServerReadClient implements MediaServerClient {
     });
     const localOwnerName = local.find((a) => a.id === PLEX_OWNER_ACCOUNT_ID)?.name ?? 'owner';
     let complete = true;
-    let owner: { id: string; name: string };
+    // Without plex.tv the owner's plex.tv id is only known from an earlier read; until then the
+    // owner is left out (the list says it is incomplete) and the server's other accounts still count.
+    let owner: { id: string; name: string } | null;
     try {
       const me = rec(await this.plexTv('api/v2/user'));
       const id = str(me['id']);
       if (!id) throw new MediaServerError('plex', 'remoteError', 'plex.tv returned no account id');
       owner = { id, name: str(me['username']) ?? str(me['title']) ?? localOwnerName };
-    } catch (err) {
-      if (!opts.ownerId) throw err;
+    } catch {
       complete = false;
-      owner = { id: opts.ownerId, name: localOwnerName };
+      owner = opts.ownerId ? { id: opts.ownerId, name: localOwnerName } : null;
     }
     const remote = new Map<string, { name: string; kind: PlexAccount['kind'] }>();
-    if (complete) {
+    if (complete && owner) {
+      const ownerId = owner.id;
       try {
         const machineId = (await this.info()).id;
         for (const raw of list(await this.plexTv('api/v2/friends'))) {
           const f = rec(raw);
           const id = str(f['id']);
           const status = str(f['status']);
-          if (!id || id === owner.id || (status !== null && status !== 'accepted')) continue;
+          if (!id || id === ownerId || (status !== null && status !== 'accepted')) continue;
           if (!sharesServer(f, machineId)) continue;
           remote.set(id, { name: str(f['title']) ?? str(f['username']) ?? `plex-${id}`, kind: f['restricted'] === true ? 'managed' : 'shared' });
         }
@@ -522,7 +524,7 @@ export class PlexServerReadClient implements MediaServerClient {
         for (const raw of homeUsers) {
           const u = rec(raw);
           const id = str(u['id']);
-          if (!id || id === owner.id || u['admin'] === true || remote.has(id)) continue;
+          if (!id || id === ownerId || u['admin'] === true || remote.has(id)) continue;
           remote.set(id, { name: str(u['title']) ?? str(u['username']) ?? `plex-${id}`, kind: u['restricted'] === true ? 'managed' : 'shared' });
         }
       } catch {
@@ -533,7 +535,7 @@ export class PlexServerReadClient implements MediaServerClient {
     const add = (a: Pick<PlexAccount, 'id' | 'localId' | 'name' | 'kind'>) => {
       if (!out.has(a.id)) out.set(a.id, { ...a, isAdmin: a.kind === 'owner', isDisabled: false, lastActivityAt: null });
     };
-    add({ id: owner.id, localId: PLEX_OWNER_ACCOUNT_ID, name: owner.name, kind: 'owner' });
+    if (owner) add({ id: owner.id, localId: PLEX_OWNER_ACCOUNT_ID, name: owner.name, kind: 'owner' });
     for (const a of local) {
       if (a.id !== PLEX_OWNER_ACCOUNT_ID) add({ id: a.id, localId: a.id, name: a.name, kind: remote.get(a.id)?.kind ?? 'local' });
     }

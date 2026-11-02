@@ -135,7 +135,7 @@ Plex works like Jellyfin and Emby, with these differences.
 
 **Token.** The connection's token must be the server owner's `X-Plex-Token` (see [How to find an X-Plex-Token](https://support.plex.tv/articles/204059436-finding-an-authentication-token-x-plex-token/)). Arclight uses it on the server and on plex.tv, where it lists the owner's friends and Plex Home users.
 
-**Accounts.** The user sync reads the server's own account list and adds, from plex.tv, the owner, Plex Home (managed) users and friends the server is shared with. Each account is stored by its plex.tv id, so it links to the Arclight user who signs in with that Plex account. When plex.tv cannot be reached, accounts are only added or renamed, never marked deleted, so an outage does not unlink anyone. Parental controls are not mirrored from Plex.
+**Accounts.** The user sync reads the server's own account list and adds, from plex.tv, the owner, Plex Home (managed) users and friends the server is shared with. Each account is stored by its plex.tv id, so it links to the Arclight user who signs in with that Plex account. When plex.tv cannot be reached, accounts are only added or renamed, never marked deleted, so an outage does not unlink anyone; on a first sync without plex.tv the owner is added once plex.tv answers. Parental controls are not mirrored from Plex.
 
 **What is read for each account.**
 

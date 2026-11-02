@@ -156,6 +156,20 @@ describe('Plex users', () => {
     expect(row(h, '6').deleted).toBe(true);
   });
 
+  it('syncs the server accounts without plex.tv on the first run and adds the owner later', async () => {
+    const h = await harness();
+    seed(h);
+    h.fake.plexTvDown = true;
+    const first = await h.sync.syncUsers();
+    expect(first.servers[0]).toMatchObject({ status: 'ok', deleted: 0 });
+    expect(h.db.select().from(mediaServerUsers).all().map((u) => u.externalId)).not.toContain('9000001');
+    const watch = await h.sync.syncWatch({ full: true });
+    expect(watch.servers[0]?.status).toBe('ok');
+    h.fake.plexTvDown = false;
+    await h.sync.syncUsers();
+    expect(row(h, '9000001').localId).toBe('1');
+  });
+
   it('creates linked Arclight users for new Plex accounts when sign-in allows it, and links Plex sign-ins by plex.tv id', async () => {
     const h = await harness({ createUsers: true });
     seed(h);

@@ -79,9 +79,11 @@ describe('PlexServerReadClient accounts', () => {
     ]);
   });
 
-  it('fails without plex.tv and without a stored owner id', async () => {
+  it('leaves the owner out without plex.tv and without a stored owner id', async () => {
     const { c } = client({ 'GET /api/v2/user': () => ({ status: 503, body: 'down' }) });
-    await expect(c.accounts()).rejects.toThrow();
+    const { accounts, complete } = await c.accounts();
+    expect(complete).toBe(false);
+    expect(accounts.map((a) => [a.id, a.localId, a.kind])).toEqual([['5', '5', 'local']]);
   });
 
   it('keeps the owner and the friends when Home users cannot be read, but says so', async () => {
